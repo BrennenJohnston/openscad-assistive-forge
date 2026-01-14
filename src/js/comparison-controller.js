@@ -27,15 +27,17 @@ export class ComparisonController {
     this.scadContent = null;
     this.projectFiles = null;
     this.mainFile = null;
+    this.libraries = [];
   }
 
   /**
    * Set the current SCAD content and project files
    */
-  setProject(scadContent, projectFiles = null, mainFile = null) {
+  setProject(scadContent, projectFiles = null, mainFile = null, libraries = []) {
     this.scadContent = scadContent;
     this.projectFiles = projectFiles;
     this.mainFile = mainFile;
+    this.libraries = Array.isArray(libraries) ? libraries : [];
   }
 
   /**
@@ -141,6 +143,7 @@ export class ComparisonController {
           timeoutMs: 60000,
           files: this.projectFiles,
           mainFile: this.mainFile,
+          libraries: this.libraries,
         }
       );
 

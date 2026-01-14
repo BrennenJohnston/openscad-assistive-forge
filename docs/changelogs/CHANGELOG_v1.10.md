@@ -67,6 +67,14 @@ v1.10 introduces comprehensive support for OpenSCAD library bundles, enabling us
 
 ---
 
+## 🐛 Fixes
+
+- **Comparison Mode Libraries**
+  - Variant renders now mount enabled libraries
+  - Resolves MCAD comparison errors in Library Test example
+
+---
+
 ## 🔧 Technical Improvements
 
 ### Architecture

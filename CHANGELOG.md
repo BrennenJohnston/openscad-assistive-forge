@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **URL Param Clamping**: Out-of-range URL parameters are clamped to schema limits to prevent invalid renders
+- **Comparison Mode Libraries**: Variant renders now mount enabled libraries (fixes MCAD comparison errors)
 
 ### Technical
 - New `library-manager.js` module (303 lines)

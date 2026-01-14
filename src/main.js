@@ -1282,12 +1282,14 @@ async function initApp() {
   function enterComparisonMode() {
     const state = stateManager.getState();
     stateManager.setState({ comparisonMode: true });
-    
+
     // Set project content for comparison controller
+    const libsForRender = getEnabledLibrariesForRender();
     comparisonController.setProject(
       state.uploadedFile.content,
       state.projectFiles,
-      state.mainFile
+      state.mainFile,
+      libsForRender
     );
     
     // Hide main interface, show comparison view
