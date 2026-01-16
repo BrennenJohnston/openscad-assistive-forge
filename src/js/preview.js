@@ -1,11 +1,67 @@
 /**
- * 3D Preview using Three.js
+ * 3D Preview using Three.js (Lazy Loaded for Performance)
  * @license GPL-3.0-or-later
  */
 
-import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
+// Lazy-loaded Three.js modules - loaded on demand to reduce initial bundle size
+let THREE = null;
+let OrbitControls = null;
+let STLLoader = null;
+let threeJsLoaded = false;
+let threeJsLoading = null;
+
+/**
+ * Lazy load Three.js and its dependencies
+ * @returns {Promise<{THREE: object, OrbitControls: Function, STLLoader: Function}>}
+ */
+async function loadThreeJS() {
+  if (threeJsLoaded) {
+    return { THREE, OrbitControls, STLLoader };
+  }
+  
+  // If already loading, wait for that promise
+  if (threeJsLoading) {
+    return threeJsLoading;
+  }
+  
+  console.log('[Preview] Loading Three.js modules...');
+  const startTime = performance.now();
+  
+  threeJsLoading = (async () => {
+    try {
+      // Parallel loading of all Three.js modules
+      const [threeModule, controlsModule, loaderModule] = await Promise.all([
+        import('three'),
+        import('three/examples/jsm/controls/OrbitControls.js'),
+        import('three/examples/jsm/loaders/STLLoader.js')
+      ]);
+      
+      THREE = threeModule;
+      OrbitControls = controlsModule.OrbitControls;
+      STLLoader = loaderModule.STLLoader;
+      threeJsLoaded = true;
+      
+      const loadTime = Math.round(performance.now() - startTime);
+      console.log(`[Preview] Three.js loaded in ${loadTime}ms`);
+      
+      return { THREE, OrbitControls, STLLoader };
+    } catch (error) {
+      console.error('[Preview] Failed to load Three.js:', error);
+      threeJsLoading = null;
+      throw error;
+    }
+  })();
+  
+  return threeJsLoading;
+}
+
+/**
+ * Check if Three.js is loaded
+ * @returns {boolean}
+ */
+export function isThreeJsLoaded() {
+  return threeJsLoaded;
+}
 
 /**
  * Theme-aware color scheme for 3D preview
@@ -73,9 +129,16 @@ export class PreviewManager {
   }
 
   /**
-   * Initialize Three.js scene
+   * Initialize Three.js scene (async - loads Three.js on demand)
+   * @returns {Promise<void>}
    */
-  init() {
+  async init() {
+    // Show loading state
+    this.container.innerHTML = '<div class="preview-loading" style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--color-text-secondary)">Loading 3D preview...</div>';
+    
+    // Lazy load Three.js
+    await loadThreeJS();
+    
     // Clear container
     this.container.innerHTML = '';
 
@@ -382,7 +445,6 @@ export class PreviewManager {
     const max = box.max;
     
     // Choose color based on theme
-    const colors = PREVIEW_COLORS[this.currentTheme];
     const lineColor = this.currentTheme.includes('dark') ? 0xff6b6b : 0xff0000;
     
     // Create bounding box edges
@@ -455,10 +517,10 @@ export class PreviewManager {
   /**
    * Create a text sprite for dimension labels
    * @param {string} text - Text content
-   * @param {number} color - Text color
+   * @param {number} _color - Text color (unused, determined by theme)
    * @returns {THREE.Sprite} Text sprite
    */
-  createTextSprite(text, color) {
+  createTextSprite(text, _color) {
     const canvas = document.createElement('canvas');
     const context = canvas.getContext('2d');
     const fontSize = this.highContrast ? 48 : 32;

@@ -236,14 +236,23 @@ Adds Vue and Svelte templates, plus enhanced CLI capabilities:
 
 ### Coming Soon
 
-#### v3.0 (Future) — Community Platform
+#### v2.4 (Planned) — Performance & Testing
+- Enhanced testing infrastructure (unit tests, E2E tests)
+- Performance optimization (bundle size, WASM loading)
+- Font bundling for `text()` function support
+- Documentation improvements
 
-|| Feature | Status |
-||---------|--------|
-|| 🌐 Model hosting & sharing | ⏳ Planned |
-|| 👥 User accounts (optional) | ⏳ Planned |
-|| 🔍 Model gallery with search | ⏳ Planned |
-|| 🍴 Remix/fork functionality | ⏳ Planned |
+### Embedding & Integration
+
+This tool is designed to be **embedded** in existing platforms, not to become a social platform itself.
+
+| Use Case | How To |
+|----------|--------|
+| 🔗 **Embed in your website** | Use iframe or scaffold a dedicated app |
+| 📦 **Create dedicated customizers** | `openscad-forge scaffold` for standalone apps |
+| 🌐 **Share configurations** | URL parameters already encode settings |
+
+See [BUILD_PLAN_NEW.md](docs/BUILD_PLAN_NEW.md#future-direction-embeddable-tool) for embedding details.
 
 ## 📋 Supported File Formats
 
@@ -464,6 +473,7 @@ openscad-forge sync ./box-customizer --apply-safe-fixes
 ## 📖 Documentation
 
 - [Build Plan](docs/BUILD_PLAN_NEW.md) — Development roadmap and architecture
+- [Troubleshooting](docs/TROUBLESHOOTING.md) — Common issues and solutions
 - [Parameter Schema Spec](docs/specs/PARAMETER_SCHEMA_SPEC.md) — JSON Schema format
 - [Test Report](TEST_REPORT.md) — Comprehensive testing results
 - [Examples](examples/) — Sample OpenSCAD projects
@@ -508,6 +518,25 @@ The application has been comprehensively tested:
 - ✅ **Full keyboard navigation**
 - ✅ **WCAG 2.1 AA** accessibility compliance
 - ✅ **Cross-browser** tested (Chrome, Firefox, Safari, Edge)
+
+### Running Tests
+
+```bash
+# Unit tests
+npm run test              # Watch mode
+npm run test:run          # Run once
+npm run test:coverage     # With coverage
+
+# E2E tests (with anti-hang protection)
+npm run test:e2e          # Headless mode (recommended)
+npm run test:e2e:headed   # Headed mode
+npm run test:e2e:report   # View report
+
+# All tests
+npm run test:all
+```
+
+**Note for Windows users**: E2E tests use a failsafe wrapper to prevent terminal hangs. If your terminal freezes, press `Ctrl+C` to abort. See [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md#playwright-terminal-hangs-windows) for details.
 
 See [TEST_REPORT.md](TEST_REPORT.md) for detailed results.
 

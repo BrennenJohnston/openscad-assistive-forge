@@ -4,7 +4,6 @@
  */
 
 import { PreviewManager } from './preview.js';
-import { formatFileSize } from './download.js';
 
 /**
  * ComparisonView handles the multi-panel comparison UI
@@ -31,14 +30,14 @@ export class ComparisonView {
   /**
    * Initialize the comparison view
    */
-  init() {
+  async init() {
     this.container.innerHTML = this.createComparisonLayout();
     this.attachEventListeners();
     
     // Render any existing variants (they may have been added before init)
     const existingVariants = this.comparisonController.getAllVariants();
     for (const variant of existingVariants) {
-      this.addVariantCard(variant);
+      await this.addVariantCard(variant);
     }
     
     // Auto-render all pending variants for better UX
@@ -194,7 +193,7 @@ export class ComparisonView {
   /**
    * Add a variant card to the grid
    */
-  addVariantCard(variant) {
+  async addVariantCard(variant) {
     const grid = document.getElementById('comparison-grid');
     if (!grid) return;
 
@@ -213,14 +212,14 @@ export class ComparisonView {
 
     grid.appendChild(card);
 
-    // Initialize preview manager for this variant
+    // Initialize preview manager for this variant (lazy loads Three.js)
     const previewContainer = card.querySelector('.variant-preview');
     if (previewContainer) {
       const previewManager = new PreviewManager(previewContainer, {
         theme: this.theme,
         highContrast: this.highContrast,
       });
-      previewManager.init();
+      await previewManager.init();
       this.previewManagers.set(variant.id, previewManager);
       
       // If variant already has an STL (from previous render), load it immediately

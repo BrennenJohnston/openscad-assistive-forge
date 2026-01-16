@@ -366,12 +366,12 @@ let passed = 0;
 let failed = 0;
 
 for (const fixture of fixtures.fixtures) {
-  process.stdout.write(\`Testing: \${fixture.name}... \`);
+  process.stdout.write('Testing: ' + fixture.name + '... ');
   
   try {
     // Run validation command
     const result = execSync(
-      \`openscad-forge validate ./webapp --format json\`,
+      'openscad-forge validate ./webapp --format json',
       { encoding: 'utf-8', timeout: fixtures.timeout }
     );
     
@@ -383,17 +383,17 @@ for (const fixture of fixtures.fixtures) {
       passed++;
     } else {
       console.log('✗ FAIL');
-      console.log(\`  \${validation.error}\`);
+      console.log('  ' + validation.error);
       failed++;
     }
   } catch (err) {
     console.log('✗ ERROR');
-    console.log(\`  \${err.message}\`);
+    console.log('  ' + err.message);
     failed++;
   }
 }
 
-console.log(\`\\nResults: \${passed} passed, \${failed} failed\`);
+console.log('\nResults: ' + passed + ' passed, ' + failed + ' failed');
 process.exit(failed > 0 ? 1 : 0);
 `,
     },
@@ -413,8 +413,8 @@ export async function ciCommand(options) {
       console.log(chalk.blue('\\n📋 Available CI/CD Providers:\\n'));
       for (const [key, template] of Object.entries(CI_TEMPLATES)) {
         console.log(chalk.bold(key));
-        console.log(chalk.gray(\`  \${template.description}\`));
-        console.log(chalk.gray(\`  Files: \${Object.keys(template.files).join(', ')}\`));
+        console.log(chalk.gray(`  ${template.description}`));
+        console.log(chalk.gray(`  Files: ${Object.keys(template.files).join(', ')}`));
         console.log();
       }
       return;
@@ -429,16 +429,16 @@ export async function ciCommand(options) {
     
     const template = CI_TEMPLATES[options.provider];
     if (!template) {
-      console.error(chalk.red(\`✗ Unknown provider: \${options.provider}\`));
+      console.error(chalk.red(`✗ Unknown provider: ${options.provider}`));
       console.log(chalk.yellow('Use --list to see available providers'));
       process.exit(1);
     }
     
-    console.log(chalk.green(\`✓ Using provider: \${template.name}\`));
+    console.log(chalk.green(`✓ Using provider: ${template.name}`));
     
     // Determine output directory
     const outDir = resolve(options.out);
-    console.log(chalk.gray(\`Output: \${outDir}\`));
+    console.log(chalk.gray(`Output: ${outDir}`));
     
     // Write files
     let filesCreated = 0;
@@ -453,17 +453,17 @@ export async function ciCommand(options) {
       
       // Check if file exists
       if (existsSync(fullPath)) {
-        console.log(chalk.yellow(\`⚠ Skipped (exists): \${filePath}\`));
+        console.log(chalk.yellow(`⚠ Skipped (exists): ${filePath}`));
         continue;
       }
       
       // Write file
       writeFileSync(fullPath, content, 'utf-8');
-      console.log(chalk.green(\`✓ Created: \${filePath}\`));
+      console.log(chalk.green(`✓ Created: ${filePath}`));
       filesCreated++;
     }
     
-    console.log(chalk.blue(\`\\n📋 Summary: \${filesCreated} file(s) created\`));
+    console.log(chalk.blue(`\n📋 Summary: ${filesCreated} file(s) created`));
     
     // Provider-specific instructions
     if (options.provider === 'github') {
@@ -491,7 +491,7 @@ export async function ciCommand(options) {
     }
     
   } catch (err) {
-    console.error(chalk.red(\`✗ Unexpected error: \${err.message}\`));
+    console.error(chalk.red(`✗ Unexpected error: ${err.message}`));
     if (process.env.DEBUG) {
       console.error(err.stack);
     }

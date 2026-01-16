@@ -50,6 +50,9 @@ async function initWASM() {
     openscadModule = await ensureOpenSCADModule();
     initialized = true;
 
+    // Mount fonts for text() support
+    await mountFonts();
+
     self.postMessage({
       type: 'READY',
     });
@@ -66,6 +69,76 @@ async function initWASM() {
         details: error.message,
       },
     });
+  }
+}
+
+/**
+ * Mount Liberation fonts for OpenSCAD text() support
+ * Fonts are loaded from /fonts/ and mounted to /usr/share/fonts/truetype/liberation/
+ * @returns {Promise<void>}
+ */
+async function mountFonts() {
+  const module = await ensureOpenSCADModule();
+  if (!module || !module.FS) {
+    console.warn('[Worker] Cannot mount fonts: filesystem not available');
+    return;
+  }
+
+  const FS = module.FS;
+  
+  // Create font directory structure
+  const fontPath = '/usr/share/fonts/truetype/liberation';
+  try {
+    FS.mkdir('/usr');
+  } catch (e) { /* may exist */ }
+  try {
+    FS.mkdir('/usr/share');
+  } catch (e) { /* may exist */ }
+  try {
+    FS.mkdir('/usr/share/fonts');
+  } catch (e) { /* may exist */ }
+  try {
+    FS.mkdir('/usr/share/fonts/truetype');
+  } catch (e) { /* may exist */ }
+  try {
+    FS.mkdir('/usr/share/fonts/truetype/liberation');
+  } catch (e) { /* may exist */ }
+
+  // List of fonts to load
+  const fonts = [
+    'LiberationSans-Regular.ttf',
+    'LiberationSans-Bold.ttf',
+    'LiberationSans-Italic.ttf',
+    'LiberationMono-Regular.ttf'
+  ];
+
+  let mounted = 0;
+  let failed = 0;
+
+  for (const fontFile of fonts) {
+    try {
+      const response = await fetch(`/fonts/${fontFile}`);
+      
+      if (!response.ok) {
+        console.warn(`[Worker] Font not found: ${fontFile}`);
+        failed++;
+        continue;
+      }
+
+      const fontData = await response.arrayBuffer();
+      FS.writeFile(`${fontPath}/${fontFile}`, new Uint8Array(fontData));
+      console.log(`[Worker] Mounted font: ${fontFile}`);
+      mounted++;
+    } catch (error) {
+      console.warn(`[Worker] Failed to mount font ${fontFile}:`, error.message);
+      failed++;
+    }
+  }
+
+  if (mounted > 0) {
+    console.log(`[Worker] Font mounting complete: ${mounted} mounted, ${failed} failed`);
+  } else {
+    console.warn('[Worker] No fonts mounted - text() function may not work correctly');
   }
 }
 
@@ -173,7 +246,7 @@ async function mountLibraries(libraries) {
       // Fetch library file list from manifest or directory listing
       // For now, we'll try to mount the library directory recursively
       const manifestUrl = `${lib.path}/manifest.json`;
-      const response = await fetch(manifestUrl).catch((err) => {
+      const response = await fetch(manifestUrl).catch(() => {
         return null;
       });
       
@@ -406,17 +479,6 @@ function applyOverrides(scadContent, parameters) {
 }
 
 /**
- * Supported output formats
- */
-const OUTPUT_FORMATS = {
-  STL: 'stl',
-  OBJ: 'obj',
-  OFF: 'off',
-  AMF: 'amf',
-  '3MF': '3mf',
-};
-
-/**
  * Render using export method (fallback for formats without dedicated renderTo* methods)
  * @param {string} scadContent - OpenSCAD source code
  * @param {string} format - Output format (obj, off, amf, 3mf)
@@ -460,7 +522,7 @@ async function renderWithExport(scadContent, format) {
  * Render OpenSCAD to specified format
  */
 async function render(payload) {
-  const { requestId, scadContent, parameters, timeoutMs, files, mainFile, outputFormat = 'stl', libraries } = payload;
+  const { requestId, scadContent, parameters, timeoutMs, files, outputFormat = 'stl', libraries } = payload;
 
   try {
     self.postMessage({

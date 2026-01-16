@@ -72,7 +72,7 @@ export function detectLibraries(scadContent) {
     const includePath = match[1];
     
     // Check which library it belongs to
-    for (const [libId, lib] of Object.entries(LIBRARY_DEFINITIONS)) {
+    for (const libId of Object.keys(LIBRARY_DEFINITIONS)) {
       if (includePath.startsWith(libId + '/')) {
         detected.add(libId);
       }

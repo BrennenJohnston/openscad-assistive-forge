@@ -6,6 +6,7 @@
 import { readFileSync, existsSync, readdirSync, statSync, writeFileSync, mkdirSync } from 'fs';
 import { resolve, join, dirname } from 'path';
 import chalk from 'chalk';
+import YAML from 'yaml';
 
 /**
  * Load test cases from YAML or JSON file
@@ -18,30 +19,35 @@ function loadTestCases(casesPath) {
   if (casesPath.endsWith('.json')) {
     return JSON.parse(content);
   } else if (casesPath.endsWith('.yaml') || casesPath.endsWith('.yml')) {
-    // Simple YAML parsing for basic cases
-    // For production, consider using a YAML library like 'js-yaml'
-    console.warn(chalk.yellow('⚠ YAML parsing is basic. Consider using JSON for test cases.'));
-    const cases = [];
-    const lines = content.split('\n');
-    let currentCase = null;
-    
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (trimmed.startsWith('- name:')) {
-        if (currentCase) cases.push(currentCase);
-        currentCase = { name: trimmed.replace('- name:', '').trim(), params: {} };
-      } else if (trimmed.startsWith('params:')) {
-        // Next lines will be parameters
-        continue;
-      } else if (currentCase && trimmed.includes(':')) {
-        const [key, ...valueParts] = trimmed.split(':');
-        const value = valueParts.join(':').trim();
-        currentCase.params[key.trim()] = value;
-      }
+    // Use robust YAML parsing (supports arrays, nested objects, numbers, booleans, etc.)
+    const parsed = YAML.parse(content);
+
+    // Accept a few common shapes:
+    // 1) - name: Case A
+    //      params: { ... }
+    // 2) { cases: [ ... ] }
+    // 3) { "Case A": { ...params... }, "Case B": { ... } }
+    let cases = [];
+
+    if (Array.isArray(parsed)) {
+      cases = parsed;
+    } else if (parsed && typeof parsed === 'object' && Array.isArray(parsed.cases)) {
+      cases = parsed.cases;
+    } else if (parsed && typeof parsed === 'object') {
+      cases = Object.entries(parsed).map(([name, params]) => ({ name, params }));
+    } else {
+      throw new Error('YAML test cases must be a list, {cases: [...]}, or a map of name -> params');
     }
-    if (currentCase) cases.push(currentCase);
-    
-    return cases;
+
+    // Normalize and validate cases
+    return cases.map((c, idx) => {
+      const name = c?.name ?? `case-${idx + 1}`;
+      const params = c?.params ?? c?.parameters ?? (typeof c === 'object' ? c.params : null);
+      if (!params || typeof params !== 'object') {
+        throw new Error(`Invalid test case "${name}": missing params object`);
+      }
+      return { name: String(name), params };
+    });
   } else {
     throw new Error('Test cases must be .json, .yaml, or .yml file');
   }

@@ -4,7 +4,7 @@
  * Version: 2.3.0
  */
 
-const CACHE_VERSION = 'v2.3.0';
+const CACHE_VERSION = 'v2.4.0';
 const CACHE_NAME = `openscad-forge-${CACHE_VERSION}`;
 
 // Assets to cache immediately on install

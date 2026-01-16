@@ -4,6 +4,78 @@
  */
 
 /**
+ * Create a help tooltip button
+ * @param {Object} param - Parameter definition
+ * @returns {HTMLElement|null} Help button element with tooltip
+ */
+function createHelpTooltip(param) {
+  if (!param.description) return null;
+
+  const wrapper = document.createElement('div');
+  wrapper.className = 'param-help-wrapper';
+
+  const button = document.createElement('button');
+  button.className = 'param-help-button';
+  button.type = 'button';
+  button.setAttribute('aria-label', `Help for ${param.name}`);
+  button.setAttribute('aria-expanded', 'false');
+  button.innerHTML = '?';
+
+  const tooltip = document.createElement('div');
+  tooltip.className = 'param-tooltip';
+  tooltip.setAttribute('role', 'tooltip');
+  tooltip.id = `tooltip-${param.name}`;
+  tooltip.textContent = param.description;
+  tooltip.style.display = 'none';
+
+  // Toggle tooltip on click
+  button.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const isVisible = tooltip.style.display === 'block';
+
+    // Hide all other tooltips
+    document.querySelectorAll('.param-tooltip').forEach(t => {
+      t.style.display = 'none';
+    });
+    document.querySelectorAll('.param-help-button').forEach(b => {
+      b.setAttribute('aria-expanded', 'false');
+    });
+
+    // Toggle this tooltip
+    tooltip.style.display = isVisible ? 'none' : 'block';
+    button.setAttribute('aria-expanded', !isVisible);
+  });
+
+  // Keyboard support: Escape to close
+  button.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && tooltip.style.display === 'block') {
+      tooltip.style.display = 'none';
+      button.setAttribute('aria-expanded', 'false');
+      button.focus();
+    }
+  });
+
+  wrapper.appendChild(button);
+  wrapper.appendChild(tooltip);
+
+  return wrapper;
+}
+
+// Close all tooltips when clicking outside
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.param-help-wrapper')) {
+    document.querySelectorAll('.param-tooltip').forEach(t => {
+      t.style.display = 'none';
+    });
+    document.querySelectorAll('.param-help-button').forEach(b => {
+      b.setAttribute('aria-expanded', 'false');
+    });
+  }
+});
+
+/**
  * Create a range slider control
  * @param {Object} param - Parameter definition
  * @param {Function} onChange - Change handler
@@ -13,17 +85,24 @@ function createSliderControl(param, onChange) {
   const container = document.createElement('div');
   container.className = 'param-control';
 
+  // Label container with help tooltip
+  const labelContainer = document.createElement('div');
+  labelContainer.className = 'param-label-container';
+
   const label = document.createElement('label');
   label.htmlFor = `param-${param.name}`;
   const paramLabel = param.name.replace(/_/g, ' ');
-  label.innerHTML = `${paramLabel}`;
-  
-  if (param.description) {
-    const desc = document.createElement('span');
-    desc.className = 'param-unit';
-    desc.textContent = param.description;
-    label.appendChild(desc);
+  label.textContent = paramLabel;
+
+  labelContainer.appendChild(label);
+
+  // Add help tooltip if description exists
+  const helpTooltip = createHelpTooltip(param);
+  if (helpTooltip) {
+    labelContainer.appendChild(helpTooltip);
   }
+
+  container.appendChild(labelContainer);
 
   const sliderContainer = document.createElement('div');
   sliderContainer.className = 'slider-container';
@@ -56,7 +135,6 @@ function createSliderControl(param, onChange) {
   sliderContainer.appendChild(input);
   sliderContainer.appendChild(output);
 
-  container.appendChild(label);
   container.appendChild(sliderContainer);
 
   return container;
@@ -72,9 +150,23 @@ function createNumberInput(param, onChange) {
   const container = document.createElement('div');
   container.className = 'param-control';
 
+  // Label container with help tooltip
+  const labelContainer = document.createElement('div');
+  labelContainer.className = 'param-label-container';
+
   const label = document.createElement('label');
   label.htmlFor = `param-${param.name}`;
   label.textContent = param.name.replace(/_/g, ' ');
+
+  labelContainer.appendChild(label);
+
+  // Add help tooltip if description exists
+  const helpTooltip = createHelpTooltip(param);
+  if (helpTooltip) {
+    labelContainer.appendChild(helpTooltip);
+  }
+
+  container.appendChild(labelContainer);
 
   const input = document.createElement('input');
   input.type = 'number';
@@ -97,15 +189,7 @@ function createNumberInput(param, onChange) {
     onChange(param.name, value);
   });
 
-  container.appendChild(label);
   container.appendChild(input);
-
-  if (param.description) {
-    const desc = document.createElement('small');
-    desc.className = 'param-description';
-    desc.textContent = param.description;
-    container.appendChild(desc);
-  }
 
   return container;
 }
@@ -120,9 +204,23 @@ function createSelectControl(param, onChange) {
   const container = document.createElement('div');
   container.className = 'param-control';
 
+  // Label container with help tooltip
+  const labelContainer = document.createElement('div');
+  labelContainer.className = 'param-label-container';
+
   const label = document.createElement('label');
   label.htmlFor = `param-${param.name}`;
   label.textContent = param.name.replace(/_/g, ' ');
+
+  labelContainer.appendChild(label);
+
+  // Add help tooltip if description exists
+  const helpTooltip = createHelpTooltip(param);
+  if (helpTooltip) {
+    labelContainer.appendChild(helpTooltip);
+  }
+
+  container.appendChild(labelContainer);
 
   const select = document.createElement('select');
   select.id = `param-${param.name}`;
@@ -142,15 +240,7 @@ function createSelectControl(param, onChange) {
     onChange(param.name, e.target.value);
   });
 
-  container.appendChild(label);
   container.appendChild(select);
-
-  if (param.description) {
-    const desc = document.createElement('small');
-    desc.className = 'param-description';
-    desc.textContent = param.description;
-    container.appendChild(desc);
-  }
 
   return container;
 }
@@ -164,6 +254,23 @@ function createSelectControl(param, onChange) {
 function createToggleControl(param, onChange) {
   const container = document.createElement('div');
   container.className = 'param-control';
+
+  // Label container with help tooltip
+  const labelContainer = document.createElement('div');
+  labelContainer.className = 'param-label-container';
+
+  const labelText = document.createElement('span');
+  labelText.textContent = param.name.replace(/_/g, ' ');
+
+  labelContainer.appendChild(labelText);
+
+  // Add help tooltip if description exists
+  const helpTooltip = createHelpTooltip(param);
+  if (helpTooltip) {
+    labelContainer.appendChild(helpTooltip);
+  }
+
+  container.appendChild(labelContainer);
 
   const toggleContainer = document.createElement('div');
   toggleContainer.className = 'toggle-switch';
@@ -192,13 +299,6 @@ function createToggleControl(param, onChange) {
 
   container.appendChild(toggleContainer);
 
-  if (param.description) {
-    const desc = document.createElement('small');
-    desc.className = 'param-description';
-    desc.textContent = param.description;
-    container.appendChild(desc);
-  }
-
   return container;
 }
 
@@ -212,9 +312,23 @@ function createTextInput(param, onChange) {
   const container = document.createElement('div');
   container.className = 'param-control';
 
+  // Label container with help tooltip
+  const labelContainer = document.createElement('div');
+  labelContainer.className = 'param-label-container';
+
   const label = document.createElement('label');
   label.htmlFor = `param-${param.name}`;
   label.textContent = param.name.replace(/_/g, ' ');
+
+  labelContainer.appendChild(label);
+
+  // Add help tooltip if description exists
+  const helpTooltip = createHelpTooltip(param);
+  if (helpTooltip) {
+    labelContainer.appendChild(helpTooltip);
+  }
+
+  container.appendChild(labelContainer);
 
   const input = document.createElement('input');
   input.type = 'text';
@@ -225,16 +339,7 @@ function createTextInput(param, onChange) {
   input.addEventListener('change', (e) => {
     onChange(param.name, e.target.value);
   });
-
-  container.appendChild(label);
   container.appendChild(input);
-
-  if (param.description) {
-    const desc = document.createElement('small');
-    desc.className = 'param-description';
-    desc.textContent = param.description;
-    container.appendChild(desc);
-  }
 
   return container;
 }
@@ -249,9 +354,23 @@ function createColorControl(param, onChange) {
   const container = document.createElement('div');
   container.className = 'param-control param-control--color';
 
+  // Label container with help tooltip
+  const labelContainer = document.createElement('div');
+  labelContainer.className = 'param-label-container';
+
   const label = document.createElement('label');
   label.htmlFor = `param-${param.name}`;
   label.textContent = param.name.replace(/_/g, ' ');
+
+  labelContainer.appendChild(label);
+
+  // Add help tooltip if description exists
+  const helpTooltip = createHelpTooltip(param);
+  if (helpTooltip) {
+    labelContainer.appendChild(helpTooltip);
+  }
+
+  container.appendChild(labelContainer);
 
   const colorContainer = document.createElement('div');
   colorContainer.className = 'color-picker-container';
@@ -315,15 +434,7 @@ function createColorControl(param, onChange) {
   colorContainer.appendChild(colorInput);
   colorContainer.appendChild(hexInput);
 
-  container.appendChild(label);
   container.appendChild(colorContainer);
-
-  if (param.description) {
-    const desc = document.createElement('small');
-    desc.className = 'param-description';
-    desc.textContent = param.description;
-    container.appendChild(desc);
-  }
 
   return container;
 }
@@ -338,9 +449,23 @@ function createFileControl(param, onChange) {
   const container = document.createElement('div');
   container.className = 'param-control param-control--file';
 
+  // Label container with help tooltip
+  const labelContainer = document.createElement('div');
+  labelContainer.className = 'param-label-container';
+
   const label = document.createElement('label');
   label.htmlFor = `param-${param.name}`;
   label.textContent = param.name.replace(/_/g, ' ');
+
+  labelContainer.appendChild(label);
+
+  // Add help tooltip if description exists
+  const helpTooltip = createHelpTooltip(param);
+  if (helpTooltip) {
+    labelContainer.appendChild(helpTooltip);
+  }
+
+  container.appendChild(labelContainer);
 
   const fileContainer = document.createElement('div');
   fileContainer.className = 'file-upload-container';
@@ -429,18 +554,7 @@ function createFileControl(param, onChange) {
   fileContainer.appendChild(clearButton);
   fileContainer.appendChild(fileInput);
 
-  container.appendChild(label);
   container.appendChild(fileContainer);
-
-  if (param.description) {
-    const desc = document.createElement('small');
-    desc.className = 'param-description';
-    desc.textContent = param.description;
-    if (param.acceptedExtensions && param.acceptedExtensions.length > 0) {
-      desc.textContent += ` (Accepted: ${param.acceptedExtensions.join(', ')})`;
-    }
-    container.appendChild(desc);
-  }
 
   return container;
 }

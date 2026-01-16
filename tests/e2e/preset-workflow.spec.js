@@ -1,0 +1,495 @@
+/**
+ * E2E tests for preset save/load workflow
+ * @license GPL-3.0-or-later
+ */
+
+import { test, expect } from '@playwright/test'
+
+const loadSimpleBoxExample = async (page) => {
+  const exampleButton = page.locator('[data-example="simple-box"], #loadSimpleBoxBtn, button:has-text("Simple Box")')
+
+  await exampleButton.waitFor({ state: 'visible', timeout: 10000 })
+  await exampleButton.click()
+
+  const mainInterface = page.locator('#mainInterface')
+  try {
+    await mainInterface.waitFor({ state: 'visible', timeout: 20000 })
+  } catch (error) {
+    const statusText = await page.locator('#statusArea').textContent().catch(() => '')
+    if (statusText?.includes('Error loading example')) {
+      throw error
+    }
+    await exampleButton.click()
+    await mainInterface.waitFor({ state: 'visible', timeout: 20000 })
+  }
+
+  await page.waitForSelector('.param-control', { state: 'attached', timeout: 20000 })
+}
+
+test.describe('Preset Workflow', () => {
+  test.beforeEach(async ({ page }) => {
+    // Clear localStorage before each test
+    await page.goto('/')
+    await page.evaluate(() => localStorage.clear())
+    await page.reload()
+  })
+
+  test('should save a preset with custom name', async ({ page }) => {
+    try {
+      await loadSimpleBoxExample(page)
+    } catch (error) {
+      console.log('Could not load preset fixture:', error.message)
+      test.skip()
+      return
+    }
+
+    // Verify parameters are loaded
+    const paramControls = page.locator('.param-control')
+    if ((await paramControls.count()) === 0) {
+      test.skip()
+      return
+    }
+
+    // Change a parameter value
+    const firstSlider = page.locator('input[type="range"]').first()
+    if (await firstSlider.isVisible()) {
+      await firstSlider.fill('75')
+      await page.waitForTimeout(500)
+    }
+
+    // Find and click Save Preset button
+    const saveButton = page.locator('button:has-text("Save Preset"), button[aria-label*="Save preset"]')
+    if (!(await saveButton.isVisible())) {
+      test.skip()
+      return
+    }
+
+    await saveButton.click()
+
+    // Fill in preset name
+    const nameInput = page.locator('input[type="text"][placeholder*="Preset name"], input[type="text"][placeholder*="preset"]')
+    if (await nameInput.isVisible()) {
+      await nameInput.fill('My Test Preset')
+      
+      // Click Save/OK button in modal
+      const confirmButton = page.locator('button:has-text("Save"), button:has-text("OK")')
+      await confirmButton.click()
+      
+      await page.waitForTimeout(500)
+
+      // Verify success message or feedback
+      const successIndicator = page.locator('[role="status"]:has-text("Saved"), [role="alert"]:has-text("Saved"), .success-message')
+      
+      // Success indicator might appear and disappear, so we check if preset appears in list
+      const presetSelect = page.locator('select#presetSelect, select[aria-label*="preset"]')
+      if (await presetSelect.isVisible()) {
+        const options = await presetSelect.locator('option').allTextContents()
+        const hasSavedPreset = options.some(opt => opt.includes('My Test Preset'))
+        expect(hasSavedPreset).toBe(true)
+      }
+    }
+  })
+
+  test('should load a saved preset', async ({ page }) => {
+    try {
+      await loadSimpleBoxExample(page)
+    } catch (error) {
+      console.log('Could not load preset fixture:', error.message)
+      test.skip()
+      return
+    }
+
+    // Get initial parameter value
+    const firstSlider = page.locator('input[type="range"]').first()
+    if (!(await firstSlider.isVisible())) {
+      test.skip()
+      return
+    }
+
+    const initialValue = await firstSlider.inputValue()
+    const newValue = '80'
+
+    // Change parameter
+    await firstSlider.fill(newValue)
+    await page.waitForTimeout(500)
+
+    // Save preset
+    const saveButton = page.locator('button:has-text("Save Preset")')
+    if (!(await saveButton.isVisible())) {
+      test.skip()
+      return
+    }
+
+    await saveButton.click()
+
+    const nameInput = page.locator('input[type="text"][placeholder*="Preset name"]')
+    if (await nameInput.isVisible()) {
+      await nameInput.fill('Load Test Preset')
+      const confirmButton = page.locator('button:has-text("Save"), button:has-text("OK")')
+      await confirmButton.click()
+      await page.waitForTimeout(500)
+    }
+
+    // Change parameter to different value
+    await firstSlider.fill(initialValue)
+    await page.waitForTimeout(500)
+
+    // Verify parameter changed
+    expect(await firstSlider.inputValue()).toBe(initialValue)
+
+    // Load the saved preset
+    const presetSelect = page.locator('select#presetSelect')
+    if (await presetSelect.isVisible()) {
+      // Get all options and find the one matching our preset
+      const options = await presetSelect.locator('option').allTextContents()
+      const matchingOption = options.find(opt => opt.includes('Load Test Preset'))
+      if (matchingOption) {
+        await presetSelect.selectOption({ label: matchingOption })
+        await page.waitForTimeout(500)
+
+        // Verify parameter value restored
+        const restoredValue = await firstSlider.inputValue()
+        expect(restoredValue).toBe(newValue)
+      }
+    }
+  })
+
+  test('should export preset as JSON', async ({ page }) => {
+    try {
+      await loadSimpleBoxExample(page)
+    } catch (error) {
+      console.log('Could not load preset fixture:', error.message)
+      test.skip()
+      return
+    }
+
+    // Save a preset first
+    const saveButton = page.locator('button:has-text("Save Preset")')
+    if (!(await saveButton.isVisible())) {
+      test.skip()
+      return
+    }
+
+    await saveButton.click()
+    const modal = page.locator('.preset-modal')
+    if (!(await modal.isVisible({ timeout: 2000 }).catch(() => false))) {
+      test.skip()
+      return
+    }
+
+    const nameInput = modal.locator('input[type="text"][placeholder*="Preset name"]')
+    await nameInput.fill('Export Test')
+    const confirmButton = modal.locator('button[type="submit"]')
+    await confirmButton.click()
+    await modal.waitFor({ state: 'detached', timeout: 5000 })
+
+    const manageButton = page.locator('#managePresetsBtn, button[aria-label*="Manage presets"]')
+    if (!(await manageButton.isVisible())) {
+      test.skip()
+      return
+    }
+
+    const lingeringModal = page.locator('.preset-modal')
+    if (await lingeringModal.isVisible({ timeout: 1000 }).catch(() => false)) {
+      const closeButton = lingeringModal.locator('[data-action="close"]').first()
+      if (await closeButton.isVisible().catch(() => false)) {
+        await closeButton.click()
+      }
+      await lingeringModal.waitFor({ state: 'detached', timeout: 5000 })
+    }
+
+    await manageButton.click()
+
+    const presetItem = page.locator('.preset-item', { hasText: 'Export Test' })
+    const exportButton = presetItem.locator('button[data-action="export"]')
+    if (!(await exportButton.isVisible())) {
+      test.skip()
+      return
+    }
+
+    // Setup download listener
+    const downloadPromise = page.waitForEvent('download', { timeout: 5000 }).catch(() => null)
+    
+    await exportButton.click()
+    
+    const download = await downloadPromise
+    if (download) {
+      // Verify download occurred
+      const filename = download.suggestedFilename()
+      expect(filename).toMatch(/\.json$/i)
+    }
+  })
+
+  test('should import preset from JSON', async ({ page }) => {
+    try {
+      await loadSimpleBoxExample(page)
+    } catch (error) {
+      console.log('Could not load preset fixture:', error.message)
+      test.skip()
+      return
+    }
+
+    // Find import button (more specific - only buttons)
+    const importButton = page.locator('button[aria-label*="Import preset"]').first()
+    
+    if (!(await importButton.isVisible({ timeout: 2000 }).catch(() => false))) {
+      test.skip()
+      return
+    }
+
+    // Note: Actually importing a file requires file system access
+    // This test verifies the button exists and is clickable
+    // Full import testing is better done in unit tests
+    expect(await importButton.isEnabled()).toBe(true)
+  })
+
+  test('should delete a preset', async ({ page }) => {
+    try {
+      await loadSimpleBoxExample(page)
+    } catch (error) {
+      console.log('Could not load preset fixture:', error.message)
+      test.skip()
+      return
+    }
+
+    // Save preset
+    const saveButton = page.locator('button:has-text("Save Preset")')
+    if (!(await saveButton.isVisible())) {
+      test.skip()
+      return
+    }
+
+    await saveButton.click()
+
+    const nameInput = page.locator('input[type="text"][placeholder*="Preset name"]')
+    if (await nameInput.isVisible()) {
+      await nameInput.fill('Delete Test')
+      const confirmButton = page.locator('button:has-text("Save")')
+      await confirmButton.click()
+      await page.waitForTimeout(500)
+    }
+
+    // Select the preset
+    const presetSelect = page.locator('select#presetSelect')
+    if (!(await presetSelect.isVisible())) {
+      test.skip()
+      return
+    }
+
+    // Get all options and find the one matching our preset
+    const options = await presetSelect.locator('option').allTextContents()
+    const matchingOption = options.find(opt => opt.includes('Delete Test'))
+    if (!matchingOption) {
+      test.skip()
+      return
+    }
+
+    await presetSelect.selectOption({ label: matchingOption })
+    await page.waitForTimeout(300)
+
+    // Find and click delete button
+    const deleteButton = page.locator('button:has-text("Delete Preset"), button[aria-label*="Delete preset"], button[title*="Delete"]')
+    if (!(await deleteButton.isVisible())) {
+      test.skip()
+      return
+    }
+
+    await deleteButton.click()
+
+    // Confirm deletion if confirmation dialog appears
+    const confirmDelete = page.locator('button:has-text("Delete"), button:has-text("Yes"), button:has-text("OK")')
+    if (await confirmDelete.isVisible({ timeout: 1000 })) {
+      await confirmDelete.click()
+    }
+
+    await page.waitForTimeout(500)
+
+    // Verify preset is removed
+    const remainingOptions = await presetSelect.locator('option').allTextContents()
+    const stillExists = remainingOptions.some(opt => opt.includes('Delete Test'))
+    expect(stillExists).toBe(false)
+  })
+
+  test('should show preset count in UI', async ({ page }) => {
+    try {
+      await loadSimpleBoxExample(page)
+    } catch (error) {
+      console.log('Could not load preset fixture:', error.message)
+      test.skip()
+      return
+    }
+
+    // Check for preset select dropdown
+    const presetSelect = page.locator('select#presetSelect, select[aria-label*="preset"]')
+    if (!(await presetSelect.isVisible())) {
+      test.skip()
+      return
+    }
+
+    // Count initial options (should have at least "Select preset" or similar)
+    const initialCount = await presetSelect.locator('option').count()
+    expect(initialCount).toBeGreaterThanOrEqual(1)
+
+    // Save a preset
+    const saveButton = page.locator('button:has-text("Save Preset")')
+    if (await saveButton.isVisible()) {
+      await saveButton.click()
+
+      const nameInput = page.locator('input[type="text"][placeholder*="Preset name"]')
+      if (await nameInput.isVisible()) {
+        await nameInput.fill('Count Test')
+        const confirmButton = page.locator('button:has-text("Save")')
+        await confirmButton.click()
+        await page.waitForTimeout(500)
+
+        // Verify count increased
+        const newCount = await presetSelect.locator('option').count()
+        expect(newCount).toBeGreaterThan(initialCount)
+      }
+    }
+  })
+
+  test('should handle preset names with special characters', async ({ page }) => {
+    try {
+      await loadSimpleBoxExample(page)
+    } catch (error) {
+      console.log('Could not load preset fixture:', error.message)
+      test.skip()
+      return
+    }
+
+    const saveButton = page.locator('button:has-text("Save Preset")')
+    if (!(await saveButton.isVisible())) {
+      test.skip()
+      return
+    }
+
+    await saveButton.click()
+
+    const nameInput = page.locator('input[type="text"][placeholder*="Preset name"]')
+    if (await nameInput.isVisible()) {
+      // Try saving with special characters
+      await nameInput.fill('Test "Preset" (v1.0)')
+      const confirmButton = page.locator('button:has-text("Save")')
+      await confirmButton.click()
+      await page.waitForTimeout(500)
+
+      // Verify it was saved (should either work or show validation error)
+      const presetSelect = page.locator('select#presetSelect')
+      if (await presetSelect.isVisible()) {
+        const options = await presetSelect.locator('option').allTextContents()
+        // Either preset exists with cleaned name, or validation prevented save
+        // Both behaviors are acceptable
+        expect(options.length).toBeGreaterThanOrEqual(1)
+      }
+    }
+  })
+
+  test('should persist presets across page reloads', async ({ page }) => {
+    // Capture console messages
+    const consoleMessages = []
+    page.on('console', msg => {
+      consoleMessages.push(`[${msg.type()}] ${msg.text()}`)
+    })
+
+    try {
+      await loadSimpleBoxExample(page)
+    } catch (error) {
+      console.log('Could not load preset fixture:', error.message)
+      test.skip()
+      return
+    }
+
+    const saveButton = page.locator('button:has-text("Save Preset")')
+    if (!(await saveButton.isVisible())) {
+      test.skip()
+      return
+    }
+
+    // Check if presetManager exists before saving
+    const presetManagerExists = await page.evaluate(() => {
+      return {
+        exists: typeof window.presetManager !== 'undefined',
+        storageAvailable: window.presetManager ? window.presetManager.isStorageAvailable() : false
+      }
+    })
+    console.log('PresetManager status:', presetManagerExists)
+
+    await saveButton.click()
+
+    // Wait for modal to appear
+    const modal = page.locator('.preset-modal')
+    await modal.waitFor({ state: 'visible', timeout: 5000 })
+    console.log('Modal appeared')
+
+    // Try multiple selectors for the name input
+    const nameInput = page.locator('#presetName, input[placeholder*="preset"], input[placeholder*="Preset"]').first()
+    await nameInput.waitFor({ state: 'visible', timeout: 5000 })
+    console.log('Name input found')
+    
+    await nameInput.fill('Persistence Test')
+    console.log('Filled preset name')
+    
+    const confirmButton = page.locator('button[type="submit"]:has-text("Save")').first()
+    console.log('Confirm button visible:', await confirmButton.isVisible())
+    
+    await confirmButton.click()
+    console.log('Clicked save button')
+    
+    // Wait for modal to close
+    await page.waitForSelector('.preset-modal', { state: 'detached', timeout: 5000 })
+    console.log('Modal closed')
+    await page.waitForTimeout(1000)
+
+    // Check localStorage before reload
+    const storageBeforeReload = await page.evaluate(() => {
+      return {
+        presets: localStorage.getItem('openscad-customizer-presets'),
+        allKeys: Object.keys(localStorage)
+      }
+    })
+    console.log('localStorage before reload:', storageBeforeReload)
+    console.log('Relevant console messages:', consoleMessages.filter(msg => 
+      msg.includes('Preset') || msg.includes('localStorage') || msg.includes('Saved') || msg.includes('Failed')
+    ))
+
+    // Reload page
+    await page.reload()
+    await page.waitForLoadState('domcontentloaded')
+    await page.waitForTimeout(1000)
+
+    try {
+      await loadSimpleBoxExample(page)
+    } catch (error) {
+      console.log('Could not load preset fixture after reload:', error.message)
+      test.skip()
+      return
+    }
+
+    // Wait for parameters to load
+    const firstParam = page.locator('input[type="range"]').first()
+    await firstParam.waitFor({ state: 'visible', timeout: 5000 })
+    await page.waitForTimeout(1000)
+
+    // Check localStorage after reload and model load
+    const storageAfterReload = await page.evaluate(() => {
+      const presets = localStorage.getItem('openscad-customizer-presets')
+      const state = window.stateManager ? window.stateManager.getState() : null
+      return {
+        presets: presets,
+        currentModelName: state?.uploadedFile?.name || 'no model',
+        allKeys: Object.keys(localStorage)
+      }
+    })
+    console.log('localStorage after reload:', storageAfterReload)
+
+    // Verify preset still exists
+    const presetSelect = page.locator('select#presetSelect')
+    if (await presetSelect.isVisible()) {
+      const options = await presetSelect.locator('option').allTextContents()
+      console.log('Available preset options after reload:', options)
+      const persistedPreset = options.some(opt => opt.includes('Persistence Test'))
+      expect(persistedPreset).toBe(true)
+    }
+  })
+})

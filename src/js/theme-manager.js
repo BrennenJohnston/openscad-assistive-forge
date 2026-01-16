@@ -169,9 +169,13 @@ export class ThemeManager {
   /**
    * Add listener for theme changes
    * @param {Function} callback - Called with new theme
+   * @returns {Function} Unsubscribe function
    */
   addListener(callback) {
     this.listeners.push(callback);
+    return () => {
+      this.listeners = this.listeners.filter(cb => cb !== callback);
+    };
   }
 
   /**

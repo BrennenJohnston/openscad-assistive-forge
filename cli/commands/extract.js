@@ -6,6 +6,7 @@
 import { readFileSync, writeFileSync } from 'fs';
 import { resolve, basename } from 'path';
 import chalk from 'chalk';
+import YAML from 'yaml';
 import { extractParameters } from '../../src/js/parser.js';
 
 /**
@@ -37,11 +38,19 @@ function toJsonSchema(extracted, filename) {
 
   // Convert groups to schema
   if (extracted.groups && extracted.groups.length > 0) {
-    schema['x-groups'] = extracted.groups.map((group) => ({
-      name: group.name,
-      label: group.label || group.name,
-      collapsed: group.collapsed || false,
-    }));
+    // Note: web parser emits groups as { id, label, order }.
+    // Keep output stable for consumers by emitting { name, label, collapsed, order }.
+    schema['x-groups'] = extracted.groups.map((group) => {
+      const g = {
+        name: group.name || group.id || group.label,
+        label: group.label || group.name || group.id,
+        collapsed: group.collapsed || false,
+      };
+      if (typeof group.order === 'number') {
+        g.order = group.order;
+      }
+      return g;
+    });
   }
 
   // Convert parameters to schema properties
@@ -67,8 +76,13 @@ function toJsonSchema(extracted, filename) {
     switch (param.type) {
       case 'number':
       case 'integer':
-        if (typeof param.min !== 'undefined') property.minimum = param.min;
-        if (typeof param.max !== 'undefined') property.maximum = param.max;
+        // Web parser uses minimum/maximum/step; keep compat with older min/max too.
+        if (typeof param.minimum !== 'undefined') property.minimum = param.minimum;
+        else if (typeof param.min !== 'undefined') property.minimum = param.min;
+
+        if (typeof param.maximum !== 'undefined') property.maximum = param.maximum;
+        else if (typeof param.max !== 'undefined') property.maximum = param.max;
+
         if (typeof param.step !== 'undefined') property['x-step'] = param.step;
         break;
 
@@ -154,10 +168,13 @@ export async function extractCommand(file, options) {
     // Format output
     let output;
     if (options.format === 'yaml') {
-      console.error(chalk.red('✗ YAML output not yet implemented'));
-      process.exit(1);
-    } else {
+      output = YAML.stringify(schema);
+    } else if (options.format === 'json') {
       output = options.pretty ? JSON.stringify(schema, null, 2) : JSON.stringify(schema);
+    } else {
+      console.error(chalk.red(`✗ Unsupported format: ${options.format}`));
+      console.log(chalk.gray('Supported formats: json, yaml'));
+      process.exit(1);
     }
 
     // Write output

@@ -5,6 +5,52 @@ All notable changes to the OpenSCAD Web Customizer Forge project are documented 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.0] - 2026-01-15
+
+### Added - Testing Infrastructure & Performance
+
+- **Unit Testing Suite**: Comprehensive Vitest-based unit tests for core modules
+  - 119+ unit tests covering parser, state, presets, theme, and ZIP handling
+  - 88.82% coverage on parser module, 70%+ on preset and theme managers
+  - Test fixtures for OpenSCAD file validation
+  - Mock-based testing for localStorage and DOM interactions
+  
+- **E2E Testing Framework**: Playwright integration for end-to-end testing
+  - Basic workflow tests (upload → customize → download)
+  - Accessibility compliance tests with axe-core
+  - Keyboard navigation validation
+  - Multi-browser testing (Chromium, Firefox, WebKit)
+  
+- **GitHub Actions CI**: Automated testing on every push and PR
+  - Unit test execution with coverage reporting
+  - E2E test execution with artifact upload
+  - Build verification and bundle size monitoring
+  - Markdown linting
+  
+- **Documentation**: Comprehensive testing and performance guides
+  - TESTING.md - Complete guide for unit and E2E testing
+  - PERFORMANCE.md - Performance optimization strategies and targets
+  - Coverage targets and best practices
+  - Troubleshooting and debugging tips
+
+### Fixed
+
+- **Theme Manager API**: Updated `addListener()` to return unsubscribe function for consistency with StateManager pattern
+
+### Improved
+
+- **State Management Tests**: Extended coverage for URL synchronization and localStorage persistence
+- **Test Infrastructure**: Added setup files and fixtures for better test organization
+- **CI/CD Pipeline**: Complete automated testing workflow for continuous quality assurance
+
+### Technical
+
+- Dependencies: @playwright/test, @axe-core/playwright, vitest, @vitest/ui, @vitest/coverage-v8
+- Test count: 119 unit tests + 8 E2E tests
+- Coverage: 21%+ overall, 80%+ on core modules
+- New files: 10+ test files, 2 documentation files, 3 config files
+- GitHub Actions: 4 workflow jobs (unit, E2E, build, lint)
+
 ## [2.3.0] - 2026-01-15
 
 ### Fixed - Audit & Polish Release

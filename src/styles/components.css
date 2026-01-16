@@ -111,6 +111,8 @@
 
 /* Upload Zone */
 .upload-zone {
+  display: block;
+  text-align: center;
   border: 2px dashed var(--color-border);
   border-radius: var(--border-radius-lg);
   padding: var(--space-xl);
@@ -133,7 +135,8 @@
   transform: scale(1.02);
 }
 
-.upload-zone:focus {
+.upload-zone:focus,
+.upload-zone:focus-within {
   border-color: var(--color-accent);
   box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.3);
 }
@@ -276,6 +279,111 @@
   font-weight: 500;
   margin-bottom: var(--space-xs);
   color: var(--color-text-primary);
+}
+
+/* Help Tooltip Styles */
+.param-label-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.param-help-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.param-help-button {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  color: white;
+  border: none;
+  font-size: 12px;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s, transform 0.1s;
+  flex-shrink: 0;
+}
+
+.param-help-button:hover {
+  background: var(--color-accent-hover);
+  transform: scale(1.1);
+}
+
+.param-help-button:focus {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.param-help-button:active {
+  transform: scale(0.95);
+}
+
+.param-help-button[aria-expanded="true"] {
+  background: var(--color-accent-hover);
+}
+
+.param-tooltip {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  padding: var(--space-sm) var(--space-md);
+  max-width: 280px;
+  min-width: 200px;
+  font-size: var(--font-size-sm);
+  line-height: 1.4;
+  color: var(--color-text-primary);
+  box-shadow: var(--shadow-md);
+  z-index: 1000;
+  white-space: normal;
+  word-wrap: break-word;
+}
+
+.param-tooltip::before {
+  content: '';
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-bottom-color: var(--color-border);
+}
+
+.param-tooltip::after {
+  content: '';
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-bottom-color: var(--color-bg-secondary);
+  margin-bottom: 1px;
+}
+
+/* High Contrast Mode Adjustments for Tooltips */
+body.high-contrast .param-help-button {
+  border: 2px solid currentColor;
+}
+
+body.high-contrast .param-tooltip {
+  border-width: 2px;
+}
+
+/* Dark Mode Adjustments for Tooltips */
+@media (prefers-color-scheme: dark) {
+  .param-tooltip {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  }
 }
 
 .param-unit {

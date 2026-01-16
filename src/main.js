@@ -111,7 +111,7 @@ function sanitizeUrlParams(extracted, urlParams) {
 
 // Initialize app
 async function initApp() {
-  console.log('OpenSCAD Web Customizer v2.3.0 (Audit & Polish)');
+  console.log('OpenSCAD Web Customizer v2.4.0 (Testing Infrastructure)');
   console.log('Initializing...');
 
   // Register Service Worker for PWA support
@@ -270,9 +270,9 @@ async function initApp() {
   const mainInterface = document.getElementById('mainInterface');
   const uploadZone = document.getElementById('uploadZone');
   const fileInput = document.getElementById('fileInput');
-  const loadExampleBtn = document.getElementById('loadExampleBtn');
   const statusArea = document.getElementById('statusArea');
   const primaryActionBtn = document.getElementById('primaryActionBtn');
+  const cancelRenderBtn = document.getElementById('cancelRenderBtn');
   const downloadFallbackLink = document.getElementById('downloadFallbackLink');
   const statsArea = document.getElementById('stats');
   const previewContainer = document.getElementById('previewContainer');
@@ -296,8 +296,7 @@ async function initApp() {
     <span class="rendering-text">Generating preview...</span>
   `;
   
-  // Track if parameters have changed since last STL generation
-  let parametersChangedSinceGeneration = true; // Start true since no STL exists yet
+  // Track last generated parameters for comparison
   let lastGeneratedParamsHash = null;
   
   // Auto-preview enabled by default
@@ -512,7 +511,6 @@ async function initApp() {
     // Check auto-preview controller state
     const hasFullQualitySTL = autoPreviewController?.getCurrentFullSTL(state.parameters);
     const needsFullRender = !hasFullQualitySTL || autoPreviewController?.needsFullRender(state.parameters);
-    const autoPreviewState = autoPreviewController?.getStateInfo();
 
     if (hasFullQualitySTL && !needsFullRender) {
       // Full quality STL is ready and matches current parameters - show Download
@@ -669,8 +667,16 @@ async function initApp() {
       welcomeScreen.classList.add('hidden');
       mainInterface.classList.remove('hidden');
 
-      // Update file info
-      document.getElementById('fileInfo').textContent = `${fileName} (${paramCount} parameters)`;
+      // Update file info (preserve file tree for multi-file projects)
+      const fileInfo = document.getElementById('fileInfo');
+      if (fileInfo) {
+        if (projectFiles && projectFiles.size > 1) {
+          const treeHtml = createFileTree(projectFiles, mainFilePath || fileName);
+          fileInfo.innerHTML = `${fileName} (${paramCount} parameters)<br>${treeHtml}`;
+        } else {
+          fileInfo.textContent = `${fileName} (${paramCount} parameters)`;
+        }
+      }
 
       // Handle detected libraries
       const detectedLibraries = extracted.libraries || [];
@@ -755,10 +761,10 @@ async function initApp() {
         updateStatus(`Ready - ${paramCount} parameters loaded`);
       }
       
-      // Initialize 3D preview
+      // Initialize 3D preview (lazy loads Three.js)
       if (!previewManager) {
         previewManager = new PreviewManager(previewContainer);
-        previewManager.init();
+        await previewManager.init();
         
         // Sync measurements toggle with saved preference
         if (measurementsToggle) {
@@ -1006,6 +1012,9 @@ async function initApp() {
       primaryActionBtn.disabled = true;
       primaryActionBtn.textContent = `⏳ Generating ${formatName}...`;
       
+      // Show cancel button
+      cancelRenderBtn.classList.remove('hidden');
+      
       // Cancel any pending preview renders
       if (autoPreviewController) {
         autoPreviewController.cancelPending();
@@ -1091,7 +1100,20 @@ async function initApp() {
       alert(userMessage);
     } finally {
       primaryActionBtn.disabled = false;
+      // Hide cancel button
+      cancelRenderBtn.classList.add('hidden');
       // Always restore button to correct state based on current conditions
+      updatePrimaryActionButton();
+    }
+  });
+
+  // Cancel render button
+  cancelRenderBtn.addEventListener('click', () => {
+    if (renderController) {
+      renderController.cancel();
+      updateStatus('Generation cancelled by user');
+      cancelRenderBtn.classList.add('hidden');
+      primaryActionBtn.disabled = false;
       updatePrimaryActionButton();
     }
   });
@@ -1614,7 +1636,7 @@ async function initApp() {
         ? providedName.trim()
         : `Variant ${count}`;
 
-    const id = comparisonController.addVariant(variantName, state.parameters);
+    comparisonController.addVariant(variantName, state.parameters);
 
     updateStatus(`Added "${variantName}" to comparison`);
   });
@@ -2134,7 +2156,7 @@ async function initApp() {
   });
   
   // Subscribe to preset changes
-  presetManager.subscribe((action, preset, modelName) => {
+  presetManager.subscribe((action, _preset, _modelName) => {
     // Update dropdown only when the preset LIST changes.
     // IMPORTANT: presetManager emits a 'load' event too; rebuilding the <select> on 'load'
     // resets selection back to "-- Select Preset --" (confirmed by logs: updatePresetDropdown exit newValue="").
@@ -2417,6 +2439,14 @@ function renderLibraryUI(detectedLibraries) {
 function getEnabledLibrariesForRender() {
   const paths = libraryManager.getMountPaths();
   return paths;
+}
+
+// Expose key managers to window for testing and debugging
+if (typeof window !== 'undefined') {
+  window.stateManager = stateManager;
+  window.presetManager = presetManager;
+  window.themeManager = themeManager;
+  window.libraryManager = libraryManager;
 }
 
 // Start the app

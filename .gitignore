@@ -8,6 +8,13 @@ dist/
 public/wasm/openscad.*
 public/libraries/*/
 !public/libraries/README.md
+public/fonts/*.ttf
+!public/fonts/README.md
 
 .vercel
 .env*.local
+
+# Test artifacts
+coverage/
+test-results/
+playwright-report/

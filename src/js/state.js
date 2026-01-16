@@ -3,7 +3,7 @@
  * @license GPL-3.0-or-later
  */
 
-class StateManager {
+export class StateManager {
   constructor(initialState) {
     this.state = initialState;
     this.subscribers = [];

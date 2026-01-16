@@ -69,8 +69,8 @@ body {
 
 /* Contrast Toggle Button */
 .contrast-toggle {
-  background: rgba(255, 255, 255, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(0, 0, 0, 0.35);  /* Darker background for WCAG AA contrast */
+  border: 1px solid rgba(255, 255, 255, 0.35);
   border-radius: var(--border-radius-md);
   color: var(--color-accent-text);
   cursor: pointer;
@@ -100,8 +100,8 @@ body {
 }
 
 .contrast-label {
-  font-size: 0.75rem;
-  font-weight: 600;
+  font-size: 0.875rem;  /* Larger text (14px) for better contrast ratio */
+  font-weight: 700;
   letter-spacing: 0.5px;
 }
 
