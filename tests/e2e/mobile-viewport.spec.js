@@ -1,10 +1,12 @@
 import { test, expect, devices } from '@playwright/test'
 
-// Test on multiple mobile devices
+const stripWorkerOptions = ({ defaultBrowserType, browserName, ...device }) => device
+
+// Test on multiple mobile devices (without worker-level options)
 const mobileDevices = [
-  { name: 'Pixel 5', device: devices['Pixel 5'] },
-  { name: 'iPhone 12', device: devices['iPhone 12'] },
-  { name: 'iPhone SE', device: devices['iPhone SE'] },
+  { name: 'Pixel 5', device: stripWorkerOptions(devices['Pixel 5']) },
+  { name: 'iPhone 12', device: stripWorkerOptions(devices['iPhone 12']) },
+  { name: 'iPhone SE', device: stripWorkerOptions(devices['iPhone SE']) },
 ]
 
 for (const { name, device } of mobileDevices) {
