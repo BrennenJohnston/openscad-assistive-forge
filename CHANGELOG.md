@@ -38,6 +38,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Manual dismiss option
   - Mobile-responsive design
 
+### Fixed
+
+- **Worker bundling in preview/production**: Kept the worker constructor inline so Vite
+  bundles `openscad-wasm-prebuilt` into the worker chunk, preventing OpenSCAD WASM
+  initialization failures during preview or Vercel deployments.
+
 ### Technical
 
 - Total tests: 602 unit + 42 E2E

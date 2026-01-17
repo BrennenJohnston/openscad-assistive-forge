@@ -199,6 +199,19 @@ Look in the parameters panel for "📚 Libraries" section:
 - Verify worker mounted files (check console)
 - Try disabling and re-enabling library in UI
 
+### Issue 4: OpenSCAD Engine Fails to Initialize
+
+**Symptoms**:
+- `Failed to initialize OpenSCAD engine`
+- `[RenderController] Worker error: Event`
+- `Worker not ready. Call init() first.`
+
+**Fix**:
+- Keep the worker constructor inline: `new Worker(new URL('../worker/openscad-worker.js', import.meta.url), { type: 'module' })`
+- Avoid precomputing the worker URL outside the constructor (can break Vite worker bundling)
+- Rebuild and preview: `npm run build` then `npm run preview`
+- Clear the site data/service worker cache if the error persists
+
 ### Issue 4: MCAD Not Auto-Enabled
 
 **Symptoms**: Library detected but not checked in UI

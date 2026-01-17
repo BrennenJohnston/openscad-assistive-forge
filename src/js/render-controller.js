@@ -199,7 +199,7 @@ export class RenderController {
           onProgress(0, 'Starting OpenSCAD engine...');
         }
 
-        // Create worker
+        // Create worker (inline URL keeps Vite worker bundling intact).
         this.worker = new Worker(
           new URL('../worker/openscad-worker.js', import.meta.url),
           { type: 'module' }
