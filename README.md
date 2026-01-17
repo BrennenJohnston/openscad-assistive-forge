@@ -7,6 +7,7 @@
 [![Accessibility](https://img.shields.io/badge/WCAG-2.1%20AA-green.svg)](https://www.w3.org/WAI/WCAG21/quickref/)
 [![Version](https://img.shields.io/badge/version-2.10.1-brightgreen.svg)](CHANGELOG.md)
 [![PWA](https://img.shields.io/badge/PWA-enabled-blue.svg)](https://web.dev/progressive-web-apps/)
+[![Deploy](https://img.shields.io/badge/Deploy-Cloudflare%20Pages-F38020.svg)](https://openscad-web-customizer-forge.pages.dev/)
 
 ## 🎯 What This Does
 
@@ -39,7 +40,7 @@
 
 ## 🚀 Try It Now
 
-**[🔗 Live Demo](https://openscad-web-customizer-forge-gutg7h11z.vercel.app)**
+**[🔗 Live Demo](https://openscad-web-customizer-forge.pages.dev/)** — Hosted on Cloudflare Pages
 
 Or run locally:
 

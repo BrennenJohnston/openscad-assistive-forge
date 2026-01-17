@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 192 192">
+  <rect width="192" height="192" fill="#0066cc" rx="19"/>
+  <text x="50%" y="55%" dominant-baseline="middle" text-anchor="middle" 
+        font-family="Arial, sans-serif" font-weight="bold" font-size="67px" 
+        fill="#ffffff" stroke="#ffffff" stroke-width="3">OS</text>
+  <rect x="19.200000000000003" y="144" width="153.60000000000002" height="15.36" 
+        fill="#ffffff" opacity="0.3" rx="3.84"/>
+</svg>

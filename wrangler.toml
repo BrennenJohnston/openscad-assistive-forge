@@ -1,0 +1,6 @@
+# Cloudflare Pages Configuration
+# This file is optional for Pages deployments via GitHub integration
+# If using wrangler CLI directly: npx wrangler pages deploy dist
+
+name = "openscad-web-customizer-forge"
+pages_build_output_dir = "dist"
