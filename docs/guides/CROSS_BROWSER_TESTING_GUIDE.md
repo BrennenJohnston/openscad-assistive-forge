@@ -30,7 +30,7 @@ According to `docs/BUILD_PLAN_NEW.md`, we target:
 Use this for rapid verification across browsers:
 
 ### 1. Initial Load (30 seconds)
-1. Open production URL: https://openscad-web-customizer-forge-gutg7h11z.vercel.app
+1. Open production URL: https://openscad-web-customizer-forge.pages.dev
 2. ✅ Page loads without errors
 3. ✅ Welcome screen displays
 4. ✅ No console errors (F12 → Console tab)
@@ -483,7 +483,7 @@ console.log(gl ? 'WebGL supported' : 'WebGL not supported');
 
 ## 📚 Resources
 
-- **Production URL**: https://openscad-web-customizer-forge-gutg7h11z.vercel.app
+- **Production URL**: https://openscad-web-customizer-forge.pages.dev
 - **Build Plan**: docs/BUILD_PLAN_NEW.md (Browser Requirements section)
 - **Production Checklist**: PRODUCTION_VERIFICATION_CHECKLIST.md
 - **Browser Compatibility Matrix**: docs/BUILD_PLAN_NEW.md (lines 442-456)

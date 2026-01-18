@@ -1,8 +1,8 @@
 # Production Verification Checklist — v1.2.0
 
-**Version**: v1.2.0  
-**Production URL**: https://openscad-web-customizer-forge-gutg7h11z.vercel.app  
-**Verification Date**: 2026-01-13  
+**Version**: v3.0.0  
+**Production URL**: https://openscad-web-customizer-forge.pages.dev  
+**Verification Date**: 2026-01-18  
 **Status**: 🔄 **PENDING VERIFICATION**
 
 ---
@@ -22,8 +22,8 @@ This checklist ensures v1.2.0 Auto-Preview features work correctly in production
   - Main: 49.94 KB (15.62 KB gzipped) ✅
   - Three.js: 460.78 KB (117.20 KB gzipped) ✅
   - WASM: 10.98 MB (lazy loaded) ✅
-- [x] **Deployment successful** - Vercel deployment completed in 20s
-- [x] **Production URL generated** - https://openscad-web-customizer-forge-gutg7h11z.vercel.app
+- [x] **Deployment successful** - Cloudflare Pages deployment completed
+- [x] **Production URL generated** - https://openscad-web-customizer-forge.pages.dev
 
 ---
 
@@ -539,8 +539,8 @@ This checklist ensures v1.2.0 Auto-Preview features work correctly in production
 
 ## 📚 Resources
 
-- **Production URL**: https://openscad-web-customizer-forge-gutg7h11z.vercel.app
-- **Vercel Dashboard**: https://vercel.com/brennenjohnstons-projects/openscad-web-customizer-forge
+- **Production URL**: https://openscad-web-customizer-forge.pages.dev
+- **Cloudflare Dashboard**: https://dash.cloudflare.com
 - **GitHub Repository**: (add your repo URL)
 - **Build Plan**: docs/BUILD_PLAN_NEW.md
 - **Changelog**: CHANGELOG_v1.2.md

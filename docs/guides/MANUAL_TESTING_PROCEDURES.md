@@ -31,7 +31,7 @@
 ### Access Production Environment
 
 1. Open browser
-2. Navigate to: https://openscad-web-customizer-forge-gutg7h11z.vercel.app
+2. Navigate to: https://openscad-web-customizer-forge.pages.dev
 3. Open DevTools (F12)
 4. Check Console tab for any errors
 5. Verify page loads without errors

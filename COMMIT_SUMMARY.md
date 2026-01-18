@@ -217,7 +217,7 @@ Status: ✅ Successfully pushed
 
 ### Links
 - **Repository**: https://github.com/BrennenJohnston/openscad-web-customizer-forge
-- **Live Demo**: https://openscad-web-customizer-forge-gutg7h11z.vercel.app
+- **Live Demo**: https://openscad-web-customizer-forge.pages.dev
 - **Commit**: https://github.com/BrennenJohnston/openscad-web-customizer-forge/commit/addb670
 
 ---

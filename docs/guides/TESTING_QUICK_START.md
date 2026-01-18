@@ -19,7 +19,7 @@ This guide helps you quickly verify that v1.2.0 is working correctly in producti
 ### Steps
 
 1. **Open Production**
-   - URL: https://openscad-web-customizer-forge-gutg7h11z.vercel.app
+   - URL: https://openscad-web-customizer-forge.pages.dev
    - Press F12 to open DevTools
    - Check Console for errors
 
@@ -249,5 +249,5 @@ _____________________________________________
 ---
 
 **Quick Start Version**: 1.0  
-**Last Updated**: 2026-01-13  
-**Production URL**: https://openscad-web-customizer-forge-gutg7h11z.vercel.app
+**Last Updated**: 2026-01-18  
+**Production URL**: https://openscad-web-customizer-forge.pages.dev
