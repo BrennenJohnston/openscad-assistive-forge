@@ -49,7 +49,11 @@ program
   .requiredOption('-s, --schema <path>', 'Parameter schema JSON file')
   .requiredOption('--scad <path>', 'OpenSCAD source file')
   .option('-o, --out <path>', 'Output directory', './webapp')
-  .option('--template <name>', 'Template to use (vanilla|react|vue|svelte)', 'vanilla')
+  .option(
+    '--template <name>',
+    'Template to use (vanilla|react|vue|svelte|angular|preact)',
+    'vanilla'
+  )
   .option('--title <title>', 'App title')
   .option('--theme <theme>', 'Theme preset (default|dark|custom)')
   .action(scaffoldCommand);

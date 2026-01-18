@@ -439,8 +439,6 @@ Ideas for future versions:
 
 ## 🏆 Credits
 
-**Developed by**: Claude Sonnet 4.5  
-**Release Manager**: OpenSCAD Forge Team  
 **License**: GPL-3.0-or-later
 
 ---

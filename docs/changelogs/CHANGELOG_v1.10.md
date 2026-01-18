@@ -437,9 +437,7 @@ npm run dev
 
 ### Implementation
 
-- **Library Manager**: Claude Sonnet 4.5
-- **Documentation**: Claude Sonnet 4.5
-- **Testing**: (Community contributions welcome!)
+- **Testing**: Community contributions welcome!
 
 ### Library Authors
 

@@ -690,7 +690,7 @@ We follow [Semantic Versioning](https://semver.org/):
 
 ## Links
 
-- **Repository**: [GitHub](https://github.com/YOUR_ORG/openscad-web-customizer-forge)
+- **Repository**: [GitHub](https://github.com/BrennenJohnston/openscad-web-customizer-forge)
 - **Live Demo**: [Cloudflare Pages](https://openscad-web-customizer-forge.pages.dev/)
 - **Documentation**: [docs/](docs/)
 - **Version Changelogs**: [docs/changelogs/](docs/changelogs/)

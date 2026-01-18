@@ -14,7 +14,7 @@ const __dirname = dirname(__filename);
 
 /**
  * Get template directory path
- * @param {string} templateName - Template name (vanilla|react|vue|svelte)
+ * @param {string} templateName - Template name (vanilla|react|vue|svelte|angular|preact)
  * @returns {string} Template directory path
  */
 function getTemplateDir(templateName) {

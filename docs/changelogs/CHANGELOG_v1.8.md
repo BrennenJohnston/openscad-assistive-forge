@@ -246,7 +246,6 @@ const enabled = previewManager.measurementsEnabled;
 
 ### Contributors
 
-- **Implementation**: Claude Opus 4.5 (AI Assistant)
 - **Testing**: Manual browser testing
 - **Design**: Based on BUILD_PLAN_NEW.md specifications
 

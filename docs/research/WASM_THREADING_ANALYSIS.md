@@ -1,7 +1,6 @@
 # WASM Threading Analysis for openscad-wasm-prebuilt
 
 **Analysis Date**: January 17, 2026  
-**Analyst**: AI Assistant  
 **Package Version Analyzed**: openscad-wasm-prebuilt@1.2.0
 
 ## Executive Summary

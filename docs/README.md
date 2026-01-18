@@ -103,8 +103,8 @@
 All version changelogs are available in [changelogs/](changelogs/)
 
 **Major versions:**
-- v2.x (2024-2026): Accessibility, CLI tooling, templates, library system
-- v1.x (2024): Core features, ZIP upload, auto-preview, examples, preset management
+- v2.x - v3.x (2026): Accessibility, CLI tooling, templates, library system, Cloudflare deployment
+- v1.x (2026): Core features, ZIP upload, auto-preview, examples, preset management
 
 ---
 

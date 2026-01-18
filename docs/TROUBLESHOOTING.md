@@ -315,8 +315,8 @@ npx vitest run tests/unit/parser.test.js
 
 If none of these solutions work:
 
-1. **Check existing issues**: https://github.com/your-repo/issues
-2. **Ask in discussions**: https://github.com/your-repo/discussions
+1. **Check existing issues** in your repository host’s issue tracker
+2. **Ask in discussions** (if enabled for the repo)
 3. **Provide details**:
    - OS and version (e.g., Windows 11, macOS 14)
    - Node version (`node --version`)

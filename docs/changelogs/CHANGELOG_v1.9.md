@@ -360,8 +360,6 @@ npm run build
 
 ## Credits
 
-**Feature Design:** Claude Opus 4.5  
-**Implementation:** Automated development workflow  
 **Testing:** Build verification + manual testing  
 **Documentation:** Comprehensive changelog + inline comments
 

@@ -3,7 +3,7 @@ name: OpenSCAD Web Customizer Forge — Build Plan
 version: 3.0.0
 date: 2026-01-12
 last_validated: 2026-01-18
-validated_by: Claude Opus 4.5 (v3.0.0 Cloudflare Stable Release)
+validated_by: Project maintainer (v3.0.0 Cloudflare Stable Release)
 status: released
 next_milestone: v3.1 (Q2 2026)
 license: GPL-3.0-or-later

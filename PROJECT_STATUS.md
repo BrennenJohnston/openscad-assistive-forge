@@ -373,7 +373,7 @@ openscad-web-customizer-forge/
 || Environment | URL | Status |
 ||-------------|-----|--------|
 || **Production** | https://openscad-web-customizer-forge.pages.dev | ✅ Live (Cloudflare) |
-|| **GitHub** | https://github.com/YOUR_ORG/openscad-web-customizer-forge | ✅ Published |
+|| **GitHub** | https://github.com/BrennenJohnston/openscad-web-customizer-forge | ✅ Published |
 
 ### Deployment Configuration
 
@@ -541,9 +541,9 @@ docs/
 
 ### For Developers
 
-- **GitHub**: https://github.com/YOUR_ORG/openscad-web-customizer-forge
+- **GitHub**: https://github.com/BrennenJohnston/openscad-web-customizer-forge
 - **Issues**: Report bugs via GitHub Issues
-- **Contributing**: See README.md contributing section
+- **Contributing**: See CONTRIBUTING.md
 - **Build Plan**: See `docs/BUILD_PLAN_NEW.md`
 
 ### For Maintainers

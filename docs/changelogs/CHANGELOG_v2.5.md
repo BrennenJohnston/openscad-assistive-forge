@@ -110,7 +110,6 @@ OpenSCAD's `text()` function now works with bundled Liberation fonts.
 
 ## Contributors
 
-- Implementation: AI-assisted development with Claude
 - Testing: Browser-based verification
 
 ---

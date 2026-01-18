@@ -285,7 +285,6 @@ No production code changes, no migration needed.
 
 ## Contributors
 
-Phase 1 implemented by: AI Assistant (Claude)  
 Date: 2026-01-15
 
 ---

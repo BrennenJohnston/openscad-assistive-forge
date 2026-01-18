@@ -364,7 +364,6 @@ The remaining v1.2 feature is **Render Queue** (batch multiple variants):
 
 ## Credits
 
-**Implementation**: Claude Sonnet 4.5  
 **Testing**: Manual browser testing  
 **Build platform**: Vite 5.4.21  
 **Dependencies**: No new dependencies added  

@@ -442,6 +442,5 @@ This release marks a significant milestone in the v1.2 Advanced Features roadmap
 
 ---
 
-**Contributors**: Claude Sonnet 4.5  
 **License**: GPL-3.0-or-later  
 **Build**: Vite 5.4.21
