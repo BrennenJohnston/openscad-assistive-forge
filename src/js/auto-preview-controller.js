@@ -35,6 +35,9 @@ export class AutoPreviewController {
     this.maxCacheSize = options.maxCacheSize ?? 10;
     this.enabled = options.enabled ?? true;
     this.previewQuality = options.previewQuality ?? null;
+    this.resolvePreviewQuality = options.resolvePreviewQuality || null;
+    this.resolvePreviewParameters = options.resolvePreviewParameters || null;
+    this.resolvePreviewCacheKey = options.resolvePreviewCacheKey || null;
 
     // State
     this.state = PREVIEW_STATE.IDLE;
@@ -42,12 +45,15 @@ export class AutoPreviewController {
     this.currentScadContent = null;
     this.currentParamHash = null;
     this.previewParamHash = null;
+    this.previewCacheKey = null;
+    this.currentPreviewKey = null;
     this.fullRenderParamHash = null;
     this.scadVersion = 0;
 
     // If params change while a render is in progress, keep the latest requested params here.
     this.pendingParameters = null;
     this.pendingParamHash = null;
+    this.pendingPreviewKey = null;
 
     // Enabled libraries for rendering
     this.enabledLibraries = [];
@@ -61,6 +67,7 @@ export class AutoPreviewController {
     // Full quality STL for download (separate from preview)
     this.fullQualitySTL = null;
     this.fullQualityStats = null;
+    this.fullQualityKey = null;
 
     // Callbacks
     this.onStateChange = options.onStateChange || (() => {});
@@ -76,6 +83,56 @@ export class AutoPreviewController {
    */
   hashParams(params) {
     return JSON.stringify(params);
+  }
+
+  /**
+   * Resolve preview quality and cache key for current parameters
+   * @param {Object} parameters
+   * @returns {{quality: Object|null, qualityKey: string}}
+   */
+  resolvePreviewQualityInfo(parameters) {
+    const quality = this.resolvePreviewQuality
+      ? this.resolvePreviewQuality(parameters)
+      : this.previewQuality;
+    let qualityKey = this.resolvePreviewCacheKey
+      ? this.resolvePreviewCacheKey(parameters, quality)
+      : null;
+
+    if (!qualityKey) {
+      if (!quality) {
+        qualityKey = 'model';
+      } else if (quality.name) {
+        qualityKey = quality.name;
+      } else {
+        qualityKey = 'custom';
+      }
+    }
+
+    return { quality, qualityKey };
+  }
+
+  /**
+   * Resolve preview parameter overrides
+   * @param {Object} parameters
+   * @param {string} qualityKey
+   * @param {Object|null} quality
+   * @returns {Object}
+   */
+  resolvePreviewParametersForRender(parameters, qualityKey, quality) {
+    if (this.resolvePreviewParameters) {
+      return this.resolvePreviewParameters(parameters, qualityKey, quality);
+    }
+    return parameters;
+  }
+
+  /**
+   * Build a preview cache key
+   * @param {string} paramHash
+   * @param {string} qualityKey
+   * @returns {string}
+   */
+  getPreviewCacheKey(paramHash, qualityKey) {
+    return `${paramHash}|${qualityKey}`;
   }
 
   /**
@@ -189,7 +246,43 @@ export class AutoPreviewController {
   setPreviewQuality(qualityPreset) {
     this.previewQuality = qualityPreset;
     this.clearPreviewCache();
-    if (this.currentParamHash) {
+    if (this.currentPreviewKey) {
+      this.setState(PREVIEW_STATE.STALE);
+    }
+  }
+
+  /**
+   * Set resolver for adaptive preview quality
+   * @param {Function|null} resolver
+   */
+  setPreviewQualityResolver(resolver) {
+    this.resolvePreviewQuality = resolver || null;
+    this.clearPreviewCache();
+    if (this.currentPreviewKey) {
+      this.setState(PREVIEW_STATE.STALE);
+    }
+  }
+
+  /**
+   * Set resolver for adaptive preview parameters
+   * @param {Function|null} resolver
+   */
+  setPreviewParametersResolver(resolver) {
+    this.resolvePreviewParameters = resolver || null;
+    this.clearPreviewCache();
+    if (this.currentPreviewKey) {
+      this.setState(PREVIEW_STATE.STALE);
+    }
+  }
+
+  /**
+   * Set resolver for preview cache key
+   * @param {Function|null} resolver
+   */
+  setPreviewCacheKeyResolver(resolver) {
+    this.resolvePreviewCacheKey = resolver || null;
+    this.clearPreviewCache();
+    if (this.currentPreviewKey) {
       this.setState(PREVIEW_STATE.STALE);
     }
   }
@@ -203,24 +296,28 @@ export class AutoPreviewController {
     if (!this.currentScadContent) return;
 
     const paramHash = this.hashParams(parameters);
+    const { qualityKey } = this.resolvePreviewQualityInfo(parameters);
+    const cacheKey = this.getPreviewCacheKey(paramHash, qualityKey);
+
     this.currentParamHash = paramHash;
+    this.currentPreviewKey = cacheKey;
 
     // Check if preview is already current
     if (
-      paramHash === this.previewParamHash &&
+      cacheKey === this.previewCacheKey &&
       this.state === PREVIEW_STATE.CURRENT
     ) {
       return;
     }
 
     // Check cache first
-    if (this.previewCache.has(paramHash)) {
-      this.loadCachedPreview(paramHash);
+    if (this.previewCache.has(cacheKey)) {
+      this.loadCachedPreview(paramHash, cacheKey, qualityKey);
       return;
     }
 
     // Mark preview as stale if we have one
-    if (this.previewParamHash && this.state === PREVIEW_STATE.CURRENT) {
+    if (this.previewCacheKey && this.state === PREVIEW_STATE.CURRENT) {
       this.setState(PREVIEW_STATE.STALE);
     }
 
@@ -243,6 +340,7 @@ export class AutoPreviewController {
       }
       this.pendingParameters = parameters;
       this.pendingParamHash = paramHash;
+      this.pendingPreviewKey = cacheKey;
       this.setState(PREVIEW_STATE.PENDING);
       return;
     }
@@ -264,9 +362,11 @@ export class AutoPreviewController {
   /**
    * Load a cached preview
    * @param {string} paramHash - Parameter hash to load
+   * @param {string} cacheKey - Cache key to load
+   * @param {string} qualityKey - Quality key for state reporting
    */
-  async loadCachedPreview(paramHash) {
-    const cached = this.previewCache.get(paramHash);
+  async loadCachedPreview(paramHash, cacheKey, qualityKey) {
+    const cached = this.previewCache.get(cacheKey);
     if (!cached) return;
 
     try {
@@ -282,15 +382,18 @@ export class AutoPreviewController {
       }
       await this.previewManager.loadSTL(cached.stl);
       this.previewParamHash = paramHash;
+      this.previewCacheKey = cacheKey;
       this.setState(PREVIEW_STATE.CURRENT, {
         cached: true,
         stats: cached.stats,
+        renderDurationMs: cached.durationMs,
+        qualityKey,
       });
-      this.onPreviewReady(cached.stl, cached.stats, true);
+      this.onPreviewReady(cached.stl, cached.stats, true, cached.durationMs);
     } catch (error) {
       console.error('Failed to load cached preview:', error);
       // Remove from cache and try fresh render
-      this.previewCache.delete(paramHash);
+      this.previewCache.delete(cacheKey);
       this.renderPreview(JSON.parse(paramHash), paramHash);
     }
   }
@@ -302,8 +405,19 @@ export class AutoPreviewController {
    */
   async renderPreview(parameters, paramHash) {
     const localScadVersion = this.scadVersion;
+    const { quality, qualityKey } = this.resolvePreviewQualityInfo(parameters);
+    const cacheKey = this.getPreviewCacheKey(paramHash, qualityKey);
+    const previewParameters = this.resolvePreviewParametersForRender(
+      parameters,
+      qualityKey,
+      quality
+    );
+
     // Check if this render is still relevant
-    if (paramHash !== this.currentParamHash) {
+    if (
+      paramHash !== this.currentParamHash ||
+      cacheKey !== this.currentPreviewKey
+    ) {
       console.log('[AutoPreview] Skipping stale render request');
       return;
     }
@@ -311,11 +425,12 @@ export class AutoPreviewController {
     this.setState(PREVIEW_STATE.RENDERING);
 
     try {
+      const startTime = Date.now();
       const result = await this.renderController.renderPreview(
         this.currentScadContent,
-        parameters,
+        previewParameters,
         {
-          ...(this.previewQuality ? { quality: this.previewQuality } : {}),
+          ...(quality ? { quality } : {}),
           files: this.projectFiles,
           mainFile: this.mainFilePath,
           libraries: this.enabledLibraries,
@@ -324,19 +439,24 @@ export class AutoPreviewController {
           },
         }
       );
+      const durationMs = Date.now() - startTime;
 
       // If the file changed mid-render, ignore this result.
       if (localScadVersion !== this.scadVersion) return;
 
       // Check if still relevant after render completes
-      if (paramHash !== this.currentParamHash) {
+      if (
+        paramHash !== this.currentParamHash ||
+        cacheKey !== this.currentPreviewKey
+      ) {
         console.log('[AutoPreview] Discarding stale render result');
         return;
       }
 
       // Cache the result
-      this.addToCache(paramHash, result);
+      this.addToCache(cacheKey, result, durationMs);
       this.previewParamHash = paramHash;
+      this.previewCacheKey = cacheKey;
 
       // Load into 3D preview
       if (this.previewManager?.setColorOverride) {
@@ -345,8 +465,12 @@ export class AutoPreviewController {
       }
       await this.previewManager.loadSTL(result.stl);
 
-      this.setState(PREVIEW_STATE.CURRENT, { stats: result.stats });
-      this.onPreviewReady(result.stl, result.stats, false);
+      this.setState(PREVIEW_STATE.CURRENT, {
+        stats: result.stats,
+        renderDurationMs: durationMs,
+        qualityKey,
+      });
+      this.onPreviewReady(result.stl, result.stats, false, durationMs);
     } catch (error) {
       console.error('[AutoPreview] Preview render failed:', error);
 
@@ -370,7 +494,8 @@ export class AutoPreviewController {
         // Do nothing - stale render result ignored
       } else if (
         this.pendingParamHash &&
-        this.pendingParamHash === this.currentParamHash
+        this.pendingParamHash === this.currentParamHash &&
+        this.pendingPreviewKey === this.currentPreviewKey
       ) {
         // If parameters changed during this render, immediately render the latest once we are free.
         // (OpenSCAD WASM render is blocking in the worker, so "cancel" can't interrupt mid-render.)
@@ -378,6 +503,7 @@ export class AutoPreviewController {
         const nextHash = this.pendingParamHash;
         this.pendingParameters = null;
         this.pendingParamHash = null;
+        this.pendingPreviewKey = null;
 
         // Avoid re-entrancy: render on next tick.
         setTimeout(() => {
@@ -389,19 +515,21 @@ export class AutoPreviewController {
 
   /**
    * Add result to cache, evicting old entries if needed
-   * @param {string} paramHash - Parameter hash
+   * @param {string} cacheKey - Preview cache key
    * @param {Object} result - Render result { stl, stats }
+   * @param {number} durationMs - Render duration in milliseconds
    */
-  addToCache(paramHash, result) {
+  addToCache(cacheKey, result, durationMs = null) {
     // Evict oldest entries if cache is full
     while (this.previewCache.size >= this.maxCacheSize) {
       const oldestKey = this.previewCache.keys().next().value;
       this.previewCache.delete(oldestKey);
     }
 
-    this.previewCache.set(paramHash, {
+    this.previewCache.set(cacheKey, {
       stl: result.stl,
       stats: result.stats,
+      durationMs,
       timestamp: Date.now(),
     });
   }
@@ -412,9 +540,11 @@ export class AutoPreviewController {
   clearCache() {
     this.previewCache.clear();
     this.previewParamHash = null;
+    this.previewCacheKey = null;
     this.fullRenderParamHash = null;
     this.fullQualitySTL = null;
     this.fullQualityStats = null;
+    this.fullQualityKey = null;
   }
 
   /**
@@ -423,6 +553,7 @@ export class AutoPreviewController {
   clearPreviewCache() {
     this.previewCache.clear();
     this.previewParamHash = null;
+    this.previewCacheKey = null;
   }
 
   /**
@@ -430,11 +561,18 @@ export class AutoPreviewController {
    * @param {Object} parameters - Parameter values
    * @returns {Promise<Object>} Render result with STL and stats
    */
-  async renderFull(parameters) {
+  async renderFull(parameters, options = {}) {
     const paramHash = this.hashParams(parameters);
+    const quality = options.quality || null;
+    const qualityKey = quality?.name ? `full-${quality.name}` : 'full';
+    const cacheKey = this.getPreviewCacheKey(paramHash, qualityKey);
 
     // Check if we already have full quality for these params
-    if (paramHash === this.fullRenderParamHash && this.fullQualitySTL) {
+    if (
+      paramHash === this.fullRenderParamHash &&
+      this.fullQualitySTL &&
+      this.fullQualityKey === qualityKey
+    ) {
       return {
         stl: this.fullQualitySTL,
         stats: this.fullQualityStats,
@@ -450,6 +588,7 @@ export class AutoPreviewController {
         files: this.projectFiles,
         mainFile: this.mainFilePath,
         libraries: this.enabledLibraries,
+        ...(quality ? { quality } : {}),
         onProgress: (percent, message) => {
           this.onProgress(percent, message, 'full');
         },
@@ -460,6 +599,7 @@ export class AutoPreviewController {
     this.fullQualitySTL = result.stl;
     this.fullQualityStats = result.stats;
     this.fullRenderParamHash = paramHash;
+    this.fullQualityKey = qualityKey;
 
     // Also update the preview with full quality result
     try {
@@ -469,10 +609,12 @@ export class AutoPreviewController {
       }
       await this.previewManager.loadSTL(result.stl);
       this.previewParamHash = paramHash;
-      this.addToCache(paramHash, result);
+      this.previewCacheKey = cacheKey;
+      this.addToCache(cacheKey, result, null);
       this.setState(PREVIEW_STATE.CURRENT, {
         stats: result.stats,
         fullQuality: true,
+        qualityKey,
       });
     } catch (error) {
       console.warn(
@@ -521,6 +663,7 @@ export class AutoPreviewController {
 
     this.pendingParameters = null;
     this.pendingParamHash = null;
+    this.pendingPreviewKey = null;
   }
 
   /**
@@ -545,13 +688,18 @@ export class AutoPreviewController {
       const paramHash = this.hashParams(parameters);
       this.pendingParameters = parameters;
       this.pendingParamHash = paramHash;
+      const { qualityKey } = this.resolvePreviewQualityInfo(parameters);
+      this.pendingPreviewKey = this.getPreviewCacheKey(paramHash, qualityKey);
       this.currentParamHash = paramHash;
+      this.currentPreviewKey = this.pendingPreviewKey;
       this.setState(PREVIEW_STATE.PENDING);
       return true; // Will render when current render completes
     }
 
     const paramHash = this.hashParams(parameters);
     this.currentParamHash = paramHash;
+    const { qualityKey } = this.resolvePreviewQualityInfo(parameters);
+    this.currentPreviewKey = this.getPreviewCacheKey(paramHash, qualityKey);
     await this.renderPreview(parameters, paramHash);
     return true;
   }
@@ -565,10 +713,10 @@ export class AutoPreviewController {
       state: this.state,
       enabled: this.enabled,
       hasPendingRender: !!this.debounceTimer,
-      hasPreview: !!this.previewParamHash,
+      hasPreview: !!this.previewCacheKey,
       hasFullSTL: !!this.fullQualitySTL,
       cacheSize: this.previewCache.size,
-      isPreviewCurrent: this.currentParamHash === this.previewParamHash,
+      isPreviewCurrent: this.currentPreviewKey === this.previewCacheKey,
       isFullCurrent: this.currentParamHash === this.fullRenderParamHash,
     };
   }

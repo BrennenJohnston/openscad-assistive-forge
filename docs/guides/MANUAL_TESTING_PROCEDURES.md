@@ -334,13 +334,13 @@
 1. Change "Width" slider from 50 to 60
 2. Release mouse
 3. Observe status immediately
-4. Wait 1.5 seconds
+4. Wait ~0.35 seconds (default debounce; allow up to 1s on slower devices)
 5. Observe status change
 6. Wait for render to complete
 
 **Expected Result:**
 - ✅ Immediately after change: Status shows "Changes detected - preview updating..." (yellow indicator)
-- ✅ After 1.5s: Status shows "Generating preview..." (blue indicator)
+- ✅ After debounce: Status shows "Generating preview..." (blue indicator)
 - ✅ After 2-8s: Status shows "Preview ready" (green indicator)
 - ✅ 3D preview updates with new geometry
 - ✅ No console errors
@@ -358,16 +358,16 @@
 **Setup:** Load Simple Box
 
 **Steps:**
-1. Rapidly change "Width" slider multiple times (within 1.5 seconds)
+1. Rapidly change "Width" slider multiple times (within the debounce window ~0.35s)
 2. Release mouse
 3. Observe status
-4. Wait 1.5 seconds
+4. Wait ~0.35 seconds (default debounce; allow up to 1s on slower devices)
 5. Verify only ONE render triggers
 
 **Expected Result:**
 - ✅ Status shows "Changes detected..." during rapid changes
 - ✅ Timer resets with each change
-- ✅ Only one render starts after 1.5s of inactivity
+- ✅ Only one render starts after the debounce window of inactivity
 - ✅ No multiple renders triggered
 - ✅ No console errors
 
@@ -454,7 +454,7 @@
 **Expected:** ✅ Yellow indicator, "Changes detected - preview updating..."
 
 #### Rendering State
-1. Wait 1.5s after parameter change
+1. Wait ~0.35s after parameter change (default debounce)
 2. Observe status
 
 **Expected:** ✅ Blue indicator, "Generating preview...", spinner visible

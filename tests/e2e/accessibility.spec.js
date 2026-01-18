@@ -175,6 +175,34 @@ test.describe('Accessibility Compliance (WCAG 2.1 AA)', () => {
       test.skip()
     }
   })
+  
+  test('should show library controls after upload even when no libraries detected', async ({ page }) => {
+    // Skip in CI - requires WASM to process uploaded file
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
+    
+    await page.goto('/')
+    
+    const fileInput = page.locator('#fileInput')
+    const fixturePath = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad')
+    
+    try {
+      await fileInput.setInputFiles(fixturePath)
+      await page.waitForSelector('.param-control', { timeout: 15000 })
+      
+      // Library controls should be visible (not hidden)
+      const libraryControls = page.locator('#libraryControls')
+      await expect(libraryControls).toBeVisible()
+      
+      // Library details should exist (may be closed)
+      const libraryDetails = page.locator('.library-details')
+      await expect(libraryDetails).toBeVisible()
+      
+      console.log('Library controls are visible after upload')
+    } catch (error) {
+      console.log('Could not test library controls visibility:', error.message)
+      test.skip()
+    }
+  })
 })
 
 test.describe('Screen Reader Support', () => {

@@ -14,16 +14,18 @@ describe('RenderController', () => {
     const params = { $fn: 100, $fa: 5, $fs: 0.5 }
     const adjusted = controller.applyQualitySettings(params, RENDER_QUALITY.DRAFT)
 
-    expect(adjusted.$fn).toBe(16)
-    expect(adjusted.$fa).toBe(12)
-    expect(adjusted.$fs).toBe(2)
+    // DRAFT: maxFn=24, minFa=15, minFs=3 (community draft standard)
+    expect(adjusted.$fn).toBe(24)
+    expect(adjusted.$fa).toBe(15)
+    expect(adjusted.$fs).toBe(3)
   })
 
   it('forces $fn when missing and forceFn is true', () => {
     const controller = new RenderController()
     const adjusted = controller.applyQualitySettings({}, RENDER_QUALITY.DRAFT)
 
-    expect(adjusted.$fn).toBe(16)
+    // DRAFT forces $fn to maxFn=24
+    expect(adjusted.$fn).toBe(24)
   })
 
   it('reports busy state when a request is active', () => {
@@ -258,7 +260,8 @@ describe('RenderController', () => {
     const params = {}
     const adjusted = controller.applyQualitySettings(params, RENDER_QUALITY.DRAFT)
     
-    expect(adjusted.$fa).toBe(12)
+    // DRAFT minFa=15 (community draft standard)
+    expect(adjusted.$fa).toBe(15)
   })
 
   it('applies minFs when $fs is undefined', () => {
@@ -266,7 +269,8 @@ describe('RenderController', () => {
     const params = {}
     const adjusted = controller.applyQualitySettings(params, RENDER_QUALITY.DRAFT)
     
-    expect(adjusted.$fs).toBe(2)
+    // DRAFT minFs=3 (community draft standard)
+    expect(adjusted.$fs).toBe(3)
   })
 
   it('returns not busy when no current request', () => {

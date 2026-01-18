@@ -18,7 +18,7 @@ The OpenSCAD Web Customizer works on mobile browsers (iOS Safari, Android Chrome
 **Workarounds**:
 1. **Reduce `$fn` value**: Use lower circle resolution (e.g., `$fn=32` instead of `$fn=100`)
 2. **Simplify geometry**: Reduce the number of operations and mesh complexity
-3. **Use preview quality**: Iterate with preview quality ($fn capped at 24), only generate full quality for final export
+3. **Use preview quality**: Iterate with adaptive preview tiers (lower $fn caps on mobile), only generate full quality for final export
 4. **Clear browser cache**: If memory errors persist, clear cache and close other tabs
 5. **Restart browser**: Close and reopen the browser to free up memory
 
@@ -52,7 +52,7 @@ The OpenSCAD Web Customizer works on mobile browsers (iOS Safari, Android Chrome
 - Very complex models may timeout (30s preview, 60s full quality)
 
 **Mitigations**:
-- Auto-preview uses aggressive $fn capping on mobile (max 24 vs 48 on desktop)
+- Auto-preview uses aggressive tiered $fn capping on mobile (lower caps than desktop)
 - Render time estimates account for mobile performance
 - Progress indicators keep user informed during long renders
 - Timeout warnings appear with options to simplify or retry

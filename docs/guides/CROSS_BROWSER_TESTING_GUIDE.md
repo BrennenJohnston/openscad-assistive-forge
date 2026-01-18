@@ -44,7 +44,7 @@ Use this for rapid verification across browsers:
 ### 3. Auto-Preview (2 minutes)
 1. Change "Width" slider from 50 to 60
 2. ✅ Status shows "Changes detected..." (yellow)
-3. ✅ After 1.5s, status shows "Generating preview..." (blue)
+3. ✅ After debounce (~0.35s default), status shows "Generating preview..." (blue)
 4. ✅ After 5-10s, status shows "Preview ready" (green)
 5. ✅ 3D preview updates with new geometry
 6. ✅ No console errors
@@ -289,8 +289,8 @@ typeof SharedArrayBuffer !== 'undefined'  // Should be true
 
 **Test Debounce:**
 1. Load Simple Box
-2. Rapidly change Width slider (multiple times within 1.5s)
-3. ✅ Only one render triggers (after 1.5s of no changes)
+2. Rapidly change Width slider (multiple times within the debounce window ~0.35s)
+3. ✅ Only one render triggers (after the debounce window of no changes)
 4. ✅ Status shows "Changes detected..." during debounce
 
 **Test Caching:**
@@ -310,7 +310,7 @@ typeof SharedArrayBuffer !== 'undefined'  // Should be true
 **Test State Indicators:**
 1. Change parameter
 2. ✅ Status shows yellow "Changes detected..."
-3. ✅ After 1.5s, status shows blue "Generating preview..."
+3. ✅ After debounce (~0.35s default), status shows blue "Generating preview..."
 4. ✅ After render, status shows green "Preview ready"
 5. Change parameter again
 6. ✅ Status shows yellow "Preview outdated" (stale)

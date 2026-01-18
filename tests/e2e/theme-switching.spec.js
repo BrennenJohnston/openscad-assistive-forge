@@ -295,7 +295,7 @@ test.describe('Theme Switching', () => {
     )
 
     // Load an example
-    const exampleButton = page.locator('button:has-text("Simple Box"), button:has-text("Universal Cuff")').first()
+    const exampleButton = page.locator('button:has-text("Simple Box"), button:has-text("Braille Embosser")').first()
     if (await exampleButton.isVisible()) {
       await exampleButton.click()
       await page.waitForTimeout(2000)

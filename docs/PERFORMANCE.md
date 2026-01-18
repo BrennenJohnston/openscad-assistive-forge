@@ -105,11 +105,11 @@ Main Thread                 Worker Thread
 
 #### Auto-Preview Debouncing
 
-Parameter changes trigger renders after 1.5s debounce:
+Parameter changes trigger renders after a 350ms default debounce (configurable):
 
 ```javascript
 // src/js/auto-preview-controller.js
-const DEBOUNCE_MS = 1500
+const DEBOUNCE_MS = 350
 
 // Rapid parameter changes only trigger one render
 let debounceTimeout

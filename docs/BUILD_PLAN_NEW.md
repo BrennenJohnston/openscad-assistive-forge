@@ -1060,7 +1060,7 @@ worker.postMessage({
 |--------------|--------|----------------|
 | **Initial page load** | < 3s on 3G | Defer WASM loading until file uploaded |
 | **WASM load time** | < 10s on cable | Show progress bar, lazy load |
-| **Parameter change response** | < 100ms | Debounce render trigger (500ms default) |
+| **Parameter change response** | < 100ms | Debounce render trigger (350ms default) |
 | **STL generation** | < 30s for typical models | Use OpenSCAD performance flags |
 | **Preview render** | < 2s | Three.js with hardware acceleration |
 | **Bundle size** | < 200KB (pre-WASM) | Tree-shaking, code splitting |
@@ -1072,11 +1072,11 @@ The Auto-Preview system provides progressive enhancement for real-time visual fe
 #### Architecture Overview
 
 ```
-Parameter Change → Immediate UI Feedback → Debounce Timer (1.5s)
+Parameter Change → Immediate UI Feedback → Debounce Timer (350ms default)
                         ↓                        ↓
               "Changes pending..."        Auto-Preview Render
                                                ↓
-                                      Preview STL (low $fn)
+                                      Preview STL (adaptive tier)
                                                ↓
                                       3D Preview Update
                                                ↓
@@ -1093,8 +1093,8 @@ Parameter Change → Immediate UI Feedback → Debounce Timer (1.5s)
 
 | Tier | $fn Value | Use Case | Typical Time |
 |------|-----------|----------|--------------|
-| **Preview** | min(user $fn, 24) | Auto-render on param change | 2-8s |
-| **Full** | user $fn or 64 | Final STL for download | 10-60s |
+| **Preview** | Adaptive tier caps $fn by complexity/hardware (typ. 8-48) | Auto-render on param change | 2-8s |
+| **Full** | User $fn or full-quality presets | Final STL for download | 10-60s |
 
 #### State Machine
 
@@ -1116,8 +1116,8 @@ class AutoPreviewController {
   constructor(renderController, previewManager, options = {}) {
     this.renderController = renderController;
     this.previewManager = previewManager;
-    this.debounceMs = options.debounceMs || 1500;
-    this.previewFn = options.previewFn || 24;  // Max $fn for preview
+    this.debounceMs = options.debounceMs ?? 350;
+    this.previewQuality = options.previewQuality ?? null; // Adaptive tiers can override
     this.enabled = options.enabled ?? true;
     
     this.debounceTimer = null;
@@ -1207,10 +1207,10 @@ class AutoPreviewController {
 ```javascript
 // User preferences (stored in localStorage)
 const autoPreviewSettings = {
-  enabled: true,           // Toggle auto-preview on/off
-  debounceMs: 1500,        // Delay before auto-render
-  previewFn: 24,           // Max $fn for preview renders
-  maxCacheSize: 10,        // Max cached preview renders
+  enabled: true,              // Toggle auto-preview on/off
+  debounceMs: 350,            // Default delay before auto-render
+  previewQualityMode: 'auto', // Adaptive tiers based on complexity/hardware
+  maxCacheSize: 10,           // Max cached preview renders
 };
 ```
 
@@ -1232,7 +1232,7 @@ const performanceFlags = [
 ```
 
 **Render Debouncing**:
-- Debounce parameter changes by 500ms (adjustable)
+- Debounce parameter changes by 350ms (adjustable)
 - Show "Generating..." immediately when debounce triggers
 - Cancel previous render when new one starts
 - Use requestId to ignore stale results
@@ -4875,7 +4875,7 @@ function debounce(fn, delay) {
   }
 }
 
-const debouncedRender = debounce(renderPreview, 1500)
+const debouncedRender = debounce(renderPreview, 350)
 
 input.addEventListener('input', (e) => {
   updateParameter(name, e.target.value)  // Update immediately
@@ -8896,7 +8896,7 @@ When v2.4 is complete, this build plan should be updated to reflect:
 - **MILESTONE**: Auto-preview system for real-time visual feedback COMPLETE
 - **Added**: Progressive Enhancement rendering strategy
   - Immediate "pending changes" indicator when parameters change
-  - Auto-render with debounce (1.5s) at preview quality ($fn capped at 24)
+  - Auto-render with debounce (350ms default) at adaptive preview quality (tiered $fn caps)
   - Cached preview renders to avoid redundant computation (max 10 cache entries)
   - Full-quality render only on "Download STL" click
   - Smart button logic: "Download STL" when ready, "Generate STL" when params changed
@@ -8906,7 +8906,7 @@ When v2.4 is complete, this build plan should be updated to reflect:
 - **Improved**: UX flow - 5-10x faster parameter iteration
 - **Technical**: New `AutoPreviewController` class (375 lines) for render orchestration
 - **Technical**: Render caching by parameter hash with LRU eviction
-- **Technical**: Quality tiers (PREVIEW: $fn≤24, 30s timeout | FULL: unlimited $fn, 60s timeout)
+- **Technical**: Quality tiers (PREVIEW: tiered $fn caps, 30s timeout | FULL: full-quality presets, 60s timeout)
 - **Tested**: Simple Box example renders successfully (0.73s, 296 triangles, 888 vertices)
 - **Tested**: State management working correctly (idle → current transitions)
 

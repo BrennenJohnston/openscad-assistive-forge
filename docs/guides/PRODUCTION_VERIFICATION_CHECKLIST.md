@@ -60,12 +60,12 @@ This checklist ensures v1.2.0 Auto-Preview features work correctly in production
   - [ ] Load Simple Box example
   - [ ] Change "Width" slider
   - [ ] Status shows "Changes detected - preview updating..." (yellow)
-  - [ ] After 1.5 seconds, status shows "Generating preview..." (blue)
+  - [ ] After debounce (~0.35s default), status shows "Generating preview..." (blue)
   - [ ] Preview renders successfully
   - [ ] Status shows "Preview ready" (green)
   - [ ] 3D preview updates with new geometry
 
-- [ ] **Preview quality is reduced ($fn ≤ 24)**
+- [ ] **Preview quality is reduced via adaptive tiers (lower $fn caps)**
   - [ ] Change a parameter
   - [ ] Wait for auto-preview to complete
   - [ ] Check render time (should be 2-8 seconds for simple models)

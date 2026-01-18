@@ -135,6 +135,9 @@ export class PreviewManager {
     this.measurementsEnabled = this.loadMeasurementPreference();
     this.measurementHelpers = null; // Group containing all measurement visuals
     this.dimensions = null; // { x, y, z, volume }
+
+    // Grid visibility
+    this.gridEnabled = this.loadGridPreference();
   }
 
   /**
@@ -160,11 +163,17 @@ export class PreviewManager {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(colors.background);
 
-    // Create camera
+    // Create camera with OpenSCAD-compatible Z-up coordinate system
     const width = this.container.clientWidth;
     const height = this.container.clientHeight;
     this.camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 10000);
-    this.camera.position.set(0, 0, 200);
+    
+    // Set Z as the up axis (OpenSCAD uses Z-up, Three.js defaults to Y-up)
+    this.camera.up.set(0, 0, 1);
+    
+    // Position camera for OpenSCAD-style diagonal view (looking at origin from front-right-above)
+    // This mimics OpenSCAD's default "Diagonal" view orientation
+    this.camera.position.set(150, -150, 100);
 
     // Create renderer
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -184,13 +193,18 @@ export class PreviewManager {
     this.directionalLight2.position.set(-1, -1, -1);
     this.scene.add(this.directionalLight2);
 
-    // Add grid helper
+    // Add grid helper on XY plane (OpenSCAD's ground plane)
+    // GridHelper by default creates a grid on XZ plane (Y-up), so we rotate it for Z-up
     this.gridHelper = new THREE.GridHelper(
       200,
       20,
       colors.gridPrimary,
       colors.gridSecondary
     );
+    // Rotate grid from XZ plane to XY plane (Z-up coordinate system)
+    this.gridHelper.rotation.x = Math.PI / 2;
+    // Apply saved grid visibility preference
+    this.gridHelper.visible = this.gridEnabled;
     this.scene.add(this.gridHelper);
 
     // Add orbit controls
@@ -284,6 +298,8 @@ export class PreviewManager {
         colors.gridSecondary
       );
       this.gridHelper.material.linewidth = gridSize;
+      // Rotate grid from XZ plane to XY plane (Z-up coordinate system)
+      this.gridHelper.rotation.x = Math.PI / 2;
       this.scene.add(this.gridHelper);
     }
 
@@ -494,7 +510,7 @@ export class PreviewManager {
   }
 
   /**
-   * Fit camera to model bounds
+   * Fit camera to model bounds (Z-up coordinate system, OpenSCAD-style diagonal view)
    */
   fitCameraToModel() {
     if (!this.mesh) return;
@@ -507,13 +523,25 @@ export class PreviewManager {
     // Get the max side of the bounding box
     const maxDim = Math.max(size.x, size.y, size.z);
     const fov = this.camera.fov * (Math.PI / 180);
-    let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
+    let cameraDistance = Math.abs(maxDim / 2 / Math.tan(fov / 2));
 
     // Add some padding
-    cameraZ *= 1.5;
+    cameraDistance *= 1.8;
 
-    // Update camera position
-    this.camera.position.set(center.x, center.y, center.z + cameraZ);
+    // Position camera for OpenSCAD-style diagonal view (Z-up coordinate system)
+    // Camera looks from front-right-above toward the center
+    // Using roughly 45° elevation and 45° azimuth for a nice isometric-like view
+    const angle = Math.PI / 4; // 45 degrees
+    const elevation = Math.PI / 6; // 30 degrees above XY plane
+    
+    const horizontalDist = cameraDistance * Math.cos(elevation);
+    const verticalDist = cameraDistance * Math.sin(elevation);
+    
+    this.camera.position.set(
+      center.x + horizontalDist * Math.cos(angle),  // X: front-right
+      center.y - horizontalDist * Math.sin(angle),  // Y: front (negative Y in OpenSCAD view)
+      center.z + verticalDist                        // Z: above (Z-up)
+    );
     this.camera.lookAt(center);
 
     // Update controls target
@@ -521,10 +549,10 @@ export class PreviewManager {
     this.controls.update();
 
     console.log(
-      '[Preview] Camera fitted to model, size:',
+      '[Preview] Camera fitted to model (Z-up), size:',
       size,
       'distance:',
-      cameraZ
+      cameraDistance
     );
   }
 
@@ -753,6 +781,51 @@ export class PreviewManager {
       );
     } catch (error) {
       console.warn('[Preview] Could not save measurement preference:', error);
+    }
+  }
+
+  /**
+   * Toggle grid visibility
+   * @param {boolean} enabled - Show or hide grid
+   */
+  toggleGrid(enabled) {
+    this.gridEnabled = enabled;
+    this.saveGridPreference(enabled);
+
+    if (this.gridHelper) {
+      this.gridHelper.visible = enabled;
+    }
+
+    console.log(`[Preview] Grid ${enabled ? 'enabled' : 'disabled'}`);
+  }
+
+  /**
+   * Load grid preference from localStorage
+   * @returns {boolean} Preference value (defaults to true)
+   */
+  loadGridPreference() {
+    try {
+      const pref = localStorage.getItem('openscad-customizer-grid');
+      // Default to true (grid visible) if not set
+      return pref === null ? true : pref === 'true';
+    } catch (error) {
+      console.warn('[Preview] Could not load grid preference:', error);
+      return true;
+    }
+  }
+
+  /**
+   * Save grid preference to localStorage
+   * @param {boolean} enabled - Grid enabled state
+   */
+  saveGridPreference(enabled) {
+    try {
+      localStorage.setItem(
+        'openscad-customizer-grid',
+        enabled ? 'true' : 'false'
+      );
+    } catch (error) {
+      console.warn('[Preview] Could not save grid preference:', error);
     }
   }
 

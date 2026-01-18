@@ -179,7 +179,7 @@ Use this for quick status tracking:
 
 ### v1.2.0 Features
 - [ ] Auto-preview triggers on parameter change
-- [ ] Debounce works (1.5 second delay)
+- [ ] Debounce works (~0.35 second default delay)
 - [ ] Cache works (instant load on repeated values)
 - [ ] Progressive quality (preview fast, full quality slower)
 - [ ] Visual state indicators (yellow, blue, green)

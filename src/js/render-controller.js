@@ -3,41 +3,106 @@
  * @license GPL-3.0-or-later
  */
 
+// Re-export quality tier system for convenience
+export {
+  COMPLEXITY_TIER,
+  QUALITY_TIERS,
+  HARDWARE_LEVEL,
+  detectHardware,
+  analyzeComplexity,
+  getQualityPreset,
+  getAdaptiveQualityConfig,
+  getTierPresets,
+  formatPresetDescription,
+} from './quality-tiers.js';
+
 /**
- * Render quality presets
+ * Legacy render quality presets (for backwards compatibility)
+ * 
+ * NOTE: New code should use the adaptive quality tier system from quality-tiers.js
+ * These presets are based on community standards for STANDARD complexity models.
+ * 
+ * For adaptive quality based on model complexity and hardware, use:
+ * - getAdaptiveQualityConfig(scadContent, parameters)
+ * - getQualityPreset(tier, hardwareLevel, qualityLevel, mode)
  */
 export const RENDER_QUALITY = {
+  /**
+   * Draft quality - very fast preview for any model
+   */
   DRAFT: {
     name: 'draft',
-    maxFn: 16, // Force a lower $fn for faster interactive preview
+    maxFn: 24,
     forceFn: true,
-    minFa: 12, // Increase $fa (min angle) to reduce tessellation
-    minFs: 2, // Increase $fs (min size) to reduce tessellation
-    timeoutMs: 20000, // Shorter timeout for draft preview
+    minFa: 15,
+    minFs: 3,
+    timeoutMs: 20000,
   },
-  PREVIEW: {
-    name: 'preview',
-    maxFn: 24, // Cap $fn at 24 for faster preview
-    forceFn: false, // Don't force $fn unless the model/user already sets it
-    minFa: null,
-    minFs: null,
-    timeoutMs: 30000, // 30 second timeout for preview
-  },
-  HIGH: {
-    name: 'high',
-    maxFn: 64, // Higher cap for smoother preview (can be slower)
+  /**
+   * Low quality - fast exports, coarse tessellation
+   */
+  LOW: {
+    name: 'low',
+    maxFn: 32,
     forceFn: false,
-    minFa: null,
-    minFs: null,
+    minFa: 15,
+    minFs: 3,
     timeoutMs: 45000,
   },
+  /**
+   * Preview quality - balanced for interactive use
+   */
+  PREVIEW: {
+    name: 'preview',
+    maxFn: 48,
+    forceFn: false,
+    minFa: 12,
+    minFs: 2,
+    timeoutMs: 30000,
+  },
+  /**
+   * Medium quality - community standard (STANDARD tier)
+   */
+  MEDIUM: {
+    name: 'medium',
+    maxFn: 128,
+    forceFn: false,
+    minFa: 6,
+    minFs: 1,
+    timeoutMs: 60000,
+  },
+  /**
+   * High quality - community high standard (STANDARD tier)
+   */
+  HIGH: {
+    name: 'high',
+    maxFn: 256,
+    forceFn: false,
+    minFa: 2,
+    minFs: 0.5,
+    timeoutMs: 90000,
+  },
+  /**
+   * Desktop-equivalent - respects model's settings
+   */
+  DESKTOP_DEFAULT: {
+    name: 'desktop',
+    maxFn: null,
+    forceFn: false,
+    minFa: 12,
+    minFs: 2,
+    timeoutMs: 60000,
+  },
+  /**
+   * Full quality - for final export
+   */
   FULL: {
     name: 'full',
-    maxFn: null, // No cap, use model's $fn
+    maxFn: null,
     forceFn: false,
-    minFa: null,
-    minFs: null,
-    timeoutMs: 60000, // 60 second timeout for full render
+    minFa: 12,
+    minFs: 2,
+    timeoutMs: 60000,
   },
 };
 
@@ -156,7 +221,7 @@ export class RenderController {
    * @param {Object} options - Configuration options
    * @param {number} options.defaultTimeoutMs - Default render timeout in milliseconds (default: 60000)
    * @param {number} options.previewTimeoutMs - Preview render timeout in milliseconds (default: 30000)
-   * @param {number} options.initTimeoutMs - WASM initialization timeout in milliseconds (default: 60000)
+   * @param {number} options.initTimeoutMs - WASM initialization timeout in milliseconds (default: 120000)
    */
   constructor(options = {}) {
     this.worker = null;
@@ -164,6 +229,9 @@ export class RenderController {
     this.currentRequest = null;
     this.ready = false;
     this.initPromise = null;
+    this.initTimeoutHandle = null;
+    this.readyResolve = null;
+    this.readyReject = null;
     this.renderQueue = Promise.resolve();
     this.memoryUsage = null;
     this.onMemoryWarning = null;
@@ -172,7 +240,7 @@ export class RenderController {
     this.timeoutConfig = {
       defaultTimeoutMs: options.defaultTimeoutMs || 60000,
       previewTimeoutMs: options.previewTimeoutMs || 30000,
-      initTimeoutMs: options.initTimeoutMs || 60000,
+      initTimeoutMs: options.initTimeoutMs || 120000,
     };
   }
 
@@ -227,7 +295,36 @@ export class RenderController {
 
     const onProgress = options.onProgress || this.onInitProgress;
 
-    this.initPromise = new Promise((resolve, reject) => {
+    const initPromise = new Promise((resolve, reject) => {
+      let initSettled = false;
+      const clearInitTimeout = () => {
+        if (this.initTimeoutHandle) {
+          clearTimeout(this.initTimeoutHandle);
+          this.initTimeoutHandle = null;
+        }
+      };
+
+      const settleInit = (settler, value) => {
+        if (initSettled) {
+          return;
+        }
+        initSettled = true;
+        clearInitTimeout();
+        this.readyResolve = null;
+        this.readyReject = null;
+        settler(value);
+      };
+
+      const failInit = (error) => {
+        console.error('[RenderController] Init failed:', error);
+        this.terminate();
+        settleInit(reject, error);
+      };
+
+      const resolveInit = () => {
+        settleInit(resolve);
+      };
+
       try {
         // Report start of initialization
         if (onProgress) {
@@ -246,11 +343,14 @@ export class RenderController {
         };
 
         this.worker.onerror = (error) => {
+          const message = error?.message || 'Worker error during initialization';
           console.error('[RenderController] Worker error:', error);
           if (onProgress) {
-            onProgress(-1, 'Failed to initialize: ' + error.message);
+            onProgress(-1, 'Failed to initialize: ' + message);
           }
-          reject(error);
+          const initError = new Error(message);
+          initError.event = error;
+          failInit(initError);
         };
 
         // Report WASM download starting
@@ -260,19 +360,20 @@ export class RenderController {
 
         // Send init message
         // Asset base URL is optional - worker will derive from self.location if not provided
+        const assetBaseUrl = options.assetBaseUrl;
         this.worker.postMessage({
           type: 'INIT',
           payload: {
-            // assetBaseUrl: '/', // Optional: specify if assets are served from a different origin
+            ...(assetBaseUrl ? { assetBaseUrl } : {}),
           },
         });
 
         // Set up ready handler
-        this.readyResolve = resolve;
-        this.readyReject = reject;
+        this.readyResolve = resolveInit;
+        this.readyReject = failInit;
 
         // Timeout for initialization (configurable)
-        setTimeout(() => {
+        this.initTimeoutHandle = setTimeout(() => {
           if (!this.ready) {
             if (onProgress) {
               onProgress(
@@ -280,7 +381,7 @@ export class RenderController {
                 'Initialization timeout - please refresh and try again'
               );
             }
-            reject(new Error('Worker initialization timeout'));
+            failInit(new Error('Worker initialization timeout'));
           }
         }, this.timeoutConfig.initTimeoutMs);
       } catch (error) {
@@ -288,11 +389,17 @@ export class RenderController {
         if (onProgress) {
           onProgress(-1, 'Failed to create worker: ' + error.message);
         }
-        reject(error);
+        failInit(error);
       }
     });
 
-    return this.initPromise;
+    this.initPromise = initPromise;
+    return initPromise.catch((error) => {
+      if (this.initPromise === initPromise) {
+        this.initPromise = null;
+      }
+      throw error;
+    });
   }
 
   /**
@@ -367,7 +474,16 @@ export class RenderController {
           this.currentRequest.reject(error);
           this.currentRequest = null;
         } else if (payload.requestId === 'init' && this.readyReject) {
-          this.readyReject(new Error(payload.message));
+          const error = new Error(
+            payload.message || 'Failed to initialize OpenSCAD engine'
+          );
+          if (payload.code) {
+            error.code = payload.code;
+          }
+          if (payload.details) {
+            error.details = payload.details;
+          }
+          this.readyReject(error);
         }
         break;
 
@@ -464,12 +580,22 @@ export class RenderController {
 
   /**
    * Apply quality settings to parameters
+   * 
+   * Quality presets control tessellation through $fn, $fa, and $fs:
+   * - $fn: Number of segments for full circles (0 = use $fa/$fs instead)
+   * - $fa: Minimum angle (degrees) per segment (default 12°)
+   * - $fs: Minimum size (mm) per segment (default 2mm)
+   * 
+   * For FULL/DESKTOP_DEFAULT quality, we only SET defaults if the model
+   * doesn't define them. For PREVIEW/DRAFT, we enforce constraints.
+   * 
    * @param {Object} parameters - Original parameters
    * @param {Object} quality - Quality preset (RENDER_QUALITY.PREVIEW or RENDER_QUALITY.FULL)
    * @returns {Object} Parameters with quality adjustments
    */
   applyQualitySettings(parameters, quality) {
     const adjusted = { ...parameters };
+    const isFullQuality = quality.name === 'full' || quality.name === 'desktop';
 
     // Cap $fn if quality has a maxFn limit
     if (quality.maxFn !== null && adjusted.$fn !== undefined) {
@@ -485,22 +611,31 @@ export class RenderController {
       adjusted.$fn = quality.maxFn;
     }
 
-    // $fa: smaller = smoother, larger = faster. For faster preview, enforce a minimum $fa.
+    // Handle $fa (minimum angle)
+    // For full quality: Only set if model doesn't define it (respect model's choices)
+    // For preview/draft: Enforce minimum for performance
     if (quality.minFa !== null && quality.minFa !== undefined) {
       if (adjusted.$fa === undefined) {
+        // Model doesn't define $fa - use our default
         adjusted.$fa = quality.minFa;
-      } else {
+      } else if (!isFullQuality) {
+        // For preview modes, enforce minimum $fa for performance
         adjusted.$fa = Math.max(adjusted.$fa, quality.minFa);
       }
+      // For full quality, respect the model's $fa setting
     }
 
-    // $fs: smaller = smoother, larger = faster. For faster preview, enforce a minimum $fs.
+    // Handle $fs (minimum size)
+    // Same logic as $fa
     if (quality.minFs !== null && quality.minFs !== undefined) {
       if (adjusted.$fs === undefined) {
+        // Model doesn't define $fs - use our default
         adjusted.$fs = quality.minFs;
-      } else {
+      } else if (!isFullQuality) {
+        // For preview modes, enforce minimum $fs for performance
         adjusted.$fs = Math.max(adjusted.$fs, quality.minFs);
       }
+      // For full quality, respect the model's $fs setting
     }
 
     return adjusted;
@@ -620,7 +755,7 @@ export class RenderController {
   async renderFull(scadContent, parameters = {}, options = {}) {
     return this.render(scadContent, parameters, {
       ...options,
-      quality: RENDER_QUALITY.FULL,
+      quality: options.quality || RENDER_QUALITY.FULL,
     });
   }
 

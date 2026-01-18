@@ -216,12 +216,18 @@ describe('AutoPreviewController', () => {
     })
 
     it('returns early when preview is already current', () => {
-      const hash = controller.hashParams({ width: 20 })
+      const params = { width: 20 }
+      const hash = controller.hashParams(params)
+      // Use compound cache key: paramHash|qualityKey (default qualityKey is 'model' when no quality set)
+      const cacheKey = `${hash}|model`
       controller.previewParamHash = hash
+      controller.previewCacheKey = cacheKey
+      controller.currentParamHash = hash
+      controller.currentPreviewKey = cacheKey
       controller.state = PREVIEW_STATE.CURRENT
       const stateSpy = vi.spyOn(controller, 'setState')
       
-      controller.onParameterChange({ width: 20 })
+      controller.onParameterChange(params)
       
       expect(stateSpy).not.toHaveBeenCalled()
     })
@@ -229,13 +235,15 @@ describe('AutoPreviewController', () => {
     it('loads from cache when available', async () => {
       const params = { width: 20 }
       const hash = controller.hashParams(params)
-      controller.previewCache.set(hash, { stl: new ArrayBuffer(4), stats: {}, timestamp: Date.now() })
+      // Use compound cache key: paramHash|qualityKey (default qualityKey is 'model' when no quality set)
+      const cacheKey = `${hash}|model`
+      controller.previewCache.set(cacheKey, { stl: new ArrayBuffer(4), stats: {}, timestamp: Date.now() })
       
       const loadCachedSpy = vi.spyOn(controller, 'loadCachedPreview').mockResolvedValue()
       
       controller.onParameterChange(params)
       
-      expect(loadCachedSpy).toHaveBeenCalledWith(hash)
+      expect(loadCachedSpy).toHaveBeenCalledWith(hash, cacheKey, 'model')
     })
 
     it('clears existing debounce timer when busy', () => {
@@ -263,18 +271,21 @@ describe('AutoPreviewController', () => {
       controller.setColorParamNames(['box_color'])
       const params = { box_color: '00ff00' }
       const hash = controller.hashParams(params)
+      // Use compound cache key: paramHash|qualityKey
+      const qualityKey = 'model'
+      const cacheKey = `${hash}|${qualityKey}`
       const cached = { stl: new ArrayBuffer(4), stats: { triangles: 5 }, timestamp: Date.now() }
-      controller.previewCache.set(hash, cached)
+      controller.previewCache.set(cacheKey, cached)
 
       const previewReady = vi.fn()
       controller.onPreviewReady = previewReady
 
-      await controller.loadCachedPreview(hash)
+      await controller.loadCachedPreview(hash, cacheKey, qualityKey)
 
       expect(previewManager.setColorOverride).toHaveBeenCalledWith('#00ff00')
       expect(previewManager.loadSTL).toHaveBeenCalledWith(cached.stl)
       expect(controller.state).toBe(PREVIEW_STATE.CURRENT)
-      expect(previewReady).toHaveBeenCalledWith(cached.stl, cached.stats, true)
+      expect(previewReady).toHaveBeenCalledWith(cached.stl, cached.stats, true, undefined)
     })
 
     it('adds results to cache and evicts old entries', () => {
@@ -288,22 +299,28 @@ describe('AutoPreviewController', () => {
     })
 
     it('returns early when cache entry not found', async () => {
-      await controller.loadCachedPreview('nonexistent')
+      const hash = 'nonexistent'
+      const cacheKey = `${hash}|model`
+      await controller.loadCachedPreview(hash, cacheKey, 'model')
       
       expect(previewManager.loadSTL).not.toHaveBeenCalled()
     })
 
     it('handles load error and removes from cache', async () => {
-      const hash = controller.hashParams({ width: 20 })
-      controller.previewCache.set(hash, { stl: new ArrayBuffer(4), stats: {}, timestamp: Date.now() })
+      const params = { width: 20 }
+      const hash = controller.hashParams(params)
+      // Use compound cache key: paramHash|qualityKey
+      const qualityKey = 'model'
+      const cacheKey = `${hash}|${qualityKey}`
+      controller.previewCache.set(cacheKey, { stl: new ArrayBuffer(4), stats: {}, timestamp: Date.now() })
       previewManager.loadSTL.mockRejectedValueOnce(new Error('Load failed'))
       
       const renderSpy = vi.spyOn(controller, 'renderPreview').mockResolvedValue()
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
       
-      await controller.loadCachedPreview(hash)
+      await controller.loadCachedPreview(hash, cacheKey, qualityKey)
       
-      expect(controller.previewCache.has(hash)).toBe(false)
+      expect(controller.previewCache.has(cacheKey)).toBe(false)
       expect(renderSpy).toHaveBeenCalled()
       
       consoleSpy.mockRestore()
@@ -395,8 +412,9 @@ describe('AutoPreviewController', () => {
       expect(controller.previewCache.size).toBe(0)
     })
 
-    it('sets state to stale when current param hash exists', () => {
-      controller.currentParamHash = 'hash'
+    it('sets state to stale when current preview key exists', () => {
+      // The controller sets state to stale when currentPreviewKey exists
+      controller.currentPreviewKey = 'hash|model'
       controller.state = PREVIEW_STATE.CURRENT
       
       controller.setPreviewQuality({ $fn: 20 })

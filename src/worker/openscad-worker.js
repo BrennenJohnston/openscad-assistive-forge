@@ -1108,19 +1108,40 @@ async function render(payload) {
         if (match) triangleCount = parseInt(match[1]);
       }
     } else if (outputData instanceof Uint8Array) {
-      outputBuffer = outputData.buffer;
+      // CRITICAL FIX: Uint8Array's .buffer property returns the underlying ArrayBuffer
+      // which might be the WASM heap or a larger pre-allocated buffer.
+      // We must slice to get only the actual file content.
+      outputBuffer = outputData.buffer.slice(
+        outputData.byteOffset,
+        outputData.byteOffset + outputData.byteLength
+      );
     } else {
       throw new Error(`Unknown ${resultFormat.toUpperCase()} data format`);
     }
 
     // For binary STL, read triangle count from header
+    // Binary STL format: 80 bytes header + 4 bytes triangle count + (50 bytes per triangle)
     if (
       resultFormat === 'stl' &&
       !isTextFormat &&
       outputBuffer.byteLength > 84
     ) {
       const view = new DataView(outputBuffer);
-      triangleCount = view.getUint32(80, true);
+      const headerTriangleCount = view.getUint32(80, true);
+      
+      // Sanity check: verify triangle count matches file size
+      // Each triangle = 50 bytes (12 bytes normal + 36 bytes vertices + 2 bytes attribute)
+      const expectedFileSize = 84 + (headerTriangleCount * 50);
+      const actualFileSize = outputBuffer.byteLength;
+      
+      if (Math.abs(expectedFileSize - actualFileSize) <= 50) {
+        // Triangle count is consistent with file size
+        triangleCount = headerTriangleCount;
+      } else {
+        // Triangle count from header seems incorrect, calculate from file size
+        console.warn(`[Worker] STL header triangle count (${headerTriangleCount}) inconsistent with file size (${actualFileSize}). Calculating from size.`);
+        triangleCount = Math.floor((actualFileSize - 84) / 50);
+      }
     }
 
     self.postMessage(
