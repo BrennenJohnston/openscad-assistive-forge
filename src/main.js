@@ -22,12 +22,14 @@ import {
   RenderController,
   RENDER_QUALITY,
   estimateRenderTime,
+} from './js/render-controller.js';
+import {
   analyzeComplexity,
   getAdaptiveQualityConfig,
   getQualityPreset,
   COMPLEXITY_TIER,
   formatPresetDescription,
-} from './js/render-controller.js';
+} from './js/quality-tiers.js';
 import { PreviewManager } from './js/preview.js';
 import {
   AutoPreviewController,
