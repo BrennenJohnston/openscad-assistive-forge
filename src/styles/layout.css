@@ -97,10 +97,10 @@ body {
 
 /* Contrast Toggle Button */
 .contrast-toggle {
-  background: rgba(0, 0, 0, 0.35); /* Darker background for WCAG AA contrast */
-  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: var(--color-bg-tertiary); /* Darker background for WCAG AA contrast */
+  border: 1px solid var(--color-border);
   border-radius: var(--border-radius-md);
-  color: var(--color-accent-text);
+  color: var(--color-text-primary);
   cursor: pointer;
   padding: var(--space-xs);
   transition: all 0.2s ease;
@@ -114,12 +114,12 @@ body {
 }
 
 .contrast-toggle:hover {
-  background: rgba(255, 255, 255, 0.25);
+  background: var(--color-hover-bg);
   transform: scale(1.05);
 }
 
 .contrast-toggle:focus {
-  outline: 2px solid var(--color-accent-text);
+  outline: 2px solid var(--color-focus);
   outline-offset: 2px;
 }
 
@@ -135,17 +135,17 @@ body {
 
 /* High contrast mode active state */
 :root[data-high-contrast='true'] .contrast-toggle {
-  background: rgba(255, 255, 255, 0.3);
-  border: 2px solid rgba(255, 255, 255, 0.5);
+  background: var(--color-hover-bg);
+  border: 2px solid var(--color-border);
   font-weight: 700;
 }
 
 /* GitHub Link */
 .github-link {
-  background: rgba(255, 255, 255, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-light);
   border-radius: var(--border-radius-md);
-  color: var(--color-accent-text);
+  color: var(--color-text-primary);
   cursor: pointer;
   padding: var(--space-xs) var(--space-sm);
   transition: all 0.2s ease;
@@ -161,14 +161,14 @@ body {
 }
 
 .github-link:hover {
-  background: rgba(255, 255, 255, 0.25);
+  background: var(--color-hover-bg);
   transform: scale(1.05);
-  color: var(--color-accent-text);
+  color: var(--color-text-primary);
   text-decoration: none;
 }
 
 .github-link:focus {
-  outline: 2px solid var(--color-accent-text);
+  outline: 2px solid var(--color-focus);
   outline-offset: 2px;
 }
 
@@ -197,10 +197,10 @@ body {
 
 /* Theme Toggle Button */
 .theme-toggle {
-  background: rgba(255, 255, 255, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-light);
   border-radius: var(--border-radius-md);
-  color: var(--color-accent-text);
+  color: var(--color-text-primary);
   cursor: pointer;
   padding: var(--space-sm);
   transition: all 0.2s ease;
@@ -213,12 +213,12 @@ body {
 }
 
 .theme-toggle:hover {
-  background: rgba(255, 255, 255, 0.25);
+  background: var(--color-hover-bg);
   transform: scale(1.05);
 }
 
 .theme-toggle:focus {
-  outline: 2px solid var(--color-accent-text);
+  outline: 2px solid var(--color-focus);
   outline-offset: 2px;
 }
 
@@ -394,6 +394,100 @@ body {
   background-color: var(--color-text-secondary);
 }
 
+/* ============================================================================
+   Mobile Off-Canvas Drawer
+   ============================================================================
+   Based on Bootstrap Offcanvas pattern.
+   Active on screens < 768px (tablet breakpoint).
+   ============================================================================ */
+
+/* Drawer backdrop */
+.drawer-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  /* Keep below app modals (currently z-index: 1000) */
+  z-index: 900;
+  opacity: 0;
+  transition: opacity 0.3s ease-out;
+}
+
+.drawer-backdrop.visible {
+  display: block;
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drawer-backdrop {
+    transition: none;
+  }
+}
+
+/* Mobile drawer styles */
+@media (max-width: 767px) {
+  /* Main interface becomes single-column, preview-first */
+  .main-interface {
+    flex-direction: column;
+  }
+  
+  /* Parameters panel becomes off-canvas drawer */
+  .param-panel {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: min(90vw, 360px);
+    max-height: 100vh;
+    max-height: 100dvh; /* Dynamic viewport height */
+    transform: translateX(-100%);
+    transition: transform 0.3s ease-out;
+    /* Keep below app modals (currently z-index: 1000) */
+    z-index: 950;
+    border-right: 1px solid var(--color-border);
+    box-shadow: var(--shadow-lg);
+    /* Ensure opaque background */
+    background-color: var(--color-bg-primary);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    /* Safe-area support for notched devices */
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+  
+  .param-panel .panel-header {
+    padding-top: calc(var(--space-md) + env(safe-area-inset-top, 0px));
+  }
+  
+  .param-panel.drawer-open {
+    transform: translateX(0);
+  }
+  
+  /* Respect reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    .param-panel {
+      transition: none;
+    }
+  }
+  
+  /* Preview panel takes full width */
+  .preview-panel {
+    width: 100%;
+    flex: 1;
+    min-height: 0;
+  }
+  
+  /* Hide horizontal gutter on mobile */
+  .gutter.gutter-horizontal {
+    display: none;
+  }
+  
+  /* Body scroll lock when drawer is open */
+  body.drawer-open {
+    overflow: hidden;
+  }
+}
+
 /* Scrollable content wrapper for preview panel */
 .preview-content {
   flex: 1;
@@ -415,7 +509,7 @@ body {
   :root:not([data-theme='light']) .welcome-screen,
   :root:not([data-theme='light']) .param-panel,
   :root:not([data-theme='light']) .preview-content {
-    scrollbar-color: rgba(255, 255, 255, 0.4) transparent;
+    scrollbar-color: var(--color-border) transparent;
   }
 }
 
@@ -430,7 +524,7 @@ body {
   :root:not([data-theme='light']) .welcome-screen::-webkit-scrollbar-thumb,
   :root:not([data-theme='light']) .param-panel::-webkit-scrollbar-thumb,
   :root:not([data-theme='light']) .preview-content::-webkit-scrollbar-thumb {
-    background-color: rgba(255, 255, 255, 0.35);
+    background-color: var(--color-border);
   }
 
   :root:not([data-theme='light'])
@@ -438,7 +532,7 @@ body {
   :root:not([data-theme='light']) .param-panel::-webkit-scrollbar-thumb:hover,
   :root:not([data-theme='light'])
     .preview-content::-webkit-scrollbar-thumb:hover {
-    background-color: rgba(255, 255, 255, 0.5);
+    background-color: var(--color-text-secondary);
   }
 }
 
@@ -503,7 +597,7 @@ body {
 
 .gutter.gutter-vertical:focus {
   background-color: var(--color-accent);
-  outline: 3px solid var(--color-accent);
+  outline: 3px solid var(--color-focus);
   outline-offset: 2px;
 }
 
@@ -513,7 +607,7 @@ body {
 
 .gutter.gutter-vertical:focus-visible {
   background-color: var(--color-accent);
-  outline: 3px solid var(--color-accent);
+  outline: 3px solid var(--color-focus);
   outline-offset: 2px;
 }
 
@@ -657,7 +751,7 @@ body {
 
   .gutter:focus {
     background-color: var(--color-accent);
-    outline: 3px solid var(--color-accent);
+    outline: 3px solid var(--color-focus);
     outline-offset: 2px;
   }
 
@@ -667,7 +761,7 @@ body {
 
   .gutter:focus-visible {
     background-color: var(--color-accent);
-    outline: 3px solid var(--color-accent);
+    outline: 3px solid var(--color-focus);
     outline-offset: 2px;
   }
 
@@ -1012,6 +1106,21 @@ details summary:focus,
     min-height: 60px;
     max-height: 40%;
   }
+  
+  /* Compact actions bar on mobile */
+  .actions {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  
+  .actions .btn-large {
+    flex: 1 1 100%;
+    order: -1; /* Primary action first */
+  }
+  
+  .actions-more {
+    flex: 1 1 auto;
+  }
 
   /* Larger touch target for vertical gutter on mobile */
   .gutter.gutter-vertical {
@@ -1039,6 +1148,13 @@ details summary:focus,
 
   .preview-panel .actions .btn-large {
     flex: 1 1 100%;
+  }
+  
+  /* Hide less-used actions on very small screens */
+  @media (max-width: 360px) {
+    #addToComparisonBtn {
+      display: none;
+    }
   }
 }
 

@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="description" content="Web-based OpenSCAD customizer - customize and generate 3D printable STL files directly in your browser" />
     <title>OpenSCAD Web Customizer</title>
     
@@ -85,6 +85,28 @@
           </div>
         </div>
       </header>
+      
+      <!-- Workflow Progress Indicator (C3: COGA breadcrumbs) - Moved here to prevent header overlap -->
+      <div class="workflow-progress hidden" id="workflowProgress" role="navigation" aria-label="Workflow progress">
+        <ol class="workflow-steps">
+          <li class="workflow-step" data-step="upload" aria-current="false">
+            <span class="workflow-step-number">1</span>
+            <span class="workflow-step-label">Upload</span>
+          </li>
+          <li class="workflow-step" data-step="customize" aria-current="false">
+            <span class="workflow-step-number">2</span>
+            <span class="workflow-step-label">Customize</span>
+          </li>
+          <li class="workflow-step" data-step="render" aria-current="false">
+            <span class="workflow-step-number">3</span>
+            <span class="workflow-step-label">Generate</span>
+          </li>
+          <li class="workflow-step" data-step="download" aria-current="false">
+            <span class="workflow-step-number">4</span>
+            <span class="workflow-step-label">Download</span>
+          </li>
+        </ol>
+      </div>
       
       <main class="app-main" id="main-content">
         <div class="welcome-screen" id="welcomeScreen">
@@ -434,6 +456,22 @@
           <div class="preview-panel" id="previewPanel" role="region" aria-label="3D preview and actions">
             <div class="panel-header">
               <div class="panel-header-left">
+                <!-- Mobile drawer toggle -->
+                <button 
+                  id="mobileDrawerToggle" 
+                  class="btn btn-sm btn-icon mobile-only" 
+                  aria-expanded="false" 
+                  aria-controls="paramPanel"
+                  aria-label="Open parameters panel"
+                  title="Parameters"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <line x1="3" y1="12" x2="21" y2="12"></line>
+                    <line x1="3" y1="6" x2="21" y2="6"></line>
+                    <line x1="3" y1="18" x2="21" y2="18"></line>
+                  </svg>
+                  <span class="btn-label">Params</span>
+                </button>
                 <h2 id="preview-heading">Preview</h2>
               </div>
               <div class="panel-header-right">
@@ -482,7 +520,7 @@
                 <!-- Dedicated screen reader announcer (separate from visible status) -->
                 <div id="srAnnouncer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
 
-                <details class="preview-settings-details">
+                <details id="previewSettingsDetails" class="preview-settings-details">
                   <summary class="preview-settings-summary">
                     <span class="settings-icon">⚙️</span>
                     Preview Settings
@@ -592,28 +630,6 @@
       </main>
       
       <div class="error-message hidden" id="errorMessage" role="alert" aria-live="assertive" aria-atomic="true"></div>
-      
-      <!-- Workflow Progress Indicator (C3: COGA breadcrumbs) -->
-      <div class="workflow-progress hidden" id="workflowProgress" role="navigation" aria-label="Workflow progress">
-        <ol class="workflow-steps">
-          <li class="workflow-step" data-step="upload" aria-current="false">
-            <span class="workflow-step-number">1</span>
-            <span class="workflow-step-label">Upload</span>
-          </li>
-          <li class="workflow-step" data-step="customize" aria-current="false">
-            <span class="workflow-step-number">2</span>
-            <span class="workflow-step-label">Customize</span>
-          </li>
-          <li class="workflow-step" data-step="render" aria-current="false">
-            <span class="workflow-step-number">3</span>
-            <span class="workflow-step-label">Generate</span>
-          </li>
-          <li class="workflow-step" data-step="download" aria-current="false">
-            <span class="workflow-step-number">4</span>
-            <span class="workflow-step-label">Download</span>
-          </li>
-        </ol>
-      </div>
     </div>
     
     <!-- Render Queue Modal -->
@@ -908,6 +924,9 @@ color(hex2rgb(box_color))
         </div>
       </div>
     </div>
+    
+    <!-- Drawer backdrop (for mobile off-canvas) -->
+    <div class="drawer-backdrop" id="drawerBackdrop" aria-hidden="true"></div>
     
     <script type="module" src="/src/main.js"></script>
   </body>

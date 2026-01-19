@@ -68,6 +68,7 @@ import {
   resetWorkflowProgress,
 } from './js/workflow-progress.js';
 import { startTutorial, closeTutorial } from './js/tutorial-sandbox.js';
+import { initDrawerController } from './js/drawer-controller.js';
 import Split from 'split.js';
 
 // Example definitions (used by welcome screen and Features Guide)
@@ -2429,8 +2430,13 @@ function sanitizeUrlParams(extracted, urlParams) {
     
     const minSizes = [280, 300];
 
-    // Initialize Split.js (only if not collapsed)
+    // Initialize Split.js (only if not collapsed and not on mobile)
     const initSplit = function() {
+      // Don't initialize on mobile (drawer pattern is used instead)
+      if (window.innerWidth < 768) {
+        return;
+      }
+      
       if (splitInstance || paramPanel.classList.contains('collapsed')) {
         return;
       }
@@ -2578,11 +2584,25 @@ function sanitizeUrlParams(extracted, urlParams) {
       }, 100);
     }
     
-    // Destroy Split.js
+    // Destroy Split.js and clean up
     const destroySplit = function() {
       if (splitInstance) {
         splitInstance.destroy();
         splitInstance = null;
+      }
+      
+      // Clean up leftover gutters and inline styles
+      const gutters = document.querySelectorAll('.gutter-horizontal');
+      gutters.forEach(gutter => gutter.remove());
+      
+      // Clear inline styles that Split.js may have applied
+      if (paramPanel) {
+        paramPanel.style.removeProperty('width');
+        paramPanel.style.removeProperty('flex-basis');
+      }
+      if (previewPanel) {
+        previewPanel.style.removeProperty('width');
+        previewPanel.style.removeProperty('flex-basis');
       }
     }
     
@@ -2590,6 +2610,29 @@ function sanitizeUrlParams(extracted, urlParams) {
     if (!paramPanel.classList.contains('collapsed')) {
       initSplit();
     }
+    
+    // Initialize mobile drawer controller
+    initDrawerController();
+    
+    // Collapse details sections on mobile by default
+    function initMobileDetailsCollapse() {
+      if (window.innerWidth >= 768) return;
+      
+      const detailsToCollapse = [
+        '#previewSettingsDetails',
+        '.advanced-menu'
+      ];
+      
+      detailsToCollapse.forEach(selector => {
+        const el = document.querySelector(selector);
+        if (el && el.tagName === 'DETAILS') {
+          el.removeAttribute('open');
+        }
+      });
+    }
+    
+    // Call on load
+    initMobileDetailsCollapse();
     
     // Re-initialize/destroy split when collapse state changes
     const originalToggleParamPanel = toggleParamPanel;
