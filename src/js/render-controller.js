@@ -18,10 +18,10 @@ export {
 
 /**
  * Legacy render quality presets (for backwards compatibility)
- * 
+ *
  * NOTE: New code should use the adaptive quality tier system from quality-tiers.js
  * These presets are based on community standards for STANDARD complexity models.
- * 
+ *
  * For adaptive quality based on model complexity and hardware, use:
  * - getAdaptiveQualityConfig(scadContent, parameters)
  * - getQualityPreset(tier, hardwareLevel, qualityLevel, mode)
@@ -235,7 +235,7 @@ export class RenderController {
     this.renderQueue = Promise.resolve();
     this.memoryUsage = null;
     this.onMemoryWarning = null;
-    
+
     // Configurable timeout settings
     this.timeoutConfig = {
       defaultTimeoutMs: options.defaultTimeoutMs || 60000,
@@ -252,9 +252,12 @@ export class RenderController {
    * @param {number} config.initTimeoutMs - WASM initialization timeout in milliseconds
    */
   setTimeoutConfig(config) {
-    if (config.defaultTimeoutMs) this.timeoutConfig.defaultTimeoutMs = config.defaultTimeoutMs;
-    if (config.previewTimeoutMs) this.timeoutConfig.previewTimeoutMs = config.previewTimeoutMs;
-    if (config.initTimeoutMs) this.timeoutConfig.initTimeoutMs = config.initTimeoutMs;
+    if (config.defaultTimeoutMs)
+      this.timeoutConfig.defaultTimeoutMs = config.defaultTimeoutMs;
+    if (config.previewTimeoutMs)
+      this.timeoutConfig.previewTimeoutMs = config.previewTimeoutMs;
+    if (config.initTimeoutMs)
+      this.timeoutConfig.initTimeoutMs = config.initTimeoutMs;
   }
 
   /**
@@ -343,7 +346,8 @@ export class RenderController {
         };
 
         this.worker.onerror = (error) => {
-          const message = error?.message || 'Worker error during initialization';
+          const message =
+            error?.message || 'Worker error during initialization';
           console.error('[RenderController] Worker error:', error);
           if (onProgress) {
             onProgress(-1, 'Failed to initialize: ' + message);
@@ -511,12 +515,12 @@ export class RenderController {
       case 'WARNING':
         // Handle proactive warnings from worker (e.g., high memory before render)
         console.warn(`[RenderController] Warning: ${payload.message}`);
-        
+
         // Trigger memory warning callback if this is a memory warning
         if (payload.code === 'HIGH_MEMORY' && this.onMemoryWarning) {
           this.onMemoryWarning(payload.memoryUsage || payload);
         }
-        
+
         // Forward warning to current request's progress callback
         if (this.currentRequest && this.currentRequest.onProgress) {
           // Use negative percent to indicate warning state
@@ -580,15 +584,15 @@ export class RenderController {
 
   /**
    * Apply quality settings to parameters
-   * 
+   *
    * Quality presets control tessellation through $fn, $fa, and $fs:
    * - $fn: Number of segments for full circles (0 = use $fa/$fs instead)
    * - $fa: Minimum angle (degrees) per segment (default 12°)
    * - $fs: Minimum size (mm) per segment (default 2mm)
-   * 
+   *
    * For FULL/DESKTOP_DEFAULT quality, we only SET defaults if the model
    * doesn't define them. For PREVIEW/DRAFT, we enforce constraints.
-   * 
+   *
    * @param {Object} parameters - Original parameters
    * @param {Object} quality - Quality preset (RENDER_QUALITY.PREVIEW or RENDER_QUALITY.FULL)
    * @returns {Object} Parameters with quality adjustments
@@ -660,7 +664,10 @@ export class RenderController {
       const quality = options.quality || RENDER_QUALITY.FULL;
       const adjustedParams = this.applyQualitySettings(parameters, quality);
       // Use explicit timeout if provided, then quality preset, then controller default
-      const timeoutMs = options.timeoutMs || quality.timeoutMs || this.timeoutConfig.defaultTimeoutMs;
+      const timeoutMs =
+        options.timeoutMs ||
+        quality.timeoutMs ||
+        this.timeoutConfig.defaultTimeoutMs;
 
       const shouldRetryOnce = (err) => {
         const msg = err?.message || String(err);
@@ -670,7 +677,8 @@ export class RenderController {
         if (/^Failed to render model:\s*\d+/.test(msg)) return true;
         // Worker translates numeric callMain errors to INTERNAL_ERROR with raw numeric details.
         if (code === 'INTERNAL_ERROR') return true;
-        if (typeof details === 'string' && /\b\d{6,}\b/.test(details)) return true;
+        if (typeof details === 'string' && /\b\d{6,}\b/.test(details))
+          return true;
         return false;
       };
 

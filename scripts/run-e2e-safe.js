@@ -30,8 +30,8 @@ const getEnvNumber = (name, fallback) => {
 
 // Configuration
 const CONFIG = {
-  // Maximum time to wait for tests (2 minutes)
-  GLOBAL_TIMEOUT: getEnvNumber('PW_FAILSAFE_TIMEOUT', 120000),
+  // Maximum time to wait for tests (5 minutes for CI, 2 minutes local)
+  GLOBAL_TIMEOUT: getEnvNumber('PW_FAILSAFE_TIMEOUT', process.env.CI ? 300000 : 120000),
   // Kill if no output for this long (0 disables)
   IDLE_TIMEOUT: getEnvNumber('PW_FAILSAFE_IDLE_TIMEOUT', 0),
   // Time to wait before force-killing hung process (10 seconds)
@@ -43,6 +43,7 @@ const CONFIG = {
     CI: '1',                          // Force CI mode (non-interactive)
     PWTEST_SKIP_TEST_OUTPUT: '1',    // Reduce output verbosity
     NO_COLOR: '1',                    // Disable color codes that can cause hangs
+    PW_REUSE_SERVER: '1',            // Allow reusing existing dev server
   }
 }
 

@@ -1,0 +1,325 @@
+/* ============================================================================
+   Semantic Color Tokens
+   ============================================================================
+   Maps Radix color scales to semantic tokens used throughout the application.
+   Preserves existing token names for backward compatibility.
+   
+   Token Naming Convention:
+   - --color-{purpose}-{variant}
+   - --color-{component}-{element}-{state}
+   
+   Radix Scale Reference:
+   - Steps 1-4: Subtle backgrounds
+   - Steps 5-8: Borders and UI elements
+   - Steps 9-10: Solid backgrounds
+   - Steps 11-12: High contrast text
+   ============================================================================ */
+
+:root {
+  /* ========================================================================
+     Brand Colors (for reference, mapped to semantic tokens below)
+     ======================================================================== */
+  --color-brand-yellow: var(--yellow-9);
+  --color-brand-green: var(--green-9);
+  --color-brand-black: var(--slate-12);
+
+  /* ========================================================================
+     Background Colors
+     ======================================================================== */
+  --color-bg-primary: var(--slate-1);
+  --color-bg-secondary: var(--slate-2);
+  --color-bg-tertiary: var(--slate-3);
+  --color-bg-elevated: var(--slate-1); /* Alias for elevated surfaces */
+
+  /* ========================================================================
+     Text Colors
+     ======================================================================== */
+  --color-text-primary: var(--slate-12);
+  --color-text-secondary: var(--slate-11);
+  --color-text-tertiary: var(--slate-10);
+  --color-text-muted: var(--slate-10); /* Alias for muted text */
+
+  /* ========================================================================
+     Accent Colors (Yellow - Primary Brand)
+     ======================================================================== */
+  --color-accent: var(--yellow-9);
+  --color-accent-hover: var(--yellow-10);
+  --color-accent-text: var(--slate-12); /* Text on accent backgrounds */
+  --color-accent-subtle: var(--yellow-4);
+
+  /* ========================================================================
+     Success Colors (Green)
+     ======================================================================== */
+  --color-success: var(--green-9);
+  --color-success-hover: var(--green-10);
+  /* Use step-12 for WCAG AA on subtle (step-3) backgrounds */
+  --color-success-text: var(--green-12);
+  --color-success-bg: var(--green-3);
+
+  /* ========================================================================
+     Info Colors (Teal - NEW)
+     ======================================================================== */
+  --color-info: var(--teal-9);
+  --color-info-hover: var(--teal-10);
+  /* Use step-12 for WCAG AA on subtle (step-3) backgrounds */
+  --color-info-text: var(--teal-12);
+  --color-info-bg: var(--teal-3);
+
+  /* ========================================================================
+     Error Colors (Red)
+     ======================================================================== */
+  --color-error: var(--red-9);
+  --color-error-hover: var(--red-10);
+  /* Use step-12 for WCAG AA margin (avoid borderline ratios) */
+  --color-error-text: var(--red-12);
+  --color-error-bg: var(--red-3);
+
+  /* ========================================================================
+     Warning Colors (Amber - not yellow, better contrast for warnings)
+     ======================================================================== */
+  --color-warning: var(--amber-9);
+  --color-warning-hover: var(--amber-10);
+  /* Use step-12 for WCAG AA on subtle (step-3) backgrounds */
+  --color-warning-text: var(--amber-12);
+  --color-warning-bg: var(--amber-3);
+
+  /* ========================================================================
+     Border Colors
+     ======================================================================== */
+  /* Ensure non-text contrast (3:1) against primary backgrounds */
+  --color-border: var(--slate-10);
+  --color-border-light: var(--slate-9);
+  --color-border-hover: var(--yellow-8);
+
+  /* ========================================================================
+     Input Colors
+     ======================================================================== */
+  --color-input-bg: var(--slate-1);
+  /* Inputs are key boundaries; ensure 3:1 non-text contrast */
+  --color-input-border: var(--slate-10);
+  /* Focus uses brand-neutral blue (meets 3:1) */
+  --color-input-border-focus: var(--color-focus);
+
+  /* ========================================================================
+     Interactive States
+     ======================================================================== */
+  --color-hover-bg: var(--slate-3);
+
+  /* ========================================================================
+     Focus Indicators
+     Note: Using brand-neutral blue for focus (per plan Phase 4.5)
+     This provides consistent, OS-convention focus indicators
+     ======================================================================== */
+  --color-focus: #0052cc;
+  --focus-ring: 0 0 0 3px rgba(0, 82, 204, 0.35);
+
+  /* ========================================================================
+     Shadows (using Radix alpha scales for depth)
+     ======================================================================== */
+  --shadow-sm: 0 1px 3px var(--slate-a4);
+  --shadow-md: 0 4px 6px var(--slate-a5);
+  --shadow-lg: 0 10px 20px var(--slate-a6);
+}
+
+/* ============================================================================
+   Dark Mode Semantic Tokens
+   ============================================================================
+   Dark mode uses the same token names with different Radix scale values.
+   Radix dark scales are designed to maintain perceptual consistency.
+   ============================================================================ */
+
+/* Dark Mode - Manual Override */
+:root[data-theme='dark'] {
+  /* Background Colors */
+  --color-bg-primary: var(--slate-1);
+  --color-bg-secondary: var(--slate-2);
+  --color-bg-tertiary: var(--slate-3);
+  --color-bg-elevated: var(--slate-1);
+
+  /* Text Colors */
+  --color-text-primary: var(--slate-12);
+  --color-text-secondary: var(--slate-11);
+  --color-text-tertiary: var(--slate-10);
+  --color-text-muted: var(--slate-10);
+
+  /* Accent Colors */
+  --color-accent: var(--yellow-9);
+  --color-accent-hover: var(--yellow-10);
+  --color-accent-text: var(--slate-1); /* Light text on dark yellow */
+  --color-accent-subtle: var(--yellow-4);
+
+  /* Success Colors */
+  --color-success: var(--green-9);
+  --color-success-hover: var(--green-10);
+  --color-success-text: var(--green-12);
+  --color-success-bg: var(--green-3);
+
+  /* Info Colors */
+  --color-info: var(--teal-9);
+  --color-info-hover: var(--teal-10);
+  --color-info-text: var(--teal-12);
+  --color-info-bg: var(--teal-3);
+
+  /* Error Colors */
+  --color-error: var(--red-9);
+  --color-error-hover: var(--red-10);
+  --color-error-text: var(--red-12);
+  --color-error-bg: var(--red-3);
+
+  /* Warning Colors */
+  --color-warning: var(--amber-9);
+  --color-warning-hover: var(--amber-10);
+  --color-warning-text: var(--amber-12);
+  --color-warning-bg: var(--amber-3);
+
+  /* Border Colors */
+  --color-border: var(--slate-10);
+  --color-border-light: var(--slate-9);
+  --color-border-hover: var(--yellow-8);
+
+  /* Input Colors */
+  --color-input-bg: var(--slate-2);
+  --color-input-border: var(--slate-10);
+  --color-input-border-focus: var(--color-focus);
+
+  /* Interactive States */
+  --color-hover-bg: var(--slate-3);
+
+  /* Focus Indicators - Lighter blue for dark backgrounds */
+  --color-focus: #66b3ff;
+  --focus-ring: 0 0 0 3px rgba(102, 179, 255, 0.5);
+
+  /* Shadows */
+  --shadow-sm: 0 1px 3px var(--slate-a6);
+  --shadow-md: 0 4px 6px var(--slate-a7);
+  --shadow-lg: 0 10px 20px var(--slate-a8);
+}
+
+/* Dark Mode - System Preference (when no manual override) */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    /* Background Colors */
+    --color-bg-primary: var(--slate-1);
+    --color-bg-secondary: var(--slate-2);
+    --color-bg-tertiary: var(--slate-3);
+    --color-bg-elevated: var(--slate-1);
+
+    /* Text Colors */
+    --color-text-primary: var(--slate-12);
+    --color-text-secondary: var(--slate-11);
+    --color-text-tertiary: var(--slate-10);
+    --color-text-muted: var(--slate-10);
+
+    /* Accent Colors */
+    --color-accent: var(--yellow-9);
+    --color-accent-hover: var(--yellow-10);
+    --color-accent-text: var(--slate-1);
+    --color-accent-subtle: var(--yellow-4);
+
+    /* Success Colors */
+    --color-success: var(--green-9);
+    --color-success-hover: var(--green-10);
+    --color-success-text: var(--green-12);
+    --color-success-bg: var(--green-3);
+
+    /* Info Colors */
+    --color-info: var(--teal-9);
+    --color-info-hover: var(--teal-10);
+    --color-info-text: var(--teal-12);
+    --color-info-bg: var(--teal-3);
+
+    /* Error Colors */
+    --color-error: var(--red-9);
+    --color-error-hover: var(--red-10);
+    --color-error-text: var(--red-12);
+    --color-error-bg: var(--red-3);
+
+    /* Warning Colors */
+    --color-warning: var(--amber-9);
+    --color-warning-hover: var(--amber-10);
+    --color-warning-text: var(--amber-12);
+    --color-warning-bg: var(--amber-3);
+
+    /* Border Colors */
+    --color-border: var(--slate-10);
+    --color-border-light: var(--slate-9);
+    --color-border-hover: var(--yellow-8);
+
+    /* Input Colors */
+    --color-input-bg: var(--slate-2);
+    --color-input-border: var(--slate-10);
+    --color-input-border-focus: var(--color-focus);
+
+    /* Interactive States */
+    --color-hover-bg: var(--slate-3);
+
+    /* Focus Indicators */
+    --color-focus: #66b3ff;
+    --focus-ring: 0 0 0 3px rgba(102, 179, 255, 0.5);
+
+    /* Shadows */
+    --shadow-sm: 0 1px 3px var(--slate-a6);
+    --shadow-md: 0 4px 6px var(--slate-a7);
+    --shadow-lg: 0 10px 20px var(--slate-a8);
+  }
+}
+
+/* ============================================================================
+   Light Mode Explicit (forces light even if system prefers dark)
+   ============================================================================ */
+:root[data-theme='light'] {
+  /* Explicitly set light mode values (same as root defaults) */
+  /* This ensures light mode works even when system preference is dark */
+
+  --color-bg-primary: var(--slate-1);
+  --color-bg-secondary: var(--slate-2);
+  --color-bg-tertiary: var(--slate-3);
+  --color-bg-elevated: var(--slate-1);
+
+  --color-text-primary: var(--slate-12);
+  --color-text-secondary: var(--slate-11);
+  --color-text-tertiary: var(--slate-10);
+  --color-text-muted: var(--slate-10);
+
+  --color-accent: var(--yellow-9);
+  --color-accent-hover: var(--yellow-10);
+  --color-accent-text: var(--slate-12);
+  --color-accent-subtle: var(--yellow-4);
+
+  --color-success: var(--green-9);
+  --color-success-hover: var(--green-10);
+  --color-success-text: var(--green-12);
+  --color-success-bg: var(--green-3);
+
+  --color-info: var(--teal-9);
+  --color-info-hover: var(--teal-10);
+  --color-info-text: var(--teal-12);
+  --color-info-bg: var(--teal-3);
+
+  --color-error: var(--red-9);
+  --color-error-hover: var(--red-10);
+  --color-error-text: var(--red-12);
+  --color-error-bg: var(--red-3);
+
+  --color-warning: var(--amber-9);
+  --color-warning-hover: var(--amber-10);
+  --color-warning-text: var(--amber-12);
+  --color-warning-bg: var(--amber-3);
+
+  --color-border: var(--slate-10);
+  --color-border-light: var(--slate-9);
+  --color-border-hover: var(--yellow-8);
+
+  --color-input-bg: var(--slate-1);
+  --color-input-border: var(--slate-10);
+  --color-input-border-focus: var(--color-focus);
+
+  --color-hover-bg: var(--slate-3);
+
+  --color-focus: #0052cc;
+  --focus-ring: 0 0 0 3px rgba(0, 82, 204, 0.35);
+
+  --shadow-sm: 0 1px 3px var(--slate-a4);
+  --shadow-md: 0 4px 6px var(--slate-a5);
+  --shadow-lg: 0 10px 20px var(--slate-a6);
+}

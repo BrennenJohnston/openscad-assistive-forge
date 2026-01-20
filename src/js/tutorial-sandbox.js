@@ -1,13 +1,13 @@
 /**
  * Tutorial Sandbox System - Modern Spotlight Coachmarks
- * 
+ *
  * Provides guided walkthrough overlays using a spotlight/cutout approach.
  * The tutorial panel positions itself near highlighted elements, with an
  * arrow pointing to the target. Users can interact with highlighted elements
  * through the spotlight cutout.
- * 
+ *
  * Based on best practices from Shepherd.js, Driver.js, and modern onboarding UX.
- * 
+ *
  * @module tutorial-sandbox
  */
 
@@ -51,23 +51,29 @@ const PANEL_OFFSET = 16;
  */
 function findScrollableParent(element) {
   let parent = element.parentElement;
-  
+
   while (parent && parent !== document.body) {
     const overflowY = window.getComputedStyle(parent).overflowY;
     const overflowX = window.getComputedStyle(parent).overflowX;
-    
-    if (overflowY === 'auto' || overflowY === 'scroll' || 
-        overflowX === 'auto' || overflowX === 'scroll') {
+
+    if (
+      overflowY === 'auto' ||
+      overflowY === 'scroll' ||
+      overflowX === 'auto' ||
+      overflowX === 'scroll'
+    ) {
       // Check if it actually has scrollable content
-      if (parent.scrollHeight > parent.clientHeight || 
-          parent.scrollWidth > parent.clientWidth) {
+      if (
+        parent.scrollHeight > parent.clientHeight ||
+        parent.scrollWidth > parent.clientWidth
+      ) {
         return parent;
       }
     }
-    
+
     parent = parent.parentElement;
   }
-  
+
   return null;
 }
 
@@ -98,10 +104,15 @@ const TUTORIALS = {
           <p><strong>Try it:</strong> Change the <strong>Width</strong> value and watch the preview update.</p>
           <p class="tutorial-hint">Use the slider or type a number.</p>
         `,
-        highlightSelector: '.param-control[data-param-name="width"], #param-width',
+        highlightSelector:
+          '.param-control[data-param-name="width"], #param-width',
         position: 'right',
         lockScroll: true,
-        completion: { type: 'domEvent', selector: '#param-width', event: 'input' },
+        completion: {
+          type: 'domEvent',
+          selector: '#param-width',
+          event: 'input',
+        },
       },
       {
         title: 'See the Preview',
@@ -130,7 +141,11 @@ const TUTORIALS = {
         `,
         highlightSelector: '#primaryActionBtn',
         position: 'top',
-        completion: { type: 'domEvent', selector: '#primaryActionBtn', event: 'click' },
+        completion: {
+          type: 'domEvent',
+          selector: '#primaryActionBtn',
+          event: 'click',
+        },
       },
       {
         title: 'Get Help',
@@ -140,10 +155,10 @@ const TUTORIALS = {
         `,
         highlightSelector: '#featuresGuideBtn',
         position: 'left',
-        completion: { 
-          type: 'modalOpen', 
+        completion: {
+          type: 'modalOpen',
           selector: '#featuresGuideModal',
-          trigger: '#featuresGuideBtn'
+          trigger: '#featuresGuideBtn',
         },
       },
       {
@@ -163,7 +178,7 @@ const TUTORIALS = {
         completion: { type: 'modalClose', selector: '#featuresGuideModal' },
       },
       {
-        title: 'You\'re Ready!',
+        title: "You're Ready!",
         content: `
           <p>You can now demonstrate 3D customization to your students.</p>
           <p><strong>Next steps:</strong></p>
@@ -201,7 +216,10 @@ const TUTORIALS = {
         `,
         highlightSelector: '#libraryControls',
         position: 'right',
-        completion: { type: 'detailsOpen', selector: '#libraryControls details' },
+        completion: {
+          type: 'detailsOpen',
+          selector: '#libraryControls details',
+        },
       },
       {
         title: 'Multi-file Projects',
@@ -224,7 +242,11 @@ const TUTORIALS = {
         `,
         highlightSelector: '#outputFormat',
         position: 'top',
-        completion: { type: 'domEvent', selector: '#outputFormat', event: 'change' },
+        completion: {
+          type: 'domEvent',
+          selector: '#outputFormat',
+          event: 'change',
+        },
       },
       {
         title: 'All Set!',
@@ -270,7 +292,11 @@ const TUTORIALS = {
         highlightSelector: '#parametersContainer',
         position: 'right',
         lockScroll: true,
-        completion: { type: 'domEvent', selector: '#parametersContainer', event: 'input' },
+        completion: {
+          type: 'domEvent',
+          selector: '#parametersContainer',
+          event: 'input',
+        },
       },
       {
         title: 'Modal Navigation',
@@ -280,7 +306,7 @@ const TUTORIALS = {
         position: 'center',
       },
       {
-        title: 'You\'re Set!',
+        title: "You're Set!",
         content: `
           <p>All features work with keyboard only.</p>
           <p class="tutorial-hint">See Keyguard Workflow Guide for full reference.</p>
@@ -313,7 +339,11 @@ const TUTORIALS = {
         `,
         highlightSelector: '#contrastToggle',
         position: 'bottom',
-        completion: { type: 'domEvent', selector: '#contrastToggle', event: 'click' },
+        completion: {
+          type: 'domEvent',
+          selector: '#contrastToggle',
+          event: 'click',
+        },
       },
       {
         title: 'Theme Toggle',
@@ -322,7 +352,11 @@ const TUTORIALS = {
         `,
         highlightSelector: '#themeToggle',
         position: 'bottom',
-        completion: { type: 'domEvent', selector: '#themeToggle', event: 'click' },
+        completion: {
+          type: 'domEvent',
+          selector: '#themeToggle',
+          event: 'click',
+        },
       },
       {
         title: 'Touch Targets',
@@ -419,10 +453,15 @@ const TUTORIALS = {
           <p>The <strong>Status area</strong> announces all operations automatically.</p>
           <p><strong>Try it:</strong> Adjust <strong>Width</strong> and listen for the announcement.</p>
         `,
-        highlightSelector: '#statusArea, .param-control[data-param-name="width"], #param-width',
+        highlightSelector:
+          '#statusArea, .param-control[data-param-name="width"], #param-width',
         position: 'auto',
         lockScroll: true,
-        completion: { type: 'domEvent', selector: '#param-width', event: 'input' },
+        completion: {
+          type: 'domEvent',
+          selector: '#param-width',
+          event: 'input',
+        },
       },
       {
         title: 'ARIA Landmarks',
@@ -475,7 +514,9 @@ export function startTutorial(tutorialId, { triggerEl } = {}) {
 
   createTutorialOverlay();
   showStep(0);
-  announceToScreenReader(`${tutorial.title} started. Step 1 of ${tutorial.steps.length}.`);
+  announceToScreenReader(
+    `${tutorial.title} started. Step 1 of ${tutorial.steps.length}.`
+  );
 }
 
 /**
@@ -488,7 +529,8 @@ function createTutorialOverlay() {
 
   const overlay = document.createElement('div');
   overlay.className = 'tutorial-overlay';
-  overlay.setAttribute('role', 'region');
+  overlay.setAttribute('role', 'dialog');
+  overlay.setAttribute('aria-modal', 'true');
   overlay.setAttribute('aria-label', `${activeTutorial.title} tutorial`);
   overlay.setAttribute('aria-live', 'polite');
 
@@ -530,7 +572,7 @@ function createTutorialOverlay() {
       
       <div class="tutorial-footer">
         <div class="tutorial-progress">
-          <span id="tutorial-step-current">1</span> / <span id="tutorial-step-total">${activeTutorial.steps.length}</span>
+          Step <span id="tutorial-step-current">1</span> of <span id="tutorial-step-total">${activeTutorial.steps.length}</span>
         </div>
         <div class="tutorial-nav">
           <button class="btn btn-sm tutorial-btn-back" id="tutorialBackBtn" disabled>← Back</button>
@@ -573,13 +615,13 @@ function setupTutorialListeners() {
   closeBtn?.addEventListener('click', closeTutorial);
   minimizeBtn?.addEventListener('click', toggleMinimize);
   restoreBtn?.addEventListener('click', toggleMinimize);
-  
+
   backBtn?.addEventListener('click', () => showStep(currentStepIndex - 1));
   nextBtn?.addEventListener('click', handleNextClick);
 
   // Click outside panel to focus target (if there is one)
   tutorialOverlay.addEventListener('click', handleOverlayClick);
-  
+
   document.addEventListener('keydown', handleKeydown);
 }
 
@@ -588,7 +630,7 @@ function setupTutorialListeners() {
  */
 function handleKeydown(e) {
   if (!tutorialOverlay) return;
-  
+
   if (e.key === 'Escape') {
     e.preventDefault();
     closeTutorial();
@@ -611,12 +653,14 @@ function handleKeydown(e) {
 function handleOverlayClick(e) {
   const panel = tutorialOverlay.querySelector('.tutorial-panel');
   const minimized = tutorialOverlay.querySelector('.tutorial-minimized');
-  
+
   // If click is outside panel and minimized button, focus the highlighted element
   if (!panel?.contains(e.target) && !minimized?.contains(e.target)) {
     const step = activeTutorial.steps[currentStepIndex];
     if (step.highlightSelector) {
-      const target = document.querySelector(step.highlightSelector.split(',')[0]);
+      const target = document.querySelector(
+        step.highlightSelector.split(',')[0]
+      );
       if (target && typeof target.focus === 'function') {
         target.focus();
       }
@@ -634,11 +678,14 @@ function handleNextClick() {
     const reqEl = tutorialOverlay.querySelector('#tutorialRequirement');
     if (reqEl) {
       reqEl.classList.add('tutorial-requirement-pulse');
-      setTimeout(() => reqEl.classList.remove('tutorial-requirement-pulse'), 500);
+      setTimeout(
+        () => reqEl.classList.remove('tutorial-requirement-pulse'),
+        500
+      );
     }
     return;
   }
-  
+
   if (currentStepIndex < activeTutorial.steps.length - 1) {
     showStep(currentStepIndex + 1);
   } else {
@@ -656,9 +703,11 @@ function setupResizeObserver() {
     }
   });
   resizeObserver.observe(document.body);
-  
+
   // Also handle scroll
-  window.addEventListener('scroll', updateSpotlightAndPosition, { passive: true });
+  window.addEventListener('scroll', updateSpotlightAndPosition, {
+    passive: true,
+  });
 }
 
 /**
@@ -666,11 +715,11 @@ function setupResizeObserver() {
  */
 function toggleMinimize() {
   isMinimized = !isMinimized;
-  
+
   const panel = tutorialOverlay.querySelector('.tutorial-panel');
   const minimized = tutorialOverlay.querySelector('.tutorial-minimized');
   const svg = tutorialOverlay.querySelector('.tutorial-spotlight-svg');
-  
+
   if (isMinimized) {
     panel.classList.add('hidden');
     minimized.classList.remove('hidden');
@@ -681,8 +730,10 @@ function toggleMinimize() {
     svg.style.opacity = '1';
     updateSpotlightAndPosition();
   }
-  
-  announceToScreenReader(isMinimized ? 'Tutorial minimized' : 'Tutorial restored');
+
+  announceToScreenReader(
+    isMinimized ? 'Tutorial minimized' : 'Tutorial restored'
+  );
 }
 
 /**
@@ -694,7 +745,7 @@ function showStep(stepIndex) {
 
   // Clear previous state
   clearCompletionListeners();
-  
+
   currentStepIndex = stepIndex;
   const step = activeTutorial.steps[stepIndex];
 
@@ -706,18 +757,20 @@ function showStep(stepIndex) {
   `;
 
   // Update progress
-  tutorialOverlay.querySelector('#tutorial-step-current').textContent = stepIndex + 1;
-  tutorialOverlay.querySelector('.tutorial-minimized-progress').textContent = 
+  tutorialOverlay.querySelector('#tutorial-step-current').textContent =
+    stepIndex + 1;
+  tutorialOverlay.querySelector('.tutorial-minimized-progress').textContent =
     `${stepIndex + 1}/${activeTutorial.steps.length}`;
-  tutorialOverlay.querySelector('.tutorial-minimized-text').textContent = 
+  tutorialOverlay.querySelector('.tutorial-minimized-text').textContent =
     step.autoMinimize ? 'Explore the modal' : 'Tutorial';
 
   // Update buttons
   const backBtn = tutorialOverlay.querySelector('#tutorialBackBtn');
   const nextBtn = tutorialOverlay.querySelector('#tutorialNextBtn');
-  
+
   backBtn.disabled = stepIndex === 0;
-  nextBtn.textContent = stepIndex === activeTutorial.steps.length - 1 ? 'Finish ✓' : 'Next →';
+  nextBtn.textContent =
+    stepIndex === activeTutorial.steps.length - 1 ? 'Finish ✓' : 'Next →';
 
   // Setup completion gate
   setupCompletion(step);
@@ -734,7 +787,9 @@ function showStep(stepIndex) {
   }
 
   // Announce to screen readers
-  announceToScreenReader(`Step ${stepIndex + 1} of ${activeTutorial.steps.length}: ${step.title}`);
+  announceToScreenReader(
+    `Step ${stepIndex + 1} of ${activeTutorial.steps.length}: ${step.title}`
+  );
 }
 
 /**
@@ -742,22 +797,22 @@ function showStep(stepIndex) {
  */
 function updateSpotlightAndPosition() {
   if (!tutorialOverlay || isMinimized) return;
-  
+
   const step = activeTutorial.steps[currentStepIndex];
   const panel = tutorialOverlay.querySelector('.tutorial-panel');
   const arrow = tutorialOverlay.querySelector('.tutorial-arrow');
   const cutout = tutorialOverlay.querySelector('.tutorial-spotlight-cutout');
-  
+
   // Clear previous highlight
-  document.querySelectorAll('.tutorial-target-highlight').forEach(el => {
+  document.querySelectorAll('.tutorial-target-highlight').forEach((el) => {
     el.classList.remove('tutorial-target-highlight');
   });
-  
+
   // Clear previous scroll locks
-  document.querySelectorAll('.tutorial-scroll-locked').forEach(el => {
+  document.querySelectorAll('.tutorial-scroll-locked').forEach((el) => {
     el.classList.remove('tutorial-scroll-locked');
   });
-  
+
   if (!step.highlightSelector || step.position === 'center') {
     // No highlight - center the panel, hide spotlight
     cutout.setAttribute('width', '0');
@@ -774,7 +829,7 @@ function updateSpotlightAndPosition() {
   // Find the target element
   const targetSelector = step.highlightSelector.split(',')[0].trim();
   const target = document.querySelector(targetSelector);
-  
+
   if (!target) {
     // Target not found - center panel
     cutout.setAttribute('width', '0');
@@ -790,7 +845,7 @@ function updateSpotlightAndPosition() {
 
   // Add highlight class to target
   target.classList.add('tutorial-target-highlight');
-  
+
   // Lock scrolling on parent scrollable container if requested
   if (step.lockScroll) {
     const scrollableParent = findScrollableParent(target);
@@ -798,16 +853,21 @@ function updateSpotlightAndPosition() {
       scrollableParent.classList.add('tutorial-scroll-locked');
     }
   }
-  
+
   // Scroll target into view if needed
   const targetRect = target.getBoundingClientRect();
-  const isVisible = targetRect.top >= 0 && 
-                    targetRect.bottom <= window.innerHeight &&
-                    targetRect.left >= 0 && 
-                    targetRect.right <= window.innerWidth;
-  
+  const isVisible =
+    targetRect.top >= 0 &&
+    targetRect.bottom <= window.innerHeight &&
+    targetRect.left >= 0 &&
+    targetRect.right <= window.innerWidth;
+
   if (!isVisible) {
-    target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+    target.scrollIntoView({
+      behavior: 'smooth',
+      block: 'center',
+      inline: 'center',
+    });
     // Wait for scroll to complete before positioning
     setTimeout(() => updateSpotlightAndPosition(), 300);
     return;
@@ -815,7 +875,7 @@ function updateSpotlightAndPosition() {
 
   // Get target bounds
   const rect = target.getBoundingClientRect();
-  
+
   // Update spotlight cutout
   cutout.setAttribute('x', rect.left - SPOTLIGHT_PADDING);
   cutout.setAttribute('y', rect.top - SPOTLIGHT_PADDING);
@@ -851,7 +911,10 @@ function calculateBestPosition(targetRect, preferred) {
 
   // If preferred position has enough space, use it
   if (preferred && preferred !== 'auto') {
-    const minSpace = preferred === 'top' || preferred === 'bottom' ? panelHeight + PANEL_OFFSET : panelWidth + PANEL_OFFSET;
+    const minSpace =
+      preferred === 'top' || preferred === 'bottom'
+        ? panelHeight + PANEL_OFFSET
+        : panelWidth + PANEL_OFFSET;
     if (space[preferred] >= minSpace) {
       return preferred;
     }
@@ -866,7 +929,7 @@ function calculateBestPosition(targetRect, preferred) {
   ];
 
   // Prefer positions with enough space, sorted by available space
-  const viable = positions.filter(p => p.space >= p.needed);
+  const viable = positions.filter((p) => p.space >= p.needed);
   if (viable.length > 0) {
     return viable.sort((a, b) => b.space - a.space)[0].pos;
   }
@@ -898,32 +961,58 @@ function positionPanel(panel, arrow, targetRect, position) {
 
   switch (position) {
     case 'top':
-      top = targetRect.top - panelRect.height - PANEL_OFFSET - SPOTLIGHT_PADDING;
-      left = Math.max(16, Math.min(targetCenterX - panelRect.width / 2, viewport.width - panelRect.width - 16));
+      top =
+        targetRect.top - panelRect.height - PANEL_OFFSET - SPOTLIGHT_PADDING;
+      left = Math.max(
+        16,
+        Math.min(
+          targetCenterX - panelRect.width / 2,
+          viewport.width - panelRect.width - 16
+        )
+      );
       arrow.className = 'tutorial-arrow tutorial-arrow-bottom';
       arrow.style.left = `${Math.min(Math.max(targetCenterX - left - 8, 20), panelRect.width - 40)}px`;
       arrow.style.top = '';
       break;
-      
+
     case 'bottom':
       top = targetRect.bottom + PANEL_OFFSET + SPOTLIGHT_PADDING;
-      left = Math.max(16, Math.min(targetCenterX - panelRect.width / 2, viewport.width - panelRect.width - 16));
+      left = Math.max(
+        16,
+        Math.min(
+          targetCenterX - panelRect.width / 2,
+          viewport.width - panelRect.width - 16
+        )
+      );
       arrow.className = 'tutorial-arrow tutorial-arrow-top';
       arrow.style.left = `${Math.min(Math.max(targetCenterX - left - 8, 20), panelRect.width - 40)}px`;
       arrow.style.top = '';
       break;
-      
+
     case 'left':
-      left = targetRect.left - panelRect.width - PANEL_OFFSET - SPOTLIGHT_PADDING;
-      top = Math.max(16, Math.min(targetCenterY - panelRect.height / 2, viewport.height - panelRect.height - 16));
+      left =
+        targetRect.left - panelRect.width - PANEL_OFFSET - SPOTLIGHT_PADDING;
+      top = Math.max(
+        16,
+        Math.min(
+          targetCenterY - panelRect.height / 2,
+          viewport.height - panelRect.height - 16
+        )
+      );
       arrow.className = 'tutorial-arrow tutorial-arrow-right';
       arrow.style.top = `${Math.min(Math.max(targetCenterY - top - 8, 20), panelRect.height - 40)}px`;
       arrow.style.left = '';
       break;
-      
+
     case 'right':
       left = targetRect.right + PANEL_OFFSET + SPOTLIGHT_PADDING;
-      top = Math.max(16, Math.min(targetCenterY - panelRect.height / 2, viewport.height - panelRect.height - 16));
+      top = Math.max(
+        16,
+        Math.min(
+          targetCenterY - panelRect.height / 2,
+          viewport.height - panelRect.height - 16
+        )
+      );
       arrow.className = 'tutorial-arrow tutorial-arrow-left';
       arrow.style.top = `${Math.min(Math.max(targetCenterY - top - 8, 20), panelRect.height - 40)}px`;
       arrow.style.left = '';
@@ -951,7 +1040,7 @@ function setupCompletion(step) {
   if (!requirementEl || !nextBtn) return;
 
   stepCompleted = !step.completion;
-  
+
   if (step.completion) {
     requirementEl.textContent = '↑ Complete the action above to continue';
     requirementEl.classList.remove('tutorial-requirement-done');
@@ -1008,7 +1097,7 @@ function attachCompletionListener({ selector, event, predicate }) {
 
   const handler = () => {
     if (predicate && !predicate(target)) return;
-    
+
     stepCompleted = true;
     nextBtn.disabled = false;
     nextBtn.setAttribute('aria-disabled', 'false');
@@ -1017,7 +1106,9 @@ function attachCompletionListener({ selector, event, predicate }) {
     announceToScreenReader('Action completed. Next enabled.');
 
     target.removeEventListener(event, handler, true);
-    completionListeners = completionListeners.filter(l => l.handler !== handler);
+    completionListeners = completionListeners.filter(
+      (l) => l.handler !== handler
+    );
   };
 
   target.addEventListener(event, handler, true);
@@ -1050,7 +1141,11 @@ function attachModalOpenListener(modalSelector, triggerSelector) {
       }, 100);
     };
     triggerBtn.addEventListener('click', clickHandler, true);
-    completionListeners.push({ element: triggerBtn, event: 'click', handler: clickHandler });
+    completionListeners.push({
+      element: triggerBtn,
+      event: 'click',
+      handler: clickHandler,
+    });
   }
 
   // Watch for class changes on modal
@@ -1075,7 +1170,7 @@ function attachModalOpenListener(modalSelector, triggerSelector) {
     requirementEl.textContent = '✓ Done! Click Next to continue';
     requirementEl.classList.add('tutorial-requirement-done');
     announceToScreenReader('Help opened. Next enabled.');
-    
+
     // Auto-advance to show the modal
     setTimeout(() => {
       if (stepCompleted && currentStepIndex < activeTutorial.steps.length - 1) {
@@ -1142,32 +1237,78 @@ export function closeTutorial() {
   if (!tutorialOverlay) return;
 
   clearCompletionListeners();
-  
+
   // Remove highlight from any targeted elements
-  document.querySelectorAll('.tutorial-target-highlight').forEach(el => {
+  document.querySelectorAll('.tutorial-target-highlight').forEach((el) => {
     el.classList.remove('tutorial-target-highlight');
   });
-  
+
   // Remove scroll locks
-  document.querySelectorAll('.tutorial-scroll-locked').forEach(el => {
+  document.querySelectorAll('.tutorial-scroll-locked').forEach((el) => {
     el.classList.remove('tutorial-scroll-locked');
   });
-  
+
   if (resizeObserver) {
     resizeObserver.disconnect();
     resizeObserver = null;
   }
-  
+
   window.removeEventListener('scroll', updateSpotlightAndPosition);
   document.removeEventListener('keydown', handleKeydown);
 
   tutorialOverlay.remove();
   tutorialOverlay = null;
 
-  if (triggerElement) {
-    triggerElement.focus();
-    triggerElement = null;
-  }
+  // Restore focus to trigger element or fallback to visible focusable element
+  // Use requestAnimationFrame to ensure DOM has settled after overlay removal
+  requestAnimationFrame(() => {
+    let focusRestored = false;
+
+    // Try trigger element first (only if still visible in DOM)
+    if (triggerElement && document.contains(triggerElement)) {
+      const triggerStyle = window.getComputedStyle(triggerElement);
+      if (
+        triggerStyle.display !== 'none' &&
+        triggerStyle.visibility !== 'hidden'
+      ) {
+        triggerElement.focus();
+        focusRestored = true;
+      }
+    }
+
+    // Fallback: focus a visible, focusable element
+    if (!focusRestored) {
+      const fallbackTargets = [
+        '#primaryActionBtn:not([disabled])',
+        '#parametersContainer button:not([disabled])',
+        '#featuresGuideBtn',
+        '#clearFileBtn',
+        '.param-control input:not([disabled])',
+        '.param-control select:not([disabled])',
+        '.btn-primary:not([disabled])',
+        '#main-content',
+      ];
+
+      for (const selector of fallbackTargets) {
+        const el = document.querySelector(selector);
+        if (el && typeof el.focus === 'function') {
+          const style = window.getComputedStyle(el);
+          if (style.display !== 'none' && style.visibility !== 'hidden') {
+            el.focus();
+            focusRestored = true;
+            break;
+          }
+        }
+      }
+    }
+
+    // Last resort: focus body to at least have something focused
+    if (!focusRestored) {
+      document.body.focus();
+    }
+  });
+
+  triggerElement = null;
 
   activeTutorial = null;
   currentStepIndex = 0;

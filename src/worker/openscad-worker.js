@@ -44,59 +44,70 @@ function escapeRegExp(s) {
 const ERROR_TRANSLATIONS = [
   {
     pattern: /Parser error/i,
-    message: 'Syntax error in your OpenSCAD file. Check for missing semicolons, brackets, or parentheses.',
-    code: 'SYNTAX_ERROR'
+    message:
+      'Syntax error in your OpenSCAD file. Check for missing semicolons, brackets, or parentheses.',
+    code: 'SYNTAX_ERROR',
   },
   {
     pattern: /Rendering cancelled|timeout/i,
-    message: 'Render was stopped because it was taking too long. Try reducing complexity (lower $fn value) or simplifying your design.',
-    code: 'TIMEOUT'
+    message:
+      'Render was stopped because it was taking too long. Try reducing complexity (lower $fn value) or simplifying your design.',
+    code: 'TIMEOUT',
   },
   {
     pattern: /out of memory|memory allocation failed|OOM/i,
-    message: 'This model is too complex for browser rendering. Try lowering $fn, reducing boolean operations, or simplifying the design.',
-    code: 'OUT_OF_MEMORY'
+    message:
+      'This model is too complex for browser rendering. Try lowering $fn, reducing boolean operations, or simplifying the design.',
+    code: 'OUT_OF_MEMORY',
   },
   {
     pattern: /Unknown module/i,
-    message: 'Your model uses a module that could not be found. Check include/use statements and ensure library files are loaded.',
-    code: 'UNKNOWN_MODULE'
+    message:
+      'Your model uses a module that could not be found. Check include/use statements and ensure library files are loaded.',
+    code: 'UNKNOWN_MODULE',
   },
   {
     pattern: /Unknown function/i,
-    message: 'Your model uses a function that could not be found. Check for typos or missing library includes.',
-    code: 'UNKNOWN_FUNCTION'
+    message:
+      'Your model uses a function that could not be found. Check for typos or missing library includes.',
+    code: 'UNKNOWN_FUNCTION',
   },
   {
     pattern: /Undefined variable/i,
-    message: 'A variable in your model is not defined. Check for typos in variable names.',
-    code: 'UNDEFINED_VARIABLE'
+    message:
+      'A variable in your model is not defined. Check for typos in variable names.',
+    code: 'UNDEFINED_VARIABLE',
   },
   {
     pattern: /WARNING: Object may not be a valid 2-manifold/i,
-    message: 'The model has geometry issues (non-manifold). It may still render but could cause problems for 3D printing.',
-    code: 'NON_MANIFOLD_WARNING'
+    message:
+      'The model has geometry issues (non-manifold). It may still render but could cause problems for 3D printing.',
+    code: 'NON_MANIFOLD_WARNING',
   },
   {
     pattern: /No top[ -]?level geometry/i,
-    message: 'Your model does not produce any geometry. Make sure you have at least one shape (cube, sphere, etc.) in your code.',
-    code: 'NO_GEOMETRY'
+    message:
+      'Your model does not produce any geometry. Make sure you have at least one shape (cube, sphere, etc.) in your code.',
+    code: 'NO_GEOMETRY',
   },
   {
     pattern: /Cannot open file/i,
-    message: 'A file referenced in your model could not be found. Check include/use paths and file names.',
-    code: 'FILE_NOT_FOUND'
+    message:
+      'A file referenced in your model could not be found. Check include/use paths and file names.',
+    code: 'FILE_NOT_FOUND',
   },
   {
     pattern: /Recursion detected|Stack overflow/i,
-    message: 'Your model has infinite recursion. Check recursive module or function calls.',
-    code: 'RECURSION'
+    message:
+      'Your model has infinite recursion. Check recursive module or function calls.',
+    code: 'RECURSION',
   },
   {
-    pattern: /\b\d{6,}\b/,  // Match long numeric error codes (like 1101176)
-    message: 'An internal rendering error occurred. Try reloading the page and rendering again.',
-    code: 'INTERNAL_ERROR'
-  }
+    pattern: /\b\d{6,}\b/, // Match long numeric error codes (like 1101176)
+    message:
+      'An internal rendering error occurred. Try reloading the page and rendering again.',
+    code: 'INTERNAL_ERROR',
+  },
 ];
 
 /**
@@ -106,33 +117,34 @@ const ERROR_TRANSLATIONS = [
  */
 function translateError(rawError) {
   const errorStr = String(rawError);
-  
+
   for (const { pattern, message, code } of ERROR_TRANSLATIONS) {
     if (pattern.test(errorStr)) {
       return { message, code, raw: errorStr };
     }
   }
-  
+
   // Fallback: return a cleaned up version of the error
   // Remove internal paths and technical details that aren't helpful
   let cleaned = errorStr
     .replace(/\/tmp\/[^\s]+/g, 'your model')
     .replace(/at line \d+/g, '')
     .trim();
-  
+
   // If the error is very short or just a number, provide a generic message
   if (cleaned.length < 10 || /^\d+$/.test(cleaned)) {
     return {
-      message: 'An error occurred while rendering. Please check your model syntax and try again.',
+      message:
+        'An error occurred while rendering. Please check your model syntax and try again.',
       code: 'RENDER_FAILED',
-      raw: errorStr
+      raw: errorStr,
     };
   }
-  
+
   return {
     message: `Rendering error: ${cleaned}`,
     code: 'RENDER_FAILED',
-    raw: errorStr
+    raw: errorStr,
   };
 }
 
@@ -855,7 +867,7 @@ function checkMemoryBeforeRender(requestId) {
         code: 'HIGH_MEMORY',
         message: `Memory usage is high (${usedMB}MB of ${limitMB}MB, ${percent}%). Complex models may fail. Consider refreshing the page if renders are slow.`,
         severity: 'warning',
-        memoryUsage: { used, limit, percent, usedMB, limitMB }
+        memoryUsage: { used, limit, percent, usedMB, limitMB },
       },
     });
     return { percent, warning: true, usedMB, limitMB };
@@ -883,7 +895,9 @@ async function render(payload) {
     // Check memory usage before starting render
     const memCheck = checkMemoryBeforeRender(requestId);
     if (memCheck.warning) {
-      console.warn(`[Worker] High memory usage: ${memCheck.usedMB}MB (${memCheck.percent}%)`);
+      console.warn(
+        `[Worker] High memory usage: ${memCheck.usedMB}MB (${memCheck.percent}%)`
+      );
     }
 
     self.postMessage({
@@ -1128,18 +1142,20 @@ async function render(payload) {
     ) {
       const view = new DataView(outputBuffer);
       const headerTriangleCount = view.getUint32(80, true);
-      
+
       // Sanity check: verify triangle count matches file size
       // Each triangle = 50 bytes (12 bytes normal + 36 bytes vertices + 2 bytes attribute)
-      const expectedFileSize = 84 + (headerTriangleCount * 50);
+      const expectedFileSize = 84 + headerTriangleCount * 50;
       const actualFileSize = outputBuffer.byteLength;
-      
+
       if (Math.abs(expectedFileSize - actualFileSize) <= 50) {
         // Triangle count is consistent with file size
         triangleCount = headerTriangleCount;
       } else {
         // Triangle count from header seems incorrect, calculate from file size
-        console.warn(`[Worker] STL header triangle count (${headerTriangleCount}) inconsistent with file size (${actualFileSize}). Calculating from size.`);
+        console.warn(
+          `[Worker] STL header triangle count (${headerTriangleCount}) inconsistent with file size (${actualFileSize}). Calculating from size.`
+        );
         triangleCount = Math.floor((actualFileSize - 84) / 50);
       }
     }
@@ -1173,7 +1189,7 @@ async function render(payload) {
     // Translate error to user-friendly message
     const errorMessage = error?.message || String(error);
     const translated = translateError(errorMessage);
-    
+
     self.postMessage({
       type: 'ERROR',
       payload: {

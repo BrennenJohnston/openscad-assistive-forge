@@ -97,10 +97,12 @@ body {
 
 /* Contrast Toggle Button */
 .contrast-toggle {
-  background: rgba(0, 0, 0, 0.35); /* Darker background for WCAG AA contrast */
-  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: var(
+    --color-bg-tertiary
+  ); /* Darker background for WCAG AA contrast */
+  border: 1px solid var(--color-border);
   border-radius: var(--border-radius-md);
-  color: var(--color-accent-text);
+  color: var(--color-text-primary);
   cursor: pointer;
   padding: var(--space-xs);
   transition: all 0.2s ease;
@@ -108,18 +110,19 @@ body {
   align-items: center;
   justify-content: center;
   gap: 4px;
-  min-width: 40px;
-  height: 40px;
+  min-width: 44px;
+  height: 44px;
   flex-shrink: 0;
 }
 
 .contrast-toggle:hover {
-  background: rgba(255, 255, 255, 0.25);
+  background: var(--color-hover-bg);
   transform: scale(1.05);
 }
 
-.contrast-toggle:focus {
-  outline: 2px solid var(--color-accent-text);
+.contrast-toggle:focus,
+.contrast-toggle:focus-visible {
+  outline: 3px solid var(--color-focus);
   outline-offset: 2px;
 }
 
@@ -135,17 +138,17 @@ body {
 
 /* High contrast mode active state */
 :root[data-high-contrast='true'] .contrast-toggle {
-  background: rgba(255, 255, 255, 0.3);
-  border: 2px solid rgba(255, 255, 255, 0.5);
+  background: var(--color-hover-bg);
+  border: 2px solid var(--color-border);
   font-weight: 700;
 }
 
 /* GitHub Link */
 .github-link {
-  background: rgba(255, 255, 255, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-light);
   border-radius: var(--border-radius-md);
-  color: var(--color-accent-text);
+  color: var(--color-text-primary);
   cursor: pointer;
   padding: var(--space-xs) var(--space-sm);
   transition: all 0.2s ease;
@@ -156,19 +159,20 @@ body {
   text-decoration: none;
   font-size: var(--font-size-sm);
   font-weight: 500;
-  height: 40px;
+  height: 44px;
   flex-shrink: 0;
 }
 
 .github-link:hover {
-  background: rgba(255, 255, 255, 0.25);
+  background: var(--color-hover-bg);
   transform: scale(1.05);
-  color: var(--color-accent-text);
+  color: var(--color-text-primary);
   text-decoration: none;
 }
 
-.github-link:focus {
-  outline: 2px solid var(--color-accent-text);
+.github-link:focus,
+.github-link:focus-visible {
+  outline: 3px solid var(--color-focus);
   outline-offset: 2px;
 }
 
@@ -188,37 +192,38 @@ body {
   .github-label {
     display: none;
   }
-  
+
   .github-link {
-    width: 40px;
+    width: 44px;
     padding: var(--space-sm);
   }
 }
 
 /* Theme Toggle Button */
 .theme-toggle {
-  background: rgba(255, 255, 255, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-light);
   border-radius: var(--border-radius-md);
-  color: var(--color-accent-text);
+  color: var(--color-text-primary);
   cursor: pointer;
   padding: var(--space-sm);
   transition: all 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   flex-shrink: 0;
 }
 
 .theme-toggle:hover {
-  background: rgba(255, 255, 255, 0.25);
+  background: var(--color-hover-bg);
   transform: scale(1.05);
 }
 
-.theme-toggle:focus {
-  outline: 2px solid var(--color-accent-text);
+.theme-toggle:focus,
+.theme-toggle:focus-visible {
+  outline: 3px solid var(--color-focus);
   outline-offset: 2px;
 }
 
@@ -394,6 +399,108 @@ body {
   background-color: var(--color-text-secondary);
 }
 
+/* ============================================================================
+   Mobile Off-Canvas Drawer
+   ============================================================================
+   Based on Bootstrap Offcanvas pattern.
+   Active on screens < 768px (tablet breakpoint).
+   ============================================================================ */
+
+/* Drawer backdrop */
+.drawer-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  /* Keep below app modals (currently z-index: 1000) */
+  z-index: 900;
+  opacity: 0;
+  transition: opacity 0.3s ease-out;
+}
+
+.drawer-backdrop.visible {
+  display: block;
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drawer-backdrop {
+    transition: none;
+  }
+}
+
+/* Mobile drawer styles */
+@media (max-width: 767px) {
+  /* Main interface becomes single-column, preview-first */
+  .main-interface {
+    flex-direction: column;
+  }
+
+  /* Parameters panel becomes off-canvas drawer */
+  .param-panel {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: min(90vw, 360px);
+    max-height: 100vh;
+    max-height: 100dvh; /* Dynamic viewport height */
+    transform: translateX(-100%);
+    transition: transform 0.3s ease-out;
+    /* Keep below app modals (currently z-index: 1000) */
+    z-index: 950;
+    border-right: 1px solid var(--color-border);
+    box-shadow: var(--shadow-lg);
+    /* Ensure opaque background */
+    background-color: var(--color-bg-primary);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    /* Safe-area support for notched devices */
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+
+  .param-panel .panel-header {
+    padding-top: calc(var(--space-md) + env(safe-area-inset-top, 0px));
+  }
+
+  .param-panel.drawer-open {
+    transform: translateX(0);
+  }
+
+  /* Respect reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    .param-panel {
+      transition: none;
+    }
+  }
+
+  /* Preview panel takes full width */
+  .preview-panel {
+    width: 100%;
+    flex: 1;
+    min-height: 0;
+    padding-bottom: 56px; /* Space for fixed actions bar */
+  }
+
+  /* Preview canvas section keeps full height on mobile */
+  .preview-canvas-section {
+    flex: 1;
+    min-height: 200px;
+    margin-bottom: 0;
+  }
+
+  /* Hide horizontal gutter on mobile */
+  .gutter.gutter-horizontal {
+    display: none;
+  }
+
+  /* Body scroll lock when drawer is open */
+  body.drawer-open {
+    overflow: hidden;
+  }
+}
+
 /* Scrollable content wrapper for preview panel */
 .preview-content {
   flex: 1;
@@ -415,7 +522,7 @@ body {
   :root:not([data-theme='light']) .welcome-screen,
   :root:not([data-theme='light']) .param-panel,
   :root:not([data-theme='light']) .preview-content {
-    scrollbar-color: rgba(255, 255, 255, 0.4) transparent;
+    scrollbar-color: var(--color-border) transparent;
   }
 }
 
@@ -430,7 +537,7 @@ body {
   :root:not([data-theme='light']) .welcome-screen::-webkit-scrollbar-thumb,
   :root:not([data-theme='light']) .param-panel::-webkit-scrollbar-thumb,
   :root:not([data-theme='light']) .preview-content::-webkit-scrollbar-thumb {
-    background-color: rgba(255, 255, 255, 0.35);
+    background-color: var(--color-border);
   }
 
   :root:not([data-theme='light'])
@@ -438,7 +545,7 @@ body {
   :root:not([data-theme='light']) .param-panel::-webkit-scrollbar-thumb:hover,
   :root:not([data-theme='light'])
     .preview-content::-webkit-scrollbar-thumb:hover {
-    background-color: rgba(255, 255, 255, 0.5);
+    background-color: var(--color-text-secondary);
   }
 }
 
@@ -454,19 +561,29 @@ body {
   background-color: rgba(255, 255, 255, 0.5);
 }
 
-/* Vertical split layout for preview content */
+/* Preview content - relative container for overlay drawer */
 .preview-content {
   display: flex;
   flex-direction: column;
+  position: relative;
 }
 
-/* Preview canvas section - contains the 3D preview */
+/* Preview canvas section - contains the 3D preview, takes full space */
 .preview-canvas-section {
   flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   min-height: 150px;
   overflow: hidden;
+  /* Small gap below the drawer header to prevent overlap with canvas border */
+  margin-top: var(--space-xs, 4px);
+  /* Padding to prevent bounding box/measurements from being clipped at edges */
+  padding-left: var(--space-xs, 4px);
+  padding-right: var(--space-xs, 4px);
+  padding-bottom: var(--space-xs, 4px);
+  position: relative; /* For status bar positioning */
+  /* Explicit z-index below preview-info-section (z-index: 20) to prevent overlap */
+  z-index: 10;
 }
 
 .preview-canvas-section .preview-container {
@@ -474,56 +591,245 @@ body {
   min-height: 150px;
 }
 
-/* Preview info section - contains settings, stats, dimensions */
+/* ============================================================================
+   Preview Status Bar - Floating status overlay at bottom of preview
+   ============================================================================
+   Shows processing status, progress, and render information while viewing
+   the 3D model. Styled as a system dialog/toast notification.
+   ============================================================================ */
+
+/* ============================================================================
+   Preview Status Bar - Compact left-aligned overlay
+   ============================================================================
+   Shows processing status and render statistics. Positioned at bottom-left
+   of the preview canvas. Can be toggled on/off via Preview Settings.
+   ============================================================================ */
+
+.preview-status-bar {
+  position: absolute;
+  bottom: var(--space-xs);
+  left: var(--space-xs);
+  background-color: color-mix(
+    in srgb,
+    var(--color-bg-primary) 88%,
+    transparent
+  );
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  padding: 3px 8px;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-primary);
+  z-index: 15;
+  max-width: calc(100% - var(--space-md));
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+
+  /* Single line layout */
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+/* Fallback for browsers without color-mix support */
+@supports not (background-color: color-mix(in srgb, red 50%, blue)) {
+  .preview-status-bar {
+    background-color: var(--color-bg-primary);
+    opacity: 0.92;
+  }
+}
+
+.preview-status-text {
+  font-weight: 500;
+}
+
+/* Divider between status and stats */
+.preview-status-divider {
+  width: 1px;
+  height: 12px;
+  background-color: var(--color-border);
+  flex-shrink: 0;
+}
+
+/* Stats section */
+.preview-status-stats {
+  color: var(--color-text-secondary);
+}
+
+/* Hide divider when stats is empty */
+.preview-status-stats:empty {
+  display: none;
+}
+
+.preview-status-bar.no-stats .preview-status-divider {
+  display: none;
+}
+
+/* Hide status bar when idle/ready */
+.preview-status-bar.idle {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Hidden by user toggle */
+.preview-status-bar.user-hidden {
+  display: none !important;
+}
+
+/* Active states - subtle colored left border */
+.preview-status-bar.processing {
+  border-left: 3px solid var(--color-accent);
+}
+
+.preview-status-bar.success {
+  border-left: 3px solid var(--color-success);
+}
+
+.preview-status-bar.error {
+  border-left: 3px solid var(--color-error);
+  background-color: color-mix(
+    in srgb,
+    var(--color-error-bg, var(--color-bg-primary)) 90%,
+    transparent
+  );
+}
+
+@supports not (background-color: color-mix(in srgb, red 50%, blue)) {
+  .preview-status-bar.error {
+    background-color: var(--color-error-bg, var(--color-bg-primary));
+  }
+}
+
+/* Respect reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  .preview-status-bar {
+    transition: none;
+  }
+}
+
+/* High contrast mode - ensure visibility */
+@media (forced-colors: active) {
+  .preview-status-bar {
+    border: 2px solid CanvasText;
+    background-color: Canvas;
+    forced-color-adjust: none;
+  }
+}
+
+/* ============================================================================
+   Preview Info Section - Overlay Drawer
+   ============================================================================
+   When COLLAPSED: Part of normal flex flow, takes up space (not overlay)
+   When EXPANDED: Overlays on top of the canvas (position: absolute)
+   This ensures the preview canvas is never obscured when drawer is closed.
+   ============================================================================ */
+
+/* Default state (collapsed) - part of normal flex flow */
 .preview-info-section {
+  position: relative;
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
-  min-height: 80px;
-  max-height: 50%;
+  min-height: 44px;
+  height: 44px;
+  background-color: var(--color-bg-primary);
+  border-bottom: 1px solid var(--color-border);
+  z-index: 20;
+}
+
+/* Collapsible content wrapper */
+.preview-info-content {
+  flex: 1 1 auto;
+  display: none; /* Hidden when collapsed */
+  flex-direction: column;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
+  padding: var(--space-sm);
+  min-height: 0;
 }
 
-/* Vertical gutter styles */
-.gutter.gutter-vertical {
-  cursor: row-resize;
-  height: 8px;
-  width: 100%;
-  background-color: var(--color-border);
-  flex-shrink: 0;
+/* When collapsed - stays in flow, no overlay */
+.preview-info-section.preview-drawer-collapsed {
   position: relative;
-  transition: background-color 0.2s ease;
+  height: 44px;
+  max-height: 44px;
+  box-shadow: none;
 }
 
-.gutter.gutter-vertical:hover {
-  background-color: var(--color-accent);
+.preview-info-section.preview-drawer-collapsed .preview-info-content {
+  display: none;
 }
 
-.gutter.gutter-vertical:focus {
-  background-color: var(--color-accent);
-  outline: 3px solid var(--color-accent);
-  outline-offset: 2px;
+.preview-info-section.preview-drawer-collapsed .preview-drawer-resize-handle {
+  display: none;
 }
 
-.gutter.gutter-vertical:focus:not(:focus-visible) {
-  outline: none;
-}
-
-.gutter.gutter-vertical:focus-visible {
-  background-color: var(--color-accent);
-  outline: 3px solid var(--color-accent);
-  outline-offset: 2px;
-}
-
-/* Vertical gutter grip indicator */
-.gutter.gutter-vertical::before {
-  content: '';
+/* When EXPANDED - switches to absolute positioning to overlay */
+.preview-info-section.preview-drawer-expanded {
   position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+  top: 0;
+  left: 0;
+  right: 0;
+  height: auto;
+  max-height: calc(100% - 8px); /* Leave space above the actions bar */
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transition: height 0.15s ease-out;
+}
+
+.preview-info-section.preview-drawer-expanded .preview-info-content {
+  display: flex;
+}
+
+/* Respect reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  .preview-info-section.preview-drawer-expanded {
+    transition: none;
+  }
+}
+
+/* Disable transition during drag for smooth resize */
+.preview-info-section.dragging {
+  transition: none !important;
+}
+
+/* Visual feedback when dragging */
+.preview-info-section.dragging .preview-drawer-resize-handle {
+  background-color: var(--color-accent);
+}
+
+.preview-info-section.dragging .preview-drawer-resize-handle::before {
+  opacity: 1;
+}
+
+/* Resize handle at the bottom of the drawer (only visible when expanded) */
+.preview-drawer-resize-handle {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 8px;
+  cursor: row-resize;
+  background-color: var(--color-border);
+  transition: background-color 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.preview-drawer-resize-handle:hover {
+  background-color: var(--color-accent);
+}
+
+.preview-drawer-resize-handle:active {
+  background-color: var(--color-accent);
+}
+
+/* Resize handle grip indicator */
+.preview-drawer-resize-handle::before {
+  content: '';
   width: 40px;
   height: 3px;
   background-color: currentColor;
@@ -531,9 +837,26 @@ body {
   opacity: 0.5;
 }
 
-.gutter.gutter-vertical:hover::before,
-.gutter.gutter-vertical:focus::before {
+.preview-drawer-resize-handle:hover::before {
   opacity: 1;
+}
+
+/* Keyboard accessible resize handle */
+.preview-drawer-resize-handle:focus {
+  background-color: var(--color-accent);
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.preview-drawer-resize-handle:focus-visible {
+  background-color: var(--color-accent);
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+/* Hide vertical gutter - no longer used with overlay approach */
+.gutter.gutter-vertical {
+  display: none !important;
 }
 
 /* Preview container within scrollable area - fills available space */
@@ -543,7 +866,7 @@ body {
 }
 
 /* Sticky actions at bottom of preview panel */
-.preview-panel .actions {
+.preview-panel .actions-bar {
   flex-shrink: 0;
   position: sticky;
   bottom: 0;
@@ -576,14 +899,6 @@ body {
     max-width: 640px;
   }
 
-  .preview-panel .panel-header {
-    flex-wrap: nowrap;
-  }
-
-  .preview-panel .file-info-wrapper {
-    flex-basis: auto;
-  }
-
   .main-interface {
     flex-direction: row;
   }
@@ -592,7 +907,9 @@ body {
     min-width: 280px;
     max-height: none;
     border-right: none; /* Gutter will provide separator */
-    transition: width 0.3s ease, min-width 0.3s ease;
+    transition:
+      width 0.3s ease,
+      min-width 0.3s ease;
   }
 
   /* Respect reduced motion preference */
@@ -600,6 +917,54 @@ body {
     .param-panel {
       transition: none;
     }
+  }
+
+  /* ============================================================================
+     Panel Collapse Control - Edge-Aligned Toggle
+     ============================================================================
+     Positioned at the right edge of the panel header for clear discoverability.
+     The button visually indicates the panel can dock/undock from the edge.
+     ============================================================================ */
+
+  /* Add padding to header for collapse button space */
+  .param-panel .panel-header {
+    position: relative;
+    padding-right: calc(var(--space-md) + 36px);
+  }
+
+  .panel-collapse-control {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    padding-right: var(--space-xs);
+    z-index: 11;
+  }
+
+  .btn-collapse-panel {
+    background: var(--color-bg-tertiary);
+    border: 1px solid var(--color-border);
+    border-right: none;
+    border-radius: var(--border-radius-sm) 0 0 var(--border-radius-sm);
+    min-width: 28px;
+    min-height: 44px;
+    padding: var(--space-xs);
+    transition:
+      background-color 0.2s,
+      border-color 0.2s;
+  }
+
+  .btn-collapse-panel:hover {
+    background: var(--color-accent);
+    color: var(--color-accent-text);
+    border-color: var(--color-accent);
+  }
+
+  .btn-collapse-panel:focus-visible {
+    outline: 3px solid var(--color-focus);
+    outline-offset: 2px;
   }
 
   /* Collapsed state */
@@ -615,17 +980,31 @@ body {
     display: none;
   }
 
-  /* Hide other header actions when collapsed */
-  .param-panel.collapsed .param-header-actions > *:not(#collapseParamPanelBtn) {
+  /* Hide header actions when collapsed */
+  .param-panel.collapsed .param-header-actions {
     display: none;
+  }
+
+  /* Reposition collapse control when collapsed */
+  .param-panel.collapsed .panel-collapse-control {
+    position: static;
+    padding: 0;
+    justify-content: center;
+    margin-top: var(--space-sm);
+  }
+
+  .param-panel.collapsed .btn-collapse-panel {
+    border-radius: var(--border-radius-sm);
+    border: 1px solid var(--color-border);
   }
 
   /* Adjust header layout when collapsed */
   .param-panel.collapsed .panel-header {
     flex-direction: column;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
     padding: var(--space-sm);
+    padding-top: var(--space-md);
   }
 
   .param-panel.collapsed .panel-header h2 {
@@ -633,6 +1012,7 @@ body {
     text-orientation: mixed;
     margin: var(--space-sm) 0;
     font-size: var(--font-size-sm);
+    order: 1;
   }
 
   .preview-panel {
@@ -641,6 +1021,317 @@ body {
     min-height: 0; /* Ensure flexbox scrolling works */
   }
 
+  /* ============================================================================
+     Camera Controls Panel (Right Side Drawer)
+     ============================================================================
+     Mirrors the Parameters panel on the left side, but expands to the left.
+     Collapsed by default, shows only the toggle button when collapsed.
+     ============================================================================ */
+
+  .camera-panel {
+    flex: 0 0 auto;
+    width: 200px;
+    min-width: 200px;
+    display: flex;
+    flex-direction: column;
+    background-color: var(--color-bg-primary);
+    border: 1px solid var(--color-border);
+    border-right: none;
+    overflow: hidden;
+    transition: width 0.2s ease;
+  }
+
+  .camera-panel-header {
+    display: flex;
+    align-items: center;
+    padding: var(--space-sm);
+    border-bottom: 1px solid var(--color-border);
+    background-color: var(--color-bg-secondary);
+    gap: var(--space-sm);
+  }
+
+  .camera-panel-header h2 {
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    margin: 0;
+    white-space: nowrap;
+  }
+
+  /* Collapse button for camera panel - positioned on left side, expands left */
+  .camera-panel .btn-collapse-panel {
+    background: var(--color-bg-tertiary);
+    border: 1px solid var(--color-border);
+    border-left: none;
+    border-radius: 0 var(--border-radius-sm) var(--border-radius-sm) 0;
+    min-width: 28px;
+    min-height: 44px;
+    padding: var(--space-xs);
+    transition:
+      background-color 0.2s,
+      border-color 0.2s;
+  }
+
+  .camera-panel .btn-collapse-panel:hover {
+    background: var(--color-accent);
+    color: var(--color-accent-text);
+    border-color: var(--color-accent);
+  }
+
+  .camera-panel .btn-collapse-panel svg {
+    transition: transform 0.2s ease;
+  }
+
+  /* Rotate icon when expanded */
+  .camera-panel:not(.collapsed) .btn-collapse-panel svg {
+    transform: rotate(180deg);
+  }
+
+  .camera-panel-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--space-sm);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+  }
+
+  /* Collapsed state for camera panel */
+  .camera-panel.collapsed {
+    width: 48px !important;
+    min-width: 48px;
+    max-width: 48px;
+    flex: none !important;
+  }
+
+  .camera-panel.collapsed .camera-panel-body {
+    display: none;
+  }
+
+  .camera-panel.collapsed .camera-panel-header {
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding: var(--space-sm);
+    padding-top: var(--space-md);
+    border-bottom: none;
+  }
+
+  .camera-panel.collapsed .camera-panel-header h2 {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    margin: var(--space-sm) 0;
+    font-size: var(--font-size-sm);
+  }
+
+  .camera-panel.collapsed .btn-collapse-panel {
+    border-radius: var(--border-radius-sm);
+    border: 1px solid var(--color-border);
+  }
+
+  .camera-panel.collapsed .btn-collapse-panel svg {
+    transform: rotate(0deg);
+  }
+}
+
+/* Camera Control Sections - applies to all screen sizes */
+.camera-control-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.camera-control-section-title {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* D-pad/Cross layout for direction buttons (accessibility compliant) */
+.camera-control-dpad {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-rows: 1fr 1fr 1fr;
+  grid-template-areas:
+    '.    up    .'
+    'left .     right'
+    '.    down  .';
+  gap: var(--space-xs);
+  width: fit-content;
+  margin: 0 auto;
+}
+
+.camera-control-dpad .dpad-up {
+  grid-area: up;
+}
+.camera-control-dpad .dpad-down {
+  grid-area: down;
+}
+.camera-control-dpad .dpad-left {
+  grid-area: left;
+}
+.camera-control-dpad .dpad-right {
+  grid-area: right;
+}
+
+/* Legacy 2x2 grid for other controls if needed */
+.camera-control-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-xs);
+}
+
+/* Row layout for zoom buttons */
+.camera-control-row {
+  display: flex;
+  gap: var(--space-xs);
+}
+
+.camera-control-row > * {
+  flex: 1;
+}
+
+/* Camera control buttons */
+.camera-btn {
+  min-width: 44px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  transition:
+    background-color 0.15s,
+    border-color 0.15s,
+    color 0.15s;
+}
+
+.camera-btn:hover {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-accent-text);
+}
+
+.camera-btn:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.camera-btn:active {
+  transform: scale(0.95);
+}
+
+/* Wide camera buttons (with text) */
+.camera-btn-wide {
+  min-height: 40px;
+  padding: var(--space-xs) var(--space-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+  transition:
+    background-color 0.15s,
+    border-color 0.15s,
+    color 0.15s;
+}
+
+.camera-btn-wide:hover {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-accent-text);
+}
+
+.camera-btn-wide:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+/* Full width camera button */
+.camera-btn-full {
+  width: 100%;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+}
+
+/* Keyboard shortcuts help section */
+.camera-shortcuts-help {
+  margin-top: auto;
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--color-border);
+}
+
+.camera-shortcuts-details {
+  font-size: var(--font-size-xs);
+}
+
+.camera-shortcuts-summary {
+  cursor: pointer;
+  padding: var(--space-xs);
+  border-radius: var(--border-radius-sm);
+  color: var(--color-text-secondary);
+  list-style: none;
+}
+
+.camera-shortcuts-summary::-webkit-details-marker {
+  display: none;
+}
+
+.camera-shortcuts-summary:hover {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+}
+
+.camera-shortcuts-list {
+  margin: var(--space-xs) 0 0 0;
+  padding: var(--space-xs);
+  background: var(--color-bg-secondary);
+  border-radius: var(--border-radius-sm);
+}
+
+.camera-shortcut-item {
+  display: flex;
+  justify-content: space-between;
+  padding: var(--space-xs) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.camera-shortcut-item:last-child {
+  border-bottom: none;
+}
+
+.camera-shortcut-item dt {
+  font-weight: 500;
+  color: var(--color-text-primary);
+}
+
+.camera-shortcut-item dd {
+  margin: 0;
+  color: var(--color-text-secondary);
+}
+
+/* Mobile: Hide camera panel (use floating controls instead or show in a modal) */
+@media (max-width: 767px) {
+  .camera-panel {
+    display: none;
+  }
+}
+
+/* Tablet and up: Camera panel visible */
+@media (min-width: 768px) {
   /* Split.js gutter styles */
   .gutter {
     background-color: var(--color-border);
@@ -657,7 +1348,7 @@ body {
 
   .gutter:focus {
     background-color: var(--color-accent);
-    outline: 3px solid var(--color-accent);
+    outline: 3px solid var(--color-focus);
     outline-offset: 2px;
   }
 
@@ -667,7 +1358,7 @@ body {
 
   .gutter:focus-visible {
     background-color: var(--color-accent);
-    outline: 3px solid var(--color-accent);
+    outline: 3px solid var(--color-focus);
     outline-offset: 2px;
   }
 
@@ -812,34 +1503,205 @@ details summary:focus,
   padding: var(--space-xl);
 }
 
+/* Status area in drawer - now visually hidden, kept for screen readers */
 .status-area {
-  padding: var(--space-xs) var(--space-md);
-  background-color: var(--color-bg-secondary);
-  border-bottom: 1px solid var(--color-border);
-  font-size: var(--font-size-xs);
-  min-height: auto;
+  /* Visually hidden but accessible to screen readers */
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
 }
 
-.actions {
-  padding: var(--space-xs) var(--space-sm);
+/* ============================================================================
+   Actions Bar - Drawer Pattern
+   ============================================================================
+   A collapsible drawer on the left containing secondary actions, with the
+   primary action (Generate/Download STL) always visible on the right.
+   Matches the drawer pattern used by the Parameters panel and Camera panel.
+   ============================================================================ */
+
+.actions-bar {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-xs);
+  align-items: stretch;
   border-top: 1px solid var(--color-border);
   background-color: var(--color-bg-primary);
-  padding-bottom: calc(var(--space-xs) + env(safe-area-inset-bottom, 0px));
-  align-items: center;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  min-height: 52px;
 }
 
-/* Compact action buttons */
-.actions .btn {
+/* Actions Drawer (left side, collapsible) */
+.actions-drawer {
+  display: flex;
+  align-items: center;
+  background-color: var(--color-bg-secondary);
+  border-right: 1px solid var(--color-border);
+  transition: width 0.2s ease;
+  overflow: hidden;
+}
+
+/* Collapsed state - just toggle button and label */
+.actions-drawer.collapsed {
+  width: auto;
+  min-width: 124px;
+}
+
+.actions-drawer.collapsed .actions-drawer-body {
+  display: none;
+}
+
+/* Expanded state - show all content */
+.actions-drawer:not(.collapsed) {
+  width: auto;
+  flex: 0 1 auto;
+}
+
+.actions-drawer:not(.collapsed) .actions-drawer-body {
+  display: flex;
+}
+
+/* Drawer toggle button */
+.actions-drawer-toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: var(--space-xs);
+  min-width: 44px;
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.actions-drawer-toggle-btn:hover {
+  background-color: var(--color-hover-bg);
+}
+
+.actions-drawer-toggle-btn:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: -3px;
+}
+
+/* Arrow icon rotation */
+.actions-drawer-icon {
+  /* no-op: we rotate only the chevron, not the whole icon */
+}
+
+.actions-drawer-icon .drawer-chevron {
+  transition: transform 0.2s ease;
+  transform-box: fill-box;
+  transform-origin: center;
+  transform: rotate(0deg); /* Collapsed: points right (expand) */
+}
+
+.actions-drawer:not(.collapsed) .actions-drawer-icon .drawer-chevron {
+  transform: rotate(180deg); /* Expanded: points left (collapse) */
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .actions-drawer,
+  .actions-drawer-icon .drawer-chevron {
+    transition: none;
+  }
+}
+
+/* Drawer label (visible when collapsed) */
+.actions-drawer-label {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  padding-right: var(--space-sm);
+  white-space: nowrap;
+}
+
+.actions-drawer:not(.collapsed) .actions-drawer-label {
+  display: none;
+}
+
+/* Drawer body (expandable content) */
+.actions-drawer-body {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-xs);
+  flex-wrap: nowrap;
+}
+
+/* Buttons inside drawer */
+.actions-drawer-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
   padding: var(--space-xs) var(--space-sm);
   font-size: var(--font-size-xs);
+  white-space: nowrap;
 }
 
-.actions .btn-large {
-  padding: var(--space-xs) var(--space-md);
+.actions-drawer-btn .btn-icon-svg {
+  flex-shrink: 0;
+}
+
+/* Divider between button groups in drawer */
+.actions-drawer-divider {
+  width: 1px;
+  height: 20px;
+  background-color: var(--color-border);
+  flex-shrink: 0;
+  margin: 0 var(--space-xs);
+}
+
+/* Queue badge styling */
+.queue-badge {
+  background-color: var(--color-accent);
+  color: var(--color-accent-text);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: var(--border-radius-sm);
+  min-width: 16px;
+  text-align: center;
+  margin-left: 2px;
+}
+
+.queue-badge:empty,
+.queue-badge[data-count='0'] {
+  display: none;
+}
+
+/* Primary actions (right side, always visible) */
+.actions-primary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-sm);
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.actions-primary .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.actions-primary .btn-large {
+  padding: var(--space-sm) var(--space-md);
   font-size: var(--font-size-sm);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Ensure primary button has consistent width for both states */
+#primaryActionBtn {
+  min-width: 130px;
+  justify-content: center;
 }
 
 /* Actions More Dropdown */
@@ -880,11 +1742,10 @@ details summary:focus,
   text-align: left;
 }
 
-/* Status area auto-hide when idle */
+/* Status area in drawer is always visually hidden (for screen readers only) */
+/* The idle class is kept for JS logic but has no visual effect */
 .status-area.idle {
-  opacity: 0.6;
-  padding: 2px var(--space-md);
-  min-height: auto;
+  /* No visual changes needed - already visually hidden */
 }
 
 /* Compact header mode */
@@ -927,23 +1788,16 @@ details summary:focus,
   font-size: var(--font-size-sm);
 }
 
-.main-interface.focus-mode .file-info-wrapper {
+.main-interface.focus-mode .file-info {
   display: none;
 }
 
+/* Status area already visually hidden - no additional changes needed in focus mode */
 .main-interface.focus-mode .status-area {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border-width: 0;
+  /* Already sr-only style applied in base .status-area */
 }
 
-.main-interface.focus-mode .preview-settings-details {
+.main-interface.focus-mode .preview-settings-panel {
   display: none;
 }
 
@@ -951,8 +1805,9 @@ details summary:focus,
   display: none;
 }
 
+/* Stats already visually hidden - no additional changes needed in focus mode */
 .main-interface.focus-mode .stats {
-  display: none;
+  /* Already sr-only style applied in base .stats */
 }
 
 .main-interface.focus-mode .dimensions-display {
@@ -973,12 +1828,20 @@ details summary:focus,
   min-height: 0;
 }
 
-.main-interface.focus-mode .actions > *:not(#primaryActionBtn):not(#cancelRenderBtn):not(#focusModeBtn) {
+/* In focus mode, hide the actions drawer */
+.main-interface.focus-mode .actions-drawer {
+  display: none;
+}
+
+/* Hide utility buttons in workflow bar in focus mode, except the focus mode toggle itself */
+/* Uses :has() selector - well supported in modern browsers */
+#app:has(.main-interface.focus-mode) .workflow-actions #featuresGuideBtn,
+#app:has(.main-interface.focus-mode) .workflow-actions #clearFileBtn {
   display: none;
 }
 
 /* Focus mode button state */
-#focusModeBtn[aria-pressed="true"] svg {
+#focusModeBtn[aria-pressed='true'] svg {
   transform: rotate(90deg);
 }
 
@@ -987,10 +1850,18 @@ details summary:focus,
   display: none !important;
 }
 
+/* Stats in drawer - now visually hidden, kept for screen readers */
 .stats {
-  padding: var(--space-sm) var(--space-md);
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
+  /* Visually hidden but accessible to screen readers */
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
 }
 
 /* Mobile-specific: ensure actions stay visible */
@@ -1003,42 +1874,138 @@ details summary:focus,
     flex: 1 1 auto;
   }
 
-  /* Vertical split on mobile - give more space to preview by default */
   .preview-canvas-section {
     min-height: 200px;
   }
 
+  /* Overlay drawer adjustments for mobile */
   .preview-info-section {
-    min-height: 60px;
-    max-height: 40%;
+    /* On mobile, drawer appears from top with slightly higher z-index */
+    z-index: 25;
   }
 
-  /* Larger touch target for vertical gutter on mobile */
-  .gutter.gutter-vertical {
+  /* Larger touch target for resize handle on mobile */
+  .preview-drawer-resize-handle {
     height: 12px;
   }
 
-  .gutter.gutter-vertical::before {
+  .preview-drawer-resize-handle::before {
     width: 60px;
     height: 4px;
   }
 
-  .preview-panel .actions {
-    padding: var(--space-xs);
-    gap: var(--space-xs);
-    padding-bottom: calc(var(--space-xs) + env(safe-area-inset-bottom, 0px));
+  /* ============================================================================
+     Actions Bar with Drawer Pattern (Mobile)
+     ============================================================================
+     On mobile, the actions bar is fixed at the bottom. The drawer expands
+     upward to show secondary actions while the primary action stays visible.
+     ============================================================================ */
+
+  .preview-panel .actions-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 960;
+    flex-direction: column-reverse; /* Primary at bottom, drawer above */
+    border-radius: var(--border-radius-md) var(--border-radius-md) 0 0;
+    border-top: 2px solid var(--color-border);
+    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.15);
+    min-height: auto;
   }
 
-  /* Compact buttons on mobile */
-  .preview-panel .actions .btn {
-    flex: 1 1 auto;
+  /* Drawer on mobile - expands upward */
+  .actions-drawer {
+    flex-direction: column;
+    border-right: none;
+    border-bottom: 1px solid var(--color-border);
+    width: 100%;
+  }
+
+  .actions-drawer.collapsed {
+    min-width: auto;
+  }
+
+  /* Toggle row on mobile */
+  .actions-drawer-toggle-btn {
+    width: 100%;
+    justify-content: center;
+    min-height: 36px;
     min-width: 0;
-    font-size: var(--font-size-xs);
-    padding: var(--space-xs) var(--space-sm);
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+    border-bottom: 1px solid var(--color-border);
   }
 
-  .preview-panel .actions .btn-large {
-    flex: 1 1 100%;
+  .actions-drawer-label {
+    padding-right: 0;
+    padding-left: var(--space-xs);
+  }
+
+  .actions-drawer.collapsed .actions-drawer-label {
+    display: inline;
+  }
+
+  /* Arrow points up when collapsed (to indicate expand direction) */
+  .actions-drawer-icon .drawer-edge {
+    display: none;
+  }
+
+  .actions-drawer-icon .drawer-chevron {
+    transform: rotate(-90deg);
+  }
+
+  .actions-drawer:not(.collapsed) .actions-drawer-icon .drawer-chevron {
+    transform: rotate(90deg);
+  }
+
+  /* Drawer body on mobile - vertical list */
+  .actions-drawer-body {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    padding: var(--space-xs);
+    max-height: 220px;
+    overflow-y: auto;
+  }
+
+  .actions-drawer-btn {
+    width: 100%;
+    justify-content: flex-start;
+    padding: var(--space-sm) var(--space-md);
+    font-size: var(--font-size-sm);
+  }
+
+  /* Dividers become horizontal on mobile */
+  .actions-drawer-divider {
+    width: 100%;
+    height: 1px;
+    margin: var(--space-xs) 0;
+  }
+
+  /* Primary actions on mobile - full width at bottom */
+  .actions-primary {
+    width: 100%;
+    padding: var(--space-xs);
+    margin-left: 0;
+    justify-content: center;
+  }
+
+  .actions-primary .btn-large {
+    flex: 1;
+    min-width: 0;
+  }
+
+  #primaryActionBtn {
+    min-width: auto;
+  }
+
+  /* Hide less-used actions on very small screens */
+  @media (max-width: 360px) {
+    #addToComparisonBtn {
+      display: none;
+    }
   }
 }
 
@@ -1056,19 +2023,38 @@ details summary:focus,
 
 /* Dark mode shadow adjustment */
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) .preview-panel .actions {
+  :root:not([data-theme='light']) .preview-panel .actions-bar {
     box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.3);
+  }
+
+  :root:not([data-theme='light'])
+    .preview-info-section.preview-drawer-expanded {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
   }
 }
 
-:root[data-theme='dark'] .preview-panel .actions {
+:root[data-theme='dark'] .preview-panel .actions-bar {
   box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.3);
 }
 
+:root[data-theme='dark'] .preview-info-section.preview-drawer-expanded {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
 /* High contrast mode */
-:root[data-high-contrast='true'] .preview-panel .actions {
+:root[data-high-contrast='true'] .preview-panel .actions-bar {
   border-top: 3px solid var(--color-border);
   box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.2);
+}
+
+:root[data-high-contrast='true'] .preview-info-section.preview-drawer-expanded {
+  border: 2px solid var(--color-border);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+}
+
+:root[data-high-contrast='true'] .preview-drawer-resize-handle {
+  height: 10px;
+  border-top: 2px solid var(--color-border);
 }
 
 .file-info {
@@ -1138,14 +2124,11 @@ details summary:focus,
     border: 2px solid ButtonText;
   }
 
-  /* Status area */
-  .status-area {
-    background: Canvas;
-    border-bottom: 2px solid CanvasText !important;
-  }
+  /* Status area is visually hidden (sr-only) - no forced-colors needed */
+  /* Preview status bar handles visible status display */
 
   /* Actions bar */
-  .actions {
+  .actions-bar {
     background: Canvas;
     border-top: 2px solid CanvasText !important;
   }
@@ -1192,46 +2175,31 @@ details summary:focus,
   }
 
   /* Ensure sticky elements have borders */
-  .preview-panel .actions {
+  .preview-panel .actions-bar {
     border-top: 3px solid CanvasText !important;
+  }
+
+  /* Preview info overlay drawer */
+  .preview-info-section {
+    background: Canvas;
+    border: 2px solid CanvasText !important;
+  }
+
+  .preview-drawer-resize-handle {
+    background: CanvasText !important;
+    height: 6px;
+  }
+
+  .preview-drawer-resize-handle:hover,
+  .preview-drawer-resize-handle:focus {
+    background: Highlight !important;
+    outline: 3px solid Highlight !important;
   }
 }
 
-/* Compact preview panel header */
-.preview-panel .panel-header {
-  padding: var(--space-xs) var(--space-md);
-  gap: var(--space-xs);
-  flex-wrap: wrap;
-  min-height: auto;
-}
-
-.preview-panel .panel-header h2 {
-  font-size: var(--font-size-base);
-  margin: 0;
-}
-
-.preview-panel .panel-header-left {
-  flex: 0 0 auto;
-}
-
-.preview-panel .panel-header-right {
-  flex: 0 0 auto;
-  order: 3;
-}
-
-.preview-panel .file-info-wrapper {
-  flex: 1 1 auto;
-  min-width: 0;
-  order: 2;
-  flex-basis: 100%;
-}
-
-/* Compact file info in preview panel */
-.preview-panel .file-info {
-  padding: var(--space-xs);
-  min-height: auto;
-  border-width: 1px;
-  line-height: 1.2;
+/* File info in preview drawer */
+.preview-info-content .file-info {
+  margin-bottom: var(--space-md);
 }
 
 /* Utility Classes */
@@ -1243,8 +2211,9 @@ details summary:focus,
   position: fixed;
   bottom: calc(var(--space-lg) + env(safe-area-inset-bottom, 0px));
   right: calc(var(--space-lg) + env(safe-area-inset-right, 0px));
-  background-color: var(--color-error);
-  color: white;
+  background-color: var(--color-error-bg);
+  color: var(--color-text-primary);
+  border: 2px solid var(--color-error);
   padding: var(--space-md);
   border-radius: var(--border-radius-md);
   box-shadow: var(--shadow-lg);

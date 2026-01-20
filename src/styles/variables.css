@@ -1,29 +1,20 @@
-/* Design System - CSS Custom Properties */
-:root {
-  /* Colors - Light Mode (default) */
-  --color-brand-yellow: #f4c400;
-  --color-brand-green: #2e7d32;
-  --color-brand-black: #0b0b0b;
-  --color-bg-primary: #ffffff;
-  --color-bg-secondary: #f5f5f5;
-  --color-bg-tertiary: #e8e8e8;
-  --color-text-primary: #0b0b0b;
-  --color-text-secondary: #2b2b2b;
-  --color-text-tertiary: #5f5f5f;
-  --color-accent: var(--color-brand-yellow);
-  --color-accent-hover: #d9ac00;
-  --color-accent-text: var(--color-brand-black);
-  --color-success: var(--color-brand-green);
-  --color-success-bg: #d8f0dc;
-  --color-error: #dc3545;
-  --color-error-bg: #f8d7da;
-  --color-warning: #f4c400;
-  --color-warning-bg: #fff3c2;
-  --color-border: #d1d1d1;
-  --color-border-light: #e8e8e8;
-  --color-input-bg: #ffffff;
-  --color-hover-bg: #f0f0f0;
+/* ============================================================================
+   Design System - CSS Custom Properties
+   ============================================================================
+   Accessible color system built on Radix Colors foundation.
+   Meets WCAG 2.2 AA for normal themes, AAA for high contrast mode.
+   Supports forced-colors and prefers-contrast.
+   ============================================================================ */
 
+/* Import Radix color scales and semantic token mappings */
+@import './color-scales.css';
+@import './semantic-tokens.css';
+
+/* ============================================================================
+   Design Tokens (Non-Color)
+   ============================================================================ */
+
+:root {
   /* Spacing */
   --space-xs: 4px;
   --space-sm: 8px;
@@ -39,6 +30,8 @@
   --font-size-base: 1rem;
   --font-size-lg: 1.125rem;
   --font-size-xl: 1.5rem;
+  --font-size-xs: 0.8125rem; /* 13px */
+  --font-size-md: var(--font-size-base);
 
   /* Borders */
   --border-radius-sm: 4px;
@@ -47,19 +40,6 @@
   --border-radius-xs: 3px;
   --radius-md: var(--border-radius-md);
 
-  /* Shadows */
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1);
-  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
-  --shadow-lg: 0 10px 20px rgba(0, 0, 0, 0.15);
-
-  /* Elevated surfaces / muted text (aliases used by components) */
-  --color-bg-elevated: var(--color-bg-primary);
-  --color-text-muted: var(--color-text-tertiary);
-
-  /* Focus */
-  --focus-ring: 0 0 0 3px rgba(244, 196, 0, 0.35);
-  --font-size-md: var(--font-size-base);
-
   /* Breakpoints */
   --breakpoint-mobile: 480px;
   --breakpoint-tablet: 768px;
@@ -67,91 +47,13 @@
   --breakpoint-wide: 1440px;
 }
 
-/* Dark Mode - System Preference (when no manual override) */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) {
-    --color-bg-primary: #0b0b0b;
-    --color-bg-secondary: #161616;
-    --color-bg-tertiary: #222222;
-    --color-text-primary: #f5f5f5;
-    --color-text-secondary: #d1d1d1;
-    --color-text-tertiary: #a0a0a0;
-    --color-accent: var(--color-brand-yellow);
-    --color-accent-hover: #ffd24d;
-    --color-accent-text: var(--color-brand-black);
-    --color-success: #3fbf4c;
-    --color-success-bg: #123a1a;
-    --color-error: #f44336;
-    --color-error-bg: #5a1a1a;
-    --color-warning: #f4c400;
-    --color-warning-bg: #3a2d00;
-    --color-border: #404040;
-    --color-border-light: #333333;
-    --color-input-bg: #2d2d2d;
-    --color-hover-bg: #3a3a3a;
-    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
-    --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.3);
-    --shadow-lg: 0 10px 20px rgba(0, 0, 0, 0.4);
-    --focus-ring: 0 0 0 3px rgba(244, 196, 0, 0.5);
-  }
-}
+/* ============================================================================
+   High Contrast Mode - Works with any theme (Light/Dark/Auto)
+   ============================================================================
+   Activated via data-high-contrast="true" on :root
+   Meets WCAG AAA (7:1 contrast ratio) requirements
+   ============================================================================ */
 
-/* Dark Mode - Manual Override */
-:root[data-theme='dark'] {
-  --color-bg-primary: #0b0b0b;
-  --color-bg-secondary: #161616;
-  --color-bg-tertiary: #222222;
-  --color-text-primary: #f5f5f5;
-  --color-text-secondary: #d1d1d1;
-  --color-text-tertiary: #a0a0a0;
-  --color-accent: var(--color-brand-yellow);
-  --color-accent-hover: #ffd24d;
-  --color-accent-text: var(--color-brand-black);
-  --color-success: #3fbf4c;
-  --color-success-bg: #123a1a;
-  --color-error: #f44336;
-  --color-error-bg: #5a1a1a;
-  --color-warning: #f4c400;
-  --color-warning-bg: #3a2d00;
-  --color-border: #404040;
-  --color-border-light: #333333;
-  --color-input-bg: #2d2d2d;
-  --color-hover-bg: #3a3a3a;
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.3);
-  --shadow-lg: 0 10px 20px rgba(0, 0, 0, 0.4);
-  --focus-ring: 0 0 0 3px rgba(244, 196, 0, 0.5);
-}
-
-/* Light Mode - Manual Override (forces light even if system prefers dark) */
-:root[data-theme='light'] {
-  --color-bg-primary: #ffffff;
-  --color-bg-secondary: #f5f5f5;
-  --color-bg-tertiary: #e8e8e8;
-  --color-text-primary: #0b0b0b;
-  --color-text-secondary: #2b2b2b;
-  --color-text-tertiary: #5f5f5f;
-  --color-accent: var(--color-brand-yellow);
-  --color-accent-hover: #d9ac00;
-  --color-accent-text: var(--color-brand-black);
-  --color-success: var(--color-brand-green);
-  --color-success-bg: #d8f0dc;
-  --color-error: #dc3545;
-  --color-error-bg: #f8d7da;
-  --color-warning: #f4c400;
-  --color-warning-bg: #fff3c2;
-  --color-border: #d1d1d1;
-  --color-border-light: #e8e8e8;
-  --color-input-bg: #ffffff;
-  --color-hover-bg: #f0f0f0;
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1);
-  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
-  --shadow-lg: 0 10px 20px rgba(0, 0, 0, 0.15);
-  --focus-ring: 0 0 0 3px rgba(244, 196, 0, 0.35);
-}
-
-/* High Contrast Mode - Works with any theme (Light/Dark/Auto) */
-/* Activated via data-high-contrast="true" on :root */
 :root[data-high-contrast='true'] {
   /* Enhanced Typography */
   --font-size-sm: 1rem; /* +14% from 0.875rem */
@@ -172,7 +74,8 @@
   --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.4);
 }
 
-/* High Contrast Light Mode */
+/* High Contrast Light Mode
+   Uses darker colors for 7:1 contrast on white backgrounds */
 :root[data-high-contrast='true'][data-theme='light'],
 :root[data-high-contrast='true']:not([data-theme='dark']):not(
     [data-theme='light']
@@ -181,26 +84,64 @@
   --color-bg-primary: #ffffff;
   --color-bg-secondary: #f0f0f0;
   --color-bg-tertiary: #e0e0e0;
+  --color-bg-elevated: #ffffff;
+
   --color-text-primary: #000000; /* Pure black for maximum contrast */
   --color-text-secondary: #1a1a1a; /* Near-black */
   --color-text-tertiary: #333333; /* Dark gray */
-  --color-accent: #0052cc; /* Darker blue for 7:1 on white */
-  --color-accent-hover: #003d99; /* Even darker on hover */
+  --color-text-muted: #333333;
+
+  /* Accent - Brand-neutral blue for HC mode */
+  /* Ensure WCAG AAA (7:1) on white */
+  --color-accent: #003d99;
+  --color-accent-hover: #002b80;
   --color-accent-text: #ffffff;
-  --color-success: #0d7a1f; /* Darker green for 7:1 */
+  --color-accent-subtle: #e6f0ff;
+
+  /* Success - Darker green for 7:1 */
+  --color-success: #08651a;
+  --color-success-hover: #054d14;
+  --color-success-text: #08651a;
   --color-success-bg: #c8e6c9;
-  --color-error: #b30000; /* Darker red for 7:1 */
+
+  /* Info - Darker teal for 7:1 */
+  --color-info: #005b61;
+  --color-info-hover: #004c52;
+  --color-info-text: #005b61;
+  --color-info-bg: #c7f0f3;
+
+  /* Error - Darker red for 7:1 */
+  --color-error: #b30000;
+  --color-error-hover: #990000;
+  --color-error-text: #b30000;
   --color-error-bg: #ffcccc;
-  --color-warning: #b38600; /* Darker yellow for 7:1 */
+
+  /* Warning - Darker amber for 7:1 */
+  --color-warning: #664700;
+  --color-warning-hover: #4d3300;
+  --color-warning-text: #664700;
   --color-warning-bg: #fff4cc;
+
+  /* Borders */
   --color-border: #000000; /* Black borders */
   --color-border-light: #666666; /* Dark gray borders */
+  --color-border-hover: var(--color-accent);
+
+  /* Inputs */
   --color-input-bg: #ffffff;
+  --color-input-border: #000000;
+  --color-input-border-focus: #0052cc;
+
+  /* Interactive States */
   --color-hover-bg: #e8e8e8;
-  --focus-ring: 0 0 0 4px #0052cc; /* Solid blue focus */
+
+  /* Focus - Brand-neutral blue with 3:1 contrast */
+  --color-focus: var(--color-accent);
+  --focus-ring: 0 0 0 4px var(--color-accent); /* Solid focus, 4px thick */
 }
 
-/* High Contrast Dark Mode */
+/* High Contrast Dark Mode
+   Uses lighter colors for 7:1 contrast on black backgrounds */
 :root[data-high-contrast='true'][data-theme='dark'],
 :root[data-high-contrast='true']:not([data-theme='light']):not(
     [data-theme='dark']
@@ -209,23 +150,59 @@
   --color-bg-primary: #000000; /* Pure black */
   --color-bg-secondary: #1a1a1a;
   --color-bg-tertiary: #2d2d2d;
+  --color-bg-elevated: #000000;
+
   --color-text-primary: #ffffff; /* Pure white for maximum contrast */
   --color-text-secondary: #f0f0f0; /* Near-white */
   --color-text-tertiary: #cccccc; /* Light gray */
-  --color-accent: #66b3ff; /* Lighter blue for 7:1 on black */
+  --color-text-muted: #cccccc;
+
+  /* Accent - Brand-neutral light blue for HC dark mode */
+  --color-accent: #66b3ff; /* 7:1 on black */
   --color-accent-hover: #99ccff; /* Even lighter on hover */
   --color-accent-text: #000000;
-  --color-success: #66ff66; /* Bright green for 7:1 */
+  --color-accent-subtle: #003d66;
+
+  /* Success - Bright green for 7:1 */
+  --color-success: #66ff66;
+  --color-success-hover: #7fff7f;
+  --color-success-text: #66ff66;
   --color-success-bg: #0d3d0d;
-  --color-error: #ff6666; /* Bright red for 7:1 */
+
+  /* Info - Bright teal for 7:1 */
+  --color-info: #44d9e6;
+  --color-info-hover: #5fe0eb;
+  --color-info-text: #44d9e6;
+  --color-info-bg: #0d3d3d;
+
+  /* Error - Bright red for 7:1 */
+  --color-error: #ff6666;
+  --color-error-hover: #ff8080;
+  --color-error-text: #ff6666;
   --color-error-bg: #4d0000;
-  --color-warning: #ffcc00; /* Bright yellow for 7:1 */
+
+  /* Warning - Bright yellow for 7:1 */
+  --color-warning: #ffcc00;
+  --color-warning-hover: #ffd633;
+  --color-warning-text: #ffcc00;
   --color-warning-bg: #4d3d00;
+
+  /* Borders */
   --color-border: #ffffff; /* White borders */
   --color-border-light: #999999; /* Light gray borders */
+  --color-border-hover: #66b3ff;
+
+  /* Inputs */
   --color-input-bg: #1a1a1a;
+  --color-input-border: #ffffff;
+  --color-input-border-focus: #66b3ff;
+
+  /* Interactive States */
   --color-hover-bg: #333333;
-  --focus-ring: 0 0 0 4px #66b3ff; /* Solid blue focus */
+
+  /* Focus - Brand-neutral light blue with 3:1 contrast */
+  --color-focus: #66b3ff;
+  --focus-ring: 0 0 0 4px #66b3ff; /* Solid focus, 4px thick */
 }
 
 /* High Contrast - System Dark Preference */
@@ -233,25 +210,53 @@
   :root[data-high-contrast='true']:not([data-theme='light']):not(
       [data-theme='dark']
     ) {
+    /* Apply dark HC colors when system preference is dark and no manual theme set */
     --color-bg-primary: #000000;
     --color-bg-secondary: #1a1a1a;
     --color-bg-tertiary: #2d2d2d;
+    --color-bg-elevated: #000000;
+
     --color-text-primary: #ffffff;
     --color-text-secondary: #f0f0f0;
     --color-text-tertiary: #cccccc;
+    --color-text-muted: #cccccc;
+
     --color-accent: #66b3ff;
     --color-accent-hover: #99ccff;
     --color-accent-text: #000000;
+    --color-accent-subtle: #003d66;
+
     --color-success: #66ff66;
+    --color-success-hover: #7fff7f;
+    --color-success-text: #66ff66;
     --color-success-bg: #0d3d0d;
+
+    --color-info: #44d9e6;
+    --color-info-hover: #5fe0eb;
+    --color-info-text: #44d9e6;
+    --color-info-bg: #0d3d3d;
+
     --color-error: #ff6666;
+    --color-error-hover: #ff8080;
+    --color-error-text: #ff6666;
     --color-error-bg: #4d0000;
+
     --color-warning: #ffcc00;
+    --color-warning-hover: #ffd633;
+    --color-warning-text: #ffcc00;
     --color-warning-bg: #4d3d00;
+
     --color-border: #ffffff;
     --color-border-light: #999999;
+    --color-border-hover: #66b3ff;
+
     --color-input-bg: #1a1a1a;
+    --color-input-border: #ffffff;
+    --color-input-border-focus: #66b3ff;
+
     --color-hover-bg: #333333;
+
+    --color-focus: #66b3ff;
     --focus-ring: 0 0 0 4px #66b3ff;
   }
 }
@@ -268,7 +273,12 @@
   border-width: var(--border-width-thick, 3px);
 }
 
-/* Reduced Motion */
+/* ============================================================================
+   Reduced Motion
+   ============================================================================
+   Respects user preference for reduced motion
+   ============================================================================ */
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -293,22 +303,49 @@
     --color-bg-primary: Canvas;
     --color-bg-secondary: Canvas;
     --color-bg-tertiary: Canvas;
+    --color-bg-elevated: Canvas;
+
     --color-text-primary: CanvasText;
     --color-text-secondary: CanvasText;
     --color-text-tertiary: CanvasText;
+    --color-text-muted: CanvasText;
+
     --color-accent: LinkText;
     --color-accent-hover: LinkText;
     --color-accent-text: Canvas;
+    --color-accent-subtle: Canvas;
+
     --color-success: LinkText;
+    --color-success-hover: LinkText;
+    --color-success-text: CanvasText;
     --color-success-bg: Canvas;
+
+    --color-info: LinkText;
+    --color-info-hover: LinkText;
+    --color-info-text: CanvasText;
+    --color-info-bg: Canvas;
+
     --color-error: LinkText;
+    --color-error-hover: LinkText;
+    --color-error-text: CanvasText;
     --color-error-bg: Canvas;
+
     --color-warning: LinkText;
+    --color-warning-hover: LinkText;
+    --color-warning-text: CanvasText;
     --color-warning-bg: Canvas;
+
     --color-border: CanvasText;
     --color-border-light: CanvasText;
+    --color-border-hover: CanvasText;
+
     --color-input-bg: Field;
+    --color-input-border: CanvasText;
+    --color-input-border-focus: Highlight;
+
     --color-hover-bg: Canvas;
+
+    --color-focus: Highlight;
 
     /* Use solid outlines instead of box-shadow for focus (box-shadow suppressed in forced-colors) */
     --focus-ring: none;
@@ -380,7 +417,7 @@
     --color-border-light: #333333;
 
     /* Stronger focus indicators */
-    --focus-ring: 0 0 0 4px rgba(0, 102, 204, 0.5);
+    --focus-ring: 0 0 0 4px rgba(0, 82, 204, 0.5);
   }
 
   /* Dark mode enhanced contrast */
@@ -389,7 +426,7 @@
     --color-text-secondary: #f0f0f0;
     --color-border: #ffffff;
     --color-border-light: #cccccc;
-    --focus-ring: 0 0 0 4px rgba(77, 159, 255, 0.6);
+    --focus-ring: 0 0 0 4px rgba(102, 179, 255, 0.6);
   }
 
   /* System preference for dark mode */
@@ -399,7 +436,7 @@
       --color-text-secondary: #f0f0f0;
       --color-border: #ffffff;
       --color-border-light: #cccccc;
-      --focus-ring: 0 0 0 4px rgba(77, 159, 255, 0.6);
+      --focus-ring: 0 0 0 4px rgba(102, 179, 255, 0.6);
     }
   }
 

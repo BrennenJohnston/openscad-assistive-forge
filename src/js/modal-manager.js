@@ -24,7 +24,9 @@ function getFocusableElements(container) {
   return Array.from(container.querySelectorAll(selector)).filter((el) => {
     if (el.getAttribute('aria-hidden') === 'true') return false;
     const isVisible =
-      el.offsetWidth > 0 || el.offsetHeight > 0 || el.getClientRects().length > 0;
+      el.offsetWidth > 0 ||
+      el.offsetHeight > 0 ||
+      el.getClientRects().length > 0;
     return isVisible;
   });
 }
@@ -37,13 +39,13 @@ function getFocusableElements(container) {
 function createFocusTrap(modal) {
   return function trapFocus(e) {
     if (e.key !== 'Tab') return;
-    
+
     const focusable = getFocusableElements(modal);
     if (focusable.length === 0) return;
-    
+
     const firstFocusable = focusable[0];
     const lastFocusable = focusable[focusable.length - 1];
-    
+
     if (e.shiftKey) {
       // Shift + Tab: going backward
       if (document.activeElement === firstFocusable) {
@@ -77,27 +79,27 @@ let bodyOverflowBefore = null;
  */
 export function openModal(modal, options = {}) {
   if (!modal) return;
-  
+
   // Store trigger for focus restoration
   const trigger = document.activeElement;
-  
+
   // Create focus trap handler
   const trapHandler = createFocusTrap(modal);
-  
+
   // Store state
   modalStates.set(modal, {
     trigger,
     trapHandler,
     onClose: options.onClose || null,
   });
-  
+
   // Show modal
   modal.classList.remove('hidden');
   modal.setAttribute('aria-hidden', 'false');
-  
+
   // Add focus trap listener
   modal.addEventListener('keydown', trapHandler);
-  
+
   // Focus the target element or first focusable
   requestAnimationFrame(() => {
     const focusTarget = options.focusTarget || getFocusableElements(modal)[0];
@@ -105,7 +107,7 @@ export function openModal(modal, options = {}) {
       focusTarget.focus();
     }
   });
-  
+
   // Prevent body scroll (optional)
   if (modalStates.size === 1) {
     bodyOverflowBefore = document.body.style.overflow;
@@ -120,31 +122,31 @@ export function openModal(modal, options = {}) {
  */
 export function closeModal(modal) {
   if (!modal) return;
-  
+
   const state = modalStates.get(modal);
-  
+
   // Hide modal
   modal.classList.add('hidden');
   modal.setAttribute('aria-hidden', 'true');
-  
+
   if (state) {
     // Remove focus trap listener
     modal.removeEventListener('keydown', state.trapHandler);
-    
+
     // Restore focus to trigger
     if (state.trigger && typeof state.trigger.focus === 'function') {
       state.trigger.focus();
     }
-    
+
     // Call onClose callback
     if (state.onClose) {
       state.onClose();
     }
-    
+
     // Clean up state
     modalStates.delete(modal);
   }
-  
+
   // Restore body scroll if no other modals are open
   if (modalStates.size === 0) {
     document.body.style.overflow = bodyOverflowBefore ?? '';
@@ -160,19 +162,20 @@ export function closeModal(modal) {
  * @param {string} [selectors.overlay] - Selector for overlay click area
  */
 export function setupModalCloseHandlers(modal, selectors = {}) {
-  const { closeButton = '.modal-close', overlay = '.modal-overlay' } = selectors;
-  
+  const { closeButton = '.modal-close', overlay = '.modal-overlay' } =
+    selectors;
+
   // Close button(s)
   modal.querySelectorAll(closeButton).forEach((btn) => {
     btn.addEventListener('click', () => closeModal(modal));
   });
-  
+
   // Overlay click
   const overlayEl = modal.querySelector(overlay);
   if (overlayEl) {
     overlayEl.addEventListener('click', () => closeModal(modal));
   }
-  
+
   // Escape key (additional handler at modal level)
   modal.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
@@ -195,7 +198,7 @@ export function initStaticModals() {
       overlay: '#queueModalOverlay',
     });
   }
-  
+
   // Source Viewer Modal
   const sourceModal = document.getElementById('sourceViewerModal');
   if (sourceModal) {
@@ -204,7 +207,7 @@ export function initStaticModals() {
       overlay: '#sourceViewerOverlay',
     });
   }
-  
+
   // Params JSON Modal
   const paramsModal = document.getElementById('paramsJsonModal');
   if (paramsModal) {
@@ -213,7 +216,7 @@ export function initStaticModals() {
       overlay: '#paramsJsonOverlay',
     });
   }
-  
+
   // Features Guide Modal
   const featuresModal = document.getElementById('featuresGuideModal');
   if (featuresModal) {
@@ -222,7 +225,7 @@ export function initStaticModals() {
       overlay: '#featuresGuideOverlay',
     });
   }
-  
+
   // Reset Confirmation Modal
   const resetModal = document.getElementById('resetConfirmModal');
   if (resetModal) {

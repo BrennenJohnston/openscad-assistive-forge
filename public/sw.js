@@ -1,10 +1,10 @@
 /**
  * OpenSCAD Web Customizer Forge - Service Worker
  * Provides offline functionality and caching for PWA
- * Version: 3.0.0
+ * Version: 3.1.0
  */
 
-const CACHE_VERSION = 'v3.0.0';
+const CACHE_VERSION = 'v3.1.0';
 const CACHE_NAME = `openscad-forge-${CACHE_VERSION}`;
 
 // Assets to cache immediately on install

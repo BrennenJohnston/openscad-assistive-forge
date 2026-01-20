@@ -1,3 +1,28 @@
+# Test Report - OpenSCAD Web Customizer v3.1.0
+
+**Date**: 2026-01-20  
+**Tester**: Automated verification  
+**Build**: v3.1.0  
+**Status**: ✅ **ALL TESTS PASSING**
+
+---
+
+## v3.1.0 Verification Summary
+
+- **Lint**: `npm run lint` completed with 0 warnings/errors.
+- **Build**: `npm run build` succeeded (Vite 7.3.1).
+- **Unit tests**: `npm run test:run` passed (18 files, 687 tests).
+- **E2E tests**: `npm run test:e2e` passed (76 passed, 45 skipped).
+- **Accessibility audit**: `npm run check-a11y` completed successfully.
+- **Security audit**: `npm audit` found 0 vulnerabilities.
+
+### Notes
+
+- Console output includes expected stderr logs for mocked error scenarios in tests.
+- Build reports large chunk warnings due to worker bundle size (unchanged).
+
+---
+
 # Test Report - OpenSCAD Web Customizer v2.3.0
 
 **Date**: 2026-01-15  

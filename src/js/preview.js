@@ -167,10 +167,10 @@ export class PreviewManager {
     const width = this.container.clientWidth;
     const height = this.container.clientHeight;
     this.camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 10000);
-    
+
     // Set Z as the up axis (OpenSCAD uses Z-up, Three.js defaults to Y-up)
     this.camera.up.set(0, 0, 1);
-    
+
     // Position camera for OpenSCAD-style diagonal view (looking at origin from front-right-above)
     // This mimics OpenSCAD's default "Diagonal" view orientation
     this.camera.position.set(150, -150, 100);
@@ -381,7 +381,12 @@ export class PreviewManager {
       let handled = false;
 
       // Rotation (arrow keys without modifiers)
-      if (!event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey) {
+      if (
+        !event.shiftKey &&
+        !event.ctrlKey &&
+        !event.altKey &&
+        !event.metaKey
+      ) {
         switch (event.key) {
           case 'ArrowLeft':
             this.controls.object.position.applyAxisAngle(
@@ -412,9 +417,13 @@ export class PreviewManager {
             const newVerticalAngle = verticalAngle + rotationSpeed;
 
             this.controls.object.position.x =
-              currentDist * Math.cos(newVerticalAngle) * Math.cos(horizontalAngle);
+              currentDist *
+              Math.cos(newVerticalAngle) *
+              Math.cos(horizontalAngle);
             this.controls.object.position.y =
-              currentDist * Math.cos(newVerticalAngle) * Math.sin(horizontalAngle);
+              currentDist *
+              Math.cos(newVerticalAngle) *
+              Math.sin(horizontalAngle);
             this.controls.object.position.z =
               currentDist * Math.sin(newVerticalAngle);
             this.controls.update();
@@ -434,9 +443,13 @@ export class PreviewManager {
             const newVerticalAngle2 = verticalAngle2 - rotationSpeed;
 
             this.controls.object.position.x =
-              currentDist2 * Math.cos(newVerticalAngle2) * Math.cos(horizontalAngle2);
+              currentDist2 *
+              Math.cos(newVerticalAngle2) *
+              Math.cos(horizontalAngle2);
             this.controls.object.position.y =
-              currentDist2 * Math.cos(newVerticalAngle2) * Math.sin(horizontalAngle2);
+              currentDist2 *
+              Math.cos(newVerticalAngle2) *
+              Math.sin(horizontalAngle2);
             this.controls.object.position.z =
               currentDist2 * Math.sin(newVerticalAngle2);
             this.controls.update();
@@ -492,9 +505,21 @@ export class PreviewManager {
   /**
    * Setup on-screen camera controls (WCAG 2.2 SC 2.5.7)
    * Adds visible buttons for camera manipulation
+   * Note: On desktop (>= 768px), the camera panel drawer handles controls,
+   * so we only create floating controls for mobile.
    */
   setupCameraControls() {
-    // Create control panel
+    // Check if the camera panel drawer exists (desktop view)
+    // If it does, skip creating floating controls as they're redundant
+    const cameraPanelDrawer = document.getElementById('cameraPanel');
+    if (cameraPanelDrawer && window.innerWidth >= 768) {
+      console.log(
+        '[Preview] Camera panel drawer exists - skipping floating controls'
+      );
+      return;
+    }
+
+    // Create control panel (for mobile or when drawer doesn't exist)
     const controlPanel = document.createElement('div');
     controlPanel.className = 'camera-controls';
     controlPanel.setAttribute('role', 'group');
@@ -504,8 +529,7 @@ export class PreviewManager {
     const collapsedKey = 'openscad-camera-controls-collapsed';
     const positionKey = 'openscad-camera-controls-position';
     const isCollapsed = localStorage.getItem(collapsedKey) === 'true';
-    const position =
-      localStorage.getItem(positionKey) || 'bottom-right'; // bottom-right | bottom-left | top-right | top-left
+    const position = localStorage.getItem(positionKey) || 'bottom-right'; // bottom-right | bottom-left | top-right | top-left
     controlPanel.dataset.collapsed = isCollapsed ? 'true' : 'false';
     controlPanel.dataset.position = position;
 
@@ -518,14 +542,22 @@ export class PreviewManager {
     toggleBtn.className = 'camera-controls-toggle';
     toggleBtn.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true');
     toggleBtn.setAttribute('aria-controls', 'cameraControlsBody');
-    toggleBtn.setAttribute('aria-label', isCollapsed ? 'Expand camera controls' : 'Collapse camera controls');
-    toggleBtn.title = isCollapsed ? 'Show camera controls' : 'Hide camera controls';
+    toggleBtn.setAttribute(
+      'aria-label',
+      isCollapsed ? 'Expand camera controls' : 'Collapse camera controls'
+    );
+    toggleBtn.title = isCollapsed
+      ? 'Show camera controls'
+      : 'Hide camera controls';
     toggleBtn.textContent = 'Camera controls';
 
     const moveBtn = document.createElement('button');
     moveBtn.type = 'button';
     moveBtn.className = 'camera-controls-move';
-    moveBtn.setAttribute('aria-label', 'Move camera controls to a different corner');
+    moveBtn.setAttribute(
+      'aria-label',
+      'Move camera controls to a different corner'
+    );
     moveBtn.title = 'Move camera controls';
     moveBtn.textContent = 'Move';
 
@@ -603,8 +635,13 @@ export class PreviewManager {
       controlPanel.dataset.collapsed = nextCollapsed ? 'true' : 'false';
       body.hidden = !!nextCollapsed;
       toggleBtn.setAttribute('aria-expanded', nextCollapsed ? 'false' : 'true');
-      toggleBtn.setAttribute('aria-label', nextCollapsed ? 'Expand camera controls' : 'Collapse camera controls');
-      toggleBtn.title = nextCollapsed ? 'Show camera controls' : 'Hide camera controls';
+      toggleBtn.setAttribute(
+        'aria-label',
+        nextCollapsed ? 'Expand camera controls' : 'Collapse camera controls'
+      );
+      toggleBtn.title = nextCollapsed
+        ? 'Show camera controls'
+        : 'Hide camera controls';
       localStorage.setItem(collapsedKey, nextCollapsed ? 'true' : 'false');
     };
 
@@ -637,23 +674,27 @@ export class PreviewManager {
     const zoomSpeed = 15;
 
     // Rotation buttons
-    document.getElementById('cameraRotateLeft')?.addEventListener('click', () => {
-      this.controls.object.position.applyAxisAngle(
-        new THREE.Vector3(0, 0, 1),
-        rotationSpeed
-      );
-      this.controls.update();
-      this.announceCameraAction('Rotate left');
-    });
+    document
+      .getElementById('cameraRotateLeft')
+      ?.addEventListener('click', () => {
+        this.controls.object.position.applyAxisAngle(
+          new THREE.Vector3(0, 0, 1),
+          rotationSpeed
+        );
+        this.controls.update();
+        this.announceCameraAction('Rotate left');
+      });
 
-    document.getElementById('cameraRotateRight')?.addEventListener('click', () => {
-      this.controls.object.position.applyAxisAngle(
-        new THREE.Vector3(0, 0, 1),
-        -rotationSpeed
-      );
-      this.controls.update();
-      this.announceCameraAction('Rotate right');
-    });
+    document
+      .getElementById('cameraRotateRight')
+      ?.addEventListener('click', () => {
+        this.controls.object.position.applyAxisAngle(
+          new THREE.Vector3(0, 0, 1),
+          -rotationSpeed
+        );
+        this.controls.update();
+        this.announceCameraAction('Rotate right');
+      });
 
     document.getElementById('cameraRotateUp')?.addEventListener('click', () => {
       const currentDist = this.controls.object.position.length();
@@ -673,33 +714,37 @@ export class PreviewManager {
         currentDist * Math.cos(newVerticalAngle) * Math.cos(horizontalAngle);
       this.controls.object.position.y =
         currentDist * Math.cos(newVerticalAngle) * Math.sin(horizontalAngle);
-      this.controls.object.position.z = currentDist * Math.sin(newVerticalAngle);
+      this.controls.object.position.z =
+        currentDist * Math.sin(newVerticalAngle);
       this.controls.update();
       this.announceCameraAction('Rotate up');
     });
 
-    document.getElementById('cameraRotateDown')?.addEventListener('click', () => {
-      const currentDist = this.controls.object.position.length();
-      const horizontalAngle = Math.atan2(
-        this.controls.object.position.y,
-        this.controls.object.position.x
-      );
-      const verticalAngle = Math.asin(
-        this.controls.object.position.z / currentDist
-      );
-      const newVerticalAngle = Math.max(
-        verticalAngle - rotationSpeed,
-        -Math.PI / 2 + 0.01
-      );
+    document
+      .getElementById('cameraRotateDown')
+      ?.addEventListener('click', () => {
+        const currentDist = this.controls.object.position.length();
+        const horizontalAngle = Math.atan2(
+          this.controls.object.position.y,
+          this.controls.object.position.x
+        );
+        const verticalAngle = Math.asin(
+          this.controls.object.position.z / currentDist
+        );
+        const newVerticalAngle = Math.max(
+          verticalAngle - rotationSpeed,
+          -Math.PI / 2 + 0.01
+        );
 
-      this.controls.object.position.x =
-        currentDist * Math.cos(newVerticalAngle) * Math.cos(horizontalAngle);
-      this.controls.object.position.y =
-        currentDist * Math.cos(newVerticalAngle) * Math.sin(horizontalAngle);
-      this.controls.object.position.z = currentDist * Math.sin(newVerticalAngle);
-      this.controls.update();
-      this.announceCameraAction('Rotate down');
-    });
+        this.controls.object.position.x =
+          currentDist * Math.cos(newVerticalAngle) * Math.cos(horizontalAngle);
+        this.controls.object.position.y =
+          currentDist * Math.cos(newVerticalAngle) * Math.sin(horizontalAngle);
+        this.controls.object.position.z =
+          currentDist * Math.sin(newVerticalAngle);
+        this.controls.update();
+        this.announceCameraAction('Rotate down');
+      });
 
     // Pan buttons
     document.getElementById('cameraPanLeft')?.addEventListener('click', () => {
@@ -740,12 +785,14 @@ export class PreviewManager {
     });
 
     // Reset view button
-    document.getElementById('cameraResetView')?.addEventListener('click', () => {
-      if (this.mesh) {
-        this.fitCameraToModel();
-        this.announceCameraAction('Reset view');
-      }
-    });
+    document
+      .getElementById('cameraResetView')
+      ?.addEventListener('click', () => {
+        if (this.mesh) {
+          this.fitCameraToModel();
+          this.announceCameraAction('Reset view');
+        }
+      });
   }
 
   /**
@@ -977,14 +1024,14 @@ export class PreviewManager {
     // Using roughly 45° elevation and 45° azimuth for a nice isometric-like view
     const angle = Math.PI / 4; // 45 degrees
     const elevation = Math.PI / 6; // 30 degrees above XY plane
-    
+
     const horizontalDist = cameraDistance * Math.cos(elevation);
     const verticalDist = cameraDistance * Math.sin(elevation);
-    
+
     this.camera.position.set(
-      center.x + horizontalDist * Math.cos(angle),  // X: front-right
-      center.y - horizontalDist * Math.sin(angle),  // Y: front (negative Y in OpenSCAD view)
-      center.z + verticalDist                        // Z: above (Z-up)
+      center.x + horizontalDist * Math.cos(angle), // X: front-right
+      center.y - horizontalDist * Math.sin(angle), // Y: front (negative Y in OpenSCAD view)
+      center.z + verticalDist // Z: above (Z-up)
     );
     this.camera.lookAt(center);
 
@@ -1032,7 +1079,8 @@ export class PreviewManager {
     if (!summaryEl) return;
 
     if (!this.mesh) {
-      summaryEl.textContent = 'No model loaded. Upload an OpenSCAD file and generate an STL to see the 3D preview.';
+      summaryEl.textContent =
+        'No model loaded. Upload an OpenSCAD file and generate an STL to see the 3D preview.';
       return;
     }
 
@@ -1061,6 +1109,60 @@ export class PreviewManager {
     this.controls.target.addScaledVector(up, deltaUp);
     this.camera.position.addScaledVector(right, deltaRight);
     this.camera.position.addScaledVector(up, deltaUp);
+    this.controls.update();
+  }
+
+  /**
+   * Rotate camera horizontally around the target (Z-up)
+   * @param {number} angle - Rotation angle in radians (positive = left, negative = right)
+   */
+  rotateHorizontal(angle) {
+    if (!this.controls) return;
+    this.controls.object.position.applyAxisAngle(
+      new THREE.Vector3(0, 0, 1),
+      angle
+    );
+    this.controls.update();
+  }
+
+  /**
+   * Rotate camera vertically around the target
+   * @param {number} angle - Rotation angle in radians (positive = up, negative = down)
+   */
+  rotateVertical(angle) {
+    if (!this.controls) return;
+    const currentDist = this.controls.object.position.length();
+    const horizontalAngle = Math.atan2(
+      this.controls.object.position.y,
+      this.controls.object.position.x
+    );
+    const verticalAngle = Math.asin(
+      this.controls.object.position.z / currentDist
+    );
+
+    // Clamp to prevent flipping over the poles
+    const newVerticalAngle = Math.max(
+      -Math.PI / 2 + 0.01,
+      Math.min(Math.PI / 2 - 0.01, verticalAngle + angle)
+    );
+
+    this.controls.object.position.x =
+      currentDist * Math.cos(newVerticalAngle) * Math.cos(horizontalAngle);
+    this.controls.object.position.y =
+      currentDist * Math.cos(newVerticalAngle) * Math.sin(horizontalAngle);
+    this.controls.object.position.z = currentDist * Math.sin(newVerticalAngle);
+    this.controls.update();
+  }
+
+  /**
+   * Zoom camera in or out
+   * @param {number} amount - Zoom amount (positive = in, negative = out)
+   */
+  zoomCamera(amount) {
+    if (!this.camera || !this.controls) return;
+    const direction = new THREE.Vector3();
+    this.camera.getWorldDirection(direction);
+    this.camera.position.addScaledVector(direction, amount);
     this.controls.update();
   }
 

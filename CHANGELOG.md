@@ -5,6 +5,46 @@ All notable changes to the OpenSCAD Web Customizer Forge project are documented 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.0] - 2026-01-20
+
+### Enhanced UI & Accessibility Release
+
+**Highlights:**
+- Comprehensive color system overhaul with Radix Colors for WCAG compliance
+- Responsive drawer UI with mobile-first design
+- Camera panel controller for keyboard-accessible 3D navigation
+- Preview settings drawer with improved UX
+- Enhanced accessibility documentation and testing
+
+### Added
+
+- **Radix Colors Integration**: New semantic color system with automatic light/dark/high-contrast support
+- **Camera Panel Controller**: Keyboard-accessible camera controls for 3D preview navigation
+- **Preview Settings Drawer**: Collapsible overlay drawer for preview settings with resize capability
+- **Color Contrast Testing**: Automated WCAG 2.x and APCA contrast verification
+- **UI Standards Guide**: Comprehensive documentation for theme-consistent UI development
+- **Color System Guide**: Complete guide for using the new semantic token system
+- **Color Migration Guide**: Instructions for updating existing components
+
+### Improved
+
+- **Mobile Off-Canvas Drawer**: Bootstrap-inspired off-canvas pattern for parameters panel
+- **Forced Colors Support**: Full compatibility with Windows High Contrast and OS color schemes
+- **Focus Management**: Enhanced scroll-margin and scroll-padding for WCAG 2.4.11/2.4.13 compliance
+- **Touch Targets**: 44x44px minimum touch targets throughout the UI
+- **Accessibility Guide**: Updated with new color system and contrast information
+- **Status Bar**: Compact floating status overlay on preview canvas
+
+### Technical
+
+- New CSS files: `color-scales.css`, `semantic-tokens.css`
+- New test file: `color-contrast.test.js`
+- New guides: `COLOR_SYSTEM_GUIDE.md`, `COLOR_MIGRATION_GUIDE.md`, `UI_STANDARDS.md`
+- Radix UI Colors dependency for professional color palette
+- Improved high contrast mode with 7:1 AAA contrast ratios
+
+---
+
 ## [3.0.0] - 2026-01-19
 
 ### Major Milestone - Cloudflare Stable Deployment

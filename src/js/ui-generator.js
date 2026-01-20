@@ -18,8 +18,6 @@ let limitsUnlocked = false;
 // Store parameter metadata for search
 let parameterMetadata = {};
 
-// Track current search filter
-let currentSearchFilter = '';
 
 /**
  * Set whether parameter limits are unlocked
@@ -299,7 +297,10 @@ function createHelpTooltip(param) {
   const button = document.createElement('button');
   button.className = 'param-help-button';
   button.type = 'button';
-  button.setAttribute('aria-label', `Help for ${param.name.replace(/_/g, ' ')}`);
+  button.setAttribute(
+    'aria-label',
+    `Help for ${param.name.replace(/_/g, ' ')}`
+  );
   button.setAttribute('aria-expanded', 'false');
   // WCAG: Link trigger to tooltip content for SR announcement
   button.setAttribute('aria-describedby', tooltipId);
@@ -417,7 +418,6 @@ export function initParameterSearch() {
   const searchInput = document.getElementById('paramSearchInput');
   const clearBtn = document.getElementById('clearParamSearchBtn');
   const jumpSelect = document.getElementById('paramJumpSelect');
-  const filterStats = document.getElementById('paramFilterStats');
   const showAllBtn = document.getElementById('showAllParamsBtn');
 
   if (!searchInput) return;
@@ -425,9 +425,8 @@ export function initParameterSearch() {
   // Search input handler
   searchInput.addEventListener('input', (e) => {
     const query = e.target.value.trim().toLowerCase();
-    currentSearchFilter = query;
     filterParameters(query);
-    
+
     // Show/hide clear button
     if (clearBtn) {
       clearBtn.classList.toggle('hidden', !query);
@@ -438,7 +437,6 @@ export function initParameterSearch() {
   if (clearBtn) {
     clearBtn.addEventListener('click', () => {
       searchInput.value = '';
-      currentSearchFilter = '';
       filterParameters('');
       clearBtn.classList.add('hidden');
       searchInput.focus();
@@ -451,7 +449,9 @@ export function initParameterSearch() {
       const groupId = e.target.value;
       if (!groupId) return;
 
-      const groupElement = document.querySelector(`.param-group[data-group-id="${groupId}"]`);
+      const groupElement = document.querySelector(
+        `.param-group[data-group-id="${groupId}"]`
+      );
       if (groupElement) {
         // Expand the group if collapsed
         groupElement.open = true;
@@ -461,7 +461,9 @@ export function initParameterSearch() {
         const summary = groupElement.querySelector('summary');
         if (summary) summary.focus();
         // Announce for screen readers
-        announceChange(`Jumped to ${groupElement.querySelector('summary')?.textContent || groupId} group`);
+        announceChange(
+          `Jumped to ${groupElement.querySelector('summary')?.textContent || groupId} group`
+        );
       }
       // Reset select
       jumpSelect.value = '';
@@ -472,7 +474,6 @@ export function initParameterSearch() {
   if (showAllBtn) {
     showAllBtn.addEventListener('click', () => {
       searchInput.value = '';
-      currentSearchFilter = '';
       filterParameters('');
       if (clearBtn) clearBtn.classList.add('hidden');
       searchInput.focus();
@@ -485,7 +486,9 @@ export function initParameterSearch() {
  * @param {string} query - Search query (lowercase)
  */
 function filterParameters(query) {
-  const paramControls = document.querySelectorAll('.param-control[data-param-name]');
+  const paramControls = document.querySelectorAll(
+    '.param-control[data-param-name]'
+  );
   const paramGroups = document.querySelectorAll('.param-group');
   const filterStats = document.getElementById('paramFilterStats');
   const filterCount = document.getElementById('paramFilterCount');
@@ -496,10 +499,10 @@ function filterParameters(query) {
   paramControls.forEach((control) => {
     const paramName = control.dataset.paramName;
     const metadata = parameterMetadata[paramName] || {};
-    
+
     // Skip if already hidden by dependency
     const isHiddenByDependency = control.getAttribute('aria-hidden') === 'true';
-    
+
     if (!query) {
       // No search - show all (unless hidden by dependency)
       control.classList.remove('search-hidden');
@@ -510,21 +513,23 @@ function filterParameters(query) {
         paramName.toLowerCase().replace(/_/g, ' '),
         (metadata.label || '').toLowerCase(),
         (metadata.description || '').toLowerCase(),
-        (metadata.group || '').toLowerCase()
+        (metadata.group || '').toLowerCase(),
       ].join(' ');
 
       const matches = searchableText.includes(query);
       control.classList.toggle('search-hidden', !matches);
-      
+
       if (matches && !isHiddenByDependency) visibleCount++;
     }
   });
 
   // Update group visibility based on whether they have visible parameters
   paramGroups.forEach((group) => {
-    const visibleParams = group.querySelectorAll('.param-control:not(.search-hidden):not([aria-hidden="true"])');
+    const visibleParams = group.querySelectorAll(
+      '.param-control:not(.search-hidden):not([aria-hidden="true"])'
+    );
     group.classList.toggle('search-empty', visibleParams.length === 0);
-    
+
     // Auto-expand groups with matches when searching
     if (query && visibleParams.length > 0) {
       group.open = true;
@@ -686,7 +691,10 @@ function createSliderControl(param, onChange) {
     const defaultHint = document.createElement('span');
     defaultHint.className = 'param-default-value';
     defaultHint.textContent = formatValueWithUnit(originalDefault);
-    defaultHint.setAttribute('title', `Default: ${formatValueWithUnit(originalDefault)}`);
+    defaultHint.setAttribute(
+      'title',
+      `Default: ${formatValueWithUnit(originalDefault)}`
+    );
     sliderContainer.appendChild(defaultHint);
   }
 
@@ -853,8 +861,13 @@ function createNumberInput(param, onChange) {
   if (originalDefault !== undefined) {
     const defaultHint = document.createElement('span');
     defaultHint.className = 'param-default-value';
-    defaultHint.textContent = param.unit ? `${originalDefault} ${param.unit}` : String(originalDefault);
-    defaultHint.setAttribute('title', `Default: ${originalDefault}${param.unit ? ' ' + param.unit : ''}`);
+    defaultHint.textContent = param.unit
+      ? `${originalDefault} ${param.unit}`
+      : String(originalDefault);
+    defaultHint.setAttribute(
+      'title',
+      `Default: ${originalDefault}${param.unit ? ' ' + param.unit : ''}`
+    );
     inputContainer.appendChild(defaultHint);
   }
 
@@ -1324,7 +1337,7 @@ export function renderParameterUI(
       description: param.description || '',
       group: param.group,
       type: param.type,
-      uiType: param.uiType
+      uiType: param.uiType,
     };
   });
 

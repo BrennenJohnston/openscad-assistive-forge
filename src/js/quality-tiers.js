@@ -16,7 +16,7 @@ export const COMPLEXITY_TIER = {
 /**
  * Quality presets organized by complexity tier
  * Each tier has preview and export quality levels (low, medium, high)
- * 
+ *
  * Triangle count estimates are approximate and vary by model geometry.
  */
 export const QUALITY_TIERS = {
@@ -24,7 +24,7 @@ export const QUALITY_TIERS = {
    * BEGINNER tier - For simple models with few curved features
    * Optimized for: cubes, simple boxes, basic shapes with minimal curves
    * Example: simple_box.scad (4 corner cylinders, basic ventilation holes)
-   * 
+   *
    * These models can handle higher $fn without performance issues.
    */
   [COMPLEXITY_TIER.BEGINNER]: {
@@ -90,7 +90,7 @@ export const QUALITY_TIERS = {
   /**
    * STANDARD tier - Community standard for typical OpenSCAD models
    * Optimized for: gear sets, enclosures, mechanical parts, decorative items
-   * 
+   *
    * Based on community-recommended $fn values from OpenSCAD forums/docs:
    * - Low/Draft: $fn=20-32 preview, $fn=64 render
    * - Medium: $fn=50-80 preview, $fn=128 render
@@ -160,7 +160,7 @@ export const QUALITY_TIERS = {
    * COMPLEX tier - For models with many small curved features
    * Optimized for: braille embossers, perforated patterns, organic shapes,
    *                models with 100+ spheres/cylinders
-   * 
+   *
    * Based on braille_embosser.scad which has 264+ small curved dots.
    * Using community standards here would produce 500K+ triangles.
    * These conservative values keep STL size manageable.
@@ -242,16 +242,17 @@ export const HARDWARE_LEVEL = {
  */
 export function detectHardware() {
   const cores = navigator.hardwareConcurrency || 2;
-  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-    navigator.userAgent
-  );
-  
+  const isMobile =
+    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+      navigator.userAgent
+    );
+
   // Estimate available memory (not always accurate)
   let memoryGB = 4; // Default assumption
   if (navigator.deviceMemory) {
     memoryGB = navigator.deviceMemory;
   }
-  
+
   // Determine hardware level
   let level;
   if (isMobile || cores <= 2 || memoryGB <= 2) {
@@ -261,7 +262,7 @@ export function detectHardware() {
   } else {
     level = HARDWARE_LEVEL.MEDIUM;
   }
-  
+
   return {
     level,
     cores,
@@ -287,84 +288,88 @@ export function analyzeComplexity(scadContent, parameters = {}) {
   }
 
   const warnings = [];
-  
+
   // Count operations that affect complexity
   const counts = {
     // Curved primitives (each generates many triangles)
     spheres: (scadContent.match(/sphere\s*\(/g) || []).length,
     cylinders: (scadContent.match(/cylinder\s*\(/g) || []).length,
     circles: (scadContent.match(/circle\s*\(/g) || []).length,
-    
+
     // Loops that multiply curved features
     forLoops: (scadContent.match(/for\s*\(/g) || []).length,
-    
+
     // Expensive operations
     hulls: (scadContent.match(/hull\s*\(/g) || []).length,
     minkowskis: (scadContent.match(/minkowski\s*\(/g) || []).length,
     intersections: (scadContent.match(/intersection\s*\(/g) || []).length,
     differences: (scadContent.match(/difference\s*\(/g) || []).length,
-    
+
     // Extrusions
     linearExtrudes: (scadContent.match(/linear_extrude\s*\(/g) || []).length,
     rotateExtrudes: (scadContent.match(/rotate_extrude\s*\(/g) || []).length,
-    
+
     // Text (can generate many triangles)
     textCalls: (scadContent.match(/text\s*\(/g) || []).length,
   };
-  
+
   // Estimate curved feature count (spheres and cylinders in loops multiply)
   const loopMultiplier = Math.max(1, counts.forLoops * 3); // Estimate 3x per loop level
-  const estimatedCurvedFeatures = 
+  const estimatedCurvedFeatures =
     (counts.spheres + counts.cylinders + counts.circles) * loopMultiplier;
-  
+
   // Calculate complexity score
   let score = 0;
-  
+
   // Curved features are the main driver
   score += estimatedCurvedFeatures * 10;
-  
+
   // Expensive operations
   score += counts.hulls * 30;
   score += counts.minkowskis * 50;
   score += counts.intersections * 20;
   score += counts.differences * 15;
-  
+
   // Extrusions
   score += counts.linearExtrudes * 8;
   score += counts.rotateExtrudes * 12;
-  
+
   // Text
   score += counts.textCalls * 25;
-  
+
   // Check for high $fn in parameters
   const fn = parameters.$fn || parameters.fn;
   if (fn !== undefined && fn > 64) {
     score += fn * 0.5;
     warnings.push(`High $fn value (${fn}) detected`);
   }
-  
+
   // Determine tier based on score and curved feature count
   let tier;
-  
+
   if (estimatedCurvedFeatures >= 50 || score >= 500) {
     tier = COMPLEXITY_TIER.COMPLEX;
     if (estimatedCurvedFeatures >= 100) {
-      warnings.push(`Model has ~${estimatedCurvedFeatures} curved features - using conservative quality settings`);
+      warnings.push(
+        `Model has ~${estimatedCurvedFeatures} curved features - using conservative quality settings`
+      );
     }
   } else if (estimatedCurvedFeatures >= 10 || score >= 100) {
     tier = COMPLEXITY_TIER.STANDARD;
   } else {
     tier = COMPLEXITY_TIER.BEGINNER;
   }
-  
+
   // Detect specific patterns
   if (counts.minkowskis > 0) {
-    warnings.push(`${counts.minkowskis} minkowski() operations - these are very expensive`);
+    warnings.push(
+      `${counts.minkowskis} minkowski() operations - these are very expensive`
+    );
   }
   if (counts.spheres > 20) {
     warnings.push(`${counts.spheres} spheres detected - may produce large STL`);
   }
-  
+
   return {
     tier,
     score,
@@ -382,22 +387,29 @@ export function analyzeComplexity(scadContent, parameters = {}) {
  * @param {string} mode - preview or export
  * @returns {Object} Quality preset
  */
-export function getQualityPreset(tier, hardwareLevel, qualityLevel = 'medium', mode = 'preview') {
-  const tierConfig = QUALITY_TIERS[tier] || QUALITY_TIERS[COMPLEXITY_TIER.STANDARD];
+export function getQualityPreset(
+  tier,
+  hardwareLevel,
+  qualityLevel = 'medium',
+  mode = 'preview'
+) {
+  const tierConfig =
+    QUALITY_TIERS[tier] || QUALITY_TIERS[COMPLEXITY_TIER.STANDARD];
   const modePresets = tierConfig[mode] || tierConfig.preview;
-  
+
   // Adjust quality level based on hardware
   let effectiveLevel = qualityLevel;
-  
+
   if (hardwareLevel === HARDWARE_LEVEL.LOW) {
     // Downgrade quality on low-end hardware
     if (qualityLevel === 'high') effectiveLevel = 'medium';
-    if (qualityLevel === 'medium' && tier === COMPLEXITY_TIER.COMPLEX) effectiveLevel = 'low';
+    if (qualityLevel === 'medium' && tier === COMPLEXITY_TIER.COMPLEX)
+      effectiveLevel = 'low';
   } else if (hardwareLevel === HARDWARE_LEVEL.HIGH && mode === 'export') {
     // High-end hardware can handle better export quality
     // But don't upgrade automatically - let user choose
   }
-  
+
   return modePresets[effectiveLevel] || modePresets.medium;
 }
 
@@ -410,11 +422,11 @@ export function getQualityPreset(tier, hardwareLevel, qualityLevel = 'medium', m
 export function getAdaptiveQualityConfig(scadContent, parameters = {}) {
   const hardware = detectHardware();
   const analysis = analyzeComplexity(scadContent, parameters);
-  
+
   // Determine default quality levels based on hardware
   let defaultPreviewLevel = 'medium';
   let defaultExportLevel = 'medium';
-  
+
   if (hardware.level === HARDWARE_LEVEL.LOW) {
     defaultPreviewLevel = 'low';
     defaultExportLevel = 'low';
@@ -422,13 +434,13 @@ export function getAdaptiveQualityConfig(scadContent, parameters = {}) {
     defaultPreviewLevel = 'medium';
     defaultExportLevel = 'high';
   }
-  
+
   // For complex models, be more conservative
   if (analysis.tier === COMPLEXITY_TIER.COMPLEX) {
     if (defaultPreviewLevel === 'high') defaultPreviewLevel = 'medium';
     if (defaultExportLevel === 'high') defaultExportLevel = 'medium';
   }
-  
+
   return {
     tier: analysis.tier,
     tierName: QUALITY_TIERS[analysis.tier].name,
@@ -436,8 +448,18 @@ export function getAdaptiveQualityConfig(scadContent, parameters = {}) {
     hardware,
     defaultPreviewLevel,
     defaultExportLevel,
-    previewQuality: getQualityPreset(analysis.tier, hardware.level, defaultPreviewLevel, 'preview'),
-    exportQuality: getQualityPreset(analysis.tier, hardware.level, defaultExportLevel, 'export'),
+    previewQuality: getQualityPreset(
+      analysis.tier,
+      hardware.level,
+      defaultPreviewLevel,
+      'preview'
+    ),
+    exportQuality: getQualityPreset(
+      analysis.tier,
+      hardware.level,
+      defaultExportLevel,
+      'export'
+    ),
     analysis,
   };
 }
@@ -458,10 +480,10 @@ export function getTierPresets(tier) {
  */
 export function formatPresetDescription(preset) {
   if (!preset) return 'Unknown';
-  
+
   const fnInfo = preset.maxFn ? `$fn≤${preset.maxFn}` : '$fn=model';
   const faInfo = preset.minFa ? `$fa≥${preset.minFa}°` : '';
   const fsInfo = preset.minFs ? `$fs≥${preset.minFs}mm` : '';
-  
+
   return [fnInfo, faInfo, fsInfo].filter(Boolean).join(', ');
 }

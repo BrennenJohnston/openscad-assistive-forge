@@ -66,6 +66,12 @@ When you change UI behavior or markup, please verify:
 
 If you add new interactive patterns, prefer semantic HTML (`button`, `details/summary`, `fieldset/legend`, etc.) before adding ARIA.
 
+## UI styling standards (for theme-consistent UI changes)
+
+For drawer headers, icons, spacing, and token usage across **all themes** (including **high contrast** and **forced-colors**), follow:
+
+- `docs/guides/UI_STANDARDS.md`
+
 ## Submitting changes
 
 - Keep PRs focused: one behavior change per PR when possible.

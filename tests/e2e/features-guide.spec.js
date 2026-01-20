@@ -205,8 +205,8 @@ test.describe('Features Guide Modal', () => {
   test('should open from welcome screen "Learn more" button', async ({ page }) => {
     await page.goto('/')
     
-    // "Learn more" button should be visible on welcome screen
-    const learnMoreBtn = page.locator('#learnMoreFeaturesBtn')
+    // "Learn More" buttons live on the welcome screen role cards
+    const learnMoreBtn = page.locator('.btn-role-learn').first()
     await expect(learnMoreBtn).toBeVisible()
     
     // Click it
@@ -220,77 +220,3 @@ test.describe('Features Guide Modal', () => {
   })
 })
 
-test.describe('Feature Hints', () => {
-  test('should show feature hints after file upload', async ({ page }) => {
-    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
-    
-    await page.goto('/')
-    
-    const fileInput = page.locator('#fileInput')
-    const fixturePath = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad')
-    
-    try {
-      await fileInput.setInputFiles(fixturePath)
-      await page.waitForSelector('.param-control', { timeout: 15000 })
-      
-      // Feature hints may or may not be visible depending on file content
-      const featureHints = page.locator('#featureHints')
-      
-      // If visible, should have proper structure
-      if (await featureHints.isVisible()) {
-        const hintsList = page.locator('#hintsList')
-        await expect(hintsList).toBeVisible()
-        
-        // Hints should be in a list
-        await expect(hintsList).toHaveAttribute('role', 'list')
-        
-        console.log('Feature hints are displayed')
-      } else {
-        console.log('No feature hints shown (file may already have all features)')
-      }
-    } catch (error) {
-      console.log('Could not test feature hints:', error.message)
-      test.skip()
-    }
-  })
-  
-  test('should open Features Guide from hint button', async ({ page }) => {
-    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
-    
-    await page.goto('/')
-    
-    const fileInput = page.locator('#fileInput')
-    const fixturePath = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad')
-    
-    try {
-      await fileInput.setInputFiles(fixturePath)
-      await page.waitForSelector('.param-control', { timeout: 15000 })
-      
-      // If hints are visible, try clicking a "Learn more" button
-      const featureHints = page.locator('#featureHints')
-      
-      if (await featureHints.isVisible()) {
-        // Expand hints if collapsed
-        const summary = featureHints.locator('.hints-summary')
-        if (await summary.isVisible()) {
-          await summary.click()
-        }
-        
-        // Find and click a "Learn more" button
-        const learnMoreBtn = featureHints.locator('.hint-action').first()
-        if (await learnMoreBtn.isVisible()) {
-          await learnMoreBtn.click()
-          
-          // Modal should open
-          const modal = page.locator('#featuresGuideModal')
-          await expect(modal).not.toHaveClass(/hidden/)
-          
-          console.log('Features Guide opened from hint button')
-        }
-      }
-    } catch (error) {
-      console.log('Could not test hint button:', error.message)
-      test.skip()
-    }
-  })
-})

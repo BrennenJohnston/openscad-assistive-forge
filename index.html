@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="description" content="Web-based OpenSCAD customizer - customize and generate 3D printable STL files directly in your browser" />
     <title>OpenSCAD Web Customizer</title>
     
@@ -18,10 +18,12 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="OpenSCAD Forge" />
-    <link rel="apple-touch-icon" href="/icons/logo.png" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     
-    <!-- Favicon -->
-    <link rel="icon" type="image/png" href="/icons/logo.png" />
+    <!-- Favicons -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16x16.png" />
+    <link rel="shortcut icon" href="/favicon.ico" />
     
     <!-- Microsoft -->
     <meta name="msapplication-TileColor" content="#f4c400" />
@@ -48,7 +50,7 @@
           </div>
           <div class="header-controls">
             <a href="https://github.com/BrennenJohnston/openscad-web-customizer-forge" 
-               class="github-link" 
+               class="btn btn-sm btn-secondary github-link" 
                target="_blank" 
                rel="noopener noreferrer" 
                aria-label="View source code on GitHub (opens in new tab)" 
@@ -58,7 +60,7 @@
               </svg>
               <span class="github-label">GitHub</span>
             </a>
-            <button id="contrastToggle" class="contrast-toggle" aria-label="Toggle high contrast" title="Toggle high contrast mode">
+            <button id="contrastToggle" class="btn btn-sm btn-secondary contrast-toggle" aria-label="Toggle high contrast" title="Toggle high contrast mode">
               <svg class="contrast-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                 <circle cx="12" cy="12" r="10"></circle>
                 <path d="M12 2 L12 22"></path>
@@ -66,7 +68,7 @@
               </svg>
               <span class="contrast-label">HC</span>
             </button>
-            <button id="themeToggle" class="theme-toggle" aria-label="Toggle theme" title="Toggle light/dark theme">
+            <button id="themeToggle" class="btn btn-sm btn-secondary theme-toggle" aria-label="Toggle theme" title="Toggle light/dark theme">
               <svg class="theme-icon theme-icon-sun" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                 <circle cx="12" cy="12" r="5"></circle>
                 <line x1="12" y1="1" x2="12" y2="3"></line>
@@ -86,7 +88,43 @@
         </div>
       </header>
       
-      <main class="app-main" id="main-content">
+      <!-- Workflow Progress Indicator (C3: COGA breadcrumbs) - Moved here to prevent header overlap -->
+      <div class="workflow-progress hidden" id="workflowProgress" role="navigation" aria-label="Workflow progress">
+        <ol class="workflow-steps">
+          <li class="workflow-step" data-step="upload" aria-current="false">
+            <span class="workflow-step-number">1</span>
+            <span class="workflow-step-label">Upload</span>
+          </li>
+          <li class="workflow-step" data-step="customize" aria-current="false">
+            <span class="workflow-step-number">2</span>
+            <span class="workflow-step-label">Customize</span>
+          </li>
+          <li class="workflow-step" data-step="render" aria-current="false">
+            <span class="workflow-step-number">3</span>
+            <span class="workflow-step-label">Generate</span>
+          </li>
+          <li class="workflow-step" data-step="download" aria-current="false">
+            <span class="workflow-step-number">4</span>
+            <span class="workflow-step-label">Download</span>
+          </li>
+        </ol>
+        <div class="workflow-actions">
+          <button id="focusModeBtn" class="btn btn-sm btn-outline" aria-pressed="false" aria-label="Enter focus mode" title="Focus mode (maximize preview)">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>
+            </svg>
+            <span class="btn-text">Full Screen</span>
+          </button>
+          <button id="featuresGuideBtn" class="btn btn-sm btn-outline" aria-label="Open features guide and examples" title="Help & Examples">
+            📖 Help
+          </button>
+          <button id="clearFileBtn" class="btn btn-sm btn-outline" aria-label="Go back to welcome screen. Warning: unsaved changes will be lost" title="Back to welcome screen (unsaved changes will be lost)">
+            ← Back
+          </button>
+        </div>
+      </div>
+      
+      <main class="app-main" id="main-content" tabindex="-1">
         <div class="welcome-screen" id="welcomeScreen">
           <div class="welcome-content">
             <h2>Get Started</h2>
@@ -259,11 +297,6 @@
             <div class="panel-header">
               <h2 id="parameters-heading">Parameters</h2>
               <div class="param-header-actions">
-                <button id="collapseParamPanelBtn" class="btn btn-sm btn-icon" aria-expanded="true" aria-controls="paramPanelBody" aria-label="Collapse parameters" title="Collapse parameters">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                    <polyline points="15 18 9 12 15 6"></polyline>
-                  </svg>
-                </button>
                 <button id="undoBtn" class="btn btn-sm btn-outline" aria-label="Undo last parameter change (Ctrl+Z)" title="Undo (Ctrl+Z)" disabled>
                   ↩️ Undo
                 </button>
@@ -271,6 +304,22 @@
                   ↪️ Redo
                 </button>
                 <button id="resetBtn" class="btn btn-sm" aria-label="Reset all parameters to default values">Reset</button>
+              </div>
+              <!-- Panel collapse control - positioned at right edge for discoverability -->
+              <div class="panel-collapse-control">
+                <button 
+                  id="collapseParamPanelBtn" 
+                  class="btn btn-sm btn-icon btn-collapse-panel" 
+                  aria-expanded="true" 
+                  aria-controls="paramPanelBody" 
+                  aria-label="Collapse parameters panel"
+                  title="Collapse panel"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <polyline points="11 18 5 12 11 6"></polyline>
+                    <line x1="17" y1="4" x2="17" y2="20" stroke-width="2"></line>
+                  </svg>
+                </button>
               </div>
             </div>
             
@@ -315,21 +364,6 @@
                       ℹ️ What are libraries?
                     </button>
                   </div>
-                </div>
-              </details>
-            </div>
-            
-            <!-- Feature Hints -->
-            <div class="feature-hints hidden" id="featureHints" role="region" aria-label="Feature tips">
-              <details class="hints-details">
-                <summary class="hints-summary">
-                  <span class="hints-icon" aria-hidden="true">💡</span>
-                  Tips: Enhance your model
-                </summary>
-                <div class="hints-content">
-                  <ul class="hints-list" role="list" id="hintsList">
-                    <!-- Hints dynamically populated -->
-                  </ul>
                 </div>
               </details>
             </div>
@@ -432,37 +466,170 @@
           </div>
           
           <div class="preview-panel" id="previewPanel" role="region" aria-label="3D preview and actions">
-            <div class="panel-header">
-              <div class="panel-header-left">
-                <h2 id="preview-heading">Preview</h2>
-              </div>
-              <div class="panel-header-right">
-                <button id="focusModeBtn" class="btn btn-sm btn-icon hidden" aria-pressed="false" aria-label="Enter focus mode" title="Focus mode (maximize preview)">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                    <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>
-                  </svg>
-                </button>
-              </div>
-              <div class="file-info-wrapper">
-                <div class="file-info" id="fileInfo" aria-live="polite">
-                  <span class="file-info-summary" id="fileInfoSummary"></span>
-                  <details class="file-info-details hidden" id="fileInfoDetails">
-                    <summary>Show included files</summary>
-                    <div class="file-info-tree" id="fileInfoTree"></div>
-                  </details>
-                </div>
-                <button id="featuresGuideBtn" class="btn btn-sm btn-outline hidden" aria-label="Open features guide and examples" title="Help & Examples">
-                  📖 Help
-                </button>
-                <button id="clearFileBtn" class="btn btn-sm btn-outline hidden" aria-label="Clear file and return to welcome screen" title="Clear file">
-                  ✕ Clear
-                </button>
-              </div>
-            </div>
-            
             <!-- Scrollable content wrapper with vertical split -->
             <div class="preview-content" id="previewContent">
-              <!-- Top section: 3D preview canvas -->
+              <!-- Top section: Preview settings, status, stats, dimensions -->
+              <div class="preview-info-section" id="previewInfoSection">
+                <!-- Drawer toggle header with mobile params button -->
+                <div class="preview-drawer-header">
+                  <div class="preview-drawer-header-left">
+                    <button 
+                      id="previewDrawerToggle" 
+                      class="btn btn-sm btn-icon btn-collapse-panel preview-drawer-toggle-btn" 
+                      aria-expanded="false" 
+                      aria-controls="previewInfoContent"
+                      aria-label="Expand preview settings and model info"
+                      title="Preview Settings &amp; Info"
+                    >
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <polyline points="13 6 7 12 13 18"></polyline>
+                        <line x1="17" y1="4" x2="17" y2="20" stroke-width="2"></line>
+                      </svg>
+                    </button>
+                    <h2 class="preview-drawer-title" id="preview-settings-heading">Preview Settings &amp; Info</h2>
+                  </div>
+
+                  <div class="preview-drawer-header-right">
+                    <!-- Mobile drawer toggle for parameters panel -->
+                    <button 
+                      id="mobileDrawerToggle" 
+                      class="btn btn-sm btn-icon mobile-only" 
+                      aria-expanded="false" 
+                      aria-controls="paramPanel"
+                      aria-label="Open parameters panel"
+                      title="Parameters"
+                    >
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <line x1="3" y1="12" x2="21" y2="12"></line>
+                        <line x1="3" y1="6" x2="21" y2="6"></line>
+                        <line x1="3" y1="18" x2="21" y2="18"></line>
+                      </svg>
+                      <span class="btn-label">Params</span>
+                    </button>
+                  </div>
+                </div>
+                
+                <!-- Collapsible content -->
+                <div class="preview-info-content" id="previewInfoContent">
+                  <!-- File info section -->
+                  <div class="file-info" id="fileInfo" aria-live="polite">
+                    <span class="file-info-summary" id="fileInfoSummary"></span>
+                    <details class="file-info-details hidden" id="fileInfoDetails">
+                      <summary>Show included files</summary>
+                      <div class="file-info-tree" id="fileInfoTree"></div>
+                    </details>
+                  </div>
+                  
+                  <div class="status-area" id="statusArea" role="region" aria-label="Status">
+                    Ready
+                  </div>
+                  <!-- Dedicated screen reader announcer (separate from visible status) -->
+                  <div id="srAnnouncer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+
+                  <div class="preview-settings-panel" aria-label="Preview settings">
+                    <div class="preview-settings-header">
+                      <span class="settings-icon">⚙️</span>
+                      <span>Preview Settings</span>
+                    </div>
+                    <div class="preview-settings">
+                      <label class="preview-setting">
+                        <input type="checkbox" id="autoPreviewToggle" checked />
+                        <span>Auto-preview</span>
+                      </label>
+                      
+                      <label class="preview-setting">
+                        <input type="checkbox" id="measurementsToggle" aria-describedby="measurementsHelp" />
+                        <span>Show measurements</span>
+                      </label>
+                      <span id="measurementsHelp" class="sr-only">Toggle dimension measurements and bounding box overlay on 3D preview</span>
+
+                      <label class="preview-setting">
+                        <input type="checkbox" id="gridToggle" checked aria-describedby="gridHelp" />
+                        <span>Show grid</span>
+                      </label>
+                      <span id="gridHelp" class="sr-only">Toggle grid plane visibility in 3D preview</span>
+
+                      <label class="preview-setting">
+                        <input type="checkbox" id="statusBarToggle" checked aria-describedby="statusBarHelp" />
+                        <span>Show status bar</span>
+                      </label>
+                      <span id="statusBarHelp" class="sr-only">Toggle status and render info overlay on preview</span>
+
+                      <label class="preview-setting" for="previewQualitySelect">
+                        <span class="preview-setting-label">Preview quality</span>
+                        <select id="previewQualitySelect" aria-label="Select preview quality">
+                          <option value="auto" selected>Auto (adaptive)</option>
+                          <option value="fidelity">Fidelity (slower)</option>
+                          <option value="balanced">Balanced</option>
+                          <option value="fast">Fast (lower resolution)</option>
+                        </select>
+                      </label>
+
+                      <label class="preview-setting" for="exportQualitySelect">
+                        <span class="preview-setting-label">Export quality</span>
+                        <select id="exportQualitySelect" aria-label="Select export quality">
+                          <option value="model" selected>Model default</option>
+                          <option value="low">Low (fast)</option>
+                          <option value="medium">Medium (balanced)</option>
+                          <option value="high">High (smooth)</option>
+                        </select>
+                      </label>
+                      
+                      <div class="preview-setting complexity-indicator" id="complexityIndicator" title="Detected model complexity tier">
+                        <span class="preview-setting-label">Complexity:</span>
+                        <span id="complexityTierLabel" class="complexity-tier-label">Analyzing...</span>
+                      </div>
+
+                      <div class="preview-setting model-color-setting">
+                        <span class="preview-setting-label">Model Color</span>
+                        <div class="model-color-picker">
+                          <input type="color" id="modelColorPicker" value="#2196F3" aria-label="Choose model display color" />
+                          <button id="modelColorReset" class="btn-icon" title="Reset to theme default" aria-label="Reset color to theme default">↺</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div class="stats" id="stats" role="status" aria-live="polite"></div>
+                  
+                  <div class="dimensions-display hidden" id="dimensionsDisplay" role="region" aria-label="Model dimensions">
+                    <h3 class="dimensions-heading">Dimensions</h3>
+                    <dl class="dimensions-list">
+                      <div class="dimension-item">
+                        <dt>Width (X):</dt>
+                        <dd id="dimX">--</dd>
+                      </div>
+                      <div class="dimension-item">
+                        <dt>Depth (Y):</dt>
+                        <dd id="dimY">--</dd>
+                      </div>
+                      <div class="dimension-item">
+                        <dt>Height (Z):</dt>
+                        <dd id="dimZ">--</dd>
+                      </div>
+                      <div class="dimension-item">
+                        <dt>Volume:</dt>
+                        <dd id="dimVolume">--</dd>
+                      </div>
+                    </dl>
+                  </div>
+                </div>
+                
+                <!-- Resize handle for dragging drawer height -->
+                <div 
+                  class="preview-drawer-resize-handle" 
+                  id="previewDrawerResizeHandle"
+                  role="separator"
+                  aria-orientation="horizontal"
+                  aria-label="Resize preview settings drawer"
+                  aria-valuenow="30"
+                  aria-valuemin="10"
+                  aria-valuemax="80"
+                  tabindex="0"
+                ></div>
+              </div>
+              
+              <!-- Bottom section: 3D preview canvas -->
               <div class="preview-canvas-section" id="previewCanvasSection">
                 <div class="preview-container" id="previewContainer" role="group" aria-label="3D model preview and controls" aria-describedby="previewModelSummary" tabindex="0">
                   <!-- 3D preview or placeholder -->
@@ -472,115 +639,250 @@
                   <!-- Screen reader accessible model summary (WCAG 2.2 non-visual content) -->
                   <div id="previewModelSummary" class="sr-only" aria-live="polite" aria-atomic="true">No model loaded. Upload an OpenSCAD file and generate an STL to see the 3D preview.</div>
                 </div>
-              </div>
-              
-              <!-- Bottom section: status, settings, stats, dimensions -->
-              <div class="preview-info-section" id="previewInfoSection">
-                <div class="status-area" id="statusArea" role="region" aria-label="Status">
-                  Ready
-                </div>
-                <!-- Dedicated screen reader announcer (separate from visible status) -->
-                <div id="srAnnouncer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
-
-                <details class="preview-settings-details">
-                  <summary class="preview-settings-summary">
-                    <span class="settings-icon">⚙️</span>
-                    Preview Settings
-                  </summary>
-                  <div class="preview-settings" aria-label="Preview settings">
-                    <label class="preview-setting">
-                      <input type="checkbox" id="autoPreviewToggle" checked />
-                      <span>Auto-preview</span>
-                    </label>
-                    
-                    <label class="preview-setting">
-                      <input type="checkbox" id="measurementsToggle" aria-describedby="measurementsHelp" />
-                      <span>Show measurements</span>
-                    </label>
-                    <span id="measurementsHelp" class="sr-only">Toggle dimension measurements and bounding box overlay on 3D preview</span>
-
-                    <label class="preview-setting">
-                      <input type="checkbox" id="gridToggle" checked aria-describedby="gridHelp" />
-                      <span>Show grid</span>
-                    </label>
-                    <span id="gridHelp" class="sr-only">Toggle grid plane visibility in 3D preview</span>
-
-                    <label class="preview-setting" for="previewQualitySelect">
-                      <span class="preview-setting-label">Preview quality</span>
-                      <select id="previewQualitySelect" aria-label="Select preview quality">
-                        <option value="auto" selected>Auto (adaptive)</option>
-                        <option value="fidelity">Fidelity (slower)</option>
-                        <option value="balanced">Balanced</option>
-                        <option value="fast">Fast (lower resolution)</option>
-                      </select>
-                    </label>
-
-                    <label class="preview-setting" for="exportQualitySelect">
-                      <span class="preview-setting-label">Export quality</span>
-                      <select id="exportQualitySelect" aria-label="Select export quality">
-                        <option value="model" selected>Model default</option>
-                        <option value="low">Low (fast)</option>
-                        <option value="medium">Medium (balanced)</option>
-                        <option value="high">High (smooth)</option>
-                      </select>
-                    </label>
-                    
-                    <div class="preview-setting complexity-indicator" id="complexityIndicator" title="Detected model complexity tier">
-                      <span class="preview-setting-label">Complexity:</span>
-                      <span id="complexityTierLabel" class="complexity-tier-label">Analyzing...</span>
-                    </div>
-
-                    <div class="preview-setting model-color-setting">
-                      <span class="preview-setting-label">Model Color</span>
-                      <div class="model-color-picker">
-                        <input type="color" id="modelColorPicker" value="#2196F3" aria-label="Choose model display color" />
-                        <button id="modelColorReset" class="btn-icon" title="Reset to theme default" aria-label="Reset color to theme default">↺</button>
-                      </div>
-                    </div>
-                  </div>
-                </details>
                 
-                <div class="stats" id="stats" role="status" aria-live="polite"></div>
-                
-                <div class="dimensions-display hidden" id="dimensionsDisplay" role="region" aria-label="Model dimensions">
-                  <h3 class="dimensions-heading">Dimensions</h3>
-                  <dl class="dimensions-list">
-                    <div class="dimension-item">
-                      <dt>Width (X):</dt>
-                      <dd id="dimX">--</dd>
-                    </div>
-                    <div class="dimension-item">
-                      <dt>Depth (Y):</dt>
-                      <dd id="dimY">--</dd>
-                    </div>
-                    <div class="dimension-item">
-                      <dt>Height (Z):</dt>
-                      <dd id="dimZ">--</dd>
-                    </div>
-                    <div class="dimension-item">
-                      <dt>Volume:</dt>
-                      <dd id="dimVolume">--</dd>
-                    </div>
-                  </dl>
+                <!-- Status bar overlay at bottom of preview -->
+                <div class="preview-status-bar idle no-stats" id="previewStatusBar" role="status" aria-live="polite">
+                  <span class="preview-status-text" id="previewStatusText">Ready</span>
+                  <span class="preview-status-divider" aria-hidden="true"></span>
+                  <span class="preview-status-stats" id="previewStatusStats"></span>
                 </div>
               </div>
             </div>
             
-            <!-- Actions bar - sticky at bottom -->
-            <div class="actions">
-              <button id="primaryActionBtn" class="btn btn-primary btn-large" aria-label="Generate STL file from current parameters" data-action="generate">Generate STL</button>
-              <button id="cancelRenderBtn" class="btn btn-outline hidden" aria-label="Cancel current render operation">⏹️ Cancel</button>
-              <a id="downloadFallbackLink" href="#" class="btn btn-sm btn-outline hidden" aria-label="Download previously generated file">📥 Download last file</a>
-              <button id="addToComparisonBtn" class="btn btn-secondary" aria-label="Add current configuration to comparison">⚖️ Compare</button>
-              <details class="actions-more">
-                <summary class="btn btn-secondary" aria-label="Show more actions">⋯ More</summary>
-                <div class="actions-more-content">
-                  <button id="addToQueueBtn" class="btn btn-secondary" aria-label="Add current configuration to render queue">📋 Add to Queue</button>
-                  <button id="viewQueueBtn" class="btn btn-secondary" aria-label="View and manage render queue">🔄 Queue <span class="queue-badge" id="queueBadge">0</span></button>
-                  <button id="shareBtn" class="btn btn-secondary" aria-label="Copy shareable link with current parameters">📋 Copy Share Link</button>
-                  <button id="exportParamsBtn" class="btn btn-secondary" aria-label="Download parameters as JSON file">💾 Export Params</button>
+            <!-- Actions bar with collapsible drawer and fixed primary action -->
+            <div class="actions-bar" id="actionsBar" role="toolbar" aria-label="Model actions">
+              <!-- Actions Drawer (collapsible, left side) -->
+              <div class="actions-drawer collapsed" id="actionsDrawer" role="region" aria-label="Additional actions">
+                <!-- Drawer toggle button -->
+                <button 
+                  id="actionsDrawerToggle" 
+                  class="btn btn-sm btn-icon actions-drawer-toggle-btn" 
+                  aria-expanded="false" 
+                  aria-controls="actionsDrawerBody"
+                  aria-label="Expand actions menu"
+                  title="More Actions"
+                >
+                  <svg class="actions-drawer-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <line class="drawer-edge" x1="7" y1="4" x2="7" y2="20" stroke-width="2"></line>
+                    <polyline class="drawer-chevron" points="11 6 17 12 11 18"></polyline>
+                  </svg>
+                </button>
+                <span class="actions-drawer-label">Actions</span>
+                
+                <!-- Drawer body (expandable content) -->
+                <div class="actions-drawer-body" id="actionsDrawerBody">
+                  <button id="addToComparisonBtn" class="btn btn-sm btn-secondary actions-drawer-btn" aria-label="Add current configuration to comparison">
+                    <svg class="btn-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                      <rect x="3" y="3" width="7" height="18" rx="1"></rect>
+                      <rect x="14" y="3" width="7" height="18" rx="1"></rect>
+                    </svg>
+                    <span class="btn-text">Compare</span>
+                  </button>
+                  
+                  <span class="actions-drawer-divider" aria-hidden="true"></span>
+                  
+                  <button id="addToQueueBtn" class="btn btn-sm btn-secondary actions-drawer-btn" aria-label="Add current configuration to render queue">
+                    <svg class="btn-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                      <rect x="3" y="3" width="18" height="18" rx="2"></rect>
+                      <path d="M12 8v8"></path>
+                      <path d="M8 12h8"></path>
+                    </svg>
+                    <span class="btn-text">Add to Queue</span>
+                  </button>
+                  
+                  <button id="viewQueueBtn" class="btn btn-sm btn-secondary actions-drawer-btn" aria-label="View and manage render queue">
+                    <svg class="btn-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                      <path d="M4 6h16"></path>
+                      <path d="M4 12h16"></path>
+                      <path d="M4 18h16"></path>
+                    </svg>
+                    <span class="btn-text">Queue</span>
+                    <span class="queue-badge" id="queueBadge">0</span>
+                  </button>
+                  
+                  <span class="actions-drawer-divider" aria-hidden="true"></span>
+                  
+                  <button id="shareBtn" class="btn btn-sm btn-secondary actions-drawer-btn" aria-label="Copy shareable link with current parameters">
+                    <svg class="btn-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+                    </svg>
+                    <span class="btn-text">Share Link</span>
+                  </button>
+                  
+                  <button id="exportParamsBtn" class="btn btn-sm btn-secondary actions-drawer-btn" aria-label="Download parameters as JSON file">
+                    <svg class="btn-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                      <polyline points="7 10 12 15 17 10"></polyline>
+                      <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    <span class="btn-text">Export Params</span>
+                  </button>
                 </div>
-              </details>
+              </div>
+              
+              <!-- Primary actions (always visible, right side) -->
+              <div class="actions-primary">
+                <button id="cancelRenderBtn" class="btn btn-outline hidden" aria-label="Cancel current render operation">
+                  <svg class="btn-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <rect x="3" y="3" width="18" height="18" rx="2"></rect>
+                  </svg>
+                  <span>Cancel</span>
+                </button>
+                <button id="primaryActionBtn" class="btn btn-primary btn-large" aria-label="Generate STL file from current parameters" data-action="generate">Generate STL</button>
+                <a id="downloadFallbackLink" href="#" class="btn btn-sm btn-outline hidden" aria-label="Download previously generated file">
+                  <svg class="btn-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="7 10 12 15 17 10"></polyline>
+                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                  </svg>
+                  <span>Download last file</span>
+                </a>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Camera Controls Panel (Right Side Drawer) -->
+          <div class="camera-panel collapsed" id="cameraPanel" role="region" aria-label="Camera controls">
+            <div class="panel-header camera-panel-header">
+              <button 
+                id="cameraPanelToggle" 
+                class="btn btn-sm btn-icon btn-collapse-panel" 
+                aria-expanded="false" 
+                aria-controls="cameraPanelBody" 
+                aria-label="Expand camera controls panel"
+                title="Camera Controls"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <polyline points="13 6 7 12 13 18"></polyline>
+                  <line x1="17" y1="4" x2="17" y2="20" stroke-width="2"></line>
+                </svg>
+              </button>
+              <h2 id="camera-controls-heading">Camera</h2>
+            </div>
+            
+            <div class="camera-panel-body" id="cameraPanelBody">
+              <!-- Rotation Controls - D-pad layout -->
+              <div class="camera-control-section">
+                <h3 class="camera-control-section-title">Rotate View</h3>
+                <div class="camera-control-dpad" role="group" aria-label="Rotation controls">
+                  <button type="button" class="btn btn-sm btn-icon camera-btn dpad-up" id="cameraRotateUp" aria-label="Rotate view up" title="Rotate up (Arrow Up)">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                      <polyline points="18 15 12 9 6 15"></polyline>
+                    </svg>
+                  </button>
+                  <button type="button" class="btn btn-sm btn-icon camera-btn dpad-left" id="cameraRotateLeft" aria-label="Rotate view left" title="Rotate left (Arrow Left)">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                      <polyline points="15 18 9 12 15 6"></polyline>
+                    </svg>
+                  </button>
+                  <button type="button" class="btn btn-sm btn-icon camera-btn dpad-right" id="cameraRotateRight" aria-label="Rotate view right" title="Rotate right (Arrow Right)">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                      <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
+                  </button>
+                  <button type="button" class="btn btn-sm btn-icon camera-btn dpad-down" id="cameraRotateDown" aria-label="Rotate view down" title="Rotate down (Arrow Down)">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                      <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              
+              <!-- Pan Controls - D-pad layout -->
+              <div class="camera-control-section">
+                <h3 class="camera-control-section-title">Pan View</h3>
+                <div class="camera-control-dpad" role="group" aria-label="Pan controls">
+                  <button type="button" class="btn btn-sm btn-icon camera-btn dpad-up" id="cameraPanUp" aria-label="Pan view up" title="Pan up (Shift + Arrow Up)">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                      <line x1="12" y1="19" x2="12" y2="5"></line>
+                      <polyline points="5 12 12 5 19 12"></polyline>
+                    </svg>
+                  </button>
+                  <button type="button" class="btn btn-sm btn-icon camera-btn dpad-left" id="cameraPanLeft" aria-label="Pan view left" title="Pan left (Shift + Arrow Left)">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                      <line x1="19" y1="12" x2="5" y2="12"></line>
+                      <polyline points="12 19 5 12 12 5"></polyline>
+                    </svg>
+                  </button>
+                  <button type="button" class="btn btn-sm btn-icon camera-btn dpad-right" id="cameraPanRight" aria-label="Pan view right" title="Pan right (Shift + Arrow Right)">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                      <line x1="5" y1="12" x2="19" y2="12"></line>
+                      <polyline points="12 5 19 12 12 19"></polyline>
+                    </svg>
+                  </button>
+                  <button type="button" class="btn btn-sm btn-icon camera-btn dpad-down" id="cameraPanDown" aria-label="Pan view down" title="Pan down (Shift + Arrow Down)">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                      <line x1="12" y1="5" x2="12" y2="19"></line>
+                      <polyline points="19 12 12 19 5 12"></polyline>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              
+              <!-- Zoom Controls -->
+              <div class="camera-control-section">
+                <h3 class="camera-control-section-title">Zoom</h3>
+                <div class="camera-control-row">
+                  <button type="button" class="btn btn-sm camera-btn-wide" id="cameraZoomIn" aria-label="Zoom in" title="Zoom in (+)">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                      <circle cx="11" cy="11" r="8"></circle>
+                      <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                      <line x1="11" y1="8" x2="11" y2="14"></line>
+                      <line x1="8" y1="11" x2="14" y2="11"></line>
+                    </svg>
+                    <span>Zoom In</span>
+                  </button>
+                  <button type="button" class="btn btn-sm camera-btn-wide" id="cameraZoomOut" aria-label="Zoom out" title="Zoom out (-)">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                      <circle cx="11" cy="11" r="8"></circle>
+                      <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                      <line x1="8" y1="11" x2="14" y2="11"></line>
+                    </svg>
+                    <span>Zoom Out</span>
+                  </button>
+                </div>
+              </div>
+              
+              <!-- Reset View -->
+              <div class="camera-control-section">
+                <button type="button" class="btn btn-sm btn-outline camera-btn-full" id="cameraResetView" aria-label="Reset camera to default view" title="Reset view (Home)">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                    <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                  </svg>
+                  <span>Reset View</span>
+                </button>
+              </div>
+              
+              <!-- Keyboard Shortcuts Help -->
+              <div class="camera-shortcuts-help">
+                <details class="camera-shortcuts-details">
+                  <summary class="camera-shortcuts-summary">⌨️ Keyboard Shortcuts</summary>
+                  <dl class="camera-shortcuts-list">
+                    <div class="camera-shortcut-item">
+                      <dt>Arrow Keys</dt>
+                      <dd>Rotate view</dd>
+                    </div>
+                    <div class="camera-shortcut-item">
+                      <dt>Shift + Arrows</dt>
+                      <dd>Pan view</dd>
+                    </div>
+                    <div class="camera-shortcut-item">
+                      <dt>+ / -</dt>
+                      <dd>Zoom in/out</dd>
+                    </div>
+                    <div class="camera-shortcut-item">
+                      <dt>Mouse Drag</dt>
+                      <dd>Orbit camera</dd>
+                    </div>
+                    <div class="camera-shortcut-item">
+                      <dt>Scroll Wheel</dt>
+                      <dd>Zoom</dd>
+                    </div>
+                  </dl>
+                </details>
+              </div>
             </div>
           </div>
         </div>
@@ -592,28 +894,6 @@
       </main>
       
       <div class="error-message hidden" id="errorMessage" role="alert" aria-live="assertive" aria-atomic="true"></div>
-      
-      <!-- Workflow Progress Indicator (C3: COGA breadcrumbs) -->
-      <div class="workflow-progress hidden" id="workflowProgress" role="navigation" aria-label="Workflow progress">
-        <ol class="workflow-steps">
-          <li class="workflow-step" data-step="upload" aria-current="false">
-            <span class="workflow-step-number">1</span>
-            <span class="workflow-step-label">Upload</span>
-          </li>
-          <li class="workflow-step" data-step="customize" aria-current="false">
-            <span class="workflow-step-number">2</span>
-            <span class="workflow-step-label">Customize</span>
-          </li>
-          <li class="workflow-step" data-step="render" aria-current="false">
-            <span class="workflow-step-number">3</span>
-            <span class="workflow-step-label">Generate</span>
-          </li>
-          <li class="workflow-step" data-step="download" aria-current="false">
-            <span class="workflow-step-number">4</span>
-            <span class="workflow-step-label">Download</span>
-          </li>
-        </ol>
-      </div>
     </div>
     
     <!-- Render Queue Modal -->
@@ -908,6 +1188,9 @@ color(hex2rgb(box_color))
         </div>
       </div>
     </div>
+    
+    <!-- Drawer backdrop (for mobile off-canvas) -->
+    <div class="drawer-backdrop" id="drawerBackdrop" aria-hidden="true"></div>
     
     <script type="module" src="/src/main.js"></script>
   </body>

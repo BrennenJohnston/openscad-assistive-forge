@@ -256,6 +256,129 @@ For numeric parameters:
 
 ---
 
+## Color System and Visual Accessibility
+
+### Accessible Color Palette
+
+The OpenSCAD Web Customizer uses an accessible color system built on [Radix Colors](https://www.radix-ui.com/colors), designed to meet **WCAG 2.2 AA** standards for normal themes and **WCAG AAA (7:1)** standards for high contrast mode.
+
+#### Color Palette
+
+- **Yellow (Accent)**: Primary brand color for buttons, links, and highlights
+- **Green (Success)**: Successful operations and positive states
+- **Teal (Info)**: Informational messages and secondary actions
+- **Red (Error)**: Errors and destructive actions
+- **Amber (Warning)**: Warnings and caution states
+- **Neutral (Slate)**: Text, backgrounds, and borders
+
+All colors are carefully selected to:
+- Meet WCAG contrast requirements
+- Be distinguishable for color blind users
+- Work across light, dark, and high contrast themes
+- Never convey information by color alone (WCAG 1.4.1)
+
+### Theme Options
+
+#### Light Theme
+
+- Default theme with light backgrounds and dark text
+- Optimized for bright environments
+- WCAG 2.2 AA compliant (4.5:1 for text, 3:1 for UI elements)
+
+#### Dark Theme
+
+- Dark backgrounds with light text
+- Reduces eye strain in low-light conditions
+- Same contrast requirements as light theme
+- Automatically activates based on system preference (if not manually set)
+
+#### High Contrast Mode
+
+Toggle via the "HC" button in the header.
+
+Features:
+- **WCAG AAA** compliant (7:1 contrast for text)
+- Larger text sizes (12-17% increase)
+- Thicker borders (2-3px instead of 1px)
+- Stronger focus indicators (4px instead of 3px)
+- Brand-neutral colors for maximum contrast
+
+Available in both light and dark variants.
+
+### Focus Indicators
+
+Focus indicators use **brand-neutral blue** (#0052cc in light mode, #66b3ff in dark mode) for:
+- Consistency with OS conventions
+- Clear distinction from brand yellow
+- Optimal contrast against all backgrounds
+
+All focus indicators meet **WCAG 2.4.13 Focus Appearance** requirements:
+- Minimum 3px thickness (4px in high contrast mode)
+- 3:1 contrast against adjacent colors
+- Visible outline or box-shadow
+
+### Color Blindness Considerations
+
+The palette is designed to be distinguishable for common color vision deficiencies:
+
+- **Deuteranopia/Protanopia (Red-Green)**: Yellow and green have sufficient brightness difference
+- **Tritanopia (Blue-Yellow)**: Teal provides clear distinction from yellow
+- **All Types**: Icons and text accompany all color-coded states
+
+**Important**: No information is conveyed by color alone (WCAG 1.4.1). All states include:
+- ✓ Success states have checkmark icons
+- ✗ Error states have X icons
+- ⚠ Warning states have warning icons
+- ℹ Info states have info icons
+
+### Contrast Testing
+
+The color system includes automated tests:
+- WCAG 2.x contrast ratios (4.5:1 for text, 3:1 for UI)
+- WCAG AAA ratios for high contrast mode (7:1)
+- APCA (future WCAG 3.0) informational checks
+
+Tests run automatically with `npm test`.
+
+### System Preferences
+
+The app respects system-level accessibility preferences:
+
+#### prefers-color-scheme
+
+Automatically switches between light and dark themes based on your OS setting (unless manually overridden).
+
+#### prefers-contrast
+
+When "Increase Contrast" is enabled in your OS:
+- Borders become thicker
+- Focus indicators are enhanced
+- Text contrast is increased
+- Colors remain brand-appropriate
+
+#### forced-colors (Windows High Contrast)
+
+When Windows High Contrast or other OS color schemes are active:
+- All colors map to system colors (Canvas, CanvasText, LinkText, etc.)
+- Focus uses outline instead of box-shadow
+- Borders are explicitly visible on all interactive elements
+- No information is lost
+
+#### prefers-reduced-motion
+
+When "Reduce Motion" is enabled:
+- Animations are disabled or minimized
+- Transitions are instant
+
+### Color Resources
+
+For detailed information:
+- **System Overview**: See [Color System Guide](./COLOR_SYSTEM_GUIDE.md)
+- **Migration Info**: See [Color Migration Guide](./COLOR_MIGRATION_GUIDE.md)
+- **Token Reference**: Check `src/styles/semantic-tokens.css`
+
+---
+
 ## General Accessibility Features
 
 ### Built-in Features

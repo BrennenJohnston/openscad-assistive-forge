@@ -9,8 +9,6 @@ import {
   renderParameterUI,
   setLimitsUnlocked,
   getAllDefaults,
-  getModifiedParameterCount,
-  initParameterSearch,
 } from './js/ui-generator.js';
 import { stateManager, getShareableURL } from './js/state.js';
 import {
@@ -51,16 +49,12 @@ import { RenderQueue } from './js/render-queue.js';
 import {
   openModal,
   closeModal,
-  setupModalCloseHandlers,
   initStaticModals,
 } from './js/modal-manager.js';
 import {
   translateError,
-  showFriendlyError,
-  clearFriendlyError,
 } from './js/error-translator.js';
 import {
-  initWorkflowProgress,
   showWorkflowProgress,
   hideWorkflowProgress,
   setWorkflowStep,
@@ -68,6 +62,9 @@ import {
   resetWorkflowProgress,
 } from './js/workflow-progress.js';
 import { startTutorial, closeTutorial } from './js/tutorial-sandbox.js';
+import { initDrawerController } from './js/drawer-controller.js';
+import { initPreviewSettingsDrawer } from './js/preview-settings-drawer.js';
+import { initCameraPanelController } from './js/camera-panel-controller.js';
 import Split from 'split.js';
 
 // Example definitions (used by welcome screen and Features Guide)
@@ -142,7 +139,12 @@ let renderQueue = null;
  * @param {string} [cancelLabel='Cancel'] - Label for cancel button
  * @returns {Promise<boolean>} True if confirmed, false if cancelled
  */
-function showConfirmDialog(message, title = 'Confirm Action', confirmLabel = 'Confirm', cancelLabel = 'Cancel') {
+function showConfirmDialog(
+  message,
+  title = 'Confirm Action',
+  confirmLabel = 'Confirm',
+  cancelLabel = 'Cancel'
+) {
   return new Promise((resolve) => {
     const modal = document.createElement('div');
     modal.className = 'preset-modal confirm-modal';
@@ -265,25 +267,26 @@ function sanitizeUrlParams(extracted, urlParams) {
   return { sanitized, adjustments };
 }
 
-  // Initialize app
-  async function initApp() {
+// Initialize app
+async function initApp() {
   console.log('OpenSCAD Web Customizer v2.9.0 (WASM Progress & Mobile)');
   console.log('Initializing...');
 
-    let statusArea = null;
-    let autoPreviewEnabled = true;
-    let previewQuality = RENDER_QUALITY.PREVIEW;
-    let previewQualityMode = 'balanced';
+  let statusArea = null;
+  let cameraPanelController = null; // Declared here, initialized later
+  let autoPreviewEnabled = true;
+  let previewQuality = RENDER_QUALITY.PREVIEW;
+  let previewQualityMode = 'balanced';
 
-    const AUTO_PREVIEW_FORCE_FAST_MS = 2 * 60 * 1000;
-    const AUTO_PREVIEW_SLOW_RENDER_MS = 7000;
-    const AUTO_PREVIEW_TRIANGLE_THRESHOLD = 200000;
-    const autoPreviewHints = {
-      forceFastUntil: 0,
-      lastPreviewDurationMs: null,
-      lastPreviewTriangles: null,
-    };
-    let adaptivePreviewMemo = { key: null, info: null };
+  const AUTO_PREVIEW_FORCE_FAST_MS = 2 * 60 * 1000;
+  const AUTO_PREVIEW_SLOW_RENDER_MS = 7000;
+  const AUTO_PREVIEW_TRIANGLE_THRESHOLD = 200000;
+  const autoPreviewHints = {
+    forceFastUntil: 0,
+    lastPreviewDurationMs: null,
+    lastPreviewTriangles: null,
+  };
+  let adaptivePreviewMemo = { key: null, info: null };
 
   // Register Service Worker for PWA support
   // In development, avoid Service Worker caching/stale assets which can break testing.
@@ -305,7 +308,9 @@ function sanitizeUrlParams(extracted, urlParams) {
             navigator.serviceWorker.controller
           ) {
             // New version available - silent background update
-            console.log('[PWA] New version available - will activate on next reload');
+            console.log(
+              '[PWA] New version available - will activate on next reload'
+            );
           }
         });
       });
@@ -635,6 +640,9 @@ function sanitizeUrlParams(extracted, urlParams) {
   const fileInput = document.getElementById('fileInput');
   const clearFileBtn = document.getElementById('clearFileBtn');
   statusArea = document.getElementById('statusArea');
+  const previewStatusBar = document.getElementById('previewStatusBar');
+  const previewStatusText = document.getElementById('previewStatusText');
+  const previewStatusStats = document.getElementById('previewStatusStats');
   const primaryActionBtn = document.getElementById('primaryActionBtn');
   const cancelRenderBtn = document.getElementById('cancelRenderBtn');
   const downloadFallbackLink = document.getElementById('downloadFallbackLink');
@@ -698,12 +706,14 @@ function sanitizeUrlParams(extracted, urlParams) {
       // null = use model's own quality settings (FULL quality with no overrides)
       return null;
     }
-    
+
     // Get current complexity tier from state
     const state = stateManager.getState();
     const tier = state?.complexityTier || COMPLEXITY_TIER.STANDARD;
-    const hardware = state?.adaptiveQualityConfig?.hardware || { level: 'medium' };
-    
+    const hardware = state?.adaptiveQualityConfig?.hardware || {
+      level: 'medium',
+    };
+
     // Get tier-appropriate preset
     return getQualityPreset(tier, hardware.level, mode, 'export');
   };
@@ -717,8 +727,10 @@ function sanitizeUrlParams(extracted, urlParams) {
     const state = stateManager.getState();
     const scadContent = state?.uploadedFile?.content || '';
     const tier = state?.complexityTier || COMPLEXITY_TIER.STANDARD;
-    const hardware = state?.adaptiveQualityConfig?.hardware || { level: 'medium' };
-    
+    const hardware = state?.adaptiveQualityConfig?.hardware || {
+      level: 'medium',
+    };
+
     const scadSignature = state?.uploadedFile
       ? `${state.uploadedFile.name}|${scadContent.length}|${tier}`
       : 'none';
@@ -748,11 +760,16 @@ function sanitizeUrlParams(extracted, urlParams) {
     // Determine preview quality level based on conditions
     const useFast = forceFast || slowRender || heavyTriangles || estimatedSlow;
     const qualityLevel = useFast ? 'low' : 'medium';
-    
+
     // Get tier-appropriate preview preset
-    const quality = getQualityPreset(tier, hardware.level, qualityLevel, 'preview');
+    const quality = getQualityPreset(
+      tier,
+      hardware.level,
+      qualityLevel,
+      'preview'
+    );
     const qualityKey = useFast ? `auto-fast-${tier}` : `auto-balanced-${tier}`;
-    
+
     const info = { quality, qualityKey };
     adaptivePreviewMemo = { key: memoKey, info };
     return info;
@@ -794,8 +811,12 @@ function sanitizeUrlParams(extracted, urlParams) {
       previewQuality = null;
       if (autoPreviewController) {
         autoPreviewController.setPreviewQualityResolver(resolveAdaptiveQuality);
-        autoPreviewController.setPreviewCacheKeyResolver(resolveAdaptiveCacheKey);
-        autoPreviewController.setPreviewParametersResolver(resolveAdaptiveParameters);
+        autoPreviewController.setPreviewCacheKeyResolver(
+          resolveAdaptiveCacheKey
+        );
+        autoPreviewController.setPreviewParametersResolver(
+          resolveAdaptiveParameters
+        );
         autoPreviewController.setPreviewQuality(null);
       }
       return;
@@ -875,12 +896,42 @@ function sanitizeUrlParams(extracted, urlParams) {
     });
   }
 
+  // Wire status bar toggle
+  const statusBarToggle = document.getElementById('statusBarToggle');
+  if (statusBarToggle && previewStatusBar) {
+    // Initialize from localStorage
+    const savedStatusBarPref = localStorage.getItem(
+      'openscad-customizer-status-bar'
+    );
+    const statusBarEnabled = savedStatusBarPref !== 'false'; // Default to true
+    statusBarToggle.checked = statusBarEnabled;
+    if (!statusBarEnabled) {
+      previewStatusBar.classList.add('user-hidden');
+    }
+
+    statusBarToggle.addEventListener('change', () => {
+      const enabled = statusBarToggle.checked;
+      if (enabled) {
+        previewStatusBar.classList.remove('user-hidden');
+      } else {
+        previewStatusBar.classList.add('user-hidden');
+      }
+      localStorage.setItem(
+        'openscad-customizer-status-bar',
+        enabled ? 'true' : 'false'
+      );
+      console.log(`[App] Status bar ${enabled ? 'shown' : 'hidden'}`);
+    });
+  }
+
   // Wire model color picker
   const modelColorPicker = document.getElementById('modelColorPicker');
   const modelColorReset = document.getElementById('modelColorReset');
-  
+
   // Load saved model color from localStorage
-  const savedModelColor = localStorage.getItem('openscad-customizer-model-color');
+  const savedModelColor = localStorage.getItem(
+    'openscad-customizer-model-color'
+  );
   if (savedModelColor && modelColorPicker) {
     modelColorPicker.value = savedModelColor;
   }
@@ -920,7 +971,7 @@ function sanitizeUrlParams(extracted, urlParams) {
     const activeTheme = themeManager.getActiveTheme();
     const highContrast = themeManager.isHighContrastEnabled();
     const themeKey = highContrast ? `${activeTheme}-hc` : activeTheme;
-    
+
     // Match PREVIEW_COLORS from preview.js
     const PREVIEW_COLORS = {
       light: 0x2196f3,
@@ -928,7 +979,7 @@ function sanitizeUrlParams(extracted, urlParams) {
       'light-hc': 0x0052cc,
       'dark-hc': 0x66b3ff,
     };
-    
+
     const colorHex = PREVIEW_COLORS[themeKey] || PREVIEW_COLORS.light;
     return '#' + colorHex.toString(16).padStart(6, '0');
   }
@@ -1008,7 +1059,8 @@ function sanitizeUrlParams(extracted, urlParams) {
       let previewPercentText = '';
       if (!extra.fullQuality && autoPreviewController) {
         const currentParams = stateManager.getState()?.parameters;
-        const fullStats = autoPreviewController.getCurrentFullSTL(currentParams)?.stats;
+        const fullStats =
+          autoPreviewController.getCurrentFullSTL(currentParams)?.stats;
         if (
           typeof fullStats?.triangles === 'number' &&
           fullStats.triangles > 0 &&
@@ -1026,6 +1078,41 @@ function sanitizeUrlParams(extracted, urlParams) {
         ? '<span class="stats-quality full">Full Quality</span>'
         : `<span class="stats-quality preview">Preview Quality${previewPercentText}</span>`;
       statsArea.innerHTML = `${qualityLabel} Size: ${formatFileSize(extra.stats.size)} | Triangles: ${extra.stats.triangles.toLocaleString()}`;
+
+      // Also update the preview status bar stats
+      updatePreviewStats(extra.stats, extra.fullQuality, previewPercentText);
+    }
+  }
+
+  /**
+   * Update the preview status bar stats display
+   * @param {Object} stats - Stats object with size and triangles
+   * @param {boolean} fullQuality - Whether this is full quality render
+   * @param {string} percentText - Optional percentage text for preview quality
+   */
+  function updatePreviewStats(stats, fullQuality = false, percentText = '') {
+    if (!previewStatusStats || !previewStatusBar) return;
+
+    if (!stats) {
+      previewStatusStats.textContent = '';
+      previewStatusBar.classList.add('no-stats');
+      return;
+    }
+
+    const qualityText = fullQuality ? 'Full' : `Preview${percentText}`;
+    previewStatusStats.textContent = `${qualityText} | ${formatFileSize(stats.size)} | ${stats.triangles.toLocaleString()} triangles`;
+    previewStatusBar.classList.remove('no-stats');
+  }
+
+  /**
+   * Clear the preview status bar stats
+   */
+  function clearPreviewStats() {
+    if (previewStatusStats) {
+      previewStatusStats.textContent = '';
+    }
+    if (previewStatusBar) {
+      previewStatusBar.classList.add('no-stats');
     }
   }
 
@@ -1260,21 +1347,56 @@ function sanitizeUrlParams(extracted, urlParams) {
   };
 
   // Update status
-  function updateStatus(message) {
-    if (!statusArea) return;
-    statusArea.textContent = message;
+  function updateStatus(message, statusType = 'default') {
+    // Update the drawer status area (hidden but kept for screen readers)
+    if (statusArea) {
+      statusArea.textContent = message;
+
+      // Add/remove idle class
+      if (message === 'Ready' || message === '') {
+        statusArea.classList.add('idle');
+      } else {
+        statusArea.classList.remove('idle');
+      }
+    }
+
+    // Update the preview status bar overlay
+    if (previewStatusBar && previewStatusText) {
+      previewStatusText.textContent = message;
+
+      // Reset all state classes
+      previewStatusBar.classList.remove(
+        'idle',
+        'processing',
+        'success',
+        'error'
+      );
+
+      // Determine state class based on message content or explicit type
+      const isIdle = message === 'Ready' || message === '';
+      const isProcessing =
+        /processing|generating|rendering|loading|compiling|\d+%/i.test(message);
+      const isError =
+        /error|failed|invalid/i.test(message) || statusType === 'error';
+      const isSuccess =
+        (/complete|success|ready|generated/i.test(message) && !isIdle) ||
+        statusType === 'success';
+
+      if (isIdle) {
+        previewStatusBar.classList.add('idle');
+      } else if (isError) {
+        previewStatusBar.classList.add('error');
+      } else if (isProcessing) {
+        previewStatusBar.classList.add('processing');
+      } else if (isSuccess) {
+        previewStatusBar.classList.add('success');
+      }
+    }
 
     // Announce status changes via dedicated SR live region.
     // Debounce progress-style updates (percent text) to avoid announcement spam.
     const shouldDebounce = /\d+%/.test(message);
     stateManager.announceChange(message, shouldDebounce);
-    
-    // Add/remove idle class for auto-hide when status is "Ready"
-    if (message === 'Ready' || message === '') {
-      statusArea.classList.add('idle');
-    } else {
-      statusArea.classList.remove('idle');
-    }
   }
 
   /**
@@ -1421,7 +1543,7 @@ function sanitizeUrlParams(extracted, urlParams) {
       // Analyze file complexity to determine quality tier
       const complexityAnalysis = analyzeComplexity(fileContent, {});
       const adaptiveConfig = getAdaptiveQualityConfig(fileContent, {});
-      
+
       console.log('[Complexity] Analysis:', {
         tier: adaptiveConfig.tierName,
         score: complexityAnalysis.score,
@@ -1429,10 +1551,12 @@ function sanitizeUrlParams(extracted, urlParams) {
         hardware: adaptiveConfig.hardware.level,
         warnings: complexityAnalysis.warnings,
       });
-      
+
       // Show complexity warnings if any
       if (complexityAnalysis.warnings.length > 0) {
-        complexityAnalysis.warnings.forEach(w => console.warn('[Complexity]', w));
+        complexityAnalysis.warnings.forEach((w) =>
+          console.warn('[Complexity]', w)
+        );
       }
 
       // Store in state (including project files for multi-file support)
@@ -1484,15 +1608,20 @@ function sanitizeUrlParams(extracted, urlParams) {
       const fileInfoSummary = document.getElementById('fileInfoSummary');
       const fileInfoDetails = document.getElementById('fileInfoDetails');
       const fileInfoTree = document.getElementById('fileInfoTree');
-      
+
       if (fileInfo && fileInfoSummary) {
         // Always show compact summary
         const summaryText = `${fileName} (${paramCount} parameters, ${fileSizeStr})`;
         fileInfoSummary.textContent = summaryText;
         fileInfoSummary.title = summaryText; // Full text in tooltip
-        
+
         // Show file tree in disclosure if multi-file project
-        if (projectFiles && projectFiles.size > 1 && fileInfoDetails && fileInfoTree) {
+        if (
+          projectFiles &&
+          projectFiles.size > 1 &&
+          fileInfoDetails &&
+          fileInfoTree
+        ) {
           const treeHtml = createFileTree(
             projectFiles,
             mainFilePath || fileName
@@ -1503,26 +1632,30 @@ function sanitizeUrlParams(extracted, urlParams) {
           fileInfoDetails.classList.add('hidden');
         }
       }
-      
+
       // Enable compact header after file is loaded
       const appHeader = document.querySelector('.app-header');
       if (appHeader) {
         appHeader.classList.add('compact');
       }
-      
+
       // Update complexity tier indicator
-      const complexityTierLabel = document.getElementById('complexityTierLabel');
+      const complexityTierLabel = document.getElementById(
+        'complexityTierLabel'
+      );
       if (complexityTierLabel) {
         const tierName = adaptiveConfig.tierName;
-        const tierIcon = {
-          'Beginner': '🟢',
-          'Standard': '🔵', 
-          'Complex': '🟡',
-        }[tierName] || '⚪';
-        
+        const tierIcon =
+          {
+            Beginner: '🟢',
+            Standard: '🔵',
+            Complex: '🟡',
+          }[tierName] || '⚪';
+
         complexityTierLabel.textContent = `${tierIcon} ${tierName}`;
         complexityTierLabel.className = `complexity-tier-label tier-${adaptiveConfig.tier}`;
-        complexityTierLabel.title = `${adaptiveConfig.tierDescription}\n` +
+        complexityTierLabel.title =
+          `${adaptiveConfig.tierDescription}\n` +
           `Curved features: ~${complexityAnalysis.estimatedCurvedFeatures}\n` +
           `Hardware: ${adaptiveConfig.hardware.level}\n` +
           `Preview: ${adaptiveConfig.defaultPreviewLevel}, Export: ${adaptiveConfig.defaultExportLevel}`;
@@ -1531,21 +1664,6 @@ function sanitizeUrlParams(extracted, urlParams) {
       // Show include/use warning in status if detected
       if (includeUseWarning) {
         updateStatus(`File loaded. ${includeUseWarning.trim()}`);
-      }
-
-      // Show clear file button and focus mode button
-      if (clearFileBtn) {
-        clearFileBtn.classList.remove('hidden');
-      }
-      
-      const featuresGuideBtn = document.getElementById('featuresGuideBtn');
-      if (featuresGuideBtn) {
-        featuresGuideBtn.classList.remove('hidden');
-      }
-      
-      const focusModeBtn = document.getElementById('focusModeBtn');
-      if (focusModeBtn) {
-        focusModeBtn.classList.remove('hidden');
       }
 
       // Handle detected libraries
@@ -1563,12 +1681,9 @@ function sanitizeUrlParams(extracted, urlParams) {
           updateStatus(`Enabled ${autoEnabled.length} required libraries`);
         }
       }
-      
+
       // Always show library UI (even when no libraries detected)
       renderLibraryUI(detectedLibraries);
-      
-      // Render contextual feature hints
-      renderFeatureHints(extracted, fileContent);
 
       // Render parameter UI
       const parametersContainer = document.getElementById(
@@ -1664,8 +1779,15 @@ function sanitizeUrlParams(extracted, urlParams) {
           gridToggle.checked = previewManager.gridEnabled;
         }
 
+        // Update camera panel controller with preview manager reference
+        if (cameraPanelController) {
+          cameraPanelController.setPreviewManager(previewManager);
+        }
+
         // Apply saved model color if exists
-        const savedModelColor = localStorage.getItem('openscad-customizer-model-color');
+        const savedModelColor = localStorage.getItem(
+          'openscad-customizer-model-color'
+        );
         if (savedModelColor) {
           previewManager.setColorOverride(savedModelColor);
         }
@@ -1674,10 +1796,13 @@ function sanitizeUrlParams(extracted, urlParams) {
         themeManager.addListener((theme, activeTheme, highContrast) => {
           if (previewManager) {
             previewManager.updateTheme(activeTheme, highContrast);
-            
+
             // Update color picker to show theme default when no custom color is set
-            const modelColorPicker = document.getElementById('modelColorPicker');
-            const hasSavedColor = localStorage.getItem('openscad-customizer-model-color');
+            const modelColorPicker =
+              document.getElementById('modelColorPicker');
+            const hasSavedColor = localStorage.getItem(
+              'openscad-customizer-model-color'
+            );
             if (modelColorPicker && !hasSavedColor) {
               const themeKey = highContrast ? `${activeTheme}-hc` : activeTheme;
               const PREVIEW_COLORS = {
@@ -1687,7 +1812,8 @@ function sanitizeUrlParams(extracted, urlParams) {
                 'dark-hc': 0x66b3ff,
               };
               const colorHex = PREVIEW_COLORS[themeKey] || PREVIEW_COLORS.light;
-              modelColorPicker.value = '#' + colorHex.toString(16).padStart(6, '0');
+              modelColorPicker.value =
+                '#' + colorHex.toString(16).padStart(6, '0');
             }
           }
         });
@@ -1755,11 +1881,15 @@ function sanitizeUrlParams(extracted, urlParams) {
     e.target.value = '';
   });
 
-  // Clear file button
+  // Back button - returns to welcome screen
   if (clearFileBtn) {
     clearFileBtn.addEventListener('click', () => {
-      // Confirm before clearing
-      if (confirm('Clear the current file and return to the welcome screen?')) {
+      // Confirm before going back - warn about unsaved changes
+      if (
+        confirm(
+          'Go back to the welcome screen?\n\nAny unsaved changes to your current project will be lost.'
+        )
+      ) {
         // Reset file input
         fileInput.value = '';
 
@@ -1788,35 +1918,24 @@ function sanitizeUrlParams(extracted, urlParams) {
         resetWorkflowProgress();
         hideWorkflowProgress();
 
-        // Hide clear button
-        clearFileBtn.classList.add('hidden');
-        
-        // Hide features guide button
-        const featuresGuideBtn = document.getElementById('featuresGuideBtn');
-        if (featuresGuideBtn) {
-          featuresGuideBtn.classList.add('hidden');
-        }
-        
-        // Hide focus mode button
+        // Exit focus mode if active
         const focusModeBtn = document.getElementById('focusModeBtn');
-        if (focusModeBtn) {
-          focusModeBtn.classList.add('hidden');
-          // Exit focus mode if active
-          if (mainInterface && mainInterface.classList.contains('focus-mode')) {
-            mainInterface.classList.remove('focus-mode');
-            focusModeBtn.setAttribute('aria-pressed', 'false');
-          }
+        if (
+          focusModeBtn &&
+          mainInterface &&
+          mainInterface.classList.contains('focus-mode')
+        ) {
+          mainInterface.classList.remove('focus-mode');
+          focusModeBtn.setAttribute('aria-pressed', 'false');
         }
-        
-        // Hide feature hints
-        const featureHints = document.getElementById('featureHints');
-        if (featureHints) {
-          featureHints.classList.add('hidden');
-        }
-        
+
         // Close Features Guide modal if open
-        const featuresGuideModal = document.getElementById('featuresGuideModal');
-        if (featuresGuideModal && !featuresGuideModal.classList.contains('hidden')) {
+        const featuresGuideModal =
+          document.getElementById('featuresGuideModal');
+        if (
+          featuresGuideModal &&
+          !featuresGuideModal.classList.contains('hidden')
+        ) {
           closeFeaturesGuide();
         }
 
@@ -1828,6 +1947,7 @@ function sanitizeUrlParams(extracted, urlParams) {
         // Reset status
         updateStatus('Ready');
         statsArea.textContent = '';
+        clearPreviewStats();
 
         // Clear file info
         const fileInfoSummary = document.getElementById('fileInfoSummary');
@@ -1838,7 +1958,7 @@ function sanitizeUrlParams(extracted, urlParams) {
         if (fileInfoDetails) {
           fileInfoDetails.classList.add('hidden');
         }
-        
+
         // Remove compact header
         const appHeader = document.querySelector('.app-header');
         if (appHeader) {
@@ -1877,7 +1997,10 @@ function sanitizeUrlParams(extracted, urlParams) {
   });
 
   // Shared example loader (reusable by welcome buttons and Features Guide)
-  async function loadExampleByKey(exampleKey, { closeModal = false, modalTrigger = null } = {}) {
+  async function loadExampleByKey(
+    exampleKey,
+    { closeFeaturesGuideModal = false } = {}
+  ) {
     const example = EXAMPLE_DEFINITIONS[exampleKey];
     if (!example) {
       console.error('Unknown example type:', exampleKey);
@@ -1909,14 +2032,12 @@ function sanitizeUrlParams(extracted, urlParams) {
       console.log('Example loaded:', example.name, content.length, 'bytes');
 
       // Close modal if requested
-      if (closeModal) {
-        const featuresGuideModal = document.getElementById('featuresGuideModal');
+      if (closeFeaturesGuideModal) {
+        const featuresGuideModal =
+          document.getElementById('featuresGuideModal');
         if (featuresGuideModal) {
-          featuresGuideModal.classList.add('hidden');
-          // Restore focus to trigger
-          if (modalTrigger) {
-            modalTrigger.focus();
-          }
+          // Use shared modal manager so focus restores correctly
+          closeModal(featuresGuideModal);
         }
       }
 
@@ -1945,17 +2066,17 @@ function sanitizeUrlParams(extracted, urlParams) {
     button.addEventListener('click', async () => {
       const exampleType = button.dataset.example;
       const tutorialId = button.dataset.tutorial;
-      
+
       // Load the example first
       await loadExampleByKey(exampleType);
-      
+
       if (exampleType) {
         // Screen reader confirmation that an example was loaded
         announceToScreenReader(
           `${EXAMPLE_DEFINITIONS[exampleType]?.name || 'Example'} loaded and ready to customize`
         );
       }
-      
+
       // Launch tutorial if specified (after a short delay to let example load)
       if (tutorialId) {
         setTimeout(() => {
@@ -2101,18 +2222,20 @@ function sanitizeUrlParams(extracted, urlParams) {
   });
 
   // Collapsible Parameter Panel (Desktop only)
-  const collapseParamPanelBtn = document.getElementById('collapseParamPanelBtn');
+  const collapseParamPanelBtn = document.getElementById(
+    'collapseParamPanelBtn'
+  );
   const paramPanel = document.getElementById('paramPanel');
   const paramPanelBody = document.getElementById('paramPanelBody');
-  
+
   // Declare toggleParamPanel at module scope so it can be referenced by Split.js code
   let toggleParamPanel = null;
-  
+
   if (collapseParamPanelBtn && paramPanel && paramPanelBody) {
     // Load saved collapsed state (desktop only)
     const STORAGE_KEY_COLLAPSED = 'openscad-customizer-param-panel-collapsed';
     let isCollapsed = false;
-    
+
     try {
       const savedState = localStorage.getItem(STORAGE_KEY_COLLAPSED);
       if (savedState === 'true' && window.innerWidth >= 768) {
@@ -2121,35 +2244,41 @@ function sanitizeUrlParams(extracted, urlParams) {
     } catch (e) {
       console.warn('Could not access localStorage:', e);
     }
-    
+
     // Apply initial state
     if (isCollapsed) {
       paramPanel.classList.add('collapsed');
       collapseParamPanelBtn.setAttribute('aria-expanded', 'false');
-      collapseParamPanelBtn.setAttribute('aria-label', 'Expand parameters');
-      collapseParamPanelBtn.title = 'Expand parameters';
+      collapseParamPanelBtn.setAttribute(
+        'aria-label',
+        'Expand parameters panel'
+      );
+      collapseParamPanelBtn.title = 'Expand panel';
     }
-    
+
     // Toggle function (assigned to outer scope variable)
-    toggleParamPanel = function() {
+    toggleParamPanel = function () {
       // Only allow collapse on desktop (>= 768px)
       if (window.innerWidth < 768) {
         return;
       }
-      
+
       isCollapsed = !isCollapsed;
-      
+
       if (isCollapsed) {
         // Check if focus is inside the panel body
         const activeElement = document.activeElement;
         const isFocusInBody = paramPanelBody.contains(activeElement);
-        
+
         // Collapse panel
         paramPanel.classList.add('collapsed');
         collapseParamPanelBtn.setAttribute('aria-expanded', 'false');
-        collapseParamPanelBtn.setAttribute('aria-label', 'Expand parameters');
-        collapseParamPanelBtn.title = 'Expand parameters';
-        
+        collapseParamPanelBtn.setAttribute(
+          'aria-label',
+          'Expand parameters panel'
+        );
+        collapseParamPanelBtn.title = 'Expand panel';
+
         // If focus was inside body, move it to the toggle button
         if (isFocusInBody) {
           collapseParamPanelBtn.focus();
@@ -2158,28 +2287,31 @@ function sanitizeUrlParams(extracted, urlParams) {
         // Expand panel
         paramPanel.classList.remove('collapsed');
         collapseParamPanelBtn.setAttribute('aria-expanded', 'true');
-        collapseParamPanelBtn.setAttribute('aria-label', 'Collapse parameters');
-        collapseParamPanelBtn.title = 'Collapse parameters';
+        collapseParamPanelBtn.setAttribute(
+          'aria-label',
+          'Collapse parameters panel'
+        );
+        collapseParamPanelBtn.title = 'Collapse panel';
       }
-      
+
       // Persist state
       try {
         localStorage.setItem(STORAGE_KEY_COLLAPSED, String(isCollapsed));
       } catch (e) {
         console.warn('Could not save to localStorage:', e);
       }
-      
+
       // Trigger preview resize after transition
       setTimeout(() => {
         if (previewManager) {
           previewManager.handleResize();
         }
       }, 300); // Match CSS transition duration
-    }
-    
+    };
+
     // Add click listener
     collapseParamPanelBtn.addEventListener('click', toggleParamPanel);
-    
+
     // Handle window resize - reset collapsed state on mobile
     let resizeTimeout;
     window.addEventListener('resize', () => {
@@ -2190,229 +2322,26 @@ function sanitizeUrlParams(extracted, urlParams) {
           isCollapsed = false;
           paramPanel.classList.remove('collapsed');
           collapseParamPanelBtn.setAttribute('aria-expanded', 'true');
-          collapseParamPanelBtn.setAttribute('aria-label', 'Collapse parameters');
-          collapseParamPanelBtn.title = 'Collapse parameters';
+          collapseParamPanelBtn.setAttribute(
+            'aria-label',
+            'Collapse parameters panel'
+          );
+          collapseParamPanelBtn.title = 'Collapse panel';
         }
       }, 150);
     });
   }
 
-  // Resizable Split Panels (Desktop only for horizontal, all viewports for vertical)
+  // Resizable Split Panels (Desktop only - horizontal split between params and preview)
   let splitInstance = null;
-  let verticalSplitInstance = null;
   const previewPanel = document.querySelector('.preview-panel');
-  const previewCanvasSection = document.getElementById('previewCanvasSection');
-  const previewInfoSection = document.getElementById('previewInfoSection');
-  
-  // Vertical Split (Preview canvas vs info section) - works on all viewports
-  if (previewCanvasSection && previewInfoSection) {
-    const STORAGE_KEY_VERTICAL_SPLIT = 'openscad-customizer-vertical-split-sizes';
-    
-    // Load saved vertical split sizes
-    let initialVerticalSizes = [70, 30]; // Default: 70% preview, 30% info
-    try {
-      const savedSizes = localStorage.getItem(STORAGE_KEY_VERTICAL_SPLIT);
-      if (savedSizes) {
-        const parsed = JSON.parse(savedSizes);
-        if (Array.isArray(parsed) && parsed.length === 2) {
-          initialVerticalSizes = parsed;
-        }
-      }
-    } catch (e) {
-      console.warn('Could not load vertical split sizes:', e);
-    }
-    
-    // Min heights in pixels
-    const verticalMinSizes = [150, 60]; // min preview 150px, min info 60px
-    
-    // Initialize vertical Split.js
-    const initVerticalSplit = function() {
-      if (verticalSplitInstance) {
-        return;
-      }
-      
-      verticalSplitInstance = Split([previewCanvasSection, previewInfoSection], {
-        sizes: initialVerticalSizes,
-        minSize: verticalMinSizes,
-        gutterSize: 8,
-        direction: 'vertical',
-        cursor: 'row-resize',
-        onDrag: () => {
-          // Trigger preview resize during drag
-          if (previewManager) {
-            requestAnimationFrame(() => {
-              previewManager.handleResize();
-            });
-          }
-        },
-        onDragEnd: (sizes) => {
-          // Persist sizes
-          try {
-            localStorage.setItem(STORAGE_KEY_VERTICAL_SPLIT, JSON.stringify(sizes));
-          } catch (e) {
-            console.warn('Could not save vertical split sizes:', e);
-          }
-          
-          // Final resize after drag
-          if (previewManager) {
-            previewManager.handleResize();
-          }
-        },
-      });
-      
-      // Add keyboard accessibility to vertical gutter
-      setTimeout(() => {
-        const verticalGutter = document.querySelector('.gutter.gutter-vertical');
-        if (verticalGutter) {
-          // Make gutter focusable
-          verticalGutter.setAttribute('tabindex', '0');
-          verticalGutter.setAttribute('role', 'separator');
-          verticalGutter.setAttribute('aria-orientation', 'horizontal');
-          verticalGutter.setAttribute('aria-label', 'Resize preview and settings areas');
-          verticalGutter.setAttribute('aria-controls', 'previewCanvasSection previewInfoSection');
-          
-          // Get current sizes
-          const getCurrentVerticalSizes = () => {
-            const canvasHeight = previewCanvasSection.offsetHeight;
-            const infoHeight = previewInfoSection.offsetHeight;
-            const totalHeight = canvasHeight + infoHeight;
-            if (!totalHeight) return [70, 30];
-            return [
-              (canvasHeight / totalHeight) * 100,
-              (infoHeight / totalHeight) * 100,
-            ];
-          };
-          
-          const getVerticalAriaRange = () => {
-            const totalHeight = previewCanvasSection.offsetHeight + previewInfoSection.offsetHeight;
-            if (!totalHeight) {
-              return { min: 20, max: 95 };
-            }
-            const minCanvas = Math.round((verticalMinSizes[0] / totalHeight) * 100);
-            const maxCanvas = Math.round((1 - verticalMinSizes[1] / totalHeight) * 100);
-            return {
-              min: Math.max(20, Math.min(minCanvas, maxCanvas)),
-              max: Math.min(95, Math.max(minCanvas, maxCanvas)),
-            };
-          };
-          
-          // Set aria-value attributes
-          const updateVerticalAriaValues = () => {
-            const sizes = getCurrentVerticalSizes();
-            const { min, max } = getVerticalAriaRange();
-            verticalGutter.setAttribute('aria-valuenow', Math.round(sizes[0]));
-            verticalGutter.setAttribute('aria-valuemin', String(min));
-            verticalGutter.setAttribute('aria-valuemax', String(max));
-            verticalGutter.setAttribute('aria-valuetext', `Preview: ${Math.round(sizes[0])}%, Settings: ${Math.round(sizes[1])}%`);
-          };
-          
-          updateVerticalAriaValues();
-          
-          // Keyboard navigation for vertical gutter
-          verticalGutter.addEventListener('keydown', (e) => {
-            if (['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) {
-              e.preventDefault();
-              
-              const sizes = getCurrentVerticalSizes();
-              let newCanvasSize = sizes[0];
-              const { min, max } = getVerticalAriaRange();
-              
-              // Calculate step size
-              const smallStep = 3; // 3%
-              const largeStep = 10; // 10% with Shift
-              const step = e.shiftKey ? largeStep : smallStep;
-              
-              // Adjust size based on key (Up = more preview, Down = less preview)
-              switch (e.key) {
-                case 'ArrowUp':
-                  newCanvasSize = Math.min(max, sizes[0] + step);
-                  break;
-                case 'ArrowDown':
-                  newCanvasSize = Math.max(min, sizes[0] - step);
-                  break;
-                case 'Home':
-                  newCanvasSize = max; // Maximize preview
-                  break;
-                case 'End':
-                  newCanvasSize = min; // Minimize preview
-                  break;
-              }
-              
-              const newInfoSize = 100 - newCanvasSize;
-              
-              // Apply new sizes
-              if (verticalSplitInstance) {
-                verticalSplitInstance.setSizes([newCanvasSize, newInfoSize]);
-                
-                // Save to localStorage
-                try {
-                  localStorage.setItem(STORAGE_KEY_VERTICAL_SPLIT, JSON.stringify([newCanvasSize, newInfoSize]));
-                } catch (err) {
-                  console.warn('Could not save vertical split sizes:', err);
-                }
-                
-                // Update ARIA values
-                updateVerticalAriaValues();
-                
-                // Trigger preview resize
-                if (previewManager) {
-                  previewManager.handleResize();
-                }
-              }
-            }
-          });
-          
-          // Update ARIA values after drag
-          verticalGutter.addEventListener('mouseup', updateVerticalAriaValues);
-          verticalGutter.addEventListener('touchend', updateVerticalAriaValues);
-        }
-      }, 100);
-    };
-    
-    // Destroy vertical Split.js
-    const destroyVerticalSplit = function() {
-      if (verticalSplitInstance) {
-        verticalSplitInstance.destroy();
-        verticalSplitInstance = null;
-      }
-    };
-    
-    // Initialize vertical split when main interface is visible
-    const isMainInterfaceVisible = () => {
-      return mainInterface && !mainInterface.classList.contains('hidden');
-    };
-    
-    // Initialize if already visible, otherwise wait
-    if (isMainInterfaceVisible()) {
-      initVerticalSplit();
-    }
-    
-    // Handle main interface visibility and focus mode changes
-    const mainInterfaceObserver = new MutationObserver((mutations) => {
-      mutations.forEach((mutation) => {
-        if (mutation.attributeName === 'class') {
-          const isVisible = isMainInterfaceVisible();
-          const isFocusMode = mainInterface && mainInterface.classList.contains('focus-mode');
-          
-          if (!isVisible || isFocusMode) {
-            // Hidden or focus mode - destroy split
-            destroyVerticalSplit();
-          } else {
-            // Visible and not focus mode - initialize split
-            setTimeout(initVerticalSplit, 100);
-          }
-        }
-      });
-    });
-    
-    if (mainInterface) {
-      mainInterfaceObserver.observe(mainInterface, { attributes: true });
-    }
-  }
-  
-  if (paramPanel && previewPanel && window.innerWidth >= 768) {
+
+  // Note: Vertical split (preview info vs canvas) is now handled by the overlay drawer
+  // in preview-settings-drawer.js - no Split.js needed for that anymore
+
+  if (paramPanel && previewPanel) {
     const STORAGE_KEY_SPLIT = 'openscad-customizer-split-sizes';
-    
+
     // Load saved split sizes
     let initialSizes = [40, 60]; // Default: 40% params, 60% preview
     try {
@@ -2426,15 +2355,20 @@ function sanitizeUrlParams(extracted, urlParams) {
     } catch (e) {
       console.warn('Could not load split sizes:', e);
     }
-    
+
     const minSizes = [280, 300];
 
-    // Initialize Split.js (only if not collapsed)
-    const initSplit = function() {
+    // Initialize Split.js (only if not collapsed and not on mobile)
+    const initSplit = function () {
+      // Don't initialize on mobile (drawer pattern is used instead)
+      if (window.innerWidth < 768) {
+        return;
+      }
+
       if (splitInstance || paramPanel.classList.contains('collapsed')) {
         return;
       }
-      
+
       splitInstance = Split([paramPanel, previewPanel], {
         sizes: initialSizes,
         minSize: minSizes,
@@ -2455,14 +2389,14 @@ function sanitizeUrlParams(extracted, urlParams) {
           } catch (e) {
             console.warn('Could not save split sizes:', e);
           }
-          
+
           // Final resize after drag
           if (previewManager) {
             previewManager.handleResize();
           }
         },
       });
-      
+
       // Add keyboard accessibility to gutter
       setTimeout(() => {
         const gutter = document.querySelector('.gutter');
@@ -2478,7 +2412,7 @@ function sanitizeUrlParams(extracted, urlParams) {
           if (controlIds) {
             gutter.setAttribute('aria-controls', controlIds);
           }
-          
+
           // Get current sizes
           const getCurrentSizes = () => {
             const paramWidth = paramPanel.offsetWidth;
@@ -2491,20 +2425,19 @@ function sanitizeUrlParams(extracted, urlParams) {
           };
 
           const getAriaRange = () => {
-            const totalWidth = paramPanel.offsetWidth + previewPanel.offsetWidth;
+            const totalWidth =
+              paramPanel.offsetWidth + previewPanel.offsetWidth;
             if (!totalWidth) {
               return { min: 0, max: 100 };
             }
             const minParam = Math.round((minSizes[0] / totalWidth) * 100);
-            const maxParam = Math.round(
-              (1 - minSizes[1] / totalWidth) * 100
-            );
+            const maxParam = Math.round((1 - minSizes[1] / totalWidth) * 100);
             return {
               min: Math.max(0, Math.min(minParam, maxParam)),
               max: Math.min(100, Math.max(minParam, maxParam)),
             };
           };
-          
+
           // Set aria-value attributes
           const updateAriaValues = () => {
             const sizes = getCurrentSizes();
@@ -2512,25 +2445,28 @@ function sanitizeUrlParams(extracted, urlParams) {
             gutter.setAttribute('aria-valuenow', Math.round(sizes[0]));
             gutter.setAttribute('aria-valuemin', String(min));
             gutter.setAttribute('aria-valuemax', String(max));
-            gutter.setAttribute('aria-valuetext', `Parameters: ${Math.round(sizes[0])}%, Preview: ${Math.round(sizes[1])}%`);
+            gutter.setAttribute(
+              'aria-valuetext',
+              `Parameters: ${Math.round(sizes[0])}%, Preview: ${Math.round(sizes[1])}%`
+            );
           };
-          
+
           updateAriaValues();
-          
+
           // Keyboard navigation
           gutter.addEventListener('keydown', (e) => {
             if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) {
               e.preventDefault();
-              
+
               const sizes = getCurrentSizes();
               let newParamSize = sizes[0];
               const { min, max } = getAriaRange();
-              
+
               // Calculate step size
               const smallStep = 2; // 2%
               const largeStep = 5; // 5% with Shift
               const step = e.shiftKey ? largeStep : smallStep;
-              
+
               // Adjust size based on key
               switch (e.key) {
                 case 'ArrowLeft':
@@ -2546,23 +2482,26 @@ function sanitizeUrlParams(extracted, urlParams) {
                   newParamSize = max;
                   break;
               }
-              
+
               const newPreviewSize = 100 - newParamSize;
-              
+
               // Apply new sizes
               if (splitInstance) {
                 splitInstance.setSizes([newParamSize, newPreviewSize]);
-                
+
                 // Save to localStorage
                 try {
-                  localStorage.setItem(STORAGE_KEY_SPLIT, JSON.stringify([newParamSize, newPreviewSize]));
+                  localStorage.setItem(
+                    STORAGE_KEY_SPLIT,
+                    JSON.stringify([newParamSize, newPreviewSize])
+                  );
                 } catch (err) {
                   console.warn('Could not save split sizes:', err);
                 }
-                
+
                 // Update ARIA values
                 updateAriaValues();
-                
+
                 // Trigger preview resize
                 if (previewManager) {
                   previewManager.handleResize();
@@ -2570,34 +2509,114 @@ function sanitizeUrlParams(extracted, urlParams) {
               }
             }
           });
-          
+
           // Update ARIA values after drag
           gutter.addEventListener('mouseup', updateAriaValues);
           gutter.addEventListener('touchend', updateAriaValues);
         }
       }, 100);
-    }
-    
-    // Destroy Split.js
-    const destroySplit = function() {
+    };
+
+    // Destroy Split.js and clean up
+    const destroySplit = function () {
       if (splitInstance) {
         splitInstance.destroy();
         splitInstance = null;
       }
-    }
-    
+
+      // Clean up leftover gutters and inline styles
+      const gutters = document.querySelectorAll('.gutter-horizontal');
+      gutters.forEach((gutter) => gutter.remove());
+
+      // Clear inline styles that Split.js may have applied
+      if (paramPanel) {
+        paramPanel.style.removeProperty('width');
+        paramPanel.style.removeProperty('flex-basis');
+      }
+      if (previewPanel) {
+        previewPanel.style.removeProperty('width');
+        previewPanel.style.removeProperty('flex-basis');
+      }
+    };
+
     // Initialize if not collapsed
     if (!paramPanel.classList.contains('collapsed')) {
       initSplit();
     }
-    
+
+    // Initialize mobile drawer controller
+    initDrawerController();
+
+    // Initialize preview settings drawer (overlay with resize functionality)
+    initPreviewSettingsDrawer({
+      onResize: () => {
+        if (previewManager) {
+          previewManager.handleResize();
+        }
+      },
+    });
+
+    // Initialize camera panel controller (right-side drawer)
+    cameraPanelController = initCameraPanelController({
+      previewManager: null, // Will be set after preview manager is initialized
+    });
+
+    // Initialize actions drawer toggle
+    const initActionsDrawer = () => {
+      const toggleBtn = document.getElementById('actionsDrawerToggle');
+      const drawer = document.getElementById('actionsDrawer');
+
+      if (!toggleBtn || !drawer) return;
+
+      toggleBtn.addEventListener('click', () => {
+        const isExpanded = !drawer.classList.contains('collapsed');
+
+        if (isExpanded) {
+          // Collapse drawer
+          drawer.classList.add('collapsed');
+          toggleBtn.setAttribute('aria-expanded', 'false');
+          toggleBtn.setAttribute('aria-label', 'Expand actions menu');
+        } else {
+          // Expand drawer
+          drawer.classList.remove('collapsed');
+          toggleBtn.setAttribute('aria-expanded', 'true');
+          toggleBtn.setAttribute('aria-label', 'Collapse actions menu');
+        }
+      });
+
+      // Keep drawer collapsed on resize if screen is small
+      window.addEventListener('resize', () => {
+        // On mobile, keep drawer behavior consistent
+        // On desktop, drawer can stay expanded
+      });
+    };
+
+    initActionsDrawer();
+
+    // Collapse details sections on mobile by default
+    const initMobileDetailsCollapse = () => {
+      if (window.innerWidth >= 768) return;
+
+      const detailsToCollapse = ['.advanced-menu'];
+
+      detailsToCollapse.forEach((selector) => {
+        const el = document.querySelector(selector);
+        if (el && el.tagName === 'DETAILS') {
+          el.removeAttribute('open');
+        }
+      });
+    };
+
+    // Call on load
+    initMobileDetailsCollapse();
+
     // Re-initialize/destroy split when collapse state changes
     const originalToggleParamPanel = toggleParamPanel;
     if (typeof originalToggleParamPanel === 'function') {
-      toggleParamPanel = function() {
+      toggleParamPanel = function () {
         const wasCollapsed = paramPanel.classList.contains('collapsed');
         originalToggleParamPanel.call(this);
-        
+
         if (wasCollapsed) {
           // Just expanded - initialize split
           setTimeout(initSplit, 350); // Wait for transition
@@ -2606,12 +2625,15 @@ function sanitizeUrlParams(extracted, urlParams) {
           destroySplit();
         }
       };
-      
+
       // Re-bind the event listener
-      collapseParamPanelBtn.removeEventListener('click', originalToggleParamPanel);
+      collapseParamPanelBtn.removeEventListener(
+        'click',
+        originalToggleParamPanel
+      );
       collapseParamPanelBtn.addEventListener('click', toggleParamPanel);
     }
-    
+
     // Handle window resize - destroy/reinit split on mobile
     let splitResizeTimeout;
     window.addEventListener('resize', () => {
@@ -2619,7 +2641,10 @@ function sanitizeUrlParams(extracted, urlParams) {
       splitResizeTimeout = setTimeout(() => {
         if (window.innerWidth < 768) {
           destroySplit();
-        } else if (!splitInstance && !paramPanel.classList.contains('collapsed')) {
+        } else if (
+          !splitInstance &&
+          !paramPanel.classList.contains('collapsed')
+        ) {
           initSplit();
         }
       }, 150);
@@ -2630,20 +2655,20 @@ function sanitizeUrlParams(extracted, urlParams) {
   const focusModeBtn = document.getElementById('focusModeBtn');
   // mainInterface is already declared at line 484
   // comparisonView container is accessed via DOM query
-  
+
   if (focusModeBtn && mainInterface) {
     let isFocusMode = false;
-    
+
     // Toggle focus mode
-    const toggleFocusMode = function() {
+    const toggleFocusMode = function () {
       // Don't allow focus mode when comparison view is active
       const comparisonViewEl = document.getElementById('comparisonView');
       if (comparisonViewEl && !comparisonViewEl.classList.contains('hidden')) {
         return;
       }
-      
+
       isFocusMode = !isFocusMode;
-      
+
       if (isFocusMode) {
         // Enter focus mode
         mainInterface.classList.add('focus-mode');
@@ -2657,18 +2682,18 @@ function sanitizeUrlParams(extracted, urlParams) {
         focusModeBtn.setAttribute('aria-label', 'Enter focus mode');
         focusModeBtn.title = 'Focus mode (maximize preview)';
       }
-      
+
       // Trigger preview resize after mode change
       setTimeout(() => {
         if (previewManager) {
           previewManager.handleResize();
         }
       }, 100);
-    }
-    
+    };
+
     // Add click listener
     focusModeBtn.addEventListener('click', toggleFocusMode);
-    
+
     // Add Escape key listener to exit focus mode
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && isFocusMode) {
@@ -2679,7 +2704,7 @@ function sanitizeUrlParams(extracted, urlParams) {
         }
       }
     });
-    
+
     // Auto-exit focus mode when comparison view is shown
     const comparisonViewEl = document.getElementById('comparisonView');
     if (comparisonViewEl) {
@@ -2694,7 +2719,7 @@ function sanitizeUrlParams(extracted, urlParams) {
           }
         });
       });
-      
+
       observer.observe(comparisonViewEl, { attributes: true });
     }
   }
@@ -2851,6 +2876,9 @@ function sanitizeUrlParams(extracted, urlParams) {
           : '';
       statsArea.innerHTML = `<span class="stats-quality full">Full Quality ${formatName}</span> Size: ${formatFileSize(result.stats.size)}${triangleInfo} | Time: ${duration}s`;
 
+      // Also update the preview status bar stats
+      updatePreviewStats(result.stats, true);
+
       console.log('Full render complete:', result.stats);
 
       // Update workflow progress to render complete
@@ -2869,7 +2897,7 @@ function sanitizeUrlParams(extracted, urlParams) {
       });
     } catch (error) {
       console.error('Generation failed:', error);
-      
+
       // Use COGA-compliant friendly error translation
       const friendlyError = translateError(error.message);
       updateStatus(`Error: ${friendlyError.title}`);
@@ -2924,74 +2952,80 @@ function sanitizeUrlParams(extracted, urlParams) {
 
   // Copy Share Link button
   const shareBtn = document.getElementById('shareBtn');
-  shareBtn.addEventListener('click', async () => {
-    const state = stateManager.getState();
+  if (shareBtn) {
+    shareBtn.addEventListener('click', async () => {
+      const state = stateManager.getState();
 
-    if (!state.uploadedFile) {
-      alert('No file uploaded yet');
-      return;
-    }
-
-    // Get only non-default parameters for sharing
-    const nonDefaultParams = {};
-    for (const [key, value] of Object.entries(state.parameters)) {
-      if (state.defaults[key] !== value) {
-        nonDefaultParams[key] = value;
+      if (!state.uploadedFile) {
+        alert('No file uploaded yet');
+        return;
       }
-    }
 
-    const shareUrl = getShareableURL(nonDefaultParams);
+      // Get only non-default parameters for sharing
+      const nonDefaultParams = {};
+      for (const [key, value] of Object.entries(state.parameters)) {
+        if (state.defaults[key] !== value) {
+          nonDefaultParams[key] = value;
+        }
+      }
 
-    try {
-      // Try modern clipboard API
-      await navigator.clipboard.writeText(shareUrl);
-      updateStatus('Share link copied to clipboard!');
+      const shareUrl = getShareableURL(nonDefaultParams);
 
-      // Visual feedback
-      shareBtn.textContent = '✅ Copied!';
-      setTimeout(() => {
-        shareBtn.textContent = '📋 Copy Share Link';
-      }, 2000);
-    } catch (error) {
-      // Fallback for older browsers
-      console.error('Failed to copy to clipboard:', error);
+      try {
+        // Try modern clipboard API
+        await navigator.clipboard.writeText(shareUrl);
+        updateStatus('Share link copied to clipboard!');
 
-      // Show URL in a prompt as fallback
-      prompt('Copy this link to share:', shareUrl);
-      updateStatus('Share link ready');
-    }
-  });
+        // Visual feedback
+        const textSpan = shareBtn.querySelector('.btn-text');
+        if (textSpan) {
+          const originalText = textSpan.textContent;
+          textSpan.textContent = '✅ Copied!';
+          setTimeout(() => {
+            textSpan.textContent = originalText;
+          }, 2000);
+        }
+      } catch (error) {
+        // Fallback for older browsers
+        console.error('Failed to copy to clipboard:', error);
+        prompt('Copy this link to share:', shareUrl);
+        updateStatus('Share link ready');
+      }
+    });
+  }
 
-  // Export Parameters as JSON button
+  // Export Parameters button
   const exportParamsBtn = document.getElementById('exportParamsBtn');
-  exportParamsBtn.addEventListener('click', () => {
-    const state = stateManager.getState();
+  if (exportParamsBtn) {
+    exportParamsBtn.addEventListener('click', () => {
+      const state = stateManager.getState();
 
-    if (!state.uploadedFile) {
-      alert('No file uploaded yet');
-      return;
-    }
+      if (!state.uploadedFile) {
+        alert('No file uploaded yet');
+        return;
+      }
 
-    // Create JSON snapshot
-    const snapshot = {
-      version: '1.0.0',
-      model: state.uploadedFile.name,
-      timestamp: new Date().toISOString(),
-      parameters: state.parameters,
-    };
+      // Create JSON snapshot
+      const snapshot = {
+        version: '1.0.0',
+        model: state.uploadedFile.name,
+        timestamp: new Date().toISOString(),
+        parameters: state.parameters,
+      };
 
-    const json = JSON.stringify(snapshot, null, 2);
-    const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
+      const json = JSON.stringify(snapshot, null, 2);
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
 
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${state.uploadedFile.name.replace('.scad', '')}-params.json`;
-    a.click();
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${state.uploadedFile.name.replace('.scad', '')}-params.json`;
+      a.click();
 
-    URL.revokeObjectURL(url);
-    updateStatus(`Parameters exported to JSON`);
-  });
+      URL.revokeObjectURL(url);
+      updateStatus(`Parameters exported to JSON`);
+    });
+  }
 
   // ========== RENDER QUEUE ==========
 
@@ -3951,7 +3985,7 @@ function sanitizeUrlParams(extracted, urlParams) {
   spotlightLinks.forEach((link) => {
     link.addEventListener('click', (e) => {
       e.preventDefault();
-      
+
       if (link.dataset.featureTab) {
         openFeaturesGuide({ tab: link.dataset.featureTab });
       } else if (link.dataset.doc) {
@@ -4288,7 +4322,10 @@ function sanitizeUrlParams(extracted, urlParams) {
       if (!paramsJsonModal.classList.contains('hidden')) {
         paramsJsonModal.classList.add('hidden');
       }
-      if (featuresGuideModal && !featuresGuideModal.classList.contains('hidden')) {
+      if (
+        featuresGuideModal &&
+        !featuresGuideModal.classList.contains('hidden')
+      ) {
         closeFeaturesGuide();
       }
     }
@@ -4297,7 +4334,7 @@ function sanitizeUrlParams(extracted, urlParams) {
   // ========== END ADVANCED MENU ==========
 
   // ========== GUIDED TOURS ==========
-  
+
   /**
    * Open a minimal guided tour modal (for Welcome screen role paths)
    * Tours are skippable, focus-safe, and respect prefers-reduced-motion
@@ -4309,24 +4346,22 @@ function sanitizeUrlParams(extracted, urlParams) {
     console.log('[Guided Tours] Tour requested:', tourType);
     openFeaturesGuide();
   }
-  
+
   // ========== END GUIDED TOURS ==========
 
   // ========== FEATURES GUIDE MODAL ==========
-  
-  let featuresGuideModalTrigger = null; // Store trigger for focus restoration
-  
+
   // Open Features Guide modal with optional tab selection
   function openFeaturesGuide({ tab = 'libraries' } = {}) {
     const featuresGuideModal = document.getElementById('featuresGuideModal');
     if (!featuresGuideModal) return;
-    
-    // Store current focus for restoration
-    featuresGuideModalTrigger = document.activeElement;
-    
-    // Show modal
-    featuresGuideModal.classList.remove('hidden');
-    
+
+    // Show modal with focus trap + automatic focus restoration
+    openModal(featuresGuideModal, {
+      // Focus will be moved to the requested tab (or first focusable)
+      focusTarget: document.getElementById(`tab-${tab}`) || undefined,
+    });
+
     // Switch to requested tab
     const tabId = `tab-${tab}`;
     const tabButton = document.getElementById(tabId);
@@ -4336,40 +4371,36 @@ function sanitizeUrlParams(extracted, urlParams) {
       setTimeout(() => tabButton.focus(), 100);
     }
   }
-  
+
   // Expose openFeaturesGuide to window for module-level functions
   if (typeof window !== 'undefined') {
     window.openFeaturesGuide = openFeaturesGuide;
   }
-  
+
   // Close Features Guide modal
   function closeFeaturesGuide() {
     const featuresGuideModal = document.getElementById('featuresGuideModal');
     if (!featuresGuideModal) return;
-    
-    featuresGuideModal.classList.add('hidden');
-    
-    // Restore focus to trigger
-    if (featuresGuideModalTrigger && featuresGuideModalTrigger.focus) {
-      featuresGuideModalTrigger.focus();
-    }
-    featuresGuideModalTrigger = null;
+
+    closeModal(featuresGuideModal);
   }
-  
+
   // Switch between tabs
   function switchFeaturesTab(tabId) {
     const allTabs = document.querySelectorAll('.features-tab');
     const allPanels = document.querySelectorAll('.features-panel');
-    
-    allTabs.forEach(tab => {
+
+    allTabs.forEach((tab) => {
       const isActive = tab.id === tabId;
       tab.setAttribute('aria-selected', isActive ? 'true' : 'false');
       tab.setAttribute('tabindex', isActive ? '0' : '-1');
     });
-    
-    allPanels.forEach(panel => {
+
+    allPanels.forEach((panel) => {
       const panelId = panel.id;
-      const associatedTab = document.querySelector(`[aria-controls="${panelId}"]`);
+      const associatedTab = document.querySelector(
+        `[aria-controls="${panelId}"]`
+      );
       if (associatedTab && associatedTab.id === tabId) {
         panel.hidden = false;
       } else {
@@ -4377,15 +4408,15 @@ function sanitizeUrlParams(extracted, urlParams) {
       }
     });
   }
-  
+
   // Features Guide close button
   const featuresGuideClose = document.getElementById('featuresGuideClose');
   featuresGuideClose?.addEventListener('click', closeFeaturesGuide);
-  
+
   // Features Guide overlay click
   const featuresGuideOverlay = document.getElementById('featuresGuideOverlay');
   featuresGuideOverlay?.addEventListener('click', closeFeaturesGuide);
-  
+
   // Features Guide main button handler
   const featuresGuideBtn = document.getElementById('featuresGuideBtn');
   if (featuresGuideBtn) {
@@ -4393,7 +4424,7 @@ function sanitizeUrlParams(extracted, urlParams) {
       openFeaturesGuide();
     });
   }
-  
+
   // Tab keyboard navigation
   const featuresTabs = document.querySelectorAll('.features-tab');
   featuresTabs.forEach((tab, _index) => {
@@ -4401,13 +4432,13 @@ function sanitizeUrlParams(extracted, urlParams) {
     tab.addEventListener('click', () => {
       switchFeaturesTab(tab.id);
     });
-    
+
     // Keyboard navigation
     tab.addEventListener('keydown', (e) => {
       const tabs = Array.from(featuresTabs);
       const currentIndex = tabs.indexOf(tab);
       let nextIndex = currentIndex;
-      
+
       switch (e.key) {
         case 'ArrowLeft':
           e.preventDefault();
@@ -4435,20 +4466,19 @@ function sanitizeUrlParams(extracted, urlParams) {
       }
     });
   });
-  
+
   // Example buttons within Features Guide
   document.addEventListener('click', (e) => {
     const exampleBtn = e.target.closest('[data-feature-example]');
     if (exampleBtn && exampleBtn.dataset.example) {
       e.preventDefault();
       const exampleKey = exampleBtn.dataset.example;
-      loadExampleByKey(exampleKey, { 
-        closeModal: true, 
-        modalTrigger: featuresGuideModalTrigger 
+      loadExampleByKey(exampleKey, {
+        closeFeaturesGuideModal: true,
       });
     }
   });
-  
+
   // ========== END FEATURES GUIDE MODAL ==========
 
   // Global keyboard shortcuts
@@ -4557,7 +4587,8 @@ function renderLibraryUI(detectedLibraries) {
   // Update help text based on whether libraries were detected
   if (libraryHelp) {
     if (detectedLibraries.length === 0) {
-      libraryHelp.textContent = 'No libraries detected in this model. You can still enable library bundles to use external functions and modules.';
+      libraryHelp.textContent =
+        'No libraries detected in this model. You can still enable library bundles to use external functions and modules.';
     } else {
       libraryHelp.textContent = 'Enable libraries used by this model:';
     }
@@ -4641,99 +4672,6 @@ function renderLibraryUI(detectedLibraries) {
         statusArea.textContent = `${lib.name} ${checkbox.checked ? 'enabled' : 'disabled'}`;
       }
     });
-  });
-}
-
-// Feature Hints Rendering
-function renderFeatureHints(schema, _fileContent) {
-  const hints = [];
-  const parameters = schema?.parameters || {};
-  
-  // Check for color param opportunity
-  const hasColorParams = Object.values(parameters)
-    .some(p => p.uiType === 'color');
-  if (!hasColorParams) {
-    hints.push({
-      icon: '🎨',
-      title: 'Color Parameters',
-      text: 'Add // [color] annotation to variables for color picker UI',
-      action: { type: 'openFeaturesGuide', tab: 'colors' }
-    });
-  }
-  
-  // Check for library usage
-  const detectedLibraries = schema?.libraries || [];
-  if (detectedLibraries.length === 0) {
-    hints.push({
-      icon: '📚',
-      title: 'Library Support',
-      text: 'Enable MCAD, BOSL2, or other libraries for extended functions',
-      action: { type: 'openFeaturesGuide', tab: 'libraries' }
-    });
-  }
-  
-  // Render hints if any
-  renderHintsUI(hints);
-}
-
-function renderHintsUI(hints) {
-  const featureHints = document.getElementById('featureHints');
-  const hintsList = document.getElementById('hintsList');
-  
-  if (!featureHints || !hintsList) return;
-  
-  // Clear existing hints
-  hintsList.innerHTML = '';
-  
-  if (hints.length === 0) {
-    featureHints.classList.add('hidden');
-    return;
-  }
-  
-  // Show hints container
-  featureHints.classList.remove('hidden');
-  
-  // Render each hint
-  hints.forEach(hint => {
-    const li = document.createElement('li');
-    li.className = 'hint-item';
-    
-    const icon = document.createElement('span');
-    icon.className = 'hint-icon';
-    icon.textContent = hint.icon;
-    icon.setAttribute('aria-hidden', 'true');
-    
-    const content = document.createElement('div');
-    content.className = 'hint-content';
-    
-    const title = document.createElement('strong');
-    title.className = 'hint-title';
-    title.textContent = hint.title;
-    
-    const text = document.createElement('p');
-    text.className = 'hint-text';
-    text.textContent = hint.text;
-    
-    content.appendChild(title);
-    content.appendChild(text);
-    
-    // Add action button
-    if (hint.action && hint.action.type === 'openFeaturesGuide') {
-      const button = document.createElement('button');
-      button.className = 'btn btn-sm btn-link hint-action';
-      button.textContent = 'Learn more';
-      button.setAttribute('aria-label', `Learn more about ${hint.title}`);
-      button.addEventListener('click', () => {
-        if (window.openFeaturesGuide) {
-          window.openFeaturesGuide({ tab: hint.action.tab });
-        }
-      });
-      content.appendChild(button);
-    }
-    
-    li.appendChild(icon);
-    li.appendChild(content);
-    hintsList.appendChild(li);
   });
 }
 

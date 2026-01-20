@@ -3,12 +3,59 @@
  * @license GPL-3.0-or-later
  */
 
+import {
+  amber,
+  amberDark,
+  green,
+  greenDark,
+  red,
+  redDark,
+  slate,
+  slateA,
+  slateDark,
+  slateDarkA,
+  teal,
+  tealDark,
+  yellow,
+  yellowDark,
+} from '@radix-ui/colors';
+
 const THEME_KEY = 'openscad-customizer-theme';
 const HIGH_CONTRAST_KEY = 'openscad-customizer-high-contrast';
 const THEMES = {
   AUTO: 'auto',
   LIGHT: 'light',
   DARK: 'dark',
+};
+
+const RADIX_SCALES = {
+  light: [yellow, green, teal, slate, red, amber, slateA],
+  dark: [
+    yellowDark,
+    greenDark,
+    tealDark,
+    slateDark,
+    redDark,
+    amberDark,
+    slateDarkA,
+  ],
+};
+
+const toCssVarName = (key) => {
+  const withHyphen = key.replace(/([a-z])([A-Z])/g, '$1-$2');
+  const lower = withHyphen.toLowerCase();
+  if (/-a\d+$/i.test(lower)) {
+    return `--${lower}`;
+  }
+  return `--${lower.replace(/(\D)(\d)/g, '$1-$2')}`;
+};
+
+const applyRadixScaleSet = (root, scales) => {
+  scales.forEach((scale) => {
+    Object.entries(scale).forEach(([key, value]) => {
+      root.style.setProperty(toCssVarName(key), value);
+    });
+  });
 };
 
 /**
@@ -93,6 +140,9 @@ export class ThemeManager {
     this.currentTheme = theme;
     this.saveTheme(theme);
 
+    // Ensure Radix scales match resolved theme (light/dark)
+    this.applyRadixScales(this.getActiveTheme());
+
     // Notify listeners
     this.notifyListeners();
 
@@ -143,6 +193,17 @@ export class ThemeManager {
         : THEMES.LIGHT;
     }
     return this.currentTheme;
+  }
+
+  /**
+   * Apply Radix color scales to match active theme.
+   * @param {string} activeTheme - Resolved theme (light or dark)
+   */
+  applyRadixScales(activeTheme) {
+    const root = document.documentElement;
+    const scaleSet =
+      activeTheme === THEMES.DARK ? RADIX_SCALES.dark : RADIX_SCALES.light;
+    applyRadixScaleSet(root, scaleSet);
   }
 
   /**
@@ -207,6 +268,34 @@ export class ThemeManager {
     this.applyTheme(this.currentTheme);
     this.applyHighContrast(this.highContrast);
 
+    // If something external mutates `data-theme` (e.g. tests, SSR, or manual overrides),
+    // ensure Radix scale variables stay in sync with the resolved theme.
+    // This keeps semantic tokens like `--slate-1` correct under `:root[data-theme='dark']`.
+    try {
+      const root = document.documentElement;
+      const observer = new MutationObserver((mutations) => {
+        for (const m of mutations) {
+          if (m.type !== 'attributes') continue;
+          if (m.attributeName !== 'data-theme') continue;
+
+          const attr = root.getAttribute('data-theme');
+          if (attr === THEMES.DARK || attr === THEMES.LIGHT) {
+            this.applyRadixScales(attr);
+          } else {
+            // Attribute removed or invalid -> fall back to manager's resolved theme
+            this.applyRadixScales(this.getActiveTheme());
+          }
+        }
+      });
+      observer.observe(root, {
+        attributes: true,
+        attributeFilter: ['data-theme'],
+      });
+    } catch (error) {
+      // MutationObserver may not exist in some test environments
+      console.warn('[Theme] Could not observe data-theme changes:', error);
+    }
+
     // Listen for system theme changes when in auto mode
     window
       .matchMedia('(prefers-color-scheme: dark)')
@@ -215,6 +304,7 @@ export class ThemeManager {
           console.log(
             `[Theme] System preference changed to ${e.matches ? 'dark' : 'light'}`
           );
+          this.applyRadixScales(this.getActiveTheme());
           this.notifyListeners();
         }
       });

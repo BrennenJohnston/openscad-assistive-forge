@@ -25,7 +25,7 @@ export function initWorkflowProgress(visible = false) {
   if (!progressElement) return;
 
   progressElement.classList.toggle('hidden', !visible);
-  
+
   // Reset state
   currentStep = null;
   completedSteps.clear();
@@ -81,7 +81,7 @@ export function setWorkflowStep(step) {
  */
 export function completeWorkflowStep(step) {
   if (!WORKFLOW_STEPS.includes(step)) return;
-  
+
   completedSteps.add(step);
   updateProgressUI();
 }
@@ -103,7 +103,7 @@ export function getWorkflowState() {
   return {
     currentStep,
     completedSteps: Array.from(completedSteps),
-    allSteps: WORKFLOW_STEPS
+    allSteps: WORKFLOW_STEPS,
   };
 }
 
@@ -114,7 +114,7 @@ function updateProgressUI() {
   const progressElement = document.getElementById('workflowProgress');
   if (!progressElement) return;
 
-  WORKFLOW_STEPS.forEach((step, index) => {
+  WORKFLOW_STEPS.forEach((step) => {
     const stepElement = progressElement.querySelector(`[data-step="${step}"]`);
     if (!stepElement) return;
 
@@ -126,7 +126,7 @@ function updateProgressUI() {
     if (completedSteps.has(step)) {
       stepElement.classList.add('completed');
     }
-    
+
     if (step === currentStep) {
       stepElement.classList.add('active');
       stepElement.setAttribute('aria-current', 'step');
@@ -147,11 +147,11 @@ function announceStepChange(step) {
     upload: 'Upload file',
     customize: 'Customize parameters',
     render: 'Generate model',
-    download: 'Download file'
+    download: 'Download file',
   };
 
   const message = `Step ${stepIndex} of ${WORKFLOW_STEPS.length}: ${stepLabels[step] || step}`;
-  
+
   // Use a timeout to avoid conflicting with other announcements
   setTimeout(() => {
     srAnnouncer.textContent = message;
