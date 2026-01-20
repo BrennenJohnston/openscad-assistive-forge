@@ -317,6 +317,12 @@ All focus indicators meet **WCAG 2.4.13 Focus Appearance** requirements:
 - 3:1 contrast against adjacent colors
 - Visible outline or box-shadow
 
+### Skip Link
+
+The skip link uses **AAA-compliant** colors for high contrast mode:
+- Light mode: `#0047b3` background with white text (7:1 or better)
+- Dark mode: `#66b3ff` background with black text (7:1 or better)
+
 ### Color Blindness Considerations
 
 The palette is designed to be distinguishable for common color vision deficiencies:

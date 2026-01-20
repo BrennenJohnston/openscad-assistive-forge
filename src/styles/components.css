@@ -1,12 +1,12 @@
 /* Component Styles */
 
 /* Skip Link (Accessibility) */
-/* Uses high-contrast blue instead of accent yellow for WCAG AA compliance */
+/* Uses high-contrast blue instead of accent yellow for WCAG AAA compliance */
 .skip-link {
   position: absolute;
   top: -40px;
   left: 0;
-  background: #0052cc; /* Brand-neutral blue with 4.5:1 on white */
+  background: #0047b3; /* Brand-neutral blue with 7:1 on white */
   color: #ffffff;
   padding: var(--space-sm) var(--space-md);
   text-decoration: none;
