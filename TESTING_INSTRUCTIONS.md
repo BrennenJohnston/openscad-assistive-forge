@@ -1,407 +1,241 @@
-# 🧪 Testing Instructions - v1.10.0 Library Bundles
+# Testing Instructions - Tutorial Enhancement (v2.4)
 
-**Quick Start Guide for Manual Testing**
+## Overview
 
----
+This document provides testing instructions for the Educator Tutorial Enhancement and new UI Orientation tutorial implemented in v2.4.
 
-## ⚡ TL;DR - 5 Minute Test
+## Changes Summary
 
-1. **Open the app**: http://localhost:5173
-2. **Upload test file**: Look for example buttons, find "Library Test" or upload `public/examples/library-test/library_test.scad`
-3. **Check library panel**: Should see "📚 Libraries" with MCAD marked "required"
-4. **Generate STL**: Click the button and verify no errors
-5. **Success**: If STL downloads, library system works! 🎉
+1. **Selector Visibility Logic**: Updated `tutorial-sandbox.js` to select the first *visible* element from comma-separated selectors
+2. **Enhanced Educator Tutorial**: Added drawer/panel hints for mobile and desktop
+3. **New UI Orientation Tutorial**: 6-step non-gated walkthrough of app layout
+4. **Welcome Screen Update**: Added "UI Orientation (1 min)" button below Accessibility Spotlights
+5. **Documentation**: Updated guides and created research documentation
 
----
+## Manual Testing Required
 
-## 📋 Current Status
+### Test 1: Selector Visibility Logic (Desktop Viewport ≥768px)
 
-✅ **Setup Complete**
-- Libraries downloaded (MCAD, BOSL2)
-- Manifests created
-- Test example ready
-- Dev server running
+**Goal:** Verify that desktop-specific controls are highlighted in tutorials
 
-⏳ **Needs Testing**
-- Library detection
-- Worker mounting
-- Rendering with libraries
-- UI functionality
+**Steps:**
+1. Open the app in a desktop browser (viewport ≥768px)
+2. Click "Start Tutorial" on the Educators card
+3. Proceed to Step 2 (Adjust Parameters)
+4. **Expected:** The `#collapseParamPanelBtn` (left panel collapse button) should be highlighted, NOT `#mobileDrawerToggle` (which should be hidden on desktop)
+5. Exit the tutorial
+6. Click "UI Orientation (1 min)" button
+7. Proceed to Step 2 (Parameters Panel)
+8. **Expected:** The `#collapseParamPanelBtn` should be highlighted
+9. Proceed to Step 5 (Camera Controls)
+10. **Expected:** The `#cameraPanelToggle` (right-side camera panel button) should be highlighted
 
----
-
-## 🎯 Primary Test Objective
-
-**Verify that the library-test example works:**
-
-The test uses MCAD's `roundedBox()` function. If this renders successfully, it proves:
-1. Parser detects library usage ✓
-2. Library manager auto-enables MCAD ✓
-3. Worker mounts MCAD files ✓
-4. OpenSCAD can access library functions ✓
-5. Rendering pipeline integrates correctly ✓
+**Pass Criteria:**
+- Desktop controls are highlighted correctly
+- No visual glitches or overlapping highlights
+- Tutorial panel positions correctly near highlighted elements
 
 ---
 
-## 🚀 Step-by-Step Test
+### Test 2: Selector Visibility Logic (Mobile Viewport <768px)
 
-### Step 1: Load the Test Example
+**Goal:** Verify that mobile-specific controls are highlighted in tutorials
 
-**Option A - From Welcome Screen** (easiest):
-- Open http://localhost:5173
-- Look for example buttons
-- Click "Library Test" if available
+**Steps:**
+1. Open the app in a mobile browser or use browser DevTools to simulate mobile (viewport <768px)
+2. Click "Start Tutorial" on the Educators card
+3. Proceed to Step 2 (Adjust Parameters)
+4. **Expected:** The `#mobileDrawerToggle` ("Params" button) should be highlighted, NOT `#collapseParamPanelBtn` (which should be hidden on mobile)
+5. Exit the tutorial
+6. Click "UI Orientation (1 min)" button
+7. Proceed to Step 2 (Parameters Panel)
+8. **Expected:** The `#mobileDrawerToggle` should be highlighted
+9. Proceed to Step 5 (Camera Controls)
+10. **Expected:** The `#cameraDrawerToggle` (camera drawer button in actions bar) should be highlighted
 
-**Option B - Manual Upload**:
-- Click "Upload .scad file"
-- Navigate to: `public/examples/library-test/library_test.scad`
-- Select and upload
-
-### Step 2: Verify Library Detection
-
-Open browser DevTools (F12) and check Console tab for:
-
-```
-✅ Expected messages:
-OpenSCAD Assistive Forge v3.1.0
-Detected libraries: ['MCAD']
-Auto-enabled libraries: ['MCAD']
-[Library] enable: MCAD
-```
-
-### Step 3: Check UI
-
-Look in the parameters panel for "📚 Libraries" section:
-
-```
-📚 Libraries [1]
-  ▼ Expand to see:
-    
-    ☑ ⚙️ MCAD (required)
-       Mechanical CAD components
-```
-
-**Verify**:
-- Badge shows "1"
-- MCAD is checked
-- "required" badge visible
-- Panel can expand/collapse
-
-### Step 4: Test Rendering
-
-**Configure parameters** (should be defaults):
-- Style: "Rounded"
-- Width: 50
-- Depth: 30
-- Height: 25
-- Radius: 5
-
-**Trigger render**:
-- Wait for auto-preview (if enabled), OR
-- Click "Generate STL" button
-
-**Note on URL Parameters (Stability Fix)**:
-- If you load a shared URL with out-of-range values, the app now **clamps** them to the model's min/max.
-- Example: `width=18` → clamped to `20`, `height=96` → clamped to `50`.
-- This prevents CGAL assertion failures from invalid geometry.
-
-**Watch console for**:
-```
-✅ Expected worker messages:
-[Worker] Rendering with parameters: {...}
-[Worker FS] Mounting library: MCAD from /libraries/MCAD
-[Worker FS] Created directory: MCAD
-[Worker FS] Mounted file: MCAD/boxes.scad (XXX bytes)
-[Worker FS] Successfully mounted library: MCAD (36 files)
-[Worker] Render complete: NNN triangles
-```
-
-### Step 5: Verify Success
-
-**Success indicators**:
-- ✅ No error messages
-- ✅ Status shows "Ready" or "Preview ready"
-- ✅ 3D preview shows rounded box (if preview enabled)
-- ✅ "Download STL" button becomes active
-- ✅ Clicking download works
-
-**Failure indicators**:
-- ❌ Error: "Failed to render model"
-- ❌ Error: "File not found: MCAD/boxes.scad"
-- ❌ Console shows library mounting errors
-- ❌ Render times out
+**Pass Criteria:**
+- Mobile controls are highlighted correctly
+- Tutorial panel docks to bottom of screen on mobile
+- No horizontal scrolling or layout issues
 
 ---
 
-## 🔍 What to Look For
+### Test 3: Educator Tutorial Flow
 
-### Console Messages (Good Signs)
+**Goal:** Verify the enhanced educator tutorial includes drawer/panel hints
 
-```javascript
-// 1. Detection
-"Detected libraries: ['MCAD']"
+**Steps:**
+1. Click "Start Tutorial" on the Educators card
+2. Read through all 8 steps
+3. **Expected content changes:**
+   - **Step 1 (Welcome)**: Should mention "New to the interface? Try 'UI Orientation' (1 minute) after this tour."
+   - **Step 2 (Adjust Parameters)**: Should mention mobile ("tap Params") and desktop ("collapse button") controls
+   - **Step 3 (See Preview)**: Should mention "Expand 'Preview Settings & Info' to view status, dimensions, and quality settings"
+   - **Step 5 (Generate)**: Should mention "More options like Share Link and Export Params live in the 'Actions' menu"
+   - **Step 8 (You're Ready!)**: Should mention "Run 'UI Orientation' if you're new to the layout"
 
-// 2. Auto-enable
-"Auto-enabled libraries: ['MCAD']"
-
-// 3. Worker mounting
-"[Worker FS] Mounting library: MCAD from /libraries/MCAD"
-"[Worker FS] Successfully mounted library: MCAD"
-
-// 4. Render success
-"[Worker] Render complete: 296 triangles"
-```
-
-### Console Errors (Problem Signs)
-
-```javascript
-// ❌ Detection failed
-"Detected libraries: []" // Should have MCAD
-
-// ❌ Mounting failed
-"Failed to fetch /libraries/MCAD/manifest.json"
-"Failed to mount library: MCAD"
-
-// ❌ File not found
-"Error: Cannot find file: MCAD/boxes.scad"
-```
+**Pass Criteria:**
+- All new hints are present and clearly worded
+- Tutorial completes successfully
+- Focus returns to "Start Tutorial" button on exit
 
 ---
 
-## 🐛 Common Issues & Fixes
+### Test 4: UI Orientation Tutorial
 
-### Issue 1: Library Not Detected
+**Goal:** Verify the new UI Orientation tutorial is non-gated and covers all drawers
 
-**Symptoms**: Console shows `Detected libraries: []`
+**Steps:**
+1. Load the welcome screen
+2. Scroll down to the "UI Orientation (1 min)" button (below Accessibility Spotlights)
+3. Click the button
+4. **Expected:** Simple Box example loads, then tutorial starts automatically
+5. Verify all 6 steps:
+   - **Step 1**: App Layout overview (centered, no highlight)
+   - **Step 2**: Parameters Panel (highlights mobile drawer toggle OR desktop collapse button)
+   - **Step 3**: Preview Settings & Info (highlights `#previewDrawerToggle`)
+   - **Step 4**: Actions Menu (highlights `#actionsDrawerToggle`)
+   - **Step 5**: Camera Controls (highlights mobile drawer OR desktop panel toggle)
+   - **Step 6**: Ready to Explore (centered, no highlight)
+6. **Expected:** "Next" button is ALWAYS enabled (no completion gates)
+7. Press "Next" through all steps without interacting with highlighted elements
+8. **Expected:** Tutorial completes successfully
 
-**Fix**:
-- Verify include statement in test file: `use <MCAD/boxes.scad>;`
-- Check parser.js has library detection code
-- Refresh browser (Ctrl+Shift+R)
-
-### Issue 2: Manifest Not Found
-
-**Symptoms**: `Failed to fetch /libraries/MCAD/manifest.json`
-
-**Fix**:
-- Verify file exists: `public/libraries/MCAD/manifest.json`
-- Check manifest.json is valid JSON
-- Verify dev server is running
-- Check Network tab in DevTools for 404 errors
-
-### Issue 3: Worker Can't Find Library Files
-
-**Symptoms**: `Error: Cannot find file: MCAD/boxes.scad`
-
-**Fix**:
-- Verify MCAD directory has .scad files
-- Check manifest.json lists "boxes.scad"
-- Verify worker mounted files (check console)
-- Try disabling and re-enabling library in UI
-
-### Issue 4: OpenSCAD Engine Fails to Initialize
-
-**Symptoms**:
-- `Failed to initialize OpenSCAD engine`
-- `[RenderController] Worker error: Event`
-- `Worker not ready. Call init() first.`
-
-**Fix**:
-- Keep the worker constructor inline: `new Worker(new URL('../worker/openscad-worker.js', import.meta.url), { type: 'module' })`
-- Avoid precomputing the worker URL outside the constructor (can break Vite worker bundling)
-- Rebuild and preview: `npm run build` then `npm run preview`
-- Clear the site data/service worker cache if the error persists
-
-### Issue 4: MCAD Not Auto-Enabled
-
-**Symptoms**: Library detected but not checked in UI
-
-**Fix**:
-- Check libraryManager.autoEnable() is called
-- Verify state has detectedLibraries
-- Manually check MCAD checkbox
-- Check console for errors
+**Pass Criteria:**
+- Tutorial loads simple-box example before starting
+- All steps are skippable (no completion requirements)
+- Highlights appear on correct elements
+- Tutorial duration is under 2 minutes
 
 ---
 
-## ✅ Quick Verification Checklist
+### Test 5: Keyboard Navigation
 
-Run through this 2-minute checklist:
+**Goal:** Verify tutorials are fully keyboard accessible
 
-- [ ] Dev server running (http://localhost:5173 accessible)
-- [ ] Test file uploads without error
-- [ ] Library panel visible in UI
-- [ ] MCAD shows as "required" with badge
-- [ ] Console shows detection message
-- [ ] Render completes without errors
-- [ ] STL file downloads successfully
-- [ ] 3D preview shows rounded box (optional)
+**Steps:**
+1. Use only keyboard to navigate
+2. Tab to "Start Tutorial" button (Educators card) and press Enter
+3. Tutorial should open with focus inside the panel
+4. Press **Tab** to navigate between Back/Next buttons
+5. Press **Arrow Right** to advance to next step
+6. Press **Arrow Left** to go back to previous step
+7. Press **Escape** to exit tutorial
+8. **Expected:** Focus returns to "Start Tutorial" button
 
-If all checked: **✅ Library system works!**
+**Repeat for UI Orientation tutorial:**
+1. Tab to "UI Orientation (1 min)" button and press Enter
+2. Verify keyboard navigation works as above
 
-If any unchecked: **See troubleshooting above**
-
----
-
-## 📚 Additional Tests (Optional)
-
-### Test 2: Manual Toggle
-
-1. Uncheck MCAD
-2. Try to render
-3. Should get error (library required but disabled)
-4. Re-check MCAD
-5. Render should succeed
-
-### Test 3: BOSL2
-
-1. Create simple file with: `include <BOSL2/std.scad>; cuboid([20,30,40]);`
-2. Upload
-3. Verify BOSL2 detected
-4. Enable BOSL2
-5. Render
-
-### Test 4: State Persistence
-
-1. Enable MCAD and BOSL2
-2. Refresh browser
-3. Upload any file
-4. Check libraries still enabled
+**Pass Criteria:**
+- All tutorial controls are keyboard accessible
+- Arrow keys navigate between steps
+- Escape exits tutorial
+- Focus is restored to trigger button on exit
 
 ---
 
-## 📞 Getting Help
+### Test 6: Screen Reader Announcements
 
-### Detailed Testing Guide
-For comprehensive test cases, see:
-```
-docs/guides/LIBRARY_TESTING_GUIDE.md
-```
+**Goal:** Verify tutorials announce steps and completion states
 
-### Setup Verification
-Verify setup completed correctly:
-```
-docs/changelogs/V1.10_TESTING_SETUP.md
-```
+**Test with NVDA, JAWS, or VoiceOver:**
+1. Start Educators tutorial
+2. **Expected announcement:** "Educator Quick Start started. Step 1 of 8."
+3. Press Next
+4. **Expected announcement:** "Step 2 of 8: Adjust Parameters"
+5. If step has completion requirement, complete the action
+6. **Expected announcement:** "Action completed. Next enabled."
+7. Complete tutorial
+8. **Expected announcement:** "Tutorial closed."
 
-### Feature Documentation
-Full feature details:
-```
-docs/changelogs/CHANGELOG_v1.10.md
-```
+**Repeat for UI Orientation tutorial:**
+1. Start UI Orientation
+2. **Expected announcement:** "UI Orientation started. Step 1 of 6."
+3. Verify all steps announce correctly
 
-### Console Commands
-
-Check library state in browser console:
-```javascript
-// Check localStorage
-localStorage.getItem('openscad-customizer-libraries')
-
-// Check if libraries available
-await fetch('/libraries/MCAD/manifest.json').then(r => r.json())
-
-// Check mounted libraries (in worker context)
-// Look for [Worker FS] messages in console
-```
+**Pass Criteria:**
+- Step transitions are announced clearly
+- Step numbers and titles are announced
+- Completion states are announced (for gated steps in Educators tutorial)
+- Exit announcements are clear
 
 ---
 
-## 🎯 Success Criteria
+### Test 7: Visual Accessibility (High Contrast Mode)
 
-**Minimum for "Working"**:
-- Library detected from test file ✓
-- UI shows library controls ✓  
-- MCAD auto-enabled ✓
-- Render completes without errors ✓
-- STL file generated ✓
+**Goal:** Verify tutorials work in high contrast mode
 
-**Ideal for "Production Ready"**:
-- All above plus:
-- Multiple browsers tested ✓
-- Mobile devices tested ✓
-- Performance acceptable ✓
-- Accessibility verified ✓
-- Documentation complete ✓
+**Steps:**
+1. Enable high contrast mode (HC button in header)
+2. Start Educators tutorial
+3. **Expected:** Tutorial panel has visible borders and text
+4. **Expected:** Spotlight cutout has visible outline around highlighted elements
+5. Repeat for UI Orientation tutorial
 
----
+**Test with Windows High Contrast Mode:**
+1. Enable Windows High Contrast Mode (Settings > Accessibility > Contrast themes)
+2. Reload the app
+3. Start tutorials
+4. **Expected:** All tutorial UI is visible and distinguishable
 
-## 🚀 After Testing
-
-### If Everything Works
-
-1. Update completion summary with "✅ TESTED"
-2. Create git commit with test results
-3. Consider production deployment
-4. Plan next features (v1.11)
-
-### If Issues Found
-
-1. Document specific errors
-2. Check troubleshooting section
-3. Review worker console messages
-4. Test isolation (disable other features)
-5. Report findings for fixes
+**Pass Criteria:**
+- Tutorial panel is visible in high contrast
+- Highlighted elements are clearly distinguished
+- Text is readable
+- Buttons have visible focus indicators
 
 ---
 
-## 📝 Test Report Template
+### Test 8: Welcome Screen UI Orientation Button
 
-Copy and fill out after testing:
+**Goal:** Verify the new UI Orientation button is visible and functional
 
-```markdown
-## Test Report - v1.10.0
+**Steps:**
+1. Load welcome screen
+2. Scroll down to Accessibility Spotlights section
+3. **Expected:** "UI Orientation (1 min)" button is visible below the spotlights
+4. Button should have:
+   - Text: "🧭 UI Orientation (1 min)"
+   - Outline button style (`btn-outline`)
+   - Minimum 44px height (WCAG AAA touch target)
+5. Click the button
+6. **Expected:** Simple Box example loads, then UI Orientation tutorial starts
 
-**Date**: [Today]
-**Tester**: [Your Name]
-**Browser**: [Chrome/Firefox/Safari] [Version]
-
-### Primary Test: Library Test Example
-- [ ] File uploaded successfully
-- [ ] MCAD detected: Yes / No
-- [ ] MCAD auto-enabled: Yes / No
-- [ ] Worker mounted MCAD: Yes / No
-- [ ] Render succeeded: Yes / No
-- [ ] STL downloaded: Yes / No
-
-### Issues Found
-1. [Description]
-2. [Description]
-
-### Console Errors
-```
-[Paste any error messages]
-```
-
-### Overall Status
-- [ ] ✅ Working - Ready for production
-- [ ] ⚠️ Working with minor issues
-- [ ] ❌ Not working - needs fixes
-
-### Recommendations
-[Your feedback]
-```
+**Pass Criteria:**
+- Button is visible and styled correctly
+- Button loads simple-box example
+- Tutorial launches automatically after example loads
+- Button is keyboard accessible (Tab to reach, Enter to activate)
 
 ---
 
-## 🎉 Expected Outcome
+## Automated Testing (Future Enhancement)
 
-**When working correctly, you'll see:**
-
-1. **Upload library_test.scad**
-2. **Console**: "Detected libraries: ['MCAD']"
-3. **UI**: Library panel with MCAD checked and badge "1"
-4. **Click Generate**: Worker mounts MCAD, render succeeds
-5. **Download**: STL file with rounded box geometry
-6. **Preview**: 3D view shows smooth rounded corners
-
-**Total time**: 30 seconds to 2 minutes (depending on render)
-
-**This proves**: The entire library system pipeline works end-to-end! 🎊
+Consider adding Playwright tests for:
+- Selector visibility on different viewport sizes
+- Tutorial navigation flow
+- Focus restoration on exit
+- ARIA announcements (via accessibility snapshot)
 
 ---
 
-**Ready to test? Start here**: http://localhost:5173
+## Success Criteria Summary
 
-**Questions?** Check `docs/guides/LIBRARY_TESTING_GUIDE.md`
+✅ All selectors highlight correctly on mobile and desktop viewports  
+✅ Educator tutorial includes drawer/panel hints  
+✅ UI Orientation tutorial is non-gated and completes in under 2 minutes  
+✅ Welcome screen shows UI Orientation button  
+✅ Keyboard navigation works for all tutorials  
+✅ Screen reader announcements are clear and timely  
+✅ High contrast mode support is maintained  
+✅ Focus restoration works on tutorial exit
 
-**Good luck! 🍀**
+---
+
+## Related Documentation
+
+- [Welcome Screen Feature Paths](docs/guides/WELCOME_SCREEN_FEATURE_PATHS.md)
+- [Welcome Feature Paths Inventory](docs/WELCOME_FEATURE_PATHS_INVENTORY.md)
+- [Tutorial Design Research](docs/research/TUTORIAL_DESIGN_RESEARCH.md)
+- [Accessibility Guide](docs/guides/ACCESSIBILITY_GUIDE.md)

@@ -142,20 +142,20 @@
             
             <div class="features-overview" role="region" aria-labelledby="features-heading">
               <h3 id="features-heading">Discover Features for Your Needs</h3>
-              <p class="features-intro">Choose a path to explore accessible customization features:</p>
+              <p class="features-intro">Start with the guided beginner tutorial, then explore more features in Help.</p>
               
               <div class="role-paths-grid">
-                <!-- Educators / Facilitators (MOVED TO FIRST) -->
+                <!-- Beginners Start Here (only visible tutorial for now) -->
                 <div class="role-path-card">
-                  <h4 class="role-path-title">Educators / Facilitators</h4>
-                  <p class="role-path-description">Demonstrate 3D design concepts quickly with ready-to-use examples</p>
+                  <h4 class="role-path-title">Beginners Start Here</h4>
+                  <p class="role-path-description">New to OpenSCAD Assistive Forge? Learn the basics with a simple example</p>
                   <ul class="role-path-tips" aria-label="What you'll learn">
                     <li>Change Width/Height → watch Preview update</li>
-                    <li>Save presets for classroom reuse</li>
-                    <li>Guide students through full workflow (~2 min)</li>
+                    <li>Save a preset to reuse later</li>
+                    <li>Generate and download your first STL (~2 min)</li>
                   </ul>
                   <div class="role-path-actions">
-                    <button class="btn btn-primary btn-role-try" data-example="simple-box" data-role="educators" data-tutorial="educators">
+                    <button class="btn btn-primary btn-role-try" data-example="simple-box" data-role="beginners" data-tutorial="educators">
                       Start Tutorial
                     </button>
                     <button class="btn btn-link btn-role-learn" data-feature-tab="presets" aria-label="Open Features Guide: Presets">
@@ -164,8 +164,8 @@
                   </div>
                 </div>
 
-                <!-- Advanced Makers (MOVED TO SECOND) -->
-                <div class="role-path-card">
+                <!-- Other tutorials are temporarily hidden (we'll re-enable later) -->
+                <div class="role-path-card" hidden aria-hidden="true">
                   <h4 class="role-path-title">Advanced Makers</h4>
                   <p class="role-path-description">Work with multi-file projects, libraries, and advanced OpenSCAD features</p>
                   <ul class="role-path-tips" aria-label="What you'll learn">
@@ -183,8 +183,7 @@
                   </div>
                 </div>
 
-                <!-- Keyboard-Only / Switch Users (MOVED TO THIRD) -->
-                <div class="role-path-card">
+                <div class="role-path-card" hidden aria-hidden="true">
                   <h4 class="role-path-title">Keyboard-Only Users</h4>
                   <p class="role-path-description">Complete the full workflow without a mouse using predictable keyboard controls</p>
                   <ul class="role-path-tips" aria-label="What you'll learn">
@@ -202,8 +201,7 @@
                   </div>
                 </div>
 
-                <!-- Low Vision / High Contrast Users (MOVED TO FOURTH) -->
-                <div class="role-path-card">
+                <div class="role-path-card" hidden aria-hidden="true">
                   <h4 class="role-path-title">Low Vision Users</h4>
                   <p class="role-path-description">Use high contrast themes, large touch targets, and visible focus indicators</p>
                   <ul class="role-path-tips" aria-label="What you'll learn">
@@ -221,8 +219,7 @@
                   </div>
                 </div>
 
-                <!-- Voice Input Users (MOVED TO FIFTH) -->
-                <div class="role-path-card">
+                <div class="role-path-card" hidden aria-hidden="true">
                   <h4 class="role-path-title">Voice Input Users</h4>
                   <p class="role-path-description">Control the app with voice commands using stable, speakable names</p>
                   <ul class="role-path-tips" aria-label="What you'll learn">
@@ -240,8 +237,7 @@
                   </div>
                 </div>
 
-                <!-- Screen Reader / Blind Users (MOVED TO LAST) -->
-                <div class="role-path-card">
+                <div class="role-path-card" hidden aria-hidden="true">
                   <h4 class="role-path-title">Screen Reader Users</h4>
                   <p class="role-path-description">Customize models with clear status announcements and keyboard-only workflow</p>
                   <ul class="role-path-tips" aria-label="What you'll learn">
@@ -285,6 +281,19 @@
                     </a>
                   </li>
                 </ul>
+              </div>
+              
+              <!-- UI Orientation Call-to-Action -->
+              <div class="ui-orientation-cta">
+                <p>New to the interface?</p>
+                <button 
+                  class="btn btn-outline btn-ui-orientation" 
+                  data-example="simple-box" 
+                  data-tutorial="ui-orientation"
+                  aria-label="Start UI orientation tour (1 minute)"
+                >
+                  🧭 UI Orientation (1 min)
+                </button>
               </div>
             </div>
           </div>
@@ -1153,6 +1162,8 @@
             <button class="features-tab" role="tab" aria-selected="false" aria-controls="featuresPanelColors" id="tab-colors" tabindex="-1">Color Parameters</button>
             <button class="features-tab" role="tab" aria-selected="false" aria-controls="featuresPanelPresets" id="tab-presets" tabindex="-1">Presets</button>
             <button class="features-tab" role="tab" aria-selected="false" aria-controls="featuresPanelAdvanced" id="tab-advanced" tabindex="-1">Advanced</button>
+            <button class="features-tab" role="tab" aria-selected="false" aria-controls="featuresPanelWorkflow" id="tab-workflow" tabindex="-1">Workflow</button>
+            <button class="features-tab" role="tab" aria-selected="false" aria-controls="featuresPanelAccessibility" id="tab-accessibility" tabindex="-1">Accessibility</button>
           </div>
           
           <!-- Libraries Panel -->
@@ -1181,6 +1192,13 @@ use &lt;BOSL2/std.scad&gt;;</code></pre>
               </button>
               <p class="features-note">This example demonstrates MCAD library usage with mechanical components.</p>
             </div>
+
+            <h4>Related Features</h4>
+            <ul class="features-list">
+              <li><strong>ZIP projects</strong> – Upload a <code>.zip</code> containing multiple <code>.scad</code> files and dependencies</li>
+              <li><strong>File tree</strong> – View included files to confirm everything loaded correctly</li>
+              <li><strong>Source viewer</strong> – Inspect the fully assembled source (Advanced tab)</li>
+            </ul>
           </div>
           
           <!-- Colors Panel -->
@@ -1206,15 +1224,7 @@ secondary_color = "E74C3C"; // [color]</code></pre>
             </ul>
             
             <h4>Using Colors in Your Model</h4>
-            <p>Convert hex strings to RGB values in OpenSCAD:</p>
-            <pre><code>function hex2rgb(hex) = [
-  (search(substr(hex,0,2), "0123456789ABCDEF") / 16) / 255,
-  (search(substr(hex,2,2), "0123456789ABCDEF") / 16) / 255,
-  (search(substr(hex,4,2), "0123456789ABCDEF") / 16) / 255
-];
-
-color(hex2rgb(box_color))
-  cube([10, 10, 10]);</code></pre>
+            <p>Use your color parameter in OpenSCAD however you prefer (RGB arrays, named colors, or helper functions). The example below includes a working conversion helper.</p>
             
             <div class="features-action">
               <button class="btn btn-primary" data-example="colored-box" data-feature-example="true">
@@ -1222,6 +1232,13 @@ color(hex2rgb(box_color))
               </button>
               <p class="features-note">This example shows how to use color parameters with a complete hex2rgb implementation.</p>
             </div>
+
+            <h4>Preview-Only Model Color</h4>
+            <p>You can also change the model’s display color without changing your OpenSCAD file:</p>
+            <ul class="features-list">
+              <li><strong>Preview Settings &amp; Info → Model Color</strong> – affects the preview only</li>
+              <li><strong>Reset</strong> – returns to the theme default display color</li>
+            </ul>
           </div>
           
           <!-- Presets Panel -->
@@ -1248,11 +1265,24 @@ color(hex2rgb(box_color))
             </ul>
             
             <p>Presets are stored per-file, so each model has its own set of saved configurations.</p>
+
+            <h4>Sharing Your Configuration</h4>
+            <ul class="features-list">
+              <li><strong>Share Link</strong> (Actions menu) – Copy a URL that includes your current parameters</li>
+              <li><strong>Export Params</strong> (Actions menu) – Download your current settings as a JSON file</li>
+            </ul>
           </div>
           
           <!-- Advanced Panel -->
           <div class="features-panel" id="featuresPanelAdvanced" role="tabpanel" tabindex="0" aria-labelledby="tab-advanced" hidden>
             <h3>Advanced Features</h3>
+            
+            <h4>Parameter Search &amp; Jump</h4>
+            <ul class="features-list">
+              <li><strong>Search parameters</strong> – Filter by name/description</li>
+              <li><strong>Jump to group</strong> – Quickly navigate long parameter lists</li>
+              <li><strong>Show all</strong> – Restore all parameters after a search</li>
+            </ul>
             
             <h4>Output Formats</h4>
             <p>Export your customized models in multiple formats:</p>
@@ -1272,20 +1302,92 @@ color(hex2rgb(box_color))
               <li>Display a file tree showing the project structure</li>
               <li>Support relative paths in <code>include</code> and <code>use</code> statements</li>
             </ul>
+
+            <div class="features-action">
+              <button class="btn btn-primary" data-example="multi-file-box" data-feature-example="true">
+                🧩 Load Multi-file ZIP Example
+              </button>
+              <p class="features-note">A small ZIP project that demonstrates includes, modules, and the file tree.</p>
+            </div>
             
             <h4>Parameter Limits Override</h4>
             <p>By default, sliders and number inputs respect the limits defined in your OpenSCAD file. You can unlock parameter limits from the Advanced menu to enter custom values.</p>
             
             <h4>Source Code Viewer</h4>
             <p>View the complete OpenSCAD source code, including all included files, from the Advanced menu. This helps verify that multi-file projects are loaded correctly.</p>
+
+            <h4>Current Parameters as JSON</h4>
+            <p>Use <strong>Advanced → View Params JSON</strong> to copy or archive your current configuration (useful for clinics, classrooms, or troubleshooting).</p>
             
             <h4>Render Quality</h4>
-            <p>Choose different quality levels for preview rendering:</p>
+            <p>Choose different quality levels for preview and exports:</p>
             <ul class="features-list">
-              <li><strong>Draft</strong> – Fast rendering for quick iterations</li>
-              <li><strong>Normal</strong> – Balanced quality and speed (default)</li>
-              <li><strong>High</strong> – Higher detail for final previews</li>
+              <li><strong>Preview quality</strong> – Auto, Fidelity, Balanced, Fast</li>
+              <li><strong>Export quality</strong> – Model default, Low, Medium, High</li>
+              <li><strong>Complexity indicator</strong> – Shows a suggested quality tier based on your model</li>
             </ul>
+          </div>
+
+          <!-- Workflow Panel -->
+          <div class="features-panel" id="featuresPanelWorkflow" role="tabpanel" tabindex="0" aria-labelledby="tab-workflow" hidden>
+            <h3>Workflow &amp; Actions</h3>
+            <p>The app is designed around a simple, repeatable workflow. A progress indicator at the top shows where you are.</p>
+
+            <h4>The 4-Step Flow</h4>
+            <ol class="features-list">
+              <li><strong>Upload</strong> – Load a <code>.scad</code> or <code>.zip</code> project</li>
+              <li><strong>Customize</strong> – Adjust parameters, use presets, search/jump for large models</li>
+              <li><strong>Generate</strong> – Create your output file (STL/OBJ/OFF/AMF/3MF)</li>
+              <li><strong>Download</strong> – Download the generated file (or download the last file again)</li>
+            </ol>
+
+            <h4>Actions Menu</h4>
+            <p>Open the <strong>Actions</strong> drawer to find power features:</p>
+            <ul class="features-list">
+              <li><strong>Share Link</strong> – Copy a URL with your current parameters</li>
+              <li><strong>Export Params</strong> – Download your configuration as JSON</li>
+              <li><strong>Compare</strong> – Track and compare parameter changes</li>
+              <li><strong>Queue</strong> – Batch multiple renders and process them later</li>
+            </ul>
+
+            <h4>Focus Mode</h4>
+            <p>Use <strong>Full Screen</strong> (Focus Mode) to maximize the preview area when presenting or when working on smaller screens.</p>
+          </div>
+
+          <!-- Accessibility Panel -->
+          <div class="features-panel" id="featuresPanelAccessibility" role="tabpanel" tabindex="0" aria-labelledby="tab-accessibility" hidden>
+            <h3>Accessibility Features</h3>
+            <p>The UI is built to support keyboard-only use, screen readers, voice control, and low-vision needs.</p>
+
+            <h4>Keyboard &amp; Focus</h4>
+            <ul class="features-list">
+              <li><strong>Skip link</strong> – Press <kbd>Tab</kbd> at the top to jump to main content</li>
+              <li><strong>Undo / Redo</strong> – <kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd></li>
+              <li><strong>Focus indicators</strong> – 3px visible outlines (4px in High Contrast mode)</li>
+              <li><strong>Touch targets</strong> – Buttons meet a 44×44px minimum size</li>
+            </ul>
+
+            <h4>Screen Readers</h4>
+            <ul class="features-list">
+              <li><strong>Status announcements</strong> – Key operations are announced via live regions</li>
+              <li><strong>Landmarks</strong> – Major sections are labeled as regions for quick navigation</li>
+              <li><strong>Plain-language errors</strong> – Errors include clear titles and suggested fixes</li>
+            </ul>
+
+            <h4>Theme &amp; Contrast</h4>
+            <ul class="features-list">
+              <li><strong>Theme toggle</strong> – Light / Dark</li>
+              <li><strong>High Contrast (HC)</strong> – AAA-oriented contrast and thicker focus/borders</li>
+              <li><strong>Forced colors</strong> – Works with Windows High Contrast / forced-colors mode</li>
+              <li><strong>Reduced motion</strong> – Respects <code>prefers-reduced-motion</code></li>
+            </ul>
+
+            <div class="features-action">
+              <a class="btn btn-outline" href="https://github.com/BrennenJohnston/openscad-assistive-forge/blob/main/docs/guides/ACCESSIBILITY_GUIDE.md" target="_blank" rel="noopener noreferrer">
+                📘 Full Accessibility Guide (opens in new tab)
+              </a>
+              <p class="features-note">Full details, including tested screen reader/browser combinations.</p>
+            </div>
           </div>
         </div>
       </div>

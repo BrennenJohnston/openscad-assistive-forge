@@ -85,6 +85,10 @@ const EXAMPLE_DEFINITIONS = {
     path: '/examples/colored-box/colored_box.scad',
     name: 'colored_box.scad',
   },
+  'multi-file-box': {
+    path: '/examples/multi-file-box.zip',
+    name: 'multi-file-box.zip',
+  },
 };
 
 // Feature detection

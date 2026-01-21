@@ -92,7 +92,7 @@ summary:focus-visible,
 
 .btn-primary {
   background-color: var(--color-accent);
-  color: var(--color-accent-text);
+  color: var(--color-on-accent);
 }
 
 .btn-primary:hover:not(:disabled) {
@@ -101,7 +101,7 @@ summary:focus-visible,
 
 .btn-success {
   background-color: var(--color-success);
-  color: var(--color-accent-text);
+  color: var(--color-on-success);
 }
 
 .btn-success:hover:not(:disabled) {
@@ -1024,26 +1024,26 @@ select:focus-visible {
 /* State: Current - preview matches parameters */
 .preview-state-indicator.state-current {
   background-color: var(--color-success);
-  color: var(--color-accent-text);
+  color: var(--color-on-success);
 }
 
 /* State: Pending - parameter changed, render scheduled */
 .preview-state-indicator.state-pending {
   background-color: var(--color-warning);
-  color: var(--color-accent-text);
+  color: var(--color-on-warning);
   animation: pulse-pending 1.5s ease-in-out infinite;
 }
 
 /* State: Rendering - preview render in progress */
 .preview-state-indicator.state-rendering {
   background-color: var(--color-accent);
-  color: var(--color-accent-text);
+  color: var(--color-on-accent);
 }
 
 /* State: Stale - preview outdated */
 .preview-state-indicator.state-stale {
   background-color: var(--color-warning-hover);
-  color: var(--color-accent-text);
+  color: var(--color-on-warning);
 }
 
 /* State: Error - render failed */
@@ -2382,7 +2382,7 @@ select:focus-visible {
   display: inline-block;
   padding: 2px var(--space-xs);
   background: var(--color-warning);
-  color: var(--color-accent-text);
+  color: var(--color-on-warning);
   border-radius: var(--border-radius-sm);
   font-size: 10px;
   font-weight: 700;
@@ -2798,7 +2798,7 @@ select:focus-visible {
   min-width: 20px;
   padding: 2px 6px;
   background: var(--color-accent);
-  color: var(--color-accent-text);
+  color: var(--color-on-accent);
   border-radius: 10px;
   font-size: 12px;
   font-weight: 700;
@@ -3824,7 +3824,7 @@ select:focus-visible {
 
 .features-tab:hover {
   color: var(--color-text-primary);
-  background-color: var(--color-bg-hover);
+  background-color: var(--color-hover-bg);
 }
 
 .features-tab:focus {
@@ -3956,6 +3956,151 @@ select:focus-visible {
 [data-high-contrast='true'] .features-action {
   border-width: 2px;
   border-left-width: 6px;
+}
+
+/* =========================================
+   Features Guide - Tutorial Highlight Polish
+   Enhanced styling when modal is spotlighted
+   ========================================= */
+
+/* Enhanced header when spotlighted */
+#featuresGuideModal .modal-content.tutorial-target-highlight .modal-header {
+  background: linear-gradient(
+    135deg,
+    var(--color-accent) 0%,
+    color-mix(in srgb, var(--color-accent) 80%, var(--color-bg-primary)) 100%
+  );
+  color: var(--color-accent-text, white);
+  border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0;
+  padding: var(--space-md) var(--space-lg);
+}
+
+#featuresGuideModal .modal-content.tutorial-target-highlight .modal-header h2 {
+  color: inherit;
+}
+
+#featuresGuideModal .modal-content.tutorial-target-highlight .modal-close {
+  color: inherit;
+  opacity: 0.9;
+}
+
+#featuresGuideModal .modal-content.tutorial-target-highlight .modal-close:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Make close button more prominent during tutorial - pulsing hint */
+#featuresGuideModal .modal-content.tutorial-target-highlight .modal-close {
+  animation: closeButtonHint 2s ease-in-out infinite;
+  position: relative;
+}
+
+#featuresGuideModal .modal-content.tutorial-target-highlight .modal-close::after {
+  content: 'Close to continue';
+  position: absolute;
+  right: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  margin-right: var(--space-sm);
+  white-space: nowrap;
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  opacity: 0.9;
+  pointer-events: none;
+}
+
+@keyframes closeButtonHint {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
+
+/* Enhanced tabs when spotlighted */
+#featuresGuideModal .modal-content.tutorial-target-highlight .features-tabs {
+  position: relative;
+  background: var(--color-bg-secondary);
+  border-bottom: 2px solid var(--color-accent);
+  padding-top: var(--space-lg);
+}
+
+#featuresGuideModal .modal-content.tutorial-target-highlight .features-tab {
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+#featuresGuideModal .modal-content.tutorial-target-highlight .features-tab:hover {
+  background: color-mix(in srgb, var(--color-accent) 15%, transparent);
+}
+
+#featuresGuideModal .modal-content.tutorial-target-highlight .features-tab[aria-selected='true'] {
+  color: var(--color-accent);
+  border-bottom-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 10%, var(--color-bg-primary));
+}
+
+/* Enhanced panel content when spotlighted */
+#featuresGuideModal .modal-content.tutorial-target-highlight .features-panel {
+  background: var(--color-bg-primary);
+}
+
+#featuresGuideModal .modal-content.tutorial-target-highlight .features-panel h3 {
+  color: var(--color-accent);
+  border-bottom: 2px solid var(--color-accent);
+  padding-bottom: var(--space-xs);
+  margin-bottom: var(--space-md);
+}
+
+#featuresGuideModal .modal-content.tutorial-target-highlight .features-action {
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 8%, var(--color-bg-secondary));
+}
+
+/* Encourage exploration - hint above tabs */
+#featuresGuideModal .modal-content.tutorial-target-highlight .features-tabs::before {
+  content: '👆 Explore the tabs to learn more';
+  position: absolute;
+  left: var(--space-sm);
+  top: var(--space-2xs);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  font-weight: 500;
+  font-style: italic;
+}
+
+/* Tutorial panel positioning when Features Guide modal is open */
+body:has(#featuresGuideModal:not(.hidden)) .tutorial-panel {
+  /* Position at bottom of screen when modal is open */
+  position: fixed !important;
+  bottom: var(--space-md) !important;
+  left: 50% !important;
+  top: auto !important;
+  transform: translateX(-50%) !important;
+  max-width: min(400px, calc(100vw - var(--space-lg) * 2)) !important;
+  z-index: 10006 !important;
+  box-shadow: 
+    0 -4px 20px rgba(0, 0, 0, 0.3),
+    0 0 0 3px var(--color-accent) !important;
+}
+
+/* Hide the arrow when modal is open - panel is detached */
+body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
+  display: none !important;
+}
+
+/* Mobile: adjust panel position when modal is open */
+@media (max-width: 767px) {
+  body:has(#featuresGuideModal:not(.hidden)) .tutorial-panel {
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    transform: none !important;
+    max-width: 100% !important;
+    border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0 !important;
+    max-height: 35vh !important;
+  }
 }
 
 /* Responsive adjustments */
@@ -4478,6 +4623,28 @@ select:focus-visible {
   outline-offset: 2px;
 }
 
+/* UI Orientation CTA */
+.ui-orientation-cta {
+  margin-top: var(--space-xl);
+  padding: var(--space-lg);
+  text-align: center;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-md);
+}
+
+.ui-orientation-cta p {
+  margin: 0 0 var(--space-md) 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.btn-ui-orientation {
+  min-height: 44px;
+  padding: var(--space-sm) var(--space-lg);
+  font-size: var(--font-size-base);
+}
+
 /* ============================================================================
    Tutorial Overlay System - Spotlight Coachmarks
    ============================================================================
@@ -4724,6 +4891,43 @@ select:focus-visible {
   animation: requirementPulse 0.5s ease;
 }
 
+/* Drawer reopen prompt styling */
+.tutorial-requirement-action {
+  background: var(--color-info-bg, rgba(23, 162, 184, 0.1));
+  border-left-color: var(--color-info, #17a2b8);
+}
+
+.tutorial-drawer-prompt {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2xs);
+}
+
+.tutorial-reopen-drawer-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-2xs) var(--space-xs);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  background: var(--color-primary);
+  color: var(--color-text-on-primary, white);
+  border: none;
+  border-radius: var(--border-radius-sm);
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.tutorial-reopen-drawer-btn:hover,
+.tutorial-reopen-drawer-btn:focus {
+  background: var(--color-primary-hover);
+  outline: none;
+}
+
+.tutorial-reopen-drawer-btn:focus-visible {
+  box-shadow: 0 0 0 2px var(--color-focus-ring);
+}
+
 /* Footer with navigation */
 .tutorial-footer {
   display: flex;
@@ -4767,7 +4971,7 @@ select:focus-visible {
   position: fixed;
   bottom: var(--space-lg);
   right: var(--space-lg);
-  z-index: 10001;
+  z-index: 10005;
   pointer-events: auto;
 }
 
@@ -4842,27 +5046,53 @@ select:focus-visible {
   background: rgba(0, 0, 0, 0.7);
 }
 
-/* When Features Guide is highlighted by tutorial, make it fully opaque and visible */
-#featuresGuideModal.tutorial-target-highlight {
-  z-index: 10002 !important;
-  background: rgba(0, 0, 0, 0.85) !important;
+/* When Features Guide modal is open during tutorial, bring it above the overlay */
+#featuresGuideModal:not(.hidden) {
+  z-index: 10003;
 }
 
-/* Make the Features Guide content fully opaque when spotlighted */
-#featuresGuideModal.tutorial-target-highlight .modal-content {
+/* When the Features Guide content is highlighted by tutorial */
+#featuresGuideModal .modal-content.tutorial-target-highlight {
+  z-index: 10004 !important;
   opacity: 1 !important;
   background: var(--color-bg-primary) !important;
   box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.4),
-    0 0 0 4px var(--color-accent) !important;
+    0 12px 48px rgba(0, 0, 0, 0.5),
+    0 0 0 4px var(--color-accent),
+    0 0 24px rgba(var(--color-accent-rgb, 59, 130, 246), 0.3) !important;
+  animation: tutorialModalHighlight 2s ease-in-out infinite !important;
 }
 
-/* Reduce tutorial backdrop opacity when modal is spotlighted */
-.tutorial-overlay:has(~ #featuresGuideModal.tutorial-target-highlight)
-  .tutorial-backdrop,
-.tutorial-overlay:has(+ * #featuresGuideModal.tutorial-target-highlight)
-  .tutorial-backdrop {
-  fill: rgba(0, 0, 0, 0.3);
+/* Override the default outline for modal content - use box-shadow glow instead */
+#featuresGuideModal .modal-content.tutorial-target-highlight {
+  outline: none !important;
+  outline-offset: 0 !important;
+}
+
+/* Make the modal overlay semi-transparent when content is spotlighted */
+#featuresGuideModal:has(.modal-content.tutorial-target-highlight) .modal-overlay {
+  background: rgba(0, 0, 0, 0.5);
+}
+
+/* Reduce tutorial backdrop when modal content is spotlighted */
+body:has(#featuresGuideModal .modal-content.tutorial-target-highlight) .tutorial-backdrop {
+  fill: rgba(0, 0, 0, 0.4);
+}
+
+/* Animation for highlighted modal */
+@keyframes tutorialModalHighlight {
+  0%, 100% {
+    box-shadow:
+      0 12px 48px rgba(0, 0, 0, 0.5),
+      0 0 0 4px var(--color-accent),
+      0 0 24px rgba(var(--color-accent-rgb, 59, 130, 246), 0.3);
+  }
+  50% {
+    box-shadow:
+      0 12px 48px rgba(0, 0, 0, 0.5),
+      0 0 0 6px var(--color-accent),
+      0 0 32px rgba(var(--color-accent-rgb, 59, 130, 246), 0.5);
+  }
 }
 
 /* Animations */
@@ -5282,7 +5512,7 @@ select:focus-visible {
   .workflow-step-number {
     background: var(--color-accent);
     border-color: var(--color-accent);
-    color: var(--color-accent-text);
+    color: var(--color-on-accent);
   }
   .workflow-step-label {
     color: var(--color-text-primary);
@@ -5295,7 +5525,7 @@ select:focus-visible {
   .workflow-step-number {
     background: var(--color-success);
     border-color: var(--color-success);
-    color: var(--color-accent-text);
+    color: var(--color-on-success);
   }
   .workflow-step-number::after {
     content: '✓';
@@ -5338,7 +5568,8 @@ select:focus-visible {
 }
 
 .confirm-warning {
-  color: var(--color-warning) !important;
+  /* Higher-contrast warning text on neutral surfaces */
+  color: var(--color-warning-text) !important;
   font-weight: 500;
 }
 

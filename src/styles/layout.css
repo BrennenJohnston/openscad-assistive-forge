@@ -97,10 +97,9 @@ body {
 
 /* Contrast Toggle Button */
 .contrast-toggle {
-  background: var(
-    --color-bg-tertiary
-  ); /* Darker background for WCAG AA contrast */
-  border: 1px solid var(--color-border);
+  /* Ensure strong separation from the accent header background across themes */
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-text-primary);
   border-radius: var(--border-radius-md);
   color: var(--color-text-primary);
   cursor: pointer;
@@ -182,8 +181,9 @@ body {
 
 /* GitHub Link */
 .github-link {
-  background: var(--color-bg-secondary);
-  border: 1px solid var(--color-border-light);
+  /* Ensure strong separation from the accent header background across themes */
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-text-primary);
   border-radius: var(--border-radius-md);
   color: var(--color-text-primary);
   cursor: pointer;
@@ -238,8 +238,9 @@ body {
 
 /* Theme Toggle Button */
 .theme-toggle {
-  background: var(--color-bg-secondary);
-  border: 1px solid var(--color-border-light);
+  /* Ensure strong separation from the accent header background across themes */
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-text-primary);
   border-radius: var(--border-radius-md);
   color: var(--color-text-primary);
   cursor: pointer;
@@ -1784,7 +1785,7 @@ details summary:focus,
 /* Queue badge styling */
 .queue-badge {
   background-color: var(--color-accent);
-  color: var(--color-accent-text);
+  color: var(--color-on-accent);
   font-size: 10px;
   font-weight: 600;
   padding: 1px 5px;

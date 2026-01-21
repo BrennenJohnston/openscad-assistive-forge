@@ -21,6 +21,8 @@ This document maps the 6 core user roles to their primary capabilities, examples
 - Features Guide with comprehensive documentation
 - Workflow progress indicator shows current step
 - Clear visual feedback
+- Focus Mode (maximize preview for presenting)
+- Actions menu for Share Link / Export Params (handouts + reproducible demos)
 
 **Documentation Links:**
 - Features Guide modal (accessible via "Help" button)
@@ -49,6 +51,10 @@ This document maps the 6 core user roles to their primary capabilities, examples
 - Source code viewer
 - Multiple output formats (STL, OBJ, OFF, AMF, 3MF)
 - Preset export/import for sharing
+- Share Link + Export Params for reproducible configurations
+- Compare view for tracking parameter changes
+- Render Queue for batching multiple renders
+- Parameter Search + Jump-to-Group for large models
 
 **Documentation Links:**
 - Features Guide modal → Libraries tab
@@ -77,6 +83,8 @@ This document maps the 6 core user roles to their primary capabilities, examples
 - Modal focus trapping with Escape to close
 - Camera controls with keyboard alternatives (no drag required)
 - Undo/Redo with Ctrl+Z / Ctrl+Shift+Z
+- Actions drawer is keyboard reachable (Compare / Queue / Share / Export Params)
+- Focus Mode works without pointer input
 
 **Documentation Links:**
 - `/docs/guides/KEYGUARD_WORKFLOW_GUIDE.md` - Keyboard-first workflow
@@ -105,6 +113,7 @@ This document maps the 6 core user roles to their primary capabilities, examples
 - Large touch targets (44×44px minimum)
 - 3px visible focus indicators
 - Configurable theme (light/dark)
+- Enhanced contrast preference support (`prefers-contrast: more`)
 
 **Documentation Links:**
 - `/docs/guides/ACCESSIBILITY_GUIDE.md` - Visual accessibility features
@@ -169,14 +178,60 @@ This document maps the 6 core user roles to their primary capabilities, examples
 
 ---
 
+### UI Orientation (New in v2.4)
+
+**Primary Goal:** Quick familiarization with app layout and drawer/panel locations
+
+**Placement:** Below Accessibility Spotlights section as a subtle call-to-action (not a role card)
+
+**Target Audience:** All new users who need to understand where things are before diving into features
+
+**Try It Example:** `simple-box`
+- Loads a working example so drawers/panels are visible
+- Non-blocking, optional orientation
+
+**What You'll Learn (~1 min):**
+- Where Parameters, Preview, and Actions areas are
+- How to open/close each drawer/panel
+- Mobile vs. desktop control differences (viewport-aware selectors)
+
+**Tutorial Sandbox:** 6-step non-gated walkthrough showing:
+1. **App Layout** - Overview of three main areas (Parameters, Preview, Actions)
+2. **Parameters Panel** - Mobile: tap "Params" button; Desktop: collapse/expand button
+3. **Preview Settings & Info** - Expandable drawer with status, dimensions, quality settings
+4. **Actions Menu** - Share Link, Export Params, Compare, Queue
+5. **Camera Controls** (Optional) - Desktop: right panel; Mobile: camera drawer
+6. **Ready to Explore** - Return to Welcome or start customizing
+
+**Key Features:**
+- **Non-gated**: No completion requirements (recognition-focused, not task-based)
+- **Fast**: Under 1 minute, skippable at any time with Escape
+- **Viewport-aware**: Uses comma-separated selectors to highlight mobile OR desktop controls
+- **Progressive disclosure**: Teaches "where things are" first; role tutorials teach "how to use them"
+- **COGA-friendly**: Keeps cognitive load low by separating layout orientation from feature training
+
+**Drawer/Panel Selectors:**
+- Parameters Panel: `#mobileDrawerToggle, #collapseParamPanelBtn`
+- Preview Settings & Info: `#previewDrawerToggle`
+- Actions Menu: `#actionsDrawerToggle`
+- Camera Controls: `#cameraPanelToggle, #cameraDrawerToggle`
+
+**Research Foundation:**
+- **W3C COGA**: Progressive disclosure, predictable controls, clear language
+- **UDL 3.0**: Learner agency, minimize distractions, flexible paths
+- **Onboarding best practices** (Shepherd.js, Driver.js): Short orientation modules (time-boxed), "aha moment" within 3-4 steps
+
+---
+
 ## Additional Examples Available
 
-These examples are available but not currently in `EXAMPLE_DEFINITIONS`:
+These examples are available (not all are wired into `EXAMPLE_DEFINITIONS` yet):
 - `cable-organizer` - Complex parametric design
 - `wall-hook` - Practical 3D printing example
 - `honeycomb-grid` - Pattern generation
 - `phone-stand` - Real-world accessory
-- `multi-file-box` - Multi-file project demonstration
+- (Already wired up) `colored-box` - Color parameter example
+- (Already wired up) `multi-file-box` - Multi-file ZIP project demonstration
 
 Consider adding these to `EXAMPLE_DEFINITIONS` if needed for additional role paths.
 

@@ -38,6 +38,7 @@ let completionListeners = [];
 let stepCompleted = true;
 let resizeObserver = null;
 let isMinimized = false;
+let drawerObserver = null;
 
 // Spotlight cutout padding around target element
 const SPOTLIGHT_PADDING = 8;
@@ -78,12 +79,150 @@ function findScrollableParent(element) {
 }
 
 /**
+ * Check if we're on mobile viewport
+ * @returns {boolean}
+ */
+function isMobileViewport() {
+  return window.innerWidth < 768;
+}
+
+/**
+ * Check if the mobile drawer is currently open
+ * @returns {boolean}
+ */
+function isMobileDrawerOpen() {
+  const paramPanel = document.getElementById('paramPanel');
+  return paramPanel && paramPanel.classList.contains('drawer-open');
+}
+
+/**
+ * Check if an element is inside the param panel (mobile drawer)
+ * @param {HTMLElement} element - Element to check
+ * @returns {boolean}
+ */
+function isInsideParamPanel(element) {
+  const paramPanel = document.getElementById('paramPanel');
+  return paramPanel && paramPanel.contains(element);
+}
+
+/**
+ * Open the mobile drawer programmatically
+ */
+function openMobileDrawer() {
+  const toggleBtn = document.getElementById('mobileDrawerToggle');
+  if (toggleBtn && isMobileViewport() && !isMobileDrawerOpen()) {
+    toggleBtn.click();
+  }
+}
+
+/**
+ * Set up observer to watch for drawer close events during tutorial
+ * If the drawer closes while we need an element inside it, show a prompt
+ */
+function setupDrawerObserver() {
+  clearDrawerObserver();
+
+  const paramPanel = document.getElementById('paramPanel');
+  if (!paramPanel) return;
+
+  drawerObserver = new MutationObserver((mutations) => {
+    mutations.forEach((mutation) => {
+      if (mutation.attributeName === 'class') {
+        // Check if drawer just closed
+        if (!paramPanel.classList.contains('drawer-open') && isMobileViewport()) {
+          handleDrawerClosed();
+        }
+      }
+    });
+  });
+
+  drawerObserver.observe(paramPanel, { attributes: true, attributeFilter: ['class'] });
+}
+
+/**
+ * Clear the drawer observer
+ */
+function clearDrawerObserver() {
+  if (drawerObserver) {
+    drawerObserver.disconnect();
+    drawerObserver = null;
+  }
+}
+
+/**
+ * Handle when the mobile drawer closes during a tutorial step
+ */
+function handleDrawerClosed() {
+  if (!activeTutorial || !tutorialOverlay) return;
+
+  const step = activeTutorial.steps[currentStepIndex];
+  if (!step.highlightSelector) return;
+
+  // Check if the current step targets an element inside the param panel
+  const selectors = step.highlightSelector.split(',').map((s) => s.trim());
+  let targetInsideDrawer = false;
+
+  for (const selector of selectors) {
+    const el = document.querySelector(selector);
+    if (el && isInsideParamPanel(el)) {
+      targetInsideDrawer = true;
+      break;
+    }
+  }
+
+  if (targetInsideDrawer && !stepCompleted) {
+    // Show a prompt to reopen the drawer
+    showDrawerReopenPrompt();
+  }
+}
+
+/**
+ * Show a prompt in the tutorial panel to reopen the drawer
+ */
+function showDrawerReopenPrompt() {
+  if (!tutorialOverlay) return;
+
+  const requirementEl = tutorialOverlay.querySelector('#tutorialRequirement');
+  if (!requirementEl) return;
+
+  // Create or update the reopen prompt
+  requirementEl.innerHTML = `
+    <span class="tutorial-drawer-prompt">
+      <span>Panel closed. </span>
+      <button class="tutorial-reopen-drawer-btn" type="button">
+        Reopen Parameters
+      </button>
+      <span> to continue.</span>
+    </span>
+  `;
+  requirementEl.classList.add('tutorial-requirement-action');
+
+  // Wire up the reopen button
+  const reopenBtn = requirementEl.querySelector('.tutorial-reopen-drawer-btn');
+  if (reopenBtn) {
+    reopenBtn.addEventListener('click', () => {
+      openMobileDrawer();
+      // Reset the requirement text after a short delay
+      setTimeout(() => {
+        if (requirementEl && !stepCompleted) {
+          requirementEl.textContent = '↑ Complete the action above to continue';
+          requirementEl.classList.remove('tutorial-requirement-action');
+        }
+      }, 400);
+    });
+  }
+
+  // Update spotlight to show centered panel
+  updateSpotlightAndPosition();
+}
+
+/**
  * Tutorial definitions - Streamlined content for better UX
  */
 const TUTORIALS = {
   educators: {
     id: 'educators',
-    title: 'Educator Quick Start',
+    title: 'Beginner Quick Start',
     steps: [
       {
         title: 'Welcome!',
@@ -94,6 +233,7 @@ const TUTORIALS = {
             <li>Save presets for reuse</li>
             <li>Generate 3D files</li>
           </ul>
+          <p class="tutorial-hint">New to the interface? Try "UI Orientation" (1 minute) after this tour.</p>
           <p class="tutorial-hint">Press <kbd>Esc</kbd> to exit anytime.</p>
         `,
         position: 'center',
@@ -103,6 +243,7 @@ const TUTORIALS = {
         content: `
           <p><strong>Try it:</strong> Change the <strong>Width</strong> value and watch the preview update.</p>
           <p class="tutorial-hint">Use the slider or type a number.</p>
+          <p class="tutorial-hint">On mobile: tap "Params" to open/close the panel. On desktop: use the collapse button if the left panel is collapsed.</p>
         `,
         highlightSelector:
           '.param-control[data-param-name="width"], #param-width',
@@ -119,6 +260,7 @@ const TUTORIALS = {
         content: `
           <p>Great! The preview panel now shows your updated model.</p>
           <p class="tutorial-hint">The 3D preview updates automatically as you adjust parameters.</p>
+          <p class="tutorial-hint">Expand "Preview Settings & Info" to view status, dimensions, and quality settings.</p>
         `,
         highlightSelector: '#previewContainer',
         position: 'left',
@@ -127,7 +269,7 @@ const TUTORIALS = {
         title: 'Save Presets',
         content: `
           <p>Click <strong>Presets</strong> to save your current configuration for later.</p>
-          <p class="tutorial-hint">Great for classroom demonstrations!</p>
+          <p class="tutorial-hint">Presets help you keep “versions” while you learn.</p>
         `,
         highlightSelector: '#presetControls',
         position: 'right',
@@ -138,6 +280,7 @@ const TUTORIALS = {
         content: `
           <p>Click <strong>Generate STL</strong> to create your 3D file.</p>
           <p class="tutorial-hint">The file downloads automatically.</p>
+          <p class="tutorial-hint">More options like Share Link and Export Params live in the "Actions" menu.</p>
         `,
         highlightSelector: '#primaryActionBtn',
         position: 'top',
@@ -170,11 +313,10 @@ const TUTORIALS = {
             <li>Example files</li>
             <li>Keyboard shortcuts</li>
           </ul>
-          <p class="tutorial-hint">Close it to continue the tutorial.</p>
+          <p class="tutorial-hint"><strong>Close the modal</strong> (click X or press Escape) to continue.</p>
         `,
-        highlightSelector: '#featuresGuideModal',
-        position: 'center',
-        autoMinimize: true,
+        highlightSelector: '#featuresGuideModal .modal-content',
+        position: 'bottom',
         completion: { type: 'modalClose', selector: '#featuresGuideModal' },
       },
       {
@@ -185,6 +327,7 @@ const TUTORIALS = {
           <ul>
             <li>Try different examples</li>
             <li>Upload your own .scad files</li>
+            <li>Run "UI Orientation" if you're new to the layout</li>
           </ul>
         `,
         position: 'center',
@@ -492,6 +635,87 @@ const TUTORIALS = {
       },
     ],
   },
+  'ui-orientation': {
+    id: 'ui-orientation',
+    title: 'UI Orientation',
+    steps: [
+      {
+        title: 'App Layout',
+        content: `
+          <p>Welcome! This quick tour shows you where everything is.</p>
+          <p>The app has three main areas:</p>
+          <ul>
+            <li><strong>Parameters</strong> - Adjust model settings</li>
+            <li><strong>Preview</strong> - See your 3D model</li>
+            <li><strong>Actions</strong> - Export, share, and more</li>
+          </ul>
+          <p class="tutorial-hint">Press <kbd>Esc</kbd> to exit anytime.</p>
+        `,
+        position: 'center',
+      },
+      {
+        title: 'Parameters Panel',
+        content: `
+          <p>The <strong>Parameters panel</strong> is where you customize your model.</p>
+          <p class="tutorial-hint">On mobile: tap "Params" to open/close. On desktop: use the collapse button to expand/collapse the left panel.</p>
+          <p>Find controls for parameters, presets, output format, and advanced tools here.</p>
+        `,
+        highlightSelector: '#mobileDrawerToggle, #collapseParamPanelBtn',
+        position: 'right',
+      },
+      {
+        title: 'Preview Settings & Info',
+        content: `
+          <p>Expand <strong>Preview Settings & Info</strong> to view:</p>
+          <ul>
+            <li>Render status and progress</li>
+            <li>Model dimensions and statistics</li>
+            <li>Preview quality settings</li>
+          </ul>
+          <p class="tutorial-hint">You can resize this drawer using the handle (supports keyboard arrows when focused).</p>
+        `,
+        highlightSelector: '#previewDrawerToggle',
+        position: 'left',
+      },
+      {
+        title: 'Actions Menu',
+        content: `
+          <p>Open the <strong>Actions</strong> drawer to find:</p>
+          <ul>
+            <li>Share Link - Share your customized model</li>
+            <li>Export Params - Save your settings</li>
+            <li>Compare - View parameter changes</li>
+            <li>Queue - Batch processing</li>
+          </ul>
+        `,
+        highlightSelector: '#actionsDrawerToggle',
+        position: 'top',
+      },
+      {
+        title: 'Camera Controls (Optional)',
+        content: `
+          <p><strong>Camera controls</strong> let you rotate, pan, zoom, and reset the view without drag gestures.</p>
+          <p class="tutorial-hint">On desktop: right-side panel. On mobile: camera drawer button.</p>
+          <p>Skip this if you're comfortable with drag gestures for now.</p>
+        `,
+        highlightSelector: '#cameraPanelToggle, #cameraDrawerToggle',
+        position: 'left',
+      },
+      {
+        title: 'Ready to Explore!',
+        content: `
+          <p>You now know where everything is in the app.</p>
+          <p><strong>Next steps:</strong></p>
+          <ul>
+            <li>Return to Welcome to try role-specific tutorials</li>
+            <li>Start customizing a model</li>
+            <li>Explore the Features Guide (Help button)</li>
+          </ul>
+        `,
+        position: 'center',
+      },
+    ],
+  },
 };
 
 /**
@@ -658,9 +882,24 @@ function handleOverlayClick(e) {
   if (!panel?.contains(e.target) && !minimized?.contains(e.target)) {
     const step = activeTutorial.steps[currentStepIndex];
     if (step.highlightSelector) {
-      const target = document.querySelector(
-        step.highlightSelector.split(',')[0]
-      );
+      const selectors = step.highlightSelector
+        .split(',')
+        .map((s) => s.trim());
+      let target = null;
+      for (const selector of selectors) {
+        const el = document.querySelector(selector);
+        if (el && el.offsetParent !== null) {
+          if (
+            isMobileViewport() &&
+            isInsideParamPanel(el) &&
+            !isMobileDrawerOpen()
+          ) {
+            continue;
+          }
+          target = el;
+          break;
+        }
+      }
       if (target && typeof target.focus === 'function') {
         target.focus();
       }
@@ -745,9 +984,35 @@ function showStep(stepIndex) {
 
   // Clear previous state
   clearCompletionListeners();
+  clearDrawerObserver();
 
   currentStepIndex = stepIndex;
   const step = activeTutorial.steps[stepIndex];
+
+  // Check if this step targets an element inside the param panel
+  // If so, set up drawer observer and ensure drawer is open on mobile
+  if (step.highlightSelector && isMobileViewport()) {
+    const selectors = step.highlightSelector.split(',').map((s) => s.trim());
+    let needsDrawerOpen = false;
+
+    for (const selector of selectors) {
+      const el = document.querySelector(selector);
+      if (el && isInsideParamPanel(el)) {
+        needsDrawerOpen = true;
+        break;
+      }
+    }
+
+    if (needsDrawerOpen) {
+      // Set up observer to detect drawer closes
+      setupDrawerObserver();
+
+      // If drawer is closed, open it automatically
+      if (!isMobileDrawerOpen()) {
+        openMobileDrawer();
+      }
+    }
+  }
 
   // Update content
   const contentEl = tutorialOverlay.querySelector('#tutorial-content');
@@ -826,9 +1091,24 @@ function updateSpotlightAndPosition() {
     return;
   }
 
-  // Find the target element
-  const targetSelector = step.highlightSelector.split(',')[0].trim();
-  const target = document.querySelector(targetSelector);
+  // Find the first *visible* target element from comma-separated selectors
+  const selectors = step.highlightSelector.split(',').map((s) => s.trim());
+  let target = null;
+  for (const selector of selectors) {
+    const el = document.querySelector(selector);
+    // Check if element exists and is truly visible
+    // offsetParent is null if hidden via display:none or inside hidden ancestor
+    // Also check if element is inside a closed mobile drawer
+    if (el && el.offsetParent !== null) {
+      // Additional check: if element is inside paramPanel, drawer must be open on mobile
+      if (isMobileViewport() && isInsideParamPanel(el) && !isMobileDrawerOpen()) {
+        // Element is inside closed drawer - not truly visible
+        continue;
+      }
+      target = el;
+      break;
+    }
+  }
 
   if (!target) {
     // Target not found - center panel
@@ -1237,6 +1517,7 @@ export function closeTutorial() {
   if (!tutorialOverlay) return;
 
   clearCompletionListeners();
+  clearDrawerObserver();
 
   // Remove highlight from any targeted elements
   document.querySelectorAll('.tutorial-target-highlight').forEach((el) => {

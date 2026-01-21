@@ -12,6 +12,8 @@ The Welcome screen's "Discover Features for Your Needs" section provides **role-
 - **Tutorial sandbox overlays**: Each path launches a 3-6 step guided walkthrough
 - **Practical tips**: Cards show "what you'll learn" bullets before starting
 - **Removed the old Screen Reader demo**: Screen Reader path now uses Simple Box example
+- **Expanded Features Guide**: Updated to include Workflow/Actions and Accessibility tabs
+- **New power features surfaced**: Actions menu (Share/Export/Compare/Queue), parameter search/jump, preview & export quality controls
 
 ## Design Philosophy
 
@@ -48,7 +50,7 @@ All copy follows [WCAG 2.2 SC 3.1.5 Reading Level](https://www.w3.org/WAI/WCAG22
 - Save presets for classroom reuse
 - Guide students through full workflow
 
-**Tutorial:** 5-step guided walkthrough showing:
+**Tutorial:** 8-step guided walkthrough showing:
 - How to customize parameters
 - Saving presets for reuse
 - Generating and downloading STL files
@@ -146,6 +148,37 @@ All copy follows [WCAG 2.2 SC 3.1.5 Reading Level](https://www.w3.org/WAI/WCAG22
 - How to navigate with ARIA landmarks
 - How to access Help (📖 Help button in consistent location)
 - Where to find Clear button to restart
+
+## UI Orientation (New in v2.4)
+
+**Placement:** Below Accessibility Spotlights section
+**Style:** Subtle call-to-action, not a card
+
+**Target audience:** All new users who need to understand the app layout before diving into customization
+
+**Example:** Simple Box
+- Loads a working example so drawers/panels are visible
+- Non-blocking, optional orientation
+
+**What you'll learn (~1 min):**
+- Where Parameters, Preview, and Actions areas are
+- How to open/close each drawer/panel
+- Mobile vs. desktop control differences
+
+**Tutorial:** 6-step non-gated walkthrough showing:
+1. **App Layout** - Overview of three main areas
+2. **Parameters Panel** - Mobile (tap "Params") vs. Desktop (collapse button)
+3. **Preview Settings & Info** - Expandable drawer with status/dimensions/quality
+4. **Actions Menu** - Share Link, Export Params, Compare, Queue
+5. **Camera Controls** (Optional) - Desktop panel vs. mobile drawer
+6. **Ready to Explore** - Return to Welcome or start customizing
+
+**Key Design Decisions:**
+- **Non-gated**: No completion requirements (recognition-focused, not task-based)
+- **Fast**: Under 1 minute, skippable at any time
+- **Viewport-aware**: Uses comma-separated selectors to highlight mobile OR desktop controls based on viewport
+- **Progressive disclosure**: Teaches "where things are" first, lets role tutorials teach "how to use them"
+- **COGA-friendly**: Keeps cognitive load low by separating layout orientation from feature training
 
 ## Accessibility Spotlights
 

@@ -51,6 +51,22 @@
   --color-accent-subtle: var(--yellow-4);
 
   /* ========================================================================
+     Text on Solid Semantic Surfaces
+     ========================================================================
+     These are for components that use solid semantic backgrounds
+     (e.g., badges, status pills, solid buttons).
+     
+     Important: Do NOT reuse --color-accent-text for non-accent colors.
+     ======================================================================== */
+  --color-on-accent: var(--color-accent-text);
+  /* In light mode, slate-1 is near-white; in dark mode slate-1 is near-black. */
+  --color-on-success: var(--slate-1);
+  --color-on-info: var(--slate-1);
+  --color-on-error: var(--slate-1);
+  /* Warning backgrounds are typically bright in both themes; prefer dark text. */
+  --color-on-warning: var(--slate-12);
+
+  /* ========================================================================
      Success Colors (Green)
      ======================================================================== */
   --color-success: var(--green-9);
@@ -154,6 +170,13 @@
   --color-accent-text: var(--slate-1); /* Light text on dark yellow */
   --color-accent-subtle: var(--yellow-4);
 
+  /* Text on Solid Semantic Surfaces */
+  --color-on-accent: var(--color-accent-text);
+  --color-on-success: var(--slate-1);
+  --color-on-info: var(--slate-1);
+  --color-on-error: var(--slate-1);
+  --color-on-warning: var(--slate-1);
+
   /* Success Colors */
   --color-success: var(--green-9);
   --color-success-hover: var(--green-10);
@@ -221,6 +244,13 @@
     --color-accent-hover: var(--yellow-10);
     --color-accent-text: var(--slate-1);
     --color-accent-subtle: var(--yellow-4);
+
+    /* Text on Solid Semantic Surfaces */
+    --color-on-accent: var(--color-accent-text);
+    --color-on-success: var(--slate-1);
+    --color-on-info: var(--slate-1);
+    --color-on-error: var(--slate-1);
+    --color-on-warning: var(--slate-1);
 
     /* Success Colors */
     --color-success: var(--green-9);
@@ -291,6 +321,13 @@
   --color-accent-hover: var(--yellow-10);
   --color-accent-text: var(--slate-12);
   --color-accent-subtle: var(--yellow-4);
+
+  /* Text on Solid Semantic Surfaces */
+  --color-on-accent: var(--color-accent-text);
+  --color-on-success: var(--slate-1);
+  --color-on-info: var(--slate-1);
+  --color-on-error: var(--slate-1);
+  --color-on-warning: var(--slate-12);
 
   --color-success: var(--green-9);
   --color-success-hover: var(--green-10);

@@ -666,18 +666,18 @@ test.describe('Screen Reader Support', () => {
   })
   
   test.describe('Role-Based Feature Paths (Welcome Screen)', () => {
-    test('should display role path cards with keyboard-accessible CTAs', async ({ page }) => {
+    test('should display beginner tutorial card with keyboard-accessible CTAs', async ({ page }) => {
       await page.goto('/')
       
       // Check that role path cards are present
-      const roleCards = page.locator('.role-path-card')
+      const roleCards = page.locator('.role-path-card:visible')
       const cardCount = await roleCards.count()
-      expect(cardCount).toBe(6) // 6 role-based cards
+      expect(cardCount).toBe(1) // Only the beginner tutorial is visible for now
       
       // Check that each card has a "Try" button
-      const tryButtons = page.locator('.btn-role-try')
+      const tryButtons = page.locator('.btn-role-try:visible')
       const tryCount = await tryButtons.count()
-      expect(tryCount).toBe(6)
+      expect(tryCount).toBe(1)
       
       // Check that all Try buttons are keyboard accessible
       const firstTryButton = tryButtons.first()
@@ -804,34 +804,26 @@ test.describe('Screen Reader Support', () => {
       expect(outlineWidthPx).toBeGreaterThanOrEqual(2)
     })
     
-    test('should display cards in correct order (Educators first, Screen Reader last)', async ({ page }) => {
+    test('should show the beginner tutorial card', async ({ page }) => {
       await page.goto('/')
       
       // Get all role path cards
-      const roleCards = page.locator('.role-path-card')
+      const roleCards = page.locator('.role-path-card:visible')
       const cardCount = await roleCards.count()
-      expect(cardCount).toBe(6)
+      expect(cardCount).toBe(1)
       
-      // Check first card is Educators
+      // Check first (and only) card is Beginner
       const firstCardTitle = await roleCards.nth(0).locator('.role-path-title').textContent()
-      expect(firstCardTitle.toLowerCase()).toContain('educator')
-      
-      // Check second card is Advanced Makers
-      const secondCardTitle = await roleCards.nth(1).locator('.role-path-title').textContent()
-      expect(secondCardTitle.toLowerCase()).toContain('maker')
-      
-      // Check last card is Screen Reader
-      const lastCardTitle = await roleCards.nth(5).locator('.role-path-title').textContent()
-      expect(lastCardTitle.toLowerCase()).toContain('screen reader')
+      expect(firstCardTitle.toLowerCase()).toContain('beginner')
     })
     
-    test('should show tutorial tips on cards', async ({ page }) => {
+    test('should show tutorial tips on the beginner card', async ({ page }) => {
       await page.goto('/')
       
       // Check that cards have tips lists
-      const tipLists = page.locator('.role-path-tips')
+      const tipLists = page.locator('.role-path-tips:visible')
       const tipCount = await tipLists.count()
-      expect(tipCount).toBe(6) // All 6 cards should have tips
+      expect(tipCount).toBe(1)
       
       // Check first card has tips
       const firstCardTips = await tipLists.first().locator('li').count()

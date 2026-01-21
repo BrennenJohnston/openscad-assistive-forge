@@ -98,6 +98,13 @@
   --color-accent-text: #ffffff;
   --color-accent-subtle: #e6f0ff;
 
+  /* Text on Solid Semantic Surfaces */
+  --color-on-accent: #ffffff;
+  --color-on-success: #ffffff;
+  --color-on-info: #ffffff;
+  --color-on-warning: #ffffff;
+  --color-on-error: #ffffff;
+
   /* Success - Darker green for 7:1 */
   --color-success: #08651a;
   --color-success-hover: #054d14;
@@ -162,6 +169,13 @@
   --color-accent-hover: #99ccff; /* Even lighter on hover */
   --color-accent-text: #000000;
   --color-accent-subtle: #003d66;
+
+  /* Text on Solid Semantic Surfaces */
+  --color-on-accent: #000000;
+  --color-on-success: #000000;
+  --color-on-info: #000000;
+  --color-on-warning: #000000;
+  --color-on-error: #000000;
 
   /* Success - Bright green for 7:1 */
   --color-success: #66ff66;
@@ -314,6 +328,13 @@
     --color-accent-hover: LinkText;
     --color-accent-text: Canvas;
     --color-accent-subtle: Canvas;
+
+    /* Text on Solid Semantic Surfaces */
+    --color-on-accent: Canvas;
+    --color-on-success: Canvas;
+    --color-on-info: Canvas;
+    --color-on-warning: Canvas;
+    --color-on-error: Canvas;
 
     --color-success: LinkText;
     --color-success-hover: LinkText;
