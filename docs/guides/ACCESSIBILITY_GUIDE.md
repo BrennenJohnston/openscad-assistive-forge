@@ -31,9 +31,12 @@ The OpenSCAD Web Customizer Forge is designed with screen reader users in mind a
 #### Navigating the Interface
 
 1. **Skip to Content**: Press Tab immediately after page load to activate the "Skip to main content" link
-2. **Parameters Panel** (Left): All model parameters with their controls
-3. **Preview Panel** (Right): 3D preview and action buttons
-4. **Status Updates**: Announced automatically via screen reader
+2. **Parameters Panel** (desktop left): All model parameters with their controls  
+   **Mobile**: Use the "Params" button at the top of the preview panel to open the drawer
+3. **Preview Settings & Info** (top of preview): Status, stats, and settings  
+   **Mobile**: Use the "Preview Settings & Info" toggle button
+4. **Camera Controls** (desktop right panel) or **Camera** drawer in the actions bar (mobile)
+5. **Status Updates**: Announced automatically via screen reader
 
 ### Screen Reader Features
 
@@ -86,7 +89,7 @@ When a model is rendered, the following information is available:
 - **File Size**: Output file size
 - **Vertex Count**: Geometric complexity indicator
 
-Access this via the Stats section (below the 3D preview).
+Access this via the **Preview Settings & Info** drawer (Stats section).
 
 ### Tips for Screen Reader Users
 
@@ -220,7 +223,7 @@ If you use voice input software (Dragon NaturallySpeaking, Windows Voice Control
 
 All interactive elements have visible text labels or accessible names:
 
-- **Buttons**: Named clearly ("Generate Model", "Save Preset", etc.)
+- **Buttons**: Named clearly ("Generate STL", "Save Preset", etc.)
 - **Inputs**: Labeled with parameter names
 - **Dropdowns**: Labeled with setting names
 
@@ -228,7 +231,8 @@ All interactive elements have visible text labels or accessible names:
 
 #### Common Commands (vary by software)
 
-- "Click Generate Model" - Start rendering
+- "Click Generate STL" - Start rendering
+- "Click Generate STL" - Start rendering
 - "Click Save Preset" - Save current configuration  
 - "Click Reset" - Reset parameters to defaults
 - "Press Tab" - Navigate to next element

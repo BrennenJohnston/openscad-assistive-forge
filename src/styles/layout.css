@@ -318,7 +318,9 @@ body {
 .welcome-screen {
   flex: 1;
   display: flex;
-  align-items: center;
+  /* Use flex-start to ensure content is scrollable from top when it overflows.
+     The welcome-content uses margin: auto to center when content fits. */
+  align-items: flex-start;
   justify-content: center;
   padding: var(--space-lg);
   padding-top: calc(var(--space-lg) + env(safe-area-inset-top, 0px));
@@ -356,13 +358,14 @@ body {
   max-width: 600px;
   text-align: center;
   width: 100%;
-  margin: 0 auto;
+  /* margin: auto centers vertically when content fits in container,
+     but allows scrolling from top when content overflows */
+  margin: auto;
 }
 
 @media (max-height: 720px) {
   .welcome-screen {
-    align-items: flex-start;
-    justify-content: flex-start;
+    /* align-items: flex-start is now the default */
     padding-top: var(--space-lg);
     padding-bottom: var(--space-lg);
   }
@@ -371,12 +374,12 @@ body {
 /* Mobile portrait: ensure welcome content starts at top */
 @media (max-width: 767px) {
   .welcome-screen {
-    align-items: flex-start;
-    justify-content: flex-start;
+    /* align-items: flex-start is now the default */
     padding-top: calc(var(--space-md) + env(safe-area-inset-top, 0px));
   }
   
   .welcome-content {
+    /* On mobile, always start at top instead of centering */
     margin-top: 0;
   }
 }
@@ -557,6 +560,12 @@ body {
     transform: translateX(0);
   }
 
+  /* Add bottom padding to drawer body to allow scrolling past fixed actions bar */
+  /* The actions bar is ~120px tall when expanded (drawer toggle + primary button rows) */
+  .param-panel .param-panel-body {
+    padding-bottom: calc(130px + env(safe-area-inset-bottom, 0px));
+  }
+
   /* Respect reduced motion */
   @media (prefers-reduced-motion: reduce) {
     .param-panel {
@@ -569,7 +578,19 @@ body {
     width: 100%;
     flex: 1;
     min-height: 0;
-    padding-bottom: 56px; /* Space for fixed actions bar */
+    padding-bottom: 56px; /* Space for fixed actions bar (collapsed state) */
+    transition: padding-bottom 0.2s ease;
+  }
+
+  /* Increase preview panel padding when camera drawer is expanded */
+  .preview-panel.camera-drawer-open {
+    padding-bottom: 220px; /* Space for actions bar + expanded camera drawer */
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .preview-panel {
+      transition: none;
+    }
   }
 
   /* Preview canvas section keeps full height on mobile */
@@ -1324,7 +1345,7 @@ body {
 
 /* Wide camera buttons (with text) */
 .camera-btn-wide {
-  min-height: 40px;
+  min-height: 44px;
   padding: var(--space-xs) var(--space-sm);
   display: flex;
   align-items: center;
@@ -1419,10 +1440,17 @@ body {
   color: var(--color-text-secondary);
 }
 
-/* Mobile: Hide camera panel (use floating controls instead or show in a modal) */
+/* Mobile: Hide camera panel (use camera drawer instead) */
 @media (max-width: 767px) {
   .camera-panel {
     display: none;
+  }
+}
+
+/* Desktop: Hide camera drawer (use camera panel instead) */
+@media (min-width: 768px) {
+  .camera-drawer {
+    display: none !important;
   }
 }
 
@@ -2003,11 +2031,278 @@ details summary:focus,
     left: 0;
     right: 0;
     z-index: 960;
-    flex-direction: column-reverse; /* Primary at bottom, drawer above */
+    flex-direction: column-reverse; /* Primary at bottom, camera drawer, then actions drawer */
     border-radius: var(--border-radius-md) var(--border-radius-md) 0 0;
     border-top: 2px solid var(--color-border);
     box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.15);
     min-height: auto;
+  }
+
+  /* ============================================================================
+     Mobile Camera Controls Drawer
+     ============================================================================
+     Game controller-style layout for camera controls on mobile.
+     Semi-transparent background to allow view of the 3D preview beneath.
+     - Left: Rotate D-pad
+     - Center: Zoom buttons + Reset
+     - Right: Pan D-pad
+     ============================================================================ */
+
+  .camera-drawer {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    /* Semi-transparent background with backdrop blur */
+    background-color: color-mix(
+      in srgb,
+      var(--color-bg-secondary) 85%,
+      transparent
+    );
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  /* Fallback for browsers without color-mix support */
+  @supports not (background-color: color-mix(in srgb, red 50%, blue)) {
+    .camera-drawer {
+      background-color: var(--color-bg-secondary);
+    }
+  }
+
+  .camera-drawer.collapsed .camera-drawer-body {
+    display: none;
+  }
+
+  /* Camera drawer toggle button - slightly more opaque for readability */
+  .camera-drawer-toggle-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-xs);
+    width: 100%;
+    min-height: 44px;
+    padding: var(--space-xs) var(--space-sm);
+    background: color-mix(
+      in srgb,
+      var(--color-bg-tertiary) 90%,
+      transparent
+    );
+    border: none;
+    border-bottom: 1px solid var(--color-border);
+    color: var(--color-text-primary);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  /* Fallback for toggle button */
+  @supports not (background-color: color-mix(in srgb, red 50%, blue)) {
+    .camera-drawer-toggle-btn {
+      background: var(--color-bg-tertiary);
+    }
+  }
+
+  .camera-drawer-toggle-btn:hover {
+    background-color: var(--color-hover-bg);
+  }
+
+  .camera-drawer-toggle-btn:focus-visible {
+    outline: 3px solid var(--color-focus);
+    outline-offset: -3px;
+  }
+
+  /* Arrow icon rotation */
+  .camera-drawer-icon .drawer-chevron {
+    transition: transform 0.2s ease;
+    transform: rotate(180deg); /* Collapsed: points up (expand) */
+  }
+
+  .camera-drawer:not(.collapsed) .camera-drawer-icon .drawer-chevron {
+    transform: rotate(0deg); /* Expanded: points down (collapse) */
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .camera-drawer-icon .drawer-chevron {
+      transition: none;
+    }
+  }
+
+  .camera-drawer-label {
+    white-space: nowrap;
+  }
+
+  /* Camera drawer body - game controller layout with semi-transparent background */
+  .camera-drawer-body {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: var(--space-xs);
+    padding: var(--space-sm);
+    background-color: color-mix(
+      in srgb,
+      var(--color-bg-primary) 80%,
+      transparent
+    );
+  }
+
+  /* Fallback for drawer body */
+  @supports not (background-color: color-mix(in srgb, red 50%, blue)) {
+    .camera-drawer-body {
+      background-color: var(--color-bg-primary);
+    }
+  }
+
+  /* Camera drawer sections */
+  .camera-drawer-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-xs);
+  }
+
+  .camera-drawer-section-title {
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin: 0;
+  }
+
+  /* D-pad layout for Rotate and Pan - expanded to fill space */
+  .camera-drawer-dpad {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(3, 44px);
+    grid-template-areas:
+      '.      up     .'
+      'left   center right'
+      '.      down   .';
+    gap: 3px;
+    width: 100%;
+    max-width: 140px;
+  }
+
+  .camera-drawer-dpad .dpad-up {
+    grid-area: up;
+  }
+  .camera-drawer-dpad .dpad-down {
+    grid-area: down;
+  }
+  .camera-drawer-dpad .dpad-left {
+    grid-area: left;
+  }
+  .camera-drawer-dpad .dpad-right {
+    grid-area: right;
+  }
+
+  /* Center label in D-pad */
+  .camera-drawer-dpad-label {
+    grid-area: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    background: color-mix(
+      in srgb,
+      var(--color-bg-secondary) 85%,
+      transparent
+    );
+    border-radius: var(--border-radius-sm);
+  }
+
+  /* Fallback for D-pad label */
+  @supports not (background-color: color-mix(in srgb, red 50%, blue)) {
+    .camera-drawer-dpad-label {
+      background: var(--color-bg-secondary);
+    }
+  }
+
+  /* Camera drawer buttons - expanded for better touch targets, semi-transparent */
+  .camera-drawer-btn {
+    min-width: 44px;
+    min-height: 44px;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: color-mix(
+      in srgb,
+      var(--color-bg-tertiary) 92%,
+      transparent
+    );
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-sm);
+    color: var(--color-text-primary);
+    cursor: pointer;
+    transition: background-color 0.15s, border-color 0.15s;
+  }
+
+  /* Fallback for buttons */
+  @supports not (background-color: color-mix(in srgb, red 50%, blue)) {
+    .camera-drawer-btn {
+      background: var(--color-bg-tertiary);
+    }
+  }
+
+  .camera-drawer-btn:hover {
+    background: var(--color-accent);
+    border-color: var(--color-accent);
+    color: var(--color-accent-text);
+  }
+
+  .camera-drawer-btn:focus-visible {
+    outline: 3px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+
+  .camera-drawer-btn:active {
+    transform: scale(0.95);
+  }
+
+  /* Zoom controls layout (vertical stack) */
+  .camera-drawer-zoom-controls {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-xs);
+  }
+
+  .camera-drawer-zoom-controls .camera-drawer-btn {
+    width: 44px;
+    height: 44px;
+  }
+
+  /* Reset button with text */
+  .camera-drawer-reset-btn {
+    width: auto !important;
+    min-width: auto;
+    padding: var(--space-xs) var(--space-sm);
+    gap: var(--space-xs);
+    font-size: var(--font-size-xs);
+  }
+
+  /* Position sections: Rotate left, Zoom center, Pan right */
+  .camera-drawer-rotate {
+    justify-self: start;
+    width: 100%;
+    max-width: 140px;
+  }
+
+  .camera-drawer-zoom {
+    justify-self: center;
+    align-self: center;
+  }
+
+  .camera-drawer-pan {
+    justify-self: end;
+    width: 100%;
+    max-width: 140px;
   }
 
   /* Drawer on mobile - expands upward */
@@ -2026,7 +2321,7 @@ details summary:focus,
   .actions-drawer-toggle-btn {
     width: 100%;
     justify-content: center;
-    min-height: 36px;
+    min-height: 44px;
     min-width: 0;
     border-radius: 0;
     border-left: none;
@@ -2151,6 +2446,92 @@ details summary:focus,
 :root[data-high-contrast='true'] .preview-drawer-resize-handle {
   height: 10px;
   border-top: 2px solid var(--color-border);
+}
+
+/* ============================================================================
+   Camera Drawer Theme and Accessibility Overrides (Mobile)
+   ============================================================================ */
+
+/* Dark theme - slightly different transparency for better contrast */
+@media (max-width: 767px) {
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) .camera-drawer {
+      background-color: color-mix(
+        in srgb,
+        var(--color-bg-secondary) 88%,
+        transparent
+      );
+    }
+
+    :root:not([data-theme='light']) .camera-drawer-body {
+      background-color: color-mix(
+        in srgb,
+        var(--color-bg-primary) 85%,
+        transparent
+      );
+    }
+  }
+
+  :root[data-theme='dark'] .camera-drawer {
+    background-color: color-mix(
+      in srgb,
+      var(--color-bg-secondary) 88%,
+      transparent
+    );
+  }
+
+  :root[data-theme='dark'] .camera-drawer-body {
+    background-color: color-mix(
+      in srgb,
+      var(--color-bg-primary) 85%,
+      transparent
+    );
+  }
+
+  :root[data-theme='dark'] .camera-drawer-btn {
+    background: color-mix(
+      in srgb,
+      var(--color-bg-tertiary) 95%,
+      transparent
+    );
+  }
+
+  /* High contrast mode - disable transparency for maximum readability */
+  :root[data-high-contrast='true'] .camera-drawer {
+    background-color: var(--color-bg-secondary);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    border: 2px solid var(--color-border);
+  }
+
+  :root[data-high-contrast='true'] .camera-drawer-toggle-btn {
+    background: var(--color-bg-tertiary);
+    border: 2px solid var(--color-border);
+    font-weight: 700;
+  }
+
+  :root[data-high-contrast='true'] .camera-drawer-body {
+    background-color: var(--color-bg-primary);
+  }
+
+  :root[data-high-contrast='true'] .camera-drawer-btn {
+    background: var(--color-bg-tertiary);
+    border: 2px solid var(--color-border);
+    font-weight: 700;
+  }
+
+  :root[data-high-contrast='true'] .camera-drawer-dpad-label {
+    background: var(--color-bg-tertiary);
+    border: 1px solid var(--color-border);
+    font-weight: 700;
+  }
+
+  :root[data-high-contrast='true'] .camera-drawer-btn:hover,
+  :root[data-high-contrast='true'] .camera-drawer-btn:focus {
+    background: var(--color-accent);
+    color: var(--color-accent-text);
+    border-color: var(--color-accent);
+  }
 }
 
 .file-info {
@@ -2290,6 +2671,54 @@ details summary:focus,
   .preview-drawer-resize-handle:focus {
     background: Highlight !important;
     outline: 3px solid Highlight !important;
+  }
+
+  /* Mobile camera drawer - forced colors */
+  .camera-drawer {
+    background: Canvas !important;
+    border: 2px solid CanvasText !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  .camera-drawer-toggle-btn {
+    background: ButtonFace !important;
+    color: ButtonText !important;
+    border: 2px solid ButtonText !important;
+  }
+
+  .camera-drawer-toggle-btn:hover,
+  .camera-drawer-toggle-btn:focus {
+    background: Highlight !important;
+    color: HighlightText !important;
+    border-color: Highlight !important;
+  }
+
+  .camera-drawer-body {
+    background: Canvas !important;
+  }
+
+  .camera-drawer-btn {
+    background: ButtonFace !important;
+    color: ButtonText !important;
+    border: 2px solid ButtonText !important;
+  }
+
+  .camera-drawer-btn:hover,
+  .camera-drawer-btn:focus {
+    background: Highlight !important;
+    color: HighlightText !important;
+    border-color: Highlight !important;
+  }
+
+  .camera-drawer-dpad-label {
+    background: Canvas !important;
+    color: CanvasText !important;
+    border: 1px solid CanvasText !important;
+  }
+
+  .camera-drawer-section-title {
+    color: CanvasText !important;
   }
 }
 

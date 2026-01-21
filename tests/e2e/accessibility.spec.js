@@ -5,6 +5,13 @@ import path from 'path'
 // Skip WASM-dependent tests in CI - WASM initialization is slow/unreliable
 const isCI = !!process.env.CI
 
+async function waitForWasmReady(page) {
+  const overlay = page.locator('#wasmLoadingOverlay')
+  if (await overlay.count()) {
+    await overlay.waitFor({ state: 'detached', timeout: 120000 })
+  }
+}
+
 test.describe('Accessibility Compliance (WCAG 2.1 AA)', () => {
   test('should have no accessibility violations on landing page', async ({ page }) => {
     await page.goto('/')
@@ -35,6 +42,7 @@ test.describe('Accessibility Compliance (WCAG 2.1 AA)', () => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
     
     await page.goto('/')
+    await waitForWasmReady(page)
     
     // Upload a test file - use specific ID to avoid matching queue import input
     const fileInput = page.locator('#fileInput')
@@ -145,6 +153,7 @@ test.describe('Accessibility Compliance (WCAG 2.1 AA)', () => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
     
     await page.goto('/')
+    await waitForWasmReady(page)
     
     // Upload file to get parameter form - use specific ID
     const fileInput = page.locator('#fileInput')
@@ -181,6 +190,7 @@ test.describe('Accessibility Compliance (WCAG 2.1 AA)', () => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
     
     await page.goto('/')
+    await waitForWasmReady(page)
     
     const fileInput = page.locator('#fileInput')
     const fixturePath = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad')
@@ -211,6 +221,7 @@ test.describe('New Accessibility Features (WCAG 2.2)', () => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
     
     await page.goto('/')
+    await waitForWasmReady(page)
     
     const fileInput = page.locator('#fileInput')
     const fixturePath = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad')
@@ -246,17 +257,30 @@ test.describe('New Accessibility Features (WCAG 2.2)', () => {
   test('should have keyboard shortcuts for 3D preview controls', async ({ page }) => {
     await page.goto('/')
     
-    // Check for camera control buttons
-    const cameraControls = page.locator('.camera-controls')
+    // Check for camera control buttons in the current panel/drawer UI
+    const rotateButtons = await page
+      .locator(
+        '.camera-panel button[aria-label*="rotate" i], #cameraDrawer button[aria-label*="rotate" i]'
+      )
+      .count()
+    const panButtons = await page
+      .locator(
+        '.camera-panel button[aria-label*="pan" i], #cameraDrawer button[aria-label*="pan" i]'
+      )
+      .count()
+    const zoomButtons = await page
+      .locator(
+        '.camera-panel button[aria-label*="zoom" i], #cameraDrawer button[aria-label*="zoom" i]'
+      )
+      .count()
     
-    // Camera controls may not be visible until a model is loaded
-    // Just verify the structure exists in the DOM
-    const rotateButtons = await page.locator('.camera-control-btn[aria-label*="rotate" i], .camera-control-btn[aria-label*="orbit" i]').count()
-    const zoomButtons = await page.locator('.camera-control-btn[aria-label*="zoom" i]').count()
+    console.log(
+      `Found ${rotateButtons} rotate buttons, ${panButtons} pan buttons, ${zoomButtons} zoom buttons`
+    )
     
-    console.log(`Found ${rotateButtons} rotate buttons, ${zoomButtons} zoom buttons`)
-    
-    // These may be 0 if no model is loaded, which is acceptable
+    expect(rotateButtons).toBeGreaterThanOrEqual(4)
+    expect(panButtons).toBeGreaterThanOrEqual(4)
+    expect(zoomButtons).toBeGreaterThanOrEqual(2)
   })
 
   test('should have workflow progress indicator with proper ARIA', async ({ page }) => {
@@ -284,6 +308,7 @@ test.describe('New Accessibility Features (WCAG 2.2)', () => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
     
     await page.goto('/')
+    await waitForWasmReady(page)
     
     const fileInput = page.locator('#fileInput')
     const fixturePath = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad')
@@ -321,6 +346,7 @@ test.describe('New Accessibility Features (WCAG 2.2)', () => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
     
     await page.goto('/')
+    await waitForWasmReady(page)
     
     const fileInput = page.locator('#fileInput')
     const fixturePath = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad')
@@ -443,6 +469,7 @@ test.describe('Default Value Display (COGA)', () => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
     
     await page.goto('/')
+    await waitForWasmReady(page)
     
     const fileInput = page.locator('#fileInput')
     const fixturePath = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad')
@@ -556,6 +583,7 @@ test.describe('Workflow Progress Indicator', () => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
     
     await page.goto('/')
+    await waitForWasmReady(page)
     
     const fileInput = page.locator('#fileInput')
     const fixturePath = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad')
@@ -668,6 +696,7 @@ test.describe('Screen Reader Support', () => {
       test.skip(isCI, 'WASM example loading is slow/unreliable in CI')
       
       await page.goto('/')
+      await waitForWasmReady(page)
       
       // Click the first "Try" button (Educators path -> Simple Box, as of v2.0 reordering)
       const firstTryButton = page.locator('.btn-role-try').first()
@@ -814,6 +843,7 @@ test.describe('Screen Reader Support', () => {
       test.skip(isCI, 'WASM example loading is slow/unreliable in CI')
       
       await page.goto('/')
+      await waitForWasmReady(page)
       
       // Click a "Start Tutorial" button
       const firstTryButton = page.locator('.btn-role-try').first()
@@ -840,6 +870,7 @@ test.describe('Screen Reader Support', () => {
       test.skip(isCI, 'WASM example loading is slow/unreliable in CI')
       
       await page.goto('/')
+      await waitForWasmReady(page)
       
       // Click a "Start Tutorial" button
       const firstTryButton = page.locator('.btn-role-try').first()
@@ -876,6 +907,7 @@ test.describe('Screen Reader Support', () => {
       test.skip(isCI, 'WASM example loading is slow/unreliable in CI')
       
       await page.goto('/')
+      await waitForWasmReady(page)
       
       // Click a "Start Tutorial" button
       const firstTryButton = page.locator('.btn-role-try').first()
@@ -904,6 +936,7 @@ test.describe('Screen Reader Support', () => {
       test.skip(isCI, 'WASM example loading is slow/unreliable in CI')
       
       await page.goto('/')
+      await waitForWasmReady(page)
       
       // Click a "Start Tutorial" button
       const firstTryButton = page.locator('.btn-role-try').first()
@@ -935,6 +968,7 @@ test.describe('Screen Reader Support', () => {
       test.skip(isCI, 'WASM example loading is slow/unreliable in CI')
       
       await page.goto('/')
+      await waitForWasmReady(page)
       
       // Click a "Start Tutorial" button
       const firstTryButton = page.locator('.btn-role-try').first()
@@ -1320,6 +1354,7 @@ test.describe('Drawer Accessibility', () => {
   test('drawer has correct ARIA attributes when open', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI');
     await page.goto('/');
+    await waitForWasmReady(page);
     const fixturePath = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad');
     
     try {
@@ -1340,6 +1375,7 @@ test.describe('Drawer Accessibility', () => {
   test('drawer passes axe accessibility scan', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI');
     await page.goto('/');
+    await waitForWasmReady(page);
     const fixturePath = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad');
     
     try {

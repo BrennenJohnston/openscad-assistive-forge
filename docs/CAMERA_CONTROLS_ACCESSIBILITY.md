@@ -2,7 +2,12 @@
 
 ## Overview
 
-The on-screen camera controls feature provides keyboard-accessible alternatives to mouse-based dragging operations for manipulating the 3D preview camera. This document details how the implementation meets WCAG 2.2 accessibility guidelines.
+The camera controls provide keyboard-accessible alternatives to mouse-based dragging operations for manipulating the 3D preview camera. Controls are available in two primary locations:
+
+- **Desktop:** Right-side Camera panel
+- **Mobile:** Camera drawer in the actions bar
+
+This document details how the implementation meets WCAG 2.2 accessibility guidelines.
 
 ## WCAG 2.2 Compliance
 
@@ -12,10 +17,10 @@ The on-screen camera controls feature provides keyboard-accessible alternatives 
 
 **Implementation:**
 - Provides button-based controls for all camera operations:
-  - **Rotation:** 4 directional buttons (◀ ▲ ▼ ▶)
-  - **Pan:** 4 directional buttons (⟵ ⟰ ⟱ ⟶)
-  - **Zoom:** In/Out buttons (+ −) and Reset (⌂)
-- All operations that typically require mouse dragging can be performed via button clicks
+  - **Rotation:** 4 directional buttons
+  - **Pan:** 4 directional buttons
+  - **Zoom:** In/Out buttons and Reset
+- All drag-based operations are available via buttons and keyboard shortcuts
 - Keyboard shortcuts also available (Arrow keys, Shift+Arrow, +/-)
 
 ### SC 4.1.2 Name, Role, Value (Level A) ✓
@@ -24,12 +29,12 @@ The on-screen camera controls feature provides keyboard-accessible alternatives 
 
 **Implementation:**
 - **Semantic HTML:** All controls use `<button type="button">` elements
-- **Accessible Names:** Every button has both `aria-label` and `title` attributes
+- **Accessible Names:** Buttons include descriptive text or `aria-label`
 - **ARIA Attributes:**
-  - `role="group"` on control panel with `aria-label="Camera controls"`
-  - `aria-expanded` on toggle button (reflects collapsed state)
-  - `aria-controls` links toggle button to controlled content
-- **State Communication:** Toggle button label changes based on state:
+  - `role="group"` on control groups with `aria-label="Camera controls"`
+  - `aria-expanded` on panel/drawer toggle buttons (reflects collapsed state)
+  - `aria-controls` links toggle buttons to controlled regions
+- **State Communication:** Toggle button labels update based on state:
   - Collapsed: "Expand camera controls"
   - Expanded: "Collapse camera controls"
 
@@ -59,14 +64,10 @@ The on-screen camera controls feature provides keyboard-accessible alternatives 
 
 **Implementation:**
 ```css
-.camera-controls-toggle:focus,
-.camera-controls-move:focus {
-  outline: 3px solid var(--color-accent);
-  outline-offset: 2px;
-}
-
-.camera-control-btn:focus {
-  outline: 3px solid var(--color-accent);
+.camera-btn:focus-visible,
+.camera-drawer-btn:focus-visible,
+.camera-drawer-toggle-btn:focus-visible {
+  outline: 3px solid var(--color-focus);
   outline-offset: 2px;
 }
 ```
@@ -79,10 +80,9 @@ The on-screen camera controls feature provides keyboard-accessible alternatives 
 **Requirement:** Touch targets are at least 44×44 CSS pixels.
 
 **Implementation:**
-- Toggle button: `min-height: 44px` with adequate padding
-- Move button: `min-height: 44px` with adequate padding
-- Camera control buttons: `width: 44px; height: 44px; min-width: 44px; min-height: 44px;`
-- Mobile responsive: Adjusts to 40×40px on small screens (still meets AA requirement of 24×24px)
+- Camera control buttons: `min-width: 44px; min-height: 44px`
+- Zoom/reset buttons: `min-height: 44px` with adequate padding
+- Drawer toggle button: `min-height: 44px` with full-width layout on mobile
 
 ### SC 1.4.11 Non-text Contrast (Level AA) ✓
 

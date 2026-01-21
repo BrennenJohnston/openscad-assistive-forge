@@ -309,6 +309,8 @@ export class PreviewManager {
       this.gridHelper.material.linewidth = gridSize;
       // Rotate grid from XZ plane to XY plane (Z-up coordinate system)
       this.gridHelper.rotation.x = Math.PI / 2;
+      // Preserve grid visibility preference when recreating grid
+      this.gridHelper.visible = this.gridEnabled;
       this.scene.add(this.gridHelper);
     }
 
@@ -513,8 +515,9 @@ export class PreviewManager {
   /**
    * Setup on-screen camera controls (WCAG 2.2 SC 2.5.7)
    * Adds visible buttons for camera manipulation
-   * Note: On desktop (>= 768px), the camera panel drawer handles controls,
-   * so we only create floating controls for mobile.
+   * Note: On desktop (>= 768px), the camera panel drawer handles controls.
+   * On mobile, the camera drawer in the actions bar handles controls.
+   * Floating controls are only created as a fallback if neither exists.
    */
   setupCameraControls() {
     // Check if the camera panel drawer exists (desktop view)
@@ -523,6 +526,16 @@ export class PreviewManager {
     if (cameraPanelDrawer && window.innerWidth >= 768) {
       console.log(
         '[Preview] Camera panel drawer exists - skipping floating controls'
+      );
+      return;
+    }
+
+    // Check if the mobile camera drawer exists (mobile view)
+    // If it does, skip creating floating controls
+    const mobileCameraDrawer = document.getElementById('cameraDrawer');
+    if (mobileCameraDrawer && window.innerWidth < 768) {
+      console.log(
+        '[Preview] Mobile camera drawer exists - skipping floating controls'
       );
       return;
     }

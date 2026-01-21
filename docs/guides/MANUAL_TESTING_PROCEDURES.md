@@ -1,6 +1,6 @@
-# Manual Testing Procedures — v1.3.0
+# Manual Testing Procedures — v3.1.0
 
-**Version**: v1.3.0  
+**Version**: v3.1.0  
 **Last Updated**: 2026-01-18  
 **Purpose**: Detailed step-by-step testing procedures for all features
 
@@ -10,8 +10,8 @@
 
 1. [Initial Setup](#initial-setup)
 2. [Core Features Testing](#core-features-testing)
-3. [v1.2.0 Auto-Preview Testing](#v120-auto-preview-testing)
-4. [v1.1.0 Features Testing](#v110-features-testing)
+3. [Auto-Preview Testing](#auto-preview-testing)
+4. [Legacy Features Testing](#legacy-features-testing)
 5. [Accessibility Testing](#accessibility-testing)
 6. [Error Handling Testing](#error-handling-testing)
 7. [Performance Testing](#performance-testing)
@@ -38,7 +38,8 @@
 
 **Expected Result:**
 - ✅ Welcome screen displays
-- ✅ "Try Simple Box", "Try Parametric Cylinder", "Try Universal Cuff" buttons visible
+- ✅ Role-based Quick Start cards visible (Educators/Facilitators, Advanced Makers, Keyboard-Only, Low Vision, Voice Input, Screen Reader)
+- ✅ "Start Tutorial" buttons visible on each card
 - ✅ File upload zone visible
 - ✅ No console errors
 - ✅ No network request failures
@@ -90,42 +91,38 @@
 
 ---
 
-### Test 3: Example Model Loading
+### Test 3: Example Model Loading (Quick Start Cards)
 
-**Objective:** Verify all example models load correctly
+**Objective:** Verify example models load correctly via the role-based Quick Start cards
 
 **Steps:**
 
 #### Simple Box
-1. Click "Try Simple Box" button
+1. In the **Educators / Facilitators** card, click "Start Tutorial"
 2. Wait for file to load
 
 **Expected Result:**
 - ✅ File loads successfully
-- ✅ 10 parameters appear
-- ✅ 3 groups: "Dimensions", "Options", "Advanced"
+- ✅ Parameters appear
 - ✅ Status shows "File loaded: simple_box.scad"
 - ✅ No console errors
 
 #### Parametric Cylinder
-1. Click "Try Parametric Cylinder" button
+1. In the **Keyboard-Only Users** card, click "Start Tutorial"
 2. Wait for file to load
 
 **Expected Result:**
 - ✅ File loads successfully
-- ✅ 12 parameters appear
-- ✅ Multiple groups
+- ✅ Parameters appear
 - ✅ No console errors
 
-#### Universal Cuff
-1. Click "Try Universal Cuff" button
+#### Library Test
+1. In the **Advanced Makers** card, click "Start Tutorial"
 2. Wait for file to load
 
 **Expected Result:**
 - ✅ File loads successfully
-- ✅ 47 parameters appear
-- ✅ 10 groups
-- ✅ Status shows "File loaded: universal_cuff_utensil_holder.scad"
+- ✅ Libraries panel appears (if required)
 - ✅ No console errors
 
 **Pass/Fail:** ☐ Pass ☐ Fail
@@ -190,7 +187,7 @@
 
 **Objective:** Verify collapsible groups work
 
-**Setup:** Load Universal Cuff (10 groups)
+**Setup:** Load a multi-group model (e.g., Universal Cuff via file upload)
 
 **Steps:**
 1. Locate "Dimensions" group header
@@ -322,7 +319,7 @@
 
 ---
 
-## v1.2.0 Auto-Preview Testing
+## Auto-Preview Testing
 
 ### Test 10: Auto-Preview Trigger
 
@@ -334,7 +331,7 @@
 1. Change "Width" slider from 50 to 60
 2. Release mouse
 3. Observe status immediately
-4. Wait ~0.35 seconds (default debounce; allow up to 1s on slower devices)
+4. Wait ~1.5 seconds (default debounce; allow up to 2.5s on slower devices)
 5. Observe status change
 6. Wait for render to complete
 
@@ -358,10 +355,10 @@
 **Setup:** Load Simple Box
 
 **Steps:**
-1. Rapidly change "Width" slider multiple times (within the debounce window ~0.35s)
+1. Rapidly change "Width" slider multiple times (within the debounce window ~1.5s)
 2. Release mouse
 3. Observe status
-4. Wait ~0.35 seconds (default debounce; allow up to 1s on slower devices)
+4. Wait ~1.5 seconds (default debounce; allow up to 2.5s on slower devices)
 5. Verify only ONE render triggers
 
 **Expected Result:**
@@ -454,7 +451,7 @@
 **Expected:** ✅ Yellow indicator, "Changes detected - preview updating..."
 
 #### Rendering State
-1. Wait ~0.35s after parameter change (default debounce)
+1. Wait ~1.5s after parameter change (default debounce)
 2. Observe status
 
 **Expected:** ✅ Blue indicator, "Generating preview...", spinner visible
@@ -506,7 +503,7 @@
 
 ---
 
-## v1.1.0 Features Testing
+## Legacy Features Testing
 
 ### Test 16: URL Parameters
 
@@ -805,7 +802,7 @@
 
 **Expected Result:**
 - ✅ Parameter changes announced
-- ✅ Rapid changes debounced (350ms)
+- ✅ Rapid changes debounced (1.5s)
 - ✅ Visible status doesn't flicker
 - ✅ Camera actions announced
 
@@ -1156,6 +1153,6 @@ Reviewer: _____________________ Date: _____________
 
 ---
 
-**Document Version**: 1.3  
+**Document Version**: 3.1  
 **Last Updated**: 2026-01-18  
-**Next Review**: After v1.4 release
+**Next Review**: After v3.2 release

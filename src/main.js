@@ -2429,6 +2429,9 @@ async function initApp() {
             const paramWidth = paramPanel.offsetWidth;
             const previewWidth = previewPanel.offsetWidth;
             const totalWidth = paramWidth + previewWidth;
+            if (!totalWidth) {
+              return [50, 50];
+            }
             return [
               (paramWidth / totalWidth) * 100,
               (previewWidth / totalWidth) * 100,

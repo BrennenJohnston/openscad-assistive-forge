@@ -377,7 +377,8 @@ export class AutoPreviewController {
       } catch (error) {
         previewColor = null;
       }
-      if (this.previewManager?.setColorOverride) {
+      // Only apply SCAD-derived color if one exists; don't clear user's manual color override
+      if (this.previewManager?.setColorOverride && previewColor !== null) {
         this.previewManager.setColorOverride(previewColor);
       }
       await this.previewManager.loadSTL(cached.stl);
@@ -459,9 +460,12 @@ export class AutoPreviewController {
       this.previewCacheKey = cacheKey;
 
       // Load into 3D preview
+      // Only apply SCAD-derived color if one exists; don't clear user's manual color override
       if (this.previewManager?.setColorOverride) {
         const previewColor = this.resolvePreviewColor(parameters);
-        this.previewManager.setColorOverride(previewColor);
+        if (previewColor !== null) {
+          this.previewManager.setColorOverride(previewColor);
+        }
       }
       await this.previewManager.loadSTL(result.stl);
 
@@ -603,9 +607,12 @@ export class AutoPreviewController {
 
     // Also update the preview with full quality result
     try {
+      // Only apply SCAD-derived color if one exists; don't clear user's manual color override
       if (this.previewManager?.setColorOverride) {
         const previewColor = this.resolvePreviewColor(parameters);
-        this.previewManager.setColorOverride(previewColor);
+        if (previewColor !== null) {
+          this.previewManager.setColorOverride(previewColor);
+        }
       }
       await this.previewManager.loadSTL(result.stl);
       this.previewParamHash = paramHash;
