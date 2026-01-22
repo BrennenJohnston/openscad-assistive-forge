@@ -28,6 +28,7 @@ All visual properties must use tokens from `src/styles/variables.css` (never har
 
 | Token | Value | Usage |
 |-------|-------|-------|
+| `--space-2xs` | 2px | Micro spacing for compact UI |
 | `--space-xs` | 4px | Minimal gaps, tight spacing |
 | `--space-sm` | 8px | Default padding, small gaps |
 | `--space-md` | 16px | Section padding, medium gaps |
@@ -77,6 +78,7 @@ All visual properties must use tokens from `src/styles/variables.css` (never har
 | `--border-radius-sm` | 4px | Small components |
 | `--border-radius-md` | 8px | Standard components |
 | `--border-radius-lg` | 12px | Large panels |
+| `--border-radius-pill` | 999px | Pill buttons and toggles |
 | `--radius-sm` | 6px | Alternative small radius |
 | `--radius-md` | 10px | Alternative medium radius |
 
@@ -134,6 +136,10 @@ All visual properties must use tokens from `src/styles/variables.css` (never har
 | `--drawer-padding` | var(--space-sm) | Internal drawer padding |
 | `--drawer-handle-size` | 24px | Resize handle size |
 | `--drawer-max-height` | 75vh | Maximum height for bottom sheets |
+| `--actions-bar-height` | 52px | Bottom actions bar height |
+| `--actions-bar-collapsed-offset` | calc(var(--actions-bar-height) + var(--space-xs)) | Mobile preview padding when actions bar is docked |
+| `--actions-bar-expanded-offset` | 220px | Mobile preview padding when camera drawer is expanded |
+| `--actions-bar-expanded-padding` | 130px | Drawer body padding to clear expanded actions bar |
 
 ### Color Tokens
 

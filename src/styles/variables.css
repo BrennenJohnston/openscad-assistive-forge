@@ -16,6 +16,7 @@
 
 :root {
   /* Spacing */
+  --space-2xs: 2px;
   --space-xs: 4px;
   --space-sm: 8px;
   --space-md: 16px;
@@ -54,6 +55,7 @@
   --border-radius-sm: 4px;
   --border-radius-md: 8px;
   --border-radius-lg: 12px;
+  --border-radius-pill: 999px;
   --radius-sm: 6px;
   --radius-md: 10px;
 
@@ -92,6 +94,11 @@
   --drawer-max-height: 75vh;
   /* Bottom actions bar (collapsed/docked) */
   --actions-bar-height: 52px;
+  --actions-bar-collapsed-offset: calc(
+    var(--actions-bar-height) + var(--space-xs)
+  );
+  --actions-bar-expanded-offset: 220px;
+  --actions-bar-expanded-padding: 130px;
 
   /* Breakpoints (Note: CSS variables cannot be used in media queries) */
   --breakpoint-mobile: 480px;
