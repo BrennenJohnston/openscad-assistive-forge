@@ -19,7 +19,11 @@ export default defineConfig({
         'src/worker/**',
         'src/main.js',
         'src/js/**/*.test.js',
-        'src/js/**/*.spec.js'
+        'src/js/**/*.spec.js',
+        // UI controller files - primarily tested via E2E tests
+        'src/js/drawer-controller.js',
+        'src/js/tutorial-sandbox.js',
+        'src/js/preview-settings-drawer.js'
       ],
       thresholds: {
         lines: 50,

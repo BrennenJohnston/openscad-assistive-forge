@@ -215,7 +215,9 @@ export function initDrawerController() {
 
   /**
    * Handle keyboard events for ESC and Tab trap
+   * @note Currently unused - keyboard handling done via docKeydownHandler
    */
+  // eslint-disable-next-line no-unused-vars
   function handleKeydown(event) {
     // ESC to close (still handle inside-drawer for completeness)
     if (event.key === 'Escape') {

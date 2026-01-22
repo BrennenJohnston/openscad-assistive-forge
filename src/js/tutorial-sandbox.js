@@ -1760,7 +1760,9 @@ function setupFocusTrap(panelElement) {
 /**
  * Make background content inert while tutorial is active
  * @param {boolean} makeInert - Whether to make content inert
+ * @note Reserved for future accessibility enhancement
  */
+// eslint-disable-next-line no-unused-vars
 function setBackgroundInert(makeInert) {
   // Find main app content containers (excluding tutorial overlay)
   const mainContent =
