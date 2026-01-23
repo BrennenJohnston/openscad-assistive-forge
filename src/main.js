@@ -62,6 +62,17 @@ import { initCameraPanelController } from './js/camera-panel-controller.js';
 import { initSequenceDetector } from './js/_seq.js';
 import Split from 'split.js';
 
+/**
+ * Escape HTML special characters to prevent XSS
+ * @param {string} text - Text to escape
+ * @returns {string} - Escaped HTML string
+ */
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
 // Example definitions (used by welcome screen and Features Guide)
 const EXAMPLE_DEFINITIONS = {
   'simple-box': {
@@ -2658,7 +2669,7 @@ async function initApp() {
           const fileTreeHtml = createFileTree(files, mainFile);
           const infoArea = document.getElementById('fileInfo');
           if (infoArea) {
-            infoArea.innerHTML = `${file.name} → ${mainFile}<br>${fileTreeHtml}`;
+            infoArea.innerHTML = `${escapeHtml(file.name)} → ${escapeHtml(mainFile)}<br>${fileTreeHtml}`;
           }
 
           // Get main file content

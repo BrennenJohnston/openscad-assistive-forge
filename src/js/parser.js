@@ -163,6 +163,7 @@ export function extractParameters(scadContent) {
   if (!scadContent || typeof scadContent !== 'string') {
     return { groups: [], parameters: {} };
   }
+
   const lines = scadContent.split('\n');
   const groups = [];
   const parameters = {};

@@ -724,6 +724,13 @@ body {
     display: flex !important;
     align-items: center;
     justify-content: center;
+    /* Fixed position so button stays visible when scrolling */
+    position: fixed;
+    top: calc(var(--space-md) + env(safe-area-inset-top, 0px));
+    right: auto;
+    /* Position at right edge of drawer (drawer is min(90vw, 360px) wide) */
+    left: calc(min(90vw, 360px) - 44px - var(--space-md));
+    z-index: 960; /* Above drawer content (drawer is z-index: 950) */
   }
 }
 
@@ -1207,8 +1214,8 @@ body {
      ============================================================================ */
 
   /* Add padding to header for collapse button space */
+  /* Note: position: sticky (inherited from base rule) also creates positioning context for absolute children */
   .param-panel .panel-header {
-    position: relative;
     padding-right: calc(var(--space-md) + 36px);
   }
 

@@ -327,6 +327,7 @@ export function initDrawerController() {
     window.addEventListener('pointercancel', clearIgnore, true);
   });
 
+
   // Event listeners
   toggleBtn.addEventListener('click', toggle);
 

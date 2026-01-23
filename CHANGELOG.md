@@ -39,12 +39,19 @@ This is the **first major stable release** of OpenSCAD Assistive Forge, marking 
 - Comprehensive THIRD_PARTY_NOTICES.md
 - Clear licensing information throughout
 
+### Dependencies
+
+- **commander**: Updated from ^11.1.0 to ^14.0.2 (CLI argument parsing)
+- **three**: Updated from ^0.160.0 to ^0.182.0 (3D rendering engine)
+
 ### Fixed
 
 - Guard against null worker in `render-controller` cancel flow after terminate
 - Dispose Three.js `GridHelper` geometry/material on theme changes to prevent leaks
 - Add null checks in parameter extraction to prevent crashes on unexpected inputs
 - Improve state cloning error handling for non-serializable values
+- Add XSS protection for file names displayed in info area
+- Fix mobile drawer collapse button positioning with fixed position
 
 ### Accessibility
 
