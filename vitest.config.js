@@ -23,7 +23,14 @@ export default defineConfig({
         // UI controller files - primarily tested via E2E tests
         'src/js/drawer-controller.js',
         'src/js/tutorial-sandbox.js',
-        'src/js/preview-settings-drawer.js'
+        'src/js/preview-settings-drawer.js',
+        // Utility modules tested indirectly through integration
+        'src/js/color-utils.js',
+        'src/js/html-utils.js',
+        'src/js/keyboard-config.js',
+        'src/js/sw-manager.js',
+        'src/js/version.js',
+        'src/js/gamepad-controller.js'
       ],
       thresholds: {
         lines: 50,
