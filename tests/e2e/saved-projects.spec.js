@@ -15,6 +15,13 @@ const getFixturePath = (filename) => {
   return path.join(__dirname, '../fixtures', filename);
 };
 
+// Dismiss first-visit modal so it doesn't block UI interactions
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+  });
+});
+
 test.describe('Saved Projects', () => {
   test.beforeEach(async ({ page }) => {
     // Navigate to app
@@ -28,7 +35,7 @@ test.describe('Saved Projects', () => {
       return window.indexedDB.deleteDatabase('openscad-forge-saved-projects');
     });
     
-    // Also clear localStorage
+    // Also clear localStorage (but preserve first-visit-seen flag)
     await page.evaluate(() => {
       localStorage.removeItem('openscad-saved-projects');
     });
