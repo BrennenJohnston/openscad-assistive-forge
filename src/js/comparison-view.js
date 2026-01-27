@@ -4,6 +4,7 @@
  */
 
 import { PreviewManager } from './preview.js';
+import { escapeHtml } from './html-utils.js';
 
 /**
  * ComparisonView handles the multi-panel comparison UI
@@ -246,7 +247,7 @@ export class ComparisonView {
         <input 
           type="text" 
           class="variant-name-input" 
-          value="${this.escapeHtml(variant.name)}"
+          value="${escapeHtml(variant.name)}"
           data-variant-id="${variant.id}"
           aria-label="Variant name"
         />
@@ -292,7 +293,7 @@ export class ComparisonView {
       <div class="variant-status ${stateClass}">
         <span class="status-label">${stateLabel}</span>
         ${variant.stats ? `<span class="status-stats">${variant.stats.triangles || 0} triangles</span>` : ''}
-        ${variant.error ? `<span class="status-error">${this.escapeHtml(variant.error)}</span>` : ''}
+        ${variant.error ? `<span class="status-error">${escapeHtml(variant.error)}</span>` : ''}
       </div>
     `;
   }
@@ -314,7 +315,7 @@ export class ComparisonView {
       statusDiv.innerHTML = `
         <span class="status-label">${stateLabel}</span>
         ${variant.stats ? `<span class="status-stats">${variant.stats.triangles || 0} triangles</span>` : ''}
-        ${variant.error ? `<span class="status-error">${this.escapeHtml(variant.error)}</span>` : ''}
+        ${variant.error ? `<span class="status-error">${escapeHtml(variant.error)}</span>` : ''}
       `;
     }
 
@@ -604,15 +605,6 @@ export class ComparisonView {
       error: 'Error',
     };
     return labels[state] || state;
-  }
-
-  /**
-   * Escape HTML for safe display
-   */
-  escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
   }
 
   /**

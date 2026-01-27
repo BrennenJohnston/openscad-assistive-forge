@@ -3,6 +3,8 @@
  * @license GPL-3.0-or-later
  */
 
+import { normalizeHexColor } from './color-utils.js';
+
 /**
  * Preview state constants
  */
@@ -207,14 +209,9 @@ export class AutoPreviewController {
       ? 'box_color'
       : this.colorParamNames[0];
     const raw = parameters[preferredKey];
-    if (typeof raw !== 'string') {
-      return null;
-    }
-
-    const normalized = raw.startsWith('#') ? raw : `#${raw}`;
-    const isValid = /^#[0-9A-Fa-f]{6}$/.test(normalized);
-    const previewColor = isValid ? normalized : null;
-    return previewColor;
+    
+    // Use shared color normalization utility
+    return normalizeHexColor(raw);
   }
 
   /**

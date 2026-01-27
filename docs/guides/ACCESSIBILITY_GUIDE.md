@@ -344,11 +344,7 @@ The palette is designed to be distinguishable for common color vision deficienci
 - **Tritanopia (Blue-Yellow)**: Teal provides clear distinction from yellow
 - **All Types**: Icons and text accompany all color-coded states
 
-**Important**: No information is conveyed by color alone (WCAG 1.4.1). All states include:
-- ✓ Success states have checkmark icons
-- ✗ Error states have X icons
-- ⚠ Warning states have warning icons
-- ℹ Info states have info icons
+No information is conveyed by color alone (WCAG 1.4.1). All states include icons: success has checkmarks, error has X icons, warning has warning icons, info has info icons.
 
 ### Contrast Testing
 
@@ -399,18 +395,18 @@ For detailed information:
 
 ## General Accessibility Features
 
-### Built-in Features
+### Built-in features
 
-- ✅ **Keyboard navigation**: Full functionality without a mouse
-- ✅ **Screen reader support**: Comprehensive ARIA labels and live regions
-- ✅ **High contrast mode**: Toggle via HC button (top-right)
-- ✅ **Forced colors support**: Works with OS-enforced color schemes
-- ✅ **Focus indicators**: Always visible on all interactive elements (WCAG 2.2)
-- ✅ **Reduced motion**: Respects `prefers-reduced-motion` setting
-- ✅ **Touch targets**: All buttons meet 44×44px minimum size
-- ✅ **Undo/Redo**: Parameter history with Ctrl+Z/Ctrl+Shift+Z
-- ✅ **Presets**: Save and recall frequently-used configurations
-- ✅ **Persistent values**: Parameters remembered between sessions
+- Keyboard navigation: full functionality without a mouse
+- Screen reader support: comprehensive ARIA labels and live regions
+- High contrast mode: toggle via HC button (top-right)
+- Forced colors support: works with OS-enforced color schemes
+- Focus indicators: always visible on all interactive elements (WCAG 2.2)
+- Reduced motion: respects `prefers-reduced-motion` setting
+- Touch targets: all buttons meet 44x44px minimum size
+- Undo/Redo: parameter history with Ctrl+Z/Ctrl+Shift+Z
+- Presets: save and recall frequently-used configurations
+- Persistent values: parameters remembered between sessions
 
 ### Standards Compliance
 

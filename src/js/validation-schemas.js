@@ -9,6 +9,7 @@ import {
   URL_PARAM_LIMITS,
   STORAGE_LIMITS,
 } from './validation-constants.js';
+import { isValidHexColor } from './color-utils.js';
 
 // Initialize Ajv with options
 const ajv = new Ajv({
@@ -105,6 +106,36 @@ const libraryMapSchema = {
   additionalProperties: false,
 };
 
+/**
+ * Saved project validation schema
+ */
+const savedProjectSchema = {
+  type: 'object',
+  required: ['id', 'schemaVersion', 'name', 'originalName', 'kind', 'mainFilePath', 'content', 'notes', 'savedAt', 'lastLoadedAt'],
+  properties: {
+    id: { type: 'string', minLength: 1 },
+    schemaVersion: { type: 'number', minimum: 1, maximum: 100 },
+    name: { type: 'string', minLength: 1, maxLength: 255 },
+    originalName: { type: 'string', minLength: 1, maxLength: 255 },
+    kind: { type: 'string', enum: ['scad', 'zip'] },
+    mainFilePath: { type: 'string', minLength: 1, maxLength: 500 },
+    content: { type: 'string', maxLength: STORAGE_LIMITS.MAX_SAVED_PROJECT_SIZE },
+    projectFiles: { type: ['string', 'null'], default: null },
+    notes: { type: 'string', maxLength: STORAGE_LIMITS.MAX_NOTES_LENGTH, default: '' },
+    savedAt: { type: 'number', minimum: 0 },
+    lastLoadedAt: { type: 'number', minimum: 0 },
+  },
+};
+
+/**
+ * Saved projects collection validation schema
+ */
+const savedProjectsCollectionSchema = {
+  type: 'array',
+  items: savedProjectSchema,
+  maxItems: STORAGE_LIMITS.MAX_SAVED_PROJECTS_COUNT,
+};
+
 // Compile validators
 export const validateFileUpload = ajv.compile(fileUploadSchema);
 export const validateUrlParamValue = ajv.compile(urlParamValueSchema);
@@ -112,6 +143,8 @@ export const validateDraftState = ajv.compile(draftStateSchema);
 export const validatePreset = ajv.compile(presetSchema);
 export const validatePresetsCollection = ajv.compile(presetsCollectionSchema);
 export const validateLibraryMap = ajv.compile(libraryMapSchema);
+export const validateSavedProject = ajv.compile(savedProjectSchema);
+export const validateSavedProjectsCollection = ajv.compile(savedProjectsCollectionSchema);
 
 /**
  * Validate URL params object (all values)
@@ -322,10 +355,9 @@ export function validateParameterValue(paramName, value, propertySchema) {
     }
   }
 
-  // Color validation
+  // Color validation - use shared utility
   if (propertySchema.format === 'color') {
-    const colorPattern = /^#?[0-9A-Fa-f]{6}$/;
-    if (!colorPattern.test(String(coerced))) {
+    if (!isValidHexColor(String(coerced))) {
       errors.push(
         `${paramName}: must be a valid hex color (e.g., FF0000 or #FF0000)`
       );

@@ -94,6 +94,14 @@ export const DEFAULT_SHORTCUTS = {
     description: 'Open keyboard shortcuts settings',
   },
 
+  // Saved Projects
+  focusSavedProjects: {
+    key: 'p',
+    ctrl: true,
+    shift: true,
+    description: 'Focus saved projects list',
+  },
+
   // Navigation
   nextParameter: {
     key: 'ArrowDown',

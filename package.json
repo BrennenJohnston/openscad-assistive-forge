@@ -1,6 +1,6 @@
 {
   "name": "openscad-assistive-forge",
-  "version": "4.0.0",
+  "version": "4.1.0",
   "description": "Accessibility-first web-based OpenSCAD customizer with client-side WASM rendering and developer toolchain",
   "type": "module",
   "author": "Brennen Johnston <https://github.com/BrennenJohnston>",

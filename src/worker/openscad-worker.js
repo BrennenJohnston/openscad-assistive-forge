@@ -23,6 +23,8 @@
  * - Threaded WASM for multi-core parallelism (requires SharedArrayBuffer)
  */
 
+import { hexToRgb } from '../js/color-utils.js';
+
 // Official WASM is loaded dynamically in initWASM() from /wasm/openscad-official/
 
 // Worker state
@@ -924,29 +926,7 @@ function clearLibraries() {
   console.log('[Worker FS] Cleared library tracking');
 }
 
-/**
- * Convert hex color to RGB array [r, g, b] (0-255 range)
- * @param {string} hex - Hex color code (with or without #)
- * @returns {Array<number>} RGB array
- */
-function hexToRgb(hex) {
-  // Remove # if present
-  hex = hex.replace(/^#/, '');
-
-  // Convert 3-digit hex to 6-digit
-  if (hex.length === 3) {
-    hex = hex
-      .split('')
-      .map((c) => c + c)
-      .join('');
-  }
-
-  const r = parseInt(hex.substring(0, 2), 16);
-  const g = parseInt(hex.substring(2, 4), 16);
-  const b = parseInt(hex.substring(4, 6), 16);
-
-  return [r, g, b];
-}
+// hexToRgb is now imported from color-utils.js
 
 /**
  * Build -D command-line arguments from parameters

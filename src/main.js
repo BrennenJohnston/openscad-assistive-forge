@@ -27,6 +27,11 @@ import {
   estimateRenderTime,
 } from './js/render-controller.js';
 import {
+  escapeHtml,
+  isValidServiceWorkerMessage,
+  setupNotesCounter,
+} from './js/html-utils.js';
+import {
   analyzeComplexity,
   getAdaptiveQualityConfig,
   getQualityPreset,
@@ -80,18 +85,18 @@ import {
   keyboardConfig,
   initShortcutsModal,
 } from './js/keyboard-config.js';
+import {
+  initSavedProjectsDB,
+  listSavedProjects,
+  saveProject,
+  getProject,
+  touchProject,
+  updateProject,
+  deleteProject,
+  getSavedProjectsSummary,
+  clearAllSavedProjects,
+} from './js/saved-projects-manager.js';
 import Split from 'split.js';
-
-/**
- * Escape HTML special characters to prevent XSS
- * @param {string} text - Text to escape
- * @returns {string} - Escaped HTML string
- */
-function escapeHtml(text) {
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
-}
 
 // Example definitions (used by welcome screen and Features Guide)
 const EXAMPLE_DEFINITIONS = {
@@ -1304,7 +1309,7 @@ function _disableAltViewWithPreview(toggleBtn, rotateBtn, mobileRotateBtn) {
 
 // Initialize app
 async function initApp() {
-  console.log('OpenSCAD Assistive Forge v4.0.0');
+  console.log('OpenSCAD Assistive Forge v4.1.0');
   console.log('Initializing...');
 
   let statusArea = null;
@@ -1432,7 +1437,13 @@ async function initApp() {
       });
 
       navigator.serviceWorker.addEventListener('message', (event) => {
-        if (event.data?.type === 'CACHE_CLEARED') {
+        // Validate message type against allowlist
+        if (!isValidServiceWorkerMessage(event, ['CACHE_CLEARED'])) {
+          console.warn('[SW] Ignoring invalid or unexpected message:', event.data);
+          return;
+        }
+
+        if (event.data.type === 'CACHE_CLEARED') {
           cacheClearPending = false;
           updateStatus('Cache cleared. Reloading...', 'success');
           window.location.reload();
@@ -1488,6 +1499,17 @@ async function initApp() {
 
   // Initialize configurable keyboard shortcuts
   initKeyboardShortcuts();
+  
+  // Initialize saved projects database
+  try {
+    const { available, type } = await initSavedProjectsDB();
+    console.log(`[Saved Projects] Initialized with ${type}`);
+    
+    // Render saved projects list on welcome screen
+    await renderSavedProjectsList();
+  } catch (error) {
+    console.error('[Saved Projects] Initialization failed:', error);
+  }
 
   // Initialize gamepad controller (if supported)
   let gamepadController = null;
@@ -1570,6 +1592,42 @@ async function initApp() {
   // Shared clear cache handler
   async function handleClearCache() {
     try {
+      // Get saved projects summary
+      const summary = await getSavedProjectsSummary();
+      const presetCount = presetManager?.getPresetCount?.() || 0;
+      
+      // Build warning message
+      let warningItems = [];
+      if (summary.count > 0) {
+        warningItems.push(`${summary.count} saved project(s)`);
+      }
+      if (presetCount > 0) {
+        warningItems.push(`${presetCount} preset(s)`);
+      }
+      
+      const message = warningItems.length > 0
+        ? `This will permanently delete:\n• ${warningItems.join('\n• ')}\n\nThis cannot be undone.`
+        : 'This will clear all cached data. Continue?';
+      
+      const title = warningItems.length > 0
+        ? 'Clear All Cached Data?'
+        : 'Clear Cache';
+      
+      // Show confirmation dialog
+      const confirmed = await showConfirmDialog(
+        message,
+        title,
+        'Clear Cache',
+        'Cancel'
+      );
+      
+      if (!confirmed) return;
+      
+      // Clear saved projects explicitly
+      if (summary.count > 0) {
+        await clearAllSavedProjects();
+      }
+      
       const success = await clearCachedData();
       if (success) {
         updateStatus('Site data cleared. Reloading...', 'success');
@@ -1679,7 +1737,10 @@ async function initApp() {
         // handleFile will be available since it's defined later but hoisted
         handleFile(
           { name: draftToRestore.fileName },
-          draftToRestore.fileContent
+          draftToRestore.fileContent,
+          null,
+          null,
+          'saved'
         );
         updateStatus('Draft restored');
       } else {
@@ -3093,7 +3154,7 @@ async function initApp() {
       if (shouldRestore) {
         console.log('Restoring draft...');
         // Treat draft as uploaded file
-        handleFile({ name: draft.fileName }, draft.fileContent);
+        handleFile({ name: draft.fileName }, draft.fileContent, null, null, 'saved');
         updateStatus('Draft restored');
       } else {
         stateManager.clearLocalStorage();
@@ -3146,7 +3207,7 @@ async function initApp() {
       );
 
       // Process the embedded content using handleFile
-      handleFile({ name: fileName }, scadContent);
+      handleFile({ name: fileName }, scadContent, null, null, 'example');
 
       return true;
     } catch (e) {
@@ -3317,7 +3378,8 @@ async function initApp() {
     file,
     content = null,
     extractedFiles = null,
-    mainFilePathArg = null
+    mainFilePathArg = null,
+    source = 'user' // 'user' | 'example' | 'saved' - track upload source
   ) {
     if (!file && !content) return;
 
@@ -3400,7 +3462,7 @@ async function initApp() {
           );
 
           // Continue with extracted content, passing mainFilePath as 4th argument
-          handleFile(null, fileContent, projectFiles, mainFilePath);
+          handleFile(null, fileContent, projectFiles, mainFilePath, source);
           return;
         } catch (error) {
           console.error('[ZIP] Extraction failed:', error);
@@ -3419,9 +3481,11 @@ async function initApp() {
     }
 
     if (file && !content) {
+      const originalFileName = fileName; // Preserve file name for recursive call
       const reader = new FileReader();
       reader.onload = (e) => {
-        handleFile(null, e.target.result, extractedFiles, mainFilePath);
+        // Pass a minimal object with the original file name
+        handleFile({ name: originalFileName }, e.target.result, extractedFiles, mainFilePath, source);
       };
       reader.readAsText(file);
       return;
@@ -3802,6 +3866,16 @@ async function initApp() {
             });
         }
       }
+      
+      // Show opt-in save prompt for user uploads only (not examples or saved projects)
+      if (source === 'user') {
+        try {
+          const state = stateManager.getState();
+          await showSaveProjectPrompt(state);
+        } catch (error) {
+          console.error('[Saved Projects] Error showing save prompt:', error);
+        }
+      }
     } catch (error) {
       console.error('Failed to extract parameters:', error);
       updateStatus('Error: Failed to extract parameters');
@@ -3936,6 +4010,485 @@ async function initApp() {
     }
   });
 
+  // ========== SAVED PROJECTS ==========
+  
+  /**
+   * Format relative time (e.g., "2 days ago")
+   * @param {number} timestamp - Unix timestamp in milliseconds
+   * @returns {string}
+   */
+  function formatRelativeTime(timestamp) {
+    const now = Date.now();
+    const diff = now - timestamp;
+    const seconds = Math.floor(diff / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+    
+    if (seconds < 60) return 'just now';
+    if (minutes < 60) return `${minutes} minute${minutes !== 1 ? 's' : ''} ago`;
+    if (hours < 24) return `${hours} hour${hours !== 1 ? 's' : ''} ago`;
+    if (days < 7) return `${days} day${days !== 1 ? 's' : ''} ago`;
+    if (days < 30) {
+      const weeks = Math.floor(days / 7);
+      return `${weeks} week${weeks !== 1 ? 's' : ''} ago`;
+    }
+    if (days < 365) {
+      const months = Math.floor(days / 30);
+      return `${months} month${months !== 1 ? 's' : ''} ago`;
+    }
+    const years = Math.floor(days / 365);
+    return `${years} year${years !== 1 ? 's' : ''} ago`;
+  }
+  
+  /**
+   * Linkify URLs in text (convert http/https URLs to clickable links)
+   * @param {string} text - Plain text with URLs
+   * @returns {string} - HTML string with links
+   */
+  function linkifyText(text) {
+    if (!text) return '';
+    
+    const escaped = escapeHtml(text);
+    const urlPattern = /(https?:\/\/[^\s]+)/g;
+    
+    return escaped.replace(urlPattern, (url) => {
+      return `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`;
+    });
+  }
+  
+  /**
+   * Render saved projects list on welcome screen
+   */
+  async function renderSavedProjectsList() {
+    const savedProjectsList = document.getElementById('savedProjectsList');
+    const savedProjectsEmpty = document.getElementById('savedProjectsEmpty');
+    
+    if (!savedProjectsList || !savedProjectsEmpty) return;
+    
+    const projects = await listSavedProjects();
+    
+    if (projects.length === 0) {
+      savedProjectsList.innerHTML = '';
+      savedProjectsEmpty.classList.remove('hidden');
+      return;
+    }
+    
+    savedProjectsEmpty.classList.add('hidden');
+    
+    // Render project cards
+    const cardsHtml = projects.map((project) => {
+      const notesPreview = project.notes
+        ? `<div class="saved-project-notes-preview">${linkifyText(project.notes)}</div>`
+        : '';
+      
+      const savedTime = formatRelativeTime(project.savedAt);
+      const loadedTime = project.lastLoadedAt !== project.savedAt
+        ? formatRelativeTime(project.lastLoadedAt)
+        : null;
+      
+      return `
+        <div class="saved-project-card" role="listitem" data-project-id="${project.id}">
+          <div class="saved-project-header">
+            <svg class="saved-project-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+            </svg>
+            <div class="saved-project-info">
+              <h4 class="saved-project-name">${escapeHtml(project.name)}</h4>
+              <div class="saved-project-meta">
+                <span class="saved-project-date">Saved ${savedTime}</span>
+                ${loadedTime ? `<span class="saved-project-date">Opened ${loadedTime}</span>` : ''}
+              </div>
+            </div>
+          </div>
+          ${notesPreview}
+          <div class="saved-project-actions">
+            <button class="btn btn-primary btn-load-project" data-project-id="${project.id}">
+              Load
+            </button>
+            <button class="btn btn-secondary btn-edit-project" data-project-id="${project.id}">
+              Edit
+            </button>
+            <button class="btn btn-danger btn-delete-project" data-project-id="${project.id}">
+              Delete
+            </button>
+          </div>
+        </div>
+      `;
+    }).join('');
+    
+    savedProjectsList.innerHTML = cardsHtml;
+    
+    // Wire up event listeners
+    savedProjectsList.querySelectorAll('.btn-load-project').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const projectId = btn.dataset.projectId;
+        loadSavedProject(projectId);
+      });
+    });
+    
+    savedProjectsList.querySelectorAll('.btn-edit-project').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const projectId = btn.dataset.projectId;
+        showEditProjectModal(projectId);
+      });
+    });
+    
+    savedProjectsList.querySelectorAll('.btn-delete-project').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const projectId = btn.dataset.projectId;
+        deleteSavedProject(projectId);
+      });
+    });
+    
+    // Make cards clickable to load
+    savedProjectsList.querySelectorAll('.saved-project-card').forEach((card) => {
+      card.addEventListener('click', (e) => {
+        // Only load if clicking the card itself, not buttons
+        if (e.target.closest('button')) return;
+        const projectId = card.dataset.projectId;
+        loadSavedProject(projectId);
+      });
+      
+      card.setAttribute('tabindex', '0');
+      card.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          const projectId = card.dataset.projectId;
+          loadSavedProject(projectId);
+        }
+      });
+    });
+  }
+  
+  /**
+   * Load a saved project
+   * @param {string} projectId
+   */
+  async function loadSavedProject(projectId) {
+    try {
+      const project = await getProject(projectId);
+      if (!project) {
+        alert('Project not found');
+        return;
+      }
+      
+      // Check if file is currently loaded
+      const currentState = stateManager.getState();
+      if (currentState.uploadedFile) {
+        const confirmed = await showConfirmDialog(
+          'Loading a saved project will replace the current file. Continue?',
+          'Load Saved Project',
+          'Load',
+          'Cancel'
+        );
+        if (!confirmed) return;
+      }
+      
+      // Reconstruct file data
+      const content = project.content;
+      const fileName = project.originalName;
+      const projectFiles = project.projectFiles ? new Map(Object.entries(project.projectFiles)) : null;
+      // FIX: For single-file projects, mainFilePath should be null so content gets written to /tmp/input.scad
+      // The mainFilePath is only meaningful for multi-file ZIP projects where files are mounted to the FS
+      const mainFilePath = projectFiles && projectFiles.size > 0 ? project.mainFilePath : null;
+      
+      // Update last loaded timestamp
+      await touchProject(projectId);
+      
+      // Load the file (reuse existing handleFile logic)
+      // Pass { name: fileName } to ensure the original filename is preserved
+      await handleFile({ name: fileName }, content, projectFiles, mainFilePath, 'saved');
+      
+      // Announce success
+      stateManager.announceChange(`Loaded saved project: ${project.name}`);
+      updateStatus(`Loaded: ${project.name}`);
+      
+      // Re-render list to update "last opened" time
+      await renderSavedProjectsList();
+    } catch (error) {
+      console.error('Error loading saved project:', error);
+      alert(`Failed to load project: ${error.message}`);
+    }
+  }
+  
+  /**
+   * Show opt-in save prompt after file upload
+   * @param {Object} fileData - Current file state
+   */
+  async function showSaveProjectPrompt(fileData) {
+    const { uploadedFile, projectFiles, mainFilePath } = fileData;
+    
+    if (!uploadedFile) return;
+    
+    const kind = projectFiles ? 'zip' : 'scad';
+    const fileName = uploadedFile.name || 'untitled.scad';
+    
+    // Create modal
+    const modal = document.createElement('div');
+    modal.className = 'preset-modal save-project-modal';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-labelledby', 'saveProjectTitle');
+    modal.setAttribute('aria-modal', 'true');
+    
+    modal.innerHTML = `
+      <div class="preset-modal-content">
+        <div class="preset-modal-header">
+          <h3 id="saveProjectTitle" class="preset-modal-title">Save this file for quick access?</h3>
+          <button class="preset-modal-close" aria-label="Close dialog">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p style="margin-bottom: var(--space-md); color: var(--color-text-secondary);">
+            Saved projects are stored in this browser. Clearing cache/site data will remove them.
+          </p>
+          <div class="save-project-checkbox-wrapper">
+            <input type="checkbox" id="saveProjectCheckbox" />
+            <label for="saveProjectCheckbox">Save this file to Saved Projects</label>
+          </div>
+          <div class="edit-project-field">
+            <label for="saveProjectName">Project Name</label>
+            <input type="text" id="saveProjectName" value="${escapeHtml(fileName)}" />
+          </div>
+          <div class="save-project-notes-field">
+            <label for="saveProjectNotes">Notes (optional - you can paste links)</label>
+            <textarea id="saveProjectNotes" placeholder="Add notes about this project..."></textarea>
+            <div class="save-project-notes-counter">
+              <span id="saveProjectNotesCount">0</span> / 5000 characters
+            </div>
+          </div>
+        </div>
+        <div class="preset-modal-footer">
+          <button class="btn btn-secondary" id="saveProjectNotNow">Not now</button>
+          <button class="btn btn-primary" id="saveProjectSave" disabled>Save</button>
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Get elements
+    const checkbox = modal.querySelector('#saveProjectCheckbox');
+    const nameInput = modal.querySelector('#saveProjectName');
+    const notesTextarea = modal.querySelector('#saveProjectNotes');
+    const notesCount = modal.querySelector('#saveProjectNotesCount');
+    const saveBtn = modal.querySelector('#saveProjectSave');
+    const notNowBtn = modal.querySelector('#saveProjectNotNow');
+    const closeBtn = modal.querySelector('.preset-modal-close');
+    
+    // Update save button state based on checkbox
+    checkbox.addEventListener('change', () => {
+      saveBtn.disabled = !checkbox.checked;
+    });
+    
+    // Setup character counter for notes with validation
+    const counter = modal.querySelector('.save-project-notes-counter');
+    setupNotesCounter(notesTextarea, notesCount, counter, {
+      maxLength: 5000,
+      warningThreshold: 4500,
+      onValidChange: (isValid) => {
+        if (isValid) {
+          saveBtn.disabled = !checkbox.checked;
+        } else {
+          saveBtn.disabled = true;
+        }
+      },
+    });
+    
+    // Handle save
+    saveBtn.addEventListener('click', async () => {
+      if (!checkbox.checked) return;
+      
+      const projectName = nameInput.value.trim() || fileName;
+      const notes = notesTextarea.value.trim();
+      
+      // Convert projectFiles Map to object for storage
+      const projectFilesObj = projectFiles ? Object.fromEntries(projectFiles) : null;
+      
+      const result = await saveProject({
+        name: projectName,
+        originalName: fileName,
+        kind,
+        mainFilePath: mainFilePath || fileName,
+        content: uploadedFile.content,
+        projectFiles: projectFilesObj,
+        notes,
+      });
+      
+      if (result.success) {
+        stateManager.announceChange(`Project saved: ${projectName}`);
+        updateStatus(`Saved: ${projectName}`);
+        await renderSavedProjectsList();
+      } else {
+        alert(`Failed to save project: ${result.error}`);
+      }
+      
+      document.body.removeChild(modal);
+    });
+    
+    // Handle close
+    const closeHandler = () => {
+      document.body.removeChild(modal);
+    };
+    
+    notNowBtn.addEventListener('click', closeHandler);
+    closeBtn.addEventListener('click', closeHandler);
+    
+    // Open modal with focus management
+    openModal(modal);
+    
+    // Focus the project name input for easy editing
+    nameInput.focus();
+    nameInput.select();
+  }
+  
+  /**
+   * Show edit project modal
+   * @param {string} projectId
+   */
+  async function showEditProjectModal(projectId) {
+    try {
+      const project = await getProject(projectId);
+      if (!project) {
+        alert('Project not found');
+        return;
+      }
+      
+      // Create modal
+      const modal = document.createElement('div');
+      modal.className = 'preset-modal edit-project-modal';
+      modal.setAttribute('role', 'dialog');
+      modal.setAttribute('aria-labelledby', 'editProjectTitle');
+      modal.setAttribute('aria-modal', 'true');
+      
+      modal.innerHTML = `
+        <div class="preset-modal-content">
+          <div class="preset-modal-header">
+            <h3 id="editProjectTitle" class="preset-modal-title">Edit Project</h3>
+            <button class="preset-modal-close" aria-label="Close dialog">&times;</button>
+          </div>
+          <div class="modal-body">
+            <div class="edit-project-field">
+              <label for="editProjectName">Project Name</label>
+              <input type="text" id="editProjectName" value="${escapeHtml(project.name)}" />
+            </div>
+            <div class="edit-project-field">
+              <label for="editProjectNotes">Notes</label>
+              <textarea id="editProjectNotes">${escapeHtml(project.notes || '')}</textarea>
+              <div class="save-project-notes-counter">
+                <span id="editProjectNotesCount">${(project.notes || '').length}</span> / 5000 characters
+              </div>
+            </div>
+          </div>
+          <div class="preset-modal-footer">
+            <button class="btn btn-secondary" id="editProjectCancel">Cancel</button>
+            <button class="btn btn-primary" id="editProjectSave">Save Changes</button>
+          </div>
+        </div>
+      `;
+      
+      document.body.appendChild(modal);
+      
+      // Get elements
+      const nameInput = modal.querySelector('#editProjectName');
+      const notesTextarea = modal.querySelector('#editProjectNotes');
+      const notesCount = modal.querySelector('#editProjectNotesCount');
+      const saveBtn = modal.querySelector('#editProjectSave');
+      const cancelBtn = modal.querySelector('#editProjectCancel');
+      const closeBtn = modal.querySelector('.preset-modal-close');
+      
+      // Setup character counter for notes with validation
+      const counter = modal.querySelector('.save-project-notes-counter');
+      setupNotesCounter(notesTextarea, notesCount, counter, {
+        maxLength: 5000,
+        warningThreshold: 4500,
+        submitButton: saveBtn, // Disable save button when over limit
+      });
+      
+      // Handle save
+      saveBtn.addEventListener('click', async () => {
+        const name = nameInput.value.trim();
+        const notes = notesTextarea.value.trim();
+        
+        if (!name) {
+          alert('Project name cannot be empty');
+          return;
+        }
+        
+        const result = await updateProject({
+          id: projectId,
+          name,
+          notes,
+        });
+        
+        if (result.success) {
+          stateManager.announceChange(`Project updated: ${name}`);
+          updateStatus(`Updated: ${name}`);
+          await renderSavedProjectsList();
+        } else {
+          alert(`Failed to update project: ${result.error}`);
+        }
+        
+        document.body.removeChild(modal);
+      });
+      
+      // Handle close
+      const closeHandler = () => {
+        document.body.removeChild(modal);
+      };
+      
+      cancelBtn.addEventListener('click', closeHandler);
+      closeBtn.addEventListener('click', closeHandler);
+      
+      // Open modal with focus management
+      openModal(modal);
+      nameInput.focus();
+      nameInput.select();
+    } catch (error) {
+      console.error('Error showing edit modal:', error);
+      alert(`Failed to load project: ${error.message}`);
+    }
+  }
+  
+  /**
+   * Delete a saved project (with confirmation)
+   * @param {string} projectId
+   */
+  async function deleteSavedProject(projectId) {
+    try {
+      const project = await getProject(projectId);
+      if (!project) {
+        alert('Project not found');
+        return;
+      }
+      
+      const confirmed = await showConfirmDialog(
+        `Delete "${project.name}"?\n\nThis cannot be undone.`,
+        'Delete Saved Project',
+        'Delete',
+        'Cancel'
+      );
+      
+      if (!confirmed) return;
+      
+      const result = await deleteProject(projectId);
+      
+      if (result.success) {
+        stateManager.announceChange(`Deleted project: ${project.name}`);
+        updateStatus(`Deleted: ${project.name}`);
+        await renderSavedProjectsList();
+      } else {
+        alert(`Failed to delete project: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Error deleting project:', error);
+      alert(`Failed to delete project: ${error.message}`);
+    }
+  }
+
   // Shared example loader (reusable by welcome buttons and Features Guide)
   async function loadExampleByKey(
     exampleKey,
@@ -3982,7 +4535,7 @@ async function initApp() {
       }
 
       // Treat as uploaded file
-      handleFile({ name: example.name }, content);
+      handleFile({ name: example.name }, content, null, null, 'example');
     } catch (error) {
       console.error('Failed to load example:', error);
       updateStatus('Error loading example');
@@ -6749,6 +7302,27 @@ async function initApp() {
     }
   });
 
+  keyboardConfig.on('focusSavedProjects', () => {
+    const savedProjectsList = document.getElementById('savedProjectsList');
+    const welcomeScreen = document.getElementById('welcomeScreen');
+    
+    // Only focus if on welcome screen
+    if (welcomeScreen && !welcomeScreen.classList.contains('hidden')) {
+      if (savedProjectsList) {
+        // Scroll to saved projects section
+        savedProjectsList.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        
+        // Focus first project card if available
+        const firstCard = savedProjectsList.querySelector('.saved-project-card');
+        if (firstCard) {
+          firstCard.focus();
+        } else {
+          savedProjectsList.focus();
+        }
+      }
+    }
+  });
+
   keyboardConfig.on('resetAllParams', () => {
     const state = stateManager.getState();
     if (state.uploadedFile) {
@@ -6757,7 +7331,7 @@ async function initApp() {
   });
 
   keyboardConfig.on('toggleTheme', () => {
-    themeManager.toggle();
+    themeManager.cycleTheme();
   });
 
   keyboardConfig.on('showShortcutsModal', () => {

@@ -21,4 +21,7 @@ export const STORAGE_LIMITS = {
   MAX_DRAFT_SIZE: 5 * 1024 * 1024, // 5MB
   MAX_PRESET_SIZE: 1 * 1024 * 1024, // 1MB per preset
   MAX_PRESETS_COUNT: 50,
+  MAX_SAVED_PROJECT_SIZE: 5 * 1024 * 1024, // 5MB (matches draft size)
+  MAX_SAVED_PROJECTS_COUNT: 25, // Conservative limit for browser storage
+  MAX_NOTES_LENGTH: 5000, // Characters for project notes
 };

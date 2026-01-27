@@ -3,6 +3,8 @@
  * @license GPL-3.0-or-later
  */
 
+import { formatFileSize } from './download.js';
+
 /**
  * Format a parameter name for display (replaces underscores with spaces)
  * @param {string} name - Parameter name
@@ -1373,18 +1375,7 @@ function createFileControl(param, onChange) {
   return container;
 }
 
-/**
- * Format file size for display
- * @param {number} bytes - File size in bytes
- * @returns {string} Formatted file size
- */
-function formatFileSize(bytes) {
-  if (bytes === 0) return '0 Bytes';
-  const k = 1024;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
-}
+// formatFileSize is now imported from download.js
 
 /**
  * Render parameter UI from extracted parameters
@@ -1531,11 +1522,14 @@ export function renderParameterUI(
 /**
  * Render parameter UI from JSON Schema
  * This is the schema-driven rendering entry point
+ * @public
  * @param {Object} schema - JSON Schema with x-* extensions
  * @param {HTMLElement} container - Container to render into
  * @param {Function} onChange - Called when parameter changes
  * @param {Object} [initialValues] - Optional initial values to override defaults
  * @returns {Object} Current parameter values
+ * @note Currently not integrated into main workflow, but exported as part of the
+ *       public API for schema-based UI generation. Planned for future integration.
  */
 export function renderFromSchema(
   schema,
@@ -1554,12 +1548,15 @@ export function renderFromSchema(
 /**
  * Synchronous version of renderFromSchema
  * Requires schema-generator to be pre-imported
+ * @public
  * @param {Object} schema - JSON Schema with x-* extensions
  * @param {Function} converter - The fromJsonSchema function
  * @param {HTMLElement} container - Container to render into
  * @param {Function} onChange - Called when parameter changes
  * @param {Object} [initialValues] - Optional initial values to override defaults
  * @returns {Object} Current parameter values
+ * @note Currently not integrated into main workflow, but exported as part of the
+ *       public API for schema-based UI generation. Planned for future integration.
  */
 export function renderFromSchemaSync(
   schema,

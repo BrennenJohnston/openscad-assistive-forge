@@ -656,7 +656,7 @@ function loadDrawerSize(drawerName, defaultSize) {
 
 **Related Documentation:**
 - **[ACCESSIBILITY_GUIDE.md](ACCESSIBILITY_GUIDE.md)** - Comprehensive keyboard navigation, screen reader patterns, live regions
-- **[CAMERA_CONTROLS_ACCESSIBILITY.md](../CAMERA_CONTROLS_ACCESSIBILITY.md)** - Camera-specific accessibility patterns
+- **[CAMERA_CONTROLS_ACCESSIBILITY.md](CAMERA_CONTROLS_ACCESSIBILITY.md)** - Camera-specific accessibility patterns
 
 **Rule:** All new UI components must follow patterns documented in these guides.
 

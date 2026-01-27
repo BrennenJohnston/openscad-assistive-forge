@@ -184,6 +184,18 @@
               <input type="file" id="fileInput" accept=".scad,.zip" class="file-input" />
             </label>
             
+            <!-- Saved Projects Section -->
+            <section class="saved-projects-panel" id="savedProjectsPanel" aria-labelledby="saved-projects-heading">
+              <h3 id="saved-projects-heading">Saved Projects</h3>
+              <p class="saved-projects-description">Your previously saved files (stored in this browser)</p>
+              <div class="saved-projects-list" id="savedProjectsList" role="list" aria-label="Saved projects">
+                <!-- Dynamically populated -->
+              </div>
+              <p class="saved-projects-empty hidden" id="savedProjectsEmpty">
+                No saved projects yet. Upload a file and choose to save it.
+              </p>
+            </section>
+            
               <div class="features-overview" role="region" aria-labelledby="features-heading">
               <h3 id="features-heading">Discover features (optional)</h3>
                 <p class="features-intro">Take a quick guided start, or open Help to browse workflow tips, libraries, presets, and accessibility options.</p>

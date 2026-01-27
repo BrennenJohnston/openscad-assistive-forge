@@ -136,12 +136,8 @@ function isElementVisible(element) {
     rect.left < viewport.width &&
     rect.right > 0;
 
-  // For elements inside mobile drawer, check drawer state
-  if (
-    isMobileViewport() &&
-    isInsideParamPanel(element) &&
-    !isMobileDrawerOpen()
-  ) {
+  // For elements inside param panel, check if panel is visible (both mobile and desktop)
+  if (isInsideParamPanel(element) && !isParamPanelOpen()) {
     return false;
   }
 
@@ -370,6 +366,24 @@ function isMobileDrawerOpen() {
 }
 
 /**
+ * Check if the param panel is currently visible/accessible
+ * Works for both mobile drawer and desktop panel
+ * @returns {boolean}
+ */
+function isParamPanelOpen() {
+  const paramPanel = document.getElementById('paramPanel');
+  if (!paramPanel) return false;
+  
+  if (isMobileViewport()) {
+    // Mobile: check for drawer-open class
+    return paramPanel.classList.contains('drawer-open');
+  } else {
+    // Desktop: check that panel is NOT collapsed
+    return !paramPanel.classList.contains('collapsed');
+  }
+}
+
+/**
  * Check if an element is inside the param panel (mobile drawer)
  * @param {HTMLElement} element - Element to check
  * @returns {boolean}
@@ -397,6 +411,22 @@ function closeMobileDrawer() {
   const closeBtn = document.getElementById('drawerCloseBtn');
   if (closeBtn && isMobileViewport() && isMobileDrawerOpen()) {
     closeBtn.click();
+  }
+}
+
+/**
+ * Open/expand the param panel (works on both mobile and desktop)
+ */
+function openParamPanel() {
+  if (isMobileViewport()) {
+    openMobileDrawer();
+  } else {
+    // Desktop: click the collapse button to expand if collapsed
+    const collapseBtn = document.getElementById('collapseParamPanelBtn');
+    const paramPanel = document.getElementById('paramPanel');
+    if (collapseBtn && paramPanel?.classList.contains('collapsed')) {
+      collapseBtn.click();
+    }
   }
 }
 
@@ -550,7 +580,7 @@ let drawerChangeTimeout = null;
 
 /**
  * Set up observer to watch for drawer state changes during tutorial
- * Handles both open and close transitions to reposition spotlight
+ * Handles both mobile drawer (open/close) and desktop panel (collapsed/expanded)
  */
 function setupDrawerObserver() {
   clearDrawerObserver();
@@ -561,9 +591,14 @@ function setupDrawerObserver() {
   drawerObserver = new MutationObserver((mutations) => {
     mutations.forEach((mutation) => {
       if (mutation.attributeName === 'class') {
-        // Handle any drawer state change (both open and close)
+        // Handle drawer state changes on both mobile and desktop
         if (isMobileViewport()) {
+          // Mobile: watch for 'drawer-open' class
           const isNowOpen = paramPanel.classList.contains('drawer-open');
+          handleDrawerStateChange(isNowOpen);
+        } else {
+          // Desktop: watch for 'collapsed' class
+          const isNowOpen = !paramPanel.classList.contains('collapsed');
           handleDrawerStateChange(isNowOpen);
         }
       }
@@ -616,16 +651,9 @@ function handleDrawerStateChange(isNowOpen) {
     const step = activeTutorial.steps[currentStepIndex];
     if (!step.highlightSelector && !step.targetKey) return;
 
-    // CRITICAL FIX: For informational steps (no completion requirement), don't track drawer state changes.
-    // These steps just want to show the user where controls are, not create an interactive ping-pong
-    // between open/close buttons. User should just read the info and click Next.
-    // Only track drawer changes for steps that REQUIRE specific drawer states for completion.
-    if (!step.completion) {
-      return;
-    }
-
     // For steps with completion requirements, block updates after completion to prevent loops
-    if (stepCompleted) {
+    // This prevents unnecessary re-resolution when the user has already completed the action
+    if (step.completion && stepCompleted) {
       return;
     }
 
@@ -648,8 +676,16 @@ function handleDrawerStateChange(isNowOpen) {
       // All targets are hidden - check if any are inside the closed drawer
       const hasTargetInsideDrawer = checkIfAnyTargetInsideDrawer(step);
       if (hasTargetInsideDrawer && !isNowOpen) {
-        // Show prompt to reopen drawer
-        showDrawerReopenPrompt();
+        // Automatically reopen the panel - user closed it but tutorial needs it
+        openParamPanel();
+        // Wait for animation
+        await waitForTransition(document.getElementById('paramPanel'), 400);
+        // Re-resolve target after panel is open
+        const reopenedTarget = resolveStepTarget(step, { requireVisible: true });
+        if (reopenedTarget) {
+          currentTarget = reopenedTarget;
+          updateSpotlightAndPosition();
+        }
       }
     }
   }, 100); // Debounce for 100ms
@@ -682,7 +718,8 @@ function checkIfAnyTargetInsideDrawer(step) {
 }
 
 /**
- * Show a prompt in the tutorial panel to reopen the drawer
+ * Show a prompt in the tutorial panel to reopen/expand the param panel
+ * Works for both mobile drawer and desktop collapsed panel
  */
 function showDrawerReopenPrompt() {
   if (!tutorialOverlay) return;
@@ -690,12 +727,17 @@ function showDrawerReopenPrompt() {
   const requirementEl = tutorialOverlay.querySelector('#tutorialRequirement');
   if (!requirementEl) return;
 
+  // Determine the appropriate message based on viewport
+  const isMobile = isMobileViewport();
+  const actionText = isMobile ? 'Reopen Parameters' : 'Expand Parameters';
+  const statusText = isMobile ? 'Panel closed.' : 'Panel collapsed.';
+
   // Create or update the reopen prompt
   requirementEl.innerHTML = `
     <span class="tutorial-drawer-prompt">
-      <span>Panel closed. </span>
+      <span>${statusText} </span>
       <button class="tutorial-reopen-drawer-btn" type="button">
-        Reopen Parameters
+        ${actionText}
       </button>
       <span> to continue.</span>
     </span>
@@ -706,7 +748,7 @@ function showDrawerReopenPrompt() {
   const reopenBtn = requirementEl.querySelector('.tutorial-reopen-drawer-btn');
   if (reopenBtn) {
     reopenBtn.addEventListener('click', () => {
-      openMobileDrawer();
+      openParamPanel();
       // Reset the requirement text after a short delay
       setTimeout(() => {
         if (requirementEl && !stepCompleted) {
@@ -2308,8 +2350,8 @@ async function showStep(stepIndex) {
   }
 
   // Check if this step targets an element inside the param panel
-  // If so, set up drawer observer and ensure drawer is open on mobile
-  if ((step.highlightSelector || step.targetKey) && isMobileViewport()) {
+  // If so, set up drawer observer and ensure drawer is open (both mobile and desktop)
+  if (step.highlightSelector || step.targetKey) {
     // Set guard flag to prevent drawer observer from interfering during setup
     isSettingUpStep = true;
 
@@ -2333,18 +2375,20 @@ async function showStep(stepIndex) {
     }
 
     if (needsDrawerOpen) {
-      // Set up observer to detect drawer closes
+      // Set up observer to detect drawer/panel state changes (mobile + desktop)
       setupDrawerObserver();
 
-      // If drawer is closed, open it automatically and wait for animation
-      if (!isMobileDrawerOpen()) {
-        openMobileDrawer();
+      // CRITICAL: Automatically open/expand the panel on BOTH mobile AND desktop
+      // The tutorial CANNOT proceed if the target element is hidden in a collapsed panel
+      if (!isParamPanelOpen()) {
+        openParamPanel();
+        // Wait for animation to complete
         await waitForTransition(document.getElementById('paramPanel'), 400);
       }
     } else {
-      // Target is NOT inside the param panel, so close the drawer
+      // Target is NOT inside the param panel, so close the drawer on mobile
       // to ensure the target element is visible (not hidden behind drawer)
-      if (isMobileDrawerOpen()) {
+      if (isMobileViewport() && isMobileDrawerOpen()) {
         closeMobileDrawer();
         await waitForTransition(document.getElementById('paramPanel'), 400);
       }
@@ -3448,7 +3492,10 @@ export function closeTutorial(completed = false) {
 
 /**
  * Check if a tutorial is currently active
+ * @public
  * @returns {boolean}
+ * @note Currently not used internally, but exported as part of the public API
+ *       for potential external use or future features
  */
 export function isTutorialActive() {
   return !!activeTutorial;
@@ -3456,7 +3503,10 @@ export function isTutorialActive() {
 
 /**
  * Get the current tutorial ID
+ * @public
  * @returns {string|null}
+ * @note Currently not used internally, but exported as part of the public API
+ *       for potential external use or future features
  */
 export function getCurrentTutorialId() {
   return activeTutorial ? activeTutorial.id : null;

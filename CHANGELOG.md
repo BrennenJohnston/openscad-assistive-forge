@@ -7,33 +7,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Work in progress since v4.0.0.
+Nothing yet.
+
+---
+
+## [4.1.0] - 2026-01-27
+
+### Security & Features Release
+
+Security hardening, saved projects, documentation overhaul, and accessibility improvements.
 
 ### Added
 
+- **Saved Projects** - Save, load, and export complete projects (SCAD + parameters) to browser storage
+  - IndexedDB storage with localStorage fallback
+  - Export projects as ZIP files
+  - Import projects from ZIP
+  - Project metadata (name, notes, timestamps)
+  - Full unit test coverage (26 tests)
 - **Gamepad support** - Full gamepad controller for 3D navigation and parameter adjustment
 - **Keyboard configuration** - Configurable keyboard shortcuts with persistent storage
 - **Service worker manager** - Better update detection and user notifications
 - **Version module** - Build info (version, commit SHA, timestamp) injected at build time
 - **Schema generator** - Convert parameters to standard JSON Schema format
-- **Enhanced validation** - More robust parameter validation schemas
+- **Shared utility modules** - `html-utils.js` and `color-utils.js` for consolidated functionality
+- **Modal helper** - `createModal()` function for consistent modal creation
 
-### Changed
+### Security
 
-- Service worker cache versioning now uses commit SHA (CI) or build timestamp (local)
-- UI generator refactored for better maintainability
-- Vite config updated for version injection
+- **Fixed XSS vulnerability** in ZIP file tree display - file paths now properly escaped
+- **Added Service Worker message validation** with allowlists at all 3 message handlers
+- **Added path traversal protection** for ZIP extraction (rejects `..`, leading `/` or `\`)
 
 ### Documentation
 
-- Added `docs/RELEASING.md` - streamlined release process notes
-- Added code audit notes (Jan 26)
-- Simplified documentation style across notes
+- **Added `docs/ARCHITECTURE.md`** - Complete system architecture with 10 Mermaid diagrams
+  - Module map, render pipeline, saved projects flow, validation pipeline
+  - Service worker caching, tutorial sandbox, comparison mode, CLI structure
+- **Added `docs/guides/SECURITY_TESTING.md`** - Security audit procedures
+- **Added `docs/DEV_QUICK_START.md`** - Developer onboarding guide
+- **Documentation style audit** - Rewrote docs to single-maintainer voice
+  - Removed template/AI patterns and excessive emoji
+  - Consolidated docs into predictable `docs/` structure
+  - Moved specs to `docs/specs/` (UI_STANDARDS, CAMERA_CONTROLS_ACCESSIBILITY)
 
-### Infrastructure
+### Changed
 
-- Added `pixi.toml` for optional reproducible environment setup (not required)
-- Added `.cursor/` to gitignore
+- Service worker cache versioning uses commit SHA (CI) or build timestamp (local)
+- Consolidated duplicate code: hex color validation, file size formatting (~80-130 lines removed)
+- UI generator refactored for better maintainability
+
+### Fixed
+
+- **Saved Projects**: Fixed loading issue where single-file projects weren't loading correctly
+
+### Technical
+
+- 890 unit tests passing (100%)
+- 0 linter errors
+- Production build: 125KB gzipped (main), 187KB gzipped (Three.js)
 
 ---
 
@@ -770,6 +802,7 @@ Multi-variant comparison system for side-by-side parameter testing.
 - **v2.1.0 - v2.10.1** (2026-01-15 to 2026-01-18): CLI enhancements, templates, testing
 - **v3.0.0 - v3.1.0** (2026-01-19 to 2026-01-20): Cloudflare deployment, UI/accessibility enhancements
 - **v4.0.0** (2026-01-22): Major stable release with comprehensive documentation
+- **v4.1.0** (2026-01-27): Security hardening, saved projects, documentation overhaul
 
 ## Version Scheme
 

@@ -1,7 +1,7 @@
 /**
  * OpenSCAD Assistive Forge - Service Worker
  * Provides offline functionality and caching for PWA
- * Version: 4.0.0
+ * Version: 4.1.0
  */
 
 const CACHE_VERSION = '__SW_CACHE_VERSION__';

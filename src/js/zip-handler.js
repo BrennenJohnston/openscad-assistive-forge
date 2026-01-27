@@ -4,6 +4,7 @@
  */
 
 import JSZip from 'jszip';
+import { escapeHtml } from './html-utils.js';
 
 /**
  * Extract files from a ZIP archive
@@ -31,6 +32,18 @@ export async function extractZipFiles(zipFile) {
       const normalizedPath = relativePath
         .replace(/^\/+/, '')
         .replace(/\\/g, '/');
+
+      // Security: Reject paths with directory traversal attempts
+      if (
+        normalizedPath.includes('..') ||
+        normalizedPath.startsWith('/') ||
+        normalizedPath.includes('\\')
+      ) {
+        console.warn(
+          `[ZIP] Skipping potentially malicious path: ${relativePath}`
+        );
+        continue;
+      }
 
       files.set(normalizedPath, content);
 
@@ -168,7 +181,8 @@ export function createFileTree(files, mainFile) {
     const badge = isMain ? ' <span class="file-tree-badge">main</span>' : '';
     const className = isMain ? 'file-tree-item main' : 'file-tree-item';
 
-    return `<div class="${className}">${icon} ${path}${badge}</div>`;
+    // Escape path to prevent XSS attacks from malicious ZIP file names
+    return `<div class="${className}">${icon} ${escapeHtml(path)}${badge}</div>`;
   });
 
   return `

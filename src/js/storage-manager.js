@@ -4,6 +4,8 @@
  * @license GPL-3.0-or-later
  */
 
+import { isValidServiceWorkerMessage } from './html-utils.js';
+
 const FIRST_VISIT_KEY = 'openscad-forge-first-visit-seen';
 const STORAGE_PREFS_KEY = 'openscad-forge-storage-prefs';
 
@@ -133,7 +135,12 @@ export async function clearCachedData() {
       new Promise((resolve) => {
         // Repo reality: `public/sw.js` broadcasts {type:'CACHE_CLEARED'} to all clients.
         const onMessage = (event) => {
-          if (event.data?.type === 'CACHE_CLEARED') {
+          // Validate message type against allowlist
+          if (!isValidServiceWorkerMessage(event, ['CACHE_CLEARED'])) {
+            return; // Ignore invalid messages, keep listening
+          }
+
+          if (event.data.type === 'CACHE_CLEARED') {
             navigator.serviceWorker.removeEventListener('message', onMessage);
             resolve(true);
           }

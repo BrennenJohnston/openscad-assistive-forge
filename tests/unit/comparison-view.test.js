@@ -16,6 +16,7 @@ vi.mock('../../src/js/preview.js', () => ({
 }))
 
 import { ComparisonView } from '../../src/js/comparison-view.js'
+import { escapeHtml } from '../../src/js/html-utils.js'
 
 describe('ComparisonView', () => {
   let container
@@ -245,20 +246,20 @@ describe('ComparisonView', () => {
 
   describe('HTML Escaping', () => {
     it('escapes HTML special characters', () => {
-      const escaped = view.escapeHtml('<script>alert("xss")</script>')
+      const escaped = escapeHtml('<script>alert("xss")</script>')
       expect(escaped).not.toContain('<script>')
       expect(escaped).toContain('&lt;')
       expect(escaped).toContain('&gt;')
     })
 
     it('escapes ampersands', () => {
-      const escaped = view.escapeHtml('A & B')
+      const escaped = escapeHtml('A & B')
       expect(escaped).toBe('A &amp; B')
     })
 
     it('handles strings with quotes', () => {
       // The implementation may not escape quotes, but should handle them
-      const escaped = view.escapeHtml('"quoted"')
+      const escaped = escapeHtml('"quoted"')
       expect(typeof escaped).toBe('string')
     })
   })

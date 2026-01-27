@@ -3,6 +3,8 @@
  * @license GPL-3.0-or-later
  */
 
+import { normalizeHexColor } from './color-utils.js';
+
 // Lazy-loaded Three.js modules - loaded on demand to reduce initial bundle size
 let THREE = null;
 let OrbitControls = null;
@@ -121,14 +123,6 @@ const PREVIEW_COLORS = {
     ambientLight: 0xffb000,
   },
 };
-
-function normalizeHexColor(value) {
-  if (typeof value !== 'string') return null;
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-  const normalized = trimmed.startsWith('#') ? trimmed : `#${trimmed}`;
-  return /^#[0-9A-Fa-f]{6}$/.test(normalized) ? normalized : null;
-}
 
 /**
  * Preview manager class

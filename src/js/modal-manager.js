@@ -260,3 +260,119 @@ export function getActiveModal() {
   const entries = Array.from(modalStates.entries());
   return entries.length > 0 ? entries[entries.length - 1][0] : null;
 }
+
+/**
+ * Create a modal element with consistent structure and behavior
+ * @param {Object} options - Modal configuration
+ * @param {string} options.className - CSS class for the modal
+ * @param {string} options.ariaLabel - ARIA label for the modal
+ * @param {string} options.titleId - ID for the title element (for aria-labelledby)
+ * @param {string} options.title - Title text
+ * @param {string} options.content - HTML content for the modal body
+ * @param {Array<{label: string, className: string, action: string, disabled?: boolean}>} [options.buttons] - Button configuration
+ * @param {boolean} [options.showCloseButton=true] - Whether to show X close button
+ * @param {boolean} [options.closeOnBackdrop=true] - Whether clicking backdrop closes modal
+ * @param {boolean} [options.closeOnEscape=true] - Whether Escape key closes modal
+ * @returns {{modal: HTMLElement, promise: Promise<string|null>, cleanup: Function}}
+ */
+export function createModal(options) {
+  const {
+    className = 'preset-modal',
+    ariaLabel,
+    titleId,
+    title,
+    content,
+    buttons = [],
+    showCloseButton = true,
+    closeOnBackdrop = true,
+    closeOnEscape = true,
+  } = options;
+
+  const modal = document.createElement('div');
+  modal.className = className;
+  modal.setAttribute('role', 'dialog');
+  modal.setAttribute('aria-modal', 'true');
+  
+  if (ariaLabel) {
+    modal.setAttribute('aria-label', ariaLabel);
+  }
+  if (titleId) {
+    modal.setAttribute('aria-labelledby', titleId);
+  }
+
+  const closeButtonHtml = showCloseButton
+    ? '<button class="preset-modal-close" aria-label="Close dialog">&times;</button>'
+    : '';
+
+  const buttonsHtml = buttons
+    .map(
+      (btn) =>
+        `<button type="button" class="${btn.className}" data-action="${btn.action}" ${btn.disabled ? 'disabled' : ''}>${btn.label}</button>`
+    )
+    .join('');
+
+  modal.innerHTML = `
+    <div class="preset-modal-content ${options.contentClass || ''}">
+      <div class="preset-modal-header">
+        <h3 id="${titleId}" class="preset-modal-title">${title}</h3>
+        ${closeButtonHtml}
+      </div>
+      <div class="modal-body">
+        ${content}
+      </div>
+      ${buttons.length > 0 ? `<div class="preset-modal-footer">${buttonsHtml}</div>` : ''}
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  // Create promise that resolves when modal closes
+  let resolvePromise;
+  const promise = new Promise((resolve) => {
+    resolvePromise = resolve;
+  });
+
+  const cleanup = (result = null) => {
+    closeModal(modal);
+    document.body.removeChild(modal);
+    resolvePromise(result);
+  };
+
+  // Handle button clicks
+  if (buttons.length > 0) {
+    modal.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-action]');
+      if (!btn) return;
+      cleanup(btn.dataset.action);
+    });
+  }
+
+  // Handle close button
+  if (showCloseButton) {
+    const closeBtn = modal.querySelector('.preset-modal-close');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', () => cleanup(null));
+    }
+  }
+
+  // Handle backdrop click
+  if (closeOnBackdrop) {
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        cleanup(null);
+      }
+    });
+  }
+
+  // Handle Escape key
+  if (closeOnEscape) {
+    modal.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        cleanup(null);
+      }
+    });
+  }
+
+  return { modal, promise, cleanup };
+}

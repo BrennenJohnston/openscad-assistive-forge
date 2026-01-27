@@ -5,6 +5,7 @@
  */
 
 import { getVersionString } from './version.js';
+import { isValidServiceWorkerMessage } from './html-utils.js';
 
 let registration = null;
 let updateAvailable = false;
@@ -56,7 +57,18 @@ export async function registerServiceWorker(options = {}) {
 
     // Listen for messages from SW
     navigator.serviceWorker.addEventListener('message', (event) => {
-      if (event.data?.type === 'SW_UPDATED') {
+      // Validate message type against allowlist
+      if (
+        !isValidServiceWorkerMessage(event, ['SW_UPDATED', 'CACHE_CLEARED'])
+      ) {
+        console.warn(
+          '[SW Manager] Ignoring invalid or unexpected message:',
+          event.data
+        );
+        return;
+      }
+
+      if (event.data.type === 'SW_UPDATED') {
         console.log(
           '[SW Manager] Service worker updated to:',
           event.data.version
@@ -66,7 +78,7 @@ export async function registerServiceWorker(options = {}) {
         }
       }
 
-      if (event.data?.type === 'CACHE_CLEARED') {
+      if (event.data.type === 'CACHE_CLEARED') {
         console.log('[SW Manager] Cache cleared');
       }
     });
