@@ -45,7 +45,10 @@ export async function initSavedProjectsDB() {
       const request = indexedDB.open(DB_NAME, DB_VERSION);
 
       request.onerror = () => {
-        console.warn('IndexedDB open failed, falling back to localStorage:', request.error);
+        console.warn(
+          'IndexedDB open failed, falling back to localStorage:',
+          request.error
+        );
         storageType = 'localstorage';
         resolve({ available: true, type: 'localstorage' });
       };
@@ -59,17 +62,24 @@ export async function initSavedProjectsDB() {
 
       request.onupgradeneeded = (event) => {
         const database = event.target.result;
-        
+
         // Create object store if it doesn't exist
         if (!database.objectStoreNames.contains(STORE_NAME)) {
-          const objectStore = database.createObjectStore(STORE_NAME, { keyPath: 'id' });
+          const objectStore = database.createObjectStore(STORE_NAME, {
+            keyPath: 'id',
+          });
           objectStore.createIndex('savedAt', 'savedAt', { unique: false });
-          objectStore.createIndex('lastLoadedAt', 'lastLoadedAt', { unique: false });
+          objectStore.createIndex('lastLoadedAt', 'lastLoadedAt', {
+            unique: false,
+          });
         }
       };
     });
   } catch (error) {
-    console.warn('IndexedDB initialization error, falling back to localStorage:', error);
+    console.warn(
+      'IndexedDB initialization error, falling back to localStorage:',
+      error
+    );
     storageType = 'localstorage';
     return { available: true, type: 'localstorage' };
   }
@@ -303,8 +313,12 @@ export async function getProject(id) {
     }
 
     const project = projects.find((p) => p.id === id);
-    
-    if (project && project.projectFiles && typeof project.projectFiles === 'string') {
+
+    if (
+      project &&
+      project.projectFiles &&
+      typeof project.projectFiles === 'string'
+    ) {
       // Parse projectFiles back to object
       try {
         project.projectFiles = JSON.parse(project.projectFiles);
@@ -385,10 +399,13 @@ export async function updateProject({ id, name, notes }) {
 
     // Validate updated project
     const tempProject = { ...project };
-    if (tempProject.projectFiles && typeof tempProject.projectFiles === 'object') {
+    if (
+      tempProject.projectFiles &&
+      typeof tempProject.projectFiles === 'object'
+    ) {
       tempProject.projectFiles = JSON.stringify(tempProject.projectFiles);
     }
-    
+
     const valid = validateSavedProject(tempProject);
     if (!valid) {
       const errorMsg = getValidationErrorMessage(validateSavedProject.errors);
@@ -456,7 +473,7 @@ export async function getSavedProjectsSummary() {
   try {
     const projects = await listSavedProjects();
     const count = projects.length;
-    
+
     // Approximate total size
     let totalApproxBytes = 0;
     for (const project of projects) {

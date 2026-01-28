@@ -586,7 +586,7 @@ summary:focus-visible,
   border-radius: var(--border-radius-sm);
 }
 
-.save-project-checkbox-wrapper input[type="checkbox"] {
+.save-project-checkbox-wrapper input[type='checkbox'] {
   width: 20px;
   height: 20px;
   cursor: pointer;
@@ -694,11 +694,11 @@ summary:focus-visible,
   .saved-projects-list {
     grid-template-columns: 1fr;
   }
-  
+
   .saved-project-actions {
     flex-direction: column;
   }
-  
+
   .saved-project-actions .btn {
     width: 100%;
   }
@@ -709,7 +709,7 @@ summary:focus-visible,
   .saved-project-card {
     transition: none;
   }
-  
+
   .saved-project-card:hover {
     transform: none;
   }
@@ -802,6 +802,41 @@ summary:focus-visible,
 .preview-settings input[type='checkbox'] {
   width: 18px;
   height: 18px;
+}
+
+/* Rotation speed slider setting - full width layout within preview settings */
+.preview-setting.rotation-speed-setting {
+  flex-basis: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-xs);
+}
+
+.preview-setting.rotation-speed-setting .preview-setting-label {
+  margin-right: 0;
+}
+
+/* Ensure slider value uses tabular figures for stable width */
+.preview-setting.rotation-speed-setting .slider-value {
+  min-width: 4.5rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* High contrast mode - thicker slider track and enhanced focus */
+:root[data-high-contrast='true']
+  .preview-setting.rotation-speed-setting
+  .slider-container
+  input[type='range'] {
+  height: 8px;
+  border: 2px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+}
+
+:root[data-high-contrast='true']
+  .preview-setting.rotation-speed-setting
+  .slider-value {
+  font-weight: 700;
 }
 
 .update-banner {
@@ -4312,6 +4347,100 @@ body.first-visit-blocking #app {
   font-size: var(--font-size-sm);
   color: var(--color-text-muted);
   font-style: italic;
+}
+
+/* Alt View Controls Diagram */
+.altview-controls-diagram {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xl);
+  justify-content: center;
+  margin: var(--space-lg) 0;
+  padding: var(--space-lg);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-md);
+}
+
+.altview-dpad-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.altview-dpad-label {
+  font-weight: 600;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+}
+
+.altview-dpad {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-rows: 1fr 1fr 1fr;
+  gap: 2px;
+  width: 90px;
+  height: 90px;
+}
+
+.altview-dpad-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-xs);
+  font-size: 0.9rem;
+  color: var(--color-text-secondary);
+}
+
+.altview-dpad-up {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.altview-dpad-left {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.altview-dpad-center {
+  grid-column: 2;
+  grid-row: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-accent);
+  color: var(--color-bg-primary);
+  border-radius: var(--border-radius-xs);
+  font-weight: 600;
+  font-size: 1.1rem;
+}
+
+.altview-dpad-right {
+  grid-column: 3;
+  grid-row: 2;
+}
+
+.altview-dpad-down {
+  grid-column: 2;
+  grid-row: 3;
+}
+
+.altview-dpad-hint {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.altview-adjust-legend {
+  text-align: center;
+  padding: var(--space-sm) var(--space-md);
+  background: var(--color-bg-tertiary);
+  border-radius: var(--border-radius-sm);
+  font-size: var(--font-size-sm);
+  margin: var(--space-md) 0;
 }
 
 /* Modal size variant for Features Guide */

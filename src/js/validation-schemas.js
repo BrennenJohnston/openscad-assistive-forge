@@ -111,7 +111,18 @@ const libraryMapSchema = {
  */
 const savedProjectSchema = {
   type: 'object',
-  required: ['id', 'schemaVersion', 'name', 'originalName', 'kind', 'mainFilePath', 'content', 'notes', 'savedAt', 'lastLoadedAt'],
+  required: [
+    'id',
+    'schemaVersion',
+    'name',
+    'originalName',
+    'kind',
+    'mainFilePath',
+    'content',
+    'notes',
+    'savedAt',
+    'lastLoadedAt',
+  ],
   properties: {
     id: { type: 'string', minLength: 1 },
     schemaVersion: { type: 'number', minimum: 1, maximum: 100 },
@@ -119,9 +130,16 @@ const savedProjectSchema = {
     originalName: { type: 'string', minLength: 1, maxLength: 255 },
     kind: { type: 'string', enum: ['scad', 'zip'] },
     mainFilePath: { type: 'string', minLength: 1, maxLength: 500 },
-    content: { type: 'string', maxLength: STORAGE_LIMITS.MAX_SAVED_PROJECT_SIZE },
+    content: {
+      type: 'string',
+      maxLength: STORAGE_LIMITS.MAX_SAVED_PROJECT_SIZE,
+    },
     projectFiles: { type: ['string', 'null'], default: null },
-    notes: { type: 'string', maxLength: STORAGE_LIMITS.MAX_NOTES_LENGTH, default: '' },
+    notes: {
+      type: 'string',
+      maxLength: STORAGE_LIMITS.MAX_NOTES_LENGTH,
+      default: '',
+    },
     savedAt: { type: 'number', minimum: 0 },
     lastLoadedAt: { type: 'number', minimum: 0 },
   },
@@ -144,7 +162,9 @@ export const validatePreset = ajv.compile(presetSchema);
 export const validatePresetsCollection = ajv.compile(presetsCollectionSchema);
 export const validateLibraryMap = ajv.compile(libraryMapSchema);
 export const validateSavedProject = ajv.compile(savedProjectSchema);
-export const validateSavedProjectsCollection = ajv.compile(savedProjectsCollectionSchema);
+export const validateSavedProjectsCollection = ajv.compile(
+  savedProjectsCollectionSchema
+);
 
 /**
  * Validate URL params object (all values)

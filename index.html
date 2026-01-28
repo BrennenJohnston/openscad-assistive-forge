@@ -741,6 +741,15 @@
                       </label>
                       <span id="statusBarHelp" class="sr-only">Toggle status and render info overlay on preview</span>
 
+                      <div class="preview-setting rotation-speed-setting">
+                        <label class="preview-setting-label" for="rotationSpeedInput" id="rotationSpeedLabel">Auto-rotate speed</label>
+                        <div class="slider-container">
+                          <input type="range" id="rotationSpeedInput" min="0.1" max="3" step="0.1" value="0.5" aria-labelledby="rotationSpeedLabel" aria-describedby="rotationSpeedHelp" aria-valuemin="0.1" aria-valuemax="3" aria-valuenow="0.5" />
+                          <span class="slider-value" id="rotationSpeedValue">0.5°/s</span>
+                        </div>
+                      </div>
+                      <span id="rotationSpeedHelp" class="sr-only">Set the speed of automatic model rotation when auto-rotate is enabled, from 0.1 to 3 degrees per second</span>
+
                       <label class="preview-setting" for="previewQualitySelect">
                         <span class="preview-setting-label">Preview quality</span>
                         <select id="previewQualitySelect" aria-label="Select preview quality">
@@ -948,7 +957,7 @@
                 
                 <!-- Drawer body (expandable content - game controller layout) -->
                 <div class="camera-drawer-body" id="cameraDrawerBody">
-                  <!-- Left: Rotate View D-pad with label in center -->
+                  <!-- Left: Rotate View D-pad with auto-rotate toggle in center -->
                   <div class="camera-drawer-section camera-drawer-rotate">
                     <div class="camera-drawer-dpad" role="group" aria-label="Rotation controls">
                       <button type="button" class="btn btn-sm btn-icon camera-drawer-btn dpad-up" id="mobileCameraRotateUp" aria-label="Rotate view up" title="Rotate up">
@@ -961,7 +970,12 @@
                           <polyline points="15 18 9 12 15 6"></polyline>
                         </svg>
                       </button>
-                      <span class="camera-drawer-dpad-label">Rotate</span>
+                      <button type="button" class="btn btn-sm btn-icon camera-drawer-btn auto-rotate-toggle dpad-center" id="mobileAutoRotateToggle" aria-pressed="false" aria-label="Toggle auto rotation" title="Auto rotate">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                          <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"></path>
+                          <polyline points="21 3 21 8 16 8"></polyline>
+                        </svg>
+                      </button>
                       <button type="button" class="btn btn-sm btn-icon camera-drawer-btn dpad-right" id="mobileCameraRotateRight" aria-label="Rotate view right" title="Rotate right">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                           <polyline points="9 18 15 12 9 6"></polyline>
@@ -1072,6 +1086,12 @@
                   <button type="button" class="btn btn-sm btn-icon camera-btn dpad-left" id="cameraRotateLeft" aria-label="Rotate view left" title="Rotate left (Arrow Left)">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                       <polyline points="15 18 9 12 15 6"></polyline>
+                    </svg>
+                  </button>
+                  <button type="button" class="btn btn-sm btn-icon camera-btn auto-rotate-toggle dpad-center" id="autoRotateToggle" aria-pressed="false" aria-label="Toggle auto rotation" title="Auto rotate">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                      <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"></path>
+                      <polyline points="21 3 21 8 16 8"></polyline>
                     </svg>
                   </button>
                   <button type="button" class="btn btn-sm btn-icon camera-btn dpad-right" id="cameraRotateRight" aria-label="Rotate view right" title="Rotate right (Arrow Right)">
@@ -1340,6 +1360,7 @@
             <button class="features-tab" role="tab" aria-selected="false" aria-controls="featuresPanelAdvanced" id="tab-advanced" tabindex="-1">Advanced</button>
             <button class="features-tab" role="tab" aria-selected="false" aria-controls="featuresPanelWorkflow" id="tab-workflow" tabindex="-1">Workflow</button>
             <button class="features-tab" role="tab" aria-selected="false" aria-controls="featuresPanelAccessibility" id="tab-accessibility" tabindex="-1">Accessibility</button>
+            <button class="features-tab" role="tab" aria-selected="false" aria-controls="featuresPanelAltView" id="tab-altview" tabindex="-1" hidden data-hfm-gated>Alt View</button>
           </div>
           
           <!-- Libraries Panel -->
@@ -1564,6 +1585,93 @@ secondary_color = "E74C3C"; // [color]</code></pre>
               </a>
               <p class="features-note">Full details, including tested screen reader/browser combinations.</p>
             </div>
+          </div>
+
+          <!-- Alt View Panel (HFM gated) -->
+          <div class="features-panel" id="featuresPanelAltView" role="tabpanel" tabindex="0" aria-labelledby="tab-altview" hidden data-hfm-gated>
+            <h3>ASCII Render Mode (Alt View)</h3>
+            <p>Alt View converts the 3D preview into character-based ASCII art. This hidden feature is unlocked via a special input sequence or developer bypass.</p>
+
+            <h4>What is Alt View?</h4>
+            <ul class="features-list">
+              <li><strong>Purpose</strong> – ASCII art rendering mode that converts the 3D preview into character-based art</li>
+              <li><strong>Location</strong> – Toggle button appears in the header next to the Theme toggle after unlock</li>
+              <li><strong>Effect</strong> – Activates the mono UI theme variant and replaces the WebGL preview with ASCII character output</li>
+              <li><strong>Session-only</strong> – The theme switch does not persist; closing the browser reverts to normal</li>
+            </ul>
+
+            <h4>ASCII Rendering Technology</h4>
+            <p>The ASCII renderer uses a 6D shape-vector character model for glyph selection:</p>
+            <ul class="features-list">
+              <li>Each cell is sampled at 6 internal points to create a "shape signature"</li>
+              <li>Characters are matched by finding the glyph whose shape vector is closest</li>
+              <li>Per-cell and directional contrast enhancement improves edge definition</li>
+              <li>Based on research into shape-vector ASCII rendering (credited in THIRD_PARTY_NOTICES.md)</li>
+            </ul>
+
+            <h4>Controls Reference</h4>
+            
+            <div class="altview-controls-diagram">
+              <div class="altview-dpad-group">
+                <div class="altview-dpad-label">Rotate D-pad</div>
+                <div class="altview-dpad">
+                  <div class="altview-dpad-arrow altview-dpad-up">▲</div>
+                  <div class="altview-dpad-arrow altview-dpad-left">◄</div>
+                  <div class="altview-dpad-center">⟳</div>
+                  <div class="altview-dpad-arrow altview-dpad-right">►</div>
+                  <div class="altview-dpad-arrow altview-dpad-down">▼</div>
+                </div>
+                <div class="altview-dpad-hint">Center: Auto-Rotate</div>
+              </div>
+              <div class="altview-dpad-group">
+                <div class="altview-dpad-label">Pan D-pad</div>
+                <div class="altview-dpad">
+                  <div class="altview-dpad-arrow altview-dpad-up">▲</div>
+                  <div class="altview-dpad-arrow altview-dpad-left">◄</div>
+                  <div class="altview-dpad-center">⊕</div>
+                  <div class="altview-dpad-arrow altview-dpad-right">►</div>
+                  <div class="altview-dpad-arrow altview-dpad-down">▼</div>
+                </div>
+                <div class="altview-dpad-hint">Center: Pan Adjust Toggle</div>
+              </div>
+            </div>
+
+            <p class="altview-adjust-legend"><strong>When Pan Adjust is ON:</strong> ▲/▼ = Edge ±, ◄/► = Size ±</p>
+
+            <h4>Auto-Rotate (Rotate D-pad center)</h4>
+            <ul class="features-list">
+              <li>Toggles automatic model rotation around the Z-axis</li>
+              <li>Enabled by default when Alt View is activated</li>
+              <li>Click to pause/resume rotation</li>
+            </ul>
+
+            <h4>Pan Adjust Toggle (Pan D-pad center)</h4>
+            <p>Switches the Pan D-pad between two modes:</p>
+            <ul class="features-list">
+              <li><strong>OFF (default)</strong> – Normal pan behavior (moves the camera)</li>
+              <li><strong>ON</strong> – Adjustment mode for Edge and Size parameters</li>
+            </ul>
+
+            <h4>Edge &amp; Size Adjustment</h4>
+            <p>When Pan Adjust is ON, the D-pad arrows control rendering parameters:</p>
+            <ul class="features-list">
+              <li><strong>Up arrow</strong> – Increase Edge (sharper outlines, more contrast)</li>
+              <li><strong>Down arrow</strong> – Decrease Edge (softer outlines, less contrast)</li>
+              <li><strong>Right arrow</strong> – Increase Size (larger characters, fewer columns)</li>
+              <li><strong>Left arrow</strong> – Decrease Size (smaller characters, more columns)</li>
+            </ul>
+            <p>Edge range: 0.5–4.0 &nbsp;|&nbsp; Size range: 0.5–2.5 &nbsp;(defaults vary by device)</p>
+
+            <h4>Status Bar</h4>
+            <p>When Alt View is active, the status bar shows current Edge and Size values. Example: <code>[ALT VIEW] Edge: 1.8 | Size: 1.0</code></p>
+
+            <h4>Tips</h4>
+            <ul class="features-list">
+              <li>Alt View auto-calibrates Edge and Size based on your viewport size and device type</li>
+              <li>Mobile devices default to larger characters for readability</li>
+              <li>High-DPI displays can handle more detail (smaller characters, sharper edges)</li>
+              <li>The sliders in the preview settings panel provide the same adjustments as the D-pad</li>
+            </ul>
           </div>
         </div>
       </div>

@@ -1834,6 +1834,48 @@ export class PreviewManager {
   }
 
   /**
+   * Enable auto-rotation of the model
+   * Uses Three.js OrbitControls built-in autoRotate feature
+   * @param {boolean} enabled - Whether auto-rotate should be enabled
+   */
+  setAutoRotate(enabled) {
+    if (this.controls) {
+      this.controls.autoRotate = enabled;
+      console.log(`[Preview] Auto-rotate ${enabled ? 'enabled' : 'disabled'}`);
+    }
+  }
+
+  /**
+   * Check if auto-rotation is currently enabled
+   * @returns {boolean} Whether auto-rotate is active
+   */
+  isAutoRotateEnabled() {
+    return this.controls?.autoRotate ?? false;
+  }
+
+  /**
+   * Set the auto-rotation speed
+   * @param {number} speed - Rotation speed in degrees per second (0.1 to 3)
+   */
+  setAutoRotateSpeed(speed) {
+    // Clamp to reasonable range: 0.1 to 3 degrees/second
+    const clampedSpeed = Math.max(0.1, Math.min(3, speed));
+    if (this.controls) {
+      this.controls.autoRotateSpeed = clampedSpeed;
+      console.log(`[Preview] Auto-rotate speed set to ${clampedSpeed} deg/s`);
+    }
+  }
+
+  /**
+   * Get the current auto-rotation speed
+   * @returns {number} Current rotation speed in degrees per second
+   */
+  getAutoRotateSpeed() {
+    // Default is 0.5 for a gentle rotation
+    return this.controls?.autoRotateSpeed ?? 0.5;
+  }
+
+  /**
    * Clear the preview
    */
   clear() {

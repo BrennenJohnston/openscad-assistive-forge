@@ -24,6 +24,7 @@ The OpenSCAD Assistive Forge is designed with screen reader users in mind and pr
 - **Arrow Keys**: Rotate 3D preview (when preview has focus)
 - **Shift + Arrow Keys**: Pan 3D preview
 - **+** / **-**: Zoom in/out on 3D preview
+- **Enter/Space**: Toggle auto-rotate (when auto-rotate button has focus)
 - **Ctrl+Z**: Undo last parameter change
 - **Ctrl+Shift+Z**: Redo parameter change
 - **Escape**: Close open modals or tooltips
@@ -36,6 +37,8 @@ The OpenSCAD Assistive Forge is designed with screen reader users in mind and pr
 3. **Preview Settings & Info** (top of preview): Status, stats, and settings  
    **Mobile**: Use the "Preview Settings & Info" toggle button
 4. **Camera Controls** (desktop right panel) or **Camera** drawer in the actions bar (mobile)
+   - **Auto-rotate toggle**: Located in the center of the rotation D-pad. Use Enter/Space to toggle.
+   - **Rotation speed**: Configurable in Preview Settings (0.5 to 10 degrees per second)
 5. **Status Updates**: Announced automatically via screen reader
 
 ### Screen Reader Features
@@ -49,6 +52,7 @@ The app provides automatic announcements for:
 - File upload results
 - Library loading status
 - Camera movement actions
+- Auto-rotate state changes (enabled/disabled)
 - Preset loading confirmations
 
 #### Helpful Landmarks
@@ -384,6 +388,8 @@ When Windows High Contrast or other OS color schemes are active:
 When "Reduce Motion" is enabled:
 - Animations are disabled or minimized
 - Transitions are instant
+- Auto-rotate feature is blocked from enabling (protects motion-sensitive users)
+- If auto-rotate is running when preference changes, it is automatically disabled
 
 ### Color Resources
 

@@ -65,9 +65,9 @@ export function setupNotesCounter(
 
     // Update visual feedback
     counterContainer.classList.remove('error', 'warning');
-    
+
     let isValid = true;
-    
+
     if (length > maxLength) {
       counterContainer.classList.add('error');
       if (submitButton) submitButton.disabled = true;

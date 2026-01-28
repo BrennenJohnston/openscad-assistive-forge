@@ -581,6 +581,13 @@ body {
   max-width: 100%;
 }
 
+/* Comparison View - takes full height when visible */
+.comparison-view {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
 /* Welcome Screen */
 .welcome-screen {
   flex: 1;
@@ -1562,6 +1569,30 @@ body {
 
 .camera-btn:active {
   transform: scale(0.95);
+}
+
+/* Auto-rotate toggle button in D-pad center */
+.camera-btn.auto-rotate-toggle {
+  background: var(--color-bg-secondary);
+  border-color: var(--color-border);
+}
+
+.camera-btn.auto-rotate-toggle:hover {
+  background: var(--color-bg-tertiary);
+  border-color: var(--color-border-strong);
+}
+
+.camera-btn.auto-rotate-toggle.active,
+.camera-btn.auto-rotate-toggle[aria-pressed='true'] {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-accent-text);
+}
+
+.camera-btn.auto-rotate-toggle.active:hover,
+.camera-btn.auto-rotate-toggle[aria-pressed='true']:hover {
+  background: var(--color-accent-hover);
+  border-color: var(--color-accent-hover);
 }
 
 /* Wide camera buttons (with text) */
@@ -2622,6 +2653,30 @@ details summary:focus,
 
   .camera-drawer-btn:active {
     transform: scale(0.95);
+  }
+
+  /* Auto-rotate toggle button in mobile drawer D-pad center */
+  .camera-drawer-btn.auto-rotate-toggle {
+    background: var(--color-bg-secondary);
+    border-color: var(--color-border);
+  }
+
+  .camera-drawer-btn.auto-rotate-toggle:hover {
+    background: var(--color-bg-tertiary);
+    border-color: var(--color-border-strong);
+  }
+
+  .camera-drawer-btn.auto-rotate-toggle.active,
+  .camera-drawer-btn.auto-rotate-toggle[aria-pressed='true'] {
+    background: var(--color-accent);
+    border-color: var(--color-accent);
+    color: var(--color-accent-text);
+  }
+
+  .camera-drawer-btn.auto-rotate-toggle.active:hover,
+  .camera-drawer-btn.auto-rotate-toggle[aria-pressed='true']:hover {
+    background: var(--color-accent-hover);
+    border-color: var(--color-accent-hover);
   }
 
   /* Zoom controls layout (vertical stack) */

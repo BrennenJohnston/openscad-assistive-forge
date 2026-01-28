@@ -107,13 +107,6 @@ export class ComparisonView {
           <h2>Comparison Mode</h2>
           <div class="comparison-controls">
             <button 
-              id="add-variant-btn" 
-              class="btn btn-primary"
-              aria-label="Add variant to comparison"
-            >
-              <span aria-hidden="true">➕</span> Add Variant
-            </button>
-            <button 
               id="render-all-btn" 
               class="btn btn-secondary"
               aria-label="Render all variants"
@@ -130,15 +123,15 @@ export class ComparisonView {
             <button 
               id="exit-comparison-btn" 
               class="btn btn-secondary"
-              aria-label="Exit comparison mode"
+              aria-label="Return to customizer"
             >
-              <span aria-hidden="true">✖</span> Exit
+              <span aria-hidden="true">↩</span> Return to Customizer
             </button>
           </div>
         </div>
         <div class="comparison-grid" id="comparison-grid">
           <div class="comparison-empty-state">
-            <p>No variants yet. Click "Add Variant" to start comparing.</p>
+            <p>No variants added for comparison.</p>
           </div>
         </div>
       </div>
@@ -149,14 +142,10 @@ export class ComparisonView {
    * Attach event listeners
    */
   attachEventListeners() {
-    const addBtn = document.getElementById('add-variant-btn');
     const renderAllBtn = document.getElementById('render-all-btn');
     const exportBtn = document.getElementById('export-comparison-btn');
     const exitBtn = document.getElementById('exit-comparison-btn');
 
-    if (addBtn) {
-      addBtn.addEventListener('click', () => this.handleAddVariant());
-    }
     if (renderAllBtn) {
       renderAllBtn.addEventListener('click', () => this.handleRenderAll());
     }
@@ -371,7 +360,7 @@ export class ComparisonView {
     const grid = document.getElementById('comparison-grid');
     if (grid) {
       grid.innerHTML =
-        '<div class="comparison-empty-state"><p>No variants yet. Click "Add Variant" to start comparing.</p></div>';
+        '<div class="comparison-empty-state"><p>No variants added for comparison.</p></div>';
     }
   }
 
@@ -387,7 +376,7 @@ export class ComparisonView {
 
     if (!hasVariants && !emptyState) {
       grid.innerHTML =
-        '<div class="comparison-empty-state"><p>No variants yet. Click "Add Variant" to start comparing.</p></div>';
+        '<div class="comparison-empty-state"><p>No variants added for comparison.</p></div>';
     } else if (hasVariants && emptyState) {
       emptyState.remove();
     }
@@ -397,19 +386,10 @@ export class ComparisonView {
    * Update control button states
    */
   updateControls() {
-    const addBtn = document.getElementById('add-variant-btn');
     const renderAllBtn = document.getElementById('render-all-btn');
     const exportBtn = document.getElementById('export-comparison-btn');
 
     const count = this.comparisonController.getVariantCount();
-    const atMax = this.comparisonController.isAtMaxCapacity();
-
-    if (addBtn) {
-      addBtn.disabled = atMax;
-      addBtn.title = atMax
-        ? 'Maximum variants reached'
-        : 'Add variant to comparison';
-    }
 
     if (renderAllBtn) {
       renderAllBtn.disabled = count === 0;
@@ -469,16 +449,6 @@ export class ComparisonView {
         this.handleDeleteVariant(variantId)
       );
     }
-  }
-
-  /**
-   * Handle add variant
-   */
-  handleAddVariant() {
-    // This will be triggered from the main app
-    // to capture current parameters
-    const event = new CustomEvent('comparison:add-variant');
-    window.dispatchEvent(event);
   }
 
   /**

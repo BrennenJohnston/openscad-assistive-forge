@@ -373,7 +373,7 @@ function isMobileDrawerOpen() {
 function isParamPanelOpen() {
   const paramPanel = document.getElementById('paramPanel');
   if (!paramPanel) return false;
-  
+
   if (isMobileViewport()) {
     // Mobile: check for drawer-open class
     return paramPanel.classList.contains('drawer-open');
@@ -681,7 +681,9 @@ function handleDrawerStateChange(isNowOpen) {
         // Wait for animation
         await waitForTransition(document.getElementById('paramPanel'), 400);
         // Re-resolve target after panel is open
-        const reopenedTarget = resolveStepTarget(step, { requireVisible: true });
+        const reopenedTarget = resolveStepTarget(step, {
+          requireVisible: true,
+        });
         if (reopenedTarget) {
           currentTarget = reopenedTarget;
           updateSpotlightAndPosition();

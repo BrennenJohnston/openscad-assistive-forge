@@ -13,10 +13,10 @@ export function normalizeHexColor(value) {
   if (typeof value !== 'string') return null;
   const trimmed = value.trim();
   if (!trimmed) return null;
-  
+
   // Add # if missing
   const normalized = trimmed.startsWith('#') ? trimmed : `#${trimmed}`;
-  
+
   // Validate format (#RRGGBB)
   return /^#[0-9A-Fa-f]{6}$/.test(normalized) ? normalized : null;
 }
@@ -28,7 +28,7 @@ export function normalizeHexColor(value) {
  */
 export function hexToRgb(hex) {
   if (typeof hex !== 'string') return null;
-  
+
   // Remove # if present
   hex = hex.replace(/^#/, '');
 

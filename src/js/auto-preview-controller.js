@@ -209,7 +209,7 @@ export class AutoPreviewController {
       ? 'box_color'
       : this.colorParamNames[0];
     const raw = parameters[preferredKey];
-    
+
     // Use shared color normalization utility
     return normalizeHexColor(raw);
   }

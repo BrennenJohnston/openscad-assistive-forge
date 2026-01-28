@@ -17,10 +17,19 @@
  */
 
 export class ComparisonController {
-  constructor(stateManager, renderController, options = {}) {
+  /**
+   * @param {object} stateManager - State manager instance
+   * @param {Function} getRenderController - Getter function that returns the current renderController
+   * @param {object} options - Configuration options
+   */
+  constructor(stateManager, getRenderController, options = {}) {
     this.stateManager = stateManager;
-    this.renderController = renderController;
-    this.maxVariants = options.maxVariants || 4;
+    // Store getter function instead of direct reference to handle lazy initialization
+    this._getRenderController =
+      typeof getRenderController === 'function'
+        ? getRenderController
+        : () => getRenderController;
+    this.maxVariants = options.maxVariants || 10;
     this.variants = new Map(); // id -> variant
     this.nextId = 1;
     this.listeners = [];
@@ -28,6 +37,14 @@ export class ComparisonController {
     this.projectFiles = null;
     this.mainFile = null;
     this.libraries = [];
+  }
+
+  /**
+   * Get the current render controller (supports lazy initialization)
+   * @returns {object|null} The render controller
+   */
+  get renderController() {
+    return this._getRenderController();
   }
 
   /**
@@ -137,6 +154,10 @@ export class ComparisonController {
 
     if (!this.scadContent) {
       throw new Error('No SCAD content loaded');
+    }
+
+    if (!this.renderController) {
+      throw new Error('Render controller not initialized');
     }
 
     // Update state to rendering

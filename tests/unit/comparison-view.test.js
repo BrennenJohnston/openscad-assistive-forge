@@ -80,32 +80,20 @@ describe('ComparisonView', () => {
 
     it('includes all control buttons', () => {
       const layout = view.createComparisonLayout()
-      expect(layout).toContain('add-variant-btn')
       expect(layout).toContain('render-all-btn')
       expect(layout).toContain('export-comparison-btn')
       expect(layout).toContain('exit-comparison-btn')
+      expect(layout).toContain('Return to Customizer')
     })
 
     it('includes empty state message', () => {
       const layout = view.createComparisonLayout()
       expect(layout).toContain('comparison-empty-state')
-      expect(layout).toContain('No variants yet')
+      expect(layout).toContain('No variants added')
     })
   })
 
   describe('Event Handling', () => {
-    it('dispatches add-variant events on button click', async () => {
-      const eventSpy = vi.fn()
-      window.addEventListener('comparison:add-variant', eventSpy)
-
-      await view.init()
-      const addButton = document.getElementById('add-variant-btn')
-      addButton.click()
-
-      expect(eventSpy).toHaveBeenCalled()
-      window.removeEventListener('comparison:add-variant', eventSpy)
-    })
-
     it('dispatches exit events', () => {
       const eventSpy = vi.fn()
       window.addEventListener('comparison:exit', eventSpy)
@@ -553,22 +541,9 @@ describe('ComparisonView', () => {
   })
 
   describe('Update Controls', () => {
-    it('disables add button when at max capacity', async () => {
-      await view.init()
-      comparisonController.getVariantCount = vi.fn(() => 4)
-      comparisonController.isAtMaxCapacity = vi.fn(() => true)
-      
-      view.updateControls()
-      
-      const addBtn = document.getElementById('add-variant-btn')
-      expect(addBtn.disabled).toBe(true)
-      expect(addBtn.title).toBe('Maximum variants reached')
-    })
-
     it('disables render and export when no variants', async () => {
       await view.init()
       comparisonController.getVariantCount = vi.fn(() => 0)
-      comparisonController.isAtMaxCapacity = vi.fn(() => false)
       
       view.updateControls()
       

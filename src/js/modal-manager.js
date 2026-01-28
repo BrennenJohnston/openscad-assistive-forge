@@ -292,7 +292,7 @@ export function createModal(options) {
   modal.className = className;
   modal.setAttribute('role', 'dialog');
   modal.setAttribute('aria-modal', 'true');
-  
+
   if (ariaLabel) {
     modal.setAttribute('aria-label', ariaLabel);
   }

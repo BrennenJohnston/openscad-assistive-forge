@@ -1157,6 +1157,11 @@ function _handleUnlock() {
   // Inject toggle button
   _injectAltToggle();
 
+  // Reveal gated Features Guide tab and panel
+  document.querySelectorAll('[data-hfm-gated]').forEach((el) => {
+    el.hidden = false;
+  });
+
   // Optional: brief flash on preview container
   const container = document.getElementById('previewContainer');
   if (container) {
@@ -1439,7 +1444,10 @@ async function initApp() {
       navigator.serviceWorker.addEventListener('message', (event) => {
         // Validate message type against allowlist
         if (!isValidServiceWorkerMessage(event, ['CACHE_CLEARED'])) {
-          console.warn('[SW] Ignoring invalid or unexpected message:', event.data);
+          console.warn(
+            '[SW] Ignoring invalid or unexpected message:',
+            event.data
+          );
           return;
         }
 
@@ -1499,12 +1507,12 @@ async function initApp() {
 
   // Initialize configurable keyboard shortcuts
   initKeyboardShortcuts();
-  
+
   // Initialize saved projects database
   try {
     const { available, type } = await initSavedProjectsDB();
     console.log(`[Saved Projects] Initialized with ${type}`);
-    
+
     // Render saved projects list on welcome screen
     await renderSavedProjectsList();
   } catch (error) {
@@ -1595,7 +1603,7 @@ async function initApp() {
       // Get saved projects summary
       const summary = await getSavedProjectsSummary();
       const presetCount = presetManager?.getPresetCount?.() || 0;
-      
+
       // Build warning message
       let warningItems = [];
       if (summary.count > 0) {
@@ -1604,15 +1612,15 @@ async function initApp() {
       if (presetCount > 0) {
         warningItems.push(`${presetCount} preset(s)`);
       }
-      
-      const message = warningItems.length > 0
-        ? `This will permanently delete:\n• ${warningItems.join('\n• ')}\n\nThis cannot be undone.`
-        : 'This will clear all cached data. Continue?';
-      
-      const title = warningItems.length > 0
-        ? 'Clear All Cached Data?'
-        : 'Clear Cache';
-      
+
+      const message =
+        warningItems.length > 0
+          ? `This will permanently delete:\n• ${warningItems.join('\n• ')}\n\nThis cannot be undone.`
+          : 'This will clear all cached data. Continue?';
+
+      const title =
+        warningItems.length > 0 ? 'Clear All Cached Data?' : 'Clear Cache';
+
       // Show confirmation dialog
       const confirmed = await showConfirmDialog(
         message,
@@ -1620,14 +1628,14 @@ async function initApp() {
         'Clear Cache',
         'Cancel'
       );
-      
+
       if (!confirmed) return;
-      
+
       // Clear saved projects explicitly
       if (summary.count > 0) {
         await clearAllSavedProjects();
       }
-      
+
       const success = await clearCachedData();
       if (success) {
         updateStatus('Site data cleared. Reloading...', 'success');
@@ -2735,6 +2743,158 @@ async function initApp() {
     });
   }
 
+  // Wire auto-rotate toggle buttons (desktop and mobile)
+  const autoRotateToggle = document.getElementById('autoRotateToggle');
+  const mobileAutoRotateToggle = document.getElementById(
+    'mobileAutoRotateToggle'
+  );
+  const rotationSpeedInput = document.getElementById('rotationSpeedInput');
+
+  // Storage keys for auto-rotate settings
+  const STORAGE_KEY_AUTO_ROTATE = 'openscad-customizer-auto-rotate';
+  const STORAGE_KEY_ROTATE_SPEED = 'openscad-customizer-rotate-speed';
+
+  // Check for prefers-reduced-motion preference
+  const prefersReducedMotion = window.matchMedia(
+    '(prefers-reduced-motion: reduce)'
+  );
+
+  /**
+   * Sync all auto-rotate toggle buttons to the same state
+   * @param {boolean} enabled - Whether auto-rotate is enabled
+   */
+  function syncAutoRotateToggles(enabled) {
+    const toggles = [autoRotateToggle, mobileAutoRotateToggle];
+    toggles.forEach((toggle) => {
+      if (toggle) {
+        toggle.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+        toggle.classList.toggle('active', enabled);
+      }
+    });
+  }
+
+  /**
+   * Toggle auto-rotation state
+   * @param {boolean} enabled - Whether to enable auto-rotation
+   */
+  function setAutoRotation(enabled) {
+    // Respect prefers-reduced-motion - don't enable if user prefers reduced motion
+    if (enabled && prefersReducedMotion.matches) {
+      console.log('[App] Auto-rotate blocked: user prefers reduced motion');
+      // Announce to screen reader
+      const srAnnouncer = document.getElementById('srAnnouncer');
+      if (srAnnouncer) {
+        srAnnouncer.textContent =
+          'Auto-rotation is disabled because you prefer reduced motion';
+      }
+      return;
+    }
+
+    if (previewManager) {
+      previewManager.setAutoRotate(enabled);
+    }
+    syncAutoRotateToggles(enabled);
+    localStorage.setItem(STORAGE_KEY_AUTO_ROTATE, enabled ? 'true' : 'false');
+
+    // Announce to screen reader
+    const srAnnouncer = document.getElementById('srAnnouncer');
+    if (srAnnouncer) {
+      srAnnouncer.textContent = `Auto-rotation ${enabled ? 'enabled' : 'disabled'}`;
+    }
+
+    console.log(`[App] Auto-rotate ${enabled ? 'enabled' : 'disabled'}`);
+  }
+
+  // Load saved auto-rotate preferences
+  const savedAutoRotate = localStorage.getItem(STORAGE_KEY_AUTO_ROTATE);
+  const savedRotateSpeed = localStorage.getItem(STORAGE_KEY_ROTATE_SPEED);
+
+  // Get the rotation speed value display element
+  const rotationSpeedValue = document.getElementById('rotationSpeedValue');
+
+  /**
+   * Update the rotation speed slider visual state
+   * @param {number} speed - Current speed value
+   */
+  function updateRotationSpeedDisplay(speed) {
+    // Update value display
+    if (rotationSpeedValue) {
+      rotationSpeedValue.textContent = `${speed.toFixed(1)}°/s`;
+    }
+
+    // Update aria-valuenow for screen readers
+    if (rotationSpeedInput) {
+      rotationSpeedInput.setAttribute('aria-valuenow', speed.toFixed(1));
+    }
+  }
+
+  // Initialize rotation speed from saved preference
+  if (savedRotateSpeed && rotationSpeedInput) {
+    const speed = parseFloat(savedRotateSpeed);
+    if (!isNaN(speed) && speed >= 0.1 && speed <= 3) {
+      rotationSpeedInput.value = speed;
+      updateRotationSpeedDisplay(speed);
+    } else {
+      // Default to 0.5 if invalid
+      updateRotationSpeedDisplay(0.5);
+    }
+  } else if (rotationSpeedInput) {
+    // Initialize display with default value
+    updateRotationSpeedDisplay(0.5);
+  }
+
+  // Wire desktop auto-rotate toggle
+  if (autoRotateToggle) {
+    autoRotateToggle.addEventListener('click', () => {
+      const currentState =
+        autoRotateToggle.getAttribute('aria-pressed') === 'true';
+      setAutoRotation(!currentState);
+    });
+  }
+
+  // Wire mobile auto-rotate toggle
+  if (mobileAutoRotateToggle) {
+    mobileAutoRotateToggle.addEventListener('click', () => {
+      const currentState =
+        mobileAutoRotateToggle.getAttribute('aria-pressed') === 'true';
+      setAutoRotation(!currentState);
+    });
+  }
+
+  // Wire rotation speed slider - use 'input' for real-time feedback
+  if (rotationSpeedInput) {
+    rotationSpeedInput.addEventListener('input', () => {
+      let speed = parseFloat(rotationSpeedInput.value);
+      // Clamp to valid range
+      speed = Math.max(0.1, Math.min(3, speed));
+
+      // Update visual display
+      updateRotationSpeedDisplay(speed);
+
+      if (previewManager) {
+        previewManager.setAutoRotateSpeed(speed);
+      }
+    });
+
+    // Save to localStorage on change (when user releases slider)
+    rotationSpeedInput.addEventListener('change', () => {
+      const speed = parseFloat(rotationSpeedInput.value);
+      localStorage.setItem(STORAGE_KEY_ROTATE_SPEED, speed.toString());
+      console.log(`[App] Auto-rotate speed set to ${speed.toFixed(1)} deg/s`);
+    });
+  }
+
+  // Listen for prefers-reduced-motion changes
+  prefersReducedMotion.addEventListener('change', (e) => {
+    if (e.matches && previewManager?.isAutoRotateEnabled()) {
+      // User switched to preferring reduced motion, disable auto-rotate
+      setAutoRotation(false);
+      console.log(
+        '[App] Auto-rotate disabled: user now prefers reduced motion'
+      );
+    }
+  });
+
   // Wire model color picker
   const modelColorPicker = document.getElementById('modelColorPicker');
   const modelColorReset = document.getElementById('modelColorReset');
@@ -3154,7 +3314,13 @@ async function initApp() {
       if (shouldRestore) {
         console.log('Restoring draft...');
         // Treat draft as uploaded file
-        handleFile({ name: draft.fileName }, draft.fileContent, null, null, 'saved');
+        handleFile(
+          { name: draft.fileName },
+          draft.fileContent,
+          null,
+          null,
+          'saved'
+        );
         updateStatus('Draft restored');
       } else {
         stateManager.clearLocalStorage();
@@ -3485,7 +3651,13 @@ async function initApp() {
       const reader = new FileReader();
       reader.onload = (e) => {
         // Pass a minimal object with the original file name
-        handleFile({ name: originalFileName }, e.target.result, extractedFiles, mainFilePath, source);
+        handleFile(
+          { name: originalFileName },
+          e.target.result,
+          extractedFiles,
+          mainFilePath,
+          source
+        );
       };
       reader.readAsText(file);
       return;
@@ -3750,6 +3922,29 @@ async function initApp() {
           autoBedToggle.checked = previewManager.autoBedEnabled;
         }
 
+        // Initialize auto-rotate settings from localStorage
+        // Only enable if user doesn't prefer reduced motion
+        const savedAutoRotatePref = localStorage.getItem(
+          STORAGE_KEY_AUTO_ROTATE
+        );
+        const savedRotateSpeedPref = localStorage.getItem(
+          STORAGE_KEY_ROTATE_SPEED
+        );
+
+        // Apply saved rotation speed first
+        if (savedRotateSpeedPref) {
+          const speed = parseFloat(savedRotateSpeedPref);
+          if (!isNaN(speed) && speed >= 0.1 && speed <= 3) {
+            previewManager.setAutoRotateSpeed(speed);
+          }
+        }
+
+        // Apply saved auto-rotate state (respecting reduced motion preference)
+        if (savedAutoRotatePref === 'true' && !prefersReducedMotion.matches) {
+          previewManager.setAutoRotate(true);
+          syncAutoRotateToggles(true);
+        }
+
         // Update camera panel controller with preview manager reference
         if (cameraPanelController) {
           cameraPanelController.setPreviewManager(previewManager);
@@ -3866,7 +4061,7 @@ async function initApp() {
             });
         }
       }
-      
+
       // Show opt-in save prompt for user uploads only (not examples or saved projects)
       if (source === 'user') {
         try {
@@ -4011,7 +4206,7 @@ async function initApp() {
   });
 
   // ========== SAVED PROJECTS ==========
-  
+
   /**
    * Format relative time (e.g., "2 days ago")
    * @param {number} timestamp - Unix timestamp in milliseconds
@@ -4024,7 +4219,7 @@ async function initApp() {
     const minutes = Math.floor(seconds / 60);
     const hours = Math.floor(minutes / 60);
     const days = Math.floor(hours / 24);
-    
+
     if (seconds < 60) return 'just now';
     if (minutes < 60) return `${minutes} minute${minutes !== 1 ? 's' : ''} ago`;
     if (hours < 24) return `${hours} hour${hours !== 1 ? 's' : ''} ago`;
@@ -4040,7 +4235,7 @@ async function initApp() {
     const years = Math.floor(days / 365);
     return `${years} year${years !== 1 ? 's' : ''} ago`;
   }
-  
+
   /**
    * Linkify URLs in text (convert http/https URLs to clickable links)
    * @param {string} text - Plain text with URLs
@@ -4048,46 +4243,48 @@ async function initApp() {
    */
   function linkifyText(text) {
     if (!text) return '';
-    
+
     const escaped = escapeHtml(text);
     const urlPattern = /(https?:\/\/[^\s]+)/g;
-    
+
     return escaped.replace(urlPattern, (url) => {
       return `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`;
     });
   }
-  
+
   /**
    * Render saved projects list on welcome screen
    */
   async function renderSavedProjectsList() {
     const savedProjectsList = document.getElementById('savedProjectsList');
     const savedProjectsEmpty = document.getElementById('savedProjectsEmpty');
-    
+
     if (!savedProjectsList || !savedProjectsEmpty) return;
-    
+
     const projects = await listSavedProjects();
-    
+
     if (projects.length === 0) {
       savedProjectsList.innerHTML = '';
       savedProjectsEmpty.classList.remove('hidden');
       return;
     }
-    
+
     savedProjectsEmpty.classList.add('hidden');
-    
+
     // Render project cards
-    const cardsHtml = projects.map((project) => {
-      const notesPreview = project.notes
-        ? `<div class="saved-project-notes-preview">${linkifyText(project.notes)}</div>`
-        : '';
-      
-      const savedTime = formatRelativeTime(project.savedAt);
-      const loadedTime = project.lastLoadedAt !== project.savedAt
-        ? formatRelativeTime(project.lastLoadedAt)
-        : null;
-      
-      return `
+    const cardsHtml = projects
+      .map((project) => {
+        const notesPreview = project.notes
+          ? `<div class="saved-project-notes-preview">${linkifyText(project.notes)}</div>`
+          : '';
+
+        const savedTime = formatRelativeTime(project.savedAt);
+        const loadedTime =
+          project.lastLoadedAt !== project.savedAt
+            ? formatRelativeTime(project.lastLoadedAt)
+            : null;
+
+        return `
         <div class="saved-project-card" role="listitem" data-project-id="${project.id}">
           <div class="saved-project-header">
             <svg class="saved-project-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -4116,10 +4313,11 @@ async function initApp() {
           </div>
         </div>
       `;
-    }).join('');
-    
+      })
+      .join('');
+
     savedProjectsList.innerHTML = cardsHtml;
-    
+
     // Wire up event listeners
     savedProjectsList.querySelectorAll('.btn-load-project').forEach((btn) => {
       btn.addEventListener('click', (e) => {
@@ -4128,7 +4326,7 @@ async function initApp() {
         loadSavedProject(projectId);
       });
     });
-    
+
     savedProjectsList.querySelectorAll('.btn-edit-project').forEach((btn) => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -4136,7 +4334,7 @@ async function initApp() {
         showEditProjectModal(projectId);
       });
     });
-    
+
     savedProjectsList.querySelectorAll('.btn-delete-project').forEach((btn) => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -4144,27 +4342,29 @@ async function initApp() {
         deleteSavedProject(projectId);
       });
     });
-    
+
     // Make cards clickable to load
-    savedProjectsList.querySelectorAll('.saved-project-card').forEach((card) => {
-      card.addEventListener('click', (e) => {
-        // Only load if clicking the card itself, not buttons
-        if (e.target.closest('button')) return;
-        const projectId = card.dataset.projectId;
-        loadSavedProject(projectId);
-      });
-      
-      card.setAttribute('tabindex', '0');
-      card.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
+    savedProjectsList
+      .querySelectorAll('.saved-project-card')
+      .forEach((card) => {
+        card.addEventListener('click', (e) => {
+          // Only load if clicking the card itself, not buttons
+          if (e.target.closest('button')) return;
           const projectId = card.dataset.projectId;
           loadSavedProject(projectId);
-        }
+        });
+
+        card.setAttribute('tabindex', '0');
+        card.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            const projectId = card.dataset.projectId;
+            loadSavedProject(projectId);
+          }
+        });
       });
-    });
   }
-  
+
   /**
    * Load a saved project
    * @param {string} projectId
@@ -4176,7 +4376,7 @@ async function initApp() {
         alert('Project not found');
         return;
       }
-      
+
       // Check if file is currently loaded
       const currentState = stateManager.getState();
       if (currentState.uploadedFile) {
@@ -4188,26 +4388,35 @@ async function initApp() {
         );
         if (!confirmed) return;
       }
-      
+
       // Reconstruct file data
       const content = project.content;
       const fileName = project.originalName;
-      const projectFiles = project.projectFiles ? new Map(Object.entries(project.projectFiles)) : null;
+      const projectFiles = project.projectFiles
+        ? new Map(Object.entries(project.projectFiles))
+        : null;
       // FIX: For single-file projects, mainFilePath should be null so content gets written to /tmp/input.scad
       // The mainFilePath is only meaningful for multi-file ZIP projects where files are mounted to the FS
-      const mainFilePath = projectFiles && projectFiles.size > 0 ? project.mainFilePath : null;
-      
+      const mainFilePath =
+        projectFiles && projectFiles.size > 0 ? project.mainFilePath : null;
+
       // Update last loaded timestamp
       await touchProject(projectId);
-      
+
       // Load the file (reuse existing handleFile logic)
       // Pass { name: fileName } to ensure the original filename is preserved
-      await handleFile({ name: fileName }, content, projectFiles, mainFilePath, 'saved');
-      
+      await handleFile(
+        { name: fileName },
+        content,
+        projectFiles,
+        mainFilePath,
+        'saved'
+      );
+
       // Announce success
       stateManager.announceChange(`Loaded saved project: ${project.name}`);
       updateStatus(`Loaded: ${project.name}`);
-      
+
       // Re-render list to update "last opened" time
       await renderSavedProjectsList();
     } catch (error) {
@@ -4215,26 +4424,26 @@ async function initApp() {
       alert(`Failed to load project: ${error.message}`);
     }
   }
-  
+
   /**
    * Show opt-in save prompt after file upload
    * @param {Object} fileData - Current file state
    */
   async function showSaveProjectPrompt(fileData) {
     const { uploadedFile, projectFiles, mainFilePath } = fileData;
-    
+
     if (!uploadedFile) return;
-    
+
     const kind = projectFiles ? 'zip' : 'scad';
     const fileName = uploadedFile.name || 'untitled.scad';
-    
+
     // Create modal
     const modal = document.createElement('div');
     modal.className = 'preset-modal save-project-modal';
     modal.setAttribute('role', 'dialog');
     modal.setAttribute('aria-labelledby', 'saveProjectTitle');
     modal.setAttribute('aria-modal', 'true');
-    
+
     modal.innerHTML = `
       <div class="preset-modal-content">
         <div class="preset-modal-header">
@@ -4267,9 +4476,9 @@ async function initApp() {
         </div>
       </div>
     `;
-    
+
     document.body.appendChild(modal);
-    
+
     // Get elements
     const checkbox = modal.querySelector('#saveProjectCheckbox');
     const nameInput = modal.querySelector('#saveProjectName');
@@ -4278,12 +4487,12 @@ async function initApp() {
     const saveBtn = modal.querySelector('#saveProjectSave');
     const notNowBtn = modal.querySelector('#saveProjectNotNow');
     const closeBtn = modal.querySelector('.preset-modal-close');
-    
+
     // Update save button state based on checkbox
     checkbox.addEventListener('change', () => {
       saveBtn.disabled = !checkbox.checked;
     });
-    
+
     // Setup character counter for notes with validation
     const counter = modal.querySelector('.save-project-notes-counter');
     setupNotesCounter(notesTextarea, notesCount, counter, {
@@ -4297,17 +4506,19 @@ async function initApp() {
         }
       },
     });
-    
+
     // Handle save
     saveBtn.addEventListener('click', async () => {
       if (!checkbox.checked) return;
-      
+
       const projectName = nameInput.value.trim() || fileName;
       const notes = notesTextarea.value.trim();
-      
+
       // Convert projectFiles Map to object for storage
-      const projectFilesObj = projectFiles ? Object.fromEntries(projectFiles) : null;
-      
+      const projectFilesObj = projectFiles
+        ? Object.fromEntries(projectFiles)
+        : null;
+
       const result = await saveProject({
         name: projectName,
         originalName: fileName,
@@ -4317,7 +4528,7 @@ async function initApp() {
         projectFiles: projectFilesObj,
         notes,
       });
-      
+
       if (result.success) {
         stateManager.announceChange(`Project saved: ${projectName}`);
         updateStatus(`Saved: ${projectName}`);
@@ -4325,26 +4536,26 @@ async function initApp() {
       } else {
         alert(`Failed to save project: ${result.error}`);
       }
-      
+
       document.body.removeChild(modal);
     });
-    
+
     // Handle close
     const closeHandler = () => {
       document.body.removeChild(modal);
     };
-    
+
     notNowBtn.addEventListener('click', closeHandler);
     closeBtn.addEventListener('click', closeHandler);
-    
+
     // Open modal with focus management
     openModal(modal);
-    
+
     // Focus the project name input for easy editing
     nameInput.focus();
     nameInput.select();
   }
-  
+
   /**
    * Show edit project modal
    * @param {string} projectId
@@ -4356,14 +4567,14 @@ async function initApp() {
         alert('Project not found');
         return;
       }
-      
+
       // Create modal
       const modal = document.createElement('div');
       modal.className = 'preset-modal edit-project-modal';
       modal.setAttribute('role', 'dialog');
       modal.setAttribute('aria-labelledby', 'editProjectTitle');
       modal.setAttribute('aria-modal', 'true');
-      
+
       modal.innerHTML = `
         <div class="preset-modal-content">
           <div class="preset-modal-header">
@@ -4389,9 +4600,9 @@ async function initApp() {
           </div>
         </div>
       `;
-      
+
       document.body.appendChild(modal);
-      
+
       // Get elements
       const nameInput = modal.querySelector('#editProjectName');
       const notesTextarea = modal.querySelector('#editProjectNotes');
@@ -4399,7 +4610,7 @@ async function initApp() {
       const saveBtn = modal.querySelector('#editProjectSave');
       const cancelBtn = modal.querySelector('#editProjectCancel');
       const closeBtn = modal.querySelector('.preset-modal-close');
-      
+
       // Setup character counter for notes with validation
       const counter = modal.querySelector('.save-project-notes-counter');
       setupNotesCounter(notesTextarea, notesCount, counter, {
@@ -4407,23 +4618,23 @@ async function initApp() {
         warningThreshold: 4500,
         submitButton: saveBtn, // Disable save button when over limit
       });
-      
+
       // Handle save
       saveBtn.addEventListener('click', async () => {
         const name = nameInput.value.trim();
         const notes = notesTextarea.value.trim();
-        
+
         if (!name) {
           alert('Project name cannot be empty');
           return;
         }
-        
+
         const result = await updateProject({
           id: projectId,
           name,
           notes,
         });
-        
+
         if (result.success) {
           stateManager.announceChange(`Project updated: ${name}`);
           updateStatus(`Updated: ${name}`);
@@ -4431,18 +4642,18 @@ async function initApp() {
         } else {
           alert(`Failed to update project: ${result.error}`);
         }
-        
+
         document.body.removeChild(modal);
       });
-      
+
       // Handle close
       const closeHandler = () => {
         document.body.removeChild(modal);
       };
-      
+
       cancelBtn.addEventListener('click', closeHandler);
       closeBtn.addEventListener('click', closeHandler);
-      
+
       // Open modal with focus management
       openModal(modal);
       nameInput.focus();
@@ -4452,7 +4663,7 @@ async function initApp() {
       alert(`Failed to load project: ${error.message}`);
     }
   }
-  
+
   /**
    * Delete a saved project (with confirmation)
    * @param {string} projectId
@@ -4464,18 +4675,18 @@ async function initApp() {
         alert('Project not found');
         return;
       }
-      
+
       const confirmed = await showConfirmDialog(
         `Delete "${project.name}"?\n\nThis cannot be undone.`,
         'Delete Saved Project',
         'Delete',
         'Cancel'
       );
-      
+
       if (!confirmed) return;
-      
+
       const result = await deleteProject(projectId);
-      
+
       if (result.success) {
         stateManager.announceChange(`Deleted project: ${project.name}`);
         updateStatus(`Deleted: ${project.name}`);
@@ -5090,8 +5301,34 @@ async function initApp() {
       },
     });
 
-    // Initialize input sequence detector (passive)
+    // Dev bypass: check localStorage or URL param before sequence detector
+    const HFM_UNLOCK_KEY = 'openscad-customizer-hfm-unlock';
+    const devUnlockFlag = localStorage.getItem(HFM_UNLOCK_KEY) === 'true';
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlUnlock = urlParams.get('hfm') === 'unlock';
+
+    if (urlUnlock) {
+      // Strip param to avoid accidental sharing
+      urlParams.delete('hfm');
+      const newUrl = urlParams.toString()
+        ? `${window.location.pathname}?${urlParams}`
+        : window.location.pathname;
+      history.replaceState(null, '', newUrl);
+    }
+
+    if (devUnlockFlag || urlUnlock) {
+      _handleUnlock();
+    }
+
+    // Initialize input sequence detector (still works for non-dev users)
     initSequenceDetector(_handleUnlock);
+
+    // Expose DevTools helper for manual unlock
+    window.__unlockAltView = () => {
+      localStorage.setItem(HFM_UNLOCK_KEY, 'true');
+      _handleUnlock();
+      return 'Alt View unlocked. Refresh to persist.';
+    };
 
     // Initialize actions drawer toggle
     const initActionsDrawer = () => {
@@ -6161,11 +6398,12 @@ async function initApp() {
   // ========== COMPARISON MODE ==========
 
   // Initialize comparison controller
+  // Pass getter function to handle lazy renderController initialization
   comparisonController = new ComparisonController(
     stateManager,
-    renderController,
+    () => renderController,
     {
-      maxVariants: 4,
+      maxVariants: 10,
     }
   );
 
@@ -6319,11 +6557,22 @@ async function initApp() {
   }
 
   function exitComparisonMode() {
+    const state = stateManager.getState();
     stateManager.setState({ comparisonMode: false });
 
-    // Show main interface, hide comparison view
-    mainInterface.classList.remove('hidden');
+    // Always hide comparison view
     comparisonViewContainer.classList.add('hidden');
+
+    // Show appropriate screen based on whether a file is loaded
+    if (state.uploadedFile) {
+      // File is loaded - show main interface, hide welcome screen
+      mainInterface.classList.remove('hidden');
+      welcomeScreen.classList.add('hidden');
+    } else {
+      // No file loaded - show welcome screen, hide main interface
+      mainInterface.classList.add('hidden');
+      welcomeScreen.classList.remove('hidden');
+    }
 
     // Optionally clear variants or keep them
     // comparisonController.clearAll();
@@ -6331,6 +6580,15 @@ async function initApp() {
     console.log('[Comparison] Exited comparison mode');
     updateStatus('Exited comparison mode');
   }
+
+  // Handle browser back/forward button while in comparison mode
+  window.addEventListener('popstate', () => {
+    const state = stateManager.getState();
+    if (state.comparisonMode) {
+      // Exit comparison mode when user navigates back
+      exitComparisonMode();
+    }
+  });
 
   // ========== PRESET SYSTEM ==========
 
@@ -7207,8 +7465,10 @@ async function initApp() {
 
     // Keyboard navigation
     tab.addEventListener('keydown', (e) => {
-      const tabs = Array.from(featuresTabs);
+      // Filter out hidden tabs (e.g., gated Alt View tab)
+      const tabs = Array.from(featuresTabs).filter((t) => !t.hidden);
       const currentIndex = tabs.indexOf(tab);
+      if (currentIndex === -1) return; // Current tab is hidden, skip navigation
       let nextIndex = currentIndex;
 
       switch (e.key) {
@@ -7305,15 +7565,20 @@ async function initApp() {
   keyboardConfig.on('focusSavedProjects', () => {
     const savedProjectsList = document.getElementById('savedProjectsList');
     const welcomeScreen = document.getElementById('welcomeScreen');
-    
+
     // Only focus if on welcome screen
     if (welcomeScreen && !welcomeScreen.classList.contains('hidden')) {
       if (savedProjectsList) {
         // Scroll to saved projects section
-        savedProjectsList.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        
+        savedProjectsList.scrollIntoView({
+          behavior: 'smooth',
+          block: 'nearest',
+        });
+
         // Focus first project card if available
-        const firstCard = savedProjectsList.querySelector('.saved-project-card');
+        const firstCard = savedProjectsList.querySelector(
+          '.saved-project-card'
+        );
         if (firstCard) {
           firstCard.focus();
         } else {
