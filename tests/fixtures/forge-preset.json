@@ -1,0 +1,10 @@
+{
+  "version": "1.0.0",
+  "type": "openscad-preset",
+  "modelName": "simple_box.scad",
+  "preset": {
+    "name": "Test Preset",
+    "parameters": { "width": 75, "height": 45 },
+    "description": "Test preset"
+  }
+}

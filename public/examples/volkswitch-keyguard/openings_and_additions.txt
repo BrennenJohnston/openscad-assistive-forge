@@ -1,0 +1,25 @@
+// Volkswitch Keyguard - Custom Openings and Additions Template
+// 
+// This file allows you to define custom cutouts and additions to your keyguard.
+// Lines starting with // are comments and will be ignored.
+//
+// Format for openings (cutouts):
+//   opening, x, y, width, height, [corner_radius]
+//
+// Format for additions (raised areas):  
+//   addition, x, y, width, height, thickness
+//
+// All measurements are in millimeters.
+// x,y coordinates are measured from the bottom-left corner.
+
+// Example: Add a larger opening for a power button
+// opening, 10, 80, 30, 25, 3
+
+// Example: Add a cutout for a speaker grille area
+// opening, 120, 10, 25, 25, 0
+
+// Example: Add a raised border section
+// addition, 0, 0, 10, 100, 2
+
+// Your custom modifications below:
+

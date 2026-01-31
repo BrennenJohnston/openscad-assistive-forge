@@ -37,6 +37,7 @@ describe('Download Manager', () => {
         extension: '.stl',
         mimeType: 'application/vnd.ms-pki.stl',
         description: 'Most common format for 3D printing',
+        is2D: false,
       })
     })
 
@@ -46,7 +47,41 @@ describe('Download Manager', () => {
         extension: '.obj',
         mimeType: 'text/plain',
         description: 'Wavefront OBJ, widely supported',
+        is2D: false,
       })
+    })
+
+    it('should have correct SVG format definition (2D)', () => {
+      expect(OUTPUT_FORMATS.svg).toEqual({
+        name: 'SVG',
+        extension: '.svg',
+        mimeType: 'image/svg+xml',
+        description: 'SVG - For laser cutting or 2D vector graphics',
+        is2D: true,
+      })
+    })
+
+    it('should have correct DXF format definition (2D)', () => {
+      expect(OUTPUT_FORMATS.dxf).toEqual({
+        name: 'DXF',
+        extension: '.dxf',
+        mimeType: 'application/dxf',
+        description: 'DXF - For CAD software and laser cutting',
+        is2D: true,
+      })
+    })
+
+    it('should distinguish 2D formats from 3D formats', () => {
+      // 3D formats should have is2D: false
+      expect(OUTPUT_FORMATS.stl.is2D).toBe(false)
+      expect(OUTPUT_FORMATS.obj.is2D).toBe(false)
+      expect(OUTPUT_FORMATS.off.is2D).toBe(false)
+      expect(OUTPUT_FORMATS.amf.is2D).toBe(false)
+      expect(OUTPUT_FORMATS['3mf'].is2D).toBe(false)
+      
+      // 2D formats should have is2D: true
+      expect(OUTPUT_FORMATS.svg.is2D).toBe(true)
+      expect(OUTPUT_FORMATS.dxf.is2D).toBe(true)
     })
   })
 

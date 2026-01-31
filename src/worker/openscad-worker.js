@@ -1711,6 +1711,8 @@ async function render(payload) {
             renderMs: workerRenderMs,
             wasmInitMs: wasmInitDurationMs,
           },
+          // Include console output for echo() messages - critical for Volkswitch keyguard
+          consoleOutput: openscadConsoleOutput || '',
         },
       },
       [outputBuffer]

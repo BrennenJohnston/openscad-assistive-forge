@@ -184,15 +184,15 @@
               <input type="file" id="fileInput" accept=".scad,.zip" class="file-input" />
             </label>
             
-            <!-- Saved Projects Section -->
+            <!-- Saved Designs Section -->
             <section class="saved-projects-panel" id="savedProjectsPanel" aria-labelledby="saved-projects-heading">
-              <h3 id="saved-projects-heading">Saved Projects</h3>
+              <h3 id="saved-projects-heading">Saved Designs</h3>
               <p class="saved-projects-description">Your previously saved files (stored in this browser)</p>
-              <div class="saved-projects-list" id="savedProjectsList" role="list" aria-label="Saved projects">
+              <div class="saved-projects-list" id="savedProjectsList" role="list" aria-label="Saved designs">
                 <!-- Dynamically populated -->
               </div>
               <p class="saved-projects-empty hidden" id="savedProjectsEmpty">
-                No saved projects yet. Upload a file and choose to save it.
+                No saved designs yet. Upload a file and choose to save it.
               </p>
             </section>
             
@@ -525,6 +525,51 @@
               </details>
             </div>
             
+            <!-- Companion Files Manager (for multi-file projects) -->
+            <div class="project-files-controls hidden" id="projectFilesControls" role="region" aria-label="Companion files for this design">
+              <details class="project-files-details">
+                <summary class="project-files-summary">
+                  <svg class="btn-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true">
+                    <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                    <line x1="12" y1="18" x2="12" y2="12"></line>
+                    <line x1="9" y1="15" x2="15" y2="15"></line>
+                  </svg>
+                  Companion Files <span class="project-files-badge" id="projectFilesBadge">0</span>
+                </summary>
+                <div class="project-files-content">
+                  <p class="project-files-help" id="projectFilesHelp">Manage companion files used by this design:</p>
+                  
+                  <!-- Missing files warning -->
+                  <div class="project-files-warning hidden" id="projectFilesWarning" role="alert">
+                    <span class="warning-icon" aria-hidden="true">⚠️</span>
+                    <span class="warning-text" id="projectFilesWarningText">Some required files are missing</span>
+                  </div>
+                  
+                  <!-- File list -->
+                  <div class="project-files-list" id="projectFilesList" role="list" aria-label="Project files">
+                    <!-- Dynamically populated -->
+                  </div>
+                  
+                  <!-- Add file controls -->
+                  <div class="project-files-actions">
+                    <label class="btn btn-sm btn-outline project-files-add-btn" for="addCompanionFileInput">
+                      <svg class="btn-icon-svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                      </svg>
+                      Add File
+                      <input type="file" id="addCompanionFileInput" class="sr-only" accept=".txt,.scad,.svg,.json,.csv" multiple />
+                    </label>
+                  </div>
+                  
+                  <div class="project-files-footer">
+                    <p class="project-files-hint">Add .txt, .scad, .svg, or other files referenced by your model</p>
+                  </div>
+                </div>
+              </details>
+            </div>
+            
             <!-- Parameter Search and Navigation (C2: Cognitive load reduction) -->
             <div class="param-search-section" id="paramSearchSection">
               <div class="param-search-row">
@@ -554,15 +599,38 @@
             <div class="output-format-section" aria-label="Output format selection">
               <label for="outputFormat" class="output-format-label">Output:</label>
               <select id="outputFormat" class="output-format-select" aria-label="Select output file format" data-tutorial-target="output-format">
-                <option value="stl" selected>STL</option>
-                <option value="obj">OBJ</option>
-                <option value="off">OFF</option>
-                <option value="amf">AMF</option>
-                <option value="3mf">3MF</option>
+                <optgroup label="3D Printing">
+                  <option value="stl" selected>STL - 3D Printing (Binary)</option>
+                  <option value="obj">OBJ - Wavefront (Text)</option>
+                  <option value="off">OFF - Object File Format</option>
+                  <option value="amf">AMF - Additive Manufacturing</option>
+                  <option value="3mf">3MF - 3D Manufacturing</option>
+                </optgroup>
+                <optgroup label="Laser Cutting / 2D">
+                  <option value="svg">SVG - Vector Graphics</option>
+                  <option value="dxf">DXF - CAD / Laser</option>
+                </optgroup>
               </select>
               <span class="output-format-info" id="formatInfo" aria-live="polite">
                 Most common format for 3D printing
               </span>
+              
+              <!-- 2D Format Guidance (shown when SVG/DXF selected) -->
+              <div class="format-2d-guidance hidden" id="format2dGuidance" role="alert" aria-live="polite">
+                <p class="guidance-title">📐 2D Export Guidance</p>
+                <p class="guidance-text">
+                  For laser cutting, ensure your model uses <code>projection()</code> or set the 
+                  <code>generate</code> parameter to <strong>"first layer for SVG/DXF file"</strong>.
+                </p>
+                <details class="guidance-details">
+                  <summary>More info for Volkswitch keyguard users</summary>
+                  <ul>
+                    <li>Set <code>type_of_keyguard</code> to <strong>"Laser-Cut"</strong></li>
+                    <li>Set <code>generate</code> to <strong>"first layer for SVG/DXF file"</strong></li>
+                    <li>Not all 3D models support 2D export</li>
+                  </ul>
+                </details>
+              </div>
             </div>
             
             <!-- Advanced Menu -->
@@ -625,6 +693,15 @@
                   <button id="viewParamsJsonBtn" class="btn btn-sm btn-outline advanced-btn" aria-label="View current parameters as JSON">
                     { } View Params JSON
                   </button>
+                </div>
+                
+                <!-- Export Changed Settings (Volkswitch troubleshooting support) -->
+                <div class="advanced-section">
+                  <h4 class="advanced-section-title">Troubleshooting</h4>
+                  <button id="exportChangedBtn" class="btn btn-sm btn-outline advanced-btn" aria-label="Export only changed parameters for troubleshooting">
+                    📋 Export Changed Settings
+                  </button>
+                  <p class="advanced-hint">Download only non-default parameters (useful for support requests)</p>
                 </div>
               </div>
             </details>
@@ -838,8 +915,41 @@
                   <span class="preview-status-text" id="previewStatusText">Ready</span>
                   <span class="preview-status-divider" aria-hidden="true"></span>
                   <span class="preview-status-stats" id="previewStatusStats"></span>
+                  <!-- Memory usage indicator -->
+                  <span class="memory-indicator hidden" id="memoryIndicator" role="status" aria-live="polite">
+                    <span class="memory-icon" aria-hidden="true">💾</span>
+                    <span class="memory-text" id="memoryText">--</span>
+                    <span class="memory-bar" id="memoryBar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                      <span class="memory-bar-fill" id="memoryBarFill"></span>
+                    </span>
+                  </span>
                   <!-- Alt adjust info (visible only in mono variant when alt view is enabled) -->
                   <span class="preview-status-alt-adjust" id="previewStatusAltAdjust"></span>
+                </div>
+                
+                <!-- ECHO message drawer (Volkswitch echo() support) -->
+                <div class="echo-drawer collapsed" id="echoDrawer">
+                  <button 
+                    class="echo-drawer-toggle" 
+                    id="echoDrawerToggle"
+                    type="button"
+                    aria-expanded="false"
+                    aria-controls="echoDrawerContent"
+                    aria-label="Toggle echo messages panel"
+                  >
+                    <span class="echo-drawer-label" id="echoDrawerLabel">No echo messages</span>
+                    <svg class="echo-drawer-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                      <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                  </button>
+                  <div class="echo-drawer-content" id="echoDrawerContent" role="region" aria-label="Echo messages from OpenSCAD">
+                    <pre class="echo-messages" id="echoMessages"></pre>
+                    <button 
+                      class="echo-view-console btn btn-sm btn-secondary"
+                      id="echoViewConsoleBtn"
+                      type="button"
+                    >View Full Console</button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -914,6 +1024,22 @@
                       <line x1="12" y1="15" x2="12" y2="3"></line>
                     </svg>
                     <span class="btn-text">Export Params</span>
+                  </button>
+                  
+                  <span class="actions-drawer-divider" aria-hidden="true"></span>
+                  
+                  <button id="viewConsoleBtn" class="btn btn-sm btn-secondary actions-drawer-btn" aria-label="View OpenSCAD console output including echo statements">
+                    <svg class="btn-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                      <rect x="2" y="3" width="20" height="18" rx="2"></rect>
+                      <line x1="6" y1="8" x2="6" y2="8"></line>
+                      <line x1="10" y1="8" x2="18" y2="8"></line>
+                      <line x1="6" y1="12" x2="6" y2="12"></line>
+                      <line x1="10" y1="12" x2="18" y2="12"></line>
+                      <line x1="6" y1="16" x2="6" y2="16"></line>
+                      <line x1="10" y1="16" x2="14" y2="16"></line>
+                    </svg>
+                    <span class="btn-text">Console</span>
+                    <span class="console-badge hidden" id="consoleBadge" aria-label="New console output available">!</span>
                   </button>
                 </div>
               </div>
@@ -1677,6 +1803,39 @@ secondary_color = "E74C3C"; // [color]</code></pre>
       </div>
     </div>
     
+    <!-- Text File Editor Modal (for editing companion .txt files) -->
+    <div class="modal hidden" id="textFileEditorModal" role="dialog" aria-labelledby="textFileEditorTitle" aria-modal="true">
+      <div class="modal-overlay" id="textFileEditorOverlay"></div>
+      <div class="modal-content modal-medium">
+        <div class="modal-header">
+          <h2 id="textFileEditorTitle">Edit File</h2>
+          <button class="modal-close" id="textFileEditorClose" aria-label="Close file editor">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <p class="text-editor-info" id="textFileEditorInfo">Editing: <span id="textFileEditorFileName"></span></p>
+          <textarea 
+            id="textFileEditorContent" 
+            class="text-file-editor-textarea" 
+            aria-label="File content editor" 
+            spellcheck="false"
+            autocomplete="off"
+            autocorrect="off"
+            autocapitalize="off"
+          ></textarea>
+          <p class="text-editor-hint">Changes will be applied when you click "Apply and Preview"</p>
+        </div>
+        <div class="modal-footer">
+          <button id="textFileEditorCancel" class="btn btn-outline">Cancel</button>
+          <button id="textFileEditorApply" class="btn btn-primary">Apply and Preview</button>
+        </div>
+      </div>
+    </div>
+    
     <!-- Reset All Confirmation Modal (COGA: Undo confirmation) -->
     <div class="modal hidden" id="resetConfirmModal" role="dialog" aria-labelledby="resetConfirmTitle" aria-modal="true">
       <div class="modal-overlay" id="resetConfirmOverlay"></div>
@@ -1720,6 +1879,45 @@ secondary_color = "E74C3C"; // [color]</code></pre>
         <div class="modal-footer shortcuts-modal-footer">
           <button id="shortcutsResetAll" class="btn btn-secondary">Reset All to Defaults</button>
           <button id="shortcutsModalDone" class="btn btn-primary">Done</button>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Console Output Modal (Volkswitch echo() support) -->
+    <div class="modal hidden" id="consoleOutputModal" role="dialog" aria-labelledby="consoleOutputTitle" aria-modal="true">
+      <div class="modal-overlay" id="consoleOutputOverlay"></div>
+      <div class="modal-content modal-large modal-console">
+        <div class="modal-header">
+          <h2 id="consoleOutputTitle">OpenSCAD Console Output</h2>
+          <button class="modal-close" id="consoleOutputClose" aria-label="Close console output">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body console-modal-body">
+          <p class="console-description">
+            This shows output from <code>echo()</code> statements in your OpenSCAD file. 
+            Designers often use echo() to provide guidance, show calculated values, or help troubleshoot configurations.
+          </p>
+          <div class="console-output-container">
+            <pre class="console-output" id="consoleOutput" tabindex="0" aria-label="Console output text">No console output yet. Generate a model to see output.</pre>
+          </div>
+          <p class="console-hint" id="consoleHint">
+            <strong>Tip:</strong> Look for <code>ECHO:</code> lines that may contain important instructions from the model designer.
+          </p>
+        </div>
+        <div class="modal-footer console-modal-footer">
+          <button id="consoleCopyBtn" class="btn btn-secondary">
+            <svg class="btn-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+            Copy to Clipboard
+          </button>
+          <button id="consoleClearBtn" class="btn btn-secondary">Clear</button>
+          <button id="consoleCloseBtn" class="btn btn-primary">Close</button>
         </div>
       </div>
     </div>
