@@ -107,7 +107,7 @@ const libraryMapSchema = {
 };
 
 /**
- * Saved project validation schema
+ * Saved project validation schema (v2 with folder support)
  */
 const savedProjectSchema = {
   type: 'object',
@@ -135,6 +135,10 @@ const savedProjectSchema = {
       maxLength: STORAGE_LIMITS.MAX_SAVED_PROJECT_SIZE,
     },
     projectFiles: { type: ['string', 'null'], default: null },
+    // v2 fields
+    folderId: { type: ['string', 'null'], default: null },
+    overlayFiles: { type: 'object', default: {} },
+    presets: { type: 'array', default: [] },
     notes: {
       type: 'string',
       maxLength: STORAGE_LIMITS.MAX_NOTES_LENGTH,

@@ -83,6 +83,8 @@ export class AutoPreviewController {
     this.fullQualitySTL = null;
     this.fullQualityStats = null;
     this.fullQualityKey = null;
+    // Console output from last full render (for echo() support)
+    this.fullQualityConsoleOutput = null;
 
     // Callbacks
     this.onStateChange = options.onStateChange || (() => {});
@@ -685,6 +687,7 @@ export class AutoPreviewController {
     this.previewCacheKey = null;
     this.fullRenderParamHash = null;
     this.fullQualitySTL = null;
+    this.fullQualityConsoleOutput = null;
     this.fullQualityStats = null;
     this.fullQualityKey = null;
   }
@@ -719,6 +722,8 @@ export class AutoPreviewController {
         stl: this.fullQualitySTL,
         stats: this.fullQualityStats,
         cached: true,
+        // Include console output even from cached results (Volkswitch echo() support)
+        consoleOutput: this.fullQualityConsoleOutput || '',
       };
     }
 
@@ -742,6 +747,8 @@ export class AutoPreviewController {
     this.fullQualityStats = result.stats;
     this.fullRenderParamHash = paramHash;
     this.fullQualityKey = qualityKey;
+    // Store console output for Volkswitch echo() support
+    this.fullQualityConsoleOutput = result.consoleOutput || '';
 
     // Also update the preview with full quality result
     try {

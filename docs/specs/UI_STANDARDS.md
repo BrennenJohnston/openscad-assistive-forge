@@ -310,8 +310,8 @@ svg {
 | Toggle Button | `.btn-collapse-panel` | `aria-expanded`, `aria-label` | 44×44px | ✓ |
 | Icon Button | `.btn`, `.btn-icon` | `aria-label` required | 44×44px | ✓ |
 | Primary Button | `.btn`, `.btn-primary` | Text or `aria-label` | 44×44px min height | ✓ |
-| Input Field | (native) | `<label>` or `aria-label` | — | ✓ |
-| Modal | `.modal` | `role="dialog"`, `aria-modal`, `aria-labelledby` | — | Focus trap |
+| Input Field | (native) | `<label>` or `aria-label` | N/A | ✓ |
+| Modal | `.modal` | `role="dialog"`, `aria-modal`, `aria-labelledby` | N/A | Focus trap |
 
 ---
 

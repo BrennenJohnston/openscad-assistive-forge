@@ -42,6 +42,18 @@ inner_depth = depth - (wall_thickness * 2);
 inner_height = height - wall_thickness;
 lid_height = wall_thickness;
 
+// Debug output - these appear in the Console panel
+echo("=== Simple Box Configuration ===");
+echo(str("Box dimensions: ", width, " x ", depth, " x ", height, " mm"));
+echo(str("Wall thickness: ", wall_thickness, " mm"));
+echo(str("Interior space: ", inner_width, " x ", inner_depth, " x ", inner_height, " mm"));
+echo(str("Lid included: ", include_lid));
+echo(str("Ventilation: ", ventilation));
+if (ventilation == "yes") {
+    echo(str("  - Hole count: ", hole_count));
+    echo(str("  - Hole diameter: ", hole_diameter, " mm"));
+}
+
 // Main module
 module box() {
     difference() {

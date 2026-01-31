@@ -7,35 +7,56 @@
  * Format definitions with MIME types and extensions
  */
 export const OUTPUT_FORMATS = {
+  // 3D Printing Formats
   stl: {
     name: 'STL',
     extension: '.stl',
     mimeType: 'application/vnd.ms-pki.stl', // or 'application/octet-stream'
     description: 'Most common format for 3D printing',
+    is2D: false,
   },
   obj: {
     name: 'OBJ',
     extension: '.obj',
     mimeType: 'text/plain', // OBJ is text-based
     description: 'Wavefront OBJ, widely supported',
+    is2D: false,
   },
   off: {
     name: 'OFF',
     extension: '.off',
     mimeType: 'text/plain', // OFF is text-based
     description: 'Object File Format for geometry',
+    is2D: false,
   },
   amf: {
     name: 'AMF',
     extension: '.amf',
     mimeType: 'application/x-amf', // or 'application/xml'
     description: 'Additive Manufacturing File Format',
+    is2D: false,
   },
   '3mf': {
     name: '3MF',
     extension: '.3mf',
     mimeType: 'application/vnd.ms-package.3dmanufacturing-3dmodel+xml',
     description: '3D Manufacturing Format (modern)',
+    is2D: false,
+  },
+  // Laser Cutting / 2D Formats (Volkswitch support)
+  svg: {
+    name: 'SVG',
+    extension: '.svg',
+    mimeType: 'image/svg+xml',
+    description: 'SVG - For laser cutting or 2D vector graphics',
+    is2D: true,
+  },
+  dxf: {
+    name: 'DXF',
+    extension: '.dxf',
+    mimeType: 'application/dxf',
+    description: 'DXF - For CAD software and laser cutting',
+    is2D: true,
   },
 };
 

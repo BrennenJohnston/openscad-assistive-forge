@@ -1142,8 +1142,9 @@ async function renderWithCallMain(
   mainFilePath = null,
   renderOptions = {}
 ) {
-  const inputFile = mainFilePath || '/tmp/input.scad';
+  let inputFile = mainFilePath || '/tmp/input.scad';
   const outputFile = `/tmp/output.${format}`;
+  let wroteTempInput = false;
   // Performance flags: Use Manifold backend for 5-30x faster CSG operations
   // Note: Modern OpenSCAD uses --backend=Manifold instead of --enable=manifold
   // lazy-union is still opt-in via --enable flag
@@ -1181,8 +1182,22 @@ async function renderWithCallMain(
     }
 
     // Write input file to FS (unless it's already mounted via mainFilePath)
-    if (!mainFilePath || mainFilePath.startsWith('/tmp/')) {
+    let shouldWriteInput = !mainFilePath || inputFile.startsWith('/tmp/');
+    if (!shouldWriteInput) {
+      let inputExists = false;
+      try {
+        inputExists = module.FS.analyzePath(inputFile).exists;
+      } catch (_e) {
+        inputExists = false;
+      }
+      if (!inputExists) {
+        inputFile = '/tmp/input.scad';
+        shouldWriteInput = true;
+      }
+    }
+    if (shouldWriteInput) {
       module.FS.writeFile(inputFile, scadContent);
+      wroteTempInput = true;
     } // Build -D arguments
     const defineArgs = buildDefineArgs(parameters);
 
@@ -1237,6 +1252,25 @@ async function renderWithCallMain(
       ) {
         throw new Error(
           `Current top level object is empty. Output: ${openscadConsoleOutput.substring(0, 500)}`
+        );
+      }
+
+      // Check for 2D object exported to a 3D format (STL/OBJ/etc.)
+      // This happens when model produces 2D geometry (e.g., "first layer for SVG/DXF file")
+      // but the render is trying to export to a 3D format.
+      const is2DFormat = format === 'svg' || format === 'dxf';
+      if (
+        !is2DFormat &&
+        (openscadConsoleOutput.includes(
+          'Current top level object is not a 3D object'
+        ) ||
+          openscadConsoleOutput.includes('Top level object is a 2D object'))
+      ) {
+        throw new Error(
+          `MODEL_IS_2D: Your model is configured to produce 2D geometry. ` +
+            `For preview, 2D models cannot be displayed in 3D view. ` +
+            `To export: select SVG or DXF output format. ` +
+            `For Volkswitch keyguard: this is expected when "generate" is set to "first layer for SVG/DXF file".`
         );
       }
 
@@ -1303,6 +1337,21 @@ async function renderWithCallMain(
           );
         }
 
+        // Check for 2D object on retry as well
+        if (
+          openscadConsoleOutput.includes(
+            'Current top level object is not a 3D object'
+          ) ||
+          openscadConsoleOutput.includes('Top level object is a 2D object')
+        ) {
+          throw new Error(
+            `MODEL_IS_2D: Your model is configured to produce 2D geometry. ` +
+              `For preview, 2D models cannot be displayed in 3D view. ` +
+              `To export: select SVG or DXF output format. ` +
+              `For Volkswitch keyguard: this is expected when "generate" is set to "first layer for SVG/DXF file".`
+          );
+        }
+
         const retryNotSupportedMatch = openscadConsoleOutput.match(
           /ECHO:.*is not supported/i
         );
@@ -1328,7 +1377,7 @@ async function renderWithCallMain(
 
     // Clean up temporary files
     try {
-      if (!mainFilePath || mainFilePath.startsWith('/tmp/')) {
+      if (wroteTempInput) {
         module.FS.unlink(inputFile);
       }
     } catch (_e) {
@@ -1394,6 +1443,180 @@ async function _renderWithExport(scadContent, format) {
       `Export to ${format.toUpperCase()} format not supported by OpenSCAD WASM`
     );
   }
+}
+
+/**
+ * Validate 2D output format (SVG/DXF) for completeness
+ * Returns an object with valid flag and error message if invalid
+ * @param {ArrayBuffer} outputBuffer - The output data
+ * @param {string} format - Output format ('svg' or 'dxf')
+ * @returns {{valid: boolean, error?: string}}
+ */
+function validate2DOutput(outputBuffer, format) {
+  // Convert buffer to string for text-based validation
+  const decoder = new TextDecoder('utf-8');
+  const content = decoder.decode(outputBuffer);
+
+  if (format === 'svg') {
+    return validateSVGOutput(content);
+  } else if (format === 'dxf') {
+    return validateDXFOutput(content);
+  }
+
+  // Unknown format - pass through
+  return { valid: true };
+}
+
+/**
+ * Validate SVG output
+ * @param {string} content - SVG content as string
+ * @returns {{valid: boolean, error?: string}}
+ */
+function validateSVGOutput(content) {
+  // Check minimum length
+  if (!content || content.length < 50) {
+    return {
+      valid: false,
+      error:
+        'SVG output is empty or too small. Your model may not produce 2D geometry. ' +
+        'For Volkswitch keyguard: ensure "type_of_keyguard" is set to "Laser-Cut" and ' +
+        '"generate" is set to "first layer for SVG/DXF file".',
+    };
+  }
+
+  // Check for SVG root element
+  if (!/<svg[\s>]/i.test(content)) {
+    return {
+      valid: false,
+      error:
+        'Invalid SVG output - missing <svg> element. The OpenSCAD render may have failed silently.',
+    };
+  }
+
+  // Check for at least one geometric element
+  const geometricElements = [
+    '<path',
+    '<polygon',
+    '<polyline',
+    '<line',
+    '<rect',
+    '<circle',
+    '<ellipse',
+    '<g>',
+  ];
+
+  const hasGeometry = geometricElements.some((el) =>
+    content.toLowerCase().includes(el.toLowerCase())
+  );
+
+  if (!hasGeometry) {
+    return {
+      valid: false,
+      error:
+        'SVG contains no geometry (no paths, polygons, or shapes). ' +
+        'Your 3D model may not include any 2D projection. ' +
+        'Ensure your model uses projection() or is configured for 2D output. ' +
+        'For Volkswitch: set "generate" to "first layer for SVG/DXF file".',
+    };
+  }
+
+  // Check for completely empty viewBox or very small content
+  const viewBoxMatch = content.match(/viewBox="([^"]+)"/);
+  if (viewBoxMatch) {
+    const parts = viewBoxMatch[1].split(/\s+/).map(parseFloat);
+    if (parts.length >= 4) {
+      const width = parts[2];
+      const height = parts[3];
+      if ((width === 0 && height === 0) || (width < 0.001 && height < 0.001)) {
+        return {
+          valid: false,
+          error:
+            'SVG has zero-size viewBox (no visible geometry). ' +
+            'Your model configuration may be producing empty output.',
+        };
+      }
+    }
+  }
+
+  return { valid: true };
+}
+
+/**
+ * Validate DXF output
+ * @param {string} content - DXF content as string
+ * @returns {{valid: boolean, error?: string}}
+ */
+function validateDXFOutput(content) {
+  // Check minimum length
+  if (!content || content.length < 50) {
+    return {
+      valid: false,
+      error:
+        'DXF output is empty or too small. Your model may not produce 2D geometry. ' +
+        'For Volkswitch keyguard: ensure "type_of_keyguard" is set to "Laser-Cut" and ' +
+        '"generate" is set to "first layer for SVG/DXF file".',
+    };
+  }
+
+  // DXF files start with "0" followed by "SECTION" in the first few lines
+  // Normalize line endings for cross-platform compatibility
+  const normalizedContent = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const lines = normalizedContent.split('\n').map((l) => l.trim());
+
+  // Check for DXF structure
+  if (lines[0] !== '0' || !lines.includes('SECTION')) {
+    return {
+      valid: false,
+      error:
+        'Invalid DXF output - missing DXF header structure. ' +
+        'The OpenSCAD render may have failed silently.',
+    };
+  }
+
+  // Check for ENTITIES section with actual content
+  const entitiesIndex = lines.indexOf('ENTITIES');
+  if (entitiesIndex === -1) {
+    return {
+      valid: false,
+      error:
+        'DXF contains no ENTITIES section (no geometry). ' +
+        'Your model may not be configured for 2D output.',
+    };
+  }
+
+  // Check for at least one entity after ENTITIES
+  // Look for LINE, POLYLINE, LWPOLYLINE, CIRCLE, ARC, etc.
+  const entityTypes = [
+    'LINE',
+    'POLYLINE',
+    'LWPOLYLINE',
+    'CIRCLE',
+    'ARC',
+    'SPLINE',
+    'POINT',
+  ];
+  let hasEntity = false;
+
+  for (let i = entitiesIndex; i < lines.length; i++) {
+    if (entityTypes.includes(lines[i])) {
+      hasEntity = true;
+      break;
+    }
+    // Stop at ENDSEC
+    if (lines[i] === 'ENDSEC') break;
+  }
+
+  if (!hasEntity) {
+    return {
+      valid: false,
+      error:
+        'DXF ENTITIES section is empty (no geometry). ' +
+        'Your 3D model may not include any 2D projection. ' +
+        'For Volkswitch: set "generate" to "first layer for SVG/DXF file".',
+    };
+  }
+
+  return { valid: true };
 }
 
 /**
@@ -1669,6 +1892,14 @@ async function render(payload) {
       throw new Error(`Unknown ${resultFormat.toUpperCase()} data format`);
     }
 
+    // Validate 2D format outputs (SVG/DXF) - they may be "valid" but empty
+    if (resultFormat === 'svg' || resultFormat === 'dxf') {
+      const validationResult = validate2DOutput(outputBuffer, resultFormat);
+      if (!validationResult.valid) {
+        throw new Error(validationResult.error);
+      }
+    }
+
     // For binary STL, read triangle count from header
     // Binary STL format: 80 bytes header + 4 bytes triangle count + (50 bytes per triangle)
     if (
@@ -1711,6 +1942,8 @@ async function render(payload) {
             renderMs: workerRenderMs,
             wasmInitMs: wasmInitDurationMs,
           },
+          // Include console output for echo() messages - critical for Volkswitch keyguard
+          consoleOutput: openscadConsoleOutput || '',
         },
       },
       [outputBuffer]
@@ -1752,6 +1985,26 @@ async function render(payload) {
       code = 'EMPTY_GEOMETRY';
       message =
         'This configuration produces no geometry. Check that required options are enabled/disabled for this selection.';
+    }
+
+    // If error indicates 2D model trying to export to a 3D format
+    const is2DOutput =
+      (outputFormat || 'stl').toLowerCase() === 'svg' ||
+      (outputFormat || 'stl').toLowerCase() === 'dxf';
+    if (
+      !is2DOutput &&
+      (code === 'INTERNAL_ERROR' || translated.raw?.includes('MODEL_IS_2D')) &&
+      openscadConsoleOutput &&
+      (openscadConsoleOutput.includes(
+        'Current top level object is not a 3D object'
+      ) ||
+        openscadConsoleOutput.includes('Top level object is a 2D object'))
+    ) {
+      code = 'MODEL_IS_2D';
+      message =
+        'Your model produces 2D geometry (this is expected for laser-cut SVG/DXF export). ' +
+        'To preview: set "generate" back to "keyguard" for 3D preview. ' +
+        'To export: use the SVG or DXF output format.';
     }
 
     self.postMessage({

@@ -49,7 +49,7 @@ import {
   getZipStats,
 } from './js/zip-handler.js';
 import { themeManager, initThemeToggle } from './js/theme-manager.js';
-import { presetManager } from './js/preset-manager.js';
+import { presetManager, extractScadVersion } from './js/preset-manager.js';
 import { ComparisonController } from './js/comparison-controller.js';
 import { ComparisonView } from './js/comparison-view.js';
 import { libraryManager, LIBRARY_DEFINITIONS } from './js/library-manager.js';
@@ -63,6 +63,14 @@ import {
   markFirstVisitComplete,
   updateStoragePrefs,
   shouldDeferLargeDownloads,
+  formatBytes,
+  // v2: Persistence and backup
+  checkPersistentStorage,
+  requestPersistentStorage,
+  clearCacheWithOptions,
+  getDetailedStorageInfo,
+  exportProjectsBackup,
+  importProjectsBackup,
 } from './js/storage-manager.js';
 import {
   showWorkflowProgress,
@@ -96,10 +104,22 @@ import {
   getSavedProjectsSummary,
   clearAllSavedProjects,
   getStorageDiagnostics,
+  // v2: Folder operations
+  createFolder,
+  getFolder,
+  listFolders,
+  renameFolder,
+  deleteFolder,
+  moveFolder,
+  getFolderTree,
+  getFolderBreadcrumbs,
+  // v2: Project-folder operations
+  moveProject,
+  getProjectsInFolder,
 } from './js/saved-projects-manager.js';
 import Split from 'split.js';
 
-// Example definitions (used by welcome screen and Features Guide)
+// Example definitions (used by welcome screen, Features Guide, and deep-linking)
 const EXAMPLE_DEFINITIONS = {
   'simple-box': {
     path: '/examples/simple-box/simple_box.scad',
@@ -120,6 +140,29 @@ const EXAMPLE_DEFINITIONS = {
   'multi-file-box': {
     path: '/examples/multi-file-box.zip',
     name: 'multi-file-box.zip',
+  },
+  // Additional examples for deep-linking
+  'cable-organizer': {
+    path: '/examples/cable-organizer/cable_organizer.scad',
+    name: 'cable_organizer.scad',
+  },
+  'honeycomb-grid': {
+    path: '/examples/honeycomb-grid/honeycomb_grid.scad',
+    name: 'honeycomb_grid.scad',
+  },
+  'phone-stand': {
+    path: '/examples/phone-stand/phone_stand.scad',
+    name: 'phone_stand.scad',
+  },
+  'wall-hook': {
+    path: '/examples/wall-hook/wall_hook.scad',
+    name: 'wall_hook.scad',
+  },
+  // Volkswitch keyguard example for deep-linking from volksswitch.org
+  // Usage: ?example=volkswitch-keyguard-demo
+  'volkswitch-keyguard-demo': {
+    path: '/examples/volkswitch-keyguard/keyguard_demo.scad',
+    name: 'keyguard_demo.scad',
   },
 };
 
@@ -165,6 +208,46 @@ let autoPreviewController = null;
 let comparisonController = null;
 let comparisonView = null;
 let renderQueue = null;
+
+// Screen reader announcer utility
+// Provides a consistent API for announcing messages to assistive technology
+const srAnnouncer = {
+  _timeout: null,
+  _clearTimeout: null,
+  /**
+   * Announce a message to screen readers
+   * @param {string} message - Message to announce
+   * @param {boolean} [debounce=false] - Whether to debounce rapid announcements
+   */
+  announce(message, debounce = false) {
+    const el = document.getElementById('srAnnouncer');
+    if (!el) return;
+
+    // Cancel pending announcements
+    if (this._timeout) clearTimeout(this._timeout);
+    if (this._clearTimeout) clearTimeout(this._clearTimeout);
+
+    const write = () => {
+      // Clear first so AT will re-announce repeated strings reliably
+      el.textContent = '';
+      requestAnimationFrame(() => {
+        el.textContent = message;
+        // Clear after a short delay, but only if unchanged
+        this._clearTimeout = setTimeout(() => {
+          if (el.textContent === message) {
+            el.textContent = '';
+          }
+        }, 1500);
+      });
+    };
+
+    if (debounce) {
+      this._timeout = setTimeout(write, 150);
+    } else {
+      write();
+    }
+  },
+};
 
 // Hidden feature state (non-persistent)
 let _hfmUnlocked = false;
@@ -1245,6 +1328,24 @@ async function initApp() {
   let autoPreviewEnabled = true;
   let autoPreviewUserEnabled = true;
   let previewQuality = RENDER_QUALITY.PREVIEW;
+
+  // CRITICAL: Declare DOM element variables early to avoid Temporal Dead Zone errors
+  // These will be assigned actual values later when DOM queries are performed
+  let previewStatusBar = null;
+  let previewStatusText = null;
+  let previewStatusStats = null;
+
+  // CRITICAL: Declare memoryPollInterval early to avoid TDZ in startMemoryPolling()
+  let memoryPollInterval = null;
+
+  // CRITICAL: Import validation constants early to avoid TDZ in handleFile()
+  let FILE_SIZE_LIMITS = null;
+  try {
+    const validationModule = await import('./js/validation-constants.js');
+    FILE_SIZE_LIMITS = validationModule.FILE_SIZE_LIMITS;
+  } catch (e) {
+    console.error('Failed to import validation constants:', e);
+  }
   // Default to 'balanced' mode (~50% quality) for faster preview during parameter changes
   // The adaptive system will determine appropriate full quality when generating STL
   let previewQualityMode = 'balanced';
@@ -1298,23 +1399,148 @@ async function initApp() {
         waitingWorker.postMessage({ type: 'SKIP_WAITING' });
       };
 
-      const requestCacheClear = () => {
+      const CACHE_CLEAR_TIMEOUT = 10000; // 10 seconds before showing recovery dialog
+      const CACHE_CLEAR_EXPECTED = 3000; // Expected time for cache clear
+
+      const requestCacheClear = async () => {
         if (!navigator.serviceWorker?.controller) {
           updateStatus('Cache clear unavailable', 'error');
           return;
         }
         if (cacheClearPending) return;
         cacheClearPending = true;
+
+        // Update button to show progress
+        const clearCacheBtn = document.getElementById('clearCacheBtn');
+        const originalBtnText = clearCacheBtn?.textContent;
+        if (clearCacheBtn) {
+          clearCacheBtn.disabled = true;
+          clearCacheBtn.textContent = 'Clearing...';
+          clearCacheBtn.setAttribute('aria-busy', 'true');
+        }
+
         updateStatus('Clearing cache...');
         navigator.serviceWorker.controller.postMessage({ type: 'CLEAR_CACHE' });
 
-        setTimeout(() => {
-          if (!cacheClearPending) return;
+        // Track completion via message event
+        let cacheCleared = false;
+        const onCacheCleared = (event) => {
+          // Validate message type against allowlist
+          if (!isValidServiceWorkerMessage(event, ['CACHE_CLEARED'])) {
+            return; // Ignore invalid messages
+          }
+          if (event.data.type === 'CACHE_CLEARED') {
+            cacheCleared = true;
+            navigator.serviceWorker.removeEventListener(
+              'message',
+              onCacheCleared
+            );
+          }
+        };
+        navigator.serviceWorker.addEventListener('message', onCacheCleared);
+
+        // Wait for expected time, then check progress
+        await new Promise((resolve) =>
+          setTimeout(resolve, CACHE_CLEAR_EXPECTED)
+        );
+
+        if (cacheCleared || !cacheClearPending) {
+          // Cache was cleared successfully
           cacheClearPending = false;
           updateStatus('Cache cleared. Reloading...', 'success');
           window.location.reload();
-        }, 2000);
+          return;
+        }
+
+        // Cache clear is taking longer - wait until timeout
+        const remainingTime = CACHE_CLEAR_TIMEOUT - CACHE_CLEAR_EXPECTED;
+        await new Promise((resolve) => setTimeout(resolve, remainingTime));
+
+        if (cacheCleared || !cacheClearPending) {
+          // Cleared during extended wait
+          cacheClearPending = false;
+          updateStatus('Cache cleared. Reloading...', 'success');
+          window.location.reload();
+          return;
+        }
+
+        // Show recovery dialog - cache clear is hanging
+        navigator.serviceWorker.removeEventListener('message', onCacheCleared);
+
+        if (clearCacheBtn) {
+          clearCacheBtn.disabled = false;
+          clearCacheBtn.textContent = originalBtnText || 'Clear Cache';
+          clearCacheBtn.removeAttribute('aria-busy');
+        }
+
+        const action = await showCacheRecoveryDialog();
+        cacheClearPending = false;
+
+        if (action === 'force') {
+          updateStatus('Force reloading...', 'success');
+          window.location.reload();
+        } else if (action === 'wait') {
+          // User chose to wait - just reset state
+          updateStatus('Cache clear may still be in progress');
+        }
       };
+
+      /**
+       * Show recovery dialog when cache clear takes too long
+       * @returns {Promise<string>} 'force', 'wait', or null
+       */
+      function showCacheRecoveryDialog() {
+        return new Promise((resolve) => {
+          const modal = document.createElement('div');
+          modal.className = 'preset-modal confirm-modal';
+          modal.setAttribute('role', 'alertdialog');
+          modal.setAttribute('aria-labelledby', 'cacheRecoveryTitle');
+          modal.setAttribute('aria-describedby', 'cacheRecoveryMessage');
+          modal.setAttribute('aria-modal', 'true');
+
+          modal.innerHTML = `
+            <div class="preset-modal-content confirm-modal-content">
+              <div class="preset-modal-header">
+                <h3 id="cacheRecoveryTitle">Cache Clear Taking Longer Than Expected</h3>
+              </div>
+              <div class="modal-body">
+                <p id="cacheRecoveryMessage">
+                  The cache clearing operation is taking longer than usual. This can happen 
+                  if there are many cached files or if the browser is busy.
+                </p>
+                <p>What would you like to do?</p>
+              </div>
+              <div class="preset-modal-footer">
+                <button type="button" class="btn btn-outline" data-action="wait">Continue Waiting</button>
+                <button type="button" class="btn btn-primary" data-action="force">Force Reload</button>
+              </div>
+            </div>
+          `;
+
+          const handleAction = (action) => {
+            document.body.removeChild(modal);
+            resolve(action);
+          };
+
+          modal.addEventListener('click', (e) => {
+            const btn = e.target.closest('button[data-action]');
+            if (btn) {
+              handleAction(btn.dataset.action);
+            } else if (e.target === modal) {
+              handleAction(null);
+            }
+          });
+
+          modal.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+              handleAction(null);
+            }
+          });
+
+          document.body.appendChild(modal);
+          modal.querySelector('button[data-action="force"]').focus();
+        });
+      }
 
       if (updateBannerRefreshBtn) {
         updateBannerRefreshBtn.addEventListener('click', requestUpdate);
@@ -1438,7 +1664,9 @@ async function initApp() {
 
     // Log diagnostics in development mode or if there are potential issues
     const diagnostics = await getStorageDiagnostics();
-    if (diagnostics.indexedDbProjectCount !== diagnostics.localStorageProjectCount) {
+    if (
+      diagnostics.indexedDbProjectCount !== diagnostics.localStorageProjectCount
+    ) {
       console.warn('[Saved Projects] Storage mismatch detected:', {
         indexedDb: diagnostics.indexedDbProjectCount,
         localStorage: diagnostics.localStorageProjectCount,
@@ -1453,7 +1681,10 @@ async function initApp() {
     try {
       await renderSavedProjectsList();
     } catch (renderError) {
-      console.error('[Saved Projects] Render fallback also failed:', renderError);
+      console.error(
+        '[Saved Projects] Render fallback also failed:',
+        renderError
+      );
     }
   }
 
@@ -1535,65 +1766,266 @@ async function initApp() {
     if (usedEl) usedEl.textContent = displayText;
   }
 
-  // Shared clear cache handler
-  async function handleClearCache() {
+  // Smart Cache Clear Dialog (v2)
+  async function showSmartCacheClearDialog() {
     try {
-      // Get saved projects summary
-      const summary = await getSavedProjectsSummary();
-      const presetCount = presetManager?.getPresetCount?.() || 0;
+      const storageInfo = await getDetailedStorageInfo();
 
-      // Build warning message
-      let warningItems = [];
-      if (summary.count > 0) {
-        warningItems.push(`${summary.count} saved project(s)`);
+      const modal = document.createElement('div');
+      modal.className = 'preset-modal cache-clear-dialog';
+      modal.setAttribute('role', 'dialog');
+      modal.setAttribute('aria-labelledby', 'cacheClearTitle');
+      modal.setAttribute('aria-modal', 'true');
+
+      const hasProjects = storageInfo.savedDesignsCount > 0;
+
+      modal.innerHTML = `
+        <div class="preset-modal-content">
+          <div class="preset-modal-header">
+            <h3 id="cacheClearTitle" class="preset-modal-title">Clear Cache</h3>
+          </div>
+
+          <div class="preset-modal-body">
+            <div class="cache-clear-warning">
+              <span class="cache-clear-warning-icon" aria-hidden="true">⚠️</span>
+              <div class="cache-clear-warning-text">
+                <strong>Warning:</strong> This will delete all saved projects and cached app data by default.
+                Check the box below if you want to keep your saved projects.
+              </div>
+            </div>
+
+            <div class="cache-clear-sizes">
+              <div class="cache-size-item">
+                <div class="cache-size-label">App Cache</div>
+                <div class="cache-size-value">${storageInfo.appCacheFormatted}</div>
+              </div>
+              <div class="cache-size-item">
+                <div class="cache-size-label">Saved Designs</div>
+                <div class="cache-size-value">${storageInfo.savedDesignsCount} project${storageInfo.savedDesignsCount !== 1 ? 's' : ''}</div>
+              </div>
+            </div>
+
+            <div class="cache-clear-options">
+              <label class="cache-clear-option">
+                <input type="checkbox" id="clearAppCaches" checked />
+                <div class="cache-clear-option-content">
+                  <div class="cache-clear-option-label">Clear app caches (recommended)</div>
+                  <div class="cache-clear-option-desc">Remove outdated app versions and cached resources</div>
+                </div>
+              </label>
+
+              <label class="cache-clear-option preservation-off" id="preserveOption">
+                <input type="checkbox" id="preserveSavedDesigns" />
+                <div class="cache-clear-option-content">
+                  <div class="cache-clear-option-label">
+                    Keep my Saved Designs
+                    <span class="preservation-indicator danger" id="preserveIndicator">
+                      <span aria-hidden="true">⚠️</span> Will be deleted
+                    </span>
+                  </div>
+                  <div class="cache-clear-option-desc">
+                    ${hasProjects ? `Preserve ${storageInfo.savedDesignsCount} project${storageInfo.savedDesignsCount !== 1 ? 's' : ''} and ${storageInfo.foldersCount} folder${storageInfo.foldersCount !== 1 ? 's' : ''}` : 'No projects to preserve'}
+                  </div>
+                </div>
+              </label>
+            </div>
+
+            ${
+              hasProjects
+                ? `
+              <div class="cache-clear-backup-prompt">
+                <span>💾</span>
+                <span>Export a backup before clearing?</span>
+                <button type="button" class="btn btn-sm btn-outline" id="exportBeforeClearBtn">
+                  Export Backup
+                </button>
+              </div>
+            `
+                : ''
+            }
+          </div>
+
+          <div class="preset-modal-footer">
+            <button class="btn btn-secondary" id="cacheClearCancelBtn">Cancel</button>
+            <button class="btn btn-danger" id="cacheClearConfirmBtn">Clear Cache</button>
+          </div>
+        </div>
+      `;
+
+      document.body.appendChild(modal);
+
+      // Wire up preserve checkbox visual feedback
+      const preserveCheckbox = modal.querySelector('#preserveSavedDesigns');
+      const preserveOption = modal.querySelector('#preserveOption');
+      const preserveIndicator = modal.querySelector('#preserveIndicator');
+
+      preserveCheckbox.addEventListener('change', () => {
+        if (preserveCheckbox.checked) {
+          preserveOption.classList.remove('preservation-off');
+          preserveOption.classList.add('preservation-on');
+          preserveIndicator.className = 'preservation-indicator safe';
+          preserveIndicator.innerHTML =
+            '<span aria-hidden="true">✓</span> Will be kept';
+        } else {
+          preserveOption.classList.remove('preservation-on');
+          preserveOption.classList.add('preservation-off');
+          preserveIndicator.className = 'preservation-indicator danger';
+          preserveIndicator.innerHTML =
+            '<span aria-hidden="true">⚠️</span> Will be deleted';
+        }
+      });
+
+      // Export backup button
+      const exportBtn = modal.querySelector('#exportBeforeClearBtn');
+      if (exportBtn) {
+        exportBtn.addEventListener('click', async () => {
+          exportBtn.disabled = true;
+          exportBtn.textContent = 'Exporting...';
+          try {
+            await handleExportBackup();
+          } finally {
+            exportBtn.disabled = false;
+            exportBtn.textContent = 'Export Backup';
+          }
+        });
       }
-      if (presetCount > 0) {
-        warningItems.push(`${presetCount} preset(s)`);
-      }
 
-      const message =
-        warningItems.length > 0
-          ? `This will permanently delete:\n• ${warningItems.join('\n• ')}\n\nThis cannot be undone.`
-          : 'This will clear all cached data. Continue?';
+      // Wait for user action
+      return new Promise((resolve) => {
+        const cancelBtn = modal.querySelector('#cacheClearCancelBtn');
+        const confirmBtn = modal.querySelector('#cacheClearConfirmBtn');
 
-      const title =
-        warningItems.length > 0 ? 'Clear All Cached Data?' : 'Clear Cache';
+        cancelBtn.addEventListener('click', () => {
+          document.body.removeChild(modal);
+          resolve(false);
+        });
 
-      // Show confirmation dialog
-      const confirmed = await showConfirmDialog(
-        message,
-        title,
-        'Clear Cache',
-        'Cancel'
-      );
+        confirmBtn.addEventListener('click', async () => {
+          const clearAppCaches = modal.querySelector('#clearAppCaches').checked;
+          const preserveDesigns = modal.querySelector(
+            '#preserveSavedDesigns'
+          ).checked;
 
-      if (!confirmed) return;
+          confirmBtn.disabled = true;
+          confirmBtn.textContent = 'Clearing...';
 
-      // Clear saved projects explicitly
-      if (summary.count > 0) {
-        await clearAllSavedProjects();
-      }
+          const result = await clearCacheWithOptions({
+            clearAppCaches,
+            preserveSavedDesigns: preserveDesigns,
+          });
 
-      const success = await clearCachedData();
-      if (success) {
-        updateStatus('Site data cleared. Reloading...', 'success');
-        await updateStorageDisplay();
-        setTimeout(() => {
-          window.location.reload();
-        }, 300);
-      } else {
-        updateStatus('Failed to clear cache', 'error');
-      }
+          document.body.removeChild(modal);
+
+          if (result.appCachesCleared || result.userDataCleared) {
+            const msg = preserveDesigns
+              ? 'App cache cleared. Your saved designs are preserved. Reloading...'
+              : 'All data cleared. Reloading...';
+            updateStatus(msg, 'success');
+            await updateStorageDisplay();
+            setTimeout(() => {
+              window.location.reload();
+            }, 500);
+          }
+
+          resolve(true);
+        });
+
+        // Close on escape
+        modal.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape') {
+            document.body.removeChild(modal);
+            resolve(false);
+          }
+        });
+
+        // Focus first interactive element
+        setTimeout(() => cancelBtn.focus(), 100);
+      });
     } catch (error) {
-      console.error('[Storage] Clear cache error:', error);
-      updateStatus('Error clearing cache', 'error');
+      console.error('[Storage] Smart cache clear error:', error);
+      updateStatus('Error showing cache dialog', 'error');
     }
   }
 
-  // Wire up storage clear button
+  // Export backup handler
+  async function handleExportBackup() {
+    try {
+      updateStatus('Creating backup...', 'info');
+      const result = await exportProjectsBackup();
+
+      if (result.success && result.blob) {
+        // Download the file
+        const url = URL.createObjectURL(result.blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = result.fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        updateStatus(`Backup exported: ${result.fileName}`, 'success');
+        stateManager.announceChange('Backup exported successfully');
+      } else {
+        updateStatus(`Export failed: ${result.error}`, 'error');
+      }
+    } catch (error) {
+      console.error('[Storage] Export error:', error);
+      updateStatus('Failed to export backup', 'error');
+    }
+  }
+
+  // Import backup handler
+  async function handleImportBackup(file) {
+    try {
+      updateStatus('Importing backup...', 'info');
+      const result = await importProjectsBackup(file);
+
+      if (result.success) {
+        await renderSavedProjectsList();
+        const msg = `Imported ${result.imported} project${result.imported !== 1 ? 's' : ''}`;
+        updateStatus(msg, 'success');
+        stateManager.announceChange(msg);
+
+        if (result.errors.length > 0) {
+          console.warn('[Storage] Import errors:', result.errors);
+        }
+      } else {
+        updateStatus(`Import failed: ${result.errors.join(', ')}`, 'error');
+      }
+    } catch (error) {
+      console.error('[Storage] Import error:', error);
+      updateStatus('Failed to import backup', 'error');
+    }
+  }
+
+  // Wire up storage clear button (now uses smart dialog)
   const clearStorageBtn = document.getElementById('clearStorageBtn');
   if (clearStorageBtn) {
-    clearStorageBtn.addEventListener('click', handleClearCache);
+    clearStorageBtn.addEventListener('click', showSmartCacheClearDialog);
+  }
+
+  // Wire up export button
+  const exportAllProjectsBtn = document.getElementById('exportAllProjectsBtn');
+  if (exportAllProjectsBtn) {
+    exportAllProjectsBtn.addEventListener('click', handleExportBackup);
+  }
+
+  // Wire up import button and hidden file input
+  const importProjectsBtn = document.getElementById('importProjectsBtn');
+  const importBackupInput = document.getElementById('importBackupInput');
+  if (importProjectsBtn && importBackupInput) {
+    importProjectsBtn.addEventListener('click', () => {
+      importBackupInput.click();
+    });
+
+    importBackupInput.addEventListener('change', async (e) => {
+      const file = e.target.files?.[0];
+      if (file) {
+        await handleImportBackup(file);
+        importBackupInput.value = ''; // Reset for next import
+      }
+    });
   }
 
   let storageUpdateTimeout = null;
@@ -1765,6 +2197,7 @@ async function initApp() {
   // Declare format selector elements
   const outputFormatSelect = document.getElementById('outputFormat');
   const formatInfo = document.getElementById('formatInfo');
+  const format2dGuidance = document.getElementById('format2dGuidance');
 
   // Initialize output format selector
   if (outputFormatSelect && formatInfo) {
@@ -1790,12 +2223,32 @@ async function initApp() {
             `Download generated ${formatName} file`
           );
         }
+
+        // Show/hide 2D format guidance for SVG/DXF (Volkswitch laser cutting support)
+        if (format2dGuidance) {
+          if (formatDef.is2D) {
+            format2dGuidance.classList.remove('hidden');
+            srAnnouncer.announce(
+              `${formatName} is a 2D format. See guidance below the format selector.`
+            );
+          } else {
+            format2dGuidance.classList.add('hidden');
+          }
+        }
+
+        // Ensure primary action button reflects selected format
+        updatePrimaryActionButton();
       }
     });
 
     // Set initial format info
     const initialFormat = outputFormatSelect.value;
     formatInfo.textContent = OUTPUT_FORMATS[initialFormat]?.description || '';
+
+    // Hide 2D guidance initially (STL is default)
+    if (format2dGuidance && !OUTPUT_FORMATS[initialFormat]?.is2D) {
+      format2dGuidance.classList.add('hidden');
+    }
   }
 
   // Check browser support
@@ -1849,6 +2302,8 @@ async function initApp() {
         console.warn(
           `[Memory] High usage: ${memoryInfo.usedMB}MB / ${memoryInfo.limitMB}MB (${memoryInfo.percent}%)`
         );
+        // Update memory indicator
+        updateMemoryIndicator(memoryInfo);
         showMemoryWarning(memoryInfo);
         if (previewQualityMode === 'auto') {
           autoPreviewHints.forceFastUntil =
@@ -1921,6 +2376,8 @@ async function initApp() {
         console.log('OpenSCAD WASM ready');
         hideWasmLoadingIndicator(wasmLoadingOverlay);
         wasmInitialized = true;
+        // Start memory usage polling
+        startMemoryPolling();
         return true;
       } catch (error) {
         console.error('Failed to initialize OpenSCAD WASM:', error);
@@ -2152,11 +2609,111 @@ async function initApp() {
    * Provide actionable guidance for configuration-dependent “no geometry” errors.
    * Returns true if it handled the error.
    */
+  function updateMemoryIndicator(memoryInfo) {
+    const indicator = document.getElementById('memoryIndicator');
+    const text = document.getElementById('memoryText');
+    const barFill = document.getElementById('memoryBarFill');
+    const bar = document.getElementById('memoryBar');
+
+    if (!indicator || !memoryInfo) return;
+
+    indicator.classList.remove('hidden');
+
+    if (text) {
+      text.textContent = `${memoryInfo.usedMB || 0}MB`;
+    }
+
+    const percent = memoryInfo.percent || 0;
+    if (barFill) {
+      barFill.style.width = `${Math.min(percent, 100)}%`;
+    }
+    if (bar) {
+      bar.setAttribute('aria-valuenow', percent);
+    }
+
+    indicator.classList.remove('warning', 'critical');
+    if (percent >= 90) {
+      indicator.classList.add('critical');
+    } else if (percent >= 75) {
+      indicator.classList.add('warning');
+    }
+
+    const tips = [];
+    if (percent >= 90) {
+      tips.push('Memory very high - consider refreshing');
+    } else if (percent >= 75) {
+      tips.push('Memory usage elevated');
+    }
+    if (memoryInfo.limitMB) {
+      tips.push(`${memoryInfo.usedMB}MB of ~${memoryInfo.limitMB}MB`);
+    }
+    indicator.title = tips.join('\n') || 'WASM memory usage';
+  }
+
+  // memoryPollInterval is now declared at the top of initApp() to avoid TDZ
+  function startMemoryPolling() {
+    if (memoryPollInterval) return;
+
+    memoryPollInterval = setInterval(async () => {
+      if (renderController && renderController.ready) {
+        try {
+          const memoryInfo = await renderController.getMemoryUsage();
+          if (memoryInfo && memoryInfo.available !== false) {
+            updateMemoryIndicator(memoryInfo);
+          }
+        } catch (_e) {
+          // Silently ignore polling errors
+        }
+      }
+    }, 10000);
+  }
+
+  function stopMemoryPolling() {
+    if (memoryPollInterval) {
+      clearInterval(memoryPollInterval);
+      memoryPollInterval = null;
+    }
+  }
+
   function handleConfigDependencyError(error) {
     const code = error?.code;
     const msg = error?.message || '';
     const details = error?.details || '';
     const detailsStr = String(details || '');
+
+    // Handle 2D model case (Volkswitch laser-cut workflow)
+    const is2DModel =
+      code === 'MODEL_IS_2D' ||
+      /MODEL_IS_2D|not a 3D object|Top level object is a 2D object/i.test(
+        msg
+      ) ||
+      /not a 3D object|2D object/i.test(detailsStr);
+
+    if (is2DModel) {
+      // Show guidance for 2D model - this is expected for laser-cut workflow
+      updateStatus(
+        'Your model produces 2D geometry. Select SVG or DXF output format to export.',
+        'error'
+      );
+
+      // Offer to change output format automatically
+      const outputFormatSelect = document.getElementById('outputFormat');
+      if (outputFormatSelect && outputFormatSelect.value === 'stl') {
+        const changeTo2D = confirm(
+          '2D Model Detected\n\n' +
+            'Your model is configured to produce 2D geometry for laser cutting.\n' +
+            '2D models cannot be exported as STL (3D format).\n\n' +
+            'Would you like to switch to SVG output format?'
+        );
+        if (changeTo2D) {
+          outputFormatSelect.value = 'svg';
+          // Trigger change event so UI updates
+          outputFormatSelect.dispatchEvent(new Event('change'));
+        }
+      }
+      return true;
+    }
+
     const hasDependencyHint =
       /'[^']+?'\s+is set to\s+'(no|off)'/i.test(detailsStr) ||
       /Current top[ -]?level object is empty|top-level object is empty/i.test(
@@ -2370,9 +2927,10 @@ async function initApp() {
   const fileInput = document.getElementById('fileInput');
   const clearFileBtn = document.getElementById('clearFileBtn');
   statusArea = document.getElementById('statusArea');
-  const previewStatusBar = document.getElementById('previewStatusBar');
-  const previewStatusText = document.getElementById('previewStatusText');
-  const previewStatusStats = document.getElementById('previewStatusStats');
+  // previewStatusBar, previewStatusText, previewStatusStats are declared at top of initApp() to avoid TDZ
+  previewStatusBar = document.getElementById('previewStatusBar');
+  previewStatusText = document.getElementById('previewStatusText');
+  previewStatusStats = document.getElementById('previewStatusStats');
   const primaryActionBtn = document.getElementById('primaryActionBtn');
   const cancelRenderBtn = document.getElementById('cancelRenderBtn');
   const downloadFallbackLink = document.getElementById('downloadFallbackLink');
@@ -2386,6 +2944,29 @@ async function initApp() {
   const autoBedToggle = document.getElementById('autoBedToggle');
   const dimensionsDisplay = document.getElementById('dimensionsDisplay');
   // Note: outputFormatSelect and formatInfo already declared above
+
+  // Reference overlay controls
+  const overlaySourceSelect = document.getElementById('overlaySourceSelect');
+  const overlayToggle = document.getElementById('overlayToggle');
+  const overlayOpacityInput = document.getElementById('overlayOpacityInput');
+  const overlayOpacityValue = document.getElementById('overlayOpacityValue');
+  const overlayFitModelBtn = document.getElementById('overlayFitModelBtn');
+  const overlayCenterBtn = document.getElementById('overlayCenterBtn');
+  const overlayWidthInput = document.getElementById('overlayWidthInput');
+  const overlayHeightInput = document.getElementById('overlayHeightInput');
+  const overlayAspectLockBtn = document.getElementById('overlayAspectLockBtn');
+  const overlayOffsetXInput = document.getElementById('overlayOffsetXInput');
+  const overlayOffsetYInput = document.getElementById('overlayOffsetYInput');
+  const overlayRotationInput = document.getElementById('overlayRotationInput');
+  const overlayRotationValue = document.getElementById('overlayRotationValue');
+  const overlayStatus = document.getElementById('overlayStatus');
+  const overlayFileInput = document.getElementById('overlayFileInput');
+  const overlayDimensionsValue = document.getElementById(
+    'overlayDimensionsValue'
+  );
+  const overlayMeasurementsToggle = document.getElementById(
+    'overlayMeasurementsToggle'
+  );
 
   // Create preview state indicator element
   const previewStateIndicator = document.createElement('div');
@@ -2682,6 +3263,457 @@ async function initApp() {
     });
   }
 
+  // ============================================================================
+  // Reference Overlay Controls
+  // ============================================================================
+  const STORAGE_KEY_OVERLAY_ENABLED = 'openscad-overlay-enabled';
+  const STORAGE_KEY_OVERLAY_OPACITY = 'openscad-overlay-opacity';
+  const STORAGE_KEY_OVERLAY_SOURCE = 'openscad-overlay-source';
+
+  /**
+   * Update the overlay source dropdown with available project files
+   */
+  function updateOverlaySourceDropdown() {
+    if (!overlaySourceSelect) return;
+
+    const state = stateManager.getState();
+    const projectFiles = state.projectFiles;
+
+    // Clear and rebuild dropdown
+    overlaySourceSelect.innerHTML =
+      '<option value="">-- Select file --</option>';
+
+    if (!projectFiles || projectFiles.size === 0) {
+      overlaySourceSelect.disabled = true;
+      return;
+    }
+
+    overlaySourceSelect.disabled = false;
+
+    // Filter for image files (SVG, PNG, JPG)
+    const imageExtensions = ['svg', 'png', 'jpg', 'jpeg'];
+    const imageFiles = Array.from(projectFiles.keys())
+      .filter((path) => {
+        const ext = path.split('.').pop()?.toLowerCase();
+        return imageExtensions.includes(ext);
+      })
+      .sort();
+
+    if (imageFiles.length === 0) {
+      const option = document.createElement('option');
+      option.value = '';
+      option.textContent = '-- No image files --';
+      option.disabled = true;
+      overlaySourceSelect.appendChild(option);
+      return;
+    }
+
+    imageFiles.forEach((path) => {
+      const option = document.createElement('option');
+      option.value = path;
+      option.textContent = path;
+      overlaySourceSelect.appendChild(option);
+    });
+  }
+
+  // Track uploaded overlay files (not part of project files)
+  const uploadedOverlayFiles = new Map();
+
+  /**
+   * Load overlay from selected project file or uploaded file
+   * @param {string} fileName - Name of the file to load
+   */
+  async function loadOverlayFromProjectFile(fileName) {
+    if (!previewManager || !fileName) {
+      if (previewManager) {
+        await previewManager.setReferenceOverlaySource({
+          kind: null,
+          name: null,
+          dataUrlOrText: null,
+        });
+      }
+      updateOverlayStatus();
+      return;
+    }
+
+    // Check uploaded overlay files first
+    if (uploadedOverlayFiles.has(fileName)) {
+      await loadOverlayFromUploadedFile(fileName);
+      return;
+    }
+
+    const state = stateManager.getState();
+    const projectFiles = state.projectFiles;
+
+    if (!projectFiles || !projectFiles.has(fileName)) {
+      console.warn(`[App] Overlay file not found: ${fileName}`);
+      return;
+    }
+
+    const content = projectFiles.get(fileName);
+    const ext = fileName.split('.').pop()?.toLowerCase();
+
+    try {
+      if (ext === 'svg') {
+        await previewManager.setReferenceOverlaySource({
+          kind: 'svg',
+          name: fileName,
+          dataUrlOrText: content,
+        });
+      } else {
+        // PNG/JPG - content should be a data URL or we need to convert
+        // If it's already a data URL, use it directly
+        // If it's raw binary, convert to data URL
+        let dataUrl = content;
+        if (!content.startsWith('data:')) {
+          // Assume it's a Blob URL or needs conversion
+          const mimeType = ext === 'png' ? 'image/png' : 'image/jpeg';
+          const blob = new Blob([content], { type: mimeType });
+          dataUrl = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result);
+            reader.readAsDataURL(blob);
+          });
+        }
+        await previewManager.setReferenceOverlaySource({
+          kind: 'raster',
+          name: fileName,
+          dataUrlOrText: dataUrl,
+        });
+      }
+
+      // Update UI to reflect loaded overlay
+      updateOverlayUIFromConfig();
+      localStorage.setItem(STORAGE_KEY_OVERLAY_SOURCE, fileName);
+      console.log(`[App] Overlay loaded: ${fileName}`);
+    } catch (error) {
+      console.error('[App] Failed to load overlay:', error);
+      updateStatus(`Failed to load overlay: ${error.message}`, 'error');
+    }
+  }
+
+  /**
+   * Update overlay status indicator
+   */
+  function updateOverlayStatus() {
+    if (!overlayStatus) return;
+
+    const config = previewManager?.getOverlayConfig();
+    const isEnabled = config?.enabled && config?.sourceFileName;
+
+    overlayStatus.textContent = isEnabled ? 'On' : 'Off';
+    overlayStatus.classList.toggle('active', isEnabled);
+  }
+
+  /**
+   * Update overlay UI controls from the current config
+   */
+  function updateOverlayUIFromConfig() {
+    if (!previewManager) return;
+
+    const config = previewManager.getOverlayConfig();
+
+    if (overlayToggle) {
+      overlayToggle.checked = config.enabled;
+    }
+
+    if (overlayOpacityInput) {
+      const opacityPercent = Math.round(config.opacity * 100);
+      overlayOpacityInput.value = opacityPercent;
+      if (overlayOpacityValue) {
+        overlayOpacityValue.textContent = `${opacityPercent}%`;
+      }
+    }
+
+    if (overlayWidthInput) {
+      overlayWidthInput.value = Math.round(config.width);
+    }
+
+    if (overlayHeightInput) {
+      overlayHeightInput.value = Math.round(config.height);
+    }
+
+    if (overlayOffsetXInput) {
+      overlayOffsetXInput.value = Math.round(config.offsetX);
+    }
+
+    if (overlayOffsetYInput) {
+      overlayOffsetYInput.value = Math.round(config.offsetY);
+    }
+
+    if (overlayRotationInput) {
+      overlayRotationInput.value = Math.round(config.rotationDeg);
+      if (overlayRotationValue) {
+        overlayRotationValue.textContent = `${Math.round(config.rotationDeg)}°`;
+      }
+    }
+
+    if (overlayAspectLockBtn) {
+      overlayAspectLockBtn.setAttribute(
+        'aria-pressed',
+        config.lockAspect ? 'true' : 'false'
+      );
+    }
+
+    if (overlaySourceSelect && config.sourceFileName) {
+      overlaySourceSelect.value = config.sourceFileName;
+    }
+
+    // Update dimensions display
+    if (overlayDimensionsValue) {
+      const w = Math.round(config.width);
+      const h = Math.round(config.height);
+      overlayDimensionsValue.textContent = `${w} × ${h} mm`;
+    }
+
+    updateOverlayStatus();
+  }
+
+  // Wire overlay source select
+  if (overlaySourceSelect) {
+    overlaySourceSelect.addEventListener('change', async () => {
+      const fileName = overlaySourceSelect.value;
+      await loadOverlayFromProjectFile(fileName);
+    });
+  }
+
+  // Wire overlay file upload input
+  if (overlayFileInput) {
+    overlayFileInput.addEventListener('change', async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      const fileName = file.name;
+      const ext = fileName.split('.').pop()?.toLowerCase();
+      const isSvg = ext === 'svg' || file.type === 'image/svg+xml';
+
+      try {
+        let content;
+        if (isSvg) {
+          // Read SVG as text
+          content = await file.text();
+        } else {
+          // Read raster as data URL
+          content = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = () => reject(new Error('Failed to read file'));
+            reader.readAsDataURL(file);
+          });
+        }
+
+        // Store in uploaded overlay files map
+        uploadedOverlayFiles.set(fileName, { content, isSvg });
+
+        // Add to dropdown if not already there
+        if (overlaySourceSelect) {
+          let optionExists = false;
+          for (const opt of overlaySourceSelect.options) {
+            if (opt.value === fileName) {
+              optionExists = true;
+              break;
+            }
+          }
+          if (!optionExists) {
+            const option = document.createElement('option');
+            option.value = fileName;
+            option.textContent = `📤 ${fileName}`;
+            overlaySourceSelect.appendChild(option);
+          }
+          overlaySourceSelect.value = fileName;
+        }
+
+        // Load the overlay
+        await loadOverlayFromUploadedFile(fileName);
+
+        updateStatus(`Overlay image loaded: ${fileName}`);
+      } catch (error) {
+        console.error('[App] Failed to load overlay file:', error);
+        updateStatus(`Failed to load overlay: ${error.message}`, 'error');
+      }
+
+      // Reset input so same file can be re-uploaded
+      overlayFileInput.value = '';
+    });
+  }
+
+  /**
+   * Load overlay from an uploaded file (not from project files)
+   * @param {string} fileName - Name of the uploaded file
+   */
+  async function loadOverlayFromUploadedFile(fileName) {
+    if (!previewManager || !fileName) return;
+
+    const uploadedFile = uploadedOverlayFiles.get(fileName);
+    if (!uploadedFile) {
+      // Try loading from project files as fallback
+      await loadOverlayFromProjectFile(fileName);
+      return;
+    }
+
+    const { content, isSvg } = uploadedFile;
+
+    try {
+      await previewManager.setReferenceOverlaySource({
+        kind: isSvg ? 'svg' : 'raster',
+        name: fileName,
+        dataUrlOrText: content,
+      });
+
+      // Auto-enable overlay when file is uploaded
+      if (!overlayToggle?.checked) {
+        overlayToggle.checked = true;
+        previewManager.setOverlayEnabled(true);
+      }
+
+      updateOverlayUIFromConfig();
+      localStorage.setItem(STORAGE_KEY_OVERLAY_SOURCE, fileName);
+      console.log(`[App] Overlay loaded from upload: ${fileName}`);
+    } catch (error) {
+      console.error('[App] Failed to load overlay:', error);
+      throw error;
+    }
+  }
+
+  // Wire overlay toggle
+  if (overlayToggle) {
+    overlayToggle.addEventListener('change', () => {
+      const enabled = overlayToggle.checked;
+      if (previewManager) {
+        previewManager.setOverlayEnabled(enabled);
+        updateOverlayStatus();
+        localStorage.setItem(
+          STORAGE_KEY_OVERLAY_ENABLED,
+          enabled ? 'true' : 'false'
+        );
+      }
+      console.log(
+        `[App] Reference overlay ${enabled ? 'enabled' : 'disabled'}`
+      );
+    });
+  }
+
+  // Wire overlay measurements toggle
+  if (overlayMeasurementsToggle) {
+    overlayMeasurementsToggle.addEventListener('change', () => {
+      const enabled = overlayMeasurementsToggle.checked;
+      if (previewManager) {
+        previewManager.toggleOverlayMeasurements(enabled);
+      }
+      console.log(
+        `[App] Overlay measurements ${enabled ? 'enabled' : 'disabled'}`
+      );
+    });
+  }
+
+  // Wire overlay opacity slider
+  if (overlayOpacityInput) {
+    overlayOpacityInput.addEventListener('input', () => {
+      const opacityPercent = parseInt(overlayOpacityInput.value, 10);
+      if (overlayOpacityValue) {
+        overlayOpacityValue.textContent = `${opacityPercent}%`;
+      }
+      if (previewManager) {
+        previewManager.setOverlayOpacity(opacityPercent / 100);
+        localStorage.setItem(
+          STORAGE_KEY_OVERLAY_OPACITY,
+          opacityPercent.toString()
+        );
+      }
+    });
+  }
+
+  // Wire fit to model button
+  if (overlayFitModelBtn) {
+    overlayFitModelBtn.addEventListener('click', () => {
+      if (previewManager) {
+        previewManager.fitOverlayToModelXY();
+        updateOverlayUIFromConfig();
+      }
+    });
+  }
+
+  // Wire center button
+  if (overlayCenterBtn) {
+    overlayCenterBtn.addEventListener('click', () => {
+      if (previewManager) {
+        previewManager.setOverlayTransform({ offsetX: 0, offsetY: 0 });
+        updateOverlayUIFromConfig();
+      }
+    });
+  }
+
+  // Wire width input
+  if (overlayWidthInput) {
+    overlayWidthInput.addEventListener('change', () => {
+      const width = parseFloat(overlayWidthInput.value);
+      if (!isNaN(width) && previewManager) {
+        previewManager.setOverlaySize({ width });
+        updateOverlayUIFromConfig();
+      }
+    });
+  }
+
+  // Wire height input
+  if (overlayHeightInput) {
+    overlayHeightInput.addEventListener('change', () => {
+      const height = parseFloat(overlayHeightInput.value);
+      if (!isNaN(height) && previewManager) {
+        previewManager.setOverlaySize({ height });
+        updateOverlayUIFromConfig();
+      }
+    });
+  }
+
+  // Wire aspect lock button
+  if (overlayAspectLockBtn) {
+    overlayAspectLockBtn.addEventListener('click', () => {
+      const isCurrentlyLocked =
+        overlayAspectLockBtn.getAttribute('aria-pressed') === 'true';
+      const newLocked = !isCurrentlyLocked;
+      overlayAspectLockBtn.setAttribute(
+        'aria-pressed',
+        newLocked ? 'true' : 'false'
+      );
+      if (previewManager) {
+        previewManager.setOverlayAspectLock(newLocked);
+      }
+    });
+  }
+
+  // Wire offset X input
+  if (overlayOffsetXInput) {
+    overlayOffsetXInput.addEventListener('change', () => {
+      const offsetX = parseFloat(overlayOffsetXInput.value);
+      if (!isNaN(offsetX) && previewManager) {
+        previewManager.setOverlayTransform({ offsetX });
+      }
+    });
+  }
+
+  // Wire offset Y input
+  if (overlayOffsetYInput) {
+    overlayOffsetYInput.addEventListener('change', () => {
+      const offsetY = parseFloat(overlayOffsetYInput.value);
+      if (!isNaN(offsetY) && previewManager) {
+        previewManager.setOverlayTransform({ offsetY });
+      }
+    });
+  }
+
+  // Wire rotation slider
+  if (overlayRotationInput) {
+    overlayRotationInput.addEventListener('input', () => {
+      const rotationDeg = parseInt(overlayRotationInput.value, 10);
+      if (overlayRotationValue) {
+        overlayRotationValue.textContent = `${rotationDeg}°`;
+      }
+      if (previewManager) {
+        previewManager.setOverlayTransform({ rotationDeg });
+      }
+    });
+  }
+
   // Wire auto-rotate toggle buttons (desktop and mobile)
   const autoRotateToggle = document.getElementById('autoRotateToggle');
   const mobileAutoRotateToggle = document.getElementById(
@@ -2745,7 +3777,6 @@ async function initApp() {
   }
 
   // Load saved auto-rotate preferences
-  const savedAutoRotate = localStorage.getItem(STORAGE_KEY_AUTO_ROTATE);
   const savedRotateSpeed = localStorage.getItem(STORAGE_KEY_ROTATE_SPEED);
 
   // Get the rotation speed value display element
@@ -3142,7 +4173,12 @@ async function initApp() {
           if (type === 'preview') {
             updateStatus('Rendering preview...');
           } else {
-            updateStatus('Generating STL...');
+            // Get current output format from selector for correct progress text
+            const outputFormatSelect = document.getElementById('outputFormat');
+            const outputFormat = outputFormatSelect?.value || 'stl';
+            const formatName =
+              OUTPUT_FORMATS[outputFormat]?.name || outputFormat.toUpperCase();
+            updateStatus(`Generating ${formatName}...`);
           }
         },
         onError: (error, type) => {
@@ -3185,9 +4221,18 @@ async function initApp() {
    */
   function updatePrimaryActionButton() {
     const state = stateManager.getState();
-    const hasLegacySTL = !!state.stl;
+    const hasGeneratedFile = !!state.stl;
     const currentParamsHash = hashParams(state.parameters);
     const paramsChanged = currentParamsHash !== lastGeneratedParamsHash;
+    const outputFormatSelect = document.getElementById('outputFormat');
+    const selectedFormat = (
+      outputFormatSelect?.value ||
+      state.outputFormat ||
+      'stl'
+    ).toLowerCase();
+    const formatName =
+      OUTPUT_FORMATS[selectedFormat]?.name || selectedFormat.toUpperCase();
+    const isStlFormat = selectedFormat === 'stl';
 
     // Check auto-preview controller state
     const hasFullQualitySTL = autoPreviewController?.getCurrentFullSTL(
@@ -3197,40 +4242,65 @@ async function initApp() {
       !hasFullQualitySTL ||
       autoPreviewController?.needsFullRender(state.parameters);
 
-    if (hasFullQualitySTL && !needsFullRender) {
+    if (isStlFormat && hasFullQualitySTL && !needsFullRender) {
       // Full quality STL is ready and matches current parameters - show Download
-      primaryActionBtn.textContent = '📥 Download STL';
+      primaryActionBtn.textContent = `📥 Download ${formatName}`;
       primaryActionBtn.dataset.action = 'download';
       primaryActionBtn.classList.remove('btn-primary');
       primaryActionBtn.classList.add('btn-success');
       primaryActionBtn.setAttribute(
         'aria-label',
-        'Download generated STL file (full quality)'
+        `Download generated ${formatName} file (full quality)`
       );
       // Hide fallback since primary button is download
       downloadFallbackLink.classList.add('hidden');
-    } else {
+    } else if (isStlFormat) {
       // Need to generate (no full STL yet, or params changed)
-      primaryActionBtn.textContent = 'Generate STL';
+      primaryActionBtn.textContent = `Generate ${formatName}`;
       primaryActionBtn.dataset.action = 'generate';
       primaryActionBtn.classList.remove('btn-success');
       primaryActionBtn.classList.add('btn-primary');
       primaryActionBtn.setAttribute(
         'aria-label',
-        'Generate STL file from current parameters'
+        `Generate ${formatName} file from current parameters`
       );
 
       // Show fallback download link if STL exists but params changed
-      if (hasLegacySTL && paramsChanged) {
+      if (hasGeneratedFile && paramsChanged) {
         downloadFallbackLink.classList.remove('hidden');
       } else {
         downloadFallbackLink.classList.add('hidden');
       }
+    } else {
+      const stateOutputFormat = (state.outputFormat || '').toLowerCase();
+      const hasMatchingOutput =
+        hasGeneratedFile &&
+        stateOutputFormat === selectedFormat &&
+        !paramsChanged;
+      if (hasMatchingOutput) {
+        primaryActionBtn.textContent = `📥 Download ${formatName}`;
+        primaryActionBtn.dataset.action = 'download';
+        primaryActionBtn.classList.remove('btn-primary');
+        primaryActionBtn.classList.add('btn-success');
+        primaryActionBtn.setAttribute(
+          'aria-label',
+          `Download generated ${formatName} file`
+        );
+      } else {
+        primaryActionBtn.textContent = `Generate ${formatName}`;
+        primaryActionBtn.dataset.action = 'generate';
+        primaryActionBtn.classList.remove('btn-success');
+        primaryActionBtn.classList.add('btn-primary');
+        primaryActionBtn.setAttribute(
+          'aria-label',
+          `Generate ${formatName} file from current parameters`
+        );
+      }
+      downloadFallbackLink.classList.add('hidden');
     }
   }
 
-  // Import shared validation constants and schemas (must be before draft restore which calls handleFile)
-  const { FILE_SIZE_LIMITS } = await import('./js/validation-constants.js');
+  // Import shared validation schemas (FILE_SIZE_LIMITS is now imported at top of initApp() to avoid TDZ)
   const { validateFileUpload, getValidationErrorMessage } =
     await import('./js/validation-schemas.js');
 
@@ -3478,13 +4548,496 @@ async function initApp() {
     };
   }
 
+  /**
+   * Detect required companion files from SCAD content
+   * Scans for include/use statements, import() calls, and file variable patterns
+   * @param {string} scadContent - OpenSCAD source code
+   * @returns {Object} Detection result with all referenced files
+   */
+  function detectRequiredCompanionFiles(scadContent) {
+    const files = new Set();
+
+    // Match include <...> and use <...> statements
+    const includePattern = /^\s*include\s*<([^>]+)>/gm;
+    const usePattern = /^\s*use\s*<([^>]+)>/gm;
+
+    // Match import(file="...") statements (for STL/other imports)
+    const importPattern = /import\s*\(\s*(?:file\s*=\s*)?["']([^"']+)["']/gi;
+
+    // Match common file variable patterns like screenshot_file = "filename"
+    // This handles Volkswitch-style patterns: screenshot_file = "default.svg"
+    const fileVarPatterns = [
+      /(\w*_?file\w*)\s*=\s*["']([^"']+\.\w+)["']/gi, // xxx_file = "name.ext"
+      /(\w*_?filename\w*)\s*=\s*["']([^"']+\.\w+)["']/gi, // xxx_filename = "name.ext"
+      /(\w*_?path\w*)\s*=\s*["']([^"']+\.\w+)["']/gi, // xxx_path = "name.ext"
+    ];
+
+    // Match surface() calls which load heightmap files
+    const surfacePattern = /surface\s*\(\s*(?:file\s*=\s*)?["']([^"']+)["']/gi;
+
+    let match;
+
+    // Collect include files
+    while ((match = includePattern.exec(scadContent)) !== null) {
+      files.add({ path: match[1], type: 'include', required: true });
+    }
+
+    // Collect use files
+    while ((match = usePattern.exec(scadContent)) !== null) {
+      files.add({ path: match[1], type: 'use', required: true });
+    }
+
+    // Collect import files
+    while ((match = importPattern.exec(scadContent)) !== null) {
+      files.add({ path: match[1], type: 'import', required: true });
+    }
+
+    // Collect surface files
+    while ((match = surfacePattern.exec(scadContent)) !== null) {
+      files.add({ path: match[1], type: 'surface', required: true });
+    }
+
+    // Collect file variable references (may be optional/customizable)
+    for (const pattern of fileVarPatterns) {
+      while ((match = pattern.exec(scadContent)) !== null) {
+        const varName = match[1];
+        const fileName = match[2];
+        // Skip obvious non-file variables
+        if (!fileName.includes('.') || fileName.startsWith('http')) continue;
+        files.add({
+          path: fileName,
+          type: 'variable',
+          variableName: varName,
+          required: false, // File variables are often optional/customizable
+        });
+      }
+    }
+
+    // Convert Set to array (dedupe by path)
+    const uniqueFiles = [];
+    const seenPaths = new Set();
+    for (const file of files) {
+      if (!seenPaths.has(file.path)) {
+        seenPaths.add(file.path);
+        uniqueFiles.push(file);
+      }
+    }
+
+    return {
+      files: uniqueFiles,
+      requiredCount: uniqueFiles.filter((f) => f.required).length,
+      optionalCount: uniqueFiles.filter((f) => !f.required).length,
+    };
+  }
+
+  /**
+   * Render the project files list in the UI
+   * @param {Map<string, string>} projectFiles - Map of file paths to content
+   * @param {string} mainFilePath - Path to the main .scad file
+   * @param {Object} requiredFiles - Detection result from detectRequiredCompanionFiles
+   */
+  function renderProjectFilesList(
+    projectFiles,
+    mainFilePath,
+    requiredFiles = null
+  ) {
+    const container = document.getElementById('projectFilesList');
+    const badge = document.getElementById('projectFilesBadge');
+    const controls = document.getElementById('projectFilesControls');
+    const warning = document.getElementById('projectFilesWarning');
+    const warningText = document.getElementById('projectFilesWarningText');
+
+    if (!container || !controls) return;
+
+    // If no project files, hide the controls
+    if (!projectFiles || projectFiles.size === 0) {
+      controls.classList.add('hidden');
+      return;
+    }
+
+    // Show controls
+    controls.classList.remove('hidden');
+
+    // Update badge count
+    if (badge) {
+      badge.textContent = projectFiles.size;
+    }
+
+    // Check for missing required files
+    const missingFiles = [];
+    if (requiredFiles && requiredFiles.files) {
+      for (const reqFile of requiredFiles.files) {
+        if (reqFile.required && !projectFiles.has(reqFile.path)) {
+          missingFiles.push(reqFile.path);
+        }
+      }
+    }
+
+    // Show/hide warning
+    if (warning && warningText) {
+      if (missingFiles.length > 0) {
+        warning.classList.remove('hidden');
+        warningText.textContent = `Missing files: ${missingFiles.join(', ')}`;
+      } else {
+        warning.classList.add('hidden');
+      }
+    }
+
+    // Build file list HTML
+    const fileList = Array.from(projectFiles.keys()).sort();
+
+    const items = fileList.map((path) => {
+      const isMain = path === mainFilePath;
+      const content = projectFiles.get(path);
+      const size =
+        typeof content === 'string'
+          ? formatFileSize(new Blob([content]).size)
+          : '—';
+      const ext = path.split('.').pop().toLowerCase();
+      const isEditable = ['txt', 'csv', 'json', 'scad'].includes(ext);
+      const icon = getFileIcon(ext);
+
+      const mainBadge = isMain
+        ? '<span class="project-file-badge">main</span>'
+        : '';
+      const editBtn =
+        isEditable && !isMain
+          ? `<button class="project-file-btn" data-action="edit" data-path="${escapeHtml(path)}" aria-label="Edit ${escapeHtml(path)}">✏️</button>`
+          : '';
+      const removeBtn = !isMain
+        ? `<button class="project-file-btn btn-danger" data-action="remove" data-path="${escapeHtml(path)}" aria-label="Remove ${escapeHtml(path)}">✕</button>`
+        : '';
+
+      const itemClass = isMain
+        ? 'project-file-item main-file'
+        : 'project-file-item';
+
+      return `
+        <div class="${itemClass}" role="listitem">
+          <span class="project-file-icon" aria-hidden="true">${icon}</span>
+          <span class="project-file-name" title="${escapeHtml(path)}">${escapeHtml(path)}</span>
+          ${mainBadge}
+          <span class="project-file-size">${size}</span>
+          <div class="project-file-actions">
+            ${editBtn}
+            ${removeBtn}
+          </div>
+        </div>
+      `;
+    });
+
+    container.innerHTML = items.join('');
+
+    // Attach event handlers
+    container.querySelectorAll('button[data-action]').forEach((btn) => {
+      btn.addEventListener('click', handleProjectFileAction);
+    });
+
+    // Update overlay source dropdown with available image files
+    updateOverlaySourceDropdown();
+
+    // Auto-select overlay source based on Volkswitch screenshot_file pattern
+    autoSelectOverlaySource(requiredFiles);
+  }
+
+  /**
+   * Auto-select overlay source based on Volkswitch screenshot_file pattern
+   * @param {Object} requiredFiles - Detection result from detectRequiredCompanionFiles
+   */
+  function autoSelectOverlaySource(requiredFiles) {
+    if (!overlaySourceSelect || !previewManager) return;
+
+    const state = stateManager.getState();
+    const projectFiles = state.projectFiles;
+    if (!projectFiles || projectFiles.size === 0) return;
+
+    // Check if user has already selected a source (don't override)
+    const currentSource = overlaySourceSelect.value;
+    if (currentSource && projectFiles.has(currentSource)) return;
+
+    // Check for saved preference first
+    const savedSource = localStorage.getItem(STORAGE_KEY_OVERLAY_SOURCE);
+    if (savedSource && projectFiles.has(savedSource)) {
+      overlaySourceSelect.value = savedSource;
+      // Don't auto-load, just select it in the dropdown
+      return;
+    }
+
+    // Look for Volkswitch screenshot_file variable
+    let screenshotFile = null;
+    if (requiredFiles && requiredFiles.files) {
+      const screenshotVar = requiredFiles.files.find(
+        (f) => f.variableName === 'screenshot_file'
+      );
+      if (screenshotVar && projectFiles.has(screenshotVar.path)) {
+        screenshotFile = screenshotVar.path;
+      }
+    }
+
+    // Fallback: look for default.svg (common Volkswitch convention)
+    if (!screenshotFile && projectFiles.has('default.svg')) {
+      screenshotFile = 'default.svg';
+    }
+
+    // If found, select it in the dropdown (but don't auto-enable the overlay)
+    if (screenshotFile) {
+      overlaySourceSelect.value = screenshotFile;
+      console.log(`[App] Auto-selected overlay source: ${screenshotFile}`);
+    }
+  }
+
+  /**
+   * Get icon for file type
+   * @param {string} ext - File extension
+   * @returns {string} Icon emoji
+   */
+  function getFileIcon(ext) {
+    const icons = {
+      scad: '📐',
+      txt: '📝',
+      csv: '📊',
+      json: '📋',
+      svg: '🎨',
+      stl: '🧊',
+      png: '🖼️',
+      jpg: '🖼️',
+      jpeg: '🖼️',
+    };
+    return icons[ext] || '📎';
+  }
+
+  /**
+   * Handle project file action (edit/remove)
+   * @param {Event} event - Click event
+   */
+  function handleProjectFileAction(event) {
+    const btn = event.currentTarget;
+    const action = btn.dataset.action;
+    const path = btn.dataset.path;
+
+    if (action === 'edit') {
+      editProjectFile(path);
+    } else if (action === 'remove') {
+      removeProjectFile(path);
+    }
+  }
+
+  /**
+   * Add companion file to project
+   * @param {File} file - File to add
+   */
+  async function handleAddCompanionFile(file) {
+    const state = stateManager.getState();
+    let { projectFiles, mainFilePath, uploadedFile } = state;
+
+    if (!uploadedFile) {
+      updateStatus('No project loaded', 'error');
+      return;
+    }
+
+    try {
+      const content = await file.text();
+      const fileName = file.name;
+
+      // Initialize projectFiles if needed (converting single-file to multi-file)
+      if (!projectFiles) {
+        projectFiles = new Map();
+        // Add the main file to projectFiles
+        const mainPath = mainFilePath || uploadedFile.name;
+        projectFiles.set(mainPath, uploadedFile.content);
+        mainFilePath = mainPath;
+      }
+
+      // Check for duplicate
+      if (projectFiles.has(fileName)) {
+        const overwrite = confirm(
+          `File "${fileName}" already exists. Overwrite?`
+        );
+        if (!overwrite) return;
+      }
+
+      // Add the new file
+      projectFiles.set(fileName, content);
+
+      // Update state
+      stateManager.setState({
+        projectFiles,
+        mainFilePath,
+      });
+
+      // Update UI
+      const requiredFiles = detectRequiredCompanionFiles(uploadedFile.content);
+      renderProjectFilesList(projectFiles, mainFilePath, requiredFiles);
+
+      // Update auto-preview controller
+      if (autoPreviewController) {
+        autoPreviewController.setProjectFiles(projectFiles, mainFilePath);
+        await autoPreviewController.forcePreview(
+          stateManager.getState().parameters
+        );
+      }
+
+      updateStatus(`Added file: ${fileName}`, 'success');
+      console.log(`[ProjectFiles] Added companion file: ${fileName}`);
+    } catch (error) {
+      console.error('[ProjectFiles] Error adding file:', error);
+      updateStatus(`Failed to add file: ${error.message}`, 'error');
+    }
+  }
+
+  /**
+   * Remove a companion file from the project
+   * @param {string} path - Path to the file to remove
+   */
+  async function removeProjectFile(path) {
+    const state = stateManager.getState();
+    const { projectFiles, mainFilePath, uploadedFile } = state;
+
+    if (!projectFiles || !projectFiles.has(path)) {
+      updateStatus('File not found', 'error');
+      return;
+    }
+
+    // Don't allow removing the main file
+    if (path === mainFilePath) {
+      updateStatus('Cannot remove the main file', 'error');
+      return;
+    }
+
+    const confirmed = confirm(`Remove "${path}" from the project?`);
+    if (!confirmed) return;
+
+    projectFiles.delete(path);
+
+    // Update state
+    stateManager.setState({ projectFiles });
+
+    // Update UI
+    const requiredFiles = uploadedFile
+      ? detectRequiredCompanionFiles(uploadedFile.content)
+      : null;
+    renderProjectFilesList(projectFiles, mainFilePath, requiredFiles);
+
+    // Update auto-preview controller
+    if (autoPreviewController) {
+      autoPreviewController.setProjectFiles(projectFiles, mainFilePath);
+      await autoPreviewController.forcePreview(
+        stateManager.getState().parameters
+      );
+    }
+
+    updateStatus(`Removed file: ${path}`, 'success');
+    console.log(`[ProjectFiles] Removed file: ${path}`);
+  }
+
+  /**
+   * Open the text file editor modal for a companion file
+   * @param {string} path - Path to the file to edit
+   */
+  function editProjectFile(path) {
+    const state = stateManager.getState();
+    const { projectFiles } = state;
+
+    if (!projectFiles || !projectFiles.has(path)) {
+      updateStatus('File not found', 'error');
+      return;
+    }
+
+    const content = projectFiles.get(path);
+
+    // Get modal elements
+    const modal = document.getElementById('textFileEditorModal');
+    const fileNameEl = document.getElementById('textFileEditorFileName');
+    const textarea = document.getElementById('textFileEditorContent');
+
+    if (!modal || !textarea) {
+      console.error('[ProjectFiles] Text editor modal not found');
+      return;
+    }
+
+    // Set content
+    if (fileNameEl) fileNameEl.textContent = path;
+    textarea.value = content;
+    textarea.dataset.editingPath = path;
+
+    // Open modal
+    openModal(modal, {
+      focusTarget: textarea,
+    });
+  }
+
+  /**
+   * Apply text file editor changes and trigger preview
+   */
+  async function applyTextFileEditorChanges() {
+    const textarea = document.getElementById('textFileEditorContent');
+    const modal = document.getElementById('textFileEditorModal');
+
+    if (!textarea || !modal) return;
+
+    const path = textarea.dataset.editingPath;
+    const newContent = textarea.value;
+
+    const state = stateManager.getState();
+    const { projectFiles, mainFilePath } = state;
+
+    if (!projectFiles || !path) {
+      closeModal(modal);
+      return;
+    }
+
+    // Update file content
+    projectFiles.set(path, newContent);
+
+    // Update state
+    stateManager.setState({ projectFiles });
+
+    // Update UI
+    const requiredFiles = state.uploadedFile
+      ? detectRequiredCompanionFiles(state.uploadedFile.content)
+      : null;
+    renderProjectFilesList(projectFiles, mainFilePath, requiredFiles);
+
+    // Close modal
+    closeModal(modal);
+
+    // Trigger preview with updated files
+    if (autoPreviewController) {
+      autoPreviewController.setProjectFiles(projectFiles, mainFilePath);
+      await autoPreviewController.forcePreview(
+        stateManager.getState().parameters
+      );
+    }
+
+    updateStatus(`Updated file: ${path}`, 'success');
+    console.log(`[ProjectFiles] Updated file: ${path}`);
+  }
+
+  /**
+   * Update the project files UI after file load
+   */
+  function updateProjectFilesUI() {
+    const state = stateManager.getState();
+    const { projectFiles, mainFilePath, uploadedFile } = state;
+
+    if (!uploadedFile) {
+      const controls = document.getElementById('projectFilesControls');
+      if (controls) controls.classList.add('hidden');
+      return;
+    }
+
+    const requiredFiles = detectRequiredCompanionFiles(uploadedFile.content);
+    renderProjectFilesList(projectFiles, mainFilePath, requiredFiles);
+  }
+
   // Handle file upload (supports both .scad and .zip files)
   async function handleFile(
     file,
     content = null,
     extractedFiles = null,
     mainFilePathArg = null,
-    source = 'user' // 'user' | 'example' | 'saved' - track upload source
+    source = 'user', // 'user' | 'example' | 'saved' - track upload source
+    originalFileNameArg = null // Original file name (e.g., ZIP name) for multi-file projects
   ) {
     if (!file && !content) return;
 
@@ -3496,6 +5049,8 @@ async function initApp() {
     let fileContent = content;
     let projectFiles = extractedFiles; // Map of additional files for multi-file projects
     let mainFilePath = mainFilePathArg; // Path to main file in multi-file project (passed from ZIP extraction)
+    // For ZIP files, preserve the original ZIP filename for display/save purposes
+    let originalFileName = originalFileNameArg || fileName;
 
     if (file) {
       const fileNameLower = fileName.toLowerCase();
@@ -3530,8 +5085,9 @@ async function initApp() {
         return;
       }
 
-      // Handle ZIP files
-      if (isZip) {
+      // Handle ZIP files - but SKIP if content is already provided (e.g., from saved project)
+      // When loading a saved ZIP project, content and extractedFiles are already available
+      if (isZip && !content && !extractedFiles) {
         const validation = validateZipFile(file);
         if (!validation.valid) {
           alert(validation.error);
@@ -3566,8 +5122,17 @@ async function initApp() {
             `[ZIP] Loaded multi-file project: ${mainFile} (${stats.totalFiles} files)`
           );
 
-          // Continue with extracted content, passing mainFilePath as 4th argument
-          handleFile(null, fileContent, projectFiles, mainFilePath, source);
+          // Continue with extracted content, passing mainFilePath and original ZIP name
+          // The original ZIP filename is used as the default project name when saving
+          const zipFileName = file.name;
+          handleFile(
+            null,
+            fileContent,
+            projectFiles,
+            mainFilePath,
+            source,
+            zipFileName
+          );
           return;
         } catch (error) {
           console.error('[ZIP] Extraction failed:', error);
@@ -3638,10 +5203,12 @@ async function initApp() {
       }
 
       // Store in state (including project files for multi-file support)
+      // For ZIP files: fileName = main .scad file, originalFileName = ZIP name
+      // For single files: both are the same
       stateManager.setState({
-        uploadedFile: { name: fileName, content: fileContent },
+        uploadedFile: { name: originalFileName, content: fileContent },
         projectFiles: projectFiles || null, // Map of additional files (null for single-file projects)
-        mainFilePath: mainFilePath || fileName, // Track main file path
+        mainFilePath: mainFilePath || fileName, // Track main file path (the .scad file inside ZIP)
         schema: extracted,
         parameters: {},
         defaults: {},
@@ -3861,6 +5428,23 @@ async function initApp() {
           autoBedToggle.checked = previewManager.autoBedEnabled;
         }
 
+        // Initialize overlay settings from localStorage
+        const savedOverlayOpacity = localStorage.getItem(
+          STORAGE_KEY_OVERLAY_OPACITY
+        );
+        if (savedOverlayOpacity) {
+          const opacity = parseInt(savedOverlayOpacity, 10);
+          if (!isNaN(opacity) && opacity >= 0 && opacity <= 100) {
+            previewManager.setOverlayOpacity(opacity / 100);
+            if (overlayOpacityInput) {
+              overlayOpacityInput.value = opacity;
+            }
+            if (overlayOpacityValue) {
+              overlayOpacityValue.textContent = `${opacity}%`;
+            }
+          }
+        }
+
         // Initialize auto-rotate settings from localStorage
         // Only enable if user doesn't prefer reduced motion
         const savedAutoRotatePref = localStorage.getItem(
@@ -3965,8 +5549,13 @@ async function initApp() {
         const libsForRender = getEnabledLibrariesForRender();
         autoPreviewController.setEnabledLibraries(libsForRender);
         updatePreviewStateUI(PREVIEW_STATE.IDLE);
+      }
 
-        // Trigger an initial preview immediately on first load (and also for URL-param loads).
+      // Update Project Files Manager UI (for multi-file projects)
+      updateProjectFilesUI();
+
+      // Trigger an initial preview immediately on first load (and also for URL-param loads).
+      if (autoPreviewController) {
         if (autoPreviewEnabled) {
           // Use .then()/.catch() to handle errors without blocking file load completion
           autoPreviewController
@@ -4015,9 +5604,58 @@ async function initApp() {
     e.target.value = '';
   });
 
+  // Companion file input (Project Files Manager)
+  const addCompanionFileInput = document.getElementById(
+    'addCompanionFileInput'
+  );
+  if (addCompanionFileInput) {
+    addCompanionFileInput.addEventListener('change', async (e) => {
+      const files = e.target.files;
+      if (!files || files.length === 0) return;
+
+      for (const file of files) {
+        await handleAddCompanionFile(file);
+      }
+
+      // Reset input for potential re-selection
+      e.target.value = '';
+    });
+  }
+
+  // Text File Editor Modal handlers
+  const textFileEditorModal = document.getElementById('textFileEditorModal');
+  const textFileEditorApply = document.getElementById('textFileEditorApply');
+  const textFileEditorCancel = document.getElementById('textFileEditorCancel');
+  const textFileEditorClose = document.getElementById('textFileEditorClose');
+  const textFileEditorOverlay = document.getElementById(
+    'textFileEditorOverlay'
+  );
+
+  if (textFileEditorApply) {
+    textFileEditorApply.addEventListener('click', applyTextFileEditorChanges);
+  }
+
+  if (textFileEditorCancel && textFileEditorModal) {
+    textFileEditorCancel.addEventListener('click', () =>
+      closeModal(textFileEditorModal)
+    );
+  }
+
+  if (textFileEditorClose && textFileEditorModal) {
+    textFileEditorClose.addEventListener('click', () =>
+      closeModal(textFileEditorModal)
+    );
+  }
+
+  if (textFileEditorOverlay && textFileEditorModal) {
+    textFileEditorOverlay.addEventListener('click', () =>
+      closeModal(textFileEditorModal)
+    );
+  }
+
   // Back button - returns to welcome screen
   if (clearFileBtn) {
-    clearFileBtn.addEventListener('click', () => {
+    clearFileBtn.addEventListener('click', async () => {
       // Confirm before going back - warn about unsaved changes
       if (
         confirm(
@@ -4048,6 +5686,9 @@ async function initApp() {
         mainInterface.classList.add('hidden');
         welcomeScreen.classList.remove('hidden');
         updateStorageDisplay();
+
+        // Refresh saved projects list when returning to welcome screen
+        await renderSavedProjectsList();
 
         // Reset and hide workflow progress
         resetWorkflowProgress();
@@ -4178,58 +5819,241 @@ async function initApp() {
     });
   }
 
+  // Track current folder for navigation
+  let currentFolderId = null;
+
   /**
-   * Render saved projects list on welcome screen
+   * Render saved projects list on welcome screen (v2 with folder tree)
    */
   async function renderSavedProjectsList() {
     const savedProjectsList = document.getElementById('savedProjectsList');
     const savedProjectsEmpty = document.getElementById('savedProjectsEmpty');
+    const folderTree = document.getElementById('folderTree');
+    const breadcrumbNav = document.getElementById('folderBreadcrumbs');
+    const breadcrumbList = document.getElementById('breadcrumbList');
 
     if (!savedProjectsList || !savedProjectsEmpty) return;
 
-    const projects = await listSavedProjects();
+    // Get folder tree structure
+    let folders, rootProjects, allProjects;
+    try {
+      const treeResult = await getFolderTree();
+      folders = treeResult.folders;
+      rootProjects = treeResult.rootProjects;
+      allProjects = await listSavedProjects();
+    } catch (error) {
+      console.error('[Saved Projects] Error rendering list:', error);
+      return;
+    }
 
-    if (projects.length === 0) {
+    // Determine what to show based on current folder
+    let projectsToShow = [];
+    let foldersToShow = [];
+
+    if (currentFolderId) {
+      // Show contents of current folder
+      projectsToShow = allProjects.filter(
+        (p) => p.folderId === currentFolderId
+      );
+      foldersToShow = folders.filter((f) => f.parentId === currentFolderId);
+
+      // Also get nested folders
+      const findNestedFolders = (parentId) => {
+        const nested = [];
+        for (const folder of folders) {
+          if (folder.parentId === parentId) {
+            nested.push(folder);
+          }
+        }
+        return nested;
+      };
+      foldersToShow = findNestedFolders(currentFolderId);
+
+      // Update breadcrumbs
+      if (breadcrumbNav && breadcrumbList) {
+        const breadcrumbs = await getFolderBreadcrumbs(currentFolderId);
+        breadcrumbNav.classList.remove('hidden');
+        breadcrumbList.innerHTML = `
+          <li class="breadcrumb-item">
+            <button class="breadcrumb-link" data-folder-id="" aria-label="Go to root">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                <polyline points="9 22 9 12 15 12 15 22"></polyline>
+              </svg>
+              Root
+            </button>
+          </li>
+          ${breadcrumbs
+            .map(
+              (folder, index) => `
+            <li class="breadcrumb-item">
+              <button class="breadcrumb-link ${index === breadcrumbs.length - 1 ? 'current' : ''}" 
+                      data-folder-id="${folder.id}"
+                      ${index === breadcrumbs.length - 1 ? 'aria-current="page"' : ''}>
+                ${escapeHtml(folder.name)}
+              </button>
+            </li>
+          `
+            )
+            .join('')}
+        `;
+
+        // Wire up breadcrumb navigation
+        breadcrumbList.querySelectorAll('.breadcrumb-link').forEach((link) => {
+          link.addEventListener('click', () => {
+            const folderId = link.dataset.folderId || null;
+            navigateToFolder(folderId);
+          });
+        });
+      }
+    } else {
+      // Show root level
+      projectsToShow = rootProjects;
+      foldersToShow = folders.filter((f) => !f.parentId);
+      if (breadcrumbNav) {
+        breadcrumbNav.classList.add('hidden');
+      }
+    }
+
+    // Check if empty
+    if (allProjects.length === 0 && folders.length === 0) {
       savedProjectsList.innerHTML = '';
+      if (folderTree) folderTree.innerHTML = '';
       savedProjectsEmpty.classList.remove('hidden');
       return;
     }
 
     savedProjectsEmpty.classList.add('hidden');
 
+    // Render folder tree (if at root level)
+    if (folderTree) {
+      if (currentFolderId === null) {
+        folderTree.innerHTML = renderFolders(
+          foldersToShow,
+          folders,
+          allProjects
+        );
+        wireUpFolderEvents(folderTree);
+      } else {
+        // When inside a folder, show subfolders inline
+        folderTree.innerHTML = renderFolders(
+          foldersToShow,
+          folders,
+          allProjects
+        );
+        wireUpFolderEvents(folderTree);
+      }
+    }
+
     // Render project cards
-    const cardsHtml = projects
-      .map((project) => {
-        const notesPreview = project.notes
-          ? `<div class="saved-project-notes-preview">${linkifyText(project.notes)}</div>`
+    const cardsHtml = projectsToShow
+      .map((project) => renderProjectCard(project))
+      .join('');
+
+    savedProjectsList.innerHTML = cardsHtml;
+    wireUpProjectCardEvents(savedProjectsList);
+  }
+
+  /**
+   * Render folders recursively
+   */
+  function renderFolders(foldersToRender, allFolders, allProjects) {
+    return foldersToRender
+      .map((folder) => {
+        const childCount = allProjects.filter(
+          (p) => p.folderId === folder.id
+        ).length;
+        const childFolders = allFolders.filter((f) => f.parentId === folder.id);
+        const totalItems = childCount + childFolders.length;
+        const colorDot = folder.color
+          ? `<span class="folder-color-dot" style="background: ${folder.color}"></span>`
           : '';
 
-        const savedTime = formatRelativeTime(project.savedAt);
-        const loadedTime =
-          project.lastLoadedAt !== project.savedAt
-            ? formatRelativeTime(project.lastLoadedAt)
-            : null;
-
         return `
-        <div class="saved-project-card" role="listitem" data-project-id="${project.id}">
-          <div class="saved-project-header">
-            <svg class="saved-project-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-              <polyline points="14 2 14 8 20 8"></polyline>
+        <div class="folder-item" data-folder-id="${folder.id}">
+          <div class="folder-header" 
+               role="treeitem" 
+               tabindex="0"
+               aria-expanded="false"
+               aria-label="${escapeHtml(folder.name)} folder, ${totalItems} items">
+            <svg class="folder-expand-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <polyline points="9 18 15 12 9 6"></polyline>
             </svg>
-            <div class="saved-project-info">
-              <h4 class="saved-project-name">${escapeHtml(project.name)}</h4>
-              <div class="saved-project-meta">
-                <span class="saved-project-date">Saved ${savedTime}</span>
-                ${loadedTime ? `<span class="saved-project-date">Opened ${loadedTime}</span>` : ''}
-              </div>
+            ${colorDot}
+            <svg class="folder-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+            </svg>
+            <span class="folder-name">${escapeHtml(folder.name)}</span>
+            <span class="folder-count">${totalItems}</span>
+            <div class="folder-actions">
+              <button class="btn btn-sm btn-icon btn-rename-folder" data-folder-id="${folder.id}" aria-label="Rename folder" title="Rename">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                </svg>
+              </button>
+              <button class="btn btn-sm btn-icon btn-delete-folder" data-folder-id="${folder.id}" aria-label="Delete folder" title="Delete">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <polyline points="3 6 5 6 21 6"></polyline>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                </svg>
+              </button>
             </div>
           </div>
-          ${notesPreview}
-          <div class="saved-project-actions">
+          <div class="folder-contents" id="folder-contents-${folder.id}">
+            <!-- Contents loaded on expand -->
+          </div>
+        </div>
+      `;
+      })
+      .join('');
+  }
+
+  /**
+   * Render a single project card
+   */
+  function renderProjectCard(project) {
+    const notesPreview = project.notes
+      ? `<div class="saved-project-notes-preview">${linkifyText(project.notes)}</div>`
+      : '';
+
+    const savedTime = formatRelativeTime(project.savedAt);
+    const loadedTime =
+      project.lastLoadedAt !== project.savedAt
+        ? formatRelativeTime(project.lastLoadedAt)
+        : null;
+
+    const isZip = project.kind === 'zip';
+    const iconPath = isZip
+      ? '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>'
+      : '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline>';
+
+    return `
+      <div class="saved-project-card" role="listitem" data-project-id="${project.id}" draggable="true">
+        <div class="saved-project-header">
+          <svg class="saved-project-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            ${iconPath}
+          </svg>
+          <div class="saved-project-info">
+            <h4 class="saved-project-name">${escapeHtml(project.name)}</h4>
+            <div class="saved-project-meta">
+              <span class="saved-project-date">Saved ${savedTime}</span>
+              ${loadedTime ? `<span class="saved-project-date">Opened ${loadedTime}</span>` : ''}
+            </div>
+          </div>
+        </div>
+        ${notesPreview}
+        <div class="saved-project-actions">
             <button class="btn btn-primary btn-load-project" data-project-id="${project.id}">
               Load
             </button>
+            ${
+              isZip
+                ? `<button class="btn btn-secondary btn-manage-files" data-project-id="${project.id}" title="View and manage project files">
+              Files
+            </button>`
+                : ''
+            }
             <button class="btn btn-secondary btn-edit-project" data-project-id="${project.id}">
               Edit
             </button>
@@ -4238,57 +6062,554 @@ async function initApp() {
             </button>
           </div>
         </div>
-      `;
-      })
-      .join('');
+    `;
+  }
 
-    savedProjectsList.innerHTML = cardsHtml;
+  /**
+   * Wire up event listeners for folder tree
+   */
+  function wireUpFolderEvents(container) {
+    // Folder expand/collapse
+    container.querySelectorAll('.folder-header').forEach((header) => {
+      header.addEventListener('click', async (e) => {
+        if (e.target.closest('.folder-actions')) return;
 
-    // Wire up event listeners
-    savedProjectsList.querySelectorAll('.btn-load-project').forEach((btn) => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const projectId = btn.dataset.projectId;
-        loadSavedProject(projectId);
+        const folderItem = header.closest('.folder-item');
+        const folderId = folderItem.dataset.folderId;
+        const contents = folderItem.querySelector('.folder-contents');
+        const isExpanded = header.getAttribute('aria-expanded') === 'true';
+
+        if (isExpanded) {
+          // Collapse
+          header.setAttribute('aria-expanded', 'false');
+          contents.classList.remove('expanded');
+        } else {
+          // Expand and load contents
+          header.setAttribute('aria-expanded', 'true');
+          contents.classList.add('expanded');
+          await loadFolderContents(folderId, contents);
+        }
+      });
+
+      // Double-click to navigate into folder
+      header.addEventListener('dblclick', (e) => {
+        if (e.target.closest('.folder-actions')) return;
+        const folderId = header.closest('.folder-item').dataset.folderId;
+        navigateToFolder(folderId);
+      });
+
+      // Keyboard navigation
+      header.addEventListener('keydown', (e) => {
+        const folderId = header.closest('.folder-item').dataset.folderId;
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          navigateToFolder(folderId);
+        } else if (e.key === ' ') {
+          e.preventDefault();
+          header.click(); // Toggle expand
+        }
       });
     });
 
-    savedProjectsList.querySelectorAll('.btn-edit-project').forEach((btn) => {
-      btn.addEventListener('click', (e) => {
+    // Rename folder buttons
+    container.querySelectorAll('.btn-rename-folder').forEach((btn) => {
+      btn.addEventListener('click', async (e) => {
         e.stopPropagation();
-        const projectId = btn.dataset.projectId;
-        showEditProjectModal(projectId);
+        const folderId = btn.dataset.folderId;
+        await showRenameFolderDialog(folderId);
       });
     });
 
-    savedProjectsList.querySelectorAll('.btn-delete-project').forEach((btn) => {
+    // Delete folder buttons
+    container.querySelectorAll('.btn-delete-folder').forEach((btn) => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const folderId = btn.dataset.folderId;
+        await handleDeleteFolder(folderId);
+      });
+    });
+  }
+
+  /**
+   * Wire up event listeners for project cards
+   */
+  function wireUpProjectCardEvents(container) {
+    container.querySelectorAll('.btn-load-project').forEach((btn) => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
-        const projectId = btn.dataset.projectId;
-        deleteSavedProject(projectId);
+        loadSavedProject(btn.dataset.projectId);
+      });
+    });
+
+    container.querySelectorAll('.btn-manage-files').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        showProjectFileManager(btn.dataset.projectId);
+      });
+    });
+
+    container.querySelectorAll('.btn-edit-project').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        showEditProjectModal(btn.dataset.projectId);
+      });
+    });
+
+    container.querySelectorAll('.btn-delete-project').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        deleteSavedProject(btn.dataset.projectId);
       });
     });
 
     // Make cards clickable to load
-    savedProjectsList
-      .querySelectorAll('.saved-project-card')
-      .forEach((card) => {
-        card.addEventListener('click', (e) => {
-          // Only load if clicking the card itself, not buttons
-          if (e.target.closest('button')) return;
-          const projectId = card.dataset.projectId;
-          loadSavedProject(projectId);
+    container.querySelectorAll('.saved-project-card').forEach((card) => {
+      card.addEventListener('click', (e) => {
+        if (e.target.closest('button')) return;
+        loadSavedProject(card.dataset.projectId);
+      });
+
+      card.setAttribute('tabindex', '0');
+      card.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          loadSavedProject(card.dataset.projectId);
+        }
+      });
+
+      // Drag and drop support
+      card.addEventListener('dragstart', (e) => {
+        e.dataTransfer.setData('text/plain', card.dataset.projectId);
+        e.dataTransfer.setData(
+          'application/x-project-id',
+          card.dataset.projectId
+        );
+        card.classList.add('dragging');
+      });
+
+      card.addEventListener('dragend', () => {
+        card.classList.remove('dragging');
+      });
+    });
+  }
+
+  /**
+   * Load folder contents dynamically
+   */
+  async function loadFolderContents(folderId, container) {
+    const allProjects = await listSavedProjects();
+    const allFolders = await listFolders();
+
+    const projectsInFolder = allProjects.filter((p) => p.folderId === folderId);
+    const subfoldersInFolder = allFolders.filter(
+      (f) => f.parentId === folderId
+    );
+
+    let html = '';
+
+    // Render subfolders
+    if (subfoldersInFolder.length > 0) {
+      html += `<div class="folder-tree">${renderFolders(subfoldersInFolder, allFolders, allProjects)}</div>`;
+    }
+
+    // Render projects
+    if (projectsInFolder.length > 0) {
+      html += `<div class="saved-projects-list">${projectsInFolder.map((p) => renderProjectCard(p)).join('')}</div>`;
+    }
+
+    if (!html) {
+      html = '<p class="folder-empty">This folder is empty</p>';
+    }
+
+    container.innerHTML = html;
+
+    // Wire up events for new content
+    const subFolderTree = container.querySelector('.folder-tree');
+    if (subFolderTree) {
+      wireUpFolderEvents(subFolderTree);
+    }
+
+    const projectsList = container.querySelector('.saved-projects-list');
+    if (projectsList) {
+      wireUpProjectCardEvents(projectsList);
+    }
+
+    // Setup folder as drop target
+    setupFolderDropTarget(container.closest('.folder-item'));
+  }
+
+  /**
+   * Navigate to a folder
+   */
+  async function navigateToFolder(folderId) {
+    currentFolderId = folderId;
+    await renderSavedProjectsList();
+  }
+
+  /**
+   * Setup folder as drop target for projects
+   */
+  function setupFolderDropTarget(folderItem) {
+    if (!folderItem) return;
+
+    const header = folderItem.querySelector('.folder-header');
+    const folderId = folderItem.dataset.folderId;
+
+    header.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      folderItem.classList.add('drag-over');
+    });
+
+    header.addEventListener('dragleave', () => {
+      folderItem.classList.remove('drag-over');
+    });
+
+    header.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      folderItem.classList.remove('drag-over');
+
+      const projectId = e.dataTransfer.getData('application/x-project-id');
+      if (projectId) {
+        const result = await moveProject(projectId, folderId);
+        if (result.success) {
+          await renderSavedProjectsList();
+          stateManager.announceChange('Project moved to folder');
+        } else {
+          alert(`Failed to move project: ${result.error}`);
+        }
+      }
+    });
+  }
+
+  /**
+   * Show dialog to rename a folder
+   */
+  async function showRenameFolderDialog(folderId) {
+    const folder = await getFolder(folderId);
+    if (!folder) return;
+
+    const newName = prompt('Enter new folder name:', folder.name);
+    if (newName && newName.trim() && newName !== folder.name) {
+      const result = await renameFolder(folderId, newName.trim());
+      if (result.success) {
+        await renderSavedProjectsList();
+        stateManager.announceChange(`Folder renamed to ${newName.trim()}`);
+      } else {
+        alert(`Failed to rename folder: ${result.error}`);
+      }
+    }
+  }
+
+  /**
+   * Handle folder deletion
+   */
+  async function handleDeleteFolder(folderId) {
+    const folder = await getFolder(folderId);
+    if (!folder) return;
+
+    const projectsInFolder = await getProjectsInFolder(folderId);
+    const hasContents = projectsInFolder.length > 0;
+
+    let message = `Delete folder "${folder.name}"?`;
+    if (hasContents) {
+      message = `Delete folder "${folder.name}"?\n\nThis folder contains ${projectsInFolder.length} project(s). They will be moved to the root level.`;
+    }
+
+    if (confirm(message)) {
+      const result = await deleteFolder(folderId, false); // Don't delete contents, move to root
+      if (result.success) {
+        if (currentFolderId === folderId) {
+          currentFolderId = null; // Navigate back to root if we deleted current folder
+        }
+        await renderSavedProjectsList();
+        stateManager.announceChange(`Folder "${folder.name}" deleted`);
+      } else {
+        alert(`Failed to delete folder: ${result.error}`);
+      }
+    }
+  }
+
+  /**
+   * Show Project File Manager modal for ZIP projects
+   * @param {string} projectId - The project ID
+   */
+  async function showProjectFileManager(projectId) {
+    const project = await getProject(projectId);
+    if (!project) {
+      alert('Project not found');
+      return;
+    }
+
+    if (project.kind !== 'zip' || !project.projectFiles) {
+      alert('This feature is only available for ZIP projects');
+      return;
+    }
+
+    const projectFiles =
+      typeof project.projectFiles === 'string'
+        ? JSON.parse(project.projectFiles)
+        : project.projectFiles;
+
+    const modal = document.createElement('div');
+    modal.className = 'preset-modal file-manager-modal';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-labelledby', 'fileManagerTitle');
+    modal.setAttribute('aria-modal', 'true');
+
+    // Build file list
+    const fileEntries = Object.entries(projectFiles);
+    const filesHtml = fileEntries
+      .map(([path, content]) => {
+        const isMain = path === project.mainFilePath;
+        const size = new Blob([content]).size;
+        const iconClass = isMain ? 'main-file' : '';
+
+        return `
+        <div class="file-manager-item" data-path="${escapeHtml(path)}">
+          <svg class="file-manager-item-icon ${iconClass}" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            ${
+              isMain
+                ? '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line>'
+                : '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline>'
+            }
+          </svg>
+          <span class="file-manager-item-path">${escapeHtml(path)}</span>
+          <span class="file-manager-item-size">${formatFileSize(size)}</span>
+          <div class="file-manager-item-actions">
+            ${
+              isMain
+                ? '<span class="badge">Main</span>'
+                : `
+              <button class="btn btn-sm btn-icon btn-set-main-file" data-path="${escapeHtml(path)}" aria-label="Set as main file" title="Set as main">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+              </button>
+            `
+            }
+            <button class="btn btn-sm btn-icon btn-preview-file" data-path="${escapeHtml(path)}" aria-label="Preview file" title="Preview">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+              </svg>
+            </button>
+          </div>
+        </div>
+      `;
+      })
+      .join('');
+
+    modal.innerHTML = `
+      <div class="preset-modal-content" style="max-width: 700px;">
+        <div class="preset-modal-header">
+          <h3 id="fileManagerTitle" class="preset-modal-title">Project Files: ${escapeHtml(project.name)}</h3>
+        </div>
+
+        <div class="preset-modal-body">
+          <div class="file-manager-toolbar">
+            <button type="button" class="btn btn-sm btn-outline" id="addFileToProjectBtn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+              Add File
+            </button>
+            <span class="file-manager-count">${fileEntries.length} file${fileEntries.length !== 1 ? 's' : ''}</span>
+          </div>
+
+          <div class="file-manager-tree">
+            ${filesHtml || '<p class="text-muted">No files in project</p>'}
+          </div>
+        </div>
+
+        <div class="preset-modal-footer">
+          <button class="btn btn-secondary" id="fileManagerCloseBtn">Close</button>
+          <button class="btn btn-primary" id="fileManagerLoadBtn">Load Project</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    // Wire up events
+    const closeBtn = modal.querySelector('#fileManagerCloseBtn');
+    closeBtn.addEventListener('click', () => {
+      document.body.removeChild(modal);
+    });
+
+    const loadBtn = modal.querySelector('#fileManagerLoadBtn');
+    loadBtn.addEventListener('click', () => {
+      document.body.removeChild(modal);
+      loadSavedProject(projectId);
+    });
+
+    // Preview file buttons
+    modal.querySelectorAll('.btn-preview-file').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const path = btn.dataset.path;
+        const content = projectFiles[path];
+        showFilePreviewModal(path, content);
+      });
+    });
+
+    // Set main file buttons
+    modal.querySelectorAll('.btn-set-main-file').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const path = btn.dataset.path;
+        // Update project main file path
+        project.mainFilePath = path;
+        project.content = projectFiles[path];
+
+        const projectToSave = { ...project };
+        if (typeof projectToSave.projectFiles === 'object') {
+          projectToSave.projectFiles = JSON.stringify(
+            projectToSave.projectFiles
+          );
+        }
+
+        const result = await updateProject({
+          id: projectId,
+          name: project.name,
+          notes: project.notes,
         });
 
-        card.setAttribute('tabindex', '0');
-        card.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            const projectId = card.dataset.projectId;
-            loadSavedProject(projectId);
+        if (result.success) {
+          document.body.removeChild(modal);
+          showProjectFileManager(projectId); // Refresh
+          stateManager.announceChange(`Main file set to ${path}`);
+        }
+      });
+    });
+
+    // Add file button
+    const addFileBtn = modal.querySelector('#addFileToProjectBtn');
+    if (addFileBtn) {
+      addFileBtn.addEventListener('click', () => {
+        // Create a temporary file input
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.multiple = true;
+        fileInput.accept = '.scad,.json,.svg,.png,.jpg,.jpeg,.stl,.txt';
+
+        fileInput.addEventListener('change', async (e) => {
+          const files = Array.from(e.target.files || []);
+          if (files.length === 0) return;
+
+          let addedCount = 0;
+          const updatedProjectFiles = { ...projectFiles };
+
+          for (const file of files) {
+            try {
+              // Determine how to read the file
+              const ext = file.name.split('.').pop().toLowerCase();
+              const isText = ['scad', 'json', 'txt', 'svg'].includes(ext);
+
+              let content;
+              if (isText) {
+                content = await file.text();
+              } else {
+                // For binary files, store as base64 data URL
+                content = await new Promise((resolve, reject) => {
+                  const reader = new FileReader();
+                  reader.onload = () => resolve(reader.result);
+                  reader.onerror = reject;
+                  reader.readAsDataURL(file);
+                });
+              }
+
+              // Use the filename as the path
+              // If file already exists, it will be overwritten
+              updatedProjectFiles[file.name] = content;
+              addedCount++;
+            } catch (err) {
+              console.error(
+                `[FileManager] Error reading file ${file.name}:`,
+                err
+              );
+            }
+          }
+
+          if (addedCount > 0) {
+            // Update project with new files
+            const result = await updateProject({
+              id: projectId,
+              projectFiles: JSON.stringify(updatedProjectFiles),
+            });
+
+            if (result.success) {
+              document.body.removeChild(modal);
+              showProjectFileManager(projectId); // Refresh to show new files
+              stateManager.announceChange(
+                `Added ${addedCount} file${addedCount !== 1 ? 's' : ''} to project`
+              );
+            } else {
+              alert(`Failed to add files: ${result.error}`);
+            }
           }
         });
+
+        fileInput.click();
       });
+    }
+
+    // Close on escape
+    modal.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        document.body.removeChild(modal);
+      }
+    });
+
+    // Focus close button
+    setTimeout(() => closeBtn.focus(), 100);
+  }
+
+  /**
+   * Show file preview modal
+   */
+  function showFilePreviewModal(path, content) {
+    const modal = document.createElement('div');
+    modal.className = 'preset-modal';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-labelledby', 'filePreviewTitle');
+    modal.setAttribute('aria-modal', 'true');
+
+    const ext = path.split('.').pop().toLowerCase();
+    const isCode = ['scad', 'json', 'txt', 'md'].includes(ext);
+
+    modal.innerHTML = `
+      <div class="preset-modal-content">
+        <div class="preset-modal-header">
+          <h3 id="filePreviewTitle" class="preset-modal-title">${escapeHtml(path)}</h3>
+        </div>
+
+        <div class="preset-modal-body">
+          ${
+            isCode
+              ? `<pre style="max-height: 400px; overflow: auto; background: var(--color-bg-secondary); padding: var(--space-md); border-radius: var(--border-radius-sm); font-size: var(--font-size-sm);"><code>${escapeHtml(content)}</code></pre>`
+              : `<p class="text-muted">Binary file - preview not available</p>`
+          }
+        </div>
+
+        <div class="preset-modal-footer">
+          <button class="btn btn-secondary" id="filePreviewCloseBtn">Close</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    const closeBtn = modal.querySelector('#filePreviewCloseBtn');
+    closeBtn.addEventListener('click', () => {
+      document.body.removeChild(modal);
+    });
+
+    modal.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        document.body.removeChild(modal);
+      }
+    });
+
+    setTimeout(() => closeBtn.focus(), 100);
   }
 
   /**
@@ -4307,8 +6628,8 @@ async function initApp() {
       const currentState = stateManager.getState();
       if (currentState.uploadedFile) {
         const confirmed = await showConfirmDialog(
-          'Loading a saved project will replace the current file. Continue?',
-          'Load Saved Project',
+          'Loading a saved design will replace the current file. Continue?',
+          'Load Saved Design',
           'Load',
           'Cancel'
         );
@@ -4318,6 +6639,7 @@ async function initApp() {
       // Reconstruct file data
       const content = project.content;
       const fileName = project.originalName;
+      // getProject() already parses projectFiles from JSON string to object
       const projectFiles = project.projectFiles
         ? new Map(Object.entries(project.projectFiles))
         : null;
@@ -4330,17 +6652,18 @@ async function initApp() {
       await touchProject(projectId);
 
       // Load the file (reuse existing handleFile logic)
-      // Pass { name: fileName } to ensure the original filename is preserved
+      // Pass project.name as the 6th arg so uploadedFile.name shows the saved project name
       await handleFile(
         { name: fileName },
         content,
         projectFiles,
         mainFilePath,
-        'saved'
+        'saved',
+        project.name // Use the saved project name for display
       );
 
       // Announce success
-      stateManager.announceChange(`Loaded saved project: ${project.name}`);
+      stateManager.announceChange(`Loaded saved design: ${project.name}`);
       updateStatus(`Loaded: ${project.name}`);
 
       // Re-render list to update "last opened" time
@@ -4604,7 +6927,7 @@ async function initApp() {
 
       const confirmed = await showConfirmDialog(
         `Delete "${project.name}"?\n\nThis cannot be undone.`,
-        'Delete Saved Project',
+        'Delete Saved Design',
         'Delete',
         'Cancel'
       );
@@ -4715,6 +7038,50 @@ async function initApp() {
       }
     });
   });
+
+  // =========================================
+  // Deep-linking: ?example= URL parameter support (Volkswitch website integration)
+  // Allows external sites to link directly to Forge with a specific example loaded
+  // Usage: ?example=simple-box or ?example=volkswitch-keyguard-v74
+  // =========================================
+  const initUrlParams = new URLSearchParams(window.location.search);
+  const exampleParam = initUrlParams.get('example');
+
+  if (exampleParam) {
+    console.log(`[DeepLink] Loading example from URL: ${exampleParam}`);
+
+    // Check if example exists
+    if (EXAMPLE_DEFINITIONS[exampleParam]) {
+      // Load the example after a short delay to ensure UI is ready
+      setTimeout(async () => {
+        try {
+          await loadExampleByKey(exampleParam);
+
+          // Clean up URL to avoid reloading on refresh
+          initUrlParams.delete('example');
+          const cleanUrl = initUrlParams.toString()
+            ? `${window.location.pathname}?${initUrlParams}`
+            : window.location.pathname;
+          history.replaceState(null, '', cleanUrl);
+
+          console.log(`[DeepLink] Successfully loaded: ${exampleParam}`);
+          srAnnouncer.announce(
+            `${EXAMPLE_DEFINITIONS[exampleParam]?.name || 'Example'} loaded from URL link`
+          );
+        } catch (error) {
+          console.error('[DeepLink] Failed to load example:', error);
+          updateStatus(`Failed to load example: ${exampleParam}`);
+        }
+      }, 500);
+    } else {
+      console.warn(`[DeepLink] Unknown example: ${exampleParam}`);
+      console.log(
+        '[DeepLink] Available examples:',
+        Object.keys(EXAMPLE_DEFINITIONS)
+      );
+      updateStatus(`Unknown example: ${exampleParam}`);
+    }
+  }
 
   // Undo/Redo buttons
   const undoBtn = document.getElementById('undoBtn');
@@ -5761,7 +8128,10 @@ async function initApp() {
             ...(exportQualityPreset ? { quality: exportQualityPreset } : {}),
             onProgress: (_percent, _message) => {
               // Simplified status: no confusing percentages
-              updateStatus('Generating STL...');
+              const formatName =
+                OUTPUT_FORMATS[outputFormat]?.name ||
+                outputFormat.toUpperCase();
+              updateStatus(`Generating ${formatName}...`);
             },
           }
         );
@@ -5778,6 +8148,14 @@ async function initApp() {
         stlStats: result.stats,
         lastRenderTime: duration,
       });
+
+      // Store console output for the Console panel (Volkswitch echo() support)
+      if (
+        result.consoleOutput &&
+        typeof window.updateConsoleOutput === 'function'
+      ) {
+        window.updateConsoleOutput(result.consoleOutput);
+      }
 
       // Update detailed stats in drawer (not in status bar overlay)
       const triangleInfo =
@@ -5799,7 +8177,8 @@ async function initApp() {
       setWorkflowStep('download');
 
       // Simple status - ready to download (use 'success' type to keep visible)
-      updateStatus('STL ready', 'success');
+      // Use correct format name instead of hardcoded "STL"
+      updateStatus(`${formatName} ready`, 'success');
 
       // Update preview state to show full quality
       updatePreviewStateUI(PREVIEW_STATE.CURRENT, {
@@ -6647,15 +9026,29 @@ async function initApp() {
         return;
       }
 
+      // Auto-rename duplicates: "test1" → "test1 (1)" → "test1 (2)" etc.
+      const existingPresets = presetManager.getPresetsForModel(
+        state.uploadedFile.name
+      );
+      let finalName = name;
+      const existingNames = new Set(existingPresets.map((p) => p.name));
+      if (existingNames.has(name)) {
+        let counter = 1;
+        while (existingNames.has(`${name} (${counter})`)) {
+          counter++;
+        }
+        finalName = `${name} (${counter})`;
+      }
+
       try {
         presetManager.savePreset(
           state.uploadedFile.name,
-          name,
+          finalName,
           state.parameters,
           { description }
         );
 
-        updateStatus(`Preset "${name}" saved`);
+        updateStatus(`Preset "${finalName}" saved`);
         updatePresetDropdown();
         closeSavePresetModal();
       } catch (error) {
@@ -6868,7 +9261,15 @@ async function initApp() {
 
           try {
             const text = await file.text();
-            const result = presetManager.importPreset(text);
+            // Get current model name and schema for proper import
+            const currentState = stateManager.getState();
+            const currentModelName = currentState.uploadedFile?.name || null;
+            const paramSchema = currentState.schema?.parameters || {};
+            const result = presetManager.importPreset(
+              text,
+              currentModelName,
+              paramSchema
+            );
 
             if (result.success) {
               alert(
@@ -6952,7 +9353,7 @@ async function initApp() {
   });
 
   // Handle preset selection
-  presetSelect.addEventListener('change', (e) => {
+  presetSelect.addEventListener('change', async (e) => {
     const presetId = e.target.value;
     if (!presetId) return;
 
@@ -6960,6 +9361,29 @@ async function initApp() {
     const preset = presetManager.loadPreset(state.uploadedFile.name, presetId);
 
     if (preset) {
+      // Check preset compatibility with current schema
+      const compatibility = presetManager.analyzePresetCompatibility(
+        preset.parameters,
+        state.schema || {}
+      );
+
+      // If there are compatibility issues, show a warning dialog
+      if (!compatibility.isCompatible) {
+        const action = await showPresetCompatibilityWarning(
+          preset,
+          compatibility,
+          state
+        );
+
+        if (action === 'cancel') {
+          // Reset dropdown selection
+          const presetSelectEl = document.getElementById('presetSelect');
+          if (presetSelectEl) presetSelectEl.value = '';
+          return;
+        }
+        // action === 'apply' - continue with loading
+      }
+
       // Set flag to prevent clearPresetSelection during load
       isLoadingPreset = true;
 
@@ -7005,12 +9429,129 @@ async function initApp() {
       // Clear the loading flag
       isLoadingPreset = false;
 
-      updateStatus(`Loaded preset: ${preset.name}`);
+      // Update status with compatibility info if there were issues
+      if (!compatibility.isCompatible) {
+        const issueCount =
+          compatibility.extraParams.length + compatibility.missingParams.length;
+        updateStatus(
+          `Loaded preset: ${preset.name} (${issueCount} parameter differences)`
+        );
+      } else {
+        updateStatus(`Loaded preset: ${preset.name}`);
+      }
 
       // Keep showing the preset name in dropdown (don't reset)
       // The dropdown will reset when parameters change (handled in onChange callback)
     }
   });
+
+  /**
+   * Show preset compatibility warning dialog
+   * @param {Object} preset - The preset being loaded
+   * @param {Object} compatibility - Compatibility analysis result
+   * @param {Object} state - Current app state
+   * @returns {Promise<string>} 'apply' or 'cancel'
+   */
+  function showPresetCompatibilityWarning(preset, compatibility, state) {
+    return new Promise((resolve) => {
+      // Check for SCAD version info
+      const scadVersion = state.uploadedFile?.content
+        ? extractScadVersion(state.uploadedFile.content)
+        : null;
+
+      const modal = document.createElement('div');
+      modal.className = 'preset-modal';
+      modal.setAttribute('role', 'alertdialog');
+      modal.setAttribute('aria-labelledby', 'presetCompatTitle');
+      modal.setAttribute('aria-describedby', 'presetCompatMessage');
+      modal.setAttribute('aria-modal', 'true');
+
+      // Build issue list
+      let issueHtml = '';
+
+      if (compatibility.extraParams.length > 0) {
+        issueHtml += `
+          <div class="preset-compat-section">
+            <h4>⚠️ Obsolete parameters (${compatibility.extraParams.length})</h4>
+            <p>These preset parameters don't exist in the current file (may have been removed or renamed):</p>
+            <ul class="preset-compat-list">
+              ${compatibility.extraParams.map((p) => `<li><code>${escapeHtml(p)}</code></li>`).join('')}
+            </ul>
+          </div>
+        `;
+      }
+
+      if (compatibility.missingParams.length > 0) {
+        issueHtml += `
+          <div class="preset-compat-section">
+            <h4>ℹ️ New parameters (${compatibility.missingParams.length})</h4>
+            <p>These file parameters aren't in the preset (will use defaults):</p>
+            <ul class="preset-compat-list">
+              ${compatibility.missingParams
+                .slice(0, 10)
+                .map((p) => `<li><code>${escapeHtml(p)}</code></li>`)
+                .join('')}
+              ${compatibility.missingParams.length > 10 ? `<li>...and ${compatibility.missingParams.length - 10} more</li>` : ''}
+            </ul>
+          </div>
+        `;
+      }
+
+      const versionNote = scadVersion
+        ? `<p class="preset-compat-note">Current file version: <strong>${scadVersion.version}</strong></p>`
+        : '';
+
+      modal.innerHTML = `
+        <div class="preset-modal-content modal-medium">
+          <div class="preset-modal-header">
+            <h3 id="presetCompatTitle">Preset May Be From Different Version</h3>
+            <button class="preset-modal-close" aria-label="Close">&times;</button>
+          </div>
+          <div class="modal-body">
+            <p id="presetCompatMessage">
+              The preset "<strong>${escapeHtml(preset.name)}</strong>" may have been created for a different version 
+              of this file. Some parameters don't match.
+            </p>
+            ${versionNote}
+            ${issueHtml}
+            <p>
+              <strong>${compatibility.compatibleCount}</strong> of <strong>${compatibility.totalPresetParams}</strong> 
+              preset parameters can be applied.
+            </p>
+          </div>
+          <div class="preset-modal-footer">
+            <button type="button" class="btn btn-outline" data-action="cancel">Cancel</button>
+            <button type="button" class="btn btn-primary" data-action="apply">Apply Anyway</button>
+          </div>
+        </div>
+      `;
+
+      const handleAction = (action) => {
+        document.body.removeChild(modal);
+        resolve(action);
+      };
+
+      modal.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-action]');
+        const closeBtn = e.target.closest('.preset-modal-close');
+
+        if (btn) {
+          handleAction(btn.dataset.action);
+        } else if (closeBtn || e.target === modal) {
+          handleAction('cancel');
+        }
+      });
+
+      modal.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          handleAction('cancel');
+        }
+      });
+
+      document.body.appendChild(modal);
+      modal.querySelector('button[data-action="apply"]').focus();
+    });
+  }
 
   // Subscribe to preset changes
   presetManager.subscribe((action, _preset, _modelName) => {
@@ -7119,6 +9660,247 @@ async function initApp() {
       console.error('Failed to copy:', error);
     }
   });
+
+  // =========================================
+  // Console Output Modal (Volkswitch echo() support)
+  // =========================================
+  const viewConsoleBtn = document.getElementById('viewConsoleBtn');
+  const consoleOutputModal = document.getElementById('consoleOutputModal');
+  const consoleOutputClose = document.getElementById('consoleOutputClose');
+  const consoleOutputOverlay = document.getElementById('consoleOutputOverlay');
+  const consoleOutput = document.getElementById('consoleOutput');
+  const consoleCopyBtn = document.getElementById('consoleCopyBtn');
+  const consoleClearBtn = document.getElementById('consoleClearBtn');
+  const consoleCloseBtn = document.getElementById('consoleCloseBtn');
+  const consoleBadge = document.getElementById('consoleBadge');
+
+  // State for console output
+  let lastConsoleOutput = '';
+
+  /**
+   * Update console output display
+   * @param {string} output - Console output from OpenSCAD render
+   */
+  function updateConsoleOutput(output) {
+    if (!output || output.trim() === '') return;
+
+    lastConsoleOutput = output;
+
+    // Show badge to indicate new output
+    if (consoleBadge) {
+      consoleBadge.classList.remove('hidden');
+    }
+
+    // If modal is open, update it
+    if (consoleOutput && !consoleOutputModal?.classList.contains('hidden')) {
+      renderConsoleOutput(output);
+    }
+
+    // Extract ECHO messages and display in status bar
+    const echoMessages = extractEchoMessages(output);
+    updateStatusBarEcho(echoMessages);
+
+    // Log for debugging
+    const echoCount = echoMessages.length;
+    if (echoCount > 0) {
+      console.log(`[Console] ${echoCount} ECHO statement(s) captured`);
+    }
+  }
+
+  /**
+   * Extract ECHO messages from console output
+   * @param {string} output - Raw console output
+   * @returns {string[]} Array of ECHO message contents
+   */
+  function extractEchoMessages(output) {
+    if (!output) return [];
+
+    const echoLines = output
+      .split('\n')
+      .filter((line) => line.includes('ECHO:'));
+    return echoLines
+      .map((line) => {
+        // Extract the message content after "ECHO:"
+        const match = line.match(/ECHO:\s*"?([^"]*)"?/);
+        return match ? match[1].trim() : line.replace(/.*ECHO:\s*/, '').trim();
+      })
+      .filter((msg) => msg.length > 0);
+  }
+
+  /**
+   * Update the echo drawer display
+   * @param {string[]} echoMessages - Array of ECHO messages
+   */
+  function updateStatusBarEcho(echoMessages) {
+    const echoDrawer = document.getElementById('echoDrawer');
+    const echoDrawerLabel = document.getElementById('echoDrawerLabel');
+    const echoMessagesEl = document.getElementById('echoMessages');
+
+    if (!echoDrawer || !echoDrawerLabel || !echoMessagesEl) return;
+
+    if (echoMessages.length === 0) {
+      echoDrawer.classList.remove('visible');
+      echoDrawer.classList.add('collapsed');
+      echoDrawerLabel.textContent = 'No echo messages';
+      echoMessagesEl.textContent = '';
+      return;
+    }
+
+    // Update label with count
+    echoDrawerLabel.textContent = `ECHO Messages (${echoMessages.length})`;
+
+    // Show all ECHO messages, each on its own line
+    const formattedMessages = echoMessages
+      .map((msg) => `ECHO: ${msg}`)
+      .join('\n');
+    echoMessagesEl.textContent = formattedMessages;
+
+    // Show the drawer and EXPAND it by default so user sees the messages
+    echoDrawer.classList.add('visible');
+    echoDrawer.classList.remove('collapsed');
+
+    // Update aria-expanded on toggle button
+    const toggleBtn = document.getElementById('echoDrawerToggle');
+    if (toggleBtn) {
+      toggleBtn.setAttribute('aria-expanded', 'true');
+    }
+
+    // Announce to screen readers
+    srAnnouncer.announce(
+      `Model has ${echoMessages.length} echo message${echoMessages.length > 1 ? 's' : ''}: ${echoMessages[0]}`
+    );
+  }
+
+  /**
+   * Render console output with highlighted ECHO lines
+   * @param {string} output - Raw console output
+   */
+  function renderConsoleOutput(output) {
+    if (!consoleOutput) return;
+
+    if (!output || output.trim() === '') {
+      consoleOutput.textContent =
+        'No console output yet. Generate a model to see output.';
+      return;
+    }
+
+    // Split into lines and highlight ECHO lines
+    const lines = output.split('\n');
+    const highlightedLines = lines.map((line) => {
+      if (line.includes('ECHO:')) {
+        return `<span class="echo-line">${escapeHtml(line)}</span>`;
+      }
+      return escapeHtml(line);
+    });
+
+    consoleOutput.innerHTML = highlightedLines.join('\n');
+  }
+
+  // Open console modal
+  const openConsoleModal = () => {
+    if (!consoleOutputModal) return;
+
+    // Clear the "new output" badge
+    if (consoleBadge) {
+      consoleBadge.classList.add('hidden');
+    }
+
+    // Render current console output
+    renderConsoleOutput(lastConsoleOutput);
+
+    // Show modal
+    consoleOutputModal.classList.remove('hidden');
+
+    // Announce to screen readers
+    srAnnouncer.announce('Console output panel opened');
+  };
+
+  viewConsoleBtn?.addEventListener('click', openConsoleModal);
+
+  // Echo drawer toggle
+  const echoDrawerToggleBtn = document.getElementById('echoDrawerToggle');
+  const echoDrawerEl = document.getElementById('echoDrawer');
+
+  echoDrawerToggleBtn?.addEventListener('click', () => {
+    if (!echoDrawerEl) return;
+    const isCollapsed = echoDrawerEl.classList.contains('collapsed');
+    echoDrawerEl.classList.toggle('collapsed');
+    echoDrawerToggleBtn.setAttribute(
+      'aria-expanded',
+      isCollapsed ? 'true' : 'false'
+    );
+  });
+
+  // Echo drawer "View Full Console" button
+  const echoViewConsoleBtn = document.getElementById('echoViewConsoleBtn');
+  echoViewConsoleBtn?.addEventListener('click', openConsoleModal);
+
+  // Close handlers
+  const closeConsoleModal = () => {
+    if (consoleOutputModal) {
+      consoleOutputModal.classList.add('hidden');
+    }
+  };
+
+  consoleOutputClose?.addEventListener('click', closeConsoleModal);
+  consoleOutputOverlay?.addEventListener('click', closeConsoleModal);
+  consoleCloseBtn?.addEventListener('click', closeConsoleModal);
+
+  // Escape key closes console modal (accessibility)
+  consoleOutputModal?.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      closeConsoleModal();
+      e.preventDefault();
+    }
+  });
+
+  // Copy to clipboard
+  consoleCopyBtn?.addEventListener('click', async () => {
+    if (!lastConsoleOutput) {
+      consoleCopyBtn.textContent = 'Nothing to copy';
+      setTimeout(() => {
+        consoleCopyBtn.innerHTML = `
+          <svg class="btn-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
+          Copy to Clipboard
+        `;
+      }, 2000);
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(lastConsoleOutput);
+      consoleCopyBtn.textContent = '✅ Copied!';
+      srAnnouncer.announce('Console output copied to clipboard');
+      setTimeout(() => {
+        consoleCopyBtn.innerHTML = `
+          <svg class="btn-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
+          Copy to Clipboard
+        `;
+      }, 2000);
+    } catch (error) {
+      console.error('Failed to copy console output:', error);
+      consoleCopyBtn.textContent = 'Copy failed';
+    }
+  });
+
+  // Clear console
+  consoleClearBtn?.addEventListener('click', () => {
+    lastConsoleOutput = '';
+    if (consoleBadge) {
+      consoleBadge.classList.add('hidden');
+    }
+    renderConsoleOutput('');
+    srAnnouncer.announce('Console output cleared');
+  });
+
+  // Make updateConsoleOutput available globally for the render result handler
+  window.updateConsoleOutput = updateConsoleOutput;
 
   // Unlock Limits Toggle
   const unlockLimitsToggle = document.getElementById('unlockLimitsToggle');
@@ -7266,6 +10048,64 @@ async function initApp() {
     } catch (error) {
       console.error('Failed to copy:', error);
     }
+  });
+
+  // =========================================
+  // Export Changed Settings (Volkswitch troubleshooting support)
+  // =========================================
+  const exportChangedBtn = document.getElementById('exportChangedBtn');
+
+  exportChangedBtn?.addEventListener('click', () => {
+    const state = stateManager.getState();
+    if (!state.uploadedFile || !state.schema) {
+      alert('No file uploaded');
+      return;
+    }
+
+    // Get default parameters from schema
+    const defaultParams = state.schema.parameters || {};
+
+    // Use preset manager to export changed parameters
+    const changedJson = presetManager.exportChangedParametersJSON(
+      state.parameters,
+      defaultParams,
+      state.currentModelName || 'Unknown Model'
+    );
+
+    // Parse to check change count
+    const parsed = JSON.parse(changedJson);
+
+    if (parsed.message && parsed.changeCount === undefined) {
+      // No changes made
+      updateStatus('All parameters are at default values');
+      srAnnouncer.announce(
+        'All parameters are at default values. Nothing to export.'
+      );
+      return;
+    }
+
+    // Download as JSON file
+    const blob = new Blob([changedJson], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+
+    // Generate filename with model name and date
+    const baseName = (state.currentModelName || 'model').replace(
+      /\.(scad|zip)$/i,
+      ''
+    );
+    const date = new Date().toISOString().split('T')[0].replace(/-/g, '');
+    a.href = url;
+    a.download = `${baseName}-changed-params-${date}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+
+    // Update status
+    const changeCount = parsed.changeCount || 0;
+    updateStatus(`Exported ${changeCount} changed parameter(s)`);
+    srAnnouncer.announce(
+      `Downloaded ${changeCount} changed parameters as JSON file`
+    );
   });
 
   // Close modals on Escape key

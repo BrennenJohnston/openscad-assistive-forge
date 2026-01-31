@@ -1,20 +1,22 @@
 import { defineConfig, devices } from '@playwright/test'
 
 const isWindows = process.platform === 'win32'
+const isCI = !!process.env.CI
 const baseURL = process.env.PW_BASE_URL || 'http://localhost:5173'
 
 export default defineConfig({
   testDir: './tests/e2e',
   fullyParallel: true,
-  forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
+  forbidOnly: isCI,
+  retries: isCI ? 2 : 0,
   // Limit workers on Windows to reduce terminal hangs/stalls
-  workers: process.env.CI || isWindows ? 1 : undefined,
-  reporter: 'html',
+  workers: isCI || isWindows ? 1 : undefined,
+  // Use list reporter in CI to prevent HTML reporter hangs, HTML locally
+  reporter: isCI ? [['list'], ['html', { open: 'never' }]] : 'html',
   
-  // Global timeout to prevent hangs (per test: 60s, total: 10min)
+  // Global timeout to prevent hangs (per test: 60s, total: 5min in CI)
   timeout: 60000,
-  globalTimeout: 600000,
+  globalTimeout: isCI ? 300000 : 600000,
   
   // Prevent terminal hang issues
   outputDir: './test-results',
@@ -49,7 +51,11 @@ export default defineConfig({
   webServer: {
     command: 'npm run dev',
     url: baseURL,
-    reuseExistingServer: !process.env.CI || process.env.PW_REUSE_SERVER === '1',
+    // In CI, don't reuse server - start fresh and ensure clean shutdown
+    reuseExistingServer: !isCI,
     timeout: 120000,
+    // Ensure the server shuts down when tests complete
+    stdout: 'ignore',
+    stderr: 'pipe',
   },
 })

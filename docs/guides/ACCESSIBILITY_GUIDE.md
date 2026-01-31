@@ -100,7 +100,7 @@ Access this via the **Preview Settings & Info** drawer (Stats section).
 1. **Start with Examples**: Load an example model to get familiar with the interface
 2. **Use Parameter Groups**: Models with many parameters are organized into collapsible groups
 3. **Presets Are Your Friend**: Save frequently-used configurations as presets
-4. **Undo is Available**: Don't worry about experimenting—Ctrl+Z undoes parameter changes
+4. **Undo is Available**: Don't worry about experimenting. Ctrl+Z undoes parameter changes
 5. **Help Text**: Each parameter may have a help tooltip (? button)
 
 #### Tested Configurations
@@ -214,7 +214,7 @@ Don't worry! You can't break anything permanently:
 
 - **Parameter Help (?)**: Click the ? button next to parameters for explanations
 - **Features Guide**: Click "Help" button for tutorials
-- **Error Messages**: Read carefully—they often explain what went wrong
+- **Error Messages**: Read carefully. They often explain what went wrong
 - **Example Models**: Try the built-in examples to learn how parameters work
 
 ---

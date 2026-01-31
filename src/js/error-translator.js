@@ -125,6 +125,18 @@ const ERROR_PATTERNS = [
       'Try simpler parameter values, or avoid very thin walls or sharp angles.',
   },
 
+  // 2D model exported to 3D format (Volkswitch laser-cut workflow)
+  {
+    pattern: /MODEL_IS_2D|not a 3D object|Top level object is a 2D object/i,
+    title: '2D Model Detected',
+    explanation:
+      'Your model is configured to produce 2D geometry for laser cutting. ' +
+      '2D models cannot be previewed in the 3D viewer.',
+    suggestion:
+      'To preview: change "generate" back to "keyguard" for 3D preview. ' +
+      'To export: select SVG or DXF output format, then click Generate.',
+  },
+
   // Render quality errors
   {
     pattern: /\$fn.*value.*(\d+)/i,

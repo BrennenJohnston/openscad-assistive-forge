@@ -14,6 +14,18 @@ import {
   deleteProject,
   getSavedProjectsSummary,
   clearAllSavedProjects,
+  // v2: Folder operations
+  createFolder,
+  getFolder,
+  listFolders,
+  renameFolder,
+  deleteFolder,
+  moveFolder,
+  getFolderTree,
+  getFolderBreadcrumbs,
+  // v2: Project-folder operations
+  moveProject,
+  getProjectsInFolder,
 } from '../../src/js/saved-projects-manager.js';
 
 // Mock IndexedDB
@@ -507,4 +519,425 @@ describe('Saved Projects Manager', () => {
       expect(project.notes).toBe('Notes: Привет 🎉');
     });
   });
+
+  // ============================================================================
+  // Folder Operations Tests (v2)
+  // ============================================================================
+
+  describe('Folder Operations (v2)', () => {
+    describe('createFolder', () => {
+      it('should create a folder successfully', async () => {
+        const result = await createFolder({ name: 'Test Folder' });
+        
+        expect(result.success).toBe(true);
+        expect(result.id).toBeDefined();
+        expect(typeof result.id).toBe('string');
+        expect(result.id.startsWith('folder-')).toBe(true);
+      });
+
+      it('should create a nested folder', async () => {
+        const parent = await createFolder({ name: 'Parent Folder' });
+        expect(parent.success).toBe(true);
+
+        const child = await createFolder({
+          name: 'Child Folder',
+          parentId: parent.id,
+        });
+
+        expect(child.success).toBe(true);
+
+        const childFolder = await getFolder(child.id);
+        expect(childFolder.parentId).toBe(parent.id);
+      });
+
+      it('should reject empty folder name', async () => {
+        const result = await createFolder({ name: '' });
+        
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('required');
+      });
+
+      it('should reject folder with non-existent parent', async () => {
+        const result = await createFolder({
+          name: 'Orphan',
+          parentId: 'non-existent-id',
+        });
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('Parent folder not found');
+      });
+    });
+
+    describe('getFolder', () => {
+      it('should retrieve a folder by ID', async () => {
+        const created = await createFolder({ name: 'Test Folder', color: '#FF0000' });
+        
+        const folder = await getFolder(created.id);
+        
+        expect(folder).toBeDefined();
+        expect(folder.id).toBe(created.id);
+        expect(folder.name).toBe('Test Folder');
+        expect(folder.color).toBe('#FF0000');
+      });
+
+      it('should return null for non-existent folder', async () => {
+        const folder = await getFolder('non-existent-id');
+        expect(folder).toBeNull();
+      });
+    });
+
+    describe('listFolders', () => {
+      it('should return empty array when no folders exist', async () => {
+        const folders = await listFolders();
+        expect(folders).toEqual([]);
+      });
+
+      it('should list all folders', async () => {
+        await createFolder({ name: 'Folder 1' });
+        await createFolder({ name: 'Folder 2' });
+
+        const folders = await listFolders();
+        
+        expect(folders).toHaveLength(2);
+      });
+    });
+
+    describe('renameFolder', () => {
+      it('should rename a folder', async () => {
+        const created = await createFolder({ name: 'Original Name' });
+        
+        const result = await renameFolder(created.id, 'New Name');
+        expect(result.success).toBe(true);
+
+        const folder = await getFolder(created.id);
+        expect(folder.name).toBe('New Name');
+      });
+
+      it('should reject empty name', async () => {
+        const created = await createFolder({ name: 'Test' });
+        
+        const result = await renameFolder(created.id, '');
+        expect(result.success).toBe(false);
+      });
+    });
+
+    describe('deleteFolder', () => {
+      it('should delete an empty folder', async () => {
+        const created = await createFolder({ name: 'To Delete' });
+        
+        const result = await deleteFolder(created.id);
+        expect(result.success).toBe(true);
+
+        const folder = await getFolder(created.id);
+        expect(folder).toBeNull();
+      });
+
+      it('should move contents to root when deleting folder with projects', async () => {
+        const folder = await createFolder({ name: 'Folder' });
+        
+        const project = await saveProject({
+          name: 'Project in Folder',
+          originalName: 'test.scad',
+          kind: 'scad',
+          mainFilePath: 'test.scad',
+          content: '// Test',
+          notes: '',
+          folderId: folder.id,
+        });
+
+        await deleteFolder(folder.id, false); // Don't delete contents
+
+        const updatedProject = await getProject(project.id);
+        expect(updatedProject.folderId).toBeNull(); // Moved to root
+      });
+    });
+
+    describe('moveFolder', () => {
+      it('should move a folder to a new parent', async () => {
+        const parent1 = await createFolder({ name: 'Parent 1' });
+        const parent2 = await createFolder({ name: 'Parent 2' });
+        const child = await createFolder({ name: 'Child', parentId: parent1.id });
+
+        const result = await moveFolder(child.id, parent2.id);
+        expect(result.success).toBe(true);
+
+        const movedFolder = await getFolder(child.id);
+        expect(movedFolder.parentId).toBe(parent2.id);
+      });
+
+      it('should prevent moving folder into itself', async () => {
+        const folder = await createFolder({ name: 'Self' });
+        
+        const result = await moveFolder(folder.id, folder.id);
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('Cannot move folder into itself');
+      });
+
+      it('should prevent moving folder into its descendant', async () => {
+        const parent = await createFolder({ name: 'Parent' });
+        const child = await createFolder({ name: 'Child', parentId: parent.id });
+        
+        const result = await moveFolder(parent.id, child.id);
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('Cannot move folder into itself');
+      });
+    });
+
+    describe('getFolderTree', () => {
+      it('should return hierarchical folder structure', async () => {
+        await createFolder({ name: 'Root Folder' });
+        const project = await saveProject({
+          name: 'Root Project',
+          originalName: 'test.scad',
+          kind: 'scad',
+          mainFilePath: 'test.scad',
+          content: '// Test',
+          notes: '',
+        });
+
+        const tree = await getFolderTree();
+        
+        expect(tree.folders).toHaveLength(1);
+        expect(tree.rootProjects).toBeDefined();
+      });
+    });
+
+    describe('getFolderBreadcrumbs', () => {
+      it('should return folder path from root to current', async () => {
+        const parent = await createFolder({ name: 'Parent' });
+        const child = await createFolder({ name: 'Child', parentId: parent.id });
+        const grandchild = await createFolder({ name: 'Grandchild', parentId: child.id });
+
+        const breadcrumbs = await getFolderBreadcrumbs(grandchild.id);
+        
+        expect(breadcrumbs).toHaveLength(3);
+        expect(breadcrumbs[0].name).toBe('Parent');
+        expect(breadcrumbs[1].name).toBe('Child');
+        expect(breadcrumbs[2].name).toBe('Grandchild');
+      });
+    });
+  });
+
+  describe('Project-Folder Operations (v2)', () => {
+    describe('moveProject', () => {
+      it('should move a project to a folder', async () => {
+        const folder = await createFolder({ name: 'Destination' });
+        const project = await saveProject({
+          name: 'Project',
+          originalName: 'test.scad',
+          kind: 'scad',
+          mainFilePath: 'test.scad',
+          content: '// Test',
+          notes: '',
+        });
+
+        const result = await moveProject(project.id, folder.id);
+        expect(result.success).toBe(true);
+
+        const updatedProject = await getProject(project.id);
+        expect(updatedProject.folderId).toBe(folder.id);
+      });
+
+      it('should move a project to root (null folder)', async () => {
+        const folder = await createFolder({ name: 'Source' });
+        const project = await saveProject({
+          name: 'Project',
+          originalName: 'test.scad',
+          kind: 'scad',
+          mainFilePath: 'test.scad',
+          content: '// Test',
+          notes: '',
+          folderId: folder.id,
+        });
+
+        const result = await moveProject(project.id, null);
+        expect(result.success).toBe(true);
+
+        const updatedProject = await getProject(project.id);
+        expect(updatedProject.folderId).toBeNull();
+      });
+    });
+
+    describe('getProjectsInFolder', () => {
+      it('should return projects in a specific folder', async () => {
+        const folder = await createFolder({ name: 'Folder' });
+        
+        await saveProject({
+          name: 'Project 1',
+          originalName: 'p1.scad',
+          kind: 'scad',
+          mainFilePath: 'p1.scad',
+          content: '// P1',
+          notes: '',
+          folderId: folder.id,
+        });
+
+        await saveProject({
+          name: 'Project 2',
+          originalName: 'p2.scad',
+          kind: 'scad',
+          mainFilePath: 'p2.scad',
+          content: '// P2',
+          notes: '',
+        }); // Root level
+
+        const projects = await getProjectsInFolder(folder.id);
+        
+        expect(projects).toHaveLength(1);
+        expect(projects[0].name).toBe('Project 1');
+      });
+
+      it('should return root projects when folderId is null', async () => {
+        await saveProject({
+          name: 'Root Project',
+          originalName: 'root.scad',
+          kind: 'scad',
+          mainFilePath: 'root.scad',
+          content: '// Root',
+          notes: '',
+        });
+
+        const folder = await createFolder({ name: 'Folder' });
+        await saveProject({
+          name: 'Folder Project',
+          originalName: 'folder.scad',
+          kind: 'scad',
+          mainFilePath: 'folder.scad',
+          content: '// Folder',
+          notes: '',
+          folderId: folder.id,
+        });
+
+        const projects = await getProjectsInFolder(null);
+        
+        expect(projects).toHaveLength(1);
+        expect(projects[0].name).toBe('Root Project');
+      });
+    });
+
+    describe('saveProject with folderId', () => {
+    it('should save project with folder assignment', async () => {
+      const folder = await createFolder({ name: 'My Folder' });
+      
+      const result = await saveProject({
+        name: 'Project',
+        originalName: 'test.scad',
+        kind: 'scad',
+        mainFilePath: 'test.scad',
+        content: '// Test',
+        notes: '',
+        folderId: folder.id,
+      });
+
+      expect(result.success).toBe(true);
+
+      const project = await getProject(result.id);
+      expect(project.folderId).toBe(folder.id);
+    });
+  });
+
+  describe('Duplicate Name Handling', () => {
+    it('should auto-increment name when saving duplicate', async () => {
+      // Save first project
+      const result1 = await saveProject({
+        name: 'example.scad',
+        originalName: 'example.scad',
+        kind: 'scad',
+        mainFilePath: 'example.scad',
+        content: '// First',
+        notes: '',
+      });
+      expect(result1.success).toBe(true);
+
+      // Save second project with same name - should get (2)
+      const result2 = await saveProject({
+        name: 'example.scad',
+        originalName: 'example.scad',
+        kind: 'scad',
+        mainFilePath: 'example.scad',
+        content: '// Second',
+        notes: '',
+      });
+      expect(result2.success).toBe(true);
+
+      const project2 = await getProject(result2.id);
+      expect(project2.name).toBe('example.scad (2)');
+
+      // Save third project with same name - should get (3)
+      const result3 = await saveProject({
+        name: 'example.scad',
+        originalName: 'example.scad',
+        kind: 'scad',
+        mainFilePath: 'example.scad',
+        content: '// Third',
+        notes: '',
+      });
+      expect(result3.success).toBe(true);
+
+      const project3 = await getProject(result3.id);
+      expect(project3.name).toBe('example.scad (3)');
+    });
+
+    it('should handle unique names without modification', async () => {
+      const result = await saveProject({
+        name: 'unique-project.scad',
+        originalName: 'unique-project.scad',
+        kind: 'scad',
+        mainFilePath: 'unique-project.scad',
+        content: '// Unique',
+        notes: '',
+      });
+
+      expect(result.success).toBe(true);
+
+      const project = await getProject(result.id);
+      expect(project.name).toBe('unique-project.scad');
+    });
+
+    it('should correctly find next available number', async () => {
+      // Save project 1
+      await saveProject({
+        name: 'test.scad',
+        originalName: 'test.scad',
+        kind: 'scad',
+        mainFilePath: 'test.scad',
+        content: '// 1',
+        notes: '',
+      });
+
+      // Save project 2 - gets (2)
+      await saveProject({
+        name: 'test.scad',
+        originalName: 'test.scad',
+        kind: 'scad',
+        mainFilePath: 'test.scad',
+        content: '// 2',
+        notes: '',
+      });
+
+      // Save project 3 - gets (3)
+      await saveProject({
+        name: 'test.scad',
+        originalName: 'test.scad',
+        kind: 'scad',
+        mainFilePath: 'test.scad',
+        content: '// 3',
+        notes: '',
+      });
+
+      // Save project 4 - should get (4) not (2)
+      const result4 = await saveProject({
+        name: 'test.scad',
+        originalName: 'test.scad',
+        kind: 'scad',
+        mainFilePath: 'test.scad',
+        content: '// 4',
+        notes: '',
+      });
+
+      const project4 = await getProject(result4.id);
+      expect(project4.name).toBe('test.scad (4)');
+    });
+  });
+});
 });

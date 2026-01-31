@@ -4,7 +4,7 @@
 
 # OpenSCAD Assistive Forge
 
-A browser-based OpenSCAD “Customizer” that tries really hard to be usable with keyboards, screen readers, high contrast, and small screens.
+A browser based OpenSCAD “Customizer” that tries to be usable with keyboards, screen readers, high contrast, and small screens.
 
 - **Live demo**: `https://openscad-assistive-forge.pages.dev/`
 - **Docs index**: `docs/README.md`
@@ -12,9 +12,9 @@ A browser-based OpenSCAD “Customizer” that tries really hard to be usable wi
 
 ## Why this exists
 
-I like parametric OpenSCAD models, but the usual workflow (install app, write code, understand the UI) is a wall for a lot of people — especially folks who rely on assistive tech, and clinicians/caregivers who just need “a few dimensions changed”.
+Because I work in the assistive technology field, I love parametric OpenSCAD models, but the usual workflow of installing several apps, copy and pasting settings, and trying to understand a new UI is a barrier for a lot of people, especially folks who rely on assistive tech like clinicians, caregivers, people living with a disability or anyone who just need “a few dimensions changed”.
 
-So this is my attempt at: “upload a Customizer-enabled `.scad`, tweak the knobs, preview it, download it” — entirely in the browser.
+So this is my attempt at removing a few of those barriers and hopefully opening up opportunities to deliver more custom models to everyone.
 
 ## What it does
 

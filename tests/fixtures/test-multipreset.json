@@ -1,0 +1,23 @@
+{
+  "fileFormatVersion": "1",
+  "parameterSets": {
+    "Client A - iPad 9th gen": {
+      "type_of_keyguard": "3D-Printed",
+      "generate": "keyguard",
+      "width": "100",
+      "height": "150"
+    },
+    "Client B - Laser Cut": {
+      "type_of_keyguard": "Laser-Cut",
+      "generate": "first layer for SVG/DXF file",
+      "width": "120",
+      "height": "180"
+    },
+    "Test Preset - Small": {
+      "type_of_keyguard": "3D-Printed",
+      "generate": "keyguard",
+      "width": "60",
+      "height": "80"
+    }
+  }
+}

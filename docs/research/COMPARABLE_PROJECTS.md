@@ -61,7 +61,8 @@ According to build system documentation, the `vercel.json` includes:
 
 **Why these headers are used**:
 > "Ensures correct MIME types for WASM files and enables cross-origin isolation required for SharedArrayBuffer support in the OpenSCAD worker."
-> — *Source: DeepWiki analysis of openscad-playground build system*
+>
+> *Source: DeepWiki analysis of openscad-playground build system*
 
 **Key Observations**:
 - This is the **official OpenSCAD web implementation**

@@ -807,4 +807,305 @@ describe('PreviewManager', () => {
       expect(() => manager.hideMeasurements()).not.toThrow()
     })
   })
+
+  describe('Reference Overlay', () => {
+    describe('Overlay Configuration', () => {
+      it('initializes with default overlay config', () => {
+        const manager = new PreviewManager(container)
+        
+        expect(manager.overlayConfig).toBeDefined()
+        expect(manager.overlayConfig.enabled).toBe(false)
+        expect(manager.overlayConfig.opacity).toBe(0.5)
+        expect(manager.overlayConfig.offsetX).toBe(0)
+        expect(manager.overlayConfig.offsetY).toBe(0)
+        expect(manager.overlayConfig.rotationDeg).toBe(0)
+        expect(manager.overlayConfig.width).toBe(200)
+        expect(manager.overlayConfig.height).toBe(150)
+        expect(manager.overlayConfig.zPosition).toBe(-0.25)
+        expect(manager.overlayConfig.lockAspect).toBe(true)
+        expect(manager.overlayConfig.intrinsicAspect).toBeNull()
+        expect(manager.overlayConfig.sourceFileName).toBeNull()
+      })
+
+      it('initializes with no overlay mesh or texture', () => {
+        const manager = new PreviewManager(container)
+        
+        expect(manager.referenceOverlay).toBeNull()
+        expect(manager.referenceTexture).toBeNull()
+      })
+    })
+
+    describe('getOverlayConfig', () => {
+      it('returns a copy of the overlay config', () => {
+        const manager = new PreviewManager(container)
+        
+        const config = manager.getOverlayConfig()
+        
+        expect(config).toEqual(manager.overlayConfig)
+        
+        // Verify it's a copy, not a reference
+        config.enabled = true
+        expect(manager.overlayConfig.enabled).toBe(false)
+      })
+    })
+
+    describe('setOverlayEnabled', () => {
+      it('updates enabled state in config', () => {
+        const manager = new PreviewManager(container)
+        
+        manager.setOverlayEnabled(true)
+        expect(manager.overlayConfig.enabled).toBe(true)
+        
+        manager.setOverlayEnabled(false)
+        expect(manager.overlayConfig.enabled).toBe(false)
+      })
+
+      it('hides overlay mesh when disabled', () => {
+        const manager = new PreviewManager(container)
+        manager.referenceOverlay = { visible: true }
+        
+        manager.setOverlayEnabled(false)
+        
+        expect(manager.referenceOverlay.visible).toBe(false)
+      })
+    })
+
+    describe('setOverlayOpacity', () => {
+      it('clamps opacity to valid range', () => {
+        const manager = new PreviewManager(container)
+        
+        manager.setOverlayOpacity(-0.5)
+        expect(manager.overlayConfig.opacity).toBe(0)
+        
+        manager.setOverlayOpacity(1.5)
+        expect(manager.overlayConfig.opacity).toBe(1)
+        
+        manager.setOverlayOpacity(0.7)
+        expect(manager.overlayConfig.opacity).toBe(0.7)
+      })
+
+      it('updates overlay material opacity', () => {
+        const manager = new PreviewManager(container)
+        manager.referenceOverlay = {
+          material: { opacity: 0.5 }
+        }
+        
+        manager.setOverlayOpacity(0.8)
+        
+        expect(manager.referenceOverlay.material.opacity).toBe(0.8)
+      })
+    })
+
+    describe('setOverlayTransform', () => {
+      it('updates offset values', () => {
+        const manager = new PreviewManager(container)
+        
+        manager.setOverlayTransform({ offsetX: 10, offsetY: -5 })
+        
+        expect(manager.overlayConfig.offsetX).toBe(10)
+        expect(manager.overlayConfig.offsetY).toBe(-5)
+      })
+
+      it('updates rotation value', () => {
+        const manager = new PreviewManager(container)
+        
+        manager.setOverlayTransform({ rotationDeg: 45 })
+        
+        expect(manager.overlayConfig.rotationDeg).toBe(45)
+      })
+
+      it('handles partial updates', () => {
+        const manager = new PreviewManager(container)
+        manager.overlayConfig.offsetX = 100
+        manager.overlayConfig.offsetY = 200
+        
+        manager.setOverlayTransform({ offsetX: 50 })
+        
+        expect(manager.overlayConfig.offsetX).toBe(50)
+        expect(manager.overlayConfig.offsetY).toBe(200) // unchanged
+      })
+    })
+
+    describe('setOverlaySize', () => {
+      it('updates width and height', () => {
+        const manager = new PreviewManager(container)
+        
+        manager.setOverlaySize({ width: 300, height: 200 })
+        
+        expect(manager.overlayConfig.width).toBe(300)
+        expect(manager.overlayConfig.height).toBe(200)
+      })
+
+      it('adjusts height when width changes with aspect lock', () => {
+        const manager = new PreviewManager(container)
+        manager.overlayConfig.lockAspect = true
+        manager.overlayConfig.intrinsicAspect = 2 // 2:1 aspect ratio
+        
+        manager.setOverlaySize({ width: 400 })
+        
+        expect(manager.overlayConfig.width).toBe(400)
+        expect(manager.overlayConfig.height).toBe(200) // 400 / 2 = 200
+      })
+
+      it('adjusts width when height changes with aspect lock', () => {
+        const manager = new PreviewManager(container)
+        manager.overlayConfig.lockAspect = true
+        manager.overlayConfig.intrinsicAspect = 2 // 2:1 aspect ratio
+        
+        manager.setOverlaySize({ height: 100 })
+        
+        expect(manager.overlayConfig.height).toBe(100)
+        expect(manager.overlayConfig.width).toBe(200) // 100 * 2 = 200
+      })
+
+      it('does not adjust when aspect lock is off', () => {
+        const manager = new PreviewManager(container)
+        manager.overlayConfig.lockAspect = false
+        manager.overlayConfig.intrinsicAspect = 2
+        manager.overlayConfig.width = 100
+        manager.overlayConfig.height = 50
+        
+        manager.setOverlaySize({ width: 200 })
+        
+        expect(manager.overlayConfig.width).toBe(200)
+        expect(manager.overlayConfig.height).toBe(50) // unchanged
+      })
+    })
+
+    describe('setOverlayAspectLock', () => {
+      it('updates aspect lock state', () => {
+        const manager = new PreviewManager(container)
+        
+        manager.setOverlayAspectLock(false)
+        expect(manager.overlayConfig.lockAspect).toBe(false)
+        
+        manager.setOverlayAspectLock(true)
+        expect(manager.overlayConfig.lockAspect).toBe(true)
+      })
+    })
+
+    describe('removeReferenceOverlay', () => {
+      it('removes overlay mesh from scene', () => {
+        const manager = new PreviewManager(container)
+        const geometryDispose = vi.fn()
+        const materialDispose = vi.fn()
+        const sceneRemove = vi.fn()
+        const textureDispose = vi.fn()
+        
+        manager.scene = { remove: sceneRemove }
+        manager.referenceOverlay = {
+          geometry: { dispose: geometryDispose },
+          material: { dispose: materialDispose }
+        }
+        manager.referenceTexture = { dispose: textureDispose }
+        
+        manager.removeReferenceOverlay()
+        
+        expect(sceneRemove).toHaveBeenCalled()
+        expect(geometryDispose).toHaveBeenCalled()
+        expect(materialDispose).toHaveBeenCalled()
+        expect(textureDispose).toHaveBeenCalled()
+        expect(manager.referenceOverlay).toBeNull()
+        expect(manager.referenceTexture).toBeNull()
+      })
+
+      it('does nothing when no overlay exists', () => {
+        const manager = new PreviewManager(container)
+        manager.referenceOverlay = null
+        manager.referenceTexture = null
+        
+        // Should not throw
+        expect(() => manager.removeReferenceOverlay()).not.toThrow()
+      })
+    })
+
+    describe('getMaxTextureResolution', () => {
+      it('returns lower resolution for mobile', () => {
+        const manager = new PreviewManager(container)
+        
+        // Mock mobile conditions
+        const originalInnerWidth = window.innerWidth
+        Object.defineProperty(window, 'innerWidth', { value: 400, writable: true })
+        
+        const resolution = manager.getMaxTextureResolution()
+        
+        expect(resolution).toBe(1024)
+        
+        Object.defineProperty(window, 'innerWidth', { value: originalInnerWidth })
+      })
+
+      it('returns higher resolution for desktop', () => {
+        const manager = new PreviewManager(container)
+        
+        // Mock desktop conditions
+        const originalInnerWidth = window.innerWidth
+        const originalMaxTouchPoints = navigator.maxTouchPoints
+        Object.defineProperty(window, 'innerWidth', { value: 1920, writable: true })
+        Object.defineProperty(navigator, 'maxTouchPoints', { value: 0, configurable: true })
+        
+        const resolution = manager.getMaxTextureResolution()
+        
+        expect(resolution).toBe(2048)
+        
+        Object.defineProperty(window, 'innerWidth', { value: originalInnerWidth })
+        Object.defineProperty(navigator, 'maxTouchPoints', { value: originalMaxTouchPoints, configurable: true })
+      })
+    })
+
+    describe('loadImage', () => {
+      it('returns a promise', () => {
+        const manager = new PreviewManager(container)
+        
+        // In jsdom, images don't actually load, so we just verify the API works
+        const promise = manager.loadImage('data:image/png;base64,')
+        
+        expect(promise).toBeInstanceOf(Promise)
+      })
+
+      it('creates an Image element internally', () => {
+        const manager = new PreviewManager(container)
+        
+        // The loadImage method creates an Image and returns a promise
+        // We can verify it doesn't throw synchronously
+        expect(() => manager.loadImage('test-url')).not.toThrow()
+      })
+    })
+
+    describe('Clear with Overlay', () => {
+      it('preserves overlay but updates Z position on clear', () => {
+        const manager = new PreviewManager(container)
+        manager.scene = { remove: vi.fn() }
+        manager.renderer = { render: vi.fn() }
+        manager.camera = {}
+        manager.mesh = {
+          geometry: { dispose: vi.fn() },
+          material: { dispose: vi.fn() }
+        }
+        manager.referenceOverlay = {
+          position: { z: -5 }
+        }
+        manager.overlayConfig.zPosition = -0.25
+        manager.autoBedOffset = 10
+        
+        manager.clear()
+        
+        // Overlay should still exist
+        expect(manager.referenceOverlay).not.toBeNull()
+        // Z position should be reset to config value (not offset)
+        expect(manager.referenceOverlay.position.z).toBe(-0.25)
+      })
+    })
+
+    describe('Dispose with Overlay', () => {
+      it('removes overlay on dispose', () => {
+        const manager = new PreviewManager(container)
+        manager.removeReferenceOverlay = vi.fn()
+        manager.renderer = { dispose: vi.fn() }
+        
+        manager.dispose()
+        
+        expect(manager.removeReferenceOverlay).toHaveBeenCalled()
+      })
+    })
+  })
 })

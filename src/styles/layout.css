@@ -13,6 +13,8 @@ body {
   flex-direction: column;
   height: 100vh;
   min-height: 100vh;
+  /* Prevent outer scrollbar - only welcome-screen should scroll */
+  overflow: hidden;
 }
 
 /* Use dynamic viewport height on mobile browsers */
@@ -546,6 +548,7 @@ body {
   padding-bottom: calc(var(--space-lg) + env(safe-area-inset-bottom, 0px));
   padding-left: calc(var(--space-lg) + env(safe-area-inset-left, 0px));
   padding-right: calc(var(--space-lg) + env(safe-area-inset-right, 0px));
+  overflow-x: hidden;
   overflow-y: auto;
   scrollbar-gutter: stable;
   scrollbar-width: thin;
@@ -580,6 +583,9 @@ body {
   /* margin: auto centers vertically when content fits in container,
      but allows scrolling from top when content overflows */
   margin: auto;
+  /* Prevent horizontal overflow from child content */
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 @media (max-height: 720px) {
@@ -595,11 +601,15 @@ body {
   .welcome-screen {
     /* align-items: flex-start is now the default */
     padding-top: calc(var(--space-md) + env(safe-area-inset-top, 0px));
+    /* Remove scrollbar gutter reservation on mobile - use native overlay scrollbars */
+    scrollbar-gutter: auto;
   }
 
   .welcome-content {
     /* On mobile, always start at top instead of centering */
     margin-top: 0;
+    /* Ensure content doesn't overflow viewport width */
+    max-width: 100%;
   }
 }
 
@@ -1005,6 +1015,89 @@ body {
   display: none;
 }
 
+/* ============================================================================
+   Memory Usage Indicator - Non-intrusive WASM memory monitoring
+   ============================================================================ */
+
+.memory-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  padding-left: var(--space-xs);
+  border-left: 1px solid var(--color-border);
+  margin-left: var(--space-xs);
+  font-size: var(--font-size-2xs);
+  color: var(--color-text-secondary);
+  cursor: help;
+}
+
+.memory-icon {
+  font-size: 0.9em;
+}
+
+.memory-text {
+  font-family: var(--font-family-mono);
+  min-width: 50px;
+}
+
+.memory-bar {
+  width: 40px;
+  height: 6px;
+  background: var(--color-bg-tertiary);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.memory-bar-fill {
+  height: 100%;
+  background: var(--color-accent);
+  transition:
+    width 0.3s ease,
+    background-color 0.3s ease;
+  border-radius: 3px;
+}
+
+/* Warning state (75%+ usage) */
+.memory-indicator.warning .memory-bar-fill {
+  background: var(--color-warning, #ffc107);
+}
+
+.memory-indicator.warning .memory-text {
+  color: var(--color-warning, #ffc107);
+}
+
+/* Critical state (90%+ usage) */
+.memory-indicator.critical .memory-bar-fill {
+  background: var(--color-error, #dc3545);
+}
+
+.memory-indicator.critical .memory-text {
+  color: var(--color-error, #dc3545);
+}
+
+/* Hide on small screens to avoid crowding */
+@media (max-width: 600px) {
+  .memory-indicator {
+    display: none;
+  }
+}
+
+/* High contrast mode */
+@media (forced-colors: active) {
+  .memory-indicator {
+    border-left-color: CanvasText;
+  }
+
+  .memory-bar {
+    border: 1px solid CanvasText;
+    background: Canvas;
+  }
+
+  .memory-bar-fill {
+    background: Highlight;
+  }
+}
+
 /* Hide status bar when idle/ready */
 .preview-status-bar.idle {
   opacity: 0;
@@ -1032,6 +1125,130 @@ body {
 /* Alt adjust info line - hidden by default, shown only in specific variants */
 .preview-status-alt-adjust {
   display: none;
+}
+
+/* =========================================
+   ECHO Message Drawer
+   ========================================= */
+
+.echo-drawer {
+  display: none;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--color-bg-secondary);
+  border-top: 1px solid var(--color-border);
+  z-index: 10;
+}
+
+.echo-drawer.visible {
+  display: block;
+}
+
+/* Toggle button */
+.echo-drawer-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 6px 12px;
+  background: var(--color-info-bg, rgba(23, 162, 184, 0.15));
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.echo-drawer-toggle:hover {
+  background: var(--color-info-bg, rgba(23, 162, 184, 0.25));
+}
+
+.echo-drawer-toggle:focus-visible {
+  outline: 3px solid var(--color-focus-ring, var(--color-info));
+  outline-offset: -3px;
+}
+
+.echo-drawer-label {
+  color: var(--color-info-text, #17a2b8);
+  font-size: var(--font-size-sm, 0.875rem);
+  font-weight: 500;
+}
+
+.echo-drawer-arrow {
+  color: var(--color-info-text, #17a2b8);
+  transition: transform 0.3s ease;
+  flex-shrink: 0;
+}
+
+/* Arrow rotates when expanded */
+.echo-drawer-toggle[aria-expanded='true'] .echo-drawer-arrow {
+  transform: rotate(180deg);
+}
+
+/* Content area - hidden when collapsed */
+.echo-drawer-content {
+  display: none;
+  padding: 8px 12px;
+  background: var(--color-bg-tertiary, var(--color-bg-secondary));
+  border-top: 1px solid var(--color-border);
+}
+
+.echo-drawer:not(.collapsed) .echo-drawer-content {
+  display: block;
+}
+
+/* Echo messages container */
+.echo-messages {
+  margin: 0 0 8px 0;
+  padding: 8px;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm, 4px);
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: var(--font-size-xs, 0.75rem);
+  color: var(--color-info-text, #17a2b8);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  line-height: 1.5;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+/* Empty state */
+.echo-messages:empty::before {
+  content: 'No echo messages';
+  color: var(--color-text-tertiary);
+  font-style: italic;
+}
+
+/* View console button */
+.echo-view-console {
+  font-size: var(--font-size-xs, 0.75rem);
+}
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .echo-drawer-arrow {
+    transition: none;
+  }
+}
+
+/* High contrast mode */
+@media (forced-colors: active) {
+  .echo-drawer {
+    border: 2px solid CanvasText;
+  }
+
+  .echo-drawer-toggle {
+    background: Canvas;
+    border-bottom: 1px solid CanvasText;
+  }
+
+  .echo-drawer-label,
+  .echo-drawer-arrow,
+  .echo-messages {
+    color: CanvasText;
+  }
 }
 
 /* Hidden by user toggle */

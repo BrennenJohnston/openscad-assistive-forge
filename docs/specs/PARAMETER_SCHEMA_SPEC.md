@@ -12,10 +12,10 @@ The Parameter Schema is based on **JSON Schema (draft 2020-12)** with custom ext
 
 ## Goals
 
-1. **Lossless extraction** — Capture all OpenSCAD Customizer information
-2. **UI-ready metadata** — Include everything needed to render a form UI
-3. **Validation-friendly** — Support runtime validation of parameter values
-4. **Bidirectional** — Support both OpenSCAD→Web and Web→OpenSCAD workflows
+1. **Lossless extraction**: Capture all OpenSCAD Customizer information
+2. **UI-ready metadata**: Include everything needed to render a form UI
+3. **Validation-friendly**: Support runtime validation of parameter values
+4. **Bidirectional**: Support both OpenSCAD to Web and Web to OpenSCAD workflows
 
 ---
 
@@ -380,12 +380,12 @@ angle = 45;  // [0:90] degrees
 ```
 
 **Standard Units:**
-- `mm` — millimeters
-- `cm` — centimeters
-- `in` — inches
-- `deg` — degrees
-- `rad` — radians
-- `%` — percentage
+- `mm` (millimeters)
+- `cm` (centimeters)
+- `in` (inches)
+- `deg` (degrees)
+- `rad` (radians)
+- `%` (percentage)
 
 ---
 

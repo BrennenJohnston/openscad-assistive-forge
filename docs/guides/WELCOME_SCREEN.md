@@ -93,7 +93,31 @@ Below the role cards, key accessibility features are highlighted:
 
 Module: `src/js/tutorial-sandbox.js`
 
-All role paths launch a spotlight coachmark tutorial after loading the example. Features include:
+All role paths launch a spotlight coachmark tutorial after loading the example.
+
+```mermaid
+flowchart TB
+    User[User picks role path] --> Load[Load example SCAD]
+    Load --> Tutorial[tutorial-sandbox.js]
+    Tutorial --> Spotlight[Create SVG spotlight overlay]
+    Tutorial --> Panel[Show tutorial panel]
+    Tutorial --> Arrow[Position arrow to target]
+    
+    Panel --> Step[Display current step]
+    Step --> Action[User completes action]
+    Action --> Check{Action complete?}
+    Check -->|Yes| Next[Next step]
+    Check -->|No| Wait[Wait for action]
+    Wait --> Action
+    Next --> Done{Final step?}
+    Done -->|No| Step
+    Done -->|Yes| Close[Close tutorial]
+    
+    User2[User presses Escape] --> Close
+    User2[User clicks X button] --> Close
+```
+
+Features include:
 
 - Step-by-step walkthroughs (4-6 steps per path)
 - Floating panel with smart positioning

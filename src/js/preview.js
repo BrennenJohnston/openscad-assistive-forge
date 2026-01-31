@@ -161,6 +161,27 @@ export class PreviewManager {
     this._resizeHook = null;
     this._postLoadHook = null; // Called after STL is loaded
 
+    // Reference overlay (screenshot/SVG image plane under the model)
+    this.referenceOverlay = null; // THREE.Mesh for the overlay plane
+    this.referenceTexture = null; // THREE.Texture for the image
+    this.overlayConfig = {
+      enabled: false,
+      opacity: 0.5,
+      offsetX: 0, // mm
+      offsetY: 0, // mm
+      rotationDeg: 0,
+      width: 200, // mm (default; will be replaced by "fit to model XY" when possible)
+      height: 150, // mm
+      zPosition: -0.25, // Slightly below Z=0 build plate (avoid z-fighting with grid)
+      lockAspect: true,
+      intrinsicAspect: null, // Width/height ratio from source image
+      sourceFileName: null, // Name of the file used as overlay source
+    };
+
+    // Overlay measurements (dimension lines on the overlay)
+    this.overlayMeasurementsEnabled = false;
+    this.overlayMeasurementHelpers = null; // Group containing overlay measurement visuals
+
     // Resize state tracking for view preservation
     this._lastAspect = null; // Previous aspect ratio for comparison
     this._lastContainerWidth = 0; // Track container dimensions
@@ -1809,6 +1830,12 @@ export class PreviewManager {
       this.controls.update();
     }
 
+    // Adjust reference overlay position to stay aligned with the model
+    if (this.referenceOverlay) {
+      this.referenceOverlay.position.z =
+        this.overlayConfig.zPosition + centeringOffset;
+    }
+
     console.log(
       `[Preview] Rotation centering enabled: mesh moved by ${centeringOffset.toFixed(3)} mm on Z`
     );
@@ -1834,6 +1861,11 @@ export class PreviewManager {
       this.camera.position.z += restorationOffset;
       this.controls.target.z += restorationOffset;
       this.controls.update();
+    }
+
+    // Restore reference overlay position
+    if (this.referenceOverlay) {
+      this.referenceOverlay.position.z = this.overlayConfig.zPosition;
     }
 
     console.log(
@@ -1891,6 +1923,694 @@ export class PreviewManager {
     return this.controls?.autoRotateSpeed ?? 0.5;
   }
 
+  // ============================================================================
+  // Reference Overlay System
+  // ============================================================================
+
+  /**
+   * Set the reference overlay source from an image/SVG
+   * @param {Object} source - Source configuration
+   * @param {string} source.kind - 'raster' (PNG/JPG) or 'svg'
+   * @param {string} source.name - Source file name for display
+   * @param {string} source.dataUrlOrText - Data URL for rasters, SVG text for SVG
+   * @returns {Promise<void>}
+   */
+  async setReferenceOverlaySource({ kind, name, dataUrlOrText }) {
+    // Dispose of existing texture
+    if (this.referenceTexture) {
+      this.referenceTexture.dispose();
+      this.referenceTexture = null;
+    }
+
+    if (!dataUrlOrText) {
+      console.log('[Preview] Overlay source cleared');
+      this.overlayConfig.sourceFileName = null;
+      this.overlayConfig.intrinsicAspect = null;
+      this.removeReferenceOverlay();
+      return;
+    }
+
+    try {
+      if (kind === 'svg') {
+        // Convert SVG text to texture
+        const { texture, aspect } =
+          await this.svgTextToCanvasTexture(dataUrlOrText);
+        this.referenceTexture = texture;
+        this.overlayConfig.intrinsicAspect = aspect;
+      } else {
+        // Load raster image (PNG/JPG) as texture
+        const { texture, aspect } =
+          await this.rasterDataUrlToTexture(dataUrlOrText);
+        this.referenceTexture = texture;
+        this.overlayConfig.intrinsicAspect = aspect;
+      }
+
+      this.overlayConfig.sourceFileName = name;
+
+      // Apply aspect ratio to dimensions if locked
+      if (this.overlayConfig.lockAspect && this.overlayConfig.intrinsicAspect) {
+        this.overlayConfig.height =
+          this.overlayConfig.width / this.overlayConfig.intrinsicAspect;
+      }
+
+      // Create/update the overlay if enabled
+      if (this.overlayConfig.enabled) {
+        this.createOrUpdateReferenceOverlay();
+      }
+
+      console.log(
+        `[Preview] Overlay source set: ${name} (${kind}, aspect: ${this.overlayConfig.intrinsicAspect?.toFixed(2) || 'unknown'})`
+      );
+    } catch (error) {
+      console.error('[Preview] Failed to load overlay source:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Convert SVG text to a Three.js CanvasTexture
+   * @param {string} svgContent - SVG markup
+   * @returns {Promise<{texture: THREE.CanvasTexture, aspect: number}>}
+   */
+  async svgTextToCanvasTexture(svgContent) {
+    // Parse SVG to extract viewBox/dimensions for aspect ratio
+    const parser = new DOMParser();
+    const svgDoc = parser.parseFromString(svgContent, 'image/svg+xml');
+    const svgEl = svgDoc.querySelector('svg');
+
+    if (!svgEl) {
+      throw new Error('Invalid SVG: no <svg> element found');
+    }
+
+    // Determine intrinsic dimensions and aspect ratio
+    let intrinsicWidth, intrinsicHeight;
+
+    const viewBox = svgEl.getAttribute('viewBox');
+    if (viewBox) {
+      const [, , vbWidth, vbHeight] = viewBox.split(/[\s,]+/).map(parseFloat);
+      intrinsicWidth = vbWidth;
+      intrinsicHeight = vbHeight;
+    } else {
+      // Fall back to explicit width/height attributes
+      intrinsicWidth =
+        parseFloat(svgEl.getAttribute('width')) ||
+        parseFloat(svgEl.style.width) ||
+        200;
+      intrinsicHeight =
+        parseFloat(svgEl.getAttribute('height')) ||
+        parseFloat(svgEl.style.height) ||
+        150;
+    }
+
+    const aspect = intrinsicWidth / intrinsicHeight;
+
+    // Determine canvas resolution (bounded to avoid memory spikes)
+    const maxDim = this.getMaxTextureResolution();
+    let canvasWidth, canvasHeight;
+
+    if (intrinsicWidth >= intrinsicHeight) {
+      canvasWidth = Math.min(intrinsicWidth, maxDim);
+      canvasHeight = canvasWidth / aspect;
+    } else {
+      canvasHeight = Math.min(intrinsicHeight, maxDim);
+      canvasWidth = canvasHeight * aspect;
+    }
+
+    // Create canvas at the computed resolution
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.ceil(canvasWidth);
+    canvas.height = Math.ceil(canvasHeight);
+
+    // Create Image from SVG blob
+    const blob = new Blob([svgContent], { type: 'image/svg+xml' });
+    const url = URL.createObjectURL(blob);
+
+    try {
+      const img = await this.loadImage(url);
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+
+    // Create Three.js texture from canvas
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.needsUpdate = true;
+
+    return { texture, aspect };
+  }
+
+  /**
+   * Load a raster image (PNG/JPG) from a data URL to a Three.js texture
+   * @param {string} dataUrl - Data URL of the image
+   * @returns {Promise<{texture: THREE.Texture, aspect: number}>}
+   */
+  async rasterDataUrlToTexture(dataUrl) {
+    const img = await this.loadImage(dataUrl);
+    const aspect = img.width / img.height;
+
+    // Resize if needed to avoid memory issues
+    const maxDim = this.getMaxTextureResolution();
+    let canvas;
+
+    if (img.width > maxDim || img.height > maxDim) {
+      canvas = document.createElement('canvas');
+      if (img.width >= img.height) {
+        canvas.width = maxDim;
+        canvas.height = maxDim / aspect;
+      } else {
+        canvas.height = maxDim;
+        canvas.width = maxDim * aspect;
+      }
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.needsUpdate = true;
+      return { texture, aspect };
+    }
+
+    // Use TextureLoader for full-res images
+    const texture = new THREE.Texture(img);
+    texture.needsUpdate = true;
+    return { texture, aspect };
+  }
+
+  /**
+   * Load an image from a URL
+   * @param {string} url - URL to load
+   * @returns {Promise<HTMLImageElement>}
+   */
+  loadImage(url) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error('Failed to load image'));
+      img.src = url;
+    });
+  }
+
+  /**
+   * Get the maximum texture resolution based on device capability
+   * @returns {number} Maximum dimension in pixels
+   */
+  getMaxTextureResolution() {
+    // Mobile devices get lower resolution to avoid memory issues
+    const isMobile = window.innerWidth < 768 || navigator.maxTouchPoints > 0;
+    return isMobile ? 1024 : 2048;
+  }
+
+  /**
+   * Create or update the reference overlay plane mesh
+   */
+  createOrUpdateReferenceOverlay() {
+    if (!this.scene || !this.referenceTexture) {
+      return;
+    }
+
+    const { width, height, opacity, offsetX, offsetY, rotationDeg, zPosition } =
+      this.overlayConfig;
+
+    // Create the mesh if it doesn't exist
+    if (!this.referenceOverlay) {
+      const geometry = new THREE.PlaneGeometry(width, height);
+      const material = new THREE.MeshBasicMaterial({
+        map: this.referenceTexture,
+        transparent: true,
+        opacity: opacity,
+        depthWrite: false, // Prevent overlay from occluding other objects
+        side: THREE.DoubleSide,
+      });
+
+      this.referenceOverlay = new THREE.Mesh(geometry, material);
+      this.referenceOverlay.name = 'referenceOverlay';
+
+      // Position on XY plane (normal +Z) for Z-up coordinate system
+      this.referenceOverlay.rotation.x = 0; // Already on XY plane
+      this.scene.add(this.referenceOverlay);
+
+      console.log('[Preview] Reference overlay created');
+    } else {
+      // Update existing mesh
+      // Update geometry if size changed
+      const geo = this.referenceOverlay.geometry;
+      if (geo.parameters.width !== width || geo.parameters.height !== height) {
+        geo.dispose();
+        this.referenceOverlay.geometry = new THREE.PlaneGeometry(width, height);
+      }
+
+      // Update material
+      this.referenceOverlay.material.map = this.referenceTexture;
+      this.referenceOverlay.material.opacity = opacity;
+      this.referenceOverlay.material.needsUpdate = true;
+    }
+
+    // Update position and rotation
+    this.referenceOverlay.position.set(offsetX, offsetY, zPosition);
+    this.referenceOverlay.rotation.z = (rotationDeg * Math.PI) / 180;
+
+    // Apply rotation centering offset if active
+    if (this.rotationCenteringEnabled) {
+      this.referenceOverlay.position.z = zPosition - this.autoBedOffset;
+    }
+
+    this.referenceOverlay.visible = this.overlayConfig.enabled;
+  }
+
+  /**
+   * Fit the overlay size to match the current model's XY bounding box
+   */
+  fitOverlayToModelXY() {
+    if (!this.mesh) {
+      console.log('[Preview] No mesh to fit overlay to');
+      return;
+    }
+
+    const box = new THREE.Box3().setFromObject(this.mesh);
+    const size = box.getSize(new THREE.Vector3());
+
+    // Update overlay dimensions to match model XY
+    this.overlayConfig.width = size.x;
+    this.overlayConfig.height = size.y;
+
+    // If aspect is locked and we have an intrinsic aspect, adjust to fit within bounds
+    if (this.overlayConfig.lockAspect && this.overlayConfig.intrinsicAspect) {
+      const modelAspect = size.x / size.y;
+      const imageAspect = this.overlayConfig.intrinsicAspect;
+
+      if (imageAspect > modelAspect) {
+        // Image is wider than model, fit to width
+        this.overlayConfig.width = size.x;
+        this.overlayConfig.height = size.x / imageAspect;
+      } else {
+        // Image is taller than model, fit to height
+        this.overlayConfig.height = size.y;
+        this.overlayConfig.width = size.y * imageAspect;
+      }
+    }
+
+    // Center the overlay under the model
+    this.overlayConfig.offsetX = 0;
+    this.overlayConfig.offsetY = 0;
+
+    // Update the overlay mesh
+    if (this.overlayConfig.enabled) {
+      this.createOrUpdateReferenceOverlay();
+    }
+
+    console.log(
+      `[Preview] Overlay fitted to model XY: ${this.overlayConfig.width.toFixed(1)} x ${this.overlayConfig.height.toFixed(1)} mm`
+    );
+  }
+
+  /**
+   * Enable or disable the reference overlay visibility
+   * @param {boolean} enabled - Whether the overlay should be visible
+   */
+  setOverlayEnabled(enabled) {
+    this.overlayConfig.enabled = enabled;
+
+    if (enabled && this.referenceTexture) {
+      this.createOrUpdateReferenceOverlay();
+      // Refresh overlay measurements if they're enabled
+      if (this.overlayMeasurementsEnabled) {
+        this.showOverlayMeasurements();
+      }
+    } else if (this.referenceOverlay) {
+      this.referenceOverlay.visible = false;
+      // Hide overlay measurements when overlay is disabled
+      this.hideOverlayMeasurements();
+    }
+
+    console.log(`[Preview] Overlay ${enabled ? 'enabled' : 'disabled'}`);
+  }
+
+  /**
+   * Set the overlay opacity (0-1)
+   * @param {number} opacity01 - Opacity value from 0 to 1
+   */
+  setOverlayOpacity(opacity01) {
+    this.overlayConfig.opacity = Math.max(0, Math.min(1, opacity01));
+
+    if (this.referenceOverlay && this.referenceOverlay.material) {
+      this.referenceOverlay.material.opacity = this.overlayConfig.opacity;
+    }
+  }
+
+  /**
+   * Set the overlay transform (position and rotation)
+   * @param {Object} transform - Transform configuration
+   * @param {number} [transform.offsetX] - X offset in mm
+   * @param {number} [transform.offsetY] - Y offset in mm
+   * @param {number} [transform.rotationDeg] - Rotation in degrees
+   */
+  setOverlayTransform({ offsetX, offsetY, rotationDeg }) {
+    if (typeof offsetX === 'number') {
+      this.overlayConfig.offsetX = offsetX;
+    }
+    if (typeof offsetY === 'number') {
+      this.overlayConfig.offsetY = offsetY;
+    }
+    if (typeof rotationDeg === 'number') {
+      this.overlayConfig.rotationDeg = rotationDeg;
+    }
+
+    if (this.overlayConfig.enabled) {
+      this.createOrUpdateReferenceOverlay();
+      // Refresh measurements if enabled
+      if (this.overlayMeasurementsEnabled) {
+        this.showOverlayMeasurements();
+      }
+    }
+  }
+
+  /**
+   * Set the overlay size
+   * @param {Object} size - Size configuration
+   * @param {number} [size.width] - Width in mm
+   * @param {number} [size.height] - Height in mm
+   */
+  setOverlaySize({ width, height }) {
+    if (typeof width === 'number') {
+      this.overlayConfig.width = width;
+      // Adjust height if aspect is locked
+      if (this.overlayConfig.lockAspect && this.overlayConfig.intrinsicAspect) {
+        this.overlayConfig.height = width / this.overlayConfig.intrinsicAspect;
+      }
+    }
+    if (typeof height === 'number') {
+      this.overlayConfig.height = height;
+      // Adjust width if aspect is locked
+      if (this.overlayConfig.lockAspect && this.overlayConfig.intrinsicAspect) {
+        this.overlayConfig.width = height * this.overlayConfig.intrinsicAspect;
+      }
+    }
+
+    if (this.overlayConfig.enabled) {
+      this.createOrUpdateReferenceOverlay();
+      // Refresh measurements if enabled
+      if (this.overlayMeasurementsEnabled) {
+        this.showOverlayMeasurements();
+      }
+    }
+  }
+
+  /**
+   * Set whether aspect ratio is locked for the overlay
+   * @param {boolean} locked - Whether to lock aspect ratio
+   */
+  setOverlayAspectLock(locked) {
+    this.overlayConfig.lockAspect = locked;
+  }
+
+  /**
+   * Remove and dispose the reference overlay
+   */
+  removeReferenceOverlay() {
+    // Hide overlay measurements first
+    this.hideOverlayMeasurements();
+
+    if (this.referenceOverlay) {
+      this.scene.remove(this.referenceOverlay);
+      this.referenceOverlay.geometry.dispose();
+      this.referenceOverlay.material.dispose();
+      this.referenceOverlay = null;
+      console.log('[Preview] Reference overlay removed');
+    }
+
+    if (this.referenceTexture) {
+      this.referenceTexture.dispose();
+      this.referenceTexture = null;
+    }
+  }
+
+  /**
+   * Get the current overlay configuration
+   * @returns {Object} Copy of the overlay configuration
+   */
+  getOverlayConfig() {
+    return { ...this.overlayConfig };
+  }
+
+  /**
+   * Toggle overlay measurement display
+   * @param {boolean} enabled - Show or hide overlay measurements
+   */
+  toggleOverlayMeasurements(enabled) {
+    this.overlayMeasurementsEnabled = enabled;
+
+    if (enabled && this.referenceOverlay && this.overlayConfig.enabled) {
+      this.showOverlayMeasurements();
+    } else {
+      this.hideOverlayMeasurements();
+    }
+
+    console.log(
+      `[Preview] Overlay measurements ${enabled ? 'enabled' : 'disabled'}`
+    );
+  }
+
+  /**
+   * Show measurement overlays on the reference overlay plane
+   */
+  showOverlayMeasurements() {
+    if (!this.referenceOverlay || !this.overlayConfig.enabled) return;
+
+    // Remove existing overlay measurements
+    this.hideOverlayMeasurements();
+
+    // Create group for overlay measurement visuals
+    this.overlayMeasurementHelpers = new THREE.Group();
+    this.overlayMeasurementHelpers.name = 'overlayMeasurements';
+
+    const { width, height, offsetX, offsetY, zPosition, rotationDeg } =
+      this.overlayConfig;
+
+    // Calculate corners of the overlay (accounting for rotation centering)
+    const z = this.rotationCenteringEnabled
+      ? zPosition - this.autoBedOffset
+      : zPosition;
+    const zLabel = z + 0.1; // Just slightly above overlay plane
+
+    // Center point
+    const cx = offsetX;
+    const cy = offsetY;
+
+    // Half dimensions
+    const hw = width / 2;
+    const hh = height / 2;
+
+    // Label offset distance from overlay edge (mm) - far enough to be visible
+    const labelOffset = Math.max(15, Math.max(width, height) * 0.1);
+
+    // Rotation in radians
+    const rot = (rotationDeg * Math.PI) / 180;
+    const cos = Math.cos(rot);
+    const sin = Math.sin(rot);
+
+    // Helper to rotate a point around center
+    const rotatePoint = (x, y) => ({
+      x: cx + (x - cx) * cos - (y - cy) * sin,
+      y: cy + (x - cx) * sin + (y - cy) * cos,
+    });
+
+    // Calculate corners (after rotation)
+    const corners = [
+      rotatePoint(cx - hw, cy - hh), // bottom-left
+      rotatePoint(cx + hw, cy - hh), // bottom-right
+      rotatePoint(cx + hw, cy + hh), // top-right
+      rotatePoint(cx - hw, cy + hh), // top-left
+    ];
+
+    // Choose color - use a different color than model measurements (cyan/teal)
+    const lineColor = this.currentTheme.includes('dark') ? 0x00ffff : 0x008b8b;
+
+    // Create outline edges
+    for (let i = 0; i < 4; i++) {
+      const start = corners[i];
+      const end = corners[(i + 1) % 4];
+      const points = [
+        new THREE.Vector3(start.x, start.y, zLabel),
+        new THREE.Vector3(end.x, end.y, zLabel),
+      ];
+      const geometry = new THREE.BufferGeometry().setFromPoints(points);
+      const material = new THREE.LineBasicMaterial({ color: lineColor });
+      const line = new THREE.Line(geometry, material);
+      this.overlayMeasurementHelpers.add(line);
+    }
+
+    // Calculate label positions OUTSIDE the overlay bounds
+    // Width label: below the bottom edge
+    const bottomMid = {
+      x: (corners[0].x + corners[1].x) / 2,
+      y: (corners[0].y + corners[1].y) / 2,
+    };
+    // Offset perpendicular to bottom edge (outward)
+    const bottomDir = {
+      x: -(corners[1].y - corners[0].y),
+      y: corners[1].x - corners[0].x,
+    };
+    const bottomLen = Math.sqrt(
+      bottomDir.x * bottomDir.x + bottomDir.y * bottomDir.y
+    );
+    const widthLabelPos = {
+      x: bottomMid.x - (bottomDir.x / bottomLen) * labelOffset,
+      y: bottomMid.y - (bottomDir.y / bottomLen) * labelOffset,
+    };
+
+    // Height label: left of the left edge
+    const leftMid = {
+      x: (corners[0].x + corners[3].x) / 2,
+      y: (corners[0].y + corners[3].y) / 2,
+    };
+    // Offset perpendicular to left edge (outward)
+    const leftDir = {
+      x: -(corners[3].y - corners[0].y),
+      y: corners[3].x - corners[0].x,
+    };
+    const leftLen = Math.sqrt(leftDir.x * leftDir.x + leftDir.y * leftDir.y);
+    const heightLabelPos = {
+      x: leftMid.x - (leftDir.x / leftLen) * labelOffset,
+      y: leftMid.y - (leftDir.y / leftLen) * labelOffset,
+    };
+
+    // Create flat text labels (lying on XY plane)
+    const widthLabel = this.createFlatTextLabel(
+      `${Math.round(width)} mm`,
+      lineColor,
+      rotationDeg
+    );
+    widthLabel.position.set(widthLabelPos.x, widthLabelPos.y, zLabel);
+    this.overlayMeasurementHelpers.add(widthLabel);
+
+    const heightLabel = this.createFlatTextLabel(
+      `${Math.round(height)} mm`,
+      lineColor,
+      rotationDeg + 90 // Rotate 90° for height label
+    );
+    heightLabel.position.set(heightLabelPos.x, heightLabelPos.y, zLabel);
+    this.overlayMeasurementHelpers.add(heightLabel);
+
+    // Add dimension lines from label to edge
+    this.addDimensionExtensionLine(widthLabelPos, bottomMid, zLabel, lineColor);
+    this.addDimensionExtensionLine(heightLabelPos, leftMid, zLabel, lineColor);
+
+    this.scene.add(this.overlayMeasurementHelpers);
+    console.log(
+      `[Preview] Overlay measurements displayed: ${Math.round(width)} x ${Math.round(height)} mm`
+    );
+  }
+
+  /**
+   * Create a flat text label that lies on the XY plane
+   * @param {string} text - Text content
+   * @param {number} color - Text color
+   * @param {number} rotationDeg - Rotation in degrees
+   * @returns {THREE.Mesh} Text mesh lying flat
+   */
+  createFlatTextLabel(text, color, rotationDeg) {
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    const fontSize = 48;
+
+    // Set canvas size
+    canvas.width = 256;
+    canvas.height = 64;
+
+    // Draw background for better visibility
+    const bgColor = this.currentTheme.includes('dark')
+      ? 'rgba(0, 0, 0, 0.85)'
+      : 'rgba(255, 255, 255, 0.85)';
+    context.fillStyle = bgColor;
+    context.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Configure text rendering
+    context.font = `bold ${fontSize}px Arial`;
+    context.fillStyle = this.currentTheme.includes('dark')
+      ? '#00ffff'
+      : '#008b8b';
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+    context.fillText(text, canvas.width / 2, canvas.height / 2);
+
+    // Create texture from canvas
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.needsUpdate = true;
+
+    // Create a plane geometry lying flat on XY
+    // Size the plane proportionally to the text (roughly 20mm wide for readability)
+    const planeWidth = 30;
+    const planeHeight = planeWidth * (canvas.height / canvas.width);
+    const geometry = new THREE.PlaneGeometry(planeWidth, planeHeight);
+
+    const material = new THREE.MeshBasicMaterial({
+      map: texture,
+      transparent: true,
+      side: THREE.DoubleSide,
+      depthTest: true,
+      depthWrite: false,
+    });
+
+    const mesh = new THREE.Mesh(geometry, material);
+
+    // Rotate to lie flat on XY plane (facing up, +Z)
+    // PlaneGeometry faces +Z by default, so no X rotation needed
+    // Apply the overlay's rotation around Z axis
+    mesh.rotation.z = (rotationDeg * Math.PI) / 180;
+
+    return mesh;
+  }
+
+  /**
+   * Add a thin extension line from label to edge
+   * @param {Object} from - Start position {x, y}
+   * @param {Object} to - End position {x, y}
+   * @param {number} z - Z position
+   * @param {number} color - Line color
+   */
+  addDimensionExtensionLine(from, to, z, color) {
+    const points = [
+      new THREE.Vector3(from.x, from.y, z),
+      new THREE.Vector3(to.x, to.y, z),
+    ];
+    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+    const material = new THREE.LineBasicMaterial({
+      color: color,
+      transparent: true,
+      opacity: 0.5,
+    });
+    const line = new THREE.Line(geometry, material);
+    this.overlayMeasurementHelpers.add(line);
+  }
+
+  /**
+   * Hide overlay measurement overlays
+   */
+  hideOverlayMeasurements() {
+    if (this.overlayMeasurementHelpers) {
+      // Dispose of geometries and materials
+      this.overlayMeasurementHelpers.traverse((child) => {
+        if (child.geometry) child.geometry.dispose();
+        if (child.material) {
+          if (child.material.map) child.material.map.dispose();
+          child.material.dispose();
+        }
+      });
+
+      this.scene.remove(this.overlayMeasurementHelpers);
+      this.overlayMeasurementHelpers = null;
+    }
+  }
+
+  /**
+   * Check if overlay measurements are enabled
+   * @returns {boolean}
+   */
+  isOverlayMeasurementsEnabled() {
+    return this.overlayMeasurementsEnabled;
+  }
+
   /**
    * Clear the preview
    */
@@ -1908,6 +2628,13 @@ export class PreviewManager {
       this.mesh.material.dispose();
       this.mesh = null;
     }
+
+    // Keep the overlay when clearing the model (user may want to reference it for alignment)
+    // But update its Z position since auto-bed offset is reset
+    if (this.referenceOverlay) {
+      this.referenceOverlay.position.z = this.overlayConfig.zPosition;
+    }
+
     this.renderer.render(this.scene, this.camera);
 
     // Update screen reader model summary (WCAG 2.2)
@@ -1948,6 +2675,9 @@ export class PreviewManager {
       this.mesh.geometry.dispose();
       this.mesh.material.dispose();
     }
+
+    // Clean up reference overlay
+    this.removeReferenceOverlay();
 
     if (this.renderer) {
       this.renderer.dispose();
