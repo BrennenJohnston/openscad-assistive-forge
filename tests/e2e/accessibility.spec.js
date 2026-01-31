@@ -423,9 +423,9 @@ test.describe('Modal Focus Management', () => {
     await expect(learnMoreBtn).toBeVisible()
     await learnMoreBtn.click()
     
-    // Wait for modal to be visible
+    // Wait for modal to be visible (allow time for JS event handlers to process)
     const modal = page.locator('#featuresGuideModal')
-    await expect(modal).toBeVisible()
+    await expect(modal).toBeVisible({ timeout: 5000 })
     
     // Get first and last focusable elements in modal
     const focusableElements = await modal.locator('button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])').all()
@@ -457,8 +457,9 @@ test.describe('Modal Focus Management', () => {
     await learnMoreBtn.focus()
     await learnMoreBtn.click()
     
+    // Wait for modal to be visible (allow time for JS event handlers to process)
     const modal = page.locator('#featuresGuideModal')
-    await expect(modal).toBeVisible()
+    await expect(modal).toBeVisible({ timeout: 5000 })
     
     // Close modal
     await page.keyboard.press('Escape')

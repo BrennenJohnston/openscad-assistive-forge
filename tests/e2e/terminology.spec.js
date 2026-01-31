@@ -90,7 +90,8 @@ test.describe('Terminology Consistency - Saved Designs', () => {
     
     const list = page.locator('#savedProjectsList')
     
-    if (await list.isAttached()) {
+    // Check if element exists using count() - isAttached() is not a valid Playwright method
+    if (await list.count() > 0) {
       const ariaLabel = await list.getAttribute('aria-label')
       if (ariaLabel) {
         expect(ariaLabel.toLowerCase()).toContain('design')

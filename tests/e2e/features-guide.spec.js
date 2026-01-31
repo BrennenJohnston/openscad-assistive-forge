@@ -219,9 +219,9 @@ test.describe('Features Guide Modal', () => {
     // Click it
     await learnMoreBtn.click()
     
-    // Modal should open
+    // Modal should open - wait for it to be visible (class hidden should be removed)
     const modal = page.locator('#featuresGuideModal')
-    await expect(modal).not.toHaveClass(/hidden/)
+    await expect(modal).toBeVisible({ timeout: 5000 })
     
     console.log('Features Guide opened from welcome screen')
   })

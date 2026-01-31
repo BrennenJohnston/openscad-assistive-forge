@@ -47,8 +47,12 @@ test.describe('Example Deep-Links', () => {
     // Should not crash - either shows welcome screen or error message
     await expect(page.locator('body')).toBeVisible()
     
-    // Check we didn't get a blank page
-    const hasContent = await page.locator('h1, #welcomeScreen, #statusArea').isVisible().catch(() => false)
+    // Check we didn't get a blank page - at least one of these elements should exist
+    const h1Count = await page.locator('h1').count()
+    const welcomeCount = await page.locator('#welcomeScreen').count()
+    const statusCount = await page.locator('#statusArea').count()
+    
+    const hasContent = h1Count > 0 || welcomeCount > 0 || statusCount > 0
     expect(hasContent).toBe(true)
   })
 })
