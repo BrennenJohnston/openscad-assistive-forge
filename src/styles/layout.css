@@ -148,7 +148,7 @@ body {
   color: var(--color-text-primary);
   cursor: pointer;
   padding: var(--space-xs);
-  transition: all 0.2s ease;
+  transition: all var(--motion-base) ease;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -232,7 +232,7 @@ body {
   color: var(--color-text-primary);
   cursor: pointer;
   padding: var(--space-xs) var(--space-sm);
-  transition: all 0.2s ease;
+  transition: all var(--motion-base) ease;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -288,7 +288,7 @@ body {
   color: var(--color-text-primary);
   cursor: pointer;
   padding: var(--space-sm);
-  transition: all 0.2s ease;
+  transition: all var(--motion-base) ease;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -341,7 +341,7 @@ body {
   color: var(--color-text-primary);
   cursor: pointer;
   padding: var(--space-sm);
-  transition: all 0.2s ease;
+  transition: all var(--motion-base) ease;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -367,8 +367,8 @@ body {
 
 .theme-icon {
   transition:
-    opacity 0.2s ease,
-    transform 0.2s ease;
+    opacity var(--motion-base) ease,
+    transform var(--motion-base) ease;
 }
 
 /* Hide sun icon by default (light mode), show moon */
@@ -409,7 +409,7 @@ body {
   color: var(--color-text-primary);
   cursor: pointer;
   padding: var(--space-sm);
-  transition: all 0.2s ease;
+  transition: all var(--motion-base) ease;
   display: none; /* Hidden by default until unlock */
   align-items: center;
   justify-content: center;
@@ -474,7 +474,7 @@ body {
   color: var(--color-text-primary);
   cursor: pointer;
   padding: var(--space-xs);
-  transition: all 0.2s ease;
+  transition: all var(--motion-base) ease;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -697,7 +697,7 @@ body {
   /* Keep below app modals (currently z-index: 1000) */
   z-index: 900;
   opacity: 0;
-  transition: opacity 0.3s ease-out;
+  transition: opacity var(--motion-slow) ease-out;
 }
 
 .drawer-backdrop.visible {
@@ -774,7 +774,7 @@ body {
     max-height: 100vh;
     max-height: 100dvh; /* Dynamic viewport height */
     transform: translateX(-100%);
-    transition: transform 0.3s ease-out;
+    transition: transform var(--motion-slow) ease-out;
     /* Keep below app modals (currently z-index: 1000) */
     z-index: 950;
     border-right: 1px solid var(--color-border);
@@ -817,7 +817,7 @@ body {
     flex: 1;
     min-height: 0;
     padding-bottom: var(--actions-bar-collapsed-offset);
-    transition: padding-bottom 0.2s ease;
+    transition: padding-bottom var(--motion-base) ease;
   }
 
   /* Increase preview panel padding when camera drawer is expanded */
@@ -971,7 +971,7 @@ body {
   color: var(--color-text-primary);
   z-index: 15;
   max-width: calc(100% - var(--space-md));
-  transition: opacity 0.2s ease;
+  transition: opacity var(--motion-base) ease;
   pointer-events: none;
 
   /* Single line layout */
@@ -1052,8 +1052,8 @@ body {
   height: 100%;
   background: var(--color-accent);
   transition:
-    width 0.3s ease,
-    background-color 0.3s ease;
+    width var(--motion-slow) ease,
+    background-color var(--motion-slow) ease;
   border-radius: 3px;
 }
 
@@ -1156,7 +1156,7 @@ body {
   background: var(--color-info-bg, rgba(23, 162, 184, 0.15));
   border: none;
   cursor: pointer;
-  transition: background-color 0.2s ease;
+  transition: background-color var(--motion-base) ease;
 }
 
 .echo-drawer-toggle:hover {
@@ -1176,7 +1176,7 @@ body {
 
 .echo-drawer-arrow {
   color: var(--color-info-text, #17a2b8);
-  transition: transform 0.3s ease;
+  transition: transform var(--motion-slow) ease;
   flex-shrink: 0;
 }
 
@@ -1418,8 +1418,8 @@ body {
     max-height: none;
     border-right: none; /* Gutter will provide separator */
     transition:
-      width 0.3s ease,
-      min-width 0.3s ease;
+      width var(--motion-slow) ease,
+      min-width var(--motion-slow) ease;
   }
 
   /* Respect reduced motion preference */
@@ -1542,7 +1542,7 @@ body {
     border: 1px solid var(--color-border);
     border-right: none;
     overflow: hidden;
-    transition: width 0.2s ease;
+    transition: width var(--motion-base) ease;
   }
 
   .camera-panel-header {
@@ -1586,7 +1586,7 @@ body {
   }
 
   .camera-panel .btn-collapse-panel svg {
-    transition: transform 0.2s ease;
+    transition: transform var(--motion-base) ease;
   }
 
   /* Rotate icon when expanded */
@@ -1690,6 +1690,30 @@ body {
   gap: var(--space-xs);
 }
 
+/* Standard camera views grid (Top, Front, Side, Diagonal) */
+.camera-standard-views {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-xs);
+}
+
+.camera-view-btn {
+  padding: var(--space-xs) var(--space-sm);
+  font-size: var(--font-size-sm);
+  min-height: 36px;
+}
+
+.camera-view-btn:hover {
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+  border-color: var(--color-accent);
+}
+
+.camera-view-btn:focus {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
 /* Row layout for zoom buttons */
 .camera-control-row {
   display: flex;
@@ -1713,9 +1737,9 @@ body {
   color: var(--color-text-primary);
   cursor: pointer;
   transition:
-    background-color 0.15s,
-    border-color 0.15s,
-    color 0.15s;
+    background-color var(--motion-fast),
+    border-color var(--motion-fast),
+    color var(--motion-fast);
 }
 
 .camera-btn:hover {
@@ -1772,9 +1796,9 @@ body {
   font-size: var(--font-size-xs);
   cursor: pointer;
   transition:
-    background-color 0.15s,
-    border-color 0.15s,
-    color 0.15s;
+    background-color var(--motion-fast),
+    border-color var(--motion-fast),
+    color var(--motion-fast);
 }
 
 .camera-btn-wide:hover {
@@ -1979,7 +2003,7 @@ body {
     background-position: 50%;
     cursor: col-resize;
     flex-shrink: 0;
-    transition: background-color 0.2s ease;
+    transition: background-color var(--motion-base) ease;
   }
 
   .gutter:hover {
@@ -2262,7 +2286,7 @@ details summary:focus,
 
 /* Icon rotation - matches preview drawer pattern */
 .actions-drawer-toggle-btn.btn-collapse-panel svg {
-  transition: transform 0.2s ease;
+  transition: transform var(--motion-base) ease;
   /* Base icon points left; rotate to point DOWN when collapsed (expand) */
   transform: rotate(90deg);
 }
@@ -2405,12 +2429,12 @@ details summary:focus,
 /* Compact header mode */
 .app-header.compact {
   padding: var(--space-sm) var(--space-lg);
-  transition: padding 0.3s ease;
+  transition: padding var(--motion-slow) ease;
 }
 
 .app-header.compact h1 {
   font-size: var(--font-size-lg);
-  transition: font-size 0.3s ease;
+  transition: font-size var(--motion-slow) ease;
 }
 
 .app-header.compact .app-tagline {
@@ -2648,7 +2672,7 @@ details summary:focus,
   .camera-drawer-icon .drawer-chevron {
     stroke: currentColor;
     stroke-width: 2;
-    transition: transform 0.2s ease;
+    transition: transform var(--motion-base) ease;
     transform: rotate(180deg); /* Collapsed: points up (expand) */
   }
 
@@ -2791,8 +2815,8 @@ details summary:focus,
     color: var(--color-text-primary);
     cursor: pointer;
     transition:
-      background-color 0.15s,
-      border-color 0.15s;
+      background-color var(--motion-fast),
+      border-color var(--motion-fast);
   }
 
   /* Fallback for buttons */
@@ -2879,6 +2903,49 @@ details summary:focus,
     justify-self: end;
     width: 100%;
     max-width: 140px;
+  }
+
+  /* Standard Views section - horizontal scrollable row on mobile */
+  .camera-drawer-views {
+    grid-column: 1 / -1;
+    align-items: stretch !important;
+    width: 100%;
+  }
+
+  .camera-drawer-views-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-xs);
+    justify-content: center;
+  }
+
+  .camera-drawer-views-grid .camera-view-btn {
+    flex: 0 0 auto;
+    min-width: 60px;
+    padding: var(--space-xs) var(--space-sm);
+    font-size: var(--font-size-xs);
+  }
+
+  /* Projection toggle section */
+  .camera-drawer-projection {
+    grid-column: 1 / -1;
+    width: 100%;
+    align-items: center !important;
+  }
+
+  .camera-drawer-projection-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-xs);
+    padding: var(--space-xs) var(--space-md);
+    font-size: var(--font-size-xs);
+    width: auto;
+    min-height: 36px;
+  }
+
+  .camera-drawer-projection-btn svg {
+    flex-shrink: 0;
   }
 
   /* Actions Drawer on mobile - header stays in place, body expands as overlay */
@@ -3430,7 +3497,7 @@ details summary:focus,
     content: '▼' !important;
     font-size: 10px !important;
     margin-right: var(--space-xs) !important;
-    transition: transform 0.2s ease !important;
+    transition: transform var(--motion-base) ease !important;
     display: inline-block !important;
   }
 
@@ -3467,7 +3534,7 @@ details summary:focus,
     content: '▼' !important;
     font-size: 10px !important;
     margin-right: var(--space-xs) !important;
-    transition: transform 0.2s ease !important;
+    transition: transform var(--motion-base) ease !important;
     display: inline-block !important;
   }
 

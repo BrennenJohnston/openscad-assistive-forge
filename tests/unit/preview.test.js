@@ -47,7 +47,7 @@ describe('PreviewManager', () => {
     })
 
     it('loads measurement preference from localStorage', () => {
-      localStorage.setItem('openscad-customizer-measurements', 'true')
+      localStorage.setItem('openscad-forge-measurements', 'true')
       const manager = new PreviewManager(container)
       
       expect(manager.measurementsEnabled).toBe(true)
@@ -56,13 +56,13 @@ describe('PreviewManager', () => {
 
   describe('Measurement Preferences', () => {
     it('loads and saves measurement preference', () => {
-      localStorage.setItem('openscad-customizer-measurements', 'true')
+      localStorage.setItem('openscad-forge-measurements', 'true')
       const manager = new PreviewManager(container)
 
       expect(manager.loadMeasurementPreference()).toBe(true)
 
       manager.saveMeasurementPreference(false)
-      expect(localStorage.getItem('openscad-customizer-measurements')).toBe('false')
+      expect(localStorage.getItem('openscad-forge-measurements')).toBe('false')
     })
 
     it('returns false when localStorage is empty', () => {
@@ -166,11 +166,11 @@ describe('PreviewManager', () => {
 
       manager.toggleMeasurements(true)
       expect(manager.showMeasurements).toHaveBeenCalled()
-      expect(localStorage.getItem('openscad-customizer-measurements')).toBe('true')
+      expect(localStorage.getItem('openscad-forge-measurements')).toBe('true')
 
       manager.toggleMeasurements(false)
       expect(manager.hideMeasurements).toHaveBeenCalled()
-      expect(localStorage.getItem('openscad-customizer-measurements')).toBe('false')
+      expect(localStorage.getItem('openscad-forge-measurements')).toBe('false')
     })
 
     it('does not show measurements when no mesh exists', () => {

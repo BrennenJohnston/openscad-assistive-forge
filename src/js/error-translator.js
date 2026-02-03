@@ -4,6 +4,8 @@
  * @license GPL-3.0-or-later
  */
 
+import { announceError } from './announcer.js';
+
 /**
  * Common OpenSCAD error patterns and their user-friendly translations
  */
@@ -267,12 +269,9 @@ export function showFriendlyError(technicalError, container) {
   container.appendChild(errorDisplay);
   container.classList.remove('hidden');
 
-  // Announce to screen readers
-  const srAnnouncer = document.getElementById('srAnnouncer');
-  if (srAnnouncer) {
-    const error = translateError(technicalError);
-    srAnnouncer.textContent = `Error: ${error.title}. ${error.explanation}`;
-  }
+  // Announce to screen readers via assertive region
+  const error = translateError(technicalError);
+  announceError(`Error: ${error.title}. ${error.explanation}`);
 }
 
 /**

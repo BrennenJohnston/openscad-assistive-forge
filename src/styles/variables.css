@@ -37,6 +37,19 @@
   --font-size-2xl: 2rem; /* 32px */
   --font-size-3xl: 2.5rem; /* 40px */
 
+  /* Font Weights (design tokens for consistency) */
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  /* Opacity (design tokens for consistent disabled/muted states)
+     Note: In forced-colors mode, opacity alone may not be sufficient.
+     Use additional visual cues (borders, icons) for disabled states. */
+  --opacity-disabled: 0.5;
+  --opacity-muted: 0.6;
+  --opacity-subtle: 0.8;
+
   /* Touch Targets & Interactive Sizing */
   --size-touch-target: 44px;
   --size-touch-target-sm: 36px;
@@ -56,8 +69,11 @@
   --border-radius-md: 8px;
   --border-radius-lg: 12px;
   --border-radius-pill: 999px;
-  --radius-sm: 6px;
-  --radius-md: 10px;
+
+  /* DEPRECATED: Use --border-radius-* tokens instead.
+     These aliases exist for backward compatibility and will be removed. */
+  --radius-sm: var(--border-radius-sm);
+  --radius-md: var(--border-radius-md);
 
   /* Focus Ring */
   --focus-ring-width: 3px;

@@ -9,6 +9,7 @@ export default defineConfig({
       '**/node_modules/**',
       '**/dist/**',
       '**/e2e/**',  // Playwright E2E tests
+      '**/visual/**',  // Playwright visual regression tests
       '**/.{idea,git,cache,output,temp}/**'
     ],
     coverage: {

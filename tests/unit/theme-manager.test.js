@@ -26,21 +26,21 @@ describe('Theme Manager', () => {
     })
 
     it('should load saved theme from localStorage', () => {
-      localStorage.setItem('openscad-customizer-theme', 'dark')
+      localStorage.setItem('openscad-forge-theme', 'dark')
       
       const manager = new ThemeManager()
       expect(manager.currentTheme).toBe('dark')
     })
 
     it('should load saved light theme from localStorage', () => {
-      localStorage.setItem('openscad-customizer-theme', 'light')
+      localStorage.setItem('openscad-forge-theme', 'light')
       
       const manager = new ThemeManager()
       expect(manager.currentTheme).toBe('light')
     })
 
     it('should handle invalid theme in localStorage', () => {
-      localStorage.setItem('openscad-customizer-theme', 'invalid-theme')
+      localStorage.setItem('openscad-forge-theme', 'invalid-theme')
       
       const manager = new ThemeManager()
       // Should default to auto
@@ -72,7 +72,7 @@ describe('Theme Manager', () => {
     it('should handle localStorage errors gracefully when loading high contrast', () => {
       const originalGetItem = localStorage.getItem
       localStorage.getItem = (key) => {
-        if (key === 'openscad-customizer-high-contrast') {
+        if (key === 'openscad-forge-high-contrast') {
           throw new Error('Storage error')
         }
         return null
@@ -118,7 +118,7 @@ describe('Theme Manager', () => {
     it('should persist high contrast preference', () => {
       themeManager.toggleHighContrast()
       
-      const saved = localStorage.getItem('openscad-customizer-high-contrast')
+      const saved = localStorage.getItem('openscad-forge-high-contrast')
       expect(saved).toBe('true')
     })
   })
@@ -128,7 +128,7 @@ describe('Theme Manager', () => {
       themeManager.applyTheme('dark')
       themeManager.saveTheme('dark')
       
-      const saved = localStorage.getItem('openscad-customizer-theme')
+      const saved = localStorage.getItem('openscad-forge-theme')
       expect(saved).toBe('dark')
     })
 
@@ -290,8 +290,8 @@ describe('Theme Manager', () => {
 
   describe('Init Method', () => {
     it('should apply current theme and high contrast on init', () => {
-      localStorage.setItem('openscad-customizer-theme', 'dark')
-      localStorage.setItem('openscad-customizer-high-contrast', 'true')
+      localStorage.setItem('openscad-forge-theme', 'dark')
+      localStorage.setItem('openscad-forge-high-contrast', 'true')
       
       const manager = new ThemeManager()
       manager.init()

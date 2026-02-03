@@ -36,7 +36,10 @@
     "test:e2e:direct": "playwright test",
     "test:e2e:report": "playwright show-report",
     "test:all": "npm run test:run && npm run test:e2e",
-    "check-a11y": "lighthouse http://localhost:5173 --only-categories=accessibility --quiet"
+    "test:visual": "playwright test --project=visual-regression",
+    "test:visual:update": "playwright test --project=visual-regression --update-snapshots",
+    "check-a11y": "lighthouse http://localhost:5173 --only-categories=accessibility --quiet",
+    "check-bundle": "node scripts/check-bundle-budget.js dist"
   },
   "keywords": [
     "openscad",

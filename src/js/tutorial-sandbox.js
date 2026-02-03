@@ -11,6 +11,9 @@
  * @module tutorial-sandbox
  */
 
+import { createFocusTrap } from './focus-trap.js';
+import { announceImmediate, announceError, POLITENESS } from './announcer.js';
+
 /**
  * Tutorial step definition
  * @typedef {Object} TutorialStep
@@ -1817,40 +1820,19 @@ function setupTouchHandlers(panel) {
 }
 
 // ============================================================================
-// Focus Trap
+// Focus Trap (uses shared utility from focus-trap.js)
 // ============================================================================
 
 /**
  * Setup focus trap inside tutorial panel to keep focus within the dialog
+ * Uses shared focus-trap.js utility for consistent behavior across components.
  * @param {HTMLElement} panelElement - The panel element to trap focus within
  * @returns {Function} Cleanup function to remove the trap
  */
 function setupFocusTrap(panelElement) {
-  const focusableSelectors =
-    'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])';
-
-  const getFocusables = () => panelElement.querySelectorAll(focusableSelectors);
-
-  const trapHandler = (e) => {
-    if (e.key !== 'Tab') return;
-
-    const focusables = getFocusables();
-    if (focusables.length === 0) return;
-
-    const first = focusables[0];
-    const last = focusables[focusables.length - 1];
-
-    if (e.shiftKey && document.activeElement === first) {
-      e.preventDefault();
-      last.focus();
-    } else if (!e.shiftKey && document.activeElement === last) {
-      e.preventDefault();
-      first.focus();
-    }
-  };
-
-  panelElement.addEventListener('keydown', trapHandler);
-  return () => panelElement.removeEventListener('keydown', trapHandler);
+  const trap = createFocusTrap(panelElement);
+  trap.activate();
+  return () => trap.deactivate();
 }
 
 /**
@@ -3519,19 +3501,16 @@ export function getCurrentTutorialId() {
  * @param {string} message - Message to announce
  */
 /**
- * Announce message to screen readers with optional politeness control
+ * Announce message to screen readers with optional politeness control.
+ * Delegates to shared announcer.js utility using dual live regions
+ * (avoids mutating aria-live attribute which can cause issues).
  * @param {string} message - Message to announce
  * @param {string} politeness - 'polite' (default) or 'assertive'
  */
 function announceToScreenReader(message, politeness = 'polite') {
-  const announcer = document.getElementById('srAnnouncer');
-  if (announcer) {
-    announcer.setAttribute('aria-live', politeness);
-    announcer.textContent = message;
-
-    // Clear after announcement is read
-    setTimeout(() => {
-      announcer.textContent = '';
-    }, 1000);
+  if (politeness === 'assertive') {
+    announceError(message, { clearDelayMs: 1000 });
+  } else {
+    announceImmediate(message, { clearDelayMs: 1000 });
   }
 }

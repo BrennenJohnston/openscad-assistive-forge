@@ -19,9 +19,11 @@ import {
   yellow,
   yellowDark,
 } from '@radix-ui/colors';
+import { getAppPrefKey } from './storage-keys.js';
 
-const THEME_KEY = 'openscad-customizer-theme';
-const HIGH_CONTRAST_KEY = 'openscad-customizer-high-contrast';
+// Storage keys using standardized naming convention
+const THEME_KEY = getAppPrefKey('theme');
+const HIGH_CONTRAST_KEY = getAppPrefKey('high-contrast');
 const THEMES = {
   AUTO: 'auto',
   LIGHT: 'light',

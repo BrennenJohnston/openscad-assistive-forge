@@ -4,6 +4,11 @@
  */
 
 import { normalizeHexColor } from './color-utils.js';
+import { getAppPrefKey } from './storage-keys.js';
+
+// Storage keys using standardized naming convention
+const STORAGE_KEY_PERF_METRICS = getAppPrefKey('perf-metrics');
+const STORAGE_KEY_METRICS_LOG = getAppPrefKey('metrics-log');
 
 /**
  * Preview state constants
@@ -451,11 +456,11 @@ export class AutoPreviewController {
 
       // Collect performance metrics if enabled
       const metricsEnabled =
-        localStorage.getItem('openscad-perf-metrics') === 'true';
+        localStorage.getItem(STORAGE_KEY_PERF_METRICS) === 'true';
       if (metricsEnabled) {
         try {
           const metrics = JSON.parse(
-            localStorage.getItem('openscad-metrics-log') || '[]'
+            localStorage.getItem(STORAGE_KEY_METRICS_LOG) || '[]'
           );
           metrics.push({
             timestamp: Date.now(),
@@ -470,7 +475,7 @@ export class AutoPreviewController {
             metrics.shift();
           }
 
-          localStorage.setItem('openscad-metrics-log', JSON.stringify(metrics));
+          localStorage.setItem(STORAGE_KEY_METRICS_LOG, JSON.stringify(metrics));
           console.log('[Perf] Cache hit');
         } catch (error) {
           console.warn('[Perf] Failed to log cached metrics:', error);

@@ -4,6 +4,7 @@
  */
 
 import { formatFileSize } from './download.js';
+import { announceChange } from './announcer.js';
 
 /**
  * Format a parameter name for display (replaces underscores with spaces)
@@ -118,9 +119,9 @@ export function setLimitsUnlocked(unlocked) {
       }
     }
 
-    // Update number inputs
-    const numberInput = control.querySelector('input[type="number"]');
-    if (numberInput) {
+    // Update number inputs (including slider spinboxes)
+    const numberInputs = control.querySelectorAll('input[type="number"]');
+    numberInputs.forEach((numberInput) => {
       if (unlocked) {
         numberInput.removeAttribute('min');
         numberInput.removeAttribute('max');
@@ -130,7 +131,7 @@ export function setLimitsUnlocked(unlocked) {
         if (limits.max !== undefined) numberInput.max = limits.max;
         control.classList.remove('limits-unlocked');
       }
-    }
+    });
   });
 }
 
@@ -287,13 +288,19 @@ export function setParameterValue(paramName, value) {
   if (!input) return false;
 
   if (input.type === 'checkbox') {
-    input.checked = String(value).toLowerCase() === 'yes' || value === true;
+    const strVal = String(value).toLowerCase();
+    input.checked = strVal === 'yes' || strVal === 'true' || value === true;
     input.dispatchEvent(new Event('change', { bubbles: true }));
   } else if (input.tagName === 'SELECT') {
     input.value = String(value);
     input.dispatchEvent(new Event('change', { bubbles: true }));
   } else if (input.type === 'range') {
     input.value = String(value);
+    // Also update paired spinbox if present
+    const spinbox = control.querySelector('.slider-spinbox');
+    if (spinbox) {
+      spinbox.value = String(value);
+    }
     input.dispatchEvent(new Event('input', { bubbles: true }));
   } else {
     input.value = String(value);
@@ -324,10 +331,16 @@ export function resetParameter(paramName, onChange) {
   const input = control.querySelector('input, select');
   if (input) {
     if (input.type === 'checkbox') {
-      input.checked = defaultValue.toLowerCase() === 'yes';
+      const strVal = String(defaultValue).toLowerCase();
+      input.checked = strVal === 'yes' || strVal === 'true';
       input.dispatchEvent(new Event('change', { bubbles: true }));
     } else if (input.type === 'range') {
       input.value = defaultValue;
+      // Also update paired spinbox if present
+      const spinbox = control.querySelector('.slider-spinbox');
+      if (spinbox) {
+        spinbox.value = defaultValue;
+      }
       input.dispatchEvent(new Event('input', { bubbles: true }));
     } else {
       input.value = defaultValue;
@@ -397,7 +410,7 @@ export function updateDependentParameters(changedParam, newValue) {
       const paramName = control.dataset.paramName;
 
       if (shouldShow) {
-        control.style.display = '';
+        control.classList.remove('hidden');
         control.setAttribute('aria-hidden', 'false');
 
         // Re-enable inputs for accessibility
@@ -407,8 +420,21 @@ export function updateDependentParameters(changedParam, newValue) {
         // Announce to screen readers
         announceChange(`${formatParamName(paramName)} is now visible`);
       } else {
-        control.style.display = 'none';
+        control.classList.add('hidden');
         control.setAttribute('aria-hidden', 'true');
+
+        // Move focus to a visible element if the hidden control was focused
+        if (control.contains(document.activeElement)) {
+          // Find next visible sibling or parent summary
+          const group = control.closest('.param-group');
+          const nextVisible = control.nextElementSibling?.matches(':not(.hidden)')
+            ? control.nextElementSibling
+            : group?.querySelector('summary');
+          if (nextVisible) {
+            const focusable = nextVisible.querySelector('input, select, textarea, button') || nextVisible;
+            focusable.focus();
+          }
+        }
 
         // Remove from tab order when hidden
         const inputs = control.querySelectorAll('input, select, textarea');
@@ -420,41 +446,7 @@ export function updateDependentParameters(changedParam, newValue) {
   });
 }
 
-/**
- * Announce changes to screen readers via dedicated live region
- * Separate from visible status to avoid flickering
- * @param {string} message - Message to announce
- */
-function announceChange(message) {
-  const srAnnouncer = document.getElementById('srAnnouncer');
-  if (!srAnnouncer) return;
-
-  // Debounce announcements to avoid spamming (e.g., slider changes)
-  if (announceChange._timeout) {
-    clearTimeout(announceChange._timeout);
-  }
-
-  // Cancel pending clear (avoid clearing a newer message written elsewhere)
-  if (announceChange._clearTimeout) {
-    clearTimeout(announceChange._clearTimeout);
-  }
-
-  announceChange._timeout = window.setTimeout(() => {
-    // Clear first so repeated strings are re-announced reliably
-    srAnnouncer.textContent = '';
-
-    requestAnimationFrame(() => {
-      srAnnouncer.textContent = message;
-
-      // Clear after a short delay, but only if unchanged
-      announceChange._clearTimeout = window.setTimeout(() => {
-        if (srAnnouncer.textContent === message) {
-          srAnnouncer.textContent = '';
-        }
-      }, 1500);
-    });
-  }, 350);
-}
+// announceChange is now imported from ./announcer.js for centralized screen reader announcements
 
 /**
  * Apply dependency attributes and initial visibility to a parameter control
@@ -472,7 +464,7 @@ function applyDependency(container, param, currentParams) {
 
   // Check if dependency is met and set initial visibility
   if (!checkDependency(param.dependency, currentParams)) {
-    container.style.display = 'none';
+    container.classList.add('hidden');
     container.setAttribute('aria-hidden', 'true');
 
     // Remove from tab order when hidden
@@ -782,7 +774,9 @@ export function getModifiedParameterCount() {
 }
 
 /**
- * Create a range slider control
+ * Create a range slider control with editable spinbox
+ * Ken's Critical Requirement: Users need to enter precise pixel values (0-10000 range)
+ * Sliders alone make it impossible to enter discrete values accurately.
  * @param {Object} param - Parameter definition
  * @param {Function} onChange - Change handler
  * @returns {HTMLElement} Control element
@@ -825,47 +819,121 @@ function createSliderControl(param, onChange) {
   input.setAttribute('aria-valuenow', param.default);
   input.setAttribute(
     'aria-label',
-    `${formatParamName(param.name)}: ${param.default}${param.unit ? ' ' + param.unit : ''}`
+    `${formatParamName(param.name)} slider`
   );
 
-  const output = document.createElement('output');
-  output.htmlFor = `param-${param.name}`;
-  output.className = 'slider-value';
+  // Create editable spinbox for precise value entry (Ken's P0 requirement)
+  const spinbox = document.createElement('input');
+  spinbox.type = 'number';
+  spinbox.id = `param-${param.name}-spinbox`;
+  spinbox.className = 'slider-spinbox';
+  spinbox.min = limitsUnlocked ? '' : param.minimum;
+  spinbox.max = limitsUnlocked ? '' : param.maximum;
+  spinbox.step = param.step || 1;
+  spinbox.value = param.default;
+  spinbox.setAttribute('inputmode', 'numeric'); // Mobile-friendly numeric keyboard
+  spinbox.setAttribute(
+    'aria-label',
+    `${formatParamName(param.name)} value${param.unit ? ' in ' + param.unit : ''}, editable`
+  );
+  // Link slider and spinbox for screen readers
+  spinbox.setAttribute('aria-describedby', `param-${param.name}`);
 
   // Display value with unit if available
   const formatValueWithUnit = (val) => {
     return param.unit ? `${val} ${param.unit}` : val;
   };
-  output.textContent = formatValueWithUnit(param.default);
 
-  input.addEventListener('input', (e) => {
-    const value =
-      param.type === 'integer'
-        ? parseInt(e.target.value)
-        : parseFloat(e.target.value);
-    output.textContent = formatValueWithUnit(value);
-    input.setAttribute('aria-valuenow', value);
-    input.setAttribute(
-      'aria-label',
-      `${formatParamName(param.name)}: ${value}${param.unit ? ' ' + param.unit : ''}`
-    );
+  // Unit label (display only, not editable)
+  const unitLabel = param.unit
+    ? (() => {
+        const span = document.createElement('span');
+        span.className = 'slider-unit';
+        span.textContent = param.unit;
+        span.setAttribute('aria-hidden', 'true');
+        return span;
+      })()
+    : null;
+
+  // Shared update logic
+  const updateValue = (value, source) => {
+    const parsedValue =
+      param.type === 'integer' ? parseInt(value) : parseFloat(value);
+    
+    if (isNaN(parsedValue)) return;
+
+    // Update both controls bidirectionally
+    if (source !== 'slider') {
+      input.value = parsedValue;
+      input.setAttribute('aria-valuenow', parsedValue);
+    }
+    if (source !== 'spinbox') {
+      spinbox.value = parsedValue;
+    }
 
     // Check if value is out of original range
     const limits = originalParameterLimits[param.name];
-    if (limits && (value < limits.min || value > limits.max)) {
+    if (limits && (parsedValue < limits.min || parsedValue > limits.max)) {
       container.classList.add('out-of-range');
     } else {
       container.classList.remove('out-of-range');
     }
 
     // Update reset button state
-    updateResetButtonState(param.name, value);
+    updateResetButtonState(param.name, parsedValue);
 
-    onChange(param.name, value);
+    return parsedValue;
+  };
+
+  // Slider input event - updates spinbox in real-time
+  input.addEventListener('input', (e) => {
+    const value = updateValue(e.target.value, 'slider');
+    if (value !== undefined) {
+      onChange(param.name, value);
+    }
+  });
+
+  // Spinbox input event - updates slider in real-time for visual feedback
+  spinbox.addEventListener('input', (e) => {
+    const value = updateValue(e.target.value, 'spinbox');
+    // Don't trigger onChange on every keystroke - wait for change event
+  });
+
+  // Spinbox change event - triggers preview update (on Enter or blur)
+  spinbox.addEventListener('change', (e) => {
+    const value = updateValue(e.target.value, 'spinbox');
+    if (value !== undefined) {
+      onChange(param.name, value);
+    }
+  });
+
+  // Keyboard enhancements for spinbox
+  spinbox.addEventListener('keydown', (e) => {
+    const step = parseFloat(param.step) || 1;
+    const currentVal = parseFloat(spinbox.value) || 0;
+    
+    // Shift+Arrow for 10x step increment (power user feature)
+    if (e.shiftKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+      e.preventDefault();
+      const multiplier = e.key === 'ArrowUp' ? 10 : -10;
+      const newValue = currentVal + step * multiplier;
+      
+      // Respect limits unless unlocked
+      const limits = originalParameterLimits[param.name];
+      if (!limitsUnlocked && limits) {
+        if (newValue < limits.min || newValue > limits.max) return;
+      }
+      
+      spinbox.value = newValue;
+      spinbox.dispatchEvent(new Event('change', { bubbles: true }));
+    }
   });
 
   sliderContainer.appendChild(input);
-  sliderContainer.appendChild(output);
+  sliderContainer.appendChild(spinbox);
+  if (unitLabel) {
+    sliderContainer.appendChild(unitLabel);
+  }
 
   // Show original default value hint (COGA: reduce memory load)
   // Use stored original default, not the current/effective value
@@ -1071,11 +1139,18 @@ function createSelectControl(param, onChange) {
   select.id = `param-${param.name}`;
   select.setAttribute('aria-label', `Select ${formatParamName(param.name)}`);
 
-  param.enum.forEach((value) => {
+  param.enum.forEach((item) => {
     const option = document.createElement('option');
+    // Support both new labeled format { value, label } and legacy string format
+    const value = typeof item === 'object' ? item.value : item;
+    const label = typeof item === 'object' ? item.label : item;
+    
     option.value = value;
-    option.textContent = value;
-    if (value === param.default) {
+    option.textContent = label;
+    
+    // Check for selected - compare with string version of default
+    const defaultStr = String(param.default);
+    if (value === defaultStr || value === param.default) {
       option.selected = true;
     }
     select.appendChild(option);
@@ -1092,6 +1167,7 @@ function createSelectControl(param, onChange) {
 
 /**
  * Create a toggle switch control
+ * Supports both yes/no enums and true/false booleans
  * @param {Object} param - Parameter definition
  * @param {Function} onChange - Change handler
  * @returns {HTMLElement} Control element
@@ -1108,13 +1184,20 @@ function createToggleControl(param, onChange) {
   const toggleContainer = document.createElement('div');
   toggleContainer.className = 'toggle-switch';
 
+  // Determine if this is a boolean (true/false) or yes/no toggle
+  const isBoolean = param.type === 'boolean';
+  const defaultStr = String(param.default).toLowerCase();
+  const isChecked = isBoolean
+    ? defaultStr === 'true'
+    : defaultStr === 'yes';
+
   const input = document.createElement('input');
   input.type = 'checkbox';
   input.id = `param-${param.name}`;
   input.setAttribute('role', 'switch');
-  input.checked = param.default.toLowerCase() === 'yes';
+  input.checked = isChecked;
   input.setAttribute('aria-label', `Toggle ${formatParamName(param.name)}`);
-  input.setAttribute('aria-checked', param.default.toLowerCase() === 'yes');
+  input.setAttribute('aria-checked', String(isChecked));
 
   const label = document.createElement('label');
   label.htmlFor = `param-${param.name}`;
@@ -1122,8 +1205,11 @@ function createToggleControl(param, onChange) {
   label.textContent = formatParamName(param.name);
 
   input.addEventListener('change', (e) => {
-    const value = e.target.checked ? 'yes' : 'no';
-    input.setAttribute('aria-checked', e.target.checked);
+    // Return appropriate value type based on parameter type
+    const value = isBoolean
+      ? (e.target.checked ? 'true' : 'false')
+      : (e.target.checked ? 'yes' : 'no');
+    input.setAttribute('aria-checked', String(e.target.checked));
     onChange(param.name, value);
   });
 
@@ -1155,6 +1241,19 @@ function createTextInput(param, onChange) {
   input.id = `param-${param.name}`;
   input.value = param.default;
   input.setAttribute('aria-label', `Enter ${formatParamName(param.name)}`);
+
+  // Apply maxLength if specified (OpenSCAD Customizer format: //8)
+  if (param.maxLength && param.maxLength > 0) {
+    input.maxLength = param.maxLength;
+    input.setAttribute('aria-describedby', `${input.id}-hint`);
+    
+    // Add a hint about the character limit for accessibility
+    const hint = document.createElement('span');
+    hint.id = `${input.id}-hint`;
+    hint.className = 'param-hint';
+    hint.textContent = `(max ${param.maxLength} characters)`;
+    labelContainer.appendChild(hint);
+  }
 
   input.addEventListener('change', (e) => {
     onChange(param.name, e.target.value);
@@ -1378,6 +1477,272 @@ function createFileControl(param, onChange) {
 // formatFileSize is now imported from download.js
 
 /**
+ * Create a vector parameter control with individual component inputs
+ * @param {Object} param - Parameter definition with components array
+ * @param {Function} onChange - Change handler
+ * @returns {HTMLElement} Control element
+ */
+function createVectorControl(param, onChange) {
+  const container = document.createElement('fieldset');
+  container.className = 'param-control vector-parameter';
+  container.dataset.paramName = param.name;
+
+  // Create legend (acts like label for fieldset)
+  const legend = document.createElement('legend');
+  legend.className = 'parameter-label';
+  legend.textContent = formatParamName(param.name);
+
+  // Add help button if description exists
+  const helpTooltip = createHelpTooltip(param);
+  if (helpTooltip) {
+    legend.appendChild(helpTooltip);
+  }
+
+  container.appendChild(legend);
+
+  // Add description paragraph if exists
+  if (param.description) {
+    const descId = `${param.name}-desc`;
+    const descPara = document.createElement('p');
+    descPara.className = 'parameter-description';
+    descPara.id = descId;
+    descPara.textContent = param.description;
+    container.appendChild(descPara);
+  }
+
+  // Create vector inputs container
+  const vectorInputs = document.createElement('div');
+  vectorInputs.className = 'vector-inputs';
+  vectorInputs.setAttribute('role', 'group');
+  vectorInputs.setAttribute(
+    'aria-label',
+    `Vector parameter ${formatParamName(param.name)}`
+  );
+
+  // Store original limits for unlock functionality
+  if (param.minimum !== undefined || param.maximum !== undefined) {
+    originalParameterLimits[param.name] = {
+      min: param.minimum,
+      max: param.maximum,
+      step: param.step,
+    };
+  }
+
+  // Create input for each component
+  const values = Array.isArray(param.default) ? [...param.default] : [];
+  const components = param.components || [];
+
+  components.forEach((comp, index) => {
+    const compContainer = document.createElement('div');
+    compContainer.className = 'vector-component';
+
+    const inputId = `${param.name}-${index}`;
+    const rangeId = `${inputId}-range`;
+
+    // Component label
+    const label = document.createElement('label');
+    label.htmlFor = inputId;
+    label.className = 'component-label';
+    label.textContent = comp.label || `[${index}]`;
+    compContainer.appendChild(label);
+
+    // Number input
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.id = inputId;
+    input.name = `${param.name}[${index}]`;
+    input.value = comp.value ?? values[index] ?? 0;
+    input.className = 'vector-input';
+
+    // Build aria-describedby
+    const describedBy = [];
+    if (param.description) describedBy.push(`${param.name}-desc`);
+    describedBy.push(rangeId);
+    input.setAttribute('aria-describedby', describedBy.join(' '));
+
+    // Set constraints
+    if (comp.minimum !== undefined) {
+      input.min = comp.minimum;
+      input.setAttribute('aria-valuemin', comp.minimum);
+    } else if (param.minimum !== undefined) {
+      input.min = param.minimum;
+      input.setAttribute('aria-valuemin', param.minimum);
+    }
+
+    if (comp.maximum !== undefined) {
+      input.max = comp.maximum;
+      input.setAttribute('aria-valuemax', comp.maximum);
+    } else if (param.maximum !== undefined) {
+      input.max = param.maximum;
+      input.setAttribute('aria-valuemax', param.maximum);
+    }
+
+    if (comp.step !== undefined) {
+      input.step = comp.step;
+    } else if (param.step !== undefined) {
+      input.step = param.step;
+    }
+
+    // Input event handler
+    input.addEventListener('input', () => {
+      const newValue = parseFloat(input.value);
+      values[index] = isNaN(newValue) ? 0 : newValue;
+
+      // Announce change for screen readers
+      announceChange(
+        `${comp.label || `Component ${index + 1}`}: ${values[index]}${comp.unit ? ' ' + comp.unit : ''}`
+      );
+
+      // Trigger onChange with the full vector
+      onChange(param.name, [...values]);
+    });
+
+    // Keyboard navigation: arrow keys increment/decrement
+    input.addEventListener('keydown', (e) => {
+      const step =
+        comp.step !== undefined
+          ? comp.step
+          : param.step !== undefined
+            ? param.step
+            : 1;
+      const currentVal = parseFloat(input.value) || 0;
+
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        const newVal = currentVal + step;
+        const maxVal =
+          comp.maximum !== undefined
+            ? comp.maximum
+            : param.maximum !== undefined
+              ? param.maximum
+              : Infinity;
+        if (newVal <= maxVal) {
+          input.value = newVal;
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        const newVal = currentVal - step;
+        const minVal =
+          comp.minimum !== undefined
+            ? comp.minimum
+            : param.minimum !== undefined
+              ? param.minimum
+              : -Infinity;
+        if (newVal >= minVal) {
+          input.value = newVal;
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      } else if (e.key === 'Escape') {
+        // Reset to default
+        const defaultVal = param.default?.[index] ?? 0;
+        input.value = defaultVal;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    });
+
+    compContainer.appendChild(input);
+
+    // Range hint below input
+    const rangeHint = document.createElement('span');
+    rangeHint.id = rangeId;
+    rangeHint.className = 'range-hint';
+    const min =
+      comp.minimum !== undefined
+        ? comp.minimum
+        : param.minimum !== undefined
+          ? param.minimum
+          : null;
+    const max =
+      comp.maximum !== undefined
+        ? comp.maximum
+        : param.maximum !== undefined
+          ? param.maximum
+          : null;
+    if (min !== null && max !== null) {
+      rangeHint.textContent = `${min} - ${max}`;
+    } else if (min !== null) {
+      rangeHint.textContent = `≥ ${min}`;
+    } else if (max !== null) {
+      rangeHint.textContent = `≤ ${max}`;
+    }
+    compContainer.appendChild(rangeHint);
+
+    vectorInputs.appendChild(compContainer);
+  });
+
+  container.appendChild(vectorInputs);
+
+  // Apply limits-unlocked class if needed
+  if (
+    limitsUnlocked &&
+    (param.minimum !== undefined || param.maximum !== undefined)
+  ) {
+    container.classList.add('limits-unlocked');
+  }
+
+  return container;
+}
+
+/**
+ * Create a raw/read-only parameter control for unparseable values
+ * @param {Object} param - Parameter definition with rawValue
+ * @param {Function} onChange - Change handler
+ * @returns {HTMLElement} Control element
+ */
+function createRawControl(param, onChange) {
+  const container = document.createElement('div');
+  container.className = 'param-control raw-parameter';
+  container.dataset.paramName = param.name;
+
+  // Label container with help tooltip
+  const labelContainer = createLabelContainer(param);
+  container.appendChild(labelContainer);
+
+  const rawContainer = document.createElement('div');
+  rawContainer.className = 'raw-value-container';
+
+  // Create text input for raw editing
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.id = `param-${param.name}`;
+  input.className = 'raw-input';
+  input.value =
+    param.rawValue ||
+    (Array.isArray(param.default) ? JSON.stringify(param.default) : param.default);
+  input.setAttribute(
+    'aria-label',
+    `Enter ${formatParamName(param.name)} as OpenSCAD expression`
+  );
+
+  // Add warning if parsing failed
+  if (param.parseFailureReason) {
+    const warning = document.createElement('span');
+    warning.className = 'raw-warning';
+    warning.textContent = 'Contains expressions - edit as text';
+    warning.setAttribute('role', 'note');
+    rawContainer.appendChild(warning);
+  }
+
+  input.addEventListener('change', (e) => {
+    const value = e.target.value;
+    // Try to parse as JSON array, fallback to string
+    try {
+      const parsed = JSON.parse(value);
+      onChange(param.name, parsed);
+    } catch {
+      // Keep as string - will be passed to OpenSCAD as-is
+      onChange(param.name, value);
+    }
+  });
+
+  rawContainer.appendChild(input);
+  container.appendChild(rawContainer);
+
+  return container;
+}
+
+/**
  * Render parameter UI from extracted parameters
  * @param {Object} extractedParams - Output from extractParameters()
  * @param {HTMLElement} container - Container to render into
@@ -1401,7 +1766,10 @@ export function renderParameterUI(
   parameterMetadata = {};
 
   // Group parameters by group
+  // Also collect global parameters (isGlobal: true) to show on all tabs (OpenSCAD Customizer spec)
   const paramsByGroup = {};
+  const globalParams = [];
+  
   Object.values(parameters).forEach((param) => {
     if (!paramsByGroup[param.group]) {
       paramsByGroup[param.group] = [];
@@ -1413,7 +1781,14 @@ export function renderParameterUI(
         : param.default;
     // Create a copy of param with the effective default
     const paramWithValue = { ...param, default: effectiveDefault };
-    paramsByGroup[param.group].push(paramWithValue);
+    
+    // Collect global parameters separately (they'll be shown on ALL groups)
+    if (param.isGlobal) {
+      globalParams.push(paramWithValue);
+    } else {
+      paramsByGroup[param.group].push(paramWithValue);
+    }
+    
     currentValues[param.name] = effectiveDefault;
 
     // Store the original default value (from schema, not initialValues)
@@ -1444,10 +1819,15 @@ export function renderParameterUI(
   // Render each group
   sortedGroups.forEach((group) => {
     const groupParams = paramsByGroup[group.id] || [];
-    if (groupParams.length === 0) return;
+    
+    // Skip groups with no params (unless there are global params to show)
+    if (groupParams.length === 0 && globalParams.length === 0) return;
 
-    // Sort parameters by order
-    groupParams.sort((a, b) => a.order - b.order);
+    // Combine global params (shown at top of every group) with group-specific params
+    // Global params are sorted by their order, then group params by their order
+    const sortedGlobalParams = [...globalParams].sort((a, b) => a.order - b.order);
+    const sortedGroupParams = [...groupParams].sort((a, b) => a.order - b.order);
+    const allGroupParams = [...sortedGlobalParams, ...sortedGroupParams];
 
     const details = document.createElement('details');
     details.className = 'param-group';
@@ -1461,7 +1841,7 @@ export function renderParameterUI(
     summary.textContent = group.label;
     details.appendChild(summary);
 
-    groupParams.forEach((param) => {
+    allGroupParams.forEach((param) => {
       let control;
 
       // Create onChange handler that also updates dependent parameters
@@ -1492,6 +1872,14 @@ export function renderParameterUI(
 
         case 'file':
           control = createFileControl(param, handleChange);
+          break;
+
+        case 'vector':
+          control = createVectorControl(param, handleChange);
+          break;
+
+        case 'raw':
+          control = createRawControl(param, handleChange);
           break;
 
         case 'input':

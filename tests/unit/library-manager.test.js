@@ -87,13 +87,13 @@ describe('LibraryManager', () => {
       const manager = new LibraryManager()
       manager.enable('BOSL2')
 
-      const stored = JSON.parse(localStorage.getItem('openscad-customizer-libraries'))
+      const stored = JSON.parse(localStorage.getItem('openscad-forge-libraries'))
       expect(stored.BOSL2.enabled).toBe(true)
     })
 
     it('loads library state from localStorage', () => {
       localStorage.setItem(
-        'openscad-customizer-libraries',
+        'openscad-forge-libraries',
         JSON.stringify({ MCAD: { enabled: true }, BOSL2: { enabled: false } })
       )
       const manager = new LibraryManager()
@@ -103,7 +103,7 @@ describe('LibraryManager', () => {
     })
 
     it('handles invalid JSON in localStorage gracefully', () => {
-      localStorage.setItem('openscad-customizer-libraries', 'invalid json')
+      localStorage.setItem('openscad-forge-libraries', 'invalid json')
       const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
       
       const manager = new LibraryManager()
@@ -129,7 +129,7 @@ describe('LibraryManager', () => {
 
     it('handles missing enabled property in saved state', () => {
       localStorage.setItem(
-        'openscad-customizer-libraries',
+        'openscad-forge-libraries',
         JSON.stringify({ MCAD: {} })
       )
       const manager = new LibraryManager()

@@ -4,6 +4,15 @@
  */
 
 import { normalizeHexColor } from './color-utils.js';
+import { announceCameraAction as announceCamera, announceImmediate } from './announcer.js';
+import { getAppPrefKey } from './storage-keys.js';
+
+// Storage keys using standardized naming convention
+const STORAGE_KEY_MEASUREMENTS = getAppPrefKey('measurements');
+const STORAGE_KEY_GRID = getAppPrefKey('grid');
+const STORAGE_KEY_AUTO_BED = getAppPrefKey('auto-bed');
+const STORAGE_KEY_CAMERA_COLLAPSED = getAppPrefKey('camera-controls-collapsed');
+const STORAGE_KEY_CAMERA_POSITION = getAppPrefKey('camera-controls-position');
 
 // Lazy-loaded Three.js modules - loaded on demand to reduce initial bundle size
 let THREE = null;
@@ -148,6 +157,10 @@ export class PreviewManager {
 
     // Grid visibility
     this.gridEnabled = this.loadGridPreference();
+
+    // Camera projection mode (perspective or orthographic)
+    this.projectionMode = 'perspective';
+    this.orthoCamera = null;  // Lazy-created orthographic camera
 
     // Auto-bed: place object on Z=0 build plate
     this.autoBedEnabled = this.loadAutoBedPreference();
@@ -494,7 +507,7 @@ export class PreviewManager {
     if (this._renderOverride) {
       this._renderOverride();
     } else {
-      this.renderer.render(this.scene, this.camera);
+      this.renderer.render(this.scene, this.getActiveCamera());
     }
   }
 
@@ -685,10 +698,8 @@ export class PreviewManager {
     controlPanel.setAttribute('aria-label', 'Camera controls');
 
     // Persisted preferences: collapsed + position (keyboard-accessible “move”)
-    const collapsedKey = 'openscad-camera-controls-collapsed';
-    const positionKey = 'openscad-camera-controls-position';
-    const isCollapsed = localStorage.getItem(collapsedKey) === 'true';
-    const position = localStorage.getItem(positionKey) || 'bottom-right'; // bottom-right | bottom-left | top-right | top-left
+    const isCollapsed = localStorage.getItem(STORAGE_KEY_CAMERA_COLLAPSED) === 'true';
+    const position = localStorage.getItem(STORAGE_KEY_CAMERA_POSITION) || 'bottom-right'; // bottom-right | bottom-left | top-right | top-left
     controlPanel.dataset.collapsed = isCollapsed ? 'true' : 'false';
     controlPanel.dataset.position = position;
 
@@ -801,7 +812,7 @@ export class PreviewManager {
       toggleBtn.title = nextCollapsed
         ? 'Show camera controls'
         : 'Hide camera controls';
-      localStorage.setItem(collapsedKey, nextCollapsed ? 'true' : 'false');
+      localStorage.setItem(STORAGE_KEY_CAMERA_COLLAPSED, nextCollapsed ? 'true' : 'false');
     };
 
     const positions = ['bottom-right', 'bottom-left', 'top-right', 'top-left'];
@@ -810,7 +821,7 @@ export class PreviewManager {
       const idx = positions.indexOf(current);
       const next = positions[(idx + 1 + positions.length) % positions.length];
       controlPanel.dataset.position = next;
-      localStorage.setItem(positionKey, next);
+      localStorage.setItem(STORAGE_KEY_CAMERA_POSITION, next);
     };
 
     toggleBtn.addEventListener('click', () => {
@@ -952,40 +963,28 @@ export class PreviewManager {
           this.announceCameraAction('Reset view');
         }
       });
+
+    // Standard view buttons (Ken's request for consistent viewing angles)
+    const viewButtons = document.querySelectorAll('.camera-view-btn');
+    viewButtons.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const viewName = btn.dataset.view;
+        if (viewName) {
+          this.setCameraView(viewName);
+        }
+      });
+    });
   }
 
   /**
    * Announce camera actions to screen readers
+   * Uses centralized announcer for consistent behavior
    * @param {string} action - Action description or key pressed
    * @param {boolean} shiftKey - Whether shift key was pressed
    */
   announceCameraAction(action, shiftKey = false) {
-    const srAnnouncer = document.getElementById('srAnnouncer');
-    if (!srAnnouncer) return;
-
-    let message = '';
-    if (action === 'ArrowLeft') {
-      message = shiftKey ? 'Panning left' : 'Rotating left';
-    } else if (action === 'ArrowRight') {
-      message = shiftKey ? 'Panning right' : 'Rotating right';
-    } else if (action === 'ArrowUp') {
-      message = shiftKey ? 'Panning up' : 'Rotating up';
-    } else if (action === 'ArrowDown') {
-      message = shiftKey ? 'Panning down' : 'Rotating down';
-    } else if (action === '+' || action === '=') {
-      message = 'Zooming in';
-    } else if (action === '-') {
-      message = 'Zooming out';
-    } else {
-      message = action; // For button clicks with descriptive names
-    }
-
-    srAnnouncer.textContent = message;
-    setTimeout(() => {
-      if (srAnnouncer.textContent === message) {
-        srAnnouncer.textContent = '';
-      }
-    }, 1000);
+    // Delegate to centralized announcer which handles message formatting
+    announceCamera(action, { shiftKey });
   }
 
   /**
@@ -1235,6 +1234,167 @@ export class PreviewManager {
       'distance:',
       cameraDistance
     );
+  }
+
+  /**
+   * Standard camera views for OpenSCAD-style viewing
+   * Ken requested these for consistent viewing angles
+   */
+  static CAMERA_VIEWS = {
+    top: { name: 'Top', direction: [0, 0, 1], up: [0, 1, 0] },
+    bottom: { name: 'Bottom', direction: [0, 0, -1], up: [0, -1, 0] },
+    front: { name: 'Front', direction: [0, -1, 0], up: [0, 0, 1] },
+    back: { name: 'Back', direction: [0, 1, 0], up: [0, 0, 1] },
+    left: { name: 'Left', direction: [-1, 0, 0], up: [0, 0, 1] },
+    right: { name: 'Right', direction: [1, 0, 0], up: [0, 0, 1] },
+    diagonal: { name: 'Diagonal', direction: [1, -1, 0.6], up: [0, 0, 1] },
+  };
+
+  /**
+   * Set camera to a standard view angle
+   * @param {string} viewName - Name of the view (top, bottom, front, back, left, right, diagonal)
+   */
+  setCameraView(viewName) {
+    const view = PreviewManager.CAMERA_VIEWS[viewName];
+    if (!view) {
+      console.warn(`[Preview] Unknown camera view: ${viewName}`);
+      return;
+    }
+
+    if (!this.mesh) {
+      console.warn('[Preview] No mesh loaded, cannot set camera view');
+      announceImmediate('Load a model first to use camera views');
+      return;
+    }
+
+    // Compute bounding box to get center and appropriate distance
+    const box = new THREE.Box3().setFromObject(this.mesh);
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+
+    // Get the max side of the bounding box
+    const maxDim = Math.max(size.x, size.y, size.z);
+    const fov = this.camera.fov * (Math.PI / 180);
+    let cameraDistance = Math.abs(maxDim / 2 / Math.tan(fov / 2));
+    cameraDistance *= 1.8; // Padding
+
+    // Create direction vector and normalize
+    const direction = new THREE.Vector3(...view.direction).normalize();
+
+    // Position camera along the direction vector from center
+    this.camera.position.copy(center).addScaledVector(direction, cameraDistance);
+
+    // Set up vector
+    this.camera.up.set(...view.up);
+
+    // Look at center
+    this.camera.lookAt(center);
+
+    // Update controls target
+    this.controls.target.copy(center);
+    this.controls.update();
+
+    // Announce to screen readers
+    this.announceCameraAction(`${view.name} view`);
+
+    console.log(`[Preview] Camera set to ${view.name} view`);
+  }
+
+  /**
+   * Toggle between perspective and orthographic projection
+   * @returns {string} The new projection mode ('perspective' or 'orthographic')
+   */
+  toggleProjection() {
+    const width = this.container.clientWidth;
+    const height = this.container.clientHeight;
+    const aspect = width / height;
+
+    if (this.projectionMode === 'perspective') {
+      // Switch to orthographic
+      this.projectionMode = 'orthographic';
+
+      // Create orthographic camera if not exists
+      if (!this.orthoCamera) {
+        // Calculate frustum size based on current camera distance
+        const frustumSize = 100;
+        this.orthoCamera = new THREE.OrthographicCamera(
+          (frustumSize * aspect) / -2,
+          (frustumSize * aspect) / 2,
+          frustumSize / 2,
+          frustumSize / -2,
+          0.1,
+          10000
+        );
+        this.orthoCamera.up.set(0, 0, 1);  // Z-up to match perspective camera
+      }
+
+      // Copy position and target from perspective camera
+      this.orthoCamera.position.copy(this.camera.position);
+      this.orthoCamera.lookAt(this.controls.target);
+
+      // Adjust orthographic zoom to approximate perspective view
+      if (this.mesh) {
+        const box = new THREE.Box3().setFromObject(this.mesh);
+        const size = box.getSize(new THREE.Vector3());
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const distance = this.camera.position.distanceTo(this.controls.target);
+        const zoom = (distance / maxDim) * 0.8;
+        this.orthoCamera.zoom = zoom;
+      }
+
+      // Update orthographic camera aspect
+      const frustumSize = 100 / (this.orthoCamera.zoom || 1);
+      this.orthoCamera.left = (frustumSize * aspect) / -2;
+      this.orthoCamera.right = (frustumSize * aspect) / 2;
+      this.orthoCamera.top = frustumSize / 2;
+      this.orthoCamera.bottom = frustumSize / -2;
+      this.orthoCamera.updateProjectionMatrix();
+
+      // Switch controls to orthographic camera
+      this.controls.object = this.orthoCamera;
+      this.controls.update();
+
+    } else {
+      // Switch to perspective
+      this.projectionMode = 'perspective';
+
+      // Copy position from orthographic camera
+      if (this.orthoCamera) {
+        this.camera.position.copy(this.orthoCamera.position);
+        this.camera.lookAt(this.controls.target);
+      }
+
+      this.camera.updateProjectionMatrix();
+
+      // Switch controls back to perspective camera
+      this.controls.object = this.camera;
+      this.controls.update();
+    }
+
+    // Announce change to screen readers
+    const modeName = this.projectionMode === 'perspective' ? 'Perspective' : 'Orthographic';
+    this.announceCameraAction(`${modeName} projection`);
+
+    console.log(`[Preview] Switched to ${this.projectionMode} projection`);
+    return this.projectionMode;
+  }
+
+  /**
+   * Get current projection mode
+   * @returns {string} 'perspective' or 'orthographic'
+   */
+  getProjectionMode() {
+    return this.projectionMode;
+  }
+
+  /**
+   * Get the currently active camera (perspective or orthographic)
+   * @returns {THREE.Camera}
+   */
+  getActiveCamera() {
+    return this.projectionMode === 'orthographic' && this.orthoCamera
+      ? this.orthoCamera
+      : this.camera;
   }
 
   /**
@@ -1632,7 +1792,7 @@ export class PreviewManager {
    */
   loadMeasurementPreference() {
     try {
-      const pref = localStorage.getItem('openscad-customizer-measurements');
+      const pref = localStorage.getItem(STORAGE_KEY_MEASUREMENTS);
       return pref === 'true';
     } catch (error) {
       console.warn('[Preview] Could not load measurement preference:', error);
@@ -1646,10 +1806,7 @@ export class PreviewManager {
    */
   saveMeasurementPreference(enabled) {
     try {
-      localStorage.setItem(
-        'openscad-customizer-measurements',
-        enabled ? 'true' : 'false'
-      );
+      localStorage.setItem(STORAGE_KEY_MEASUREMENTS, enabled ? 'true' : 'false');
     } catch (error) {
       console.warn('[Preview] Could not save measurement preference:', error);
     }
@@ -1676,7 +1833,7 @@ export class PreviewManager {
    */
   loadGridPreference() {
     try {
-      const pref = localStorage.getItem('openscad-customizer-grid');
+      const pref = localStorage.getItem(STORAGE_KEY_GRID);
       // Default to true (grid visible) if not set
       return pref === null ? true : pref === 'true';
     } catch (error) {
@@ -1691,10 +1848,7 @@ export class PreviewManager {
    */
   saveGridPreference(enabled) {
     try {
-      localStorage.setItem(
-        'openscad-customizer-grid',
-        enabled ? 'true' : 'false'
-      );
+      localStorage.setItem(STORAGE_KEY_GRID, enabled ? 'true' : 'false');
     } catch (error) {
       console.warn('[Preview] Could not save grid preference:', error);
     }
@@ -1720,7 +1874,7 @@ export class PreviewManager {
    */
   loadAutoBedPreference() {
     try {
-      const pref = localStorage.getItem('openscad-customizer-auto-bed');
+      const pref = localStorage.getItem(STORAGE_KEY_AUTO_BED);
       // Default to true (auto-bed enabled) if not set
       return pref === null ? true : pref === 'true';
     } catch (error) {
@@ -1735,10 +1889,7 @@ export class PreviewManager {
    */
   saveAutoBedPreference(enabled) {
     try {
-      localStorage.setItem(
-        'openscad-customizer-auto-bed',
-        enabled ? 'true' : 'false'
-      );
+      localStorage.setItem(STORAGE_KEY_AUTO_BED, enabled ? 'true' : 'false');
     } catch (error) {
       console.warn('[Preview] Could not save auto-bed preference:', error);
     }
@@ -2635,7 +2786,7 @@ export class PreviewManager {
       this.referenceOverlay.position.z = this.overlayConfig.zPosition;
     }
 
-    this.renderer.render(this.scene, this.camera);
+    this.renderer.render(this.scene, this.getActiveCamera());
 
     // Update screen reader model summary (WCAG 2.2)
     this.updateModelSummary();

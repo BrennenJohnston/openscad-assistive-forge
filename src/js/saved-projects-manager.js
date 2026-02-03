@@ -367,18 +367,38 @@ async function deleteFromIndexedDB(id) {
 
 /**
  * Clear all projects from IndexedDB
+ * Includes timeout protection to prevent freezes (Ken's stability issue)
  * @returns {Promise<void>}
  */
 async function clearIndexedDB() {
   if (!db) return;
 
+  const IDB_TIMEOUT = 5000; // 5 second timeout for IndexedDB operations
+
   return new Promise((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      console.warn('[Saved Projects] IndexedDB clear timed out');
+      reject(new Error('IndexedDB clear timeout'));
+    }, IDB_TIMEOUT);
+
     const transaction = db.transaction([STORE_NAME], 'readwrite');
     const objectStore = transaction.objectStore(STORE_NAME);
     const request = objectStore.clear();
 
-    request.onsuccess = () => resolve();
-    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      clearTimeout(timeoutId);
+      resolve();
+    };
+    request.onerror = () => {
+      clearTimeout(timeoutId);
+      reject(request.error);
+    };
+
+    // Also handle transaction errors
+    transaction.onerror = () => {
+      clearTimeout(timeoutId);
+      reject(transaction.error);
+    };
   });
 }
 

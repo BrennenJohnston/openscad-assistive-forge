@@ -3,6 +3,13 @@
  * @license GPL-3.0-or-later
  */
 
+import { getAppPrefKey } from './storage-keys.js';
+
+// Storage keys using standardized naming convention
+const STORAGE_KEY_PERF_METRICS = getAppPrefKey('perf-metrics');
+const STORAGE_KEY_METRICS_LOG = getAppPrefKey('metrics-log');
+const STORAGE_KEY_LAZY_UNION = getAppPrefKey('lazy-union');
+
 // Re-export quality tier system for convenience
 export {
   COMPLEXITY_TIER,
@@ -546,11 +553,11 @@ export class RenderController {
 
           // Collect performance metrics if enabled
           const metricsEnabled =
-            localStorage.getItem('openscad-perf-metrics') === 'true';
+            localStorage.getItem(STORAGE_KEY_PERF_METRICS) === 'true';
           if (metricsEnabled && payload.timing) {
             try {
               const metrics = JSON.parse(
-                localStorage.getItem('openscad-metrics-log') || '[]'
+                localStorage.getItem(STORAGE_KEY_METRICS_LOG) || '[]'
               );
               metrics.push({
                 timestamp: Date.now(),
@@ -564,10 +571,7 @@ export class RenderController {
                 metrics.shift();
               }
 
-              localStorage.setItem(
-                'openscad-metrics-log',
-                JSON.stringify(metrics)
-              );
+              localStorage.setItem(STORAGE_KEY_METRICS_LOG, JSON.stringify(metrics));
               console.log('[Perf] Render timing:', payload.timing);
             } catch (error) {
               console.warn('[Perf] Failed to log metrics:', error);
@@ -859,9 +863,15 @@ export class RenderController {
           const outputFormat = options.outputFormat || 'stl';
 
           // Read performance options from localStorage (worker can't access localStorage)
+          // Engine selection: manifold_engine feature flag controls Manifold vs CGAL backend
+          // Default to true (Manifold) for performance, user can disable for compatibility
+          const manifoldPref = localStorage.getItem('openscad-forge-manifold-engine');
+          const useManifold = manifoldPref === null ? true : manifoldPref !== 'false';
+          
           const renderOptions = {
             enableLazyUnion:
-              localStorage.getItem('openscad-lazy-union') === 'true',
+              localStorage.getItem(STORAGE_KEY_LAZY_UNION) === 'true',
+            useManifold,
           };
 
           this.worker.postMessage({

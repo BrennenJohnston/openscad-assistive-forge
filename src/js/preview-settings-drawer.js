@@ -5,7 +5,10 @@
  * The drawer auto-sizes to fit content and scrolls if needed.
  */
 
-const STORAGE_KEY_DRAWER_COLLAPSED = 'openscad-customizer-drawer-collapsed';
+import { getDrawerStateKey } from './storage-keys.js';
+
+// Storage key using standardized naming convention
+const STORAGE_KEY_DRAWER_COLLAPSED = getDrawerStateKey('preview-settings');
 
 /**
  * Initialize the preview settings drawer controller

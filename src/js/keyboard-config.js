@@ -39,7 +39,15 @@ export const DEFAULT_SHORTCUTS = {
   exportParams: {
     key: 'e',
     ctrl: true,
+    shift: true,
     description: 'Export parameters as JSON',
+  },
+
+  // Expert Mode
+  toggleExpertMode: {
+    key: 'e',
+    ctrl: true,
+    description: 'Toggle Expert Mode (code editor)',
   },
 
   // View controls
@@ -55,6 +63,47 @@ export const DEFAULT_SHORTCUTS = {
   resetView: {
     key: 'r',
     description: 'Reset camera view',
+  },
+
+  // Camera view presets (matches OpenSCAD desktop numpad layout)
+  viewTop: {
+    key: '5',
+    ctrl: true,
+    description: 'Top view',
+  },
+  viewBottom: {
+    key: '0',
+    ctrl: true,
+    description: 'Bottom view',
+  },
+  viewFront: {
+    key: '8',
+    ctrl: true,
+    description: 'Front view',
+  },
+  viewBack: {
+    key: '2',
+    ctrl: true,
+    description: 'Back view',
+  },
+  viewLeft: {
+    key: '4',
+    ctrl: true,
+    description: 'Left view',
+  },
+  viewRight: {
+    key: '6',
+    ctrl: true,
+    description: 'Right view',
+  },
+  viewDiagonal: {
+    key: '1',
+    ctrl: true,
+    description: 'Diagonal isometric view',
+  },
+  toggleProjection: {
+    key: 'p',
+    description: 'Toggle perspective/orthographic projection',
   },
 
   // Parameter controls
@@ -141,7 +190,11 @@ export const SHORTCUT_CATEGORIES = {
   },
   view: {
     label: 'View Controls',
-    actions: ['focusMode', 'toggleParameters', 'resetView'],
+    actions: ['focusMode', 'toggleParameters', 'resetView', 'toggleExpertMode'],
+  },
+  cameraViews: {
+    label: 'Camera Views',
+    actions: ['viewTop', 'viewBottom', 'viewFront', 'viewBack', 'viewLeft', 'viewRight', 'viewDiagonal', 'toggleProjection'],
   },
   parameters: {
     label: 'Parameters',

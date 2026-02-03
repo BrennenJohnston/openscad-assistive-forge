@@ -94,8 +94,119 @@ test.describe('Preset Workflow', () => {
         const options = await presetSelect.locator('option').allTextContents()
         const hasSavedPreset = options.some(opt => opt.includes('My Test Preset'))
         expect(hasSavedPreset).toBe(true)
+        
+        // OpenSCAD Customizer behavior: newly saved preset should be auto-selected
+        // This enables the save button to update the preset immediately after creation
+        const selectedValue = await presetSelect.inputValue()
+        const selectedOption = await presetSelect.locator('option:checked').textContent()
+        expect(selectedOption).toContain('My Test Preset')
       }
     }
+  })
+
+  test('should auto-select newly saved preset (OpenSCAD Customizer behavior)', async ({ page }) => {
+    // Skip in CI - requires WASM to process example files
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
+    
+    try {
+      await loadSimpleBoxExample(page)
+    } catch (error) {
+      console.log('Could not load preset fixture:', error.message)
+      test.skip()
+      return
+    }
+
+    // Find the Add Preset button ("+") to create a new preset
+    const addPresetBtn = page.locator('#addPresetBtn, button[aria-label*="Add preset"]')
+    if (!(await addPresetBtn.isVisible())) {
+      test.skip()
+      return
+    }
+
+    await addPresetBtn.click()
+
+    // Fill in preset name in modal
+    const nameInput = page.locator('#presetName, input[placeholder*="preset"]').first()
+    if (await nameInput.isVisible()) {
+      await nameInput.fill('Auto-Select Test Preset')
+      
+      // Click Save button in modal
+      const confirmButton = page.locator('button[type="submit"]:has-text("Save")').first()
+      await confirmButton.click()
+      
+      // Wait for modal to close
+      await page.waitForSelector('.preset-modal', { state: 'detached', timeout: 5000 })
+      await page.waitForTimeout(500)
+
+      // Verify the newly saved preset is automatically selected in the dropdown
+      // This matches OpenSCAD Customizer behavior where "+" creates and selects the preset
+      const presetSelect = page.locator('select#presetSelect')
+      if (await presetSelect.isVisible()) {
+        const selectedOption = await presetSelect.locator('option:checked').textContent()
+        expect(selectedOption).toContain('Auto-Select Test Preset')
+        
+        // The Save Preset button should now be enabled (can update this preset)
+        const savePresetBtn = page.locator('#savePresetBtn')
+        if (await savePresetBtn.isVisible()) {
+          const isDisabled = await savePresetBtn.isDisabled()
+          expect(isDisabled).toBe(false)
+        }
+      }
+    }
+  })
+
+  test('should keep preset selected after loading (selection persistence)', async ({ page }) => {
+    // Skip in CI - requires WASM to process example files
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
+    
+    try {
+      await loadSimpleBoxExample(page)
+    } catch (error) {
+      console.log('Could not load preset fixture:', error.message)
+      test.skip()
+      return
+    }
+
+    // First, save a preset
+    const addPresetBtn = page.locator('#addPresetBtn, button[aria-label*="Add preset"]')
+    if (!(await addPresetBtn.isVisible())) {
+      test.skip()
+      return
+    }
+
+    await addPresetBtn.click()
+
+    const nameInput = page.locator('#presetName, input[placeholder*="preset"]').first()
+    if (await nameInput.isVisible()) {
+      await nameInput.fill('Persistence Test Preset')
+      const confirmButton = page.locator('button[type="submit"]:has-text("Save")').first()
+      await confirmButton.click()
+      await page.waitForSelector('.preset-modal', { state: 'detached', timeout: 5000 })
+      await page.waitForTimeout(500)
+    }
+
+    // Now select the preset from the dropdown
+    const presetSelect = page.locator('select#presetSelect')
+    if (!(await presetSelect.isVisible())) {
+      test.skip()
+      return
+    }
+
+    // Select the preset
+    await presetSelect.selectOption({ label: 'Persistence Test Preset' })
+    await page.waitForTimeout(1000)
+
+    // Verify the preset is selected
+    let selectedOption = await presetSelect.locator('option:checked').textContent()
+    expect(selectedOption).toContain('Persistence Test Preset')
+
+    // Wait a bit more to ensure any async operations complete
+    await page.waitForTimeout(1000)
+
+    // Verify the preset is STILL selected (not reset to "Select Preset")
+    selectedOption = await presetSelect.locator('option:checked').textContent()
+    expect(selectedOption).toContain('Persistence Test Preset')
+    expect(selectedOption).not.toContain('Select Preset')
   })
 
   test('should load a saved preset', async ({ page }) => {

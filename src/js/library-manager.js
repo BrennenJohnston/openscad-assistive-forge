@@ -5,6 +5,11 @@
  * Manages OpenSCAD library bundles (MCAD, BOSL2, etc.)
  */
 
+import { getAppPrefKey } from './storage-keys.js';
+
+// Storage key using standardized naming convention
+const STORAGE_KEY_LIBRARIES = getAppPrefKey('libraries');
+
 // Import validation at module level
 let validateLibraryMapFn = null;
 (async () => {
@@ -109,7 +114,7 @@ export class LibraryManager {
         return; // Skip in Node.js environment
       }
 
-      const saved = localStorage.getItem('openscad-customizer-libraries');
+      const saved = localStorage.getItem(STORAGE_KEY_LIBRARIES);
       if (saved) {
         const state = JSON.parse(saved);
 
@@ -157,10 +162,7 @@ export class LibraryManager {
       for (const [id, lib] of Object.entries(this.libraries)) {
         state[id] = { enabled: lib.enabled };
       }
-      localStorage.setItem(
-        'openscad-customizer-libraries',
-        JSON.stringify(state)
-      );
+      localStorage.setItem(STORAGE_KEY_LIBRARIES, JSON.stringify(state));
     } catch (error) {
       console.warn('Failed to save library state:', error);
     }

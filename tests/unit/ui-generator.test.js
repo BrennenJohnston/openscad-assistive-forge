@@ -59,12 +59,14 @@ describe('UI Generator', () => {
       renderParameterUI(schema, container, onChange, {})
 
       const slider = container.querySelector('input[type="range"]')
-      const output = container.querySelector('.slider-value')
+      const spinbox = container.querySelector('.slider-spinbox')
       expect(slider).toBeTruthy()
       expect(slider.min).toBe('10')
       expect(slider.max).toBe('100')
       expect(slider.value).toBe('50')
-      expect(output?.textContent).toBe('50')
+      // Value is now in editable spinbox instead of read-only output
+      expect(spinbox).toBeTruthy()
+      expect(spinbox.value).toBe('50')
     })
 
     it('calls onChange with updated values when slider changes', () => {
@@ -255,6 +257,79 @@ describe('UI Generator', () => {
       expect(onChange).toHaveBeenCalled()
       expect(onChange.mock.calls[0][0]).toEqual({ enabled: 'yes' })
     })
+
+    it('renders toggle for boolean type parameters (true/false)', () => {
+      const schema = buildParams({
+        params: [
+          {
+            name: 'rounded',
+            type: 'boolean',
+            default: true,
+            uiType: 'toggle'
+          }
+        ]
+      })
+      const onChange = vi.fn()
+
+      renderParameterUI(schema, container, onChange, {})
+
+      const checkbox = container.querySelector('input[type="checkbox"]')
+      expect(checkbox).toBeTruthy()
+      expect(checkbox.checked).toBe(true)
+      expect(checkbox.getAttribute('aria-checked')).toBe('true')
+    })
+
+    it('returns true/false strings for boolean type toggles', () => {
+      const schema = buildParams({
+        params: [
+          {
+            name: 'rounded',
+            type: 'boolean',
+            default: true,
+            uiType: 'toggle'
+          }
+        ]
+      })
+      const onChange = vi.fn()
+
+      renderParameterUI(schema, container, onChange, {})
+
+      const checkbox = container.querySelector('input[type="checkbox"]')
+      // Toggle off (was true, now false)
+      checkbox.checked = false
+      checkbox.dispatchEvent(new Event('change'))
+
+      expect(onChange).toHaveBeenCalled()
+      expect(onChange.mock.calls[0][0]).toEqual({ rounded: 'false' })
+    })
+
+    it('handles boolean default value of false', () => {
+      const schema = buildParams({
+        params: [
+          {
+            name: 'solid',
+            type: 'boolean',
+            default: false,
+            uiType: 'toggle'
+          }
+        ]
+      })
+      const onChange = vi.fn()
+
+      renderParameterUI(schema, container, onChange, {})
+
+      const checkbox = container.querySelector('input[type="checkbox"]')
+      expect(checkbox).toBeTruthy()
+      expect(checkbox.checked).toBe(false)
+      expect(checkbox.getAttribute('aria-checked')).toBe('false')
+
+      // Toggle on
+      checkbox.checked = true
+      checkbox.dispatchEvent(new Event('change'))
+
+      expect(onChange).toHaveBeenCalled()
+      expect(onChange.mock.calls[0][0]).toEqual({ solid: 'true' })
+    })
   })
 
   describe('Color and File Parameters', () => {
@@ -378,7 +453,7 @@ describe('UI Generator', () => {
   })
 
   describe('Accessibility and Defaults', () => {
-    it('sets aria-label for sliders with current value', () => {
+    it('sets aria-label for sliders', () => {
       const schema = buildParams({
         params: [
           {
@@ -396,7 +471,11 @@ describe('UI Generator', () => {
       renderParameterUI(schema, container, onChange, {})
 
       const slider = container.querySelector('input[type="range"]')
-      expect(slider.getAttribute('aria-label')).toContain('width: 50')
+      // Slider aria-label contains parameter name
+      expect(slider.getAttribute('aria-label')).toContain('width')
+      expect(slider.getAttribute('aria-label')).toContain('slider')
+      // Current value is in aria-valuenow attribute
+      expect(slider.getAttribute('aria-valuenow')).toBe('50')
     })
 
     it('includes help tooltips when descriptions are provided', () => {
@@ -676,14 +755,14 @@ describe('UI Generator', () => {
 
       const detailControl = container.querySelector('[data-param-name="detail_level"]')
       
-      // Initially hidden (mode is 'simple')
-      expect(detailControl.style.display).toBe('none')
+      // Initially hidden (mode is 'simple') - uses .hidden class per UI_STANDARDS.md
+      expect(detailControl.classList.contains('hidden')).toBe(true)
 
       // Change mode to advanced
       updateDependentParameters('mode', 'advanced')
 
       // Should now be visible
-      expect(detailControl.style.display).toBe('')
+      expect(detailControl.classList.contains('hidden')).toBe(false)
     })
 
     it('handles != operator in dependencies', () => {
@@ -711,19 +790,19 @@ describe('UI Generator', () => {
 
       const optionsControl = container.querySelector('[data-param-name="options"]')
       
-      // Initially visible (type != none)
-      expect(optionsControl.style.display).toBe('')
+      // Initially visible (type != none) - no .hidden class
+      expect(optionsControl.classList.contains('hidden')).toBe(false)
 
       // Change type to 'none'
       updateDependentParameters('type', 'none')
 
-      // Should now be hidden
-      expect(optionsControl.style.display).toBe('none')
+      // Should now be hidden - uses .hidden class per UI_STANDARDS.md
+      expect(optionsControl.classList.contains('hidden')).toBe(true)
     })
   })
 
   describe('Unit Display', () => {
-    it('displays unit suffix in slider value when parameter has unit', () => {
+    it('displays unit suffix in slider when parameter has unit', () => {
       const schema = buildParams({
         params: [
           {
@@ -741,10 +820,14 @@ describe('UI Generator', () => {
 
       renderParameterUI(schema, container, onChange, {})
 
-      // Unit is displayed within the slider-value output element
-      const valueDisplay = container.querySelector('.slider-value')
-      expect(valueDisplay).toBeTruthy()
-      expect(valueDisplay.textContent).toBe('50 mm')
+      // Value is in the editable spinbox input
+      const spinbox = container.querySelector('.slider-spinbox')
+      expect(spinbox).toBeTruthy()
+      expect(spinbox.value).toBe('50')
+      // Unit is displayed as a separate label
+      const unitLabel = container.querySelector('.slider-unit')
+      expect(unitLabel).toBeTruthy()
+      expect(unitLabel.textContent).toBe('mm')
     })
 
     it('displays degree symbol for angle parameters', () => {
@@ -765,10 +848,14 @@ describe('UI Generator', () => {
 
       renderParameterUI(schema, container, onChange, {})
 
-      // Unit is displayed within the slider-value output element
-      const valueDisplay = container.querySelector('.slider-value')
-      expect(valueDisplay).toBeTruthy()
-      expect(valueDisplay.textContent).toBe('45 °')
+      // Value is in the editable spinbox input
+      const spinbox = container.querySelector('.slider-spinbox')
+      expect(spinbox).toBeTruthy()
+      expect(spinbox.value).toBe('45')
+      // Unit (degree symbol) is displayed as a separate label
+      const unitLabel = container.querySelector('.slider-unit')
+      expect(unitLabel).toBeTruthy()
+      expect(unitLabel.textContent).toBe('°')
     })
   })
 })

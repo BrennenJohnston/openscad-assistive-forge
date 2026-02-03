@@ -680,30 +680,65 @@ async function checkCapabilities() {
   }
 }
 
+// Work directory for design packages (Ken's Volkswitch compatibility)
+// All files are mounted here so include/use statements resolve correctly
+const WORK_DIR = '/work';
+
 /**
  * Mount files into OpenSCAD virtual filesystem
+ * Ken's P0 requirement: Enable include <openings_and_additions.txt> to work
+ * 
+ * Files are mounted under /work/ directory so that:
+ * - Main file runs from /work/mainfile.scad
+ * - Include files like openings_and_additions.txt are at /work/openings_and_additions.txt
+ * - OpenSCAD's include path resolution finds them correctly
+ * 
  * @param {Map<string, string>} files - Map of file paths to content
- * @returns {Promise<void>}
+ * @param {Object} options - Mount options
+ * @param {boolean} options.useWorkDir - Mount under /work/ (default: true for multi-file projects)
+ * @returns {Promise<{workDir: string, files: Map<string, string>}>} Mount result with resolved paths
  */
-async function mountFiles(files) {
+async function mountFiles(files, options = {}) {
   const module = await ensureOpenSCADModule();
   if (!module || !module.FS) {
     throw new Error('OpenSCAD filesystem not available');
   }
 
   const FS = module.FS;
+  const useWorkDir = options.useWorkDir !== false && files.size > 1;
+  const baseDir = useWorkDir ? WORK_DIR : '';
+  
+  // Create work directory if needed
+  if (useWorkDir) {
+    try {
+      FS.mkdir(WORK_DIR);
+      console.log(`[Worker FS] Created work directory: ${WORK_DIR}`);
+    } catch (error) {
+      if (error.code !== 'EEXIST') {
+        console.warn(`[Worker FS] Work directory creation warning:`, error.message);
+      }
+    }
+  }
 
   // Create directory structure
   const directories = new Set();
 
   for (const filePath of files.keys()) {
+    // Security: Reject path traversal attempts
+    if (filePath.includes('..') || filePath.startsWith('/')) {
+      console.warn(`[Worker FS] Skipping invalid path: ${filePath}`);
+      continue;
+    }
+    
     // Extract all directory components
     const parts = filePath.split('/');
-    let currentPath = '';
+    let currentPath = baseDir;
 
     for (let i = 0; i < parts.length - 1; i++) {
       currentPath = currentPath ? `${currentPath}/${parts[i]}` : parts[i];
-      directories.add(currentPath);
+      if (currentPath) {
+        directories.add(currentPath);
+      }
     }
   }
 
@@ -723,25 +758,41 @@ async function mountFiles(files) {
     }
   }
 
-  // Write files
+  // Write files - track the resolved paths
+  const resolvedPaths = new Map();
+  
   for (const [filePath, content] of files.entries()) {
+    // Security: Skip path traversal attempts
+    if (filePath.includes('..') || filePath.startsWith('/')) {
+      continue;
+    }
+    
+    const resolvedPath = baseDir ? `${baseDir}/${filePath}` : filePath;
+    
     try {
-      FS.writeFile(filePath, content);
-      mountedFiles.set(filePath, content);
+      FS.writeFile(resolvedPath, content);
+      mountedFiles.set(resolvedPath, content);
+      resolvedPaths.set(filePath, resolvedPath);
       console.log(
-        `[Worker FS] Mounted file: ${filePath} (${content.length} bytes)`
+        `[Worker FS] Mounted file: ${resolvedPath} (${content.length} bytes)`
       );
     } catch (error) {
-      console.error(`[Worker FS] Failed to mount file ${filePath}:`, error);
+      console.error(`[Worker FS] Failed to mount file ${resolvedPath}:`, error);
       throw new Error(`Failed to mount file: ${filePath}`);
     }
   }
 
-  console.log(`[Worker FS] Successfully mounted ${files.size} files`);
+  console.log(`[Worker FS] Successfully mounted ${files.size} files under ${baseDir || '/'}`);
+  
+  return {
+    workDir: baseDir,
+    files: resolvedPaths,
+  };
 }
 
 /**
  * Clear all mounted files from virtual filesystem
+ * Also cleans up the /work/ directory for design packages
  */
 function clearMountedFiles() {
   if (!openscadModule || !openscadModule.FS) {
@@ -751,12 +802,43 @@ function clearMountedFiles() {
 
   const FS = openscadModule.FS;
 
+  // Remove all mounted files
   for (const filePath of mountedFiles.keys()) {
     try {
       FS.unlink(filePath);
     } catch (_error) {
       // File may already be deleted, ignore
     }
+  }
+
+  // Clean up work directory if it exists
+  try {
+    const workDirAnalysis = FS.analyzePath(WORK_DIR);
+    if (workDirAnalysis.exists) {
+      // Read directory contents and remove files
+      const entries = FS.readdir(WORK_DIR);
+      for (const entry of entries) {
+        if (entry !== '.' && entry !== '..') {
+          try {
+            const fullPath = `${WORK_DIR}/${entry}`;
+            const stat = FS.stat(fullPath);
+            if (FS.isFile(stat.mode)) {
+              FS.unlink(fullPath);
+            }
+          } catch (_e) {
+            // Ignore cleanup errors for individual files
+          }
+        }
+      }
+      // Try to remove the directory itself
+      try {
+        FS.rmdir(WORK_DIR);
+      } catch (_e) {
+        // Directory may not be empty or may not exist
+      }
+    }
+  } catch (_error) {
+    // Work directory may not exist, ignore
   }
 
   mountedFiles.clear();
@@ -950,8 +1032,15 @@ function buildDefineArgs(parameters) {
 
     // Handle different value types
     if (typeof value === 'string') {
+      // Check for boolean string values (true/false or yes/no)
+      const lowerValue = value.toLowerCase();
+      if (lowerValue === 'true' || lowerValue === 'yes') {
+        formattedValue = 'true';
+      } else if (lowerValue === 'false' || lowerValue === 'no') {
+        formattedValue = 'false';
+      }
       // Check if this is a color (hex string)
-      if (/^#?[0-9A-Fa-f]{6}$/.test(value)) {
+      else if (/^#?[0-9A-Fa-f]{6}$/.test(value)) {
         const rgb = hexToRgb(value);
         formattedValue = `[${rgb[0]},${rgb[1]},${rgb[2]}]`;
       } else {
@@ -1021,6 +1110,13 @@ function parametersToScad(parameters, paramTypes = {}) {
 
       // Handle different value types
       if (typeof value === 'string') {
+        // Check for boolean string values (true/false or yes/no)
+        const lowerValue = value.toLowerCase();
+        if (lowerValue === 'true' || lowerValue === 'yes') {
+          return `${key} = true;`;
+        } else if (lowerValue === 'false' || lowerValue === 'no') {
+          return `${key} = false;`;
+        }
         // Escape quotes in strings
         const escaped = value.replace(/"/g, '\\"');
         return `${key} = "${escaped}";`;
@@ -1084,6 +1180,13 @@ function _applyOverrides(scadContent, parameters) {
 
     // Handle strings
     if (typeof value === 'string') {
+      // Check for boolean string values (true/false or yes/no)
+      const lowerValue = value.toLowerCase();
+      if (lowerValue === 'true' || lowerValue === 'yes') {
+        return 'true';
+      } else if (lowerValue === 'false' || lowerValue === 'no') {
+        return 'false';
+      }
       const escaped = value.replace(/"/g, '\\"');
       return `"${escaped}"`;
     }
@@ -1148,15 +1251,25 @@ async function renderWithCallMain(
   // Performance flags: Use Manifold backend for 5-30x faster CSG operations
   // Note: Modern OpenSCAD uses --backend=Manifold instead of --enable=manifold
   // lazy-union is still opt-in via --enable flag
+  // Ken's P2 requirement: Allow toggling between Manifold (fast) and CGAL (stable)
   const capabilities = openscadCapabilities || {};
   const supportsManifold = Boolean(capabilities.hasManifold);
   const supportsLazyUnion = Boolean(capabilities.hasLazyUnion);
   const supportsBinarySTL = Boolean(capabilities.hasBinarySTL);
   const enableLazyUnion =
     Boolean(renderOptions?.enableLazyUnion) && supportsLazyUnion;
+  
+  // Engine selection: Use Manifold by default, but allow user to disable
+  // renderOptions.useManifold: undefined/true = use Manifold, false = use CGAL (stable)
+  const useManifold = renderOptions?.useManifold !== false;
+  
   const performanceFlags = [];
-  if (supportsManifold) {
+  if (supportsManifold && useManifold) {
     performanceFlags.push('--backend=Manifold');
+  } else if (supportsManifold && !useManifold) {
+    // Explicitly use CGAL backend for stability
+    performanceFlags.push('--backend=CGAL');
+    console.log('[Worker] Using CGAL (stable) backend instead of Manifold');
   }
   if (enableLazyUnion) {
     performanceFlags.push('--enable=lazy-union');
@@ -1737,6 +1850,8 @@ async function render(payload) {
     }
 
     // Mount additional files if provided (for multi-file projects)
+    // Ken's P0 requirement: Support include <openings_and_additions.txt>
+    let mountResult = null;
     if (files && Object.keys(files).length > 0) {
       // Convert files object to Map
       const filesMap = new Map(Object.entries(files));
@@ -1750,7 +1865,8 @@ async function render(payload) {
         },
       });
 
-      await mountFiles(filesMap);
+      // Mount files under /work/ directory for proper include resolution
+      mountResult = await mountFiles(filesMap, { useWorkDir: true });
 
       self.postMessage({
         type: 'PROGRESS',
@@ -1760,6 +1876,8 @@ async function render(payload) {
           message: 'Files mounted successfully',
         },
       });
+      
+      console.log('[Worker] Files mounted under:', mountResult.workDir);
     }
     console.log('[Worker] Rendering with parameters:', parameters);
 
@@ -1803,11 +1921,21 @@ async function render(payload) {
       console.log('[Worker] Using callMain with official OpenSCAD WASM');
 
       // Determine main file path
-      const mainFileToUse = mainFile || '/tmp/input.scad';
-
-      // If mainFile is specified and exists in mounted files, use it directly
-      // Otherwise, write scadContent to the filesystem
-      if (!mainFile) {
+      // For multi-file projects, use the work directory path
+      // Ken's requirement: include <openings_and_additions.txt> must resolve correctly
+      let mainFileToUse;
+      
+      if (mainFile && mountResult && mountResult.workDir) {
+        // Multi-file project: use the work directory path
+        mainFileToUse = `${mountResult.workDir}/${mainFile}`;
+        console.log(`[Worker] Multi-file project: using ${mainFileToUse}`);
+      } else if (mainFile && mountResult && mountResult.files.has(mainFile)) {
+        // File was mounted but without work directory
+        mainFileToUse = mountResult.files.get(mainFile);
+      } else {
+        // Single file or no mounted files: use /tmp
+        mainFileToUse = '/tmp/input.scad';
+        
         // Write to temporary location
         const module = await ensureOpenSCADModule();
         if (!module || !module.FS) {

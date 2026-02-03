@@ -82,6 +82,34 @@
             </div>
           </div>
           <div class="header-controls">
+            <!-- Memory Status Badge (Milestone 0: graceful degradation) -->
+            <span
+              id="memoryStatusBadge"
+              class="memory-status-badge hidden"
+              role="status"
+              aria-live="polite"
+              data-state="normal"
+            >
+              <svg
+                class="memory-badge-icon"
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                aria-hidden="true"
+              >
+                <rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect>
+                <rect x="8" y="8" width="8" height="8" rx="1" ry="1"></rect>
+                <line x1="4" y1="10" x2="1" y2="10"></line>
+                <line x1="4" y1="14" x2="1" y2="14"></line>
+                <line x1="23" y1="10" x2="20" y2="10"></line>
+                <line x1="23" y1="14" x2="20" y2="14"></line>
+              </svg>
+              <span id="memoryStatusText" class="memory-badge-text">--</span>
+            </span>
+
             <a
               href="https://github.com/BrennenJohnston/openscad-assistive-forge"
               class="btn btn-sm btn-secondary github-link"
@@ -228,6 +256,85 @@
         </div>
       </div>
 
+      <!-- Memory Warning Banner (Milestone 0: graceful degradation) -->
+      <div
+        id="memoryBanner"
+        class="memory-banner"
+        role="alert"
+        aria-live="assertive"
+        data-visible="false"
+        data-state="normal"
+      >
+        <svg
+          class="memory-banner-icon"
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          aria-hidden="true"
+        >
+          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+          <line x1="12" y1="9" x2="12" y2="13"></line>
+          <line x1="12" y1="17" x2="12.01" y2="17"></line>
+        </svg>
+        <span id="memoryBannerText" class="memory-banner-text">
+          High memory usage detected. Consider saving your work.
+        </span>
+        <div class="memory-banner-actions">
+          <!-- Critical state actions -->
+          <button
+            id="memoryBannerReduceFn"
+            class="memory-banner-btn memory-action-critical"
+            type="button"
+            title="Lower quality settings to reduce memory usage"
+          >
+            Reduce Quality
+          </button>
+          <button
+            id="memoryBannerDisableAuto"
+            class="memory-banner-btn memory-action-critical"
+            type="button"
+            title="Disable automatic preview updates"
+          >
+            Disable Auto-Preview
+          </button>
+          <button
+            id="memoryBannerSave"
+            class="memory-banner-btn"
+            type="button"
+          >
+            Save Project
+          </button>
+          <!-- Emergency state actions -->
+          <button
+            id="memoryBannerExport"
+            class="memory-banner-btn memory-action-emergency"
+            type="button"
+            title="Export STL to preserve your work"
+          >
+            Export STL
+          </button>
+          <button
+            id="memoryBannerReload"
+            class="memory-banner-btn memory-action-emergency"
+            type="button"
+            title="Reload page in recovery mode (your work will be saved)"
+          >
+            Reload (Safe)
+          </button>
+          <button
+            id="memoryBannerDismiss"
+            class="memory-banner-btn memory-action-dismissable"
+            type="button"
+            aria-label="Dismiss memory warning"
+          >
+            Dismiss
+          </button>
+        </div>
+      </div>
+
       <!-- Workflow Progress Indicator (C3: COGA breadcrumbs) - Moved here to prevent header overlap -->
       <div
         class="workflow-progress hidden"
@@ -328,36 +435,67 @@
               generate STL files
             </p>
 
-            <label
-              class="upload-zone"
-              id="uploadZone"
-              for="fileInput"
-              tabindex="0"
-            >
-              <svg
-                class="upload-icon"
-                width="48"
-                height="48"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                aria-hidden="true"
+            <!-- Primary actions: Upload existing file OR start new -->
+            <div class="welcome-actions">
+              <label
+                class="upload-zone"
+                id="uploadZone"
+                for="fileInput"
+                tabindex="0"
               >
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                <polyline points="17 8 12 3 7 8"></polyline>
-                <line x1="12" y1="3" x2="12" y2="15"></line>
-              </svg>
-              <span class="upload-text"
-                >Drop .scad or .zip file here or click to browse</span
+                <svg
+                  class="upload-icon"
+                  width="48"
+                  height="48"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  aria-hidden="true"
+                >
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="17 8 12 3 7 8"></polyline>
+                  <line x1="12" y1="3" x2="12" y2="15"></line>
+                </svg>
+                <span class="upload-text"
+                  >Drop .scad or .zip file here or click to browse</span
+                >
+                <input
+                  type="file"
+                  id="fileInput"
+                  accept=".scad,.zip"
+                  class="file-input"
+                />
+              </label>
+
+              <div class="welcome-divider">
+                <span>or</span>
+              </div>
+
+              <button
+                type="button"
+                class="btn btn-lg btn-outline start-new-btn"
+                id="startNewProjectBtn"
+                aria-label="Start a new OpenSCAD project from scratch"
               >
-              <input
-                type="file"
-                id="fileInput"
-                accept=".scad,.zip"
-                class="file-input"
-              />
-            </label>
+                <svg
+                  class="btn-icon-svg"
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  aria-hidden="true"
+                >
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                  <line x1="12" y1="18" x2="12" y2="12"></line>
+                  <line x1="9" y1="15" x2="15" y2="15"></line>
+                </svg>
+                <span>Start New Project</span>
+              </button>
+            </div>
 
             <!-- Saved Designs Section (v2 with folder tree) -->
             <section
@@ -838,7 +976,7 @@
             class="param-panel"
             id="paramPanel"
             role="region"
-            aria-label="Model parameters"
+            aria-labelledby="parameters-heading"
           >
             <!-- WCAG 2.2 SC 3.2.6 Consistent Help: Help mechanisms (Features Guide button) 
                  appear in consistent relative order across panels (top-right area) -->
@@ -924,6 +1062,18 @@
                 >
                   Reset
                 </button>
+                <!-- Expert Mode toggle (M2) - hidden until feature flag enabled -->
+                <button
+                  id="expertModeToggle"
+                  class="mode-toggle-btn hidden"
+                  aria-pressed="false"
+                  aria-label="Toggle Expert Mode - code editor"
+                  title="Expert Mode: Edit OpenSCAD code directly"
+                  data-tutorial-target="expert-mode-toggle"
+                >
+                  <span class="mode-icon" aria-hidden="true">{ }</span>
+                  <span class="btn-text">Code</span>
+                </button>
               </div>
               <!-- Panel collapse control - positioned at right edge for discoverability -->
               <div class="panel-collapse-control">
@@ -989,27 +1139,10 @@
                   Presets
                 </summary>
                 <div class="preset-content">
-                  <div class="preset-actions">
-                    <button
-                      id="savePresetBtn"
-                      class="btn btn-sm btn-outline"
-                      aria-label="Save current parameters as preset"
-                      title="Save current parameters"
-                    >
-                      💾 Save Preset
-                    </button>
-                    <button
-                      id="managePresetsBtn"
-                      class="btn btn-sm btn-outline"
-                      aria-label="Manage presets"
-                      title="Manage saved presets"
-                    >
-                      📋 Manage
-                    </button>
-                  </div>
+                  <!-- Preset selector with OpenSCAD Customizer-style controls -->
                   <div class="preset-selector" id="presetSelector">
-                    <label for="presetSelect" class="preset-label"
-                      >Load Preset:</label
+                    <label for="presetSelect" class="preset-label sr-only"
+                      >Select preset</label
                     >
                     <select
                       id="presetSelect"
@@ -1018,6 +1151,136 @@
                     >
                       <option value="">-- Select Preset --</option>
                     </select>
+                    <!-- OpenSCAD Customizer-style preset controls: Save, Add, Delete -->
+                    <div
+                      class="preset-controls"
+                      role="group"
+                      aria-label="Preset management"
+                    >
+                      <button
+                        id="savePresetBtn"
+                        class="btn btn-sm btn-icon"
+                        aria-label="Save changes to current preset"
+                        title="Save changes to current preset"
+                        disabled
+                      >
+                        💾
+                      </button>
+                      <button
+                        id="addPresetBtn"
+                        class="btn btn-sm btn-icon"
+                        aria-label="Create new preset from current settings"
+                        title="Create new preset"
+                      >
+                        +
+                      </button>
+                      <button
+                        id="deletePresetBtn"
+                        class="btn btn-sm btn-icon btn-danger-icon"
+                        aria-label="Delete current preset"
+                        title="Delete current preset"
+                        disabled
+                      >
+                        −
+                      </button>
+                    </div>
+                  </div>
+                  <div class="preset-actions">
+                    <button
+                      id="managePresetsBtn"
+                      class="btn btn-sm btn-outline"
+                      aria-label="Manage presets (import, export, bulk operations)"
+                      title="Import/export presets"
+                    >
+                      📋 Manage
+                    </button>
+                  </div>
+                </div>
+              </details>
+
+              <!-- Console Output Panel (Ken's P1 requirement)
+                   Displays ECHO, WARNING, ERROR messages from OpenSCAD -->
+              <details
+                class="console-panel"
+                id="consolePanel"
+                role="region"
+                aria-label="OpenSCAD console output"
+              >
+                <summary class="console-summary">
+                  <span class="console-icon" aria-hidden="true">📟</span>
+                  <span class="console-title">Console Output</span>
+                  <span
+                    id="console-badge"
+                    class="console-badge hidden"
+                    aria-hidden="true"
+                    >0</span
+                  >
+                </summary>
+                <div class="console-content">
+                  <div class="console-controls">
+                    <label class="console-filter">
+                      <input
+                        type="checkbox"
+                        id="console-filter-echo"
+                        checked
+                      />
+                      <span>ECHO</span>
+                    </label>
+                    <label class="console-filter">
+                      <input
+                        type="checkbox"
+                        id="console-filter-warn"
+                        checked
+                      />
+                      <span>Warnings</span>
+                    </label>
+                    <label class="console-filter">
+                      <input
+                        type="checkbox"
+                        id="console-filter-error"
+                        checked
+                      />
+                      <span>Errors</span>
+                    </label>
+                    <div class="console-actions">
+                      <button
+                        id="console-copy-btn"
+                        class="btn btn-sm btn-icon"
+                        aria-label="Copy console output to clipboard"
+                        title="Copy to clipboard"
+                      >
+                        📋
+                      </button>
+                      <button
+                        id="console-download-btn"
+                        class="btn btn-sm btn-icon"
+                        aria-label="Download console log"
+                        title="Download log"
+                      >
+                        ⬇️
+                      </button>
+                      <button
+                        id="console-clear-btn"
+                        class="btn btn-sm btn-icon"
+                        aria-label="Clear console"
+                        title="Clear"
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  </div>
+                  <div
+                    id="console-output"
+                    class="console-output"
+                    role="log"
+                    aria-label="Console messages"
+                    aria-live="polite"
+                    aria-relevant="additions"
+                  >
+                    <div class="console-empty">
+                      No console output yet. ECHO, WARNING, and ERROR messages
+                      will appear here.
+                    </div>
                   </div>
                 </div>
               </details>
@@ -1376,16 +1639,26 @@
                       Manage companion files used by this design:
                     </p>
 
-                    <!-- Missing files warning -->
+                    <!-- Missing files warning with action button (Ken's preflight check) -->
                     <div
                       class="project-files-warning hidden"
                       id="projectFilesWarning"
                       role="alert"
                     >
-                      <span class="warning-icon" aria-hidden="true">⚠️</span>
-                      <span class="warning-text" id="projectFilesWarningText"
-                        >Some required files are missing</span
+                      <div class="warning-content">
+                        <span class="warning-icon" aria-hidden="true">⚠️</span>
+                        <span class="warning-text" id="projectFilesWarningText"
+                          >Some required files are missing</span
+                        >
+                      </div>
+                      <button
+                        type="button"
+                        class="btn btn-sm btn-outline btn-warning-action"
+                        id="addMissingFilesBtn"
+                        aria-label="Add the missing files to this project"
                       >
+                        Add Missing Files...
+                      </button>
                     </div>
 
                     <!-- File list -->
@@ -1683,6 +1956,43 @@
                 </div>
               </details>
             </div>
+
+            <!-- Expert Mode Panel (M2) - Code editor interface -->
+            <div
+              class="expert-mode-panel"
+              id="expertModePanel"
+              role="region"
+              aria-label="OpenSCAD code editor"
+              aria-live="polite"
+            >
+              <div class="expert-mode-header">
+                <span class="expert-mode-title">
+                  <span aria-hidden="true">{ }</span>
+                  OpenSCAD Code
+                  <span class="editor-dirty-indicator" id="editorDirtyIndicator" aria-label="Unsaved changes"></span>
+                </span>
+                <div class="expert-mode-actions">
+                  <button
+                    id="expertRunPreviewBtn"
+                    class="btn btn-sm btn-primary"
+                    aria-label="Run preview (Ctrl+Enter)"
+                    title="Preview (Ctrl+Enter)"
+                  >
+                    ▶ Preview
+                  </button>
+                  <button
+                    id="expertModeCloseBtn"
+                    class="btn btn-sm btn-outline"
+                    aria-label="Exit Expert Mode"
+                  >
+                    Exit Code Mode
+                  </button>
+                </div>
+              </div>
+              <div class="expert-mode-body" id="expertModeBody">
+                <!-- Editor will be inserted here by JavaScript (Monaco or Textarea) -->
+              </div>
+            </div>
           </div>
 
           <div
@@ -1767,7 +2077,12 @@
                 </div>
 
                 <!-- Collapsible content -->
-                <div class="preview-info-content" id="previewInfoContent">
+                <div
+                  class="preview-info-content"
+                  id="previewInfoContent"
+                  role="region"
+                  aria-labelledby="preview-settings-heading"
+                >
                   <!-- File info section -->
                   <div class="file-info" id="fileInfo" aria-live="polite">
                     <span class="file-info-summary" id="fileInfoSummary"></span>
@@ -1793,6 +2108,13 @@
                     id="srAnnouncer"
                     class="sr-only"
                     aria-live="polite"
+                    aria-atomic="true"
+                  ></div>
+                  <!-- Assertive announcer for errors and critical warnings -->
+                  <div
+                    id="srAnnouncerAssertive"
+                    class="sr-only"
+                    aria-live="assertive"
                     aria-atomic="true"
                   ></div>
 
@@ -1887,6 +2209,24 @@
                       <span id="statusBarHelp" class="sr-only"
                         >Toggle status and render info overlay on preview</span
                       >
+
+                      <!-- Engine Toggle (Ken's P2 requirement) -->
+                      <div class="preview-setting-divider" aria-hidden="true"></div>
+                      <label class="preview-setting">
+                        <input
+                          type="checkbox"
+                          id="manifoldEngineToggle"
+                          checked
+                          aria-describedby="manifoldEngineHelp"
+                        />
+                        <span>Fast engine (Manifold)</span>
+                      </label>
+                      <span id="manifoldEngineHelp" class="sr-only"
+                        >Use Manifold geometry engine for faster rendering. Disable if you encounter issues with complex models.</span
+                      >
+                      <p class="preview-setting-hint" id="manifoldEngineHint">
+                        5-30× faster. Disable if models fail to render.
+                      </p>
 
                       <div class="preview-setting rotation-speed-setting">
                         <label
@@ -2163,7 +2503,7 @@
                 class="actions-drawer collapsed"
                 id="actionsDrawer"
                 role="region"
-                aria-label="Additional actions"
+                aria-labelledby="actions-drawer-title"
               >
                 <!-- Drawer header with toggle button and title -->
                 <div
@@ -2197,7 +2537,7 @@
                       ></line>
                     </svg>
                   </button>
-                  <h2 class="actions-drawer-title">Actions</h2>
+                  <h2 class="actions-drawer-title" id="actions-drawer-title">Actions</h2>
                 </div>
 
                 <!-- Drawer body (expandable content) -->
@@ -2733,6 +3073,107 @@
                       </button>
                     </div>
                   </div>
+
+                  <!-- Standard Views (mobile - scrollable row) -->
+                  <div class="camera-drawer-section camera-drawer-views">
+                    <h3 class="camera-drawer-section-title">Standard Views</h3>
+                    <div
+                      class="camera-drawer-views-grid"
+                      role="group"
+                      aria-label="Standard camera views"
+                    >
+                      <button
+                        type="button"
+                        class="btn btn-sm btn-outline camera-view-btn"
+                        data-view="top"
+                        aria-label="Top view"
+                        title="Top view"
+                      >
+                        Top
+                      </button>
+                      <button
+                        type="button"
+                        class="btn btn-sm btn-outline camera-view-btn"
+                        data-view="front"
+                        aria-label="Front view"
+                        title="Front view"
+                      >
+                        Front
+                      </button>
+                      <button
+                        type="button"
+                        class="btn btn-sm btn-outline camera-view-btn"
+                        data-view="right"
+                        aria-label="Right side view"
+                        title="Right side view"
+                      >
+                        Right
+                      </button>
+                      <button
+                        type="button"
+                        class="btn btn-sm btn-outline camera-view-btn"
+                        data-view="left"
+                        aria-label="Left side view"
+                        title="Left side view"
+                      >
+                        Left
+                      </button>
+                      <button
+                        type="button"
+                        class="btn btn-sm btn-outline camera-view-btn"
+                        data-view="back"
+                        aria-label="Back view"
+                        title="Back view"
+                      >
+                        Back
+                      </button>
+                      <button
+                        type="button"
+                        class="btn btn-sm btn-outline camera-view-btn"
+                        data-view="bottom"
+                        aria-label="Bottom view"
+                        title="Bottom view"
+                      >
+                        Bottom
+                      </button>
+                      <button
+                        type="button"
+                        class="btn btn-sm btn-outline camera-view-btn"
+                        data-view="diagonal"
+                        aria-label="Diagonal isometric view"
+                        title="Diagonal isometric view"
+                      >
+                        Diagonal
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- Projection Toggle (mobile) -->
+                  <div class="camera-drawer-section camera-drawer-projection">
+                    <button
+                      type="button"
+                      class="btn btn-sm btn-outline camera-drawer-projection-btn"
+                      id="mobileProjectionToggle"
+                      aria-pressed="false"
+                      aria-label="Toggle perspective/orthographic projection"
+                      title="Switch to Orthographic"
+                    >
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        aria-hidden="true"
+                      >
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                        <line x1="3" y1="9" x2="21" y2="9"></line>
+                        <line x1="9" y1="21" x2="9" y2="9"></line>
+                      </svg>
+                      <span>Perspective</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -2743,7 +3184,7 @@
             class="camera-panel collapsed"
             id="cameraPanel"
             role="region"
-            aria-label="Camera controls"
+            aria-labelledby="camera-controls-heading"
           >
             <div class="panel-header camera-panel-header">
               <button
@@ -3025,6 +3466,80 @@
                 </div>
               </div>
 
+              <!-- Standard Views (Ken's request for consistent viewing) -->
+              <div class="camera-control-section">
+                <h3 class="camera-control-section-title">Standard Views</h3>
+                <div
+                  class="camera-standard-views"
+                  role="group"
+                  aria-label="Standard camera views"
+                >
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-outline camera-view-btn"
+                    data-view="top"
+                    aria-label="Top view (Ctrl+5)"
+                    title="Top view (Ctrl+5)"
+                  >
+                    Top
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-outline camera-view-btn"
+                    data-view="front"
+                    aria-label="Front view (Ctrl+8)"
+                    title="Front view (Ctrl+8)"
+                  >
+                    Front
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-outline camera-view-btn"
+                    data-view="right"
+                    aria-label="Right side view (Ctrl+6)"
+                    title="Right side view (Ctrl+6)"
+                  >
+                    Right
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-outline camera-view-btn"
+                    data-view="left"
+                    aria-label="Left side view (Ctrl+4)"
+                    title="Left side view (Ctrl+4)"
+                  >
+                    Left
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-outline camera-view-btn"
+                    data-view="back"
+                    aria-label="Back view (Ctrl+2)"
+                    title="Back view (Ctrl+2)"
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-outline camera-view-btn"
+                    data-view="bottom"
+                    aria-label="Bottom view (Ctrl+0)"
+                    title="Bottom view (Ctrl+0)"
+                  >
+                    Bottom
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-outline camera-view-btn"
+                    data-view="diagonal"
+                    aria-label="Diagonal isometric view (Ctrl+1)"
+                    title="Diagonal isometric view (Ctrl+1)"
+                  >
+                    Diagonal
+                  </button>
+                </div>
+              </div>
+
               <!-- Reset View -->
               <div class="camera-control-section">
                 <button
@@ -3049,6 +3564,33 @@
                     <polyline points="9 22 9 12 15 12 15 22"></polyline>
                   </svg>
                   <span>Reset View</span>
+                </button>
+              </div>
+
+              <!-- Projection Toggle -->
+              <div class="camera-control-section">
+                <button
+                  type="button"
+                  class="btn btn-sm btn-outline camera-btn-full"
+                  id="projectionToggle"
+                  aria-pressed="false"
+                  aria-label="Toggle perspective/orthographic projection (P)"
+                  title="Switch to Orthographic (P)"
+                >
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    aria-hidden="true"
+                  >
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                    <line x1="3" y1="9" x2="21" y2="9"></line>
+                    <line x1="9" y1="21" x2="9" y2="9"></line>
+                  </svg>
+                  <span>Perspective</span>
                 </button>
               </div>
 
@@ -4156,7 +4698,7 @@ secondary_color = "E74C3C"; // [color]</code></pre>
             autocapitalize="off"
           ></textarea>
           <p class="text-editor-hint">
-            Changes will be applied when you click "Apply and Preview"
+            Press <kbd>Ctrl</kbd>+<kbd>S</kbd> to save and preview, or click "Apply and Preview"
           </p>
         </div>
         <div class="modal-footer">
@@ -4328,7 +4870,24 @@ No console output yet. Generate a model to see output.</pre
                 d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"
               ></path>
             </svg>
-            Copy to Clipboard
+            Copy
+          </button>
+          <button id="consoleDownloadBtn" class="btn btn-secondary">
+            <svg
+              class="btn-icon-svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              aria-hidden="true"
+            >
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            Download
           </button>
           <button id="consoleClearBtn" class="btn btn-secondary">Clear</button>
           <button id="consoleCloseBtn" class="btn btn-primary">Close</button>

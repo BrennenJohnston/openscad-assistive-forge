@@ -6,12 +6,271 @@
 import { detectLibraries } from './library-manager.js';
 
 /**
+ * Numeric literal pattern - matches integers, decimals, negative, and scientific notation
+ * @type {RegExp}
+ */
+const NUMERIC_LITERAL = /^-?\d+(\.\d+)?([eE][+-]?\d+)?$/;
+
+/**
+ * Default labels for vector components based on dimension
+ * @param {number} dimension - Number of components
+ * @param {number} index - Component index (0-based)
+ * @returns {string} Label for the component
+ */
+function getDefaultComponentLabel(dimension, index) {
+  if (dimension <= 4) {
+    const labels = ['X', 'Y', 'Z', 'W'];
+    return labels[index] || `[${index}]`;
+  }
+  return `[${index}]`;
+}
+
+/**
+ * Check if a string represents a numeric literal
+ * @param {string} str - String to check
+ * @returns {boolean} True if numeric literal
+ */
+function isNumericLiteral(str) {
+  return NUMERIC_LITERAL.test(str.trim());
+}
+
+/**
+ * Split vector content by comma, respecting nested brackets
+ * @param {string} content - Content inside brackets (without outer [ ])
+ * @returns {Array<string>} Array of component strings
+ */
+function splitVectorComponents(content) {
+  const components = [];
+  let current = '';
+  let depth = 0;
+  let inString = false;
+  let stringChar = null;
+
+  for (let i = 0; i < content.length; i++) {
+    const char = content[i];
+    const prevChar = content[i - 1];
+
+    // Track string boundaries
+    if ((char === '"' || char === "'") && prevChar !== '\\') {
+      if (!inString) {
+        inString = true;
+        stringChar = char;
+      } else if (char === stringChar) {
+        inString = false;
+        stringChar = null;
+      }
+    }
+
+    if (!inString) {
+      if (char === '[') depth++;
+      if (char === ']') depth--;
+
+      // Split on comma at depth 0
+      if (char === ',' && depth === 0) {
+        components.push(current.trim());
+        current = '';
+        continue;
+      }
+    }
+
+    current += char;
+  }
+
+  // Don't forget the last component
+  const trimmed = current.trim();
+  if (trimmed) {
+    components.push(trimmed);
+  }
+
+  return components;
+}
+
+/**
+ * Check if vector content contains only numeric literals (safe to parse)
+ * @param {string} content - Content inside brackets (without outer [ ])
+ * @returns {boolean} True if all components are numeric literals
+ */
+function isLiteralVector(content) {
+  // Handle empty vector
+  if (!content.trim()) {
+    return true;
+  }
+
+  const components = splitVectorComponents(content);
+
+  // Check each component
+  return components.every((comp) => {
+    const trimmed = comp.trim();
+
+    // Nested vectors: recursively check
+    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+      return isLiteralVector(trimmed.slice(1, -1));
+    }
+
+    // Must be a numeric literal
+    return isNumericLiteral(trimmed);
+  });
+}
+
+/**
+ * Detect why a vector failed to parse as literal
+ * @param {string} content - Vector content
+ * @returns {string} Failure reason
+ */
+function detectFailureReason(content) {
+  const components = splitVectorComponents(content);
+
+  for (const comp of components) {
+    const trimmed = comp.trim();
+
+    // Skip nested vectors for this check
+    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+      continue;
+    }
+
+    // Check for common non-literal patterns
+    if (/[a-zA-Z_][a-zA-Z0-9_]*/.test(trimmed)) {
+      if (
+        trimmed.includes('+') ||
+        trimmed.includes('-') ||
+        trimmed.includes('*') ||
+        trimmed.includes('/')
+      ) {
+        return 'expression_detected';
+      }
+      if (/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(trimmed)) {
+        return 'variable_reference';
+      }
+      if (trimmed.includes('(')) {
+        return 'function_call';
+      }
+    }
+  }
+
+  return 'unparseable';
+}
+
+/**
+ * Parse a single vector component value
+ * @param {string} valueStr - Single component value string
+ * @returns {Object} Parsed component with type and value
+ */
+function parseVectorComponent(valueStr) {
+  const trimmed = valueStr.trim();
+
+  // Nested vector
+  if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+    const innerContent = trimmed.slice(1, -1);
+    const result = parseVectorValue(innerContent);
+    return { type: 'vector', value: result.values, nested: true };
+  }
+
+  // Numeric value
+  const num = parseFloat(trimmed);
+  if (!isNaN(num)) {
+    return { type: 'number', value: num };
+  }
+
+  // Fallback (shouldn't happen for validated vectors)
+  return { type: 'expression', value: trimmed };
+}
+
+/**
+ * Parse vector literal into structured components
+ * @param {string} content - Content inside brackets (without outer [ ])
+ * @returns {Object} Parsed vector with values and components
+ */
+function parseVectorValue(content) {
+  // Handle empty vector
+  if (!content.trim()) {
+    return {
+      values: [],
+      components: [],
+      dimension: 0,
+    };
+  }
+
+  const componentStrings = splitVectorComponents(content);
+  const values = [];
+  const components = [];
+
+  componentStrings.forEach((compStr, index) => {
+    const parsed = parseVectorComponent(compStr);
+    values.push(parsed.value);
+
+    components.push({
+      type: parsed.type,
+      value: parsed.value,
+      label: getDefaultComponentLabel(componentStrings.length, index),
+      nested: parsed.nested || false,
+    });
+  });
+
+  return {
+    values,
+    components,
+    dimension: values.length,
+    nested: components.some((c) => c.nested),
+  };
+}
+
+/**
+ * Serialize a vector back to OpenSCAD format
+ * @param {Array} values - Vector values array
+ * @returns {string} OpenSCAD vector string
+ */
+export function serializeVector(values) {
+  const parts = values.map((v) => {
+    if (Array.isArray(v)) {
+      return serializeVector(v);
+    }
+    return String(v);
+  });
+  return `[${parts.join(', ')}]`;
+}
+
+/**
+ * Safe vector parsing with fallback to raw mode
+ * @param {string} vectorStr - Full vector string including brackets
+ * @returns {Object} Parsed vector or raw fallback
+ */
+function parseVectorSafe(vectorStr) {
+  // Remove outer brackets
+  const content = vectorStr.slice(1, -1);
+
+  if (isLiteralVector(content)) {
+    const parsed = parseVectorValue(content);
+    return {
+      type: 'vector',
+      value: parsed.values,
+      components: parsed.components,
+      dimension: parsed.dimension,
+      nested: parsed.nested || false,
+      uiType: parsed.nested ? 'raw' : 'vector',
+    };
+  } else {
+    // Fallback to raw mode
+    return {
+      type: 'raw',
+      rawValue: vectorStr,
+      parseFailureReason: detectFailureReason(content),
+      uiType: 'raw',
+    };
+  }
+}
+
+/**
  * Parse default value from OpenSCAD code
  * @param {string} valueStr - Value string from assignment
  * @returns {Object} Parsed value with type
  */
 function parseDefaultValue(valueStr) {
   const trimmed = valueStr.trim();
+
+  // Check if it's a vector/array
+  if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+    return parseVectorSafe(trimmed);
+  }
 
   // Check if it's a quoted string
   if (
@@ -42,16 +301,24 @@ function parseDefaultValue(valueStr) {
 
 /**
  * Parse enum values from bracket hint
- * Handles: [opt1, opt2], [opt1,opt2], ["opt 1", "opt 2"], [0,2,4,6]
+ * Handles:
+ *   - Simple: [opt1, opt2], [opt1,opt2], ["opt 1", "opt 2"], [0,2,4,6]
+ *   - Labeled numbers: [10:S, 20:M, 30:L] - value is number, label is string
+ *   - Labeled strings: [S:Small, M:Medium, L:Large] - value is string, label is string
+ *
+ * Returns array of objects: { value, label, hasLabel }
+ * where label defaults to value when not specified (OpenSCAD Customizer compatible)
+ *
  * @param {string} enumStr - Enum string from bracket hint
- * @returns {Array} Array of enum values
+ * @returns {Array<{value: string, label: string, hasLabel: boolean}>} Array of enum option objects
  */
 function parseEnumValues(enumStr) {
-  const values = [];
+  const rawValues = [];
   let current = '';
   let inQuotes = false;
   let quoteChar = null;
 
+  // First pass: split by comma, respecting quotes
   for (let i = 0; i < enumStr.length; i++) {
     const char = enumStr[i];
 
@@ -70,7 +337,7 @@ function parseEnumValues(enumStr) {
       }
     } else if (char === ',' && !inQuotes) {
       const trimmed = current.trim();
-      if (trimmed) values.push(trimmed);
+      if (trimmed) rawValues.push(trimmed);
       current = '';
     } else {
       current += char;
@@ -78,9 +345,68 @@ function parseEnumValues(enumStr) {
   }
 
   const trimmed = current.trim();
-  if (trimmed) values.push(trimmed);
+  if (trimmed) rawValues.push(trimmed);
 
-  return values;
+  // Second pass: detect value:label format and parse accordingly
+  // OpenSCAD format: [10:S, 20:M, 30:L] or [S:Small, M:Medium, L:Large]
+  // The colon separates value from label
+  return rawValues.map((item) => {
+    // Check for value:label format (colon not inside quotes)
+    // Only split on the FIRST colon to allow labels with colons
+    const colonIndex = findLabelSeparator(item);
+    
+    if (colonIndex !== -1) {
+      const value = item.substring(0, colonIndex).trim();
+      const label = item.substring(colonIndex + 1).trim();
+      return {
+        value: value,
+        label: label || value, // Fall back to value if label is empty
+        hasLabel: true,
+      };
+    }
+    
+    // No label separator - value and label are the same
+    return {
+      value: item,
+      label: item,
+      hasLabel: false,
+    };
+  });
+}
+
+/**
+ * Find the colon that separates value from label in an enum option
+ * Returns -1 if no valid separator found
+ * Ignores colons inside quoted strings
+ * @param {string} item - Single enum option string
+ * @returns {number} Index of separator colon, or -1
+ */
+function findLabelSeparator(item) {
+  let inQuotes = false;
+  let quoteChar = null;
+  
+  for (let i = 0; i < item.length; i++) {
+    const char = item[i];
+    const prevChar = item[i - 1];
+    
+    // Track quote state
+    if ((char === '"' || char === "'") && prevChar !== '\\') {
+      if (!inQuotes) {
+        inQuotes = true;
+        quoteChar = char;
+      } else if (char === quoteChar) {
+        inQuotes = false;
+        quoteChar = null;
+      }
+    }
+    
+    // Found separator colon (not inside quotes)
+    if (char === ':' && !inQuotes) {
+      return i;
+    }
+  }
+  
+  return -1;
 }
 
 /**
@@ -262,8 +588,10 @@ export function extractParameters(scadContent) {
       if (groupMatch) {
         currentGroup = groupMatch[1].trim();
 
-        // Skip Hidden group
-        if (currentGroup.toLowerCase() !== 'hidden') {
+        // Skip Hidden group entirely, and Global group from groups array
+        // (Global params will be marked with isGlobal flag and shown on all tabs)
+        const lowerGroup = currentGroup.toLowerCase();
+        if (lowerGroup !== 'hidden' && lowerGroup !== 'global') {
           if (!groups.find((g) => g.id === currentGroup)) {
             groups.push({
               id: currentGroup,
@@ -297,6 +625,9 @@ export function extractParameters(scadContent) {
           continue;
         }
 
+        // Check if this is a Global parameter (shown on all tabs per OpenSCAD Customizer spec)
+        const isGlobalParam = currentGroup.toLowerCase() === 'global';
+
         // Parse default value
         const defaultVal = parseDefaultValue(valueStr);
 
@@ -313,10 +644,33 @@ export function extractParameters(scadContent) {
           name: paramName,
           type: defaultVal.type,
           default: defaultVal.value,
-          group: currentGroup,
+          // Global params use "General" as their home group, but are shown on all tabs
+          group: isGlobalParam ? 'General' : currentGroup,
           order: paramOrder++,
           description: capturedPrecedingComment || '', // Use preceding comment as default description
         };
+
+        // Mark global parameters so UI can show them on all tabs
+        if (isGlobalParam) {
+          param.isGlobal = true;
+        }
+
+        // If it's a vector, add vector-specific properties
+        if (defaultVal.type === 'vector') {
+          param.components = defaultVal.components;
+          param.dimension = defaultVal.dimension;
+          param.uiType = defaultVal.uiType;
+          if (defaultVal.nested) {
+            param.nested = true;
+            // Nested vectors use raw mode for now
+            param.uiType = 'raw';
+          }
+        } else if (defaultVal.type === 'raw') {
+          // Vector that couldn't be parsed as literals
+          param.rawValue = defaultVal.rawValue;
+          param.parseFailureReason = defaultVal.parseFailureReason;
+          param.uiType = 'raw';
+        }
 
         if (bracketMatch) {
           const hint = bracketMatch[1].trim();
@@ -368,20 +722,38 @@ export function extractParameters(scadContent) {
                 // [min:max]
                 param.minimum = nums[0];
                 param.maximum = nums[1];
-                param.uiType = 'slider';
+                // Only set slider for non-vector types
+                if (param.type !== 'vector' && param.type !== 'raw') {
+                  param.uiType = 'slider';
+                }
               } else if (nums.length === 3) {
                 // [min:step:max]
                 param.minimum = nums[0];
                 param.step = nums[1];
                 param.maximum = nums[2];
-                param.uiType = 'slider';
-
-                // Determine if integer or float based on step
-                if (Number.isInteger(nums[1]) && !hint.includes('.')) {
-                  param.type = 'integer';
-                } else {
-                  param.type = 'number';
+                // Only set slider for non-vector types
+                if (param.type !== 'vector' && param.type !== 'raw') {
+                  param.uiType = 'slider';
                 }
+
+                // Determine if integer or float based on step (for non-vectors)
+                if (param.type !== 'vector' && param.type !== 'raw') {
+                  if (Number.isInteger(nums[1]) && !hint.includes('.')) {
+                    param.type = 'integer';
+                  } else {
+                    param.type = 'number';
+                  }
+                }
+              }
+
+              // For vectors, apply range to all components
+              if (param.type === 'vector' && param.components) {
+                param.components = param.components.map((comp) => ({
+                  ...comp,
+                  minimum: param.minimum,
+                  maximum: param.maximum,
+                  step: param.step,
+                }));
               }
 
               // Extract comment after bracket hint
@@ -392,13 +764,13 @@ export function extractParameters(scadContent) {
                 param.description = afterBracket;
               }
             } else {
-              // It's an enum: [opt1, opt2, opt3]
+              // It's an enum: [opt1, opt2, opt3] or labeled [S:Small, M:Medium, L:Large]
               const enumValues = parseEnumValues(hint);
               param.enum = enumValues;
               param.type = 'string'; // Enums are typically strings
 
-              // Check if it's a yes/no toggle
-              const lowerVals = enumValues.map((v) => v.toLowerCase());
+              // Check if it's a yes/no toggle (use value, not label, for comparison)
+              const lowerVals = enumValues.map((item) => item.value.toLowerCase());
               if (
                 enumValues.length === 2 &&
                 lowerVals.includes('yes') &&
@@ -421,15 +793,55 @@ export function extractParameters(scadContent) {
         } else if (commentMatch) {
           // Comment without bracket hint
           param.description = commentMatch[1].trim();
-          param.uiType = 'input';
+          // Don't override uiType if already set (e.g., for vectors or raw types)
+          if (!param.uiType) {
+            param.uiType = 'input';
+          }
         } else {
-          // Bare parameter
-          param.uiType = 'input';
+          // Bare parameter - don't override uiType if already set
+          if (!param.uiType) {
+            param.uiType = 'input';
+          }
+        }
+
+        // Boolean parameters should use toggle UI (true/false without bracket hint)
+        if (param.type === 'boolean' && param.uiType === 'input') {
+          param.uiType = 'toggle';
         }
 
         // Extract unit for numeric parameters
         if (param.type === 'integer' || param.type === 'number') {
           param.unit = extractUnit(param.description, param.name);
+        }
+
+        // Extract unit for vector parameters and apply to components
+        if (param.type === 'vector' && param.components) {
+          const unit = extractUnit(param.description, param.name);
+          if (unit) {
+            param.unit = unit;
+            param.components = param.components.map((comp) => ({
+              ...comp,
+              unit: unit,
+            }));
+          }
+        }
+
+        // Extract text length limit for string parameters (OpenSCAD Customizer format)
+        // Format: String="value"; //8  (where 8 is the max length)
+        if (param.type === 'string' && !param.enum) {
+          // Check for a numeric-only comment that specifies max length
+          // This matches patterns like: //8 or // 8 or //12
+          const lengthMatch = afterAssignment.match(/\/\/\s*(\d+)\s*$/);
+          if (lengthMatch) {
+            const maxLength = parseInt(lengthMatch[1], 10);
+            if (maxLength > 0) {
+              param.maxLength = maxLength;
+              // Clear description if it was just the number
+              if (param.description === lengthMatch[1]) {
+                param.description = '';
+              }
+            }
+          }
         }
 
         // Extract dependency from comment (supports @depends(param==value))
