@@ -9,7 +9,11 @@ import { test, expect } from '@playwright/test'
 const isCI = !!process.env.CI
 
 const loadSimpleBoxExample = async (page) => {
-  const exampleButton = page.locator('[data-example="simple-box"], #loadSimpleBoxBtn, button:has-text("Simple Box")')
+  // There are multiple "Start Tutorial" CTAs with the same example dataset.
+  // In strict mode, Playwright requires a unique match, so pick a stable one.
+  const exampleButton = page.locator(
+    'button[data-example="simple-box"][data-role="beginners"], #loadSimpleBoxBtn, button:has-text("Simple Box")'
+  ).first()
 
   await exampleButton.waitFor({ state: 'visible', timeout: 10000 })
   await exampleButton.click()

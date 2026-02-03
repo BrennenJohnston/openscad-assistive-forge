@@ -9727,6 +9727,9 @@ if (rounded) {
   // Track if we're currently loading a preset (to avoid clearing during load)
   let isLoadingPreset = false;
   let currentPresetSignature = null;
+  // OpenSCAD behavior: preset stays selected even when parameters change.
+  // We track "dirty" state instead of clearing the selection.
+  let isPresetDirty = false;
 
   const stableStringify = (value) => {
     const seen = new WeakSet();
@@ -9772,6 +9775,22 @@ if (rounded) {
     return buildPresetSignature(params) === currentPresetSignature;
   }
 
+  function updatePresetDirtyState(currentValues = null) {
+    const state = stateManager.getState();
+    if (!state.currentPresetId) {
+      isPresetDirty = false;
+      return;
+    }
+
+    const valuesToCheck = currentValues || state.parameters;
+    if (!valuesToCheck || !currentPresetSignature) {
+      isPresetDirty = true;
+      return;
+    }
+
+    isPresetDirty = !doesPresetMatchParams(valuesToCheck);
+  }
+
   function forceClearPresetSelection() {
     const state = stateManager.getState();
     const presetSelect = document.getElementById('presetSelect');
@@ -9789,6 +9808,7 @@ if (rounded) {
     }
 
     currentPresetSignature = null;
+    isPresetDirty = false;
 
     if (hasSelection) {
       stateManager.setState({ currentPresetId: null, currentPresetName: null });
@@ -9816,9 +9836,12 @@ if (rounded) {
     // Save button: enabled only when a preset is selected
     if (savePresetBtn) {
       savePresetBtn.disabled = !hasPresetSelected || !hasModel;
-      savePresetBtn.title = hasPresetSelected
-        ? 'Save changes to current preset'
-        : 'Select a preset first to save changes';
+      savePresetBtn.title = !hasPresetSelected
+        ? 'Select a preset first to save changes'
+        : isPresetDirty
+          ? 'Save changes to current preset (unsaved changes)'
+          : 'Save changes to current preset';
+      savePresetBtn.dataset.dirty = isPresetDirty ? 'true' : 'false';
     }
 
     // Add button: always enabled when model is loaded
@@ -9836,31 +9859,15 @@ if (rounded) {
   }
 
   function clearPresetSelection(currentValues = null) {
-    // Don't clear if we're in the middle of loading a preset
+    // OpenSCAD Customizer behavior:
+    // Changing parameters does NOT clear the selected preset.
+    // We only update whether the current preset has unsaved changes.
     if (isLoadingPreset) {
       return;
     }
 
-    const state = stateManager.getState();
-    if (!state.currentPresetId) {
-      return;
-    }
-
-    const valuesToCheck = currentValues || state.parameters;
-    const paramsMatch = valuesToCheck && doesPresetMatchParams(valuesToCheck);
-    
-    if (paramsMatch) {
-      return;
-    }
-
-    // Debug: Log why we're clearing the selection
-    console.log('[Preset] Parameters changed, clearing selection:', {
-      presetName: state.currentPresetName,
-      signatureMatch: paramsMatch,
-      hasSignature: !!currentPresetSignature
-    });
-
-    forceClearPresetSelection();
+    updatePresetDirtyState(currentValues);
+    updatePresetControlStates();
   }
 
   function setCurrentPresetSelection(preset) {
@@ -9876,6 +9883,7 @@ if (rounded) {
     });
 
     setCurrentPresetSignature(preset.parameters);
+    isPresetDirty = false;
     stateManager.setState({
       currentPresetId: preset.id,
       currentPresetName: preset.name,
@@ -9898,6 +9906,7 @@ if (rounded) {
       presetSelect.innerHTML =
         '<option value="">-- No model loaded --</option>';
       currentPresetSignature = null;
+      isPresetDirty = false;
       updatePresetControlStates();
       return;
     }
@@ -9940,8 +9949,10 @@ if (rounded) {
       }
     } else {
       currentPresetSignature = null;
+      isPresetDirty = false;
     }
-    
+
+    updatePresetDirtyState();
     updatePresetControlStates();
   }
 
@@ -10042,30 +10053,39 @@ if (rounded) {
         );
 
         updateStatus(`Preset "${finalName}" saved`);
-        
-        // Note: updatePresetDropdown() is already called by presetManager subscriber
-        // on 'save' event, so we don't need to call it again here.
-        // The subscriber ensures dropdown is rebuilt before we set the value.
 
-        // Auto-select the newly saved preset (OpenSCAD Customizer behavior)
-        // After creating a new preset with "+", it becomes the "current" preset
-        // This enables the save button to update it and matches OpenSCAD's behavior
-        const presetSelectEl = document.getElementById('presetSelect');
-        if (presetSelectEl) {
-          // Set the value first
-          presetSelectEl.value = savedPreset.id;
-          
-          // Verify the selection took effect (option must exist)
-          if (presetSelectEl.value !== savedPreset.id) {
-            // Option doesn't exist yet - force rebuild and try again
-            console.warn('[Preset] Auto-select failed, forcing dropdown rebuild');
-            updatePresetDropdown();
-            presetSelectEl.value = savedPreset.id;
-          }
-        }
-        
-        // Update state/signature to track the currently selected preset
+        // OpenSCAD Customizer behavior:
+        // - "+" creates a new preset AND selects it in the dropdown
+        // - Save button immediately becomes available to overwrite that preset
+        //
+        // In practice, the preset dropdown may be rebuilt by subscribers and other UI
+        // events around the save; ensure selection is applied after any rebuilds.
         setCurrentPresetSelection(savedPreset);
+        updatePresetDropdown();
+
+        const ensurePresetSelected = (presetId) => {
+          const presetSelectEl = document.getElementById('presetSelect');
+          if (!presetSelectEl) return;
+
+          presetSelectEl.value = presetId;
+          updatePresetControlStates();
+
+          // If the option isn't present yet (or a subsequent rebuild overwrote it),
+          // retry on the next frame.
+          if (presetSelectEl.value !== presetId) {
+            console.warn(
+              '[Preset] Auto-select did not stick, retrying after rebuild'
+            );
+            requestAnimationFrame(() => {
+              const el = document.getElementById('presetSelect');
+              if (!el) return;
+              el.value = presetId;
+              updatePresetControlStates();
+            });
+          }
+        };
+
+        ensurePresetSelected(savedPreset.id);
 
         closeSavePresetModal();
       } catch (error) {

@@ -59,9 +59,7 @@ For deploying and operating the application:
 - [specs/CAMERA_CONTROLS_ACCESSIBILITY.md](./specs/CAMERA_CONTROLS_ACCESSIBILITY.md) - 3D camera accessibility
 - [PERFORMANCE.md](./PERFORMANCE.md) - Bundle size, caching, worker architecture
 
----
-
-## Folder Layout```
+---## Folder Layout```
 docs/
   guides/      User and workflow guides
   specs/       Formal specifications
