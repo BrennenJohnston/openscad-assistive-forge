@@ -230,12 +230,6 @@ const EXAMPLE_DEFINITIONS = {
     path: '/examples/wall-hook/wall_hook.scad',
     name: 'wall_hook.scad',
   },
-  // Volkswitch keyguard example for deep-linking from volksswitch.org
-  // Usage: ?example=volkswitch-keyguard-demo
-  'volkswitch-keyguard-demo': {
-    path: '/examples/volkswitch-keyguard/keyguard_demo.scad',
-    name: 'keyguard_demo.scad',
-  },
 };
 
 // Feature detection

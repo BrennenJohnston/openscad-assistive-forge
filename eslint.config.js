@@ -5,11 +5,11 @@ export default [
   js.configs.recommended,
   {
     languageOptions: {
-      ecmaVersion: 2020,
+      ecmaVersion: 2022,
       sourceType: 'module',
       globals: {
         ...globals.browser,
-        ...globals.es2020,
+        ...globals.es2021,
         // `globals` packages vary; support both keys defensively.
         ...(globals.worker || globals.webworker || {}),
       },
