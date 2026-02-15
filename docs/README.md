@@ -54,6 +54,7 @@ For deploying and operating the application:
 ## Reference Documentation
 
 - [ARCHITECTURE.md](./ARCHITECTURE.md) - Module map and Mermaid diagrams
+- [research/PROJECT_SHARING_REFERENCES.md](./research/PROJECT_SHARING_REFERENCES.md) - URL import + manifest patterns (debugging references)
 - [specs/PARAMETER_SCHEMA_SPEC.md](./specs/PARAMETER_SCHEMA_SPEC.md) - Customizer annotation JSON format
 - [specs/UI_STANDARDS.md](./specs/UI_STANDARDS.md) - Component and styling standards
 - [specs/CAMERA_CONTROLS_ACCESSIBILITY.md](./specs/CAMERA_CONTROLS_ACCESSIBILITY.md) - 3D camera accessibility

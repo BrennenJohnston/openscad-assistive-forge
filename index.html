@@ -2668,6 +2668,30 @@
                     <span class="btn-text">Export Params</span>
                   </button>
 
+                  <button
+                    id="publishProjectBtn"
+                    class="btn btn-sm btn-secondary actions-drawer-btn"
+                    aria-label="Generate a shareable manifest for hosting this project externally"
+                  >
+                    <svg
+                      class="btn-icon-svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      aria-hidden="true"
+                    >
+                      <circle cx="18" cy="5" r="3"></circle>
+                      <circle cx="6" cy="12" r="3"></circle>
+                      <circle cx="18" cy="19" r="3"></circle>
+                      <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+                      <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+                    </svg>
+                    <span class="btn-text">Publish</span>
+                  </button>
+
                   <span
                     class="actions-drawer-divider"
                     aria-hidden="true"
@@ -4975,6 +4999,128 @@ No console output yet. Generate a model to see output.</pre
           >
             Download &amp; Continue
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Publish/Share Project Modal -->
+    <div
+      class="modal hidden"
+      id="publishProjectModal"
+      role="dialog"
+      aria-labelledby="publishModalTitle"
+      aria-modal="true"
+    >
+      <div class="modal-overlay" id="publishModalOverlay"></div>
+      <div class="modal-content modal-large">
+        <div class="modal-header">
+          <h2 id="publishModalTitle">Publish Project</h2>
+          <button
+            class="modal-close"
+            id="publishModalClose"
+            aria-label="Close publish dialog"
+          >
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <p>
+            Generate a <code>forge-manifest.json</code> for your current
+            project. Host it on GitHub and share a one-click link that opens
+            Forge with everything pre-loaded.
+          </p>
+
+          <h3>1. Your Manifest</h3>
+          <div class="publish-manifest-container">
+            <pre
+              id="publishManifestOutput"
+              class="publish-manifest-code"
+              tabindex="0"
+              aria-label="Generated manifest JSON"
+            ></pre>
+            <button
+              id="copyManifestBtn"
+              class="btn btn-sm btn-primary publish-copy-btn"
+              aria-label="Copy manifest JSON to clipboard"
+            >
+              Copy Manifest
+            </button>
+          </div>
+
+          <h3>2. Host on GitHub</h3>
+          <ol class="publish-instructions">
+            <li>
+              Create a
+              <a
+                href="https://github.com/new"
+                target="_blank"
+                rel="noopener noreferrer"
+                >new public GitHub repository</a
+              >.
+            </li>
+            <li>
+              Upload your <code>.scad</code> file, companion files, and preset
+              <code>.json</code> file.
+            </li>
+            <li>
+              Save the manifest JSON above as
+              <code>forge-manifest.json</code> in the same directory.
+            </li>
+          </ol>
+
+          <h3>3. Get Your Shareable Link</h3>
+          <label for="publishRepoUrl" class="publish-label">
+            Your GitHub raw base URL:
+          </label>
+          <input
+            id="publishRepoUrl"
+            type="url"
+            class="publish-input"
+            placeholder="https://raw.githubusercontent.com/user/repo/main/"
+            aria-describedby="publishRepoUrlHelp"
+          />
+          <p id="publishRepoUrlHelp" class="publish-help-text">
+            Paste the raw URL path to the directory containing your files
+            (e.g.,
+            <code
+              >https://raw.githubusercontent.com/user/repo/main/</code
+            >).
+          </p>
+
+          <div
+            id="publishShareLinkContainer"
+            class="publish-share-link-container hidden"
+          >
+            <label for="publishShareLink" class="publish-label"
+              >Shareable link:</label
+            >
+            <div class="publish-share-link-row">
+              <input
+                id="publishShareLink"
+                type="text"
+                class="publish-input"
+                readonly
+                aria-label="Shareable Forge link"
+              />
+              <button
+                id="copyShareLinkBtn"
+                class="btn btn-sm btn-primary"
+                aria-label="Copy shareable link to clipboard"
+              >
+                Copy
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

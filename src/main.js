@@ -49,6 +49,10 @@ import {
   getZipStats,
 } from './js/zip-handler.js';
 import {
+  loadManifest,
+  ManifestError,
+} from './js/manifest-loader.js';
+import {
   runPreflightCheck,
   formatMissingDependencies,
 } from './js/dependency-checker.js';
@@ -7831,13 +7835,170 @@ if (rounded) {
   }
 
   // =========================================
+  // Manifest deep-link: ?manifest=<url> support
+  // Loads a full project from a forge-manifest.json hosted externally.
+  // This is the primary "one-link sharing" path for authors like Volkswitch.
+  // Usage: ?manifest=https://raw.githubusercontent.com/user/repo/main/forge-manifest.json
+  // Optional companions: ?preset=<name>, ?skipWelcome=true
+  // =========================================
+  const manifestParam = initUrlParams.get('manifest');
+
+  if (manifestParam && !exampleParam) {
+    console.log(`[DeepLink] Loading project from manifest: ${manifestParam}`);
+    updateStatus('Loading project from manifest...');
+
+    // Skip the welcome screen immediately when loading from a manifest
+    const shouldSkipWelcome =
+      initUrlParams.get('skipWelcome') === 'true' ||
+      initUrlParams.get('skipwelcome') === 'true';
+
+    if (shouldSkipWelcome || manifestParam) {
+      // Hide welcome screen early so the user sees a loading state, not the landing page
+      welcomeScreen.classList.add('hidden');
+      mainInterface.classList.remove('hidden');
+    }
+
+    setTimeout(async () => {
+      try {
+        const result = await loadManifest(manifestParam, {
+          onProgress: ({ message }) => updateStatus(message),
+        });
+
+        const { projectFiles, mainFile, mainContent, manifest, defaults } = result;
+        const projectName = manifest.name || mainFile;
+
+        console.log(`[DeepLink] Manifest loaded: "${projectName}" (${projectFiles.size} files)`);
+        announceImmediate(`Loading project: ${projectName}`);
+
+        // Call handleFile the same way ZIP extraction does (line 5664 pattern)
+        await handleFile(null, mainContent, projectFiles, mainFile, 'user', projectName);
+
+        // --- ?preset=<name> or manifest defaults.preset -----------------
+        const presetName = initUrlParams.get('preset') || defaults?.preset;
+        if (presetName) {
+          // After handleFile, presets have been auto-imported from JSON files.
+          // Find the matching preset by name and programmatically select it.
+          const state = stateManager.getState();
+          const modelName = state.uploadedFile?.name;
+          if (modelName) {
+            const presets = presetManager.getPresetsForModel(modelName);
+            const match = presets.find(
+              (p) => p.name.toLowerCase() === presetName.toLowerCase()
+            );
+            if (match) {
+              console.log(`[DeepLink] Applying preset: "${match.name}" (${match.id})`);
+
+              // Merge preset parameters onto current state (desktop OpenSCAD parity)
+              const mergedParams = { ...state.parameters, ...match.parameters };
+              stateManager.setState({ parameters: mergedParams });
+
+              // Re-render UI with preset values
+              const parametersContainer = document.getElementById('parametersContainer');
+              renderParameterUI(
+                state.schema,
+                parametersContainer,
+                (values) => {
+                  stateManager.setState({ parameters: values });
+                  if (autoPreviewController) {
+                    autoPreviewController.onParameterChange(values);
+                  }
+                  updatePrimaryActionButton();
+                },
+                mergedParams
+              );
+
+              // Update preset dropdown to reflect selection
+              const presetSelect = document.getElementById('presetSelect');
+              if (presetSelect) {
+                presetSelect.value = match.id;
+              }
+              stateManager.setState({
+                currentPresetId: match.id,
+                currentPresetName: match.name,
+              });
+
+              // Trigger auto-preview with preset parameters
+              if (autoPreviewController) {
+                autoPreviewController.onParameterChange(mergedParams);
+              }
+              updatePrimaryActionButton();
+
+              updateStatus(`Loaded: ${projectName} — preset: ${match.name}`);
+              announceImmediate(`${projectName} loaded with preset ${match.name}`);
+            } else {
+              console.warn(`[DeepLink] Preset not found: "${presetName}". Available:`,
+                presets.map((p) => p.name));
+              updateStatus(`Loaded: ${projectName} (preset "${presetName}" not found)`);
+              announceImmediate(`${projectName} loaded from manifest`);
+            }
+          }
+        } else {
+          updateStatus(`Loaded: ${projectName}`);
+          announceImmediate(`${projectName} loaded from manifest`);
+        }
+
+        // Auto-preview if manifest requests it
+        if (defaults?.autoPreview && autoPreviewController) {
+          autoPreviewController.onParameterChange(stateManager.getState().parameters);
+        }
+
+        // Clean up URL parameters
+        initUrlParams.delete('manifest');
+        initUrlParams.delete('preset');
+        initUrlParams.delete('skipWelcome');
+        initUrlParams.delete('skipwelcome');
+        const cleanUrl = initUrlParams.toString()
+          ? `${window.location.pathname}?${initUrlParams}`
+          : window.location.pathname;
+        history.replaceState(null, '', cleanUrl);
+
+        console.log(`[DeepLink] Manifest load complete: ${projectName}`);
+      } catch (error) {
+        console.error('[DeepLink] Manifest load failed:', error);
+
+        let friendlyMsg;
+        if (error instanceof ManifestError) {
+          switch (error.code) {
+            case 'CORS_ERROR':
+              friendlyMsg =
+                "Couldn't reach the file server. The manifest or its files may not be publicly " +
+                'accessible, or the server doesn\'t support CORS. Try hosting on GitHub.';
+              break;
+            case 'VALIDATION_ERROR':
+              friendlyMsg = `The manifest file has errors: ${error.details?.errors?.join('; ') || error.message}`;
+              break;
+            case 'TIMEOUT':
+              friendlyMsg = 'The request timed out. Check your internet connection and try again.';
+              break;
+            default:
+              friendlyMsg = error.message;
+          }
+        } else {
+          friendlyMsg = error.name === 'TypeError'
+            ? "Couldn't reach the server. The manifest may not be publicly accessible, or CORS may be blocking the request."
+            : error.message;
+        }
+
+        updateStatus(
+          `Couldn't load the project from manifest. ${friendlyMsg} You can still upload a file manually.`,
+          'error'
+        );
+
+        // Show welcome screen again on failure so the user isn't stuck
+        welcomeScreen.classList.remove('hidden');
+        mainInterface.classList.add('hidden');
+      }
+    }, 500);
+  }
+
+  // =========================================
   // Direct launch link: ?project=<url> support (Item 7)
   // Allows linking directly to any .scad or .zip file hosted on the web
   // Usage: ?project=https://example.com/keyguard.zip or ?scad=https://example.com/box.scad
   // =========================================
   const projectParam = initUrlParams.get('project') || initUrlParams.get('scad');
 
-  if (projectParam && !exampleParam) {
+  if (projectParam && !exampleParam && !manifestParam) {
     console.log(`[DeepLink] Loading project from URL: ${projectParam}`);
     updateStatus('Loading project from URL...');
 
@@ -9343,6 +9504,163 @@ if (rounded) {
       URL.revokeObjectURL(url);
       updateStatus(`Parameters exported to JSON`);
     });
+  }
+
+  // ========== PUBLISH PROJECT ==========
+
+  const publishProjectBtn = document.getElementById('publishProjectBtn');
+  const publishProjectModal = document.getElementById('publishProjectModal');
+  const publishModalClose = document.getElementById('publishModalClose');
+  const publishModalOverlay = document.getElementById('publishModalOverlay');
+  const publishManifestOutput = document.getElementById('publishManifestOutput');
+  const copyManifestBtn = document.getElementById('copyManifestBtn');
+  const publishRepoUrl = document.getElementById('publishRepoUrl');
+  const publishShareLinkContainer = document.getElementById('publishShareLinkContainer');
+  const publishShareLink = document.getElementById('publishShareLink');
+  const copyShareLinkBtn = document.getElementById('copyShareLinkBtn');
+
+  /**
+   * Generate a forge-manifest.json from the current project state.
+   * @returns {Object} Manifest object
+   */
+  function generateManifestFromProject() {
+    const state = stateManager.getState();
+    const fileName = state.uploadedFile?.name || 'design.scad';
+
+    const manifest = {
+      forgeManifest: '1.0',
+      name: fileName.replace(/\.scad$/i, ''),
+      files: {
+        main: fileName,
+      },
+    };
+
+    // Add companion files from the project
+    if (state.projectFiles && state.projectFiles.size > 0) {
+      const companions = [];
+      const presets = [];
+
+      for (const filePath of state.projectFiles.keys()) {
+        // Skip the main .scad file
+        if (filePath === fileName) continue;
+
+        if (filePath.toLowerCase().endsWith('.json')) {
+          presets.push(filePath);
+        } else if (!filePath.toLowerCase().endsWith('.scad')) {
+          companions.push(filePath);
+        } else {
+          // Secondary .scad files are companions (included via use/include)
+          companions.push(filePath);
+        }
+      }
+
+      if (companions.length > 0) {
+        manifest.files.companions = companions;
+      }
+      if (presets.length > 0) {
+        manifest.files.presets = presets.length === 1 ? presets[0] : presets;
+      }
+    }
+
+    // Add defaults
+    manifest.defaults = {
+      autoPreview: true,
+    };
+
+    // If a preset is currently selected, include it as the default
+    if (state.currentPresetName && state.currentPresetName !== 'design default values') {
+      manifest.defaults.preset = state.currentPresetName;
+    }
+
+    return manifest;
+  }
+
+  if (publishProjectBtn && publishProjectModal) {
+    publishProjectBtn.addEventListener('click', () => {
+      const state = stateManager.getState();
+      if (!state.uploadedFile) {
+        alert('No file uploaded yet. Upload a .scad or .zip file first.');
+        return;
+      }
+
+      const manifest = generateManifestFromProject();
+      const manifestJson = JSON.stringify(manifest, null, 2);
+
+      if (publishManifestOutput) {
+        publishManifestOutput.textContent = manifestJson;
+      }
+
+      // Reset the shareable link section
+      if (publishShareLinkContainer) {
+        publishShareLinkContainer.classList.add('hidden');
+      }
+      if (publishRepoUrl) {
+        publishRepoUrl.value = '';
+      }
+
+      openModal(publishProjectModal);
+    });
+
+    // Close handlers
+    if (publishModalClose) {
+      publishModalClose.addEventListener('click', () => closeModal(publishProjectModal));
+    }
+    if (publishModalOverlay) {
+      publishModalOverlay.addEventListener('click', () => closeModal(publishProjectModal));
+    }
+
+    // Copy manifest button
+    if (copyManifestBtn && publishManifestOutput) {
+      copyManifestBtn.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(publishManifestOutput.textContent);
+          const textSpan = copyManifestBtn.querySelector('.btn-text') || copyManifestBtn;
+          const original = textSpan.textContent;
+          textSpan.textContent = 'Copied!';
+          setTimeout(() => { textSpan.textContent = original; }, 2000);
+          updateStatus('Manifest copied to clipboard');
+        } catch (_err) {
+          prompt('Copy this manifest JSON:', publishManifestOutput.textContent);
+        }
+      });
+    }
+
+    // Generate shareable link when repo URL changes
+    if (publishRepoUrl && publishShareLink && publishShareLinkContainer) {
+      publishRepoUrl.addEventListener('input', () => {
+        let baseUrl = publishRepoUrl.value.trim();
+        if (!baseUrl) {
+          publishShareLinkContainer.classList.add('hidden');
+          return;
+        }
+
+        // Ensure trailing slash
+        if (!baseUrl.endsWith('/')) {
+          baseUrl += '/';
+        }
+
+        const manifestUrl = `${baseUrl}forge-manifest.json`;
+        const forgeBase = window.location.origin + window.location.pathname;
+        const shareUrl = `${forgeBase}?manifest=${encodeURIComponent(manifestUrl)}`;
+
+        publishShareLink.value = shareUrl;
+        publishShareLinkContainer.classList.remove('hidden');
+      });
+    }
+
+    // Copy shareable link button
+    if (copyShareLinkBtn && publishShareLink) {
+      copyShareLinkBtn.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(publishShareLink.value);
+          copyShareLinkBtn.textContent = 'Copied!';
+          setTimeout(() => { copyShareLinkBtn.textContent = 'Copy'; }, 2000);
+          updateStatus('Shareable link copied to clipboard');
+        } catch (_err) {
+          prompt('Copy this link:', publishShareLink.value);
+        }
+      });
+    }
   }
 
   // ========== RENDER QUEUE ==========
