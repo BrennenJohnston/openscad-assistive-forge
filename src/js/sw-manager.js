@@ -130,8 +130,17 @@ export function applyUpdate() {
  * @returns {Promise<void>}
  */
 export async function clearCaches() {
+  // Show loading overlay to prevent user interaction during cache clear + reload
+  const overlay = document.createElement('div');
+  overlay.id = 'cache-clear-overlay';
+  overlay.setAttribute('role', 'alert');
+  overlay.setAttribute('aria-live', 'assertive');
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.5);color:white;font-size:1.2em;';
+  overlay.textContent = 'Clearing cache and reloading...';
+  document.body.appendChild(overlay);
+
   if (navigator.serviceWorker.controller) {
-    return new Promise((resolve) => {
+    await new Promise((resolve) => {
       const messageChannel = new MessageChannel();
       messageChannel.port1.onmessage = () => resolve();
 
@@ -139,10 +148,17 @@ export async function clearCaches() {
         messageChannel.port2,
       ]);
 
-      // Timeout fallback
-      setTimeout(resolve, 5000);
+      // Timeout fallback -- resolve even if SW doesn't respond (prevents freeze)
+      setTimeout(resolve, 3000);
     });
+  } else {
+    // No service worker controller -- delete caches directly from the page
+    const keys = await caches.keys();
+    await Promise.all(keys.map((key) => caches.delete(key)));
   }
+
+  // Reload AFTER caches are confirmed cleared (fixes race condition freeze bug)
+  location.reload();
 }
 
 /**

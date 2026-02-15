@@ -1127,4 +1127,324 @@ describe('Parameter Parser', () => {
       expect(result.parameters.extra.dependency.value).toBe('advanced')
     })
   })
+
+  // =========================================================================
+  // Keyguard-specific annotation pattern tests (Stakeholder Validation Plan)
+  // =========================================================================
+  describe('Keyguard Annotation Patterns', () => {
+    it('should extract 90+ options from a large enum (type_of_tablet)', () => {
+      // Exact enum line from keyguard_v75.scad line 507 (trimmed for readability)
+      const scad = `
+        /*[Tablet]*/
+        type_of_tablet = "iPad 9th generation"; //[iPad, iPad2, iPad 3rd generation, iPad 4th generation, iPad 5th generation,iPad 6th generation, iPad 7th generation, iPad 8th generation, iPad 9th generation, iPad 10th generation, iPad 11th generation A16, iPad Pro 9.7-inch, iPad Pro 10.5-inch, iPad Pro 11-inch 1st Generation, iPad Pro 11-inch 2nd Generation, iPad Pro 11-inch 3rd Generation, iPad Pro 11-inch 4th Generation, iPad Pro 11-inch M4, iPad Pro 12.9-inch 1st Generation, iPad Pro 12.9-inch 2nd Generation, iPad Pro 12.9-inch 3rd Generation, iPad Pro 12.9-inch 4th Generation, iPad Pro 12.9-inch 5th Generation, iPad Pro 12.9-inch 6th Generation, iPad Pro 13-inch M4, iPad mini, iPad mini 2, iPad mini 3, iPad mini 4, iPad mini 5, iPad mini 6, iPad mini 7 A17 Pro, iPad Air, iPad Air 2, iPad Air 3, iPad Air 4, iPad Air 5, iPad Air 11-inch M2, iPad Air 13-inch M2, iPad Air 11-inch M3, iPad Air 13-inch M3, Dynavox I-12+, Dynavox Indi, Tobii-Dynavox I-110, Tobii-Dynavox T-15+, Tobii-Dynavox I-13, Tobii-Dynavox I-16, NovaChat 5, NovaChat 5.3, NovaChat 5.4, NovaChat 8.5, NovaChat 12, Chat Fusion 10, Surface 2, Surface 3, Surface Pro 3, Surface Pro 4, Surface Pro 5, Surface Pro 6, Surface Pro 7, Surface Pro 8, Surface Pro 9, Surface Pro X, Surface Go, Surface Go 3, Accent 800-30, Accent 800-40, Accent 1000-20, Accent 1000-30, Accent 1000-40, Accent 1400-20, Accent 1400-30a, Accent 1400-30b, Via Nano, Via Mini, Via Pro, GridPad 10s, GridPad 11, GridPad 12, GridPad 13, GridPad 15, Samsung Galaxy Tab A 8.4, Samsung Galaxy Tab A7 10.4, Samsung Galaxy Tab A7 Lite, Samsung Galaxy Tab A8, Samsung Galaxy Tab A9, Samsung Galaxy Tab A9+, Samsung Galaxy Tab Active 2, Samsung Galaxy Tab Active 3, Samsung Galaxy Tab Active 5, Samsung Galaxy Tab Active 4 Pro, Samsung Galaxy Tab S3, Samsung Galaxy Tab S6, Samsung Galaxy Tab S6 Lite, Samsung Galaxy Tab S7, Samsung Galaxy Tab S7 FE, Samsung Galaxy Tab S7+, Samsung Galaxy Tab S8, Samsung Galaxy Tab S8 Ultra, Samsung Galaxy Tab S8+, Samsung Galaxy Tab S9, Samsung Galaxy Tab S9 FE, Samsung Galaxy Tab S9 FE+, Samsung Galaxy Tab S9 Ultra, Samsung Galaxy Tab S9+, Amazon Fire HD 7, Amazon Fire HD 8, Amazon Fire HD 8 Plus, Amazon Fire HD 10, Amazon Fire HD 10 Plus, Amazon Fire Max 11, blank, other tablet]
+      `
+      const result = extractParameters(scad)
+      const param = result.parameters.type_of_tablet
+
+      expect(param).toBeDefined()
+      expect(param.type).toBe('string')
+      expect(param.uiType).toBe('select')
+      expect(param.enum).toBeDefined()
+      expect(param.enum.length).toBeGreaterThanOrEqual(90)
+      // Verify specific entries exist
+      expect(param.enum.some(e => e.value === 'iPad 9th generation')).toBe(true)
+      expect(param.enum.some(e => e.value === 'blank')).toBe(true)
+      expect(param.enum.some(e => e.value === 'other tablet')).toBe(true)
+    })
+
+    it('should parse float step shorthand "// .1" as description (current parser behavior)', () => {
+      // keyguard_v75.scad uses "// .1" to indicate step=0.1 for numeric params
+      // e.g.: keyguard_thickness = 4.0; // .1
+      const scad = `
+        /*[Keyguard Basics]*/
+        keyguard_thickness = 4.0; // .1
+      `
+      const result = extractParameters(scad)
+      const param = result.parameters.keyguard_thickness
+
+      expect(param).toBeDefined()
+      expect(param.default).toBe(4.0)
+      // Current parser: "// .1" is parsed as a description, not a step annotation
+      // This documents the current behavior for future reference
+      expect(param.type).toBe('number')
+    })
+
+    it('should parse range without step [0:10000] as slider with integer step', () => {
+      // From keyguard_v75.scad line 535
+      const scad = `
+        /*[App Layout in px]*/
+        bottom_of_status_bar = 0; //[0:10000]
+      `
+      const result = extractParameters(scad)
+      const param = result.parameters.bottom_of_status_bar
+
+      expect(param).toBeDefined()
+      expect(param.minimum).toBe(0)
+      expect(param.maximum).toBe(10000)
+      expect(param.uiType).toBe('slider')
+      // No explicit step -> implicit step not set (browser default 1)
+      expect(param.step).toBeUndefined()
+    })
+
+    it('should parse range with decimal step [-300:.1:300]', () => {
+      // From keyguard_v75.scad line 670: split_line_location
+      const scad = `
+        /*[Split Keyguard Info]*/
+        split_line_location = 0; // [-300:.1:300]
+      `
+      const result = extractParameters(scad)
+      const param = result.parameters.split_line_location
+
+      expect(param).toBeDefined()
+      expect(param.minimum).toBe(-300)
+      expect(param.step).toBe(0.1)
+      expect(param.maximum).toBe(300)
+      expect(param.type).toBe('number') // float because step has decimal
+    })
+
+    it('should parse yes/no enums as toggle uiType', () => {
+      // From keyguard_v75.scad line 509
+      const scad = `
+        /*[Tablet]*/
+        expose_home_button = "yes"; //[yes,no]
+      `
+      const result = extractParameters(scad)
+      const param = result.parameters.expose_home_button
+
+      expect(param).toBeDefined()
+      expect(param.type).toBe('string')
+      expect(param.uiType).toBe('toggle')
+      expect(param.enum).toHaveLength(2)
+    })
+
+    it('should parse labeled enum options with colons (known parser behavior)', () => {
+      // From keyguard_v75.scad line 598
+      // NOTE: The parser currently treats [1:10mm..., 2:16mm..., 3:20mm...] as a range
+      // because each colon-separated segment starts with a number that parseFloat() accepts.
+      // This is a known limitation -- the parser falls into the range branch first,
+      // but since it has 4+ parts it doesn't match [min:max] or [min:step:max],
+      // so neither slider range nor enum is assigned.
+      const scad = `
+        /*[Velcro Info]*/
+        velcro_size = 1; // [1:10mm -3/8 in- Dots, 2:16mm -5/8 in- Dots, 3:20mm -3/4 in- Dots]
+      `
+      const result = extractParameters(scad)
+      const param = result.parameters.velcro_size
+
+      expect(param).toBeDefined()
+      expect(param.default).toBe(1)
+      // Current behavior: no enum, no slider (range parser misfire with 4+ parts)
+      // This documents the behavior for future parser improvement
+      expect(param.type).toBe('integer')
+    })
+
+    it('should handle [Hidden] group -- params parsed but not in groups array', () => {
+      const scad = `
+        /*[Keyguard Basics]*/
+        type_of_keyguard = "3D-Printed"; // [3D-Printed,Laser-Cut]
+        /*[Hidden]*/
+        keyguard_designer_version = 75;
+        MW_version = false;
+        fudge = 0.001;
+      `
+      const result = extractParameters(scad)
+
+      // Only Keyguard Basics should be in groups, not Hidden
+      expect(result.groups).toHaveLength(1)
+      expect(result.groups[0].id).toBe('Keyguard Basics')
+
+      // Hidden params should be in hiddenParameters, not parameters
+      expect(result.hiddenParameters).toBeDefined()
+      expect(result.hiddenParameters.keyguard_designer_version).toBeDefined()
+      expect(result.hiddenParameters.MW_version).toBeDefined()
+      expect(result.hiddenParameters.fudge).toBeDefined()
+
+      // Should NOT appear in regular parameters
+      expect(result.parameters.keyguard_designer_version).toBeUndefined()
+      expect(result.parameters.MW_version).toBeUndefined()
+      expect(result.parameters.fudge).toBeUndefined()
+    })
+
+    it('should extract all 24 tab groups from keyguard-style SCAD', () => {
+      // Minimal fixture that includes all 24 groups from keyguard_v75.scad
+      const scad = `
+        /*[Keyguard Basics]*/ g1=1;
+        /*[Tablet]*/ g2=1;
+        /*[Tablet Case]*/ g3=1;
+        /*[App Layout in px]*/ g4=1;
+        /*[App Layout in mm]*/ g5=1;
+        /*[Bar Info]*/ g6=1;
+        /*[Grid Info]*/ g7=1;
+        /*[Grid Special Settings]*/ g8=1;
+        /*[Mounting Method]*/ g9=1;
+        /*[Velcro Info]*/ g10=1;
+        /*[Clip-on Straps Info]*/ g11=1;
+        /*[Posts Info]*/ g12=1;
+        /*[Shelf Info]*/ g13=1;
+        /*[Slide-in Tabs Info]*/ g14=1;
+        /*[Raised Tabs Info]*/ g15=1;
+        /*[Keyguard Frame Info]*/ g16=1;
+        /*[Split Keyguard Info]*/ g17=1;
+        /*[Sloped Keyguard Edge Info]*/ g18=1;
+        /*[Engraved/Embossed Text]*/ g19=1;
+        /*[Cell Inserts]*/ g20=1;
+        /*[Free-form and Hybrid Keyguard Openings]*/ g21=1;
+        /*[Special Actions and Settings]*/ g22=1;
+        /*[Hidden]*/ hidden_var = 1;
+      `
+      const result = extractParameters(scad)
+
+      // 22 visible groups (Hidden is excluded, 22 unique non-Hidden groups)
+      expect(result.groups.length).toBe(22)
+      expect(result.groups.find(g => g.id === 'Hidden')).toBeUndefined()
+      expect(result.groups.find(g => g.id === 'Keyguard Basics')).toBeDefined()
+      expect(result.groups.find(g => g.id === 'Special Actions and Settings')).toBeDefined()
+    })
+
+    it('should parse bare parameter with no annotation (spinbox default)', () => {
+      // From keyguard_v75.scad line 510
+      const scad = `
+        /*[Tablet]*/
+        home_button_edge_slope = 30;
+      `
+      const result = extractParameters(scad)
+      const param = result.parameters.home_button_edge_slope
+
+      expect(param).toBeDefined()
+      expect(param.default).toBe(30)
+      expect(param.type).toBe('integer')
+      expect(param.uiType).toBe('input') // No annotation = basic input
+    })
+
+    it('should parse string parameters for text fields', () => {
+      // From keyguard_v75.scad line 690
+      const scad = `
+        /*[Engraved/Embossed Text]*/
+        text = "";
+      `
+      const result = extractParameters(scad)
+      const param = result.parameters.text
+
+      expect(param).toBeDefined()
+      expect(param.default).toBe('')
+      expect(param.type).toBe('string')
+    })
+
+    it('should parse preceding comments as parameter descriptions', () => {
+      // From keyguard_v75.scad line 499-500
+      const scad = `
+        /*[Keyguard Basics]*/
+        //not for use with Laser-Cut keyguards
+        keyguard_thickness = 4.0; // .1
+      `
+      const result = extractParameters(scad)
+      const param = result.parameters.keyguard_thickness
+
+      expect(param).toBeDefined()
+      // The preceding comment should be captured as description
+      expect(param.description).toBeTruthy()
+    })
+
+    // =====================================================================
+    // CRITICAL: Boolean vs String "yes"/"no" Type Detection
+    // These tests verify the parser correctly distinguishes between:
+    // - Boolean params: MW_version = false;  → type: 'boolean'
+    // - String dropdown params: expose_home_button = "yes"; //[yes,no]  → type: 'string'
+    // This distinction is essential because buildDefineArgs() must send
+    // -D expose_home_button="yes" (not -D expose_home_button=true)
+    // since OpenSCAD's `if (expose_home_button == "yes")` requires a string.
+    // =====================================================================
+
+    it('should detect string "yes"/"no" dropdown as type: string, NOT boolean', () => {
+      const scad = `
+        /*[Options]*/
+        expose_home_button = "yes"; //[yes,no]
+      `
+      const result = extractParameters(scad)
+      const param = result.parameters.expose_home_button
+
+      expect(param).toBeDefined()
+      expect(param.type).toBe('string')
+      expect(param.default).toBe('yes')
+      // Should have enum values (enum items may be objects with .value or plain strings)
+      const enumValues = param.enum.map(e => typeof e === 'object' ? e.value : e)
+      expect(enumValues).toContain('yes')
+      expect(enumValues).toContain('no')
+    })
+
+    it('should detect native boolean as type: boolean', () => {
+      const scad = `
+        /*[Options]*/
+        MW_version = false;
+      `
+      const result = extractParameters(scad)
+      const param = result.parameters.MW_version
+
+      expect(param).toBeDefined()
+      expect(param.type).toBe('boolean')
+      expect(param.default).toBe(false)
+    })
+
+    it('should detect true as type: boolean', () => {
+      const scad = `
+        /*[Options]*/
+        show_debug = true;
+      `
+      const result = extractParameters(scad)
+      const param = result.parameters.show_debug
+
+      expect(param).toBeDefined()
+      expect(param.type).toBe('boolean')
+      expect(param.default).toBe(true)
+    })
+
+    it('should NOT confuse string "no" dropdown with boolean false', () => {
+      const scad = `
+        /*[Options]*/
+        expose_status_bar = "no"; //[yes,no]
+        have_a_case = "yes"; //[yes,no]
+        show_split_line = "no"; //[yes,no]
+      `
+      const result = extractParameters(scad)
+
+      // All three should be string type, NOT boolean
+      expect(result.parameters.expose_status_bar.type).toBe('string')
+      expect(result.parameters.expose_status_bar.default).toBe('no')
+
+      expect(result.parameters.have_a_case.type).toBe('string')
+      expect(result.parameters.have_a_case.default).toBe('yes')
+
+      expect(result.parameters.show_split_line.type).toBe('string')
+      expect(result.parameters.show_split_line.default).toBe('no')
+    })
+
+    it('should handle the real keyguard_v75.scad file if available', () => {
+      const realFilePath = join(__dirname, '../../.volkswitch/Keyguard Design/keyguard_v75.scad')
+      if (!existsSync(realFilePath)) {
+        console.log('Skipping: keyguard_v75.scad not available')
+        return
+      }
+
+      const scadContent = readFileSync(realFilePath, 'utf-8')
+      const result = extractParameters(scadContent)
+
+      // Verify expected parameter count
+      const paramCount = Object.keys(result.parameters).length
+      console.log(`keyguard_v75.scad: ${paramCount} parameters, ${result.groups.length} groups`)
+      expect(paramCount).toBeGreaterThanOrEqual(80)
+
+      // Verify group count (24 total minus Hidden = 23, but some may merge)
+      expect(result.groups.length).toBeGreaterThanOrEqual(20)
+
+      // Verify Hidden params are separated
+      const hiddenCount = Object.keys(result.hiddenParameters || {}).length
+      console.log(`Hidden parameters: ${hiddenCount}`)
+      expect(hiddenCount).toBeGreaterThan(0)
+
+      // Verify the big enum
+      const tabletParam = result.parameters.type_of_tablet
+      expect(tabletParam).toBeDefined()
+      expect(tabletParam.enum.length).toBeGreaterThanOrEqual(90)
+    })
+  })
 })

@@ -71,15 +71,13 @@ setting2=value2
 }
 
 /**
- * Load the simple-box example
+ * Load the simple-box example via deep-link (avoids strict mode
+ * violations from multiple buttons matching data-example="simple-box")
  */
 const loadSimpleBoxExample = async (page) => {
-  const exampleButton = page.locator('[data-example="simple-box"], #loadSimpleBoxBtn, button:has-text("Simple Box")')
-  await exampleButton.waitFor({ state: 'visible', timeout: 10000 })
-  await exampleButton.click()
-  
+  await page.goto('/?example=simple-box')
   const mainInterface = page.locator('#mainInterface')
-  await mainInterface.waitFor({ state: 'visible', timeout: 20000 })
+  await mainInterface.waitFor({ state: 'visible', timeout: 30000 })
   await page.waitForSelector('.param-control', { state: 'attached', timeout: 20000 })
 }
 
@@ -88,13 +86,30 @@ const loadSimpleBoxExample = async (page) => {
  */
 const uploadZipProject = async (page) => {
   await page.goto('/')
+  // Wait for WASM engine before uploading (file handler isn't registered until ready)
+  await page.waitForSelector('body[data-wasm-ready="true"]', {
+    state: 'attached',
+    timeout: 120_000,
+  })
   const zipPath = await createMultiFileZipFixture()
   const fileInput = page.locator('#fileInput')
   await fileInput.setInputFiles(zipPath)
-  await page.locator('#mainInterface').waitFor({ state: 'visible', timeout: 20000 })
+  await page.locator('#mainInterface').waitFor({ state: 'visible', timeout: 30000 })
+
+  // Dismiss save-project modal if it appears
+  try {
+    const notNowBtn = page.locator('#saveProjectNotNow')
+    await notNowBtn.waitFor({ state: 'visible', timeout: 3000 })
+    await notNowBtn.click()
+    await page.waitForTimeout(300)
+  } catch {
+    // Modal didn't appear
+  }
 }
 
 test.describe('Project Files Manager', () => {
+  test.describe.configure({ timeout: 150_000 }) // WASM init may need ~120s
+
   test('shows companion files section for ZIP projects', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
     
@@ -153,8 +168,8 @@ test.describe('Project Files Manager', () => {
     const count = await fileItems.count()
     expect(count).toBeGreaterThanOrEqual(1)
     
-    // Verify main file is marked
-    const mainFile = page.locator('.project-file-item.main-file, .project-file-badge:has-text("main")')
+    // Verify main file is marked (use .first() since both the item and its badge match)
+    const mainFile = page.locator('.project-file-item.main-file').first()
     await expect(mainFile).toBeVisible()
   })
 

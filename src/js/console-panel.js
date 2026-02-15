@@ -160,17 +160,42 @@ export class ConsolePanel {
 
     const lines = output.split('\n');
     let hasNewEntries = false;
+    let hasEchoOrImportant = false;
 
     for (const line of lines) {
       const entry = this.parseLine(line);
       if (entry) {
         this.addEntry(entry);
         hasNewEntries = true;
+        // Track ECHO, WARNING, and ERROR messages for auto-expand
+        if (entry.type === CONSOLE_ENTRY_TYPE.ECHO ||
+            entry.type === CONSOLE_ENTRY_TYPE.WARNING ||
+            entry.type === CONSOLE_ENTRY_TYPE.ERROR) {
+          hasEchoOrImportant = true;
+        }
       }
     }
 
     if (hasNewEntries) {
       this.render();
+    }
+
+    // Auto-expand console when ECHO/WARNING/ERROR messages arrive (Item 4)
+    // Ken uses echo() to communicate with clinicians -- these must be visible
+    if (hasEchoOrImportant) {
+      this.autoExpandPanel();
+    }
+  }
+
+  /**
+   * Auto-expand the console <details> panel when important messages arrive
+   * Sets the open attribute so the console becomes visible without user action
+   */
+  autoExpandPanel() {
+    const consolePanel = document.getElementById('consolePanel');
+    if (consolePanel && !consolePanel.open) {
+      consolePanel.open = true;
+      console.log('[ConsolePanel] Auto-expanded: ECHO/WARNING/ERROR message detected');
     }
   }
 
@@ -203,12 +228,20 @@ export class ConsolePanel {
   updateBadge() {
     if (!this.badge) return;
 
-    const importantCount = this.counts.warning + this.counts.error;
+    const warningErrorCount = this.counts.warning + this.counts.error;
+    // Include ECHO messages in badge count (Ken's clinician communication channel)
+    const importantCount = warningErrorCount + this.counts.echo;
     const totalCount = this.entries.length;
 
-    if (importantCount > 0) {
+    if (warningErrorCount > 0) {
+      // Warnings/errors get special styling
       this.badge.textContent = importantCount;
       this.badge.classList.add('has-warnings');
+      this.badge.classList.remove('hidden');
+    } else if (importantCount > 0) {
+      // ECHO-only messages still show badge (but without warning styling)
+      this.badge.textContent = importantCount;
+      this.badge.classList.remove('has-warnings');
       this.badge.classList.remove('hidden');
     } else if (totalCount > 0) {
       this.badge.textContent = totalCount;
@@ -224,8 +257,10 @@ export class ConsolePanel {
    * @param {Object} entry - Console entry
    */
   announceIfImportant(entry) {
-    // Only announce warnings and errors to avoid spamming
-    if (entry.type !== CONSOLE_ENTRY_TYPE.WARNING && 
+    // Announce ECHO, warnings, and errors to screen readers
+    // Ken uses echo() to communicate important info to clinicians
+    if (entry.type !== CONSOLE_ENTRY_TYPE.ECHO &&
+        entry.type !== CONSOLE_ENTRY_TYPE.WARNING && 
         entry.type !== CONSOLE_ENTRY_TYPE.ERROR) {
       return;
     }
@@ -254,14 +289,21 @@ export class ConsolePanel {
     this.lastAnnouncement = Date.now();
     this.pendingAnnouncement = null;
 
-    const typeLabel = entry.type === CONSOLE_ENTRY_TYPE.WARNING ? 'Warning' : 'Error';
+    let typeLabel;
+    if (entry.type === CONSOLE_ENTRY_TYPE.WARNING) {
+      typeLabel = 'Warning';
+    } else if (entry.type === CONSOLE_ENTRY_TYPE.ERROR) {
+      typeLabel = 'Error';
+    } else {
+      typeLabel = 'Message'; // ECHO messages
+    }
     const message = `${typeLabel}: ${entry.message}`;
 
-    // Errors and warnings use assertive region for immediate attention
+    // Errors use assertive region for immediate attention
     if (entry.type === CONSOLE_ENTRY_TYPE.ERROR) {
       announceError(message);
     } else {
-      // Warnings are less urgent, use polite
+      // Warnings and ECHO use polite announcement
       announceImmediate(message);
     }
   }
@@ -315,8 +357,11 @@ export class ConsolePanel {
     // Escape message for safe HTML rendering
     const safeMessage = this.escapeHtml(entry.message);
 
+    // WARNING and ERROR entries get role="alert" for screen reader announcement (WCAG 4.1.3)
+    const entryRole = (entry.type === 'warning' || entry.type === 'error') ? 'alert' : 'listitem';
+
     return `
-      <div class="console-entry ${typeClass}" role="listitem">
+      <div class="console-entry ${typeClass}" role="${entryRole}">
         <time class="console-timestamp" datetime="${time.toISOString()}">${timeStr}</time>
         <span class="console-type" aria-hidden="true">${typeLabel}</span>
         <span class="console-message">${safeMessage}</span>

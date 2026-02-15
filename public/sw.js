@@ -38,6 +38,20 @@ const CACHE_STRATEGIES = {
   images: [/\.png$/, /\.jpg$/, /\.svg$/, /\.ico$/],
 };
 
+// Trusted CDN origins whose assets we cache for offline/resilience.
+// Monaco Editor is loaded from jsdelivr CDN; caching these assets means
+// Expert Mode works even when the CDN is temporarily unreachable.
+const TRUSTED_CDN_ORIGINS = [
+  'https://cdn.jsdelivr.net',
+];
+
+/**
+ * Check if a URL is from a trusted CDN that we should cache
+ */
+function isTrustedCDN(url) {
+  return TRUSTED_CDN_ORIGINS.some((origin) => url.origin === origin);
+}
+
 /**
  * Install event - precache essential assets
  */
@@ -100,7 +114,14 @@ self.addEventListener('fetch', (event) => {
     return;
   }
   
-  // Skip cross-origin requests (except for same-origin with different protocol)
+  // Handle trusted CDN assets (e.g., Monaco Editor from jsdelivr)
+  // These are cached on first successful load for offline resilience.
+  if (isTrustedCDN(url)) {
+    event.respondWith(cacheFirst(request));
+    return;
+  }
+  
+  // Skip other cross-origin requests
   if (url.origin !== self.location.origin) {
     return;
   }
@@ -159,6 +180,39 @@ function getCacheStrategy(pathname) {
 }
 
 /**
+ * Maximum number of entries to keep per cache category.
+ * WASM files are large (~10MB); we cap cached entries to prevent
+ * unbounded storage growth from stale versions.
+ */
+const MAX_WASM_CACHE_ENTRIES = 6; // openscad.js + openscad.wasm + INTEGRITY.json + headroom
+const MAX_GENERAL_CACHE_ENTRIES = 200;
+
+/**
+ * Evict oldest entries from a cache when it exceeds maxEntries.
+ * Uses the request URL as the sort key (FIFO by insertion).
+ */
+async function trimCache(cacheName, maxEntries) {
+  const cache = await caches.open(cacheName);
+  const keys = await cache.keys();
+  if (keys.length <= maxEntries) return;
+
+  // Delete oldest entries (first inserted)
+  const toDelete = keys.length - maxEntries;
+  for (let i = 0; i < toDelete; i++) {
+    await cache.delete(keys[i]);
+  }
+  console.log(`[Service Worker] Trimmed ${toDelete} stale entries from ${cacheName}`);
+}
+
+/**
+ * Check if a URL is a WASM-related asset (large binary, rarely changes).
+ */
+function isWasmAsset(url) {
+  const pathname = url.pathname || url;
+  return CACHE_STRATEGIES.wasm.some((pattern) => String(pathname).match(pattern));
+}
+
+/**
  * Cache-first strategy: Try cache, fall back to network
  * Best for: Static assets, WASM files, examples
  */
@@ -179,7 +233,13 @@ async function cacheFirst(request) {
     if (response && response.status === 200) {
       // Clone the response (can only be consumed once)
       const responseToCache = response.clone();
-      cache.put(request, responseToCache);
+      await cache.put(request, responseToCache);
+
+      // Trim WASM cache to prevent unbounded storage growth
+      const url = new URL(request.url);
+      if (isWasmAsset(url)) {
+        trimCache(CACHE_NAME, MAX_WASM_CACHE_ENTRIES + MAX_GENERAL_CACHE_ENTRIES);
+      }
     }
     
     return response;
@@ -242,11 +302,21 @@ self.addEventListener('message', (event) => {
       caches
         .keys()
         .then((keys) => Promise.all(keys.map((key) => caches.delete(key))))
-        .then(() => self.clients.matchAll())
+        .then(() => {
+          // Respond via MessageChannel port if available (fixes race condition / freeze bug)
+          // The sw-manager.js sends a MessageChannel and waits for a response on port1
+          if (event.ports && event.ports[0]) {
+            event.ports[0].postMessage({ type: 'CACHE_CLEARED' });
+          }
+          // Also broadcast to all clients for any listeners
+          return self.clients.matchAll();
+        })
         .then((clients) => {
-          clients.forEach((client) => {
-            client.postMessage({ type: 'CACHE_CLEARED' });
-          });
+          if (clients) {
+            clients.forEach((client) => {
+              client.postMessage({ type: 'CACHE_CLEARED' });
+            });
+          }
         })
     );
   }

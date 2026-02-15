@@ -66,7 +66,7 @@ function createLabelContainer(param, options = {}) {
 let currentParameterValues = {};
 
 // Store default values for reset functionality
-let defaultParameterValues = {};
+const defaultParameterValues = {};
 
 // Store original schema limits for unlock functionality
 let originalParameterLimits = {};
@@ -829,9 +829,12 @@ function createSliderControl(param, onChange) {
   spinbox.className = 'slider-spinbox';
   spinbox.min = limitsUnlocked ? '' : param.minimum;
   spinbox.max = limitsUnlocked ? '' : param.maximum;
-  spinbox.step = param.step || 1;
+  // Spinbox step is INDEPENDENT of slider step (desktop OpenSCAD parity)
+  // For integers: step=1 so user can type any whole number (e.g., 1234 for [0:50:10000])
+  // For floats: step="any" so user can type precise decimal values (e.g., 3.14 for [0:0.5:10])
+  spinbox.step = param.type === 'integer' ? 1 : 'any';
   spinbox.value = param.default;
-  spinbox.setAttribute('inputmode', 'numeric'); // Mobile-friendly numeric keyboard
+  spinbox.setAttribute('inputmode', param.type === 'integer' ? 'numeric' : 'decimal');
   spinbox.setAttribute(
     'aria-label',
     `${formatParamName(param.name)} value${param.unit ? ' in ' + param.unit : ''}, editable`
@@ -895,7 +898,7 @@ function createSliderControl(param, onChange) {
 
   // Spinbox input event - updates slider in real-time for visual feedback
   spinbox.addEventListener('input', (e) => {
-    const value = updateValue(e.target.value, 'spinbox');
+    updateValue(e.target.value, 'spinbox');
     // Don't trigger onChange on every keystroke - wait for change event
   });
 
@@ -907,16 +910,19 @@ function createSliderControl(param, onChange) {
     }
   });
 
+  // Independent spinbox step for keyboard/wheel interactions
+  // Uses 1 for integers, 0.1 for floats (not the slider's coarse step)
+  const spinboxStep = param.type === 'integer' ? 1 : 0.1;
+
   // Keyboard enhancements for spinbox
   spinbox.addEventListener('keydown', (e) => {
-    const step = parseFloat(param.step) || 1;
     const currentVal = parseFloat(spinbox.value) || 0;
     
     // Shift+Arrow for 10x step increment (power user feature)
     if (e.shiftKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
       e.preventDefault();
       const multiplier = e.key === 'ArrowUp' ? 10 : -10;
-      const newValue = currentVal + step * multiplier;
+      const newValue = currentVal + spinboxStep * multiplier;
       
       // Respect limits unless unlocked
       const limits = originalParameterLimits[param.name];
@@ -928,6 +934,28 @@ function createSliderControl(param, onChange) {
       spinbox.dispatchEvent(new Event('change', { bubbles: true }));
     }
   });
+
+  // Wheel event handler for spinbox (desktop OpenSCAD parity: scroll wheel changes value)
+  spinbox.addEventListener('wheel', (e) => {
+    // Only handle wheel when spinbox is focused (don't hijack page scroll)
+    if (document.activeElement !== spinbox) return;
+    e.preventDefault();
+
+    const currentVal = parseFloat(spinbox.value) || 0;
+    // Shift+wheel for 10x step (matching Shift+Arrow behavior)
+    const effectiveStep = e.shiftKey ? spinboxStep * 10 : spinboxStep;
+    const direction = e.deltaY < 0 ? 1 : -1; // Scroll up = increment
+    const newValue = currentVal + effectiveStep * direction;
+
+    // Respect limits unless unlocked
+    const limits = originalParameterLimits[param.name];
+    if (!limitsUnlocked && limits) {
+      if (newValue < limits.min || newValue > limits.max) return;
+    }
+
+    spinbox.value = param.type === 'integer' ? Math.round(newValue) : newValue;
+    spinbox.dispatchEvent(new Event('change', { bubbles: true }));
+  }, { passive: false });
 
   sliderContainer.appendChild(input);
   sliderContainer.appendChild(spinbox);
@@ -1336,7 +1364,7 @@ function createColorControl(param, onChange) {
 
   // Update on hex input change
   hexInput.addEventListener('input', (e) => {
-    let hex = e.target.value.toUpperCase().replace(/[^0-9A-F]/g, '');
+    const hex = e.target.value.toUpperCase().replace(/[^0-9A-F]/g, '');
     hexInput.value = hex;
 
     if (hex.length === 6) {

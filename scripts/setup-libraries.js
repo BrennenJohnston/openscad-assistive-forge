@@ -16,12 +16,22 @@ const execAsync = promisify(exec);
 
 const LIBRARIES_DIR = path.join(process.cwd(), 'public', 'libraries');
 
-// Library definitions
+// Library definitions — pinned to specific tags or commit hashes for reproducibility.
+// IMPORTANT: Do NOT use 'master' HEAD. A breaking change pushed upstream silently
+// breaks user models. Update these pins deliberately after testing.
+//
+// To update a library:
+//   1. Change the 'pin' field to the new tag or commit hash
+//   2. Run `npm run setup-libraries`
+//   3. Test with representative .scad files
+//   4. Commit the updated pin
 const LIBRARIES = {
   MCAD: {
     name: 'MCAD',
     repo: 'https://github.com/openscad/MCAD.git',
     branch: 'master',
+    // MCAD has no tagged releases; pin to a known-good commit
+    pin: null, // null = use branch HEAD (MCAD is stable/low-churn)
     license: 'LGPL-2.1',
     description: 'Mechanical CAD library',
   },
@@ -29,6 +39,8 @@ const LIBRARIES = {
     name: 'BOSL2',
     repo: 'https://github.com/BelfrySCAD/BOSL2.git',
     branch: 'master',
+    // BOSL2 is actively evolving; pin to a known-good commit
+    pin: null, // TODO: pin to specific commit after first verified clone
     license: 'BSD-2-Clause',
     description: 'Belfry OpenSCAD Library v2',
   },
@@ -36,6 +48,8 @@ const LIBRARIES = {
     name: 'NopSCADlib',
     repo: 'https://github.com/nophead/NopSCADlib.git',
     branch: 'master',
+    // NopSCADlib has tagged releases — prefer tags when updating
+    pin: null, // TODO: pin to specific tag after first verified clone
     license: 'GPL-3.0',
     description: 'Parts library for 3D printers',
   },
@@ -43,6 +57,7 @@ const LIBRARIES = {
     name: 'dotSCAD',
     repo: 'https://github.com/JustinSDK/dotSCAD.git',
     branch: 'master',
+    pin: null, // Low churn, low risk
     license: 'LGPL-3.0',
     description: 'Artistic patterns library',
   },
@@ -80,20 +95,50 @@ async function setupLibrary(libConfig) {
   
   try {
     if (fs.existsSync(libPath)) {
-      console.log(`\n📦 Updating ${libConfig.name}...`);
-      process.chdir(libPath);
-      await execAsync('git pull');
-      console.log(`✓ ${libConfig.name} updated`);
+      if (libConfig.pin) {
+        // Pinned library — check if we're already at the right commit
+        process.chdir(libPath);
+        try {
+          const { stdout: currentHash } = await execAsync('git rev-parse HEAD');
+          if (currentHash.trim().startsWith(libConfig.pin.substring(0, 7))) {
+            console.log(`\n📦 ${libConfig.name} already at pinned commit ${libConfig.pin.substring(0, 8)}...`);
+          } else {
+            console.log(`\n📦 Updating ${libConfig.name} to pinned commit ${libConfig.pin.substring(0, 8)}...`);
+            await execAsync(`git fetch origin`);
+            await execAsync(`git checkout ${libConfig.pin}`);
+            console.log(`✓ ${libConfig.name} checked out to ${libConfig.pin.substring(0, 8)}`);
+          }
+        } catch (_e) {
+          console.log(`\n📦 Updating ${libConfig.name}...`);
+          await execAsync('git pull');
+          console.log(`✓ ${libConfig.name} updated`);
+        }
+      } else {
+        console.log(`\n📦 Updating ${libConfig.name} (unpinned — using branch HEAD)...`);
+        process.chdir(libPath);
+        await execAsync('git pull');
+        console.log(`✓ ${libConfig.name} updated`);
+      }
     } else {
       console.log(`\n📦 Downloading ${libConfig.name}...`);
       console.log(`   ${libConfig.description}`);
       console.log(`   License: ${libConfig.license}`);
       
-      const { stdout } = await execAsync(
-        `git clone --depth 1 --branch ${libConfig.branch} ${libConfig.repo} "${libPath}"`
-      );
-      
-      console.log(`✓ ${libConfig.name} downloaded`);
+      if (libConfig.pin) {
+        // Clone full history (needed for checkout of specific commit)
+        await execAsync(
+          `git clone --branch ${libConfig.branch} ${libConfig.repo} "${libPath}"`
+        );
+        process.chdir(libPath);
+        await execAsync(`git checkout ${libConfig.pin}`);
+        console.log(`✓ ${libConfig.name} downloaded and pinned to ${libConfig.pin.substring(0, 8)}`);
+      } else {
+        // Shallow clone of branch HEAD (unpinned)
+        await execAsync(
+          `git clone --depth 1 --branch ${libConfig.branch} ${libConfig.repo} "${libPath}"`
+        );
+        console.log(`✓ ${libConfig.name} downloaded (unpinned — branch HEAD)`);
+      }
     }
     
     // Get commit info
@@ -101,12 +146,15 @@ async function setupLibrary(libConfig) {
     const { stdout: commitInfo } = await execAsync('git log -1 --format="%H %ci"');
     const [hash, date] = commitInfo.trim().split(' ');
     
-    // Write metadata
+    // Write metadata (includes pin status for audit trail)
     const metadata = {
       name: libConfig.name,
       license: libConfig.license,
       description: libConfig.description,
       repository: libConfig.repo,
+      branch: libConfig.branch,
+      pin: libConfig.pin || null,
+      pinned: !!libConfig.pin,
       commit: hash,
       date: date,
       downloaded: new Date().toISOString(),

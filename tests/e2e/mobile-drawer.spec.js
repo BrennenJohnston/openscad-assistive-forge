@@ -11,32 +11,42 @@ test.beforeEach(async ({ page }) => {
   })
 })
 
-async function waitForWasmReady(page) {
-  // The app shows a blocking overlay while WASM initializes.
-  // Many UI listeners (including file upload) are registered after init completes.
-  const overlay = page.locator('#wasmLoadingOverlay');
-  try {
-    // If it exists, wait for it to be removed
-    if ((await overlay.count()) > 0) {
-      await overlay.waitFor({ state: 'detached', timeout: 120000 });
-    }
-  } catch {
-    // If it never appeared or was already detached, continue
-  }
-}
-
 async function loadSampleFile(page) {
+  // Register the WASM-ready listener BEFORE navigation so we never
+  // miss the console signal due to a race condition.
+  const wasmReady = page.waitForEvent('console', {
+    predicate: (msg) => msg.text().includes('OpenSCAD WASM ready'),
+    timeout: 120_000,
+  });
+
   await page.goto('/');
-  await waitForWasmReady(page);
+
+  // Block until WASM is confirmed initialised (guards against the
+  // flaky overlay.count() === 0 early-return that plagued the old
+  // waitForWasmReady helper).
+  await wasmReady;
 
   const fixturePath = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad');
   await page.setInputFiles('#fileInput', fixturePath);
-  await page.waitForSelector('.param-control', { timeout: 30000 });
+  await page.waitForSelector('.param-control', { timeout: 30_000 });
+
+  // Dismiss the "Save this file for quick access?" modal if it appears.
+  // The modal may render slightly after .param-control, so we must
+  // actively wait for the dismiss button rather than polling isVisible().
+  try {
+    const notNowBtn = page.locator('#saveProjectNotNow');
+    await notNowBtn.waitFor({ state: 'visible', timeout: 3000 });
+    await notNowBtn.click();
+    await page.waitForTimeout(300);
+  } catch {
+    // Modal never appeared – carry on
+  }
 }
 
 test.describe('Mobile Drawer', () => {
   test.use({ viewport: { width: 375, height: 667 } }); // iPhone SE size
-  
+  test.describe.configure({ timeout: 150_000 }); // WASM init may need ~120s
+
   test('drawer toggle is visible on mobile', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI');
     await loadSampleFile(page);
@@ -149,7 +159,8 @@ test.describe('Mobile Drawer', () => {
 
 test.describe('Desktop Layout', () => {
   test.use({ viewport: { width: 1280, height: 800 } });
-  
+  test.describe.configure({ timeout: 150_000 }); // WASM init may need ~120s
+
   test('drawer toggle is hidden on desktop', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI');
     await loadSampleFile(page);

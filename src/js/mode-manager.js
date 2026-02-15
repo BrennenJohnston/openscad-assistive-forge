@@ -173,6 +173,11 @@ export class ModeManager {
       this._announceSwitch(targetMode);
     }
 
+    // Move focus to the appropriate target after switch (WCAG 2.4.3 Focus Order)
+    if (!options.skipFocus) {
+      requestAnimationFrame(() => this._manageFocusAfterSwitch(targetMode));
+    }
+
     // Save mode to preferences
     this._savePreferences();
 
@@ -258,6 +263,47 @@ export class ModeManager {
         console.error('[ModeManager] Subscriber error:', error);
       }
     });
+  }
+
+  /**
+   * Move focus to appropriate element after mode switch (WCAG 2.4.3)
+   * Standard mode: focus first parameter input
+   * Expert mode: focus the code editor (textarea or Monaco)
+   * @param {EditorMode} mode
+   * @private
+   */
+  _manageFocusAfterSwitch(mode) {
+    try {
+      if (mode === 'standard') {
+        // Focus the first parameter control input
+        const firstInput = document.querySelector(
+          '.param-control input:not([type="hidden"]), .param-control select, .param-control textarea'
+        );
+        if (firstInput) {
+          firstInput.focus();
+          return;
+        }
+      } else if (mode === 'expert') {
+        // Focus the code editor (textarea fallback or Monaco container)
+        const textarea = document.querySelector('#textareaEditor, .textarea-editor textarea');
+        if (textarea) {
+          textarea.focus();
+          return;
+        }
+        const monacoContainer = document.querySelector('.monaco-editor textarea');
+        if (monacoContainer) {
+          monacoContainer.focus();
+          return;
+        }
+      }
+      // Fallback: focus the mode toggle button itself
+      const modeToggle = document.querySelector('#expertModeToggle, [data-action="toggle-mode"]');
+      if (modeToggle) {
+        modeToggle.focus();
+      }
+    } catch (error) {
+      console.warn('[ModeManager] Focus management error:', error);
+    }
   }
 
   /**

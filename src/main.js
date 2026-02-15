@@ -70,15 +70,15 @@ import { openModal, closeModal, initStaticModals } from './js/modal-manager.js';
 import { translateError } from './js/error-translator.js';
 import {
   getStorageEstimate,
-  clearCachedData,
+  clearCachedData as _clearCachedData,
   isFirstVisit,
   markFirstVisitComplete,
   updateStoragePrefs,
   shouldDeferLargeDownloads,
-  formatBytes,
+  formatBytes as _formatBytes,
   // v2: Persistence and backup
-  checkPersistentStorage,
-  requestPersistentStorage,
+  checkPersistentStorage as _checkPersistentStorage,
+  requestPersistentStorage as _requestPersistentStorage,
   clearCacheWithOptions,
   getDetailedStorageInfo,
   exportProjectsBackup,
@@ -128,10 +128,10 @@ const STORAGE_KEY_MODEL_COLOR = getAppPrefKey('model-color');
 const STORAGE_KEY_PARAM_PANEL_COLLAPSED = getDrawerStateKey('parameters');
 const STORAGE_KEY_LAYOUT_SIZES = getAppPrefKey('layout-sizes');
 import {
-  announce,
+  announce as _announce,
   announceImmediate,
-  announceError,
-  POLITENESS,
+  announceError as _announceError,
+  POLITENESS as _POLITENESS,
 } from './js/announcer.js';
 // Expert Mode (M2) - Code editor integration
 import { getModeManager } from './js/mode-manager.js';
@@ -151,16 +151,16 @@ import {
   touchProject,
   updateProject,
   deleteProject,
-  getSavedProjectsSummary,
-  clearAllSavedProjects,
+  getSavedProjectsSummary as _getSavedProjectsSummary,
+  clearAllSavedProjects as _clearAllSavedProjects,
   getStorageDiagnostics,
   // v2: Folder operations
-  createFolder,
+  createFolder as _createFolder,
   getFolder,
   listFolders,
   renameFolder,
   deleteFolder,
-  moveFolder,
+  moveFolder as _moveFolder,
   getFolderTree,
   getFolderBreadcrumbs,
   // v2: Project-folder operations
@@ -1477,12 +1477,38 @@ async function initApp() {
   const urlParams = new URLSearchParams(window.location.search);
   const isRecoveryMode = urlParams.get('recovery') === 'true';
 
+  // Crash detection: If WASM init started but never completed, we may have crashed.
+  // The flag is set before WASM init and cleared after success.
+  const wasmCrashDetected =
+    localStorage.getItem('openscad-forge-wasm-init-started') === 'true' &&
+    localStorage.getItem('openscad-forge-wasm-init-completed') !== 'true';
+
+  if (wasmCrashDetected && !isRecoveryMode) {
+    console.warn('[Recovery] Detected unclean WASM shutdown — offering recovery mode');
+    // Clear the flags so we don't loop
+    localStorage.removeItem('openscad-forge-wasm-init-started');
+    localStorage.removeItem('openscad-forge-wasm-init-completed');
+    // Auto-enter recovery mode
+    window.location.href = window.location.pathname + '?recovery=true';
+    return; // stop initialization
+  }
+
   if (isRecoveryMode) {
     console.log('[Recovery] Recovery mode activated');
 
-    // Apply conservative settings
+    // Apply conservative settings per B.5.4 Recovery Mode Specification:
+    // - Auto-preview OFF (no automatic renders)
+    // - Quality set to fast (minimum quality settings)
+    // - Monaco disabled (use textarea only — less memory overhead)
     localStorage.setItem(STORAGE_KEY_AUTO_PREVIEW_ENABLED, 'false');
     localStorage.setItem(STORAGE_KEY_PREVIEW_QUALITY, 'fast');
+    // Disable Monaco in recovery mode to reduce memory footprint.
+    // The user can re-enable it manually from settings after recovery.
+    localStorage.setItem('openscad-forge-flag-monaco_editor', 'false');
+
+    // Clean up crash detection flags
+    localStorage.removeItem('openscad-forge-wasm-init-started');
+    localStorage.removeItem('openscad-forge-wasm-init-completed');
 
     // Check for recovery data
     const recoverySource = localStorage.getItem(STORAGE_KEY_RECOVERY_SOURCE);
@@ -1513,7 +1539,7 @@ async function initApp() {
         statusArea.innerHTML = `
           <div class="status-notice status-warning" role="alert">
             <strong>Recovery Mode:</strong> Running with reduced settings.
-            Auto-preview is disabled and quality is set to fast.
+            Auto-preview is disabled, quality is set to fast, and the code editor uses a lightweight textarea.
             <button class="btn btn-sm btn-secondary" onclick="this.parentElement.remove()">Dismiss</button>
           </div>
         `;
@@ -1991,6 +2017,10 @@ async function initApp() {
 
   // Initialize configurable keyboard shortcuts
   initKeyboardShortcuts();
+
+  // Track current folder for saved projects navigation (must be declared
+  // before renderSavedProjectsList is called to avoid TDZ ReferenceError).
+  let currentFolderId = null;
 
   // Initialize saved projects database
   try {
@@ -2770,6 +2800,12 @@ async function initApp() {
       const wasmLoadingOverlay = showWasmLoadingIndicator();
 
       try {
+        // Set crash detection flag BEFORE WASM init.
+        // If the page crashes during init, the flag remains set and
+        // recovery mode will auto-activate on next load.
+        localStorage.setItem('openscad-forge-wasm-init-started', 'true');
+        localStorage.removeItem('openscad-forge-wasm-init-completed');
+
         const assetBaseUrl = new URL(
           import.meta.env.BASE_URL,
           window.location.origin
@@ -2786,6 +2822,15 @@ async function initApp() {
         console.log('OpenSCAD WASM ready');
         hideWasmLoadingIndicator(wasmLoadingOverlay);
         wasmInitialized = true;
+
+        // Clear crash detection flag — WASM init succeeded
+        localStorage.setItem('openscad-forge-wasm-init-completed', 'true');
+
+        // Start worker health monitoring
+        renderController.startHealthMonitoring();
+        // Expose WASM readiness as a DOM attribute so E2E tests
+        // can wait for it without race-prone overlay checks.
+        document.body.setAttribute('data-wasm-ready', 'true');
         // Start memory usage polling
         startMemoryPolling();
         return true;
@@ -5475,6 +5520,20 @@ async function initApp() {
 
     const requiredFiles = detectRequiredCompanionFiles(uploadedFile.content);
     renderProjectFilesList(projectFiles, mainFilePath, requiredFiles);
+
+    // Auto-expand companion files panel when editable .txt files are present
+    // Makes the companion file editor more discoverable for clinician workflows
+    if (projectFiles && projectFiles.size > 1) {
+      const hasEditableTxtFiles = Array.from(projectFiles.keys()).some(
+        (p) => p.toLowerCase().endsWith('.txt') && p !== mainFilePath
+      );
+      if (hasEditableTxtFiles) {
+        const details = document.querySelector('.project-files-details');
+        if (details && !details.open) {
+          details.open = true;
+        }
+      }
+    }
   }
 
   // Handle file upload (supports both .scad and .zip files)
@@ -5497,7 +5556,7 @@ async function initApp() {
     let projectFiles = extractedFiles; // Map of additional files for multi-file projects
     let mainFilePath = mainFilePathArg; // Path to main file in multi-file project (passed from ZIP extraction)
     // For ZIP files, preserve the original ZIP filename for display/save purposes
-    let originalFileName = originalFileNameArg || fileName;
+    const originalFileName = originalFileNameArg || fileName;
 
     if (file) {
       const fileNameLower = fileName.toLowerCase();
@@ -5679,6 +5738,14 @@ async function initApp() {
         );
       }
 
+      // Build paramTypes map from schema for boolean vs string disambiguation
+      // This is critical for "yes"/"no" string dropdown parameters (e.g. expose_home_button)
+      // which must NOT be converted to OpenSCAD booleans true/false.
+      const paramTypes = {};
+      for (const [pName, pDef] of Object.entries(extracted.parameters || {})) {
+        paramTypes[pName] = pDef.type || 'string';
+      }
+
       // Store in state (including project files for multi-file support)
       // For ZIP files: fileName = main .scad file, originalFileName = ZIP name
       // For single files: both are the same
@@ -5687,6 +5754,7 @@ async function initApp() {
         projectFiles: projectFiles || null, // Map of additional files (null for single-file projects)
         mainFilePath: mainFilePath || fileName, // Track main file path (the .scad file inside ZIP)
         schema: extracted,
+        paramTypes,
         parameters: {},
         defaults: {},
         // Adaptive quality configuration
@@ -5834,6 +5902,55 @@ async function initApp() {
         defaults: { ...currentValues },
       });
 
+      // Auto-import JSON presets from ZIP companion files (Item 14: desktop parity)
+      // After state is set with schema + defaults, scan projectFiles for .json preset files
+      if (projectFiles && projectFiles.size > 0) {
+        // Diagnostic: log all files available to WASM FS (companion file mount)
+        console.debug('[WASM FS] Companion files mounted:', Array.from(projectFiles.entries()).map(
+          ([path, content]) => ({ path, sizeBytes: content.length })
+        ));
+
+        let autoImportedCount = 0;
+        const paramSchema = {};
+        // Build param schema for type coercion from extracted parameters
+        for (const [pName, pDef] of Object.entries(extracted.parameters || {})) {
+          paramSchema[pName] = { type: pDef.type || 'string' };
+        }
+
+        for (const [filePath, fileContentStr] of projectFiles.entries()) {
+          if (filePath.toLowerCase().endsWith('.json') && !filePath.toLowerCase().endsWith('.scad')) {
+            try {
+              console.log(`[ZIP] Auto-importing presets from: ${filePath}`);
+              console.debug(`[ZIP] JSON content preview (first 200 chars): ${fileContentStr.substring(0, 200)}`);
+              const importResult = presetManager.importPreset(
+                fileContentStr,
+                originalFileName,
+                paramSchema
+              );
+              if (importResult.success && importResult.imported > 0) {
+                autoImportedCount += importResult.imported;
+                console.log(`[ZIP] Auto-imported ${importResult.imported} preset(s) from ${filePath}`);
+                console.debug(`[ZIP] Import result details:`, importResult);
+              } else if (!importResult.success) {
+                console.warn(`[ZIP] Failed to auto-import presets from ${filePath}:`, importResult.error);
+              }
+            } catch (jsonError) {
+              console.warn(`[ZIP] Error auto-importing presets from ${filePath}:`, jsonError.message);
+            }
+          }
+        }
+
+        if (autoImportedCount > 0) {
+          // Count companion files (non-.scad, non-.json)
+          const companionCount = Array.from(projectFiles.keys()).filter(
+            (p) => !p.toLowerCase().endsWith('.scad') && !p.toLowerCase().endsWith('.json')
+          ).length;
+          const companionText = companionCount > 0 ? ` + ${companionCount} companion file${companionCount > 1 ? 's' : ''}` : '';
+          updateStatus(`Loaded: ${fileName}${companionText} + ${autoImportedCount} preset${autoImportedCount > 1 ? 's' : ''}`);
+          updatePresetDropdown();
+        }
+      }
+
       // Load URL parameters if present (after defaults are set)
       const urlParams = stateManager.loadFromURL();
       if (urlParams && Object.keys(urlParams).length > 0) {
@@ -5884,6 +6001,17 @@ async function initApp() {
       } else {
         updateStatus(`Ready - ${paramCount} parameters loaded`);
       }
+
+      // Move focus to the first parameter input after file load (WCAG 2.4.3 Focus Order)
+      // This tells screen reader users that parameters are now available to customize
+      requestAnimationFrame(() => {
+        const firstInput = parametersContainer?.querySelector(
+          'input:not([type="hidden"]), select, textarea'
+        );
+        if (firstInput) {
+          firstInput.focus();
+        }
+      });
 
       // Initialize 3D preview (lazy loads Three.js)
       if (!previewManager) {
@@ -6012,6 +6140,7 @@ async function initApp() {
       }
       if (autoPreviewController) {
         autoPreviewController.setColorParamNames(colorParamNames);
+        autoPreviewController.setParamTypes(paramTypes);
       }
 
       // Set the SCAD content and project files for auto-preview
@@ -6384,8 +6513,7 @@ if (rounded) {
     });
   }
 
-  // Track current folder for navigation
-  let currentFolderId = null;
+  // (currentFolderId is declared earlier in initApp, before first use.)
 
   /**
    * Render saved projects list on welcome screen (v2 with folder tree)
@@ -7702,6 +7830,72 @@ if (rounded) {
     }
   }
 
+  // =========================================
+  // Direct launch link: ?project=<url> support (Item 7)
+  // Allows linking directly to any .scad or .zip file hosted on the web
+  // Usage: ?project=https://example.com/keyguard.zip or ?scad=https://example.com/box.scad
+  // =========================================
+  const projectParam = initUrlParams.get('project') || initUrlParams.get('scad');
+
+  if (projectParam && !exampleParam) {
+    console.log(`[DeepLink] Loading project from URL: ${projectParam}`);
+    updateStatus('Loading project from URL...');
+
+    setTimeout(async () => {
+      try {
+        // Validate URL
+        const projectUrl = new URL(projectParam);
+        const urlFileName = projectUrl.pathname.split('/').pop() || 'project.scad';
+        const isZipUrl = urlFileName.toLowerCase().endsWith('.zip');
+
+        console.log(`[DeepLink] Fetching: ${projectParam} (type: ${isZipUrl ? 'ZIP' : 'SCAD'})`);
+
+        const response = await fetch(projectParam);
+        if (!response.ok) {
+          throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+        }
+
+        if (isZipUrl) {
+          // Handle ZIP file: convert response to blob, create File object, pass to handleFile
+          const blob = await response.blob();
+          const file = new File([blob], urlFileName, { type: 'application/zip' });
+          await handleFile(file, null, null, null, 'user');
+        } else {
+          // Handle single .scad file
+          const scadContent = await response.text();
+          await handleFile(
+            { name: urlFileName },
+            scadContent,
+            null,
+            null,
+            'user'
+          );
+        }
+
+        // Clean up URL after loading
+        initUrlParams.delete('project');
+        initUrlParams.delete('scad');
+        const cleanUrl = initUrlParams.toString()
+          ? `${window.location.pathname}?${initUrlParams}`
+          : window.location.pathname;
+        history.replaceState(null, '', cleanUrl);
+
+        console.log(`[DeepLink] Successfully loaded project: ${urlFileName}`);
+        updateStatus(`Loaded ${urlFileName} from URL`);
+        announceImmediate(`${urlFileName} loaded from URL link`);
+      } catch (error) {
+        console.error('[DeepLink] Failed to load project:', error);
+        const friendlyMsg = error.name === 'TypeError'
+          ? "Couldn't reach the server. The file may not be publicly accessible, or CORS may be blocking the request."
+          : `${error.message}`;
+        updateStatus(
+          `Couldn't load the project from URL. ${friendlyMsg} You can still upload a file manually.`,
+          'error'
+        );
+      }
+    }, 500);
+  }
+
   // Undo/Redo buttons
   const undoBtn = document.getElementById('undoBtn');
   const redoBtn = document.getElementById('redoBtn');
@@ -8911,7 +9105,7 @@ if (rounded) {
         state.parameters
       );
       if (estimate.seconds >= 5 || estimate.warning) {
-        let estimateMsg = `Generating ${formatName}... (est. ~${estimate.seconds}s)`;
+        const estimateMsg = `Generating ${formatName}... (est. ~${estimate.seconds}s)`;
         if (estimate.warning) {
           console.warn('[Render] Complexity warning:', estimate.warning);
         }
@@ -8940,6 +9134,7 @@ if (rounded) {
           state.parameters,
           {
             outputFormat,
+            paramTypes: state.paramTypes || {},
             files: state.projectFiles,
             mainFile: state.mainFilePath,
             libraries: libsForRender,
@@ -8956,6 +9151,16 @@ if (rounded) {
       }
 
       const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+
+      // #region agent log
+      if (outputFormat === 'dxf' || outputFormat === 'svg') {
+        const _dbgData = result.data || result.stl;
+        const _dbgDataType = _dbgData === null ? 'null' : (_dbgData instanceof ArrayBuffer ? 'ArrayBuffer' : (typeof _dbgData));
+        let _dbgPreview = '';
+        if (_dbgData instanceof ArrayBuffer) { _dbgPreview = new TextDecoder('utf-8').decode(new Uint8Array(_dbgData).slice(0,800)); }
+        fetch('http://127.0.0.1:7246/ingest/8fdfe3b9-f33d-48f1-99f8-e81d685f1617',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'main.js:generateResult',message:'DXF/SVG result received in main thread',hypothesisId:'H-E',data:{outputFormat,dataType:_dbgDataType,dataSize:_dbgData?_dbgData.byteLength||0:0,format:result.format,stats:result.stats,contentPreview:_dbgPreview.substring(0,500)},timestamp:Date.now()})}).catch(()=>{});
+      }
+      // #endregion
 
       // Store the hash of parameters used for this generation
       lastGeneratedParamsHash = hashParams(state.parameters);
@@ -9717,6 +9922,10 @@ if (rounded) {
   // OpenSCAD Customizer-compatible preset management
   // Ken's requirement: Save=update current, +=new, -=delete
 
+  // "design default values" -- always first in preset dropdown (desktop OpenSCAD parity)
+  // Virtual preset ID for the immutable defaults entry (not stored in PresetManager)
+  const DESIGN_DEFAULTS_ID = '__design_defaults__';
+
   // Clear preset selection when parameters are manually changed
   // Track if we're currently loading a preset (to avoid clearing during load)
   let isLoadingPreset = false;
@@ -9826,15 +10035,19 @@ if (rounded) {
 
     const hasPresetSelected = presetSelect && presetSelect.value !== '';
     const hasModel = !!state.uploadedFile;
+    // "design default values" is immutable -- save/delete should be disabled
+    const isDesignDefaults = presetSelect?.value === DESIGN_DEFAULTS_ID;
 
-    // Save button: enabled only when a preset is selected
+    // Save button: enabled when a user preset is selected (not design defaults)
     if (savePresetBtn) {
-      savePresetBtn.disabled = !hasPresetSelected || !hasModel;
-      savePresetBtn.title = !hasPresetSelected
-        ? 'Select a preset first to save changes'
-        : isPresetDirty
-          ? 'Save changes to current preset (unsaved changes)'
-          : 'Save changes to current preset';
+      savePresetBtn.disabled = !hasPresetSelected || !hasModel || isDesignDefaults;
+      savePresetBtn.title = isDesignDefaults
+        ? 'Design default values cannot be overwritten'
+        : !hasPresetSelected
+          ? 'Select a preset first to save changes'
+          : isPresetDirty
+            ? 'Save Preset \u2014 overwrites current preset (unsaved changes)'
+            : 'Save Preset \u2014 overwrites current preset';
       savePresetBtn.dataset.dirty = isPresetDirty ? 'true' : 'false';
     }
 
@@ -9843,12 +10056,14 @@ if (rounded) {
       addPresetBtn.disabled = !hasModel;
     }
 
-    // Delete button: enabled only when a preset is selected
+    // Delete button: enabled when a user preset is selected (not design defaults)
     if (deletePresetBtn) {
-      deletePresetBtn.disabled = !hasPresetSelected || !hasModel;
-      deletePresetBtn.title = hasPresetSelected
-        ? 'Delete current preset'
-        : 'Select a preset first to delete';
+      deletePresetBtn.disabled = !hasPresetSelected || !hasModel || isDesignDefaults;
+      deletePresetBtn.title = isDesignDefaults
+        ? 'Design default values cannot be deleted'
+        : hasPresetSelected
+          ? 'Delete current preset'
+          : 'Select a preset first to delete';
     }
   }
 
@@ -9914,13 +10129,15 @@ if (rounded) {
     // Clear and rebuild dropdown
     presetSelect.innerHTML = '<option value="">-- Select Preset --</option>';
 
-    if (presets.length === 0) {
-      const option = document.createElement('option');
-      option.value = '';
-      option.textContent = '-- No presets saved --';
-      option.disabled = true;
-      presetSelect.appendChild(option);
-    } else {
+    // "design default values" is ALWAYS first in dropdown (desktop OpenSCAD parity)
+    // This is a virtual preset derived from the .scad source defaults, not stored in PresetManager
+    const defaultsOption = document.createElement('option');
+    defaultsOption.value = DESIGN_DEFAULTS_ID;
+    defaultsOption.textContent = 'design default values';
+    defaultsOption.style.fontStyle = 'italic'; // Visually distinguish from user presets
+    presetSelect.appendChild(defaultsOption);
+
+    if (presets.length > 0) {
       presets.forEach((preset) => {
         const option = document.createElement('option');
         option.value = preset.id;
@@ -10164,15 +10381,28 @@ if (rounded) {
     modal.innerHTML = `
       <div class="preset-modal-content">
         <div class="preset-modal-header">
-          <h3 id="managePresetsTitle" class="preset-modal-title">Manage Presets</h3>
+          <h3 id="managePresetsTitle" class="preset-modal-title">Import / Export Presets</h3>
           <button class="preset-modal-close" aria-label="Close dialog" data-action="close">&times;</button>
         </div>
-        <div class="preset-list">
-          ${presetsHTML}
+        <div class="preset-import-export-actions" style="display:flex;gap:12px;padding:16px;border-bottom:1px solid var(--border-color, #e0e0e0);">
+          <button class="btn btn-primary" data-action="import" style="flex:1;padding:12px;font-size:1em;">
+            📂 Import Presets
+          </button>
+          <button class="btn btn-primary" data-action="export-all" style="flex:1;padding:12px;font-size:1em;">
+            💾 Export All Presets
+          </button>
         </div>
+        ${presets.length > 0 ? `
+        <details class="preset-list-details" style="padding:0 16px 16px;">
+          <summary style="padding:8px 0;cursor:pointer;color:var(--text-secondary, #666);">
+            Individual presets (${presets.length})
+          </summary>
+          <div class="preset-list">
+            ${presetsHTML}
+          </div>
+        </details>
+        ` : '<div class="preset-empty" style="padding:16px;">No presets saved for this model yet. Import a preset file or use the + button to create one.</div>'}
         <div class="preset-modal-footer">
-          <button class="btn btn-secondary" data-action="import">Import Preset</button>
-          <button class="btn btn-secondary" data-action="export-all">Export All</button>
           <button class="btn btn-outline" data-action="close">Close</button>
         </div>
       </div>
@@ -10203,9 +10433,12 @@ if (rounded) {
           isLoadingPreset = true;
 
           const state = stateManager.getState();
-          stateManager.setState({ parameters: { ...preset.parameters } });
+          // Desktop OpenSCAD parity: MERGE preset parameters onto current state
+          // "Only the parameters defined in the dataset are modified"
+          const mergedParams = { ...state.parameters, ...preset.parameters };
+          stateManager.setState({ parameters: mergedParams });
 
-          // Re-render UI with preset parameters (FIX: UI wasn't updating before)
+          // Re-render UI with merged parameters
           const parametersContainer = document.getElementById(
             'parametersContainer'
           );
@@ -10221,12 +10454,12 @@ if (rounded) {
               }
               updatePrimaryActionButton();
             },
-            preset.parameters // Pass preset values as initial values
+            mergedParams // Pass merged values as initial values
           );
 
-          // Trigger auto-preview with new parameters
+          // Trigger auto-preview with merged parameters
           if (autoPreviewController) {
-            autoPreviewController.onParameterChange(preset.parameters);
+            autoPreviewController.onParameterChange(mergedParams);
           }
           updatePrimaryActionButton();
 
@@ -10261,7 +10494,11 @@ if (rounded) {
           updateStatus(`Exported preset: ${preset.name}`);
         }
       } else if (action === 'export-all') {
-        const json = presetManager.exportAllPresets(modelName);
+        // Export in OpenSCAD native format (includes "design default values" as first entry)
+        // Pass hidden parameters for desktop parity (included in export but not in UI)
+        const currentState = stateManager.getState();
+        const hiddenParams = currentState.schema?.hiddenParameters || {};
+        const json = presetManager.exportOpenSCADNativeFormat(modelName, hiddenParams);
         if (json) {
           const blob = new Blob([json], { type: 'application/json' });
           const url = URL.createObjectURL(blob);
@@ -10270,9 +10507,9 @@ if (rounded) {
           a.download = `${modelName.replace('.scad', '')}-presets.json`;
           a.click();
           URL.revokeObjectURL(url);
-          updateStatus('Exported all presets');
+          updateStatus('Exported all presets (OpenSCAD native format)');
         } else {
-          alert('No presets to export');
+          updateStatus('No presets to export. Create some presets first using the + button.');
         }
       } else if (action === 'import') {
         // Create file input for import
@@ -10391,6 +10628,12 @@ if (rounded) {
       return;
     }
 
+    // Block saving over "design default values" (immutable, desktop parity)
+    if (selectedPresetId === DESIGN_DEFAULTS_ID) {
+      updateStatus('Design default values cannot be overwritten. Use + to create a new preset.', 'warning');
+      return;
+    }
+
     // Get the preset to update
     const preset = presetManager.loadPreset(state.uploadedFile.name, selectedPresetId);
     if (!preset) {
@@ -10431,6 +10674,12 @@ if (rounded) {
     const selectedPresetId = presetSelect?.value;
 
     if (!state.uploadedFile || !selectedPresetId) {
+      return;
+    }
+
+    // Block deleting "design default values" (immutable, desktop parity)
+    if (selectedPresetId === DESIGN_DEFAULTS_ID) {
+      updateStatus('Design default values cannot be deleted.', 'warning');
       return;
     }
 
@@ -10522,6 +10771,49 @@ if (rounded) {
     if (!presetId) return;
 
     const state = stateManager.getState();
+
+    // Handle "design default values" virtual preset (desktop OpenSCAD parity)
+    if (presetId === DESIGN_DEFAULTS_ID) {
+      isLoadingPreset = true;
+
+      const defaultParams = { ...state.defaults };
+      stateManager.setState({ parameters: defaultParams });
+
+      // Re-render UI with default parameters
+      const parametersContainer = document.getElementById('parametersContainer');
+      renderParameterUI(
+        state.schema,
+        parametersContainer,
+        (values) => {
+          stateManager.setState({ parameters: values });
+          clearPresetSelection(values);
+          if (autoPreviewController) {
+            autoPreviewController.onParameterChange(values);
+          }
+          updatePrimaryActionButton();
+        },
+        defaultParams
+      );
+
+      if (autoPreviewController) {
+        autoPreviewController.onParameterChange(defaultParams);
+      }
+      updatePrimaryActionButton();
+
+      // Track as current selection (virtual preset)
+      currentPresetSignature = null;
+      isPresetDirty = false;
+      stateManager.setState({
+        currentPresetId: DESIGN_DEFAULTS_ID,
+        currentPresetName: 'design default values',
+      });
+
+      isLoadingPreset = false;
+      updatePresetControlStates();
+      updateStatus('Loaded design default values');
+      return;
+    }
+
     const preset = presetManager.loadPreset(state.uploadedFile.name, presetId);
 
     if (preset) {
@@ -10556,9 +10848,12 @@ if (rounded) {
       // Set flag to prevent clearPresetSelection during load
       isLoadingPreset = true;
 
-      stateManager.setState({ parameters: { ...preset.parameters } });
+      // Desktop OpenSCAD parity: MERGE preset parameters onto current state
+      // "Only the parameters defined in the dataset are modified, other parameters are not set to defaults"
+      const mergedParams = { ...state.parameters, ...preset.parameters };
+      stateManager.setState({ parameters: mergedParams });
 
-      // Re-render UI with preset parameters (FIX: UI wasn't updating before)
+      // Re-render UI with merged parameters (FIX: UI wasn't updating before)
       const parametersContainer = document.getElementById(
         'parametersContainer'
       );
@@ -10574,12 +10869,12 @@ if (rounded) {
           }
           updatePrimaryActionButton();
         },
-        preset.parameters // Pass preset values as initial values
+        mergedParams // Pass merged values as initial values
       );
 
-      // Trigger auto-preview with new parameters
+      // Trigger auto-preview with merged parameters
       if (autoPreviewController) {
-        autoPreviewController.onParameterChange(preset.parameters);
+        autoPreviewController.onParameterChange(mergedParams);
       }
       updatePrimaryActionButton();
 

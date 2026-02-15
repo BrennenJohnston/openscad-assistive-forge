@@ -46,7 +46,7 @@ function _clamp01(x) {
 function _setContrastScale(scale) {
   const next = Number.isFinite(scale) ? scale : 1;
   // Clamp to useful range based on Harri research:
-  // - Min 0.5 → exponent ~0.9 (essentially off, no enhancement)
+  // - Min 0.5 → exponent ~0.9 (near identity, no visible enhancement)
   // - Max 4.0 → exponent ~7.2 (very sharp edges, before artifact threshold)
   _contrastScale = Math.max(0.5, Math.min(4.0, next));
   _contrastExp = _DEFAULT_CONTRAST_EXP * _contrastScale;

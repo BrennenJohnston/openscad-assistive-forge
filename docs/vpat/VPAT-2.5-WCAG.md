@@ -67,7 +67,7 @@ The terms used in the Conformance Level column are defined as follows:
 | **2.3.1 Three Flashes or Below Threshold** | Supports | Application contains no flashing content. |
 | **2.4.1 Bypass Blocks** | Supports | Skip-to-main-content link provided. ARIA landmarks allow screen reader navigation. |
 | **2.4.2 Page Titled** | Supports | Page has descriptive title. Title updates to reflect loaded model. |
-| **2.4.3 Focus Order** | Supports | Focus order follows logical sequence. Tab moves through controls predictably. |
+| **2.4.3 Focus Order** | Supports | Focus order follows logical sequence. Tab moves through controls predictably. Focus programmatically managed after file upload (moves to first parameter) and mode switches (moves to editor or parameter controls). |
 | **2.4.4 Link Purpose (In Context)** | Supports | Link text describes destination. External links are marked. |
 | **2.5.1 Pointer Gestures** | Supports | All path-based gestures have single-pointer alternatives. 3D navigation available via buttons. |
 | **2.5.2 Pointer Cancellation** | Supports | Actions trigger on up-event. Dragging operations can be cancelled. |
@@ -92,7 +92,7 @@ The terms used in the Conformance Level column are defined as follows:
 | **1.4.3 Contrast (Minimum)** | Supports | All text meets 4.5:1 contrast ratio. UI components meet 3:1 ratio. High contrast mode exceeds 7:1. |
 | **1.4.4 Resize Text** | Supports | Text resizable to 200% without loss of functionality. Layout remains usable at larger sizes. |
 | **1.4.5 Images of Text** | Supports | No images of text used except for logos. All text rendered as actual text. |
-| **1.4.10 Reflow** | Partially Supports | Content reflows at 320px width. 3D preview may require horizontal scrolling on very narrow viewports. |
+| **1.4.10 Reflow** | Partially Supports | Content reflows at 320px width. 3D preview may require horizontal scrolling on narrow viewports (&lt;320px). |
 | **1.4.11 Non-text Contrast** | Supports | UI components and graphical objects meet 3:1 contrast. Focus indicators clearly visible. |
 | **1.4.12 Text Spacing** | Supports | Adjusting text spacing does not cause content loss. CSS allows user overrides. |
 | **1.4.13 Content on Hover or Focus** | Supports | Tooltips are dismissible (Escape), hoverable, and persistent until dismissed. |
@@ -110,7 +110,7 @@ The terms used in the Conformance Level column are defined as follows:
 | **3.3.4 Error Prevention (Legal, Financial, Data)** | Not Applicable | Application does not involve legal, financial, or data transactions. |
 | **3.3.7 Redundant Entry** | Supports | Application does not require re-entry of previously provided information. |
 | **3.3.8 Accessible Authentication (Minimum)** | Not Applicable | Application has no authentication requirements. |
-| **4.1.3 Status Messages** | Supports | Status messages use ARIA live regions. Render completion announced. Errors announced. Memory warnings announced. |
+| **4.1.3 Status Messages** | Supports | Status messages use ARIA live regions (`aria-live="polite"` on status area, `role="alert"` on console warnings/errors). Render completion, file upload status, errors, and memory warnings all announced to screen readers. |
 
 ---
 
@@ -165,7 +165,7 @@ The VPAT is a registered trademark of the Information Technology Industry Counci
 
 2. **Monaco Editor**: The Monaco code editor has some accessibility limitations. A fully accessible textarea editor is available as an alternative.
 
-3. **Complex Models**: Very complex models may cause memory pressure. The application provides warnings and graceful degradation.
+3. **Complex Models**: High-polygon models may cause memory pressure. The application provides warnings and graceful degradation.
 
 ---
 
@@ -174,3 +174,4 @@ The VPAT is a registered trademark of the Information Technology Industry Counci
 | Version | Date | Description |
 |---------|------|-------------|
 | 1.0 | 2026-02-02 | Initial VPAT for version 1.0 |
+| 1.1 | 2026-02-14 | Updated 2.4.3 and 4.1.3 with focus management and live region improvements |

@@ -16,7 +16,7 @@ const WORKFLOW_STEPS = ['upload', 'customize', 'render', 'download'];
  * Current workflow state
  */
 let currentStep = null;
-let completedSteps = new Set();
+const completedSteps = new Set();
 
 /**
  * Initialize the workflow progress indicator

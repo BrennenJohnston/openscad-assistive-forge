@@ -18,6 +18,7 @@ const FOLDERS_STORE = 'folders';
 const PROJECT_FILES_STORE = 'projectFiles';
 const ASSETS_STORE = 'assets';
 const LS_KEY = 'openscad-saved-projects';
+const LS_FOLDERS_KEY = 'openscad-saved-folders';
 const SCHEMA_VERSION = 2; // Project schema version
 
 let db = null;
@@ -1391,7 +1392,7 @@ export async function getFolderBreadcrumbs(folderId) {
 // localStorage helpers for folders
 function getFoldersFromLocalStorage() {
   try {
-    const data = localStorage.getItem('openscad-saved-folders');
+    const data = localStorage.getItem(LS_FOLDERS_KEY);
     return data ? JSON.parse(data) : [];
   } catch (error) {
     console.error(
@@ -1404,7 +1405,7 @@ function getFoldersFromLocalStorage() {
 
 function saveFoldersToLocalStorage(folders) {
   try {
-    localStorage.setItem('openscad-saved-folders', JSON.stringify(folders));
+    localStorage.setItem(LS_FOLDERS_KEY, JSON.stringify(folders));
   } catch (error) {
     console.error(
       '[Saved Projects] Error saving folders to localStorage:',

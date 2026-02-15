@@ -181,7 +181,7 @@ We are committed to improving accessibility over time:
 
 ### Section 508
 
-This product is designed to support compliance with Section 508 of the Rehabilitation Act for users who require assistive technology.
+This product supports Section 508 of the Rehabilitation Act for users who require assistive technology.
 
 ### WCAG 2.2
 

@@ -221,52 +221,41 @@ test.describe('Theme Switching', () => {
   })
 
   test('should support keyboard navigation for theme toggle', async ({ page }) => {
-    // Tab to theme button
+    const themeButton = page.locator('#themeToggle')
+    await expect(themeButton).toBeVisible()
+
+    // 1) Verify the button is reachable via Tab
     await page.keyboard.press('Tab')
-    
-    let attempts = 0
-    let foundThemeButton = false
-    
-    while (attempts < 20 && !foundThemeButton) {
-      const focusedElement = await page.evaluate(() => {
-        const el = document.activeElement
-        return {
-          tag: el.tagName,
-          ariaLabel: el.getAttribute('aria-label'),
-          title: el.getAttribute('title'),
-        }
-      })
-      
-      if (
-        focusedElement.ariaLabel?.toLowerCase().includes('theme') ||
-        focusedElement.title?.toLowerCase().includes('theme')
-      ) {
-        foundThemeButton = true
-        
-        // Get current theme
-        const themeBefore = await page.evaluate(() => 
-          document.documentElement.getAttribute('data-theme')
-        )
-        
-        // Press Enter/Space to toggle
-        await page.keyboard.press('Enter')
-        await page.waitForTimeout(300)
-        
-        // Verify theme changed
-        const themeAfter = await page.evaluate(() => 
-          document.documentElement.getAttribute('data-theme')
-        )
-        
-        expect(themeAfter).not.toBe(themeBefore)
-        break
-      }
-      
+    let found = false
+    for (let i = 0; i < 30; i++) {
+      const id = await page.evaluate(() => document.activeElement?.id)
+      if (id === 'themeToggle') { found = true; break }
       await page.keyboard.press('Tab')
-      attempts++
     }
-    
-    // If we didn't find it via keyboard, that's ok - button might be in a different location
-    expect(attempts).toBeLessThan(20)
+    expect(found).toBe(true)
+
+    // 2) Verify Enter activates the toggle while focused
+    // Use getAttribute OR 'auto' to normalise the null-when-auto case
+    const themeBefore = await page.evaluate(() =>
+      document.documentElement.getAttribute('data-theme') || 'auto'
+    )
+
+    await page.keyboard.press('Enter')
+
+    // Wait for the DOM attribute to actually change (avoids timing flakes)
+    await page.waitForFunction(
+      (prev) => {
+        const cur = document.documentElement.getAttribute('data-theme') || 'auto'
+        return cur !== prev
+      },
+      themeBefore,
+      { timeout: 5000 },
+    )
+
+    const themeAfter = await page.evaluate(() =>
+      document.documentElement.getAttribute('data-theme') || 'auto'
+    )
+    expect(themeAfter).not.toBe(themeBefore)
   })
 
   test('should announce theme changes to screen readers', async ({ page }) => {

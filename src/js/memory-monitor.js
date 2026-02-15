@@ -149,6 +149,7 @@ export class MemoryMonitor {
           1024
       ),
       heapPercent: memoryInfo.percent || 0,
+      growthMB: memoryInfo.growthMB || 0,
     };
 
     this.addSample(sample);

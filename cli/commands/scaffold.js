@@ -113,10 +113,13 @@ function generatePackageJson(schema, options) {
     .toLowerCase()
     .replace(/[^a-z0-9-]/g, '-');
   
+  // NOTE: openscad-wasm-prebuilt was removed in favor of vendored official WASM.
+  // Scaffolded apps should vendor the official OpenSCAD WASM build (with Manifold support)
+  // from https://files.openscad.org/playground/ into their public/wasm/ directory.
+  // See public/wasm/README.txt in the main app for update instructions.
   const baseDeps = {
     ajv: '^8.12.0',
     jszip: '^3.10.1',
-    'openscad-wasm-prebuilt': '^1.2.0',
     three: '^0.160.0',
   };
 

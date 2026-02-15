@@ -117,7 +117,52 @@ const ERROR_PATTERNS = [
       'This file might be from an external library. Check the Libraries panel.',
   },
 
-  // CGAL errors (common in complex boolean operations)
+  // CGAL assertion failures — fatal crashes from projection()/roof() in WASM
+  // See: openscad-wasm#6, openscad#6582, CGAL#7560
+  {
+    pattern: /CGAL assertion|CGAL_assertion|CGAL precondition/i,
+    title: 'Known Browser Engine Limitation',
+    explanation:
+      'This model uses a geometry feature (likely projection() or roof()) that triggers ' +
+      'a known crash in the browser-based rendering engine (CGAL + WebAssembly).',
+    suggestion:
+      'Remove or simplify projection()/roof() calls. This is a known upstream issue — ' +
+      'the same model may work in desktop OpenSCAD.',
+  },
+  // Emscripten abort — unrecoverable WASM crash
+  {
+    pattern: /Aborted\(|abort\(|Emscripten.*abort/i,
+    title: 'Rendering Engine Crashed',
+    explanation:
+      'The browser rendering engine encountered a fatal error and stopped. ' +
+      'This often happens with projection() or roof() functions.',
+    suggestion:
+      'Try removing projection()/roof() calls, or simplify the geometry. ' +
+      'The engine will restart automatically for your next render.',
+  },
+  // WASM RuntimeError: unreachable
+  {
+    pattern: /RuntimeError:\s*unreachable/i,
+    title: 'Rendering Engine Error',
+    explanation:
+      'The rendering engine hit an internal error (unreachable code path). ' +
+      'This is typically caused by projection() or roof() in the browser engine.',
+    suggestion:
+      'Simplify the model or remove projection()/roof() functions. ' +
+      'Desktop OpenSCAD may handle this model better.',
+  },
+  // WASM RuntimeError: memory access out of bounds
+  {
+    pattern: /RuntimeError:\s*memory access out of bounds/i,
+    title: 'Memory Access Error',
+    explanation:
+      'The rendering engine tried to access memory outside its bounds. ' +
+      'This can happen with very complex models or certain geometry operations.',
+    suggestion:
+      'Reduce model complexity (lower $fn), remove minkowski() operations, ' +
+      'or simplify boolean operations.',
+  },
+  // General CGAL errors (non-fatal, complex boolean operations)
   {
     pattern: /CGAL error|cgal|nef/i,
     title: 'Complex Geometry Issue',
@@ -218,10 +263,14 @@ export function createFriendlyErrorDisplay(technicalError) {
   container.setAttribute('role', 'alert');
   container.setAttribute('aria-live', 'assertive');
 
-  // Title with icon
+  // Title with icon (built via DOM to avoid innerHTML XSS risk)
   const title = document.createElement('h3');
   title.className = 'error-title';
-  title.innerHTML = `<span aria-hidden="true">⚠️</span> ${error.title}`;
+  const titleIcon = document.createElement('span');
+  titleIcon.setAttribute('aria-hidden', 'true');
+  titleIcon.textContent = '⚠️';
+  title.appendChild(titleIcon);
+  title.appendChild(document.createTextNode(' ' + error.title));
   container.appendChild(title);
 
   // Plain language explanation
@@ -230,10 +279,13 @@ export function createFriendlyErrorDisplay(technicalError) {
   explanation.textContent = error.explanation;
   container.appendChild(explanation);
 
-  // Helpful suggestion
+  // Helpful suggestion (built via DOM to avoid innerHTML XSS risk)
   const suggestion = document.createElement('p');
   suggestion.className = 'error-suggestion';
-  suggestion.innerHTML = `<strong>What to try:</strong> ${error.suggestion}`;
+  const suggestionLabel = document.createElement('strong');
+  suggestionLabel.textContent = 'What to try:';
+  suggestion.appendChild(suggestionLabel);
+  suggestion.appendChild(document.createTextNode(' ' + error.suggestion));
   container.appendChild(suggestion);
 
   // Technical details (collapsed by default)

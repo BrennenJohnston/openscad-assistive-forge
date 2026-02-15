@@ -694,8 +694,8 @@ body {
   position: fixed;
   inset: 0;
   background-color: rgba(0, 0, 0, 0.5);
-  /* Keep below app modals (currently z-index: 1000) */
-  z-index: 900;
+  /* Keep below app modals */
+  z-index: var(--z-index-drawer);
   opacity: 0;
   transition: opacity var(--motion-slow) ease-out;
 }
@@ -746,7 +746,7 @@ body {
     right: auto;
     /* Position at right edge of drawer (drawer is min(90vw, 360px) wide) */
     left: calc(min(90vw, 360px) - 44px - var(--space-md));
-    z-index: 960; /* Above drawer content (drawer is z-index: 950) */
+    z-index: calc(var(--z-index-modal-backdrop) + 10); /* Above drawer content */
   }
 }
 
@@ -775,8 +775,8 @@ body {
     max-height: 100dvh; /* Dynamic viewport height */
     transform: translateX(-100%);
     transition: transform var(--motion-slow) ease-out;
-    /* Keep below app modals (currently z-index: 1000) */
-    z-index: 950;
+    /* Keep below app modals */
+    z-index: var(--z-index-modal-backdrop);
     border-right: 1px solid var(--color-border);
     box-shadow: var(--shadow-lg);
     /* Ensure opaque background */
@@ -1152,7 +1152,7 @@ body {
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  padding: 6px 12px;
+  padding: var(--space-xs) var(--space-md);
   background: var(--color-info-bg, rgba(23, 162, 184, 0.15));
   border: none;
   cursor: pointer;
@@ -1188,7 +1188,7 @@ body {
 /* Content area - hidden when collapsed */
 .echo-drawer-content {
   display: none;
-  padding: 8px 12px;
+  padding: var(--space-sm) var(--space-md);
   background: var(--color-bg-tertiary, var(--color-bg-secondary));
   border-top: 1px solid var(--color-border);
 }
@@ -1200,7 +1200,7 @@ body {
 /* Echo messages container */
 .echo-messages {
   margin: 0 0 8px 0;
-  padding: 8px;
+  padding: var(--space-sm);
   background: var(--color-bg-primary);
   border: 1px solid var(--color-border);
   border-radius: var(--border-radius-sm, 4px);
@@ -2584,7 +2584,7 @@ details summary:focus,
     bottom: 0;
     left: 0;
     right: 0;
-    z-index: 960;
+    z-index: calc(var(--z-index-modal-backdrop) + 10);
     flex-direction: column-reverse; /* Primary at bottom, camera drawer, then actions drawer */
     border-radius: var(--border-radius-md) var(--border-radius-md) 0 0;
     border-top: 2px solid var(--color-border);
@@ -3343,7 +3343,7 @@ details summary:focus,
   border-radius: var(--border-radius-md);
   box-shadow: var(--shadow-lg);
   max-width: 400px;
-  z-index: 1000;
+  z-index: var(--z-index-modal);
 }
 
 /* ============================================================================
@@ -3495,7 +3495,7 @@ details summary:focus,
   /* Add a chevron icon to Actions title via pseudo-element */
   .actions-drawer-title::before {
     content: '▼' !important;
-    font-size: 10px !important;
+    font-size: 0.625rem !important;
     margin-right: var(--space-xs) !important;
     transition: transform var(--motion-base) ease !important;
     display: inline-block !important;
@@ -3532,7 +3532,7 @@ details summary:focus,
   /* Add chevron via pseudo-element to match Actions */
   .camera-drawer-label::before {
     content: '▼' !important;
-    font-size: 10px !important;
+    font-size: 0.625rem !important;
     margin-right: var(--space-xs) !important;
     transition: transform var(--motion-base) ease !important;
     display: inline-block !important;
@@ -3712,7 +3712,7 @@ details summary:focus,
 
   /* D-pad center labels - smaller */
   .camera-drawer:not(.collapsed) .camera-drawer-dpad-label {
-    font-size: 9px !important;
+    font-size: 0.5625rem !important;
   }
 
   /* ============================================================================

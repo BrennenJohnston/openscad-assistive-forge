@@ -289,11 +289,14 @@ export class PreviewManager {
     this.gridHelper.visible = this.gridEnabled;
     this.scene.add(this.gridHelper);
 
-    // Add orbit controls
+    // Add orbit controls (OpenSCAD-style)
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.05;
-    this.controls.screenSpacePanning = false;
+    // OpenSCAD pans in screen-space: the model follows the mouse regardless of
+    // camera angle.  With false the pan is constrained to the world horizontal
+    // plane, which breaks Top/Bottom views and feels wrong vs. desktop OpenSCAD.
+    this.controls.screenSpacePanning = true;
     this.controls.minDistance = 10;
     this.controls.maxDistance = 1000;
 
@@ -318,9 +321,18 @@ export class PreviewManager {
       const newAspect = width / height;
       const previousAspect = this._lastAspect || newAspect;
 
-      // Update camera aspect and projection
+      // Update perspective camera aspect (always kept current for projection toggling)
       this.camera.aspect = newAspect;
       this.camera.updateProjectionMatrix();
+
+      // Update orthographic camera frustum if it exists
+      if (this.orthoCamera) {
+        const frustumHeight = (this.orthoCamera.top - this.orthoCamera.bottom) / (this.orthoCamera.zoom || 1);
+        this.orthoCamera.left = (frustumHeight * newAspect) / -2;
+        this.orthoCamera.right = (frustumHeight * newAspect) / 2;
+        this.orthoCamera.updateProjectionMatrix();
+      }
+
       this.renderer.setSize(width, height);
 
       // Adjust camera to maintain model's relative position when aspect changes significantly
@@ -542,6 +554,8 @@ export class PreviewManager {
       let handled = false;
 
       // Rotation (arrow keys without modifiers)
+      // Delegates to shared rotateHorizontal/rotateVertical which correctly
+      // orbit around controls.target (not the world origin).
       if (
         !event.shiftKey &&
         !event.ctrlKey &&
@@ -550,73 +564,21 @@ export class PreviewManager {
       ) {
         switch (event.key) {
           case 'ArrowLeft':
-            this.controls.object.position.applyAxisAngle(
-              new THREE.Vector3(0, 0, 1),
-              rotationSpeed
-            );
-            this.controls.update();
+            this.rotateHorizontal(rotationSpeed);
             handled = true;
             break;
           case 'ArrowRight':
-            this.controls.object.position.applyAxisAngle(
-              new THREE.Vector3(0, 0, 1),
-              -rotationSpeed
-            );
-            this.controls.update();
+            this.rotateHorizontal(-rotationSpeed);
             handled = true;
             break;
-          case 'ArrowUp': {
-            // Orbit vertically
-            const currentDist = this.controls.object.position.length();
-            const horizontalAngle = Math.atan2(
-              this.controls.object.position.y,
-              this.controls.object.position.x
-            );
-            const verticalAngle = Math.asin(
-              this.controls.object.position.z / currentDist
-            );
-            const newVerticalAngle = verticalAngle + rotationSpeed;
-
-            this.controls.object.position.x =
-              currentDist *
-              Math.cos(newVerticalAngle) *
-              Math.cos(horizontalAngle);
-            this.controls.object.position.y =
-              currentDist *
-              Math.cos(newVerticalAngle) *
-              Math.sin(horizontalAngle);
-            this.controls.object.position.z =
-              currentDist * Math.sin(newVerticalAngle);
-            this.controls.update();
+          case 'ArrowUp':
+            this.rotateVertical(rotationSpeed);
             handled = true;
             break;
-          }
-          case 'ArrowDown': {
-            // Orbit vertically (down)
-            const currentDist2 = this.controls.object.position.length();
-            const horizontalAngle2 = Math.atan2(
-              this.controls.object.position.y,
-              this.controls.object.position.x
-            );
-            const verticalAngle2 = Math.asin(
-              this.controls.object.position.z / currentDist2
-            );
-            const newVerticalAngle2 = verticalAngle2 - rotationSpeed;
-
-            this.controls.object.position.x =
-              currentDist2 *
-              Math.cos(newVerticalAngle2) *
-              Math.cos(horizontalAngle2);
-            this.controls.object.position.y =
-              currentDist2 *
-              Math.cos(newVerticalAngle2) *
-              Math.sin(horizontalAngle2);
-            this.controls.object.position.z =
-              currentDist2 * Math.sin(newVerticalAngle2);
-            this.controls.update();
+          case 'ArrowDown':
+            this.rotateVertical(-rotationSpeed);
             handled = true;
             break;
-          }
         }
       }
 
@@ -643,12 +605,10 @@ export class PreviewManager {
       }
 
       // Zoom (+/- keys or = key for +)
+      // Delegates to shared zoomCamera() which handles both perspective and orthographic.
       if (event.key === '+' || event.key === '=' || event.key === '-') {
-        const direction = new THREE.Vector3();
-        this.camera.getWorldDirection(direction);
         const zoomAmount = (event.key === '-' ? -1 : 1) * zoomSpeed;
-        this.camera.position.addScaledVector(direction, zoomAmount);
-        this.controls.update();
+        this.zoomCamera(zoomAmount);
         handled = true;
       }
 
@@ -843,76 +803,31 @@ export class PreviewManager {
     const panSpeed = 6;
     const zoomSpeed = 15;
 
-    // Rotation buttons
+    // Rotation buttons — delegate to shared methods that correctly
+    // orbit around controls.target and work with both camera types.
     document
       .getElementById('cameraRotateLeft')
       ?.addEventListener('click', () => {
-        this.controls.object.position.applyAxisAngle(
-          new THREE.Vector3(0, 0, 1),
-          rotationSpeed
-        );
-        this.controls.update();
+        this.rotateHorizontal(rotationSpeed);
         this.announceCameraAction('Rotate left');
       });
 
     document
       .getElementById('cameraRotateRight')
       ?.addEventListener('click', () => {
-        this.controls.object.position.applyAxisAngle(
-          new THREE.Vector3(0, 0, 1),
-          -rotationSpeed
-        );
-        this.controls.update();
+        this.rotateHorizontal(-rotationSpeed);
         this.announceCameraAction('Rotate right');
       });
 
     document.getElementById('cameraRotateUp')?.addEventListener('click', () => {
-      const currentDist = this.controls.object.position.length();
-      const horizontalAngle = Math.atan2(
-        this.controls.object.position.y,
-        this.controls.object.position.x
-      );
-      const verticalAngle = Math.asin(
-        this.controls.object.position.z / currentDist
-      );
-      const newVerticalAngle = Math.min(
-        verticalAngle + rotationSpeed,
-        Math.PI / 2 - 0.01
-      );
-
-      this.controls.object.position.x =
-        currentDist * Math.cos(newVerticalAngle) * Math.cos(horizontalAngle);
-      this.controls.object.position.y =
-        currentDist * Math.cos(newVerticalAngle) * Math.sin(horizontalAngle);
-      this.controls.object.position.z =
-        currentDist * Math.sin(newVerticalAngle);
-      this.controls.update();
+      this.rotateVertical(rotationSpeed);
       this.announceCameraAction('Rotate up');
     });
 
     document
       .getElementById('cameraRotateDown')
       ?.addEventListener('click', () => {
-        const currentDist = this.controls.object.position.length();
-        const horizontalAngle = Math.atan2(
-          this.controls.object.position.y,
-          this.controls.object.position.x
-        );
-        const verticalAngle = Math.asin(
-          this.controls.object.position.z / currentDist
-        );
-        const newVerticalAngle = Math.max(
-          verticalAngle - rotationSpeed,
-          -Math.PI / 2 + 0.01
-        );
-
-        this.controls.object.position.x =
-          currentDist * Math.cos(newVerticalAngle) * Math.cos(horizontalAngle);
-        this.controls.object.position.y =
-          currentDist * Math.cos(newVerticalAngle) * Math.sin(horizontalAngle);
-        this.controls.object.position.z =
-          currentDist * Math.sin(newVerticalAngle);
-        this.controls.update();
+        this.rotateVertical(-rotationSpeed);
         this.announceCameraAction('Rotate down');
       });
 
@@ -937,20 +852,15 @@ export class PreviewManager {
       this.announceCameraAction('Pan down');
     });
 
-    // Zoom buttons
+    // Zoom buttons — delegate to shared zoomCamera() which handles
+    // both perspective (translate) and orthographic (adjust zoom property).
     document.getElementById('cameraZoomIn')?.addEventListener('click', () => {
-      const direction = new THREE.Vector3();
-      this.camera.getWorldDirection(direction);
-      this.camera.position.addScaledVector(direction, zoomSpeed);
-      this.controls.update();
+      this.zoomCamera(zoomSpeed);
       this.announceCameraAction('Zoom in');
     });
 
     document.getElementById('cameraZoomOut')?.addEventListener('click', () => {
-      const direction = new THREE.Vector3();
-      this.camera.getWorldDirection(direction);
-      this.camera.position.addScaledVector(direction, -zoomSpeed);
-      this.controls.update();
+      this.zoomCamera(-zoomSpeed);
       this.announceCameraAction('Zoom out');
     });
 
@@ -1188,6 +1098,14 @@ export class PreviewManager {
 
   /**
    * Fit camera to model bounds (Z-up coordinate system, OpenSCAD-style diagonal view)
+   *
+   * Matches OpenSCAD desktop's default $vpr = [55, 0, 25]:
+   *   azimuth  = 25° from front (-Y) toward right (+X)
+   *   elevation = 35° above the XY plane
+   *
+   * Works correctly in both perspective and orthographic projection modes.
+   * Also resets the camera up vector to Z-up (important after standard views
+   * like Top/Bottom which change the up vector).
    */
   fitCameraToModel() {
     if (!this.mesh) return;
@@ -1197,32 +1115,46 @@ export class PreviewManager {
     const center = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
 
-    // Get the max side of the bounding box
     const maxDim = Math.max(size.x, size.y, size.z);
     const fov = this.camera.fov * (Math.PI / 180);
     let cameraDistance = Math.abs(maxDim / 2 / Math.tan(fov / 2));
+    cameraDistance *= 1.8; // Padding
 
-    // Add some padding
-    cameraDistance *= 1.8;
-
-    // Position camera for OpenSCAD-style diagonal view (Z-up coordinate system)
-    // Camera looks from front-right-above toward the center
-    // Using roughly 45° elevation and 45° azimuth for a nice isometric-like view
-    const angle = Math.PI / 4; // 45 degrees
-    const elevation = Math.PI / 6; // 30 degrees above XY plane
+    // OpenSCAD default diagonal: $vpr = [55, 0, 25]
+    // azimuth 25° from front, elevation 35° above XY plane
+    const azimuth = 25 * (Math.PI / 180);    // 25° - OpenSCAD default
+    const elevation = 35 * (Math.PI / 180);  // 35° (= 90° - 55°) above XY plane
 
     const horizontalDist = cameraDistance * Math.cos(elevation);
     const verticalDist = cameraDistance * Math.sin(elevation);
 
-    this.camera.position.set(
-      center.x + horizontalDist * Math.cos(angle), // X: front-right
-      center.y - horizontalDist * Math.sin(angle), // Y: front (negative Y in OpenSCAD view)
-      center.z + verticalDist // Z: above (Z-up)
+    const camera = this.getActiveCamera();
+
+    // Reset up vector to Z-up (standard views like Top change this)
+    camera.up.set(0, 0, 1);
+
+    camera.position.set(
+      center.x + horizontalDist * Math.sin(azimuth), // X: slightly right
+      center.y - horizontalDist * Math.cos(azimuth), // Y: mostly front (negative Y)
+      center.z + verticalDist                         // Z: above
     );
-    this.camera.lookAt(center);
+    camera.lookAt(center);
 
     // Update controls target
     this.controls.target.copy(center);
+
+    // Update orthographic frustum to fit the model
+    if (this.projectionMode === 'orthographic' && this.orthoCamera) {
+      const aspect = this.container.clientWidth / this.container.clientHeight;
+      const frustumHeight = maxDim * 1.8;
+      this.orthoCamera.left = (frustumHeight * aspect) / -2;
+      this.orthoCamera.right = (frustumHeight * aspect) / 2;
+      this.orthoCamera.top = frustumHeight / 2;
+      this.orthoCamera.bottom = frustumHeight / -2;
+      this.orthoCamera.zoom = 1;
+      this.orthoCamera.updateProjectionMatrix();
+    }
+
     this.controls.update();
 
     // Store initial aspect for resize tracking
@@ -1237,8 +1169,15 @@ export class PreviewManager {
   }
 
   /**
-   * Standard camera views for OpenSCAD-style viewing
-   * Ken requested these for consistent viewing angles
+   * Standard camera views for OpenSCAD-style viewing (Z-up coordinate system)
+   *
+   * direction: unit-ish vector FROM the model center TOWARD the camera.
+   * up:        which direction is "up" on screen.
+   *
+   * The diagonal view matches OpenSCAD's default $vpr = [55, 0, 25]:
+   *   azimuth 25° from front (-Y) toward right (+X), elevation 35° above XY plane.
+   *   direction ≈ [sin(25°)cos(35°), -cos(25°)cos(35°), sin(35°)]
+   *            ≈ [0.346, -0.742, 0.574]
    */
   static CAMERA_VIEWS = {
     top: { name: 'Top', direction: [0, 0, 1], up: [0, 1, 0] },
@@ -1247,11 +1186,12 @@ export class PreviewManager {
     back: { name: 'Back', direction: [0, 1, 0], up: [0, 0, 1] },
     left: { name: 'Left', direction: [-1, 0, 0], up: [0, 0, 1] },
     right: { name: 'Right', direction: [1, 0, 0], up: [0, 0, 1] },
-    diagonal: { name: 'Diagonal', direction: [1, -1, 0.6], up: [0, 0, 1] },
+    diagonal: { name: 'Diagonal', direction: [0.346, -0.742, 0.574], up: [0, 0, 1] },
   };
 
   /**
-   * Set camera to a standard view angle
+   * Set camera to a standard view angle.
+   * Works correctly in both perspective and orthographic projection modes.
    * @param {string} viewName - Name of the view (top, bottom, front, back, left, right, diagonal)
    */
   setCameraView(viewName) {
@@ -1272,26 +1212,40 @@ export class PreviewManager {
     const center = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
 
-    // Get the max side of the bounding box
     const maxDim = Math.max(size.x, size.y, size.z);
+    // Always use the perspective camera FOV for distance calculation
     const fov = this.camera.fov * (Math.PI / 180);
     let cameraDistance = Math.abs(maxDim / 2 / Math.tan(fov / 2));
     cameraDistance *= 1.8; // Padding
 
-    // Create direction vector and normalize
+    // Use whichever camera is currently active
+    const camera = this.getActiveCamera();
     const direction = new THREE.Vector3(...view.direction).normalize();
 
     // Position camera along the direction vector from center
-    this.camera.position.copy(center).addScaledVector(direction, cameraDistance);
+    camera.position.copy(center).addScaledVector(direction, cameraDistance);
 
-    // Set up vector
-    this.camera.up.set(...view.up);
+    // Set up vector for the active camera
+    camera.up.set(...view.up);
 
     // Look at center
-    this.camera.lookAt(center);
+    camera.lookAt(center);
 
     // Update controls target
     this.controls.target.copy(center);
+
+    // Update orthographic frustum to fit the model at the new view
+    if (this.projectionMode === 'orthographic' && this.orthoCamera) {
+      const aspect = this.container.clientWidth / this.container.clientHeight;
+      const frustumHeight = maxDim * 1.8;
+      this.orthoCamera.left = (frustumHeight * aspect) / -2;
+      this.orthoCamera.right = (frustumHeight * aspect) / 2;
+      this.orthoCamera.top = frustumHeight / 2;
+      this.orthoCamera.bottom = frustumHeight / -2;
+      this.orthoCamera.zoom = 1;
+      this.orthoCamera.updateProjectionMatrix();
+    }
+
     this.controls.update();
 
     // Announce to screen readers
@@ -1301,7 +1255,12 @@ export class PreviewManager {
   }
 
   /**
-   * Toggle between perspective and orthographic projection
+   * Toggle between perspective and orthographic projection.
+   *
+   * The key insight: the orthographic frustum must match the visible area that
+   * the perspective camera sees at the controls.target distance. This is:
+   *   frustumHeight = 2 * distance * tan(fov / 2)
+   *
    * @returns {string} The new projection mode ('perspective' or 'orthographic')
    */
   toggleProjection() {
@@ -1310,44 +1269,36 @@ export class PreviewManager {
     const aspect = width / height;
 
     if (this.projectionMode === 'perspective') {
-      // Switch to orthographic
+      // ------ Switch to orthographic ------
       this.projectionMode = 'orthographic';
 
-      // Create orthographic camera if not exists
+      // Calculate frustum from perspective FOV at the current target distance
+      const distance = this.camera.position.distanceTo(this.controls.target);
+      const fovRad = this.camera.fov * (Math.PI / 180);
+      const frustumHeight = 2 * distance * Math.tan(fovRad / 2);
+
       if (!this.orthoCamera) {
-        // Calculate frustum size based on current camera distance
-        const frustumSize = 100;
         this.orthoCamera = new THREE.OrthographicCamera(
-          (frustumSize * aspect) / -2,
-          (frustumSize * aspect) / 2,
-          frustumSize / 2,
-          frustumSize / -2,
+          (frustumHeight * aspect) / -2,
+          (frustumHeight * aspect) / 2,
+          frustumHeight / 2,
+          frustumHeight / -2,
           0.1,
           10000
         );
-        this.orthoCamera.up.set(0, 0, 1);  // Z-up to match perspective camera
+        this.orthoCamera.up.set(0, 0, 1);
+      } else {
+        this.orthoCamera.left = (frustumHeight * aspect) / -2;
+        this.orthoCamera.right = (frustumHeight * aspect) / 2;
+        this.orthoCamera.top = frustumHeight / 2;
+        this.orthoCamera.bottom = frustumHeight / -2;
       }
 
-      // Copy position and target from perspective camera
+      // Transfer pose from perspective camera
       this.orthoCamera.position.copy(this.camera.position);
-      this.orthoCamera.lookAt(this.controls.target);
-
-      // Adjust orthographic zoom to approximate perspective view
-      if (this.mesh) {
-        const box = new THREE.Box3().setFromObject(this.mesh);
-        const size = box.getSize(new THREE.Vector3());
-        const maxDim = Math.max(size.x, size.y, size.z);
-        const distance = this.camera.position.distanceTo(this.controls.target);
-        const zoom = (distance / maxDim) * 0.8;
-        this.orthoCamera.zoom = zoom;
-      }
-
-      // Update orthographic camera aspect
-      const frustumSize = 100 / (this.orthoCamera.zoom || 1);
-      this.orthoCamera.left = (frustumSize * aspect) / -2;
-      this.orthoCamera.right = (frustumSize * aspect) / 2;
-      this.orthoCamera.top = frustumSize / 2;
-      this.orthoCamera.bottom = frustumSize / -2;
+      this.orthoCamera.up.copy(this.camera.up);
+      this.orthoCamera.quaternion.copy(this.camera.quaternion);
+      this.orthoCamera.zoom = 1;
       this.orthoCamera.updateProjectionMatrix();
 
       // Switch controls to orthographic camera
@@ -1355,13 +1306,14 @@ export class PreviewManager {
       this.controls.update();
 
     } else {
-      // Switch to perspective
+      // ------ Switch to perspective ------
       this.projectionMode = 'perspective';
 
-      // Copy position from orthographic camera
       if (this.orthoCamera) {
+        // Transfer pose back from orthographic camera
         this.camera.position.copy(this.orthoCamera.position);
-        this.camera.lookAt(this.controls.target);
+        this.camera.up.copy(this.orthoCamera.up);
+        this.camera.quaternion.copy(this.orthoCamera.quaternion);
       }
 
       this.camera.updateProjectionMatrix();
@@ -1415,10 +1367,20 @@ export class PreviewManager {
     // Calculate the relative change in aspect ratio
     const aspectRatio = newAspect / previousAspect;
 
+    const camera = this.getActiveCamera();
+
+    // For orthographic cameras, adjust frustum instead of distance
+    if (this.projectionMode === 'orthographic' && this.orthoCamera) {
+      const frustumHeight = (this.orthoCamera.top - this.orthoCamera.bottom) / (this.orthoCamera.zoom || 1);
+      this.orthoCamera.left = (frustumHeight * newAspect) / -2;
+      this.orthoCamera.right = (frustumHeight * newAspect) / 2;
+      this.orthoCamera.updateProjectionMatrix();
+      this.controls.update();
+      return;
+    }
+
     // Get current camera distance from target
-    const currentDistance = this.camera.position.distanceTo(
-      this.controls.target
-    );
+    const currentDistance = camera.position.distanceTo(this.controls.target);
 
     // Calculate adjustment factor
     // The idea: when aspect gets narrower, we need to zoom out (increase distance)
@@ -1427,16 +1389,7 @@ export class PreviewManager {
     //
     // Using square root provides a smoother, less aggressive adjustment that
     // works well across common aspect ratio transitions (e.g., 16:9 to 9:16)
-    let adjustmentFactor;
-    if (aspectRatio < 1.0) {
-      // Going narrower (e.g., landscape to portrait)
-      // Need to zoom out - use inverse sqrt for smoother scaling
-      adjustmentFactor = 1 / Math.sqrt(aspectRatio);
-    } else {
-      // Going wider (e.g., portrait to landscape)
-      // Can zoom in slightly - use sqrt for proportional adjustment
-      adjustmentFactor = 1 / Math.sqrt(aspectRatio);
-    }
+    const adjustmentFactor = 1 / Math.sqrt(aspectRatio);
 
     // Apply a damping factor to prevent over-correction
     // This makes the adjustment less aggressive (70% of calculated adjustment)
@@ -1457,11 +1410,11 @@ export class PreviewManager {
 
     // Calculate direction vector from target to camera
     const direction = new THREE.Vector3()
-      .subVectors(this.camera.position, this.controls.target)
+      .subVectors(camera.position, this.controls.target)
       .normalize();
 
     // Update camera position along the same viewing direction
-    this.camera.position
+    camera.position
       .copy(this.controls.target)
       .addScaledVector(direction, clampedDistance);
 
@@ -1539,49 +1492,60 @@ export class PreviewManager {
   }
 
   /**
-   * Pan camera and target in world space (Z-up)
-   * @param {number} deltaRight - Right/left movement
-   * @param {number} deltaUp - Up/down movement
+   * Pan camera and target in screen space
+   * Uses the camera's own right/up axes so panning feels natural at any viewing angle,
+   * including Top and Bottom views where the old world-up cross product was degenerate.
+   * @param {number} deltaRight - Right/left movement in screen space
+   * @param {number} deltaUp - Up/down movement in screen space
    */
   panCamera(deltaRight, deltaUp) {
-    const right = new THREE.Vector3();
-    const up = new THREE.Vector3(0, 0, 1);
-    this.camera.getWorldDirection(right);
-    right.cross(up).normalize();
+    const camera = this.getActiveCamera();
+    // Extract camera's local right (column 0) and up (column 1) from world matrix
+    const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
+    const up = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1);
 
-    this.controls.target.addScaledVector(right, deltaRight);
-    this.controls.target.addScaledVector(up, deltaUp);
-    this.camera.position.addScaledVector(right, deltaRight);
-    this.camera.position.addScaledVector(up, deltaUp);
+    const panOffset = new THREE.Vector3()
+      .addScaledVector(right, deltaRight)
+      .addScaledVector(up, deltaUp);
+
+    this.controls.target.add(panOffset);
+    camera.position.add(panOffset);
     this.controls.update();
   }
 
   /**
    * Rotate camera horizontally around the target (Z-up)
+   * Orbits around controls.target, not the world origin.
    * @param {number} angle - Rotation angle in radians (positive = left, negative = right)
    */
   rotateHorizontal(angle) {
     if (!this.controls) return;
-    this.controls.object.position.applyAxisAngle(
-      new THREE.Vector3(0, 0, 1),
-      angle
-    );
+    const camera = this.getActiveCamera();
+    // Compute offset from the orbit target (NOT world origin)
+    const offset = camera.position.clone().sub(this.controls.target);
+    // Rotate offset around the Z-axis (world up)
+    offset.applyAxisAngle(new THREE.Vector3(0, 0, 1), angle);
+    // Reposition camera at target + rotated offset
+    camera.position.copy(this.controls.target).add(offset);
     this.controls.update();
   }
 
   /**
-   * Rotate camera vertically around the target
+   * Rotate camera vertically around the target (Z-up)
+   * Orbits around controls.target, not the world origin.
    * @param {number} angle - Rotation angle in radians (positive = up, negative = down)
    */
   rotateVertical(angle) {
     if (!this.controls) return;
-    const currentDist = this.controls.object.position.length();
-    const horizontalAngle = Math.atan2(
-      this.controls.object.position.y,
-      this.controls.object.position.x
-    );
+    const camera = this.getActiveCamera();
+    // Compute offset from the orbit target (NOT world origin)
+    const offset = camera.position.clone().sub(this.controls.target);
+    const currentDist = offset.length();
+    if (currentDist < 1e-6) return; // Degenerate case
+
+    const horizontalAngle = Math.atan2(offset.y, offset.x);
     const verticalAngle = Math.asin(
-      this.controls.object.position.z / currentDist
+      Math.max(-1, Math.min(1, offset.z / currentDist))
     );
 
     // Clamp to prevent flipping over the poles
@@ -1590,11 +1554,11 @@ export class PreviewManager {
       Math.min(Math.PI / 2 - 0.01, verticalAngle + angle)
     );
 
-    this.controls.object.position.x =
-      currentDist * Math.cos(newVerticalAngle) * Math.cos(horizontalAngle);
-    this.controls.object.position.y =
-      currentDist * Math.cos(newVerticalAngle) * Math.sin(horizontalAngle);
-    this.controls.object.position.z = currentDist * Math.sin(newVerticalAngle);
+    offset.x = currentDist * Math.cos(newVerticalAngle) * Math.cos(horizontalAngle);
+    offset.y = currentDist * Math.cos(newVerticalAngle) * Math.sin(horizontalAngle);
+    offset.z = currentDist * Math.sin(newVerticalAngle);
+
+    camera.position.copy(this.controls.target).add(offset);
     this.controls.update();
   }
 
@@ -1603,10 +1567,20 @@ export class PreviewManager {
    * @param {number} amount - Zoom amount (positive = in, negative = out)
    */
   zoomCamera(amount) {
-    if (!this.camera || !this.controls) return;
-    const direction = new THREE.Vector3();
-    this.camera.getWorldDirection(direction);
-    this.camera.position.addScaledVector(direction, amount);
+    if (!this.controls) return;
+    if (this.projectionMode === 'orthographic' && this.orthoCamera) {
+      // Orthographic: adjust zoom property (position changes don't affect apparent size)
+      const factor = 1 + Math.abs(amount) * 0.02;
+      this.orthoCamera.zoom *= amount > 0 ? factor : 1 / factor;
+      this.orthoCamera.zoom = Math.max(0.01, this.orthoCamera.zoom);
+      this.orthoCamera.updateProjectionMatrix();
+    } else {
+      // Perspective: translate camera along view direction
+      const camera = this.getActiveCamera();
+      const direction = new THREE.Vector3();
+      camera.getWorldDirection(direction);
+      camera.position.addScaledVector(direction, amount);
+    }
     this.controls.update();
   }
 
@@ -1975,8 +1949,9 @@ export class PreviewManager {
 
     // Adjust both camera position AND orbit controls target by the same offset
     // This preserves the exact same view while the mesh moves
-    if (this.controls && this.camera) {
-      this.camera.position.z += centeringOffset;
+    if (this.controls) {
+      const camera = this.getActiveCamera();
+      camera.position.z += centeringOffset;
       this.controls.target.z += centeringOffset;
       this.controls.update();
     }
@@ -2008,8 +1983,9 @@ export class PreviewManager {
 
     // Adjust both camera position AND orbit controls target by the same offset
     // This preserves the exact same view while the mesh moves back
-    if (this.controls && this.camera) {
-      this.camera.position.z += restorationOffset;
+    if (this.controls) {
+      const camera = this.getActiveCamera();
+      camera.position.z += restorationOffset;
       this.controls.target.z += restorationOffset;
       this.controls.update();
     }

@@ -1160,8 +1160,8 @@
                       <button
                         id="savePresetBtn"
                         class="btn btn-sm btn-icon"
-                        aria-label="Save changes to current preset"
-                        title="Save changes to current preset"
+                        aria-label="Save Preset — overwrites current preset"
+                        title="Save Preset — overwrites current preset"
                         disabled
                       >
                         💾
@@ -1169,8 +1169,8 @@
                       <button
                         id="addPresetBtn"
                         class="btn btn-sm btn-icon"
-                        aria-label="Create new preset from current settings"
-                        title="Create new preset"
+                        aria-label="Add Preset"
+                        title="Add Preset"
                       >
                         +
                       </button>
@@ -1189,10 +1189,10 @@
                     <button
                       id="managePresetsBtn"
                       class="btn btn-sm btn-outline"
-                      aria-label="Manage presets (import, export, bulk operations)"
-                      title="Import/export presets"
+                      aria-label="Import and export presets"
+                      title="Import and export presets"
                     >
-                      📋 Manage
+                      📋 Import / Export
                     </button>
                   </div>
                 </div>
@@ -2098,8 +2098,9 @@
                   <div
                     class="status-area"
                     id="statusArea"
-                    role="region"
-                    aria-label="Status"
+                    role="status"
+                    aria-live="polite"
+                    aria-label="Application status"
                   >
                     Ready
                   </div>

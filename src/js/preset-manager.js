@@ -340,15 +340,24 @@ export function coercePresetValues(presetValues, paramSchema = {}) {
 
 /**
  * Auto-detect type from a value (for parameters not in schema)
+ * 
+ * IMPORTANT: "yes"/"no" are NOT converted to boolean here because without
+ * schema context we cannot distinguish between a boolean parameter (MW_version = false)
+ * and a string dropdown parameter (expose_home_button = "yes"; //[yes,no]).
+ * Converting "yes"/"no" to boolean breaks OpenSCAD string comparisons like
+ * `if (expose_home_button == "yes")` because `true != "yes"` in OpenSCAD.
+ * 
+ * Only "true"/"false" are converted (these are unambiguously boolean literals).
+ * 
  * @param {*} value - The value to detect type for
  * @returns {*} - Value with proper type
  */
 function autoDetectType(value) {
   if (typeof value !== 'string') return value;
 
-  // Check for boolean strings
-  if (value === 'true' || value === 'yes') return true;
-  if (value === 'false' || value === 'no') return false;
+  // Only convert unambiguous boolean literals (not "yes"/"no" which may be string dropdowns)
+  if (value === 'true') return true;
+  if (value === 'false') return false;
 
   // Check for array/vector notation
   if (value.startsWith('[') && value.endsWith(']')) {
@@ -365,7 +374,7 @@ function autoDetectType(value) {
     return num;
   }
 
-  // Keep as string
+  // Keep as string (including "yes"/"no" -- safe default without schema)
   return value;
 }
 
@@ -538,6 +547,12 @@ export class PresetManager {
     const preset = modelPresets.find((p) => p.id === presetId);
     if (preset) {
       console.log(`Loaded preset: ${preset.name}`);
+      console.debug('[PresetManager] Preset load details:', {
+        name: preset.name,
+        id: preset.id,
+        parameterCount: Object.keys(preset.parameters || {}).length,
+        parameterKeys: Object.keys(preset.parameters || {}),
+      });
       this.notifyListeners('load', preset, modelName);
     }
     return preset;
@@ -658,20 +673,34 @@ export class PresetManager {
    * @param {string} modelName - Name of the model
    * @returns {string} JSON string in OpenSCAD native format
    */
-  exportOpenSCADNativeFormat(modelName) {
+  exportOpenSCADNativeFormat(modelName, hiddenParameters = {}) {
     const presets = this.getPresetsForModel(modelName);
-    if (!presets || presets.length === 0) return null;
 
     // Build parameterSets object
     const parameterSets = {};
 
-    for (const preset of presets) {
-      // Convert all values to strings (OpenSCAD requirement)
-      const stringifiedParams = {};
-      for (const [key, value] of Object.entries(preset.parameters)) {
-        stringifiedParams[key] = stringifyForOpenSCAD(value);
+    // "design default values" is ALWAYS first in export (desktop OpenSCAD parity)
+    // Empty object {} signals "use whatever the .scad source defines"
+    parameterSets['design default values'] = {};
+
+    if (presets && presets.length > 0) {
+      for (const preset of presets) {
+        // Convert all values to strings (OpenSCAD requirement)
+        const stringifiedParams = {};
+        for (const [key, value] of Object.entries(preset.parameters)) {
+          stringifiedParams[key] = stringifyForOpenSCAD(value);
+        }
+        // Desktop parity: Hidden parameters ARE included in exported JSON
+        // (current values at time of export, not from the preset itself)
+        if (hiddenParameters && Object.keys(hiddenParameters).length > 0) {
+          for (const [key, hiddenDef] of Object.entries(hiddenParameters)) {
+            if (!(key in stringifiedParams)) {
+              stringifiedParams[key] = stringifyForOpenSCAD(hiddenDef.value);
+            }
+          }
+        }
+        parameterSets[preset.name] = stringifiedParams;
       }
-      parameterSets[preset.name] = stringifiedParams;
     }
 
     // Create OpenSCAD native structure
@@ -940,14 +969,14 @@ export class PresetManager {
    * @param {Object} paramSchema - Optional parameter schema for type coercion
    * @returns {Object} Import result with status and details
    */
-  importPreset(json, modelName = null, paramSchema = {}) {
+  importPreset(json, modelName = null, paramSchema = {}, hiddenParameterNames = []) {
     try {
       const data = JSON.parse(json);
 
       // Debug logging for Ken's import issues
       console.log('[PresetManager] Import attempt:', {
         modelName,
-        hasParamSchema: Object.keys(paramSchema).length > 0,
+        hasParamSchema: Object.keys(paramSchema || {}).length > 0,
         dataKeys: Object.keys(data),
         hasParameterSets: 'parameterSets' in data,
         hasType: 'type' in data,
@@ -956,7 +985,7 @@ export class PresetManager {
       // Check for OpenSCAD native format first
       if (isOpenSCADNativeFormat(data)) {
         console.log('[PresetManager] Detected OpenSCAD native format');
-        return this.importOpenSCADNativePresets(data, modelName, paramSchema);
+        return this.importOpenSCADNativePresets(data, modelName, paramSchema, hiddenParameterNames);
       }
 
       // Check for Forge format
@@ -1062,7 +1091,7 @@ export class PresetManager {
    * @param {Object} paramSchema - Parameter schema for type coercion
    * @returns {Object} Import result
    */
-  importOpenSCADNativePresets(data, modelName, paramSchema = {}) {
+  importOpenSCADNativePresets(data, modelName, paramSchema = {}, hiddenParameterNames = []) {
     const { parameterSets, fileFormatVersion } = data;
 
     // Validate format version (warn but continue for unknown versions)
@@ -1071,6 +1100,13 @@ export class PresetManager {
         `[PresetManager] Unknown OpenSCAD preset file format version: ${fileFormatVersion}. Attempting import anyway.`
       );
     }
+
+    // Defensive: ensure paramSchema is at least an empty object
+    const safeSchema = paramSchema || {};
+
+    // Desktop parity: Hidden parameter values in imported presets are IGNORED
+    // "stored in the JSON file, but are not retrieved from the JSON file"
+    const hiddenNames = new Set(hiddenParameterNames);
 
     // Model name is required for OpenSCAD native format
     // IMPORTANT: This must match state.uploadedFile.name for presets to show in dropdown
@@ -1087,22 +1123,56 @@ export class PresetManager {
       {
         modelName: effectiveModelName,
         presetNames,
-        schemaParamCount: Object.keys(paramSchema).length,
+        schemaParamCount: Object.keys(safeSchema).length,
       }
     );
 
     for (const [presetName, presetValues] of Object.entries(parameterSets)) {
       try {
+        // Skip "design default values" -- it's a virtual entry (empty {}) that
+        // the Forge generates from .scad source. Importing it would create a
+        // stored preset that collides with the immutable virtual preset.
+        if (presetName === 'design default values') {
+          console.log(`[PresetManager] Skipping virtual preset: "${presetName}"`);
+          continue;
+        }
+
         // Debug: log first preset's structure
         if (imported === 0 && skipped === 0) {
           console.log(`[PresetManager] Sample preset "${presetName}":`, {
-            paramCount: Object.keys(presetValues).length,
-            sampleParams: Object.keys(presetValues).slice(0, 5),
+            paramCount: Object.keys(presetValues || {}).length,
+            sampleParams: Object.keys(presetValues || {}).slice(0, 5),
           });
         }
 
+        // Defensive: skip presets with no values or non-object values
+        if (!presetValues || typeof presetValues !== 'object') {
+          console.warn(`[PresetManager] Skipping preset "${presetName}": invalid values`);
+          errors.push({ presetName, error: 'Invalid preset values (not an object)' });
+          skipped++;
+          continue;
+        }
+
         // Coerce string values to proper types using schema
-        const coercedValues = coercePresetValues(presetValues, paramSchema);
+        // Try/catch per-preset so one bad preset doesn't block others
+        let coercedValues;
+        try {
+          coercedValues = coercePresetValues(presetValues, safeSchema);
+        } catch (coercionError) {
+          console.warn(`[PresetManager] Coercion failed for "${presetName}", storing raw values:`, coercionError.message);
+          // Fallback: store raw values without coercion
+          coercedValues = { ...presetValues };
+        }
+
+        // Desktop parity: Strip hidden parameters from imported preset values
+        // "stored in the JSON file, but are not retrieved from the JSON file"
+        if (hiddenNames.size > 0) {
+          for (const hiddenName of hiddenNames) {
+            if (hiddenName in coercedValues) {
+              delete coercedValues[hiddenName];
+            }
+          }
+        }
 
         // Save the preset
         const result = this.savePreset(
@@ -1116,10 +1186,10 @@ export class PresetManager {
 
         imported++;
         results.push(result);
-        console.log(`[PresetManager] ✓ Imported preset: "${presetName}"`);
+        console.log(`[PresetManager] Imported preset: "${presetName}"`);
       } catch (error) {
         console.warn(
-          `[PresetManager] ✗ Skipped preset "${presetName}":`,
+          `[PresetManager] Skipped preset "${presetName}":`,
           error.message
         );
         errors.push({ presetName, error: error.message });
@@ -1239,12 +1309,23 @@ export class PresetManager {
         lastSaved: Date.now(),
       };
       
-      localStorage.setItem(this.storageKey, JSON.stringify(versionedData));
+      const serialized = JSON.stringify(versionedData);
+      localStorage.setItem(this.storageKey, serialized);
       console.log('[PresetManager] Presets saved (v' + STORAGE_SCHEMA_VERSION + ')');
     } catch (error) {
       console.error('[PresetManager] Failed to save presets:', error);
       if (error.name === 'QuotaExceededError') {
-        alert('Storage quota exceeded. Some presets may not be saved.');
+        // Dispatch a custom event for the UI layer to handle gracefully
+        // instead of a raw alert() that blocks the thread.
+        const event = new CustomEvent('storage-quota-exceeded', {
+          detail: {
+            source: 'preset-manager',
+            message:
+              'Storage is full. Your presets could not be saved. ' +
+              'Try exporting your presets to a file, then clear old projects to free space.',
+          },
+        });
+        document.dispatchEvent(event);
       }
     }
   }

@@ -1156,7 +1156,7 @@ summary:focus-visible,
 
 .cache-clear-warning-icon {
   flex-shrink: 0;
-  font-size: 24px;
+  font-size: 1.5rem;
 }
 
 .cache-clear-warning-text {
@@ -2047,7 +2047,7 @@ summary:focus-visible,
   line-height: 1.4;
   color: var(--color-text-primary);
   box-shadow: var(--shadow-md);
-  z-index: 1000;
+  z-index: var(--z-index-modal);
   white-space: normal;
   word-wrap: break-word;
 }
@@ -3146,7 +3146,14 @@ select:focus-visible {
   color: var(--color-error);
 }
 
-/* Preset actions row - now just for Manage button */
+/* Dirty indicator: asterisk on save button when preset has unsaved changes (desktop OpenSCAD parity) */
+#savePresetBtn[data-dirty='true']::after {
+  content: ' *';
+  color: var(--color-warning, #e67e22);
+  font-weight: bold;
+}
+
+/* Preset actions row - now for Import / Export button */
 .preset-actions {
   display: flex;
   gap: var(--space-sm);
@@ -3186,7 +3193,7 @@ select:focus-visible {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: var(--z-index-modal);
   padding: var(--space-md);
   padding-top: calc(var(--space-md) + env(safe-area-inset-top, 0px));
   padding-bottom: calc(var(--space-md) + env(safe-area-inset-bottom, 0px));
@@ -5566,7 +5573,7 @@ body.first-visit-blocking #app {
   bottom: calc(var(--space-lg) + env(safe-area-inset-bottom, 0px));
   left: 50%;
   transform: translateX(-50%);
-  z-index: 9999;
+  z-index: var(--z-index-skip-link);
   max-width: 400px;
   width: calc(100% - 2 * var(--space-md));
   padding: var(--space-md);
@@ -5720,7 +5727,7 @@ body.first-visit-blocking #app {
   top: 0;
   left: 0;
   right: 0;
-  z-index: 10000;
+  z-index: var(--z-index-tutorial-panel);
   padding: var(--space-sm) var(--space-md);
   display: flex;
   align-items: center;
@@ -6283,7 +6290,7 @@ body.first-visit-blocking #app {
 .wasm-loading-overlay {
   position: fixed;
   inset: 0;
-  z-index: 10000;
+  z-index: var(--z-index-tutorial-panel);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -8105,6 +8112,17 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
   gap: var(--space-xs);
 }
 
+.tutorial-keyboard-help-content kbd {
+  display: inline-block;
+  padding: 0.125rem 0.375rem;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-xs);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  line-height: 1;
+}
+
 /* Scroll-margin for elements that can be tutorial targets */
 [data-tutorial-target] {
   scroll-margin-top: calc(var(--space-lg) + env(safe-area-inset-top, 0px));
@@ -8147,7 +8165,7 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: var(--z-index-modal);
   background: rgba(0, 0, 0, 0.7);
 }
 

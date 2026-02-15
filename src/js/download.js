@@ -100,6 +100,13 @@ export function generateFilename(modelName, parameters, format = 'stl') {
  * @param {string} format - Output format (stl, obj, off, amf, 3mf)
  */
 export function downloadFile(arrayBuffer, filename, format = 'stl') {
+  // #region agent log
+  if (format === 'dxf' || format === 'svg') {
+    let _dbgPreview = '';
+    if (arrayBuffer instanceof ArrayBuffer) { _dbgPreview = new TextDecoder('utf-8').decode(new Uint8Array(arrayBuffer).slice(0,500)); }
+    fetch('http://127.0.0.1:7246/ingest/8fdfe3b9-f33d-48f1-99f8-e81d685f1617',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'download.js:downloadFile',message:'DXF/SVG download triggered',hypothesisId:'H-E',data:{format,filename,dataSize:arrayBuffer?arrayBuffer.byteLength:0,contentPreview:_dbgPreview},timestamp:Date.now()})}).catch(()=>{});
+  }
+  // #endregion
   const mimeType =
     OUTPUT_FORMATS[format]?.mimeType || 'application/octet-stream';
   const blob = new Blob([arrayBuffer], { type: mimeType });

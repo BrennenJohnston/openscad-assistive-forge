@@ -19,7 +19,7 @@ function loadTestCases(casesPath) {
   if (casesPath.endsWith('.json')) {
     return JSON.parse(content);
   } else if (casesPath.endsWith('.yaml') || casesPath.endsWith('.yml')) {
-    // Use robust YAML parsing (supports arrays, nested objects, numbers, booleans, etc.)
+    // Full YAML parsing (supports arrays, nested objects, numbers, booleans, etc.)
     const parsed = YAML.parse(content);
 
     // Accept a few common shapes:

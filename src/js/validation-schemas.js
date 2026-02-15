@@ -166,6 +166,7 @@ export const validatePreset = ajv.compile(presetSchema);
 export const validatePresetsCollection = ajv.compile(presetsCollectionSchema);
 export const validateLibraryMap = ajv.compile(libraryMapSchema);
 export const validateSavedProject = ajv.compile(savedProjectSchema);
+/** @reserved Planned for bulk import/export validation of project collections. */
 export const validateSavedProjectsCollection = ajv.compile(
   savedProjectsCollectionSchema
 );
@@ -225,6 +226,7 @@ export function getValidationErrorMessage(errors) {
 /**
  * Create a parameter validator from JSON Schema
  * This validates parameter values against their schema constraints
+ * @reserved Planned for real-time parameter validation in the customizer UI.
  * @param {Object} schema - JSON Schema (from schema-generator.js)
  * @returns {Function} Validator function (params) => {valid, errors, sanitized}
  */
@@ -298,6 +300,7 @@ export function createParameterValidator(schema) {
 
 /**
  * Validate a single parameter value against schema constraints
+ * @reserved Planned for real-time input validation as users type.
  * @param {string} paramName - Parameter name
  * @param {*} value - Value to validate
  * @param {Object} propertySchema - JSON Schema property definition
@@ -398,6 +401,7 @@ export function validateParameterValue(paramName, value, propertySchema) {
 /**
  * Clamp parameter values to their schema constraints
  * Useful for sanitizing URL parameters or external input
+ * @reserved Planned for URL-parameter and preset-import sanitization.
  * @param {Object} params - Parameter values
  * @param {Object} schema - JSON Schema
  * @returns {Object} Clamped parameter values

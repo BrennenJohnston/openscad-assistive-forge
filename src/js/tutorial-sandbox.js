@@ -12,7 +12,7 @@
  */
 
 import { createFocusTrap } from './focus-trap.js';
-import { announceImmediate, announceError, POLITENESS } from './announcer.js';
+import { announceImmediate, announceError, POLITENESS as _POLITENESS } from './announcer.js';
 
 /**
  * Tutorial step definition
@@ -105,7 +105,7 @@ function isMobileViewport() {
 }
 
 /**
- * Check if element is truly visible using comprehensive checks
+ * Check if element is visible using multiple DOM checks
  * More reliable than offsetParent alone for fixed/sticky positioned elements
  * @param {HTMLElement} element - Element to check
  * @returns {boolean}
@@ -726,7 +726,7 @@ function checkIfAnyTargetInsideDrawer(step) {
  * Show a prompt in the tutorial panel to reopen/expand the param panel
  * Works for both mobile drawer and desktop collapsed panel
  */
-function showDrawerReopenPrompt() {
+function _showDrawerReopenPrompt() {
   if (!tutorialOverlay) return;
 
   const requirementEl = tutorialOverlay.querySelector('#tutorialRequirement');
@@ -2495,7 +2495,7 @@ function updateSpotlightAndPosition() {
     return;
   }
 
-  // Find the first *visible* target element using comprehensive visibility check
+  // Find the first *visible* target element using multi-step visibility check
   // Supports both targetKey (data-tutorial-target) and legacy selectors
   let target = currentTarget;
   if (!target || !document.contains(target) || !isElementVisible(target)) {
@@ -2905,7 +2905,7 @@ function calculateBestPosition(targetRect, preferred, panelRect) {
 
 /**
  * Position the panel and arrow relative to target
- * Uses visualViewport and safe area insets for robust positioning
+ * Uses visualViewport and safe area insets for reliable positioning
  * @param {HTMLElement} panel - Tutorial panel
  * @param {HTMLElement} arrow - Arrow element
  * @param {DOMRect} targetRect - Target bounds

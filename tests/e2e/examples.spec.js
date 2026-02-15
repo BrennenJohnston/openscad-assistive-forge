@@ -26,8 +26,8 @@ test.describe('Example Deep-Links', () => {
     const mainInterface = page.locator('#mainInterface')
     await expect(mainInterface).toBeVisible({ timeout: 20000 })
     
-    // Should have parameters loaded
-    await expect(page.locator('#parametersContainer, .param-control')).toBeVisible({ timeout: 10000 })
+    // Should have parameters loaded (use .first() to avoid strict mode on multi-match)
+    await expect(page.locator('.param-control').first()).toBeVisible({ timeout: 10000 })
   })
 
   test('loads colored-box via deep-link parameter', async ({ page }) => {
@@ -38,7 +38,7 @@ test.describe('Example Deep-Links', () => {
     const mainInterface = page.locator('#mainInterface')
     await expect(mainInterface).toBeVisible({ timeout: 20000 })
     
-    await expect(page.locator('#parametersContainer, .param-control')).toBeVisible({ timeout: 10000 })
+    await expect(page.locator('.param-control').first()).toBeVisible({ timeout: 10000 })
   })
 
   test('handles invalid example name gracefully', async ({ page }) => {
@@ -67,8 +67,8 @@ test.describe('Volkswitch Keyguard Example', () => {
     const mainInterface = page.locator('#mainInterface')
     await expect(mainInterface).toBeVisible({ timeout: 20000 })
     
-    // Should have parameters loaded
-    await expect(page.locator('#parametersContainer, .param-control')).toBeVisible({ timeout: 10000 })
+    // Should have parameters loaded (use .first() to avoid strict mode on multi-match)
+    await expect(page.locator('.param-control').first()).toBeVisible({ timeout: 10000 })
   })
 
   test('renders with correct parameter groups', async ({ page }) => {
@@ -189,13 +189,17 @@ test.describe('Volkswitch Keyguard Example', () => {
     const mainInterface = page.locator('#mainInterface')
     await expect(mainInterface).toBeVisible({ timeout: 20000 })
     
-    // Check for mounting holes parameter (boolean)
-    const mountingParam = page.locator('.param-control:has-text("mounting"), [data-param*="mounting"]').first()
+    // Check for mounting holes parameter -- use data-param-name attribute (exact match)
+    // and fallback to text search. The param may be in a collapsed group but still in DOM.
+    const byAttr = page.locator('[data-param-name="add_mounting_holes"], [data-param-name*="mounting"]').first()
+    const byText = page.locator('.param-control:has-text("mounting")').first()
+    const byLabel = page.locator('label:has-text("mounting")').first()
     
-    const hasMounting = await mountingParam.isVisible().catch(() => false) ||
-                        await page.locator('label:has-text("mounting")').isVisible().catch(() => false)
+    const hasMounting = (await byAttr.count()) > 0 ||
+                        (await byText.count()) > 0 ||
+                        (await byLabel.count()) > 0
     
-    // Mounting holes option should be present
+    // Mounting holes option should be present in the DOM
     expect(hasMounting).toBe(true)
   })
 

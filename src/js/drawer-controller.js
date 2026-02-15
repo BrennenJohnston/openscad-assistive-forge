@@ -52,7 +52,7 @@ export function initDrawerController() {
     drawer.setAttribute('aria-modal', 'true');
     drawer.setAttribute('aria-labelledby', 'parameters-heading');
     drawer.removeAttribute('aria-label');
-    // Ensure the dialog container itself can receive focus (needed for robust focus trapping)
+    // Ensure the dialog container itself can receive focus (needed for reliable focus trapping)
     drawer.setAttribute('tabindex', '-1');
 
     // Update toggle button state

@@ -55,17 +55,34 @@ async function createVolkwitchZipFixture() {
 }
 
 /**
- * Upload a file to the app
+ * Upload a file to the app (waits for WASM readiness first)
  */
 async function uploadFile(page, filePath) {
+  // Wait for WASM engine to be ready before uploading
+  await page.waitForSelector('body[data-wasm-ready="true"]', {
+    state: 'attached',
+    timeout: 120_000,
+  });
+
   const fileInput = page.locator('#fileInput');
   await fileInput.setInputFiles(filePath);
   
   // Wait for main interface to appear
-  await page.locator('#mainInterface').waitFor({ state: 'visible', timeout: 20000 });
+  await page.locator('#mainInterface').waitFor({ state: 'visible', timeout: 30000 });
+
+  // Dismiss save-project modal if it appears
+  try {
+    const notNowBtn = page.locator('#saveProjectNotNow');
+    await notNowBtn.waitFor({ state: 'visible', timeout: 3000 });
+    await notNowBtn.click();
+    await page.waitForTimeout(300);
+  } catch {
+    // Modal didn't appear
+  }
 }
 
 test.describe('Volkswitch Keyguard SVG Export', () => {
+  test.describe.configure({ timeout: 150_000 }); // WASM init may need ~120s
   test('should show 2D format guidance when SVG format is selected', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI');
     
@@ -150,7 +167,7 @@ test.describe('Volkswitch Keyguard SVG Export', () => {
     await outputFormatSelect.selectOption('svg');
     
     // Wait for parameters to load
-    await expect(page.locator('.param-control')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('.param-control').first()).toBeVisible({ timeout: 10000 });
     
     // Find and click Generate button
     const generateButton = page.locator('button:has-text("Generate"), button:has-text("Download")').first();
@@ -197,7 +214,7 @@ test.describe('Volkswitch Keyguard SVG Export', () => {
     await expect(page.locator('.file-tree, .project-files')).toBeVisible({ timeout: 15000 });
     
     // Wait for parameters to load
-    await expect(page.locator('.param-control')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('.param-control').first()).toBeVisible({ timeout: 10000 });
     
     // Find and set type_of_keyguard to Laser-Cut
     const keyguardTypeParam = page.locator('select[data-param="type_of_keyguard"]');
@@ -244,6 +261,8 @@ test.describe('Volkswitch Keyguard SVG Export', () => {
 });
 
 test.describe('Companion File Handling', () => {
+  test.describe.configure({ timeout: 150_000 }); // WASM init may need ~120s
+
   test('should recognize TXT companion file in ZIP', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI');
     
@@ -302,7 +321,7 @@ test.describe('Multi-Preset JSON Import/Export', () => {
     await uploadFile(page, fixturePath);
     
     // Wait for parameters to load
-    await expect(page.locator('.param-control')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('.param-control').first()).toBeVisible({ timeout: 10000 });
     
     // Open preset management (look for preset button or menu)
     const presetButton = page.locator('[data-action="manage-presets"], button:has-text("Preset"), button:has-text("preset")').first();
@@ -613,7 +632,7 @@ test.describe('Progress Text Shows Correct Format', () => {
     await outputFormatSelect.selectOption('svg');
     
     // Wait for parameters
-    await expect(page.locator('.param-control')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('.param-control').first()).toBeVisible({ timeout: 10000 });
     
     // Find Generate button
     const generateButton = page.locator('button:has-text("Generate"), button:has-text("Download")').first();

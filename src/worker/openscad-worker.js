@@ -32,8 +32,8 @@ let openscadInstance = null;
 let openscadModule = null;
 let initialized = false;
 let currentRenderTimeout = null;
-let mountedFiles = new Map(); // Track files in virtual filesystem
-let mountedLibraries = new Set(); // Track mounted library IDs
+const mountedFiles = new Map(); // Track files in virtual filesystem
+const mountedLibraries = new Set(); // Track mounted library IDs
 let assetBaseUrl = ''; // Base URL for fetching assets (fonts, libraries, etc.)
 let wasmAssetLogShown = false;
 let openscadConsoleOutput = ''; // Accumulated console output from OpenSCAD
@@ -177,6 +177,42 @@ const ERROR_TRANSLATIONS = [
       'Your model has infinite recursion. Check recursive module or function calls.',
     code: 'RECURSION',
   },
+  // CGAL assertion failures — root cause of projection()/roof() crashes in WASM
+  // See: openscad-wasm#6, openscad#6582, CGAL#7560
+  {
+    pattern: /CGAL assertion|CGAL_assertion|CGAL ERROR|CGAL precondition/i,
+    message:
+      'This model uses a geometry feature (projection/roof) that has a known issue in the browser engine. ' +
+      'Try simplifying the design or removing projection()/roof() calls. ' +
+      'This is a known upstream limitation (CGAL + WebAssembly).',
+    code: 'CGAL_ASSERTION',
+  },
+  // Emscripten abort — typically triggered by unrecoverable CGAL/C++ errors
+  {
+    pattern: /Aborted\(|abort\(|Emscripten.*abort/i,
+    message:
+      'The rendering engine encountered a fatal error and stopped. ' +
+      'This often happens with projection() or roof() functions. ' +
+      'Try removing these functions or simplifying your design.',
+    code: 'WASM_ABORT',
+  },
+  // WASM RuntimeError: unreachable — compiled trap instruction hit
+  {
+    pattern: /RuntimeError:\s*unreachable/i,
+    message:
+      'The rendering engine hit an internal error (unreachable code). ' +
+      'This is typically caused by projection() or roof() in the browser engine. ' +
+      'Try simplifying the model or removing these functions.',
+    code: 'WASM_UNREACHABLE',
+  },
+  // WASM RuntimeError: memory access out of bounds
+  {
+    pattern: /RuntimeError:\s*memory access out of bounds/i,
+    message:
+      'The rendering engine ran out of accessible memory. ' +
+      'Try reducing model complexity (lower $fn), removing minkowski() operations, or simplifying boolean operations.',
+    code: 'WASM_OOB',
+  },
   {
     pattern: /\b\d{6,}\b/, // Match long numeric error codes (like 1101176)
     message:
@@ -216,7 +252,7 @@ function translateError(rawError) {
 
   // Fallback: return a cleaned up version of the error
   // Remove internal paths and technical details that aren't helpful
-  let cleaned = errorStr
+  const cleaned = errorStr
     .replace(/\/tmp\/[^\s]+/g, 'your model')
     .replace(/at line \d+/g, '')
     .trim();
@@ -265,6 +301,62 @@ async function initWASM(baseUrl = '') {
     const wasmJsUrl = `${wasmBasePath}/openscad.js`;
 
     console.log('[Worker] Loading official OpenSCAD from:', wasmJsUrl);
+
+    // Integrity check: verify WASM artifacts match expected manifest.
+    // Guards against corrupted or tampered files before they produce silent wrong results.
+    // Checks both openscad.js and openscad.wasm sizes; optionally verifies SHA-256.
+    let integrityData = null;
+    try {
+      const integrityUrl = `${wasmBasePath}/INTEGRITY.json`;
+      const integrityResp = await fetch(integrityUrl);
+      if (integrityResp.ok) {
+        integrityData = await integrityResp.json();
+        console.log(`[Worker] WASM build: ${integrityData.build}`);
+        if (integrityData.knownIssues?.length) {
+          console.log(`[Worker] Known issues: ${integrityData.knownIssues.length} documented`);
+        }
+
+        // Verify sizes of both JS loader and WASM binary
+        const filesToCheck = [
+          { name: 'openscad.js', url: wasmJsUrl },
+          { name: 'openscad.wasm', url: `${wasmBasePath}/openscad.wasm` },
+        ];
+        const mismatches = [];
+
+        for (const { name, url } of filesToCheck) {
+          const expected = integrityData.files?.[name];
+          if (!expected?.size) continue;
+
+          try {
+            const headResp = await fetch(url, { method: 'HEAD' });
+            const actualSize = parseInt(headResp.headers.get('content-length'), 10);
+            if (actualSize && actualSize !== expected.size) {
+              mismatches.push(
+                `${name}: expected ${expected.size} bytes, got ${actualSize}`
+              );
+            }
+          } catch (_headErr) {
+            // HEAD may fail on some CDN configs; skip this file's check
+          }
+        }
+
+        if (mismatches.length > 0) {
+          const msg = `[Worker] WASM integrity warning: size mismatch — ${mismatches.join('; ')}. Files may be corrupted or outdated.`;
+          console.warn(msg);
+          self.postMessage({
+            type: 'WARNING',
+            payload: {
+              code: 'WASM_INTEGRITY',
+              message: 'WASM file integrity check detected a size mismatch. Files may need re-downloading.',
+              severity: 'warning',
+            },
+          });
+        }
+      }
+    } catch (integrityErr) {
+      // Non-fatal — integrity check is informational, not blocking
+      console.log('[Worker] Integrity check skipped:', integrityErr.message);
+    }
 
     // Dynamic import of official WASM module
     const OpenSCADModule = await import(/* @vite-ignore */ wasmJsUrl);
@@ -1013,9 +1105,10 @@ function clearLibraries() {
 /**
  * Build -D command-line arguments from parameters
  * @param {Object} parameters - Parameter key-value pairs
+ * @param {Object} paramTypes - Map of parameter names to their schema types (e.g. { expose_home_button: 'string', MW_version: 'boolean' })
  * @returns {Array<string>} Array of -D arguments
  */
-function buildDefineArgs(parameters) {
+function buildDefineArgs(parameters, paramTypes = {}) {
   if (!parameters || Object.keys(parameters).length === 0) {
     return [];
   }
@@ -1032,11 +1125,17 @@ function buildDefineArgs(parameters) {
 
     // Handle different value types
     if (typeof value === 'string') {
-      // Check for boolean string values (true/false or yes/no)
       const lowerValue = value.toLowerCase();
-      if (lowerValue === 'true' || lowerValue === 'yes') {
+      // CRITICAL FIX: Only convert "yes"/"no"/"true"/"false" to OpenSCAD boolean
+      // when the parameter schema declares the type as 'boolean'.
+      // String dropdown parameters like expose_home_button = "yes"; //[yes,no]
+      // must remain as quoted strings so that OpenSCAD string comparisons
+      // (e.g. if (expose_home_button == "yes")) evaluate correctly.
+      const isBooleanParam = paramTypes[key] === 'boolean';
+
+      if (isBooleanParam && (lowerValue === 'true' || lowerValue === 'yes')) {
         formattedValue = 'true';
-      } else if (lowerValue === 'false' || lowerValue === 'no') {
+      } else if (isBooleanParam && (lowerValue === 'false' || lowerValue === 'no')) {
         formattedValue = 'false';
       }
       // Check if this is a color (hex string)
@@ -1044,7 +1143,7 @@ function buildDefineArgs(parameters) {
         const rgb = hexToRgb(value);
         formattedValue = `[${rgb[0]},${rgb[1]},${rgb[2]}]`;
       } else {
-        // Escape quotes and wrap in quotes
+        // ALL non-boolean strings (including "yes"/"no" dropdowns) stay as quoted strings
         const escaped = value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
         formattedValue = `"${escaped}"`;
       }
@@ -1110,14 +1209,16 @@ function parametersToScad(parameters, paramTypes = {}) {
 
       // Handle different value types
       if (typeof value === 'string') {
-        // Check for boolean string values (true/false or yes/no)
         const lowerValue = value.toLowerCase();
-        if (lowerValue === 'true' || lowerValue === 'yes') {
+        // CRITICAL FIX: Only convert to boolean when schema type is 'boolean'
+        const isBooleanParam = paramTypes[key] === 'boolean';
+
+        if (isBooleanParam && (lowerValue === 'true' || lowerValue === 'yes')) {
           return `${key} = true;`;
-        } else if (lowerValue === 'false' || lowerValue === 'no') {
+        } else if (isBooleanParam && (lowerValue === 'false' || lowerValue === 'no')) {
           return `${key} = false;`;
         }
-        // Escape quotes in strings
+        // ALL non-boolean strings (including "yes"/"no" dropdowns) stay as quoted strings
         const escaped = value.replace(/"/g, '\\"');
         return `${key} = "${escaped}";`;
       } else if (typeof value === 'number') {
@@ -1142,9 +1243,10 @@ function parametersToScad(parameters, paramTypes = {}) {
  *
  * @param {string} scadContent
  * @param {Object} parameters
+ * @param {Object} paramTypes - Map of parameter names to their schema types
  * @returns {{scad: string, replacedKeys: string[], prependedKeys: string[]}}
  */
-function _applyOverrides(scadContent, parameters) {
+function _applyOverrides(scadContent, parameters, paramTypes = {}) {
   if (!parameters || Object.keys(parameters).length === 0) {
     return { scad: scadContent, replacedKeys: [], prependedKeys: [] };
   }
@@ -1153,7 +1255,7 @@ function _applyOverrides(scadContent, parameters) {
   const replacedKeys = [];
   const prependedKeys = [];
 
-  const formatValue = (value) => {
+  const formatValue = (key, value) => {
     // Skip null/undefined
     if (value === null || value === undefined) {
       return null;
@@ -1180,13 +1282,16 @@ function _applyOverrides(scadContent, parameters) {
 
     // Handle strings
     if (typeof value === 'string') {
-      // Check for boolean string values (true/false or yes/no)
       const lowerValue = value.toLowerCase();
-      if (lowerValue === 'true' || lowerValue === 'yes') {
+      // CRITICAL FIX: Only convert to boolean when schema type is 'boolean'
+      const isBooleanParam = paramTypes[key] === 'boolean';
+
+      if (isBooleanParam && (lowerValue === 'true' || lowerValue === 'yes')) {
         return 'true';
-      } else if (lowerValue === 'false' || lowerValue === 'no') {
+      } else if (isBooleanParam && (lowerValue === 'false' || lowerValue === 'no')) {
         return 'false';
       }
+      // ALL non-boolean strings (including "yes"/"no" dropdowns) stay as quoted strings
       const escaped = value.replace(/"/g, '\\"');
       return `"${escaped}"`;
     }
@@ -1200,7 +1305,7 @@ function _applyOverrides(scadContent, parameters) {
   };
 
   for (const [key, value] of Object.entries(parameters)) {
-    const assignmentValue = formatValue(value);
+    const assignmentValue = formatValue(key, value);
 
     // Skip null values
     if (assignmentValue === null) {
@@ -1224,7 +1329,7 @@ function _applyOverrides(scadContent, parameters) {
   if (prependedKeys.length > 0) {
     const prependParams = {};
     for (const k of prependedKeys) prependParams[k] = parameters[k];
-    updated = parametersToScad(prependParams) + updated;
+    updated = parametersToScad(prependParams, paramTypes) + updated;
   }
 
   return { scad: updated, replacedKeys, prependedKeys };
@@ -1243,7 +1348,8 @@ async function renderWithCallMain(
   parameters,
   format,
   mainFilePath = null,
-  renderOptions = {}
+  renderOptions = {},
+  paramTypes = {}
 ) {
   let inputFile = mainFilePath || '/tmp/input.scad';
   const outputFile = `/tmp/output.${format}`;
@@ -1312,12 +1418,54 @@ async function renderWithCallMain(
       module.FS.writeFile(inputFile, scadContent);
       wroteTempInput = true;
     } // Build -D arguments
-    const defineArgs = buildDefineArgs(parameters);
+    const defineArgs = buildDefineArgs(parameters, paramTypes);
 
-    // OpenSCAD WASM doesn't support -I flag, so we need to use environment variables
-    // Set OPENSCADPATH environment variable (if supported by WASM build)
-    if (module.ENV && module.ENV.OPENSCADPATH === undefined) {
-      module.ENV.OPENSCADPATH = '/libraries';
+    // Path resolution for import()/use/include:
+    // OpenSCAD WASM doesn't support the -I flag, so we use OPENSCADPATH env var.
+    // Desktop OpenSCAD resolves relative imports next to the main SCAD file,
+    // then searches OPENSCADPATH. We replicate this by:
+    //   1. Writing the main file to the correct directory (done above)
+    //   2. Setting OPENSCADPATH to include both the library root and the
+    //      working directory (for multi-file zip projects)
+    // See: openscad-playground#35 for the upstream path resolution bug.
+    if (module.ENV) {
+      const searchPaths = ['/libraries'];
+      // For multi-file projects mounted under /work/, add the work dir
+      // so that `include <file.txt>` resolves relative to the project root
+      if (inputFile.startsWith(WORK_DIR + '/')) {
+        const inputDir = inputFile.substring(0, inputFile.lastIndexOf('/'));
+        if (inputDir && !searchPaths.includes(inputDir)) {
+          searchPaths.unshift(inputDir);
+        }
+        if (!searchPaths.includes(WORK_DIR)) {
+          searchPaths.push(WORK_DIR);
+        }
+      }
+      module.ENV.OPENSCADPATH = searchPaths.join(':');
+    }
+
+    // Pre-render guard: scan SCAD source for known-crashy functions
+    // roof() and projection() trigger CGAL assertion failures in WASM (openscad-wasm#5, #6)
+    // We emit a WARNING but do NOT block — some uses work; the guard is informational.
+    const riskyFunctions = [];
+    if (/\broof\s*\(/m.test(scadContent)) {
+      riskyFunctions.push('roof()');
+    }
+    if (/\bprojection\s*\(/m.test(scadContent)) {
+      riskyFunctions.push('projection()');
+    }
+    if (riskyFunctions.length > 0) {
+      const warningMsg =
+        `WARNING: Your model uses ${riskyFunctions.join(' and ')}, which may crash ` +
+        `the browser rendering engine due to a known CGAL/WebAssembly issue. ` +
+        `If rendering fails, try removing these functions. ` +
+        `Desktop OpenSCAD may handle them better.`;
+      console.warn('[Worker]', warningMsg);
+      // Emit as a console message so the UI can display it
+      self.postMessage({
+        type: 'CONSOLE',
+        payload: { level: 'warn', message: warningMsg },
+      });
     }
 
     // Build command: [performance flags, -D key=value, ...] -o outputFile inputFile
@@ -1573,6 +1721,18 @@ function validate2DOutput(outputBuffer, format) {
   if (format === 'svg') {
     return validateSVGOutput(content);
   } else if (format === 'dxf') {
+    // #region agent log
+    const _dbgFullContent = content;
+    const _dbgHasHeader = _dbgFullContent.includes('HEADER');
+    const _dbgHasEntities = _dbgFullContent.includes('ENTITIES');
+    const _dbgEntityTypes = [];
+    ['LINE','POLYLINE','LWPOLYLINE','CIRCLE','ARC','SPLINE','POINT'].forEach(t => { if (_dbgFullContent.includes(t)) _dbgEntityTypes.push(t); });
+    const _dbgAcadVerMatch = _dbgFullContent.match(/\$ACADVER[\s\S]*?1\n(AC\d+)/);
+    const _dbgInsbaseMatch = _dbgFullContent.match(/\$INSBASE[\s\S]{0,100}/);
+    const _dbgHasGrp100 = _dbgFullContent.includes('\n100\n');
+    const _dbgHasGrp90 = _dbgFullContent.includes('\n90\n');
+    fetch('http://127.0.0.1:7246/ingest/8fdfe3b9-f33d-48f1-99f8-e81d685f1617',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'openscad-worker.js:validate2DOutput',message:'DXF structure analysis',hypothesisId:'H-A,H-B,H-C,H-D',data:{contentLength:_dbgFullContent.length,hasHeader:_dbgHasHeader,hasEntities:_dbgHasEntities,entityTypes:_dbgEntityTypes,acadVer:_dbgAcadVerMatch?_dbgAcadVerMatch[1]:'not found',insbase:_dbgInsbaseMatch?_dbgInsbaseMatch[0]:'not found',hasGroupCode100:_dbgHasGrp100,hasGroupCode90:_dbgHasGrp90,headerSection:_dbgFullContent.substring(0,_dbgFullContent.indexOf('ENDSEC')+10).substring(0,1200)},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     return validateDXFOutput(content);
   }
 
@@ -1739,8 +1899,12 @@ function validateDXFOutput(content) {
  */
 const MEMORY_WARNING_THRESHOLD_MB = 1024; // 1GB
 
+// Track heap size before each render to compute growth delta
+let heapBeforeRenderMB = 0;
+
 /**
- * Check memory usage and send warning if high
+ * Check memory usage and send warning if high.
+ * Also records the pre-render heap size so we can report growth after render.
  * @param {string} requestId - Current request ID
  * @returns {Object} Memory usage info
  */
@@ -1751,6 +1915,9 @@ function checkMemoryBeforeRender(requestId) {
   // Get WASM heap info - note HEAP8.length is allocated size, not usage
   const heapAllocatedBytes = openscadModule.HEAP8.length;
   const heapAllocatedMB = Math.round(heapAllocatedBytes / 1024 / 1024);
+
+  // Record baseline for growth calculation
+  heapBeforeRenderMB = heapAllocatedMB;
 
   // NOTE: We can only measure the allocated heap size, not actual usage.
   // HEAP8.length == buffer.byteLength, so percentage-based checks are meaningless.
@@ -1799,6 +1966,7 @@ async function render(payload) {
     requestId,
     scadContent,
     parameters,
+    paramTypes = {},
     timeoutMs,
     files,
     outputFormat = 'stl',
@@ -1953,7 +2121,8 @@ async function render(payload) {
         parameters,
         format,
         mainFileToUse,
-        renderOptions
+        renderOptions,
+        paramTypes
       );
 
       // Capture render duration
@@ -1968,6 +2137,23 @@ async function render(payload) {
         },
       });
 
+      // #region agent log
+      if (format === 'dxf' || format === 'svg') {
+        const _dbgType = outputData === null ? 'null' : (outputData instanceof Uint8Array ? 'Uint8Array' : (outputData instanceof ArrayBuffer ? 'ArrayBuffer' : typeof outputData));
+        let _dbgPreview = '';
+        if (typeof outputData === 'string') { _dbgPreview = outputData.substring(0, 1500); }
+        else if (outputData instanceof Uint8Array) { _dbgPreview = new TextDecoder('utf-8').decode(outputData.slice(0, 1500)); }
+        else if (outputData instanceof ArrayBuffer) { _dbgPreview = new TextDecoder('utf-8').decode(new Uint8Array(outputData).slice(0, 1500)); }
+        const _dbgHasLWPOLYLINE = _dbgPreview.includes('LWPOLYLINE') || (typeof outputData === 'string' ? outputData : '').includes('LWPOLYLINE');
+        const _dbgAcadVer = (_dbgPreview.match(/\$ACADVER[\s\S]{0,20}/) || ['not found'])[0];
+        const _dbgHasLinMin = _dbgPreview.includes('$LINMIN');
+        const _dbgHasLinMax = _dbgPreview.includes('$LINMAX');
+        const _dbgHasAcDbEntity = _dbgPreview.includes('AcDbEntity');
+        const _dbgHasAcDbPolyline = _dbgPreview.includes('AcDbPolyline');
+        const _dbgSize = outputData ? (outputData.byteLength || outputData.length || 0) : 0;
+        fetch('http://127.0.0.1:7246/ingest/8fdfe3b9-f33d-48f1-99f8-e81d685f1617',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'openscad-worker.js:renderOutput',message:'DXF/SVG raw output from WASM',hypothesisId:'H-A,H-B,H-C,H-D,H-E',data:{format,outputType:_dbgType,outputSize:_dbgSize,hasLWPOLYLINE:_dbgHasLWPOLYLINE,acadVer:_dbgAcadVer,hasLinMin:_dbgHasLinMin,hasLinMax:_dbgHasLinMax,hasAcDbEntity:_dbgHasAcDbEntity,hasAcDbPolyline:_dbgHasAcDbPolyline,contentPreview:_dbgPreview.substring(0,800)},timestamp:Date.now()})}).catch(()=>{});
+      }
+      // #endregion
       return { data: outputData, format, renderDurationMs };
     })();
 
@@ -2167,7 +2353,8 @@ function cancelRender(requestId) {
 }
 
 /**
- * Get current memory usage of the WASM heap
+ * Get current memory usage of the WASM heap.
+ * Includes growth delta since last render start for leak detection.
  * @returns {Object} Memory usage info
  */
 function getMemoryUsage() {
@@ -2177,16 +2364,21 @@ function getMemoryUsage() {
       limit: MEMORY_WARNING_THRESHOLD_MB * 1024 * 1024,
       percent: 0,
       available: true,
+      growthMB: 0,
     };
   }
 
-  // IMPORTANT: heapTotalBytes is the ALLOCATED heap size, not actual used memory
-  // We use the warning threshold (1GB) as the "limit" for reporting purposes
+  // IMPORTANT: heapTotalBytes is the ALLOCATED heap size, not actual used memory.
+  // WASM linear memory grows in 64KB pages; once grown it never shrinks.
+  // We use the warning threshold (1GB) as the "limit" for reporting purposes.
   const heapTotalBytes = openscadModule.HEAP8.length;
   const heapTotalMB = Math.round(heapTotalBytes / 1024 / 1024);
   const used = heapTotalBytes;
   const limit = MEMORY_WARNING_THRESHOLD_MB * 1024 * 1024;
   const percent = Math.round((used / limit) * 100);
+
+  // Growth since last render start (helps detect memory leaks between renders)
+  const growthMB = heapBeforeRenderMB > 0 ? heapTotalMB - heapBeforeRenderMB : 0;
 
   return {
     used,
@@ -2195,8 +2387,14 @@ function getMemoryUsage() {
     available: true,
     usedMB: heapTotalMB,
     limitMB: MEMORY_WARNING_THRESHOLD_MB,
+    growthMB,
   };
 }
+
+// Worker health heartbeat — responds immediately to prove the event loop is live.
+// During a blocking callMain() render, this will NOT respond (expected).
+// The render controller uses the absence of a response to detect hung workers.
+let _lastHeartbeatId = null;
 
 // Message handler
 self.onmessage = async (e) => {
@@ -2205,6 +2403,20 @@ self.onmessage = async (e) => {
   switch (type) {
     case 'INIT':
       await initWASM(payload?.assetBaseUrl);
+      break;
+
+    case 'PING':
+      // Heartbeat response — proves the worker event loop is responsive
+      _lastHeartbeatId = payload?.id;
+      self.postMessage({
+        type: 'PONG',
+        payload: {
+          id: payload?.id,
+          timestamp: Date.now(),
+          initialized,
+          rendering: !!currentRenderTimeout,
+        },
+      });
       break;
 
     case 'GET_MEMORY_USAGE':

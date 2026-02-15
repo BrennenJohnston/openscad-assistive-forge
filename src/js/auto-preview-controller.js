@@ -74,6 +74,9 @@ export class AutoPreviewController {
     // Enabled libraries for rendering
     this.enabledLibraries = [];
 
+    // Parameter type metadata (schema types for boolean vs string disambiguation)
+    this.paramTypes = {};
+
     // Color parameters for preview tinting
     this.colorParamNames = [];
 
@@ -188,6 +191,15 @@ export class AutoPreviewController {
    */
   setEnabledLibraries(libraries) {
     this.enabledLibraries = libraries || [];
+  }
+
+  /**
+   * Set parameter type metadata from schema
+   * Used to distinguish boolean params from string "yes"/"no" dropdown params
+   * @param {Object} paramTypes - Map of parameter names to schema types (e.g. { expose_home_button: 'string', MW_version: 'boolean' })
+   */
+  setParamTypes(paramTypes) {
+    this.paramTypes = paramTypes || {};
   }
 
   /**
@@ -543,6 +555,7 @@ export class AutoPreviewController {
           files: this.projectFiles,
           mainFile: this.mainFilePath,
           libraries: this.enabledLibraries,
+          paramTypes: this.paramTypes,
           onProgress: (percent, message) => {
             this.onProgress(percent, message, 'preview');
           },
@@ -740,6 +753,7 @@ export class AutoPreviewController {
         files: this.projectFiles,
         mainFile: this.mainFilePath,
         libraries: this.enabledLibraries,
+        paramTypes: this.paramTypes,
         ...(quality ? { quality } : {}),
         onProgress: (percent, message) => {
           this.onProgress(percent, message, 'full');

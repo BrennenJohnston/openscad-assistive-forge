@@ -33,5 +33,8 @@ localhost_*.report.html
 # Cursor AI workspace
 .cursor/
 
+# Local stakeholder reference files
+.volkswitch/
+
 # Internal planning documents (not for public release)
 docs/planning/

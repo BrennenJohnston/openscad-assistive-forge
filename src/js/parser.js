@@ -493,6 +493,9 @@ export function extractParameters(scadContent) {
   const lines = scadContent.split('\n');
   const groups = [];
   const parameters = {};
+  // Track [Hidden] parameters separately for export parity with desktop OpenSCAD
+  // Hidden params: stored in JSON exports, NOT loaded from imports, NOT displayed in UI
+  const hiddenParameters = {};
 
   let currentGroup = 'General';
   let groupOrder = 0;
@@ -612,8 +615,14 @@ export function extractParameters(scadContent) {
         const paramName = assignMatch[1];
         const valueStr = assignMatch[2].trim();
 
-        // Skip if in Hidden group
+        // Capture Hidden parameters separately (desktop parity: stored in JSON but not shown in UI)
         if (currentGroup.toLowerCase() === 'hidden') {
+          const hiddenDefault = parseDefaultValue(valueStr);
+          hiddenParameters[paramName] = {
+            name: paramName,
+            type: hiddenDefault.type,
+            value: hiddenDefault.value,
+          };
           const scopeState = { inBlockComment };
           const scopeLine = stripForScope(rawLine, scopeState);
           inBlockComment = scopeState.inBlockComment;
@@ -640,7 +649,7 @@ export function extractParameters(scadContent) {
         const capturedPrecedingComment = precedingComment;
         precedingComment = ''; // Reset after capturing
 
-        let param = {
+        const param = {
           name: paramName,
           type: defaultVal.type,
           default: defaultVal.value,
@@ -877,9 +886,23 @@ export function extractParameters(scadContent) {
   // Detect library usage
   const detectedLibraries = detectLibraries(scadContent);
 
+  // Diagnostic logging: parameter count per tab group, hidden params, unparsed stats
+  const paramCountByGroup = {};
+  for (const param of Object.values(parameters)) {
+    paramCountByGroup[param.group] = (paramCountByGroup[param.group] || 0) + 1;
+  }
+  console.debug('[Parser] Extraction complete:', {
+    groups: groups.length,
+    parameters: Object.keys(parameters).length,
+    hiddenParameters: Object.keys(hiddenParameters).length,
+    libraries: detectedLibraries.length,
+    paramCountByGroup,
+  });
+
   return {
     groups,
     parameters,
+    hiddenParameters,
     libraries: detectedLibraries,
   };
 }
