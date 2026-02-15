@@ -7,7 +7,10 @@ test.beforeEach(async ({ page }) => {
   })
 })
 
-const stripWorkerOptions = ({ defaultBrowserType, browserName, ...device }) => device
+// Strip worker-level and Firefox-incompatible options from device descriptors.
+// Playwright Firefox does not support options.isMobile, so we remove it to
+// allow these viewport tests to run across all browsers.
+const stripWorkerOptions = ({ defaultBrowserType: _dbt, browserName: _bn, isMobile: _im, ...device }) => device
 
 // Test on multiple mobile devices (without worker-level options)
 const mobileDevices = [
@@ -143,7 +146,6 @@ for (const { name, device } of mobileDevices) {
 test.describe('Mobile Viewport - Landscape', () => {
   test.use({
     viewport: { width: 844, height: 390 }, // iPhone 12 landscape
-    isMobile: true,
     hasTouch: true,
   })
 
@@ -177,7 +179,6 @@ test.describe('Mobile Viewport - Landscape', () => {
 test.describe('Mobile Viewport - Small Screen', () => {
   test.use({
     viewport: { width: 320, height: 568 }, // iPhone SE 1st gen
-    isMobile: true,
     hasTouch: true,
   })
 

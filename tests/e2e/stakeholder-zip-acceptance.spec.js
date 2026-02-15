@@ -7,6 +7,7 @@
 
 import { test, expect } from '@playwright/test'
 import path from 'path'
+import fs from 'node:fs'
 import { fileURLToPath } from 'url'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -16,6 +17,9 @@ const __dirname = path.dirname(__filename)
 const KEYGUARD_ZIP_PATH = path.resolve(
   __dirname, '..', '..', '.volkswitch', 'keyguard-test-bundle.zip'
 )
+
+// .volkswitch/ is .gitignored - skip tests when the fixture is unavailable (CI)
+const fixtureAvailable = fs.existsSync(KEYGUARD_ZIP_PATH)
 
 /**
  * Attach diagnostic listeners to the page for console/network/timing capture
@@ -113,6 +117,9 @@ test.describe('Stakeholder Acceptance Tests - Ken\'s Keyguard ZIP', () => {
   let diag
 
   test.beforeEach(async ({ page }) => {
+    // .volkswitch/ is .gitignored - skip in CI where fixture is unavailable
+    test.skip(!fixtureAvailable, 'Keyguard test bundle not found (.volkswitch/ is .gitignored)')
+
     await page.addInitScript(() => {
       localStorage.clear()
       localStorage.setItem('openscad-forge-first-visit-seen', 'true')
