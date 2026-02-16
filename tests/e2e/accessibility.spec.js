@@ -2155,16 +2155,15 @@ test.describe('UI Uniformity Regression', () => {
     const typography = await page.evaluate(() => {
       const summaries = document.querySelectorAll('.forge-disclosure summary');
       if (summaries.length === 0) return null;
-      const values = Array.from(summaries)
-        .filter(s => s.offsetParent !== null)
-        .map(s => {
-          const cs = getComputedStyle(s);
-          return {
-            fontSize: cs.fontSize,
-            fontWeight: cs.fontWeight,
-            lineHeight: cs.lineHeight,
-          };
-        });
+      // Check all summaries in the DOM (not just visible ones) because the
+      // parameter panel is hidden on the welcome screen before a file loads.
+      const values = Array.from(summaries).map(s => {
+        const cs = getComputedStyle(s);
+        return {
+          fontSize: cs.fontSize,
+          fontWeight: cs.fontWeight,
+        };
+      });
       if (values.length === 0) return null;
       const first = values[0];
       const allMatch = values.every(
