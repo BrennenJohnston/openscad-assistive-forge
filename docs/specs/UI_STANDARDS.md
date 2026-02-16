@@ -727,6 +727,33 @@ function loadDrawerSize(drawerName, defaultSize) {
 
 ---
 
+## Shared UI Contracts
+
+### `.forge-control` — Shared Button/Control Contract
+
+All toolbar buttons, drawer toggles, panel collapse buttons, and modal close buttons must use the `.forge-control` base class (or its `.forge-control--sm` variant) alongside their existing semantic class. This ensures uniform sizing, border-radius, and transition timing from design tokens.
+
+**Properties enforced:** `min-height`, `min-width`, `border-radius`, `padding`, `transition`
+
+### `.forge-disclosure` — Shared Disclosure Contract
+
+All collapsible `<details>` sections (Presets, Console Output, Reference Overlay, Libraries, Companion Files, Advanced) must use the `.forge-disclosure` class on the `<details>` element. This provides a uniform `<summary>` layout with consistent chevron animation via `::after`, spacing, font weight, touch target sizing, and `prefers-reduced-motion` support.
+
+**Chevron:** CSS border-based via `::after`, rotates from -45deg (closed) to 45deg (open).
+
+### Drawer State Class Convention
+
+| Drawer | State Convention | Open Means | Closed Means |
+|--------|-----------------|------------|--------------|
+| Parameters | Additive open | `drawer-open` class present | `drawer-open` class absent |
+| Actions | Additive close | `collapsed` class absent | `collapsed` class present |
+| Camera | Additive close | `collapsed` class absent | `collapsed` class present |
+| Echo | Additive close | `collapsed` class absent | `collapsed` class present |
+
+Do NOT refactor this convention without updating all three controller files (`drawer-controller.js`, `camera-panel-controller.js`, and the inline actions/echo controllers in `main.js`) plus their corresponding test suites.
+
+---
+
 ## File Locations
 
 | Type | File Path |

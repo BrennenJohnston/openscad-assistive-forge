@@ -37,6 +37,99 @@ summary:focus-visible,
   outline-offset: 2px !important;
 }
 
+/* ============================================================================
+   Shared Control Contract (.forge-control)
+   ============================================================================
+   Token-first base class for toolbar buttons, drawer toggles, panel collapse
+   buttons, and modal close buttons. Applied alongside existing class names so
+   JS selectors remain intact.
+   ============================================================================ */
+.forge-control {
+  min-height: var(--size-touch-target);
+  min-width: var(--size-touch-target);
+  border-radius: var(--border-radius-md);
+  padding: var(--space-xs);
+  transition:
+    background-color var(--motion-base) ease,
+    border-color var(--motion-base) ease;
+}
+
+.forge-control--sm {
+  min-height: var(--size-touch-target-sm);
+  min-width: var(--size-touch-target-sm);
+}
+
+/* ============================================================================
+   Shared Disclosure Contract (.forge-disclosure)
+   ============================================================================
+   Uniform <details>/<summary> pattern for Presets, Console Output, Reference
+   Overlay, Libraries, Companion Files, and Advanced sections. Provides
+   consistent chevron animation, spacing, font weight, and focus styling.
+   ============================================================================ */
+.forge-disclosure {
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-md);
+  margin-block: var(--space-xs);
+  overflow: hidden;
+  background: var(--color-bg-elevated, var(--color-bg-secondary));
+}
+
+.forge-disclosure summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  font-size: var(--font-size-sm);
+  line-height: 1.4;
+  font-weight: var(--font-weight-semibold, 600);
+  letter-spacing: normal;
+  cursor: pointer;
+  min-height: var(--size-touch-target);
+  list-style: none;
+  transition: background-color var(--motion-base) ease;
+}
+
+.forge-disclosure summary::-webkit-details-marker {
+  display: none;
+}
+
+.forge-disclosure summary::after {
+  content: '';
+  display: inline-block;
+  width: 0.5em;
+  height: 0.5em;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform var(--motion-base) ease;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.forge-disclosure[open] summary::after {
+  transform: rotate(45deg);
+}
+
+.forge-disclosure-icon {
+  width: 1em;
+  height: 1em;
+  flex-shrink: 0;
+  stroke: currentColor;
+  fill: none;
+}
+
+.forge-disclosure-title {
+  flex: 1;
+  min-width: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .forge-disclosure summary,
+  .forge-disclosure summary::after {
+    transition: none;
+  }
+}
+
 /* Buttons */
 .btn {
   padding: var(--space-sm) var(--space-md);
@@ -205,7 +298,7 @@ summary:focus-visible,
 
 /* Desktop only - hide collapse button on mobile (drawer toggle is used instead) */
 @media (max-width: 767px) {
-  .panel-collapse-control {
+  .param-panel .btn-collapse-panel {
     display: none;
   }
 }
@@ -343,7 +436,7 @@ summary:focus-visible,
     justify-content: center;
     gap: var(--space-xs);
     width: 100%;
-    min-height: 36px;
+    min-height: var(--size-touch-target-sm);
     padding: var(--space-xs) var(--space-md);
     background-color: var(--color-bg-tertiary);
     border: none;
@@ -369,8 +462,8 @@ summary:focus-visible,
   }
 
   .actions-toggle-arrow {
-    width: 18px;
-    height: 18px;
+    width: var(--size-icon-sm, 16px);
+    height: var(--size-icon-sm, 16px);
     color: var(--color-accent);
     transition: transform var(--motion-slow) ease;
     flex-shrink: 0;
@@ -1653,25 +1746,12 @@ summary:focus-visible,
 }
 
 /* Reference Overlay Controls */
-/* Now in parametric drawer, styled similar to preset-controls */
 .overlay-details {
-  padding: 0;
-  background: var(--color-bg-secondary);
-  border-radius: var(--border-radius-md);
-  margin-bottom: var(--space-md);
-  border: 1px solid var(--color-border);
+  /* Card styling provided by .forge-disclosure */
 }
 
 .overlay-summary {
-  padding: var(--space-sm) var(--space-md);
-  cursor: pointer;
-  user-select: none;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-  transition: background-color var(--motion-base) ease;
-  min-height: var(--size-touch-target-sm);
+  /* Inherits layout from .forge-disclosure summary */
 }
 
 .overlay-summary:hover {
@@ -1693,7 +1773,7 @@ summary:focus-visible,
 
 .overlay-summary-text {
   flex: 1;
-  font-weight: 500;
+  font-weight: var(--font-weight-semibold, 600);
 }
 
 .overlay-status {
@@ -1910,28 +1990,8 @@ summary:focus-visible,
 }
 
 .param-group summary {
-  font-weight: 600;
-  padding: var(--space-sm);
-  cursor: pointer;
+  /* Inherits layout from .forge-disclosure summary; only overrides listed */
   user-select: none;
-  list-style: none;
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-}
-
-.param-group summary::-webkit-details-marker {
-  display: none;
-}
-
-.param-group summary::before {
-  content: '▶';
-  display: inline-block;
-  transition: transform var(--motion-base);
-}
-
-.param-group[open] summary::before {
-  transform: rotate(90deg);
 }
 
 .param-group summary:focus-visible {
@@ -3006,22 +3066,11 @@ select:focus-visible {
 
 /* Preset Controls */
 .preset-controls {
-  padding: 0;
-  background: var(--color-bg-secondary);
-  border-radius: var(--border-radius-md);
-  margin-bottom: var(--space-md);
-  border: 1px solid var(--color-border);
+  /* Card styling provided by .forge-disclosure */
 }
 
 .preset-summary {
-  padding: var(--space-sm) var(--space-md);
-  cursor: pointer;
-  user-select: none;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-  transition: background-color var(--motion-base) ease;
+  /* Inherits layout from .forge-disclosure summary */
 }
 
 .preset-summary:hover {
@@ -3034,7 +3083,7 @@ select:focus-visible {
 }
 
 .preset-icon {
-  font-size: 1rem;
+  /* Icon sizing now provided by .forge-disclosure-icon */
 }
 
 .preset-content {
@@ -3101,7 +3150,7 @@ select:focus-visible {
 
 /* Preset Controls - OpenSCAD Customizer-style button group (Save, Add, Delete)
  * Ken's requirement: Match OpenSCAD Customizer semantics exactly */
-.preset-selector .preset-controls {
+.preset-selector .preset-actions-group {
   display: flex;
   gap: 2px;
   border: 1px solid var(--color-border);
@@ -3110,7 +3159,7 @@ select:focus-visible {
   background: var(--color-bg-secondary);
 }
 
-.preset-selector .preset-controls .btn-icon {
+.preset-selector .preset-actions-group .btn-icon {
   border: none;
   border-radius: 0;
   background: transparent;
@@ -3122,26 +3171,26 @@ select:focus-visible {
   transition: background-color var(--motion-fast), color var(--motion-fast);
 }
 
-.preset-selector .preset-controls .btn-icon:not(:last-child) {
+.preset-selector .preset-actions-group .btn-icon:not(:last-child) {
   border-right: 1px solid var(--color-border);
 }
 
-.preset-selector .preset-controls .btn-icon:hover:not(:disabled) {
+.preset-selector .preset-actions-group .btn-icon:hover:not(:disabled) {
   background: var(--color-bg-tertiary);
 }
 
-.preset-selector .preset-controls .btn-icon:focus {
+.preset-selector .preset-actions-group .btn-icon:focus {
   outline: none;
   box-shadow: inset 0 0 0 2px var(--color-focus);
 }
 
-.preset-selector .preset-controls .btn-icon:disabled {
+.preset-selector .preset-actions-group .btn-icon:disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
 
 /* Delete button danger style */
-.preset-selector .preset-controls .btn-danger-icon:hover:not(:disabled) {
+.preset-selector .preset-actions-group .btn-danger-icon:hover:not(:disabled) {
   background: var(--color-error-bg, #fee);
   color: var(--color-error);
 }
@@ -3162,11 +3211,11 @@ select:focus-visible {
 }
 
 /* High contrast mode adjustments for presets */
-:root[data-high-contrast='true'] .preset-selector .preset-controls {
+:root[data-high-contrast='true'] .preset-selector .preset-actions-group {
   border-width: 2px;
 }
 
-:root[data-high-contrast='true'] .preset-selector .preset-controls .btn-icon {
+:root[data-high-contrast='true'] .preset-selector .preset-actions-group .btn-icon {
   font-weight: 600;
 }
 
@@ -3288,13 +3337,13 @@ body.first-visit-blocking #app {
 .modal-close {
   background: transparent;
   border: none;
-  font-size: 1.5rem;
+  font-size: var(--font-size-lg);
   cursor: pointer;
   color: var(--color-text-secondary);
   padding: var(--space-xs);
   line-height: 1;
-  min-width: 32px;
-  min-height: 32px;
+  min-width: var(--size-touch-target-sm);
+  min-height: var(--size-touch-target-sm);
   border-radius: var(--border-radius-sm);
 }
 
@@ -3515,39 +3564,12 @@ body.first-visit-blocking #app {
  * Displays ECHO, WARNING, ERROR messages from OpenSCAD
  * Ken uses echo() to communicate warnings and instructions to users */
 .console-panel {
-  padding: 0;
-  background: var(--color-bg-secondary);
-  border-radius: var(--border-radius-md);
-  border: 1px solid var(--color-border);
-  margin-bottom: var(--space-sm);
+  /* Card styling provided by .forge-disclosure */
 }
 
 .console-summary {
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-  padding: var(--space-sm) var(--space-md);
-  cursor: pointer;
-  font-weight: 500;
-  list-style: none;
-}
-
-.console-summary::-webkit-details-marker {
-  display: none;
-}
-
-.console-summary::before {
-  content: '▶';
-  font-size: 0.7em;
-  transition: transform var(--motion-base);
-}
-
-.console-panel[open] .console-summary::before {
-  transform: rotate(90deg);
-}
-
-.console-icon {
-  font-size: 1.1em;
+  /* Inherits layout from .forge-disclosure summary */
+  font-weight: 600;
 }
 
 .console-title {
@@ -4169,11 +4191,7 @@ body.first-visit-blocking #app {
    ============================================================================ */
 
 .library-controls {
-  margin-bottom: var(--space-md);
-  padding: var(--space-sm);
-  border: 1px solid var(--color-border);
-  border-radius: var(--border-radius-md);
-  background: var(--color-bg-secondary);
+  /* Wrapper div for visibility control only; card styling on inner .forge-disclosure */
 }
 
 .library-details {
@@ -4181,32 +4199,9 @@ body.first-visit-blocking #app {
 }
 
 .library-summary {
-  cursor: pointer;
-  user-select: none;
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  padding: var(--space-sm);
-  font-weight: 600;
+  /* Inherits layout from .forge-disclosure summary */
   color: var(--color-text-primary);
   border-radius: var(--border-radius-sm);
-  transition: background-color var(--motion-base);
-  list-style: none;
-}
-
-.library-summary::-webkit-details-marker {
-  display: none;
-}
-
-.library-summary::before {
-  content: '▶';
-  display: inline-block;
-  transition: transform var(--motion-base);
-  font-size: 0.8em;
-}
-
-.library-details[open] .library-summary::before {
-  transform: rotate(90deg);
 }
 
 .library-summary:hover {
@@ -4270,7 +4265,7 @@ body.first-visit-blocking #app {
 
 .library-item:has(input:checked) {
   border-color: var(--color-accent);
-  background: rgba(0, 102, 204, 0.05);
+  background: var(--color-accent-subtle, rgba(0, 102, 204, 0.05));
 }
 
 .library-item:has(input:focus) {
@@ -4422,11 +4417,7 @@ body.first-visit-blocking #app {
    ============================================================================ */
 
 .project-files-controls {
-  margin-bottom: var(--space-md);
-  padding: var(--space-sm);
-  border: 1px solid var(--color-border);
-  border-radius: var(--border-radius-md);
-  background: var(--color-bg-secondary);
+  /* Wrapper div for visibility control only; card styling on inner .forge-disclosure */
 }
 
 .project-files-details {
@@ -4434,31 +4425,9 @@ body.first-visit-blocking #app {
 }
 
 .project-files-summary {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  padding: var(--space-xs);
-  cursor: pointer;
-  font-weight: 600;
+  /* Inherits layout from .forge-disclosure summary */
   color: var(--color-text-primary);
-  list-style: none;
-  transition: background var(--motion-base);
   border-radius: var(--border-radius-sm);
-}
-
-.project-files-summary::-webkit-details-marker {
-  display: none;
-}
-
-.project-files-summary::before {
-  content: '▶';
-  font-size: 0.7em;
-  transition: transform var(--motion-base);
-  color: var(--color-text-secondary);
-}
-
-.project-files-details[open] .project-files-summary::before {
-  transform: rotate(90deg);
 }
 
 .project-files-summary:hover {
@@ -4643,6 +4612,34 @@ body.first-visit-blocking #app {
   font-size: var(--font-size-2xs);
   color: var(--color-text-secondary);
   margin: 0;
+}
+
+/* Companion files empty state */
+.companion-empty-state {
+  padding: var(--space-sm) var(--space-md);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  text-align: center;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--border-radius-sm);
+  margin-bottom: var(--space-sm);
+}
+
+.companion-empty-state p {
+  margin: 0;
+}
+
+.companion-empty-state code {
+  font-size: 0.85em;
+  padding: 1px 4px;
+  background: var(--color-bg-tertiary);
+  border-radius: 3px;
+}
+
+/* Companion Save/Update button */
+.companion-save-btn {
+  margin-top: var(--space-xs);
+  width: 100%;
 }
 
 /* High Contrast Mode */
@@ -5813,24 +5810,12 @@ body.first-visit-blocking #app {
    ========================================= */
 
 .advanced-menu {
-  margin-top: var(--space-md);
-  border: 1px solid var(--color-border);
-  border-radius: var(--border-radius-md);
-  background: var(--color-bg-secondary);
+  /* Card styling provided by .forge-disclosure */
 }
 
 .advanced-menu-summary {
-  padding: var(--space-sm) var(--space-md);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  font-weight: 500;
+  /* Inherits layout from .forge-disclosure summary */
   color: var(--color-text-secondary);
-  transition:
-    color var(--motion-base),
-    background-color var(--motion-base);
-  user-select: none;
 }
 
 .advanced-menu-summary:hover {
@@ -5848,7 +5833,7 @@ body.first-visit-blocking #app {
 }
 
 .advanced-icon {
-  font-size: 1.1rem;
+  /* Icon sizing now provided by .forge-disclosure-icon */
 }
 
 .advanced-menu-content {
@@ -9855,15 +9840,15 @@ body.tutorial-body-locked {
    fallback editor. Accessibility-first design per M2 specification.
    ============================================================================ */
 
-/* Mode toggle button in header */
+/* Mode toggle button in header — matches .btn .btn-sm sizing contract */
 .mode-toggle-btn {
   display: inline-flex;
   align-items: center;
   gap: var(--space-xs);
   padding: var(--space-xs) var(--space-sm);
-  min-height: 36px;
+  min-height: var(--size-touch-target-sm);
   background: var(--color-bg-secondary);
-  border: 2px solid var(--color-border);
+  border: 1px solid var(--color-border);
   border-radius: var(--border-radius-sm);
   color: var(--color-text-primary);
   font-size: var(--font-size-sm);

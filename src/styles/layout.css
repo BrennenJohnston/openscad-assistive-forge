@@ -711,18 +711,18 @@ body {
   }
 }
 
-/* Mobile drawer close button */
+/* Mobile drawer close button -- lives in the sticky panel-header title row */
 .drawer-close-btn {
-  position: absolute;
-  right: var(--space-md);
-  top: var(--space-md);
-  min-width: 44px;
-  min-height: 44px;
-  z-index: 10;
+  /* min-width/min-height now provided by .forge-control */
+  z-index: 1;
   background: var(--color-bg-secondary);
   border: 1px solid var(--color-border);
   border-radius: var(--border-radius-md);
-  display: none; /* Hidden by default */
+  display: none; /* Hidden by default, shown on mobile via drawer-open */
+  flex-shrink: 0;
+  transition:
+    background-color var(--motion-base) ease,
+    border-color var(--motion-base) ease;
 }
 
 .drawer-close-btn:hover {
@@ -734,19 +734,19 @@ body {
   transform: scale(0.95);
 }
 
-/* Show close button only when drawer is open on mobile */
+/* Show close button only when drawer is open on mobile.
+   The button lives inside the sticky .panel-header, so it stays
+   visible when scrolling without needing position:fixed (which is
+   broken by the parent transform on the off-canvas drawer). */
 @media (max-width: 767px) {
   .param-panel.drawer-open .drawer-close-btn {
     display: flex !important;
     align-items: center;
     justify-content: center;
-    /* Fixed position so button stays visible when scrolling */
-    position: fixed;
-    top: calc(var(--space-md) + env(safe-area-inset-top, 0px));
-    right: auto;
-    /* Position at right edge of drawer (drawer is min(90vw, 360px) wide) */
-    left: calc(min(90vw, 360px) - 44px - var(--space-md));
-    z-index: calc(var(--z-index-modal-backdrop) + 10); /* Above drawer content */
+    position: static;
+    margin-left: auto;
+    flex-shrink: 0;
+    z-index: 1;
   }
 }
 
@@ -1153,14 +1153,14 @@ body {
   justify-content: space-between;
   width: 100%;
   padding: var(--space-xs) var(--space-md);
-  background: var(--color-info-bg, rgba(23, 162, 184, 0.15));
+  background: var(--color-info-bg);
   border: none;
   cursor: pointer;
   transition: background-color var(--motion-base) ease;
 }
 
 .echo-drawer-toggle:hover {
-  background: var(--color-info-bg, rgba(23, 162, 184, 0.25));
+  background: var(--color-info-bg);
 }
 
 .echo-drawer-toggle:focus-visible {
@@ -1169,13 +1169,13 @@ body {
 }
 
 .echo-drawer-label {
-  color: var(--color-info-text, #17a2b8);
+  color: var(--color-info-text);
   font-size: var(--font-size-sm, 0.875rem);
   font-weight: 500;
 }
 
 .echo-drawer-arrow {
-  color: var(--color-info-text, #17a2b8);
+  color: var(--color-info-text);
   transition: transform var(--motion-slow) ease;
   flex-shrink: 0;
 }
@@ -1206,7 +1206,7 @@ body {
   border-radius: var(--border-radius-sm, 4px);
   font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
   font-size: var(--font-size-xs, 0.75rem);
-  color: var(--color-info-text, #17a2b8);
+  color: var(--color-info-text);
   white-space: pre-wrap;
   word-wrap: break-word;
   line-height: 1.5;
@@ -1315,6 +1315,13 @@ body {
   background-color: var(--color-bg-primary);
   border-bottom: 1px solid var(--color-border);
   z-index: 20;
+  transition: height var(--motion-base) ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .preview-info-section {
+    transition: none;
+  }
 }
 
 /* Semi-transparent background when on-screen keyboard is visible */
@@ -1436,33 +1443,21 @@ body {
      The button visually indicates the panel can dock/undock from the edge.
      ============================================================================ */
 
-  /* Add padding to header for collapse button space */
-  /* Note: position: sticky (inherited from base rule) also creates positioning context for absolute children */
-  .param-panel .panel-header {
-    padding-right: calc(var(--space-md) + 36px);
+  /* Collapse button pushed to right edge of action toolbar */
+  .param-header-actions #collapseParamPanelBtn {
+    margin-left: auto;
   }
 
-  .panel-collapse-control {
-    position: absolute;
-    right: 0;
-    top: 0;
-    bottom: 0;
-    display: flex;
-    align-items: center;
-    padding-right: var(--space-xs);
-    z-index: 11;
-  }
 
   .btn-collapse-panel {
     background: var(--color-bg-tertiary);
     border: 1px solid var(--color-border);
-    border-radius: var(--border-radius-sm);
-    min-width: 28px;
-    min-height: var(--size-touch-target);
+    border-radius: var(--border-radius-md);
     padding: var(--space-xs);
     transition:
-      background-color 0.2s,
-      border-color 0.2s;
+      background-color var(--motion-base) ease,
+      border-color var(--motion-base) ease;
+    /* Sizing provided by .forge-control (square touch target) */
   }
 
   .btn-collapse-panel:hover {
@@ -1489,17 +1484,13 @@ body {
     display: none;
   }
 
-  /* Hide header actions when collapsed */
-  .param-panel.collapsed .param-header-actions {
+  /* Hide toolbar actions except collapse button when collapsed */
+  .param-panel.collapsed .param-header-actions > :not(#collapseParamPanelBtn) {
     display: none;
   }
 
-  /* Reposition collapse control when collapsed */
-  .param-panel.collapsed .panel-collapse-control {
-    position: static;
-    padding: 0;
+  .param-panel.collapsed .param-header-actions {
     justify-content: center;
-    margin-top: var(--space-sm);
   }
 
   /* Adjust header layout when collapsed */
@@ -1509,14 +1500,22 @@ body {
     justify-content: flex-start;
     padding: var(--space-sm);
     padding-top: var(--space-md);
+    border-bottom: none;
+  }
+
+  .param-panel.collapsed .panel-header-title-row {
+    flex-direction: column;
+    align-items: center;
+    order: 1;
   }
 
   .param-panel.collapsed .panel-header h2 {
     writing-mode: vertical-rl;
     text-orientation: mixed;
+    text-align: center;
+    transform: rotate(180deg);
     margin: var(--space-sm) 0;
-    font-size: var(--font-size-sm);
-    order: 1;
+    font-size: var(--font-size-base);
   }
 
   .preview-panel {
@@ -1547,51 +1546,59 @@ body {
 
   .camera-panel-header {
     display: flex;
-    align-items: center;
-    padding: var(--space-sm);
+    flex-direction: column;
+    padding: var(--space-sm) var(--space-md);
     border-bottom: 1px solid var(--color-border);
     background-color: var(--color-bg-secondary);
-    gap: var(--space-sm);
+    gap: var(--space-xs);
     overflow: visible; /* Prevent clipping */
   }
 
+  /* Row 1: Title row (matches Parameters title row) */
+  .camera-header-title-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    min-height: var(--size-touch-target-sm);
+  }
+
   .camera-panel-header h2 {
-    flex: 1;
-    text-align: center;
     font-size: var(--font-size-sm);
     font-weight: 600;
+    line-height: 1.2;
     margin: 0;
     white-space: nowrap;
   }
 
-  /* Collapse button for camera panel - match Parameters panel button styling */
-  .camera-panel .btn-collapse-panel {
-    background: var(--color-bg-tertiary);
-    border: 1px solid var(--color-border);
-    border-radius: var(--border-radius-sm);
-    min-width: 28px;
-    min-height: 44px;
-    padding: var(--space-xs);
-    flex-shrink: 0;
-    overflow: visible;
-    transition:
-      background-color 0.2s,
-      border-color 0.2s;
+  /* Row 2: Actions row with collapse button (mirrors Parameters action toolbar) */
+  .camera-header-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
   }
 
-  .camera-panel .btn-collapse-panel:hover {
-    background: var(--color-accent);
-    color: var(--color-accent-text);
-    border-color: var(--color-accent);
+  /* Collapse button pushed to left edge (mirrors Parameters right edge positioning) */
+  .camera-header-actions #cameraPanelToggle {
+    margin-right: auto;
+  }
+
+  /* Camera collapse button - only camera-specific overrides; base styling from .btn-collapse-panel */
+  .camera-panel .btn-collapse-panel {
+    flex-shrink: 0;
+    overflow: visible;
   }
 
   .camera-panel .btn-collapse-panel svg {
-    transition: transform var(--motion-base) ease;
+    transition: transform var(--motion-slow) ease;
   }
 
-  /* Rotate icon when expanded */
-  .camera-panel:not(.collapsed) .btn-collapse-panel svg {
-    transform: rotate(180deg);
+  @media (prefers-reduced-motion: reduce) {
+    .camera-panel {
+      transition: none;
+    }
+    .camera-panel .btn-collapse-panel svg {
+      transition: none;
+    }
   }
 
   .camera-panel-body {
@@ -1624,16 +1631,33 @@ body {
     border-bottom: none;
   }
 
+  /* Hide all actions except collapse button when collapsed */
+  .camera-panel.collapsed .camera-header-actions > :not(#cameraPanelToggle) {
+    display: none;
+  }
+
+  .camera-panel.collapsed .camera-header-actions {
+    justify-content: center;
+  }
+
+  /* Title row shown but reordered below button */
+  .camera-panel.collapsed .camera-header-title-row {
+    flex-direction: column;
+    align-items: center;
+    order: 1;
+  }
+
   .camera-panel.collapsed .camera-panel-header h2 {
     writing-mode: vertical-rl;
     text-orientation: mixed;
     text-align: center;
     margin: var(--space-sm) 0;
-    font-size: var(--font-size-sm);
+    font-size: var(--font-size-base);
   }
 
+  /* Rotate icon 180° when collapsed to show "expand" direction (matches Parameters) */
   .camera-panel.collapsed .btn-collapse-panel svg {
-    transform: rotate(0deg);
+    transform: rotate(180deg);
   }
 }
 
@@ -1911,8 +1935,8 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 36px;
-    height: 36px;
+    width: var(--size-touch-target-sm);
+    height: var(--size-touch-target-sm);
     padding: 0;
     border-radius: var(--border-radius-sm);
     background: var(--color-bg-tertiary);
@@ -2060,17 +2084,25 @@ body {
 
 .panel-header {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--space-md);
+  flex-direction: column;
+  padding: var(--space-sm) var(--space-md);
   border-bottom: 1px solid var(--color-border);
   background-color: var(--color-bg-secondary);
-  flex-wrap: wrap;
-  gap: var(--space-sm);
-  /* Sticky panel headers */
+  gap: var(--space-xs);
+  /* Sticky panel headers -- stays visible when scrolling */
   position: sticky;
   top: 0;
   z-index: 10;
+}
+
+/* Row 1: Title + Simple/Advanced toggle + close button */
+.panel-header-title-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: var(--size-touch-target-sm);
+  flex-wrap: nowrap;
+  overflow: hidden;
 }
 
 .panel-header-left {
@@ -2089,12 +2121,27 @@ body {
 .panel-header h2 {
   font-size: var(--font-size-lg);
   font-weight: 600;
+  line-height: 1.2;
+  margin: 0;
+  white-space: nowrap;
 }
 
+/* Row 2: Action toolbar - consistent height, even spacing */
 .param-header-actions {
   display: flex;
-  gap: var(--space-sm);
+  gap: var(--space-xs);
   align-items: center;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.param-header-actions .btn {
+  flex-shrink: 0;
+}
+
+/* Panel body -- scrollable content below sticky header */
+.param-panel-body {
+  padding-top: var(--space-sm);
 }
 
 .parameters-container {
@@ -2237,6 +2284,7 @@ details summary:focus,
   box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.15);
   max-height: calc(100vh - var(--actions-bar-height) - 100px);
   overflow-y: auto;
+  animation: drawer-fade-in var(--motion-base) ease;
 }
 
 /* Drawer header - always visible in actions bar, contains toggle and title */
@@ -2269,7 +2317,7 @@ details summary:focus,
   min-width: var(--size-touch-target);
   background: var(--color-bg-tertiary);
   border: 1px solid var(--color-border);
-  border-radius: var(--border-radius-sm);
+  border-radius: var(--border-radius-md);
   color: var(--color-text-primary);
   cursor: pointer;
   flex-shrink: 0;
@@ -2296,9 +2344,23 @@ details summary:focus,
   transform: rotate(-90deg);
 }
 
+@keyframes drawer-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--space-xs));
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .actions-drawer-toggle-btn.btn-collapse-panel svg {
     transition: none;
+  }
+  .actions-drawer:not(.collapsed) .actions-drawer-body {
+    animation: none;
   }
 }
 
@@ -2635,7 +2697,7 @@ details summary:focus,
     justify-content: center;
     gap: var(--space-xs);
     width: 100%;
-    min-height: 44px;
+    min-height: var(--size-touch-target);
     padding: var(--space-xs) var(--space-sm);
     background: color-mix(in srgb, var(--color-bg-tertiary) 90%, transparent);
     border: none;
@@ -3355,57 +3417,57 @@ details summary:focus,
    ============================================================================ */
 @media (max-width: 480px) and (orientation: portrait) {
   /* Hide title and tagline completely */
-  .header-branding-text {
-    display: none !important;
+  :root .header-branding-text {
+    display: none;
   }
 
   /* Minimal header padding */
-  .app-header {
-    padding: var(--space-2xs) var(--space-sm) !important;
+  :root .app-header {
+    padding: var(--space-2xs) var(--space-sm);
     padding-top: calc(
       var(--space-2xs) + env(safe-area-inset-top, 0px)
-    ) !important;
+    );
     padding-left: calc(
       var(--space-sm) + env(safe-area-inset-left, 0px)
-    ) !important;
+    );
     padding-right: calc(
       var(--space-sm) + env(safe-area-inset-right, 0px)
-    ) !important;
+    );
   }
 
   /* Single row layout - logo and buttons inline */
-  .header-content {
-    flex-wrap: nowrap !important;
-    gap: var(--space-xs) !important;
-    align-items: center !important;
-    justify-content: flex-start !important;
+  :root .header-content {
+    flex-wrap: nowrap;
+    gap: var(--space-xs);
+    align-items: center;
+    justify-content: flex-start;
   }
 
   /* Logo container - minimal, no extra space */
-  .header-branding {
-    flex: 0 0 auto !important;
-    min-width: auto !important;
-    gap: 0 !important;
-    order: 1 !important;
+  :root .header-branding {
+    flex: 0 0 auto;
+    min-width: auto;
+    gap: 0;
+    order: 1;
   }
 
   /* Logo matches button size (44px) */
-  .header-logo {
-    width: var(--size-touch-target) !important;
-    height: var(--size-touch-target) !important;
-    max-height: var(--size-touch-target) !important;
-    object-fit: contain !important;
+  :root .header-logo {
+    width: var(--size-touch-target);
+    height: var(--size-touch-target);
+    max-height: var(--size-touch-target);
+    object-fit: contain;
   }
 
   /* Buttons align right on same row as logo */
-  .header-controls {
-    flex: 1 1 auto !important;
-    width: auto !important;
-    justify-content: flex-end !important;
-    margin-left: auto !important;
-    order: 2 !important;
-    gap: var(--space-xs) !important;
-    flex-wrap: nowrap !important;
+  :root .header-controls {
+    flex: 1 1 auto;
+    width: auto;
+    justify-content: flex-end;
+    margin-left: auto;
+    order: 2;
+    gap: var(--space-xs);
+    flex-wrap: nowrap;
   }
 
   /* ============================================================================
@@ -3417,134 +3479,134 @@ details summary:focus,
      ============================================================================ */
 
   /* Actions bar: use CSS Grid for precise control */
-  .preview-panel .actions-bar {
-    display: grid !important;
-    grid-template-columns: 1fr 1fr !important;
-    grid-template-rows: auto auto auto !important;
+  :root .preview-panel .actions-bar {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto auto;
     grid-template-areas:
       'drawer-content drawer-content'
       'actions camera'
-      'primary primary' !important;
-    flex-direction: unset !important;
+      'primary primary';
+    flex-direction: unset;
   }
 
   /* Actions drawer in left column */
-  .actions-drawer {
-    grid-area: actions !important;
-    width: 100% !important;
-    min-width: unset !important;
-    border-right: 1px solid var(--color-border) !important;
-    border-bottom: none !important;
+  :root .actions-drawer {
+    grid-area: actions;
+    width: 100%;
+    min-width: unset;
+    border-right: 1px solid var(--color-border);
+    border-bottom: none;
   }
 
   /* Camera drawer in right column */
-  .camera-drawer {
-    grid-area: camera !important;
-    width: 100% !important;
-    min-width: unset !important;
-    border-bottom: none !important;
-    flex-direction: column-reverse !important;
+  :root .camera-drawer {
+    grid-area: camera;
+    width: 100%;
+    min-width: unset;
+    border-bottom: none;
+    flex-direction: column-reverse;
     /* CRITICAL: Remove backdrop-filter to allow fixed positioning to work correctly */
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
   }
 
   /* Primary actions span full width at bottom */
-  .actions-primary {
-    grid-area: primary !important;
-    border-top: 1px solid var(--color-border) !important;
+  :root .actions-primary {
+    grid-area: primary;
+    border-top: 1px solid var(--color-border);
   }
 
   /* Make Actions drawer header match Camera drawer toggle button styling exactly */
-  .actions-drawer-header {
-    position: relative !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    gap: var(--space-xs) !important;
-    width: 100% !important;
-    min-height: 44px !important;
-    padding: var(--space-xs) var(--space-sm) !important;
-    background: var(--color-bg-tertiary) !important;
-    cursor: pointer !important;
+  :root .actions-drawer-header {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-xs);
+    width: 100%;
+    min-height: var(--size-touch-target);
+    padding: var(--space-xs) var(--space-sm);
+    background: var(--color-bg-tertiary);
+    cursor: pointer;
   }
 
   /* Make the toggle button cover the entire header area (invisible but clickable) */
-  .actions-drawer-toggle-btn {
-    position: absolute !important;
-    inset: 0 !important;
-    width: 100% !important;
-    height: 100% !important;
-    opacity: 0 !important;
-    cursor: pointer !important;
-    z-index: 1 !important;
+  :root .actions-drawer-toggle-btn {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+    z-index: 1;
   }
 
   /* Style the Actions title to match Camera label exactly */
-  .actions-drawer-title {
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    margin: 0 !important;
-    font-size: var(--font-size-sm) !important;
-    font-weight: 600 !important;
-    color: var(--color-text-primary) !important;
-    pointer-events: none !important;
+  :root .actions-drawer-title {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--color-text-primary);
+    pointer-events: none;
   }
 
   /* Add a chevron icon to Actions title via pseudo-element */
   .actions-drawer-title::before {
-    content: '▼' !important;
-    font-size: 0.625rem !important;
-    margin-right: var(--space-xs) !important;
-    transition: transform var(--motion-base) ease !important;
-    display: inline-block !important;
+    content: '▼';
+    font-size: 0.625rem;
+    margin-right: var(--space-xs);
+    transition: transform var(--motion-base) ease;
+    display: inline-block;
   }
 
   /* Rotate chevron when expanded (points up) */
   .actions-drawer:not(.collapsed) .actions-drawer-title::before {
-    transform: rotate(180deg) !important;
+    transform: rotate(180deg);
   }
 
   /* Camera drawer toggle - match Actions drawer styling exactly */
-  .camera-drawer-toggle-btn {
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    gap: var(--space-xs) !important;
-    width: 100% !important;
-    min-height: 44px !important;
-    padding: var(--space-xs) var(--space-sm) !important;
-    border: none !important;
-    border-bottom: none !important;
-    background: var(--color-bg-tertiary) !important;
-    color: var(--color-text-primary) !important;
-    font-size: var(--font-size-sm) !important;
-    font-weight: 600 !important;
-    cursor: pointer !important;
+  :root .camera-drawer-toggle-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-xs);
+    width: 100%;
+    min-height: var(--size-touch-target);
+    padding: var(--space-xs) var(--space-sm);
+    border: none;
+    border-bottom: none;
+    background: var(--color-bg-tertiary);
+    color: var(--color-text-primary);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    cursor: pointer;
   }
 
   /* Hide the SVG icon in Camera toggle - we'll use CSS pseudo-element instead */
   .camera-drawer-toggle-btn .camera-drawer-icon {
-    display: none !important;
+    display: none;
   }
 
   /* Add chevron via pseudo-element to match Actions */
   .camera-drawer-label::before {
-    content: '▼' !important;
-    font-size: 0.625rem !important;
-    margin-right: var(--space-xs) !important;
-    transition: transform var(--motion-base) ease !important;
-    display: inline-block !important;
+    content: '▼';
+    font-size: 0.625rem;
+    margin-right: var(--space-xs);
+    transition: transform var(--motion-base) ease;
+    display: inline-block;
   }
 
   /* Rotate chevron when Camera drawer is expanded */
   .camera-drawer:not(.collapsed) .camera-drawer-label::before {
-    transform: rotate(180deg) !important;
+    transform: rotate(180deg);
   }
 
   /* Actions drawer body - fixed overlay above the bar */
-  .actions-drawer:not(.collapsed) .actions-drawer-body {
+  :root .actions-drawer:not(.collapsed) .actions-drawer-body {
     position: fixed !important;
     left: 0 !important;
     right: 0 !important;
@@ -3555,12 +3617,12 @@ details summary:focus,
     ) !important;
     max-height: 45vh !important;
     overflow-y: auto !important;
-    border-radius: var(--border-radius-md) var(--border-radius-md) 0 0 !important;
-    box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.15) !important;
+    border-radius: var(--border-radius-md) var(--border-radius-md) 0 0;
+    box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.15);
   }
 
   /* Camera drawer body - fixed overlay, scales with viewport */
-  .camera-drawer:not(.collapsed) .camera-drawer-body {
+  :root .camera-drawer:not(.collapsed) .camera-drawer-body {
     position: fixed !important;
     left: 0 !important;
     right: 0 !important;
@@ -3572,12 +3634,12 @@ details summary:focus,
     /* Limit height and allow scrolling */
     max-height: 45vh !important;
     overflow-y: auto !important;
-    overflow-x: hidden !important;
-    border-radius: var(--border-radius-md) var(--border-radius-md) 0 0 !important;
-    border-top: 1px solid var(--color-border) !important;
-    box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.15) !important;
+    overflow-x: hidden;
+    border-radius: var(--border-radius-md) var(--border-radius-md) 0 0;
+    border-top: 1px solid var(--color-border);
+    box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.15);
     /* Ensure proper box model */
-    box-sizing: border-box !important;
+    box-sizing: border-box;
     /* Padding: add extra top room so the absolute "Zoom" label isn't clipped */
     padding: var(--space-sm) var(--space-xs) !important;
     padding-top: calc(var(--space-sm) + 1.5em) !important;
@@ -3585,10 +3647,10 @@ details summary:focus,
     display: grid !important;
     grid-template-columns: 1fr auto 1fr !important;
     /* Reduce column gap so 3×3 pads + zoom fit without squeezing */
-    gap: var(--space-xs) !important;
-    justify-items: center !important;
+    gap: var(--space-xs);
+    justify-items: center;
     /* Center items vertically - critical for D-pad alignment */
-    align-items: center !important;
+    align-items: center;
   }
 
   /* Camera drawer sizing tokens (scale with viewport + zoom) */
@@ -3609,110 +3671,110 @@ details summary:focus,
       Previous cap (26vw) made the D-pad container ~78px wide on small screens,
       while buttons were ~40px, causing overflow/squeezing and “uneven” spacing.
     */
-    max-width: none !important;
+    max-width: none;
     width: calc(
       (var(--camera-btn-size) * 3) + 2px
-    ) !important; /* 3 cols + 2 gaps (gap=1px) */
-    gap: 1px !important;
+    ); /* 3 cols + 2 gaps (gap=1px) */
+    gap: 1px;
   }
 
   /* D-pad buttons - smaller touch targets for tight space */
   .camera-drawer:not(.collapsed) .camera-drawer-btn {
-    width: var(--camera-btn-size) !important;
-    height: var(--camera-btn-size) !important;
-    min-width: var(--camera-btn-size) !important;
-    min-height: var(--camera-btn-size) !important;
+    width: var(--camera-btn-size);
+    height: var(--camera-btn-size);
+    min-width: var(--camera-btn-size);
+    min-height: var(--camera-btn-size);
   }
 
   /* Hidden/alt view: pan-adjust toggle must match D-pad sizing */
   .camera-drawer:not(.collapsed) .camera-drawer-dpad .alt-pan-toggle {
-    width: var(--camera-btn-size) !important;
-    height: var(--camera-btn-size) !important;
-    min-width: var(--camera-btn-size) !important;
-    min-height: var(--camera-btn-size) !important;
-    padding: 0 !important;
+    width: var(--camera-btn-size);
+    height: var(--camera-btn-size);
+    min-width: var(--camera-btn-size);
+    min-height: var(--camera-btn-size);
+    padding: 0;
   }
 
   /* D-pad rows - tighter */
   .camera-drawer:not(.collapsed) .camera-drawer-dpad {
-    grid-template-columns: repeat(3, var(--camera-btn-size)) !important;
-    grid-template-rows: repeat(3, var(--camera-btn-size)) !important;
+    grid-template-columns: repeat(3, var(--camera-btn-size));
+    grid-template-rows: repeat(3, var(--camera-btn-size));
   }
 
   /* Rotate section - vertically centered, aligned to left */
   .camera-drawer:not(.collapsed) .camera-drawer-rotate {
-    justify-self: center !important;
-    align-self: center !important;
+    justify-self: center;
+    align-self: center;
   }
 
   /* Pan section - vertically centered, aligned to right */
   .camera-drawer:not(.collapsed) .camera-drawer-pan {
-    justify-self: center !important;
-    align-self: center !important;
+    justify-self: center;
+    align-self: center;
   }
 
   /* Zoom section - compact vertical stack, centered */
   .camera-drawer:not(.collapsed) .camera-drawer-zoom {
-    justify-self: center !important;
-    align-self: center !important;
-    position: relative !important;
-    width: var(--camera-btn-size) !important;
-    min-width: var(--camera-btn-size) !important;
-    gap: var(--space-2xs) !important;
+    justify-self: center;
+    align-self: center;
+    position: relative;
+    width: var(--camera-btn-size);
+    min-width: var(--camera-btn-size);
+    gap: var(--space-2xs);
   }
 
   /* Keep Zoom title visible but remove it from layout height */
   .camera-drawer:not(.collapsed)
     .camera-drawer-zoom
     .camera-drawer-section-title {
-    position: absolute !important;
-    top: 0 !important;
-    left: 50% !important;
-    transform: translate(-50%, -100%) !important;
-    margin: 0 !important;
-    white-space: nowrap !important;
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translate(-50%, -100%);
+    margin: 0;
+    white-space: nowrap;
   }
 
   .camera-drawer:not(.collapsed) .camera-drawer-zoom-controls {
-    gap: var(--space-2xs) !important;
-    flex-direction: column !important;
-    align-items: center !important;
-    width: 100% !important;
+    gap: var(--space-2xs);
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
   }
 
   /* Zoom in/out buttons: force same size as D-pad arrows */
   .camera-drawer:not(.collapsed)
     .camera-drawer-zoom-controls
     .camera-drawer-btn {
-    width: var(--camera-btn-size) !important;
-    height: var(--camera-btn-size) !important;
-    min-width: var(--camera-btn-size) !important;
-    min-height: var(--camera-btn-size) !important;
-    padding: 0 !important;
+    width: var(--camera-btn-size);
+    height: var(--camera-btn-size);
+    min-width: var(--camera-btn-size);
+    min-height: var(--camera-btn-size);
+    padding: 0;
   }
 
   .camera-drawer:not(.collapsed) .camera-drawer-reset-btn {
-    width: var(--camera-btn-size) !important;
-    min-width: var(--camera-btn-size) !important;
-    padding: 0 !important;
-    font-size: var(--font-size-2xs) !important;
-    min-height: var(--camera-btn-size) !important;
+    width: var(--camera-btn-size);
+    min-width: var(--camera-btn-size);
+    padding: 0;
+    font-size: var(--font-size-2xs);
+    min-height: var(--camera-btn-size);
   }
 
   /* Reset button: hide text on tight mobile layout */
   .camera-drawer:not(.collapsed) .camera-drawer-reset-btn span {
-    display: none !important;
+    display: none;
   }
 
   /* Section titles - smaller */
   .camera-drawer:not(.collapsed) .camera-drawer-section-title {
-    font-size: var(--font-size-2xs) !important;
-    margin-bottom: var(--space-2xs) !important;
+    font-size: var(--font-size-2xs);
+    margin-bottom: var(--space-2xs);
   }
 
   /* D-pad center labels - smaller */
   .camera-drawer:not(.collapsed) .camera-drawer-dpad-label {
-    font-size: 0.5625rem !important;
+    font-size: 0.5625rem;
   }
 
   /* ============================================================================

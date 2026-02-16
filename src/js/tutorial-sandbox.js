@@ -542,6 +542,22 @@ async function executeEnsureAction(action) {
       break;
     }
 
+    case 'clickIfExpanded': {
+      // Click a specific toggle element if its aria-expanded is 'true'.
+      // Unlike collapsePanel (which searches *inside* the selector for a toggle),
+      // this targets the toggle element directly — needed when a parent container
+      // contains multiple aria-expanded elements.
+      const el = document.querySelector(action.selector);
+      if (el && el.getAttribute('aria-expanded') === 'true') {
+        el.click();
+        await waitForTransition(
+          el.closest('.preview-info-section') || el.parentElement || el,
+          400
+        );
+      }
+      break;
+    }
+
     case 'wait': {
       await new Promise((r) => setTimeout(r, action.duration || 300));
       break;
@@ -911,12 +927,31 @@ const TUTORIALS = {
         `,
         highlightSelector: '@preview-container',
         position: 'left',
+        // Collapse the Preview Settings drawer so it doesn't obscure the 3D canvas.
+        // The drawer gets its own dedicated step later ("Preview Settings & Info").
+        ensure: [
+          { type: 'clickIfExpanded', selector: '#previewDrawerToggle' },
+        ],
       },
       {
         title: 'Save a preset (optional, but helpful)',
         content: `
-          <p>Use <strong>Presets</strong> to save your current settings and return to them later.</p>
+          <p><strong>Presets</strong> let you save and switch between different configurations.</p>
+          <details class="tutorial-more">
+            <summary>What each button does</summary>
+            <ul>
+              <li><strong>Select</strong> (dropdown) — pick a saved preset</li>
+              <li><strong>Save</strong> — overwrite the current preset with your changes</li>
+              <li><strong>Add (+)</strong> — create a new preset from current settings</li>
+              <li><strong>Delete (\u2212)</strong> — remove the selected preset</li>
+              <li><strong>Import / Export</strong> — share presets as JSON files</li>
+            </ul>
+          </details>
           <p class="tutorial-hint">Presets are saved in your browser for this model.</p>
+        `,
+        contentCompact: `
+          <p>Use <strong>Presets</strong> to save, load, and share configurations.</p>
+          <p class="tutorial-hint">Saved in your browser for this model.</p>
         `,
         // Target the clickable summary so the panel can avoid covering it.
         highlightSelector: '#presetControls summary, @preset-controls',
@@ -987,6 +1022,22 @@ const TUTORIALS = {
         },
       },
       {
+        title: 'Companion Files',
+        content: `
+          <p>Some designs use extra files (like <code>.txt</code> or <code>.svg</code>). When loaded from a ZIP, they appear in the <strong>Companion Files</strong> section.</p>
+          <p class="tutorial-hint">You can also add files manually using the <strong>Add File</strong> button.</p>
+        `,
+        contentCompact: `
+          <p>Extra files (<code>.txt</code>, <code>.svg</code>) appear under <strong>Companion Files</strong>.</p>
+        `,
+        highlightSelector:
+          '[data-tutorial-target="companion-files"], #projectFilesControls summary',
+        position: 'right',
+        showWhen: {
+          condition: () => !!document.getElementById('projectFilesControls'),
+        },
+      },
+      {
         title: 'Close Parameters (mobile)',
         content: `
           <p>On mobile, the <strong>Parameters</strong> drawer sits on top of the app.</p>
@@ -1033,6 +1084,7 @@ const TUTORIALS = {
           <ul>
             <li>Try a different example from the Welcome screen</li>
             <li>Upload your own <code>.scad</code> or <code>.zip</code> project</li>
+            <li>Switch between <strong>Simple</strong> and <strong>Advanced</strong> settings to see more options</li>
             <li>Use Presets and the Actions menu to save and share your work</li>
           </ul>
         `,

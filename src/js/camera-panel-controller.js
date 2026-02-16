@@ -3,6 +3,10 @@
  * Right-side collapsible drawer for camera controls (desktop).
  * Mobile camera drawer for portrait/mobile view.
  * Mirrors the Parameters panel behavior on the left side.
+ *
+ * STATE CONVENTION: Additive close — `collapsed` class = closed.
+ * This is the opposite of the Parameters drawer which uses
+ * additive open (`drawer-open` class = open). See UI_STANDARDS.md.
  */
 
 import { announceImmediate } from './announcer.js';

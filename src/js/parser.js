@@ -589,18 +589,33 @@ export function extractParameters(scadContent) {
       // Check for group
       const groupMatch = line.match(groupPattern);
       if (groupMatch) {
-        currentGroup = groupMatch[1].trim();
+        let rawGroupName = groupMatch[1].trim();
+        let groupAnnotation = null;
+
+        // Support ":advanced" annotation suffix: /* [GroupName:advanced] */
+        // Strip the suffix from the display label and store as metadata
+        const annotationMatch = rawGroupName.match(/^(.+?)\s*:\s*(advanced|simple)\s*$/i);
+        if (annotationMatch) {
+          rawGroupName = annotationMatch[1].trim();
+          groupAnnotation = annotationMatch[2].toLowerCase();
+        }
+
+        currentGroup = rawGroupName;
 
         // Skip Hidden group entirely, and Global group from groups array
         // (Global params will be marked with isGlobal flag and shown on all tabs)
         const lowerGroup = currentGroup.toLowerCase();
         if (lowerGroup !== 'hidden' && lowerGroup !== 'global') {
           if (!groups.find((g) => g.id === currentGroup)) {
-            groups.push({
+            const groupDef = {
               id: currentGroup,
               label: currentGroup,
               order: groupOrder++,
-            });
+            };
+            if (groupAnnotation) {
+              groupDef.annotation = groupAnnotation;
+            }
+            groups.push(groupDef);
           }
         }
         handledGroup = true;

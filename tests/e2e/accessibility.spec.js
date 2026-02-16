@@ -1064,7 +1064,7 @@ test.describe('Screen Reader Support', () => {
       expect(progressText).toMatch(/Step \d+ of \d+/)
     })
 
-    test('should spotlight Actions drawer toggle (mobile tutorial step 9)', async ({ page }) => {
+    test('should spotlight Actions drawer toggle (mobile tutorial step 10)', async ({ page }) => {
       // Skip in CI - requires WASM for example loading
       test.skip(isCI, 'WASM example loading is slow/unreliable in CI')
 
@@ -1165,11 +1165,15 @@ test.describe('Screen Reader Support', () => {
       // Toggle event can be delayed by animations/layout; give it a moment.
       await expect(nextBtn).not.toBeDisabled({ timeout: 20000 })
 
-      // Step 7 -> Step 8
+      // Step 7 -> Step 8 (Settings Level - new step)
+      await nextBtn.click()
+      await expect(stepTitle).toHaveText('Settings Level')
+
+      // Step 8 -> Step 9
       await nextBtn.click()
       await expect(stepTitle).toHaveText('Preview Settings & Info')
 
-      // Step 8 -> Step 9 (Actions menu)
+      // Step 9 -> Step 10 (Actions menu)
       await nextBtn.click()
       await expect(stepTitle).toHaveText('Actions menu')
 
@@ -1219,7 +1223,7 @@ test.describe('Screen Reader Support', () => {
       expect(actionsCenter.y).toBeGreaterThanOrEqual(cutoutRect.top)
       expect(actionsCenter.y).toBeLessThanOrEqual(cutoutRect.bottom)
 
-      // Ensure we're not still spotlighting Preview Settings (regression for step 8)
+      // Ensure we're not still spotlighting Preview Settings (regression for step 9)
       expect(
         previewCenter.x >= cutoutRect.left &&
           previewCenter.x <= cutoutRect.right &&
@@ -2021,5 +2025,227 @@ test.describe('Tutorial CSS and Styling - Phase 6.4', () => {
       expect(kbdStyles.background).not.toBe('rgba(0, 0, 0, 0)');
       expect(kbdStyles.padding).not.toBe('0px');
     }
+  });
+});
+
+test.describe('Settings Level & Disclosure Section Accessibility', () => {
+  test('advanced mode is always on — no settings-hidden classes present', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI');
+
+    await page.goto('/');
+    await waitForWasmReady(page);
+
+    const fixturePath = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad');
+    await page.setInputFiles('#fileInput', fixturePath);
+    await page.waitForSelector('.param-control', { timeout: 30_000 });
+
+    // No Simple/Advanced toggle should exist
+    const settingsToggle = page.locator('#settingsLevelToggle');
+    await expect(settingsToggle).toHaveCount(0);
+
+    // No elements should have settings-hidden class
+    const hiddenCount = await page.locator('.settings-hidden').count();
+    expect(hiddenCount).toBe(0);
+
+    // Advanced menu should be visible (not hidden)
+    const advancedMenu = page.locator('#advancedMenu');
+    if (await advancedMenu.count() > 0) {
+      await expect(advancedMenu).not.toHaveClass(/settings-hidden/);
+    }
+  });
+
+  test('all disclosure sections are keyboard-operable', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI');
+
+    await page.goto('/');
+    await waitForWasmReady(page);
+
+    const fixturePath = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad');
+    await page.setInputFiles('#fileInput', fixturePath);
+    await page.waitForSelector('.param-control', { timeout: 30_000 });
+
+    // Test that forge-disclosure details can be toggled with keyboard
+    const disclosures = page.locator('.forge-disclosure');
+    const count = await disclosures.count();
+
+    for (let i = 0; i < count; i++) {
+      const detail = disclosures.nth(i);
+      const isVisible = await detail.isVisible().catch(() => false);
+      if (!isVisible) continue;
+
+      const summary = detail.locator('summary');
+      const summaryVisible = await summary.isVisible().catch(() => false);
+      if (!summaryVisible) continue;
+
+      // Focus the summary and press Enter
+      await summary.focus();
+      const wasOpen = await detail.getAttribute('open');
+      await page.keyboard.press('Enter');
+      await page.waitForTimeout(100);
+
+      const isNowOpen = await detail.getAttribute('open');
+      // State should have toggled
+      if (wasOpen !== null) {
+        expect(isNowOpen).toBeNull();
+      } else {
+        expect(isNowOpen).not.toBeNull();
+      }
+
+      // Toggle back to original state
+      await page.keyboard.press('Enter');
+      await page.waitForTimeout(100);
+    }
+  });
+
+  test('forge-disclosure sections have uniform chevron via ::after', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+
+    // Verify all forge-disclosure summaries have the ::after pseudo-element chevron
+    const hasChevrons = await page.evaluate(() => {
+      const summaries = document.querySelectorAll('.forge-disclosure summary');
+      if (summaries.length === 0) return false;
+
+      return Array.from(summaries).every(summary => {
+        const styles = getComputedStyle(summary, '::after');
+        return styles.content !== 'none' && styles.content !== '';
+      });
+    });
+
+    expect(hasChevrons).toBe(true);
+  });
+});
+
+test.describe('UI Uniformity Regression', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+  });
+
+  test('parameters header has correct 2-row structure', async ({ page }) => {
+    const structure = await page.evaluate(() => {
+      const header = document.querySelector('.panel-header');
+      if (!header) return null;
+      const rows = Array.from(header.children).map(el => el.className);
+      const collapseInActions = !!header.querySelector('.param-header-actions #collapseParamPanelBtn');
+      const noSettingsRow = !header.querySelector('.panel-header-settings-row');
+      return { rows, collapseInActions, noSettingsRow };
+    });
+    expect(structure).not.toBeNull();
+    expect(structure.collapseInActions).toBe(true);
+    expect(structure.noSettingsRow).toBe(true);
+  });
+
+  test('advanced menu is located after companion files and before param search', async ({ page }) => {
+    const order = await page.evaluate(() => {
+      const body = document.getElementById('paramPanelBody');
+      if (!body) return null;
+      const children = Array.from(body.children).map(el => el.id || el.className);
+      const projIdx = children.indexOf('projectFilesControls');
+      const advIdx = children.findIndex(c => c === 'advancedMenu' || c.includes('advanced-menu'));
+      const searchIdx = children.indexOf('paramSearchSection');
+      return { projIdx, advIdx, searchIdx };
+    });
+    expect(order).not.toBeNull();
+    expect(order.advIdx).toBeGreaterThan(order.projIdx);
+    expect(order.advIdx).toBeLessThan(order.searchIdx);
+  });
+
+  test('all forge-disclosure summaries have uniform typography', async ({ page }) => {
+    const typography = await page.evaluate(() => {
+      const summaries = document.querySelectorAll('.forge-disclosure summary');
+      if (summaries.length === 0) return null;
+      const values = Array.from(summaries)
+        .filter(s => s.offsetParent !== null)
+        .map(s => {
+          const cs = getComputedStyle(s);
+          return {
+            fontSize: cs.fontSize,
+            fontWeight: cs.fontWeight,
+            lineHeight: cs.lineHeight,
+          };
+        });
+      if (values.length === 0) return null;
+      const first = values[0];
+      const allMatch = values.every(
+        v => v.fontSize === first.fontSize && v.fontWeight === first.fontWeight
+      );
+      return { count: values.length, allMatch, sample: first };
+    });
+    expect(typography).not.toBeNull();
+    expect(typography.allMatch).toBe(true);
+  });
+
+  test('no legacy triangle chevron on param groups', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI');
+    await page.goto('/');
+    await waitForWasmReady(page);
+    const fixturePath = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad');
+    await page.setInputFiles('#fileInput', fixturePath);
+    await page.waitForSelector('.param-group', { timeout: 30_000 });
+
+    const result = await page.evaluate(() => {
+      const groups = document.querySelectorAll('.param-group');
+      const hasForgeDisclosure = Array.from(groups).every(g => g.classList.contains('forge-disclosure'));
+      const hasLegacyChevron = Array.from(groups).some(g => {
+        const beforeContent = getComputedStyle(g.querySelector('summary'), '::before').content;
+        return beforeContent && beforeContent.includes('▶');
+      });
+      return { count: groups.length, hasForgeDisclosure, hasLegacyChevron };
+    });
+    if (result.count > 0) {
+      expect(result.hasForgeDisclosure).toBe(true);
+      expect(result.hasLegacyChevron).toBe(false);
+    }
+  });
+
+  test('icon-only controls have forge-control class and correct sizing', async ({ page }) => {
+    const controls = await page.evaluate(() => {
+      const ids = ['collapseParamPanelBtn', 'cameraPanelToggle', 'previewDrawerToggle', 'actionsDrawerToggle'];
+      return ids.map(id => {
+        const el = document.getElementById(id);
+        if (!el) return { id, found: false };
+        const cs = getComputedStyle(el);
+        return {
+          id,
+          found: true,
+          hasForgeControl: el.classList.contains('forge-control'),
+          minHeight: parseFloat(cs.minHeight),
+          borderRadius: cs.borderRadius,
+        };
+      });
+    });
+    for (const ctrl of controls) {
+      if (!ctrl.found) continue;
+      expect(ctrl.hasForgeControl).toBe(true);
+      expect(ctrl.minHeight).toBeGreaterThanOrEqual(36);
+    }
+  });
+
+  test('collapsed panels have identical width (mirror symmetry)', async ({ page }) => {
+    const widths = await page.evaluate(() => {
+      const paramPanel = document.querySelector('.param-panel');
+      const cameraPanel = document.querySelector('.camera-panel');
+      if (!paramPanel || !cameraPanel) return null;
+      const paramCollapsed = getComputedStyle(paramPanel).getPropertyValue('--drawer-collapsed-width');
+      const cameraCollapsed = getComputedStyle(cameraPanel).getPropertyValue('--drawer-collapsed-width');
+      return { paramCollapsed, cameraCollapsed };
+    });
+    if (widths) {
+      expect(widths.paramCollapsed).toBe(widths.cameraCollapsed);
+    }
+  });
+
+  test('no debug fetch calls to localhost', async ({ page }) => {
+    const debugRequests = [];
+    page.on('request', request => {
+      if (request.url().includes('127.0.0.1')) {
+        debugRequests.push(request.url());
+      }
+    });
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(5000);
+    expect(debugRequests).toEqual([]);
   });
 });

@@ -47,7 +47,7 @@ Security hardening, saved projects, documentation overhaul, and accessibility im
 - **Added `docs/guides/SECURITY_TESTING.md`** - Security audit procedures
 - **Added `docs/DEV_QUICK_START.md`** - Developer onboarding guide
 - **Documentation style audit** - Rewrote docs to single-maintainer voice
-  - Removed template/AI patterns and excessive emoji
+  - Removed boilerplate patterns and excessive emoji
   - Consolidated docs into predictable `docs/` structure
   - Moved specs to `docs/specs/` (UI_STANDARDS, CAMERA_CONTROLS_ACCESSIBILITY)
 

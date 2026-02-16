@@ -30,7 +30,7 @@ localhost_*.report.html
 # Uncomment to track lock file: pixi.lock
 .pixi/
 
-# Cursor AI workspace
+# Editor workspace
 .cursor/
 
 # Local stakeholder reference files

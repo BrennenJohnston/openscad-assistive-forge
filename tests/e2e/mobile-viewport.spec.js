@@ -175,6 +175,45 @@ test.describe('Mobile Viewport - Landscape', () => {
   })
 })
 
+// Toolbar breakpoint stability tests
+test.describe('Toolbar Breakpoint Stability', () => {
+  test('no horizontal overflow at 320px width', async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 568 });
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+
+    const hasOverflow = await page.evaluate(() => {
+      return document.documentElement.scrollWidth > window.innerWidth + 1;
+    });
+    expect(hasOverflow).toBe(false);
+  });
+
+  test('no horizontal overflow at 480px width', async ({ page }) => {
+    await page.setViewportSize({ width: 480, height: 800 });
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+
+    const hasOverflow = await page.evaluate(() => {
+      return document.documentElement.scrollWidth > window.innerWidth + 1;
+    });
+    expect(hasOverflow).toBe(false);
+  });
+
+  test('header controls remain accessible at 768px', async ({ page }) => {
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+
+    const themeToggle = page.locator('#themeToggle');
+    await expect(themeToggle).toBeVisible();
+
+    const box = await themeToggle.boundingBox();
+    const viewport = page.viewportSize();
+    expect(box).not.toBeNull();
+    expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
+  });
+});
+
 // Small screen tests (older/budget phones)
 test.describe('Mobile Viewport - Small Screen', () => {
   test.use({

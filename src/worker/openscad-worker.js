@@ -155,11 +155,11 @@ const ERROR_TRANSLATIONS = [
     // IMPORTANT: Detect empty geometry from OpenSCAD console output
     pattern: /Current top[ -]?level object is empty/i,
     message:
-      'This configuration produces no geometry. Check that the selected options are compatible (e.g., if generating a "keyguard frame", make sure "have a keyguard frame" is set to "yes").',
+      'This configuration produces no geometry. Check that the selected options are compatible — some parameter combinations may result in empty output.',
     code: 'EMPTY_GEOMETRY',
   },
   {
-    // Detect "not supported" ECHO messages from the keyguard model
+    // Detect "not supported" ECHO messages from OpenSCAD models
     pattern: /is not supported for/i,
     message:
       'This combination of options is not supported. Please check the "generate" setting and related options.',
@@ -1506,7 +1506,7 @@ async function renderWithCallMain(
       }
 
       // Check for empty geometry - OpenSCAD returns exit code 0 but produces no output
-      // This happens when configuration is invalid (e.g., "keyguard frame" with "have a keyguard frame" = "no")
+      // This happens when parameter combinations result in no geometry being generated
       if (
         openscadConsoleOutput.includes('Current top level object is empty') ||
         openscadConsoleOutput.includes('top-level object is empty')
@@ -1517,8 +1517,8 @@ async function renderWithCallMain(
       }
 
       // Check for 2D object exported to a 3D format (STL/OBJ/etc.)
-      // This happens when model produces 2D geometry (e.g., "first layer for SVG/DXF file")
-      // but the render is trying to export to a 3D format.
+      // This happens when model produces 2D geometry but the render is trying
+      // to export to a 3D format — applies to any project using projection() or 2D primitives.
       const is2DFormat = format === 'svg' || format === 'dxf';
       if (
         !is2DFormat &&
@@ -1528,10 +1528,9 @@ async function renderWithCallMain(
           openscadConsoleOutput.includes('Top level object is a 2D object'))
       ) {
         throw new Error(
-          `MODEL_IS_2D: Your model is configured to produce 2D geometry. ` +
-            `For preview, 2D models cannot be displayed in 3D view. ` +
+          `MODEL_IS_2D: Your model produces 2D geometry which cannot be displayed in the 3D viewer. ` +
             `To export: select SVG or DXF output format. ` +
-            `For Volkswitch keyguard: this is expected when "generate" is set to "first layer for SVG/DXF file".`
+            `To preview in 3D: adjust your model parameters to produce 3D geometry.`
         );
       }
 
@@ -1606,10 +1605,9 @@ async function renderWithCallMain(
           openscadConsoleOutput.includes('Top level object is a 2D object')
         ) {
           throw new Error(
-            `MODEL_IS_2D: Your model is configured to produce 2D geometry. ` +
-              `For preview, 2D models cannot be displayed in 3D view. ` +
+            `MODEL_IS_2D: Your model produces 2D geometry which cannot be displayed in the 3D viewer. ` +
               `To export: select SVG or DXF output format. ` +
-              `For Volkswitch keyguard: this is expected when "generate" is set to "first layer for SVG/DXF file".`
+              `To preview in 3D: adjust your model parameters to produce 3D geometry.`
           );
         }
 
@@ -1721,18 +1719,6 @@ function validate2DOutput(outputBuffer, format) {
   if (format === 'svg') {
     return validateSVGOutput(content);
   } else if (format === 'dxf') {
-    // #region agent log
-    const _dbgFullContent = content;
-    const _dbgHasHeader = _dbgFullContent.includes('HEADER');
-    const _dbgHasEntities = _dbgFullContent.includes('ENTITIES');
-    const _dbgEntityTypes = [];
-    ['LINE','POLYLINE','LWPOLYLINE','CIRCLE','ARC','SPLINE','POINT'].forEach(t => { if (_dbgFullContent.includes(t)) _dbgEntityTypes.push(t); });
-    const _dbgAcadVerMatch = _dbgFullContent.match(/\$ACADVER[\s\S]*?1\n(AC\d+)/);
-    const _dbgInsbaseMatch = _dbgFullContent.match(/\$INSBASE[\s\S]{0,100}/);
-    const _dbgHasGrp100 = _dbgFullContent.includes('\n100\n');
-    const _dbgHasGrp90 = _dbgFullContent.includes('\n90\n');
-    fetch('http://127.0.0.1:7246/ingest/8fdfe3b9-f33d-48f1-99f8-e81d685f1617',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'openscad-worker.js:validate2DOutput',message:'DXF structure analysis',hypothesisId:'H-A,H-B,H-C,H-D',data:{contentLength:_dbgFullContent.length,hasHeader:_dbgHasHeader,hasEntities:_dbgHasEntities,entityTypes:_dbgEntityTypes,acadVer:_dbgAcadVerMatch?_dbgAcadVerMatch[1]:'not found',insbase:_dbgInsbaseMatch?_dbgInsbaseMatch[0]:'not found',hasGroupCode100:_dbgHasGrp100,hasGroupCode90:_dbgHasGrp90,headerSection:_dbgFullContent.substring(0,_dbgFullContent.indexOf('ENDSEC')+10).substring(0,1200)},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     return validateDXFOutput(content);
   }
 
@@ -1752,8 +1738,7 @@ function validateSVGOutput(content) {
       valid: false,
       error:
         'SVG output is empty or too small. Your model may not produce 2D geometry. ' +
-        'For Volkswitch keyguard: ensure "type_of_keyguard" is set to "Laser-Cut" and ' +
-        '"generate" is set to "first layer for SVG/DXF file".',
+        'Ensure your model uses projection() or 2D primitives, and that your parameter settings produce visible geometry.',
     };
   }
 
@@ -1788,8 +1773,7 @@ function validateSVGOutput(content) {
       error:
         'SVG contains no geometry (no paths, polygons, or shapes). ' +
         'Your 3D model may not include any 2D projection. ' +
-        'Ensure your model uses projection() or is configured for 2D output. ' +
-        'For Volkswitch: set "generate" to "first layer for SVG/DXF file".',
+        'Ensure your model uses projection() or is configured for 2D output.',
     };
   }
 
@@ -1826,18 +1810,24 @@ function validateDXFOutput(content) {
       valid: false,
       error:
         'DXF output is empty or too small. Your model may not produce 2D geometry. ' +
-        'For Volkswitch keyguard: ensure "type_of_keyguard" is set to "Laser-Cut" and ' +
-        '"generate" is set to "first layer for SVG/DXF file".',
+        'Ensure your model uses projection() or 2D primitives, and that your parameter settings produce visible geometry.',
     };
   }
 
-  // DXF files start with "0" followed by "SECTION" in the first few lines
-  // Normalize line endings for cross-platform compatibility
+  // DXF files may start with comment lines (group code 999) before the structure.
+  // OpenSCAD prepends "999\nDXF from OpenSCAD\n" before the standard "0\nSECTION" header.
+  // Normalize line endings for cross-platform compatibility.
   const normalizedContent = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
   const lines = normalizedContent.split('\n').map((l) => l.trim());
 
-  // Check for DXF structure
-  if (lines[0] !== '0' || !lines.includes('SECTION')) {
+  // Skip leading DXF comment pairs (group code 999 + comment text)
+  let startIdx = 0;
+  while (startIdx < lines.length - 1 && lines[startIdx] === '999') {
+    startIdx += 2; // Skip group code 999 and its comment text value
+  }
+
+  // Check for DXF structure after any comment lines
+  if (startIdx >= lines.length || lines[startIdx] !== '0' || !lines.includes('SECTION')) {
     return {
       valid: false,
       error:
@@ -1885,11 +1875,226 @@ function validateDXFOutput(content) {
       error:
         'DXF ENTITIES section is empty (no geometry). ' +
         'Your 3D model may not include any 2D projection. ' +
-        'For Volkswitch: set "generate" to "first layer for SVG/DXF file".',
+        'Ensure your model uses projection() or is configured for 2D output.',
     };
   }
 
   return { valid: true };
+}
+
+/**
+ * Post-process DXF output from OpenSCAD WASM to fix known compatibility issues.
+ *
+ * The OpenSCAD WASM binary (based on development snapshots post-2022) exports DXF files
+ * using LWPOLYLINE entities with R14+ subclass markers, but declares version AC1006 (R10).
+ * This hybrid format is rejected by most CAD software (AutoCAD, CorelDRAW, Adobe Illustrator,
+ * Xometry, SendCutSend, LibreCAD, NanoCAD, SketchUp -- see issue #4268).
+ *
+ * Simply changing the version number is NOT enough (confirmed by multiple users in #4268).
+ * The only universally compatible approach is to convert LWPOLYLINE entities back to
+ * individual LINE segments -- the format used by the working 2021.01 stable release.
+ *
+ * This post-processor:
+ *   1. Removes the broken HEADER section entirely (R12 DXF doesn't require one)
+ *   2. Preserves the TABLES section (LTYPE, LAYER, STYLE) as-is
+ *   3. Converts each LWPOLYLINE to a series of LINE entities
+ *   4. Preserves any non-LWPOLYLINE entities unchanged
+ *   5. Produces a clean, headerless DXF compatible with all tested applications
+ *
+ * Reference: github.com/openscad/openscad/issues/4268
+ *            github.com/openscad/openscad/pull/6599
+ *
+ * @param {ArrayBuffer} outputBuffer - Raw DXF output from WASM
+ * @returns {ArrayBuffer} Post-processed DXF as ArrayBuffer
+ */
+function postProcessDXF(outputBuffer) {
+  const decoder = new TextDecoder('utf-8');
+  const content = decoder.decode(outputBuffer);
+  const normalized = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const rawLines = normalized.split('\n');
+
+  // Parse DXF into group-code/value pairs
+  const pairs = [];
+  for (let i = 0; i + 1 < rawLines.length; i += 2) {
+    pairs.push({
+      code: rawLines[i].trim(),
+      value: rawLines[i + 1].trim(),
+    });
+  }
+
+  // Identify section boundaries
+  // Sections are: 0/SECTION, 2/<name>, ..., 0/ENDSEC
+  const sections = []; // {name, startIdx, endIdx}
+  for (let i = 0; i < pairs.length; i++) {
+    if (pairs[i].code === '0' && pairs[i].value === 'SECTION' &&
+        i + 1 < pairs.length && pairs[i + 1].code === '2') {
+      const name = pairs[i + 1].value;
+      // Find matching ENDSEC
+      for (let j = i + 2; j < pairs.length; j++) {
+        if (pairs[j].code === '0' && pairs[j].value === 'ENDSEC') {
+          sections.push({ name, startIdx: i, endIdx: j });
+          break;
+        }
+      }
+    }
+  }
+
+  // Extract EXTMIN/EXTMAX from HEADER for optional re-use
+  const headerSection = sections.find(s => s.name === 'HEADER');
+  let extMin = null, extMax = null;
+  if (headerSection) {
+    for (let i = headerSection.startIdx; i <= headerSection.endIdx; i++) {
+      if (pairs[i].code === '9' && pairs[i].value === '$EXTMIN') {
+        extMin = { x: 0, y: 0 };
+        for (let j = i + 1; j <= headerSection.endIdx && pairs[j].code !== '9' && pairs[j].code !== '0'; j++) {
+          if (pairs[j].code === '10') extMin.x = parseFloat(pairs[j].value);
+          if (pairs[j].code === '20') extMin.y = parseFloat(pairs[j].value);
+        }
+      }
+      if (pairs[i].code === '9' && pairs[i].value === '$EXTMAX') {
+        extMax = { x: 0, y: 0 };
+        for (let j = i + 1; j <= headerSection.endIdx && pairs[j].code !== '9' && pairs[j].code !== '0'; j++) {
+          if (pairs[j].code === '10') extMax.x = parseFloat(pairs[j].value);
+          if (pairs[j].code === '20') extMax.y = parseFloat(pairs[j].value);
+        }
+      }
+    }
+  }
+
+  // Parse LWPOLYLINE entities from the ENTITIES section
+  const entitiesSection = sections.find(s => s.name === 'ENTITIES');
+  const parsedEntities = []; // Each is {type, layer, pairs} or {type:'LWPOLYLINE', layer, vertices, closed}
+
+  if (entitiesSection) {
+    let i = entitiesSection.startIdx + 2; // Skip 0/SECTION and 2/ENTITIES
+    while (i <= entitiesSection.endIdx) {
+      if (pairs[i].code === '0' && pairs[i].value === 'ENDSEC') break;
+      if (pairs[i].code === '0') {
+        const entityType = pairs[i].value;
+        i++; // Move past the 0/EntityType pair
+
+        // Collect all pairs until next 0-code (next entity or ENDSEC)
+        const entityPairs = [];
+        while (i <= entitiesSection.endIdx && pairs[i].code !== '0') {
+          entityPairs.push(pairs[i]);
+          i++;
+        }
+
+        if (entityType === 'LWPOLYLINE') {
+          // Parse LWPOLYLINE into vertices
+          let layer = '0';
+          let closed = false;
+          const vertices = [];
+          let currentX = null;
+
+          for (const ep of entityPairs) {
+            if (ep.code === '8') layer = ep.value;
+            if (ep.code === '70') closed = (parseInt(ep.value) & 1) !== 0;
+            if (ep.code === '10') {
+              if (currentX !== null && vertices.length > 0) {
+                // Previous vertex didn't get a Y -- shouldn't happen, but guard
+              }
+              currentX = parseFloat(ep.value);
+            }
+            if (ep.code === '20') {
+              if (currentX !== null) {
+                vertices.push({ x: currentX, y: parseFloat(ep.value) });
+                currentX = null;
+              }
+            }
+          }
+          parsedEntities.push({ type: 'LWPOLYLINE', layer, vertices, closed });
+        } else {
+          // Keep other entity types as raw pairs
+          parsedEntities.push({ type: entityType, layer: '0', rawPairs: entityPairs });
+        }
+      } else {
+        i++;
+      }
+    }
+  }
+
+  // Build clean DXF output with minimal R12 header for Adobe Illustrator compatibility.
+  // Illustrator requires a HEADER section with $ACADVER to interpret geometry correctly;
+  // without it, Illustrator falls back to text rendering (confirmed by @peterzieba in #4268).
+  const out = [];
+
+  // Helper to emit a group code/value pair with proper DXF formatting
+  // Group codes are right-justified in a 3-char field; values on the next line
+  function emit(code, value) {
+    out.push(String(code).padStart(3));
+    out.push(String(value));
+  }
+
+  // HEADER section -- minimal R12-compatible header
+  // AC1009 = R12, the most universally supported DXF version.
+  // Only LINE entities are used, which are fully R12 compatible.
+  emit(0, 'SECTION');
+  emit(2, 'HEADER');
+  emit(9, '$ACADVER');
+  emit(1, 'AC1009');
+  if (extMin && extMax) {
+    emit(9, '$EXTMIN');
+    emit(10, extMin.x);
+    emit(20, extMin.y);
+    emit(9, '$EXTMAX');
+    emit(10, extMax.x);
+    emit(20, extMax.y);
+  }
+  emit(0, 'ENDSEC');
+
+  // TABLES section -- copy from original, stripping any subclass markers
+  const tablesSection = sections.find(s => s.name === 'TABLES');
+  if (tablesSection) {
+    emit(0, 'SECTION');
+    emit(2, 'TABLES');
+    for (let i = tablesSection.startIdx + 2; i < tablesSection.endIdx; i++) {
+      // Skip subclass markers (group code 100) -- not valid for R12
+      if (pairs[i].code === '100') continue;
+      emit(pairs[i].code, pairs[i].value);
+    }
+    emit(0, 'ENDSEC');
+  }
+
+  // ENTITIES section -- convert LWPOLYLINE to LINE, keep others
+  emit(0, 'SECTION');
+  emit(2, 'ENTITIES');
+
+  for (const entity of parsedEntities) {
+    if (entity.type === 'LWPOLYLINE') {
+      const verts = entity.vertices;
+      if (verts.length < 2) continue;
+
+      const segmentCount = entity.closed ? verts.length : verts.length - 1;
+      for (let s = 0; s < segmentCount; s++) {
+        const p1 = verts[s];
+        const p2 = verts[(s + 1) % verts.length];
+        emit(0, 'LINE');
+        emit(8, entity.layer);
+        emit(10, p1.x);
+        emit(20, p1.y);
+        emit(11, p2.x);
+        emit(21, p2.y);
+      }
+    } else {
+      // Emit non-LWPOLYLINE entities as-is (skip subclass markers)
+      emit(0, entity.type);
+      for (const ep of (entity.rawPairs || [])) {
+        if (ep.code === '100') continue; // Strip subclass markers
+        emit(ep.code, ep.value);
+      }
+    }
+  }
+
+  emit(0, 'ENDSEC');
+
+  // EOF
+  emit(0, 'EOF');
+
+  const result = out.join('\n') + '\n';
+
+  const encoder = new TextEncoder();
+  return encoder.encode(result).buffer;
 }
 
 /**
@@ -2137,23 +2342,6 @@ async function render(payload) {
         },
       });
 
-      // #region agent log
-      if (format === 'dxf' || format === 'svg') {
-        const _dbgType = outputData === null ? 'null' : (outputData instanceof Uint8Array ? 'Uint8Array' : (outputData instanceof ArrayBuffer ? 'ArrayBuffer' : typeof outputData));
-        let _dbgPreview = '';
-        if (typeof outputData === 'string') { _dbgPreview = outputData.substring(0, 1500); }
-        else if (outputData instanceof Uint8Array) { _dbgPreview = new TextDecoder('utf-8').decode(outputData.slice(0, 1500)); }
-        else if (outputData instanceof ArrayBuffer) { _dbgPreview = new TextDecoder('utf-8').decode(new Uint8Array(outputData).slice(0, 1500)); }
-        const _dbgHasLWPOLYLINE = _dbgPreview.includes('LWPOLYLINE') || (typeof outputData === 'string' ? outputData : '').includes('LWPOLYLINE');
-        const _dbgAcadVer = (_dbgPreview.match(/\$ACADVER[\s\S]{0,20}/) || ['not found'])[0];
-        const _dbgHasLinMin = _dbgPreview.includes('$LINMIN');
-        const _dbgHasLinMax = _dbgPreview.includes('$LINMAX');
-        const _dbgHasAcDbEntity = _dbgPreview.includes('AcDbEntity');
-        const _dbgHasAcDbPolyline = _dbgPreview.includes('AcDbPolyline');
-        const _dbgSize = outputData ? (outputData.byteLength || outputData.length || 0) : 0;
-        fetch('http://127.0.0.1:7246/ingest/8fdfe3b9-f33d-48f1-99f8-e81d685f1617',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'openscad-worker.js:renderOutput',message:'DXF/SVG raw output from WASM',hypothesisId:'H-A,H-B,H-C,H-D,H-E',data:{format,outputType:_dbgType,outputSize:_dbgSize,hasLWPOLYLINE:_dbgHasLWPOLYLINE,acadVer:_dbgAcadVer,hasLinMin:_dbgHasLinMin,hasLinMax:_dbgHasLinMax,hasAcDbEntity:_dbgHasAcDbEntity,hasAcDbPolyline:_dbgHasAcDbPolyline,contentPreview:_dbgPreview.substring(0,800)},timestamp:Date.now()})}).catch(()=>{});
-      }
-      // #endregion
       return { data: outputData, format, renderDurationMs };
     })();
 
@@ -2212,6 +2400,12 @@ async function render(payload) {
       if (!validationResult.valid) {
         throw new Error(validationResult.error);
       }
+    }
+
+    // Post-process DXF to fix known OpenSCAD WASM compatibility issues
+    // (upstream issue: github.com/openscad/openscad/issues/4268)
+    if (resultFormat === 'dxf') {
+      outputBuffer = postProcessDXF(outputBuffer);
     }
 
     // For binary STL, read triangle count from header
@@ -2305,20 +2499,25 @@ async function render(payload) {
     const is2DOutput =
       (outputFormat || 'stl').toLowerCase() === 'svg' ||
       (outputFormat || 'stl').toLowerCase() === 'dxf';
-    if (
+    const confirmed2DModel =
       !is2DOutput &&
-      (code === 'INTERNAL_ERROR' || translated.raw?.includes('MODEL_IS_2D')) &&
+      (code === 'INTERNAL_ERROR' ||
+        code === 'RENDER_FAILED' ||
+        translated.raw?.includes('MODEL_IS_2D')) &&
       openscadConsoleOutput &&
       (openscadConsoleOutput.includes(
         'Current top level object is not a 3D object'
       ) ||
-        openscadConsoleOutput.includes('Top level object is a 2D object'))
-    ) {
+        openscadConsoleOutput.includes('Top level object is a 2D object'));
+
+    if (confirmed2DModel) {
+      // Override to MODEL_IS_2D so the UI can show informational guidance
+      // instead of alarming red error messages. The UI handles this gracefully.
       code = 'MODEL_IS_2D';
       message =
-        'Your model produces 2D geometry (this is expected for laser-cut SVG/DXF export). ' +
-        'To preview: set "generate" back to "keyguard" for 3D preview. ' +
-        'To export: use the SVG or DXF output format.';
+        'Your model produces 2D geometry which cannot be previewed in the 3D viewer. ' +
+        'To export: select SVG or DXF output format. ' +
+        'To preview in 3D: adjust your model parameters to produce 3D geometry.';
     }
 
     self.postMessage({

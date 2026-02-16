@@ -279,6 +279,9 @@ let comparisonController = null;
 let comparisonView = null;
 let renderQueue = null;
 
+// Track which saved project is currently loaded (for auto-saving companion files)
+let currentSavedProjectId = null;
+
 // Screen reader announcer - now uses centralized announcer.js
 // (Local implementation removed - use imported announce/announceImmediate/announceError)
 
@@ -3141,7 +3144,7 @@ async function initApp() {
     const details = error?.details || '';
     const detailsStr = String(details || '');
 
-    // Handle 2D model case (Volkswitch laser-cut workflow)
+    // Handle 2D model case — applies to any project producing 2D output
     const is2DModel =
       code === 'MODEL_IS_2D' ||
       /MODEL_IS_2D|not a 3D object|Top level object is a 2D object/i.test(
@@ -3150,27 +3153,25 @@ async function initApp() {
       /not a 3D object|2D object/i.test(detailsStr);
 
     if (is2DModel) {
-      // Show guidance for 2D model - this is expected for laser-cut workflow
+      // Show guidance for 2D model — this is informational, not an error
+      // Use 'success' not 'error' to avoid alarming red warnings on a correct workflow path
       updateStatus(
         'Your model produces 2D geometry. Select SVG or DXF output format to export.',
-        'error'
+        'success'
       );
 
-      // Offer to change output format automatically
-      const outputFormatSelect = document.getElementById('outputFormat');
-      if (outputFormatSelect && outputFormatSelect.value === 'stl') {
-        const changeTo2D = confirm(
-          '2D Model Detected\n\n' +
-            'Your model is configured to produce 2D geometry for laser cutting.\n' +
-            '2D models cannot be exported as STL (3D format).\n\n' +
-            'Would you like to switch to SVG output format?'
-        );
-        if (changeTo2D) {
-          outputFormatSelect.value = 'svg';
-          // Trigger change event so UI updates
-          outputFormatSelect.dispatchEvent(new Event('change'));
-        }
-      }
+      // Override the preview state badge: auto-preview-controller already set it to ERROR
+      // before this handler fired. Replace with a non-alarming "2D Model" indicator.
+      previewStateIndicator.className = 'preview-state-indicator state-current';
+      previewStateIndicator.textContent = '✓ 2D Model — use SVG/DXF';
+      previewContainer.classList.remove('preview-error');
+      previewContainer.classList.add('preview-current');
+
+      // Dismiss any memory warning that may have been triggered by the failed 2D→STL render.
+      // The high memory is a side effect of the expected 2D path, not a real memory issue.
+      const memWarning = document.getElementById('memoryWarning');
+      if (memWarning) memWarning.remove();
+
       return true;
     }
 
@@ -5127,6 +5128,64 @@ async function initApp() {
   }
 
   /**
+   * Auto-save companion files to the current saved project (if tracked).
+   * Called after add, edit, or remove operations on companion files.
+   */
+  async function autoSaveCompanionFiles() {
+    if (!currentSavedProjectId) return;
+    const state = stateManager.getState();
+    const { projectFiles, mainFilePath, uploadedFile } = state;
+    if (!uploadedFile || !projectFiles) return;
+
+    try {
+      const projectFilesObj = Object.fromEntries(projectFiles);
+      // Update the kind if companion files were added to a single-file project
+      const kind = projectFiles.size > 1 ? 'zip' : 'scad';
+      await updateProject({
+        id: currentSavedProjectId,
+        projectFiles: projectFilesObj,
+        mainFilePath: mainFilePath || uploadedFile.name,
+        kind,
+      });
+      updateStatus('Project updated', 'success');
+      console.log(
+        '[CompanionFiles] Auto-saved companion files to project:',
+        currentSavedProjectId
+      );
+    } catch (error) {
+      console.error('[CompanionFiles] Auto-save failed:', error);
+      // Don't show alert for auto-save failures -- just log
+    }
+  }
+
+  /**
+   * Update the companion files Save/Update button text and visibility.
+   */
+  function updateCompanionSaveButton() {
+    const saveBtn = document.getElementById('companionSaveBtn');
+    if (!saveBtn) return;
+    const state = stateManager.getState();
+    if (!state.uploadedFile) {
+      saveBtn.classList.add('hidden');
+      return;
+    }
+    saveBtn.classList.remove('hidden');
+    if (currentSavedProjectId) {
+      saveBtn.textContent = 'Update Saved Project';
+      saveBtn.setAttribute(
+        'aria-label',
+        'Update companion files in the saved project'
+      );
+    } else {
+      saveBtn.textContent = 'Save as Project';
+      saveBtn.setAttribute(
+        'aria-label',
+        'Save this file and companion files as a project'
+      );
+    }
+  }
+
+  /**
    * Render the project files list in the UI
    * @param {Map<string, string>} projectFiles - Map of file paths to content
    * @param {string} mainFilePath - Path to the main .scad file
@@ -5145,13 +5204,68 @@ async function initApp() {
 
     if (!container || !controls) return;
 
-    // If no project files, hide the controls
-    if (!projectFiles || projectFiles.size === 0) {
+    const emptyState = document.getElementById('companionEmptyState');
+    const helpText = document.getElementById('projectFilesHelp');
+    const saveBtn = document.getElementById('companionSaveBtn');
+
+    // Always show the panel when a file is loaded (empty-state provides guidance)
+    const state = stateManager.getState();
+    if (!state.uploadedFile) {
       controls.classList.add('hidden');
       return;
     }
+    controls.classList.remove('hidden');
 
-    // Show controls
+    // Count companion files (exclude the main file)
+    const companionFiles = projectFiles
+      ? new Map(
+          Array.from(projectFiles.entries()).filter(
+            ([path]) => path !== mainFilePath
+          )
+        )
+      : new Map();
+    const companionCount = companionFiles.size;
+
+    // Toggle empty state vs file list
+    if (emptyState) {
+      emptyState.style.display = companionCount === 0 ? '' : 'none';
+    }
+    if (helpText) {
+      helpText.style.display = companionCount > 0 ? '' : 'none';
+    }
+
+    // If no companion files, show empty state and badge=0
+    if (companionCount === 0) {
+      if (badge) badge.textContent = '0';
+      container.innerHTML = '';
+      // Update save button visibility
+      if (saveBtn) {
+        updateCompanionSaveButton();
+      }
+      // Still check for missing required files
+      if (warning && warningText) {
+        const missingFiles = [];
+        if (requiredFiles && requiredFiles.files) {
+          for (const reqFile of requiredFiles.files) {
+            if (
+              reqFile.required &&
+              (!projectFiles || !projectFiles.has(reqFile.path))
+            ) {
+              missingFiles.push(reqFile.path);
+            }
+          }
+        }
+        if (missingFiles.length > 0) {
+          warning.classList.remove('hidden');
+          warningText.textContent = `Missing files: ${missingFiles.join(', ')}`;
+        } else {
+          warning.classList.add('hidden');
+        }
+      }
+      return;
+    }
+
+    // Show controls (has companion files)
     controls.classList.remove('hidden');
 
     // Update badge count
@@ -5375,6 +5489,9 @@ async function initApp() {
 
       updateStatus(`Added file: ${fileName}`, 'success');
       console.log(`[ProjectFiles] Added companion file: ${fileName}`);
+
+      // Auto-save to tracked saved project
+      await autoSaveCompanionFiles();
     } catch (error) {
       console.error('[ProjectFiles] Error adding file:', error);
       updateStatus(`Failed to add file: ${error.message}`, 'error');
@@ -5424,6 +5541,9 @@ async function initApp() {
 
     updateStatus(`Removed file: ${path}`, 'success');
     console.log(`[ProjectFiles] Removed file: ${path}`);
+
+    // Auto-save to tracked saved project
+    await autoSaveCompanionFiles();
   }
 
   /**
@@ -5507,6 +5627,9 @@ async function initApp() {
 
     updateStatus(`Updated file: ${path}`, 'success');
     console.log(`[ProjectFiles] Updated file: ${path}`);
+
+    // Auto-save to tracked saved project
+    await autoSaveCompanionFiles();
   }
 
   /**
@@ -5770,6 +5893,11 @@ async function initApp() {
       // Clear undo/redo history on new file upload
       stateManager.clearHistory();
 
+      // Reset saved project tracking for new uploads (not reloads from saved projects)
+      if (source !== 'saved') {
+        currentSavedProjectId = null;
+      }
+
       // Show main interface
       welcomeScreen.classList.add('hidden');
       mainInterface.classList.remove('hidden');
@@ -5905,6 +6033,9 @@ async function initApp() {
         parameters: currentValues,
         defaults: { ...currentValues },
       });
+
+      // Settings level is always 'advanced' — all groups visible, no toggle needed
+      localStorage.setItem('openscad-forge-settings-level', 'advanced');
 
       // Auto-import JSON presets from ZIP companion files (Item 14: desktop parity)
       // After state is set with schema + defaults, scan projectFiles for .json preset files
@@ -6236,6 +6367,23 @@ async function initApp() {
       // Trigger the companion file input
       if (addCompanionFileInput) {
         addCompanionFileInput.click();
+      }
+    });
+  }
+
+  // Companion files Save/Update Project button
+  const companionSaveBtn = document.getElementById('companionSaveBtn');
+  if (companionSaveBtn) {
+    companionSaveBtn.addEventListener('click', async () => {
+      if (currentSavedProjectId) {
+        // Update existing saved project
+        await autoSaveCompanionFiles();
+      } else {
+        // Route to save prompt for new projects
+        const state = stateManager.getState();
+        if (state.uploadedFile) {
+          await showSaveProjectPrompt(state);
+        }
       }
     });
   }
@@ -7348,6 +7496,9 @@ if (rounded) {
       // Update last loaded timestamp
       await touchProject(projectId);
 
+      // Track which saved project is loaded (for companion file auto-save)
+      currentSavedProjectId = projectId;
+
       // Load the file (reuse existing handleFile logic)
       // Pass project.name as the 6th arg so uploadedFile.name shows the saved project name
       await handleFile(
@@ -7358,6 +7509,9 @@ if (rounded) {
         'saved',
         project.name // Use the saved project name for display
       );
+
+      // Update companion save button after loading
+      updateCompanionSaveButton();
 
       // Announce success
       stateManager.announceChange(`Loaded saved design: ${project.name}`);
@@ -7476,6 +7630,9 @@ if (rounded) {
       });
 
       if (result.success) {
+        // Track the saved project ID for companion file auto-save
+        currentSavedProjectId = result.id;
+        updateCompanionSaveButton();
         stateManager.announceChange(`Project saved: ${projectName}`);
         updateStatus(`Saved: ${projectName}`);
         await renderSavedProjectsList();
@@ -8325,6 +8482,7 @@ if (rounded) {
     // Show the toggle button
     expertModeToggle.classList.remove('hidden');
 
+
     // Initialize managers
     modeManager = getModeManager({
       announceToScreenReader: (msg) => announceToScreenReader(msg),
@@ -8539,20 +8697,26 @@ if (rounded) {
         return;
       }
 
+      let splitResizePending = false;
       splitInstance = Split([paramPanel, previewPanel], {
         sizes: initialSizes,
         minSize: minSizes,
         gutterSize: 8,
         cursor: 'col-resize',
+        onDragStart: () => {
+          document.body.classList.add('split-dragging');
+        },
         onDrag: () => {
-          // Trigger preview resize during drag (throttled by RAF)
-          if (previewManager) {
+          if (previewManager && !splitResizePending) {
+            splitResizePending = true;
             requestAnimationFrame(() => {
+              splitResizePending = false;
               previewManager.handleResize();
             });
           }
         },
         onDragEnd: (sizes) => {
+          document.body.classList.remove('split-dragging');
           // Persist sizes
           try {
             localStorage.setItem(STORAGE_KEY_LAYOUT_SIZES, JSON.stringify(sizes));
@@ -9312,16 +9476,6 @@ if (rounded) {
       }
 
       const duration = ((Date.now() - startTime) / 1000).toFixed(1);
-
-      // #region agent log
-      if (outputFormat === 'dxf' || outputFormat === 'svg') {
-        const _dbgData = result.data || result.stl;
-        const _dbgDataType = _dbgData === null ? 'null' : (_dbgData instanceof ArrayBuffer ? 'ArrayBuffer' : (typeof _dbgData));
-        let _dbgPreview = '';
-        if (_dbgData instanceof ArrayBuffer) { _dbgPreview = new TextDecoder('utf-8').decode(new Uint8Array(_dbgData).slice(0,800)); }
-        fetch('http://127.0.0.1:7246/ingest/8fdfe3b9-f33d-48f1-99f8-e81d685f1617',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'main.js:generateResult',message:'DXF/SVG result received in main thread',hypothesisId:'H-E',data:{outputFormat,dataType:_dbgDataType,dataSize:_dbgData?_dbgData.byteLength||0:0,format:result.format,stats:result.stats,contentPreview:_dbgPreview.substring(0,500)},timestamp:Date.now()})}).catch(()=>{});
-      }
-      // #endregion
 
       // Store the hash of parameters used for this generation
       lastGeneratedParamsHash = hashParams(state.parameters);

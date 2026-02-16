@@ -2,6 +2,10 @@
  * Mobile Drawer Controller
  * Implements off-canvas drawer pattern for parameters panel on mobile devices
  * Based on Bootstrap Offcanvas and WAI-ARIA Dialog practices
+ *
+ * STATE CONVENTION: Additive open — `drawer-open` class = open.
+ * This is the opposite of Actions/Camera/Echo drawers which use
+ * additive close (`collapsed` class = closed). See UI_STANDARDS.md.
  */
 
 import { createDocumentFocusTrap } from './focus-trap.js';
@@ -81,7 +85,7 @@ export function initDrawerController() {
       fallbackFocus: drawer,
     });
     focusTrap.activate({
-      initialFocusDelay: 300, // Wait for transition
+      initialFocusDelay: 250, // --motion-slow (240ms) + 10ms buffer
     });
   }
 

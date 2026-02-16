@@ -740,7 +740,36 @@ function filterParameters(query) {
 }
 
 /**
- * Populate the jump-to-group dropdown
+ * Classify whether a parameter group belongs to the Simple tier.
+ *
+ * Classification heuristic (works for ANY .scad file):
+ *   1. Annotation override: if group.annotation === 'advanced', return false
+ *   2. Mounting-keyword rule: groups whose names contain mounting terms are Advanced
+ *   3. Threshold: if <= 7 groups total, all are Simple
+ *   4. First 7 groups (by document order) are Simple; rest are Advanced
+ *
+ * @param {Object} group - Group definition with id, label, annotation, etc.
+ * @param {Array} allGroups - All groups in sort order
+ * @param {number} index - This group's index in allGroups
+ * @returns {boolean} true if the group belongs to the Simple tier
+ */
+export function isSimpleGroup(group, allGroups, index) {
+  // 1. Explicit annotation overrides everything
+  if (group.annotation === 'advanced') return false;
+
+  // 2. Mounting-keyword groups default to Advanced
+  const mountingKeywords = /velcro|clip|post|shelf|tab|strap/i;
+  if (mountingKeywords.test(group.label)) return false;
+
+  // 3. Threshold: if <= 7 groups total, all are Simple
+  if (allGroups.length <= 7) return true;
+
+  // 4. First 7 groups (by document order) are Simple
+  return index < 7;
+}
+
+/**
+ * Populate the jump-to-group dropdown with all groups.
  * @param {Array} groups - Array of group definitions
  */
 export function populateGroupJumpSelect(groups) {
@@ -1838,14 +1867,14 @@ export function renderParameterUI(
   // Sort groups by order
   const sortedGroups = [...groups].sort((a, b) => a.order - b.order);
 
-  // Populate the jump-to-group dropdown
+  // Populate the jump-to-group dropdown (all groups visible)
   populateGroupJumpSelect(sortedGroups);
 
   // Track if first group has been rendered (for auto-open)
   let isFirstGroup = true;
 
   // Render each group
-  sortedGroups.forEach((group) => {
+  sortedGroups.forEach((group, index) => {
     const groupParams = paramsByGroup[group.id] || [];
     
     // Skip groups with no params (unless there are global params to show)
@@ -1858,12 +1887,16 @@ export function renderParameterUI(
     const allGroupParams = [...sortedGlobalParams, ...sortedGroupParams];
 
     const details = document.createElement('details');
-    details.className = 'param-group';
+    details.className = 'param-group forge-disclosure';
     // Open first group by default for better discoverability (WCAG/COGA)
     details.open = isFirstGroup;
     isFirstGroup = false;
     // Add data attribute for jump-to navigation
     details.dataset.groupId = group.id;
+
+    // Tag group with its settings level classification (metadata only, all groups visible)
+    const simple = isSimpleGroup(group, sortedGroups, index);
+    details.dataset.settingsLevel = simple ? 'simple' : 'advanced';
 
     const summary = document.createElement('summary');
     summary.textContent = group.label;

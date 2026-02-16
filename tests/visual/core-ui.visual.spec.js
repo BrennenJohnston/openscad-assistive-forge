@@ -290,3 +290,95 @@ test.describe('Visual Regression - Mobile Viewport', () => {
     });
   });
 });
+
+test.describe('Visual Regression - Disclosure Sections', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+    });
+    await page.goto('/');
+    await page.waitForSelector('#app', { state: 'visible' });
+    await page.waitForTimeout(500);
+  });
+
+  test('disclosure sections closed state at 1440px', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.waitForTimeout(300);
+
+    // Capture disclosures area if visible
+    const disclosures = page.locator('.forge-disclosure').first();
+    if (await disclosures.isVisible().catch(() => false)) {
+      await expect(page).toHaveScreenshot('disclosures-closed-1440.png', {
+        maxDiffPixels: 200,
+        threshold: 0.2,
+      });
+    }
+  });
+
+  test('disclosure sections at 768px tablet width', async ({ page }) => {
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await page.waitForTimeout(300);
+
+    await expect(page).toHaveScreenshot('disclosures-tablet-768.png', {
+      maxDiffPixels: 200,
+      threshold: 0.2,
+    });
+  });
+
+  test('disclosure sections at 320px mobile width', async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 568 });
+    await page.waitForTimeout(300);
+
+    await expect(page).toHaveScreenshot('disclosures-mobile-320.png', {
+      maxDiffPixels: 200,
+      threshold: 0.2,
+    });
+  });
+});
+
+test.describe('Visual Regression - UI Uniformity', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+    });
+    await page.goto('/');
+    await page.waitForSelector('#app', { state: 'visible' });
+    await page.waitForTimeout(500);
+  });
+
+  test('parameters header layout at 1280px desktop', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.waitForTimeout(300);
+
+    const header = page.locator('.panel-header');
+    if (await header.isVisible().catch(() => false)) {
+      await expect(header).toHaveScreenshot('param-header-desktop-1280.png', {
+        maxDiffPixels: 150,
+        threshold: 0.2,
+      });
+    }
+  });
+
+  test('drawer headers at 480px mobile portrait', async ({ page }) => {
+    await page.setViewportSize({ width: 480, height: 854 });
+    await page.waitForTimeout(300);
+
+    await expect(page).toHaveScreenshot('drawer-headers-mobile-480.png', {
+      maxDiffPixels: 200,
+      threshold: 0.2,
+    });
+  });
+
+  test('disclosure sections stack uniformity at 1024px', async ({ page }) => {
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await page.waitForTimeout(300);
+
+    const paramBody = page.locator('.param-panel-body');
+    if (await paramBody.isVisible().catch(() => false)) {
+      await expect(paramBody).toHaveScreenshot('disclosure-stack-1024.png', {
+        maxDiffPixels: 200,
+        threshold: 0.2,
+      });
+    }
+  });
+});

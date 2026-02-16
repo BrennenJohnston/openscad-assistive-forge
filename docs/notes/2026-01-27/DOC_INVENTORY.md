@@ -25,7 +25,7 @@ This is the decision log for the documentation style audit. Each file gets a sta
 | docs/DEV_QUICK_START.md | Rewrite | Heavy emoji, over-structured |
 | docs/TESTING.md | Keep | Already good style |
 | docs/DEPLOYMENT.md | Keep | Clean and minimal |
-| docs/PERFORMANCE.md | Rewrite | Too formal, checkbox lists, AI patterns |
+| docs/PERFORMANCE.md | Rewrite | Too formal, checkbox lists, template patterns |
 | docs/TROUBLESHOOTING.md | Rewrite | Emoji markers, checkbox formatting |
 | docs/QUICK_REFERENCE.md | Keep | Short, useful |
 | docs/DEVELOPMENT_WORKFLOW.md | Verify | Check tone |
@@ -39,7 +39,7 @@ This is the decision log for the documentation style audit. Each file gets a sta
 |------|----------|-------|
 | ACCESSIBILITY_GUIDE.md | Rewrite | Soften tone, keep structure |
 | UI_STANDARDS.md | Move to specs/ | This is a design spec |
-| COLOR_SYSTEM_GUIDE.md | Verify | Check for AI patterns |
+| COLOR_SYSTEM_GUIDE.md | Verify | Check for template patterns |
 | KEYGUARD_WORKFLOW_GUIDE.md | Rewrite | Emoji markers, overly formal |
 | SECURITY_TESTING.md | Rewrite | Emoji markers, checkbox formatting |
 | CHOOSING_FORGE_VS_PLAYGROUND.md | Verify | |

@@ -981,31 +981,35 @@
             <!-- WCAG 2.2 SC 3.2.6 Consistent Help: Help mechanisms (Features Guide button) 
                  appear in consistent relative order across panels (top-right area) -->
             <div class="panel-header">
-              <h2 id="parameters-heading">Parameters</h2>
+              <!-- Row 1: Title + close/collapse controls -->
+              <div class="panel-header-title-row">
+                <h2 id="parameters-heading">Parameters</h2>
 
-              <!-- Mobile close button for drawer -->
-              <button
-                id="drawerCloseBtn"
-                class="btn btn-sm btn-icon mobile-only drawer-close-btn"
-                aria-label="Close parameters panel"
-                title="Close"
-                style="display: none"
-                data-tutorial-target="mobile-drawer-close"
-              >
-                <svg
-                  width="20"
-                  height="20"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  aria-hidden="true"
+                <!-- Mobile close button for drawer -->
+                <button
+                  id="drawerCloseBtn"
+                  class="btn btn-sm btn-icon mobile-only drawer-close-btn forge-control"
+                  aria-label="Close parameters panel"
+                  title="Close"
+                  style="display: none"
+                  data-tutorial-target="mobile-drawer-close"
                 >
-                  <line x1="18" y1="6" x2="6" y2="18"></line>
-                  <line x1="6" y1="6" x2="18" y2="18"></line>
-                </svg>
-              </button>
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    aria-hidden="true"
+                  >
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                  </svg>
+                </button>
+              </div>
 
+              <!-- Row 2: Action toolbar -->
               <div class="param-header-actions">
                 <button
                   id="undoBtn"
@@ -1074,12 +1078,9 @@
                   <span class="mode-icon" aria-hidden="true">{ }</span>
                   <span class="btn-text">Code</span>
                 </button>
-              </div>
-              <!-- Panel collapse control - positioned at right edge for discoverability -->
-              <div class="panel-collapse-control">
                 <button
                   id="collapseParamPanelBtn"
-                  class="btn btn-sm btn-icon btn-collapse-panel"
+                  class="btn btn-sm btn-icon btn-collapse-panel forge-control"
                   aria-expanded="true"
                   aria-controls="paramPanelBody"
                   aria-label="Collapse parameters panel"
@@ -1111,32 +1112,31 @@
             <div class="param-panel-body" id="paramPanelBody">
               <!-- Preset Controls (Collapsed by default on desktop) -->
               <details
-                class="preset-controls"
+                class="preset-controls forge-disclosure"
                 id="presetControls"
                 role="region"
                 aria-label="Parameter presets"
                 data-tutorial-target="preset-controls"
               >
                 <summary class="preset-summary">
-                  <span class="preset-icon" aria-hidden="true">
-                    <svg
-                      class="btn-icon-svg"
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="square"
-                      stroke-linejoin="miter"
-                    >
-                      <rect x="4" y="4" width="16" height="16" rx="0"></rect>
-                      <rect x="7" y="4" width="10" height="6" rx="0"></rect>
-                      <rect x="8" y="14" width="8" height="6" rx="0"></rect>
-                      <line x1="16" y1="7" x2="16" y2="9"></line>
-                    </svg>
-                  </span>
-                  Presets
+                  <svg
+                    class="btn-icon-svg forge-disclosure-icon"
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="square"
+                    stroke-linejoin="miter"
+                    aria-hidden="true"
+                  >
+                    <rect x="4" y="4" width="16" height="16" rx="0"></rect>
+                    <rect x="7" y="4" width="10" height="6" rx="0"></rect>
+                    <rect x="8" y="14" width="8" height="6" rx="0"></rect>
+                    <line x1="16" y1="7" x2="16" y2="9"></line>
+                  </svg>
+                  <span class="forge-disclosure-title">Presets</span>
                 </summary>
                 <div class="preset-content">
                   <!-- Preset selector with OpenSCAD Customizer-style controls -->
@@ -1153,7 +1153,7 @@
                     </select>
                     <!-- OpenSCAD Customizer-style preset controls: Save, Add, Delete -->
                     <div
-                      class="preset-controls"
+                      class="preset-actions-group"
                       role="group"
                       aria-label="Preset management"
                     >
@@ -1201,14 +1201,14 @@
               <!-- Console Output Panel (Ken's P1 requirement)
                    Displays ECHO, WARNING, ERROR messages from OpenSCAD -->
               <details
-                class="console-panel"
+                class="console-panel forge-disclosure"
                 id="consolePanel"
                 role="region"
                 aria-label="OpenSCAD console output"
               >
                 <summary class="console-summary">
-                  <span class="console-icon" aria-hidden="true">📟</span>
-                  <span class="console-title">Console Output</span>
+                  <svg class="btn-icon-svg forge-disclosure-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+                  <span class="console-title forge-disclosure-title">Console Output</span>
                   <span
                     id="console-badge"
                     class="console-badge hidden"
@@ -1287,16 +1287,14 @@
 
               <!-- Reference Overlay Controls -->
               <details
-                class="overlay-details"
+                class="overlay-details forge-disclosure"
                 id="overlaySection"
                 role="region"
                 aria-label="Reference overlay controls"
               >
                 <summary class="overlay-summary">
-                  <span class="overlay-summary-icon" aria-hidden="true"
-                    >🖼️</span
-                  >
-                  <span class="overlay-summary-text">Reference Overlay</span>
+                  <svg class="btn-icon-svg forge-disclosure-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="0"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                  <span class="overlay-summary-text forge-disclosure-title">Reference Overlay</span>
                   <span class="overlay-status" id="overlayStatus">Off</span>
                 </summary>
                 <div class="overlay-controls">
@@ -1538,10 +1536,10 @@
                 aria-label="OpenSCAD library bundles"
                 data-tutorial-target="library-controls"
               >
-                <details class="library-details">
+                <details class="library-details forge-disclosure">
                   <summary class="library-summary">
                     <svg
-                      class="btn-icon-svg"
+                      class="btn-icon-svg forge-disclosure-icon"
                       width="16"
                       height="16"
                       viewBox="0 0 24 24"
@@ -1556,7 +1554,7 @@
                       <rect x="4" y="10" width="16" height="5" rx="0"></rect>
                       <rect x="4" y="16" width="16" height="4" rx="0"></rect>
                     </svg>
-                    Libraries
+                    <span class="forge-disclosure-title">Libraries</span>
                     <span class="library-badge" id="libraryBadge">0</span>
                   </summary>
                   <div class="library-content">
@@ -1608,10 +1606,13 @@
                 role="region"
                 aria-label="Companion files for this design"
               >
-                <details class="project-files-details">
-                  <summary class="project-files-summary">
+                <details class="project-files-details forge-disclosure">
+                  <summary
+                    class="project-files-summary"
+                    data-tutorial-target="companion-files"
+                  >
                     <svg
-                      class="btn-icon-svg"
+                      class="btn-icon-svg forge-disclosure-icon"
                       width="16"
                       height="16"
                       viewBox="0 0 24 24"
@@ -1629,7 +1630,7 @@
                       <line x1="12" y1="18" x2="12" y2="12"></line>
                       <line x1="9" y1="15" x2="15" y2="15"></line>
                     </svg>
-                    Companion Files
+                    <span class="forge-disclosure-title">Companion Files</span>
                     <span class="project-files-badge" id="projectFilesBadge"
                       >0</span
                     >
@@ -1638,6 +1639,19 @@
                     <p class="project-files-help" id="projectFilesHelp">
                       Manage companion files used by this design:
                     </p>
+
+                    <!-- Empty state shown when no companion files are present -->
+                    <div
+                      class="companion-empty-state"
+                      id="companionEmptyState"
+                    >
+                      <p>
+                        No companion files yet. Use
+                        <strong>Add File</strong> to include
+                        <code>.txt</code>, <code>.svg</code>, or other files
+                        your design needs.
+                      </p>
+                    </div>
 
                     <!-- Missing files warning with action button (Ken's preflight check) -->
                     <div
@@ -1706,10 +1720,137 @@
                         Add .txt, .scad, .svg, or other files referenced by your
                         model
                       </p>
+                      <button
+                        type="button"
+                        class="btn btn-sm btn-outline companion-save-btn hidden"
+                        id="companionSaveBtn"
+                        aria-label="Save companion files to this project"
+                      >
+                        Save as Project
+                      </button>
                     </div>
                   </div>
                 </details>
               </div>
+
+              <!-- Advanced Menu -->
+              <details class="advanced-menu forge-disclosure" id="advancedMenu">
+                <summary class="advanced-menu-summary">
+                  <svg
+                    class="btn-icon-svg forge-disclosure-icon"
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="square"
+                    stroke-linejoin="miter"
+                    aria-hidden="true"
+                  >
+                    <line x1="4" y1="6" x2="20" y2="6"></line>
+                    <line x1="4" y1="12" x2="20" y2="12"></line>
+                    <line x1="4" y1="18" x2="20" y2="18"></line>
+                    <rect x="8" y="4" width="4" height="4" rx="0"></rect>
+                    <rect x="12" y="10" width="4" height="4" rx="0"></rect>
+                    <rect x="6" y="16" width="4" height="4" rx="0"></rect>
+                  </svg>
+                  <span class="forge-disclosure-title">Advanced</span>
+                </summary>
+                <div class="advanced-menu-content">
+                  <!-- View SCAD Source -->
+                  <div class="advanced-section">
+                    <button
+                      id="viewSourceBtn"
+                      class="btn btn-sm btn-outline advanced-btn"
+                      aria-label="View OpenSCAD source code"
+                    >
+                      📄 View Source
+                    </button>
+                    <button
+                      id="copySourceBtn"
+                      class="btn btn-sm btn-outline advanced-btn"
+                      aria-label="Copy source code to clipboard"
+                    >
+                      📋 Copy Source
+                    </button>
+                  </div>
+
+                  <!-- Parameter Limits Override -->
+                  <div class="advanced-section">
+                    <label class="advanced-toggle">
+                      <input type="checkbox" id="unlockLimitsToggle" />
+                      <span>🔓 Unlock Parameter Limits</span>
+                    </label>
+                    <p class="advanced-hint">
+                      Allow values outside parsed min/max ranges
+                    </p>
+                  </div>
+
+                  <!-- Reset Tools -->
+                  <div class="advanced-section">
+                    <h4 class="advanced-section-title">Reset Tools</h4>
+                    <div class="reset-tools">
+                      <button
+                        id="resetAllBtn"
+                        class="btn btn-sm btn-outline"
+                        aria-label="Reset all parameters to defaults"
+                      >
+                        ↩️ Reset All
+                      </button>
+                      <button
+                        id="resetGroupBtn"
+                        class="btn btn-sm btn-outline"
+                        aria-label="Reset current group to defaults"
+                      >
+                        📁 Reset Group
+                      </button>
+                    </div>
+                    <div
+                      class="reset-group-selector hidden"
+                      id="resetGroupSelector"
+                    >
+                      <label for="resetGroupSelect">Select group:</label>
+                      <select id="resetGroupSelect" class="reset-group-select">
+                        <!-- Groups will be populated dynamically -->
+                      </select>
+                      <button
+                        id="confirmResetGroupBtn"
+                        class="btn btn-sm btn-primary"
+                      >
+                        Reset
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- Raw Parameter JSON -->
+                  <div class="advanced-section">
+                    <button
+                      id="viewParamsJsonBtn"
+                      class="btn btn-sm btn-outline advanced-btn"
+                      aria-label="View current parameters as JSON"
+                    >
+                      { } View Params JSON
+                    </button>
+                  </div>
+
+                  <!-- Export Changed Settings (Volkswitch troubleshooting support) -->
+                  <div class="advanced-section">
+                    <h4 class="advanced-section-title">Troubleshooting</h4>
+                    <button
+                      id="exportChangedBtn"
+                      class="btn btn-sm btn-outline advanced-btn"
+                      aria-label="Export only changed parameters for troubleshooting"
+                    >
+                      📋 Export Changed Settings
+                    </button>
+                    <p class="advanced-hint">
+                      Download only non-default parameters (useful for support
+                      requests)
+                    </p>
+                  </div>
+                </div>
+              </details>
 
               <!-- Parameter Search and Navigation (C2: Cognitive load reduction) -->
               <div class="param-search-section" id="paramSearchSection">
@@ -1835,126 +1976,6 @@
                   </details>
                 </div>
               </div>
-
-              <!-- Advanced Menu -->
-              <details class="advanced-menu" id="advancedMenu">
-                <summary class="advanced-menu-summary">
-                  <span class="advanced-icon" aria-hidden="true">
-                    <svg
-                      class="btn-icon-svg"
-                      width="18"
-                      height="18"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="square"
-                      stroke-linejoin="miter"
-                    >
-                      <line x1="4" y1="6" x2="20" y2="6"></line>
-                      <line x1="4" y1="12" x2="20" y2="12"></line>
-                      <line x1="4" y1="18" x2="20" y2="18"></line>
-                      <rect x="8" y="4" width="4" height="4" rx="0"></rect>
-                      <rect x="12" y="10" width="4" height="4" rx="0"></rect>
-                      <rect x="6" y="16" width="4" height="4" rx="0"></rect>
-                    </svg>
-                  </span>
-                  Advanced
-                </summary>
-                <div class="advanced-menu-content">
-                  <!-- View SCAD Source -->
-                  <div class="advanced-section">
-                    <button
-                      id="viewSourceBtn"
-                      class="btn btn-sm btn-outline advanced-btn"
-                      aria-label="View OpenSCAD source code"
-                    >
-                      📄 View Source
-                    </button>
-                    <button
-                      id="copySourceBtn"
-                      class="btn btn-sm btn-outline advanced-btn"
-                      aria-label="Copy source code to clipboard"
-                    >
-                      📋 Copy Source
-                    </button>
-                  </div>
-
-                  <!-- Parameter Limits Override -->
-                  <div class="advanced-section">
-                    <label class="advanced-toggle">
-                      <input type="checkbox" id="unlockLimitsToggle" />
-                      <span>🔓 Unlock Parameter Limits</span>
-                    </label>
-                    <p class="advanced-hint">
-                      Allow values outside parsed min/max ranges
-                    </p>
-                  </div>
-
-                  <!-- Reset Tools -->
-                  <div class="advanced-section">
-                    <h4 class="advanced-section-title">Reset Tools</h4>
-                    <div class="reset-tools">
-                      <button
-                        id="resetAllBtn"
-                        class="btn btn-sm btn-outline"
-                        aria-label="Reset all parameters to defaults"
-                      >
-                        ↩️ Reset All
-                      </button>
-                      <button
-                        id="resetGroupBtn"
-                        class="btn btn-sm btn-outline"
-                        aria-label="Reset current group to defaults"
-                      >
-                        📁 Reset Group
-                      </button>
-                    </div>
-                    <div
-                      class="reset-group-selector hidden"
-                      id="resetGroupSelector"
-                    >
-                      <label for="resetGroupSelect">Select group:</label>
-                      <select id="resetGroupSelect" class="reset-group-select">
-                        <!-- Groups will be populated dynamically -->
-                      </select>
-                      <button
-                        id="confirmResetGroupBtn"
-                        class="btn btn-sm btn-primary"
-                      >
-                        Reset
-                      </button>
-                    </div>
-                  </div>
-
-                  <!-- Raw Parameter JSON -->
-                  <div class="advanced-section">
-                    <button
-                      id="viewParamsJsonBtn"
-                      class="btn btn-sm btn-outline advanced-btn"
-                      aria-label="View current parameters as JSON"
-                    >
-                      { } View Params JSON
-                    </button>
-                  </div>
-
-                  <!-- Export Changed Settings (Volkswitch troubleshooting support) -->
-                  <div class="advanced-section">
-                    <h4 class="advanced-section-title">Troubleshooting</h4>
-                    <button
-                      id="exportChangedBtn"
-                      class="btn btn-sm btn-outline advanced-btn"
-                      aria-label="Export only changed parameters for troubleshooting"
-                    >
-                      📋 Export Changed Settings
-                    </button>
-                    <p class="advanced-hint">
-                      Download only non-default parameters (useful for support
-                      requests)
-                    </p>
-                  </div>
-                </div>
-              </details>
             </div>
 
             <!-- Expert Mode Panel (M2) - Code editor interface -->
@@ -2037,7 +2058,7 @@
                     <!-- Preview Settings button SECOND (right of Parameters) -->
                     <button
                       id="previewDrawerToggle"
-                      class="btn btn-sm btn-icon btn-collapse-panel preview-drawer-toggle-btn"
+                      class="btn btn-sm btn-icon btn-collapse-panel preview-drawer-toggle-btn forge-control"
                       aria-expanded="false"
                       aria-controls="previewInfoContent"
                       aria-label="Expand preview settings and model info"
@@ -2450,7 +2471,7 @@
                 <!-- ECHO message drawer (Volkswitch echo() support) -->
                 <div class="echo-drawer collapsed" id="echoDrawer">
                   <button
-                    class="echo-drawer-toggle"
+                    class="echo-drawer-toggle forge-control--sm"
                     id="echoDrawerToggle"
                     type="button"
                     aria-expanded="false"
@@ -2513,7 +2534,7 @@
                 >
                   <button
                     id="actionsDrawerToggle"
-                    class="btn btn-sm btn-icon btn-collapse-panel actions-drawer-toggle-btn"
+                    class="btn btn-sm btn-icon btn-collapse-panel actions-drawer-toggle-btn forge-control"
                     aria-expanded="false"
                     aria-controls="actionsDrawerBody"
                     aria-label="Expand actions menu"
@@ -2795,7 +2816,7 @@
                 <!-- Drawer toggle button -->
                 <button
                   id="cameraDrawerToggle"
-                  class="btn btn-sm camera-drawer-toggle-btn"
+                  class="btn btn-sm camera-drawer-toggle-btn forge-control"
                   aria-expanded="false"
                   aria-controls="cameraDrawerBody"
                   aria-label="Expand camera controls"
@@ -3212,29 +3233,41 @@
             aria-labelledby="camera-controls-heading"
           >
             <div class="panel-header camera-panel-header">
-              <button
-                id="cameraPanelToggle"
-                class="btn btn-sm btn-icon btn-collapse-panel"
-                aria-expanded="false"
-                aria-controls="cameraPanelBody"
-                aria-label="Expand camera controls panel"
-                title="Camera Controls"
-                data-tutorial-target="camera-panel-toggle"
-              >
-                <svg
-                  width="20"
-                  height="20"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  aria-hidden="true"
+              <!-- Row 1: Title -->
+              <div class="camera-header-title-row">
+                <h2 id="camera-controls-heading">Camera</h2>
+              </div>
+              <!-- Row 2: Collapse button -->
+              <div class="camera-header-actions">
+                <button
+                  id="cameraPanelToggle"
+                  class="btn btn-sm btn-icon btn-collapse-panel forge-control"
+                  aria-expanded="false"
+                  aria-controls="cameraPanelBody"
+                  aria-label="Expand camera controls panel"
+                  title="Camera Controls"
+                  data-tutorial-target="camera-panel-toggle"
                 >
-                  <polyline points="13 6 7 12 13 18"></polyline>
-                  <line x1="17" y1="4" x2="17" y2="20" stroke-width="2"></line>
-                </svg>
-              </button>
-              <h2 id="camera-controls-heading">Camera</h2>
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    aria-hidden="true"
+                  >
+                    <polyline points="13 6 19 12 13 18"></polyline>
+                    <line
+                      x1="7"
+                      y1="4"
+                      x2="7"
+                      y2="20"
+                      stroke-width="2"
+                    ></line>
+                  </svg>
+                </button>
+              </div>
             </div>
 
             <div class="camera-panel-body" id="cameraPanelBody">

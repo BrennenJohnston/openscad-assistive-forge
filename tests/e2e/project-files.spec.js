@@ -128,7 +128,7 @@ test.describe('Project Files Manager', () => {
     }
   })
 
-  test('hides companion files section for single-file projects', async ({ page }) => {
+  test('shows empty-state companion files for single-file projects', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
     
     await page.goto('/')
@@ -141,17 +141,14 @@ test.describe('Project Files Manager', () => {
       return
     }
     
-    // Verify project files controls are hidden or not visible
+    // Panel should be visible with empty-state content (not hidden)
     const projectFilesControls = page.locator('#projectFilesControls')
+    await expect(projectFilesControls).toBeVisible({ timeout: 10000 })
     
-    // Either not in DOM or has hidden class
-    const isHidden = await projectFilesControls.evaluate(el => {
-      if (!el) return true
-      return el.classList.contains('hidden') || 
-             getComputedStyle(el).display === 'none'
-    }).catch(() => true)
-    
-    expect(isHidden).toBe(true)
+    // Empty state message should be present
+    const emptyState = page.locator('#projectFilesControls .companion-empty-state')
+    await expect(emptyState).toBeVisible()
+    await expect(emptyState).toContainText('No companion files yet')
   })
 
   test('shows file list with correct structure', async ({ page }) => {
@@ -436,5 +433,24 @@ cube(10);
     // Verify file count unchanged
     const newCount = await fileItems.count()
     expect(newCount).toBe(initialCount)
+  })
+
+  test('companion save button is visible for loaded projects', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
+
+    await page.goto('/')
+
+    try {
+      await loadSimpleBoxExample(page)
+    } catch (error) {
+      console.log('Could not load example:', error.message)
+      test.skip()
+      return
+    }
+
+    // The Save as Project button should be visible in the companion files section
+    const saveBtn = page.locator('#companionSaveBtn')
+    await expect(saveBtn).toBeVisible({ timeout: 10000 })
+    await expect(saveBtn).toContainText('Save as Project')
   })
 })
