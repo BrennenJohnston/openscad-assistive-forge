@@ -27,8 +27,6 @@ manifest sharing hardening, and ongoing containment protocols.
 - **Manifest Stability Contract** - New `docs/specs/MANIFEST_STABILITY_CONTRACT.md` documenting URL parameter stability, schema versioning, hosting platform support, and breaking change policy
 - **Manifest E2E test suite** - New `tests/e2e/manifest-loading.spec.js` with 20 test cases covering valid loading, error handling, URL parameter interactions, mobile viewport, and accessibility
 - **Deep-link alias tests** - New tests for `?load=keyguard-demo` and `?load=keyguard` aliases
-- **Pre-commit hook** - `.githooks/pre-commit` scans staged files for forbidden stakeholder terms
-- **CI stakeholder scan** - `.github/workflows/stakeholder-scan.yml` runs on every push/PR
 - **Known parity gaps** - Added Forge vs Desktop OpenSCAD comparison table to `docs/TESTING.md`
 
 ### Security
