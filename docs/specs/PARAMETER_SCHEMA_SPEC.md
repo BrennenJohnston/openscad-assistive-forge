@@ -405,7 +405,7 @@ Based on `universal_cuff_utensil_holder.scad`:
     "type": "openscad",
     "file": "universal_cuff_utensil_holder.scad",
     "license": "CC0-1.0",
-    "author": "Volksswitch",
+    "author": "Community",
     "extractedAt": "2026-01-12T18:00:00Z"
   },
   "x-forge-groups": [

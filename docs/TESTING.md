@@ -54,7 +54,7 @@ npm run test:coverage
 
 This writes an HTML report into `coverage/`.
 
-## Stakeholder manual testing protocol
+## Manual testing protocol
 
 Some features cannot be reliably automated. Follow these steps with DevTools open (F12).
 
@@ -88,9 +88,9 @@ For local-only testing without a server:
 1. Navigate to `http://localhost:5173/?scad=<url-to-scad-file>` with a publicly accessible `.scad` file.
 2. Verify the file downloads and parameters appear.
 
-### Keyguard Workflow Walkthrough (Volkswitch Clinician Flow)
+### Keyguard Workflow Walkthrough (Clinician Flow)
 
-This replicates the exact workflow Ken's clinicians follow:
+This replicates the exact workflow clinicians follow when customizing keyguards:
 
 1. Upload the keyguard ZIP (`.volkswitch/keyguard-test-bundle.zip`).
 2. Verify the preset dropdown shows "design default values" first, plus the imported presets.
@@ -118,3 +118,21 @@ After any changes, verify:
 - [ ] Share link generation and loading works.
 - [ ] `npx playwright test tests/e2e/accessibility.spec.js` -- axe-core passes.
 - [ ] Bundle size is within the 153KB gzipped budget (`npm run build` and check dist).
+
+---
+
+## Known Parity Gaps (Forge vs Desktop OpenSCAD)
+
+These are known differences between Forge's WASM-based rendering and the desktop OpenSCAD application:
+
+| Feature | Desktop | Forge (WASM) | Notes |
+|---------|---------|-------------|-------|
+| **Animations (`$t`)** | Supported | Not supported | Animation variable is not available in the WASM build |
+| **Text rendering** | Uses system fonts | Requires bundled fonts | Font loading may differ; some fonts unavailable |
+| **OpenSCAD version** | Latest release | May lag behind | WASM build is updated periodically; newer features may not be available |
+| **Performance** | Native speed | Slower for complex models | Models with >100K faces may be significantly slower in WASM |
+| **File access** | Full filesystem | Upload/URL only | No direct filesystem access; all files must be uploaded or fetched via URL |
+| **Customizer GUI** | Native Qt widgets | HTML form controls | Behavior should match, but rendering differs |
+| **Library support** | Full MCAD/BOSL2 | Bundled subset | Libraries must be included in the WASM filesystem |
+
+These gaps are documented to set expectations. They do not represent bugs unless desktop parity is explicitly planned.

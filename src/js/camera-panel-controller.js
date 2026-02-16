@@ -451,7 +451,7 @@ export function initCameraPanelController(options = {}) {
         }
       });
 
-    // Standard view buttons (Ken's request for consistent viewing angles)
+    // Standard view buttons for consistent viewing angles
     // These are in both desktop camera panel and mobile camera drawer
     const viewButtons = document.querySelectorAll('.camera-view-btn');
     viewButtons.forEach((btn) => {

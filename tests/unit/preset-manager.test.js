@@ -579,7 +579,7 @@ describe('Preset Manager', () => {
     it('should import OpenSCAD native preset format (parameterSets)', () => {
       const openscadPresets = {
         parameterSets: {
-          'Ken\'s Keyguard': {
+          'Tablet Keyguard': {
             width: '200',
             height: '150',
             thickness: '3.5'
@@ -602,7 +602,7 @@ describe('Preset Manager', () => {
       
       const presets = presetManager.getPresetsForModel(modelName)
       expect(presets).toHaveLength(2)
-      expect(presets.find(p => p.name === 'Ken\'s Keyguard')).toBeDefined()
+      expect(presets.find(p => p.name === 'Tablet Keyguard')).toBeDefined()
       expect(presets.find(p => p.name === 'Large Version')).toBeDefined()
     })
 

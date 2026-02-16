@@ -772,13 +772,13 @@ async function checkCapabilities() {
   }
 }
 
-// Work directory for design packages (Ken's Volkswitch compatibility)
+// Work directory for multi-file design packages
 // All files are mounted here so include/use statements resolve correctly
 const WORK_DIR = '/work';
 
 /**
  * Mount files into OpenSCAD virtual filesystem
- * Ken's P0 requirement: Enable include <openings_and_additions.txt> to work
+ * Enable include/use statements to resolve companion files correctly
  * 
  * Files are mounted under /work/ directory so that:
  * - Main file runs from /work/mainfile.scad
@@ -1357,7 +1357,7 @@ async function renderWithCallMain(
   // Performance flags: Use Manifold backend for 5-30x faster CSG operations
   // Note: Modern OpenSCAD uses --backend=Manifold instead of --enable=manifold
   // lazy-union is still opt-in via --enable flag
-  // Ken's P2 requirement: Allow toggling between Manifold (fast) and CGAL (stable)
+  // Allow toggling between Manifold (fast) and CGAL (stable)
   const capabilities = openscadCapabilities || {};
   const supportsManifold = Boolean(capabilities.hasManifold);
   const supportsLazyUnion = Boolean(capabilities.hasLazyUnion);
@@ -2223,7 +2223,7 @@ async function render(payload) {
     }
 
     // Mount additional files if provided (for multi-file projects)
-    // Ken's P0 requirement: Support include <openings_and_additions.txt>
+    // Mount additional files for multi-file project include/use resolution
     let mountResult = null;
     if (files && Object.keys(files).length > 0) {
       // Convert files object to Map
@@ -2295,7 +2295,7 @@ async function render(payload) {
 
       // Determine main file path
       // For multi-file projects, use the work directory path
-      // Ken's requirement: include <openings_and_additions.txt> must resolve correctly
+      // For multi-file projects, include/use statements must resolve correctly
       let mainFileToUse;
       
       if (mainFile && mountResult && mountResult.workDir) {
@@ -2450,7 +2450,7 @@ async function render(payload) {
             renderMs: workerRenderMs,
             wasmInitMs: wasmInitDurationMs,
           },
-          // Include console output for echo() messages - critical for Volkswitch keyguard
+          // Include console output for echo() messages (critical for user communication)
           consoleOutput: openscadConsoleOutput || '',
         },
       },

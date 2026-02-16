@@ -4,7 +4,7 @@ This document describes how to create "golden" reference outputs from desktop Op
 
 ## Purpose
 
-When debugging SVG export issues (like the Volkswitch keyguard workflow), we need a known-good reference to compare against. The desktop OpenSCAD application is the authoritative source for expected output.
+When debugging SVG export issues (like a complex keyguard workflow), we need a known-good reference to compare against. The desktop OpenSCAD application is the authoritative source for expected output.
 
 ## Prerequisites
 
@@ -12,7 +12,7 @@ When debugging SVG export issues (like the Volkswitch keyguard workflow), we nee
 2. The test SCAD files and companion files
 3. Access to the OpenSCAD Customizer panel
 
-## Procedure for Volkswitch Keyguard Golden SVG
+## Procedure for Keyguard Golden SVG
 
 ### Step 1: Prepare Files
 
@@ -98,7 +98,7 @@ When validating Forge SVG export:
 
 ## Quick Test Procedure
 
-For rapid testing without full Volkswitch complexity:
+For rapid testing without full keyguard complexity:
 
 ```scad
 // test-2d.scad - Minimal 2D test
@@ -113,7 +113,7 @@ square([50, 50]);
 ## Console Output Verification
 
 Desktop OpenSCAD console output should be visible in the Console panel.
-For Volkswitch, look for:
+For keyguard designs, look for:
 
 - `ECHO:` lines from the designer
 - Configuration guidance messages

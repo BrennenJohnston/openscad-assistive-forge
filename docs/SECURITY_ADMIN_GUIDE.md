@@ -40,29 +40,32 @@ No user data leaves the browser except for explicit file downloads.
 The application uses a strict Content Security Policy to prevent XSS and injection attacks:
 
 ```http
-Content-Security-Policy:
+Content-Security-Policy-Report-Only:
   default-src 'self';
-  script-src 'self' 'wasm-unsafe-eval' https://cdn.jsdelivr.net;
+  script-src 'self' 'wasm-unsafe-eval';
   worker-src 'self' blob:;
+  child-src 'self' blob:;
   style-src 'self' 'unsafe-inline';
   img-src 'self' data: blob:;
   font-src 'self';
-  connect-src 'self';
-  frame-src 'none';
+  connect-src 'self' https://raw.githubusercontent.com https://*.github.io https://*.gitlab.io https://*.pages.dev;
+  frame-ancestors 'none';
   object-src 'none';
   base-uri 'self';
   form-action 'self';
-  frame-ancestors 'none'
+  upgrade-insecure-requests
 ```
+
+> **Note**: The CSP is currently in **Report-Only** mode (Phase 1). Violations are logged but not blocked. Plan to transition to enforcing mode after the manifest feature stabilizes and a burn-down period confirms no false positives.
 
 ### Directive Explanations
 
 | Directive | Value | Rationale |
 |-----------|-------|-----------|
 | `script-src 'wasm-unsafe-eval'` | Required | OpenSCAD WASM needs to compile code at runtime |
-| `script-src https://cdn.jsdelivr.net` | Required | Monaco Editor loads from CDN |
-| `worker-src blob:` | Required | Monaco Editor workers use blob URLs |
+| `worker-src blob:` | Required | Web Worker blob URLs for WASM processing |
 | `style-src 'unsafe-inline'` | Required | Monaco Editor requires inline styles |
+| `connect-src` (external origins) | Required | Manifest sharing (`?manifest=`) fetches project files from author-hosted repos on GitHub, GitLab, and Cloudflare Pages |
 | `frame-ancestors 'none'` | Security | Prevents clickjacking via framing |
 
 ### CSP Reporting
@@ -257,8 +260,9 @@ The application makes network requests only to:
 
 1. The hosting origin (static assets)
 2. cdn.jsdelivr.net (Monaco Editor - if Expert Mode enabled)
+3. `raw.githubusercontent.com` / `*.github.io` / `*.gitlab.io` / `*.pages.dev` (only when a `?manifest=` or `?project=` deep-link is used to load an externally-hosted project)
 
-No user content is transmitted.
+No user content is transmitted. However, when a user clicks a manifest link, their browser fetches files directly from the author's hosting platform (e.g., GitHub). This exposes the user's IP address and request timing to that platform. GitHub's [privacy policy](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement) applies to those requests. This is inherent to any client-side architecture that fetches remote resources without a proxy backend.
 
 ### GDPR/CCPA Compliance
 

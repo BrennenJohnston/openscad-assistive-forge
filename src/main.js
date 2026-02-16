@@ -174,8 +174,8 @@ import {
 import Split from 'split.js';
 
 // Example definitions (used by welcome screen, Features Guide, and deep-linking)
-// Ken's P2 requirement: Direct-launch URLs for external website integration
-// Usage: ?load=volkswitch-keyguard-demo or ?example=simple-box
+// Direct-launch URLs for external website integration
+// Usage: ?load=keyguard-demo or ?example=simple-box
 const EXAMPLE_DEFINITIONS = {
   'simple-box': {
     path: '/examples/simple-box/simple_box.scad',
@@ -197,24 +197,24 @@ const EXAMPLE_DEFINITIONS = {
     path: '/examples/multi-file-box.zip',
     name: 'multi-file-box.zip',
   },
-  // Volkswitch Keyguard Designer Demo (Ken's direct-launch URL contract)
-  // Usage: https://assistive-forge.example.com/?load=volkswitch-keyguard-demo
-  'volkswitch-keyguard-demo': {
-    path: '/examples/volkswitch-keyguard/keyguard_demo.scad',
+  // Keyguard Designer Demo (multi-file example with companion files)
+  // Usage: https://assistive-forge.example.com/?load=keyguard-demo
+  'keyguard-demo': {
+    path: '/examples/keyguard-demo/keyguard_demo.scad',
     name: 'keyguard_demo.scad',
-    description: 'Volkswitch Keyguard Designer Demo (multi-file)',
-    author: 'Ken @ Volksswitch.org',
+    description: 'Keyguard Designer Demo (multi-file)',
+    author: 'Community',
     // Additional files to load (multi-file design package)
     additionalFiles: [
-      '/examples/volkswitch-keyguard/openings_and_additions.txt',
+      '/examples/keyguard-demo/openings_and_additions.txt',
     ],
   },
-  // Alias for Ken's preferred short URL
+  // Short alias for keyguard demo example
   'keyguard': {
-    path: '/examples/volkswitch-keyguard/keyguard_demo.scad',
+    path: '/examples/keyguard-demo/keyguard_demo.scad',
     name: 'keyguard_demo.scad',
     additionalFiles: [
-      '/examples/volkswitch-keyguard/openings_and_additions.txt',
+      '/examples/keyguard-demo/openings_and_additions.txt',
     ],
   },
   // Additional examples for deep-linking
@@ -1031,7 +1031,7 @@ function showConfirmDialog(
 }
 
 /**
- * Show missing dependencies dialog (Ken's P0 requirement)
+ * Show missing dependencies dialog with actionable warnings
  * When a design package is missing include/use/import files, warn the user
  * with actionable options: add the files, continue anyway, or cancel
  * @param {Object} missing - Missing files by type
@@ -2282,7 +2282,7 @@ async function initApp() {
           confirmBtn.textContent = 'Clearing...';
           confirmBtn.setAttribute('aria-busy', 'true');
 
-          // Add timeout to prevent freeze (Ken's P0 stability issue)
+          // Add timeout to prevent freeze during cache clearing
           const CACHE_CLEAR_TIMEOUT = 8000; // 8 seconds max before force reload
 
           try {
@@ -2546,7 +2546,7 @@ async function initApp() {
   });
 
   // ============================================================================
-  // Preset Migration Check (Ken's P3 requirement)
+  // Preset migration check: detect legacy presets for versioned format migration
   // Check for legacy presets that can be migrated to the new versioned format
   // ============================================================================
   const checkPresetMigration = () => {
@@ -2674,7 +2674,7 @@ async function initApp() {
           );
         }
 
-        // Show/hide 2D format guidance for SVG/DXF (Volkswitch laser cutting support)
+        // Show/hide 2D format guidance for SVG/DXF laser cutting workflows
         if (format2dGuidance) {
           if (formatDef.is2D) {
             format2dGuidance.classList.remove('hidden');
@@ -3720,7 +3720,7 @@ async function initApp() {
   }
 
   // ============================================================================
-  // Engine Toggle (Ken's P2 requirement)
+  // Engine toggle: switch between Manifold (fast) and CGAL (stable, max compatibility)
   // Toggle between Manifold (fast, 5-30x speedup) and CGAL (stable, maximum compatibility)
   // ============================================================================
   const manifoldEngineToggle = document.getElementById('manifoldEngineToggle');
@@ -5062,7 +5062,7 @@ async function initApp() {
     const importPattern = /import\s*\(\s*(?:file\s*=\s*)?["']([^"']+)["']/gi;
 
     // Match common file variable patterns like screenshot_file = "filename"
-    // This handles Volkswitch-style patterns: screenshot_file = "default.svg"
+    // This handles common patterns: screenshot_file = "default.svg"
     const fileVarPatterns = [
       /(\w*_?file\w*)\s*=\s*["']([^"']+\.\w+)["']/gi, // xxx_file = "name.ext"
       /(\w*_?filename\w*)\s*=\s*["']([^"']+\.\w+)["']/gi, // xxx_filename = "name.ext"
@@ -5346,12 +5346,12 @@ async function initApp() {
     // Update overlay source dropdown with available image files
     updateOverlaySourceDropdown();
 
-    // Auto-select overlay source based on Volkswitch screenshot_file pattern
+    // Auto-select overlay source based on screenshot_file variable detection
     autoSelectOverlaySource(requiredFiles);
   }
 
   /**
-   * Auto-select overlay source based on Volkswitch screenshot_file pattern
+   * Auto-select overlay source based on screenshot_file variable detection
    * @param {Object} requiredFiles - Detection result from detectRequiredCompanionFiles
    */
   function autoSelectOverlaySource(requiredFiles) {
@@ -5373,7 +5373,7 @@ async function initApp() {
       return;
     }
 
-    // Look for Volkswitch screenshot_file variable
+    // Look for screenshot_file variable in SCAD source
     let screenshotFile = null;
     if (requiredFiles && requiredFiles.files) {
       const screenshotVar = requiredFiles.files.find(
@@ -5384,7 +5384,7 @@ async function initApp() {
       }
     }
 
-    // Fallback: look for default.svg (common Volkswitch convention)
+    // Fallback: look for default.svg (common screenshot overlay convention)
     if (!screenshotFile && projectFiles.has('default.svg')) {
       screenshotFile = 'default.svg';
     }
@@ -5755,7 +5755,7 @@ async function initApp() {
             `[ZIP] Loaded multi-file project: ${mainFile} (${stats.totalFiles} files)`
           );
 
-          // Ken's P0 requirement: Dependency preflight check
+          // Dependency preflight check: verify all include/use/import files are present
           // Check if all include/use/import files are present in the ZIP
           const uploadedFilenames = Array.from(files.keys());
           const preflight = runPreflightCheck(fileContent, uploadedFilenames, {
@@ -6359,7 +6359,7 @@ async function initApp() {
     });
   }
 
-  // Missing files warning button - Ken's preflight check enhancement
+  // Missing files warning button: direct action to add missing dependency files
   // Provides a direct action to add missing dependency files
   const addMissingFilesBtn = document.getElementById('addMissingFilesBtn');
   if (addMissingFilesBtn) {
@@ -6401,7 +6401,7 @@ async function initApp() {
     textFileEditorApply.addEventListener('click', applyTextFileEditorChanges);
   }
 
-  // Ctrl+S / Cmd+S keyboard shortcut to save and apply changes (Ken's P3 live edit requirement)
+  // Ctrl+S / Cmd+S keyboard shortcut to save and apply changes
   const textFileEditorContent = document.getElementById('textFileEditorContent');
   if (textFileEditorContent && textFileEditorModal) {
     textFileEditorContent.addEventListener('keydown', (e) => {
@@ -7804,7 +7804,7 @@ if (rounded) {
   }
 
   // Shared example loader (reusable by welcome buttons and Features Guide)
-  // Ken's P2 requirement: Direct-launch URL support for external website integration
+  // Direct-launch URL support for external website integration
   async function loadExampleByKey(
     exampleKey,
     { closeFeaturesGuideModal = false } = {}
@@ -7849,7 +7849,7 @@ if (rounded) {
         }
       }
 
-      // Check for multi-file design package (Ken's Volkswitch requirement)
+      // Check for multi-file design package with additionalFiles
       // This supports examples with additionalFiles like openings_and_additions.txt
       let projectFiles = null;
       let mainFilePath = null;
@@ -7945,13 +7945,13 @@ if (rounded) {
   });
 
   // =========================================
-  // Deep-linking: URL parameter support (Volkswitch website integration)
+  // Deep-linking: URL parameter support for external website integration
   // Allows external sites to link directly to Forge with a specific example loaded
-  // Usage: ?example=simple-box or ?load=volkswitch-keyguard-demo
-  // Note: ?load= is an alias for ?example= (Ken's preferred syntax for website links)
+  // Usage: ?example=simple-box or ?load=keyguard-demo
+  // Note: ?load= is an alias for ?example= (for website embedding convenience)
   // =========================================
   const initUrlParams = new URLSearchParams(window.location.search);
-  // Support both ?example= and ?load= (alias for Ken's website integration)
+  // Support both ?example= and ?load= (alias for website embedding)
   const exampleParam = initUrlParams.get('example') || initUrlParams.get('load');
 
   if (exampleParam) {
@@ -7994,7 +7994,7 @@ if (rounded) {
   // =========================================
   // Manifest deep-link: ?manifest=<url> support
   // Loads a full project from a forge-manifest.json hosted externally.
-  // This is the primary "one-link sharing" path for authors like Volkswitch.
+  // This is the primary "one-link sharing" path for external project authors
   // Usage: ?manifest=https://raw.githubusercontent.com/user/repo/main/forge-manifest.json
   // Optional companions: ?preset=<name>, ?skipWelcome=true
   // =========================================
@@ -9487,7 +9487,7 @@ if (rounded) {
         lastRenderTime: duration,
       });
 
-      // Store console output for the Console panel (Volkswitch echo() support)
+      // Store console output for the Console panel (echo/warning/error display)
       if (
         result.consoleOutput &&
         typeof window.updateConsoleOutput === 'function'
@@ -10392,7 +10392,7 @@ if (rounded) {
 
   // ========== PRESET SYSTEM ==========
   // OpenSCAD Customizer-compatible preset management
-  // Ken's requirement: Save=update current, +=new, -=delete
+  // Preset controls: Save = update current, + = new, - = delete
 
   // "design default values" -- always first in preset dropdown (desktop OpenSCAD parity)
   // Virtual preset ID for the immutable defaults entry (not stored in PresetManager)
@@ -10985,11 +10985,11 @@ if (rounded) {
         }
       } else if (action === 'import') {
         // Create file input for import
-        // Ken's multi-preset JSON import fix
+        // Multi-preset JSON import support
         const input = document.createElement('input');
         input.type = 'file';
         input.accept = '.json';
-        input.multiple = true; // Allow multiple files for Ken's workflow
+        input.multiple = true; // Allow multiple files for batch preset import workflow
         input.onchange = async (e) => {
           const files = e.target.files;
           if (!files || files.length === 0) return;
@@ -11016,7 +11016,7 @@ if (rounded) {
               try {
                 const text = await file.text();
                 
-                // Log for debugging Ken's import issues
+                // Log for debugging preset import issues
                 console.log(`[Import] Processing: ${file.name}`);
                 
                 const result = presetManager.importPreset(
@@ -11083,7 +11083,7 @@ if (rounded) {
   const managePresetsBtn = document.getElementById('managePresetsBtn');
   const presetSelect = document.getElementById('presetSelect');
 
-  // Save button: Update currently selected preset (Ken's P0 requirement)
+  // Save button: Update currently selected preset (not create new)
   // "Pressing 'Save Preset' creates a new preset. It should simply save any parameter changes to the current preset"
   savePresetBtn.addEventListener('click', () => {
     const state = stateManager.getState();
@@ -11589,7 +11589,7 @@ if (rounded) {
   });
 
   // =========================================
-  // Console Output Modal (Volkswitch echo() support)
+  // Console output display for ECHO/WARNING/ERROR messages
   // =========================================
   const viewConsoleBtn = document.getElementById('viewConsoleBtn');
   const consoleOutputModal = document.getElementById('consoleOutputModal');
@@ -11604,12 +11604,12 @@ if (rounded) {
   // State for console output
   let lastConsoleOutput = '';
 
-  // Initialize ConsolePanel (Ken's P1 requirement)
+  // Initialize ConsolePanel for ECHO/WARNING/ERROR display
   const consolePanel = getConsolePanel();
 
   /**
    * Update console output display
-   * Ken's P1 requirement: Display ECHO/WARNING/ERROR messages for user communication
+   * Display ECHO/WARNING/ERROR messages for user communication
    * @param {string} output - Console output from OpenSCAD render
    */
   function updateConsoleOutput(output) {
@@ -11627,7 +11627,7 @@ if (rounded) {
       renderConsoleOutput(output);
     }
 
-    // Feed the new ConsolePanel (Ken's P1 requirement)
+    // Feed the ConsolePanel with parsed console output
     // This displays ECHO/WARNING/ERROR in the parameter panel
     consolePanel.addOutput(output);
 
@@ -11824,7 +11824,7 @@ if (rounded) {
     }
   });
 
-  // Download console log - useful for troubleshooting (Ken's workflow support)
+  // Download console log for troubleshooting
   const consoleDownloadBtn = document.getElementById('consoleDownloadBtn');
   consoleDownloadBtn?.addEventListener('click', () => {
     if (!lastConsoleOutput) {
@@ -12015,7 +12015,7 @@ if (rounded) {
   });
 
   // =========================================
-  // Export Changed Settings (Volkswitch troubleshooting support)
+  // Export Changed Settings (troubleshooting and sharing support)
   // =========================================
   const exportChangedBtn = document.getElementById('exportChangedBtn');
 

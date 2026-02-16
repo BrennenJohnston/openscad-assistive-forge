@@ -874,7 +874,7 @@ export class PreviewManager {
         }
       });
 
-    // Standard view buttons (Ken's request for consistent viewing angles)
+    // Standard view buttons for consistent viewing angles
     const viewButtons = document.querySelectorAll('.camera-view-btn');
     viewButtons.forEach((btn) => {
       btn.addEventListener('click', () => {

@@ -7,7 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Nothing yet.
+### Stakeholder Sanitization & Feature Generalization
+
+Comprehensive scrub of all stakeholder-specific references, feature generalization,
+manifest sharing hardening, and ongoing containment protocols.
+
+### Changed
+
+- **Renamed example directories** - `volkswitch-keyguard` directories renamed to `keyguard-demo` (public/examples/) and `keyguard-minimal` (tests/fixtures/)
+- **Renamed test file** - `volkswitch-workflow.spec.js` renamed to `keyguard-workflow.spec.js`
+- **Generalized all code comments** - Replaced stakeholder-specific attribution comments with feature-descriptive language across 27 source, HTML, CSS, test, and documentation files
+- **Renamed EXAMPLE_DEFINITIONS keys** - `volkswitch-keyguard-demo` becomes `keyguard-demo`; all paths updated
+- **Updated deep-link URLs** - `?example=keyguard-demo` and `?load=keyguard` now serve the renamed example
+- **Updated test assertions** - All test files reference the renamed directories and generalized content
+
+### Added
+
+- **Manifest Sharing Guide rewrite** - Complete rewrite of `docs/guides/MANIFEST_SHARING_GUIDE.md` with step-by-step non-technical setup instructions, three fictional examples, and privacy notice
+- **Manifest Stability Contract** - New `docs/specs/MANIFEST_STABILITY_CONTRACT.md` documenting URL parameter stability, schema versioning, hosting platform support, and breaking change policy
+- **Manifest E2E test suite** - New `tests/e2e/manifest-loading.spec.js` with 20 test cases covering valid loading, error handling, URL parameter interactions, mobile viewport, and accessibility
+- **Deep-link alias tests** - New tests for `?load=keyguard-demo` and `?load=keyguard` aliases
+- **Pre-commit hook** - `.githooks/pre-commit` scans staged files for forbidden stakeholder terms
+- **CI stakeholder scan** - `.github/workflows/stakeholder-scan.yml` runs on every push/PR
+- **Known parity gaps** - Added Forge vs Desktop OpenSCAD comparison table to `docs/TESTING.md`
+
+### Security
+
+- **Updated SECURITY_ADMIN_GUIDE.md** - CSP documentation now matches actual deployed `connect-src` policy (includes GitHub/GitLab/Cloudflare origins for manifest support)
+- **Added privacy notice** - Documents IP exposure when users load externally-hosted manifests
+- **Verified SW isolation** - Confirmed service worker does not cache manifest-fetched cross-origin content
 
 ---
 

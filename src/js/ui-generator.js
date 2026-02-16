@@ -804,7 +804,7 @@ export function getModifiedParameterCount() {
 
 /**
  * Create a range slider control with editable spinbox
- * Ken's Critical Requirement: Users need to enter precise pixel values (0-10000 range)
+ * Users need to enter precise pixel values (0-10000 range)
  * Sliders alone make it impossible to enter discrete values accurately.
  * @param {Object} param - Parameter definition
  * @param {Function} onChange - Change handler
@@ -851,7 +851,7 @@ function createSliderControl(param, onChange) {
     `${formatParamName(param.name)} slider`
   );
 
-  // Create editable spinbox for precise value entry (Ken's P0 requirement)
+  // Create editable spinbox for precise value entry
   const spinbox = document.createElement('input');
   spinbox.type = 'number';
   spinbox.id = `param-${param.name}-spinbox`;

@@ -1,4 +1,4 @@
-// Minimal Volkswitch-style keyguard for fast parser testing
+// Minimal keyguard fixture for fast parser testing
 // Contains representative subsets of ALL annotation patterns from keyguard_v75.scad
 // Version: 75 (minimal test fixture)
 include <openings_and_additions.txt>

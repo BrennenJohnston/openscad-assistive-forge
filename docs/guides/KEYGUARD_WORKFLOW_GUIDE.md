@@ -35,7 +35,7 @@ Gather this information:
 
 ### 1. Load a keyguard model
 
-Upload a `.scad` file or load an example. Volksswitch Keyguard is a good starting point for grid-based apps on tablets.
+Upload a `.scad` file or load an example. The Keyguard Demo example is a good starting point for grid-based apps on tablets.
 
 ### 2. Set basic parameters
 
@@ -132,7 +132,6 @@ To share a configuration with another clinician:
 ## Resources
 
 Keyguard models:
-- Volksswitch: https://volksswitch.org
 - Forbes AAC: https://www.forbesaac.com/
 - Makers Making Change: https://makersmakingchange.github.io/OpenAT-Resources/
 

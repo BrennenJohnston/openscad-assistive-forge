@@ -1,6 +1,6 @@
 /**
  * Dependency Checker - Parse SCAD files for include/use/import dependencies
- * Ken's P0 requirement: Show actionable warning when files are missing
+ * Show actionable warning when include/use/import files are missing
  * @license GPL-3.0-or-later
  */
 

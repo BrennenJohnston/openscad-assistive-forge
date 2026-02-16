@@ -33,7 +33,7 @@ localhost_*.report.html
 # Editor workspace
 .cursor/
 
-# Local stakeholder reference files
+# Local testing reference files
 .volkswitch/
 
 # Internal planning documents (not for public release)

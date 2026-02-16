@@ -2211,7 +2211,7 @@ body.high-contrast .param-tooltip {
 }
 
 /* Slider Spinbox - Editable numeric input paired with slider
- * Ken's P0 requirement: "It's impossible to enter a specific value by moving the slider"
+ * Users need precise value entry alongside slider
  * This allows precise pixel value entry (0-10000 range) alongside slider */
 .slider-spinbox {
   width: 80px;
@@ -2997,7 +2997,7 @@ select:focus-visible {
   border-width: 2px;
 }
 
-/* 2D Format Guidance (SVG/DXF - Volkswitch laser cutting support) */
+/* 2D Format Guidance (SVG/DXF -- laser cutting workflows) */
 .format-2d-guidance {
   margin-top: var(--space-md);
   padding: var(--space-md);
@@ -3149,7 +3149,7 @@ select:focus-visible {
 }
 
 /* Preset Controls - OpenSCAD Customizer-style button group (Save, Add, Delete)
- * Ken's requirement: Match OpenSCAD Customizer semantics exactly */
+ * Match OpenSCAD Customizer semantics exactly */
 .preset-selector .preset-actions-group {
   display: flex;
   gap: 2px;
@@ -3486,8 +3486,7 @@ body.first-visit-blocking #app {
   border-top: 1px solid var(--color-border);
 }
 
-/* Missing Dependencies Dialog (Ken's P0 requirement)
- * Shows when design package is missing include/use/import files */
+/* Missing Dependencies Dialog -- shows when design package is missing include/use/import files */
 .missing-deps-modal .missing-deps-content {
   max-width: 520px;
 }
@@ -3560,9 +3559,7 @@ body.first-visit-blocking #app {
   gap: var(--space-sm);
 }
 
-/* Console Output Panel (Ken's P1 requirement)
- * Displays ECHO, WARNING, ERROR messages from OpenSCAD
- * Ken uses echo() to communicate warnings and instructions to users */
+/* Console Output Panel -- displays ECHO, WARNING, ERROR messages from OpenSCAD */
 .console-panel {
   /* Card styling provided by .forge-disclosure */
 }
@@ -4465,7 +4462,7 @@ body.first-visit-blocking #app {
   margin-bottom: var(--space-sm);
 }
 
-/* Warning for missing files - Ken's preflight check with actionable button */
+/* Warning for missing files -- dependency preflight check with actionable button */
 .project-files-warning {
   display: flex;
   flex-direction: column;
@@ -6152,7 +6149,7 @@ body.first-visit-blocking #app {
 }
 
 /* =========================================
-   Console Output Modal (Volkswitch echo() support)
+   Console Output Modal (echo/warning/error display)
    ========================================= */
 
 .modal-console {

@@ -18,10 +18,10 @@ const __dirname = path.dirname(__filename)
 
 // Use the minimal fixture for faster compilation (not the 7K-line full file)
 const MINIMAL_SCAD_PATH = path.resolve(
-  __dirname, '..', 'fixtures', 'volkswitch-keyguard-minimal', 'keyguard_minimal.scad'
+  __dirname, '..', 'fixtures', 'keyguard-minimal', 'keyguard_minimal.scad'
 )
 const OPENINGS_TXT_PATH = path.resolve(
-  __dirname, '..', 'fixtures', 'volkswitch-keyguard-minimal', 'openings_and_additions.txt'
+  __dirname, '..', 'fixtures', 'keyguard-minimal', 'openings_and_additions.txt'
 )
 
 // Also test with the full keyguard ZIP for realism

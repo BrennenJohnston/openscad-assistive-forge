@@ -1,6 +1,6 @@
 /**
  * Console Panel - Display OpenSCAD echo/warning/error messages
- * Ken's P1 requirement: "My program actually uses [the console] to communicate with the person"
+ * Display OpenSCAD echo/warning/error messages -- programs use console to communicate with users
  * @license GPL-3.0-or-later
  */
 
@@ -107,7 +107,7 @@ export class ConsolePanel {
     const trimmed = line.trim();
     if (!trimmed) return null;
 
-    // ECHO: messages (Ken's primary use case)
+    // ECHO: messages (primary user-facing communication channel)
     if (trimmed.startsWith('ECHO:')) {
       return {
         type: CONSOLE_ENTRY_TYPE.ECHO,
@@ -229,7 +229,7 @@ export class ConsolePanel {
     if (!this.badge) return;
 
     const warningErrorCount = this.counts.warning + this.counts.error;
-    // Include ECHO messages in badge count (Ken's clinician communication channel)
+    // Include ECHO messages in badge count (user communication channel)
     const importantCount = warningErrorCount + this.counts.echo;
     const totalCount = this.entries.length;
 

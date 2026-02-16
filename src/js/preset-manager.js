@@ -1,6 +1,6 @@
 /**
  * Preset Manager - Save and load parameter presets
- * Ken's P3 requirement: Storage namespace/migration to preserve presets across app updates
+ * Storage namespace/migration to preserve presets across app updates
  * @license GPL-3.0-or-later
  */
 
@@ -13,8 +13,8 @@ let validatePresetsCollectionFn = null;
 
 // ============================================================================
 // Storage Schema Versioning
-// Ken's P3 requirement: "If I upload a new version of the designer... all your
-// work is deleted" - We solve this by versioning storage and offering migration.
+// Problem: uploading new design versions can delete saved presets.
+// Solution: versioned storage with migration support.
 // ============================================================================
 
 /**
@@ -267,7 +267,7 @@ export function resetMigrationFlag() {
 
 /**
  * Detect if JSON data is in OpenSCAD native format (parameterSets)
- * Ken's files use this format: { parameterSets: {...}, fileFormatVersion: "1" }
+ * OpenSCAD native format: { parameterSets: {...}, fileFormatVersion: "1" }
  * Note: fileFormatVersion may be missing in some older exports
  * @param {Object} data - Parsed JSON data
  * @returns {boolean} True if OpenSCAD native format
@@ -453,7 +453,7 @@ function stringifyForOpenSCAD(value) {
 
 /**
  * PresetManager handles saving, loading, and managing parameter presets
- * Ken's P3 requirement: Storage versioning to preserve presets across app updates
+ * Storage versioning to preserve presets across app updates
  */
 export class PresetManager {
   constructor() {
@@ -963,7 +963,7 @@ export class PresetManager {
   /**
    * Import preset from JSON
    * Supports both Forge format and OpenSCAD native format (parameterSets)
-   * Ken's P0 requirement: Multi-preset JSON import must work reliably
+   * Multi-preset JSON import must work reliably
    * @param {string} json - JSON string
    * @param {string} modelName - Optional model name (required for OpenSCAD native format)
    * @param {Object} paramSchema - Optional parameter schema for type coercion
@@ -973,7 +973,7 @@ export class PresetManager {
     try {
       const data = JSON.parse(json);
 
-      // Debug logging for Ken's import issues
+      // Debug logging for preset import diagnostics
       console.log('[PresetManager] Import attempt:', {
         modelName,
         hasParamSchema: Object.keys(paramSchema || {}).length > 0,
@@ -1084,7 +1084,7 @@ export class PresetManager {
 
   /**
    * Import presets from OpenSCAD native format (parameterSets)
-   * Ken's P0 requirement: Multi-preset JSON import for files like:
+   * Import presets from OpenSCAD native format (parameterSets)
    * { "parameterSets": { "iPad Pro 11 TouchChat": {...}, "iPad 9th Gen LAMP": {...} }, "fileFormatVersion": "1" }
    * @param {Object} data - Parsed OpenSCAD native format data
    * @param {string} modelName - Model name to associate presets with
@@ -1293,7 +1293,7 @@ export class PresetManager {
 
   /**
    * Persist presets to localStorage in versioned format
-   * Ken's P3: Storage versioning ensures presets survive app updates
+   * Storage versioning ensures presets survive app updates
    */
   persist() {
     if (!this.isStorageAvailable()) {

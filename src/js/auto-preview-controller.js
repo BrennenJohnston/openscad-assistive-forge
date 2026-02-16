@@ -740,7 +740,7 @@ export class AutoPreviewController {
         stl: this.fullQualitySTL,
         stats: this.fullQualityStats,
         cached: true,
-        // Include console output even from cached results (Volkswitch echo() support)
+        // Include console output even from cached results
         consoleOutput: this.fullQualityConsoleOutput || '',
       };
     }
@@ -766,7 +766,7 @@ export class AutoPreviewController {
     this.fullQualityStats = result.stats;
     this.fullRenderParamHash = paramHash;
     this.fullQualityKey = qualityKey;
-    // Store console output for Volkswitch echo() support
+    // Store console output for display in Console panel
     this.fullQualityConsoleOutput = result.consoleOutput || '';
 
     // Also update the preview with full quality result

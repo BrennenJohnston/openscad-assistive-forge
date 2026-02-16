@@ -368,7 +368,7 @@ async function deleteFromIndexedDB(id) {
 
 /**
  * Clear all projects from IndexedDB
- * Includes timeout protection to prevent freezes (Ken's stability issue)
+ * Includes timeout protection to prevent freezes during bulk operations
  * @returns {Promise<void>}
  */
 async function clearIndexedDB() {

@@ -43,7 +43,7 @@ export const OUTPUT_FORMATS = {
     description: '3D Manufacturing Format (modern)',
     is2D: false,
   },
-  // Laser Cutting / 2D Formats (Volkswitch support)
+  // Laser Cutting / 2D Formats
   svg: {
     name: 'SVG',
     extension: '.svg',

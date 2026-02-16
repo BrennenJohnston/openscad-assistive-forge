@@ -1,6 +1,6 @@
 /**
  * Stakeholder Acceptance Tests with Real Keyguard ZIP File
- * Tests all 10 phases requested by stakeholder Ken
+ * Tests all 10 acceptance phases for keyguard ZIP workflow
  * Includes: console listener, timing metrics, partial loading, round-trip workflow
  * @license GPL-3.0-or-later
  */
@@ -18,7 +18,7 @@ const KEYGUARD_ZIP_PATH = path.resolve(
   __dirname, '..', '..', '.volkswitch', 'keyguard-test-bundle.zip'
 )
 
-// .volkswitch/ is .gitignored - skip tests when the fixture is unavailable (CI)
+// .volkswitch/ is .gitignored -- skip tests when the local fixture is unavailable (CI)
 const fixtureAvailable = fs.existsSync(KEYGUARD_ZIP_PATH)
 
 /**
