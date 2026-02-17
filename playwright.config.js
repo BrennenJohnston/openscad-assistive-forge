@@ -37,15 +37,34 @@ export default defineConfig({
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
     },
-    // Firefox and Webkit disabled for now - enable when browser binaries are installed
-    // {
-    //   name: 'firefox',
-    //   use: { ...devices['Desktop Firefox'] },
-    // },
-    // {
-    //   name: 'webkit',
-    //   use: { ...devices['Desktop Safari'] },
-    // },
+    // Edge - Tier 1 browser (blocking in CI)
+    {
+      name: 'msedge',
+      use: { ...devices['Desktop Edge'], channel: 'msedge' },
+    },
+    // Firefox - Tier 1 browser
+    {
+      name: 'firefox',
+      use: { ...devices['Desktop Firefox'] },
+    },
+    // Visual regression tests (Milestone 3: Performance & Stability)
+    // Run separately with: npm run test:visual
+    {
+      name: 'visual-regression',
+      testDir: './tests/visual',
+      use: {
+        ...devices['Desktop Chrome'],
+        // Consistent viewport for visual comparisons
+        viewport: { width: 1280, height: 720 },
+      },
+      // Visual tests should not run with regular E2E
+      testMatch: '**/*.visual.spec.js',
+    },
+    // WebKit/Safari - Tier 2 browser (requires macOS runners)
+    {
+      name: 'webkit',
+      use: { ...devices['Desktop Safari'] },
+    },
   ],
   
   webServer: {

@@ -2,7 +2,13 @@
  * Mobile Drawer Controller
  * Implements off-canvas drawer pattern for parameters panel on mobile devices
  * Based on Bootstrap Offcanvas and WAI-ARIA Dialog practices
+ *
+ * STATE CONVENTION: Additive open — `drawer-open` class = open.
+ * This is the opposite of Actions/Camera/Echo drawers which use
+ * additive close (`collapsed` class = closed). See UI_STANDARDS.md.
  */
+
+import { createDocumentFocusTrap } from './focus-trap.js';
 
 const MOBILE_BREAKPOINT_PX = 768;
 
@@ -31,32 +37,7 @@ export function initDrawerController() {
   let isOpen = false;
   let triggerEl = null;
   let scrollY = 0;
-  let focusTrapHandler = null;
-  let docKeydownHandler = null;
-
-  /**
-   * Get all focusable elements within the drawer
-   */
-  function getFocusableElements() {
-    const selectors = [
-      'a[href]',
-      'button:not([disabled])',
-      'input:not([disabled])',
-      'select:not([disabled])',
-      'textarea:not([disabled])',
-      '[tabindex]:not([tabindex="-1"])',
-    ].join(',');
-
-    // Avoid relying on offsetParent (returns null for some positioning contexts).
-    // Prefer a visibility check based on layout boxes.
-    return Array.from(drawer.querySelectorAll(selectors)).filter((el) => {
-      const style = window.getComputedStyle(el);
-      if (style.display === 'none' || style.visibility === 'hidden')
-        return false;
-      // getClientRects catches elements that are visible but have offsetParent=null
-      return el.getClientRects().length > 0;
-    });
-  }
+  let focusTrap = null;
 
   /**
    * Open the drawer
@@ -75,7 +56,7 @@ export function initDrawerController() {
     drawer.setAttribute('aria-modal', 'true');
     drawer.setAttribute('aria-labelledby', 'parameters-heading');
     drawer.removeAttribute('aria-label');
-    // Ensure the dialog container itself can receive focus (needed for robust focus trapping)
+    // Ensure the dialog container itself can receive focus (needed for reliable focus trapping)
     drawer.setAttribute('tabindex', '-1');
 
     // Update toggle button state
@@ -97,64 +78,15 @@ export function initDrawerController() {
     document.body.classList.add('drawer-open');
     document.body.style.top = `-${scrollY}px`;
 
-    // Move focus into drawer
-    setTimeout(() => {
-      const focusableElements = getFocusableElements();
-      if (focusableElements.length > 0) {
-        focusableElements[0].focus();
-      } else {
-        // Fallback: keep focus on drawer container
-        drawer.focus?.();
-      }
-    }, 300); // Wait for transition
-
-    // Set up focus trap (document-level so it works even if focus escapes)
+    // Set up focus trap using shared utility (document-level so it works even if focus escapes)
     // ESC should close even if focus isn't inside the drawer (e.g. on toggle button)
-    docKeydownHandler = (event) => {
-      if (!isOpen) return;
-
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        close();
-        return;
-      }
-
-      if (event.key !== 'Tab') return;
-
-      const focusableElements = getFocusableElements();
-      if (focusableElements.length === 0) {
-        // Keep focus on the drawer container when nothing else is focusable.
-        event.preventDefault();
-        drawer.focus?.();
-        return;
-      }
-
-      const firstElement = focusableElements[0];
-      const lastElement = focusableElements[focusableElements.length - 1];
-      const active = document.activeElement;
-      const inDrawer = active ? drawer.contains(active) : false;
-
-      // If focus is outside the drawer, bring it back in.
-      if (!inDrawer) {
-        event.preventDefault();
-        (event.shiftKey ? lastElement : firstElement).focus();
-        return;
-      }
-
-      // Cycle within the drawer
-      if (event.shiftKey) {
-        if (active === firstElement) {
-          event.preventDefault();
-          lastElement.focus();
-        }
-      } else {
-        if (active === lastElement) {
-          event.preventDefault();
-          firstElement.focus();
-        }
-      }
-    };
-    document.addEventListener('keydown', docKeydownHandler, true);
+    focusTrap = createDocumentFocusTrap(drawer, {
+      onEscape: close,
+      fallbackFocus: drawer,
+    });
+    focusTrap.activate({
+      initialFocusDelay: 250, // --motion-slow (240ms) + 10ms buffer
+    });
   }
 
   /**
@@ -201,52 +133,16 @@ export function initDrawerController() {
     document.body.style.removeProperty('top');
     window.scrollTo(0, scrollY);
 
-    if (docKeydownHandler) {
-      document.removeEventListener('keydown', docKeydownHandler, true);
-      docKeydownHandler = null;
+    // Deactivate focus trap
+    if (focusTrap) {
+      focusTrap.deactivate();
+      focusTrap = null;
     }
 
     // Return focus to trigger
     if (triggerEl) {
       triggerEl.focus();
       triggerEl = null;
-    }
-  }
-
-  /**
-   * Handle keyboard events for ESC and Tab trap
-   * @note Currently unused - keyboard handling done via docKeydownHandler
-   */
-  // eslint-disable-next-line no-unused-vars
-  function handleKeydown(event) {
-    // ESC to close (still handle inside-drawer for completeness)
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      close();
-      return;
-    }
-
-    // Tab cycling within drawer
-    if (event.key === 'Tab') {
-      const focusableElements = getFocusableElements();
-      if (focusableElements.length === 0) return;
-
-      const firstElement = focusableElements[0];
-      const lastElement = focusableElements[focusableElements.length - 1];
-
-      if (event.shiftKey) {
-        // Shift+Tab on first element: cycle to last
-        if (document.activeElement === firstElement) {
-          event.preventDefault();
-          lastElement.focus();
-        }
-      } else {
-        // Tab on last element: cycle to first
-        if (document.activeElement === lastElement) {
-          event.preventDefault();
-          firstElement.focus();
-        }
-      }
     }
   }
 
@@ -356,9 +252,10 @@ export function initDrawerController() {
         document.body.style.removeProperty('top');
         isOpen = false;
 
-        if (focusTrapHandler) {
-          drawer.removeEventListener('keydown', focusTrapHandler);
-          focusTrapHandler = null;
+        // Deactivate focus trap
+        if (focusTrap) {
+          focusTrap.deactivate();
+          focusTrap = null;
         }
       }
     }, 150);

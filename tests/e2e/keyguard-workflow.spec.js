@@ -1,5 +1,5 @@
 /**
- * E2E tests for Volkswitch Keyguard workflows
+ * E2E tests for Keyguard workflows
  * Tests SVG/DXF export, companion files, 2D guidance, and multi-preset JSON
  * @license GPL-3.0-or-later
  */
@@ -24,14 +24,14 @@ test.beforeEach(async ({ page }) => {
 });
 
 /**
- * Create a test ZIP with Volkswitch-style keyguard files
+ * Create a test ZIP with keyguard files
  * @returns {Promise<string>} Path to the created ZIP file
  */
-async function createVolkwitchZipFixture() {
+async function createKeyguardZipFixture() {
   const zip = new JSZip();
   
   // Read the fixture files
-  const fixtureDir = path.join(process.cwd(), 'tests', 'fixtures', 'volkswitch-keyguard-minimal');
+  const fixtureDir = path.join(process.cwd(), 'tests', 'fixtures', 'keyguard-minimal');
   
   const scadContent = await fs.promises.readFile(
     path.join(fixtureDir, 'keyguard_minimal.scad'),
@@ -48,24 +48,41 @@ async function createVolkwitchZipFixture() {
   const buffer = await zip.generateAsync({ type: 'nodebuffer' });
   const outputDir = path.join(process.cwd(), 'test-results');
   await fs.promises.mkdir(outputDir, { recursive: true });
-  const zipPath = path.join(outputDir, `volkswitch-keyguard-${Date.now()}.zip`);
+  const zipPath = path.join(outputDir, `keyguard-test-${Date.now()}.zip`);
   await fs.promises.writeFile(zipPath, buffer);
   
   return zipPath;
 }
 
 /**
- * Upload a file to the app
+ * Upload a file to the app (waits for WASM readiness first)
  */
 async function uploadFile(page, filePath) {
+  // Wait for WASM engine to be ready before uploading
+  await page.waitForSelector('body[data-wasm-ready="true"]', {
+    state: 'attached',
+    timeout: 120_000,
+  });
+
   const fileInput = page.locator('#fileInput');
   await fileInput.setInputFiles(filePath);
   
   // Wait for main interface to appear
-  await page.locator('#mainInterface').waitFor({ state: 'visible', timeout: 20000 });
+  await page.locator('#mainInterface').waitFor({ state: 'visible', timeout: 30000 });
+
+  // Dismiss save-project modal if it appears
+  try {
+    const notNowBtn = page.locator('#saveProjectNotNow');
+    await notNowBtn.waitFor({ state: 'visible', timeout: 3000 });
+    await notNowBtn.click();
+    await page.waitForTimeout(300);
+  } catch {
+    // Modal didn't appear
+  }
 }
 
-test.describe('Volkswitch Keyguard SVG Export', () => {
+test.describe('Keyguard SVG Export', () => {
+  test.describe.configure({ timeout: 150_000 }); // WASM init may need ~120s
   test('should show 2D format guidance when SVG format is selected', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI');
     
@@ -89,7 +106,7 @@ test.describe('Volkswitch Keyguard SVG Export', () => {
     // 2D guidance should now be visible
     await expect(format2dGuidance).toBeVisible({ timeout: 2000 });
     
-    // Check for Volkswitch-specific guidance text
+    // Check for keyguard-specific guidance text
     const guidanceText = await format2dGuidance.textContent();
     expect(guidanceText).toContain('type_of_keyguard');
     expect(guidanceText).toContain('Laser-Cut');
@@ -150,7 +167,7 @@ test.describe('Volkswitch Keyguard SVG Export', () => {
     await outputFormatSelect.selectOption('svg');
     
     // Wait for parameters to load
-    await expect(page.locator('.param-control')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('.param-control').first()).toBeVisible({ timeout: 10000 });
     
     // Find and click Generate button
     const generateButton = page.locator('button:has-text("Generate"), button:has-text("Download")').first();
@@ -184,20 +201,20 @@ test.describe('Volkswitch Keyguard SVG Export', () => {
     expect(hasGeometry).toBe(true);
   });
 
-  test.skip('should export valid SVG from Volkswitch keyguard with Laser-Cut settings', async ({ page }) => {
+  test.skip('should export valid SVG from keyguard with Laser-Cut settings', async ({ page }) => {
     test.skip(isCI, 'WASM rendering is slow/unreliable in CI');
     
     await page.goto('/');
     
-    // Create and upload the Volkswitch ZIP
-    const zipPath = await createVolkwitchZipFixture();
+    // Create and upload the keyguard ZIP
+    const zipPath = await createKeyguardZipFixture();
     await uploadFile(page, zipPath);
     
     // Wait for project files to be recognized
     await expect(page.locator('.file-tree, .project-files')).toBeVisible({ timeout: 15000 });
     
     // Wait for parameters to load
-    await expect(page.locator('.param-control')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('.param-control').first()).toBeVisible({ timeout: 10000 });
     
     // Find and set type_of_keyguard to Laser-Cut
     const keyguardTypeParam = page.locator('select[data-param="type_of_keyguard"]');
@@ -244,13 +261,15 @@ test.describe('Volkswitch Keyguard SVG Export', () => {
 });
 
 test.describe('Companion File Handling', () => {
+  test.describe.configure({ timeout: 150_000 }); // WASM init may need ~120s
+
   test('should recognize TXT companion file in ZIP', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI');
     
     await page.goto('/');
     
-    // Create and upload the Volkswitch ZIP
-    const zipPath = await createVolkwitchZipFixture();
+    // Create and upload the keyguard ZIP
+    const zipPath = await createKeyguardZipFixture();
     await uploadFile(page, zipPath);
     
     // Wait for project files to be recognized
@@ -269,8 +288,8 @@ test.describe('Companion File Handling', () => {
     
     await page.goto('/');
     
-    // Create and upload the Volkswitch ZIP
-    const zipPath = await createVolkwitchZipFixture();
+    // Create and upload the keyguard ZIP
+    const zipPath = await createKeyguardZipFixture();
     await uploadFile(page, zipPath);
     
     // Wait for project files to be recognized
@@ -302,7 +321,7 @@ test.describe('Multi-Preset JSON Import/Export', () => {
     await uploadFile(page, fixturePath);
     
     // Wait for parameters to load
-    await expect(page.locator('.param-control')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('.param-control').first()).toBeVisible({ timeout: 10000 });
     
     // Open preset management (look for preset button or menu)
     const presetButton = page.locator('[data-action="manage-presets"], button:has-text("Preset"), button:has-text("preset")').first();
@@ -403,13 +422,13 @@ test.describe('Console Output Exposure', () => {
 
 test.describe('Reference Overlay', () => {
   /**
-   * Create a Volkswitch ZIP with SVG screenshot file
+   * Create a keyguard ZIP with SVG screenshot file
    * @returns {Promise<string>} Path to the created ZIP file
    */
-  async function createVolkwitchZipWithSvg() {
+  async function createKeyguardZipWithSvg() {
     const zip = new JSZip();
     
-    const fixtureDir = path.join(process.cwd(), 'tests', 'fixtures', 'volkswitch-keyguard-minimal');
+    const fixtureDir = path.join(process.cwd(), 'tests', 'fixtures', 'keyguard-minimal');
     
     const scadContent = await fs.promises.readFile(
       path.join(fixtureDir, 'keyguard_minimal.scad'),
@@ -431,7 +450,7 @@ test.describe('Reference Overlay', () => {
     const buffer = await zip.generateAsync({ type: 'nodebuffer' });
     const outputDir = path.join(process.cwd(), 'test-results');
     await fs.promises.mkdir(outputDir, { recursive: true });
-    const zipPath = path.join(outputDir, `volkswitch-overlay-${Date.now()}.zip`);
+    const zipPath = path.join(outputDir, `keyguard-overlay-${Date.now()}.zip`);
     await fs.promises.writeFile(zipPath, buffer);
     
     return zipPath;
@@ -494,8 +513,8 @@ test.describe('Reference Overlay', () => {
     
     await page.goto('/');
     
-    // Create and upload the Volkswitch ZIP with SVG
-    const zipPath = await createVolkwitchZipWithSvg();
+    // Create and upload the keyguard ZIP with SVG
+    const zipPath = await createKeyguardZipWithSvg();
     await uploadFile(page, zipPath);
     
     // Wait for files to be processed
@@ -523,7 +542,7 @@ test.describe('Reference Overlay', () => {
     
     await page.goto('/');
     
-    const zipPath = await createVolkwitchZipWithSvg();
+    const zipPath = await createKeyguardZipWithSvg();
     await uploadFile(page, zipPath);
     
     await expect(page.locator('#mainInterface')).toBeVisible({ timeout: 20000 });
@@ -613,7 +632,7 @@ test.describe('Progress Text Shows Correct Format', () => {
     await outputFormatSelect.selectOption('svg');
     
     // Wait for parameters
-    await expect(page.locator('.param-control')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('.param-control').first()).toBeVisible({ timeout: 10000 });
     
     // Find Generate button
     const generateButton = page.locator('button:has-text("Generate"), button:has-text("Download")').first();

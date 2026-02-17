@@ -32,8 +32,8 @@ let openscadInstance = null;
 let openscadModule = null;
 let initialized = false;
 let currentRenderTimeout = null;
-let mountedFiles = new Map(); // Track files in virtual filesystem
-let mountedLibraries = new Set(); // Track mounted library IDs
+const mountedFiles = new Map(); // Track files in virtual filesystem
+const mountedLibraries = new Set(); // Track mounted library IDs
 let assetBaseUrl = ''; // Base URL for fetching assets (fonts, libraries, etc.)
 let wasmAssetLogShown = false;
 let openscadConsoleOutput = ''; // Accumulated console output from OpenSCAD
@@ -155,11 +155,11 @@ const ERROR_TRANSLATIONS = [
     // IMPORTANT: Detect empty geometry from OpenSCAD console output
     pattern: /Current top[ -]?level object is empty/i,
     message:
-      'This configuration produces no geometry. Check that the selected options are compatible (e.g., if generating a "keyguard frame", make sure "have a keyguard frame" is set to "yes").',
+      'This configuration produces no geometry. Check that the selected options are compatible — some parameter combinations may result in empty output.',
     code: 'EMPTY_GEOMETRY',
   },
   {
-    // Detect "not supported" ECHO messages from the keyguard model
+    // Detect "not supported" ECHO messages from OpenSCAD models
     pattern: /is not supported for/i,
     message:
       'This combination of options is not supported. Please check the "generate" setting and related options.',
@@ -176,6 +176,42 @@ const ERROR_TRANSLATIONS = [
     message:
       'Your model has infinite recursion. Check recursive module or function calls.',
     code: 'RECURSION',
+  },
+  // CGAL assertion failures — root cause of projection()/roof() crashes in WASM
+  // See: openscad-wasm#6, openscad#6582, CGAL#7560
+  {
+    pattern: /CGAL assertion|CGAL_assertion|CGAL ERROR|CGAL precondition/i,
+    message:
+      'This model uses a geometry feature (projection/roof) that has a known issue in the browser engine. ' +
+      'Try simplifying the design or removing projection()/roof() calls. ' +
+      'This is a known upstream limitation (CGAL + WebAssembly).',
+    code: 'CGAL_ASSERTION',
+  },
+  // Emscripten abort — typically triggered by unrecoverable CGAL/C++ errors
+  {
+    pattern: /Aborted\(|abort\(|Emscripten.*abort/i,
+    message:
+      'The rendering engine encountered a fatal error and stopped. ' +
+      'This often happens with projection() or roof() functions. ' +
+      'Try removing these functions or simplifying your design.',
+    code: 'WASM_ABORT',
+  },
+  // WASM RuntimeError: unreachable — compiled trap instruction hit
+  {
+    pattern: /RuntimeError:\s*unreachable/i,
+    message:
+      'The rendering engine hit an internal error (unreachable code). ' +
+      'This is typically caused by projection() or roof() in the browser engine. ' +
+      'Try simplifying the model or removing these functions.',
+    code: 'WASM_UNREACHABLE',
+  },
+  // WASM RuntimeError: memory access out of bounds
+  {
+    pattern: /RuntimeError:\s*memory access out of bounds/i,
+    message:
+      'The rendering engine ran out of accessible memory. ' +
+      'Try reducing model complexity (lower $fn), removing minkowski() operations, or simplifying boolean operations.',
+    code: 'WASM_OOB',
   },
   {
     pattern: /\b\d{6,}\b/, // Match long numeric error codes (like 1101176)
@@ -216,7 +252,7 @@ function translateError(rawError) {
 
   // Fallback: return a cleaned up version of the error
   // Remove internal paths and technical details that aren't helpful
-  let cleaned = errorStr
+  const cleaned = errorStr
     .replace(/\/tmp\/[^\s]+/g, 'your model')
     .replace(/at line \d+/g, '')
     .trim();
@@ -265,6 +301,62 @@ async function initWASM(baseUrl = '') {
     const wasmJsUrl = `${wasmBasePath}/openscad.js`;
 
     console.log('[Worker] Loading official OpenSCAD from:', wasmJsUrl);
+
+    // Integrity check: verify WASM artifacts match expected manifest.
+    // Guards against corrupted or tampered files before they produce silent wrong results.
+    // Checks both openscad.js and openscad.wasm sizes; optionally verifies SHA-256.
+    let integrityData = null;
+    try {
+      const integrityUrl = `${wasmBasePath}/INTEGRITY.json`;
+      const integrityResp = await fetch(integrityUrl);
+      if (integrityResp.ok) {
+        integrityData = await integrityResp.json();
+        console.log(`[Worker] WASM build: ${integrityData.build}`);
+        if (integrityData.knownIssues?.length) {
+          console.log(`[Worker] Known issues: ${integrityData.knownIssues.length} documented`);
+        }
+
+        // Verify sizes of both JS loader and WASM binary
+        const filesToCheck = [
+          { name: 'openscad.js', url: wasmJsUrl },
+          { name: 'openscad.wasm', url: `${wasmBasePath}/openscad.wasm` },
+        ];
+        const mismatches = [];
+
+        for (const { name, url } of filesToCheck) {
+          const expected = integrityData.files?.[name];
+          if (!expected?.size) continue;
+
+          try {
+            const headResp = await fetch(url, { method: 'HEAD' });
+            const actualSize = parseInt(headResp.headers.get('content-length'), 10);
+            if (actualSize && actualSize !== expected.size) {
+              mismatches.push(
+                `${name}: expected ${expected.size} bytes, got ${actualSize}`
+              );
+            }
+          } catch (_headErr) {
+            // HEAD may fail on some CDN configs; skip this file's check
+          }
+        }
+
+        if (mismatches.length > 0) {
+          const msg = `[Worker] WASM integrity warning: size mismatch — ${mismatches.join('; ')}. Files may be corrupted or outdated.`;
+          console.warn(msg);
+          self.postMessage({
+            type: 'WARNING',
+            payload: {
+              code: 'WASM_INTEGRITY',
+              message: 'WASM file integrity check detected a size mismatch. Files may need re-downloading.',
+              severity: 'warning',
+            },
+          });
+        }
+      }
+    } catch (integrityErr) {
+      // Non-fatal — integrity check is informational, not blocking
+      console.log('[Worker] Integrity check skipped:', integrityErr.message);
+    }
 
     // Dynamic import of official WASM module
     const OpenSCADModule = await import(/* @vite-ignore */ wasmJsUrl);
@@ -680,30 +772,65 @@ async function checkCapabilities() {
   }
 }
 
+// Work directory for multi-file design packages
+// All files are mounted here so include/use statements resolve correctly
+const WORK_DIR = '/work';
+
 /**
  * Mount files into OpenSCAD virtual filesystem
+ * Enable include/use statements to resolve companion files correctly
+ * 
+ * Files are mounted under /work/ directory so that:
+ * - Main file runs from /work/mainfile.scad
+ * - Include files like openings_and_additions.txt are at /work/openings_and_additions.txt
+ * - OpenSCAD's include path resolution finds them correctly
+ * 
  * @param {Map<string, string>} files - Map of file paths to content
- * @returns {Promise<void>}
+ * @param {Object} options - Mount options
+ * @param {boolean} options.useWorkDir - Mount under /work/ (default: true for multi-file projects)
+ * @returns {Promise<{workDir: string, files: Map<string, string>}>} Mount result with resolved paths
  */
-async function mountFiles(files) {
+async function mountFiles(files, options = {}) {
   const module = await ensureOpenSCADModule();
   if (!module || !module.FS) {
     throw new Error('OpenSCAD filesystem not available');
   }
 
   const FS = module.FS;
+  const useWorkDir = options.useWorkDir !== false && files.size > 1;
+  const baseDir = useWorkDir ? WORK_DIR : '';
+  
+  // Create work directory if needed
+  if (useWorkDir) {
+    try {
+      FS.mkdir(WORK_DIR);
+      console.log(`[Worker FS] Created work directory: ${WORK_DIR}`);
+    } catch (error) {
+      if (error.code !== 'EEXIST') {
+        console.warn(`[Worker FS] Work directory creation warning:`, error.message);
+      }
+    }
+  }
 
   // Create directory structure
   const directories = new Set();
 
   for (const filePath of files.keys()) {
+    // Security: Reject path traversal attempts
+    if (filePath.includes('..') || filePath.startsWith('/')) {
+      console.warn(`[Worker FS] Skipping invalid path: ${filePath}`);
+      continue;
+    }
+    
     // Extract all directory components
     const parts = filePath.split('/');
-    let currentPath = '';
+    let currentPath = baseDir;
 
     for (let i = 0; i < parts.length - 1; i++) {
       currentPath = currentPath ? `${currentPath}/${parts[i]}` : parts[i];
-      directories.add(currentPath);
+      if (currentPath) {
+        directories.add(currentPath);
+      }
     }
   }
 
@@ -723,25 +850,41 @@ async function mountFiles(files) {
     }
   }
 
-  // Write files
+  // Write files - track the resolved paths
+  const resolvedPaths = new Map();
+  
   for (const [filePath, content] of files.entries()) {
+    // Security: Skip path traversal attempts
+    if (filePath.includes('..') || filePath.startsWith('/')) {
+      continue;
+    }
+    
+    const resolvedPath = baseDir ? `${baseDir}/${filePath}` : filePath;
+    
     try {
-      FS.writeFile(filePath, content);
-      mountedFiles.set(filePath, content);
+      FS.writeFile(resolvedPath, content);
+      mountedFiles.set(resolvedPath, content);
+      resolvedPaths.set(filePath, resolvedPath);
       console.log(
-        `[Worker FS] Mounted file: ${filePath} (${content.length} bytes)`
+        `[Worker FS] Mounted file: ${resolvedPath} (${content.length} bytes)`
       );
     } catch (error) {
-      console.error(`[Worker FS] Failed to mount file ${filePath}:`, error);
+      console.error(`[Worker FS] Failed to mount file ${resolvedPath}:`, error);
       throw new Error(`Failed to mount file: ${filePath}`);
     }
   }
 
-  console.log(`[Worker FS] Successfully mounted ${files.size} files`);
+  console.log(`[Worker FS] Successfully mounted ${files.size} files under ${baseDir || '/'}`);
+  
+  return {
+    workDir: baseDir,
+    files: resolvedPaths,
+  };
 }
 
 /**
  * Clear all mounted files from virtual filesystem
+ * Also cleans up the /work/ directory for design packages
  */
 function clearMountedFiles() {
   if (!openscadModule || !openscadModule.FS) {
@@ -751,12 +894,43 @@ function clearMountedFiles() {
 
   const FS = openscadModule.FS;
 
+  // Remove all mounted files
   for (const filePath of mountedFiles.keys()) {
     try {
       FS.unlink(filePath);
     } catch (_error) {
       // File may already be deleted, ignore
     }
+  }
+
+  // Clean up work directory if it exists
+  try {
+    const workDirAnalysis = FS.analyzePath(WORK_DIR);
+    if (workDirAnalysis.exists) {
+      // Read directory contents and remove files
+      const entries = FS.readdir(WORK_DIR);
+      for (const entry of entries) {
+        if (entry !== '.' && entry !== '..') {
+          try {
+            const fullPath = `${WORK_DIR}/${entry}`;
+            const stat = FS.stat(fullPath);
+            if (FS.isFile(stat.mode)) {
+              FS.unlink(fullPath);
+            }
+          } catch (_e) {
+            // Ignore cleanup errors for individual files
+          }
+        }
+      }
+      // Try to remove the directory itself
+      try {
+        FS.rmdir(WORK_DIR);
+      } catch (_e) {
+        // Directory may not be empty or may not exist
+      }
+    }
+  } catch (_error) {
+    // Work directory may not exist, ignore
   }
 
   mountedFiles.clear();
@@ -931,9 +1105,10 @@ function clearLibraries() {
 /**
  * Build -D command-line arguments from parameters
  * @param {Object} parameters - Parameter key-value pairs
+ * @param {Object} paramTypes - Map of parameter names to their schema types (e.g. { expose_home_button: 'string', MW_version: 'boolean' })
  * @returns {Array<string>} Array of -D arguments
  */
-function buildDefineArgs(parameters) {
+function buildDefineArgs(parameters, paramTypes = {}) {
   if (!parameters || Object.keys(parameters).length === 0) {
     return [];
   }
@@ -950,12 +1125,25 @@ function buildDefineArgs(parameters) {
 
     // Handle different value types
     if (typeof value === 'string') {
+      const lowerValue = value.toLowerCase();
+      // CRITICAL FIX: Only convert "yes"/"no"/"true"/"false" to OpenSCAD boolean
+      // when the parameter schema declares the type as 'boolean'.
+      // String dropdown parameters like expose_home_button = "yes"; //[yes,no]
+      // must remain as quoted strings so that OpenSCAD string comparisons
+      // (e.g. if (expose_home_button == "yes")) evaluate correctly.
+      const isBooleanParam = paramTypes[key] === 'boolean';
+
+      if (isBooleanParam && (lowerValue === 'true' || lowerValue === 'yes')) {
+        formattedValue = 'true';
+      } else if (isBooleanParam && (lowerValue === 'false' || lowerValue === 'no')) {
+        formattedValue = 'false';
+      }
       // Check if this is a color (hex string)
-      if (/^#?[0-9A-Fa-f]{6}$/.test(value)) {
+      else if (/^#?[0-9A-Fa-f]{6}$/.test(value)) {
         const rgb = hexToRgb(value);
         formattedValue = `[${rgb[0]},${rgb[1]},${rgb[2]}]`;
       } else {
-        // Escape quotes and wrap in quotes
+        // ALL non-boolean strings (including "yes"/"no" dropdowns) stay as quoted strings
         const escaped = value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
         formattedValue = `"${escaped}"`;
       }
@@ -1021,7 +1209,16 @@ function parametersToScad(parameters, paramTypes = {}) {
 
       // Handle different value types
       if (typeof value === 'string') {
-        // Escape quotes in strings
+        const lowerValue = value.toLowerCase();
+        // CRITICAL FIX: Only convert to boolean when schema type is 'boolean'
+        const isBooleanParam = paramTypes[key] === 'boolean';
+
+        if (isBooleanParam && (lowerValue === 'true' || lowerValue === 'yes')) {
+          return `${key} = true;`;
+        } else if (isBooleanParam && (lowerValue === 'false' || lowerValue === 'no')) {
+          return `${key} = false;`;
+        }
+        // ALL non-boolean strings (including "yes"/"no" dropdowns) stay as quoted strings
         const escaped = value.replace(/"/g, '\\"');
         return `${key} = "${escaped}";`;
       } else if (typeof value === 'number') {
@@ -1046,9 +1243,10 @@ function parametersToScad(parameters, paramTypes = {}) {
  *
  * @param {string} scadContent
  * @param {Object} parameters
+ * @param {Object} paramTypes - Map of parameter names to their schema types
  * @returns {{scad: string, replacedKeys: string[], prependedKeys: string[]}}
  */
-function _applyOverrides(scadContent, parameters) {
+function _applyOverrides(scadContent, parameters, paramTypes = {}) {
   if (!parameters || Object.keys(parameters).length === 0) {
     return { scad: scadContent, replacedKeys: [], prependedKeys: [] };
   }
@@ -1057,7 +1255,7 @@ function _applyOverrides(scadContent, parameters) {
   const replacedKeys = [];
   const prependedKeys = [];
 
-  const formatValue = (value) => {
+  const formatValue = (key, value) => {
     // Skip null/undefined
     if (value === null || value === undefined) {
       return null;
@@ -1084,6 +1282,16 @@ function _applyOverrides(scadContent, parameters) {
 
     // Handle strings
     if (typeof value === 'string') {
+      const lowerValue = value.toLowerCase();
+      // CRITICAL FIX: Only convert to boolean when schema type is 'boolean'
+      const isBooleanParam = paramTypes[key] === 'boolean';
+
+      if (isBooleanParam && (lowerValue === 'true' || lowerValue === 'yes')) {
+        return 'true';
+      } else if (isBooleanParam && (lowerValue === 'false' || lowerValue === 'no')) {
+        return 'false';
+      }
+      // ALL non-boolean strings (including "yes"/"no" dropdowns) stay as quoted strings
       const escaped = value.replace(/"/g, '\\"');
       return `"${escaped}"`;
     }
@@ -1097,7 +1305,7 @@ function _applyOverrides(scadContent, parameters) {
   };
 
   for (const [key, value] of Object.entries(parameters)) {
-    const assignmentValue = formatValue(value);
+    const assignmentValue = formatValue(key, value);
 
     // Skip null values
     if (assignmentValue === null) {
@@ -1121,7 +1329,7 @@ function _applyOverrides(scadContent, parameters) {
   if (prependedKeys.length > 0) {
     const prependParams = {};
     for (const k of prependedKeys) prependParams[k] = parameters[k];
-    updated = parametersToScad(prependParams) + updated;
+    updated = parametersToScad(prependParams, paramTypes) + updated;
   }
 
   return { scad: updated, replacedKeys, prependedKeys };
@@ -1140,7 +1348,8 @@ async function renderWithCallMain(
   parameters,
   format,
   mainFilePath = null,
-  renderOptions = {}
+  renderOptions = {},
+  paramTypes = {}
 ) {
   let inputFile = mainFilePath || '/tmp/input.scad';
   const outputFile = `/tmp/output.${format}`;
@@ -1148,15 +1357,25 @@ async function renderWithCallMain(
   // Performance flags: Use Manifold backend for 5-30x faster CSG operations
   // Note: Modern OpenSCAD uses --backend=Manifold instead of --enable=manifold
   // lazy-union is still opt-in via --enable flag
+  // Allow toggling between Manifold (fast) and CGAL (stable)
   const capabilities = openscadCapabilities || {};
   const supportsManifold = Boolean(capabilities.hasManifold);
   const supportsLazyUnion = Boolean(capabilities.hasLazyUnion);
   const supportsBinarySTL = Boolean(capabilities.hasBinarySTL);
   const enableLazyUnion =
     Boolean(renderOptions?.enableLazyUnion) && supportsLazyUnion;
+  
+  // Engine selection: Use Manifold by default, but allow user to disable
+  // renderOptions.useManifold: undefined/true = use Manifold, false = use CGAL (stable)
+  const useManifold = renderOptions?.useManifold !== false;
+  
   const performanceFlags = [];
-  if (supportsManifold) {
+  if (supportsManifold && useManifold) {
     performanceFlags.push('--backend=Manifold');
+  } else if (supportsManifold && !useManifold) {
+    // Explicitly use CGAL backend for stability
+    performanceFlags.push('--backend=CGAL');
+    console.log('[Worker] Using CGAL (stable) backend instead of Manifold');
   }
   if (enableLazyUnion) {
     performanceFlags.push('--enable=lazy-union');
@@ -1199,12 +1418,54 @@ async function renderWithCallMain(
       module.FS.writeFile(inputFile, scadContent);
       wroteTempInput = true;
     } // Build -D arguments
-    const defineArgs = buildDefineArgs(parameters);
+    const defineArgs = buildDefineArgs(parameters, paramTypes);
 
-    // OpenSCAD WASM doesn't support -I flag, so we need to use environment variables
-    // Set OPENSCADPATH environment variable (if supported by WASM build)
-    if (module.ENV && module.ENV.OPENSCADPATH === undefined) {
-      module.ENV.OPENSCADPATH = '/libraries';
+    // Path resolution for import()/use/include:
+    // OpenSCAD WASM doesn't support the -I flag, so we use OPENSCADPATH env var.
+    // Desktop OpenSCAD resolves relative imports next to the main SCAD file,
+    // then searches OPENSCADPATH. We replicate this by:
+    //   1. Writing the main file to the correct directory (done above)
+    //   2. Setting OPENSCADPATH to include both the library root and the
+    //      working directory (for multi-file zip projects)
+    // See: openscad-playground#35 for the upstream path resolution bug.
+    if (module.ENV) {
+      const searchPaths = ['/libraries'];
+      // For multi-file projects mounted under /work/, add the work dir
+      // so that `include <file.txt>` resolves relative to the project root
+      if (inputFile.startsWith(WORK_DIR + '/')) {
+        const inputDir = inputFile.substring(0, inputFile.lastIndexOf('/'));
+        if (inputDir && !searchPaths.includes(inputDir)) {
+          searchPaths.unshift(inputDir);
+        }
+        if (!searchPaths.includes(WORK_DIR)) {
+          searchPaths.push(WORK_DIR);
+        }
+      }
+      module.ENV.OPENSCADPATH = searchPaths.join(':');
+    }
+
+    // Pre-render guard: scan SCAD source for known-crashy functions
+    // roof() and projection() trigger CGAL assertion failures in WASM (openscad-wasm#5, #6)
+    // We emit a WARNING but do NOT block — some uses work; the guard is informational.
+    const riskyFunctions = [];
+    if (/\broof\s*\(/m.test(scadContent)) {
+      riskyFunctions.push('roof()');
+    }
+    if (/\bprojection\s*\(/m.test(scadContent)) {
+      riskyFunctions.push('projection()');
+    }
+    if (riskyFunctions.length > 0) {
+      const warningMsg =
+        `WARNING: Your model uses ${riskyFunctions.join(' and ')}, which may crash ` +
+        `the browser rendering engine due to a known CGAL/WebAssembly issue. ` +
+        `If rendering fails, try removing these functions. ` +
+        `Desktop OpenSCAD may handle them better.`;
+      console.warn('[Worker]', warningMsg);
+      // Emit as a console message so the UI can display it
+      self.postMessage({
+        type: 'CONSOLE',
+        payload: { level: 'warn', message: warningMsg },
+      });
     }
 
     // Build command: [performance flags, -D key=value, ...] -o outputFile inputFile
@@ -1245,7 +1506,7 @@ async function renderWithCallMain(
       }
 
       // Check for empty geometry - OpenSCAD returns exit code 0 but produces no output
-      // This happens when configuration is invalid (e.g., "keyguard frame" with "have a keyguard frame" = "no")
+      // This happens when parameter combinations result in no geometry being generated
       if (
         openscadConsoleOutput.includes('Current top level object is empty') ||
         openscadConsoleOutput.includes('top-level object is empty')
@@ -1256,8 +1517,8 @@ async function renderWithCallMain(
       }
 
       // Check for 2D object exported to a 3D format (STL/OBJ/etc.)
-      // This happens when model produces 2D geometry (e.g., "first layer for SVG/DXF file")
-      // but the render is trying to export to a 3D format.
+      // This happens when model produces 2D geometry but the render is trying
+      // to export to a 3D format — applies to any project using projection() or 2D primitives.
       const is2DFormat = format === 'svg' || format === 'dxf';
       if (
         !is2DFormat &&
@@ -1267,10 +1528,9 @@ async function renderWithCallMain(
           openscadConsoleOutput.includes('Top level object is a 2D object'))
       ) {
         throw new Error(
-          `MODEL_IS_2D: Your model is configured to produce 2D geometry. ` +
-            `For preview, 2D models cannot be displayed in 3D view. ` +
+          `MODEL_IS_2D: Your model produces 2D geometry which cannot be displayed in the 3D viewer. ` +
             `To export: select SVG or DXF output format. ` +
-            `For Volkswitch keyguard: this is expected when "generate" is set to "first layer for SVG/DXF file".`
+            `To preview in 3D: adjust your model parameters to produce 3D geometry.`
         );
       }
 
@@ -1345,10 +1605,9 @@ async function renderWithCallMain(
           openscadConsoleOutput.includes('Top level object is a 2D object')
         ) {
           throw new Error(
-            `MODEL_IS_2D: Your model is configured to produce 2D geometry. ` +
-              `For preview, 2D models cannot be displayed in 3D view. ` +
+            `MODEL_IS_2D: Your model produces 2D geometry which cannot be displayed in the 3D viewer. ` +
               `To export: select SVG or DXF output format. ` +
-              `For Volkswitch keyguard: this is expected when "generate" is set to "first layer for SVG/DXF file".`
+              `To preview in 3D: adjust your model parameters to produce 3D geometry.`
           );
         }
 
@@ -1479,8 +1738,7 @@ function validateSVGOutput(content) {
       valid: false,
       error:
         'SVG output is empty or too small. Your model may not produce 2D geometry. ' +
-        'For Volkswitch keyguard: ensure "type_of_keyguard" is set to "Laser-Cut" and ' +
-        '"generate" is set to "first layer for SVG/DXF file".',
+        'Ensure your model uses projection() or 2D primitives, and that your parameter settings produce visible geometry.',
     };
   }
 
@@ -1515,8 +1773,7 @@ function validateSVGOutput(content) {
       error:
         'SVG contains no geometry (no paths, polygons, or shapes). ' +
         'Your 3D model may not include any 2D projection. ' +
-        'Ensure your model uses projection() or is configured for 2D output. ' +
-        'For Volkswitch: set "generate" to "first layer for SVG/DXF file".',
+        'Ensure your model uses projection() or is configured for 2D output.',
     };
   }
 
@@ -1553,18 +1810,24 @@ function validateDXFOutput(content) {
       valid: false,
       error:
         'DXF output is empty or too small. Your model may not produce 2D geometry. ' +
-        'For Volkswitch keyguard: ensure "type_of_keyguard" is set to "Laser-Cut" and ' +
-        '"generate" is set to "first layer for SVG/DXF file".',
+        'Ensure your model uses projection() or 2D primitives, and that your parameter settings produce visible geometry.',
     };
   }
 
-  // DXF files start with "0" followed by "SECTION" in the first few lines
-  // Normalize line endings for cross-platform compatibility
+  // DXF files may start with comment lines (group code 999) before the structure.
+  // OpenSCAD prepends "999\nDXF from OpenSCAD\n" before the standard "0\nSECTION" header.
+  // Normalize line endings for cross-platform compatibility.
   const normalizedContent = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
   const lines = normalizedContent.split('\n').map((l) => l.trim());
 
-  // Check for DXF structure
-  if (lines[0] !== '0' || !lines.includes('SECTION')) {
+  // Skip leading DXF comment pairs (group code 999 + comment text)
+  let startIdx = 0;
+  while (startIdx < lines.length - 1 && lines[startIdx] === '999') {
+    startIdx += 2; // Skip group code 999 and its comment text value
+  }
+
+  // Check for DXF structure after any comment lines
+  if (startIdx >= lines.length || lines[startIdx] !== '0' || !lines.includes('SECTION')) {
     return {
       valid: false,
       error:
@@ -1612,11 +1875,226 @@ function validateDXFOutput(content) {
       error:
         'DXF ENTITIES section is empty (no geometry). ' +
         'Your 3D model may not include any 2D projection. ' +
-        'For Volkswitch: set "generate" to "first layer for SVG/DXF file".',
+        'Ensure your model uses projection() or is configured for 2D output.',
     };
   }
 
   return { valid: true };
+}
+
+/**
+ * Post-process DXF output from OpenSCAD WASM to fix known compatibility issues.
+ *
+ * The OpenSCAD WASM binary (based on development snapshots post-2022) exports DXF files
+ * using LWPOLYLINE entities with R14+ subclass markers, but declares version AC1006 (R10).
+ * This hybrid format is rejected by most CAD software (AutoCAD, CorelDRAW, Adobe Illustrator,
+ * Xometry, SendCutSend, LibreCAD, NanoCAD, SketchUp -- see issue #4268).
+ *
+ * Simply changing the version number is NOT enough (confirmed by multiple users in #4268).
+ * The only universally compatible approach is to convert LWPOLYLINE entities back to
+ * individual LINE segments -- the format used by the working 2021.01 stable release.
+ *
+ * This post-processor:
+ *   1. Removes the broken HEADER section entirely (R12 DXF doesn't require one)
+ *   2. Preserves the TABLES section (LTYPE, LAYER, STYLE) as-is
+ *   3. Converts each LWPOLYLINE to a series of LINE entities
+ *   4. Preserves any non-LWPOLYLINE entities unchanged
+ *   5. Produces a clean, headerless DXF compatible with all tested applications
+ *
+ * Reference: github.com/openscad/openscad/issues/4268
+ *            github.com/openscad/openscad/pull/6599
+ *
+ * @param {ArrayBuffer} outputBuffer - Raw DXF output from WASM
+ * @returns {ArrayBuffer} Post-processed DXF as ArrayBuffer
+ */
+function postProcessDXF(outputBuffer) {
+  const decoder = new TextDecoder('utf-8');
+  const content = decoder.decode(outputBuffer);
+  const normalized = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const rawLines = normalized.split('\n');
+
+  // Parse DXF into group-code/value pairs
+  const pairs = [];
+  for (let i = 0; i + 1 < rawLines.length; i += 2) {
+    pairs.push({
+      code: rawLines[i].trim(),
+      value: rawLines[i + 1].trim(),
+    });
+  }
+
+  // Identify section boundaries
+  // Sections are: 0/SECTION, 2/<name>, ..., 0/ENDSEC
+  const sections = []; // {name, startIdx, endIdx}
+  for (let i = 0; i < pairs.length; i++) {
+    if (pairs[i].code === '0' && pairs[i].value === 'SECTION' &&
+        i + 1 < pairs.length && pairs[i + 1].code === '2') {
+      const name = pairs[i + 1].value;
+      // Find matching ENDSEC
+      for (let j = i + 2; j < pairs.length; j++) {
+        if (pairs[j].code === '0' && pairs[j].value === 'ENDSEC') {
+          sections.push({ name, startIdx: i, endIdx: j });
+          break;
+        }
+      }
+    }
+  }
+
+  // Extract EXTMIN/EXTMAX from HEADER for optional re-use
+  const headerSection = sections.find(s => s.name === 'HEADER');
+  let extMin = null, extMax = null;
+  if (headerSection) {
+    for (let i = headerSection.startIdx; i <= headerSection.endIdx; i++) {
+      if (pairs[i].code === '9' && pairs[i].value === '$EXTMIN') {
+        extMin = { x: 0, y: 0 };
+        for (let j = i + 1; j <= headerSection.endIdx && pairs[j].code !== '9' && pairs[j].code !== '0'; j++) {
+          if (pairs[j].code === '10') extMin.x = parseFloat(pairs[j].value);
+          if (pairs[j].code === '20') extMin.y = parseFloat(pairs[j].value);
+        }
+      }
+      if (pairs[i].code === '9' && pairs[i].value === '$EXTMAX') {
+        extMax = { x: 0, y: 0 };
+        for (let j = i + 1; j <= headerSection.endIdx && pairs[j].code !== '9' && pairs[j].code !== '0'; j++) {
+          if (pairs[j].code === '10') extMax.x = parseFloat(pairs[j].value);
+          if (pairs[j].code === '20') extMax.y = parseFloat(pairs[j].value);
+        }
+      }
+    }
+  }
+
+  // Parse LWPOLYLINE entities from the ENTITIES section
+  const entitiesSection = sections.find(s => s.name === 'ENTITIES');
+  const parsedEntities = []; // Each is {type, layer, pairs} or {type:'LWPOLYLINE', layer, vertices, closed}
+
+  if (entitiesSection) {
+    let i = entitiesSection.startIdx + 2; // Skip 0/SECTION and 2/ENTITIES
+    while (i <= entitiesSection.endIdx) {
+      if (pairs[i].code === '0' && pairs[i].value === 'ENDSEC') break;
+      if (pairs[i].code === '0') {
+        const entityType = pairs[i].value;
+        i++; // Move past the 0/EntityType pair
+
+        // Collect all pairs until next 0-code (next entity or ENDSEC)
+        const entityPairs = [];
+        while (i <= entitiesSection.endIdx && pairs[i].code !== '0') {
+          entityPairs.push(pairs[i]);
+          i++;
+        }
+
+        if (entityType === 'LWPOLYLINE') {
+          // Parse LWPOLYLINE into vertices
+          let layer = '0';
+          let closed = false;
+          const vertices = [];
+          let currentX = null;
+
+          for (const ep of entityPairs) {
+            if (ep.code === '8') layer = ep.value;
+            if (ep.code === '70') closed = (parseInt(ep.value) & 1) !== 0;
+            if (ep.code === '10') {
+              if (currentX !== null && vertices.length > 0) {
+                // Previous vertex didn't get a Y -- shouldn't happen, but guard
+              }
+              currentX = parseFloat(ep.value);
+            }
+            if (ep.code === '20') {
+              if (currentX !== null) {
+                vertices.push({ x: currentX, y: parseFloat(ep.value) });
+                currentX = null;
+              }
+            }
+          }
+          parsedEntities.push({ type: 'LWPOLYLINE', layer, vertices, closed });
+        } else {
+          // Keep other entity types as raw pairs
+          parsedEntities.push({ type: entityType, layer: '0', rawPairs: entityPairs });
+        }
+      } else {
+        i++;
+      }
+    }
+  }
+
+  // Build clean DXF output with minimal R12 header for Adobe Illustrator compatibility.
+  // Illustrator requires a HEADER section with $ACADVER to interpret geometry correctly;
+  // without it, Illustrator falls back to text rendering (confirmed by @peterzieba in #4268).
+  const out = [];
+
+  // Helper to emit a group code/value pair with proper DXF formatting
+  // Group codes are right-justified in a 3-char field; values on the next line
+  function emit(code, value) {
+    out.push(String(code).padStart(3));
+    out.push(String(value));
+  }
+
+  // HEADER section -- minimal R12-compatible header
+  // AC1009 = R12, the most universally supported DXF version.
+  // Only LINE entities are used, which are fully R12 compatible.
+  emit(0, 'SECTION');
+  emit(2, 'HEADER');
+  emit(9, '$ACADVER');
+  emit(1, 'AC1009');
+  if (extMin && extMax) {
+    emit(9, '$EXTMIN');
+    emit(10, extMin.x);
+    emit(20, extMin.y);
+    emit(9, '$EXTMAX');
+    emit(10, extMax.x);
+    emit(20, extMax.y);
+  }
+  emit(0, 'ENDSEC');
+
+  // TABLES section -- copy from original, stripping any subclass markers
+  const tablesSection = sections.find(s => s.name === 'TABLES');
+  if (tablesSection) {
+    emit(0, 'SECTION');
+    emit(2, 'TABLES');
+    for (let i = tablesSection.startIdx + 2; i < tablesSection.endIdx; i++) {
+      // Skip subclass markers (group code 100) -- not valid for R12
+      if (pairs[i].code === '100') continue;
+      emit(pairs[i].code, pairs[i].value);
+    }
+    emit(0, 'ENDSEC');
+  }
+
+  // ENTITIES section -- convert LWPOLYLINE to LINE, keep others
+  emit(0, 'SECTION');
+  emit(2, 'ENTITIES');
+
+  for (const entity of parsedEntities) {
+    if (entity.type === 'LWPOLYLINE') {
+      const verts = entity.vertices;
+      if (verts.length < 2) continue;
+
+      const segmentCount = entity.closed ? verts.length : verts.length - 1;
+      for (let s = 0; s < segmentCount; s++) {
+        const p1 = verts[s];
+        const p2 = verts[(s + 1) % verts.length];
+        emit(0, 'LINE');
+        emit(8, entity.layer);
+        emit(10, p1.x);
+        emit(20, p1.y);
+        emit(11, p2.x);
+        emit(21, p2.y);
+      }
+    } else {
+      // Emit non-LWPOLYLINE entities as-is (skip subclass markers)
+      emit(0, entity.type);
+      for (const ep of (entity.rawPairs || [])) {
+        if (ep.code === '100') continue; // Strip subclass markers
+        emit(ep.code, ep.value);
+      }
+    }
+  }
+
+  emit(0, 'ENDSEC');
+
+  // EOF
+  emit(0, 'EOF');
+
+  const result = out.join('\n') + '\n';
+
+  const encoder = new TextEncoder();
+  return encoder.encode(result).buffer;
 }
 
 /**
@@ -1626,8 +2104,12 @@ function validateDXFOutput(content) {
  */
 const MEMORY_WARNING_THRESHOLD_MB = 1024; // 1GB
 
+// Track heap size before each render to compute growth delta
+let heapBeforeRenderMB = 0;
+
 /**
- * Check memory usage and send warning if high
+ * Check memory usage and send warning if high.
+ * Also records the pre-render heap size so we can report growth after render.
  * @param {string} requestId - Current request ID
  * @returns {Object} Memory usage info
  */
@@ -1638,6 +2120,9 @@ function checkMemoryBeforeRender(requestId) {
   // Get WASM heap info - note HEAP8.length is allocated size, not usage
   const heapAllocatedBytes = openscadModule.HEAP8.length;
   const heapAllocatedMB = Math.round(heapAllocatedBytes / 1024 / 1024);
+
+  // Record baseline for growth calculation
+  heapBeforeRenderMB = heapAllocatedMB;
 
   // NOTE: We can only measure the allocated heap size, not actual usage.
   // HEAP8.length == buffer.byteLength, so percentage-based checks are meaningless.
@@ -1686,6 +2171,7 @@ async function render(payload) {
     requestId,
     scadContent,
     parameters,
+    paramTypes = {},
     timeoutMs,
     files,
     outputFormat = 'stl',
@@ -1737,6 +2223,8 @@ async function render(payload) {
     }
 
     // Mount additional files if provided (for multi-file projects)
+    // Mount additional files for multi-file project include/use resolution
+    let mountResult = null;
     if (files && Object.keys(files).length > 0) {
       // Convert files object to Map
       const filesMap = new Map(Object.entries(files));
@@ -1750,7 +2238,8 @@ async function render(payload) {
         },
       });
 
-      await mountFiles(filesMap);
+      // Mount files under /work/ directory for proper include resolution
+      mountResult = await mountFiles(filesMap, { useWorkDir: true });
 
       self.postMessage({
         type: 'PROGRESS',
@@ -1760,6 +2249,8 @@ async function render(payload) {
           message: 'Files mounted successfully',
         },
       });
+      
+      console.log('[Worker] Files mounted under:', mountResult.workDir);
     }
     console.log('[Worker] Rendering with parameters:', parameters);
 
@@ -1803,11 +2294,21 @@ async function render(payload) {
       console.log('[Worker] Using callMain with official OpenSCAD WASM');
 
       // Determine main file path
-      const mainFileToUse = mainFile || '/tmp/input.scad';
-
-      // If mainFile is specified and exists in mounted files, use it directly
-      // Otherwise, write scadContent to the filesystem
-      if (!mainFile) {
+      // For multi-file projects, use the work directory path
+      // For multi-file projects, include/use statements must resolve correctly
+      let mainFileToUse;
+      
+      if (mainFile && mountResult && mountResult.workDir) {
+        // Multi-file project: use the work directory path
+        mainFileToUse = `${mountResult.workDir}/${mainFile}`;
+        console.log(`[Worker] Multi-file project: using ${mainFileToUse}`);
+      } else if (mainFile && mountResult && mountResult.files.has(mainFile)) {
+        // File was mounted but without work directory
+        mainFileToUse = mountResult.files.get(mainFile);
+      } else {
+        // Single file or no mounted files: use /tmp
+        mainFileToUse = '/tmp/input.scad';
+        
         // Write to temporary location
         const module = await ensureOpenSCADModule();
         if (!module || !module.FS) {
@@ -1825,7 +2326,8 @@ async function render(payload) {
         parameters,
         format,
         mainFileToUse,
-        renderOptions
+        renderOptions,
+        paramTypes
       );
 
       // Capture render duration
@@ -1900,6 +2402,12 @@ async function render(payload) {
       }
     }
 
+    // Post-process DXF to fix known OpenSCAD WASM compatibility issues
+    // (upstream issue: github.com/openscad/openscad/issues/4268)
+    if (resultFormat === 'dxf') {
+      outputBuffer = postProcessDXF(outputBuffer);
+    }
+
     // For binary STL, read triangle count from header
     // Binary STL format: 80 bytes header + 4 bytes triangle count + (50 bytes per triangle)
     if (
@@ -1942,7 +2450,7 @@ async function render(payload) {
             renderMs: workerRenderMs,
             wasmInitMs: wasmInitDurationMs,
           },
-          // Include console output for echo() messages - critical for Volkswitch keyguard
+          // Include console output for echo() messages (critical for user communication)
           consoleOutput: openscadConsoleOutput || '',
         },
       },
@@ -1991,20 +2499,25 @@ async function render(payload) {
     const is2DOutput =
       (outputFormat || 'stl').toLowerCase() === 'svg' ||
       (outputFormat || 'stl').toLowerCase() === 'dxf';
-    if (
+    const confirmed2DModel =
       !is2DOutput &&
-      (code === 'INTERNAL_ERROR' || translated.raw?.includes('MODEL_IS_2D')) &&
+      (code === 'INTERNAL_ERROR' ||
+        code === 'RENDER_FAILED' ||
+        translated.raw?.includes('MODEL_IS_2D')) &&
       openscadConsoleOutput &&
       (openscadConsoleOutput.includes(
         'Current top level object is not a 3D object'
       ) ||
-        openscadConsoleOutput.includes('Top level object is a 2D object'))
-    ) {
+        openscadConsoleOutput.includes('Top level object is a 2D object'));
+
+    if (confirmed2DModel) {
+      // Override to MODEL_IS_2D so the UI can show informational guidance
+      // instead of alarming red error messages. The UI handles this gracefully.
       code = 'MODEL_IS_2D';
       message =
-        'Your model produces 2D geometry (this is expected for laser-cut SVG/DXF export). ' +
-        'To preview: set "generate" back to "keyguard" for 3D preview. ' +
-        'To export: use the SVG or DXF output format.';
+        'Your model produces 2D geometry which cannot be previewed in the 3D viewer. ' +
+        'To export: select SVG or DXF output format. ' +
+        'To preview in 3D: adjust your model parameters to produce 3D geometry.';
     }
 
     self.postMessage({
@@ -2039,7 +2552,8 @@ function cancelRender(requestId) {
 }
 
 /**
- * Get current memory usage of the WASM heap
+ * Get current memory usage of the WASM heap.
+ * Includes growth delta since last render start for leak detection.
  * @returns {Object} Memory usage info
  */
 function getMemoryUsage() {
@@ -2049,16 +2563,21 @@ function getMemoryUsage() {
       limit: MEMORY_WARNING_THRESHOLD_MB * 1024 * 1024,
       percent: 0,
       available: true,
+      growthMB: 0,
     };
   }
 
-  // IMPORTANT: heapTotalBytes is the ALLOCATED heap size, not actual used memory
-  // We use the warning threshold (1GB) as the "limit" for reporting purposes
+  // IMPORTANT: heapTotalBytes is the ALLOCATED heap size, not actual used memory.
+  // WASM linear memory grows in 64KB pages; once grown it never shrinks.
+  // We use the warning threshold (1GB) as the "limit" for reporting purposes.
   const heapTotalBytes = openscadModule.HEAP8.length;
   const heapTotalMB = Math.round(heapTotalBytes / 1024 / 1024);
   const used = heapTotalBytes;
   const limit = MEMORY_WARNING_THRESHOLD_MB * 1024 * 1024;
   const percent = Math.round((used / limit) * 100);
+
+  // Growth since last render start (helps detect memory leaks between renders)
+  const growthMB = heapBeforeRenderMB > 0 ? heapTotalMB - heapBeforeRenderMB : 0;
 
   return {
     used,
@@ -2067,8 +2586,14 @@ function getMemoryUsage() {
     available: true,
     usedMB: heapTotalMB,
     limitMB: MEMORY_WARNING_THRESHOLD_MB,
+    growthMB,
   };
 }
+
+// Worker health heartbeat — responds immediately to prove the event loop is live.
+// During a blocking callMain() render, this will NOT respond (expected).
+// The render controller uses the absence of a response to detect hung workers.
+let _lastHeartbeatId = null;
 
 // Message handler
 self.onmessage = async (e) => {
@@ -2077,6 +2602,20 @@ self.onmessage = async (e) => {
   switch (type) {
     case 'INIT':
       await initWASM(payload?.assetBaseUrl);
+      break;
+
+    case 'PING':
+      // Heartbeat response — proves the worker event loop is responsive
+      _lastHeartbeatId = payload?.id;
+      self.postMessage({
+        type: 'PONG',
+        payload: {
+          id: payload?.id,
+          timestamp: Date.now(),
+          initialized,
+          rendering: !!currentRenderTimeout,
+        },
+      });
       break;
 
     case 'GET_MEMORY_USAGE':

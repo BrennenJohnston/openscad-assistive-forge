@@ -30,5 +30,11 @@ localhost_*.report.html
 # Uncomment to track lock file: pixi.lock
 .pixi/
 
-# Cursor AI workspace
+# Editor workspace
 .cursor/
+
+# Local testing reference files
+.volkswitch/
+
+# Internal planning documents (not for public release)
+docs/planning/

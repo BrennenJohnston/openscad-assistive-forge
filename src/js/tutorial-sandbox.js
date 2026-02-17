@@ -11,6 +11,9 @@
  * @module tutorial-sandbox
  */
 
+import { createFocusTrap } from './focus-trap.js';
+import { announceImmediate, announceError, POLITENESS as _POLITENESS } from './announcer.js';
+
 /**
  * Tutorial step definition
  * @typedef {Object} TutorialStep
@@ -102,7 +105,7 @@ function isMobileViewport() {
 }
 
 /**
- * Check if element is truly visible using comprehensive checks
+ * Check if element is visible using multiple DOM checks
  * More reliable than offsetParent alone for fixed/sticky positioned elements
  * @param {HTMLElement} element - Element to check
  * @returns {boolean}
@@ -539,6 +542,22 @@ async function executeEnsureAction(action) {
       break;
     }
 
+    case 'clickIfExpanded': {
+      // Click a specific toggle element if its aria-expanded is 'true'.
+      // Unlike collapsePanel (which searches *inside* the selector for a toggle),
+      // this targets the toggle element directly — needed when a parent container
+      // contains multiple aria-expanded elements.
+      const el = document.querySelector(action.selector);
+      if (el && el.getAttribute('aria-expanded') === 'true') {
+        el.click();
+        await waitForTransition(
+          el.closest('.preview-info-section') || el.parentElement || el,
+          400
+        );
+      }
+      break;
+    }
+
     case 'wait': {
       await new Promise((r) => setTimeout(r, action.duration || 300));
       break;
@@ -723,7 +742,7 @@ function checkIfAnyTargetInsideDrawer(step) {
  * Show a prompt in the tutorial panel to reopen/expand the param panel
  * Works for both mobile drawer and desktop collapsed panel
  */
-function showDrawerReopenPrompt() {
+function _showDrawerReopenPrompt() {
   if (!tutorialOverlay) return;
 
   const requirementEl = tutorialOverlay.querySelector('#tutorialRequirement');
@@ -908,12 +927,31 @@ const TUTORIALS = {
         `,
         highlightSelector: '@preview-container',
         position: 'left',
+        // Collapse the Preview Settings drawer so it doesn't obscure the 3D canvas.
+        // The drawer gets its own dedicated step later ("Preview Settings & Info").
+        ensure: [
+          { type: 'clickIfExpanded', selector: '#previewDrawerToggle' },
+        ],
       },
       {
         title: 'Save a preset (optional, but helpful)',
         content: `
-          <p>Use <strong>Presets</strong> to save your current settings and return to them later.</p>
+          <p><strong>Presets</strong> let you save and switch between different configurations.</p>
+          <details class="tutorial-more">
+            <summary>What each button does</summary>
+            <ul>
+              <li><strong>Select</strong> (dropdown) — pick a saved preset</li>
+              <li><strong>Save</strong> — overwrite the current preset with your changes</li>
+              <li><strong>Add (+)</strong> — create a new preset from current settings</li>
+              <li><strong>Delete (\u2212)</strong> — remove the selected preset</li>
+              <li><strong>Import / Export</strong> — share presets as JSON files</li>
+            </ul>
+          </details>
           <p class="tutorial-hint">Presets are saved in your browser for this model.</p>
+        `,
+        contentCompact: `
+          <p>Use <strong>Presets</strong> to save, load, and share configurations.</p>
+          <p class="tutorial-hint">Saved in your browser for this model.</p>
         `,
         // Target the clickable summary so the panel can avoid covering it.
         highlightSelector: '#presetControls summary, @preset-controls',
@@ -984,6 +1022,22 @@ const TUTORIALS = {
         },
       },
       {
+        title: 'Companion Files',
+        content: `
+          <p>Some designs use extra files (like <code>.txt</code> or <code>.svg</code>). When loaded from a ZIP, they appear in the <strong>Companion Files</strong> section.</p>
+          <p class="tutorial-hint">You can also add files manually using the <strong>Add File</strong> button.</p>
+        `,
+        contentCompact: `
+          <p>Extra files (<code>.txt</code>, <code>.svg</code>) appear under <strong>Companion Files</strong>.</p>
+        `,
+        highlightSelector:
+          '[data-tutorial-target="companion-files"], #projectFilesControls summary',
+        position: 'right',
+        showWhen: {
+          condition: () => !!document.getElementById('projectFilesControls'),
+        },
+      },
+      {
         title: 'Close Parameters (mobile)',
         content: `
           <p>On mobile, the <strong>Parameters</strong> drawer sits on top of the app.</p>
@@ -1030,6 +1084,7 @@ const TUTORIALS = {
           <ul>
             <li>Try a different example from the Welcome screen</li>
             <li>Upload your own <code>.scad</code> or <code>.zip</code> project</li>
+            <li>Switch between <strong>Simple</strong> and <strong>Advanced</strong> settings to see more options</li>
             <li>Use Presets and the Actions menu to save and share your work</li>
           </ul>
         `,
@@ -1817,40 +1872,19 @@ function setupTouchHandlers(panel) {
 }
 
 // ============================================================================
-// Focus Trap
+// Focus Trap (uses shared utility from focus-trap.js)
 // ============================================================================
 
 /**
  * Setup focus trap inside tutorial panel to keep focus within the dialog
+ * Uses shared focus-trap.js utility for consistent behavior across components.
  * @param {HTMLElement} panelElement - The panel element to trap focus within
  * @returns {Function} Cleanup function to remove the trap
  */
 function setupFocusTrap(panelElement) {
-  const focusableSelectors =
-    'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])';
-
-  const getFocusables = () => panelElement.querySelectorAll(focusableSelectors);
-
-  const trapHandler = (e) => {
-    if (e.key !== 'Tab') return;
-
-    const focusables = getFocusables();
-    if (focusables.length === 0) return;
-
-    const first = focusables[0];
-    const last = focusables[focusables.length - 1];
-
-    if (e.shiftKey && document.activeElement === first) {
-      e.preventDefault();
-      last.focus();
-    } else if (!e.shiftKey && document.activeElement === last) {
-      e.preventDefault();
-      first.focus();
-    }
-  };
-
-  panelElement.addEventListener('keydown', trapHandler);
-  return () => panelElement.removeEventListener('keydown', trapHandler);
+  const trap = createFocusTrap(panelElement);
+  trap.activate();
+  return () => trap.deactivate();
 }
 
 /**
@@ -2513,7 +2547,7 @@ function updateSpotlightAndPosition() {
     return;
   }
 
-  // Find the first *visible* target element using comprehensive visibility check
+  // Find the first *visible* target element using multi-step visibility check
   // Supports both targetKey (data-tutorial-target) and legacy selectors
   let target = currentTarget;
   if (!target || !document.contains(target) || !isElementVisible(target)) {
@@ -2923,7 +2957,7 @@ function calculateBestPosition(targetRect, preferred, panelRect) {
 
 /**
  * Position the panel and arrow relative to target
- * Uses visualViewport and safe area insets for robust positioning
+ * Uses visualViewport and safe area insets for reliable positioning
  * @param {HTMLElement} panel - Tutorial panel
  * @param {HTMLElement} arrow - Arrow element
  * @param {DOMRect} targetRect - Target bounds
@@ -3519,19 +3553,16 @@ export function getCurrentTutorialId() {
  * @param {string} message - Message to announce
  */
 /**
- * Announce message to screen readers with optional politeness control
+ * Announce message to screen readers with optional politeness control.
+ * Delegates to shared announcer.js utility using dual live regions
+ * (avoids mutating aria-live attribute which can cause issues).
  * @param {string} message - Message to announce
  * @param {string} politeness - 'polite' (default) or 'assertive'
  */
 function announceToScreenReader(message, politeness = 'polite') {
-  const announcer = document.getElementById('srAnnouncer');
-  if (announcer) {
-    announcer.setAttribute('aria-live', politeness);
-    announcer.textContent = message;
-
-    // Clear after announcement is read
-    setTimeout(() => {
-      announcer.textContent = '';
-    }, 1000);
+  if (politeness === 'assertive') {
+    announceError(message, { clearDelayMs: 1000 });
+  } else {
+    announceImmediate(message, { clearDelayMs: 1000 });
   }
 }

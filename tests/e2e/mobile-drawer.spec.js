@@ -11,32 +11,42 @@ test.beforeEach(async ({ page }) => {
   })
 })
 
-async function waitForWasmReady(page) {
-  // The app shows a blocking overlay while WASM initializes.
-  // Many UI listeners (including file upload) are registered after init completes.
-  const overlay = page.locator('#wasmLoadingOverlay');
-  try {
-    // If it exists, wait for it to be removed
-    if ((await overlay.count()) > 0) {
-      await overlay.waitFor({ state: 'detached', timeout: 120000 });
-    }
-  } catch {
-    // If it never appeared or was already detached, continue
-  }
-}
-
 async function loadSampleFile(page) {
+  // Register the WASM-ready listener BEFORE navigation so we never
+  // miss the console signal due to a race condition.
+  const wasmReady = page.waitForEvent('console', {
+    predicate: (msg) => msg.text().includes('OpenSCAD WASM ready'),
+    timeout: 120_000,
+  });
+
   await page.goto('/');
-  await waitForWasmReady(page);
+
+  // Block until WASM is confirmed initialised (guards against the
+  // flaky overlay.count() === 0 early-return that plagued the old
+  // waitForWasmReady helper).
+  await wasmReady;
 
   const fixturePath = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad');
   await page.setInputFiles('#fileInput', fixturePath);
-  await page.waitForSelector('.param-control', { timeout: 30000 });
+  await page.waitForSelector('.param-control', { timeout: 30_000 });
+
+  // Dismiss the "Save this file for quick access?" modal if it appears.
+  // The modal may render slightly after .param-control, so we must
+  // actively wait for the dismiss button rather than polling isVisible().
+  try {
+    const notNowBtn = page.locator('#saveProjectNotNow');
+    await notNowBtn.waitFor({ state: 'visible', timeout: 3000 });
+    await notNowBtn.click();
+    await page.waitForTimeout(300);
+  } catch {
+    // Modal never appeared – carry on
+  }
 }
 
 test.describe('Mobile Drawer', () => {
   test.use({ viewport: { width: 375, height: 667 } }); // iPhone SE size
-  
+  test.describe.configure({ timeout: 150_000 }); // WASM init may need ~120s
+
   test('drawer toggle is visible on mobile', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI');
     await loadSampleFile(page);
@@ -149,7 +159,8 @@ test.describe('Mobile Drawer', () => {
 
 test.describe('Desktop Layout', () => {
   test.use({ viewport: { width: 1280, height: 800 } });
-  
+  test.describe.configure({ timeout: 150_000 }); // WASM init may need ~120s
+
   test('drawer toggle is hidden on desktop', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI');
     await loadSampleFile(page);
@@ -188,6 +199,77 @@ test.describe('Desktop Layout', () => {
     await shortcutsHelp.locator('summary').scrollIntoViewIfNeeded();
     await shortcutsHelp.locator('summary').click();
     await expect(shortcutsList).toBeVisible();
+  });
+
+  test('all drawer toggles meet 44px minimum touch target', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI');
+    await loadSampleFile(page);
+
+    // Check drawer toggle buttons meet minimum touch target
+    const toggleSelectors = [
+      '#mobileDrawerToggle',
+      '.drawer-close-btn',
+    ];
+
+    for (const sel of toggleSelectors) {
+      const el = page.locator(sel).first();
+      const isVisible = await el.isVisible().catch(() => false);
+      if (!isVisible) continue;
+
+      const size = await el.evaluate(node => {
+        const styles = getComputedStyle(node);
+        return {
+          minHeight: parseFloat(styles.minHeight),
+          minWidth: parseFloat(styles.minWidth),
+        };
+      });
+
+      expect(size.minHeight).toBeGreaterThanOrEqual(44);
+      expect(size.minWidth).toBeGreaterThanOrEqual(44);
+    }
+  });
+
+  test('drawer open/close toggles aria-expanded correctly', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI');
+    await loadSampleFile(page);
+
+    // Open drawer
+    const mobileToggle = page.locator('#mobileDrawerToggle');
+    if (await mobileToggle.isVisible()) {
+      await mobileToggle.click();
+      await page.waitForTimeout(300);
+      await expect(mobileToggle).toHaveAttribute('aria-expanded', 'true');
+
+      // Close via close button
+      const closeBtn = page.locator('.drawer-close-btn').first();
+      if (await closeBtn.isVisible()) {
+        await closeBtn.click();
+        await page.waitForTimeout(300);
+        await expect(mobileToggle).toHaveAttribute('aria-expanded', 'false');
+      }
+    }
+  });
+
+  test('parameters drawer backdrop appears and is dismissible', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI');
+    await loadSampleFile(page);
+
+    const mobileToggle = page.locator('#mobileDrawerToggle');
+    if (await mobileToggle.isVisible()) {
+      await mobileToggle.click();
+      await page.waitForTimeout(400);
+
+      // Backdrop should be visible
+      const backdrop = page.locator('.drawer-backdrop');
+      await expect(backdrop).toHaveClass(/visible/);
+
+      // Click backdrop to dismiss
+      await backdrop.click({ position: { x: 10, y: 10 } });
+      await page.waitForTimeout(400);
+
+      // Drawer should be closed
+      await expect(mobileToggle).toHaveAttribute('aria-expanded', 'false');
+    }
   });
 
   test('actions drawer does not block primary action (desktop)', async ({ page }) => {

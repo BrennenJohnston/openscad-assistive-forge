@@ -48,8 +48,24 @@ import {
   createFileTree,
   getZipStats,
 } from './js/zip-handler.js';
+import {
+  loadManifest,
+  ManifestError,
+} from './js/manifest-loader.js';
+import {
+  runPreflightCheck,
+  formatMissingDependencies,
+} from './js/dependency-checker.js';
+import { getConsolePanel } from './js/console-panel.js';
 import { themeManager, initThemeToggle } from './js/theme-manager.js';
-import { presetManager, extractScadVersion } from './js/preset-manager.js';
+import {
+  presetManager,
+  extractScadVersion,
+  checkMigrationAvailable,
+  migrateFromLegacyStorage,
+  dismissMigrationOffer,
+  coercePresetValues,
+} from './js/preset-manager.js';
 import { ComparisonController } from './js/comparison-controller.js';
 import { ComparisonView } from './js/comparison-view.js';
 import { libraryManager, LIBRARY_DEFINITIONS } from './js/library-manager.js';
@@ -58,15 +74,15 @@ import { openModal, closeModal, initStaticModals } from './js/modal-manager.js';
 import { translateError } from './js/error-translator.js';
 import {
   getStorageEstimate,
-  clearCachedData,
+  clearCachedData as _clearCachedData,
   isFirstVisit,
   markFirstVisitComplete,
   updateStoragePrefs,
   shouldDeferLargeDownloads,
-  formatBytes,
+  formatBytes as _formatBytes,
   // v2: Persistence and backup
-  checkPersistentStorage,
-  requestPersistentStorage,
+  checkPersistentStorage as _checkPersistentStorage,
+  requestPersistentStorage as _requestPersistentStorage,
   clearCacheWithOptions,
   getDetailedStorageInfo,
   exportProjectsBackup,
@@ -93,6 +109,50 @@ import {
   keyboardConfig,
   initShortcutsModal,
 } from './js/keyboard-config.js';
+import { isEnabled as _isEnabled, debugFlags, FLAGS as _FLAGS } from './js/feature-flags.js';
+import { initCSPReporter, logViolationSummary as _logViolationSummary } from './js/csp-reporter.js';
+import {
+  migrateStorageKeys,
+  getAppPrefKey,
+  getDrawerStateKey,
+} from './js/storage-keys.js';
+import { initImageMeasurement, openFullscreen as measureOpenFullscreen, closeFullscreen as measureCloseFullscreen, loadImageFromDataURL, setMeasureMode, clearRulerPoints, getCalibDistancePx } from './js/image-measurement.js';
+import * as SharedImageStore from './js/shared-image-store.js';
+import { getUnit, setUnit, getScaleFactor, setScaleFactor, onUnitChange, onScaleChange } from './js/unit-sync.js';
+
+// Storage keys using standardized naming convention
+const STORAGE_KEY_AUTO_PREVIEW_ENABLED = getAppPrefKey('auto-preview-enabled');
+const STORAGE_KEY_PREVIEW_QUALITY = getAppPrefKey('preview-quality-mode');
+const STORAGE_KEY_RECOVERY_SOURCE = getAppPrefKey('recovery-source');
+const STORAGE_KEY_RECOVERY_TIMESTAMP = getAppPrefKey('recovery-timestamp');
+const STORAGE_KEY_STATUS_BAR = getAppPrefKey('status-bar');
+const STORAGE_KEY_OVERLAY_ENABLED = getAppPrefKey('overlay-enabled');
+const STORAGE_KEY_OVERLAY_OPACITY = getAppPrefKey('overlay-opacity');
+const STORAGE_KEY_OVERLAY_SOURCE = getAppPrefKey('overlay-source');
+const STORAGE_KEY_AUTO_ROTATE = getAppPrefKey('auto-rotate');
+const STORAGE_KEY_ROTATE_SPEED = getAppPrefKey('rotate-speed');
+const STORAGE_KEY_MODEL_COLOR = getAppPrefKey('model-color');
+const STORAGE_KEY_MODEL_OPACITY = getAppPrefKey('model-opacity');
+const STORAGE_KEY_BRIGHTNESS = getAppPrefKey('brightness');
+const STORAGE_KEY_CONTRAST = getAppPrefKey('contrast');
+const STORAGE_KEY_PARAM_PANEL_COLLAPSED = getDrawerStateKey('parameters');
+const STORAGE_KEY_LAYOUT_SIZES = getAppPrefKey('layout-sizes');
+import {
+  announce as _announce,
+  announceImmediate,
+  announceError as _announceError,
+  POLITENESS as _POLITENESS,
+} from './js/announcer.js';
+// Expert Mode (M2) - Code editor integration
+import { getModeManager } from './js/mode-manager.js';
+import { getEditorStateManager } from './js/editor-state-manager.js';
+import { TextareaEditor } from './js/textarea-editor.js';
+import {
+  initMemoryMonitor,
+  getMemoryMonitor as _getMemoryMonitor,
+  MemoryState as _MemoryState,
+  MemoryRecovery as _MemoryRecovery,
+} from './js/memory-monitor.js';
 import {
   initSavedProjectsDB,
   listSavedProjects,
@@ -101,16 +161,16 @@ import {
   touchProject,
   updateProject,
   deleteProject,
-  getSavedProjectsSummary,
-  clearAllSavedProjects,
+  getSavedProjectsSummary as _getSavedProjectsSummary,
+  clearAllSavedProjects as _clearAllSavedProjects,
   getStorageDiagnostics,
   // v2: Folder operations
-  createFolder,
+  createFolder as _createFolder,
   getFolder,
   listFolders,
   renameFolder,
   deleteFolder,
-  moveFolder,
+  moveFolder as _moveFolder,
   getFolderTree,
   getFolderBreadcrumbs,
   // v2: Project-folder operations
@@ -120,6 +180,8 @@ import {
 import Split from 'split.js';
 
 // Example definitions (used by welcome screen, Features Guide, and deep-linking)
+// Direct-launch URLs for external website integration
+// Usage: ?load=keyguard-demo or ?example=simple-box
 const EXAMPLE_DEFINITIONS = {
   'simple-box': {
     path: '/examples/simple-box/simple_box.scad',
@@ -141,6 +203,26 @@ const EXAMPLE_DEFINITIONS = {
     path: '/examples/multi-file-box.zip',
     name: 'multi-file-box.zip',
   },
+  // Keyguard Designer Demo (multi-file example with companion files)
+  // Usage: https://assistive-forge.example.com/?load=keyguard-demo
+  'keyguard-demo': {
+    path: '/examples/keyguard-demo/keyguard_demo.scad',
+    name: 'keyguard_demo.scad',
+    description: 'Keyguard Designer Demo (multi-file)',
+    author: 'Community',
+    // Additional files to load (multi-file design package)
+    additionalFiles: [
+      '/examples/keyguard-demo/openings_and_additions.txt',
+    ],
+  },
+  // Short alias for keyguard demo example
+  'keyguard': {
+    path: '/examples/keyguard-demo/keyguard_demo.scad',
+    name: 'keyguard_demo.scad',
+    additionalFiles: [
+      '/examples/keyguard-demo/openings_and_additions.txt',
+    ],
+  },
   // Additional examples for deep-linking
   'cable-organizer': {
     path: '/examples/cable-organizer/cable_organizer.scad',
@@ -157,12 +239,6 @@ const EXAMPLE_DEFINITIONS = {
   'wall-hook': {
     path: '/examples/wall-hook/wall_hook.scad',
     name: 'wall_hook.scad',
-  },
-  // Volkswitch keyguard example for deep-linking from volksswitch.org
-  // Usage: ?example=volkswitch-keyguard-demo
-  'volkswitch-keyguard-demo': {
-    path: '/examples/volkswitch-keyguard/keyguard_demo.scad',
-    name: 'keyguard_demo.scad',
   },
 };
 
@@ -209,45 +285,11 @@ let comparisonController = null;
 let comparisonView = null;
 let renderQueue = null;
 
-// Screen reader announcer utility
-// Provides a consistent API for announcing messages to assistive technology
-const srAnnouncer = {
-  _timeout: null,
-  _clearTimeout: null,
-  /**
-   * Announce a message to screen readers
-   * @param {string} message - Message to announce
-   * @param {boolean} [debounce=false] - Whether to debounce rapid announcements
-   */
-  announce(message, debounce = false) {
-    const el = document.getElementById('srAnnouncer');
-    if (!el) return;
+// Track which saved project is currently loaded (for auto-saving companion files)
+let currentSavedProjectId = null;
 
-    // Cancel pending announcements
-    if (this._timeout) clearTimeout(this._timeout);
-    if (this._clearTimeout) clearTimeout(this._clearTimeout);
-
-    const write = () => {
-      // Clear first so AT will re-announce repeated strings reliably
-      el.textContent = '';
-      requestAnimationFrame(() => {
-        el.textContent = message;
-        // Clear after a short delay, but only if unchanged
-        this._clearTimeout = setTimeout(() => {
-          if (el.textContent === message) {
-            el.textContent = '';
-          }
-        }, 1500);
-      });
-    };
-
-    if (debounce) {
-      this._timeout = setTimeout(write, 150);
-    } else {
-      write();
-    }
-  },
-};
+// Screen reader announcer - now uses centralized announcer.js
+// (Local implementation removed - use imported announce/announceImmediate/announceError)
 
 // Hidden feature state (non-persistent)
 let _hfmUnlocked = false;
@@ -994,6 +1036,114 @@ function showConfirmDialog(
   });
 }
 
+/**
+ * Show missing dependencies dialog with actionable warnings
+ * When a design package is missing include/use/import files, warn the user
+ * with actionable options: add the files, continue anyway, or cancel
+ * @param {Object} missing - Missing files by type
+ * @param {string} packageName - Name of the uploaded package
+ * @returns {Promise<boolean>} True if user chooses to continue, false to cancel
+ */
+function showMissingDependenciesDialog(missing, packageName) {
+  return new Promise((resolve) => {
+    const modal = document.createElement('div');
+    modal.className = 'preset-modal missing-deps-modal';
+    modal.setAttribute('role', 'alertdialog');
+    modal.setAttribute('aria-labelledby', 'missingDepsTitle');
+    modal.setAttribute('aria-describedby', 'missingDepsList');
+    modal.setAttribute('aria-modal', 'true');
+
+    // Build list of missing files
+    const allMissing = [
+      ...missing.includes.map((f) => ({ file: f, type: 'include' })),
+      ...missing.uses.map((f) => ({ file: f, type: 'use' })),
+      ...missing.imports.map((f) => ({ file: f, type: 'import' })),
+    ];
+
+    const fileListHtml = allMissing
+      .map(
+        ({ file, type }) =>
+          `<li class="missing-dep-item">
+            <span class="missing-dep-file">${escapeHtml(file)}</span>
+            <span class="missing-dep-type">(${type})</span>
+          </li>`
+      )
+      .join('');
+
+    modal.innerHTML = `
+      <div class="preset-modal-content missing-deps-content">
+        <div class="preset-modal-header">
+          <h3 id="missingDepsTitle" class="preset-modal-title">
+            ⚠️ Missing Files Detected
+          </h3>
+        </div>
+        <div class="missing-deps-body">
+          <p>
+            The design package <strong>"${escapeHtml(packageName)}"</strong> 
+            references files that weren't included:
+          </p>
+          <ul id="missingDepsList" class="missing-deps-list" aria-label="Missing files">
+            ${fileListHtml}
+          </ul>
+          <p class="missing-deps-hint">
+            Without these files, the design may not render correctly.
+            For <code>include</code> files like <code>openings_and_additions.txt</code>,
+            you need to include them in your ZIP package.
+          </p>
+        </div>
+        <div class="preset-form-actions">
+          <button type="button" class="btn btn-secondary" data-action="cancel">
+            Cancel Upload
+          </button>
+          <button type="button" class="btn btn-primary" data-action="continue">
+            Continue Anyway
+          </button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    const cleanup = (result) => {
+      closeModal(modal);
+      document.body.removeChild(modal);
+      resolve(result);
+    };
+
+    // Handle button clicks
+    modal.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-action]');
+      if (!btn) return;
+
+      if (btn.dataset.action === 'continue') {
+        cleanup(true);
+      } else if (btn.dataset.action === 'cancel') {
+        cleanup(false);
+      }
+    });
+
+    // Close on backdrop click (cancel)
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        cleanup(false);
+      }
+    });
+
+    // Escape closes (cancel)
+    modal.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        cleanup(false);
+      }
+    });
+
+    // Open modal with focus management
+    openModal(modal, {
+      focusTarget: modal.querySelector('[data-action="cancel"]'),
+    });
+  });
+}
+
 // Sanitize URL parameters against extracted schema
 function sanitizeUrlParams(extracted, urlParams) {
   const sanitized = {};
@@ -1084,6 +1234,8 @@ function _injectAltToggle() {
   panToggleBtn.className =
     'btn btn-sm btn-icon camera-btn alt-pan-toggle dpad-center';
   panToggleBtn.setAttribute('aria-pressed', 'false');
+  panToggleBtn.setAttribute('aria-label', 'Toggle alternate pan adjustment mode');
+  panToggleBtn.setAttribute('title', 'Toggle alternate pan adjustment');
   panToggleBtn.style.display = 'none'; // Hidden until alt view is enabled
   panToggleBtn.innerHTML = `
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -1322,6 +1474,228 @@ function _disableAltViewWithPreview(toggleBtn) {
 async function initApp() {
   console.log('OpenSCAD Assistive Forge v4.1.0');
   console.log('Initializing...');
+
+  // Initialize Milestone 0 Foundation systems early
+  // Feature flags: Enable controlled rollout of new features
+  debugFlags(); // Log flag states for debugging
+
+  // CSP Reporter: Monitor Content-Security-Policy violations (report-only mode)
+  initCSPReporter();
+
+  // Storage key migration: One-time migration of localStorage keys to standardized naming
+  // Must run before any localStorage reads to ensure consistent key access
+  migrateStorageKeys();
+
+  // Recovery Mode: Detect if we're recovering from a memory-related crash
+  const urlParams = new URLSearchParams(window.location.search);
+  const isRecoveryMode = urlParams.get('recovery') === 'true';
+
+  // Crash detection: If WASM init started but never completed, we may have crashed.
+  // The flag is set before WASM init and cleared after success.
+  const wasmCrashDetected =
+    localStorage.getItem('openscad-forge-wasm-init-started') === 'true' &&
+    localStorage.getItem('openscad-forge-wasm-init-completed') !== 'true';
+
+  if (wasmCrashDetected && !isRecoveryMode) {
+    console.warn('[Recovery] Detected unclean WASM shutdown — offering recovery mode');
+    // Clear the flags so we don't loop
+    localStorage.removeItem('openscad-forge-wasm-init-started');
+    localStorage.removeItem('openscad-forge-wasm-init-completed');
+    // Auto-enter recovery mode
+    window.location.href = window.location.pathname + '?recovery=true';
+    return; // stop initialization
+  }
+
+  if (isRecoveryMode) {
+    console.log('[Recovery] Recovery mode activated');
+
+    // Apply conservative settings per B.5.4 Recovery Mode Specification:
+    // - Auto-preview OFF (no automatic renders)
+    // - Quality set to fast (minimum quality settings)
+    // - Monaco disabled (use textarea only — less memory overhead)
+    localStorage.setItem(STORAGE_KEY_AUTO_PREVIEW_ENABLED, 'false');
+    localStorage.setItem(STORAGE_KEY_PREVIEW_QUALITY, 'fast');
+    // Disable Monaco in recovery mode to reduce memory footprint.
+    // The user can re-enable it manually from settings after recovery.
+    localStorage.setItem('openscad-forge-flag-monaco_editor', 'false');
+
+    // Clean up crash detection flags
+    localStorage.removeItem('openscad-forge-wasm-init-started');
+    localStorage.removeItem('openscad-forge-wasm-init-completed');
+
+    // Check for recovery data
+    const recoverySource = localStorage.getItem(STORAGE_KEY_RECOVERY_SOURCE);
+    const recoveryTimestamp = localStorage.getItem(STORAGE_KEY_RECOVERY_TIMESTAMP);
+
+    if (recoverySource && recoveryTimestamp) {
+      const elapsed = Date.now() - parseInt(recoveryTimestamp, 10);
+      // Only restore if recovery data is less than 1 hour old
+      if (elapsed < 3600000) {
+        console.log('[Recovery] Found recovery data, will restore after init');
+        // Store for later restoration after UI is ready
+        window._recoverySource = recoverySource;
+      }
+      // Clear recovery data
+      localStorage.removeItem(STORAGE_KEY_RECOVERY_SOURCE);
+      localStorage.removeItem(STORAGE_KEY_RECOVERY_TIMESTAMP);
+    }
+
+    // Remove recovery param from URL without reloading
+    const cleanUrl = new URL(window.location.href);
+    cleanUrl.searchParams.delete('recovery');
+    window.history.replaceState({}, document.title, cleanUrl.toString());
+
+    // Show recovery notice
+    setTimeout(() => {
+      const statusArea = document.getElementById('statusArea');
+      if (statusArea) {
+        statusArea.innerHTML = `
+          <div class="status-notice status-warning" role="alert">
+            <strong>Recovery Mode:</strong> Running with reduced settings.
+            Auto-preview is disabled, quality is set to fast, and the code editor uses a lightweight textarea.
+            <button class="btn btn-sm btn-secondary" onclick="this.parentElement.remove()">Dismiss</button>
+          </div>
+        `;
+      }
+    }, 1000);
+  }
+
+  // Memory Monitor: Track memory usage and graceful degradation
+  // Will be connected to render controller after WASM init
+  // Note: Monitor is initialized here and callbacks fire on state changes
+
+  /**
+   * Update memory UI elements based on current state
+   * @param {string} state - Memory state (normal, warning, critical, emergency)
+   * @param {Object} usage - Memory usage info
+   */
+  function updateMemoryUI(state, usage) {
+    const badge = document.getElementById('memoryStatusBadge');
+    const badgeText = document.getElementById('memoryStatusText');
+    const banner = document.getElementById('memoryBanner');
+    const bannerText = document.getElementById('memoryBannerText');
+
+    if (!badge || !banner) return;
+
+    // Update badge
+    badge.dataset.state = state;
+    if (badgeText) {
+      badgeText.textContent = `${usage.heapMB} MB`;
+    }
+
+    // Show badge when not normal (or always show if user prefers)
+    if (state === 'normal') {
+      badge.classList.add('hidden');
+    } else {
+      badge.classList.remove('hidden');
+    }
+
+    // Update banner for critical/emergency states
+    if (state === 'critical' || state === 'emergency') {
+      banner.dataset.state = state;
+      banner.dataset.visible = 'true';
+
+      if (bannerText) {
+        if (state === 'emergency') {
+          bannerText.textContent =
+            'Critical memory usage! Auto-preview disabled. Please save your work immediately.';
+        } else {
+          bannerText.textContent =
+            'High memory usage detected. Consider reducing model complexity or saving your work.';
+        }
+      }
+    } else {
+      banner.dataset.visible = 'false';
+    }
+  }
+
+  const _memoryMonitor = initMemoryMonitor({
+    onWarning: (usage) => {
+      console.log(`[Memory] Warning state: ${usage.heapMB}MB`);
+      updateMemoryUI('warning', usage);
+    },
+    onCritical: (usage) => {
+      console.log(`[Memory] Critical state: ${usage.heapMB}MB`);
+      updateMemoryUI('critical', usage);
+    },
+    onEmergency: (usage) => {
+      console.log(`[Memory] Emergency state: ${usage.heapMB}MB`);
+      updateMemoryUI('emergency', usage);
+      // Disable auto-preview at emergency level
+      if (typeof autoPreviewUserEnabled !== 'undefined') {
+        autoPreviewUserEnabled = false;
+        const autoPreviewToggle = document.getElementById('autoPreviewToggle');
+        if (autoPreviewToggle) {
+          autoPreviewToggle.checked = false;
+        }
+      }
+    },
+    onRecovery: (usage) => {
+      console.log(`[Memory] Recovered to normal: ${usage.heapMB}MB`);
+      updateMemoryUI('normal', usage);
+    },
+  });
+
+  // Memory banner action handlers
+  document.getElementById('memoryBannerDismiss')?.addEventListener('click', () => {
+    const banner = document.getElementById('memoryBanner');
+    if (banner) banner.dataset.visible = 'false';
+  });
+
+  document.getElementById('memoryBannerSave')?.addEventListener('click', () => {
+    // Trigger project save - dispatch event that saved-projects system listens for
+    document.getElementById('saveProjectBtn')?.click();
+  });
+
+  document.getElementById('memoryBannerReduceFn')?.addEventListener('click', () => {
+    // Reduce quality by switching to low quality mode
+    const qualitySelect = document.getElementById('qualityPreset');
+    if (qualitySelect) {
+      qualitySelect.value = 'low';
+      qualitySelect.dispatchEvent(new Event('change'));
+    }
+    // Also reduce auto-preview quality
+    const previewQualitySelect = document.getElementById('previewQualityMode');
+    if (previewQualitySelect) {
+      previewQualitySelect.value = 'fast';
+      previewQualitySelect.dispatchEvent(new Event('change'));
+    }
+    console.log('[Memory] Quality reduced to conserve memory');
+  });
+
+  document.getElementById('memoryBannerDisableAuto')?.addEventListener('click', () => {
+    // Disable auto-preview
+    const autoPreviewToggle = document.getElementById('autoPreviewToggle');
+    if (autoPreviewToggle && autoPreviewToggle.checked) {
+      autoPreviewToggle.checked = false;
+      autoPreviewToggle.dispatchEvent(new Event('change'));
+    }
+    console.log('[Memory] Auto-preview disabled to conserve memory');
+  });
+
+  document.getElementById('memoryBannerExport')?.addEventListener('click', () => {
+    // Trigger STL export
+    const exportBtn = document.getElementById('renderExportButton');
+    if (exportBtn) {
+      exportBtn.click();
+    }
+    console.log('[Memory] STL export triggered for emergency save');
+  });
+
+  document.getElementById('memoryBannerReload')?.addEventListener('click', () => {
+    // Save current state to localStorage before reload
+    try {
+      const currentCode = document.getElementById('openscadSource')?.value || '';
+      if (currentCode) {
+        localStorage.setItem(STORAGE_KEY_RECOVERY_SOURCE, currentCode);
+        localStorage.setItem(STORAGE_KEY_RECOVERY_TIMESTAMP, Date.now().toString());
+      }
+    } catch (e) {
+      console.error('[Memory] Failed to save recovery state:', e);
+    }
+    // Reload in recovery mode
+    window.location.href = window.location.pathname + '?recovery=true';
+  });
 
   let statusArea = null;
   let cameraPanelController = null; // Declared here, initialized later
@@ -1657,6 +2031,10 @@ async function initApp() {
   // Initialize configurable keyboard shortcuts
   initKeyboardShortcuts();
 
+  // Track current folder for saved projects navigation (must be declared
+  // before renderSavedProjectsList is called to avoid TDZ ReferenceError).
+  let currentFolderId = null;
+
   // Initialize saved projects database
   try {
     const { type } = await initSavedProjectsDB();
@@ -1908,26 +2286,53 @@ async function initApp() {
 
           confirmBtn.disabled = true;
           confirmBtn.textContent = 'Clearing...';
+          confirmBtn.setAttribute('aria-busy', 'true');
 
-          const result = await clearCacheWithOptions({
-            clearAppCaches,
-            preserveSavedDesigns: preserveDesigns,
-          });
+          // Add timeout to prevent freeze during cache clearing
+          const CACHE_CLEAR_TIMEOUT = 8000; // 8 seconds max before force reload
 
-          document.body.removeChild(modal);
+          try {
+            // Race between cache clear and timeout
+            const result = await Promise.race([
+              clearCacheWithOptions({
+                clearAppCaches,
+                preserveSavedDesigns: preserveDesigns,
+              }),
+              new Promise((_, reject) =>
+                setTimeout(
+                  () => reject(new Error('Cache clear timeout')),
+                  CACHE_CLEAR_TIMEOUT
+                )
+              ),
+            ]);
 
-          if (result.appCachesCleared || result.userDataCleared) {
-            const msg = preserveDesigns
-              ? 'App cache cleared. Your saved designs are preserved. Reloading...'
-              : 'All data cleared. Reloading...';
-            updateStatus(msg, 'success');
-            await updateStorageDisplay();
+            document.body.removeChild(modal);
+
+            if (result.appCachesCleared || result.userDataCleared) {
+              const msg = preserveDesigns
+                ? 'App cache cleared. Your saved designs are preserved. Reloading...'
+                : 'All data cleared. Reloading...';
+              updateStatus(msg, 'success');
+              await updateStorageDisplay();
+              setTimeout(() => {
+                window.location.reload();
+              }, 500);
+            }
+
+            resolve(true);
+          } catch (error) {
+            // Timeout or error occurred
+            console.warn('[Cache Clear] Operation timed out or failed:', error.message);
+
+            // Force reload anyway - the cache clear may have partially succeeded
+            // and reloading is the safest recovery action
+            document.body.removeChild(modal);
+            updateStatus('Cache clear taking too long, forcing reload...', 'warning');
             setTimeout(() => {
               window.location.reload();
-            }, 500);
+            }, 300);
+            resolve(true);
           }
-
-          resolve(true);
         });
 
         // Close on escape
@@ -2146,6 +2551,57 @@ async function initApp() {
     }, 2000);
   });
 
+  // ============================================================================
+  // Preset migration check: detect legacy presets for versioned format migration
+  // Check for legacy presets that can be migrated to the new versioned format
+  // ============================================================================
+  const checkPresetMigration = () => {
+    try {
+      const migrationInfo = checkMigrationAvailable();
+      
+      if (migrationInfo.available && !migrationInfo.alreadyOffered) {
+        console.log('[App] Legacy presets detected:', {
+          presets: migrationInfo.legacyPresetCount,
+          models: migrationInfo.legacyModelCount,
+        });
+        
+        // Show migration prompt (non-blocking, user can dismiss)
+        const message = 
+          `Found ${migrationInfo.legacyPresetCount} preset(s) from a previous version. ` +
+          `Would you like to migrate them to preserve your work?`;
+        
+        const shouldMigrate = confirm(message);
+        
+        if (shouldMigrate) {
+          const result = migrateFromLegacyStorage({ createBackup: true });
+          
+          if (result.success) {
+            updateStatus(
+              `Migrated ${result.migratedPresets} preset(s) successfully!`,
+              'success'
+            );
+            console.log('[App] Migration complete:', result);
+          } else {
+            updateStatus(
+              'Migration encountered issues. Your original presets are preserved.',
+              'warning'
+            );
+            console.warn('[App] Migration issues:', result.errors);
+          }
+        } else {
+          // User declined - don't ask again
+          dismissMigrationOffer();
+          console.log('[App] User declined preset migration');
+        }
+      }
+    } catch (error) {
+      console.warn('[App] Error checking preset migration:', error);
+    }
+  };
+  
+  // Check migration after a short delay (after first-visit modal if present)
+  setTimeout(checkPresetMigration, 1500);
+
   // Initialize high contrast toggle button
   const contrastBtn = document.getElementById('contrastToggle');
   if (contrastBtn) {
@@ -2224,11 +2680,11 @@ async function initApp() {
           );
         }
 
-        // Show/hide 2D format guidance for SVG/DXF (Volkswitch laser cutting support)
+        // Show/hide 2D format guidance for SVG/DXF laser cutting workflows
         if (format2dGuidance) {
           if (formatDef.is2D) {
             format2dGuidance.classList.remove('hidden');
-            srAnnouncer.announce(
+            announceImmediate(
               `${formatName} is a 2D format. See guidance below the format selector.`
             );
           } else {
@@ -2332,11 +2788,8 @@ async function initApp() {
             'Advanced rendering optimization (Manifold) is not available in this OpenSCAD build. ' +
             'Complex models may render slower than expected.';
 
-          // Use existing notification system if available
-          const srAnnouncer = document.getElementById('srAnnouncer');
-          if (srAnnouncer) {
-            srAnnouncer.textContent = warningMessage;
-          }
+          // Announce warning to screen readers
+          announceImmediate(warningMessage);
 
           // Also log to console with helpful context
           console.warn(
@@ -2360,6 +2813,12 @@ async function initApp() {
       const wasmLoadingOverlay = showWasmLoadingIndicator();
 
       try {
+        // Set crash detection flag BEFORE WASM init.
+        // If the page crashes during init, the flag remains set and
+        // recovery mode will auto-activate on next load.
+        localStorage.setItem('openscad-forge-wasm-init-started', 'true');
+        localStorage.removeItem('openscad-forge-wasm-init-completed');
+
         const assetBaseUrl = new URL(
           import.meta.env.BASE_URL,
           window.location.origin
@@ -2376,6 +2835,15 @@ async function initApp() {
         console.log('OpenSCAD WASM ready');
         hideWasmLoadingIndicator(wasmLoadingOverlay);
         wasmInitialized = true;
+
+        // Clear crash detection flag — WASM init succeeded
+        localStorage.setItem('openscad-forge-wasm-init-completed', 'true');
+
+        // Start worker health monitoring
+        renderController.startHealthMonitoring();
+        // Expose WASM readiness as a DOM attribute so E2E tests
+        // can wait for it without race-prone overlay checks.
+        document.body.setAttribute('data-wasm-ready', 'true');
         // Start memory usage polling
         startMemoryPolling();
         return true;
@@ -2668,7 +3136,8 @@ async function initApp() {
     }, 10000);
   }
 
-  function stopMemoryPolling() {
+  // Prefixed with _ to indicate intentionally unused (reserved for future cleanup)
+  function _stopMemoryPolling() {
     if (memoryPollInterval) {
       clearInterval(memoryPollInterval);
       memoryPollInterval = null;
@@ -2681,7 +3150,7 @@ async function initApp() {
     const details = error?.details || '';
     const detailsStr = String(details || '');
 
-    // Handle 2D model case (Volkswitch laser-cut workflow)
+    // Handle 2D model case — applies to any project producing 2D output
     const is2DModel =
       code === 'MODEL_IS_2D' ||
       /MODEL_IS_2D|not a 3D object|Top level object is a 2D object/i.test(
@@ -2690,27 +3159,25 @@ async function initApp() {
       /not a 3D object|2D object/i.test(detailsStr);
 
     if (is2DModel) {
-      // Show guidance for 2D model - this is expected for laser-cut workflow
+      // Show guidance for 2D model — this is informational, not an error
+      // Use 'success' not 'error' to avoid alarming red warnings on a correct workflow path
       updateStatus(
         'Your model produces 2D geometry. Select SVG or DXF output format to export.',
-        'error'
+        'success'
       );
 
-      // Offer to change output format automatically
-      const outputFormatSelect = document.getElementById('outputFormat');
-      if (outputFormatSelect && outputFormatSelect.value === 'stl') {
-        const changeTo2D = confirm(
-          '2D Model Detected\n\n' +
-            'Your model is configured to produce 2D geometry for laser cutting.\n' +
-            '2D models cannot be exported as STL (3D format).\n\n' +
-            'Would you like to switch to SVG output format?'
-        );
-        if (changeTo2D) {
-          outputFormatSelect.value = 'svg';
-          // Trigger change event so UI updates
-          outputFormatSelect.dispatchEvent(new Event('change'));
-        }
-      }
+      // Override the preview state badge: auto-preview-controller already set it to ERROR
+      // before this handler fired. Replace with a non-alarming "2D Model" indicator.
+      previewStateIndicator.className = 'preview-state-indicator state-current';
+      previewStateIndicator.textContent = '✓ 2D Model — use SVG/DXF';
+      previewContainer.classList.remove('preview-error');
+      previewContainer.classList.add('preview-current');
+
+      // Dismiss any memory warning that may have been triggered by the failed 2D→STL render.
+      // The high memory is a side effect of the expected 2D path, not a real memory issue.
+      const memWarning = document.getElementById('memoryWarning');
+      if (memWarning) memWarning.remove();
+
       return true;
     }
 
@@ -3239,9 +3706,7 @@ async function initApp() {
   const statusBarToggle = document.getElementById('statusBarToggle');
   if (statusBarToggle && previewStatusBar) {
     // Initialize from localStorage
-    const savedStatusBarPref = localStorage.getItem(
-      'openscad-customizer-status-bar'
-    );
+    const savedStatusBarPref = localStorage.getItem(STORAGE_KEY_STATUS_BAR);
     const statusBarEnabled = savedStatusBarPref !== 'false'; // Default to true
     statusBarToggle.checked = statusBarEnabled;
     if (!statusBarEnabled) {
@@ -3255,26 +3720,76 @@ async function initApp() {
       } else {
         previewStatusBar.classList.add('user-hidden');
       }
-      localStorage.setItem(
-        'openscad-customizer-status-bar',
-        enabled ? 'true' : 'false'
-      );
+      localStorage.setItem(STORAGE_KEY_STATUS_BAR, enabled ? 'true' : 'false');
       console.log(`[App] Status bar ${enabled ? 'shown' : 'hidden'}`);
     });
   }
 
   // ============================================================================
-  // Reference Overlay Controls
+  // Engine toggle: switch between Manifold (fast) and CGAL (stable, max compatibility)
+  // Toggle between Manifold (fast, 5-30x speedup) and CGAL (stable, maximum compatibility)
   // ============================================================================
-  const STORAGE_KEY_OVERLAY_ENABLED = 'openscad-overlay-enabled';
-  const STORAGE_KEY_OVERLAY_OPACITY = 'openscad-overlay-opacity';
-  const STORAGE_KEY_OVERLAY_SOURCE = 'openscad-overlay-source';
+  const manifoldEngineToggle = document.getElementById('manifoldEngineToggle');
+  const manifoldEngineHint = document.getElementById('manifoldEngineHint');
+  const STORAGE_KEY_MANIFOLD_ENGINE = 'openscad-forge-manifold-engine';
+
+  if (manifoldEngineToggle) {
+    // Initialize from localStorage (default to true for performance)
+    const savedManifoldPref = localStorage.getItem(STORAGE_KEY_MANIFOLD_ENGINE);
+    const manifoldEnabled = savedManifoldPref === null ? true : savedManifoldPref !== 'false';
+    manifoldEngineToggle.checked = manifoldEnabled;
+
+    // Update hint text based on initial state
+    if (manifoldEngineHint) {
+      manifoldEngineHint.textContent = manifoldEnabled
+        ? '5-30× faster. Disable if models fail to render.'
+        : 'Using stable engine. Enable for faster rendering.';
+    }
+
+    manifoldEngineToggle.addEventListener('change', () => {
+      const enabled = manifoldEngineToggle.checked;
+      localStorage.setItem(STORAGE_KEY_MANIFOLD_ENGINE, enabled ? 'true' : 'false');
+
+      // Update hint text
+      if (manifoldEngineHint) {
+        manifoldEngineHint.textContent = enabled
+          ? '5-30× faster. Disable if models fail to render.'
+          : 'Using stable engine. Enable for faster rendering.';
+      }
+
+      // Announce change for screen readers
+      announceImmediate(
+        enabled
+          ? 'Manifold engine enabled. Faster rendering with good compatibility.'
+          : 'Stable engine enabled. Maximum compatibility, slower rendering.'
+      );
+
+      console.log(`[App] Render engine: ${enabled ? 'Manifold (fast)' : 'CGAL (stable)'}`);
+
+      // Note: Changes take effect on next render - no need to re-render current model
+      // Show a subtle status message
+      updateStatus(
+        enabled
+          ? 'Fast engine enabled - changes apply to next render'
+          : 'Stable engine enabled - changes apply to next render',
+        'success'
+      );
+    });
+  }
+
+  // ============================================================================
+  // Reference Overlay Controls
+  // (Storage keys defined at module level using standardized naming convention)
+  // ============================================================================
 
   /**
    * Update the overlay source dropdown with available project files
    */
   function updateOverlaySourceDropdown() {
     if (!overlaySourceSelect) return;
+
+    // Preserve current selection across rebuild
+    const previousVal = overlaySourceSelect.value;
 
     const state = stateManager.getState();
     const projectFiles = state.projectFiles;
@@ -3285,35 +3800,48 @@ async function initApp() {
 
     if (!projectFiles || projectFiles.size === 0) {
       overlaySourceSelect.disabled = true;
-      return;
+    } else {
+      overlaySourceSelect.disabled = false;
+
+      // Filter for image files (SVG, PNG, JPG)
+      const imageExtensions = ['svg', 'png', 'jpg', 'jpeg'];
+      const imageFiles = Array.from(projectFiles.keys())
+        .filter((path) => {
+          const ext = path.split('.').pop()?.toLowerCase();
+          return imageExtensions.includes(ext);
+        })
+        .sort();
+
+      if (imageFiles.length === 0) {
+        const option = document.createElement('option');
+        option.value = '';
+        option.textContent = '-- No image files --';
+        option.disabled = true;
+        overlaySourceSelect.appendChild(option);
+      } else {
+        imageFiles.forEach((path) => {
+          const option = document.createElement('option');
+          option.value = path;
+          option.textContent = path;
+          overlaySourceSelect.appendChild(option);
+        });
+      }
     }
 
-    overlaySourceSelect.disabled = false;
-
-    // Filter for image files (SVG, PNG, JPG)
-    const imageExtensions = ['svg', 'png', 'jpg', 'jpeg'];
-    const imageFiles = Array.from(projectFiles.keys())
-      .filter((path) => {
-        const ext = path.split('.').pop()?.toLowerCase();
-        return imageExtensions.includes(ext);
-      })
-      .sort();
-
-    if (imageFiles.length === 0) {
-      const option = document.createElement('option');
-      option.value = '';
-      option.textContent = '-- No image files --';
-      option.disabled = true;
-      overlaySourceSelect.appendChild(option);
-      return;
+    // Re-add shared screenshot entries from the image store
+    const imgs = SharedImageStore.getImages();
+    for (const [, rec] of imgs) {
+      const opt = document.createElement('option');
+      opt.value = `screenshot:${rec.name}`;
+      opt.textContent = `\uD83D\uDCF7 ${rec.name}`;
+      opt.dataset.shared = '1';
+      overlaySourceSelect.appendChild(opt);
     }
 
-    imageFiles.forEach((path) => {
-      const option = document.createElement('option');
-      option.value = path;
-      option.textContent = path;
-      overlaySourceSelect.appendChild(option);
-    });
+    // Restore selection if the option still exists
+    if (previousVal) {
+      overlaySourceSelect.value = previousVal;
+    }
   }
 
   // Track uploaded overlay files (not part of project files)
@@ -3473,6 +4001,35 @@ async function initApp() {
   if (overlaySourceSelect) {
     overlaySourceSelect.addEventListener('change', async () => {
       const fileName = overlaySourceSelect.value;
+      // Handle shared screenshot images (uploaded via Image Measurement tool)
+      if (fileName.startsWith('screenshot:')) {
+        const imageName = fileName.slice('screenshot:'.length);
+        const rec = SharedImageStore.getImageByName(imageName);
+        if (rec && previewManager) {
+          try {
+            await previewManager.setReferenceOverlaySource({
+              kind: 'raster',
+              name: imageName,
+              dataUrlOrText: rec.dataUrl,
+            });
+            if (!overlayToggle?.checked) {
+              overlayToggle.checked = true;
+              previewManager.setOverlayEnabled(true);
+            }
+            updateOverlayUIFromConfig();
+            // updateOverlayUIFromConfig sets dropdown to config.sourceFileName
+            // ("Test.png") but the option value is "screenshot:Test.png" --
+            // restore the prefixed value so the dropdown shows the filename.
+            overlaySourceSelect.value = fileName;
+            localStorage.setItem(STORAGE_KEY_OVERLAY_SOURCE, fileName);
+            console.log(`[App] Screenshot overlay loaded: ${imageName}`);
+          } catch (error) {
+            console.error('[App] Failed to load screenshot overlay:', error);
+          }
+        }
+        return;
+      }
+
       await loadOverlayFromProjectFile(fileName);
     });
   }
@@ -3721,9 +4278,7 @@ async function initApp() {
   );
   const rotationSpeedInput = document.getElementById('rotationSpeedInput');
 
-  // Storage keys for auto-rotate settings
-  const STORAGE_KEY_AUTO_ROTATE = 'openscad-customizer-auto-rotate';
-  const STORAGE_KEY_ROTATE_SPEED = 'openscad-customizer-rotate-speed';
+  // (Storage keys for auto-rotate defined at module level using standardized naming)
 
   // Check for prefers-reduced-motion preference
   const prefersReducedMotion = window.matchMedia(
@@ -3753,11 +4308,9 @@ async function initApp() {
     if (enabled && prefersReducedMotion.matches) {
       console.log('[App] Auto-rotate blocked: user prefers reduced motion');
       // Announce to screen reader
-      const srAnnouncer = document.getElementById('srAnnouncer');
-      if (srAnnouncer) {
-        srAnnouncer.textContent =
-          'Auto-rotation is disabled because you prefer reduced motion';
-      }
+      announceImmediate(
+        'Auto-rotation is disabled because you prefer reduced motion'
+      );
       return;
     }
 
@@ -3768,10 +4321,7 @@ async function initApp() {
     localStorage.setItem(STORAGE_KEY_AUTO_ROTATE, enabled ? 'true' : 'false');
 
     // Announce to screen reader
-    const srAnnouncer = document.getElementById('srAnnouncer');
-    if (srAnnouncer) {
-      srAnnouncer.textContent = `Auto-rotation ${enabled ? 'enabled' : 'disabled'}`;
-    }
+    announceImmediate(`Auto-rotation ${enabled ? 'enabled' : 'disabled'}`);
 
     console.log(`[App] Auto-rotate ${enabled ? 'enabled' : 'disabled'}`);
   }
@@ -3870,9 +4420,7 @@ async function initApp() {
   const modelColorReset = document.getElementById('modelColorReset');
 
   // Load saved model color from localStorage
-  const savedModelColor = localStorage.getItem(
-    'openscad-customizer-model-color'
-  );
+  const savedModelColor = localStorage.getItem(STORAGE_KEY_MODEL_COLOR);
   if (savedModelColor && modelColorPicker) {
     modelColorPicker.value = savedModelColor;
   }
@@ -3894,7 +4442,7 @@ async function initApp() {
           previewManager.setColorOverride(color);
         }
         // Save to localStorage
-        localStorage.setItem('openscad-customizer-model-color', color);
+        localStorage.setItem(STORAGE_KEY_MODEL_COLOR, color);
         console.log(`[App] Model color changed to ${color}`);
       }, 150);
     });
@@ -3911,8 +4459,68 @@ async function initApp() {
         const themeDefault = getThemeDefaultColor();
         modelColorPicker.value = themeDefault;
       }
-      localStorage.removeItem('openscad-customizer-model-color');
+      localStorage.removeItem(STORAGE_KEY_MODEL_COLOR);
       console.log('[App] Model color reset to theme default');
+    });
+  }
+
+  // --- Model Appearance Controls (Opacity, Brightness, Contrast) ---
+  const modelOpacityInput = document.getElementById('modelOpacityInput');
+  const modelOpacityValue = document.getElementById('modelOpacityValue');
+  const brightnessInput = document.getElementById('brightnessInput');
+  const brightnessValue = document.getElementById('brightnessValue');
+  const contrastInput = document.getElementById('contrastInput');
+  const contrastValue = document.getElementById('contrastValue');
+  const resetAppearanceBtn = document.getElementById('resetAppearanceBtn');
+
+  // Restore persisted values
+  const savedOpacity = localStorage.getItem(STORAGE_KEY_MODEL_OPACITY);
+  const savedBrightness = localStorage.getItem(STORAGE_KEY_BRIGHTNESS);
+  const savedContrast = localStorage.getItem(STORAGE_KEY_CONTRAST);
+  if (savedOpacity && modelOpacityInput) { modelOpacityInput.value = savedOpacity; if (modelOpacityValue) modelOpacityValue.textContent = `${savedOpacity}%`; }
+  if (savedBrightness && brightnessInput) { brightnessInput.value = savedBrightness; if (brightnessValue) brightnessValue.textContent = `${savedBrightness}%`; }
+  if (savedContrast && contrastInput) { contrastInput.value = savedContrast; if (contrastValue) contrastValue.textContent = `${savedContrast}%`; }
+
+  function applyAppearanceToPreview() {
+    if (!previewManager) return;
+    previewManager.setModelOpacity(parseInt(modelOpacityInput?.value || '100', 10));
+    previewManager.setBrightness(parseInt(brightnessInput?.value || '100', 10));
+    previewManager.setContrast(parseInt(contrastInput?.value || '100', 10));
+  }
+
+  if (modelOpacityInput) {
+    modelOpacityInput.addEventListener('input', () => {
+      const v = modelOpacityInput.value;
+      if (modelOpacityValue) modelOpacityValue.textContent = `${v}%`;
+      localStorage.setItem(STORAGE_KEY_MODEL_OPACITY, v);
+      if (previewManager) previewManager.setModelOpacity(parseInt(v, 10));
+    });
+  }
+  if (brightnessInput) {
+    brightnessInput.addEventListener('input', () => {
+      const v = brightnessInput.value;
+      if (brightnessValue) brightnessValue.textContent = `${v}%`;
+      localStorage.setItem(STORAGE_KEY_BRIGHTNESS, v);
+      if (previewManager) previewManager.setBrightness(parseInt(v, 10));
+    });
+  }
+  if (contrastInput) {
+    contrastInput.addEventListener('input', () => {
+      const v = contrastInput.value;
+      if (contrastValue) contrastValue.textContent = `${v}%`;
+      localStorage.setItem(STORAGE_KEY_CONTRAST, v);
+      if (previewManager) previewManager.setContrast(parseInt(v, 10));
+    });
+  }
+  if (resetAppearanceBtn) {
+    resetAppearanceBtn.addEventListener('click', () => {
+      if (modelOpacityInput) { modelOpacityInput.value = '100'; if (modelOpacityValue) modelOpacityValue.textContent = '100%'; }
+      if (brightnessInput) { brightnessInput.value = '100'; if (brightnessValue) brightnessValue.textContent = '100%'; }
+      if (contrastInput) { contrastInput.value = '100'; if (contrastValue) contrastValue.textContent = '100%'; }
+      localStorage.removeItem(STORAGE_KEY_MODEL_OPACITY);
+      localStorage.removeItem(STORAGE_KEY_BRIGHTNESS);
+      localStorage.removeItem(STORAGE_KEY_CONTRAST);
+      if (previewManager) previewManager.resetAppearance();
     });
   }
 
@@ -4306,7 +4914,13 @@ async function initApp() {
 
   // Check for saved draft - but only if first-visit modal is not blocking
   // If first-visit is blocking, defer draft restoration until user accepts
-  const draft = await stateManager.loadFromLocalStorage();
+  // IMPORTANT: Skip draft restoration if a manifest or project URL is specified --
+  // the URL intent takes priority over any cached draft (fixes race condition)
+  const hasManifestParam = urlParams.get('manifest');
+  const hasProjectParam = urlParams.get('project') || urlParams.get('scad');
+  const draft = (!hasManifestParam && !hasProjectParam)
+    ? await stateManager.loadFromLocalStorage()
+    : null;
 
   if (draft) {
     // If first-visit modal is blocking, defer draft restoration
@@ -4565,7 +5179,7 @@ async function initApp() {
     const importPattern = /import\s*\(\s*(?:file\s*=\s*)?["']([^"']+)["']/gi;
 
     // Match common file variable patterns like screenshot_file = "filename"
-    // This handles Volkswitch-style patterns: screenshot_file = "default.svg"
+    // This handles common patterns: screenshot_file = "default.svg"
     const fileVarPatterns = [
       /(\w*_?file\w*)\s*=\s*["']([^"']+\.\w+)["']/gi, // xxx_file = "name.ext"
       /(\w*_?filename\w*)\s*=\s*["']([^"']+\.\w+)["']/gi, // xxx_filename = "name.ext"
@@ -4631,6 +5245,64 @@ async function initApp() {
   }
 
   /**
+   * Auto-save companion files to the current saved project (if tracked).
+   * Called after add, edit, or remove operations on companion files.
+   */
+  async function autoSaveCompanionFiles() {
+    if (!currentSavedProjectId) return;
+    const state = stateManager.getState();
+    const { projectFiles, mainFilePath, uploadedFile } = state;
+    if (!uploadedFile || !projectFiles) return;
+
+    try {
+      const projectFilesObj = Object.fromEntries(projectFiles);
+      // Update the kind if companion files were added to a single-file project
+      const kind = projectFiles.size > 1 ? 'zip' : 'scad';
+      await updateProject({
+        id: currentSavedProjectId,
+        projectFiles: projectFilesObj,
+        mainFilePath: mainFilePath || uploadedFile.name,
+        kind,
+      });
+      updateStatus('Project updated', 'success');
+      console.log(
+        '[CompanionFiles] Auto-saved companion files to project:',
+        currentSavedProjectId
+      );
+    } catch (error) {
+      console.error('[CompanionFiles] Auto-save failed:', error);
+      // Don't show alert for auto-save failures -- just log
+    }
+  }
+
+  /**
+   * Update the companion files Save/Update button text and visibility.
+   */
+  function updateCompanionSaveButton() {
+    const saveBtn = document.getElementById('companionSaveBtn');
+    if (!saveBtn) return;
+    const state = stateManager.getState();
+    if (!state.uploadedFile) {
+      saveBtn.classList.add('hidden');
+      return;
+    }
+    saveBtn.classList.remove('hidden');
+    if (currentSavedProjectId) {
+      saveBtn.textContent = 'Update Saved Project';
+      saveBtn.setAttribute(
+        'aria-label',
+        'Update companion files in the saved project'
+      );
+    } else {
+      saveBtn.textContent = 'Save as Project';
+      saveBtn.setAttribute(
+        'aria-label',
+        'Save this file and companion files as a project'
+      );
+    }
+  }
+
+  /**
    * Render the project files list in the UI
    * @param {Map<string, string>} projectFiles - Map of file paths to content
    * @param {string} mainFilePath - Path to the main .scad file
@@ -4649,13 +5321,68 @@ async function initApp() {
 
     if (!container || !controls) return;
 
-    // If no project files, hide the controls
-    if (!projectFiles || projectFiles.size === 0) {
+    const emptyState = document.getElementById('companionEmptyState');
+    const helpText = document.getElementById('projectFilesHelp');
+    const saveBtn = document.getElementById('companionSaveBtn');
+
+    // Always show the panel when a file is loaded (empty-state provides guidance)
+    const state = stateManager.getState();
+    if (!state.uploadedFile) {
       controls.classList.add('hidden');
       return;
     }
+    controls.classList.remove('hidden');
 
-    // Show controls
+    // Count companion files (exclude the main file)
+    const companionFiles = projectFiles
+      ? new Map(
+          Array.from(projectFiles.entries()).filter(
+            ([path]) => path !== mainFilePath
+          )
+        )
+      : new Map();
+    const companionCount = companionFiles.size;
+
+    // Toggle empty state vs file list
+    if (emptyState) {
+      emptyState.style.display = companionCount === 0 ? '' : 'none';
+    }
+    if (helpText) {
+      helpText.style.display = companionCount > 0 ? '' : 'none';
+    }
+
+    // If no companion files, show empty state and badge=0
+    if (companionCount === 0) {
+      if (badge) badge.textContent = '0';
+      container.innerHTML = '';
+      // Update save button visibility
+      if (saveBtn) {
+        updateCompanionSaveButton();
+      }
+      // Still check for missing required files
+      if (warning && warningText) {
+        const missingFiles = [];
+        if (requiredFiles && requiredFiles.files) {
+          for (const reqFile of requiredFiles.files) {
+            if (
+              reqFile.required &&
+              (!projectFiles || !projectFiles.has(reqFile.path))
+            ) {
+              missingFiles.push(reqFile.path);
+            }
+          }
+        }
+        if (missingFiles.length > 0) {
+          warning.classList.remove('hidden');
+          warningText.textContent = `Missing files: ${missingFiles.join(', ')}`;
+        } else {
+          warning.classList.add('hidden');
+        }
+      }
+      return;
+    }
+
+    // Show controls (has companion files)
     controls.classList.remove('hidden');
 
     // Update badge count
@@ -4736,12 +5463,12 @@ async function initApp() {
     // Update overlay source dropdown with available image files
     updateOverlaySourceDropdown();
 
-    // Auto-select overlay source based on Volkswitch screenshot_file pattern
+    // Auto-select overlay source based on screenshot_file variable detection
     autoSelectOverlaySource(requiredFiles);
   }
 
   /**
-   * Auto-select overlay source based on Volkswitch screenshot_file pattern
+   * Auto-select overlay source based on screenshot_file variable detection
    * @param {Object} requiredFiles - Detection result from detectRequiredCompanionFiles
    */
   function autoSelectOverlaySource(requiredFiles) {
@@ -4763,7 +5490,7 @@ async function initApp() {
       return;
     }
 
-    // Look for Volkswitch screenshot_file variable
+    // Look for screenshot_file variable in SCAD source
     let screenshotFile = null;
     if (requiredFiles && requiredFiles.files) {
       const screenshotVar = requiredFiles.files.find(
@@ -4774,7 +5501,7 @@ async function initApp() {
       }
     }
 
-    // Fallback: look for default.svg (common Volkswitch convention)
+    // Fallback: look for default.svg (common screenshot overlay convention)
     if (!screenshotFile && projectFiles.has('default.svg')) {
       screenshotFile = 'default.svg';
     }
@@ -4836,8 +5563,22 @@ async function initApp() {
     }
 
     try {
-      const content = await file.text();
       const fileName = file.name;
+      const ext = fileName.split('.').pop()?.toLowerCase();
+      const isImage = ['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext);
+
+      // Read image files as data URLs (binary-safe); text files as text
+      let content;
+      if (isImage) {
+        content = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = () => reject(new Error('Failed to read image file'));
+          reader.readAsDataURL(file);
+        });
+      } else {
+        content = await file.text();
+      }
 
       // Initialize projectFiles if needed (converting single-file to multi-file)
       if (!projectFiles) {
@@ -4865,6 +5606,11 @@ async function initApp() {
         mainFilePath,
       });
 
+      // Mirror image files to SharedImageStore so they appear in Image Measurement
+      if (isImage) {
+        await SharedImageStore.addImageFromDataUrl(fileName, content);
+      }
+
       // Update UI
       const requiredFiles = detectRequiredCompanionFiles(uploadedFile.content);
       renderProjectFilesList(projectFiles, mainFilePath, requiredFiles);
@@ -4879,6 +5625,9 @@ async function initApp() {
 
       updateStatus(`Added file: ${fileName}`, 'success');
       console.log(`[ProjectFiles] Added companion file: ${fileName}`);
+
+      // Auto-save to tracked saved project
+      await autoSaveCompanionFiles();
     } catch (error) {
       console.error('[ProjectFiles] Error adding file:', error);
       updateStatus(`Failed to add file: ${error.message}`, 'error');
@@ -4928,6 +5677,9 @@ async function initApp() {
 
     updateStatus(`Removed file: ${path}`, 'success');
     console.log(`[ProjectFiles] Removed file: ${path}`);
+
+    // Auto-save to tracked saved project
+    await autoSaveCompanionFiles();
   }
 
   /**
@@ -5011,6 +5763,9 @@ async function initApp() {
 
     updateStatus(`Updated file: ${path}`, 'success');
     console.log(`[ProjectFiles] Updated file: ${path}`);
+
+    // Auto-save to tracked saved project
+    await autoSaveCompanionFiles();
   }
 
   /**
@@ -5028,6 +5783,20 @@ async function initApp() {
 
     const requiredFiles = detectRequiredCompanionFiles(uploadedFile.content);
     renderProjectFilesList(projectFiles, mainFilePath, requiredFiles);
+
+    // Auto-expand companion files panel when editable .txt files are present
+    // Makes the companion file editor more discoverable for clinician workflows
+    if (projectFiles && projectFiles.size > 1) {
+      const hasEditableTxtFiles = Array.from(projectFiles.keys()).some(
+        (p) => p.toLowerCase().endsWith('.txt') && p !== mainFilePath
+      );
+      if (hasEditableTxtFiles) {
+        const details = document.querySelector('.project-files-details');
+        if (details && !details.open) {
+          details.open = true;
+        }
+      }
+    }
   }
 
   // Handle file upload (supports both .scad and .zip files)
@@ -5050,7 +5819,7 @@ async function initApp() {
     let projectFiles = extractedFiles; // Map of additional files for multi-file projects
     let mainFilePath = mainFilePathArg; // Path to main file in multi-file project (passed from ZIP extraction)
     // For ZIP files, preserve the original ZIP filename for display/save purposes
-    let originalFileName = originalFileNameArg || fileName;
+    const originalFileName = originalFileNameArg || fileName;
 
     if (file) {
       const fileNameLower = fileName.toLowerCase();
@@ -5121,6 +5890,36 @@ async function initApp() {
           console.log(
             `[ZIP] Loaded multi-file project: ${mainFile} (${stats.totalFiles} files)`
           );
+
+          // Dependency preflight check: verify all include/use/import files are present
+          // Check if all include/use/import files are present in the ZIP
+          const uploadedFilenames = Array.from(files.keys());
+          const preflight = runPreflightCheck(fileContent, uploadedFilenames, {
+            availableLibraries: new Set(
+              Object.keys(LIBRARY_DEFINITIONS).map((k) => k.toLowerCase())
+            ),
+          });
+
+          if (!preflight.success) {
+            console.warn(
+              '[ZIP] Missing dependencies detected:',
+              preflight.missing
+            );
+            // Show missing dependencies dialog
+            const shouldContinue = await showMissingDependenciesDialog(
+              preflight.missing,
+              file.name
+            );
+            if (!shouldContinue) {
+              updateStatus('Upload cancelled - missing dependencies');
+              return;
+            }
+            // User chose to continue anyway - log warning
+            console.warn(
+              '[ZIP] Continuing despite missing files:',
+              formatMissingDependencies(preflight.missing)
+            );
+          }
 
           // Continue with extracted content, passing mainFilePath and original ZIP name
           // The original ZIP filename is used as the default project name when saving
@@ -5202,6 +6001,14 @@ async function initApp() {
         );
       }
 
+      // Build paramTypes map from schema for boolean vs string disambiguation
+      // This is critical for "yes"/"no" string dropdown parameters (e.g. expose_home_button)
+      // which must NOT be converted to OpenSCAD booleans true/false.
+      const paramTypes = {};
+      for (const [pName, pDef] of Object.entries(extracted.parameters || {})) {
+        paramTypes[pName] = pDef.type || 'string';
+      }
+
       // Store in state (including project files for multi-file support)
       // For ZIP files: fileName = main .scad file, originalFileName = ZIP name
       // For single files: both are the same
@@ -5210,6 +6017,7 @@ async function initApp() {
         projectFiles: projectFiles || null, // Map of additional files (null for single-file projects)
         mainFilePath: mainFilePath || fileName, // Track main file path (the .scad file inside ZIP)
         schema: extracted,
+        paramTypes,
         parameters: {},
         defaults: {},
         // Adaptive quality configuration
@@ -5220,6 +6028,11 @@ async function initApp() {
 
       // Clear undo/redo history on new file upload
       stateManager.clearHistory();
+
+      // Reset saved project tracking for new uploads (not reloads from saved projects)
+      if (source !== 'saved') {
+        currentSavedProjectId = null;
+      }
 
       // Show main interface
       welcomeScreen.classList.add('hidden');
@@ -5341,7 +6154,7 @@ async function initApp() {
           stateManager.recordParameterState();
           stateManager.setState({ parameters: values });
           // Clear preset selection when parameters are manually changed
-          clearPresetSelection();
+          clearPresetSelection(values);
           // Trigger auto-preview on parameter change
           if (autoPreviewController) {
             autoPreviewController.onParameterChange(values);
@@ -5356,6 +6169,58 @@ async function initApp() {
         parameters: currentValues,
         defaults: { ...currentValues },
       });
+
+      // Settings level is always 'advanced' — all groups visible, no toggle needed
+      localStorage.setItem('openscad-forge-settings-level', 'advanced');
+
+      // Auto-import JSON presets from ZIP companion files (Item 14: desktop parity)
+      // After state is set with schema + defaults, scan projectFiles for .json preset files
+      if (projectFiles && projectFiles.size > 0) {
+        // Diagnostic: log all files available to WASM FS (companion file mount)
+        console.debug('[WASM FS] Companion files mounted:', Array.from(projectFiles.entries()).map(
+          ([path, content]) => ({ path, sizeBytes: content.length })
+        ));
+
+        let autoImportedCount = 0;
+        const paramSchema = {};
+        // Build param schema for type coercion from extracted parameters
+        for (const [pName, pDef] of Object.entries(extracted.parameters || {})) {
+          paramSchema[pName] = { type: pDef.type || 'string' };
+        }
+
+        for (const [filePath, fileContentStr] of projectFiles.entries()) {
+          if (filePath.toLowerCase().endsWith('.json') && !filePath.toLowerCase().endsWith('.scad')) {
+            try {
+              console.log(`[ZIP] Auto-importing presets from: ${filePath}`);
+              console.debug(`[ZIP] JSON content preview (first 200 chars): ${fileContentStr.substring(0, 200)}`);
+              const importResult = presetManager.importPreset(
+                fileContentStr,
+                originalFileName,
+                paramSchema
+              );
+              if (importResult.success && importResult.imported > 0) {
+                autoImportedCount += importResult.imported;
+                console.log(`[ZIP] Auto-imported ${importResult.imported} preset(s) from ${filePath}`);
+                console.debug(`[ZIP] Import result details:`, importResult);
+              } else if (!importResult.success) {
+                console.warn(`[ZIP] Failed to auto-import presets from ${filePath}:`, importResult.error);
+              }
+            } catch (jsonError) {
+              console.warn(`[ZIP] Error auto-importing presets from ${filePath}:`, jsonError.message);
+            }
+          }
+        }
+
+        if (autoImportedCount > 0) {
+          // Count companion files (non-.scad, non-.json)
+          const companionCount = Array.from(projectFiles.keys()).filter(
+            (p) => !p.toLowerCase().endsWith('.scad') && !p.toLowerCase().endsWith('.json')
+          ).length;
+          const companionText = companionCount > 0 ? ` + ${companionCount} companion file${companionCount > 1 ? 's' : ''}` : '';
+          updateStatus(`Loaded: ${fileName}${companionText} + ${autoImportedCount} preset${autoImportedCount > 1 ? 's' : ''}`);
+          updatePresetDropdown();
+        }
+      }
 
       // Load URL parameters if present (after defaults are set)
       const urlParams = stateManager.loadFromURL();
@@ -5376,7 +6241,7 @@ async function initApp() {
             stateManager.recordParameterState();
             stateManager.setState({ parameters: values });
             // Clear preset selection when parameters are manually changed
-            clearPresetSelection();
+            clearPresetSelection(values);
             // Trigger auto-preview on parameter change
             if (autoPreviewController) {
               autoPreviewController.onParameterChange(values);
@@ -5407,6 +6272,17 @@ async function initApp() {
       } else {
         updateStatus(`Ready - ${paramCount} parameters loaded`);
       }
+
+      // Move focus to the first parameter input after file load (WCAG 2.4.3 Focus Order)
+      // This tells screen reader users that parameters are now available to customize
+      requestAnimationFrame(() => {
+        const firstInput = parametersContainer?.querySelector(
+          'input:not([type="hidden"]), select, textarea'
+        );
+        if (firstInput) {
+          firstInput.focus();
+        }
+      });
 
       // Initialize 3D preview (lazy loads Three.js)
       if (!previewManager) {
@@ -5444,6 +6320,9 @@ async function initApp() {
             }
           }
         }
+
+        // Apply persisted model appearance controls
+        applyAppearanceToPreview();
 
         // Initialize auto-rotate settings from localStorage
         // Only enable if user doesn't prefer reduced motion
@@ -5487,9 +6366,7 @@ async function initApp() {
         }
 
         // Apply saved model color if exists
-        const savedModelColor = localStorage.getItem(
-          'openscad-customizer-model-color'
-        );
+        const savedModelColor = localStorage.getItem(STORAGE_KEY_MODEL_COLOR);
         if (savedModelColor) {
           previewManager.setColorOverride(savedModelColor);
         }
@@ -5502,9 +6379,7 @@ async function initApp() {
             // Update color picker to show theme default when no custom color is set
             const modelColorPicker =
               document.getElementById('modelColorPicker');
-            const hasSavedColor = localStorage.getItem(
-              'openscad-customizer-model-color'
-            );
+            const hasSavedColor = localStorage.getItem(STORAGE_KEY_MODEL_COLOR);
             if (modelColorPicker && !hasSavedColor) {
               const themeKey = highContrast ? `${activeTheme}-hc` : activeTheme;
               const PREVIEW_COLORS = {
@@ -5539,6 +6414,7 @@ async function initApp() {
       }
       if (autoPreviewController) {
         autoPreviewController.setColorParamNames(colorParamNames);
+        autoPreviewController.setParamTypes(paramTypes);
       }
 
       // Set the SCAD content and project files for auto-preview
@@ -5553,6 +6429,22 @@ async function initApp() {
 
       // Update Project Files Manager UI (for multi-file projects)
       updateProjectFilesUI();
+
+      // Restore SharedImageStore from saved screenshots in projectFiles.
+      // This rehydrates the in-memory image store so screenshots appear in
+      // both Image Measurement and Reference Overlay dropdowns after reload.
+      if (projectFiles) {
+        const imageExts = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
+        for (const [path, content] of projectFiles) {
+          const ext = path.split('.').pop()?.toLowerCase();
+          if (imageExts.includes(ext) && typeof content === 'string' && content.startsWith('data:')) {
+            const name = path.includes('/') ? path.split('/').pop() : path;
+            SharedImageStore.addImageFromDataUrl(name, content).catch(() => {
+              console.warn(`[App] Failed to restore image: ${path}`);
+            });
+          }
+        }
+      }
 
       // Trigger an initial preview immediately on first load (and also for URL-param loads).
       if (autoPreviewController) {
@@ -5622,6 +6514,35 @@ async function initApp() {
     });
   }
 
+  // Missing files warning button: direct action to add missing dependency files
+  // Provides a direct action to add missing dependency files
+  const addMissingFilesBtn = document.getElementById('addMissingFilesBtn');
+  if (addMissingFilesBtn) {
+    addMissingFilesBtn.addEventListener('click', () => {
+      // Trigger the companion file input
+      if (addCompanionFileInput) {
+        addCompanionFileInput.click();
+      }
+    });
+  }
+
+  // Companion files Save/Update Project button
+  const companionSaveBtn = document.getElementById('companionSaveBtn');
+  if (companionSaveBtn) {
+    companionSaveBtn.addEventListener('click', async () => {
+      if (currentSavedProjectId) {
+        // Update existing saved project
+        await autoSaveCompanionFiles();
+      } else {
+        // Route to save prompt for new projects
+        const state = stateManager.getState();
+        if (state.uploadedFile) {
+          await showSaveProjectPrompt(state);
+        }
+      }
+    });
+  }
+
   // Text File Editor Modal handlers
   const textFileEditorModal = document.getElementById('textFileEditorModal');
   const textFileEditorApply = document.getElementById('textFileEditorApply');
@@ -5633,6 +6554,23 @@ async function initApp() {
 
   if (textFileEditorApply) {
     textFileEditorApply.addEventListener('click', applyTextFileEditorChanges);
+  }
+
+  // Ctrl+S / Cmd+S keyboard shortcut to save and apply changes
+  const textFileEditorContent = document.getElementById('textFileEditorContent');
+  if (textFileEditorContent && textFileEditorModal) {
+    textFileEditorContent.addEventListener('keydown', (e) => {
+      // Ctrl+S or Cmd+S to save and apply
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        applyTextFileEditorChanges();
+      }
+      // Escape to cancel
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closeModal(textFileEditorModal);
+      }
+    });
   }
 
   if (textFileEditorCancel && textFileEditorModal) {
@@ -5772,6 +6710,69 @@ async function initApp() {
     }
   });
 
+  // ========== START NEW PROJECT ==========
+  // Stakeholder feedback: Users want a way to start a new project from scratch
+  const startNewProjectBtn = document.getElementById('startNewProjectBtn');
+  if (startNewProjectBtn) {
+    startNewProjectBtn.addEventListener('click', async () => {
+      // Create a starter template
+      const starterTemplate = `// New OpenSCAD Project
+// Created with OpenSCAD Assistive Forge
+// https://github.com/BrennenJohnston/openscad-assistive-forge
+
+/* [Basic Settings] */
+// Width of the object
+width = 50; // [10:200]
+
+// Height of the object
+height = 30; // [10:200]
+
+// Depth of the object
+depth = 20; // [10:200]
+
+/* [Advanced] */
+// Enable rounded corners
+rounded = true;
+
+// Corner radius (when rounded is enabled)
+corner_radius = 5; // [1:20]
+
+// Main shape
+if (rounded) {
+    minkowski() {
+        cube([width - corner_radius*2, depth - corner_radius*2, height - corner_radius*2]);
+        sphere(r = corner_radius, $fn = 32);
+    }
+} else {
+    cube([width, depth, height]);
+}
+`;
+
+      try {
+        const fileName = 'new_project.scad';
+        // Process it like a regular file upload, but pass content directly.
+        // `handleFile()` uses FileReader for `File`/Blob inputs; passing a plain object
+        // without content will throw. This path intentionally avoids FileReader.
+        await handleFile(
+          { name: fileName },
+          starterTemplate,
+          null,
+          null,
+          'user',
+          fileName
+        );
+
+        // Announce to screen readers
+        announceImmediate('New project created. You can customize the parameters or edit the code.');
+
+        console.log('[App] New project created from template');
+      } catch (error) {
+        console.error('[App] Failed to create new project:', error);
+        updateStatus('Failed to create new project', 'error');
+      }
+    });
+  }
+
   // ========== SAVED PROJECTS ==========
 
   /**
@@ -5819,8 +6820,7 @@ async function initApp() {
     });
   }
 
-  // Track current folder for navigation
-  let currentFolderId = null;
+  // (currentFolderId is declared earlier in initApp, before first use.)
 
   /**
    * Render saved projects list on welcome screen (v2 with folder tree)
@@ -6356,16 +7356,28 @@ async function initApp() {
     modal.setAttribute('aria-labelledby', 'fileManagerTitle');
     modal.setAttribute('aria-modal', 'true');
 
-    // Build file list
+    // Build nested folder tree from flat file entries
     const fileEntries = Object.entries(projectFiles);
-    const filesHtml = fileEntries
-      .map(([path, content]) => {
-        const isMain = path === project.mainFilePath;
-        const size = new Blob([content]).size;
-        const iconClass = isMain ? 'main-file' : '';
 
-        return `
-        <div class="file-manager-item" data-path="${escapeHtml(path)}">
+    // Group files by folder
+    const tree = { files: [], folders: {} };
+    for (const [path, content] of fileEntries) {
+      const parts = path.split('/');
+      if (parts.length > 1) {
+        const folderName = parts.slice(0, -1).join('/');
+        if (!tree.folders[folderName]) tree.folders[folderName] = [];
+        tree.folders[folderName].push({ path, name: parts[parts.length - 1], content });
+      } else {
+        tree.files.push({ path, name: path, content });
+      }
+    }
+
+    function renderFileItem(file) {
+      const isMain = file.path === project.mainFilePath;
+      const size = new Blob([file.content]).size;
+      const iconClass = isMain ? 'main-file' : '';
+      return `
+        <div class="file-manager-item" data-path="${escapeHtml(file.path)}">
           <svg class="file-manager-item-icon ${iconClass}" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
             ${
               isMain
@@ -6373,31 +7385,77 @@ async function initApp() {
                 : '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline>'
             }
           </svg>
-          <span class="file-manager-item-path">${escapeHtml(path)}</span>
+          <span class="file-manager-item-path">${escapeHtml(file.name)}</span>
           <span class="file-manager-item-size">${formatFileSize(size)}</span>
           <div class="file-manager-item-actions">
             ${
               isMain
-                ? '<span class="badge">Main</span>'
+                ? '<span class="file-manager-main-badge">Main</span>'
                 : `
-              <button class="btn btn-sm btn-icon btn-set-main-file" data-path="${escapeHtml(path)}" aria-label="Set as main file" title="Set as main">
+              <button class="btn btn-sm btn-icon btn-set-main-file" data-path="${escapeHtml(file.path)}" aria-label="Set as main file" title="Set as main">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                   <polyline points="20 6 9 17 4 12"></polyline>
                 </svg>
               </button>
             `
             }
-            <button class="btn btn-sm btn-icon btn-preview-file" data-path="${escapeHtml(path)}" aria-label="Preview file" title="Preview">
+            <button class="btn btn-sm btn-icon btn-preview-file" data-path="${escapeHtml(file.path)}" aria-label="Preview file" title="Preview">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                 <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
                 <circle cx="12" cy="12" r="3"></circle>
               </svg>
             </button>
+            <button class="btn btn-sm btn-icon btn-rename-project-file" data-path="${escapeHtml(file.path)}" aria-label="Rename file" title="Rename">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+              </svg>
+            </button>
+            <button class="btn btn-sm btn-icon btn-delete-project-file${isMain ? ' btn-disabled' : ''}" data-path="${escapeHtml(file.path)}" aria-label="Delete file" title="${isMain ? 'Cannot delete main file' : 'Delete'}"${isMain ? ' disabled' : ''}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+              </svg>
+            </button>
           </div>
-        </div>
-      `;
-      })
-      .join('');
+        </div>`;
+    }
+
+    // Render root-level files first, then folders
+    let filesHtml = tree.files.map(renderFileItem).join('');
+
+    // Render each folder as a collapsible group
+    for (const [folderName, folderFiles] of Object.entries(tree.folders).sort()) {
+      const visibleFiles = folderFiles.filter(f => f.name !== '.folder');
+      const folderFilesHtml = visibleFiles.map(renderFileItem).join('');
+      filesHtml += `
+        <details class="file-manager-folder" open>
+          <summary class="file-manager-folder-header">
+            <svg class="file-manager-folder-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+            </svg>
+            <span class="file-manager-folder-name">${escapeHtml(folderName)}</span>
+            <span class="file-manager-folder-count">${visibleFiles.length} file${visibleFiles.length !== 1 ? 's' : ''}</span>
+            <div class="file-manager-folder-actions">
+              <button class="btn btn-sm btn-icon btn-rename-project-folder" data-folder="${escapeHtml(folderName)}" aria-label="Rename folder" title="Rename">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                </svg>
+              </button>
+              <button class="btn btn-sm btn-icon btn-delete-project-folder" data-folder="${escapeHtml(folderName)}" aria-label="Delete folder" title="Delete folder">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <polyline points="3 6 5 6 21 6"></polyline>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                </svg>
+              </button>
+            </div>
+          </summary>
+          <div class="file-manager-folder-contents">
+            ${folderFilesHtml || '<p class="file-manager-empty-folder">Empty folder</p>'}
+          </div>
+        </details>`;
+    }
 
     modal.innerHTML = `
       <div class="preset-modal-content" style="max-width: 700px;">
@@ -6413,6 +7471,14 @@ async function initApp() {
                 <line x1="5" y1="12" x2="19" y2="12"></line>
               </svg>
               Add File
+            </button>
+            <button type="button" class="btn btn-sm btn-outline" id="addFolderToProjectBtn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                <line x1="12" y1="11" x2="12" y2="17"></line>
+                <line x1="9" y1="14" x2="15" y2="14"></line>
+              </svg>
+              New Folder
             </button>
             <span class="file-manager-count">${fileEntries.length} file${fileEntries.length !== 1 ? 's' : ''}</span>
           </div>
@@ -6552,6 +7618,218 @@ async function initApp() {
       });
     }
 
+    // New folder button
+    const addFolderBtn = modal.querySelector('#addFolderToProjectBtn');
+    if (addFolderBtn) {
+      addFolderBtn.addEventListener('click', async () => {
+        const folderName = prompt('Enter folder name:');
+        if (!folderName || !folderName.trim()) return;
+        const safeName = folderName.trim().replace(/[\\/:*?"<>|]/g, '_');
+
+        // Check if folder already exists
+        const folderPrefix = `${safeName}/`;
+        const exists = Object.keys(projectFiles).some(p => p.startsWith(folderPrefix));
+        if (exists) {
+          alert(`Folder "${safeName}" already exists.`);
+          return;
+        }
+
+        // Create folder with a hidden sentinel entry
+        const updatedProjectFiles = { ...projectFiles };
+        updatedProjectFiles[`${safeName}/.folder`] = '';
+
+        const result = await updateProject({
+          id: projectId,
+          projectFiles: JSON.stringify(updatedProjectFiles),
+        });
+
+        if (result.success) {
+          document.body.removeChild(modal);
+          showProjectFileManager(projectId);
+          stateManager.announceChange(`Created folder "${safeName}"`);
+        } else {
+          alert(`Failed to create folder: ${result.error}`);
+        }
+      });
+    }
+
+    // Rename folder buttons
+    modal.querySelectorAll('.btn-rename-project-folder').forEach((btn) => {
+      btn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const oldName = btn.dataset.folder;
+        const newName = prompt(`Rename folder "${oldName}" to:`, oldName);
+        if (!newName || !newName.trim() || newName.trim() === oldName) return;
+        const safeName = newName.trim().replace(/[\\/:*?"<>|]/g, '_');
+
+        // Check if target name already exists
+        const targetPrefix = `${safeName}/`;
+        const conflict = Object.keys(projectFiles).some(
+          p => p.startsWith(targetPrefix) && !p.startsWith(`${oldName}/`)
+        );
+        if (conflict) {
+          alert(`Folder "${safeName}" already exists.`);
+          return;
+        }
+
+        // Rename all file paths under the old folder
+        const updatedProjectFiles = {};
+        const oldPrefix = `${oldName}/`;
+        for (const [path, content] of Object.entries(projectFiles)) {
+          if (path.startsWith(oldPrefix)) {
+            updatedProjectFiles[`${safeName}/${path.slice(oldPrefix.length)}`] = content;
+          } else {
+            updatedProjectFiles[path] = content;
+          }
+        }
+
+        // Update mainFilePath if it was in the renamed folder
+        let newMainFilePath = project.mainFilePath;
+        if (newMainFilePath && newMainFilePath.startsWith(oldPrefix)) {
+          newMainFilePath = `${safeName}/${newMainFilePath.slice(oldPrefix.length)}`;
+        }
+
+        const result = await updateProject({
+          id: projectId,
+          projectFiles: JSON.stringify(updatedProjectFiles),
+          mainFilePath: newMainFilePath,
+        });
+
+        if (result.success) {
+          document.body.removeChild(modal);
+          showProjectFileManager(projectId);
+          stateManager.announceChange(`Folder renamed to "${safeName}"`);
+        } else {
+          alert(`Failed to rename folder: ${result.error}`);
+        }
+      });
+    });
+
+    // Rename file buttons
+    modal.querySelectorAll('.btn-rename-project-file').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const oldPath = btn.dataset.path;
+        const parts = oldPath.split('/');
+        const oldName = parts[parts.length - 1];
+        const folder = parts.length > 1 ? parts.slice(0, -1).join('/') : '';
+
+        const newName = prompt(`Rename "${oldName}" to:`, oldName);
+        if (!newName || !newName.trim() || newName.trim() === oldName) return;
+        const safeName = newName.trim().replace(/[\\/:*?"<>|]/g, '_');
+        const newPath = folder ? `${folder}/${safeName}` : safeName;
+
+        if (newPath === oldPath) return;
+
+        // Check for conflicts
+        if (projectFiles[newPath] !== undefined) {
+          alert(`A file named "${safeName}" already exists${folder ? ` in ${folder}` : ''}.`);
+          return;
+        }
+
+        const updatedProjectFiles = {};
+        for (const [path, content] of Object.entries(projectFiles)) {
+          if (path === oldPath) {
+            updatedProjectFiles[newPath] = content;
+          } else {
+            updatedProjectFiles[path] = content;
+          }
+        }
+
+        // Update mainFilePath if the renamed file was the main file
+        let newMainFilePath = project.mainFilePath;
+        if (newMainFilePath === oldPath) {
+          newMainFilePath = newPath;
+        }
+
+        const result = await updateProject({
+          id: projectId,
+          projectFiles: JSON.stringify(updatedProjectFiles),
+          mainFilePath: newMainFilePath,
+        });
+
+        if (result.success) {
+          document.body.removeChild(modal);
+          showProjectFileManager(projectId);
+          stateManager.announceChange(`File renamed to "${safeName}"`);
+        } else {
+          alert(`Failed to rename file: ${result.error}`);
+        }
+      });
+    });
+
+    // Delete file buttons
+    modal.querySelectorAll('.btn-delete-project-file').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const filePath = btn.dataset.path;
+        if (filePath === project.mainFilePath) return;
+
+        const fileName = filePath.split('/').pop();
+        if (!confirm(`Delete "${fileName}"? This cannot be undone.`)) return;
+
+        const updatedProjectFiles = { ...projectFiles };
+        delete updatedProjectFiles[filePath];
+
+        const result = await updateProject({
+          id: projectId,
+          projectFiles: JSON.stringify(updatedProjectFiles),
+        });
+
+        if (result.success) {
+          document.body.removeChild(modal);
+          showProjectFileManager(projectId);
+          stateManager.announceChange(`Deleted file "${fileName}"`);
+        } else {
+          alert(`Failed to delete file: ${result.error}`);
+        }
+      });
+    });
+
+    // Delete folder buttons
+    modal.querySelectorAll('.btn-delete-project-folder').forEach((btn) => {
+      btn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const folderName = btn.dataset.folder;
+        const folderPrefix = `${folderName}/`;
+
+        // Check if the main file lives in this folder
+        if (project.mainFilePath && project.mainFilePath.startsWith(folderPrefix)) {
+          alert(`Cannot delete folder "${folderName}" because it contains the main file. Move or change the main file first.`);
+          return;
+        }
+
+        const fileCount = Object.keys(projectFiles).filter(
+          p => p.startsWith(folderPrefix) && !p.endsWith('/.folder')
+        ).length;
+        const message = fileCount > 0
+          ? `Delete folder "${folderName}" and its ${fileCount} file${fileCount !== 1 ? 's' : ''}? This cannot be undone.`
+          : `Delete empty folder "${folderName}"?`;
+
+        if (!confirm(message)) return;
+
+        const updatedProjectFiles = {};
+        for (const [path, content] of Object.entries(projectFiles)) {
+          if (!path.startsWith(folderPrefix)) {
+            updatedProjectFiles[path] = content;
+          }
+        }
+
+        const result = await updateProject({
+          id: projectId,
+          projectFiles: JSON.stringify(updatedProjectFiles),
+        });
+
+        if (result.success) {
+          document.body.removeChild(modal);
+          showProjectFileManager(projectId);
+          stateManager.announceChange(`Deleted folder "${folderName}"`);
+        } else {
+          alert(`Failed to delete folder: ${result.error}`);
+        }
+      });
+    });
+
     // Close on escape
     modal.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
@@ -6651,6 +7929,9 @@ async function initApp() {
       // Update last loaded timestamp
       await touchProject(projectId);
 
+      // Track which saved project is loaded (for companion file auto-save)
+      currentSavedProjectId = projectId;
+
       // Load the file (reuse existing handleFile logic)
       // Pass project.name as the 6th arg so uploadedFile.name shows the saved project name
       await handleFile(
@@ -6661,6 +7942,9 @@ async function initApp() {
         'saved',
         project.name // Use the saved project name for display
       );
+
+      // Update companion save button after loading
+      updateCompanionSaveButton();
 
       // Announce success
       stateManager.announceChange(`Loaded saved design: ${project.name}`);
@@ -6779,6 +8063,9 @@ async function initApp() {
       });
 
       if (result.success) {
+        // Track the saved project ID for companion file auto-save
+        currentSavedProjectId = result.id;
+        updateCompanionSaveButton();
         stateManager.announceChange(`Project saved: ${projectName}`);
         updateStatus(`Saved: ${projectName}`);
         await renderSavedProjectsList();
@@ -6950,6 +8237,7 @@ async function initApp() {
   }
 
   // Shared example loader (reusable by welcome buttons and Features Guide)
+  // Direct-launch URL support for external website integration
   async function loadExampleByKey(
     exampleKey,
     { closeFeaturesGuideModal = false } = {}
@@ -6994,8 +8282,58 @@ async function initApp() {
         }
       }
 
-      // Treat as uploaded file
-      handleFile({ name: example.name }, content, null, null, 'example');
+      // Check for multi-file design package with additionalFiles
+      // This supports examples with additionalFiles like openings_and_additions.txt
+      let projectFiles = null;
+      let mainFilePath = null;
+
+      if (example.additionalFiles && example.additionalFiles.length > 0) {
+        console.log(`[Example] Multi-file package: ${example.additionalFiles.length} additional file(s)`);
+        
+        // Load all additional files
+        projectFiles = new Map();
+        
+        // Add main file
+        const mainFileName = example.path.split('/').pop();
+        mainFilePath = mainFileName;
+        projectFiles.set(mainFileName, content);
+
+        // Load additional files in parallel
+        const additionalPromises = example.additionalFiles.map(async (filePath) => {
+          try {
+            const fileResponse = await fetch(filePath);
+            if (!fileResponse.ok) {
+              console.warn(`[Example] Failed to load additional file: ${filePath}`);
+              return null;
+            }
+            const fileContent = await fileResponse.text();
+            const fileName = filePath.split('/').pop();
+            return { fileName, content: fileContent };
+          } catch (error) {
+            console.warn(`[Example] Error loading additional file ${filePath}:`, error);
+            return null;
+          }
+        });
+
+        const additionalResults = await Promise.all(additionalPromises);
+        for (const result of additionalResults) {
+          if (result) {
+            projectFiles.set(result.fileName, result.content);
+            console.log(`[Example] Loaded additional file: ${result.fileName}`);
+          }
+        }
+
+        console.log(`[Example] Total files in package: ${projectFiles.size}`);
+      }
+
+      // Treat as uploaded file (with optional multi-file support)
+      handleFile(
+        { name: example.name },
+        content,
+        projectFiles,
+        mainFilePath,
+        'example'
+      );
     } catch (error) {
       console.error('Failed to load example:', error);
       updateStatus('Error loading example');
@@ -7040,12 +8378,14 @@ async function initApp() {
   });
 
   // =========================================
-  // Deep-linking: ?example= URL parameter support (Volkswitch website integration)
+  // Deep-linking: URL parameter support for external website integration
   // Allows external sites to link directly to Forge with a specific example loaded
-  // Usage: ?example=simple-box or ?example=volkswitch-keyguard-v74
+  // Usage: ?example=simple-box or ?load=keyguard-demo
+  // Note: ?load= is an alias for ?example= (for website embedding convenience)
   // =========================================
   const initUrlParams = new URLSearchParams(window.location.search);
-  const exampleParam = initUrlParams.get('example');
+  // Support both ?example= and ?load= (alias for website embedding)
+  const exampleParam = initUrlParams.get('example') || initUrlParams.get('load');
 
   if (exampleParam) {
     console.log(`[DeepLink] Loading example from URL: ${exampleParam}`);
@@ -7059,13 +8399,14 @@ async function initApp() {
 
           // Clean up URL to avoid reloading on refresh
           initUrlParams.delete('example');
+          initUrlParams.delete('load'); // Also remove ?load= alias
           const cleanUrl = initUrlParams.toString()
             ? `${window.location.pathname}?${initUrlParams}`
             : window.location.pathname;
           history.replaceState(null, '', cleanUrl);
 
           console.log(`[DeepLink] Successfully loaded: ${exampleParam}`);
-          srAnnouncer.announce(
+          announceImmediate(
             `${EXAMPLE_DEFINITIONS[exampleParam]?.name || 'Example'} loaded from URL link`
           );
         } catch (error) {
@@ -7081,6 +8422,379 @@ async function initApp() {
       );
       updateStatus(`Unknown example: ${exampleParam}`);
     }
+  }
+
+  // --- Manifest info banner helpers ---
+  function showManifestInfoBanner(name, author) {
+    const banner = document.getElementById('manifestInfoBanner');
+    const text = document.getElementById('manifestInfoText');
+    if (!banner) return;
+    const parts = ['Shared project'];
+    if (name) parts[0] = `Shared project: <strong>${name}</strong>`;
+    if (author) parts.push(`by ${author}`);
+    if (text) text.innerHTML = parts.join(' ');
+    banner.classList.remove('hidden');
+  }
+
+  // Wire manifest banner buttons
+  const manifestBanner = document.getElementById('manifestInfoBanner');
+  const manifestSaveCopyBtn = document.getElementById('manifestSaveCopyBtn');
+  const manifestDownloadZipBtn = document.getElementById('manifestDownloadZipBtn');
+  const manifestResetBtn = document.getElementById('manifestResetBtn');
+  const manifestDismissBanner = document.getElementById('manifestDismissBanner');
+
+  if (manifestDismissBanner) {
+    manifestDismissBanner.addEventListener('click', () => {
+      if (manifestBanner) manifestBanner.classList.add('hidden');
+    });
+  }
+
+  if (manifestSaveCopyBtn) {
+    manifestSaveCopyBtn.addEventListener('click', async () => {
+      const state = stateManager.getState();
+      if (!state.uploadedFile) return;
+      const origin = state.manifestOrigin;
+      const forkedFrom = origin ? {
+        manifestUrl: origin.url,
+        originalName: origin.name,
+        originalAuthor: origin.author,
+        forkDate: Date.now(),
+      } : null;
+      try {
+        const { saveProject } = await import('./js/saved-projects-manager.js');
+        const result = await saveProject({
+          name: state.uploadedFile.name.replace('.scad', ''),
+          originalName: state.uploadedFile.name,
+          kind: state.projectFiles ? 'zip' : 'scad',
+          mainFilePath: state.mainFilePath || state.uploadedFile.name,
+          content: state.uploadedFile.content,
+          projectFiles: state.projectFiles || null,
+          forkedFrom,
+        });
+        if (result.success) {
+          currentSavedProjectId = result.id;
+          updateStatus('Local copy saved');
+          announceImmediate('Local copy saved to browser storage');
+        } else {
+          updateStatus(`Save failed: ${result.error}`, 'error');
+        }
+      } catch (err) {
+        console.error('[Manifest] Save copy failed:', err);
+        updateStatus('Failed to save local copy', 'error');
+      }
+    });
+  }
+
+  if (manifestResetBtn) {
+    manifestResetBtn.addEventListener('click', async () => {
+      const origin = stateManager.getState().manifestOrigin;
+      if (!origin?.url) return;
+      const confirmed = confirm('Reset to the original shared project? Your unsaved changes will be lost.');
+      if (!confirmed) return;
+      try {
+        updateStatus('Reloading original project...');
+        const result = await loadManifest(origin.url, {
+          onProgress: ({ message }) => updateStatus(message),
+        });
+        await handleFile(null, result.mainContent, result.projectFiles, result.mainFile, 'manifest', result.manifest.name);
+        stateManager.setState({
+          manifestOrigin: { ...origin, loadedAt: Date.now() },
+        });
+        updateStatus(`Reset to original: ${origin.name || 'project'}`);
+      } catch (err) {
+        console.error('[Manifest] Reset failed:', err);
+        updateStatus('Failed to reload original project', 'error');
+      }
+    });
+  }
+
+  if (manifestDownloadZipBtn) {
+    manifestDownloadZipBtn.addEventListener('click', async () => {
+      const state = stateManager.getState();
+      const origin = state.manifestOrigin;
+      const projectName = origin?.name || state.uploadedFile?.name?.replace('.scad', '') || 'forge-project';
+      try {
+        const JSZip = (await import('jszip')).default;
+        const zip = new JSZip();
+        // Add main SCAD file
+        if (state.uploadedFile?.content) {
+          zip.file(state.uploadedFile.name || 'project.scad', state.uploadedFile.content);
+        }
+        // Add all project files (companions, presets, screenshots)
+        if (state.projectFiles) {
+          for (const [path, content] of state.projectFiles) {
+            zip.file(path, content);
+          }
+        }
+        const blob = await zip.generateAsync({ type: 'blob' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${projectName}.zip`;
+        a.click();
+        URL.revokeObjectURL(url);
+        updateStatus(`Downloaded: ${projectName}.zip`);
+      } catch (err) {
+        console.error('[Manifest] ZIP export failed:', err);
+        updateStatus('Failed to export ZIP', 'error');
+      }
+    });
+  }
+
+  // =========================================
+  // Manifest deep-link: ?manifest=<url> support
+  // Loads a full project from a forge-manifest.json hosted externally.
+  // This is the primary "one-link sharing" path for external project authors
+  // Usage: ?manifest=https://raw.githubusercontent.com/user/repo/main/forge-manifest.json
+  // Optional companions: ?preset=<name>, ?skipWelcome=true
+  // =========================================
+  const manifestParam = initUrlParams.get('manifest');
+
+  if (manifestParam && !exampleParam) {
+    console.log(`[DeepLink] Loading project from manifest: ${manifestParam}`);
+    updateStatus('Loading project from manifest...');
+
+    // Skip the welcome screen immediately when loading from a manifest
+    const shouldSkipWelcome =
+      initUrlParams.get('skipWelcome') === 'true' ||
+      initUrlParams.get('skipwelcome') === 'true';
+
+    if (shouldSkipWelcome || manifestParam) {
+      // Hide welcome screen early so the user sees a loading state, not the landing page
+      welcomeScreen.classList.add('hidden');
+      mainInterface.classList.remove('hidden');
+    }
+
+    setTimeout(async () => {
+      try {
+        const result = await loadManifest(manifestParam, {
+          onProgress: ({ message }) => updateStatus(message),
+        });
+
+        const { projectFiles, mainFile, mainContent, manifest, defaults } = result;
+        const projectName = manifest.name || mainFile;
+
+        console.log(`[DeepLink] Manifest loaded: "${projectName}" (${projectFiles.size} files)`);
+        announceImmediate(`Loading project: ${projectName}`);
+
+        // Call handleFile with 'manifest' source to enable origin tracking
+        await handleFile(null, mainContent, projectFiles, mainFile, 'manifest', projectName);
+
+        // Store manifest origin in state for provenance tracking
+        stateManager.setState({
+          manifestOrigin: {
+            url: manifestParam,
+            name: manifest.name || null,
+            author: manifest.author || null,
+            loadedAt: Date.now(),
+          },
+        });
+
+        // Show the manifest info banner
+        showManifestInfoBanner(manifest.name, manifest.author);
+
+        // --- ?preset=<name> or manifest defaults.preset -----------------
+        const presetName = initUrlParams.get('preset') || defaults?.preset;
+        if (presetName) {
+          // After handleFile, presets have been auto-imported from JSON files.
+          // Find the matching preset by name and programmatically select it.
+          const state = stateManager.getState();
+          const modelName = state.uploadedFile?.name;
+          if (modelName) {
+            const presets = presetManager.getPresetsForModel(modelName);
+            const match = presets.find(
+              (p) => p.name.toLowerCase() === presetName.toLowerCase()
+            );
+            if (match) {
+              console.log(`[DeepLink] Applying preset: "${match.name}" (${match.id})`);
+
+              // Merge preset parameters onto current state (desktop OpenSCAD parity)
+              const mergedParams = { ...state.parameters, ...match.parameters };
+              stateManager.setState({ parameters: mergedParams });
+
+              // Re-render UI with preset values
+              const parametersContainer = document.getElementById('parametersContainer');
+              renderParameterUI(
+                state.schema,
+                parametersContainer,
+                (values) => {
+                  stateManager.setState({ parameters: values });
+                  if (autoPreviewController) {
+                    autoPreviewController.onParameterChange(values);
+                  }
+                  updatePrimaryActionButton();
+                },
+                mergedParams
+              );
+
+              // Update preset dropdown to reflect selection
+              const presetSelect = document.getElementById('presetSelect');
+              if (presetSelect) {
+                presetSelect.value = match.id;
+              }
+              stateManager.setState({
+                currentPresetId: match.id,
+                currentPresetName: match.name,
+              });
+
+              // Trigger auto-preview with preset parameters
+              if (autoPreviewController) {
+                autoPreviewController.onParameterChange(mergedParams);
+              }
+              updatePrimaryActionButton();
+
+              updateStatus(`Loaded: ${projectName} — preset: ${match.name}`);
+              announceImmediate(`${projectName} loaded with preset ${match.name}`);
+            } else {
+              console.warn(`[DeepLink] Preset not found: "${presetName}". Available:`,
+                presets.map((p) => p.name));
+              updateStatus(`Loaded: ${projectName} (preset "${presetName}" not found)`);
+              announceImmediate(`${projectName} loaded from manifest`);
+            }
+          }
+        } else {
+          updateStatus(`Loaded: ${projectName}`);
+          announceImmediate(`${projectName} loaded from manifest`);
+        }
+
+        // Auto-preview if manifest requests it
+        if (defaults?.autoPreview && autoPreviewController) {
+          autoPreviewController.onParameterChange(stateManager.getState().parameters);
+        }
+
+        // Clean up URL parameters
+        initUrlParams.delete('manifest');
+        initUrlParams.delete('preset');
+        initUrlParams.delete('skipWelcome');
+        initUrlParams.delete('skipwelcome');
+        const cleanUrl = initUrlParams.toString()
+          ? `${window.location.pathname}?${initUrlParams}`
+          : window.location.pathname;
+        history.replaceState(null, '', cleanUrl);
+
+        console.log(`[DeepLink] Manifest load complete: ${projectName}`);
+
+        // Auto-fork: listen for the first user-initiated parameter change
+        // and prompt to save a local copy (fires once per manifest session)
+        let autoForkFired = false;
+        const unsubAutoFork = stateManager.subscribe((state, prev) => {
+          if (autoForkFired) return;
+          if (!state.manifestOrigin) return;
+          // Only trigger on parameter changes (not rendering state, etc.)
+          if (state.parameters !== prev.parameters && prev.parameters && Object.keys(prev.parameters).length > 0) {
+            autoForkFired = true;
+            unsubAutoFork();
+            // Prompt the user to save a local copy
+            const wantSave = confirm(
+              `You're editing a shared project. Save a local copy to keep your changes?`
+            );
+            if (wantSave && manifestSaveCopyBtn) {
+              manifestSaveCopyBtn.click();
+            }
+          }
+        });
+      } catch (error) {
+        console.error('[DeepLink] Manifest load failed:', error);
+
+        let friendlyMsg;
+        if (error instanceof ManifestError) {
+          switch (error.code) {
+            case 'CORS_ERROR':
+              friendlyMsg =
+                "Couldn't reach the file server. The manifest or its files may not be publicly " +
+                'accessible, or the server doesn\'t support CORS. Try hosting on GitHub.';
+              break;
+            case 'VALIDATION_ERROR':
+              friendlyMsg = `The manifest file has errors: ${error.details?.errors?.join('; ') || error.message}`;
+              break;
+            case 'TIMEOUT':
+              friendlyMsg = 'The request timed out. Check your internet connection and try again.';
+              break;
+            default:
+              friendlyMsg = error.message;
+          }
+        } else {
+          friendlyMsg = error.name === 'TypeError'
+            ? "Couldn't reach the server. The manifest may not be publicly accessible, or CORS may be blocking the request."
+            : error.message;
+        }
+
+        updateStatus(
+          `Couldn't load the project from manifest. ${friendlyMsg} You can still upload a file manually.`,
+          'error'
+        );
+
+        // Show welcome screen again on failure so the user isn't stuck
+        welcomeScreen.classList.remove('hidden');
+        mainInterface.classList.add('hidden');
+      }
+    }, 500);
+  }
+
+  // =========================================
+  // Direct launch link: ?project=<url> support (Item 7)
+  // Allows linking directly to any .scad or .zip file hosted on the web
+  // Usage: ?project=https://example.com/keyguard.zip or ?scad=https://example.com/box.scad
+  // =========================================
+  const projectParam = initUrlParams.get('project') || initUrlParams.get('scad');
+
+  if (projectParam && !exampleParam && !manifestParam) {
+    console.log(`[DeepLink] Loading project from URL: ${projectParam}`);
+    updateStatus('Loading project from URL...');
+
+    setTimeout(async () => {
+      try {
+        // Validate URL
+        const projectUrl = new URL(projectParam);
+        const urlFileName = projectUrl.pathname.split('/').pop() || 'project.scad';
+        const isZipUrl = urlFileName.toLowerCase().endsWith('.zip');
+
+        console.log(`[DeepLink] Fetching: ${projectParam} (type: ${isZipUrl ? 'ZIP' : 'SCAD'})`);
+
+        const response = await fetch(projectParam);
+        if (!response.ok) {
+          throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+        }
+
+        if (isZipUrl) {
+          // Handle ZIP file: convert response to blob, create File object, pass to handleFile
+          const blob = await response.blob();
+          const file = new File([blob], urlFileName, { type: 'application/zip' });
+          await handleFile(file, null, null, null, 'user');
+        } else {
+          // Handle single .scad file
+          const scadContent = await response.text();
+          await handleFile(
+            { name: urlFileName },
+            scadContent,
+            null,
+            null,
+            'user'
+          );
+        }
+
+        // Clean up URL after loading
+        initUrlParams.delete('project');
+        initUrlParams.delete('scad');
+        const cleanUrl = initUrlParams.toString()
+          ? `${window.location.pathname}?${initUrlParams}`
+          : window.location.pathname;
+        history.replaceState(null, '', cleanUrl);
+
+        console.log(`[DeepLink] Successfully loaded project: ${urlFileName}`);
+        updateStatus(`Loaded ${urlFileName} from URL`);
+        announceImmediate(`${urlFileName} loaded from URL link`);
+      } catch (error) {
+        console.error('[DeepLink] Failed to load project:', error);
+        const friendlyMsg = error.name === 'TypeError'
+          ? "Couldn't reach the server. The file may not be publicly accessible, or CORS may be blocking the request."
+          : `${error.message}`;
+        updateStatus(
+          `Couldn't load the project from URL. ${friendlyMsg} You can still upload a file manually.`,
+          'error'
+        );
+      }
+    }, 500);
   }
 
   // Undo/Redo buttons
@@ -7102,7 +8816,7 @@ async function initApp() {
         (values) => {
           stateManager.recordParameterState();
           stateManager.setState({ parameters: values });
-          clearPresetSelection();
+          clearPresetSelection(values);
           if (autoPreviewController && state.uploadedFile) {
             autoPreviewController.onParameterChange(values);
           }
@@ -7135,7 +8849,7 @@ async function initApp() {
         (values) => {
           stateManager.recordParameterState();
           stateManager.setState({ parameters: values });
-          clearPresetSelection();
+          clearPresetSelection(values);
           if (autoPreviewController && state.uploadedFile) {
             autoPreviewController.onParameterChange(values);
           }
@@ -7163,7 +8877,7 @@ async function initApp() {
       stateManager.setState({ parameters: { ...state.defaults } });
 
       // Clear preset selection when resetting to defaults
-      clearPresetSelection();
+      clearPresetSelection(state.defaults);
 
       // Re-render UI with defaults
       const parametersContainer = document.getElementById(
@@ -7173,7 +8887,7 @@ async function initApp() {
         stateManager.recordParameterState();
         stateManager.setState({ parameters: values });
         // Clear preset selection when parameters are manually changed
-        clearPresetSelection();
+        clearPresetSelection(values);
         // Trigger auto-preview on parameter change
         if (autoPreviewController && state.uploadedFile) {
           autoPreviewController.onParameterChange(values);
@@ -7230,11 +8944,11 @@ async function initApp() {
 
   if (collapseParamPanelBtn && paramPanel && paramPanelBody) {
     // Load saved collapsed state (desktop only)
-    const STORAGE_KEY_COLLAPSED = 'openscad-customizer-param-panel-collapsed';
+    // (Storage key defined at module level as STORAGE_KEY_PARAM_PANEL_COLLAPSED)
     let isCollapsed = false;
 
     try {
-      const savedState = localStorage.getItem(STORAGE_KEY_COLLAPSED);
+      const savedState = localStorage.getItem(STORAGE_KEY_PARAM_PANEL_COLLAPSED);
       if (savedState === 'true' && window.innerWidth >= 768) {
         isCollapsed = true;
       }
@@ -7293,7 +9007,7 @@ async function initApp() {
 
       // Persist state
       try {
-        localStorage.setItem(STORAGE_KEY_COLLAPSED, String(isCollapsed));
+        localStorage.setItem(STORAGE_KEY_PARAM_PANEL_COLLAPSED, String(isCollapsed));
       } catch (e) {
         console.warn('Could not save to localStorage:', e);
       }
@@ -7329,6 +9043,206 @@ async function initApp() {
     });
   }
 
+  // =========================================================================
+  // Expert Mode Integration (M2)
+  // =========================================================================
+  const expertModeToggle = document.getElementById('expertModeToggle');
+  const expertModePanel = document.getElementById('expertModePanel');
+  const expertModeBody = document.getElementById('expertModeBody');
+  const expertRunPreviewBtn = document.getElementById('expertRunPreviewBtn');
+  const expertModeCloseBtn = document.getElementById('expertModeCloseBtn');
+  const editorDirtyIndicator = document.getElementById('editorDirtyIndicator');
+
+  // Check if Expert Mode feature flag is enabled
+  const isExpertModeEnabled = _isEnabled('expert_mode');
+  let currentEditor = null;
+  let modeManager = null;
+  let editorStateManager = null;
+
+  if (isExpertModeEnabled && expertModeToggle && expertModePanel && expertModeBody) {
+    console.log('[Expert Mode] Feature enabled, initializing...');
+
+    // Show the toggle button
+    expertModeToggle.classList.remove('hidden');
+
+
+    // Initialize managers
+    modeManager = getModeManager({
+      announceToScreenReader: (msg) => announceToScreenReader(msg),
+      onModeChange: handleModeChange,
+    });
+    editorStateManager = getEditorStateManager();
+    
+    // Expose modeManager globally for keyboard shortcut handler
+    window._modeManager = modeManager;
+
+    /**
+     * Handle mode change between Standard and Expert
+     * @param {string} newMode - 'standard' or 'expert'
+     * @param {string} oldMode - Previous mode
+     */
+    function handleModeChange(newMode, oldMode) {
+      console.log(`[Expert Mode] Switching from ${oldMode} to ${newMode}`);
+
+      if (newMode === 'expert') {
+        // Show Expert Mode panel, hide standard param body
+        if (paramPanelBody) paramPanelBody.classList.add('hidden');
+        expertModePanel.classList.add('active');
+        expertModeToggle.setAttribute('aria-pressed', 'true');
+
+        // Initialize editor if not already done
+        if (!currentEditor) {
+          initExpertEditor();
+        } else {
+          // Sync code from state to editor
+          const currentCode = editorStateManager.getSource();
+          if (currentCode) {
+            currentEditor.setValue(currentCode);
+          }
+        }
+
+        // Focus the editor
+        if (currentEditor && currentEditor.focus) {
+          setTimeout(() => currentEditor.focus(), 100);
+        }
+      } else {
+        // Hide Expert Mode panel, show standard param body
+        expertModePanel.classList.remove('active');
+        if (paramPanelBody) paramPanelBody.classList.remove('hidden');
+        expertModeToggle.setAttribute('aria-pressed', 'false');
+
+        // Capture state from editor before switching
+        if (currentEditor) {
+          const code = currentEditor.getValue();
+          editorStateManager.setSource(code, { markDirty: false });
+        }
+      }
+    }
+
+    /**
+     * Initialize the Expert Mode code editor
+     */
+    function initExpertEditor() {
+      // Determine which editor to use based on preference
+      const editorType = modeManager.resolveEditorType();
+      console.log(`[Expert Mode] Using ${editorType} editor`);
+
+      // For now, always use textarea editor (Monaco integration in future iteration)
+      // This ensures CSP compatibility and accessibility-first approach
+      currentEditor = new TextareaEditor({
+        container: expertModeBody,
+        onChange: (code) => {
+          // Update state manager with new code
+          editorStateManager.setSource(code, { markDirty: true });
+
+          // Update dirty indicator
+          updateDirtyIndicator();
+        },
+        onSave: () => {
+          // Trigger save action
+          const saveBtn = document.getElementById('saveProjectBtn');
+          if (saveBtn) saveBtn.click();
+        },
+        onRun: () => {
+          // Trigger preview render
+          triggerPreviewFromEditor();
+        },
+        announce: (msg) => announceToScreenReader(msg),
+      });
+
+      currentEditor.initialize();
+
+      // Sync initial code from state
+      const initialCode = editorStateManager.getSource() || window._currentSCADCode || '';
+      if (initialCode) {
+        currentEditor.setValue(initialCode);
+      }
+
+      // Register editor with state manager
+      if (editorStateManager.setTextareaElement && currentEditor.textarea) {
+        editorStateManager.setTextareaElement(currentEditor.textarea);
+      }
+    }
+
+    /**
+     * Update the dirty indicator visibility
+     */
+    function updateDirtyIndicator() {
+      if (editorDirtyIndicator && editorStateManager) {
+        if (editorStateManager.getIsDirty()) {
+          editorDirtyIndicator.classList.add('visible');
+        } else {
+          editorDirtyIndicator.classList.remove('visible');
+        }
+      }
+    }
+
+    /**
+     * Trigger preview render from editor code
+     */
+    function triggerPreviewFromEditor() {
+      if (!currentEditor) return;
+
+      const code = currentEditor.getValue();
+      if (!code || code.trim() === '') {
+        announceToScreenReader('No code to preview');
+        return;
+      }
+
+      // Update global code variable
+      window._currentSCADCode = code;
+
+      // Trigger preview update
+      if (typeof triggerPreviewFromEditor === 'function') {
+        triggerPreviewFromEditor();
+      } else if (previewManager) {
+        previewManager.render(code);
+      }
+
+      // Mark as clean after preview
+      editorStateManager.markClean();
+      updateDirtyIndicator();
+      announceToScreenReader('Preview update triggered');
+    }
+
+    // Toggle button click handler
+    expertModeToggle.addEventListener('click', () => {
+      modeManager.toggleMode();
+    });
+
+    // Run preview button handler
+    if (expertRunPreviewBtn) {
+      expertRunPreviewBtn.addEventListener('click', triggerPreviewFromEditor);
+    }
+
+    // Close/exit button handler
+    if (expertModeCloseBtn) {
+      expertModeCloseBtn.addEventListener('click', () => {
+        modeManager.switchMode('standard');
+      });
+    }
+
+    // Keyboard shortcut: Ctrl+E to toggle Expert Mode (registered via keyboard config below)
+
+    // Sync code changes from parameter panel to editor state
+    // This happens when parameters are modified in Standard mode
+    window.addEventListener('scadCodeUpdated', (e) => {
+      const newCode = e.detail?.code || window._currentSCADCode;
+      if (newCode && editorStateManager) {
+        editorStateManager.setSource(newCode, { markDirty: false });
+        
+        // Update editor if in Expert Mode
+        if (modeManager.getMode() === 'expert' && currentEditor) {
+          currentEditor.setValue(newCode);
+        }
+      }
+    });
+
+    console.log('[Expert Mode] Initialization complete');
+  } else if (!isExpertModeEnabled) {
+    console.log('[Expert Mode] Feature flag disabled');
+  }
+
   // Resizable Split Panels (Desktop only - horizontal split between params and preview)
   let splitInstance = null;
   const previewPanel = document.querySelector('.preview-panel');
@@ -7337,12 +9251,12 @@ async function initApp() {
   // in preview-settings-drawer.js - no Split.js needed for that anymore
 
   if (paramPanel && previewPanel) {
-    const STORAGE_KEY_SPLIT = 'openscad-customizer-split-sizes';
+    // (Storage key defined at module level as STORAGE_KEY_LAYOUT_SIZES)
 
     // Load saved split sizes
     let initialSizes = [40, 60]; // Default: 40% params, 60% preview
     try {
-      const savedSizes = localStorage.getItem(STORAGE_KEY_SPLIT);
+      const savedSizes = localStorage.getItem(STORAGE_KEY_LAYOUT_SIZES);
       if (savedSizes) {
         const parsed = JSON.parse(savedSizes);
         if (Array.isArray(parsed) && parsed.length === 2) {
@@ -7366,23 +9280,29 @@ async function initApp() {
         return;
       }
 
+      let splitResizePending = false;
       splitInstance = Split([paramPanel, previewPanel], {
         sizes: initialSizes,
         minSize: minSizes,
         gutterSize: 8,
         cursor: 'col-resize',
+        onDragStart: () => {
+          document.body.classList.add('split-dragging');
+        },
         onDrag: () => {
-          // Trigger preview resize during drag (throttled by RAF)
-          if (previewManager) {
+          if (previewManager && !splitResizePending) {
+            splitResizePending = true;
             requestAnimationFrame(() => {
+              splitResizePending = false;
               previewManager.handleResize();
             });
           }
         },
         onDragEnd: (sizes) => {
+          document.body.classList.remove('split-dragging');
           // Persist sizes
           try {
-            localStorage.setItem(STORAGE_KEY_SPLIT, JSON.stringify(sizes));
+            localStorage.setItem(STORAGE_KEY_LAYOUT_SIZES, JSON.stringify(sizes));
           } catch (e) {
             console.warn('Could not save split sizes:', e);
           }
@@ -7492,7 +9412,7 @@ async function initApp() {
                 // Save to localStorage
                 try {
                   localStorage.setItem(
-                    STORAGE_KEY_SPLIT,
+                    STORAGE_KEY_LAYOUT_SIZES,
                     JSON.stringify([newParamSize, newPreviewSize])
                   );
                 } catch (err) {
@@ -7546,6 +9466,283 @@ async function initApp() {
 
     // Initialize mobile drawer controller
     initDrawerController();
+
+    // Initialize image measurement tool
+    initImageMeasurement({
+      onCoordinateCopied: (axis, value) => {
+        // GAP 7: populate focused parameter field with copied coordinate
+        const active = document.activeElement;
+        if (
+          active &&
+          active.tagName === 'INPUT' &&
+          (active.type === 'number' || active.type === 'text')
+        ) {
+          active.value = value;
+          active.dispatchEvent(new Event('input', { bubbles: true }));
+          active.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+      },
+    });
+
+    // Wire measurement fullscreen expand/close buttons
+    const measureExpandBtn = document.getElementById('measureExpandBtn');
+    const measureFsClose = document.getElementById('measureFullscreenClose');
+    const measureFsBackdrop = document.getElementById('measureFullscreenBackdrop');
+    if (measureExpandBtn) measureExpandBtn.addEventListener('click', measureOpenFullscreen);
+    if (measureFsClose) measureFsClose.addEventListener('click', measureCloseFullscreen);
+    if (measureFsBackdrop) measureFsBackdrop.addEventListener('click', measureCloseFullscreen);
+
+    // --- Measurement mode toggle (radiogroup with roving tabindex) ---
+    const modeBtns = [
+      document.getElementById('measureModePoint'),
+      document.getElementById('measureModeRuler'),
+      document.getElementById('measureModeCalibrate'),
+    ].filter(Boolean);
+    const modeNames = ['point', 'ruler', 'calibrate'];
+    const measureDistRow = document.getElementById('measureDistRow');
+    const measureCalibRow = document.getElementById('measureCalibRow');
+    const measureCoordRow = document.querySelector('.measure-coord-row');
+
+    function activateModeBtn(idx) {
+      modeBtns.forEach((btn, i) => {
+        const isActive = i === idx;
+        btn.classList.toggle('active', isActive);
+        btn.setAttribute('aria-checked', String(isActive));
+        btn.tabIndex = isActive ? 0 : -1;
+      });
+      setMeasureMode(modeNames[idx]);
+      // Show/hide mode-specific rows
+      if (measureDistRow) measureDistRow.classList.toggle('hidden', modeNames[idx] !== 'ruler');
+      if (measureCalibRow) measureCalibRow.classList.toggle('hidden', modeNames[idx] !== 'calibrate');
+      if (measureCoordRow) measureCoordRow.classList.toggle('hidden', modeNames[idx] === 'calibrate');
+    }
+
+    modeBtns.forEach((btn, i) => {
+      btn.addEventListener('click', () => {
+        activateModeBtn(i);
+        btn.focus();
+      });
+      btn.addEventListener('keydown', (e) => {
+        let nextIdx = -1;
+        if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+          nextIdx = (i + 1) % modeBtns.length;
+        } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+          nextIdx = (i - 1 + modeBtns.length) % modeBtns.length;
+        }
+        if (nextIdx >= 0) {
+          e.preventDefault();
+          activateModeBtn(nextIdx);
+          modeBtns[nextIdx].focus();
+        }
+      });
+    });
+
+    // --- Measurement scale factor input ---
+    const measureScaleInput = document.getElementById('measureScaleInput');
+    if (measureScaleInput) {
+      const currentSf = getScaleFactor();
+      measureScaleInput.value = currentSf > 0 ? currentSf : '';
+      measureScaleInput.addEventListener('change', () => {
+        setScaleFactor(parseFloat(measureScaleInput.value) || 0);
+      });
+    }
+
+    // --- Calibration Apply handler ---
+    const measureCalibApply = document.getElementById('measureCalibApply');
+    const measureCalibMm = document.getElementById('measureCalibMm');
+    const measureCalibError = document.getElementById('measureCalibError');
+    if (measureCalibApply && measureCalibMm) {
+      measureCalibApply.addEventListener('click', () => {
+        const pixelDist = getCalibDistancePx();
+        const mmVal = parseFloat(measureCalibMm.value);
+
+        // Validation
+        if (!pixelDist || pixelDist <= 0) {
+          showCalibError('Place two points on the canvas first.');
+          return;
+        }
+        if (!Number.isFinite(mmVal) || mmVal <= 0) {
+          showCalibError('Enter a valid distance greater than 0.');
+          return;
+        }
+
+        hideCalibError();
+        const sf = pixelDist / mmVal;
+        setScaleFactor(sf);
+        announceImmediate(`Calibration applied: ${sf.toFixed(2)} pixels per millimeter`);
+
+        // Switch back to Ruler mode after calibration
+        activateModeBtn(1);
+        modeBtns[1]?.focus();
+      });
+    }
+
+    function showCalibError(msg) {
+      if (measureCalibError) {
+        measureCalibError.textContent = msg;
+        measureCalibError.classList.remove('hidden');
+      }
+    }
+    function hideCalibError() {
+      if (measureCalibError) {
+        measureCalibError.textContent = '';
+        measureCalibError.classList.add('hidden');
+      }
+    }
+
+    // --- Distance copy and clear handlers ---
+    const measureCopyDist = document.getElementById('measureCopyDist');
+    const measureClearRuler = document.getElementById('measureClearRuler');
+    if (measureCopyDist) {
+      measureCopyDist.addEventListener('click', () => {
+        const el = document.getElementById('measureDistValue');
+        if (el && el.textContent !== '--') {
+          navigator.clipboard.writeText(el.textContent).then(() => {
+            announceImmediate(`Distance ${el.textContent} copied`);
+          }).catch(() => {});
+        }
+      });
+    }
+    if (measureClearRuler) {
+      measureClearRuler.addEventListener('click', () => clearRulerPoints());
+    }
+
+    // --- Shared Image Store: intercept measurement uploads ---
+    const measureFileInput = document.getElementById('measureFileInput');
+    const measureImageSelect = document.getElementById('measureImageSelect');
+    if (measureFileInput) {
+      measureFileInput.addEventListener('change', async (e) => {
+        const file = e.target.files?.[0];
+        if (!file || !file.type.startsWith('image/')) return;
+        const record = await SharedImageStore.addImage(file);
+
+        // Persist screenshot to projectFiles under Screenshots/ folder
+        const state = stateManager.getState();
+        let { projectFiles, mainFilePath, uploadedFile: uf } = state;
+
+        // Initialize projectFiles Map if needed (single-file → multi-file)
+        if (!projectFiles && uf) {
+          projectFiles = new Map();
+          const mainPath = mainFilePath || uf.name;
+          projectFiles.set(mainPath, uf.content);
+          mainFilePath = mainPath;
+          stateManager.setState({ projectFiles, mainFilePath });
+        }
+
+        if (projectFiles) {
+          projectFiles.set(`Screenshots/${record.name}`, record.dataUrl);
+          stateManager.setState({ projectFiles });
+
+          // Auto-save to IndexedDB so screenshots persist across sessions
+          await autoSaveCompanionFiles();
+        }
+
+        // Select the newly uploaded image in the dropdown
+        if (measureImageSelect) {
+          measureImageSelect.value = String(record.id);
+          if (measureImageSelect.value !== String(record.id)) {
+            setTimeout(() => {
+              if (measureImageSelect) measureImageSelect.value = String(record.id);
+            }, 0);
+          }
+        }
+
+        // Update overlay dropdown with the new screenshot
+        updateOverlaySourceDropdown();
+      });
+    }
+    // Populate image recall dropdown when store changes
+    SharedImageStore.onImagesChange(() => {
+      const imgs = SharedImageStore.getImages();
+      if (measureImageSelect) {
+        const currentVal = measureImageSelect.value;
+        measureImageSelect.innerHTML = '<option value="">-- No screenshots --</option>';
+        for (const [id, rec] of imgs) {
+          const opt = document.createElement('option');
+          opt.value = id;
+          opt.textContent = `${rec.name} (${rec.width}\u00d7${rec.height})`;
+          measureImageSelect.appendChild(opt);
+        }
+        measureImageSelect.value = currentVal;
+      }
+      // Also add shared images to overlay source dropdown
+      if (overlaySourceSelect) {
+        // Preserve current selection before removing/re-adding shared options
+        const overlayCurrentVal = overlaySourceSelect.value;
+        // Remove previous shared-image entries
+        for (const opt of [...overlaySourceSelect.options]) {
+          if (opt.dataset.shared) opt.remove();
+        }
+        for (const [, rec] of imgs) {
+          const opt = document.createElement('option');
+          opt.value = `screenshot:${rec.name}`;
+          opt.textContent = `\uD83D\uDCF7 ${rec.name}`;
+          opt.dataset.shared = '1';
+          overlaySourceSelect.appendChild(opt);
+        }
+        // Restore selection (removing the old option cleared it)
+        if (overlayCurrentVal) {
+          overlaySourceSelect.value = overlayCurrentVal;
+        }
+      }
+    });
+    if (measureImageSelect) {
+      measureImageSelect.addEventListener('change', () => {
+        const id = parseInt(measureImageSelect.value, 10);
+        if (!id) return;
+        const rec = SharedImageStore.getImages().get(id);
+        if (rec) loadImageFromDataURL(rec.dataUrl, rec.name);
+      });
+    }
+
+    // --- Unit Sync: wire both unit selects ---
+    const measureUnitSelect = document.getElementById('measureUnitSelect');
+    const overlayUnitSelect = document.getElementById('overlayUnitSelect');
+    const scaleFactorInput = document.getElementById('scaleFactorInput');
+    const overlaySizeUnit = document.getElementById('overlaySizeUnit');
+    const overlayOffsetUnit = document.getElementById('overlayOffsetUnit');
+
+    // Set initial state from persisted values
+    if (measureUnitSelect) measureUnitSelect.value = getUnit();
+    if (overlayUnitSelect) overlayUnitSelect.value = getUnit();
+    if (scaleFactorInput && getScaleFactor() > 0) scaleFactorInput.value = getScaleFactor();
+
+    function updateUnitLabels(unit) {
+      if (overlaySizeUnit) overlaySizeUnit.textContent = unit;
+      if (overlayOffsetUnit) overlayOffsetUnit.textContent = unit;
+      const overlayWidthInput = document.getElementById('overlayWidthInput');
+      const overlayHeightInput = document.getElementById('overlayHeightInput');
+      const overlayOffsetXInput = document.getElementById('overlayOffsetXInput');
+      const overlayOffsetYInput = document.getElementById('overlayOffsetYInput');
+      if (overlayWidthInput) overlayWidthInput.setAttribute('aria-label', `Overlay width in ${unit === 'mm' ? 'millimeters' : 'pixels'}`);
+      if (overlayHeightInput) overlayHeightInput.setAttribute('aria-label', `Overlay height in ${unit === 'mm' ? 'millimeters' : 'pixels'}`);
+      if (overlayOffsetXInput) overlayOffsetXInput.setAttribute('aria-label', `Overlay X offset in ${unit === 'mm' ? 'millimeters' : 'pixels'}`);
+      if (overlayOffsetYInput) overlayOffsetYInput.setAttribute('aria-label', `Overlay Y offset in ${unit === 'mm' ? 'millimeters' : 'pixels'}`);
+    }
+
+    function syncBothUnitSelects(unit) {
+      if (measureUnitSelect) measureUnitSelect.value = unit;
+      if (overlayUnitSelect) overlayUnitSelect.value = unit;
+      updateUnitLabels(unit);
+    }
+
+    if (measureUnitSelect) {
+      measureUnitSelect.addEventListener('change', () => setUnit(measureUnitSelect.value));
+    }
+    if (overlayUnitSelect) {
+      overlayUnitSelect.addEventListener('change', () => setUnit(overlayUnitSelect.value));
+    }
+    if (scaleFactorInput) {
+      scaleFactorInput.addEventListener('change', () => {
+        setScaleFactor(parseFloat(scaleFactorInput.value) || 0);
+      });
+    }
+
+    onUnitChange(({ unit }) => syncBothUnitSelects(unit));
+    onScaleChange(({ scaleFactor: sf }) => {
+      if (scaleFactorInput && sf > 0) scaleFactorInput.value = sf;
+      if (measureScaleInput && sf > 0) measureScaleInput.value = sf;
+    });
 
     // Initialize preview settings drawer (overlay with resize functionality)
     initPreviewSettingsDrawer({
@@ -8093,7 +10290,7 @@ async function initApp() {
         state.parameters
       );
       if (estimate.seconds >= 5 || estimate.warning) {
-        let estimateMsg = `Generating ${formatName}... (est. ~${estimate.seconds}s)`;
+        const estimateMsg = `Generating ${formatName}... (est. ~${estimate.seconds}s)`;
         if (estimate.warning) {
           console.warn('[Render] Complexity warning:', estimate.warning);
         }
@@ -8122,6 +10319,7 @@ async function initApp() {
           state.parameters,
           {
             outputFormat,
+            paramTypes: state.paramTypes || {},
             files: state.projectFiles,
             mainFile: state.mainFilePath,
             libraries: libsForRender,
@@ -8149,7 +10347,7 @@ async function initApp() {
         lastRenderTime: duration,
       });
 
-      // Store console output for the Console panel (Volkswitch echo() support)
+      // Store console output for the Console panel (echo/warning/error display)
       if (
         result.consoleOutput &&
         typeof window.updateConsoleOutput === 'function'
@@ -8320,6 +10518,163 @@ async function initApp() {
       URL.revokeObjectURL(url);
       updateStatus(`Parameters exported to JSON`);
     });
+  }
+
+  // ========== PUBLISH PROJECT ==========
+
+  const publishProjectBtn = document.getElementById('publishProjectBtn');
+  const publishProjectModal = document.getElementById('publishProjectModal');
+  const publishModalClose = document.getElementById('publishModalClose');
+  const publishModalOverlay = document.getElementById('publishModalOverlay');
+  const publishManifestOutput = document.getElementById('publishManifestOutput');
+  const copyManifestBtn = document.getElementById('copyManifestBtn');
+  const publishRepoUrl = document.getElementById('publishRepoUrl');
+  const publishShareLinkContainer = document.getElementById('publishShareLinkContainer');
+  const publishShareLink = document.getElementById('publishShareLink');
+  const copyShareLinkBtn = document.getElementById('copyShareLinkBtn');
+
+  /**
+   * Generate a forge-manifest.json from the current project state.
+   * @returns {Object} Manifest object
+   */
+  function generateManifestFromProject() {
+    const state = stateManager.getState();
+    const fileName = state.uploadedFile?.name || 'design.scad';
+
+    const manifest = {
+      forgeManifest: '1.0',
+      name: fileName.replace(/\.scad$/i, ''),
+      files: {
+        main: fileName,
+      },
+    };
+
+    // Add companion files from the project
+    if (state.projectFiles && state.projectFiles.size > 0) {
+      const companions = [];
+      const presets = [];
+
+      for (const filePath of state.projectFiles.keys()) {
+        // Skip the main .scad file
+        if (filePath === fileName) continue;
+
+        if (filePath.toLowerCase().endsWith('.json')) {
+          presets.push(filePath);
+        } else if (!filePath.toLowerCase().endsWith('.scad')) {
+          companions.push(filePath);
+        } else {
+          // Secondary .scad files are companions (included via use/include)
+          companions.push(filePath);
+        }
+      }
+
+      if (companions.length > 0) {
+        manifest.files.companions = companions;
+      }
+      if (presets.length > 0) {
+        manifest.files.presets = presets.length === 1 ? presets[0] : presets;
+      }
+    }
+
+    // Add defaults
+    manifest.defaults = {
+      autoPreview: true,
+    };
+
+    // If a preset is currently selected, include it as the default
+    if (state.currentPresetName && state.currentPresetName !== 'design default values') {
+      manifest.defaults.preset = state.currentPresetName;
+    }
+
+    return manifest;
+  }
+
+  if (publishProjectBtn && publishProjectModal) {
+    publishProjectBtn.addEventListener('click', () => {
+      const state = stateManager.getState();
+      if (!state.uploadedFile) {
+        alert('No file uploaded yet. Upload a .scad or .zip file first.');
+        return;
+      }
+
+      const manifest = generateManifestFromProject();
+      const manifestJson = JSON.stringify(manifest, null, 2);
+
+      if (publishManifestOutput) {
+        publishManifestOutput.textContent = manifestJson;
+      }
+
+      // Reset the shareable link section
+      if (publishShareLinkContainer) {
+        publishShareLinkContainer.classList.add('hidden');
+      }
+      if (publishRepoUrl) {
+        publishRepoUrl.value = '';
+      }
+
+      openModal(publishProjectModal);
+    });
+
+    // Close handlers
+    if (publishModalClose) {
+      publishModalClose.addEventListener('click', () => closeModal(publishProjectModal));
+    }
+    if (publishModalOverlay) {
+      publishModalOverlay.addEventListener('click', () => closeModal(publishProjectModal));
+    }
+
+    // Copy manifest button
+    if (copyManifestBtn && publishManifestOutput) {
+      copyManifestBtn.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(publishManifestOutput.textContent);
+          const textSpan = copyManifestBtn.querySelector('.btn-text') || copyManifestBtn;
+          const original = textSpan.textContent;
+          textSpan.textContent = 'Copied!';
+          setTimeout(() => { textSpan.textContent = original; }, 2000);
+          updateStatus('Manifest copied to clipboard');
+        } catch (_err) {
+          prompt('Copy this manifest JSON:', publishManifestOutput.textContent);
+        }
+      });
+    }
+
+    // Generate shareable link when repo URL changes
+    if (publishRepoUrl && publishShareLink && publishShareLinkContainer) {
+      publishRepoUrl.addEventListener('input', () => {
+        let baseUrl = publishRepoUrl.value.trim();
+        if (!baseUrl) {
+          publishShareLinkContainer.classList.add('hidden');
+          return;
+        }
+
+        // Ensure trailing slash
+        if (!baseUrl.endsWith('/')) {
+          baseUrl += '/';
+        }
+
+        const manifestUrl = `${baseUrl}forge-manifest.json`;
+        const forgeBase = window.location.origin + window.location.pathname;
+        const shareUrl = `${forgeBase}?manifest=${encodeURIComponent(manifestUrl)}`;
+
+        publishShareLink.value = shareUrl;
+        publishShareLinkContainer.classList.remove('hidden');
+      });
+    }
+
+    // Copy shareable link button
+    if (copyShareLinkBtn && publishShareLink) {
+      copyShareLinkBtn.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(publishShareLink.value);
+          copyShareLinkBtn.textContent = 'Copied!';
+          setTimeout(() => { copyShareLinkBtn.textContent = 'Copy'; }, 2000);
+          updateStatus('Shareable link copied to clipboard');
+        } catch (_err) {
+          prompt('Copy this link:', publishShareLink.value);
+        }
+      });
+    }
   }
 
   // ========== RENDER QUEUE ==========
@@ -8896,28 +11251,193 @@ async function initApp() {
   });
 
   // ========== PRESET SYSTEM ==========
+  // OpenSCAD Customizer-compatible preset management
+  // Preset controls: Save = update current, + = new, - = delete
+
+  // "design default values" -- always first in preset dropdown (desktop OpenSCAD parity)
+  // Virtual preset ID for the immutable defaults entry (not stored in PresetManager)
+  const DESIGN_DEFAULTS_ID = '__design_defaults__';
 
   // Clear preset selection when parameters are manually changed
   // Track if we're currently loading a preset (to avoid clearing during load)
   let isLoadingPreset = false;
+  let currentPresetSignature = null;
+  // OpenSCAD behavior: preset stays selected even when parameters change.
+  // We track "dirty" state instead of clearing the selection.
+  let isPresetDirty = false;
 
-  function clearPresetSelection() {
-    // Don't clear if we're in the middle of loading a preset
+  const stableStringify = (value) => {
+    const seen = new WeakSet();
+    const normalize = (val) => {
+      if (Array.isArray(val)) {
+        return val.map(normalize);
+      }
+      if (val && typeof val === 'object') {
+        if (seen.has(val)) {
+          return null;
+        }
+        seen.add(val);
+        return Object.keys(val)
+          .sort()
+          .reduce((acc, key) => {
+            acc[key] = normalize(val[key]);
+            return acc;
+          }, {});
+      }
+      return val;
+    };
+    return JSON.stringify(normalize(value));
+  };
+
+  function buildPresetSignature(params) {
+    if (!params) return null;
+    const state = stateManager.getState();
+    const schemaParams = state.schema?.parameters;
+    const normalized = schemaParams
+      ? coercePresetValues(params, schemaParams)
+      : params;
+    return stableStringify(normalized);
+  }
+
+  function setCurrentPresetSignature(params) {
+    currentPresetSignature = buildPresetSignature(params);
+  }
+
+  function doesPresetMatchParams(params) {
+    if (!currentPresetSignature || !params) {
+      return false;
+    }
+    return buildPresetSignature(params) === currentPresetSignature;
+  }
+
+  function updatePresetDirtyState(currentValues = null) {
+    const state = stateManager.getState();
+    if (!state.currentPresetId) {
+      isPresetDirty = false;
+      return;
+    }
+
+    const valuesToCheck = currentValues || state.parameters;
+    if (!valuesToCheck || !currentPresetSignature) {
+      isPresetDirty = true;
+      return;
+    }
+
+    isPresetDirty = !doesPresetMatchParams(valuesToCheck);
+  }
+
+  function forceClearPresetSelection() {
+    const state = stateManager.getState();
+    const presetSelect = document.getElementById('presetSelect');
+    const hasSelection =
+      state.currentPresetId || state.currentPresetName || presetSelect?.value;
+
+    // Debug logging to help identify unexpected clears
+    if (hasSelection) {
+      console.log('[Preset] Clearing selection:', {
+        currentPresetId: state.currentPresetId,
+        currentPresetName: state.currentPresetName,
+        dropdownValue: presetSelect?.value,
+        callerStack: new Error().stack?.split('\n').slice(1, 4).join('\n')
+      });
+    }
+
+    currentPresetSignature = null;
+    isPresetDirty = false;
+
+    if (hasSelection) {
+      stateManager.setState({ currentPresetId: null, currentPresetName: null });
+      if (presetSelect) {
+        presetSelect.value = '';
+      }
+      updatePresetControlStates();
+    }
+  }
+
+  /**
+   * Update preset control button states based on current selection
+   * Implements OpenSCAD Customizer semantics: Save/Delete need selection, Add always works
+   */
+  function updatePresetControlStates() {
+    const state = stateManager.getState();
+    const presetSelect = document.getElementById('presetSelect');
+    const savePresetBtn = document.getElementById('savePresetBtn');
+    const addPresetBtn = document.getElementById('addPresetBtn');
+    const deletePresetBtn = document.getElementById('deletePresetBtn');
+
+    const hasPresetSelected = presetSelect && presetSelect.value !== '';
+    const hasModel = !!state.uploadedFile;
+    // "design default values" is immutable -- save/delete should be disabled
+    const isDesignDefaults = presetSelect?.value === DESIGN_DEFAULTS_ID;
+
+    // Save button: enabled when a user preset is selected (not design defaults)
+    if (savePresetBtn) {
+      savePresetBtn.disabled = !hasPresetSelected || !hasModel || isDesignDefaults;
+      savePresetBtn.title = isDesignDefaults
+        ? 'Design default values cannot be overwritten'
+        : !hasPresetSelected
+          ? 'Select a preset first to save changes'
+          : isPresetDirty
+            ? 'Save Preset \u2014 overwrites current preset (unsaved changes)'
+            : 'Save Preset \u2014 overwrites current preset';
+      savePresetBtn.dataset.dirty = isPresetDirty ? 'true' : 'false';
+    }
+
+    // Add button: always enabled when model is loaded
+    if (addPresetBtn) {
+      addPresetBtn.disabled = !hasModel;
+    }
+
+    // Delete button: enabled when a user preset is selected (not design defaults)
+    if (deletePresetBtn) {
+      deletePresetBtn.disabled = !hasPresetSelected || !hasModel || isDesignDefaults;
+      deletePresetBtn.title = isDesignDefaults
+        ? 'Design default values cannot be deleted'
+        : hasPresetSelected
+          ? 'Delete current preset'
+          : 'Select a preset first to delete';
+    }
+  }
+
+  function clearPresetSelection(currentValues = null) {
+    // OpenSCAD Customizer behavior:
+    // Changing parameters does NOT clear the selected preset.
+    // We only update whether the current preset has unsaved changes.
     if (isLoadingPreset) {
       return;
     }
 
-    const state = stateManager.getState();
-    if (state.currentPresetId) {
-      stateManager.setState({ currentPresetId: null, currentPresetName: null });
-      const presetSelect = document.getElementById('presetSelect');
-      if (presetSelect) {
-        presetSelect.value = '';
-      }
+    updatePresetDirtyState(currentValues);
+    updatePresetControlStates();
+  }
+
+  function setCurrentPresetSelection(preset) {
+    if (!preset) {
+      forceClearPresetSelection();
+      return;
     }
+
+    console.log('[Preset] Setting selection:', {
+      id: preset.id,
+      name: preset.name,
+      paramCount: Object.keys(preset.parameters || {}).length
+    });
+
+    setCurrentPresetSignature(preset.parameters);
+    isPresetDirty = false;
+    stateManager.setState({
+      currentPresetId: preset.id,
+      currentPresetName: preset.name,
+    });
+    const presetSelect = document.getElementById('presetSelect');
+    if (presetSelect) {
+      presetSelect.value = preset.id;
+    }
+    updatePresetControlStates();
   }
 
   // Update preset dropdown based on current model
+  // Preserves current selection if the preset still exists
   function updatePresetDropdown() {
     const state = stateManager.getState();
     const presetSelect = document.getElementById('presetSelect');
@@ -8926,22 +11446,30 @@ async function initApp() {
       presetSelect.disabled = true;
       presetSelect.innerHTML =
         '<option value="">-- No model loaded --</option>';
+      currentPresetSignature = null;
+      isPresetDirty = false;
+      updatePresetControlStates();
       return;
     }
 
     const modelName = state.uploadedFile.name;
     const presets = presetManager.getPresetsForModel(modelName);
+    
+    // Remember current selection from state (survives dropdown rebuilds)
+    const currentPresetId = state.currentPresetId;
 
     // Clear and rebuild dropdown
     presetSelect.innerHTML = '<option value="">-- Select Preset --</option>';
 
-    if (presets.length === 0) {
-      const option = document.createElement('option');
-      option.value = '';
-      option.textContent = '-- No presets saved --';
-      option.disabled = true;
-      presetSelect.appendChild(option);
-    } else {
+    // "design default values" is ALWAYS first in dropdown (desktop OpenSCAD parity)
+    // This is a virtual preset derived from the .scad source defaults, not stored in PresetManager
+    const defaultsOption = document.createElement('option');
+    defaultsOption.value = DESIGN_DEFAULTS_ID;
+    defaultsOption.textContent = 'design default values';
+    defaultsOption.style.fontStyle = 'italic'; // Visually distinguish from user presets
+    presetSelect.appendChild(defaultsOption);
+
+    if (presets.length > 0) {
       presets.forEach((preset) => {
         const option = document.createElement('option');
         option.value = preset.id;
@@ -8951,6 +11479,24 @@ async function initApp() {
     }
 
     presetSelect.disabled = false;
+    
+    // Restore selection if the preset still exists in the list
+    if (currentPresetId) {
+      const currentPreset = presets.find((preset) => preset.id === currentPresetId);
+      if (currentPreset) {
+        presetSelect.value = currentPresetId;
+        setCurrentPresetSignature(currentPreset.parameters);
+      } else {
+        // Preset was deleted or doesn't exist for this model - clear state
+        forceClearPresetSelection();
+      }
+    } else {
+      currentPresetSignature = null;
+      isPresetDirty = false;
+    }
+
+    updatePresetDirtyState();
+    updatePresetControlStates();
   }
 
   // Show save preset modal
@@ -9041,7 +11587,8 @@ async function initApp() {
       }
 
       try {
-        presetManager.savePreset(
+        // Save preset and capture returned object (contains id and name)
+        const savedPreset = presetManager.savePreset(
           state.uploadedFile.name,
           finalName,
           state.parameters,
@@ -9049,7 +11596,40 @@ async function initApp() {
         );
 
         updateStatus(`Preset "${finalName}" saved`);
+
+        // OpenSCAD Customizer behavior:
+        // - "+" creates a new preset AND selects it in the dropdown
+        // - Save button immediately becomes available to overwrite that preset
+        //
+        // In practice, the preset dropdown may be rebuilt by subscribers and other UI
+        // events around the save; ensure selection is applied after any rebuilds.
+        setCurrentPresetSelection(savedPreset);
         updatePresetDropdown();
+
+        const ensurePresetSelected = (presetId) => {
+          const presetSelectEl = document.getElementById('presetSelect');
+          if (!presetSelectEl) return;
+
+          presetSelectEl.value = presetId;
+          updatePresetControlStates();
+
+          // If the option isn't present yet (or a subsequent rebuild overwrote it),
+          // retry on the next frame.
+          if (presetSelectEl.value !== presetId) {
+            console.warn(
+              '[Preset] Auto-select did not stick, retrying after rebuild'
+            );
+            requestAnimationFrame(() => {
+              const el = document.getElementById('presetSelect');
+              if (!el) return;
+              el.value = presetId;
+              updatePresetControlStates();
+            });
+          }
+        };
+
+        ensurePresetSelected(savedPreset.id);
+
         closeSavePresetModal();
       } catch (error) {
         alert(`Failed to save preset: ${error.message}`);
@@ -9133,15 +11713,28 @@ async function initApp() {
     modal.innerHTML = `
       <div class="preset-modal-content">
         <div class="preset-modal-header">
-          <h3 id="managePresetsTitle" class="preset-modal-title">Manage Presets</h3>
+          <h3 id="managePresetsTitle" class="preset-modal-title">Import / Export Presets</h3>
           <button class="preset-modal-close" aria-label="Close dialog" data-action="close">&times;</button>
         </div>
-        <div class="preset-list">
-          ${presetsHTML}
+        <div class="preset-import-export-actions" style="display:flex;gap:12px;padding:16px;border-bottom:1px solid var(--border-color, #e0e0e0);">
+          <button class="btn btn-primary" data-action="import" style="flex:1;padding:12px;font-size:1em;">
+            📂 Import Presets
+          </button>
+          <button class="btn btn-primary" data-action="export-all" style="flex:1;padding:12px;font-size:1em;">
+            💾 Export All Presets
+          </button>
         </div>
+        ${presets.length > 0 ? `
+        <details class="preset-list-details" style="padding:0 16px 16px;">
+          <summary style="padding:8px 0;cursor:pointer;color:var(--text-secondary, #666);">
+            Individual presets (${presets.length})
+          </summary>
+          <div class="preset-list">
+            ${presetsHTML}
+          </div>
+        </details>
+        ` : '<div class="preset-empty" style="padding:16px;">No presets saved for this model yet. Import a preset file or use the + button to create one.</div>'}
         <div class="preset-modal-footer">
-          <button class="btn btn-secondary" data-action="import">Import Preset</button>
-          <button class="btn btn-secondary" data-action="export-all">Export All</button>
           <button class="btn btn-outline" data-action="close">Close</button>
         </div>
       </div>
@@ -9172,9 +11765,12 @@ async function initApp() {
           isLoadingPreset = true;
 
           const state = stateManager.getState();
-          stateManager.setState({ parameters: { ...preset.parameters } });
+          // Desktop OpenSCAD parity: MERGE preset parameters onto current state
+          // "Only the parameters defined in the dataset are modified"
+          const mergedParams = { ...state.parameters, ...preset.parameters };
+          stateManager.setState({ parameters: mergedParams });
 
-          // Re-render UI with preset parameters (FIX: UI wasn't updating before)
+          // Re-render UI with merged parameters
           const parametersContainer = document.getElementById(
             'parametersContainer'
           );
@@ -9184,30 +11780,23 @@ async function initApp() {
             (values) => {
               stateManager.setState({ parameters: values });
               // Clear preset selection when parameters are manually changed
-              clearPresetSelection();
+              clearPresetSelection(values);
               if (autoPreviewController) {
                 autoPreviewController.onParameterChange(values);
               }
               updatePrimaryActionButton();
             },
-            preset.parameters // Pass preset values as initial values
+            mergedParams // Pass merged values as initial values
           );
 
-          // Trigger auto-preview with new parameters
+          // Trigger auto-preview with merged parameters
           if (autoPreviewController) {
-            autoPreviewController.onParameterChange(preset.parameters);
+            autoPreviewController.onParameterChange(mergedParams);
           }
           updatePrimaryActionButton();
 
           // Track the currently loaded preset and update dropdown to show it
-          stateManager.setState({
-            currentPresetId: presetId,
-            currentPresetName: preset.name,
-          });
-          const presetSelect = document.getElementById('presetSelect');
-          if (presetSelect) {
-            presetSelect.value = presetId;
-          }
+          setCurrentPresetSelection(preset);
 
           // Clear the loading flag
           isLoadingPreset = false;
@@ -9237,7 +11826,11 @@ async function initApp() {
           updateStatus(`Exported preset: ${preset.name}`);
         }
       } else if (action === 'export-all') {
-        const json = presetManager.exportAllPresets(modelName);
+        // Export in OpenSCAD native format (includes "design default values" as first entry)
+        // Pass hidden parameters for desktop parity (included in export but not in UI)
+        const currentState = stateManager.getState();
+        const hiddenParams = currentState.schema?.hiddenParameters || {};
+        const json = presetManager.exportOpenSCADNativeFormat(modelName, hiddenParams);
         if (json) {
           const blob = new Blob([json], { type: 'application/json' });
           const url = URL.createObjectURL(blob);
@@ -9246,41 +11839,80 @@ async function initApp() {
           a.download = `${modelName.replace('.scad', '')}-presets.json`;
           a.click();
           URL.revokeObjectURL(url);
-          updateStatus('Exported all presets');
+          updateStatus('Exported all presets (OpenSCAD native format)');
         } else {
-          alert('No presets to export');
+          updateStatus('No presets to export. Create some presets first using the + button.');
         }
       } else if (action === 'import') {
         // Create file input for import
+        // Multi-preset JSON import support
         const input = document.createElement('input');
         input.type = 'file';
         input.accept = '.json';
+        input.multiple = true; // Allow multiple files for batch preset import workflow
         input.onchange = async (e) => {
-          const file = e.target.files[0];
-          if (!file) return;
+          const files = e.target.files;
+          if (!files || files.length === 0) return;
 
           try {
-            const text = await file.text();
             // Get current model name and schema for proper import
             const currentState = stateManager.getState();
             const currentModelName = currentState.uploadedFile?.name || null;
             const paramSchema = currentState.schema?.parameters || {};
-            const result = presetManager.importPreset(
-              text,
-              currentModelName,
-              paramSchema
-            );
-
-            if (result.success) {
-              alert(
-                `Imported ${result.imported} preset(s)${result.skipped > 0 ? ` (${result.skipped} skipped)` : ''}`
+            
+            // Warn if no model is loaded
+            if (!currentModelName) {
+              const proceed = confirm(
+                'No model is currently loaded. Presets will be saved as "Unknown Model" and may not appear in the dropdown until you load a matching model.\n\nContinue with import?'
               );
+              if (!proceed) return;
+            }
+            
+            let totalImported = 0;
+            let totalSkipped = 0;
+            const errors = [];
+            
+            for (const file of files) {
+              try {
+                const text = await file.text();
+                
+                // Log for debugging preset import issues
+                console.log(`[Import] Processing: ${file.name}`);
+                
+                const result = presetManager.importPreset(
+                  text,
+                  currentModelName,
+                  paramSchema
+                );
+
+                if (result.success) {
+                  totalImported += result.imported;
+                  totalSkipped += result.skipped || 0;
+                  console.log(`[Import] ${file.name}: ${result.imported} preset(s) imported`);
+                } else {
+                  errors.push(`${file.name}: ${result.error}`);
+                }
+              } catch (error) {
+                errors.push(`${file.name}: ${error.message}`);
+              }
+            }
+
+            // Show result
+            if (totalImported > 0) {
+              let message = `Imported ${totalImported} preset(s)`;
+              if (totalSkipped > 0) {
+                message += ` (${totalSkipped} skipped)`;
+              }
+              if (errors.length > 0) {
+                message += `\n\nErrors:\n${errors.join('\n')}`;
+              }
+              alert(message);
               updatePresetDropdown();
               // Refresh the modal
               closeManagePresetsModalHandler();
               showManagePresetsModal();
             } else {
-              alert(`Import failed: ${result.error}`);
+              alert(`Import failed:\n${errors.join('\n')}`);
             }
           } catch (error) {
             alert(`Failed to import preset: ${error.message}`);
@@ -9303,13 +11935,126 @@ async function initApp() {
     });
   }
 
-  // Preset button handlers
+  // Preset button handlers - OpenSCAD Customizer semantics
+  // Save: update selected preset, Add: create new, Delete: remove selected
   const savePresetBtn = document.getElementById('savePresetBtn');
+  const addPresetBtn = document.getElementById('addPresetBtn');
+  const deletePresetBtn = document.getElementById('deletePresetBtn');
   const managePresetsBtn = document.getElementById('managePresetsBtn');
   const presetSelect = document.getElementById('presetSelect');
 
-  savePresetBtn.addEventListener('click', showSavePresetModal);
+  // Save button: Update currently selected preset (not create new)
+  // "Pressing 'Save Preset' creates a new preset. It should simply save any parameter changes to the current preset"
+  savePresetBtn.addEventListener('click', () => {
+    const state = stateManager.getState();
+    const selectedPresetId = presetSelect?.value;
+
+    if (!state.uploadedFile) {
+      updateStatus('No model loaded', 'error');
+      return;
+    }
+
+    if (!selectedPresetId) {
+      // Fallback: if no preset selected, show dialog (shouldn't happen if button is disabled)
+      updateStatus('Select a preset first, or use + to create new', 'warning');
+      return;
+    }
+
+    // Block saving over "design default values" (immutable, desktop parity)
+    if (selectedPresetId === DESIGN_DEFAULTS_ID) {
+      updateStatus('Design default values cannot be overwritten. Use + to create a new preset.', 'warning');
+      return;
+    }
+
+    // Get the preset to update
+    const preset = presetManager.loadPreset(state.uploadedFile.name, selectedPresetId);
+    if (!preset) {
+      updateStatus('Preset not found', 'error');
+      return;
+    }
+
+    try {
+      // Save/overwrite the current preset with current parameters
+      const savedPreset = presetManager.savePreset(
+        state.uploadedFile.name,
+        preset.name, // Use existing name - this will overwrite
+        state.parameters,
+        { description: preset.description } // Preserve description
+      );
+
+      updateStatus(`Preset "${preset.name}" saved`, 'success');
+      setCurrentPresetSelection(savedPreset);
+
+      // Brief visual feedback on button
+      savePresetBtn.textContent = '✓';
+      setTimeout(() => {
+        savePresetBtn.textContent = '💾';
+      }, 1500);
+
+    } catch (error) {
+      updateStatus(`Failed to save preset: ${error.message}`, 'error');
+    }
+  });
+
+  // Add button: Create new preset (shows dialog)
+  // "You use the '+' button to create a new preset based on the current customizer parameter settings"
+  addPresetBtn.addEventListener('click', showSavePresetModal);
+
+  // Delete button: Delete currently selected preset
+  deletePresetBtn.addEventListener('click', async () => {
+    const state = stateManager.getState();
+    const selectedPresetId = presetSelect?.value;
+
+    if (!state.uploadedFile || !selectedPresetId) {
+      return;
+    }
+
+    // Block deleting "design default values" (immutable, desktop parity)
+    if (selectedPresetId === DESIGN_DEFAULTS_ID) {
+      updateStatus('Design default values cannot be deleted.', 'warning');
+      return;
+    }
+
+    // Get preset info for confirmation
+    const preset = presetManager.loadPreset(state.uploadedFile.name, selectedPresetId);
+    if (!preset) {
+      updateStatus('Preset not found', 'error');
+      return;
+    }
+
+    // Show confirmation dialog
+    const confirmed = confirm(
+      `Delete preset "${preset.name}"?\n\nThis action cannot be undone.`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      const deleted = presetManager.deletePreset(state.uploadedFile.name, selectedPresetId);
+      if (deleted) {
+        updateStatus(`Deleted preset: ${preset.name}`, 'success');
+        updatePresetDropdown(); // Refresh dropdown
+        forceClearPresetSelection(); // Clear state
+      } else {
+        updateStatus('Failed to delete preset', 'error');
+      }
+    } catch (error) {
+      updateStatus(`Failed to delete preset: ${error.message}`, 'error');
+    }
+  });
+
+  // Manage button: Import/export modal
   managePresetsBtn.addEventListener('click', showManagePresetsModal);
+
+  // Update button states when preset selection changes
+  presetSelect.addEventListener('change', () => {
+    updatePresetControlStates();
+  });
+
+  // Initialize button states
+  updatePresetControlStates();
 
   // Library help button handler (bind once, not in renderLibraryUI)
   const libraryHelpBtn = document.getElementById('libraryHelpBtn');
@@ -9358,6 +12103,49 @@ async function initApp() {
     if (!presetId) return;
 
     const state = stateManager.getState();
+
+    // Handle "design default values" virtual preset (desktop OpenSCAD parity)
+    if (presetId === DESIGN_DEFAULTS_ID) {
+      isLoadingPreset = true;
+
+      const defaultParams = { ...state.defaults };
+      stateManager.setState({ parameters: defaultParams });
+
+      // Re-render UI with default parameters
+      const parametersContainer = document.getElementById('parametersContainer');
+      renderParameterUI(
+        state.schema,
+        parametersContainer,
+        (values) => {
+          stateManager.setState({ parameters: values });
+          clearPresetSelection(values);
+          if (autoPreviewController) {
+            autoPreviewController.onParameterChange(values);
+          }
+          updatePrimaryActionButton();
+        },
+        defaultParams
+      );
+
+      if (autoPreviewController) {
+        autoPreviewController.onParameterChange(defaultParams);
+      }
+      updatePrimaryActionButton();
+
+      // Track as current selection (virtual preset)
+      currentPresetSignature = null;
+      isPresetDirty = false;
+      stateManager.setState({
+        currentPresetId: DESIGN_DEFAULTS_ID,
+        currentPresetName: 'design default values',
+      });
+
+      isLoadingPreset = false;
+      updatePresetControlStates();
+      updateStatus('Loaded design default values');
+      return;
+    }
+
     const preset = presetManager.loadPreset(state.uploadedFile.name, presetId);
 
     if (preset) {
@@ -9369,6 +12157,9 @@ async function initApp() {
 
       // If there are compatibility issues, show a warning dialog
       if (!compatibility.isCompatible) {
+        // Remember previous selection to restore on cancel
+        const previousPresetId = state.currentPresetId || '';
+        
         const action = await showPresetCompatibilityWarning(
           preset,
           compatibility,
@@ -9376,9 +12167,11 @@ async function initApp() {
         );
 
         if (action === 'cancel') {
-          // Reset dropdown selection
+          // Restore dropdown to previous selection (not just clear it)
           const presetSelectEl = document.getElementById('presetSelect');
-          if (presetSelectEl) presetSelectEl.value = '';
+          if (presetSelectEl) {
+            presetSelectEl.value = previousPresetId;
+          }
           return;
         }
         // action === 'apply' - continue with loading
@@ -9387,9 +12180,12 @@ async function initApp() {
       // Set flag to prevent clearPresetSelection during load
       isLoadingPreset = true;
 
-      stateManager.setState({ parameters: { ...preset.parameters } });
+      // Desktop OpenSCAD parity: MERGE preset parameters onto current state
+      // "Only the parameters defined in the dataset are modified, other parameters are not set to defaults"
+      const mergedParams = { ...state.parameters, ...preset.parameters };
+      stateManager.setState({ parameters: mergedParams });
 
-      // Re-render UI with preset parameters (FIX: UI wasn't updating before)
+      // Re-render UI with merged parameters (FIX: UI wasn't updating before)
       const parametersContainer = document.getElementById(
         'parametersContainer'
       );
@@ -9399,32 +12195,23 @@ async function initApp() {
         (values) => {
           stateManager.setState({ parameters: values });
           // Clear preset selection when parameters are manually changed
-          clearPresetSelection();
+          clearPresetSelection(values);
           if (autoPreviewController) {
             autoPreviewController.onParameterChange(values);
           }
           updatePrimaryActionButton();
         },
-        preset.parameters // Pass preset values as initial values
+        mergedParams // Pass merged values as initial values
       );
 
-      // Trigger auto-preview with new parameters
+      // Trigger auto-preview with merged parameters
       if (autoPreviewController) {
-        autoPreviewController.onParameterChange(preset.parameters);
+        autoPreviewController.onParameterChange(mergedParams);
       }
       updatePrimaryActionButton();
 
       // Track the currently loaded preset (for showing name in dropdown)
-      stateManager.setState({
-        currentPresetId: presetId,
-        currentPresetName: preset.name,
-      });
-      // Ensure the dropdown displays the selected preset name (native <select> label)
-      // (If the dropdown was rebuilt elsewhere, re-assert selection here.)
-      const presetSelectEl = document.getElementById('presetSelect');
-      if (presetSelectEl) {
-        presetSelectEl.value = presetId;
-      }
+      setCurrentPresetSelection(preset);
 
       // Clear the loading flag
       isLoadingPreset = false;
@@ -9589,7 +12376,7 @@ async function initApp() {
   viewSourceBtn?.addEventListener('click', () => {
     const state = stateManager.getState();
     if (!state.uploadedFile) {
-      alert('No file uploaded');
+      announceImmediate('Upload a file first to view source code');
       return;
     }
 
@@ -9613,7 +12400,7 @@ async function initApp() {
   copySourceBtn?.addEventListener('click', async () => {
     const state = stateManager.getState();
     if (!state.uploadedFile) {
-      alert('No file uploaded');
+      announceImmediate('Upload a file first to copy source code');
       return;
     }
 
@@ -9662,7 +12449,7 @@ async function initApp() {
   });
 
   // =========================================
-  // Console Output Modal (Volkswitch echo() support)
+  // Console output display for ECHO/WARNING/ERROR messages
   // =========================================
   const viewConsoleBtn = document.getElementById('viewConsoleBtn');
   const consoleOutputModal = document.getElementById('consoleOutputModal');
@@ -9677,8 +12464,12 @@ async function initApp() {
   // State for console output
   let lastConsoleOutput = '';
 
+  // Initialize ConsolePanel for ECHO/WARNING/ERROR display
+  const consolePanel = getConsolePanel();
+
   /**
    * Update console output display
+   * Display ECHO/WARNING/ERROR messages for user communication
    * @param {string} output - Console output from OpenSCAD render
    */
   function updateConsoleOutput(output) {
@@ -9695,6 +12486,10 @@ async function initApp() {
     if (consoleOutput && !consoleOutputModal?.classList.contains('hidden')) {
       renderConsoleOutput(output);
     }
+
+    // Feed the ConsolePanel with parsed console output
+    // This displays ECHO/WARNING/ERROR in the parameter panel
+    consolePanel.addOutput(output);
 
     // Extract ECHO messages and display in status bar
     const echoMessages = extractEchoMessages(output);
@@ -9766,7 +12561,7 @@ async function initApp() {
     }
 
     // Announce to screen readers
-    srAnnouncer.announce(
+    announceImmediate(
       `Model has ${echoMessages.length} echo message${echoMessages.length > 1 ? 's' : ''}: ${echoMessages[0]}`
     );
   }
@@ -9812,7 +12607,7 @@ async function initApp() {
     consoleOutputModal.classList.remove('hidden');
 
     // Announce to screen readers
-    srAnnouncer.announce('Console output panel opened');
+    announceImmediate('Console output panel opened');
   };
 
   viewConsoleBtn?.addEventListener('click', openConsoleModal);
@@ -9873,7 +12668,7 @@ async function initApp() {
     try {
       await navigator.clipboard.writeText(lastConsoleOutput);
       consoleCopyBtn.textContent = '✅ Copied!';
-      srAnnouncer.announce('Console output copied to clipboard');
+      announceImmediate('Console output copied to clipboard');
       setTimeout(() => {
         consoleCopyBtn.innerHTML = `
           <svg class="btn-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -9889,6 +12684,35 @@ async function initApp() {
     }
   });
 
+  // Download console log for troubleshooting
+  const consoleDownloadBtn = document.getElementById('consoleDownloadBtn');
+  consoleDownloadBtn?.addEventListener('click', () => {
+    if (!lastConsoleOutput) {
+      updateStatus('No console output to download', 'warning');
+      return;
+    }
+
+    // Generate filename with timestamp
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const state = stateManager.getState();
+    const modelName = state.uploadedFile?.name?.replace('.scad', '') || 'console';
+    const filename = `${modelName}-console-${timestamp}.txt`;
+
+    // Create blob and download
+    const blob = new Blob([lastConsoleOutput], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    updateStatus(`Downloaded: ${filename}`, 'success');
+    announceImmediate('Console log downloaded');
+  });
+
   // Clear console
   consoleClearBtn?.addEventListener('click', () => {
     lastConsoleOutput = '';
@@ -9896,7 +12720,7 @@ async function initApp() {
       consoleBadge.classList.add('hidden');
     }
     renderConsoleOutput('');
-    srAnnouncer.announce('Console output cleared');
+    announceImmediate('Console output cleared');
   });
 
   // Make updateConsoleOutput available globally for the render result handler
@@ -9981,7 +12805,7 @@ async function initApp() {
       (values) => {
         stateManager.recordParameterState();
         stateManager.setState({ parameters: values });
-        clearPresetSelection();
+        clearPresetSelection(values);
         if (autoPreviewController && state.uploadedFile) {
           autoPreviewController.onParameterChange(values);
         }
@@ -10051,7 +12875,7 @@ async function initApp() {
   });
 
   // =========================================
-  // Export Changed Settings (Volkswitch troubleshooting support)
+  // Export Changed Settings (troubleshooting and sharing support)
   // =========================================
   const exportChangedBtn = document.getElementById('exportChangedBtn');
 
@@ -10078,7 +12902,7 @@ async function initApp() {
     if (parsed.message && parsed.changeCount === undefined) {
       // No changes made
       updateStatus('All parameters are at default values');
-      srAnnouncer.announce(
+      announceImmediate(
         'All parameters are at default values. Nothing to export.'
       );
       return;
@@ -10103,7 +12927,7 @@ async function initApp() {
     // Update status
     const changeCount = parsed.changeCount || 0;
     updateStatus(`Exported ${changeCount} changed parameter(s)`);
-    srAnnouncer.announce(
+    announceImmediate(
       `Downloaded ${changeCount} changed parameters as JSON file`
     );
   });
@@ -10328,6 +13152,68 @@ async function initApp() {
     }
   });
 
+  // Camera view presets (Ctrl+numpad to match OpenSCAD desktop)
+  keyboardConfig.on('viewTop', () => {
+    if (previewManager) previewManager.setCameraView('top');
+  });
+
+  keyboardConfig.on('viewBottom', () => {
+    if (previewManager) previewManager.setCameraView('bottom');
+  });
+
+  keyboardConfig.on('viewFront', () => {
+    if (previewManager) previewManager.setCameraView('front');
+  });
+
+  keyboardConfig.on('viewBack', () => {
+    if (previewManager) previewManager.setCameraView('back');
+  });
+
+  keyboardConfig.on('viewLeft', () => {
+    if (previewManager) previewManager.setCameraView('left');
+  });
+
+  keyboardConfig.on('viewRight', () => {
+    if (previewManager) previewManager.setCameraView('right');
+  });
+
+  keyboardConfig.on('viewDiagonal', () => {
+    if (previewManager) previewManager.setCameraView('diagonal');
+  });
+
+  keyboardConfig.on('toggleProjection', () => {
+    if (previewManager) {
+      const newMode = previewManager.toggleProjection();
+      const isPerspective = newMode === 'perspective';
+      
+      // Update desktop toggle button state
+      const projToggle = document.getElementById('projectionToggle');
+      if (projToggle) {
+        projToggle.setAttribute('aria-pressed', isPerspective ? 'false' : 'true');
+        projToggle.title = isPerspective 
+          ? 'Switch to Orthographic (P)' 
+          : 'Switch to Perspective (P)';
+        const labelSpan = projToggle.querySelector('span');
+        if (labelSpan) {
+          labelSpan.textContent = isPerspective ? 'Perspective' : 'Orthographic';
+        }
+      }
+      
+      // Update mobile toggle button state
+      const mobileProjToggle = document.getElementById('mobileProjectionToggle');
+      if (mobileProjToggle) {
+        mobileProjToggle.setAttribute('aria-pressed', isPerspective ? 'false' : 'true');
+        mobileProjToggle.title = isPerspective 
+          ? 'Switch to Orthographic' 
+          : 'Switch to Perspective';
+        const mobileLabelSpan = mobileProjToggle.querySelector('span');
+        if (mobileLabelSpan) {
+          mobileLabelSpan.textContent = isPerspective ? 'Perspective' : 'Orthographic';
+        }
+      }
+    }
+  });
+
   keyboardConfig.on('focusSavedProjects', () => {
     const savedProjectsList = document.getElementById('savedProjectsList');
     const welcomeScreen = document.getElementById('welcomeScreen');
@@ -10375,6 +13261,13 @@ async function initApp() {
         modal.dataset.initialized = 'true';
       }
       openModal(modal);
+    }
+  });
+
+  // Expert Mode toggle (Ctrl+E)
+  keyboardConfig.on('toggleExpertMode', () => {
+    if (_isEnabled('expert_mode') && window._modeManager) {
+      window._modeManager.toggleMode();
     }
   });
 

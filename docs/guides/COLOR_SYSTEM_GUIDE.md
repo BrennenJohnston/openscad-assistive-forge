@@ -274,7 +274,7 @@ Respects `prefers-reduced-motion: reduce`:
 
 ## Color Blindness Considerations
 
-The palette is designed to be distinguishable for common color vision deficiencies:
+The palette stays distinguishable across common color vision deficiencies:
 
 - **Yellow vs Green**: Sufficient brightness difference
 - **Teal vs Green**: Distinct hues

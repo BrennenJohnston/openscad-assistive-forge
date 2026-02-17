@@ -4,67 +4,11 @@
  * @license GPL-3.0-or-later
  */
 
-/**
- * Get all focusable elements within a container
- * @param {HTMLElement} container - Container to search within
- * @returns {HTMLElement[]} Array of focusable elements
- */
-function getFocusableElements(container) {
-  const selector = [
-    'button:not([disabled]):not([tabindex="-1"])',
-    'a[href]:not([tabindex="-1"])',
-    'input:not([disabled]):not([type="hidden"]):not([tabindex="-1"])',
-    'select:not([disabled]):not([tabindex="-1"])',
-    'textarea:not([disabled]):not([tabindex="-1"])',
-    '[tabindex]:not([tabindex="-1"])',
-    '[contenteditable="true"]:not([tabindex="-1"])',
-  ].join(', ');
-
-  // Visible elements only (offsetParent can be null for some positioned elements)
-  return Array.from(container.querySelectorAll(selector)).filter((el) => {
-    if (el.getAttribute('aria-hidden') === 'true') return false;
-    const isVisible =
-      el.offsetWidth > 0 ||
-      el.offsetHeight > 0 ||
-      el.getClientRects().length > 0;
-    return isVisible;
-  });
-}
-
-/**
- * Create a focus trap handler
- * @param {HTMLElement} modal - Modal element to trap focus within
- * @returns {Function} Keydown handler function
- */
-function createFocusTrap(modal) {
-  return function trapFocus(e) {
-    if (e.key !== 'Tab') return;
-
-    const focusable = getFocusableElements(modal);
-    if (focusable.length === 0) return;
-
-    const firstFocusable = focusable[0];
-    const lastFocusable = focusable[focusable.length - 1];
-
-    if (e.shiftKey) {
-      // Shift + Tab: going backward
-      if (document.activeElement === firstFocusable) {
-        e.preventDefault();
-        lastFocusable.focus();
-      }
-    } else {
-      // Tab: going forward
-      if (document.activeElement === lastFocusable) {
-        e.preventDefault();
-        firstFocusable.focus();
-      }
-    }
-  };
-}
+import { createFocusTrap, getFocusableElements } from './focus-trap.js';
 
 /**
  * Modal state storage
- * @type {Map<HTMLElement, {trigger: HTMLElement|null, trapHandler: Function}>}
+ * @type {Map<HTMLElement, {trigger: HTMLElement|null, focusTrap: Object}>}
  */
 const modalStates = new Map();
 let bodyOverflowBefore = null;
@@ -83,13 +27,13 @@ export function openModal(modal, options = {}) {
   // Store trigger for focus restoration
   const trigger = document.activeElement;
 
-  // Create focus trap handler
-  const trapHandler = createFocusTrap(modal);
+  // Create focus trap using shared utility
+  const focusTrap = createFocusTrap(modal);
 
   // Store state
   modalStates.set(modal, {
     trigger,
-    trapHandler,
+    focusTrap,
     onClose: options.onClose || null,
   });
 
@@ -97,15 +41,9 @@ export function openModal(modal, options = {}) {
   modal.classList.remove('hidden');
   modal.setAttribute('aria-hidden', 'false');
 
-  // Add focus trap listener
-  modal.addEventListener('keydown', trapHandler);
-
-  // Focus the target element or first focusable
-  requestAnimationFrame(() => {
-    const focusTarget = options.focusTarget || getFocusableElements(modal)[0];
-    if (focusTarget) {
-      focusTarget.focus();
-    }
+  // Activate focus trap with initial focus
+  focusTrap.activate({
+    initialFocus: options.focusTarget || getFocusableElements(modal)[0],
   });
 
   // Prevent body scroll (optional)
@@ -130,8 +68,8 @@ export function closeModal(modal) {
   modal.setAttribute('aria-hidden', 'true');
 
   if (state) {
-    // Remove focus trap listener
-    modal.removeEventListener('keydown', state.trapHandler);
+    // Deactivate focus trap
+    state.focusTrap.deactivate();
 
     // Restore focus to trigger
     if (state.trigger && typeof state.trigger.focus === 'function') {

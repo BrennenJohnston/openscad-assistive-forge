@@ -3,19 +3,34 @@
  * @license GPL-3.0-or-later
  */
 
-import OpenSCAD from 'openscad-wasm-prebuilt';
-
 let instance = null;
 
 async function initOpenSCAD() {
-  if (!instance) {
+  if (instance) return instance;
+
+  try {
+    // Use vendored official OpenSCAD WASM build (with Manifold support)
+    // Place openscad.js and openscad.wasm in public/wasm/openscad-official/
+    // Download from: https://files.openscad.org/playground/
+    const wasmBasePath = `${self.location.origin}/wasm/openscad-official`;
+    const OpenSCADModule = await import(/* @vite-ignore */ `${wasmBasePath}/openscad.js`);
+    const OpenSCAD = OpenSCADModule.default;
     instance = await OpenSCAD({
       noInitialRun: true,
+      noExitRuntime: true,
       print: (text) => console.log('[OpenSCAD]', text),
-      printErr: (text) => console.error('[OpenSCAD]', text)
+      printErr: (text) => console.error('[OpenSCAD]', text),
+      locateFile: (path) => {
+        if (path.endsWith('.wasm') || path.endsWith('.data')) {
+          return `${wasmBasePath}/${path}`;
+        }
+        return path;
+      },
     });
+    return instance;
+  } catch (err) {
+    throw new Error(`Failed to initialize OpenSCAD: ${err.message}`);
   }
-  return instance;
 }
 
 async function render(scadContent, format = 'stl') {

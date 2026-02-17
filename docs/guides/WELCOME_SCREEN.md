@@ -147,6 +147,6 @@ All tutorials use `simple-box` example except Advanced Makers (uses `library-tes
 
 ## Related Documentation
 
-- [Accessibility Guide](ACCESSIBILITY_GUIDE.md) - Comprehensive accessibility features
+- [Accessibility Guide](ACCESSIBILITY_GUIDE.md) - Full accessibility features reference
 - [Keyguard Workflow Guide](KEYGUARD_WORKFLOW_GUIDE.md) - Keyboard-first workflow
 - [Testing](../TESTING.md) - Test commands

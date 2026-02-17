@@ -5,6 +5,8 @@
  * @license GPL-3.0-or-later
  */
 
+import { announce } from './announcer.js';
+
 /**
  * Workflow steps in order
  */
@@ -14,7 +16,7 @@ const WORKFLOW_STEPS = ['upload', 'customize', 'render', 'download'];
  * Current workflow state
  */
 let currentStep = null;
-let completedSteps = new Set();
+const completedSteps = new Set();
 
 /**
  * Initialize the workflow progress indicator
@@ -135,13 +137,12 @@ function updateProgressUI() {
 }
 
 /**
- * Announce step change to screen readers
+ * Announce step change to screen readers.
+ * Uses shared announcer.js utility with short debounce to avoid conflicting
+ * with other announcements.
  * @param {string} step - The new current step
  */
 function announceStepChange(step) {
-  const srAnnouncer = document.getElementById('srAnnouncer');
-  if (!srAnnouncer) return;
-
   const stepIndex = WORKFLOW_STEPS.indexOf(step) + 1;
   const stepLabels = {
     upload: 'Upload file',
@@ -152,10 +153,8 @@ function announceStepChange(step) {
 
   const message = `Step ${stepIndex} of ${WORKFLOW_STEPS.length}: ${stepLabels[step] || step}`;
 
-  // Use a timeout to avoid conflicting with other announcements
-  setTimeout(() => {
-    srAnnouncer.textContent = message;
-  }, 100);
+  // Use debounced announce to avoid conflicting with other announcements
+  announce(message, { debounceMs: 100 });
 }
 
 /**

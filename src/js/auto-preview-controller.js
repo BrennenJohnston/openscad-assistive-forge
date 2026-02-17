@@ -4,6 +4,11 @@
  */
 
 import { normalizeHexColor } from './color-utils.js';
+import { getAppPrefKey } from './storage-keys.js';
+
+// Storage keys using standardized naming convention
+const STORAGE_KEY_PERF_METRICS = getAppPrefKey('perf-metrics');
+const STORAGE_KEY_METRICS_LOG = getAppPrefKey('metrics-log');
 
 /**
  * Preview state constants
@@ -68,6 +73,9 @@ export class AutoPreviewController {
 
     // Enabled libraries for rendering
     this.enabledLibraries = [];
+
+    // Parameter type metadata (schema types for boolean vs string disambiguation)
+    this.paramTypes = {};
 
     // Color parameters for preview tinting
     this.colorParamNames = [];
@@ -183,6 +191,15 @@ export class AutoPreviewController {
    */
   setEnabledLibraries(libraries) {
     this.enabledLibraries = libraries || [];
+  }
+
+  /**
+   * Set parameter type metadata from schema
+   * Used to distinguish boolean params from string "yes"/"no" dropdown params
+   * @param {Object} paramTypes - Map of parameter names to schema types (e.g. { expose_home_button: 'string', MW_version: 'boolean' })
+   */
+  setParamTypes(paramTypes) {
+    this.paramTypes = paramTypes || {};
   }
 
   /**
@@ -451,11 +468,11 @@ export class AutoPreviewController {
 
       // Collect performance metrics if enabled
       const metricsEnabled =
-        localStorage.getItem('openscad-perf-metrics') === 'true';
+        localStorage.getItem(STORAGE_KEY_PERF_METRICS) === 'true';
       if (metricsEnabled) {
         try {
           const metrics = JSON.parse(
-            localStorage.getItem('openscad-metrics-log') || '[]'
+            localStorage.getItem(STORAGE_KEY_METRICS_LOG) || '[]'
           );
           metrics.push({
             timestamp: Date.now(),
@@ -470,7 +487,7 @@ export class AutoPreviewController {
             metrics.shift();
           }
 
-          localStorage.setItem('openscad-metrics-log', JSON.stringify(metrics));
+          localStorage.setItem(STORAGE_KEY_METRICS_LOG, JSON.stringify(metrics));
           console.log('[Perf] Cache hit');
         } catch (error) {
           console.warn('[Perf] Failed to log cached metrics:', error);
@@ -538,6 +555,7 @@ export class AutoPreviewController {
           files: this.projectFiles,
           mainFile: this.mainFilePath,
           libraries: this.enabledLibraries,
+          paramTypes: this.paramTypes,
           onProgress: (percent, message) => {
             this.onProgress(percent, message, 'preview');
           },
@@ -722,7 +740,7 @@ export class AutoPreviewController {
         stl: this.fullQualitySTL,
         stats: this.fullQualityStats,
         cached: true,
-        // Include console output even from cached results (Volkswitch echo() support)
+        // Include console output even from cached results
         consoleOutput: this.fullQualityConsoleOutput || '',
       };
     }
@@ -735,6 +753,7 @@ export class AutoPreviewController {
         files: this.projectFiles,
         mainFile: this.mainFilePath,
         libraries: this.enabledLibraries,
+        paramTypes: this.paramTypes,
         ...(quality ? { quality } : {}),
         onProgress: (percent, message) => {
           this.onProgress(percent, message, 'full');
@@ -747,7 +766,7 @@ export class AutoPreviewController {
     this.fullQualityStats = result.stats;
     this.fullRenderParamHash = paramHash;
     this.fullQualityKey = qualityKey;
-    // Store console output for Volkswitch echo() support
+    // Store console output for display in Console panel
     this.fullQualityConsoleOutput = result.consoleOutput || '';
 
     // Also update the preview with full quality result

@@ -3,11 +3,18 @@
  * Right-side collapsible drawer for camera controls (desktop).
  * Mobile camera drawer for portrait/mobile view.
  * Mirrors the Parameters panel behavior on the left side.
+ *
+ * STATE CONVENTION: Additive close — `collapsed` class = closed.
+ * This is the opposite of the Parameters drawer which uses
+ * additive open (`drawer-open` class = open). See UI_STANDARDS.md.
  */
 
-const STORAGE_KEY_COLLAPSED = 'openscad-customizer-camera-panel-collapsed';
-const STORAGE_KEY_MOBILE_COLLAPSED =
-  'openscad-customizer-camera-drawer-collapsed';
+import { announceImmediate } from './announcer.js';
+import { getDrawerStateKey } from './storage-keys.js';
+
+// Storage keys using standardized naming convention
+const STORAGE_KEY_COLLAPSED = getDrawerStateKey('camera');
+const STORAGE_KEY_MOBILE_COLLAPSED = getDrawerStateKey('camera-mobile');
 
 /**
  * Initialize the camera panel controller
@@ -239,8 +246,90 @@ export function initCameraPanelController(options = {}) {
         if (pm?.fitCameraToModel && pm?.mesh) {
           pm.fitCameraToModel();
           announceAction('View reset to default');
+        } else {
+          announceAction('Load a model first');
         }
       });
+
+    // Projection toggle button (Perspective/Orthographic)
+    const projToggle = document.getElementById('projectionToggle');
+    projToggle?.addEventListener('click', () => {
+      const pm = getPM();
+      if (pm?.toggleProjection) {
+        const newMode = pm.toggleProjection();
+        const isPerspective = newMode === 'perspective';
+        projToggle.setAttribute('aria-pressed', isPerspective ? 'false' : 'true');
+        projToggle.title = isPerspective
+          ? 'Switch to Orthographic (P)'
+          : 'Switch to Perspective (P)';
+        // Update button label
+        const labelSpan = projToggle.querySelector('span');
+        if (labelSpan) {
+          labelSpan.textContent = isPerspective ? 'Perspective' : 'Orthographic';
+        }
+        // Sync mobile projection toggle
+        syncMobileProjectionToggle(newMode);
+      }
+    });
+
+    // Mobile projection toggle button
+    const mobileProjToggle = document.getElementById('mobileProjectionToggle');
+    mobileProjToggle?.addEventListener('click', () => {
+      const pm = getPM();
+      if (pm?.toggleProjection) {
+        const newMode = pm.toggleProjection();
+        const isPerspective = newMode === 'perspective';
+        mobileProjToggle.setAttribute('aria-pressed', isPerspective ? 'false' : 'true');
+        mobileProjToggle.title = isPerspective
+          ? 'Switch to Orthographic'
+          : 'Switch to Perspective';
+        // Update button label
+        const labelSpan = mobileProjToggle.querySelector('span');
+        if (labelSpan) {
+          labelSpan.textContent = isPerspective ? 'Perspective' : 'Orthographic';
+        }
+        // Sync desktop projection toggle
+        syncDesktopProjectionToggle(newMode);
+      }
+    });
+
+    /**
+     * Sync mobile projection toggle button state with desktop
+     * @param {string} mode - 'perspective' or 'orthographic'
+     */
+    function syncMobileProjectionToggle(mode) {
+      const mobileProjToggle = document.getElementById('mobileProjectionToggle');
+      if (mobileProjToggle) {
+        const isPerspective = mode === 'perspective';
+        mobileProjToggle.setAttribute('aria-pressed', isPerspective ? 'false' : 'true');
+        mobileProjToggle.title = isPerspective
+          ? 'Switch to Orthographic'
+          : 'Switch to Perspective';
+        const labelSpan = mobileProjToggle.querySelector('span');
+        if (labelSpan) {
+          labelSpan.textContent = isPerspective ? 'Perspective' : 'Orthographic';
+        }
+      }
+    }
+
+    /**
+     * Sync desktop projection toggle button state with mobile
+     * @param {string} mode - 'perspective' or 'orthographic'
+     */
+    function syncDesktopProjectionToggle(mode) {
+      const projToggle = document.getElementById('projectionToggle');
+      if (projToggle) {
+        const isPerspective = mode === 'perspective';
+        projToggle.setAttribute('aria-pressed', isPerspective ? 'false' : 'true');
+        projToggle.title = isPerspective
+          ? 'Switch to Orthographic (P)'
+          : 'Switch to Perspective (P)';
+        const labelSpan = projToggle.querySelector('span');
+        if (labelSpan) {
+          labelSpan.textContent = isPerspective ? 'Perspective' : 'Orthographic';
+        }
+      }
+    }
 
     // Mobile rotation buttons
     document
@@ -357,23 +446,33 @@ export function initCameraPanelController(options = {}) {
         if (pm?.fitCameraToModel && pm?.mesh) {
           pm.fitCameraToModel();
           announceAction('View reset to default');
+        } else {
+          announceAction('Load a model first');
         }
       });
+
+    // Standard view buttons for consistent viewing angles
+    // These are in both desktop camera panel and mobile camera drawer
+    const viewButtons = document.querySelectorAll('.camera-view-btn');
+    viewButtons.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const pm = getPM();
+        const viewName = btn.dataset.view;
+        if (viewName && pm?.setCameraView) {
+          pm.setCameraView(viewName);
+        } else if (!pm?.mesh) {
+          announceAction('Load a model first');
+        }
+      });
+    });
   }
 
   /**
    * Announce camera action to screen readers
+   * Uses centralized announcer for consistent behavior
    */
   function announceAction(message) {
-    const srAnnouncer = document.getElementById('srAnnouncer');
-    if (srAnnouncer) {
-      srAnnouncer.textContent = message;
-      setTimeout(() => {
-        if (srAnnouncer.textContent === message) {
-          srAnnouncer.textContent = '';
-        }
-      }, 1000);
-    }
+    announceImmediate(message);
   }
 
   // Initialize desktop panel

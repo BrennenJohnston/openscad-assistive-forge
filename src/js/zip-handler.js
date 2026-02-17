@@ -67,6 +67,16 @@ export async function extractZipFiles(zipFile) {
     console.log(`[ZIP] Main file detected: ${mainFile}`);
     console.log(`[ZIP] Total files extracted: ${files.size}`);
 
+    // Diagnostic: classify each extracted file by type and size
+    const fileClassification = {};
+    for (const [filePath, content] of files.entries()) {
+      const ext = filePath.split('.').pop()?.toLowerCase() || 'unknown';
+      if (!fileClassification[ext]) fileClassification[ext] = { count: 0, totalBytes: 0 };
+      fileClassification[ext].count++;
+      fileClassification[ext].totalBytes += content.length;
+    }
+    console.debug('[ZIP] File classification:', fileClassification);
+
     return { files, mainFile };
   } catch (error) {
     console.error('[ZIP] Extraction failed:', error);

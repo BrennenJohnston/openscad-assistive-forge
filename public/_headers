@@ -14,6 +14,15 @@
   X-Frame-Options: SAMEORIGIN
   Referrer-Policy: strict-origin-when-cross-origin
 
+# Content Security Policy - Report-Only Mode (Milestone 0)
+# See: docs/planning/csp-policy.md
+# Phase 1: Report-only to identify violations without breaking functionality
+# Phase 2: Move to enforcing after burn-down period
+# Note: connect-src includes GitHub raw URLs to support ?manifest= and ?project= deep-links
+#   that fetch external forge-manifest.json and project files from author-hosted repos.
+/*
+  Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://raw.githubusercontent.com https://*.github.io https://*.gitlab.io https://*.pages.dev; worker-src 'self' blob:; child-src 'self' blob:; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests
+
 # Cache static assets aggressively
 /assets/*
   Cache-Control: public, max-age=31536000, immutable

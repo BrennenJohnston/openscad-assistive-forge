@@ -3,6 +3,14 @@
  * @license GPL-3.0-or-later
  */
 
+import { getAppPrefKey } from './storage-keys.js';
+
+// Storage keys using standardized naming convention
+const STORAGE_KEY_PERF_METRICS = getAppPrefKey('perf-metrics');
+const STORAGE_KEY_METRICS_LOG = getAppPrefKey('metrics-log');
+const STORAGE_KEY_LAZY_UNION = getAppPrefKey('lazy-union');
+const STORAGE_KEY_MANIFOLD = getAppPrefKey('manifold-engine');
+
 // Re-export quality tier system for convenience
 export {
   COMPLEXITY_TIER,
@@ -293,6 +301,13 @@ export class RenderController {
     this.memoryUsage = null;
     this.onMemoryWarning = null;
 
+    // Worker health monitoring
+    this._heartbeatId = 0;
+    this._lastPongTimestamp = 0;
+    this._heartbeatInterval = null;
+    this._workerCrashCount = 0;
+    this.onWorkerHealthChange = null;
+
     // MANIFOLD OPTIMIZED: Reduced default timeouts since Manifold renders much faster
     // Configurable timeout settings
     this.timeoutConfig = {
@@ -328,7 +343,7 @@ export class RenderController {
 
   /**
    * Whether a render is currently in progress.
-   * (Note: OpenSCAD WASM renderToStl is blocking inside the worker, so we can't truly interrupt it mid-render.)
+   * (Note: OpenSCAD WASM renderToStl blocks inside the worker, so we cannot interrupt it mid-render.)
    * @returns {boolean}
    */
   isBusy() {
@@ -469,10 +484,16 @@ export class RenderController {
    * @returns {Promise<void>}
    */
   async restart() {
-    this.terminate();
+    this._workerCrashCount++;
+    console.warn(
+      `[RenderController] Worker restart #${this._workerCrashCount}`
+    );
+    this.terminate(); // also stops health monitoring
     this.initPromise = null;
     this.ready = false;
     await this.init();
+    // Resume health monitoring after reinit
+    this.startHealthMonitoring();
   }
 
   /**
@@ -546,11 +567,11 @@ export class RenderController {
 
           // Collect performance metrics if enabled
           const metricsEnabled =
-            localStorage.getItem('openscad-perf-metrics') === 'true';
+            localStorage.getItem(STORAGE_KEY_PERF_METRICS) === 'true';
           if (metricsEnabled && payload.timing) {
             try {
               const metrics = JSON.parse(
-                localStorage.getItem('openscad-metrics-log') || '[]'
+                localStorage.getItem(STORAGE_KEY_METRICS_LOG) || '[]'
               );
               metrics.push({
                 timestamp: Date.now(),
@@ -564,10 +585,7 @@ export class RenderController {
                 metrics.shift();
               }
 
-              localStorage.setItem(
-                'openscad-metrics-log',
-                JSON.stringify(metrics)
-              );
+              localStorage.setItem(STORAGE_KEY_METRICS_LOG, JSON.stringify(metrics));
               console.log('[Perf] Render timing:', payload.timing);
             } catch (error) {
               console.warn('[Perf] Failed to log metrics:', error);
@@ -640,12 +658,72 @@ export class RenderController {
         }
         break;
 
+      case 'PONG':
+        // Worker heartbeat response — update health tracking
+        this._lastPongTimestamp = Date.now();
+        break;
+
       case 'DEBUG_LOG':
         break;
 
       default:
         console.warn('[RenderController] Unknown message type:', type);
     }
+  }
+
+  /**
+   * Start worker health monitoring via heartbeat.
+   * Sends periodic PING messages; if the worker is responsive, it replies PONG.
+   * During a blocking WASM render the worker won't respond — that's expected.
+   * The health callback fires only when the worker appears unresponsive
+   * *outside* of a known render.
+   * @param {number} intervalMs - Heartbeat interval (default 10000ms)
+   */
+  startHealthMonitoring(intervalMs = 10000) {
+    this.stopHealthMonitoring();
+    this._lastPongTimestamp = Date.now();
+    this._heartbeatInterval = setInterval(() => {
+      if (!this.worker || !this.ready) return;
+
+      this.worker.postMessage({
+        type: 'PING',
+        payload: { id: ++this._heartbeatId },
+      });
+
+      // Check if last pong was too long ago AND we're not in a render
+      const silenceMs = Date.now() - this._lastPongTimestamp;
+      const isRendering = !!this.currentRequest;
+      if (!isRendering && silenceMs > intervalMs * 3) {
+        console.warn(
+          `[RenderController] Worker unresponsive for ${Math.round(silenceMs / 1000)}s outside render`
+        );
+        if (this.onWorkerHealthChange) {
+          this.onWorkerHealthChange({
+            healthy: false,
+            silenceMs,
+            crashCount: this._workerCrashCount,
+          });
+        }
+      }
+    }, intervalMs);
+  }
+
+  /**
+   * Stop worker health monitoring
+   */
+  stopHealthMonitoring() {
+    if (this._heartbeatInterval) {
+      clearInterval(this._heartbeatInterval);
+      this._heartbeatInterval = null;
+    }
+  }
+
+  /**
+   * Get worker crash count since last init
+   * @returns {number}
+   */
+  getWorkerCrashCount() {
+    return this._workerCrashCount;
   }
 
   /**
@@ -796,6 +874,7 @@ export class RenderController {
    * @param {Map<string, string>} options.files - Additional files for multi-file projects
    * @param {string} options.mainFile - Main file path (for multi-file projects)
    * @param {Array<{id: string, path: string}>} options.libraries - Library bundles to mount
+   * @param {Object} options.paramTypes - Map of parameter names to schema types (e.g. { expose_home_button: 'string', MW_version: 'boolean' })
    * @returns {Promise<Object>} Render result with data and stats
    */
   async render(scadContent, parameters = {}, options = {}) {
@@ -841,12 +920,33 @@ export class RenderController {
         }
 
         const requestId = `render-${++this.requestId}`;
+        const renderStartTime = performance.now();
 
         return new Promise((resolve, reject) => {
           this.currentRequest = {
             id: requestId,
-            resolve,
-            reject,
+            resolve: (result) => {
+              const renderDurationMs = Math.round(performance.now() - renderStartTime);
+              console.debug('[Render] Compilation complete:', {
+                requestId,
+                durationMs: renderDurationMs,
+                outputFormat: options.outputFormat || 'stl',
+                triangles: result?.stats?.triangles,
+                dataSize: result?.data?.length || result?.stl?.length || 0,
+                quality: quality?.name || 'unknown',
+              });
+              resolve(result);
+            },
+            reject: (error) => {
+              const renderDurationMs = Math.round(performance.now() - renderStartTime);
+              console.debug('[Render] Compilation failed:', {
+                requestId,
+                durationMs: renderDurationMs,
+                error: error?.message,
+                code: error?.code,
+              });
+              reject(error);
+            },
             onProgress: options.onProgress,
           };
 
@@ -859,9 +959,20 @@ export class RenderController {
           const outputFormat = options.outputFormat || 'stl';
 
           // Read performance options from localStorage (worker can't access localStorage)
+          // Engine selection: manifold_engine feature flag controls Manifold vs CGAL backend
+          // Default to true (Manifold) for performance, user can disable for compatibility
+          const manifoldPref = localStorage.getItem(STORAGE_KEY_MANIFOLD);
+          const useManifold = manifoldPref === null ? true : manifoldPref !== 'false';
+          
+          // CAUTION: lazy-union may produce incorrect geometry in WASM
+          // (OpenSCAD #350, #4169, #6060, Playground #115).
+          // Default is OFF. Only enable if user explicitly opts in via settings.
+          // If exposing a UI toggle, add warning: "Lazy union may produce incorrect
+          // geometry (wrong difference/union results). Use for preview speed only."
           const renderOptions = {
             enableLazyUnion:
-              localStorage.getItem('openscad-lazy-union') === 'true',
+              localStorage.getItem(STORAGE_KEY_LAZY_UNION) === 'true',
+            useManifold,
           };
 
           this.worker.postMessage({
@@ -870,6 +981,7 @@ export class RenderController {
               requestId,
               scadContent,
               parameters: adjustedParams,
+              paramTypes: options.paramTypes || {},
               timeoutMs,
               outputFormat,
               files: filesObject,
@@ -878,6 +990,33 @@ export class RenderController {
               renderOptions,
             },
           });
+
+          // Render-level watchdog: if the render exceeds timeout + 30s grace,
+          // the worker is hung on a blocking callMain(). Hard-cancel it.
+          // This is the last line of defense against unrecoverable WASM hangs.
+          const WATCHDOG_GRACE_MS = 30000;
+          const watchdogMs = timeoutMs + WATCHDOG_GRACE_MS;
+          this._renderWatchdogHandle = setTimeout(() => {
+            if (this.currentRequest?.id === requestId) {
+              console.error(
+                `[RenderController] Render watchdog fired after ${watchdogMs}ms — ` +
+                `worker is hung. Hard cancelling.`
+              );
+              this.cancel({ hard: true });
+            }
+          }, watchdogMs);
+
+          // Clean up watchdog when render completes (wrap resolve/reject)
+          const origResolve = this.currentRequest.resolve;
+          const origReject = this.currentRequest.reject;
+          this.currentRequest.resolve = (result) => {
+            clearTimeout(this._renderWatchdogHandle);
+            origResolve(result);
+          };
+          this.currentRequest.reject = (error) => {
+            clearTimeout(this._renderWatchdogHandle);
+            origReject(error);
+          };
         });
       };
 
@@ -928,22 +1067,71 @@ export class RenderController {
   }
 
   /**
-   * Cancel current render
+   * Cancel current render.
+   *
+   * Strategy: First, attempt a soft cancel via postMessage. If the worker
+   * doesn't respond within the grace period, perform a hard cancel by
+   * terminating the worker and reinitializing it. This is the only reliable
+   * cancellation contract because callMain() is a synchronous blocking call
+   * inside the WASM worker — the message loop cannot process CANCEL while
+   * WASM is executing.
+   *
+   * @param {Object} [options] - Cancel options
+   * @param {number} [options.gracePeriodMs=5000] - Time to wait before hard cancel
+   * @param {boolean} [options.hard=false] - Force immediate hard cancel (skip soft attempt)
    */
-  cancel() {
-    if (this.currentRequest) {
-      const { id, reject } = this.currentRequest;
-      // Guard against null worker (if terminate() was called)
-      if (this.worker) {
-        this.worker.postMessage({
-          type: 'CANCEL',
-          payload: { requestId: id },
-        });
-      }
-      // Worker-side OpenSCAD render is blocking; we can't truly interrupt it mid-render.
-      // But we must settle the promise to avoid leaks / hung awaits.
-      reject(new Error('Render cancelled'));
+  cancel(options = {}) {
+    const { gracePeriodMs = 5000, hard = false } = options;
+
+    if (!this.currentRequest) return;
+
+    const { id, reject } = this.currentRequest;
+
+    if (hard) {
+      // Immediate hard cancel — terminate and reinit
+      console.warn('[RenderController] Hard cancel: terminating worker');
+      reject(new Error('Render cancelled (hard cancel)'));
       this.currentRequest = null;
+      this._hardCancelAndReinit();
+      return;
+    }
+
+    // Soft cancel attempt — worker may or may not process this
+    if (this.worker) {
+      this.worker.postMessage({
+        type: 'CANCEL',
+        payload: { requestId: id },
+      });
+    }
+    reject(new Error('Render cancelled'));
+    this.currentRequest = null;
+
+    // Watchdog: if the worker is still blocking after the grace period,
+    // hard-cancel it. We detect this by checking if a new render has started
+    // (meaning the worker responded) vs. still being stuck.
+    this._cancelWatchdogHandle = setTimeout(() => {
+      // If no new request has been submitted and the worker is still alive,
+      // the worker is likely hung on a blocking callMain(). Terminate it.
+      if (!this.currentRequest && this.worker) {
+        console.warn(
+          '[RenderController] Watchdog: worker may be hung after cancel; terminating'
+        );
+        this._hardCancelAndReinit();
+      }
+    }, gracePeriodMs);
+  }
+
+  /**
+   * Hard cancel: terminate the worker and reinitialize it.
+   * This is the nuclear option — the only way to stop a blocking callMain().
+   * @private
+   */
+  async _hardCancelAndReinit() {
+    this.terminate();
+    try {
+      await this.init();
+    } catch (err) {
+      console.error('[RenderController] Failed to reinitialize worker after hard cancel:', err);
     }
   }
 
@@ -951,6 +1139,15 @@ export class RenderController {
    * Terminate the worker
    */
   terminate() {
+    this.stopHealthMonitoring();
+    if (this._cancelWatchdogHandle) {
+      clearTimeout(this._cancelWatchdogHandle);
+      this._cancelWatchdogHandle = null;
+    }
+    if (this.initTimeoutHandle) {
+      clearTimeout(this.initTimeoutHandle);
+      this.initTimeoutHandle = null;
+    }
     if (this.worker) {
       this.worker.terminate();
       this.worker = null;

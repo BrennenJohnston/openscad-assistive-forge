@@ -3,6 +3,9 @@
  * @license GPL-3.0-or-later
  */
 
+import { announce, announceImmediate } from './announcer.js';
+import { getAppPrefKey } from './storage-keys.js';
+
 /**
  * Parameter History Manager for Undo/Redo functionality
  * Uses a past/present/future pattern for state management
@@ -117,7 +120,7 @@ export class StateManager {
     this.subscribers = [];
     this.syncTimeout = null;
     this.saveTimeout = null;
-    this.localStorageKey = 'openscad-customizer-draft';
+    this.localStorageKey = getAppPrefKey('editor-draft');
     this.history = new ParameterHistory();
     this.isUndoRedo = false; // Flag to prevent recording during undo/redo
     this.historyEnabled = true; // Flag to disable during rendering
@@ -142,6 +145,10 @@ export class StateManager {
 
   getState() {
     return this.state;
+  }
+
+  isManifestProject() {
+    return this.state.manifestOrigin !== null;
   }
 
   syncToURL() {
@@ -220,6 +227,7 @@ export class StateManager {
         fileContent: this.state.uploadedFile.content,
         parameters: this.state.parameters,
         defaults: this.state.defaults,
+        manifestOrigin: this.state.manifestOrigin || null,
       };
 
       localStorage.setItem(this.localStorageKey, JSON.stringify(draft));
@@ -450,45 +458,18 @@ export class StateManager {
   }
 
   /**
-   * Announce changes to screen readers via dedicated live region
-   * Separate from visible status to avoid flickering
+   * Announce changes to screen readers via centralized announcer.
+   * Delegates to shared announcer.js utility for consistent behavior.
    * @param {string} message
    * @param {boolean} debounce - Whether to debounce (for rapid updates like sliders)
    */
   announceChange(message, debounce = false) {
-    const srAnnouncer = document.getElementById('srAnnouncer');
-    if (!srAnnouncer) return;
-
-    // Cancel pending announce
-    if (this._announceTimeout) clearTimeout(this._announceTimeout);
-    this._announceTimeout = null;
-
-    // Cancel pending clear (avoid clearing someone else's newer message)
-    if (this._announceClearTimeout) clearTimeout(this._announceClearTimeout);
-    this._announceClearTimeout = null;
-
-    const write = () => {
-      // Clear first so AT will re-announce repeated strings reliably
-      srAnnouncer.textContent = '';
-
-      // Next frame: write message
-      requestAnimationFrame(() => {
-        srAnnouncer.textContent = message;
-
-        // Clear after a short delay, but only if unchanged
-        this._announceClearTimeout = window.setTimeout(() => {
-          if (srAnnouncer.textContent === message) {
-            srAnnouncer.textContent = '';
-          }
-        }, 1500);
-      });
-    };
-
     if (debounce) {
-      // Debounce rapid announcements (e.g., slider changes, progress updates)
-      this._announceTimeout = window.setTimeout(write, 350);
+      // Debounced: use announce() with default 350ms debounce
+      announce(message);
     } else {
-      write();
+      // Immediate: use announceImmediate() for discrete actions
+      announceImmediate(message);
     }
   }
 }
@@ -593,6 +574,8 @@ const initialState = {
   // Libraries
   detectedLibraries: [], // Libraries detected in current .scad file
   enabledLibraries: [], // Libraries currently enabled
+  // Manifest origin tracking (set when project loaded via ?manifest= link)
+  manifestOrigin: null, // { url, name, author, loadedAt } or null
 };
 
 export const stateManager = new StateManager(initialState);

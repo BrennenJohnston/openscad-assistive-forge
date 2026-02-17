@@ -1,6 +1,6 @@
-// Volkswitch Keyguard Demo
+// Keyguard Demo
 // A simplified example demonstrating multi-file project support
-// For full keyguard functionality, visit: https://volksswitch.org
+// A multi-file project demonstrating companion file support
 // Version: demo
 
 /* [Keyguard Settings] */

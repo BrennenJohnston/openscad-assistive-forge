@@ -4,6 +4,8 @@
  * @license GPL-3.0-or-later
  */
 
+import { announceError } from './announcer.js';
+
 /**
  * Common OpenSCAD error patterns and their user-friendly translations
  */
@@ -115,7 +117,52 @@ const ERROR_PATTERNS = [
       'This file might be from an external library. Check the Libraries panel.',
   },
 
-  // CGAL errors (common in complex boolean operations)
+  // CGAL assertion failures — fatal crashes from projection()/roof() in WASM
+  // See: openscad-wasm#6, openscad#6582, CGAL#7560
+  {
+    pattern: /CGAL assertion|CGAL_assertion|CGAL precondition/i,
+    title: 'Known Browser Engine Limitation',
+    explanation:
+      'This model uses a geometry feature (likely projection() or roof()) that triggers ' +
+      'a known crash in the browser-based rendering engine (CGAL + WebAssembly).',
+    suggestion:
+      'Remove or simplify projection()/roof() calls. This is a known upstream issue — ' +
+      'the same model may work in desktop OpenSCAD.',
+  },
+  // Emscripten abort — unrecoverable WASM crash
+  {
+    pattern: /Aborted\(|abort\(|Emscripten.*abort/i,
+    title: 'Rendering Engine Crashed',
+    explanation:
+      'The browser rendering engine encountered a fatal error and stopped. ' +
+      'This often happens with projection() or roof() functions.',
+    suggestion:
+      'Try removing projection()/roof() calls, or simplify the geometry. ' +
+      'The engine will restart automatically for your next render.',
+  },
+  // WASM RuntimeError: unreachable
+  {
+    pattern: /RuntimeError:\s*unreachable/i,
+    title: 'Rendering Engine Error',
+    explanation:
+      'The rendering engine hit an internal error (unreachable code path). ' +
+      'This is typically caused by projection() or roof() in the browser engine.',
+    suggestion:
+      'Simplify the model or remove projection()/roof() functions. ' +
+      'Desktop OpenSCAD may handle this model better.',
+  },
+  // WASM RuntimeError: memory access out of bounds
+  {
+    pattern: /RuntimeError:\s*memory access out of bounds/i,
+    title: 'Memory Access Error',
+    explanation:
+      'The rendering engine tried to access memory outside its bounds. ' +
+      'This can happen with very complex models or certain geometry operations.',
+    suggestion:
+      'Reduce model complexity (lower $fn), remove minkowski() operations, ' +
+      'or simplify boolean operations.',
+  },
+  // General CGAL errors (non-fatal, complex boolean operations)
   {
     pattern: /CGAL error|cgal|nef/i,
     title: 'Complex Geometry Issue',
@@ -125,16 +172,16 @@ const ERROR_PATTERNS = [
       'Try simpler parameter values, or avoid very thin walls or sharp angles.',
   },
 
-  // 2D model exported to 3D format (Volkswitch laser-cut workflow)
+  // 2D model exported to 3D format — applies to any project producing 2D output
   {
     pattern: /MODEL_IS_2D|not a 3D object|Top level object is a 2D object/i,
     title: '2D Model Detected',
     explanation:
-      'Your model is configured to produce 2D geometry for laser cutting. ' +
+      'Your model produces 2D geometry (using projection() or 2D primitives). ' +
       '2D models cannot be previewed in the 3D viewer.',
     suggestion:
-      'To preview: change "generate" back to "keyguard" for 3D preview. ' +
-      'To export: select SVG or DXF output format, then click Generate.',
+      'To export: select SVG or DXF output format, then click Generate. ' +
+      'To preview in 3D: adjust your model parameters to produce 3D geometry.',
   },
 
   // Render quality errors
@@ -216,10 +263,14 @@ export function createFriendlyErrorDisplay(technicalError) {
   container.setAttribute('role', 'alert');
   container.setAttribute('aria-live', 'assertive');
 
-  // Title with icon
+  // Title with icon (built via DOM to avoid innerHTML XSS risk)
   const title = document.createElement('h3');
   title.className = 'error-title';
-  title.innerHTML = `<span aria-hidden="true">⚠️</span> ${error.title}`;
+  const titleIcon = document.createElement('span');
+  titleIcon.setAttribute('aria-hidden', 'true');
+  titleIcon.textContent = '⚠️';
+  title.appendChild(titleIcon);
+  title.appendChild(document.createTextNode(' ' + error.title));
   container.appendChild(title);
 
   // Plain language explanation
@@ -228,10 +279,13 @@ export function createFriendlyErrorDisplay(technicalError) {
   explanation.textContent = error.explanation;
   container.appendChild(explanation);
 
-  // Helpful suggestion
+  // Helpful suggestion (built via DOM to avoid innerHTML XSS risk)
   const suggestion = document.createElement('p');
   suggestion.className = 'error-suggestion';
-  suggestion.innerHTML = `<strong>What to try:</strong> ${error.suggestion}`;
+  const suggestionLabel = document.createElement('strong');
+  suggestionLabel.textContent = 'What to try:';
+  suggestion.appendChild(suggestionLabel);
+  suggestion.appendChild(document.createTextNode(' ' + error.suggestion));
   container.appendChild(suggestion);
 
   // Technical details (collapsed by default)
@@ -267,12 +321,9 @@ export function showFriendlyError(technicalError, container) {
   container.appendChild(errorDisplay);
   container.classList.remove('hidden');
 
-  // Announce to screen readers
-  const srAnnouncer = document.getElementById('srAnnouncer');
-  if (srAnnouncer) {
-    const error = translateError(technicalError);
-    srAnnouncer.textContent = `Error: ${error.title}. ${error.explanation}`;
-  }
+  // Announce to screen readers via assertive region
+  const error = translateError(technicalError);
+  announceError(`Error: ${error.title}. ${error.explanation}`);
 }
 
 /**

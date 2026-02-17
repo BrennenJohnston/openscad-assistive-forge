@@ -134,6 +134,31 @@ test.describe('Basic Workflow - Upload → Customize → Download', () => {
     console.log('File input has accessible label:', hasLabel)
     expect(hasLabel).toBe(true)
   })
+
+  test('should start a new project from template', async ({ page }) => {
+    await page.goto('/')
+
+    const startNewBtn = page.locator('#startNewProjectBtn')
+    await expect(startNewBtn).toBeVisible({ timeout: 5000 })
+
+    await startNewBtn.click()
+
+    // Same success signal as file upload: welcome hidden and main UI shown.
+    await expect(page.locator('#welcomeScreen')).toBeHidden({ timeout: 15000 })
+    await expect(page.locator('#mainInterface')).toBeVisible({ timeout: 5000 })
+
+    // Confirm we loaded the expected virtual filename.
+    await expect(page.locator('#fileInfoSummary')).toContainText('new_project.scad', {
+      timeout: 10000,
+    })
+
+    // And that parameters rendered (indicates extraction succeeded).
+    await expect(
+      page
+        .locator('.param-group input[type="range"], .param-group input[type="number"]')
+        .first()
+    ).toBeVisible({ timeout: 10000 })
+  })
 })
 
 test.describe('Keyboard Navigation', () => {

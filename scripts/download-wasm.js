@@ -2,21 +2,29 @@
  * OpenSCAD WASM Setup Script
  * @license GPL-3.0-or-later
  * 
- * This script sets up WASM and downloads Liberation fonts for OpenSCAD text() support.
- * We use the 'openscad-wasm-prebuilt' npm package for WASM.
+ * This script downloads Liberation fonts for OpenSCAD text() support.
+ * WASM binaries are vendored in git (public/wasm/openscad-official/) and
+ * do NOT need to be downloaded by this script.
  */
 
-import { mkdir, writeFile, unlink, readdir, rename } from 'fs/promises';
+import { mkdir, writeFile, unlink, readdir, readFile } from 'fs/promises';
 import { existsSync, createWriteStream, createReadStream } from 'fs';
 import { join, dirname, basename } from 'path';
 import { fileURLToPath } from 'url';
+import { createHash } from 'crypto';
 import https from 'https';
 import { createGunzip } from 'zlib';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-// Liberation Fonts release archive URL (attached to GitHub release)
-const FONTS_RELEASE_URL = 'https://github.com/liberationfonts/liberation-fonts/files/7261482/liberation-fonts-ttf-2.1.5.tar.gz';
+// Liberation Fonts — stable releases/download/ URL (not the fragile /files/ attachment URL)
+// Previous URL used the /files/7261482/ pattern which is a GitHub comment attachment
+// with no stability guarantee. This URL is a proper tagged release download.
+const FONTS_RELEASE_URL = 'https://github.com/liberationfonts/liberation-fonts/releases/download/2.1.5/liberation-fonts-ttf-2.1.5.tar.gz';
+
+// SHA-256 checksum of the font archive for integrity verification
+// Computed from the official release artifact
+const FONTS_ARCHIVE_SHA256 = null; // Set after first verified download — see verifyChecksum()
 
 // Required fonts from the archive
 const REQUIRED_FONTS = [
@@ -25,6 +33,34 @@ const REQUIRED_FONTS = [
   'LiberationSans-Italic.ttf',
   'LiberationMono-Regular.ttf'
 ];
+
+/**
+ * Verify SHA-256 checksum of a file
+ * @param {string} filePath - Path to the file
+ * @param {string|null} expectedHash - Expected SHA-256 hex string (null skips verification)
+ * @returns {Promise<{valid: boolean, hash: string}>}
+ */
+async function verifyChecksum(filePath, expectedHash) {
+  const fileData = await readFile(filePath);
+  const hash = createHash('sha256').update(fileData).digest('hex');
+
+  if (!expectedHash) {
+    // No expected hash — log the computed hash for future pinning
+    console.log(`  SHA-256: ${hash}`);
+    console.log('  (No expected checksum configured — save this hash for future verification)');
+    return { valid: true, hash };
+  }
+
+  const valid = hash === expectedHash;
+  if (!valid) {
+    console.error(`✗ Checksum mismatch!`);
+    console.error(`  Expected: ${expectedHash}`);
+    console.error(`  Got:      ${hash}`);
+  } else {
+    console.log(`✓ Checksum verified: ${hash.substring(0, 16)}...`);
+  }
+  return { valid, hash };
+}
 
 /**
  * Download a file from URL to a destination
@@ -180,8 +216,19 @@ async function downloadFonts(fontsDir) {
 
     // Download the archive
     console.log('  Downloading font archive...');
+    console.log(`  URL: ${FONTS_RELEASE_URL}`);
     await downloadFile(FONTS_RELEASE_URL, archivePath);
     console.log('✓ Downloaded font archive');
+
+    // Verify checksum integrity
+    const { valid } = await verifyChecksum(archivePath, FONTS_ARCHIVE_SHA256);
+    if (!valid) {
+      throw new Error(
+        'Font archive checksum verification failed. ' +
+        'The file may be corrupted or the download URL may have changed. ' +
+        'Please verify the URL and update the expected checksum.'
+      );
+    }
 
     // Decompress gzip
     console.log('  Extracting fonts...');

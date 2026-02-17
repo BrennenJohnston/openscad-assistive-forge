@@ -49,6 +49,48 @@ function paramToSchemaProperty(param) {
         data: { type: 'string', contentEncoding: 'base64' },
       };
       break;
+    case 'vector':
+      property.type = 'array';
+      property.format = 'vector';
+      // Define items based on components or default to numbers
+      if (param.nested) {
+        // Nested vectors: array of arrays
+        property.items = {
+          type: 'array',
+          items: { type: 'number' },
+        };
+      } else {
+        property.items = { type: 'number' };
+        // Add constraints to items if defined
+        if (param.minimum !== undefined) {
+          property.items.minimum = param.minimum;
+        }
+        if (param.maximum !== undefined) {
+          property.items.maximum = param.maximum;
+        }
+      }
+      // Store dimension as extension
+      if (param.dimension !== undefined) {
+        property['x-dimension'] = param.dimension;
+        property.minItems = param.dimension;
+        property.maxItems = param.dimension;
+      }
+      // Store component metadata as extension
+      if (param.components) {
+        property['x-components'] = param.components;
+      }
+      break;
+    case 'raw':
+      // Raw/expression types - store as string with original value
+      property.type = 'string';
+      property.format = 'expression';
+      if (param.rawValue) {
+        property['x-raw-value'] = param.rawValue;
+      }
+      if (param.parseFailureReason) {
+        property['x-parse-failure'] = param.parseFailureReason;
+      }
+      break;
     case 'string':
     default:
       property.type = 'string';
@@ -195,6 +237,33 @@ export function fromJsonSchema(schema) {
       } else if (prop.format === 'file') {
         param.type = 'file';
         param.uiType = 'file';
+      } else if (prop.format === 'vector' || (prop.type === 'array' && prop['x-dimension'])) {
+        param.type = 'vector';
+        param.uiType = 'vector';
+        if (prop['x-dimension'] !== undefined) {
+          param.dimension = prop['x-dimension'];
+        }
+        if (prop['x-components']) {
+          param.components = prop['x-components'];
+        }
+        // Extract item constraints
+        if (prop.items) {
+          if (prop.items.minimum !== undefined) {
+            param.minimum = prop.items.minimum;
+          }
+          if (prop.items.maximum !== undefined) {
+            param.maximum = prop.items.maximum;
+          }
+        }
+      } else if (prop.format === 'expression') {
+        param.type = 'raw';
+        param.uiType = 'raw';
+        if (prop['x-raw-value']) {
+          param.rawValue = prop['x-raw-value'];
+        }
+        if (prop['x-parse-failure']) {
+          param.parseFailureReason = prop['x-parse-failure'];
+        }
       } else if (prop.type === 'integer') {
         param.type = 'integer';
       } else if (prop.type === 'number') {
@@ -202,6 +271,13 @@ export function fromJsonSchema(schema) {
       } else if (prop.type === 'boolean') {
         param.type = 'boolean';
         param.uiType = 'toggle';
+      } else if (prop.type === 'array') {
+        // Generic array without vector format - treat as vector
+        param.type = 'vector';
+        param.uiType = 'vector';
+        if (prop.minItems !== undefined) {
+          param.dimension = prop.minItems;
+        }
       } else {
         param.type = 'string';
       }

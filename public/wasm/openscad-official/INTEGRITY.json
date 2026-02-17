@@ -1,0 +1,29 @@
+{
+  "version": "1.0",
+  "generated": "2026-02-14T00:00:00Z",
+  "build": "OpenSCAD-2025.03.25.wasm24456",
+  "source": "https://files.openscad.org/playground/",
+  "archive": "OpenSCAD-2025.03.25.wasm24456-WebAssembly-web.zip",
+  "files": {
+    "openscad.js": {
+      "sha256": "c372ba1259b34c144b1ced4bb22a502d0118ae8ee0e4bb46571a1b77ee22593b",
+      "size": 124582
+    },
+    "openscad.wasm": {
+      "sha256": "f72ce246c02c0e501990837102be383326b153fd761774ebfacce5c80c5ecf26",
+      "size": 9603115
+    }
+  },
+  "engines": {
+    "manifold": true,
+    "cgal": true,
+    "fastCsg": true
+  },
+  "knownIssues": [
+    "projection() triggers CGAL assertion failure (openscad-wasm#6, CGAL#7560)",
+    "roof() triggers CGAL FPU error (openscad-wasm#5, openscad#5220)",
+    "Performance 6x slower than native CLI (openscad-wasm#19)",
+    "lazy-union may produce incorrect geometry (disabled by default)"
+  ],
+  "nextUpdate": "Update to OpenSCAD 2026.0 RC when available (openscad#6410)"
+}

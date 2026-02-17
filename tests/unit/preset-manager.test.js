@@ -579,7 +579,7 @@ describe('Preset Manager', () => {
     it('should import OpenSCAD native preset format (parameterSets)', () => {
       const openscadPresets = {
         parameterSets: {
-          'Ken\'s Keyguard': {
+          'Tablet Keyguard': {
             width: '200',
             height: '150',
             thickness: '3.5'
@@ -602,7 +602,7 @@ describe('Preset Manager', () => {
       
       const presets = presetManager.getPresetsForModel(modelName)
       expect(presets).toHaveLength(2)
-      expect(presets.find(p => p.name === 'Ken\'s Keyguard')).toBeDefined()
+      expect(presets.find(p => p.name === 'Tablet Keyguard')).toBeDefined()
       expect(presets.find(p => p.name === 'Large Version')).toBeDefined()
     })
 
@@ -748,7 +748,11 @@ describe('Preset Manager', () => {
       const parsed = JSON.parse(exported)
       expect(parsed.fileFormatVersion).toBe('1')
       expect(parsed.parameterSets).toBeDefined()
-      expect(Object.keys(parsed.parameterSets)).toHaveLength(2)
+      // 2 user presets + 1 "design default values" virtual preset
+      expect(Object.keys(parsed.parameterSets)).toHaveLength(3)
+      // "design default values" should be FIRST key (desktop OpenSCAD parity)
+      expect(Object.keys(parsed.parameterSets)[0]).toBe('design default values')
+      expect(parsed.parameterSets['design default values']).toEqual({})
     })
 
     it('should stringify all values in OpenSCAD export', () => {
@@ -771,9 +775,13 @@ describe('Preset Manager', () => {
       expect(Object.keys(parsed.parameterSets)).toHaveLength(1)
     })
 
-    it('should return null when no presets exist', () => {
+    it('should return design defaults even when no user presets exist', () => {
       const result = presetManager.exportOpenSCADNativeFormat('non-existent-model')
-      expect(result).toBeNull()
+      // Now always returns at least "design default values" (desktop OpenSCAD parity)
+      expect(result).not.toBeNull()
+      const parsed = JSON.parse(result)
+      expect(Object.keys(parsed.parameterSets)).toHaveLength(1)
+      expect(parsed.parameterSets['design default values']).toEqual({})
     })
   })
 
@@ -1029,8 +1037,8 @@ describe('Preset Manager', () => {
         numValue: '123',
         boolTrue: 'true',
         boolFalse: 'false',
-        boolYes: 'yes',
-        boolNo: 'no',
+        yesValue: 'yes',
+        noValue: 'no',
         stringValue: 'hello',
         arrayValue: '[1, 2, 3]'
       }
@@ -1038,10 +1046,13 @@ describe('Preset Manager', () => {
       const coerced = coercePresetValues(values)
       
       expect(coerced.numValue).toBe(123)
+      // "true"/"false" are unambiguously boolean literals
       expect(coerced.boolTrue).toBe(true)
       expect(coerced.boolFalse).toBe(false)
-      expect(coerced.boolYes).toBe(true)
-      expect(coerced.boolNo).toBe(false)
+      // "yes"/"no" are NOT converted to boolean without schema context
+      // because they may be string dropdown values (e.g. expose_home_button = "yes"; //[yes,no])
+      expect(coerced.yesValue).toBe('yes')
+      expect(coerced.noValue).toBe('no')
       expect(coerced.stringValue).toBe('hello')
       expect(coerced.arrayValue).toEqual([1, 2, 3])
     })
@@ -1331,6 +1342,282 @@ describe('Preset Manager', () => {
       expect(presetManager.valuesEqual(undefined, undefined)).toBe(true)
       expect(presetManager.valuesEqual(null, undefined)).toBe(true)
       expect(presetManager.valuesEqual(null, 0)).toBe(false)
+    })
+  })
+
+  // =========================================================================
+  // Keyguard-specific preset import tests (Stakeholder Validation Plan)
+  // =========================================================================
+  describe('Keyguard Preset Import (Stakeholder)', () => {
+    const KEYGUARD_JSON = JSON.stringify({
+      fileFormatVersion: '1',
+      parameterSets: {
+        'design default values': {},
+        'iPad 9 - LTROP - TouchChat 45': {
+          type_of_tablet: 'iPad 9th generation',
+          orientation: 'landscape',
+          have_a_case: 'yes',
+          height_of_opening_in_case: '155',
+          width_of_opening_in_case: '221',
+          case_opening_corner_radius: '8',
+          number_of_rows: '5',
+          number_of_columns: '9',
+        },
+        'iPad 9 - Fintie - Grid 30': {
+          type_of_tablet: 'iPad 9th generation',
+          have_a_case: 'yes',
+          height_of_opening_in_case: '162',
+          width_of_opening_in_case: '233',
+        },
+      },
+    })
+
+    const KEYGUARD_SCHEMA = {
+      type_of_tablet: { type: 'string' },
+      orientation: { type: 'string' },
+      have_a_case: { type: 'string' },
+      height_of_opening_in_case: { type: 'integer' },
+      width_of_opening_in_case: { type: 'integer' },
+      case_opening_corner_radius: { type: 'integer' },
+      number_of_rows: { type: 'integer' },
+      number_of_columns: { type: 'integer' },
+    }
+
+    it('should import keyguard_v75.json with correct preset count', () => {
+      const result = presetManager.importPreset(
+        KEYGUARD_JSON,
+        'keyguard_v75.scad',
+        KEYGUARD_SCHEMA
+      )
+
+      expect(result.success).toBe(true)
+      // "design default values" is skipped (virtual preset generated from .scad source)
+      // So only the 2 named presets are imported
+      expect(result.imported).toBe(2)
+    })
+
+    it('should store imported presets under the model name', () => {
+      presetManager.importPreset(
+        KEYGUARD_JSON,
+        'keyguard_v75.scad',
+        KEYGUARD_SCHEMA
+      )
+
+      const presets = presetManager.getPresetsForModel('keyguard_v75.scad')
+      // 2 imported named presets (design defaults is virtual, not stored)
+      expect(presets.length).toBeGreaterThanOrEqual(2)
+
+      // Check that named presets are present
+      const ltrop = presets.find((p) => p.name.includes('LTROP'))
+      const fintie = presets.find((p) => p.name.includes('Fintie'))
+      expect(ltrop).toBeDefined()
+      expect(fintie).toBeDefined()
+    })
+
+    it('should coerce string values to proper types during import', () => {
+      presetManager.importPreset(
+        KEYGUARD_JSON,
+        'keyguard_v75.scad',
+        KEYGUARD_SCHEMA
+      )
+
+      const presets = presetManager.getPresetsForModel('keyguard_v75.scad')
+      const ltropPreset = presets.find((p) =>
+        p.name.includes('LTROP')
+      )
+
+      expect(ltropPreset).toBeDefined()
+      // String "155" should be coerced to integer 155
+      expect(ltropPreset.parameters.height_of_opening_in_case).toBe(155)
+      // String values should remain strings
+      expect(ltropPreset.parameters.type_of_tablet).toBe('iPad 9th generation')
+    })
+
+    it('should handle partial presets (only store differing values)', () => {
+      presetManager.importPreset(
+        KEYGUARD_JSON,
+        'keyguard_v75.scad',
+        KEYGUARD_SCHEMA
+      )
+
+      const presets = presetManager.getPresetsForModel('keyguard_v75.scad')
+
+      // "iPad 9 - Fintie - Grid 30" has only 4 params (partial)
+      const fintiePreset = presets.find((p) =>
+        p.name.includes('Fintie')
+      )
+      expect(fintiePreset).toBeDefined()
+      expect(Object.keys(fintiePreset.parameters).length).toBe(4)
+    })
+
+    it('should import JSON without fileFormatVersion field', () => {
+      const jsonNoVersion = JSON.stringify({
+        parameterSets: {
+          'design default values': {},
+          'Test Preset': {
+            number_of_rows: '3',
+          },
+        },
+      })
+
+      const result = presetManager.importPreset(
+        jsonNoVersion,
+        'keyguard_v75.scad',
+        KEYGUARD_SCHEMA
+      )
+
+      expect(result.success).toBe(true)
+      // "design default values" is skipped (virtual), only "Test Preset" imported
+      expect(result.imported).toBe(1)
+    })
+  })
+
+  // =====================================================================
+  // CRITICAL: Boolean vs String "yes"/"no" Coercion Tests
+  // These tests verify that coercePresetValues() correctly handles
+  // "yes"/"no" string values based on the parameter schema type.
+  // =====================================================================
+  describe('coercePresetValues - yes/no string handling', () => {
+    it('should preserve "yes"/"no" as strings when schema type is string', () => {
+      const presetValues = {
+        expose_home_button: 'yes',
+        have_a_case: 'no',
+        expose_status_bar: 'yes',
+      }
+      const schema = {
+        expose_home_button: { type: 'string' },
+        have_a_case: { type: 'string' },
+        expose_status_bar: { type: 'string' },
+      }
+
+      const result = coercePresetValues(presetValues, schema)
+
+      expect(result.expose_home_button).toBe('yes')
+      expect(result.have_a_case).toBe('no')
+      expect(result.expose_status_bar).toBe('yes')
+      // Verify they are NOT booleans
+      expect(typeof result.expose_home_button).toBe('string')
+      expect(typeof result.have_a_case).toBe('string')
+    })
+
+    it('should convert "yes"/"no" to boolean when schema type is boolean', () => {
+      const presetValues = {
+        MW_version: 'yes',
+        show_debug: 'no',
+      }
+      const schema = {
+        MW_version: { type: 'boolean' },
+        show_debug: { type: 'boolean' },
+      }
+
+      const result = coercePresetValues(presetValues, schema)
+
+      expect(result.MW_version).toBe(true)
+      expect(result.show_debug).toBe(false)
+      expect(typeof result.MW_version).toBe('boolean')
+      expect(typeof result.show_debug).toBe('boolean')
+    })
+
+    it('should preserve "yes"/"no" as strings when no schema provided (auto-detect)', () => {
+      // Without schema context, "yes"/"no" should be treated as strings (safe default)
+      const presetValues = {
+        expose_home_button: 'yes',
+        have_a_case: 'no',
+      }
+
+      const result = coercePresetValues(presetValues, {})
+
+      // autoDetectType should NOT convert "yes"/"no" to boolean
+      expect(result.expose_home_button).toBe('yes')
+      expect(result.have_a_case).toBe('no')
+      expect(typeof result.expose_home_button).toBe('string')
+      expect(typeof result.have_a_case).toBe('string')
+    })
+
+    it('should convert "true"/"false" to boolean when no schema provided (auto-detect)', () => {
+      // "true"/"false" are unambiguously boolean literals
+      const presetValues = {
+        show_debug: 'true',
+        enable_feature: 'false',
+      }
+
+      const result = coercePresetValues(presetValues, {})
+
+      expect(result.show_debug).toBe(true)
+      expect(result.enable_feature).toBe(false)
+    })
+
+    it('should handle mixed schema types correctly', () => {
+      const presetValues = {
+        expose_home_button: 'yes',     // string dropdown "yes"/"no"
+        have_a_case: 'no',             // string dropdown "yes"/"no"
+        MW_version: 'true',            // boolean param
+        number_of_rows: '5',           // integer param
+        type_of_tablet: 'iPad Pro',    // plain string
+      }
+      const schema = {
+        expose_home_button: { type: 'string' },
+        have_a_case: { type: 'string' },
+        MW_version: { type: 'boolean' },
+        number_of_rows: { type: 'integer' },
+        type_of_tablet: { type: 'string' },
+      }
+
+      const result = coercePresetValues(presetValues, schema)
+
+      // String "yes"/"no" preserved as strings
+      expect(result.expose_home_button).toBe('yes')
+      expect(typeof result.expose_home_button).toBe('string')
+      expect(result.have_a_case).toBe('no')
+      expect(typeof result.have_a_case).toBe('string')
+
+      // Boolean coerced to boolean
+      expect(result.MW_version).toBe(true)
+      expect(typeof result.MW_version).toBe('boolean')
+
+      // Integer coerced to number
+      expect(result.number_of_rows).toBe(5)
+      expect(typeof result.number_of_rows).toBe('number')
+
+      // Plain string unchanged
+      expect(result.type_of_tablet).toBe('iPad Pro')
+    })
+
+    it('should handle OpenSCAD native preset import with "yes"/"no" values', () => {
+      const nativeJson = JSON.stringify({
+        parameterSets: {
+          'design default values': {},
+          'Test Config': {
+            expose_home_button: 'yes',
+            have_a_case: 'no',
+            number_of_rows: '5',
+          },
+        },
+        fileFormatVersion: '1',
+      })
+
+      const schema = {
+        expose_home_button: { type: 'string' },
+        have_a_case: { type: 'string' },
+        number_of_rows: { type: 'integer' },
+      }
+
+      const result = presetManager.importPreset(nativeJson, 'test.scad', schema)
+      expect(result.success).toBe(true)
+      expect(result.imported).toBe(1)
+
+      const presets = presetManager.getPresetsForModel('test.scad')
+      const config = presets.find(p => p.name === 'Test Config')
+      expect(config).toBeDefined()
+
+      // "yes"/"no" should be preserved as strings, not converted to boolean
+      expect(config.parameters.expose_home_button).toBe('yes')
+      expect(config.parameters.have_a_case).toBe('no')
+      expect(typeof config.parameters.expose_home_button).toBe('string')
+      expect(typeof config.parameters.have_a_case).toBe('string')
+
+      // Integer should be coerced
+      expect(config.parameters.number_of_rows).toBe(5)
     })
   })
 })

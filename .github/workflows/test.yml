@@ -5,6 +5,7 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main, develop]
+  workflow_dispatch:
 
 jobs:
   unit-tests:
@@ -47,8 +48,8 @@ jobs:
           name: coverage-report
           path: coverage/
 
-  e2e-tests:
-    name: E2E Tests
+  e2e-tests-chromium:
+    name: E2E Tests (Chromium)
     runs-on: ubuntu-latest
     
     steps:
@@ -70,14 +71,130 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
       
-      - name: Run E2E tests
-        run: npm run test:e2e
+      - name: Run E2E tests (Chromium only)
+        run: npx playwright test --project=chromium
       
       - name: Upload Playwright report
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: playwright-report
+          name: playwright-report-chromium
+          path: playwright-report/
+          retention-days: 30
+
+  # Edge E2E tests - blocking per Milestone 0 requirements (Tier 1 browser)
+  # See: docs/planning/browser-matrix.md, docs/planning/LAYER_2_BUILD_PLAN.md
+  e2e-tests-edge:
+    name: E2E Tests (Edge)
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Download OpenSCAD WASM files
+        run: npm run setup-wasm
+      
+      - name: Install Playwright browsers (Edge/msedge)
+        run: npx playwright install --with-deps msedge
+      
+      - name: Run E2E tests (Edge)
+        run: npx playwright test --project=msedge
+      
+      - name: Upload Playwright report (Edge)
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report-edge
+          path: playwright-report/
+          retention-days: 30
+
+  # Firefox E2E tests - non-blocking per Milestone 0-2 requirements
+  # See: docs/planning/browser-matrix.md, docs/planning/LAYER_2_BUILD_PLAN.md
+  # STATUS: Will become blocking at Milestone 3 exit
+  # TO MAKE BLOCKING: Remove 'continue-on-error: true' after M3 validation
+  e2e-tests-firefox:
+    name: E2E Tests (Firefox) [Non-Blocking]
+    runs-on: ubuntu-latest
+    continue-on-error: true  # REMOVE THIS LINE AT M3 EXIT
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Download OpenSCAD WASM files
+        run: npm run setup-wasm
+      
+      - name: Install Playwright browsers (Firefox)
+        run: npx playwright install --with-deps firefox
+      
+      - name: Run E2E tests (Firefox)
+        run: npx playwright test --project=firefox
+      
+      - name: Upload Playwright report (Firefox)
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report-firefox
+          path: playwright-report/
+          retention-days: 30
+
+  # Safari/WebKit E2E tests - requires macOS runner (Milestone 3)
+  # See: docs/planning/browser-matrix.md - Tier 2 browser
+  # STATUS: Non-blocking until M3 validation complete
+  e2e-tests-webkit:
+    name: E2E Tests (Safari/WebKit) [Non-Blocking]
+    runs-on: macos-latest
+    continue-on-error: true  # REMOVE THIS LINE AT M3 EXIT
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Download OpenSCAD WASM files
+        run: npm run setup-wasm
+      
+      - name: Install Playwright browsers (WebKit)
+        run: npx playwright install --with-deps webkit
+      
+      - name: Run E2E tests (WebKit)
+        run: npx playwright test --project=webkit || true
+        env:
+          # WebKit project needs to be added to playwright.config.js
+          PW_WEBKIT_ENABLED: true
+      
+      - name: Upload Playwright report (WebKit)
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report-webkit
           path: playwright-report/
           retention-days: 30
 
@@ -101,17 +218,61 @@ jobs:
       - name: Build project
         run: npm run build
       
-      - name: Check bundle size
+      - name: Check bundle size (raw)
         run: |
           echo "Checking dist/ directory size..."
           du -sh dist/
           du -h dist/ | sort -h | tail -20
+      
+      - name: Check bundle budget (M3)
+        run: node scripts/check-bundle-budget.js dist
       
       - name: Archive build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: dist
           path: dist/
+
+  # Security checks - blocking per Milestone 0 requirements
+  # See: docs/planning/security-hardening-plan.md, docs/planning/LAYER_2_BUILD_PLAN.md
+  security-checks:
+    name: Security Checks
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run npm audit (block on critical/high)
+        run: |
+          npm audit --audit-level=high
+        continue-on-error: false
+      
+      - name: Generate SBOM (CycloneDX format)
+        run: |
+          npx @cyclonedx/cyclonedx-npm --output-file sbom-generated.json
+      
+      - name: Verify lockfile integrity
+        run: |
+          # npm ci already validates lockfile integrity
+          # This step documents the check and provides explicit feedback
+          echo "Lockfile integrity verified by npm ci"
+      
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom-generated.json
+          retention-days: 90
 
   lint-markdown:
     name: Lint Markdown

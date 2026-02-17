@@ -7,7 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Nothing yet.
+### Stakeholder Sanitization & Feature Generalization
+
+Comprehensive scrub of all stakeholder-specific references, feature generalization,
+manifest sharing hardening, and ongoing containment protocols.
+
+### Changed
+
+- **Renamed example directories** - `volkswitch-keyguard` directories renamed to `keyguard-demo` (public/examples/) and `keyguard-minimal` (tests/fixtures/)
+- **Renamed test file** - `volkswitch-workflow.spec.js` renamed to `keyguard-workflow.spec.js`
+- **Generalized all code comments** - Replaced stakeholder-specific attribution comments with feature-descriptive language across 27 source, HTML, CSS, test, and documentation files
+- **Renamed EXAMPLE_DEFINITIONS keys** - `volkswitch-keyguard-demo` becomes `keyguard-demo`; all paths updated
+- **Updated deep-link URLs** - `?example=keyguard-demo` and `?load=keyguard` now serve the renamed example
+- **Updated test assertions** - All test files reference the renamed directories and generalized content
+
+### Added
+
+- **Manifest Sharing Guide rewrite** - Complete rewrite of `docs/guides/MANIFEST_SHARING_GUIDE.md` with step-by-step non-technical setup instructions, three fictional examples, and privacy notice
+- **Manifest Stability Contract** - New `docs/specs/MANIFEST_STABILITY_CONTRACT.md` documenting URL parameter stability, schema versioning, hosting platform support, and breaking change policy
+- **Manifest E2E test suite** - New `tests/e2e/manifest-loading.spec.js` with 20 test cases covering valid loading, error handling, URL parameter interactions, mobile viewport, and accessibility
+- **Deep-link alias tests** - New tests for `?load=keyguard-demo` and `?load=keyguard` aliases
+- **Known parity gaps** - Added Forge vs Desktop OpenSCAD comparison table to `docs/TESTING.md`
+
+### Security
+
+- **Updated SECURITY_ADMIN_GUIDE.md** - CSP documentation now matches actual deployed `connect-src` policy (includes GitHub/GitLab/Cloudflare origins for manifest support)
+- **Added privacy notice** - Documents IP exposure when users load externally-hosted manifests
+- **Verified SW isolation** - Confirmed service worker does not cache manifest-fetched cross-origin content
 
 ---
 
@@ -47,7 +73,7 @@ Security hardening, saved projects, documentation overhaul, and accessibility im
 - **Added `docs/guides/SECURITY_TESTING.md`** - Security audit procedures
 - **Added `docs/DEV_QUICK_START.md`** - Developer onboarding guide
 - **Documentation style audit** - Rewrote docs to single-maintainer voice
-  - Removed template/AI patterns and excessive emoji
+  - Removed boilerplate patterns and excessive emoji
   - Consolidated docs into predictable `docs/` structure
   - Moved specs to `docs/specs/` (UI_STANDARDS, CAMERA_CONTROLS_ACCESSIBILITY)
 
@@ -73,17 +99,17 @@ Security hardening, saved projects, documentation overhaul, and accessibility im
 
 ### Major Stable Release
 
-This is the **first major stable release** of OpenSCAD Assistive Forge, marking the project as production-ready for general use.
+This is the **first major stable release** of OpenSCAD Assistive Forge, marking the project as ready for general use.
 
 **Highlights:**
-- Comprehensive documentation overhaul for accessibility and onboarding
+- Documentation overhaul for accessibility and onboarding
 - Enhanced README with detailed project intent and accessibility features
 - Package metadata improvements for npm discoverability
 - Open source conventions fully implemented
 
 ### Changed
 
-- **README.md**: Completely rewritten with comprehensive project intent, detailed accessibility features documentation, user role guide, and improved organization
+- **README.md**: Completely rewritten with clear project intent, accessibility features documentation, user role guide, and improved organization
 - **package.json**: Added author, repository, homepage, and bugs fields; expanded keywords for better discoverability
 - **Version**: Bumped to 4.0.0 to signify stable release milestone
 
@@ -100,7 +126,7 @@ This is the **first major stable release** of OpenSCAD Assistive Forge, marking 
 
 - Complete open source convention compliance
 - Enhanced CONTRIBUTING.md with UI consistency rules
-- Comprehensive THIRD_PARTY_NOTICES.md
+- Full THIRD_PARTY_NOTICES.md
 - Clear licensing information throughout
 
 ### Dependencies
@@ -128,7 +154,7 @@ This is the **first major stable release** of OpenSCAD Assistive Forge, marking 
 ### Enhanced UI & Accessibility Release
 
 **Highlights:**
-- Comprehensive color system overhaul with Radix Colors for WCAG compliance
+- Color system overhaul with Radix Colors for WCAG compliance
 - Responsive drawer UI with mobile-first design
 - Camera panel controller for keyboard-accessible 3D navigation
 - Preview settings drawer with improved UX
@@ -140,7 +166,7 @@ This is the **first major stable release** of OpenSCAD Assistive Forge, marking 
 - **Camera Panel Controller**: Keyboard-accessible camera controls for 3D preview navigation
 - **Preview Settings Drawer**: Collapsible overlay drawer for preview settings with resize capability
 - **Color Contrast Testing**: Automated WCAG 2.x and APCA contrast verification
-- **UI Standards Guide**: Comprehensive documentation for theme-consistent UI development
+- **UI Standards Guide**: Full documentation for theme-consistent UI development
 - **Color System Guide**: Complete guide for using the new semantic token system
 - **Color Migration Guide**: Instructions for updating existing components
 
@@ -170,9 +196,9 @@ This is the **first major stable release** of OpenSCAD Assistive Forge, marking 
 This is the first **major stable release** for production deployment on Cloudflare Pages.
 
 **Highlights:**
-- Production-ready deployment on Cloudflare Pages (unlimited bandwidth)
+- Stable deployment on Cloudflare Pages (unlimited bandwidth)
 - All ESLint errors resolved for clean CI builds
-- Comprehensive documentation cleanup and organization
+- Documentation cleanup and organization
 - Complete feature set across 25+ releases now stable
 
 **Infrastructure:**
@@ -246,7 +272,7 @@ This is the first **major stable release** for production deployment on Cloudfla
 - **Output Format Selector**: Moved to parameter panel for better grouping
 - **Compact Actions Bar**: Reduced padding and spacing for efficiency
 - **Keyboard Navigation**: Enhanced focus management throughout
-- **Screen Reader Support**: Comprehensive ARIA attributes
+- **Screen Reader Support**: Full ARIA attributes on all interactive elements
 - **Responsive Design**: Desktop features properly disabled on mobile
 - **Performance**: RequestAnimationFrame for smooth drag operations
 
@@ -272,7 +298,7 @@ This is the first **major stable release** for production deployment on Cloudfla
   - Fade-out animation on completion
   - Accessible with ARIA live regions
 
-- **Mobile Viewport E2E Tests**: Comprehensive mobile testing suite
+- **Mobile Viewport E2E Tests**: Multi-device mobile testing suite
   - Tests on Pixel 5, iPhone 12, iPhone SE devices
   - Landscape orientation tests
   - Small screen (320px) compatibility tests
@@ -342,7 +368,7 @@ This is the first **major stable release** for production deployment on Cloudfla
   - Added 95 new unit tests (507 → 602 total)
 
 - **Test Infrastructure**
-  - Added comprehensive LibraryManager tests (autoEnable, getMountPaths, getStats)
+  - Added LibraryManager tests (autoEnable, getMountPaths, getStats)
   - Added ComparisonView event handling tests
   - Added RenderController memory monitoring tests
   - Added PresetManager listener and statistics tests
@@ -439,7 +465,7 @@ This is the first **major stable release** for production deployment on Cloudfla
 
 ### Added - Testing Infrastructure & Performance
 
-- **Unit Testing Suite**: Comprehensive Vitest-based unit tests for core modules
+- **Unit Testing Suite**: Vitest-based unit tests for core modules
   - 119+ unit tests covering parser, state, presets, theme, and ZIP handling
   - 88.82% coverage on parser module, 70%+ on preset and theme managers
   - Test fixtures for OpenSCAD file validation
@@ -457,7 +483,7 @@ This is the first **major stable release** for production deployment on Cloudfla
   - Build verification and bundle size monitoring
   - Markdown linting
   
-- **Documentation**: Comprehensive testing and performance guides
+- **Documentation**: Testing and performance guides
   - TESTING.md - Complete guide for unit and E2E testing
   - PERFORMANCE.md - Performance optimization strategies and targets
   - Coverage targets and best practices
@@ -504,13 +530,13 @@ This is the first **major stable release** for production deployment on Cloudfla
 - **Vue 3 Template**: Full Vue Composition API template for scaffold command
 - **Svelte Template**: Modern Svelte template with reactive programming
 - **Enhanced Auto-Fix**: 15+ checks for dependencies, scripts, files, and code quality
-- **Golden Fixtures**: Comprehensive fixture system for regression testing
+- **Golden Fixtures**: Fixture system for regression testing
 - **Template Comparison**: 4 framework options (vanilla, React, Vue, Svelte)
 - **Better CLI Reporting**: Enhanced error messages and diff output
 
 ### Technical
 - Vue template (~13 files, 1,400 lines) with Composition API
-- Svelte template (~13 files, 1,300 lines) with reactive paradigm
+- Svelte template (~13 files, 1,300 lines) with reactive stores
 - Enhanced sync command (+100 lines) with 6 new checks
 - Enhanced validate command (+150 lines) with golden fixtures
 - Updated scaffold command to support Vue and Svelte
@@ -526,7 +552,7 @@ This is the first **major stable release** for production deployment on Cloudfla
 - **CI/CD Helpers**: Configuration generators for 6 platforms (GitHub, GitLab, Vercel, Netlify, Docker, Validation)
 - **React Components**: Pre-built components (App, Header, ParametersPanel, PreviewPanel, ParameterControl)
 - **Theme Presets**: Professional color palettes with accessibility support
-- **CI/CD Templates**: Production-ready workflows and configurations
+- **CI/CD Templates**: Tested workflows and configurations
 
 ### Technical
 - New `theme` command (~420 lines) with 6 presets and custom color support
@@ -624,7 +650,7 @@ Multi-variant comparison system for side-by-side parameter testing.
 ### Added - Parameter Presets System
 - **Save Presets**: Save current parameter configurations with names and descriptions
 - **Load Presets**: Quick dropdown selector and management modal for instant loading
-- **Manage Presets**: Comprehensive modal to view, load, export, and delete presets
+- **Manage Presets**: Full modal to view, load, export, and delete presets
 - **Import/Export**: Share presets as JSON files (single or collection)
 - **Smart Merging**: Duplicate preset names update existing presets
 - **Persistence**: LocalStorage per-model preset storage
@@ -801,7 +827,7 @@ Multi-variant comparison system for side-by-side parameter testing.
 - **v2.0.0** (2026-01-15): Developer toolchain
 - **v2.1.0 - v2.10.1** (2026-01-15 to 2026-01-18): CLI enhancements, templates, testing
 - **v3.0.0 - v3.1.0** (2026-01-19 to 2026-01-20): Cloudflare deployment, UI/accessibility enhancements
-- **v4.0.0** (2026-01-22): Major stable release with comprehensive documentation
+- **v4.0.0** (2026-01-22): Major stable release with full documentation
 - **v4.1.0** (2026-01-27): Security hardening, saved projects, documentation overhaul
 
 ## Version Scheme

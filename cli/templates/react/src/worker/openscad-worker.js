@@ -10,8 +10,22 @@ async function initOpenSCAD() {
   if (openscad) return openscad;
 
   try {
-    const OpenSCAD = await import('openscad-wasm-prebuilt');
-    openscad = await OpenSCAD.default();
+    // Use vendored official OpenSCAD WASM build (with Manifold support)
+    // Place openscad.js and openscad.wasm in public/wasm/openscad-official/
+    // Download from: https://files.openscad.org/playground/
+    const wasmBasePath = `${self.location.origin}/wasm/openscad-official`;
+    const OpenSCADModule = await import(/* @vite-ignore */ `${wasmBasePath}/openscad.js`);
+    const OpenSCAD = OpenSCADModule.default;
+    openscad = await OpenSCAD({
+      noInitialRun: true,
+      noExitRuntime: true,
+      locateFile: (path) => {
+        if (path.endsWith('.wasm') || path.endsWith('.data')) {
+          return `${wasmBasePath}/${path}`;
+        }
+        return path;
+      },
+    });
     return openscad;
   } catch (err) {
     throw new Error(`Failed to initialize OpenSCAD: ${err.message}`);

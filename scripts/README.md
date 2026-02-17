@@ -4,13 +4,13 @@ Utility scripts for development and testing.
 
 ## download-wasm.js
 
-Downloads OpenSCAD WASM binaries from the official repository.
+Downloads **Liberation fonts** for OpenSCAD `text()` support. WASM binaries are vendored in git (`public/wasm/openscad-official/`) and do not need to be downloaded.
 
 ```bash
 npm run setup-wasm
 ```
 
-This fetches `openscad.wasm`, `openscad.js`, and `openscad.worker.js` into `public/wasm/`. About 15-30MB total.
+This fetches Liberation fonts (~2MB) into `public/fonts/` with SHA-256 checksum verification. The WASM files (`openscad.js` + `openscad.wasm`) are already tracked in the repository.
 
 ## setup-libraries.js
 

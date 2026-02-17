@@ -1,6 +1,6 @@
 /**
  * E2E tests for example loading workflows
- * Tests deep-link example loading including volkswitch-keyguard-demo
+ * Tests deep-link example loading including keyguard-demo
  * @license GPL-3.0-or-later
  */
 
@@ -26,8 +26,8 @@ test.describe('Example Deep-Links', () => {
     const mainInterface = page.locator('#mainInterface')
     await expect(mainInterface).toBeVisible({ timeout: 20000 })
     
-    // Should have parameters loaded
-    await expect(page.locator('#parametersContainer, .param-control')).toBeVisible({ timeout: 10000 })
+    // Should have parameters loaded (use .first() to avoid strict mode on multi-match)
+    await expect(page.locator('.param-control').first()).toBeVisible({ timeout: 10000 })
   })
 
   test('loads colored-box via deep-link parameter', async ({ page }) => {
@@ -38,7 +38,7 @@ test.describe('Example Deep-Links', () => {
     const mainInterface = page.locator('#mainInterface')
     await expect(mainInterface).toBeVisible({ timeout: 20000 })
     
-    await expect(page.locator('#parametersContainer, .param-control')).toBeVisible({ timeout: 10000 })
+    await expect(page.locator('.param-control').first()).toBeVisible({ timeout: 10000 })
   })
 
   test('handles invalid example name gracefully', async ({ page }) => {
@@ -57,24 +57,24 @@ test.describe('Example Deep-Links', () => {
   })
 })
 
-test.describe('Volkswitch Keyguard Example', () => {
+test.describe('Keyguard Demo Example', () => {
   test('loads via deep-link parameter', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
     
-    await page.goto('/?example=volkswitch-keyguard-demo')
+    await page.goto('/?example=keyguard-demo')
     
     // Should show main interface
     const mainInterface = page.locator('#mainInterface')
     await expect(mainInterface).toBeVisible({ timeout: 20000 })
     
-    // Should have parameters loaded
-    await expect(page.locator('#parametersContainer, .param-control')).toBeVisible({ timeout: 10000 })
+    // Should have parameters loaded (use .first() to avoid strict mode on multi-match)
+    await expect(page.locator('.param-control').first()).toBeVisible({ timeout: 10000 })
   })
 
   test('renders with correct parameter groups', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
     
-    await page.goto('/?example=volkswitch-keyguard-demo')
+    await page.goto('/?example=keyguard-demo')
     
     // Wait for parameters to load
     const mainInterface = page.locator('#mainInterface')
@@ -104,7 +104,7 @@ test.describe('Volkswitch Keyguard Example', () => {
   test('has width parameter with correct range', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
     
-    await page.goto('/?example=volkswitch-keyguard-demo')
+    await page.goto('/?example=keyguard-demo')
     
     const mainInterface = page.locator('#mainInterface')
     await expect(mainInterface).toBeVisible({ timeout: 20000 })
@@ -132,7 +132,7 @@ test.describe('Volkswitch Keyguard Example', () => {
   test('has height parameter', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
     
-    await page.goto('/?example=volkswitch-keyguard-demo')
+    await page.goto('/?example=keyguard-demo')
     
     const mainInterface = page.locator('#mainInterface')
     await expect(mainInterface).toBeVisible({ timeout: 20000 })
@@ -150,7 +150,7 @@ test.describe('Volkswitch Keyguard Example', () => {
   test('has thickness parameter', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
     
-    await page.goto('/?example=volkswitch-keyguard-demo')
+    await page.goto('/?example=keyguard-demo')
     
     const mainInterface = page.locator('#mainInterface')
     await expect(mainInterface).toBeVisible({ timeout: 20000 })
@@ -167,7 +167,7 @@ test.describe('Volkswitch Keyguard Example', () => {
   test('has grid parameters (columns and rows)', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
     
-    await page.goto('/?example=volkswitch-keyguard-demo')
+    await page.goto('/?example=keyguard-demo')
     
     const mainInterface = page.locator('#mainInterface')
     await expect(mainInterface).toBeVisible({ timeout: 20000 })
@@ -184,25 +184,29 @@ test.describe('Volkswitch Keyguard Example', () => {
   test('has mounting holes toggle', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
     
-    await page.goto('/?example=volkswitch-keyguard-demo')
+    await page.goto('/?example=keyguard-demo')
     
     const mainInterface = page.locator('#mainInterface')
     await expect(mainInterface).toBeVisible({ timeout: 20000 })
     
-    // Check for mounting holes parameter (boolean)
-    const mountingParam = page.locator('.param-control:has-text("mounting"), [data-param*="mounting"]').first()
+    // Check for mounting holes parameter -- use data-param-name attribute (exact match)
+    // and fallback to text search. The param may be in a collapsed group but still in DOM.
+    const byAttr = page.locator('[data-param-name="add_mounting_holes"], [data-param-name*="mounting"]').first()
+    const byText = page.locator('.param-control:has-text("mounting")').first()
+    const byLabel = page.locator('label:has-text("mounting")').first()
     
-    const hasMounting = await mountingParam.isVisible().catch(() => false) ||
-                        await page.locator('label:has-text("mounting")').isVisible().catch(() => false)
+    const hasMounting = (await byAttr.count()) > 0 ||
+                        (await byText.count()) > 0 ||
+                        (await byLabel.count()) > 0
     
-    // Mounting holes option should be present
+    // Mounting holes option should be present in the DOM
     expect(hasMounting).toBe(true)
   })
 
   test('has type of keyguard dropdown', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
     
-    await page.goto('/?example=volkswitch-keyguard-demo')
+    await page.goto('/?example=keyguard-demo')
     
     const mainInterface = page.locator('#mainInterface')
     await expect(mainInterface).toBeVisible({ timeout: 20000 })
@@ -223,7 +227,7 @@ test.describe('Volkswitch Keyguard Example', () => {
   test('displays file info correctly', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
     
-    await page.goto('/?example=volkswitch-keyguard-demo')
+    await page.goto('/?example=keyguard-demo')
     
     const mainInterface = page.locator('#mainInterface')
     await expect(mainInterface).toBeVisible({ timeout: 20000 })
@@ -243,7 +247,7 @@ test.describe('Volkswitch Keyguard Example', () => {
   test('can trigger preview without errors', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
     
-    await page.goto('/?example=volkswitch-keyguard-demo')
+    await page.goto('/?example=keyguard-demo')
     
     const mainInterface = page.locator('#mainInterface')
     await expect(mainInterface).toBeVisible({ timeout: 20000 })
@@ -266,19 +270,19 @@ test.describe('Volkswitch Keyguard Example', () => {
 })
 
 test.describe('Example Files Exist', () => {
-  test('volkswitch example files are served correctly', async ({ page }) => {
+  test('keyguard demo files are served correctly', async ({ page }) => {
     // Test that the SCAD file can be fetched
-    const response = await page.request.get('/examples/volkswitch-keyguard/keyguard_demo.scad')
+    const response = await page.request.get('/examples/keyguard-demo/keyguard_demo.scad')
     expect(response.ok()).toBe(true)
     
     const content = await response.text()
-    expect(content).toContain('Volkswitch')
+    expect(content).toContain('Keyguard')
     expect(content).toContain('width')
     expect(content).toContain('height')
   })
 
-  test('volkswitch companion file is served correctly', async ({ page }) => {
-    const response = await page.request.get('/examples/volkswitch-keyguard/openings_and_additions.txt')
+  test('keyguard demo companion file is served correctly', async ({ page }) => {
+    const response = await page.request.get('/examples/keyguard-demo/openings_and_additions.txt')
     expect(response.ok()).toBe(true)
     
     // Should have some content
@@ -328,5 +332,40 @@ test.describe('Welcome Screen Examples', () => {
       
       expect(hasAccessibleName).toBe(true)
     }
+  })
+})
+
+test.describe('Deep-Link Aliases', () => {
+  test('?load=keyguard-demo loads the keyguard demo (alias for ?example=)', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
+
+    await page.goto('/?load=keyguard-demo')
+
+    const mainInterface = page.locator('#mainInterface')
+    await expect(mainInterface).toBeVisible({ timeout: 20000 })
+
+    await expect(page.locator('.param-control').first()).toBeVisible({ timeout: 10000 })
+  })
+
+  test('?load=keyguard loads via short alias', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
+
+    await page.goto('/?load=keyguard')
+
+    const mainInterface = page.locator('#mainInterface')
+    await expect(mainInterface).toBeVisible({ timeout: 20000 })
+
+    await expect(page.locator('.param-control').first()).toBeVisible({ timeout: 10000 })
+  })
+
+  test('?example=keyguard-demo loads the keyguard demo', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
+
+    await page.goto('/?example=keyguard-demo')
+
+    const mainInterface = page.locator('#mainInterface')
+    await expect(mainInterface).toBeVisible({ timeout: 20000 })
+
+    await expect(page.locator('.param-control').first()).toBeVisible({ timeout: 10000 })
   })
 })

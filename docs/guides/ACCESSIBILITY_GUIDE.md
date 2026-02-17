@@ -1,6 +1,6 @@
 # Accessibility Guide
 
-**OpenSCAD Assistive Forge** is designed to be accessible to all users, including those using assistive technologies, with limited vision, or preferring keyboard-only navigation. This guide provides role-specific information to help you get the most out of the customizer.
+**OpenSCAD Assistive Forge** works for everyone -- whether you use assistive technologies, have limited vision, or prefer keyboard-only navigation. This guide walks you through role-specific tips so you can get the most out of the customizer.
 
 ## Quick Navigation
 
@@ -342,7 +342,7 @@ The skip link uses **AAA-compliant** colors for high contrast mode:
 
 ### Color Blindness Considerations
 
-The palette is designed to be distinguishable for common color vision deficiencies:
+The palette stays distinguishable across common color vision deficiencies:
 
 - **Deuteranopia/Protanopia (Red-Green)**: Yellow and green have sufficient brightness difference
 - **Tritanopia (Blue-Yellow)**: Teal provides clear distinction from yellow
@@ -404,7 +404,7 @@ For detailed information:
 ### Built-in features
 
 - Keyboard navigation: full functionality without a mouse
-- Screen reader support: comprehensive ARIA labels and live regions
+- Screen reader support: ARIA labels and live regions on all interactive elements
 - High contrast mode: toggle via HC button (top-right)
 - Forced colors support: works with OS-enforced color schemes
 - Focus indicators: always visible on all interactive elements (WCAG 2.2)

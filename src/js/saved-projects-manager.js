@@ -18,6 +18,7 @@ const FOLDERS_STORE = 'folders';
 const PROJECT_FILES_STORE = 'projectFiles';
 const ASSETS_STORE = 'assets';
 const LS_KEY = 'openscad-saved-projects';
+const LS_FOLDERS_KEY = 'openscad-saved-folders';
 const SCHEMA_VERSION = 2; // Project schema version
 
 let db = null;
@@ -367,18 +368,38 @@ async function deleteFromIndexedDB(id) {
 
 /**
  * Clear all projects from IndexedDB
+ * Includes timeout protection to prevent freezes during bulk operations
  * @returns {Promise<void>}
  */
 async function clearIndexedDB() {
   if (!db) return;
 
+  const IDB_TIMEOUT = 5000; // 5 second timeout for IndexedDB operations
+
   return new Promise((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      console.warn('[Saved Projects] IndexedDB clear timed out');
+      reject(new Error('IndexedDB clear timeout'));
+    }, IDB_TIMEOUT);
+
     const transaction = db.transaction([STORE_NAME], 'readwrite');
     const objectStore = transaction.objectStore(STORE_NAME);
     const request = objectStore.clear();
 
-    request.onsuccess = () => resolve();
-    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      clearTimeout(timeoutId);
+      resolve();
+    };
+    request.onerror = () => {
+      clearTimeout(timeoutId);
+      reject(request.error);
+    };
+
+    // Also handle transaction errors
+    transaction.onerror = () => {
+      clearTimeout(timeoutId);
+      reject(transaction.error);
+    };
   });
 }
 
@@ -482,6 +503,7 @@ export async function saveProject({
   projectFiles = null,
   notes = '',
   folderId = null,
+  forkedFrom = null,
 }) {
   try {
     // Ensure database is initialized
@@ -524,6 +546,7 @@ export async function saveProject({
       overlayFiles: {}, // v2: overlay metadata
       presets: [], // v2: project-scoped presets metadata
       notes: notes || '',
+      forkedFrom: forkedFrom || null,
       savedAt: now,
       lastLoadedAt: now,
     };
@@ -1371,7 +1394,7 @@ export async function getFolderBreadcrumbs(folderId) {
 // localStorage helpers for folders
 function getFoldersFromLocalStorage() {
   try {
-    const data = localStorage.getItem('openscad-saved-folders');
+    const data = localStorage.getItem(LS_FOLDERS_KEY);
     return data ? JSON.parse(data) : [];
   } catch (error) {
     console.error(
@@ -1384,7 +1407,7 @@ function getFoldersFromLocalStorage() {
 
 function saveFoldersToLocalStorage(folders) {
   try {
-    localStorage.setItem('openscad-saved-folders', JSON.stringify(folders));
+    localStorage.setItem(LS_FOLDERS_KEY, JSON.stringify(folders));
   } catch (error) {
     console.error(
       '[Saved Projects] Error saving folders to localStorage:',

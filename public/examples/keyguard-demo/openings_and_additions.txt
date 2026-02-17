@@ -1,4 +1,4 @@
-// Volkswitch Keyguard - Custom Openings and Additions Template
+// Keyguard - Custom Openings and Additions Template
 // 
 // This file allows you to define custom cutouts and additions to your keyguard.
 // Lines starting with // are comments and will be ignored.

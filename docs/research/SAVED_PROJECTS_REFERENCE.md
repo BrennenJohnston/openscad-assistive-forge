@@ -33,7 +33,7 @@ import { get, set, del, keys, clear } from 'idb-keyval';
 // Store project
 await set('project-uuid-123', {
   id: 'uuid-123',
-  name: 'keyguard_v74MW.scad',
+  name: 'my-keyguard.scad',
   content: '// SCAD content...',
   notes: 'https://example.com/source',
   savedAt: Date.now()

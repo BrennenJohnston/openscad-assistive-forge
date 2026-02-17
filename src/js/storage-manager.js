@@ -85,6 +85,69 @@ export async function getStorageEstimate() {
 }
 
 /**
+ * Check whether a save of the given size is likely to succeed.
+ * Uses the Storage Estimation API when available; otherwise falls back
+ * to a conservative heuristic based on localStorage usage.
+ *
+ * @param {number} bytesToSave - Approximate size of the data to store
+ * @returns {Promise<{safe: boolean, remainingBytes: number, percentUsed: number, message: string|null}>}
+ */
+export async function checkStorageQuota(bytesToSave = 0) {
+  const fallback = {
+    safe: true,
+    remainingBytes: Infinity,
+    percentUsed: 0,
+    message: null,
+  };
+
+  try {
+    const estimate = await getStorageEstimate();
+    if (!estimate.supported || !estimate.quota) {
+      // API not available — assume safe but warn if localStorage looks large
+      const lsBytes = getLocalStorageUsageBytes();
+      const LS_SOFT_LIMIT = 4.5 * 1024 * 1024; // ~4.5MB typical localStorage limit
+      if (lsBytes + bytesToSave > LS_SOFT_LIMIT) {
+        return {
+          safe: false,
+          remainingBytes: Math.max(0, LS_SOFT_LIMIT - lsBytes),
+          percentUsed: Math.round((lsBytes / LS_SOFT_LIMIT) * 100),
+          message:
+            'Storage is nearly full. Consider exporting your presets and clearing old projects to free space.',
+        };
+      }
+      return fallback;
+    }
+
+    const remaining = estimate.quota - estimate.usage;
+    const percentUsed = estimate.percentUsed;
+
+    if (bytesToSave > remaining) {
+      return {
+        safe: false,
+        remainingBytes: remaining,
+        percentUsed,
+        message: `Not enough storage space. Need ${formatBytes(bytesToSave)} but only ${formatBytes(remaining)} available.`,
+      };
+    }
+
+    // Warn when nearing 90% capacity
+    if (percentUsed > 90) {
+      return {
+        safe: true,
+        remainingBytes: remaining,
+        percentUsed,
+        message:
+          'Storage is above 90% capacity. Consider exporting your data and clearing unused projects.',
+      };
+    }
+
+    return { safe: true, remainingBytes: remaining, percentUsed, message: null };
+  } catch (_error) {
+    return fallback;
+  }
+}
+
+/**
  * Format bytes to human-readable string
  * @param {number} bytes
  * @returns {string}
