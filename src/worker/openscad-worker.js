@@ -637,123 +637,11 @@ async function checkCapabilities() {
     // Check for export-format option (binary STL support)
     capabilities.hasBinarySTL = hasBinarySTLFlag;
 
-    const ENABLE_CAPABILITY_PROBE = false;
-    let probeResults = null;
+    // When --help text is empty (older WASM builds), assume Manifold support
+    // but not binary STL since we can't detect capabilities from flags.
     if (helpTextLength === 0) {
-      const assumedManifold = true;
-      const assumedBinarySTL = false;
-      capabilities.hasManifold = assumedManifold;
-      capabilities.hasBinarySTL = assumedBinarySTL;
-    }
-    if (helpTextLength === 0 && ENABLE_CAPABILITY_PROBE) {
-      const runCapabilityProbe = async () => {
-        const result = {
-          manifoldExitCode: null,
-          manifoldFileBytes: null,
-          manifoldError: null,
-          binaryExitCode: null,
-          binaryFileBytes: null,
-          binaryOk: null,
-          binaryError: null,
-        };
-        if (!module.FS) return result;
-        const FS = module.FS;
-        const probeInput = '/tmp/capability-probe.scad';
-        const manifoldOutput = '/tmp/capability-probe-manifold.stl';
-        const binaryOutput = '/tmp/capability-probe-binstl.stl';
-        const probeScad = 'cube(1);';
-        try {
-          FS.mkdir('/tmp');
-        } catch (_e) {
-          /* may exist */
-        }
-        try {
-          FS.writeFile(probeInput, probeScad);
-        } catch (error) {
-          result.manifoldError = String(error?.message || error);
-          return result;
-        }
-
-        const safeStatSize = (path) => {
-          try {
-            return FS.stat(path).size;
-          } catch (_e) {
-            return null;
-          }
-        };
-
-        try {
-          result.manifoldExitCode = await module.callMain([
-            '--backend=Manifold',
-            '-o',
-            manifoldOutput,
-            probeInput,
-          ]);
-          result.manifoldFileBytes = safeStatSize(manifoldOutput);
-        } catch (error) {
-          result.manifoldError = String(error?.message || error);
-        }
-
-        try {
-          result.binaryExitCode = await module.callMain([
-            '--export-format=binstl',
-            '-o',
-            binaryOutput,
-            probeInput,
-          ]);
-          result.binaryFileBytes = safeStatSize(binaryOutput);
-          if (result.binaryFileBytes && result.binaryFileBytes >= 84) {
-            const binaryData = FS.readFile(binaryOutput);
-            if (binaryData && binaryData.byteLength >= 84) {
-              const view = new DataView(
-                binaryData.buffer,
-                binaryData.byteOffset,
-                binaryData.byteLength
-              );
-              const triangleCount = view.getUint32(80, true);
-              result.binaryOk =
-                binaryData.byteLength === 84 + triangleCount * 50;
-            }
-          }
-          if (result.binaryOk === null) {
-            result.binaryOk = false;
-          }
-        } catch (error) {
-          result.binaryError = String(error?.message || error);
-        }
-
-        try {
-          FS.unlink(probeInput);
-        } catch (_e) {
-          /* ignore */
-        }
-        try {
-          FS.unlink(manifoldOutput);
-        } catch (_e) {
-          /* ignore */
-        }
-        try {
-          FS.unlink(binaryOutput);
-        } catch (_e) {
-          /* ignore */
-        }
-
-        return result;
-      };
-
-      const _probeHeapBeforeMB = module?.HEAP8
-        ? Math.round(module.HEAP8.length / 1024 / 1024)
-        : null;
-      probeResults = await runCapabilityProbe();
-      const _probeHeapAfterMB = module?.HEAP8
-        ? Math.round(module.HEAP8.length / 1024 / 1024)
-        : null;
-      const manifoldSupported =
-        probeResults.manifoldExitCode === 0 &&
-        (probeResults.manifoldFileBytes || 0) > 0;
-      const binarySupported = probeResults.binaryOk === true;
-      capabilities.hasManifold = manifoldSupported;
-      capabilities.hasBinarySTL = binarySupported;
+      capabilities.hasManifold = true;
+      capabilities.hasBinarySTL = false;
     }
 
     // Try to extract version
@@ -1099,8 +987,6 @@ function clearLibraries() {
   mountedLibraries.clear();
   console.log('[Worker FS] Cleared library tracking');
 }
-
-// hexToRgb is now imported from color-utils.js
 
 /**
  * Build -D command-line arguments from parameters

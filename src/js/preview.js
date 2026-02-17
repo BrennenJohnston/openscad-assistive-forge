@@ -66,10 +66,6 @@ async function loadThreeJS() {
   return threeJsLoading;
 }
 
-/**
- * Check if Three.js is loaded
- * @returns {boolean}
- */
 export function isThreeJsLoaded() {
   return threeJsLoaded;
 }
@@ -133,9 +129,6 @@ const PREVIEW_COLORS = {
   },
 };
 
-/**
- * Preview manager class
- */
 export class PreviewManager {
   constructor(container, options = {}) {
     this.container = container;
@@ -515,9 +508,6 @@ export class PreviewManager {
     this.mesh.material.color.setHex(parseInt(appliedHex.slice(1), 16));
   }
 
-  /**
-   * Animation loop
-   */
   animate() {
     this.animationId = requestAnimationFrame(() => this.animate());
     this.controls.update();
@@ -1492,8 +1482,7 @@ export class PreviewManager {
       return;
     }
 
-    // Format dimensions for screen readers in a clear, natural way
-    summaryEl.textContent = `3D model preview. Dimensions: ${dims.x} millimeters wide (X), ${dims.y} millimeters deep (Y), ${dims.z} millimeters tall (Z). Contains approximately ${dims.triangles.toLocaleString()} triangles. Use arrow keys to rotate, Shift plus arrow keys to pan, and plus or minus to zoom. On-screen camera controls are also available.`;
+    summaryEl.textContent = `3D model loaded. ${dims.x} mm wide, ${dims.y} mm deep, ${dims.z} mm tall. ${dims.triangles.toLocaleString()} triangles.`;
   }
 
   /**

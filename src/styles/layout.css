@@ -703,6 +703,8 @@ body {
 .drawer-backdrop.visible {
   display: block;
   opacity: 1;
+  /* Elevate above fixed actions bar (z-index: modal-backdrop + 10 = 960) when visible */
+  z-index: calc(var(--z-index-modal-backdrop) + 15);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -714,7 +716,7 @@ body {
 /* Mobile drawer close button -- lives in the sticky panel-header title row */
 .drawer-close-btn {
   /* min-width/min-height now provided by .forge-control */
-  z-index: 1;
+  z-index: var(--z-index-base);
   background: var(--color-bg-secondary);
   border: 1px solid var(--color-border);
   border-radius: var(--border-radius-md);
@@ -746,7 +748,7 @@ body {
     position: static;
     margin-left: auto;
     flex-shrink: 0;
-    z-index: 1;
+    z-index: var(--z-index-base);
   }
 }
 
@@ -794,6 +796,8 @@ body {
 
   .param-panel.drawer-open {
     transform: translateX(0);
+    /* Elevate above backdrop (965) and actions bar (960) when open */
+    z-index: calc(var(--z-index-modal-backdrop) + 20);
   }
 
   /* Add bottom padding to drawer body to allow scrolling past fixed actions bar */
@@ -930,8 +934,8 @@ body {
   padding-right: var(--space-xs, 4px);
   padding-bottom: var(--space-xs, 4px);
   position: relative; /* For status bar positioning */
-  /* Explicit z-index below preview-info-section (z-index: 20) to prevent overlap */
-  z-index: 10;
+  /* Below preview-info-section to prevent overlap */
+  z-index: var(--z-index-sticky);
 }
 
 .preview-canvas-section .preview-container {
@@ -969,7 +973,7 @@ body {
   padding: var(--space-2xs) var(--space-sm);
   font-size: var(--font-size-xs);
   color: var(--color-text-primary);
-  z-index: 15;
+  z-index: calc(var(--z-index-sticky) + 5);
   max-width: calc(100% - var(--space-md));
   transition: opacity var(--motion-base) ease;
   pointer-events: none;
@@ -1139,7 +1143,7 @@ body {
   right: 0;
   background: var(--color-bg-secondary);
   border-top: 1px solid var(--color-border);
-  z-index: 10;
+  z-index: var(--z-index-sticky);
 }
 
 .echo-drawer.visible {
@@ -1314,7 +1318,7 @@ body {
   height: var(--drawer-header-height);
   background-color: var(--color-bg-primary);
   border-bottom: 1px solid var(--color-border);
-  z-index: 20;
+  z-index: calc(var(--z-index-sticky) + 10);
   transition: height var(--motion-base) ease;
 }
 
@@ -1387,7 +1391,7 @@ body {
   flex-shrink: 0;
   position: sticky;
   bottom: 0;
-  z-index: 10;
+  z-index: var(--z-index-sticky);
   background-color: var(--color-bg-primary);
   box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
 }
@@ -1985,7 +1989,7 @@ body {
     box-shadow: var(--shadow-lg);
     min-width: 180px;
     max-width: 220px;
-    z-index: 100;
+    z-index: var(--z-index-dropdown);
   }
 
   /* Popover arrow pointing down to the icon */
@@ -2092,7 +2096,7 @@ body {
   /* Sticky panel headers -- stays visible when scrolling */
   position: sticky;
   top: 0;
-  z-index: 10;
+  z-index: var(--z-index-sticky);
 }
 
 /* Row 1: Title + Simple/Advanced toggle + close button */
@@ -2473,7 +2477,7 @@ details summary:focus,
   flex-direction: column;
   gap: var(--space-xs);
   min-width: 180px;
-  z-index: 100;
+  z-index: var(--z-index-dropdown);
 }
 
 .actions-more-content .btn {
@@ -2630,8 +2634,7 @@ details summary:focus,
 
   /* Overlay drawer adjustments for mobile */
   .preview-info-section {
-    /* On mobile, drawer appears from top with slightly higher z-index */
-    z-index: 25;
+    z-index: calc(var(--z-index-sticky) + 15);
   }
 
   /* ============================================================================
@@ -3539,7 +3542,7 @@ details summary:focus,
     height: 100%;
     opacity: 0;
     cursor: pointer;
-    z-index: 1;
+    z-index: var(--z-index-base);
   }
 
   /* Style the Actions title to match Camera label exactly */
@@ -3790,7 +3793,7 @@ details summary:focus,
   .main-interface.focus-mode.camera-focus-mode {
     position: fixed !important;
     inset: 0 !important;
-    z-index: 1100 !important;
+    z-index: calc(var(--z-index-modal) + 100) !important;
     display: flex !important;
     flex-direction: column !important;
     background: var(--color-bg-primary) !important;
@@ -3847,7 +3850,7 @@ details summary:focus,
     bottom: 0 !important;
     left: 0 !important;
     right: 0 !important;
-    z-index: 1150 !important;
+    z-index: calc(var(--z-index-modal) + 150) !important;
     border-radius: 0 !important;
     box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.2) !important;
   }
@@ -3873,7 +3876,7 @@ details summary:focus,
     position: fixed !important;
     top: calc(var(--space-sm) + env(safe-area-inset-top, 0px)) !important;
     left: calc(var(--space-sm) + env(safe-area-inset-left, 0px)) !important;
-    z-index: 1200 !important;
+    z-index: calc(var(--z-index-modal) + 200) !important;
     min-width: 44px !important;
     min-height: 44px !important;
     padding: var(--space-xs) var(--space-sm) !important;
