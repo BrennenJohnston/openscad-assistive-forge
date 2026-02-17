@@ -452,6 +452,167 @@ function stringifyForOpenSCAD(value) {
 }
 
 /**
+ * Detect if JSON data is in OpenSCAD native format (parameterSets)
+ * @param {Object} data - Parsed JSON data
+ * @returns {boolean} True if OpenSCAD native format
+ */
+function isOpenSCADNativeFormat(data) {
+  return (
+    data &&
+    typeof data === 'object' &&
+    'parameterSets' in data &&
+    typeof data.parameterSets === 'object' &&
+    'fileFormatVersion' in data
+  );
+}
+
+/**
+ * Detect if JSON data is in Forge format
+ * @param {Object} data - Parsed JSON data
+ * @returns {boolean} True if Forge format
+ */
+function isForgeFormat(data) {
+  return (
+    data &&
+    typeof data === 'object' &&
+    data.type &&
+    (data.type === 'openscad-preset' ||
+      data.type === 'openscad-presets-collection')
+  );
+}
+
+/**
+ * Coerce string values to proper types based on parameter schema
+ * OpenSCAD stores all preset values as strings, but Forge needs proper types
+ * @param {Object} presetValues - Raw preset values (potentially all strings)
+ * @param {Object} paramSchema - Parameter schema from extractParameters()
+ * @returns {Object} - Coerced values with proper types
+ */
+export function coercePresetValues(presetValues, paramSchema = {}) {
+  const coerced = {};
+
+  for (const [key, value] of Object.entries(presetValues)) {
+    // Find parameter definition in schema
+    const paramDef = paramSchema[key];
+
+    if (!paramDef) {
+      // Parameter not in schema, try to detect type from value
+      coerced[key] = autoDetectType(value);
+      continue;
+    }
+
+    // Coerce based on parameter type in schema
+    coerced[key] = coerceToType(value, paramDef.type);
+  }
+
+  return coerced;
+}
+
+/**
+ * Auto-detect type from a value (for parameters not in schema)
+ * @param {*} value - The value to detect type for
+ * @returns {*} - Value with proper type
+ */
+function autoDetectType(value) {
+  if (typeof value !== 'string') return value;
+
+  // Check for boolean strings
+  if (value === 'true' || value === 'yes') return true;
+  if (value === 'false' || value === 'no') return false;
+
+  // Check for array/vector notation
+  if (value.startsWith('[') && value.endsWith(']')) {
+    try {
+      return JSON.parse(value);
+    } catch {
+      return value;
+    }
+  }
+
+  // Check for number
+  const num = parseFloat(value);
+  if (!isNaN(num) && String(num) === value.trim()) {
+    return num;
+  }
+
+  // Keep as string
+  return value;
+}
+
+/**
+ * Coerce a value to a specific type
+ * @param {*} value - The value to coerce
+ * @param {string} targetType - Target type (integer, number, boolean, string, etc.)
+ * @returns {*} - Coerced value
+ */
+function coerceToType(value, targetType) {
+  if (value === null || value === undefined) return value;
+
+  switch (targetType) {
+    case 'integer':
+      if (typeof value === 'number') return Math.round(value);
+      if (typeof value === 'string') {
+        const parsed = parseInt(value, 10);
+        return isNaN(parsed) ? value : parsed;
+      }
+      return value;
+
+    case 'number':
+      if (typeof value === 'number') return value;
+      if (typeof value === 'string') {
+        const parsed = parseFloat(value);
+        return isNaN(parsed) ? value : parsed;
+      }
+      return value;
+
+    case 'boolean':
+      if (typeof value === 'boolean') return value;
+      if (typeof value === 'string') {
+        const lower = value.toLowerCase();
+        if (lower === 'true' || lower === 'yes') return true;
+        if (lower === 'false' || lower === 'no') return false;
+      }
+      return !!value;
+
+    case 'vector':
+    case 'array':
+      if (Array.isArray(value)) return value;
+      if (typeof value === 'string' && value.startsWith('[')) {
+        try {
+          return JSON.parse(value);
+        } catch {
+          return value;
+        }
+      }
+      return value;
+
+    case 'string':
+    default:
+      return String(value);
+  }
+}
+
+/**
+ * Convert a Forge preset value to OpenSCAD string format
+ * @param {*} value - Value to stringify
+ * @returns {string} - Stringified value
+ */
+function stringifyForOpenSCAD(value) {
+  if (value === null || value === undefined) return '';
+
+  if (typeof value === 'boolean') {
+    // OpenSCAD conventionally uses "true"/"false" strings
+    return value ? 'true' : 'false';
+  }
+
+  if (Array.isArray(value)) {
+    return JSON.stringify(value);
+  }
+
+  return String(value);
+}
+
+/**
  * PresetManager handles saving, loading, and managing parameter presets
  * Storage versioning to preserve presets across app updates
  */
@@ -1083,7 +1244,6 @@ export class PresetManager {
   }
 
   /**
-   * Import presets from OpenSCAD native format (parameterSets)
    * Import presets from OpenSCAD native format (parameterSets)
    * { "parameterSets": { "iPad Pro 11 TouchChat": {...}, "iPad 9th Gen LAMP": {...} }, "fileFormatVersion": "1" }
    * @param {Object} data - Parsed OpenSCAD native format data
