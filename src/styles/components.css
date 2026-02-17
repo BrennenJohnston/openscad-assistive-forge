@@ -1392,6 +1392,7 @@ summary:focus-visible,
   padding: var(--space-sm) var(--space-md);
   border-bottom: 1px solid var(--color-border);
   font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
 }
 
 .file-manager-item:last-child {
@@ -1418,6 +1419,7 @@ summary:focus-visible,
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--color-text-primary);
 }
 
 .file-manager-item-size {
@@ -1425,9 +1427,259 @@ summary:focus-visible,
   color: var(--color-text-secondary);
 }
 
+/* "Main" badge for the primary project file */
+.file-manager-main-badge {
+  display: inline-block;
+  padding: var(--space-2xs) var(--space-xs);
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+  font-size: var(--font-size-2xs);
+  font-weight: 600;
+  border-radius: var(--border-radius-xs);
+  border: 1px solid transparent;
+}
+
 .file-manager-item-actions {
   display: flex;
-  gap: var(--space-xs);
+  gap: var(--space-2xs);
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* Always visible with subdued styling; enhanced on hover */
+.file-manager-item-actions .btn-rename-project-file,
+.file-manager-item-actions .btn-delete-project-file {
+  color: var(--color-text-secondary);
+  border-color: var(--color-border-light, var(--color-border));
+  background: transparent;
+  transition: color var(--motion-fast), border-color var(--motion-fast), background-color var(--motion-fast);
+}
+
+.file-manager-item-actions .btn-rename-project-file:hover:not(:disabled),
+.file-manager-item-actions .btn-delete-project-file:hover:not(:disabled) {
+  color: var(--color-text-primary);
+  border-color: var(--color-text-primary);
+  background: var(--color-bg-secondary);
+}
+
+.file-manager-item-actions .btn-rename-project-file:focus-visible,
+.file-manager-item-actions .btn-delete-project-file:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.btn-delete-project-file:hover:not(:disabled),
+.btn-delete-project-folder:hover:not(:disabled) {
+  background: var(--color-error-bg, rgba(220, 53, 69, 0.1));
+  color: var(--color-error);
+  border-color: var(--color-error);
+}
+
+.btn-delete-project-file:disabled {
+  color: var(--color-text-tertiary);
+  border-color: var(--color-border-light, var(--color-border));
+  cursor: not-allowed;
+}
+
+/* Nested folder grouping in file manager */
+.file-manager-folder {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.file-manager-folder:last-child {
+  border-bottom: none;
+}
+
+.file-manager-folder-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold, 600);
+  cursor: pointer;
+  list-style: none;
+  color: var(--color-text-primary);
+  background: var(--color-bg-secondary);
+}
+
+.file-manager-folder-header::-webkit-details-marker {
+  display: none;
+}
+
+.file-manager-folder-header:hover {
+  background: var(--color-hover-bg);
+}
+
+.file-manager-folder-icon {
+  flex-shrink: 0;
+  color: var(--color-accent);
+}
+
+.file-manager-folder-name {
+  flex: 1;
+  color: var(--color-text-primary);
+}
+
+.file-manager-folder-count {
+  font-size: var(--font-size-xs);
+  font-weight: 400;
+  color: var(--color-text-secondary);
+}
+
+.file-manager-folder-contents {
+  padding-left: var(--space-md);
+}
+
+.file-manager-folder-contents .file-manager-item {
+  padding-left: var(--space-lg);
+}
+
+.file-manager-folder-actions {
+  display: flex;
+  gap: var(--space-2xs);
+  margin-left: auto;
+}
+
+/* Always visible with subdued styling; enhanced on hover */
+.file-manager-folder-actions .btn-icon {
+  color: var(--color-text-secondary);
+  border-color: var(--color-border-light, var(--color-border));
+  background: transparent;
+  transition: color var(--motion-fast), border-color var(--motion-fast), background-color var(--motion-fast);
+}
+
+.file-manager-folder-actions .btn-icon:hover:not(:disabled) {
+  color: var(--color-text-primary);
+  border-color: var(--color-text-primary);
+  background: var(--color-bg-secondary);
+}
+
+.file-manager-folder-actions .btn-icon:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.file-manager-empty-folder {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  padding: var(--space-sm) var(--space-lg);
+  font-style: italic;
+}
+
+/* High Contrast Mode - File Manager */
+:root[data-high-contrast='true'] .file-manager-item {
+  border-width: 2px;
+}
+
+:root[data-high-contrast='true'] .file-manager-folder {
+  border-width: 2px;
+}
+
+:root[data-high-contrast='true'] .file-manager-folder-header {
+  font-weight: 700;
+}
+
+:root[data-high-contrast='true'] .file-manager-main-badge {
+  font-weight: 700;
+  border: 2px solid var(--color-accent-text);
+}
+
+:root[data-high-contrast='true'] .file-manager-item-actions .btn-rename-project-file,
+:root[data-high-contrast='true'] .file-manager-item-actions .btn-delete-project-file,
+:root[data-high-contrast='true'] .file-manager-folder-actions .btn-icon {
+  border-width: 2px;
+  color: var(--color-text-primary);
+  border-color: var(--color-text-primary);
+}
+
+:root[data-high-contrast='true'] .file-manager-item-actions .btn-rename-project-file:focus-visible,
+:root[data-high-contrast='true'] .file-manager-item-actions .btn-delete-project-file:focus-visible,
+:root[data-high-contrast='true'] .file-manager-folder-actions .btn-icon:focus-visible {
+  outline-width: 4px;
+}
+
+/* Reduced Motion - File Manager */
+@media (prefers-reduced-motion: reduce) {
+  .file-manager-item-actions .btn-rename-project-file,
+  .file-manager-item-actions .btn-delete-project-file,
+  .file-manager-folder-actions .btn-icon,
+  .file-manager-item {
+    transition: none;
+  }
+}
+
+/* Forced Colors Mode (Windows High Contrast) - File Manager */
+@media (forced-colors: active) {
+  .file-manager-item {
+    border-color: CanvasText;
+    color: CanvasText;
+  }
+
+  .file-manager-item-icon,
+  .file-manager-item-icon.main-file {
+    color: CanvasText;
+  }
+
+  .file-manager-item-path,
+  .file-manager-folder-name {
+    color: CanvasText;
+  }
+
+  .file-manager-item-size,
+  .file-manager-folder-count {
+    color: GrayText;
+  }
+
+  .file-manager-main-badge {
+    background: Highlight;
+    color: HighlightText;
+    border: 1px solid HighlightText;
+  }
+
+  .file-manager-folder {
+    border-color: CanvasText;
+  }
+
+  .file-manager-folder-header {
+    background: Canvas;
+    color: CanvasText;
+  }
+
+  .file-manager-folder-icon {
+    color: CanvasText;
+  }
+
+  .file-manager-empty-folder {
+    color: GrayText;
+  }
+
+  .file-manager-item-actions .btn-rename-project-file,
+  .file-manager-item-actions .btn-delete-project-file,
+  .file-manager-folder-actions .btn-icon {
+    border: 1px solid ButtonText;
+    color: ButtonText;
+    background: ButtonFace;
+  }
+
+  .btn-delete-project-file:hover:not(:disabled),
+  .btn-delete-project-folder:hover:not(:disabled) {
+    border-color: ButtonText;
+    color: ButtonText;
+    background: ButtonFace;
+  }
+
+  .btn-delete-project-file:disabled {
+    color: GrayText;
+    border-color: GrayText;
+  }
+
+  .file-manager-item-actions .btn-rename-project-file:focus-visible,
+  .file-manager-item-actions .btn-delete-project-file:focus-visible,
+  .file-manager-folder-actions .btn-icon:focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
 }
 
 .file-manager-toolbar {
@@ -1578,6 +1830,19 @@ summary:focus-visible,
 
 .preview-setting-label {
   margin-right: var(--space-xs);
+}
+
+.preview-setting-divider {
+  border-top: 1px solid var(--color-border);
+  margin: var(--space-xs) 0;
+}
+
+.preview-settings-subheading {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold, 600);
+  color: var(--color-text-secondary);
+  display: block;
+  margin-bottom: var(--space-2xs);
 }
 
 .preview-settings select {
@@ -1831,6 +2096,13 @@ summary:focus-visible,
   outline-offset: 2px;
 }
 
+.overlay-select option,
+.measure-image-select option,
+.measure-unit-select option {
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+}
+
 .overlay-upload-btn {
   flex-shrink: 0;
   white-space: nowrap;
@@ -1969,6 +2241,502 @@ summary:focus-visible,
 
 .overlay-aspect-lock:hover {
   opacity: 1;
+}
+
+/* -----------------------------------------------------------------------
+   Image Measurement Tool
+   ----------------------------------------------------------------------- */
+
+.measure-details {
+  /* Card styling provided by .forge-disclosure */
+}
+
+.measure-summary {
+  /* Inherits layout from .forge-disclosure summary */
+}
+
+.measure-summary:hover {
+  background-color: var(--color-bg-primary);
+}
+
+.measure-summary:focus {
+  outline: 3px solid var(--color-focus);
+  outline-offset: -3px;
+}
+
+.measure-details[open] .measure-summary {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.measure-controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  padding-top: var(--space-sm);
+}
+
+.measure-source-row {
+  display: flex;
+  gap: var(--space-xs);
+  align-items: stretch;
+}
+
+.measure-upload-btn {
+  flex-shrink: 0;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.measure-upload-btn:hover {
+  background: var(--color-hover-bg);
+}
+
+.measure-info-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.measure-dim-display {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  font-family: var(--font-family-mono);
+}
+
+.measure-canvas-container {
+  width: 100%;
+  height: 240px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  overflow: hidden;
+  background: var(--color-bg-secondary);
+  position: relative;
+}
+
+.measure-canvas {
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+  display: block;
+}
+
+.measure-canvas:focus {
+  outline: var(--focus-ring-width, 3px) solid var(--color-focus);
+  outline-offset: var(--focus-ring-offset, -3px);
+}
+
+.measure-canvas.drag-over {
+  outline: 2px dashed var(--color-accent);
+  outline-offset: -2px;
+}
+
+.measure-coord-row {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.measure-coord-pair {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex: 1;
+}
+
+.measure-coord-label {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold, 600);
+  color: var(--color-text-secondary);
+  min-width: 1.5ch;
+}
+
+.measure-coord-value {
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-base);
+  color: var(--color-text-primary);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  padding: var(--space-2xs) var(--space-xs);
+  min-width: 4ch;
+  text-align: right;
+}
+
+.measure-copy-btn {
+  min-width: var(--size-touch-target);
+  min-height: var(--size-touch-target);
+  font-size: var(--font-size-sm);
+  white-space: nowrap;
+}
+
+.measure-zoom-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  margin-left: auto;
+}
+
+.measure-zoom-btn {
+  min-width: 28px;
+  min-height: 28px;
+  font-size: var(--font-size-base);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.measure-zoom-input {
+  width: 4.5em;
+  font-size: var(--font-size-sm);
+  font-family: var(--font-family-mono);
+  color: var(--color-text-primary);
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  padding: var(--space-2xs) var(--space-xs);
+  text-align: center;
+  min-height: 28px;
+  -moz-appearance: textfield;
+}
+
+.measure-zoom-input::-webkit-inner-spin-button,
+.measure-zoom-input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.measure-zoom-input:focus {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 1px;
+}
+
+/* Manifest info banner */
+.manifest-info-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--border-radius-sm);
+  margin-bottom: var(--space-sm);
+  font-size: var(--font-size-sm);
+  flex-wrap: wrap;
+}
+.manifest-info-text {
+  flex: 1;
+  min-width: 0;
+}
+.manifest-info-banner .btn-icon {
+  min-width: var(--size-touch-target);
+  min-height: var(--size-touch-target);
+}
+
+.measure-image-select,
+.measure-unit-select {
+  font-size: var(--font-size-sm);
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  min-height: var(--size-touch-target-sm);
+}
+.measure-image-select {
+  flex: 1;
+  min-width: 0;
+}
+.measure-image-select:focus,
+.measure-unit-select:focus {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+.measure-unit-select {
+  width: auto;
+  margin-left: auto;
+}
+
+.overlay-unit-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex-wrap: wrap;
+}
+.overlay-unit-select {
+  font-size: var(--font-size-sm);
+  padding: var(--space-2xs) var(--space-xs);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  min-height: var(--size-touch-target);
+}
+.overlay-scale-label {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+.overlay-scale-input {
+  width: 5em;
+  font-size: var(--font-size-sm);
+  padding: var(--space-2xs) var(--space-xs);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  min-height: var(--size-touch-target);
+}
+
+.measure-help-text {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.measure-pin-indicator {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold, 600);
+  color: var(--color-accent);
+  white-space: nowrap;
+}
+
+/* Toolbar: mode buttons + zoom controls on one line */
+.measure-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex-wrap: wrap;
+}
+
+.measure-mode-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+.measure-mode-btn {
+  min-width: var(--size-touch-target);
+  min-height: var(--size-touch-target);
+  font-size: var(--font-size-sm);
+  border-radius: var(--border-radius-sm);
+  transition: background-color 0.15s, color 0.15s;
+}
+.measure-mode-btn.active {
+  background-color: var(--color-accent);
+  color: var(--color-on-accent, #fff);
+  border-color: var(--color-accent);
+}
+.measure-mode-btn:focus-visible {
+  outline: var(--focus-ring-width, 3px) solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+/* Distance readout row (Ruler mode) */
+.measure-dist-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+.measure-dist-row label {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold, 600);
+  color: var(--color-text-secondary);
+  min-width: 5ch;
+}
+.measure-dist-row output {
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-base);
+  color: var(--color-text-primary);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  padding: var(--space-2xs) var(--space-xs);
+  min-width: 6ch;
+  text-align: right;
+}
+
+/* Calibration input row (Calibrate mode) */
+.measure-calib-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex-wrap: wrap;
+}
+.measure-calib-row span:first-child {
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+.measure-calib-row input[type="number"] {
+  width: 5em;
+  font-size: var(--font-size-sm);
+  padding: var(--space-2xs) var(--space-xs);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  min-height: var(--size-touch-target);
+}
+.measure-calib-error {
+  font-size: var(--font-size-xs);
+  color: var(--color-error, #e53e3e);
+  font-weight: var(--font-weight-semibold, 600);
+}
+
+/* Scale & unit settings section (below canvas) */
+.measure-scale-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: var(--space-sm);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+}
+
+/* Scale factor row */
+.measure-scale-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+.measure-scale-label {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+.measure-scale-input {
+  width: 5em;
+  font-size: var(--font-size-sm);
+  padding: var(--space-2xs) var(--space-xs);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  min-height: var(--size-touch-target);
+}
+.measure-scale-hint {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+}
+
+/* Fullscreen expansion for Image Measurement */
+.measure-controls.measure-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-index-modal, 1000);
+  background: var(--color-bg-primary);
+  padding: var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+.measure-controls.measure-fullscreen .measure-canvas-container {
+  height: auto;
+  flex: 1;
+  min-height: 0;
+}
+.measure-fullscreen-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--z-index-modal, 1000) - 1);
+  background: rgba(12, 12, 12, 0.55);
+  backdrop-filter: blur(6px);
+}
+.measure-fullscreen-close {
+  position: absolute;
+  top: var(--space-sm);
+  right: var(--space-sm);
+  z-index: 1;
+  min-width: var(--size-touch-target);
+  min-height: var(--size-touch-target);
+}
+@media (prefers-reduced-motion: reduce) {
+  .measure-fullscreen-backdrop {
+    backdrop-filter: none;
+  }
+}
+
+/* High Contrast Mode - Measurement Tool */
+:root[data-high-contrast='true'] .measure-canvas-container {
+  border-width: 2px;
+}
+
+:root[data-high-contrast='true'] .measure-zoom-input {
+  border-width: 2px;
+  font-weight: 600;
+}
+
+:root[data-high-contrast='true'] .measure-scale-section {
+  border-width: 2px;
+}
+
+:root[data-high-contrast='true'] .measure-mode-btn {
+  border-width: 2px;
+}
+
+/* Forced Colors Mode (Windows High Contrast) - Measurement Tool */
+@media (forced-colors: active) {
+  .measure-canvas {
+    border-color: ButtonText;
+  }
+  .measure-coord-value {
+    background: Canvas;
+    color: CanvasText;
+    border-color: ButtonText;
+  }
+  .measure-pin-indicator {
+    color: Highlight;
+  }
+  .measure-mode-btn.active {
+    background: Highlight;
+    color: HighlightText;
+    border-color: Highlight;
+  }
+  .measure-dist-row output {
+    background: Canvas;
+    color: CanvasText;
+    border-color: ButtonText;
+  }
+  .measure-calib-error {
+    color: LinkText;
+  }
+  .measure-zoom-input {
+    background: Canvas;
+    color: CanvasText;
+    border: 1px solid ButtonText;
+  }
+  .measure-scale-section {
+    background: Canvas;
+    border-color: CanvasText;
+    color: CanvasText;
+  }
+  .measure-canvas-container {
+    border-color: ButtonText;
+  }
+}
+
+/* Responsive: measurement tool rows on narrow screens */
+@media (max-width: 767px) {
+  .measure-toolbar {
+    flex-wrap: wrap;
+  }
+  .measure-zoom-row {
+    margin-left: 0;
+    flex-basis: 100%;
+  }
+  .measure-mode-row {
+    flex-wrap: wrap;
+  }
+  .measure-dist-row {
+    flex-wrap: wrap;
+  }
+  .measure-scale-row {
+    flex-wrap: wrap;
+  }
+  .measure-scale-hint {
+    flex-basis: 100%;
+  }
 }
 
 .example-buttons {
@@ -4440,15 +5208,14 @@ body.first-visit-blocking #app {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 20px;
-  height: 20px;
+  min-width: 24px;
+  height: 24px;
   padding: 0 var(--space-xs);
   background: var(--color-accent);
   color: var(--color-accent-text);
-  font-size: var(--font-size-2xs);
-  font-weight: 700;
-  border-radius: 10px;
-  margin-left: auto;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  border-radius: var(--border-radius-lg);
 }
 
 .project-files-content {

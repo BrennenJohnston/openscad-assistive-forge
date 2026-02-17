@@ -275,6 +275,11 @@ export class PreviewManager {
     this.directionalLight2.position.set(-1, -1, -1);
     this.scene.add(this.directionalLight2);
 
+    // Store base intensities for brightness/contrast controls
+    this.baseLightIntensities = { ambient: 0.6, dir1: 0.8, dir2: 0.4 };
+    this._brightnessScale = 1;
+    this._contrastFactor = 1;
+
     // Add grid helper on XY plane (OpenSCAD's ground plane)
     // GridHelper by default creates a grid on XZ plane (Y-up), so we rotate it for Z-up
     this.gridHelper = new THREE.GridHelper(
@@ -2871,5 +2876,46 @@ export class PreviewManager {
    */
   clearPostLoadHook() {
     this._postLoadHook = null;
+  }
+
+  // --- Model Appearance Controls ---
+
+  setModelOpacity(percent) {
+    if (!this.mesh?.material) return;
+    const val = Math.max(10, Math.min(100, percent));
+    const opacity = val / 100;
+    this.mesh.material.transparent = opacity < 1;
+    this.mesh.material.opacity = opacity;
+    // Keep depthWrite true to prevent model from disappearing behind grid/overlay
+    this.mesh.material.depthWrite = true;
+    if (opacity < 1) this.mesh.renderOrder = 1;
+    this.mesh.material.needsUpdate = true;
+  }
+
+  setBrightness(percent) {
+    this._brightnessScale = percent / 100;
+    this._applyLighting();
+  }
+
+  setContrast(percent) {
+    this._contrastFactor = percent / 100;
+    this._applyLighting();
+  }
+
+  _applyLighting() {
+    if (!this.ambientLight) return;
+    const bs = this._brightnessScale;
+    const cf = this._contrastFactor;
+    // Brightness scales all base intensities; contrast shifts ambient/directional ratio
+    this.ambientLight.intensity = this.baseLightIntensities.ambient * bs * (2 - cf);
+    this.directionalLight1.intensity = this.baseLightIntensities.dir1 * bs * cf;
+    this.directionalLight2.intensity = this.baseLightIntensities.dir2 * bs * cf;
+  }
+
+  resetAppearance() {
+    this.setModelOpacity(100);
+    this._brightnessScale = 1;
+    this._contrastFactor = 1;
+    this._applyLighting();
   }
 }

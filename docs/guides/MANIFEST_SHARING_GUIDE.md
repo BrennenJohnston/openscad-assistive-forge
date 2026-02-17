@@ -44,7 +44,7 @@ A "repository" is a folder on GitHub that holds your project files.
 1. Open your new repository on GitHub
 2. Click **Add file** > **Upload files**
 3. Drag and drop your files onto the page:
-   - Your main `.scad` file (e.g., `keyguard_v2.scad`)
+   - Your main `.scad` file (e.g., `my-project.scad`)
    - Any companion files (e.g., `openings_and_additions.txt`)
    - Your preset `.json` file (optional but recommended)
 4. Click **Commit changes**
@@ -214,9 +214,9 @@ Bundle your `.scad`, companion files, and preset `.json` into a single ZIP. Forg
   "author": "Community",
   "description": "Customizable 3D-printable keyguard for AAC tablets",
   "files": {
-    "main": "keyguard_v2.scad",
+    "main": "my-keyguard.scad",
     "companions": ["openings_and_additions.txt"],
-    "presets": "keyguard_presets.json"
+    "presets": "my-presets.json"
   },
   "defaults": {
     "preset": "iPad 10.9 - TouchChat 45",

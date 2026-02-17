@@ -18,7 +18,7 @@ Milestone 3 establishes production-grade reliability through graceful memory deg
 | Recovery mode | `src/main.js` | ✅ Complete |
 | Bundle budget checker | `scripts/check-bundle-budget.js` | ✅ Complete |
 | Visual regression tests | `tests/visual/core-ui.visual.spec.js` | ✅ Complete |
-| Threading investigation | `docs/planning/threading-investigation-m3.md` | ✅ Complete |
+| Threading investigation | (archived -- see git history for `docs/planning/threading-investigation-m3.md`) | ✅ Complete |
 
 ## Memory Management
 
@@ -178,7 +178,7 @@ Security: 0 vulnerabilities
 - `playwright.config.js` - Visual + WebKit projects
 - `.github/workflows/test.yml` - Bundle check, Safari CI
 - `vitest.config.js` - Exclude visual tests
-- `docs/planning/threading-investigation-m3.md` - Threading investigation
+- Threading investigation (archived -- see git history)
 
 ---
 

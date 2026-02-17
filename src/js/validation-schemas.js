@@ -144,6 +144,7 @@ const savedProjectSchema = {
       maxLength: STORAGE_LIMITS.MAX_NOTES_LENGTH,
       default: '',
     },
+    forkedFrom: { type: ['object', 'null'], default: null },
     savedAt: { type: 'number', minimum: 0 },
     lastLoadedAt: { type: 'number', minimum: 0 },
   },

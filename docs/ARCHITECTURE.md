@@ -463,3 +463,69 @@ flowchart TB
 
 **Worker:**
 - `src/worker/openscad-worker.js` - runs OpenSCAD WASM in isolation
+
+---
+
+## If you're forking this repo
+
+Welcome! Here are some practical pointers for finding your way around.
+
+### Where to start reading code
+
+The best order for building a mental model:
+
+1. **`src/js/parser.js`** -- this is the heart of the project. It reads a `.scad` file and turns Customizer annotations into a data structure the rest of the app uses. If parameters aren't showing up correctly, start here.
+2. **`src/js/ui-generator.js`** -- takes the parser's output and builds real DOM elements (sliders, dropdowns, checkboxes). If a control looks wrong or behaves oddly, start here.
+3. **`src/js/state.js`** -- the single source of truth for current parameter values. All changes flow through here.
+4. **`src/js/render-controller.js`** -- sends the SCAD code + current parameters to the WASM worker and gets STL bytes back.
+5. **`src/js/preview.js`** -- takes STL bytes and renders them with Three.js. Also handles the reference overlay, measurements, and camera.
+6. **`src/main.js`** -- wires everything together. This file is large (~5000+ lines) because it's the orchestration layer. Don't try to read it top-to-bottom; search for the feature you care about.
+
+### Common debugging paths
+
+```mermaid
+flowchart TD
+    Problem[Something's broken] --> Q1{Parameters not showing?}
+    Q1 -->|Yes| P1[Check parser.js extractParameters]
+    P1 --> P1a[Add console.log in the parsing loop]
+    P1a --> P1b[Check if the SCAD annotations are in a format the parser recognizes]
+
+    Q1 -->|No| Q2{UI control looks wrong?}
+    Q2 -->|Yes| P2[Check ui-generator.js]
+    P2 --> P2a[Find the function that builds that control type]
+    P2a --> P2b[Check the CSS in src/styles/components.css]
+
+    Q2 -->|No| Q3{Preview not updating?}
+    Q3 -->|Yes| P3[Check render-controller.js]
+    P3 --> P3a[Is the worker responding? Check browser console for worker errors]
+    P3a --> P3b[Is auto-preview enabled? Check auto-preview-controller.js]
+
+    Q3 -->|No| Q4{Export broken?}
+    Q4 -->|Yes| P4[Check download.js for the format handler]
+    P4 --> P4a[Check if render-controller has a valid result to export]
+
+    Q4 -->|No| Q5{Theme or styling issue?}
+    Q5 -->|Yes| P5[Check src/styles/variables.css for token names]
+    P5 --> P5a[Check semantic-tokens.css for the theme mapping]
+    P5a --> P5b[Test with data-theme attribute on document root]
+```
+
+### Running just the pieces you care about
+
+```bash
+# Only run parser tests (fast, no browser needed)
+npx vitest run tests/unit/parser.test.js
+
+# Only run the E2E test for file upload
+npx playwright test tests/e2e/file-upload.spec.js
+
+# Check just your CSS changes in all themes
+npm run dev   # then toggle themes in the browser settings panel
+```
+
+### Things that trip people up
+
+- **`main.js` is huge** -- it's the orchestration file. Don't panic. Use your editor's search to jump to what you need.
+- **The worker runs in a separate thread** -- you can't `console.log` from the worker and see it in the main thread's console. Worker logs appear separately. Check the browser's "Web Workers" console.
+- **CSS custom properties are the theming system** -- never hardcode a colour. Always use a `var(--token-name)` from `variables.css`.
+- **Accessibility is enforced in tests** -- if you add UI, the E2E tests check keyboard navigation and ARIA. Failing those tests is expected until you add proper accessibility.

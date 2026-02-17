@@ -7,7 +7,6 @@
  * Run: npm run test:visual
  * Update baselines: npm run test:visual:update
  *
- * @see docs/planning/visual-regression-plan.md
  * @license GPL-3.0-or-later
  */
 

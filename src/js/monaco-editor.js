@@ -305,7 +305,7 @@ function configureAndLoadMonaco(resolve, reject) {
 
   // Configure worker URL with CSP-compatible blob
   window.MonacoEnvironment = {
-    getWorkerUrl: function (_workerId, label) {
+    getWorkerUrl: function (_workerId, _label) {
       // Use blob workers for CSP compatibility
       const workerSource = `
         self.MonacoEnvironment = {

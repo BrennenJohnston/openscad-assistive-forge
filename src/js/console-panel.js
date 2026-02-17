@@ -180,8 +180,8 @@ export class ConsolePanel {
       this.render();
     }
 
-    // Auto-expand console when ECHO/WARNING/ERROR messages arrive (Item 4)
-    // Ken uses echo() to communicate with clinicians -- these must be visible
+    // Auto-expand console when ECHO/WARNING/ERROR messages arrive
+    // SCAD authors use echo() to communicate with end-users -- these must be visible
     if (hasEchoOrImportant) {
       this.autoExpandPanel();
     }
@@ -258,7 +258,7 @@ export class ConsolePanel {
    */
   announceIfImportant(entry) {
     // Announce ECHO, warnings, and errors to screen readers
-    // Ken uses echo() to communicate important info to clinicians
+    // SCAD authors use echo() to communicate important info to users
     if (entry.type !== CONSOLE_ENTRY_TYPE.ECHO &&
         entry.type !== CONSOLE_ENTRY_TYPE.WARNING && 
         entry.type !== CONSOLE_ENTRY_TYPE.ERROR) {
@@ -425,7 +425,7 @@ export class ConsolePanel {
           copyBtn.textContent = originalText;
         }, 1500);
       }
-    } catch (error) {
+    } catch (_error) {
       // Fallback for older browsers
       const textarea = document.createElement('textarea');
       textarea.value = text;

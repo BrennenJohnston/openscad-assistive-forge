@@ -37,15 +37,12 @@ export default defineConfig({
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
     },
-    // Edge enabled for Milestone 0 - Tier 1 browser (blocking in CI)
-    // See: docs/planning/browser-matrix.md
+    // Edge - Tier 1 browser (blocking in CI)
     {
       name: 'msedge',
       use: { ...devices['Desktop Edge'], channel: 'msedge' },
     },
-    // Firefox enabled for Milestone 0 - non-blocking in CI initially
-    // Will become blocking at Milestone 3 exit
-    // See: docs/planning/browser-matrix.md
+    // Firefox - Tier 1 browser
     {
       name: 'firefox',
       use: { ...devices['Desktop Firefox'] },
@@ -63,9 +60,7 @@ export default defineConfig({
       // Visual tests should not run with regular E2E
       testMatch: '**/*.visual.spec.js',
     },
-    // WebKit/Safari enabled for Milestone 3 - Tier 2 browser
-    // Requires macOS runners in CI, non-blocking until M3 exit
-    // See: docs/planning/browser-matrix.md
+    // WebKit/Safari - Tier 2 browser (requires macOS runners)
     {
       name: 'webkit',
       use: { ...devices['Desktop Safari'] },

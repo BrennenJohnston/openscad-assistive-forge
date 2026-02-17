@@ -197,9 +197,7 @@ Process for security updates:
 
 ### SBOM Location
 
-Software Bill of Materials is generated at:
-- `docs/planning/sbom.json` (CycloneDX format)
-- Included in release artifacts
+Software Bill of Materials can be regenerated with `npm audit` or third-party SBOM tooling. Check release artifacts for the latest SBOM.
 
 ---
 

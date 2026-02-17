@@ -1,75 +1,83 @@
 # Documentation
 
-Documentation for OpenSCAD Assistive Forge.
+Everything you need to use, develop, or deploy OpenSCAD Assistive Forge.
 
-## User Guides
+## Using the app
 
-Start here if you're using the application:
+If you just want to customize models, start here:
 
-- [Getting Started](./guides/GETTING_STARTED.md) - First-time user introduction
-- [Standard Mode Guide](./guides/STANDARD_MODE_GUIDE.md) - Parameter customization
-- [Expert Mode Guide](./guides/EXPERT_MODE_GUIDE.md) - Code editing interface
-- [Accessibility Guide](./guides/ACCESSIBILITY_GUIDE.md) - Screen reader, keyboard, high contrast
-- [Troubleshooting (Users)](./guides/TROUBLESHOOTING_USER_GUIDE.md) - Common issues and solutions
+- [Getting Started](./guides/GETTING_STARTED.md) -- your first five minutes with the app
+- [Standard Mode Guide](./guides/STANDARD_MODE_GUIDE.md) -- parameter types, presets, image measurement, reference overlay
+- [Expert Mode Guide](./guides/EXPERT_MODE_GUIDE.md) -- code editing for power users
+- [Accessibility Guide](./guides/ACCESSIBILITY_GUIDE.md) -- keyboard, screen reader, high contrast
+- [Troubleshooting](./guides/TROUBLESHOOTING_USER_GUIDE.md) -- common problems and fixes
 
-### Specialized Workflows
+### Specialized workflows
 
-- [Keyguard Workflow](./guides/KEYGUARD_WORKFLOW_GUIDE.md) - AAC keyguard customization for clinicians
-
----
-
-## Developer Guides
-
-If you're setting up the project for development:
-
-- [DEV_QUICK_START.md](./DEV_QUICK_START.md) - Clone, install, run dev server
-- [TESTING.md](./TESTING.md) - Running unit and E2E tests
-- [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) - Developer troubleshooting (Playwright, builds)
-- [DEVELOPMENT_WORKFLOW.md](./DEVELOPMENT_WORKFLOW.md) - Branching and commit conventions
+- [Keyguard Workflow](./guides/KEYGUARD_WORKFLOW_GUIDE.md) -- AAC keyguard customization for clinicians
 
 ---
 
-## Administrator Guides
+## Developing
 
-For deploying and operating the application:
+If you're setting up the project for development or thinking about forking:
 
-- [Deployment Guide](./DEPLOYMENT.md) - Cloudflare Pages, nginx, Apache, monitoring
-- [Security Admin Guide](./SECURITY_ADMIN_GUIDE.md) - CSP, headers, compliance
-- [Rollback Runbook](./ROLLBACK_RUNBOOK.md) - Production rollback procedures
-
----
-
-## Compliance Documentation
-
-- [VPAT (WCAG 2.2)](./vpat/VPAT-2.5-WCAG.md) - Voluntary Product Accessibility Template
-- [Accessibility Conformance](./ACCESSIBILITY_CONFORMANCE.md) - WCAG 2.2 AA conformance statement
-- [Conformance Decisions](./vpat/conformance-decisions.md) - WCAG criterion status tracking
-- [Browser Support](./BROWSER_SUPPORT.md) - Supported browsers and versions
-- [Known Issues](./KNOWN_ISSUES.md) - Current limitations and workarounds
-
-> **Source of truth:** Use `conformance-decisions.md` + evidence files in `vpat/evidence/` for criterion-level status. `ACCESSIBILITY_CONFORMANCE.md` is a summary statement.
+- [Dev Quick Start](./DEV_QUICK_START.md) -- clone, install, run
+- [Architecture](./ARCHITECTURE.md) -- how the pieces fit together, with flowcharts and a "for forkers" debugging guide
+- [Development Workflow](./DEVELOPMENT_WORKFLOW.md) -- branches, commits, PRs
+- [Testing](./TESTING.md) -- running unit and E2E tests
+- [Troubleshooting (dev)](./TROUBLESHOOTING.md) -- Playwright, builds, Windows quirks
 
 ---
 
-## Reference Documentation
+## Deploying
 
-- [ARCHITECTURE.md](./ARCHITECTURE.md) - Module map and Mermaid diagrams
-- [research/PROJECT_SHARING_REFERENCES.md](./research/PROJECT_SHARING_REFERENCES.md) - URL import + manifest patterns (debugging references)
-- [specs/PARAMETER_SCHEMA_SPEC.md](./specs/PARAMETER_SCHEMA_SPEC.md) - Customizer annotation JSON format
-- [specs/UI_STANDARDS.md](./specs/UI_STANDARDS.md) - Component and styling standards
-- [specs/CAMERA_CONTROLS_ACCESSIBILITY.md](./specs/CAMERA_CONTROLS_ACCESSIBILITY.md) - 3D camera accessibility
-- [PERFORMANCE.md](./PERFORMANCE.md) - Bundle size, caching, worker architecture
+- [Deployment Guide](./DEPLOYMENT.md) -- Cloudflare Pages, nginx, Apache
+- [Security Admin Guide](./SECURITY_ADMIN_GUIDE.md) -- CSP, headers, compliance
+- [Rollback Runbook](./ROLLBACK_RUNBOOK.md) -- production rollback procedures
 
 ---
 
-## Folder Layout
+## Accessibility and compliance
+
+- [VPAT (WCAG 2.2)](./vpat/VPAT-2.5-WCAG.md) -- Voluntary Product Accessibility Template
+- [Accessibility Conformance](./ACCESSIBILITY_CONFORMANCE.md) -- WCAG 2.2 AA conformance statement
+- [Conformance Decisions](./vpat/conformance-decisions.md) -- per-criterion status tracking
+- [Browser Support](./BROWSER_SUPPORT.md) -- what browsers we test against
+- [Known Issues](./KNOWN_ISSUES.md) -- current limitations and workarounds
+
+> **Where's the source of truth?** Use `conformance-decisions.md` + evidence files in `vpat/evidence/` for criterion-level status. `ACCESSIBILITY_CONFORMANCE.md` is the summary.
+
+---
+
+## Reference
+
+- [Architecture](./ARCHITECTURE.md) -- module map, Mermaid diagrams, debugging paths
+- [Parameter Schema Spec](./specs/PARAMETER_SCHEMA_SPEC.md) -- Customizer annotation JSON format
+- [UI Standards](./specs/UI_STANDARDS.md) -- component and styling contracts
+- [Camera Controls Accessibility](./specs/CAMERA_CONTROLS_ACCESSIBILITY.md) -- 3D camera a11y spec
+- [Performance](./PERFORMANCE.md) -- bundle budget, caching, worker architecture
+
+---
+
+## Research (background reading)
+
+- [Comparable Projects](./research/COMPARABLE_PROJECTS.md) -- how similar tools work
+- [WASM Threading Analysis](./research/WASM_THREADING_ANALYSIS.md) -- multi-threading investigation
+- [Tutorial Design Research](./research/TUTORIAL_DESIGN_RESEARCH.md) -- UX research for guided tutorials
+- [Project Sharing References](./research/PROJECT_SHARING_REFERENCES.md) -- URL import patterns
+
+---
+
+## Folder layout
 
 ```
 docs/
   guides/      User and workflow guides
   specs/       Formal specifications
   vpat/        Accessibility compliance (VPAT, evidence)
-  research/    Background research and experiments
+  research/    Background research
   notes/       Dev logs by date (working notes)
+  planning/    Retained planning artifacts (decision log, test corpus)
   archive/     Old docs kept for git history
 ```

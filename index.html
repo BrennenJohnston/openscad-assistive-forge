@@ -1109,6 +1109,26 @@
               </div>
             </div>
 
+            <!-- Manifest project info banner (hidden until a manifest project loads) -->
+            <div class="manifest-info-banner hidden" id="manifestInfoBanner" role="status" aria-live="polite">
+              <span class="manifest-info-icon" aria-hidden="true">&#128279;</span>
+              <span class="manifest-info-text" id="manifestInfoText">Shared project</span>
+              <button type="button" id="manifestSaveCopyBtn" class="btn btn-sm btn-primary"
+                      aria-label="Save a local copy of this shared project to browser storage">
+                Save My Copy
+              </button>
+              <button type="button" id="manifestDownloadZipBtn" class="btn btn-sm btn-outline"
+                      aria-label="Download this project as a ZIP file for offline use">
+                Download ZIP
+              </button>
+              <button type="button" id="manifestResetBtn" class="btn btn-sm btn-outline"
+                      aria-label="Reload original project from shared link">
+                Reset to Original
+              </button>
+              <button type="button" id="manifestDismissBanner" class="btn-icon"
+                      aria-label="Dismiss project info banner" title="Dismiss">&#10005;</button>
+            </div>
+
             <div class="param-panel-body" id="paramPanelBody">
               <!-- Preset Controls (Collapsed by default on desktop) -->
               <details
@@ -1284,6 +1304,162 @@
                 </div>
               </details>
 
+              <!-- Image Measurement Tool -->
+              <details
+                class="measure-details forge-disclosure"
+                id="measureSection"
+                role="region"
+                aria-label="Image measurement tool"
+              >
+                <summary class="measure-summary">
+                  <svg class="btn-icon-svg forge-disclosure-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true">
+                    <path d="M2 12h5l2-7 3 14 2-7h5"></path>
+                    <line x1="22" y1="12" x2="22" y2="12"></line>
+                  </svg>
+                  <span class="forge-disclosure-title">Image Measurement</span>
+                </summary>
+                <div class="measure-controls">
+                  <!-- Source image selection -->
+                  <div class="measure-control measure-source-row">
+                    <select id="measureImageSelect" class="measure-image-select" aria-label="Select from previously uploaded screenshots">
+                      <option value="">-- No screenshots --</option>
+                    </select>
+                    <label
+                      class="btn btn-sm btn-outline measure-upload-btn"
+                      for="measureFileInput"
+                      title="Upload an image (PNG, JPG, WebP, GIF)"
+                    >
+                      &#x1F4E4; Browse
+                      <input
+                        type="file"
+                        id="measureFileInput"
+                        accept="image/png,image/jpeg,image/webp,image/gif,.png,.jpg,.jpeg,.webp,.gif"
+                        class="sr-only"
+                        aria-label="Upload reference image for measurement"
+                      />
+                    </label>
+                  </div>
+
+                  <!-- Toolbar: mode toggle + zoom/view controls -->
+                  <div class="measure-toolbar">
+                    <div class="measure-mode-row" role="radiogroup" aria-label="Measurement mode">
+                      <button type="button" id="measureModePoint" class="btn btn-sm btn-outline measure-mode-btn active"
+                              role="radio" aria-checked="true" tabindex="0">Point</button>
+                      <button type="button" id="measureModeRuler" class="btn btn-sm btn-outline measure-mode-btn"
+                              role="radio" aria-checked="false" tabindex="-1">Ruler</button>
+                      <button type="button" id="measureModeCalibrate" class="btn btn-sm btn-outline measure-mode-btn"
+                              role="radio" aria-checked="false" tabindex="-1">Calibrate</button>
+                    </div>
+                    <div class="measure-zoom-row">
+                      <button type="button" id="measureZoomOut" class="btn btn-sm btn-icon measure-zoom-btn" aria-label="Zoom out" title="Zoom out">&minus;</button>
+                      <input
+                        type="number"
+                        id="measureZoomLevel"
+                        class="measure-zoom-input"
+                        value="100"
+                        min="10"
+                        max="1000"
+                        step="10"
+                        aria-label="Zoom percentage"
+                        title="Enter zoom percentage"
+                      />
+                      <button type="button" id="measureZoomIn" class="btn btn-sm btn-icon measure-zoom-btn" aria-label="Zoom in" title="Zoom in">+</button>
+                      <button type="button" id="measureZoomReset" class="btn btn-sm btn-outline" aria-label="Reset zoom to fit" title="Fit to view">Fit</button>
+                      <button type="button" id="measureExpandBtn" class="btn btn-sm btn-icon" aria-label="Open image measurement in fullscreen" title="Full Screen">&#x26F6;</button>
+                    </div>
+                  </div>
+
+                  <!-- Canvas container -->
+                  <div class="measure-canvas-container">
+                    <canvas
+                      id="measureCanvas"
+                      class="measure-canvas"
+                      aria-label="Image measurement canvas. Drop an image or click Browse."
+                    ></canvas>
+                    <button type="button" id="measureFullscreenClose" class="btn btn-sm btn-icon measure-fullscreen-close hidden" aria-label="Exit fullscreen measurement view">&#10005;</button>
+                  </div>
+
+                  <!-- Coordinate readout -->
+                  <div class="measure-coord-row">
+                    <div class="measure-coord-pair">
+                      <label class="measure-coord-label" for="measureCoordX">X</label>
+                      <output id="measureCoordX" class="measure-coord-value" aria-label="X coordinate">0</output>
+                      <button
+                        type="button"
+                        id="measureCopyX"
+                        class="btn btn-sm btn-outline measure-copy-btn"
+                        aria-label="Copy X coordinate"
+                        title="Copy X"
+                      >Copy X</button>
+                    </div>
+                    <div class="measure-coord-pair">
+                      <label class="measure-coord-label" for="measureCoordY">Y</label>
+                      <output id="measureCoordY" class="measure-coord-value" aria-label="Y coordinate">0</output>
+                      <button
+                        type="button"
+                        id="measureCopyY"
+                        class="btn btn-sm btn-outline measure-copy-btn"
+                        aria-label="Copy Y coordinate"
+                        title="Copy Y"
+                      >Copy Y</button>
+                    </div>
+                    <span id="measurePinIndicator" class="measure-pin-indicator" hidden aria-live="polite">Pinned</span>
+                    <button type="button" id="measureUnpinBtn" class="btn btn-sm btn-outline" aria-label="Unpin crosshair and resume tracking" hidden>Unpin</button>
+                  </div>
+
+                  <!-- Distance readout (Ruler mode) -->
+                  <div id="measureDistRow" class="measure-dist-row hidden">
+                    <label for="measureDistValue">Distance</label>
+                    <output id="measureDistValue">--</output>
+                    <button type="button" id="measureCopyDist" class="btn btn-sm btn-outline"
+                            aria-label="Copy distance value">Copy</button>
+                    <button type="button" id="measureClearRuler" class="btn btn-sm btn-outline"
+                            aria-label="Clear ruler points">Clear</button>
+                  </div>
+
+                  <!-- Calibration input (Calibrate mode) -->
+                  <div id="measureCalibRow" class="measure-calib-row hidden">
+                    <span id="measureCalibPixels">0 px</span>
+                    <span aria-hidden="true">=</span>
+                    <input type="number" id="measureCalibMm" min="0.1" step="0.1"
+                           placeholder="mm" aria-label="Known distance in millimeters" />
+                    <button type="button" id="measureCalibApply"
+                            class="btn btn-sm btn-primary"
+                            aria-label="Apply calibration to set scale factor">Apply</button>
+                    <span id="measureCalibError" class="measure-calib-error hidden" role="alert"></span>
+                  </div>
+
+                  <!-- Scale &amp; unit settings (below canvas for cleaner layout) -->
+                  <div class="measure-scale-section">
+                    <div class="measure-info-row">
+                      <span class="measure-dim-display" id="measureDimensions">&mdash;</span>
+                      <select id="measureUnitSelect" class="measure-unit-select" aria-label="Coordinate display unit">
+                        <option value="px" selected>px</option>
+                        <option value="mm">mm</option>
+                      </select>
+                    </div>
+                    <div class="measure-scale-row" id="measureScaleRow">
+                      <label for="measureScaleInput" class="measure-scale-label">Scale (px/mm)</label>
+                      <input type="number" id="measureScaleInput" class="measure-scale-input"
+                             min="0.01" step="0.01" placeholder="10.39"
+                             aria-label="Scale factor: pixels per millimeter"
+                             title="Pixels per millimeter. Default: iPad 264 PPI (10.39 px/mm)" />
+                      <span class="measure-scale-hint" id="measureScaleHint">Default: iPad 264 PPI &mdash; or use Calibrate</span>
+                    </div>
+                  </div>
+
+                  <!-- Screen reader live region for coordinate announcements -->
+                  <div id="measureLiveRegion" class="sr-only" aria-live="polite" role="status"></div>
+
+                  <p class="measure-help-text" aria-live="polite">
+                    Click to pin crosshair. Double-click or Escape to unpin.
+                    Arrow keys move crosshair; Shift+arrows for 10 px steps.
+                    Enter/Space toggles pin. Scroll to zoom.
+                  </p>
+                </div>
+              </details>
+              <div id="measureFullscreenBackdrop" class="measure-fullscreen-backdrop hidden" aria-hidden="true"></div>
+
               <!-- Reference Overlay Controls -->
               <details
                 class="overlay-details forge-disclosure"
@@ -1405,6 +1581,17 @@
                     </button>
                   </div>
 
+                  <!-- Unit toggle + Scale factor -->
+                  <div class="overlay-control overlay-unit-row">
+                    <label class="overlay-control-label" for="overlayUnitSelect">Unit</label>
+                    <select id="overlayUnitSelect" class="overlay-unit-select" aria-label="Overlay dimension unit">
+                      <option value="px">px</option>
+                      <option value="mm" selected>mm</option>
+                    </select>
+                    <label class="overlay-scale-label" for="scaleFactorInput">Scale</label>
+                    <input type="number" id="scaleFactorInput" class="overlay-scale-input" min="0.01" step="0.01" placeholder="px/mm" aria-label="Scale factor: pixels per millimeter" />
+                  </div>
+
                   <!-- Overlay Dimensions Display -->
                   <div
                     class="overlay-control overlay-dimensions-display"
@@ -1414,13 +1601,13 @@
                     <span
                       class="overlay-dimensions-value"
                       id="overlayDimensionsValue"
-                      >-- × -- mm</span
+                      >-- &times; -- mm</span
                     >
                   </div>
 
                   <!-- Size Controls -->
                   <div class="overlay-control overlay-size-inputs">
-                    <label class="overlay-control-label">Size (mm)</label>
+                    <label class="overlay-control-label" id="overlaySizeLabel">Size (<span id="overlaySizeUnit">mm</span>)</label>
                     <div class="overlay-size-row">
                       <label class="overlay-size-field">
                         <span class="sr-only">Width</span>
@@ -1463,7 +1650,7 @@
 
                   <!-- Offset Controls -->
                   <div class="overlay-control overlay-offset-inputs">
-                    <label class="overlay-control-label">Offset (mm)</label>
+                    <label class="overlay-control-label" id="overlayOffsetLabel">Offset (<span id="overlayOffsetUnit">mm</span>)</label>
                     <div class="overlay-offset-row">
                       <label class="overlay-offset-field">
                         <span class="sr-only">X offset</span>
@@ -2355,6 +2542,56 @@
                             ↺
                           </button>
                         </div>
+                      </div>
+
+                      <div class="preview-setting-divider" aria-hidden="true"></div>
+                      <span class="preview-settings-subheading" id="modelAppearanceHeading">Model Appearance</span>
+
+                      <!-- Model Opacity -->
+                      <div class="preview-setting model-opacity-setting">
+                        <label for="modelOpacityInput" id="modelOpacityLabel">Model opacity</label>
+                        <div class="slider-container">
+                          <input type="range" id="modelOpacityInput"
+                                 min="10" max="100" step="5" value="100"
+                                 aria-labelledby="modelOpacityLabel"
+                                 aria-describedby="modelOpacityHelp" />
+                          <span class="slider-value" id="modelOpacityValue">100%</span>
+                        </div>
+                      </div>
+                      <span id="modelOpacityHelp" class="sr-only">Reduce model opacity to see the reference overlay image behind the 3D model. Useful for alignment.</span>
+
+                      <!-- Brightness -->
+                      <div class="preview-setting brightness-setting">
+                        <label for="brightnessInput" id="brightnessLabel">Brightness</label>
+                        <div class="slider-container">
+                          <input type="range" id="brightnessInput"
+                                 min="20" max="200" step="5" value="100"
+                                 aria-labelledby="brightnessLabel"
+                                 aria-describedby="brightnessHelp" />
+                          <span class="slider-value" id="brightnessValue">100%</span>
+                        </div>
+                      </div>
+                      <span id="brightnessHelp" class="sr-only">Adjust overall scene brightness from 20 to 200 percent</span>
+
+                      <!-- Contrast -->
+                      <div class="preview-setting contrast-setting">
+                        <label for="contrastInput" id="contrastLabel">Contrast</label>
+                        <div class="slider-container">
+                          <input type="range" id="contrastInput"
+                                 min="20" max="200" step="5" value="100"
+                                 aria-labelledby="contrastLabel"
+                                 aria-describedby="contrastHelp" />
+                          <span class="slider-value" id="contrastValue">100%</span>
+                        </div>
+                      </div>
+                      <span id="contrastHelp" class="sr-only">Adjust lighting contrast from flat to dramatic, 20 to 200 percent</span>
+
+                      <!-- Reset button -->
+                      <div class="preview-setting">
+                        <button type="button" id="resetAppearanceBtn" class="btn btn-sm btn-outline"
+                                aria-label="Reset model opacity, brightness, and contrast to defaults">
+                          Reset appearance
+                        </button>
                       </div>
                     </div>
                   </div>

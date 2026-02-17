@@ -12,12 +12,12 @@ When debugging SVG export issues (like a complex keyguard workflow), we need a k
 2. The test SCAD files and companion files
 3. Access to the OpenSCAD Customizer panel
 
-## Procedure for Keyguard Golden SVG
+## Procedure (Using a Keyguard SCAD as Example)
 
 ### Step 1: Prepare Files
 
-1. Download or locate `keyguard_v74.scad` (or the minimal test fixture `keyguard_minimal.scad`)
-2. Ensure `openings_and_additions.txt` is in the same directory
+1. Locate the SCAD file you want to test (e.g., your keyguard `.scad` or the minimal test fixture `keyguard_minimal.scad`)
+2. Ensure any companion files referenced by the SCAD are in the same directory
 
 ### Step 2: Open in Desktop OpenSCAD
 
@@ -43,7 +43,7 @@ Set the following parameters in the Customizer:
 ### Step 5: Export SVG
 
 1. Go to File > Export > Export as SVG...
-2. Save as `keyguard_v74_golden.svg`
+2. Save as `<project>_golden.svg` (e.g., `keyguard_golden.svg`)
 3. Note the file size and approximate geometry
 
 ### Step 6: Validate SVG
@@ -60,7 +60,7 @@ Open the golden SVG in a text editor and verify:
 Create a reference entry with:
 
 ```
-File: keyguard_v74_golden.svg
+File: <project>_golden.svg
 Date: YYYY-MM-DD
 OpenSCAD Version: X.X.X
 Parameters:

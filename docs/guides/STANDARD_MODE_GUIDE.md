@@ -1,13 +1,6 @@
 # Standard Mode Guide
 
-Standard Mode is the default interface for customizing parametric 3D models. This guide covers all features available in Standard Mode.
-
-## What You'll Learn
-
-- How to work with all parameter types
-- How to manage presets and saved projects
-- How to export in different formats
-- How to use quality settings effectively
+Standard Mode is the default interface. This guide covers everything you can do here: parameter types, presets, exports, image measurement, and the reference overlay.
 
 ---
 
@@ -276,6 +269,47 @@ If your model uses `include` or `use` statements:
 - Single files: 5 MB maximum
 - ZIP archives: 20 MB maximum
 - These limits prevent browser memory issues
+
+---
+
+## Image Measurement
+
+Some models need pixel-based measurements -- for example, coordinates from a screenshot of a tablet app. The Image Measurement tool lets you load any image, move a crosshair around, and read X/Y pixel coordinates.
+
+### How to use it
+
+1. Open the **Image Measurement** panel in the preview settings area
+2. Click **Browse** or drag an image onto the canvas (PNG, JPG, WebP, or GIF)
+3. Move the mouse over the image to see coordinates update live, or focus the canvas and use arrow keys (1 px per press, Shift for 10 px steps)
+4. Click **Copy X** or **Copy Y** to grab a value -- if a parameter input is focused, the value gets pasted in automatically
+
+The image dimensions show up next to the Browse button so you can verify the file wasn't resized.
+
+**Keyboard shortcut**: Press Enter while the canvas is focused to copy the Y coordinate. Scroll to zoom. Shift+drag to pan.
+
+---
+
+## Reference Overlay
+
+Want to see how your model lines up against a reference image? The Reference Overlay puts any image behind the 3D model in the preview so you can compare visually.
+
+### Setting it up
+
+1. Open the **Reference Overlay** panel in the preview settings area
+2. Pick an image from your project files, or upload one
+3. Toggle **Show overlay** on
+4. Enter the overlay's real-world width and height in mm
+
+### Fine-tuning
+
+- **Opacity slider** -- make the image more or less transparent
+- **Fit to model** -- auto-sizes the image to match the model's footprint
+- **Center** -- snaps the image back to the origin
+- **Offset / Rotation** -- nudge or rotate for a better fit
+
+### A note on accessibility
+
+The overlay is purely visual -- screen reader users won't perceive it. If you need non-visual verification, use the Image Measurement tool to check dimensions by the numbers instead.
 
 ---
 

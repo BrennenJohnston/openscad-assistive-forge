@@ -1,11 +1,8 @@
 # Release Notes
 
-## v4.2.0 - Production Release (2026-02-02)
+## v4.2.0 (2026-02-02)
 
-**Status**: Production Ready  
-**Milestone**: Layer 2 Complete
-
-This release completes all planned accessibility, security, and reliability enhancements for OpenSCAD Assistive Forge, meeting Section 508 and WCAG 2.2 AA requirements.
+A big update focused on accessibility, security, and reliability. This brings the app up to WCAG 2.2 AA / Section 508 conformance.
 
 ### New Features
 

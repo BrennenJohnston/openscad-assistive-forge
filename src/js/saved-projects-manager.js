@@ -503,6 +503,7 @@ export async function saveProject({
   projectFiles = null,
   notes = '',
   folderId = null,
+  forkedFrom = null,
 }) {
   try {
     // Ensure database is initialized
@@ -545,6 +546,7 @@ export async function saveProject({
       overlayFiles: {}, // v2: overlay metadata
       presets: [], // v2: project-scoped presets metadata
       notes: notes || '',
+      forkedFrom: forkedFrom || null,
       savedAt: now,
       lastLoadedAt: now,
     };

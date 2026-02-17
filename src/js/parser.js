@@ -435,17 +435,25 @@ function parseDependency(comment) {
 }
 
 /**
- * Extract unit from parameter description or name
+ * Extract unit from parameter description, name, or tab context.
+ *
+ * Resolution order (first match wins):
+ *   1. Explicit unit keyword in the description/comment
+ *   2. Name-suffix inference (e.g. `_height` -> mm, `_px` -> px)
+ *   3. Tab-name fallback (e.g. tab "[App Layout in px]" -> px)
+ *
  * @param {string} description - Parameter description (from comment)
  * @param {string} name - Parameter name
+ * @param {string|null} [tabUnit=null] - Unit inferred from the enclosing tab name
  * @returns {string|null} Unit string or null if no unit detected
  */
-function extractUnit(description, name) {
+function extractUnit(description, name, tabUnit) {
   const comment = (description || '').toLowerCase();
   const paramName = (name || '').toLowerCase();
 
   // Explicit units in comment
   const unitPatterns = [
+    { regex: /\b(px|pixels?)\b/i, unit: 'px' },
     { regex: /\b(mm|millimeters?)\b/i, unit: 'mm' },
     { regex: /\b(cm|centimeters?)\b/i, unit: 'cm' },
     { regex: /\b(deg|degrees?|°)\b/i, unit: '°' },
@@ -457,6 +465,11 @@ function extractUnit(description, name) {
     if (regex.test(comment)) {
       return unit;
     }
+  }
+
+  // Infer from parameter name - pixel units (e.g. cell_height_in_px)
+  if (/(_px|_pixels?)$/i.test(paramName)) {
+    return 'px';
   }
 
   // Infer from parameter name - angles
@@ -475,7 +488,36 @@ function extractUnit(description, name) {
     return 'mm';
   }
 
+  // Fallback: use unit inferred from tab name (e.g. "[App Layout in px]")
+  if (tabUnit) {
+    return tabUnit;
+  }
+
   // No unit detected
+  return null;
+}
+
+/**
+ * Extract a unit hint from a tab/group name.
+ * Matches patterns like "in px", "in mm", "in cm", "in inches", "in pixels".
+ * @param {string} tabName - The raw tab name (e.g. "App Layout in px")
+ * @returns {string|null} Canonical unit string or null
+ */
+function extractTabUnit(tabName) {
+  if (!tabName) return null;
+
+  const match = tabName.match(
+    /\bin\s+(px|pixels?|mm|millimeters?|cm|centimeters?|deg|degrees?|in(?:ches)?|%|percent)\s*$/i
+  );
+  if (!match) return null;
+
+  const raw = match[1].toLowerCase();
+  if (/^(px|pixels?)$/.test(raw)) return 'px';
+  if (/^(mm|millimeters?)$/.test(raw)) return 'mm';
+  if (/^(cm|centimeters?)$/.test(raw)) return 'cm';
+  if (/^(deg|degrees?)$/.test(raw)) return '°';
+  if (/^(in(?:ches)?)$/.test(raw)) return 'in';
+  if (/^(%|percent)$/.test(raw)) return '%';
   return null;
 }
 
@@ -498,6 +540,7 @@ export function extractParameters(scadContent) {
   const hiddenParameters = {};
 
   let currentGroup = 'General';
+  let currentTabUnit = null; // Unit inferred from the current tab name (e.g. "in px")
   let groupOrder = 0;
   let paramOrder = 0;
   let scopeDepth = 0;
@@ -601,6 +644,7 @@ export function extractParameters(scadContent) {
         }
 
         currentGroup = rawGroupName;
+        currentTabUnit = extractTabUnit(rawGroupName);
 
         // Skip Hidden group entirely, and Global group from groups array
         // (Global params will be marked with isGlobal flag and shown on all tabs)
@@ -833,14 +877,14 @@ export function extractParameters(scadContent) {
           param.uiType = 'toggle';
         }
 
-        // Extract unit for numeric parameters
+        // Extract unit for numeric parameters (with tab-name fallback)
         if (param.type === 'integer' || param.type === 'number') {
-          param.unit = extractUnit(param.description, param.name);
+          param.unit = extractUnit(param.description, param.name, currentTabUnit);
         }
 
         // Extract unit for vector parameters and apply to components
         if (param.type === 'vector' && param.components) {
-          const unit = extractUnit(param.description, param.name);
+          const unit = extractUnit(param.description, param.name, currentTabUnit);
           if (unit) {
             param.unit = unit;
             param.components = param.components.map((comp) => ({

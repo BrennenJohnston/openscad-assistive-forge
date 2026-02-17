@@ -1,24 +1,16 @@
-# Getting Started with OpenSCAD Assistive Forge
+# Getting Started
 
-Welcome to OpenSCAD Assistive Forge! This guide helps you customize 3D models in your browser, no software installation required.
+This guide walks you through your first session with OpenSCAD Assistive Forge -- from opening a model to exporting a file for 3D printing.
 
-## What You'll Learn
+## What this app does
 
-- What OpenSCAD Assistive Forge does
-- How to open your first design
-- How to customize parameters
-- How to export a file for 3D printing
+You pick a parametric 3D model (a `.scad` file), adjust its dimensions with sliders and dropdowns, preview the result, and download a file ready for printing or laser cutting. Everything happens in your browser -- nothing to install, nothing uploaded anywhere.
 
-## What is OpenSCAD Assistive Forge?
+A few things that matter:
 
-OpenSCAD Assistive Forge is a web-based customizer for parametric 3D models. Instead of learning CAD software, you adjust sliders and dropdowns to change dimensions, features, and styles. The app generates a 3D preview and lets you export files ready for 3D printing or laser cutting.
-
-**Key benefits:**
-
-- Runs entirely in your browser (no downloads)
 - Works with keyboard, mouse, touch, and screen readers
-- Keeps all your data local (nothing uploaded to servers)
-- Exports STL, OBJ, and other standard formats
+- Keeps all your data on your own computer
+- Exports STL, OBJ, 3MF, and more
 
 ## Opening Your First Design
 
@@ -127,6 +119,13 @@ Load saved projects using **Open File** and selecting the `.json` file.
 | Rotate preview | Arrow keys |
 | Zoom | `+` / `-` |
 | Pan | `Shift + Arrow keys` |
+
+## Reference tools
+
+The preview settings area has two tools for working with reference images:
+
+- **Image Measurement** -- load any image and read pixel coordinates from it. Handy when a model needs measurements from screenshots or reference drawings. Details in the [Standard Mode Guide](./STANDARD_MODE_GUIDE.md#image-measurement).
+- **Reference Overlay** -- display an image behind the 3D model so you can compare alignment visually. Details in the [Standard Mode Guide](./STANDARD_MODE_GUIDE.md#reference-overlay).
 
 ## Next Steps
 

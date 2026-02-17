@@ -301,8 +301,8 @@ Key metrics to track:
 ### Operational Runbooks
 
 For incident response procedures, see:
-- `docs/planning/operational-runbooks.md` - Detailed runbooks
-- `docs/planning/incident-response.md` - Security incidents
+- `docs/ROLLBACK_RUNBOOK.md` -- rollback and recovery procedures
+- `docs/SECURITY_ADMIN_GUIDE.md` -- security configuration and incident handling
 
 ---
 

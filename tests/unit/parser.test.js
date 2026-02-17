@@ -1418,6 +1418,83 @@ describe('Parameter Parser', () => {
       expect(result.parameters.show_split_line.default).toBe('no')
     })
 
+    it('should recognise "px" unit from _px name suffix', () => {
+      const scad = `
+        /*[Grid Info]*/
+        cell_height_in_px = 120; // [0:10000]
+        cell_width_in_px = 80; // [0:10000]
+      `
+      const result = extractParameters(scad)
+
+      expect(result.parameters.cell_height_in_px.unit).toBe('px')
+      expect(result.parameters.cell_width_in_px.unit).toBe('px')
+    })
+
+    it('should recognise "px" unit from description comment', () => {
+      const scad = `
+        /*[Layout]*/
+        icon_size = 48; // Size in pixels [0:1000]
+      `
+      const result = extractParameters(scad)
+      expect(result.parameters.icon_size.unit).toBe('px')
+    })
+
+    it('should infer pixel unit from tab name containing "in px"', () => {
+      const scad = `
+        /*[App Layout in px]*/
+        bottom_of_status_bar = 120; // [0:10000]
+        bottom_of_upper_message_bar = 140; // [0:10000]
+        top_of_lower_command_bar = 1400; // [0:10000]
+      `
+      const result = extractParameters(scad)
+
+      expect(result.parameters.bottom_of_status_bar.unit).toBe('px')
+      expect(result.parameters.bottom_of_upper_message_bar.unit).toBe('px')
+      expect(result.parameters.top_of_lower_command_bar.unit).toBe('px')
+    })
+
+    it('should infer mm unit from tab name containing "in mm"', () => {
+      const scad = `
+        /*[App Layout in mm]*/
+        status_bar_height = 5; // [0:100]
+      `
+      const result = extractParameters(scad)
+      expect(result.parameters.status_bar_height.unit).toBe('mm')
+    })
+
+    it('should NOT let tab unit override explicit comment annotation', () => {
+      const scad = `
+        /*[Dimensions in px]*/
+        real_height = 10; // Height in mm [0:100]
+      `
+      const result = extractParameters(scad)
+      // Comment says "mm", tab says "px" — comment wins
+      expect(result.parameters.real_height.unit).toBe('mm')
+    })
+
+    it('should NOT let tab unit override name-suffix inference', () => {
+      const scad = `
+        /*[Layout in px]*/
+        rotation_angle = 45; // [0:360]
+      `
+      const result = extractParameters(scad)
+      // Name contains "angle" -> should be degrees, not px
+      expect(result.parameters.rotation_angle.unit).toBe('°')
+    })
+
+    it('should reset tab unit when entering a new tab without unit hint', () => {
+      const scad = `
+        /*[App Layout in px]*/
+        status_bar = 120; // [0:10000]
+
+        /*[General Settings]*/
+        count = 5; // [1:20]
+      `
+      const result = extractParameters(scad)
+      expect(result.parameters.status_bar.unit).toBe('px')
+      expect(result.parameters.count.unit).toBeNull()
+    })
+
     it('should handle the real keyguard_v75.scad file if available', () => {
       const realFilePath = join(__dirname, '../../.volkswitch/Keyguard Design/keyguard_v75.scad')
       if (!existsSync(realFilePath)) {

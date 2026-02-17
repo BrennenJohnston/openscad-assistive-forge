@@ -76,7 +76,7 @@ Some features cannot be reliably automated. Follow these steps with DevTools ope
 
 Requires a publicly hosted file for full testing.
 
-1. Host `keyguard-test-bundle.zip` on a CORS-enabled server (GitHub raw URL, Cloudflare R2, etc.).
+1. Host a test `.zip` bundle on a CORS-enabled server (GitHub raw URL, Cloudflare R2, etc.).
 2. Navigate to: `http://localhost:5173/?project=<hosted-url>`
 3. **Expected:** ZIP downloads automatically, model loads, presets appear in dropdown.
 4. Check the console for CORS errors or fetch failures.
@@ -88,19 +88,19 @@ For local-only testing without a server:
 1. Navigate to `http://localhost:5173/?scad=<url-to-scad-file>` with a publicly accessible `.scad` file.
 2. Verify the file downloads and parameters appear.
 
-### Keyguard Workflow Walkthrough (Clinician Flow)
+### Multi-File Project Walkthrough (Clinician Flow)
 
-This replicates the exact workflow clinicians follow when customizing keyguards:
+This replicates the end-to-end workflow for a multi-file SCAD project with presets:
 
-1. Upload the keyguard ZIP (`.volkswitch/keyguard-test-bundle.zip`).
+1. Upload a project ZIP that includes a `.scad` file, companion files, and a presets `.json`.
 2. Verify the preset dropdown shows "design default values" first, plus the imported presets.
-3. Select "iPad 9 - LTROP - TouchChat 45" from the dropdown.
-4. Modify `number_of_rows` by typing an exact value (e.g., `7`) into the spinbox.
+3. Select a named preset from the dropdown.
+4. Modify a numeric parameter by typing an exact value (e.g., `7`) into the spinbox.
 5. Verify the spinbox accepts the exact value without rounding to a slider step.
 6. Click "Preview" / wait for auto-preview and verify the 3D preview updates.
 7. Click Save (or Add Preset) to preserve the modification.
 8. Select a different preset, then re-select the original.
-9. Verify the modified `number_of_rows` value persisted.
+9. Verify the modified value persisted.
 10. Click "Import / Export" and then "Export All Presets".
 11. Open the exported JSON and verify:
     - `fileFormatVersion: "1"` is present.

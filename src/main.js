@@ -116,6 +116,9 @@ import {
   getAppPrefKey,
   getDrawerStateKey,
 } from './js/storage-keys.js';
+import { initImageMeasurement, openFullscreen as measureOpenFullscreen, closeFullscreen as measureCloseFullscreen, loadImageFromDataURL, setMeasureMode, clearRulerPoints, getCalibDistancePx } from './js/image-measurement.js';
+import * as SharedImageStore from './js/shared-image-store.js';
+import { getUnit, setUnit, getScaleFactor, setScaleFactor, onUnitChange, onScaleChange } from './js/unit-sync.js';
 
 // Storage keys using standardized naming convention
 const STORAGE_KEY_AUTO_PREVIEW_ENABLED = getAppPrefKey('auto-preview-enabled');
@@ -129,6 +132,9 @@ const STORAGE_KEY_OVERLAY_SOURCE = getAppPrefKey('overlay-source');
 const STORAGE_KEY_AUTO_ROTATE = getAppPrefKey('auto-rotate');
 const STORAGE_KEY_ROTATE_SPEED = getAppPrefKey('rotate-speed');
 const STORAGE_KEY_MODEL_COLOR = getAppPrefKey('model-color');
+const STORAGE_KEY_MODEL_OPACITY = getAppPrefKey('model-opacity');
+const STORAGE_KEY_BRIGHTNESS = getAppPrefKey('brightness');
+const STORAGE_KEY_CONTRAST = getAppPrefKey('contrast');
 const STORAGE_KEY_PARAM_PANEL_COLLAPSED = getDrawerStateKey('parameters');
 const STORAGE_KEY_LAYOUT_SIZES = getAppPrefKey('layout-sizes');
 import {
@@ -3782,6 +3788,9 @@ async function initApp() {
   function updateOverlaySourceDropdown() {
     if (!overlaySourceSelect) return;
 
+    // Preserve current selection across rebuild
+    const previousVal = overlaySourceSelect.value;
+
     const state = stateManager.getState();
     const projectFiles = state.projectFiles;
 
@@ -3791,35 +3800,48 @@ async function initApp() {
 
     if (!projectFiles || projectFiles.size === 0) {
       overlaySourceSelect.disabled = true;
-      return;
+    } else {
+      overlaySourceSelect.disabled = false;
+
+      // Filter for image files (SVG, PNG, JPG)
+      const imageExtensions = ['svg', 'png', 'jpg', 'jpeg'];
+      const imageFiles = Array.from(projectFiles.keys())
+        .filter((path) => {
+          const ext = path.split('.').pop()?.toLowerCase();
+          return imageExtensions.includes(ext);
+        })
+        .sort();
+
+      if (imageFiles.length === 0) {
+        const option = document.createElement('option');
+        option.value = '';
+        option.textContent = '-- No image files --';
+        option.disabled = true;
+        overlaySourceSelect.appendChild(option);
+      } else {
+        imageFiles.forEach((path) => {
+          const option = document.createElement('option');
+          option.value = path;
+          option.textContent = path;
+          overlaySourceSelect.appendChild(option);
+        });
+      }
     }
 
-    overlaySourceSelect.disabled = false;
-
-    // Filter for image files (SVG, PNG, JPG)
-    const imageExtensions = ['svg', 'png', 'jpg', 'jpeg'];
-    const imageFiles = Array.from(projectFiles.keys())
-      .filter((path) => {
-        const ext = path.split('.').pop()?.toLowerCase();
-        return imageExtensions.includes(ext);
-      })
-      .sort();
-
-    if (imageFiles.length === 0) {
-      const option = document.createElement('option');
-      option.value = '';
-      option.textContent = '-- No image files --';
-      option.disabled = true;
-      overlaySourceSelect.appendChild(option);
-      return;
+    // Re-add shared screenshot entries from the image store
+    const imgs = SharedImageStore.getImages();
+    for (const [, rec] of imgs) {
+      const opt = document.createElement('option');
+      opt.value = `screenshot:${rec.name}`;
+      opt.textContent = `\uD83D\uDCF7 ${rec.name}`;
+      opt.dataset.shared = '1';
+      overlaySourceSelect.appendChild(opt);
     }
 
-    imageFiles.forEach((path) => {
-      const option = document.createElement('option');
-      option.value = path;
-      option.textContent = path;
-      overlaySourceSelect.appendChild(option);
-    });
+    // Restore selection if the option still exists
+    if (previousVal) {
+      overlaySourceSelect.value = previousVal;
+    }
   }
 
   // Track uploaded overlay files (not part of project files)
@@ -3979,6 +4001,35 @@ async function initApp() {
   if (overlaySourceSelect) {
     overlaySourceSelect.addEventListener('change', async () => {
       const fileName = overlaySourceSelect.value;
+      // Handle shared screenshot images (uploaded via Image Measurement tool)
+      if (fileName.startsWith('screenshot:')) {
+        const imageName = fileName.slice('screenshot:'.length);
+        const rec = SharedImageStore.getImageByName(imageName);
+        if (rec && previewManager) {
+          try {
+            await previewManager.setReferenceOverlaySource({
+              kind: 'raster',
+              name: imageName,
+              dataUrlOrText: rec.dataUrl,
+            });
+            if (!overlayToggle?.checked) {
+              overlayToggle.checked = true;
+              previewManager.setOverlayEnabled(true);
+            }
+            updateOverlayUIFromConfig();
+            // updateOverlayUIFromConfig sets dropdown to config.sourceFileName
+            // ("Test.png") but the option value is "screenshot:Test.png" --
+            // restore the prefixed value so the dropdown shows the filename.
+            overlaySourceSelect.value = fileName;
+            localStorage.setItem(STORAGE_KEY_OVERLAY_SOURCE, fileName);
+            console.log(`[App] Screenshot overlay loaded: ${imageName}`);
+          } catch (error) {
+            console.error('[App] Failed to load screenshot overlay:', error);
+          }
+        }
+        return;
+      }
+
       await loadOverlayFromProjectFile(fileName);
     });
   }
@@ -4413,6 +4464,66 @@ async function initApp() {
     });
   }
 
+  // --- Model Appearance Controls (Opacity, Brightness, Contrast) ---
+  const modelOpacityInput = document.getElementById('modelOpacityInput');
+  const modelOpacityValue = document.getElementById('modelOpacityValue');
+  const brightnessInput = document.getElementById('brightnessInput');
+  const brightnessValue = document.getElementById('brightnessValue');
+  const contrastInput = document.getElementById('contrastInput');
+  const contrastValue = document.getElementById('contrastValue');
+  const resetAppearanceBtn = document.getElementById('resetAppearanceBtn');
+
+  // Restore persisted values
+  const savedOpacity = localStorage.getItem(STORAGE_KEY_MODEL_OPACITY);
+  const savedBrightness = localStorage.getItem(STORAGE_KEY_BRIGHTNESS);
+  const savedContrast = localStorage.getItem(STORAGE_KEY_CONTRAST);
+  if (savedOpacity && modelOpacityInput) { modelOpacityInput.value = savedOpacity; if (modelOpacityValue) modelOpacityValue.textContent = `${savedOpacity}%`; }
+  if (savedBrightness && brightnessInput) { brightnessInput.value = savedBrightness; if (brightnessValue) brightnessValue.textContent = `${savedBrightness}%`; }
+  if (savedContrast && contrastInput) { contrastInput.value = savedContrast; if (contrastValue) contrastValue.textContent = `${savedContrast}%`; }
+
+  function applyAppearanceToPreview() {
+    if (!previewManager) return;
+    previewManager.setModelOpacity(parseInt(modelOpacityInput?.value || '100', 10));
+    previewManager.setBrightness(parseInt(brightnessInput?.value || '100', 10));
+    previewManager.setContrast(parseInt(contrastInput?.value || '100', 10));
+  }
+
+  if (modelOpacityInput) {
+    modelOpacityInput.addEventListener('input', () => {
+      const v = modelOpacityInput.value;
+      if (modelOpacityValue) modelOpacityValue.textContent = `${v}%`;
+      localStorage.setItem(STORAGE_KEY_MODEL_OPACITY, v);
+      if (previewManager) previewManager.setModelOpacity(parseInt(v, 10));
+    });
+  }
+  if (brightnessInput) {
+    brightnessInput.addEventListener('input', () => {
+      const v = brightnessInput.value;
+      if (brightnessValue) brightnessValue.textContent = `${v}%`;
+      localStorage.setItem(STORAGE_KEY_BRIGHTNESS, v);
+      if (previewManager) previewManager.setBrightness(parseInt(v, 10));
+    });
+  }
+  if (contrastInput) {
+    contrastInput.addEventListener('input', () => {
+      const v = contrastInput.value;
+      if (contrastValue) contrastValue.textContent = `${v}%`;
+      localStorage.setItem(STORAGE_KEY_CONTRAST, v);
+      if (previewManager) previewManager.setContrast(parseInt(v, 10));
+    });
+  }
+  if (resetAppearanceBtn) {
+    resetAppearanceBtn.addEventListener('click', () => {
+      if (modelOpacityInput) { modelOpacityInput.value = '100'; if (modelOpacityValue) modelOpacityValue.textContent = '100%'; }
+      if (brightnessInput) { brightnessInput.value = '100'; if (brightnessValue) brightnessValue.textContent = '100%'; }
+      if (contrastInput) { contrastInput.value = '100'; if (contrastValue) contrastValue.textContent = '100%'; }
+      localStorage.removeItem(STORAGE_KEY_MODEL_OPACITY);
+      localStorage.removeItem(STORAGE_KEY_BRIGHTNESS);
+      localStorage.removeItem(STORAGE_KEY_CONTRAST);
+      if (previewManager) previewManager.resetAppearance();
+    });
+  }
+
   /**
    * Get the theme default model color
    */
@@ -4803,7 +4914,13 @@ async function initApp() {
 
   // Check for saved draft - but only if first-visit modal is not blocking
   // If first-visit is blocking, defer draft restoration until user accepts
-  const draft = await stateManager.loadFromLocalStorage();
+  // IMPORTANT: Skip draft restoration if a manifest or project URL is specified --
+  // the URL intent takes priority over any cached draft (fixes race condition)
+  const hasManifestParam = urlParams.get('manifest');
+  const hasProjectParam = urlParams.get('project') || urlParams.get('scad');
+  const draft = (!hasManifestParam && !hasProjectParam)
+    ? await stateManager.loadFromLocalStorage()
+    : null;
 
   if (draft) {
     // If first-visit modal is blocking, defer draft restoration
@@ -5446,8 +5563,22 @@ async function initApp() {
     }
 
     try {
-      const content = await file.text();
       const fileName = file.name;
+      const ext = fileName.split('.').pop()?.toLowerCase();
+      const isImage = ['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext);
+
+      // Read image files as data URLs (binary-safe); text files as text
+      let content;
+      if (isImage) {
+        content = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = () => reject(new Error('Failed to read image file'));
+          reader.readAsDataURL(file);
+        });
+      } else {
+        content = await file.text();
+      }
 
       // Initialize projectFiles if needed (converting single-file to multi-file)
       if (!projectFiles) {
@@ -5474,6 +5605,11 @@ async function initApp() {
         projectFiles,
         mainFilePath,
       });
+
+      // Mirror image files to SharedImageStore so they appear in Image Measurement
+      if (isImage) {
+        await SharedImageStore.addImageFromDataUrl(fileName, content);
+      }
 
       // Update UI
       const requiredFiles = detectRequiredCompanionFiles(uploadedFile.content);
@@ -6185,6 +6321,9 @@ async function initApp() {
           }
         }
 
+        // Apply persisted model appearance controls
+        applyAppearanceToPreview();
+
         // Initialize auto-rotate settings from localStorage
         // Only enable if user doesn't prefer reduced motion
         const savedAutoRotatePref = localStorage.getItem(
@@ -6290,6 +6429,22 @@ async function initApp() {
 
       // Update Project Files Manager UI (for multi-file projects)
       updateProjectFilesUI();
+
+      // Restore SharedImageStore from saved screenshots in projectFiles.
+      // This rehydrates the in-memory image store so screenshots appear in
+      // both Image Measurement and Reference Overlay dropdowns after reload.
+      if (projectFiles) {
+        const imageExts = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
+        for (const [path, content] of projectFiles) {
+          const ext = path.split('.').pop()?.toLowerCase();
+          if (imageExts.includes(ext) && typeof content === 'string' && content.startsWith('data:')) {
+            const name = path.includes('/') ? path.split('/').pop() : path;
+            SharedImageStore.addImageFromDataUrl(name, content).catch(() => {
+              console.warn(`[App] Failed to restore image: ${path}`);
+            });
+          }
+        }
+      }
 
       // Trigger an initial preview immediately on first load (and also for URL-param loads).
       if (autoPreviewController) {
@@ -7201,16 +7356,28 @@ if (rounded) {
     modal.setAttribute('aria-labelledby', 'fileManagerTitle');
     modal.setAttribute('aria-modal', 'true');
 
-    // Build file list
+    // Build nested folder tree from flat file entries
     const fileEntries = Object.entries(projectFiles);
-    const filesHtml = fileEntries
-      .map(([path, content]) => {
-        const isMain = path === project.mainFilePath;
-        const size = new Blob([content]).size;
-        const iconClass = isMain ? 'main-file' : '';
 
-        return `
-        <div class="file-manager-item" data-path="${escapeHtml(path)}">
+    // Group files by folder
+    const tree = { files: [], folders: {} };
+    for (const [path, content] of fileEntries) {
+      const parts = path.split('/');
+      if (parts.length > 1) {
+        const folderName = parts.slice(0, -1).join('/');
+        if (!tree.folders[folderName]) tree.folders[folderName] = [];
+        tree.folders[folderName].push({ path, name: parts[parts.length - 1], content });
+      } else {
+        tree.files.push({ path, name: path, content });
+      }
+    }
+
+    function renderFileItem(file) {
+      const isMain = file.path === project.mainFilePath;
+      const size = new Blob([file.content]).size;
+      const iconClass = isMain ? 'main-file' : '';
+      return `
+        <div class="file-manager-item" data-path="${escapeHtml(file.path)}">
           <svg class="file-manager-item-icon ${iconClass}" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
             ${
               isMain
@@ -7218,31 +7385,77 @@ if (rounded) {
                 : '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline>'
             }
           </svg>
-          <span class="file-manager-item-path">${escapeHtml(path)}</span>
+          <span class="file-manager-item-path">${escapeHtml(file.name)}</span>
           <span class="file-manager-item-size">${formatFileSize(size)}</span>
           <div class="file-manager-item-actions">
             ${
               isMain
-                ? '<span class="badge">Main</span>'
+                ? '<span class="file-manager-main-badge">Main</span>'
                 : `
-              <button class="btn btn-sm btn-icon btn-set-main-file" data-path="${escapeHtml(path)}" aria-label="Set as main file" title="Set as main">
+              <button class="btn btn-sm btn-icon btn-set-main-file" data-path="${escapeHtml(file.path)}" aria-label="Set as main file" title="Set as main">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                   <polyline points="20 6 9 17 4 12"></polyline>
                 </svg>
               </button>
             `
             }
-            <button class="btn btn-sm btn-icon btn-preview-file" data-path="${escapeHtml(path)}" aria-label="Preview file" title="Preview">
+            <button class="btn btn-sm btn-icon btn-preview-file" data-path="${escapeHtml(file.path)}" aria-label="Preview file" title="Preview">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                 <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
                 <circle cx="12" cy="12" r="3"></circle>
               </svg>
             </button>
+            <button class="btn btn-sm btn-icon btn-rename-project-file" data-path="${escapeHtml(file.path)}" aria-label="Rename file" title="Rename">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+              </svg>
+            </button>
+            <button class="btn btn-sm btn-icon btn-delete-project-file${isMain ? ' btn-disabled' : ''}" data-path="${escapeHtml(file.path)}" aria-label="Delete file" title="${isMain ? 'Cannot delete main file' : 'Delete'}"${isMain ? ' disabled' : ''}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+              </svg>
+            </button>
           </div>
-        </div>
-      `;
-      })
-      .join('');
+        </div>`;
+    }
+
+    // Render root-level files first, then folders
+    let filesHtml = tree.files.map(renderFileItem).join('');
+
+    // Render each folder as a collapsible group
+    for (const [folderName, folderFiles] of Object.entries(tree.folders).sort()) {
+      const visibleFiles = folderFiles.filter(f => f.name !== '.folder');
+      const folderFilesHtml = visibleFiles.map(renderFileItem).join('');
+      filesHtml += `
+        <details class="file-manager-folder" open>
+          <summary class="file-manager-folder-header">
+            <svg class="file-manager-folder-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+            </svg>
+            <span class="file-manager-folder-name">${escapeHtml(folderName)}</span>
+            <span class="file-manager-folder-count">${visibleFiles.length} file${visibleFiles.length !== 1 ? 's' : ''}</span>
+            <div class="file-manager-folder-actions">
+              <button class="btn btn-sm btn-icon btn-rename-project-folder" data-folder="${escapeHtml(folderName)}" aria-label="Rename folder" title="Rename">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                </svg>
+              </button>
+              <button class="btn btn-sm btn-icon btn-delete-project-folder" data-folder="${escapeHtml(folderName)}" aria-label="Delete folder" title="Delete folder">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <polyline points="3 6 5 6 21 6"></polyline>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                </svg>
+              </button>
+            </div>
+          </summary>
+          <div class="file-manager-folder-contents">
+            ${folderFilesHtml || '<p class="file-manager-empty-folder">Empty folder</p>'}
+          </div>
+        </details>`;
+    }
 
     modal.innerHTML = `
       <div class="preset-modal-content" style="max-width: 700px;">
@@ -7258,6 +7471,14 @@ if (rounded) {
                 <line x1="5" y1="12" x2="19" y2="12"></line>
               </svg>
               Add File
+            </button>
+            <button type="button" class="btn btn-sm btn-outline" id="addFolderToProjectBtn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                <line x1="12" y1="11" x2="12" y2="17"></line>
+                <line x1="9" y1="14" x2="15" y2="14"></line>
+              </svg>
+              New Folder
             </button>
             <span class="file-manager-count">${fileEntries.length} file${fileEntries.length !== 1 ? 's' : ''}</span>
           </div>
@@ -7396,6 +7617,218 @@ if (rounded) {
         fileInput.click();
       });
     }
+
+    // New folder button
+    const addFolderBtn = modal.querySelector('#addFolderToProjectBtn');
+    if (addFolderBtn) {
+      addFolderBtn.addEventListener('click', async () => {
+        const folderName = prompt('Enter folder name:');
+        if (!folderName || !folderName.trim()) return;
+        const safeName = folderName.trim().replace(/[\\/:*?"<>|]/g, '_');
+
+        // Check if folder already exists
+        const folderPrefix = `${safeName}/`;
+        const exists = Object.keys(projectFiles).some(p => p.startsWith(folderPrefix));
+        if (exists) {
+          alert(`Folder "${safeName}" already exists.`);
+          return;
+        }
+
+        // Create folder with a hidden sentinel entry
+        const updatedProjectFiles = { ...projectFiles };
+        updatedProjectFiles[`${safeName}/.folder`] = '';
+
+        const result = await updateProject({
+          id: projectId,
+          projectFiles: JSON.stringify(updatedProjectFiles),
+        });
+
+        if (result.success) {
+          document.body.removeChild(modal);
+          showProjectFileManager(projectId);
+          stateManager.announceChange(`Created folder "${safeName}"`);
+        } else {
+          alert(`Failed to create folder: ${result.error}`);
+        }
+      });
+    }
+
+    // Rename folder buttons
+    modal.querySelectorAll('.btn-rename-project-folder').forEach((btn) => {
+      btn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const oldName = btn.dataset.folder;
+        const newName = prompt(`Rename folder "${oldName}" to:`, oldName);
+        if (!newName || !newName.trim() || newName.trim() === oldName) return;
+        const safeName = newName.trim().replace(/[\\/:*?"<>|]/g, '_');
+
+        // Check if target name already exists
+        const targetPrefix = `${safeName}/`;
+        const conflict = Object.keys(projectFiles).some(
+          p => p.startsWith(targetPrefix) && !p.startsWith(`${oldName}/`)
+        );
+        if (conflict) {
+          alert(`Folder "${safeName}" already exists.`);
+          return;
+        }
+
+        // Rename all file paths under the old folder
+        const updatedProjectFiles = {};
+        const oldPrefix = `${oldName}/`;
+        for (const [path, content] of Object.entries(projectFiles)) {
+          if (path.startsWith(oldPrefix)) {
+            updatedProjectFiles[`${safeName}/${path.slice(oldPrefix.length)}`] = content;
+          } else {
+            updatedProjectFiles[path] = content;
+          }
+        }
+
+        // Update mainFilePath if it was in the renamed folder
+        let newMainFilePath = project.mainFilePath;
+        if (newMainFilePath && newMainFilePath.startsWith(oldPrefix)) {
+          newMainFilePath = `${safeName}/${newMainFilePath.slice(oldPrefix.length)}`;
+        }
+
+        const result = await updateProject({
+          id: projectId,
+          projectFiles: JSON.stringify(updatedProjectFiles),
+          mainFilePath: newMainFilePath,
+        });
+
+        if (result.success) {
+          document.body.removeChild(modal);
+          showProjectFileManager(projectId);
+          stateManager.announceChange(`Folder renamed to "${safeName}"`);
+        } else {
+          alert(`Failed to rename folder: ${result.error}`);
+        }
+      });
+    });
+
+    // Rename file buttons
+    modal.querySelectorAll('.btn-rename-project-file').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const oldPath = btn.dataset.path;
+        const parts = oldPath.split('/');
+        const oldName = parts[parts.length - 1];
+        const folder = parts.length > 1 ? parts.slice(0, -1).join('/') : '';
+
+        const newName = prompt(`Rename "${oldName}" to:`, oldName);
+        if (!newName || !newName.trim() || newName.trim() === oldName) return;
+        const safeName = newName.trim().replace(/[\\/:*?"<>|]/g, '_');
+        const newPath = folder ? `${folder}/${safeName}` : safeName;
+
+        if (newPath === oldPath) return;
+
+        // Check for conflicts
+        if (projectFiles[newPath] !== undefined) {
+          alert(`A file named "${safeName}" already exists${folder ? ` in ${folder}` : ''}.`);
+          return;
+        }
+
+        const updatedProjectFiles = {};
+        for (const [path, content] of Object.entries(projectFiles)) {
+          if (path === oldPath) {
+            updatedProjectFiles[newPath] = content;
+          } else {
+            updatedProjectFiles[path] = content;
+          }
+        }
+
+        // Update mainFilePath if the renamed file was the main file
+        let newMainFilePath = project.mainFilePath;
+        if (newMainFilePath === oldPath) {
+          newMainFilePath = newPath;
+        }
+
+        const result = await updateProject({
+          id: projectId,
+          projectFiles: JSON.stringify(updatedProjectFiles),
+          mainFilePath: newMainFilePath,
+        });
+
+        if (result.success) {
+          document.body.removeChild(modal);
+          showProjectFileManager(projectId);
+          stateManager.announceChange(`File renamed to "${safeName}"`);
+        } else {
+          alert(`Failed to rename file: ${result.error}`);
+        }
+      });
+    });
+
+    // Delete file buttons
+    modal.querySelectorAll('.btn-delete-project-file').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const filePath = btn.dataset.path;
+        if (filePath === project.mainFilePath) return;
+
+        const fileName = filePath.split('/').pop();
+        if (!confirm(`Delete "${fileName}"? This cannot be undone.`)) return;
+
+        const updatedProjectFiles = { ...projectFiles };
+        delete updatedProjectFiles[filePath];
+
+        const result = await updateProject({
+          id: projectId,
+          projectFiles: JSON.stringify(updatedProjectFiles),
+        });
+
+        if (result.success) {
+          document.body.removeChild(modal);
+          showProjectFileManager(projectId);
+          stateManager.announceChange(`Deleted file "${fileName}"`);
+        } else {
+          alert(`Failed to delete file: ${result.error}`);
+        }
+      });
+    });
+
+    // Delete folder buttons
+    modal.querySelectorAll('.btn-delete-project-folder').forEach((btn) => {
+      btn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const folderName = btn.dataset.folder;
+        const folderPrefix = `${folderName}/`;
+
+        // Check if the main file lives in this folder
+        if (project.mainFilePath && project.mainFilePath.startsWith(folderPrefix)) {
+          alert(`Cannot delete folder "${folderName}" because it contains the main file. Move or change the main file first.`);
+          return;
+        }
+
+        const fileCount = Object.keys(projectFiles).filter(
+          p => p.startsWith(folderPrefix) && !p.endsWith('/.folder')
+        ).length;
+        const message = fileCount > 0
+          ? `Delete folder "${folderName}" and its ${fileCount} file${fileCount !== 1 ? 's' : ''}? This cannot be undone.`
+          : `Delete empty folder "${folderName}"?`;
+
+        if (!confirm(message)) return;
+
+        const updatedProjectFiles = {};
+        for (const [path, content] of Object.entries(projectFiles)) {
+          if (!path.startsWith(folderPrefix)) {
+            updatedProjectFiles[path] = content;
+          }
+        }
+
+        const result = await updateProject({
+          id: projectId,
+          projectFiles: JSON.stringify(updatedProjectFiles),
+        });
+
+        if (result.success) {
+          document.body.removeChild(modal);
+          showProjectFileManager(projectId);
+          stateManager.announceChange(`Deleted folder "${folderName}"`);
+        } else {
+          alert(`Failed to delete folder: ${result.error}`);
+        }
+      });
+    });
 
     // Close on escape
     modal.addEventListener('keydown', (e) => {
@@ -7991,6 +8424,123 @@ if (rounded) {
     }
   }
 
+  // --- Manifest info banner helpers ---
+  function showManifestInfoBanner(name, author) {
+    const banner = document.getElementById('manifestInfoBanner');
+    const text = document.getElementById('manifestInfoText');
+    if (!banner) return;
+    const parts = ['Shared project'];
+    if (name) parts[0] = `Shared project: <strong>${name}</strong>`;
+    if (author) parts.push(`by ${author}`);
+    if (text) text.innerHTML = parts.join(' ');
+    banner.classList.remove('hidden');
+  }
+
+  // Wire manifest banner buttons
+  const manifestBanner = document.getElementById('manifestInfoBanner');
+  const manifestSaveCopyBtn = document.getElementById('manifestSaveCopyBtn');
+  const manifestDownloadZipBtn = document.getElementById('manifestDownloadZipBtn');
+  const manifestResetBtn = document.getElementById('manifestResetBtn');
+  const manifestDismissBanner = document.getElementById('manifestDismissBanner');
+
+  if (manifestDismissBanner) {
+    manifestDismissBanner.addEventListener('click', () => {
+      if (manifestBanner) manifestBanner.classList.add('hidden');
+    });
+  }
+
+  if (manifestSaveCopyBtn) {
+    manifestSaveCopyBtn.addEventListener('click', async () => {
+      const state = stateManager.getState();
+      if (!state.uploadedFile) return;
+      const origin = state.manifestOrigin;
+      const forkedFrom = origin ? {
+        manifestUrl: origin.url,
+        originalName: origin.name,
+        originalAuthor: origin.author,
+        forkDate: Date.now(),
+      } : null;
+      try {
+        const { saveProject } = await import('./js/saved-projects-manager.js');
+        const result = await saveProject({
+          name: state.uploadedFile.name.replace('.scad', ''),
+          originalName: state.uploadedFile.name,
+          kind: state.projectFiles ? 'zip' : 'scad',
+          mainFilePath: state.mainFilePath || state.uploadedFile.name,
+          content: state.uploadedFile.content,
+          projectFiles: state.projectFiles || null,
+          forkedFrom,
+        });
+        if (result.success) {
+          currentSavedProjectId = result.id;
+          updateStatus('Local copy saved');
+          announceImmediate('Local copy saved to browser storage');
+        } else {
+          updateStatus(`Save failed: ${result.error}`, 'error');
+        }
+      } catch (err) {
+        console.error('[Manifest] Save copy failed:', err);
+        updateStatus('Failed to save local copy', 'error');
+      }
+    });
+  }
+
+  if (manifestResetBtn) {
+    manifestResetBtn.addEventListener('click', async () => {
+      const origin = stateManager.getState().manifestOrigin;
+      if (!origin?.url) return;
+      const confirmed = confirm('Reset to the original shared project? Your unsaved changes will be lost.');
+      if (!confirmed) return;
+      try {
+        updateStatus('Reloading original project...');
+        const result = await loadManifest(origin.url, {
+          onProgress: ({ message }) => updateStatus(message),
+        });
+        await handleFile(null, result.mainContent, result.projectFiles, result.mainFile, 'manifest', result.manifest.name);
+        stateManager.setState({
+          manifestOrigin: { ...origin, loadedAt: Date.now() },
+        });
+        updateStatus(`Reset to original: ${origin.name || 'project'}`);
+      } catch (err) {
+        console.error('[Manifest] Reset failed:', err);
+        updateStatus('Failed to reload original project', 'error');
+      }
+    });
+  }
+
+  if (manifestDownloadZipBtn) {
+    manifestDownloadZipBtn.addEventListener('click', async () => {
+      const state = stateManager.getState();
+      const origin = state.manifestOrigin;
+      const projectName = origin?.name || state.uploadedFile?.name?.replace('.scad', '') || 'forge-project';
+      try {
+        const JSZip = (await import('jszip')).default;
+        const zip = new JSZip();
+        // Add main SCAD file
+        if (state.uploadedFile?.content) {
+          zip.file(state.uploadedFile.name || 'project.scad', state.uploadedFile.content);
+        }
+        // Add all project files (companions, presets, screenshots)
+        if (state.projectFiles) {
+          for (const [path, content] of state.projectFiles) {
+            zip.file(path, content);
+          }
+        }
+        const blob = await zip.generateAsync({ type: 'blob' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${projectName}.zip`;
+        a.click();
+        URL.revokeObjectURL(url);
+        updateStatus(`Downloaded: ${projectName}.zip`);
+      } catch (err) {
+        console.error('[Manifest] ZIP export failed:', err);
+        updateStatus('Failed to export ZIP', 'error');
+      }
+    });
+  }
+
   // =========================================
   // Manifest deep-link: ?manifest=<url> support
   // Loads a full project from a forge-manifest.json hosted externally.
@@ -8027,8 +8577,21 @@ if (rounded) {
         console.log(`[DeepLink] Manifest loaded: "${projectName}" (${projectFiles.size} files)`);
         announceImmediate(`Loading project: ${projectName}`);
 
-        // Call handleFile the same way ZIP extraction does (line 5664 pattern)
-        await handleFile(null, mainContent, projectFiles, mainFile, 'user', projectName);
+        // Call handleFile with 'manifest' source to enable origin tracking
+        await handleFile(null, mainContent, projectFiles, mainFile, 'manifest', projectName);
+
+        // Store manifest origin in state for provenance tracking
+        stateManager.setState({
+          manifestOrigin: {
+            url: manifestParam,
+            name: manifest.name || null,
+            author: manifest.author || null,
+            loadedAt: Date.now(),
+          },
+        });
+
+        // Show the manifest info banner
+        showManifestInfoBanner(manifest.name, manifest.author);
 
         // --- ?preset=<name> or manifest defaults.preset -----------------
         const presetName = initUrlParams.get('preset') || defaults?.preset;
@@ -8110,6 +8673,26 @@ if (rounded) {
         history.replaceState(null, '', cleanUrl);
 
         console.log(`[DeepLink] Manifest load complete: ${projectName}`);
+
+        // Auto-fork: listen for the first user-initiated parameter change
+        // and prompt to save a local copy (fires once per manifest session)
+        let autoForkFired = false;
+        const unsubAutoFork = stateManager.subscribe((state, prev) => {
+          if (autoForkFired) return;
+          if (!state.manifestOrigin) return;
+          // Only trigger on parameter changes (not rendering state, etc.)
+          if (state.parameters !== prev.parameters && prev.parameters && Object.keys(prev.parameters).length > 0) {
+            autoForkFired = true;
+            unsubAutoFork();
+            // Prompt the user to save a local copy
+            const wantSave = confirm(
+              `You're editing a shared project. Save a local copy to keep your changes?`
+            );
+            if (wantSave && manifestSaveCopyBtn) {
+              manifestSaveCopyBtn.click();
+            }
+          }
+        });
       } catch (error) {
         console.error('[DeepLink] Manifest load failed:', error);
 
@@ -8883,6 +9466,283 @@ if (rounded) {
 
     // Initialize mobile drawer controller
     initDrawerController();
+
+    // Initialize image measurement tool
+    initImageMeasurement({
+      onCoordinateCopied: (axis, value) => {
+        // GAP 7: populate focused parameter field with copied coordinate
+        const active = document.activeElement;
+        if (
+          active &&
+          active.tagName === 'INPUT' &&
+          (active.type === 'number' || active.type === 'text')
+        ) {
+          active.value = value;
+          active.dispatchEvent(new Event('input', { bubbles: true }));
+          active.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+      },
+    });
+
+    // Wire measurement fullscreen expand/close buttons
+    const measureExpandBtn = document.getElementById('measureExpandBtn');
+    const measureFsClose = document.getElementById('measureFullscreenClose');
+    const measureFsBackdrop = document.getElementById('measureFullscreenBackdrop');
+    if (measureExpandBtn) measureExpandBtn.addEventListener('click', measureOpenFullscreen);
+    if (measureFsClose) measureFsClose.addEventListener('click', measureCloseFullscreen);
+    if (measureFsBackdrop) measureFsBackdrop.addEventListener('click', measureCloseFullscreen);
+
+    // --- Measurement mode toggle (radiogroup with roving tabindex) ---
+    const modeBtns = [
+      document.getElementById('measureModePoint'),
+      document.getElementById('measureModeRuler'),
+      document.getElementById('measureModeCalibrate'),
+    ].filter(Boolean);
+    const modeNames = ['point', 'ruler', 'calibrate'];
+    const measureDistRow = document.getElementById('measureDistRow');
+    const measureCalibRow = document.getElementById('measureCalibRow');
+    const measureCoordRow = document.querySelector('.measure-coord-row');
+
+    function activateModeBtn(idx) {
+      modeBtns.forEach((btn, i) => {
+        const isActive = i === idx;
+        btn.classList.toggle('active', isActive);
+        btn.setAttribute('aria-checked', String(isActive));
+        btn.tabIndex = isActive ? 0 : -1;
+      });
+      setMeasureMode(modeNames[idx]);
+      // Show/hide mode-specific rows
+      if (measureDistRow) measureDistRow.classList.toggle('hidden', modeNames[idx] !== 'ruler');
+      if (measureCalibRow) measureCalibRow.classList.toggle('hidden', modeNames[idx] !== 'calibrate');
+      if (measureCoordRow) measureCoordRow.classList.toggle('hidden', modeNames[idx] === 'calibrate');
+    }
+
+    modeBtns.forEach((btn, i) => {
+      btn.addEventListener('click', () => {
+        activateModeBtn(i);
+        btn.focus();
+      });
+      btn.addEventListener('keydown', (e) => {
+        let nextIdx = -1;
+        if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+          nextIdx = (i + 1) % modeBtns.length;
+        } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+          nextIdx = (i - 1 + modeBtns.length) % modeBtns.length;
+        }
+        if (nextIdx >= 0) {
+          e.preventDefault();
+          activateModeBtn(nextIdx);
+          modeBtns[nextIdx].focus();
+        }
+      });
+    });
+
+    // --- Measurement scale factor input ---
+    const measureScaleInput = document.getElementById('measureScaleInput');
+    if (measureScaleInput) {
+      const currentSf = getScaleFactor();
+      measureScaleInput.value = currentSf > 0 ? currentSf : '';
+      measureScaleInput.addEventListener('change', () => {
+        setScaleFactor(parseFloat(measureScaleInput.value) || 0);
+      });
+    }
+
+    // --- Calibration Apply handler ---
+    const measureCalibApply = document.getElementById('measureCalibApply');
+    const measureCalibMm = document.getElementById('measureCalibMm');
+    const measureCalibError = document.getElementById('measureCalibError');
+    if (measureCalibApply && measureCalibMm) {
+      measureCalibApply.addEventListener('click', () => {
+        const pixelDist = getCalibDistancePx();
+        const mmVal = parseFloat(measureCalibMm.value);
+
+        // Validation
+        if (!pixelDist || pixelDist <= 0) {
+          showCalibError('Place two points on the canvas first.');
+          return;
+        }
+        if (!Number.isFinite(mmVal) || mmVal <= 0) {
+          showCalibError('Enter a valid distance greater than 0.');
+          return;
+        }
+
+        hideCalibError();
+        const sf = pixelDist / mmVal;
+        setScaleFactor(sf);
+        announceImmediate(`Calibration applied: ${sf.toFixed(2)} pixels per millimeter`);
+
+        // Switch back to Ruler mode after calibration
+        activateModeBtn(1);
+        modeBtns[1]?.focus();
+      });
+    }
+
+    function showCalibError(msg) {
+      if (measureCalibError) {
+        measureCalibError.textContent = msg;
+        measureCalibError.classList.remove('hidden');
+      }
+    }
+    function hideCalibError() {
+      if (measureCalibError) {
+        measureCalibError.textContent = '';
+        measureCalibError.classList.add('hidden');
+      }
+    }
+
+    // --- Distance copy and clear handlers ---
+    const measureCopyDist = document.getElementById('measureCopyDist');
+    const measureClearRuler = document.getElementById('measureClearRuler');
+    if (measureCopyDist) {
+      measureCopyDist.addEventListener('click', () => {
+        const el = document.getElementById('measureDistValue');
+        if (el && el.textContent !== '--') {
+          navigator.clipboard.writeText(el.textContent).then(() => {
+            announceImmediate(`Distance ${el.textContent} copied`);
+          }).catch(() => {});
+        }
+      });
+    }
+    if (measureClearRuler) {
+      measureClearRuler.addEventListener('click', () => clearRulerPoints());
+    }
+
+    // --- Shared Image Store: intercept measurement uploads ---
+    const measureFileInput = document.getElementById('measureFileInput');
+    const measureImageSelect = document.getElementById('measureImageSelect');
+    if (measureFileInput) {
+      measureFileInput.addEventListener('change', async (e) => {
+        const file = e.target.files?.[0];
+        if (!file || !file.type.startsWith('image/')) return;
+        const record = await SharedImageStore.addImage(file);
+
+        // Persist screenshot to projectFiles under Screenshots/ folder
+        const state = stateManager.getState();
+        let { projectFiles, mainFilePath, uploadedFile: uf } = state;
+
+        // Initialize projectFiles Map if needed (single-file → multi-file)
+        if (!projectFiles && uf) {
+          projectFiles = new Map();
+          const mainPath = mainFilePath || uf.name;
+          projectFiles.set(mainPath, uf.content);
+          mainFilePath = mainPath;
+          stateManager.setState({ projectFiles, mainFilePath });
+        }
+
+        if (projectFiles) {
+          projectFiles.set(`Screenshots/${record.name}`, record.dataUrl);
+          stateManager.setState({ projectFiles });
+
+          // Auto-save to IndexedDB so screenshots persist across sessions
+          await autoSaveCompanionFiles();
+        }
+
+        // Select the newly uploaded image in the dropdown
+        if (measureImageSelect) {
+          measureImageSelect.value = String(record.id);
+          if (measureImageSelect.value !== String(record.id)) {
+            setTimeout(() => {
+              if (measureImageSelect) measureImageSelect.value = String(record.id);
+            }, 0);
+          }
+        }
+
+        // Update overlay dropdown with the new screenshot
+        updateOverlaySourceDropdown();
+      });
+    }
+    // Populate image recall dropdown when store changes
+    SharedImageStore.onImagesChange(() => {
+      const imgs = SharedImageStore.getImages();
+      if (measureImageSelect) {
+        const currentVal = measureImageSelect.value;
+        measureImageSelect.innerHTML = '<option value="">-- No screenshots --</option>';
+        for (const [id, rec] of imgs) {
+          const opt = document.createElement('option');
+          opt.value = id;
+          opt.textContent = `${rec.name} (${rec.width}\u00d7${rec.height})`;
+          measureImageSelect.appendChild(opt);
+        }
+        measureImageSelect.value = currentVal;
+      }
+      // Also add shared images to overlay source dropdown
+      if (overlaySourceSelect) {
+        // Preserve current selection before removing/re-adding shared options
+        const overlayCurrentVal = overlaySourceSelect.value;
+        // Remove previous shared-image entries
+        for (const opt of [...overlaySourceSelect.options]) {
+          if (opt.dataset.shared) opt.remove();
+        }
+        for (const [, rec] of imgs) {
+          const opt = document.createElement('option');
+          opt.value = `screenshot:${rec.name}`;
+          opt.textContent = `\uD83D\uDCF7 ${rec.name}`;
+          opt.dataset.shared = '1';
+          overlaySourceSelect.appendChild(opt);
+        }
+        // Restore selection (removing the old option cleared it)
+        if (overlayCurrentVal) {
+          overlaySourceSelect.value = overlayCurrentVal;
+        }
+      }
+    });
+    if (measureImageSelect) {
+      measureImageSelect.addEventListener('change', () => {
+        const id = parseInt(measureImageSelect.value, 10);
+        if (!id) return;
+        const rec = SharedImageStore.getImages().get(id);
+        if (rec) loadImageFromDataURL(rec.dataUrl, rec.name);
+      });
+    }
+
+    // --- Unit Sync: wire both unit selects ---
+    const measureUnitSelect = document.getElementById('measureUnitSelect');
+    const overlayUnitSelect = document.getElementById('overlayUnitSelect');
+    const scaleFactorInput = document.getElementById('scaleFactorInput');
+    const overlaySizeUnit = document.getElementById('overlaySizeUnit');
+    const overlayOffsetUnit = document.getElementById('overlayOffsetUnit');
+
+    // Set initial state from persisted values
+    if (measureUnitSelect) measureUnitSelect.value = getUnit();
+    if (overlayUnitSelect) overlayUnitSelect.value = getUnit();
+    if (scaleFactorInput && getScaleFactor() > 0) scaleFactorInput.value = getScaleFactor();
+
+    function updateUnitLabels(unit) {
+      if (overlaySizeUnit) overlaySizeUnit.textContent = unit;
+      if (overlayOffsetUnit) overlayOffsetUnit.textContent = unit;
+      const overlayWidthInput = document.getElementById('overlayWidthInput');
+      const overlayHeightInput = document.getElementById('overlayHeightInput');
+      const overlayOffsetXInput = document.getElementById('overlayOffsetXInput');
+      const overlayOffsetYInput = document.getElementById('overlayOffsetYInput');
+      if (overlayWidthInput) overlayWidthInput.setAttribute('aria-label', `Overlay width in ${unit === 'mm' ? 'millimeters' : 'pixels'}`);
+      if (overlayHeightInput) overlayHeightInput.setAttribute('aria-label', `Overlay height in ${unit === 'mm' ? 'millimeters' : 'pixels'}`);
+      if (overlayOffsetXInput) overlayOffsetXInput.setAttribute('aria-label', `Overlay X offset in ${unit === 'mm' ? 'millimeters' : 'pixels'}`);
+      if (overlayOffsetYInput) overlayOffsetYInput.setAttribute('aria-label', `Overlay Y offset in ${unit === 'mm' ? 'millimeters' : 'pixels'}`);
+    }
+
+    function syncBothUnitSelects(unit) {
+      if (measureUnitSelect) measureUnitSelect.value = unit;
+      if (overlayUnitSelect) overlayUnitSelect.value = unit;
+      updateUnitLabels(unit);
+    }
+
+    if (measureUnitSelect) {
+      measureUnitSelect.addEventListener('change', () => setUnit(measureUnitSelect.value));
+    }
+    if (overlayUnitSelect) {
+      overlayUnitSelect.addEventListener('change', () => setUnit(overlayUnitSelect.value));
+    }
+    if (scaleFactorInput) {
+      scaleFactorInput.addEventListener('change', () => {
+        setScaleFactor(parseFloat(scaleFactorInput.value) || 0);
+      });
+    }
+
+    onUnitChange(({ unit }) => syncBothUnitSelects(unit));
+    onScaleChange(({ scaleFactor: sf }) => {
+      if (scaleFactorInput && sf > 0) scaleFactorInput.value = sf;
+      if (measureScaleInput && sf > 0) measureScaleInput.value = sf;
+    });
 
     // Initialize preview settings drawer (overlay with resize functionality)
     initPreviewSettingsDrawer({

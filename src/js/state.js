@@ -147,6 +147,10 @@ export class StateManager {
     return this.state;
   }
 
+  isManifestProject() {
+    return this.state.manifestOrigin !== null;
+  }
+
   syncToURL() {
     // Debounce URL updates to avoid excessive history entries
     if (this.syncTimeout) {
@@ -223,6 +227,7 @@ export class StateManager {
         fileContent: this.state.uploadedFile.content,
         parameters: this.state.parameters,
         defaults: this.state.defaults,
+        manifestOrigin: this.state.manifestOrigin || null,
       };
 
       localStorage.setItem(this.localStorageKey, JSON.stringify(draft));
@@ -569,6 +574,8 @@ const initialState = {
   // Libraries
   detectedLibraries: [], // Libraries detected in current .scad file
   enabledLibraries: [], // Libraries currently enabled
+  // Manifest origin tracking (set when project loaded via ?manifest= link)
+  manifestOrigin: null, // { url, name, author, loadedAt } or null
 };
 
 export const stateManager = new StateManager(initialState);

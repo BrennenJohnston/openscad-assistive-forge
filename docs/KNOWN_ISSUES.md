@@ -1,9 +1,8 @@
 # Known Issues
 
-**Version**: 4.2.0  
-**Last Updated**: 2026-02-02
+Things we know about but haven't fixed yet, along with workarounds you can use in the meantime. If you hit something not listed here, please [open an issue](https://github.com/BrennenJohnston/openscad-assistive-forge/issues).
 
-This document tracks known issues, limitations, and workarounds for OpenSCAD Assistive Forge.
+**Last updated**: 2026-02-02 (v4.2.0)
 
 ---
 
