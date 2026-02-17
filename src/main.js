@@ -414,8 +414,8 @@ function _isLightThemeActive() {
 }
 
 /**
- * Auto-calibrate Edge (contrast) and Size (font) settings based on the user's
- * viewing environment. This provides an optimal initial experience by analyzing:
+ * Auto-calibrate Edge (contrast) and Size (font) settings based on the
+ * viewing environment. Picks sensible defaults by looking at:
  * - Viewport/preview container size
  * - Device pixel ratio (screen density)
  * - Touch capability (mobile vs desktop)

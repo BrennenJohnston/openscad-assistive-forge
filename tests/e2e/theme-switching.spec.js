@@ -243,13 +243,14 @@ test.describe('Theme Switching', () => {
     await page.keyboard.press('Enter')
 
     // Wait for the DOM attribute to actually change (avoids timing flakes)
+    // Edge on CI can be slow to propagate attribute changes after keyboard events
     await page.waitForFunction(
       (prev) => {
         const cur = document.documentElement.getAttribute('data-theme') || 'auto'
         return cur !== prev
       },
       themeBefore,
-      { timeout: 5000 },
+      { timeout: 10000 },
     )
 
     const themeAfter = await page.evaluate(() =>

@@ -101,11 +101,6 @@ export class AutoPreviewController {
     this.onError = options.onError || (() => {});
   }
 
-  /**
-   * Simple hash function for parameter comparison
-   * @param {Object} params - Parameters object
-   * @returns {string} Hash string
-   */
   hashParams(params) {
     return JSON.stringify(params);
   }
@@ -150,21 +145,10 @@ export class AutoPreviewController {
     return parameters;
   }
 
-  /**
-   * Build a preview cache key
-   * @param {string} paramHash
-   * @param {string} qualityKey
-   * @returns {string}
-   */
   getPreviewCacheKey(paramHash, qualityKey) {
     return `${paramHash}|${qualityKey}`;
   }
 
-  /**
-   * Set the current state and notify listeners
-   * @param {string} newState - New state value
-   * @param {Object} extra - Extra data to pass to callback
-   */
   setState(newState, extra = {}) {
     const prevState = this.state;
     this.state = newState;
@@ -530,9 +514,6 @@ export class AutoPreviewController {
       qualityKey,
       quality
     );
-    const _overrideKeys = Object.keys(previewParameters).filter(
-      (key) => previewParameters[key] !== parameters[key]
-    );
 
     // Check if this render is still relevant
     if (
@@ -696,9 +677,6 @@ export class AutoPreviewController {
     });
   }
 
-  /**
-   * Clear the preview cache
-   */
   clearCache() {
     this.previewCache.clear();
     this.previewParamHash = null;
@@ -879,31 +857,20 @@ export class AutoPreviewController {
     return true;
   }
 
-  /**
-   * Dispose of the controller and clean up all resources
-   * Clears timers, caches, and resets state
-   */
   dispose() {
-    // Clear any pending debounce timer
     if (this.debounceTimer) {
       clearTimeout(this.debounceTimer);
       this.debounceTimer = null;
     }
 
-    // Clear pending render state
     this.pendingParameters = null;
     this.pendingParamHash = null;
     this.pendingPreviewKey = null;
-
-    // Clear cache
     this.clearCache();
-
-    // Clear full quality STL
     this.fullQualitySTL = null;
     this.fullQualityStats = null;
     this.fullQualityKey = null;
 
-    // Reset state
     this.state = PREVIEW_STATE.IDLE;
     this.currentScadContent = null;
     this.currentParamHash = null;
@@ -912,8 +879,6 @@ export class AutoPreviewController {
     this.currentPreviewKey = null;
     this.fullRenderParamHash = null;
     this.scadVersion = 0;
-
-    // Clear references
     this.renderController = null;
     this.previewManager = null;
   }
