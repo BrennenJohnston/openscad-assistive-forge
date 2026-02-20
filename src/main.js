@@ -19,6 +19,7 @@ import {
   downloadFile,
   generateFilename,
   formatFileSize,
+  sanitizeFilename,
   OUTPUT_FORMATS,
 } from './js/download.js';
 import {
@@ -145,6 +146,8 @@ import {
 } from './js/announcer.js';
 // Expert Mode (M2) - Code editor integration
 import { getModeManager } from './js/mode-manager.js';
+// UI Mode Controller - Basic/Advanced interface layout switching
+import { getUIModeController } from './js/ui-mode-controller.js';
 import { getEditorStateManager } from './js/editor-state-manager.js';
 import { TextareaEditor } from './js/textarea-editor.js';
 import {
@@ -1044,6 +1047,12 @@ function showConfirmDialog(
  * @param {string} packageName - Name of the uploaded package
  * @returns {Promise<boolean>} True if user chooses to continue, false to cancel
  */
+/**
+ * Show missing dependencies dialog with options to cancel, continue, or add files.
+ * @param {{ includes: string[], uses: string[], imports: string[] }} missing
+ * @param {string} packageName
+ * @returns {Promise<{ action: 'cancel'|'continue'|'add-files', addedFiles?: Map<string,string> }>}
+ */
 function showMissingDependenciesDialog(missing, packageName) {
   return new Promise((resolve) => {
     const modal = document.createElement('div');
@@ -1053,7 +1062,6 @@ function showMissingDependenciesDialog(missing, packageName) {
     modal.setAttribute('aria-describedby', 'missingDepsList');
     modal.setAttribute('aria-modal', 'true');
 
-    // Build list of missing files
     const allMissing = [
       ...missing.includes.map((f) => ({ file: f, type: 'include' })),
       ...missing.uses.map((f) => ({ file: f, type: 'use' })),
@@ -1063,7 +1071,7 @@ function showMissingDependenciesDialog(missing, packageName) {
     const fileListHtml = allMissing
       .map(
         ({ file, type }) =>
-          `<li class="missing-dep-item">
+          `<li class="missing-dep-item" data-file="${escapeHtml(file)}">
             <span class="missing-dep-file">${escapeHtml(file)}</span>
             <span class="missing-dep-type">(${type})</span>
           </li>`
@@ -1079,24 +1087,31 @@ function showMissingDependenciesDialog(missing, packageName) {
         </div>
         <div class="missing-deps-body">
           <p>
-            The design package <strong>"${escapeHtml(packageName)}"</strong> 
+            The design package <strong>"${escapeHtml(packageName)}"</strong>
             references files that weren't included:
           </p>
           <ul id="missingDepsList" class="missing-deps-list" aria-label="Missing files">
             ${fileListHtml}
           </ul>
           <p class="missing-deps-hint">
-            Without these files, the design may not render correctly.
-            For <code>include</code> files like <code>openings_and_additions.txt</code>,
-            you need to include them in your ZIP package.
+            You can add the missing files now, continue without them, or cancel.
           </p>
+          <input type="file" class="missing-deps-file-input" multiple
+                 accept=".scad,.txt,.csv,.dat,.json,.dxf,.svg,.stl,.png,.jpg"
+                 aria-label="Select missing dependency files" hidden />
+          <div class="missing-deps-added hidden" aria-live="polite">
+            <span class="missing-deps-added-count"></span>
+          </div>
         </div>
-        <div class="preset-form-actions">
+        <div class="preset-form-actions missing-deps-actions">
           <button type="button" class="btn btn-secondary" data-action="cancel">
             Cancel Upload
           </button>
-          <button type="button" class="btn btn-primary" data-action="continue">
+          <button type="button" class="btn btn-secondary" data-action="continue">
             Continue Anyway
+          </button>
+          <button type="button" class="btn btn-primary" data-action="add-files">
+            Add Missing Files…
           </button>
         </div>
       </div>
@@ -1104,42 +1119,118 @@ function showMissingDependenciesDialog(missing, packageName) {
 
     document.body.appendChild(modal);
 
+    const fileInput = modal.querySelector('.missing-deps-file-input');
+    const addedDisplay = modal.querySelector('.missing-deps-added');
+    const addedCount = modal.querySelector('.missing-deps-added-count');
+    const addedFiles = new Map();
+
     const cleanup = (result) => {
       closeModal(modal);
       document.body.removeChild(modal);
       resolve(result);
     };
 
-    // Handle button clicks
+    const addFilesBtn = modal.querySelector('[data-action="add-files"]');
+    const continueBtn = modal.querySelector('[data-action="continue"]');
+    const titleEl = modal.querySelector('#missingDepsTitle');
+    const hintEl = modal.querySelector('.missing-deps-hint');
+
+    const updateAddedDisplay = () => {
+      if (addedFiles.size === 0) return;
+
+      addedDisplay.classList.remove('hidden');
+      addedCount.textContent = `${addedFiles.size} file${addedFiles.size > 1 ? 's' : ''} added: ${Array.from(addedFiles.keys()).join(', ')}`;
+
+      // Mark resolved items in the list
+      const items = modal.querySelectorAll('.missing-dep-item');
+      let resolvedCount = 0;
+      items.forEach((item) => {
+        const fileName = item.dataset.file;
+        const baseName = fileName.split('/').pop();
+        const resolved = addedFiles.has(fileName) || addedFiles.has(baseName);
+        item.classList.toggle('missing-dep-resolved', resolved);
+        if (resolved) resolvedCount++;
+      });
+
+      const allResolved = resolvedCount === allMissing.length;
+
+      if (allResolved) {
+        // All files resolved — transform the dialog to a success state
+        titleEl.textContent = '✅ All Files Added';
+        hintEl.textContent =
+          'All missing files have been provided. You can now load the project.';
+        hintEl.style.borderLeftColor = 'var(--color-success, #38a169)';
+        hintEl.style.background =
+          'color-mix(in srgb, var(--color-success, #38a169) 12%, transparent)';
+
+        // Promote "Continue" to primary with clear load label, demote "Add Files"
+        continueBtn.textContent = 'Load Project';
+        continueBtn.className = 'btn btn-success';
+        addFilesBtn.className = 'btn btn-secondary';
+        addFilesBtn.textContent = 'Add More Files…';
+        continueBtn.focus();
+      } else {
+        // Partial resolution — keep "Add Files" primary but update hint
+        const remaining = allMissing.length - resolvedCount;
+        hintEl.textContent = `${resolvedCount} of ${allMissing.length} resolved. ${remaining} file${remaining > 1 ? 's' : ''} still missing.`;
+
+        // Restore button states in case user removed files and re-added
+        continueBtn.textContent = 'Continue Anyway';
+        continueBtn.className = 'btn btn-secondary';
+        addFilesBtn.className = 'btn btn-primary';
+        addFilesBtn.textContent = 'Add Missing Files…';
+      }
+    };
+
+    // Read selected files as text and store them
+    fileInput.addEventListener('change', async () => {
+      const selectedFiles = fileInput.files;
+      if (!selectedFiles || selectedFiles.length === 0) return;
+
+      for (const f of selectedFiles) {
+        try {
+          const text = await f.text();
+          addedFiles.set(f.name, text);
+        } catch (_e) {
+          console.warn(`[MissingDeps] Could not read file: ${f.name}`);
+        }
+      }
+      updateAddedDisplay();
+      fileInput.value = '';
+    });
+
     modal.addEventListener('click', (e) => {
       const btn = e.target.closest('button[data-action]');
       if (!btn) return;
 
-      if (btn.dataset.action === 'continue') {
-        cleanup(true);
+      if (btn.dataset.action === 'add-files') {
+        fileInput.click();
+      } else if (btn.dataset.action === 'continue') {
+        if (addedFiles.size > 0) {
+          cleanup({ action: 'add-files', addedFiles });
+        } else {
+          cleanup({ action: 'continue' });
+        }
       } else if (btn.dataset.action === 'cancel') {
-        cleanup(false);
+        cleanup({ action: 'cancel' });
       }
     });
 
-    // Close on backdrop click (cancel)
     modal.addEventListener('click', (e) => {
       if (e.target === modal) {
-        cleanup(false);
+        cleanup({ action: 'cancel' });
       }
     });
 
-    // Escape closes (cancel)
     modal.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
         e.preventDefault();
-        cleanup(false);
+        cleanup({ action: 'cancel' });
       }
     });
 
-    // Open modal with focus management
     openModal(modal, {
-      focusTarget: modal.querySelector('[data-action="cancel"]'),
+      focusTarget: modal.querySelector('[data-action="add-files"]'),
     });
   });
 }
@@ -1720,9 +1811,7 @@ async function initApp() {
   } catch (e) {
     console.error('Failed to import validation constants:', e);
   }
-  // Default to 'balanced' mode (~50% quality) for faster preview during parameter changes
-  // The adaptive system will determine appropriate full quality when generating STL
-  let previewQualityMode = 'balanced';
+  let previewQualityMode = 'auto';
 
   const AUTO_PREVIEW_FORCE_FAST_MS = 2 * 60 * 1000;
   // MANIFOLD OPTIMIZED: Raised threshold since Manifold renders much faster
@@ -2537,6 +2626,9 @@ async function initApp() {
       handleFirstVisitClose('continue')
     );
   }
+
+  // Initialize UI mode controller (Basic/Advanced interface layout)
+  getUIModeController().init();
 
   // Initialize theme toggle button
   initThemeToggle('themeToggle', (theme, activeTheme, message) => {
@@ -3638,6 +3730,9 @@ async function initApp() {
   }
 
   if (previewQualitySelect) {
+    if (previewQualitySelect.querySelector('option[value="auto"]')) {
+      previewQualitySelect.value = 'auto';
+    }
     applyPreviewQualityMode();
     previewQualitySelect.addEventListener('change', () => {
       applyPreviewQualityMode();
@@ -3651,6 +3746,9 @@ async function initApp() {
   }
 
   if (exportQualitySelect) {
+    if (exportQualitySelect.querySelector('option[value="model"]')) {
+      exportQualitySelect.value = 'model';
+    }
     applyExportQualityMode();
     exportQualitySelect.addEventListener('change', () => {
       applyExportQualityMode();
@@ -3680,6 +3778,56 @@ async function initApp() {
         previewManager.toggleGrid(enabled);
       }
       console.log(`[App] Grid ${enabled ? 'enabled' : 'disabled'}`);
+    });
+  }
+
+  // Wire grid size preset selector and custom inputs
+  const gridPresetSelect = document.getElementById('gridPresetSelect');
+  const gridWidthInput = document.getElementById('gridWidthInput');
+  const gridHeightInput = document.getElementById('gridHeightInput');
+
+  function applyGridSize(widthMm, heightMm) {
+    if (!previewManager) return;
+    previewManager.setGridSize(widthMm, heightMm);
+    if (gridWidthInput) gridWidthInput.value = widthMm;
+    if (gridHeightInput) gridHeightInput.value = heightMm;
+    updateStatus(`Grid size updated to ${widthMm} × ${heightMm} mm`);
+  }
+
+  if (gridPresetSelect) {
+    // Populate initial values from saved preference
+    if (previewManager) {
+      const saved = previewManager.getGridSize();
+      if (gridWidthInput) gridWidthInput.value = saved.widthMm;
+      if (gridHeightInput) gridHeightInput.value = saved.heightMm;
+    }
+    gridPresetSelect.addEventListener('change', () => {
+      const val = gridPresetSelect.value;
+      if (val === 'custom') return;
+      const [w, h] = val.split('x').map(Number);
+      if (w && h) applyGridSize(w, h);
+    });
+  }
+
+  if (gridWidthInput) {
+    gridWidthInput.addEventListener('change', () => {
+      const w = parseInt(gridWidthInput.value, 10);
+      const h = parseInt(gridHeightInput?.value || '220', 10);
+      if (!isNaN(w) && !isNaN(h)) {
+        if (gridPresetSelect) gridPresetSelect.value = 'custom';
+        applyGridSize(w, h);
+      }
+    });
+  }
+
+  if (gridHeightInput) {
+    gridHeightInput.addEventListener('change', () => {
+      const w = parseInt(gridWidthInput?.value || '220', 10);
+      const h = parseInt(gridHeightInput.value, 10);
+      if (!isNaN(w) && !isNaN(h)) {
+        if (gridPresetSelect) gridPresetSelect.value = 'custom';
+        applyGridSize(w, h);
+      }
     });
   }
 
@@ -3917,6 +4065,103 @@ async function initApp() {
     } catch (error) {
       console.error('[App] Failed to load overlay:', error);
       updateStatus(`Failed to load overlay: ${error.message}`, 'error');
+    }
+  }
+
+  /**
+   * Apply persisted hidden-group state to a rendered parameter container
+   * and wire up the group-hide event + show-all link.
+   * @param {HTMLElement} container - The parametersContainer element
+   * @param {string} modelName - Current model name (used as storage key)
+   */
+  function applyHiddenGroups(container, modelName) {
+    if (!container || !modelName) return;
+
+    const HIDDEN_KEY = `openscad-forge-hidden-groups-${modelName}`;
+
+    function loadHidden() {
+      try {
+        return new Set(JSON.parse(localStorage.getItem(HIDDEN_KEY) || '[]'));
+      } catch {
+        return new Set();
+      }
+    }
+
+    function saveHidden(set) {
+      try {
+        localStorage.setItem(HIDDEN_KEY, JSON.stringify([...set]));
+      } catch (_) { /* storage full */ }
+    }
+
+    function refreshShowAll() {
+      const existing = container.querySelector('.param-groups-show-all');
+      const hiddenGroups = container.querySelectorAll('.param-group[hidden]');
+      const count = hiddenGroups.length;
+      if (count === 0) {
+        existing?.remove();
+        return;
+      }
+      if (!existing) {
+        const link = document.createElement('button');
+        link.className = 'param-groups-show-all btn btn-sm btn-outline';
+        link.type = 'button';
+        link.setAttribute('aria-live', 'polite');
+        container.appendChild(link);
+        link.addEventListener('click', () => {
+          container.querySelectorAll('.param-group[hidden]').forEach((el) => {
+            el.removeAttribute('hidden');
+            const btn = el.querySelector('.param-group-hide-btn');
+            if (btn) btn.setAttribute('aria-pressed', 'false');
+          });
+          saveHidden(new Set());
+          refreshShowAll();
+          announceImmediate('All parameter groups shown');
+        });
+      }
+      container.querySelector('.param-groups-show-all').textContent =
+        `${count} group${count !== 1 ? 's' : ''} hidden — Show all`;
+    }
+
+    // Apply saved hidden groups
+    const hidden = loadHidden();
+    container.querySelectorAll('.param-group[data-group-id]').forEach((details) => {
+      if (hidden.has(details.dataset.groupId)) {
+        details.setAttribute('hidden', '');
+        const btn = details.querySelector('.param-group-hide-btn');
+        if (btn) btn.setAttribute('aria-pressed', 'true');
+      }
+    });
+    refreshShowAll();
+
+    // Listen for hide events from group hide buttons
+    container.addEventListener('group-hide', (e) => {
+      const { groupId, groupLabel } = e.detail;
+      const groupEl = container.querySelector(`.param-group[data-group-id="${groupId}"]`);
+      if (!groupEl) return;
+      groupEl.setAttribute('hidden', '');
+      const btn = groupEl.querySelector('.param-group-hide-btn');
+      if (btn) btn.setAttribute('aria-pressed', 'true');
+      const hiddenSet = loadHidden();
+      hiddenSet.add(groupId);
+      saveHidden(hiddenSet);
+      refreshShowAll();
+      announceImmediate(`${groupLabel} group hidden`);
+    });
+  }
+
+  /**
+   * C1: If the current SCAD model exposes `screen_width_mm` and `screen_height_mm`
+   * parameters, automatically size the reference overlay to those values.
+   * This is the SCAD-parameter binding half of the hybrid overlay auto-sizing approach.
+   * @param {Object} paramValues - Current parameter values
+   */
+  function autoApplyScreenDimensionsFromParams(paramValues) {
+    if (!previewManager || !paramValues) return;
+    const w = parseFloat(paramValues['screen_width_mm']);
+    const h = parseFloat(paramValues['screen_height_mm']);
+    if (!isNaN(w) && !isNaN(h) && w > 0 && h > 0) {
+      previewManager.fitOverlayToScreenDimensions(w, h);
+      console.log(`[App] Overlay auto-sized from SCAD params: ${w} × ${h} mm`);
     }
   }
 
@@ -4189,6 +4434,46 @@ async function initApp() {
       }
     });
   }
+
+  // Wire tablet device selector for overlay auto-sizing (C1: hybrid approach)
+  const overlayTabletSelect = document.getElementById('overlayTabletSelect');
+  if (overlayTabletSelect) {
+    // Lazy-load the tablet database on first interaction
+    let tabletDb = null;
+    async function loadTabletDb() {
+      if (tabletDb) return tabletDb;
+      try {
+        const resp = await fetch('/data/tablets.json');
+        const data = await resp.json();
+        tabletDb = data.tablets || [];
+        // Populate options
+        overlayTabletSelect.innerHTML = tabletDb.map((t) =>
+          `<option value="${t.id}" data-w="${t.screenWidthMm ?? ''}" data-h="${t.screenHeightMm ?? ''}">${t.label}</option>`
+        ).join('');
+      } catch (err) {
+        console.warn('[App] Could not load tablet database:', err);
+        tabletDb = [];
+      }
+      return tabletDb;
+    }
+
+    overlayTabletSelect.addEventListener('focus', () => loadTabletDb());
+    overlayTabletSelect.addEventListener('change', async () => {
+      await loadTabletDb();
+      const opt = overlayTabletSelect.selectedOptions[0];
+      if (!opt) return;
+      const w = parseFloat(opt.dataset.w);
+      const h = parseFloat(opt.dataset.h);
+      if (!isNaN(w) && !isNaN(h) && previewManager) {
+        previewManager.fitOverlayToScreenDimensions(w, h);
+        updateOverlayUIFromConfig();
+        updateStatus(`Overlay sized to ${opt.text}: ${w} × ${h} mm`);
+      }
+    });
+  }
+
+  // Auto-detect screen_width_mm / screen_height_mm SCAD parameters for overlay sizing
+  // Called when parameters are rendered — see autoApplyScreenDimensionsFromParams()
 
   // Wire center button
   if (overlayCenterBtn) {
@@ -5506,10 +5791,22 @@ async function initApp() {
       screenshotFile = 'default.svg';
     }
 
-    // If found, select it in the dropdown (but don't auto-enable the overlay)
+    // If found, select it in the dropdown and auto-load + enable the overlay.
+    // AAC keyguard designers need the overlay active immediately on project load.
     if (screenshotFile) {
       overlaySourceSelect.value = screenshotFile;
       console.log(`[App] Auto-selected overlay source: ${screenshotFile}`);
+      // Load the overlay image into the preview and enable the toggle
+      loadOverlayFromProjectFile(screenshotFile).then(() => {
+        if (overlayToggle && !overlayToggle.checked) {
+          overlayToggle.checked = true;
+          previewManager?.setOverlayEnabled(true);
+          updateOverlayStatus?.();
+          console.log('[App] Overlay auto-enabled for screenshot companion file');
+        }
+      }).catch((err) => {
+        console.warn('[App] Auto-enable overlay failed:', err);
+      });
     }
   }
 
@@ -5799,6 +6096,54 @@ async function initApp() {
     }
   }
 
+  /**
+   * Show a full-screen processing overlay for long operations.
+   * @param {string} message - Primary message
+   * @param {Object} [opts]
+   * @param {string} [opts.hint] - Secondary hint text
+   * @param {number} [opts.delayMs=0] - Delay before showing (0 = immediate)
+   * @returns {Function} dismiss callback (safe to call multiple times)
+   */
+  function showProcessingOverlay(message, opts = {}) {
+    const { hint = 'Please do not close or refresh the page.', delayMs = 0 } =
+      typeof opts === 'string' ? { hint: opts } : opts;
+    let dismissed = false;
+    let timerId = null;
+
+    const show = () => {
+      if (dismissed) return;
+      let overlay = document.getElementById('processingOverlay');
+      if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'processingOverlay';
+        overlay.className = 'processing-overlay';
+        overlay.setAttribute('role', 'alert');
+        overlay.setAttribute('aria-live', 'assertive');
+        overlay.innerHTML = `
+          <div class="processing-spinner"></div>
+          <div class="processing-message"></div>
+          <div class="processing-hint"></div>
+        `;
+        document.body.appendChild(overlay);
+      }
+      overlay.querySelector('.processing-message').textContent = message;
+      overlay.querySelector('.processing-hint').textContent = hint;
+    };
+
+    if (delayMs > 0) {
+      timerId = setTimeout(show, delayMs);
+    } else {
+      show();
+    }
+
+    return () => {
+      dismissed = true;
+      if (timerId) clearTimeout(timerId);
+      const el = document.getElementById('processingOverlay');
+      if (el) el.remove();
+    };
+  }
+
   // Handle file upload (supports both .scad and .zip files)
   async function handleFile(
     file,
@@ -5836,19 +6181,27 @@ async function initApp() {
 
         const isValid = validateFileUpload(fileMeta);
         if (!isValid) {
-          const errorMsg = getValidationErrorMessage(validateFileUpload.errors);
-          alert(`Invalid file: ${errorMsg}`);
-          console.error(
-            '[File Upload] Validation failed:',
-            validateFileUpload.errors
-          );
+          const fileSizeMB = (file.size / (1024 * 1024)).toFixed(1);
+          const isZipName = fileNameLower.endsWith('.zip');
+          const isScadName = fileNameLower.endsWith('.scad');
+          let userMsg;
+          if (isZipName) {
+            const limitMB = (FILE_SIZE_LIMITS.ZIP_FILE / (1024 * 1024)).toFixed(0);
+            userMsg = `ZIP file is too large (${fileSizeMB} MB). Maximum allowed size is ${limitMB} MB.`;
+          } else if (isScadName) {
+            const limitMB = (FILE_SIZE_LIMITS.SCAD_FILE / (1024 * 1024)).toFixed(0);
+            userMsg = `.scad file is too large (${fileSizeMB} MB). Maximum allowed size is ${limitMB} MB.`;
+          } else {
+            userMsg = 'Please upload a .scad or .zip file.';
+          }
+          alert(userMsg);
+          console.error('[File Upload] Validation failed:', validateFileUpload.errors);
           return;
         }
       }
 
       const isZip = fileNameLower.endsWith('.zip');
       const isScad = fileNameLower.endsWith('.scad');
-
       if (!isZip && !isScad) {
         alert('Please upload a .scad or .zip file');
         return;
@@ -5864,6 +6217,11 @@ async function initApp() {
         }
 
         try {
+          const fileSizeMB = (file.size / (1024 * 1024)).toFixed(1);
+          let dismissOverlay = showProcessingOverlay(
+            `Opening project (${fileSizeMB} MB)…`,
+            'This may take a moment for large files. Please do not close or refresh the page.'
+          );
           updateStatus('Extracting ZIP file...');
           const { files, mainFile } = await extractZipFiles(file);
 
@@ -5905,22 +6263,47 @@ async function initApp() {
               '[ZIP] Missing dependencies detected:',
               preflight.missing
             );
-            // Show missing dependencies dialog
-            const shouldContinue = await showMissingDependenciesDialog(
+            // Dismiss the processing overlay so the dialog is accessible
+            dismissOverlay();
+
+            const result = await showMissingDependenciesDialog(
               preflight.missing,
               file.name
             );
-            if (!shouldContinue) {
+
+            if (result.action === 'cancel') {
               updateStatus('Upload cancelled - missing dependencies');
               return;
             }
-            // User chose to continue anyway - log warning
-            console.warn(
-              '[ZIP] Continuing despite missing files:',
-              formatMissingDependencies(preflight.missing)
+
+            if (result.action === 'add-files' && result.addedFiles?.size > 0) {
+              for (const [name, content] of result.addedFiles) {
+                files.set(name, content);
+                projectFiles.set(name, content);
+              }
+              console.log(
+                `[ZIP] User added ${result.addedFiles.size} missing file(s):`,
+                Array.from(result.addedFiles.keys())
+              );
+            }
+
+            // Re-show overlay while we finish loading
+            dismissOverlay = showProcessingOverlay(
+              `Opening project…`,
+              result.action === 'add-files'
+                ? 'Loading with added files.'
+                : 'Continuing with available files.'
             );
+
+            if (result.action === 'continue') {
+              console.warn(
+                '[ZIP] Continuing despite missing files:',
+                formatMissingDependencies(preflight.missing)
+              );
+            }
           }
 
+          dismissOverlay();
           // Continue with extracted content, passing mainFilePath and original ZIP name
           // The original ZIP filename is used as the default project name when saving
           const zipFileName = file.name;
@@ -5934,6 +6317,7 @@ async function initApp() {
           );
           return;
         } catch (error) {
+          dismissOverlay();
           console.error('[ZIP] Extraction failed:', error);
           updateStatus('Failed to extract ZIP file');
           alert(error.message);
@@ -6108,7 +6492,6 @@ async function initApp() {
       );
       if (complexityTierLabel) {
         const tierName = adaptiveConfig.tierName;
-        // Avoid emoji icons so the badge stays in-theme (mono mode) and consistent.
         complexityTierLabel.textContent = tierName;
         complexityTierLabel.className = `complexity-tier-label tier-${adaptiveConfig.tier}`;
         complexityTierLabel.title =
@@ -6170,8 +6553,14 @@ async function initApp() {
         defaults: { ...currentValues },
       });
 
-      // Settings level is always 'advanced' — all groups visible, no toggle needed
-      localStorage.setItem('openscad-forge-settings-level', 'advanced');
+      // Apply UI mode panel visibility for the current project
+      getUIModeController().applyCurrentMode();
+
+      // Apply hidden groups from saved preference and set up hide/show-all behavior
+      applyHiddenGroups(parametersContainer, extracted?.modelName || fileName);
+
+      // C1: Auto-size overlay from SCAD parameters screen_width_mm / screen_height_mm
+      autoApplyScreenDimensionsFromParams(currentValues);
 
       // Auto-import JSON presets from ZIP companion files (Item 14: desktop parity)
       // After state is set with schema + defaults, scan projectFiles for .json preset files
@@ -6297,6 +6686,13 @@ async function initApp() {
         // Sync grid toggle with saved preference
         if (gridToggle) {
           gridToggle.checked = previewManager.gridEnabled;
+        }
+
+        // Sync grid size inputs with saved preference
+        {
+          const savedGrid = previewManager.getGridSize();
+          if (gridWidthInput) gridWidthInput.value = savedGrid.widthMm;
+          if (gridHeightInput) gridHeightInput.value = savedGrid.heightMm;
         }
 
         // Sync auto-bed toggle with saved preference
@@ -7895,6 +8291,7 @@ if (rounded) {
    * @param {string} projectId
    */
   async function loadSavedProject(projectId) {
+    let dismissOverlay = () => {};
     try {
       const project = await getProject(projectId);
       if (!project) {
@@ -7914,15 +8311,20 @@ if (rounded) {
         if (!confirmed) return;
       }
 
+      dismissOverlay = showProcessingOverlay(
+        `Loading "${project.name}"…`,
+        { hint: 'Large projects may take a moment to open.' }
+      );
+
+      // Yield to allow the browser to paint the overlay before heavy work begins
+      await new Promise((r) => setTimeout(r, 0));
+
       // Reconstruct file data
       const content = project.content;
       const fileName = project.originalName;
-      // getProject() already parses projectFiles from JSON string to object
       const projectFiles = project.projectFiles
         ? new Map(Object.entries(project.projectFiles))
         : null;
-      // FIX: For single-file projects, mainFilePath should be null so content gets written to /tmp/input.scad
-      // The mainFilePath is only meaningful for multi-file ZIP projects where files are mounted to the FS
       const mainFilePath =
         projectFiles && projectFiles.size > 0 ? project.mainFilePath : null;
 
@@ -7933,15 +8335,16 @@ if (rounded) {
       currentSavedProjectId = projectId;
 
       // Load the file (reuse existing handleFile logic)
-      // Pass project.name as the 6th arg so uploadedFile.name shows the saved project name
       await handleFile(
         { name: fileName },
         content,
         projectFiles,
         mainFilePath,
         'saved',
-        project.name // Use the saved project name for display
+        project.name
       );
+
+      dismissOverlay();
 
       // Update companion save button after loading
       updateCompanionSaveButton();
@@ -7953,6 +8356,7 @@ if (rounded) {
       // Re-render list to update "last opened" time
       await renderSavedProjectsList();
     } catch (error) {
+      dismissOverlay();
       console.error('Error loading saved project:', error);
       alert(`Failed to load project: ${error.message}`);
     }
@@ -8269,36 +8673,39 @@ if (rounded) {
       const response = await fetch(example.path);
       if (!response.ok) throw new Error('Failed to fetch example');
 
-      const content = await response.text();
-      console.log('Example loaded:', example.name, content.length, 'bytes');
-
-      // Close modal if requested
+      // Close modal if requested (before any async processing)
       if (closeFeaturesGuideModal) {
         const featuresGuideModal =
           document.getElementById('featuresGuideModal');
         if (featuresGuideModal) {
-          // Use shared modal manager so focus restores correctly
           closeModal(featuresGuideModal);
         }
       }
 
+      // ZIP examples must be fetched as binary and routed through ZIP extraction
+      if (example.path.toLowerCase().endsWith('.zip')) {
+        const blob = await response.blob();
+        const zipFile = new File([blob], example.name, { type: 'application/zip' });
+        handleFile(zipFile, null, null, null, 'example');
+        return;
+      }
+
+      const content = await response.text();
+      console.log('Example loaded:', example.name, content.length, 'bytes');
+
       // Check for multi-file design package with additionalFiles
-      // This supports examples with additionalFiles like openings_and_additions.txt
       let projectFiles = null;
       let mainFilePath = null;
 
       if (example.additionalFiles && example.additionalFiles.length > 0) {
         console.log(`[Example] Multi-file package: ${example.additionalFiles.length} additional file(s)`);
         
-        // Load all additional files
         projectFiles = new Map();
         
-        // Add main file
         const mainFileName = example.path.split('/').pop();
         mainFilePath = mainFileName;
         projectFiles.set(mainFileName, content);
 
-        // Load additional files in parallel
         const additionalPromises = example.additionalFiles.map(async (filePath) => {
           try {
             const fileResponse = await fetch(filePath);
@@ -8326,7 +8733,6 @@ if (rounded) {
         console.log(`[Example] Total files in package: ${projectFiles.size}`);
       }
 
-      // Treat as uploaded file (with optional multi-file support)
       handleFile(
         { name: example.name },
         content,
@@ -9064,7 +9470,6 @@ if (rounded) {
 
     // Show the toggle button
     expertModeToggle.classList.remove('hidden');
-
 
     // Initialize managers
     modeManager = getModeManager({
@@ -10386,6 +10791,19 @@ if (rounded) {
     } catch (error) {
       console.error('Generation failed:', error);
 
+      // Extract OpenSCAD console output embedded in error.details and surface it
+      // to the Console panel. This is how missing-include warnings reach the user.
+      if (error.details && typeof window.updateConsoleOutput === 'function') {
+        const outputMarker = '[OpenSCAD output]';
+        const markerIdx = error.details.indexOf(outputMarker);
+        if (markerIdx !== -1) {
+          const embeddedOutput = error.details.slice(markerIdx + outputMarker.length).trim();
+          if (embeddedOutput) {
+            window.updateConsoleOutput(embeddedOutput);
+          }
+        }
+      }
+
       // Special-case: configuration dependency / empty geometry guidance
       if (handleConfigDependencyError(error)) {
         return;
@@ -11664,7 +12082,9 @@ if (rounded) {
     }
 
     const modelName = state.uploadedFile.name;
-    const presets = presetManager.getPresetsForModel(modelName);
+    const PRESET_SORT_KEY = 'openscad-forge-preset-sort';
+    let currentSortOrder = localStorage.getItem(PRESET_SORT_KEY) || 'name-asc';
+    const presets = presetManager.getSortedPresets(modelName, currentSortOrder);
 
     const modal = document.createElement('div');
     modal.className = 'preset-modal';
@@ -11713,15 +12133,15 @@ if (rounded) {
     modal.innerHTML = `
       <div class="preset-modal-content">
         <div class="preset-modal-header">
-          <h3 id="managePresetsTitle" class="preset-modal-title">Import / Export Presets</h3>
+          <h3 id="managePresetsTitle" class="preset-modal-title">Import / Export Designs (Presets)</h3>
           <button class="preset-modal-close" aria-label="Close dialog" data-action="close">&times;</button>
         </div>
         <div class="preset-import-export-actions" style="display:flex;gap:12px;padding:16px;border-bottom:1px solid var(--border-color, #e0e0e0);">
           <button class="btn btn-primary" data-action="import" style="flex:1;padding:12px;font-size:1em;">
-            📂 Import Presets
+            📂 Import Designs
           </button>
           <button class="btn btn-primary" data-action="export-all" style="flex:1;padding:12px;font-size:1em;">
-            💾 Export All Presets
+            💾 Export All Designs
           </button>
         </div>
         ${presets.length > 0 ? `
@@ -11729,11 +12149,20 @@ if (rounded) {
           <summary style="padding:8px 0;cursor:pointer;color:var(--text-secondary, #666);">
             Individual presets (${presets.length})
           </summary>
-          <div class="preset-list">
+          <div class="preset-list-toolbar">
+            <label class="preset-sort-label" for="presetSortSelect">Sort</label>
+            <select id="presetSortSelect" class="preset-sort-select" aria-label="Sort presets by">
+              <option value="name-asc"${currentSortOrder === 'name-asc' ? ' selected' : ''}>Name (A–Z)</option>
+              <option value="name-desc"${currentSortOrder === 'name-desc' ? ' selected' : ''}>Name (Z–A)</option>
+              <option value="date-created"${currentSortOrder === 'date-created' ? ' selected' : ''}>Date created (newest)</option>
+              <option value="date-modified"${currentSortOrder === 'date-modified' ? ' selected' : ''}>Date modified (newest)</option>
+            </select>
+          </div>
+          <div class="preset-list" id="presetListContainer">
             ${presetsHTML}
           </div>
         </details>
-        ` : '<div class="preset-empty" style="padding:16px;">No presets saved for this model yet. Import a preset file or use the + button to create one.</div>'}
+        ` : '<div class="preset-empty" style="padding:16px;">No designs saved for this model yet. Import a design file or use the + button to create one.</div>'}
         <div class="preset-modal-footer">
           <button class="btn btn-outline" data-action="close">Close</button>
         </div>
@@ -11742,6 +12171,35 @@ if (rounded) {
 
     document.body.appendChild(modal);
 
+    // Wire sort selector
+    const presetSortSelect = modal.querySelector('#presetSortSelect');
+    const presetListContainer = modal.querySelector('#presetListContainer');
+    if (presetSortSelect && presetListContainer) {
+      presetSortSelect.addEventListener('change', () => {
+        currentSortOrder = presetSortSelect.value;
+        localStorage.setItem(PRESET_SORT_KEY, currentSortOrder);
+        const sorted = presetManager.getSortedPresets(modelName, currentSortOrder);
+        presetListContainer.innerHTML = sorted.map((preset) => `
+          <div class="preset-item" data-preset-id="${preset.id}">
+            <div class="preset-item-info">
+              <h4 class="preset-item-name">${preset.name}</h4>
+              <p class="preset-item-meta">
+                ${preset.description || 'No description'} •
+                Created ${formatDate(preset.created)}
+              </p>
+            </div>
+            <div class="preset-item-actions">
+              <button class="btn btn-sm btn-primary" data-action="load" data-preset-id="${preset.id}" aria-label="Load design ${preset.name}">Load</button>
+              <button class="btn btn-sm btn-secondary" data-action="export" data-preset-id="${preset.id}" aria-label="Export design ${preset.name}">Export</button>
+              <button class="btn btn-sm btn-outline" data-action="delete" data-preset-id="${preset.id}" aria-label="Delete design ${preset.name}">Delete</button>
+            </div>
+          </div>`).join('');
+        // Announce sort change to screen readers
+        const label = presetSortSelect.options[presetSortSelect.selectedIndex]?.text || '';
+        announceImmediate(`Designs sorted by ${label}`);
+      });
+    }
+
     // Close handler for dynamic modal
     const closeManagePresetsModalHandler = () => {
       closeModal(modal);
@@ -11749,7 +12207,7 @@ if (rounded) {
     };
 
     // Handle actions
-    modal.addEventListener('click', (e) => {
+    modal.addEventListener('click', async (e) => {
       const btn = e.target.closest('button[data-action]');
       if (!btn) return;
 
@@ -11765,9 +12223,14 @@ if (rounded) {
           isLoadingPreset = true;
 
           const state = stateManager.getState();
-          // Desktop OpenSCAD parity: MERGE preset parameters onto current state
-          // "Only the parameters defined in the dataset are modified"
-          const mergedParams = { ...state.parameters, ...preset.parameters };
+          // Desktop OpenSCAD parity: MERGE preset parameters onto current state.
+          // Hidden parameters are stored but not retrieved (desktop parity).
+          const hiddenNames = new Set(Object.keys(state.schema?.hiddenParameters || {}));
+          const visiblePresetParams = {};
+          for (const [k, v] of Object.entries(preset.parameters)) {
+            if (!hiddenNames.has(k)) visiblePresetParams[k] = v;
+          }
+          const mergedParams = { ...state.parameters, ...visiblePresetParams };
           stateManager.setState({ parameters: mergedParams });
 
           // Re-render UI with merged parameters
@@ -11779,14 +12242,13 @@ if (rounded) {
             parametersContainer,
             (values) => {
               stateManager.setState({ parameters: values });
-              // Clear preset selection when parameters are manually changed
               clearPresetSelection(values);
               if (autoPreviewController) {
                 autoPreviewController.onParameterChange(values);
               }
               updatePrimaryActionButton();
             },
-            mergedParams // Pass merged values as initial values
+            mergedParams
           );
 
           // Trigger auto-preview with merged parameters
@@ -11820,10 +12282,10 @@ if (rounded) {
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
-          a.download = `preset-${preset.name.toLowerCase().replace(/\s+/g, '-')}.json`;
+          a.download = `${sanitizeFilename(preset.name)}.json`;
           a.click();
           URL.revokeObjectURL(url);
-          updateStatus(`Exported preset: ${preset.name}`);
+          updateStatus(`Exported design: ${preset.name}`);
         }
       } else if (action === 'export-all') {
         // Export in OpenSCAD native format (includes "design default values" as first entry)
@@ -11839,11 +12301,48 @@ if (rounded) {
           a.download = `${modelName.replace('.scad', '')}-presets.json`;
           a.click();
           URL.revokeObjectURL(url);
-          updateStatus('Exported all presets (OpenSCAD native format)');
+          updateStatus('Exported all designs (OpenSCAD native format)');
         } else {
-          updateStatus('No presets to export. Create some presets first using the + button.');
+          updateStatus('No designs to export. Create some designs first using the + button.');
         }
       } else if (action === 'import') {
+        // Ask user whether to merge with existing presets or replace them all.
+        // "Replace" is destructive and always requires confirmation.
+        const importModeDialog = document.createElement('dialog');
+        importModeDialog.setAttribute('aria-labelledby', 'importModeTitle');
+        importModeDialog.innerHTML = `
+          <form method="dialog" class="import-mode-dialog">
+            <h3 id="importModeTitle">Import designs</h3>
+            <fieldset>
+              <legend>Import mode</legend>
+              <label class="import-mode-option">
+                <input type="radio" name="importMode" value="merge" checked />
+                <span><strong>Merge</strong> — add imported designs to your existing ones</span>
+              </label>
+              <label class="import-mode-option">
+                <input type="radio" name="importMode" value="replace" />
+                <span><strong>Replace all</strong> — delete existing designs for this model, then import</span>
+              </label>
+            </fieldset>
+            <div class="import-mode-actions">
+              <button type="submit" value="ok" class="btn btn-primary">Choose files…</button>
+              <button type="submit" value="cancel" class="btn btn-secondary">Cancel</button>
+            </div>
+          </form>`;
+        document.body.appendChild(importModeDialog);
+        importModeDialog.showModal();
+
+        const importMode = await new Promise((resolve) => {
+          importModeDialog.addEventListener('close', () => {
+            const returnValue = importModeDialog.returnValue;
+            const mode = importModeDialog.querySelector('input[name="importMode"]:checked')?.value || 'merge';
+            document.body.removeChild(importModeDialog);
+            resolve(returnValue === 'ok' ? mode : null);
+          }, { once: true });
+        });
+
+        if (!importMode) return; // user cancelled
+
         // Create file input for import
         // Multi-preset JSON import support
         const input = document.createElement('input');
@@ -11867,6 +12366,19 @@ if (rounded) {
               );
               if (!proceed) return;
             }
+
+            // Replace mode: confirm and clear existing presets first
+            if (importMode === 'replace' && currentModelName) {
+              const existing = presetManager.getPresets(currentModelName) || [];
+              const realCount = existing.filter((p) => p.id !== 'design-defaults').length;
+              if (realCount > 0) {
+                const confirmed = confirm(
+                  `Replace all designs? This will permanently delete ${realCount} existing design${realCount !== 1 ? 's' : ''} for "${currentModelName}". This cannot be undone.\n\nContinue?`
+                );
+                if (!confirmed) return;
+                presetManager.clearPresetsForModel(currentModelName, { preserveDefaults: true });
+              }
+            }
             
             let totalImported = 0;
             let totalSkipped = 0;
@@ -11879,10 +12391,12 @@ if (rounded) {
                 // Log for debugging preset import issues
                 console.log(`[Import] Processing: ${file.name}`);
                 
+                const hiddenParameterNames = Object.keys(currentState.schema?.hiddenParameters || {});
                 const result = presetManager.importPreset(
                   text,
                   currentModelName,
-                  paramSchema
+                  paramSchema,
+                  hiddenParameterNames
                 );
 
                 if (result.success) {
@@ -11899,7 +12413,7 @@ if (rounded) {
 
             // Show result
             if (totalImported > 0) {
-              let message = `Imported ${totalImported} preset(s)`;
+              let message = `Imported ${totalImported} design${totalImported !== 1 ? 's' : ''}`;
               if (totalSkipped > 0) {
                 message += ` (${totalSkipped} skipped)`;
               }
@@ -12149,40 +12663,19 @@ if (rounded) {
     const preset = presetManager.loadPreset(state.uploadedFile.name, presetId);
 
     if (preset) {
-      // Check preset compatibility with current schema
-      const compatibility = presetManager.analyzePresetCompatibility(
-        preset.parameters,
-        state.schema || {}
-      );
-
-      // If there are compatibility issues, show a warning dialog
-      if (!compatibility.isCompatible) {
-        // Remember previous selection to restore on cancel
-        const previousPresetId = state.currentPresetId || '';
-        
-        const action = await showPresetCompatibilityWarning(
-          preset,
-          compatibility,
-          state
-        );
-
-        if (action === 'cancel') {
-          // Restore dropdown to previous selection (not just clear it)
-          const presetSelectEl = document.getElementById('presetSelect');
-          if (presetSelectEl) {
-            presetSelectEl.value = previousPresetId;
-          }
-          return;
-        }
-        // action === 'apply' - continue with loading
-      }
-
       // Set flag to prevent clearPresetSelection during load
       isLoadingPreset = true;
 
-      // Desktop OpenSCAD parity: MERGE preset parameters onto current state
-      // "Only the parameters defined in the dataset are modified, other parameters are not set to defaults"
-      const mergedParams = { ...state.parameters, ...preset.parameters };
+      // Desktop OpenSCAD parity: MERGE preset parameters onto current state.
+      // "When a dataset is loaded, only the parameters defined in the dataset
+      //  are modified, other parameters are not set to defaults."
+      // Hidden parameters are stored but not retrieved (desktop parity).
+      const hiddenParamNames = new Set(Object.keys(state.schema?.hiddenParameters || {}));
+      const applicableParams = {};
+      for (const [k, v] of Object.entries(preset.parameters)) {
+        if (!hiddenParamNames.has(k)) applicableParams[k] = v;
+      }
+      const mergedParams = { ...state.parameters, ...applicableParams };
       stateManager.setState({ parameters: mergedParams });
 
       // Re-render UI with merged parameters (FIX: UI wasn't updating before)
@@ -12216,13 +12709,10 @@ if (rounded) {
       // Clear the loading flag
       isLoadingPreset = false;
 
-      // Update status with compatibility info if there were issues
-      if (!compatibility.isCompatible) {
-        const issueCount =
-          compatibility.extraParams.length + compatibility.missingParams.length;
-        updateStatus(
-          `Loaded preset: ${preset.name} (${issueCount} parameter differences)`
-        );
+      const applied = Object.keys(applicableParams).length;
+      const total = Object.keys(preset.parameters).length;
+      if (applied < total) {
+        updateStatus(`Loaded preset: ${preset.name} (${applied} of ${total} parameters applied)`);
       } else {
         updateStatus(`Loaded preset: ${preset.name}`);
       }
@@ -12491,79 +12981,122 @@ if (rounded) {
     // This displays ECHO/WARNING/ERROR in the parameter panel
     consolePanel.addOutput(output);
 
-    // Extract ECHO messages and display in status bar
-    const echoMessages = extractEchoMessages(output);
-    updateStatusBarEcho(echoMessages);
+    // Extract ECHO/WARNING/ERROR messages and display in preview drawer
+    const consoleMessages = extractConsoleMessages(output);
+    updatePreviewDrawer(consoleMessages);
 
-    // Log for debugging
-    const echoCount = echoMessages.length;
+    const echoCount = consoleMessages.filter((m) => m.type === 'echo').length;
     if (echoCount > 0) {
       console.log(`[Console] ${echoCount} ECHO statement(s) captured`);
     }
   }
 
   /**
-   * Extract ECHO messages from console output
+   * Extract ECHO, WARNING, and ERROR messages from console output.
    * @param {string} output - Raw console output
-   * @returns {string[]} Array of ECHO message contents
+   * @returns {{ type: 'echo'|'warning'|'error', text: string }[]}
    */
-  function extractEchoMessages(output) {
+  function extractConsoleMessages(output) {
     if (!output) return [];
 
-    const echoLines = output
+    return output
       .split('\n')
-      .filter((line) => line.includes('ECHO:'));
-    return echoLines
       .map((line) => {
-        // Extract the message content after "ECHO:"
-        const match = line.match(/ECHO:\s*"?([^"]*)"?/);
-        return match ? match[1].trim() : line.replace(/.*ECHO:\s*/, '').trim();
+        const trimmed = line.trim();
+        if (!trimmed) return null;
+
+        if (trimmed.startsWith('ECHO:')) {
+          const match = trimmed.match(/ECHO:\s*"?([^"]*)"?/);
+          const text = match
+            ? match[1].trim()
+            : trimmed.replace(/.*ECHO:\s*/, '').trim();
+          return text.length > 0 ? { type: 'echo', text } : null;
+        }
+
+        if (trimmed.includes('WARNING:') || trimmed.includes('Warning:')) {
+          return { type: 'warning', text: trimmed };
+        }
+
+        if (
+          trimmed.includes('ERROR:') ||
+          trimmed.includes('Error:') ||
+          trimmed.startsWith('[ERR]')
+        ) {
+          const text = trimmed.startsWith('[ERR] ')
+            ? trimmed.substring(6)
+            : trimmed;
+          return { type: 'error', text };
+        }
+
+        return null;
       })
-      .filter((msg) => msg.length > 0);
+      .filter(Boolean);
   }
 
   /**
-   * Update the echo drawer display
-   * @param {string[]} echoMessages - Array of ECHO messages
+   * Update the preview drawer to show ECHO, WARNING, and ERROR messages.
+   * @param {{ type: 'echo'|'warning'|'error', text: string }[]} messages
    */
-  function updateStatusBarEcho(echoMessages) {
+  function updatePreviewDrawer(messages) {
     const echoDrawer = document.getElementById('echoDrawer');
     const echoDrawerLabel = document.getElementById('echoDrawerLabel');
     const echoMessagesEl = document.getElementById('echoMessages');
 
     if (!echoDrawer || !echoDrawerLabel || !echoMessagesEl) return;
 
-    if (echoMessages.length === 0) {
-      echoDrawer.classList.remove('visible');
+    if (messages.length === 0) {
+      echoDrawer.classList.remove('visible', 'echo-drawer--warning', 'echo-drawer--error');
       echoDrawer.classList.add('collapsed');
-      echoDrawerLabel.textContent = 'No echo messages';
-      echoMessagesEl.textContent = '';
+      echoDrawerLabel.textContent = 'No messages';
+      echoMessagesEl.innerHTML = '';
       return;
     }
 
-    // Update label with count
-    echoDrawerLabel.textContent = `ECHO Messages (${echoMessages.length})`;
+    const echoCount = messages.filter((m) => m.type === 'echo').length;
+    const warnCount = messages.filter((m) => m.type === 'warning').length;
+    const errorCount = messages.filter((m) => m.type === 'error').length;
 
-    // Show all ECHO messages, each on its own line
-    const formattedMessages = echoMessages
-      .map((msg) => `ECHO: ${msg}`)
+    // Build label describing the mix of message types
+    const parts = [];
+    if (echoCount > 0) parts.push(`${echoCount} echo`);
+    if (warnCount > 0) parts.push(`${warnCount} warning${warnCount > 1 ? 's' : ''}`);
+    if (errorCount > 0) parts.push(`${errorCount} error${errorCount > 1 ? 's' : ''}`);
+    echoDrawerLabel.textContent = `OpenSCAD Messages (${parts.join(', ')})`;
+
+    // Set severity class on the drawer for toggle-bar tinting
+    echoDrawer.classList.remove('echo-drawer--warning', 'echo-drawer--error');
+    if (errorCount > 0) {
+      echoDrawer.classList.add('echo-drawer--error');
+    } else if (warnCount > 0) {
+      echoDrawer.classList.add('echo-drawer--warning');
+    }
+
+    // Render each message as a color-coded line (text-only, no user HTML)
+    const escHtml = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    echoMessagesEl.innerHTML = messages
+      .map((m) => {
+        const cls = `echo-msg-line echo-msg-line--${m.type}`;
+        const prefix =
+          m.type === 'echo' ? 'ECHO: ' : m.type === 'warning' ? '' : '';
+        return `<span class="${cls}">${escHtml(prefix + m.text)}</span>`;
+      })
       .join('\n');
-    echoMessagesEl.textContent = formattedMessages;
 
-    // Show the drawer and EXPAND it by default so user sees the messages
+    // Show the drawer expanded
     echoDrawer.classList.add('visible');
     echoDrawer.classList.remove('collapsed');
 
-    // Update aria-expanded on toggle button
     const toggleBtn = document.getElementById('echoDrawerToggle');
     if (toggleBtn) {
       toggleBtn.setAttribute('aria-expanded', 'true');
     }
 
-    // Announce to screen readers
-    announceImmediate(
-      `Model has ${echoMessages.length} echo message${echoMessages.length > 1 ? 's' : ''}: ${echoMessages[0]}`
-    );
+    // Build accessible announcement
+    const summary = [];
+    if (errorCount > 0) summary.push(`${errorCount} error${errorCount > 1 ? 's' : ''}`);
+    if (warnCount > 0) summary.push(`${warnCount} warning${warnCount > 1 ? 's' : ''}`);
+    if (echoCount > 0) summary.push(`${echoCount} echo message${echoCount > 1 ? 's' : ''}`);
+    announceImmediate(`Model has ${summary.join(', ')}`);
   }
 
   /**

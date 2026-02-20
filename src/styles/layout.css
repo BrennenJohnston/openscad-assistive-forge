@@ -223,6 +223,80 @@ body {
   font-weight: 700;
 }
 
+/* ============================================================================
+   UI Mode Toggle Button (Basic / Advanced interface mode)
+   Matches .contrast-toggle pattern — same sizing, focus ring, token usage.
+   ============================================================================ */
+
+.ui-mode-toggle {
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-text-primary);
+  border-radius: var(--border-radius-md);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  padding: var(--space-xs);
+  transition: all var(--motion-base) ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs);
+  min-width: var(--size-touch-target);
+  height: var(--size-touch-target);
+  flex-shrink: 0;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+}
+
+.ui-mode-toggle:hover {
+  background: var(--color-hover-bg);
+  transform: scale(1.05);
+}
+
+.ui-mode-toggle:focus,
+.ui-mode-toggle:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.ui-mode-toggle:active {
+  transform: scale(0.95);
+}
+
+/* Active state when Basic mode is selected */
+.ui-mode-toggle--basic {
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+  border-color: var(--color-accent);
+}
+
+/* High contrast mode: active states */
+:root[data-high-contrast='true'][data-theme='dark'] .ui-mode-toggle:focus,
+:root[data-high-contrast='true'][data-theme='dark'] .ui-mode-toggle:active,
+:root[data-high-contrast='true'][data-theme='dark'] .ui-mode-toggle:hover {
+  background: var(--color-accent) !important;
+  color: var(--color-accent-text) !important;
+  border-color: var(--color-accent) !important;
+}
+
+:root[data-high-contrast='true'][data-theme='light'] .ui-mode-toggle:focus,
+:root[data-high-contrast='true'][data-theme='light'] .ui-mode-toggle:active,
+:root[data-high-contrast='true'][data-theme='light'] .ui-mode-toggle:hover {
+  background: var(--color-accent) !important;
+  color: var(--color-accent-text) !important;
+  border-color: var(--color-accent) !important;
+}
+
+/* Hidden panel class applied by UIModeController in Basic mode */
+.ui-mode-hidden {
+  display: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-mode-toggle {
+    transition: none;
+  }
+}
+
 /* GitHub Link */
 .github-link {
   /* Ensure strong separation from the accent header background across themes */
@@ -1218,9 +1292,46 @@ body {
   overflow-y: auto;
 }
 
+/* Individual message lines */
+.echo-msg-line {
+  display: block;
+}
+
+.echo-msg-line--echo {
+  color: var(--color-info-text);
+}
+
+.echo-msg-line--warning {
+  color: var(--color-warning, #d69e2e);
+}
+
+.echo-msg-line--error {
+  color: var(--color-error, #e53e3e);
+  font-weight: 600;
+}
+
+/* Drawer severity tinting — toggle bar changes color based on highest severity */
+.echo-drawer--warning .echo-drawer-toggle {
+  background: var(--color-warning-bg, color-mix(in srgb, var(--color-warning) 15%, transparent));
+}
+
+.echo-drawer--warning .echo-drawer-label,
+.echo-drawer--warning .echo-drawer-arrow {
+  color: var(--color-warning-text, var(--color-warning));
+}
+
+.echo-drawer--error .echo-drawer-toggle {
+  background: var(--color-error-bg, color-mix(in srgb, var(--color-error) 15%, transparent));
+}
+
+.echo-drawer--error .echo-drawer-label,
+.echo-drawer--error .echo-drawer-arrow {
+  color: var(--color-error, #e53e3e);
+}
+
 /* Empty state */
 .echo-messages:empty::before {
-  content: 'No echo messages';
+  content: 'No messages';
   color: var(--color-text-tertiary);
   font-style: italic;
 }
@@ -1250,7 +1361,8 @@ body {
 
   .echo-drawer-label,
   .echo-drawer-arrow,
-  .echo-messages {
+  .echo-messages,
+  .echo-msg-line {
     color: CanvasText;
   }
 }

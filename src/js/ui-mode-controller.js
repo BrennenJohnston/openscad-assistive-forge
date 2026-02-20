@@ -1,0 +1,502 @@
+/**
+ * UI Mode Controller - Controls switching between Basic and Advanced interface layouts
+ *
+ * Basic Mode: Simplified interface showing only core parameter controls and preview
+ * Advanced Mode: Full interface with all panels visible (default — preserves existing behavior)
+ *
+ * @license GPL-3.0-or-later
+ */
+
+import { isEnabled } from './feature-flags.js';
+import { announceImmediate } from './announcer.js';
+
+/**
+ * @typedef {'basic' | 'advanced'} UIMode
+ */
+
+/**
+ * @typedef {Object} PanelDefinition
+ * @property {string} id - Unique panel identifier
+ * @property {string} label - Human-readable label for preferences UI
+ * @property {string} selector - CSS selector targeting the panel element(s)
+ * @property {boolean} defaultHiddenInBasic - Whether hidden by default in Basic mode
+ */
+
+// Storage key for UI mode preference (follows openscad-forge-{feature} convention)
+const UI_MODE_STORAGE_KEY = 'openscad-forge-ui-mode';
+
+// CSS class applied to panel elements when hidden in Basic mode
+const HIDDEN_CLASS = 'ui-mode-hidden';
+
+/**
+ * Registry of panels controlled by Basic/Advanced mode.
+ * Selectors are verified against the current index.html DOM structure.
+ * CRITICAL: Never target .param-group or .param-control elements here —
+ * those are independently controlled by isSimpleGroup() and data-settings-level.
+ *
+ * @type {PanelDefinition[]}
+ */
+const PANEL_REGISTRY = [
+  {
+    id: 'consoleOutput',
+    label: 'Console Output',
+    selector: '#consolePanel',
+    defaultHiddenInBasic: true,
+  },
+  {
+    id: 'codeEditor',
+    label: 'Code Editor',
+    selector: '#expertModeToggle, #expertModePanel',
+    defaultHiddenInBasic: true,
+  },
+  {
+    id: 'imageMeasurement',
+    label: 'Image Measurement',
+    selector: '#measureSection',
+    defaultHiddenInBasic: true,
+  },
+  {
+    id: 'referenceOverlay',
+    label: 'Reference Overlay',
+    selector: '#overlaySection',
+    defaultHiddenInBasic: true,
+  },
+  {
+    id: 'libraries',
+    label: 'Libraries',
+    selector: '#libraryControls',
+    defaultHiddenInBasic: true,
+  },
+  {
+    id: 'advancedMenu',
+    label: 'Advanced Menu',
+    selector: '#advancedMenu',
+    defaultHiddenInBasic: true,
+  },
+  {
+    id: 'gridSettings',
+    label: 'Grid Settings',
+    selector: '.preview-setting-group--grid',
+    defaultHiddenInBasic: true,
+  },
+  {
+    id: 'companionFileManagement',
+    label: 'Companion Files',
+    selector: '#projectFilesControls',
+    defaultHiddenInBasic: true,
+  },
+  {
+    id: 'presetImportExport',
+    label: 'Preset Import/Export',
+    selector: '#exportParamsBtn',
+    defaultHiddenInBasic: true,
+  },
+  {
+    id: 'renderSettings',
+    label: 'Render Settings',
+    selector: '.preview-setting-group--quality',
+    defaultHiddenInBasic: true,
+  },
+];
+
+/**
+ * UIModeController - Central controller for Basic/Advanced interface mode switching
+ *
+ * Responsibilities:
+ * - Track current UI mode (basic/advanced)
+ * - Handle mode switching with screen reader announcements
+ * - Persist mode preference to localStorage
+ * - Apply panel visibility via CSS class (PR 2 wires the actual hiding)
+ * - Expose panel registry for preferences UI (PR 3)
+ */
+export class UIModeController {
+  /**
+   * @param {Object} options
+   * @param {Function} [options.onModeChange] - Callback when mode changes
+   */
+  constructor(options = {}) {
+    /** @type {UIMode} */
+    this.currentMode = 'advanced';
+
+    /** @type {Function} */
+    this.onModeChange = options.onModeChange || (() => {});
+
+    /** @type {Set<Function>} */
+    this.subscribers = new Set();
+
+    /** @type {string[]} Hidden panel IDs for current project (overrides defaults) */
+    this._projectHiddenPanels = null;
+
+    // Load saved preferences
+    this._loadPreferences();
+  }
+
+  /**
+   * Check if Basic/Advanced mode feature is enabled via feature flag
+   * @returns {boolean}
+   */
+  isFeatureEnabled() {
+    return isEnabled('basic_advanced_mode');
+  }
+
+  /**
+   * Get current UI mode
+   * @returns {UIMode}
+   */
+  getMode() {
+    return this.currentMode;
+  }
+
+  /**
+   * Get a deep copy of the panel registry (safe for external mutation)
+   * @returns {PanelDefinition[]}
+   */
+  getRegistry() {
+    return PANEL_REGISTRY.map((panel) => ({ ...panel }));
+  }
+
+  /**
+   * Subscribe to mode changes
+   * @param {Function} callback - Called with (newMode, oldMode)
+   * @returns {Function} Unsubscribe function
+   */
+  subscribe(callback) {
+    this.subscribers.add(callback);
+    return () => this.subscribers.delete(callback);
+  }
+
+  /**
+   * Switch to a specific UI mode
+   * @param {UIMode} targetMode - 'basic' or 'advanced'
+   * @param {Object} [options]
+   * @param {boolean} [options.skipAnnouncement] - Skip screen reader announcement
+   * @param {boolean} [options.skipFocus] - Skip focus management
+   * @returns {boolean} True if switch was successful
+   */
+  switchMode(targetMode, options = {}) {
+    if (!['basic', 'advanced'].includes(targetMode)) {
+      console.warn(`[UIModeController] Invalid mode: ${targetMode}`);
+      return false;
+    }
+
+    if (targetMode === this.currentMode) {
+      console.log(`[UIModeController] Already in ${targetMode} mode`);
+      return true;
+    }
+
+    const previousMode = this.currentMode;
+
+    console.log(`[UIModeController] Switching from ${previousMode} to ${targetMode}`);
+
+    this.currentMode = targetMode;
+
+    // Apply panel visibility
+    this.applyMode(targetMode);
+
+    // Update toggle button ARIA state
+    this._updateToggleButton();
+
+    // Notify subscribers
+    this._notifySubscribers(targetMode, previousMode);
+
+    // Call mode change callback
+    this.onModeChange(targetMode, previousMode);
+
+    // Announce to screen reader
+    if (!options.skipAnnouncement) {
+      this._announceSwitch(targetMode);
+    }
+
+    // Move focus after switch (WCAG 2.4.3)
+    if (!options.skipFocus) {
+      requestAnimationFrame(() => this._manageFocusAfterSwitch(targetMode));
+    }
+
+    // Save mode preference
+    this._savePreferences();
+
+    return true;
+  }
+
+  /**
+   * Toggle between Basic and Advanced modes
+   * @returns {UIMode} New mode after toggle
+   */
+  toggleMode() {
+    const newMode = this.currentMode === 'advanced' ? 'basic' : 'advanced';
+    this.switchMode(newMode);
+    return this.currentMode;
+  }
+
+  /**
+   * Apply panel visibility for the given mode.
+   * Adds/removes HIDDEN_CLASS on panel elements.
+   *
+   * CRITICAL: Never hides .param-group or .param-control elements.
+   * Parameter group visibility is independently controlled by isSimpleGroup()
+   * and data-settings-level attributes — those mechanisms are separate.
+   *
+   * @param {UIMode} mode
+   */
+  applyMode(mode) {
+    const hiddenPanelIds = this._getEffectiveHiddenPanels();
+
+    for (const panel of PANEL_REGISTRY) {
+      const elements = this._queryPanelElements(panel.selector);
+
+      if (mode === 'basic' && hiddenPanelIds.includes(panel.id)) {
+        elements.forEach((el) => el.classList.add(HIDDEN_CLASS));
+      } else {
+        elements.forEach((el) => el.classList.remove(HIDDEN_CLASS));
+      }
+    }
+  }
+
+  /**
+   * Apply the current mode (re-apply after DOM changes)
+   */
+  applyCurrentMode() {
+    this.applyMode(this.currentMode);
+  }
+
+  /**
+   * Set per-project hidden panel overrides.
+   * Null resets to user/default preferences.
+   * @param {string[]|null} hiddenPanelIds
+   */
+  setProjectHiddenPanels(hiddenPanelIds) {
+    this._projectHiddenPanels = hiddenPanelIds;
+  }
+
+  /**
+   * Initialize the controller: show/hide toggle button per feature flag,
+   * wire click handler, apply initial mode.
+   */
+  init() {
+    const btn = document.getElementById('uiModeToggle');
+    if (!btn) return;
+
+    if (this.isFeatureEnabled()) {
+      btn.classList.remove('hidden');
+    } else {
+      btn.classList.add('hidden');
+      return;
+    }
+
+    btn.addEventListener('click', () => this.toggleMode());
+    this._updateToggleButton();
+  }
+
+  // ============================================================================
+  // Private methods
+  // ============================================================================
+
+  /**
+   * Get the effective list of hidden panel IDs for the current context.
+   * Resolution order: per-project override > localStorage defaults > PANEL_REGISTRY defaults
+   * @returns {string[]}
+   * @private
+   */
+  _getEffectiveHiddenPanels() {
+    if (this._projectHiddenPanels !== null) {
+      return this._projectHiddenPanels;
+    }
+
+    try {
+      const stored = localStorage.getItem(UI_MODE_STORAGE_KEY);
+      if (stored) {
+        const prefs = JSON.parse(stored);
+        if (Array.isArray(prefs.hiddenPanels)) {
+          return prefs.hiddenPanels;
+        }
+      }
+    } catch {
+      // Fall through to defaults
+    }
+
+    return PANEL_REGISTRY.filter((p) => p.defaultHiddenInBasic).map((p) => p.id);
+  }
+
+  /**
+   * Query DOM elements for a panel selector, skipping param-group elements.
+   * @param {string} selector
+   * @returns {Element[]}
+   * @private
+   */
+  _queryPanelElements(selector) {
+    const elements = [];
+    const parts = selector.split(',').map((s) => s.trim());
+
+    for (const part of parts) {
+      try {
+        const found = document.querySelectorAll(part);
+        found.forEach((el) => {
+          // Safety: never hide param-group or param-control elements
+          if (
+            !el.classList.contains('param-group') &&
+            !el.classList.contains('param-control')
+          ) {
+            elements.push(el);
+          }
+        });
+      } catch (error) {
+        console.warn(`[UIModeController] Invalid selector: ${part}`, error);
+      }
+    }
+
+    return elements;
+  }
+
+  /**
+   * Notify all subscribers of mode change
+   * @param {UIMode} newMode
+   * @param {UIMode} oldMode
+   * @private
+   */
+  _notifySubscribers(newMode, oldMode) {
+    this.subscribers.forEach((callback) => {
+      try {
+        callback(newMode, oldMode);
+      } catch (error) {
+        console.error('[UIModeController] Subscriber error:', error);
+      }
+    });
+  }
+
+  /**
+   * Update toggle button ARIA attributes to reflect current mode
+   * @private
+   */
+  _updateToggleButton() {
+    const btn = document.getElementById('uiModeToggle');
+    if (!btn) return;
+
+    const isAdvanced = this.currentMode === 'advanced';
+    btn.setAttribute('aria-checked', String(isAdvanced));
+
+    const label = btn.querySelector('.ui-mode-label');
+    if (label) {
+      label.textContent = isAdvanced ? 'Advanced' : 'Basic';
+    }
+
+    if (isAdvanced) {
+      btn.setAttribute(
+        'aria-label',
+        'Interface mode: Advanced. Click to switch to Basic mode'
+      );
+      btn.classList.remove('ui-mode-toggle--basic');
+    } else {
+      btn.setAttribute(
+        'aria-label',
+        'Interface mode: Basic. Click to switch to Advanced mode'
+      );
+      btn.classList.add('ui-mode-toggle--basic');
+    }
+  }
+
+  /**
+   * Move focus to an appropriate element after mode switch (WCAG 2.4.3)
+   * @param {UIMode} mode
+   * @private
+   */
+  _manageFocusAfterSwitch(mode) {
+    try {
+      if (mode === 'basic') {
+        // Focus the first visible parameter control
+        const firstInput = document.querySelector(
+          '.param-control:not(.ui-mode-hidden) input:not([type="hidden"]), ' +
+            '.param-control:not(.ui-mode-hidden) select'
+        );
+        if (firstInput) {
+          firstInput.focus();
+          return;
+        }
+      }
+      // Fallback: return focus to the toggle button
+      const btn = document.getElementById('uiModeToggle');
+      if (btn) {
+        btn.focus();
+      }
+    } catch (error) {
+      console.warn('[UIModeController] Focus management error:', error);
+    }
+  }
+
+  /**
+   * Announce mode switch to screen readers
+   * @param {UIMode} mode
+   * @private
+   */
+  _announceSwitch(mode) {
+    const messages = {
+      basic:
+        'Switched to Basic mode. Advanced panels are now hidden. Parameter controls remain accessible.',
+      advanced:
+        'Switched to Advanced mode. All panels are now visible.',
+    };
+
+    announceImmediate(messages[mode] || `Switched to ${mode} mode`, {
+      clearDelayMs: 3000,
+    });
+  }
+
+  /**
+   * Load mode preference from localStorage
+   * @private
+   */
+  _loadPreferences() {
+    try {
+      const stored = localStorage.getItem(UI_MODE_STORAGE_KEY);
+      if (stored) {
+        const prefs = JSON.parse(stored);
+        if (prefs.mode === 'basic' || prefs.mode === 'advanced') {
+          this.currentMode = prefs.mode;
+        }
+      }
+    } catch (error) {
+      console.warn('[UIModeController] Could not load preferences:', error);
+    }
+  }
+
+  /**
+   * Save current mode preference to localStorage.
+   * Gracefully handles QuotaExceededError.
+   * @private
+   */
+  _savePreferences() {
+    try {
+      const stored = localStorage.getItem(UI_MODE_STORAGE_KEY);
+      const existing = stored ? JSON.parse(stored) : {};
+      const prefs = { ...existing, mode: this.currentMode };
+      localStorage.setItem(UI_MODE_STORAGE_KEY, JSON.stringify(prefs));
+    } catch (error) {
+      if (error.name === 'QuotaExceededError') {
+        console.warn('[UIModeController] localStorage quota exceeded — mode preference not saved');
+      } else {
+        console.warn('[UIModeController] Could not save preferences:', error);
+      }
+    }
+  }
+}
+
+// Singleton instance
+let instance = null;
+
+/**
+ * Get or create the UIModeController singleton
+ * @param {Object} [options] - Options for new instance (only used on first call)
+ * @returns {UIModeController}
+ */
+export function getUIModeController(options = {}) {
+  if (!instance) {
+    instance = new UIModeController(options);
+  }
+  return instance;
+}
+
+/**
+ * Reset UIModeController singleton (for testing)
+ */
+export function resetUIModeController() {
+  instance = null;
+}

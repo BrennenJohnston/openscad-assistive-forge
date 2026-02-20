@@ -98,6 +98,15 @@ export const FLAGS = {
     userConfigurable: true,
     killSwitch: false,
   },
+  basic_advanced_mode: {
+    id: 'basic_advanced_mode',
+    name: 'Basic/Advanced Mode',
+    description: 'Toggle between simplified and full interface layouts',
+    default: true,
+    rollout: 100,
+    userConfigurable: true,
+    killSwitch: false,
+  },
 };
 
 // Storage key for user preferences
