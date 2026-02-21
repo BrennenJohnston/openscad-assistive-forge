@@ -50,6 +50,12 @@ const PANEL_REGISTRY = [
     defaultHiddenInBasic: true,
   },
   {
+    id: 'fileActions',
+    label: 'File Actions',
+    selector: '#filePanel',
+    defaultHiddenInBasic: true,
+  },
+  {
     id: 'codeEditor',
     label: 'Code Editor',
     selector: '#expertModeToggle, #expertModePanel',
@@ -101,6 +107,12 @@ const PANEL_REGISTRY = [
     id: 'renderSettings',
     label: 'Render Settings',
     selector: '.preview-setting-group--quality',
+    defaultHiddenInBasic: true,
+  },
+  {
+    id: 'editTools',
+    label: 'Edit Tools',
+    selector: '#editToolsPanel',
     defaultHiddenInBasic: true,
   },
 ];

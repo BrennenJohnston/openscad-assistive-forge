@@ -151,6 +151,35 @@ export const DEFAULT_SHORTCUTS = {
     description: 'Focus saved projects list',
   },
 
+  // File actions
+  newFile: {
+    key: 'n',
+    ctrl: true,
+    description: 'New file',
+  },
+  saveFile: {
+    key: 's',
+    ctrl: true,
+    description: 'Save file',
+  },
+  saveFileAs: {
+    key: 's',
+    ctrl: true,
+    shift: true,
+    description: 'Save file as',
+  },
+  reloadFile: {
+    key: 'r',
+    ctrl: true,
+    description: 'Reload file',
+  },
+  exportImage: {
+    key: 'i',
+    ctrl: true,
+    shift: true,
+    description: 'Export preview as image',
+  },
+
   // Navigation
   nextParameter: {
     key: 'ArrowDown',
@@ -173,6 +202,42 @@ export const DEFAULT_SHORTCUTS = {
     ctrl: true,
     alt: true,
     description: 'Jump to previous parameter group',
+  },
+
+  // Edit actions
+  copyViewportImage: {
+    key: 'c',
+    ctrl: true,
+    shift: true,
+    description: 'Copy viewport image to clipboard',
+  },
+  jumpNextError: {
+    key: 'e',
+    ctrl: true,
+    alt: true,
+    description: 'Jump to next error',
+  },
+  jumpPrevError: {
+    key: 'e',
+    ctrl: true,
+    alt: true,
+    shift: true,
+    description: 'Jump to previous error',
+  },
+  increaseFontSize: {
+    key: '=',
+    ctrl: true,
+    description: 'Increase editor font size',
+  },
+  decreaseFontSize: {
+    key: '-',
+    ctrl: true,
+    description: 'Decrease editor font size',
+  },
+  findReplace: {
+    key: 'h',
+    ctrl: true,
+    description: 'Find and replace in editor',
   },
 };
 
@@ -208,9 +273,17 @@ export const SHORTCUT_CATEGORIES = {
     label: 'Help',
     actions: ['showHelp', 'showShortcutsModal'],
   },
+  file: {
+    label: 'File',
+    actions: ['newFile', 'saveFile', 'saveFileAs', 'reloadFile', 'exportImage'],
+  },
   navigation: {
     label: 'Navigation',
     actions: ['nextParameter', 'prevParameter', 'nextGroup', 'prevGroup'],
+  },
+  editing: {
+    label: 'Editing',
+    actions: ['copyViewportImage', 'jumpNextError', 'jumpPrevError', 'increaseFontSize', 'decreaseFontSize', 'findReplace'],
   },
 };
 

@@ -150,6 +150,8 @@ import { getModeManager } from './js/mode-manager.js';
 // UI Mode Controller - Basic/Advanced interface layout switching
 import { getUIModeController } from './js/ui-mode-controller.js';
 import { initParamDetailController } from './js/param-detail-controller.js';
+import { getFileActionsController } from './js/file-actions-controller.js';
+import { getEditActionsController } from './js/edit-actions-controller.js';
 import { getEditorStateManager } from './js/editor-state-manager.js';
 import { TextareaEditor } from './js/textarea-editor.js';
 import {
@@ -2642,6 +2644,87 @@ async function initApp() {
 
   // Initialize parameter detail level controller (Show/Inline/Hide/Desc-only)
   initParamDetailController();
+
+  // Initialize file actions controller (New, Reload, Save, Save As, Export Image, Recent)
+  const fileActionsController = getFileActionsController({
+    onNew: () => {
+      stateManager.resetState();
+      const container = document.getElementById('parametersContainer');
+      if (container) container.textContent = '';
+      if (previewManager) previewManager.clearScene();
+    },
+    onReload: () => {
+      const state = stateManager.getState();
+      if (state.uploadedFile) {
+        handleFile(
+          null,
+          state.uploadedFile.content,
+          null,
+          null,
+          'user',
+          state.uploadedFile.name
+        );
+      }
+    },
+    onSave: () => {
+      const state = stateManager.getState();
+      const content = state.uploadedFile?.content;
+      if (!content) return;
+      const blob = new Blob([content], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = state.uploadedFile.name || 'model.scad';
+      a.click();
+      URL.revokeObjectURL(url);
+    },
+    onSaveAs: () => {
+      const state = stateManager.getState();
+      const content = state.uploadedFile?.content;
+      if (!content) return;
+      const name = prompt('Save as:', state.uploadedFile.name || 'model.scad');
+      if (!name) return;
+      const blob = new Blob([content], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = name;
+      a.click();
+      URL.revokeObjectURL(url);
+    },
+    onExportImage: () => {
+      const canvas = document.querySelector('#preview canvas, .preview-area canvas');
+      if (!canvas) return;
+      const link = document.createElement('a');
+      link.download = 'openscad-preview.png';
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    },
+  });
+  fileActionsController.init();
+
+  // Initialize edit actions controller (Copy viewport, camera values, error nav, font size)
+  const editActionsController = getEditActionsController({
+    getPreviewManager: () => previewManager,
+    getErrorLogPanel: () => errorLogPanel,
+    onJumpToLine: (file, line) => {
+      const modeManager = getModeManager();
+      if (modeManager?.isExpertMode?.() && modeManager.getEditorInstance?.()) {
+        const editor = modeManager.getEditorInstance();
+        if (editor.revealLineInCenter) editor.revealLineInCenter(line);
+        if (editor.setPosition) editor.setPosition({ lineNumber: line, column: 1 });
+        if (editor.focus) editor.focus();
+      }
+    },
+    onFontSizeChange: (size) => {
+      const modeManager = getModeManager();
+      if (modeManager?.isExpertMode?.() && modeManager.getEditorInstance?.()) {
+        const editor = modeManager.getEditorInstance();
+        if (editor.updateOptions) editor.updateOptions({ fontSize: size });
+      }
+    },
+  });
+  editActionsController.init();
 
   // Listen for "Save to Project" events from UI preferences panel
   document.addEventListener('ui-mode-save-to-project', (e) => {
@@ -6662,6 +6745,9 @@ async function initApp() {
         getUIModeController().setProjectHiddenPanels(null);
       }
       getUIModeController().applyCurrentMode();
+
+      // Track file in recent files list
+      fileActionsController.trackOpen(fileName);
 
       // Apply hidden groups from saved preference and set up hide/show-all behavior
       applyHiddenGroups(parametersContainer, extracted?.modelName || fileName);
@@ -14063,6 +14149,30 @@ if (rounded) {
         modal.dataset.initialized = 'true';
       }
       openModal(modal);
+    }
+  });
+
+  // File action shortcuts
+  keyboardConfig.on('newFile', () => fileActionsController.onNew());
+  keyboardConfig.on('saveFile', () => fileActionsController.onSave());
+  keyboardConfig.on('saveFileAs', () => fileActionsController.onSaveAs());
+  keyboardConfig.on('reloadFile', () => fileActionsController.onReload());
+  keyboardConfig.on('exportImage', () => fileActionsController.onExportImage());
+
+  // Edit action shortcuts
+  keyboardConfig.on('copyViewportImage', () => editActionsController.copyViewportImage());
+  keyboardConfig.on('jumpNextError', () => editActionsController.jumpToNextError());
+  keyboardConfig.on('jumpPrevError', () => editActionsController.jumpToPrevError());
+  keyboardConfig.on('increaseFontSize', () => editActionsController.increaseFontSize());
+  keyboardConfig.on('decreaseFontSize', () => editActionsController.decreaseFontSize());
+  keyboardConfig.on('findReplace', () => {
+    const modeManager = getModeManager();
+    if (modeManager?.isExpertMode?.() && modeManager.getEditorInstance?.()) {
+      const editor = modeManager.getEditorInstance();
+      if (editor.getAction) {
+        const action = editor.getAction('editor.action.startFindReplaceAction');
+        if (action) action.run();
+      }
     }
   });
 

@@ -4839,6 +4839,70 @@ body.first-visit-blocking #app {
   }
 }
 
+/* ---- File Actions Panel ------------------------------------------------- */
+
+.file-panel-content {
+  padding: var(--space-sm);
+  border-top: 1px solid var(--color-border);
+}
+
+.file-panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-md);
+}
+
+.file-recent-heading {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  margin: 0 0 var(--space-xs);
+  color: var(--color-text-secondary);
+}
+
+.file-recent-list {
+  max-height: 140px;
+  overflow-y: auto;
+}
+
+.file-recent-empty {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  font-style: italic;
+  padding: var(--space-xs) 0;
+}
+
+.file-recent-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.file-recent-btn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  font: inherit;
+  font-size: var(--font-size-sm);
+  padding: var(--space-xs) var(--space-sm);
+  min-height: var(--size-touch-target);
+  color: var(--color-accent);
+  cursor: pointer;
+  border-radius: var(--border-radius-xs);
+  transition: background-color var(--motion-fast) ease;
+}
+
+.file-recent-btn:hover {
+  background: var(--color-hover-bg);
+}
+
+.file-recent-btn:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus);
+  outline-offset: var(--focus-ring-offset);
+}
+
 /* ---- Error Log Panel ---------------------------------------------------- */
 
 .error-log-panel {
@@ -5071,6 +5135,64 @@ body.first-visit-blocking #app {
   .error-log-row td:nth-child(2) {
     display: none;
   }
+}
+
+/* ---- Edit Tools Panel --------------------------------------------------- */
+
+.edit-tools-body {
+  padding: var(--space-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.edit-tools-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.edit-tools-section-title {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.edit-tools-btn {
+  min-height: var(--size-touch-target);
+}
+
+.edit-tools-row {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.edit-tools-row > .edit-tools-btn {
+  flex: 1;
+}
+
+.edit-tools-font-row {
+  align-items: center;
+  justify-content: center;
+}
+
+.edit-tools-font-value {
+  min-width: 3.5em;
+  text-align: center;
+  font-size: var(--font-size-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-primary);
+}
+
+/* ---- Camera Copy Values Grid -------------------------------------------- */
+
+.camera-copy-values {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-xs);
 }
 
 /* Save Preset Form */
