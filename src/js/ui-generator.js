@@ -5,6 +5,7 @@
 
 import { formatFileSize } from './download.js';
 import { announceChange } from './announcer.js';
+import { reapplyDetailLevel } from './param-detail-controller.js';
 
 /**
  * Format a parameter name for display (replaces underscores with spaces)
@@ -43,8 +44,18 @@ function createLabelContainer(param, options = {}) {
     labelContainer.appendChild(label);
   } else {
     const labelText = document.createElement('span');
+    labelText.className = 'param-label-text';
     labelText.textContent = formatParamName(param.name);
     labelContainer.appendChild(labelText);
+  }
+
+  // Add visible description element (visibility controlled by data-detail-level CSS)
+  if (param.description) {
+    labelContainer.dataset.hasDescription = 'true';
+    const descEl = document.createElement('span');
+    descEl.className = 'param-description';
+    descEl.textContent = param.description;
+    labelContainer.appendChild(descEl);
   }
 
   // Add help tooltip if description exists
@@ -1899,7 +1910,32 @@ export function renderParameterUI(
     details.dataset.settingsLevel = simple ? 'simple' : 'advanced';
 
     const summary = document.createElement('summary');
-    summary.textContent = group.label;
+    summary.className = 'param-group-summary';
+
+    const summaryLabel = document.createElement('span');
+    summaryLabel.textContent = group.label;
+    summary.appendChild(summaryLabel);
+
+    // Hide group button — keyboard accessible with aria-pressed
+    const hideBtn = document.createElement('button');
+    hideBtn.className = 'param-group-hide-btn';
+    hideBtn.type = 'button';
+    hideBtn.setAttribute('aria-label', `Hide ${group.label} group`);
+    hideBtn.setAttribute('aria-pressed', 'false');
+    hideBtn.title = 'Hide this group';
+    hideBtn.innerHTML = '&#x2715;'; // × character
+    hideBtn.addEventListener('click', (e) => {
+      // Prevent the summary toggle from firing
+      e.stopPropagation();
+      e.preventDefault();
+      // Dispatch custom event so main.js can persist the hidden state
+      details.dispatchEvent(new CustomEvent('group-hide', {
+        bubbles: true,
+        detail: { groupId: group.id, groupLabel: group.label },
+      }));
+    });
+    summary.appendChild(hideBtn);
+
     details.appendChild(summary);
 
     allGroupParams.forEach((param) => {
@@ -1964,6 +2000,9 @@ export function renderParameterUI(
 
   // Initialize parameter search after rendering
   initParameterSearch();
+
+  // Re-apply detail level to newly rendered parameters
+  reapplyDetailLevel();
 
   return currentValues;
 }

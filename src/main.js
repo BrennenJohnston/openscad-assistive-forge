@@ -148,6 +148,7 @@ import {
 import { getModeManager } from './js/mode-manager.js';
 // UI Mode Controller - Basic/Advanced interface layout switching
 import { getUIModeController } from './js/ui-mode-controller.js';
+import { initParamDetailController } from './js/param-detail-controller.js';
 import { getEditorStateManager } from './js/editor-state-manager.js';
 import { TextareaEditor } from './js/textarea-editor.js';
 import {
@@ -2111,6 +2112,14 @@ async function initApp() {
     }
   });
 
+  // B1 fix: Terminate WASM worker before page unload to prevent browser freeze.
+  // Without this, a mid-render worker blocks the unload sequence on some browsers.
+  window.addEventListener('beforeunload', () => {
+    if (renderController) {
+      renderController.terminate();
+    }
+  });
+
   // Initialize theme (before any UI rendering)
   themeManager.init();
 
@@ -2629,6 +2638,34 @@ async function initApp() {
 
   // Initialize UI mode controller (Basic/Advanced interface layout)
   getUIModeController().init();
+
+  // Initialize parameter detail level controller (Show/Inline/Hide/Desc-only)
+  initParamDetailController();
+
+  // Listen for "Save to Project" events from UI preferences panel
+  document.addEventListener('ui-mode-save-to-project', (e) => {
+    const prefs = e.detail?.uiPreferences;
+    if (!prefs) return;
+
+    const state = stateManager.getState();
+    const modelName = state.uploadedFile?.name;
+    if (modelName) {
+      try {
+        const key = `openscad-forge-ui-prefs-${modelName}`;
+        localStorage.setItem(key, JSON.stringify(prefs));
+        console.log(`[App] UI preferences saved for project: ${modelName}`);
+        updateStatus('UI preferences saved to project');
+      } catch (error) {
+        if (error.name === 'QuotaExceededError') {
+          console.warn('[App] localStorage quota exceeded — UI prefs not saved');
+        } else {
+          console.warn('[App] Could not save UI preferences:', error);
+        }
+      }
+    } else {
+      updateStatus('Load a project first to save preferences');
+    }
+  });
 
   // Initialize theme toggle button
   initThemeToggle('themeToggle', (theme, activeTheme, message) => {
@@ -5753,6 +5790,40 @@ async function initApp() {
   }
 
   /**
+   * Sync overlay visibility with the include_screenshot SCAD parameter.
+   * Called on parameter change and preset load so the overlay tracks user intent.
+   * @param {Object} parameters - Current parameter values
+   */
+  function syncOverlayWithScreenshotParam(parameters) {
+    if (!overlayToggle || !previewManager || !parameters) return;
+
+    const includeFlag = parameters.include_screenshot;
+    if (includeFlag === undefined) return;
+
+    const shouldShow = includeFlag === 'yes' || includeFlag === true || includeFlag === 'true';
+    const state = stateManager.getState();
+    const projectFiles = state.projectFiles;
+
+    if (shouldShow) {
+      const screenshotFile = parameters.screenshot_file || 'default.svg';
+      if (projectFiles?.has(screenshotFile)) {
+        if (overlaySourceSelect) overlaySourceSelect.value = screenshotFile;
+        loadOverlayFromProjectFile(screenshotFile).then(() => {
+          overlayToggle.checked = true;
+          previewManager.setOverlayEnabled(true);
+          updateOverlayStatus?.();
+        }).catch((err) => {
+          console.warn('[App] Overlay enable via include_screenshot failed:', err);
+        });
+      }
+    } else {
+      overlayToggle.checked = false;
+      previewManager.setOverlayEnabled(false);
+      updateOverlayStatus?.();
+    }
+  }
+
+  /**
    * Auto-select overlay source based on screenshot_file variable detection
    * @param {Object} requiredFiles - Detection result from detectRequiredCompanionFiles
    */
@@ -6080,6 +6151,26 @@ async function initApp() {
 
     const requiredFiles = detectRequiredCompanionFiles(uploadedFile.content);
     renderProjectFilesList(projectFiles, mainFilePath, requiredFiles);
+
+    // Emit synthetic console warnings for missing companion files so the
+    // Console panel mirrors what desktop OpenSCAD would show for missing includes.
+    if (requiredFiles?.files && typeof window.updateConsoleOutput === 'function') {
+      const projectBasenames = projectFiles
+        ? new Set(Array.from(projectFiles.keys()).map((p) => p.split('/').pop().toLowerCase()))
+        : new Set();
+      const missing = requiredFiles.files.filter((f) => {
+        if (!f.required) return false;
+        if (!projectFiles) return true;
+        if (projectFiles.has(f.path)) return false;
+        return !projectBasenames.has(f.path.split('/').pop().toLowerCase());
+      });
+      if (missing.length > 0) {
+        const warnings = missing
+          .map((f) => `WARNING: Can't open include file '${f.path}'.`)
+          .join('\n');
+        window.updateConsoleOutput(warnings);
+      }
+    }
 
     // Auto-expand companion files panel when editable .txt files are present
     // Makes the companion file editor more discoverable for clinician workflows
@@ -6544,6 +6635,8 @@ async function initApp() {
           }
           // Update button state when parameters change
           updatePrimaryActionButton();
+          // Sync overlay with include_screenshot param
+          syncOverlayWithScreenshotParam(values);
         }
       );
 
@@ -6553,7 +6646,20 @@ async function initApp() {
         defaults: { ...currentValues },
       });
 
-      // Apply UI mode panel visibility for the current project
+      // Load per-project UI preferences if saved, then apply panel visibility
+      try {
+        const projectPrefsKey = `openscad-forge-ui-prefs-${fileName}`;
+        const savedProjectPrefs = localStorage.getItem(projectPrefsKey);
+        if (savedProjectPrefs) {
+          const prefs = JSON.parse(savedProjectPrefs);
+          getUIModeController().importPreferences(prefs, { applyImmediately: false });
+          console.log(`[App] Loaded per-project UI preferences for: ${fileName}`);
+        } else {
+          getUIModeController().setProjectHiddenPanels(null);
+        }
+      } catch {
+        getUIModeController().setProjectHiddenPanels(null);
+      }
       getUIModeController().applyCurrentMode();
 
       // Apply hidden groups from saved preference and set up hide/show-all behavior
@@ -6582,10 +6688,12 @@ async function initApp() {
             try {
               console.log(`[ZIP] Auto-importing presets from: ${filePath}`);
               console.debug(`[ZIP] JSON content preview (first 200 chars): ${fileContentStr.substring(0, 200)}`);
+              const hiddenParamNamesForImport = Object.keys(extracted.hiddenParameters || {});
               const importResult = presetManager.importPreset(
                 fileContentStr,
                 originalFileName,
-                paramSchema
+                paramSchema,
+                hiddenParamNamesForImport
               );
               if (importResult.success && importResult.imported > 0) {
                 autoImportedCount += importResult.imported;
@@ -6999,7 +7107,7 @@ async function initApp() {
         // Reset file input
         fileInput.value = '';
 
-        // Clear state
+        // Clear state (including preset selection so it doesn't survive reload)
         stateManager.setState({
           uploadedFile: null,
           projectFiles: null,
@@ -7011,6 +7119,8 @@ async function initApp() {
           outputFormat: 'stl',
           stlStats: null,
           detectedLibraries: [],
+          currentPresetId: null,
+          currentPresetName: null,
         });
 
         // Clear history
@@ -8998,6 +9108,17 @@ if (rounded) {
 
         // Show the manifest info banner
         showManifestInfoBanner(manifest.name, manifest.author);
+
+        // --- ?uiMode= or manifest defaults.uiMode / defaults.hiddenPanels ---
+        const manifestUiMode = initUrlParams.get('uiMode') || defaults?.uiMode;
+        const manifestHiddenPanels = defaults?.hiddenPanels;
+        if (manifestUiMode || manifestHiddenPanels) {
+          getUIModeController().importPreferences({
+            defaultMode: manifestUiMode || undefined,
+            hiddenPanelsInBasic: manifestHiddenPanels || undefined,
+          });
+          console.log(`[DeepLink] Applied UI preferences from manifest:`, { manifestUiMode, manifestHiddenPanels });
+        }
 
         // --- ?preset=<name> or manifest defaults.preset -----------------
         const presetName = initUrlParams.get('preset') || defaults?.preset;
@@ -11004,6 +11125,19 @@ if (rounded) {
       manifest.defaults.preset = state.currentPresetName;
     }
 
+    // Include UI mode preferences so shared links apply the same panel visibility
+    const uiModePrefs = getUIModeController().getPreferencesForExport();
+    if (uiModePrefs.defaultMode !== 'advanced') {
+      manifest.defaults.uiMode = uiModePrefs.defaultMode;
+    }
+    const registryDefaults = getUIModeController().getRegistry()
+      .filter((p) => p.defaultHiddenInBasic).map((p) => p.id);
+    const prefsChanged = JSON.stringify(uiModePrefs.hiddenPanelsInBasic.sort()) !==
+      JSON.stringify(registryDefaults.sort());
+    if (prefsChanged) {
+      manifest.defaults.hiddenPanels = uiModePrefs.hiddenPanelsInBasic;
+    }
+
     return manifest;
   }
 
@@ -11675,6 +11809,7 @@ if (rounded) {
   // "design default values" -- always first in preset dropdown (desktop OpenSCAD parity)
   // Virtual preset ID for the immutable defaults entry (not stored in PresetManager)
   const DESIGN_DEFAULTS_ID = '__design_defaults__';
+  const PRESET_SORT_KEY = 'openscad-forge-preset-sort';
 
   // Clear preset selection when parameters are manually changed
   // Track if we're currently loading a preset (to avoid clearing during load)
@@ -11856,6 +11991,7 @@ if (rounded) {
 
   // Update preset dropdown based on current model
   // Preserves current selection if the preset still exists
+  // Applies the user's saved sort preference (shared with Import/Export modal)
   function updatePresetDropdown() {
     const state = stateManager.getState();
     const presetSelect = document.getElementById('presetSelect');
@@ -11871,7 +12007,8 @@ if (rounded) {
     }
 
     const modelName = state.uploadedFile.name;
-    const presets = presetManager.getPresetsForModel(modelName);
+    const currentSortOrder = localStorage.getItem(PRESET_SORT_KEY) || 'name-asc';
+    const presets = presetManager.getSortedPresets(modelName, currentSortOrder);
     
     // Remember current selection from state (survives dropdown rebuilds)
     const currentPresetId = state.currentPresetId;
@@ -11884,11 +12021,12 @@ if (rounded) {
     const defaultsOption = document.createElement('option');
     defaultsOption.value = DESIGN_DEFAULTS_ID;
     defaultsOption.textContent = 'design default values';
-    defaultsOption.style.fontStyle = 'italic'; // Visually distinguish from user presets
+    defaultsOption.style.fontStyle = 'italic';
     presetSelect.appendChild(defaultsOption);
 
     if (presets.length > 0) {
       presets.forEach((preset) => {
+        if (preset.id === 'design-defaults') return;
         const option = document.createElement('option');
         option.value = preset.id;
         option.textContent = preset.name;
@@ -11897,7 +12035,13 @@ if (rounded) {
     }
 
     presetSelect.disabled = false;
-    
+
+    // Sync the sort toolbar dropdown to reflect the active sort order
+    const sortSelect = document.getElementById('presetDropdownSort');
+    if (sortSelect && sortSelect.value !== currentSortOrder) {
+      sortSelect.value = currentSortOrder;
+    }
+
     // Restore selection if the preset still exists in the list
     if (currentPresetId) {
       const currentPreset = presets.find((preset) => preset.id === currentPresetId);
@@ -11905,7 +12049,6 @@ if (rounded) {
         presetSelect.value = currentPresetId;
         setCurrentPresetSignature(currentPreset.parameters);
       } else {
-        // Preset was deleted or doesn't exist for this model - clear state
         forceClearPresetSelection();
       }
     } else {
@@ -12005,12 +12148,25 @@ if (rounded) {
       }
 
       try {
+        // E2: Capture companion files (text-only, exclude images and main file)
+        const companionSnapshot = {};
+        if (state.projectFiles) {
+          for (const [path, content] of state.projectFiles.entries()) {
+            if (path !== state.mainFilePath && typeof content === 'string' && !content.startsWith('data:')) {
+              companionSnapshot[path] = content;
+            }
+          }
+        }
+
         // Save preset and capture returned object (contains id and name)
         const savedPreset = presetManager.savePreset(
           state.uploadedFile.name,
           finalName,
           state.parameters,
-          { description }
+          {
+            description,
+            companionFiles: Object.keys(companionSnapshot).length > 0 ? companionSnapshot : null,
+          }
         );
 
         updateStatus(`Preset "${finalName}" saved`);
@@ -12082,7 +12238,6 @@ if (rounded) {
     }
 
     const modelName = state.uploadedFile.name;
-    const PRESET_SORT_KEY = 'openscad-forge-preset-sort';
     let currentSortOrder = localStorage.getItem(PRESET_SORT_KEY) || 'name-asc';
     const presets = presetManager.getSortedPresets(modelName, currentSortOrder);
 
@@ -12194,7 +12349,8 @@ if (rounded) {
               <button class="btn btn-sm btn-outline" data-action="delete" data-preset-id="${preset.id}" aria-label="Delete design ${preset.name}">Delete</button>
             </div>
           </div>`).join('');
-        // Announce sort change to screen readers
+        // Keep the main preset dropdown in sync with the new sort order
+        updatePresetDropdown();
         const label = presetSortSelect.options[presetSortSelect.selectedIndex]?.text || '';
         announceImmediate(`Designs sorted by ${label}`);
       });
@@ -12250,6 +12406,26 @@ if (rounded) {
             },
             mergedParams
           );
+
+          // E2: Swap companion files if the preset has them
+          if (preset.companionFiles && Object.keys(preset.companionFiles).length > 0) {
+            const curState = stateManager.getState();
+            const newProjectFiles = curState.projectFiles
+              ? new Map(curState.projectFiles)
+              : new Map();
+
+            for (const [filename, content] of Object.entries(preset.companionFiles)) {
+              newProjectFiles.set(filename, content);
+            }
+
+            stateManager.setState({ projectFiles: newProjectFiles });
+
+            if (autoPreviewController) {
+              autoPreviewController.setProjectFiles(newProjectFiles, curState.mainFilePath);
+            }
+
+            updateProjectFilesUI();
+          }
 
           // Trigger auto-preview with merged parameters
           if (autoPreviewController) {
@@ -12383,6 +12559,7 @@ if (rounded) {
             let totalImported = 0;
             let totalSkipped = 0;
             const errors = [];
+            let lastImportedPresets = [];
             
             for (const file of files) {
               try {
@@ -12402,6 +12579,9 @@ if (rounded) {
                 if (result.success) {
                   totalImported += result.imported;
                   totalSkipped += result.skipped || 0;
+                  if (result.presets?.length > 0) {
+                    lastImportedPresets = result.presets;
+                  }
                   console.log(`[Import] ${file.name}: ${result.imported} preset(s) imported`);
                 } else {
                   errors.push(`${file.name}: ${result.error}`);
@@ -12422,6 +12602,15 @@ if (rounded) {
               }
               alert(message);
               updatePresetDropdown();
+
+              // Auto-select the last imported preset so the user can find it
+              if (lastImportedPresets.length > 0) {
+                const lastPreset = lastImportedPresets[lastImportedPresets.length - 1];
+                if (lastPreset?.id) {
+                  setCurrentPresetSelection(lastPreset);
+                }
+              }
+
               // Refresh the modal
               closeManagePresetsModalHandler();
               showManagePresetsModal();
@@ -12488,12 +12677,25 @@ if (rounded) {
     }
 
     try {
+      // E2: Capture companion files (text-only, exclude images and main file)
+      const companionSnapshot = {};
+      if (state.projectFiles) {
+        for (const [path, content] of state.projectFiles.entries()) {
+          if (path !== state.mainFilePath && typeof content === 'string' && !content.startsWith('data:')) {
+            companionSnapshot[path] = content;
+          }
+        }
+      }
+
       // Save/overwrite the current preset with current parameters
       const savedPreset = presetManager.savePreset(
         state.uploadedFile.name,
         preset.name, // Use existing name - this will overwrite
         state.parameters,
-        { description: preset.description } // Preserve description
+        {
+          description: preset.description,
+          companionFiles: Object.keys(companionSnapshot).length > 0 ? companionSnapshot : null,
+        }
       );
 
       updateStatus(`Preset "${preset.name}" saved`, 'success');
@@ -12561,6 +12763,19 @@ if (rounded) {
 
   // Manage button: Import/export modal
   managePresetsBtn.addEventListener('click', showManagePresetsModal);
+
+  // Preset sort control: re-sort dropdown when sort order changes
+  const presetDropdownSort = document.getElementById('presetDropdownSort');
+  if (presetDropdownSort) {
+    presetDropdownSort.addEventListener('change', () => {
+      try {
+        localStorage.setItem(PRESET_SORT_KEY, presetDropdownSort.value);
+      } catch (_) { /* localStorage overflow — continue with in-memory value */ }
+      updatePresetDropdown();
+      const label = presetDropdownSort.options[presetDropdownSort.selectedIndex]?.text || '';
+      announceImmediate(`Presets sorted by ${label}`);
+    });
+  }
 
   // Update button states when preset selection changes
   presetSelect.addEventListener('change', () => {
@@ -12663,6 +12878,24 @@ if (rounded) {
     const preset = presetManager.loadPreset(state.uploadedFile.name, presetId);
 
     if (preset) {
+      // Check compatibility before applying
+      const hiddenParamNames = new Set(Object.keys(state.schema?.hiddenParameters || {}));
+      const compatibility = presetManager.analyzePresetCompatibility(
+        preset.parameters,
+        state.schema?.parameters || state.schema,
+        [...hiddenParamNames]
+      );
+      // Desktop OpenSCAD parity: silently apply matching parameters, skip extras.
+      // Desktop OpenSCAD never shows a compatibility warning dialog (confirmed from
+      // ParameterWidget.cc:476-502 -- it just skips unknown params with no else clause).
+      if (compatibility.extraParams.length > 0 || compatibility.missingParams.length > 0) {
+        console.info(
+          `[Preset] "${preset.name}": ${compatibility.applicableCount} params applied, ` +
+          `${compatibility.extraParams.length} skipped (not in current file), ` +
+          `${compatibility.missingParams.length} kept at defaults (not in preset)`
+        );
+      }
+
       // Set flag to prevent clearPresetSelection during load
       isLoadingPreset = true;
 
@@ -12670,7 +12903,6 @@ if (rounded) {
       // "When a dataset is loaded, only the parameters defined in the dataset
       //  are modified, other parameters are not set to defaults."
       // Hidden parameters are stored but not retrieved (desktop parity).
-      const hiddenParamNames = new Set(Object.keys(state.schema?.hiddenParameters || {}));
       const applicableParams = {};
       for (const [k, v] of Object.entries(preset.parameters)) {
         if (!hiddenParamNames.has(k)) applicableParams[k] = v;
@@ -12687,21 +12919,41 @@ if (rounded) {
         parametersContainer,
         (values) => {
           stateManager.setState({ parameters: values });
-          // Clear preset selection when parameters are manually changed
           clearPresetSelection(values);
           if (autoPreviewController) {
             autoPreviewController.onParameterChange(values);
           }
           updatePrimaryActionButton();
+          syncOverlayWithScreenshotParam(values);
         },
-        mergedParams // Pass merged values as initial values
+        mergedParams
       );
+
+      // E2: Swap companion files if the preset has them
+      if (preset.companionFiles && Object.keys(preset.companionFiles).length > 0) {
+        const newProjectFiles = state.projectFiles
+          ? new Map(state.projectFiles)
+          : new Map();
+
+        for (const [filename, content] of Object.entries(preset.companionFiles)) {
+          newProjectFiles.set(filename, content);
+        }
+
+        stateManager.setState({ projectFiles: newProjectFiles });
+
+        if (autoPreviewController) {
+          autoPreviewController.setProjectFiles(newProjectFiles, state.mainFilePath);
+        }
+
+        updateProjectFilesUI();
+      }
 
       // Trigger auto-preview with merged parameters
       if (autoPreviewController) {
         autoPreviewController.onParameterChange(mergedParams);
       }
       updatePrimaryActionButton();
+      syncOverlayWithScreenshotParam(mergedParams);
 
       // Track the currently loaded preset (for showing name in dropdown)
       setCurrentPresetSelection(preset);
@@ -12962,8 +13214,12 @@ if (rounded) {
    * Display ECHO/WARNING/ERROR messages for user communication
    * @param {string} output - Console output from OpenSCAD render
    */
-  function updateConsoleOutput(output) {
+  function updateConsoleOutput(output, { append = false } = {}) {
     if (!output || output.trim() === '') return;
+
+    if (!append) {
+      consolePanel.clear();
+    }
 
     lastConsoleOutput = output;
 
@@ -12996,6 +13252,8 @@ if (rounded) {
    * @param {string} output - Raw console output
    * @returns {{ type: 'echo'|'warning'|'error', text: string }[]}
    */
+  const _ERR_INFO_PATTERNS = /^(?:Geometries in cache|Geometry cache size|CGAL Polyhedrons in cache|CGAL cache size|Total rendering time|Top level object is|Status:\s|Genus:\s|Vertices:\s|Facets:\s|Could not initialize localization|Compiling design|Rendering design)/i;
+
   function extractConsoleMessages(output) {
     if (!output) return [];
 
@@ -13014,17 +13272,20 @@ if (rounded) {
         }
 
         if (trimmed.includes('WARNING:') || trimmed.includes('Warning:')) {
-          return { type: 'warning', text: trimmed };
+          const warnText = trimmed.startsWith('[ERR] ') ? trimmed.substring(6) : trimmed;
+          return { type: 'warning', text: warnText };
         }
 
-        if (
-          trimmed.includes('ERROR:') ||
-          trimmed.includes('Error:') ||
-          trimmed.startsWith('[ERR]')
-        ) {
-          const text = trimmed.startsWith('[ERR] ')
-            ? trimmed.substring(6)
-            : trimmed;
+        if (trimmed.includes('ERROR:') || trimmed.includes('Error:')) {
+          const errText = trimmed.startsWith('[ERR] ') ? trimmed.substring(6) : trimmed;
+          return { type: 'error', text: errText };
+        }
+
+        if (trimmed.startsWith('[ERR]')) {
+          const text = trimmed.substring(trimmed.startsWith('[ERR] ') ? 6 : 5).trim();
+          if (!text || _ERR_INFO_PATTERNS.test(text)) {
+            return null;
+          }
           return { type: 'error', text };
         }
 

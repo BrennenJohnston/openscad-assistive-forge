@@ -89,6 +89,63 @@ summary:focus-visible,
   transition: background-color var(--motion-base) ease;
 }
 
+/* Summary flex layout: label fills space, hide button sits at end before chevron */
+.param-group-summary {
+  display: flex;
+  align-items: center;
+}
+
+.param-group-summary > span:first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Hide button on each group header */
+.param-group-hide-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  margin-right: var(--space-xs);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--motion-base) ease, background-color var(--motion-base) ease;
+}
+
+.forge-disclosure summary:hover .param-group-hide-btn,
+.forge-disclosure summary:focus-within .param-group-hide-btn {
+  opacity: 1;
+}
+
+.param-group-hide-btn:hover {
+  background: var(--color-surface-hover);
+  border-color: var(--color-border);
+  color: var(--color-text-primary);
+}
+
+.param-group-hide-btn:focus-visible {
+  opacity: 1;
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+/* "Show all groups" action button */
+.param-groups-show-all {
+  width: 100%;
+  margin-top: var(--space-sm);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  text-align: center;
+}
+
 .forge-disclosure summary::-webkit-details-marker {
   display: none;
 }
@@ -1236,6 +1293,57 @@ summary:focus-visible,
   max-width: 500px;
 }
 
+/* Import mode dialog (merge vs replace) */
+.import-mode-dialog {
+  max-width: 440px;
+  padding: var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.import-mode-dialog h3 {
+  margin: 0;
+  font-size: var(--font-size-lg);
+  color: var(--color-text-primary);
+}
+
+.import-mode-dialog fieldset {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.import-mode-dialog legend {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  padding: 0 var(--space-xs);
+  color: var(--color-text-secondary);
+}
+
+.import-mode-option {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+}
+
+.import-mode-option input[type='radio'] {
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.import-mode-actions {
+  display: flex;
+  gap: var(--space-sm);
+  justify-content: flex-end;
+}
+
 .cache-clear-warning {
   display: flex;
   align-items: flex-start;
@@ -1865,6 +1973,51 @@ summary:focus-visible,
   height: 1px;
   background-color: var(--color-border);
   margin: var(--space-xs) 0;
+}
+
+/* Grid size setting group */
+.preview-setting-group {
+  flex-basis: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding-top: var(--space-xs);
+}
+
+.preview-setting-group-label {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.preview-setting-inline {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--font-size-sm);
+}
+
+.preview-setting-inline span {
+  min-width: 6rem;
+  color: var(--color-text-primary);
+}
+
+.preview-setting-inline select,
+.preview-setting-inline input[type='number'] {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-xs) var(--space-sm);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+}
+
+.preview-setting-inline input[type='number'] {
+  width: 5rem;
 }
 
 /* Preview setting hint text (used for engine toggle explanation) */
@@ -2776,7 +2929,8 @@ summary:focus-visible,
     max-height var(--motion-slow) ease,
     margin var(--motion-slow) ease,
     padding var(--motion-slow) ease;
-  overflow: hidden;
+  /* overflow:visible so help tooltips are not clipped */
+  overflow: visible;
 }
 
 /* Hidden state for dependent parameters */
@@ -2786,6 +2940,7 @@ summary:focus-visible,
   margin: 0;
   padding: 0;
   pointer-events: none;
+  overflow: hidden;
 }
 
 /* Reduced motion: instant show/hide */
@@ -2796,10 +2951,9 @@ summary:focus-visible,
 }
 
 .param-description {
-  display: block;
+  display: none;
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
-  margin-top: var(--space-xs);
   font-style: italic;
 }
 
@@ -2816,6 +2970,84 @@ summary:focus-visible,
   align-items: center;
   gap: var(--space-sm);
   margin-bottom: var(--space-sm);
+}
+
+/* --- Parameter Detail Level Modes ---------------------------------------- */
+
+/* Show Details: description on a new line below the label */
+[data-detail-level="show"] .param-label-container {
+  flex-wrap: wrap;
+}
+
+[data-detail-level="show"] .param-description {
+  display: block;
+  flex-basis: 100%;
+  order: 99;
+  margin-top: var(--space-2xs);
+}
+
+[data-detail-level="show"] .param-help-wrapper {
+  display: none;
+}
+
+/* Inline Details: description inline next to the label */
+[data-detail-level="inline"] .param-description {
+  display: inline;
+}
+
+[data-detail-level="inline"] .param-help-wrapper {
+  display: none;
+}
+
+/* Hide Details: description hidden, tooltip-only (default behavior) */
+[data-detail-level="hide"] .param-description {
+  display: none;
+}
+
+/* Description Only: description replaces label when description exists */
+[data-detail-level="desc-only"] .param-label-container[data-has-description] > label,
+[data-detail-level="desc-only"] .param-label-container[data-has-description] > .param-label-text {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+[data-detail-level="desc-only"] .param-description {
+  display: inline;
+  font-style: normal;
+  font-weight: 500;
+  color: var(--color-text-primary);
+}
+
+[data-detail-level="desc-only"] .param-help-wrapper {
+  display: none;
+}
+
+/* Detail level dropdown in param search bar */
+.param-detail-wrapper {
+  flex-shrink: 0;
+}
+
+.param-detail-select {
+  min-height: var(--size-touch-target);
+  padding: var(--space-xs) var(--space-sm);
+  font-size: var(--font-size-sm);
+  border: 1px solid var(--color-input-border);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-input-bg);
+  color: var(--color-text-primary);
+  cursor: pointer;
+}
+
+.param-detail-select:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus);
+  outline-offset: var(--focus-ring-offset);
 }
 
 .param-help-wrapper {
@@ -3253,6 +3485,50 @@ select:focus-visible {
   to {
     transform: rotate(360deg);
   }
+}
+
+/* Processing Overlay — shown during long operations (ZIP extraction, etc.) */
+.processing-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(12, 12, 12, 0.75);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  color: var(--color-text-primary, #fff);
+  gap: var(--space-md, 12px);
+  animation: fadeInOverlay 0.15s ease-out;
+}
+
+@keyframes fadeInOverlay {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.processing-overlay .processing-spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid var(--color-bg-secondary, #333);
+  border-top-color: var(--color-accent, #f4c400);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.processing-overlay .processing-message {
+  font-size: 1.1rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.processing-overlay .processing-hint {
+  font-size: 0.85rem;
+  opacity: 0.7;
+  text-align: center;
+  max-width: 340px;
 }
 
 /* ========================================
@@ -3864,6 +4140,14 @@ select:focus-visible {
   margin-bottom: var(--space-sm);
 }
 
+.preset-sort-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-top: var(--space-sm);
+  margin-bottom: var(--space-xs);
+}
+
 .preset-actions {
   display: flex;
   gap: var(--space-sm);
@@ -3999,6 +4283,10 @@ select:focus-visible {
   border-width: 2px;
 }
 
+:root[data-high-contrast='true'] .preset-sort-select {
+  border-width: 2px;
+}
+
 /* Preset Management Modal */
 .preset-modal {
   position: fixed;
@@ -4125,6 +4413,41 @@ body.first-visit-blocking #app {
 .modal-close:focus {
   outline: 3px solid var(--color-focus);
   outline-offset: 2px;
+}
+
+.preset-list-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-xs) 0 var(--space-sm);
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: var(--space-sm);
+}
+
+.preset-sort-label {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.preset-sort-select {
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-raised);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  transition: border-color var(--motion-base), box-shadow var(--motion-base);
+}
+
+.preset-sort-select:hover {
+  border-color: var(--color-accent);
+}
+
+.preset-sort-select:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: var(--focus-ring);
 }
 
 .preset-list {
@@ -4320,11 +4643,35 @@ body.first-visit-blocking #app {
   font-size: 0.9em;
 }
 
+/* Resolved state — file was added by user */
+.missing-dep-resolved .missing-dep-file {
+  color: var(--color-success, #38a169);
+  text-decoration: line-through;
+}
+
+.missing-dep-resolved::after {
+  content: '✓';
+  color: var(--color-success, #38a169);
+  font-weight: 700;
+  margin-left: var(--space-xs);
+}
+
+/* Added files counter */
+.missing-deps-added {
+  margin-top: var(--space-sm);
+  padding: var(--space-xs) var(--space-sm);
+  background: color-mix(in srgb, var(--color-success, #38a169) 12%, transparent);
+  border-radius: var(--border-radius-sm);
+  font-size: var(--font-size-sm);
+  color: var(--color-success, #38a169);
+}
+
 .missing-deps-modal .preset-form-actions {
   justify-content: flex-end;
   padding-top: var(--space-md);
   border-top: 1px solid var(--color-border);
   gap: var(--space-sm);
+  flex-wrap: wrap;
 }
 
 /* Console Output Panel -- displays ECHO, WARNING, ERROR messages from OpenSCAD */
@@ -6294,7 +6641,25 @@ body.first-visit-blocking #app {
 .lod-warning-actions {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
   gap: var(--space-sm);
+}
+
+.lod-warning-actions .btn-ghost {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  background: none;
+  border: none;
+  padding: var(--space-xs) var(--space-sm);
+  cursor: pointer;
+  opacity: 0.8;
+}
+
+.lod-warning-actions .btn-ghost:hover {
+  color: var(--color-text-primary);
+  opacity: 1;
 }
 
 /* High Contrast Mode */
