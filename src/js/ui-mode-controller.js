@@ -121,6 +121,12 @@ const PANEL_REGISTRY = [
     selector: '#designPanel',
     defaultHiddenInBasic: true,
   },
+  {
+    id: 'displayOptions',
+    label: 'Display Options',
+    selector: '#displayOptionsPanel',
+    defaultHiddenInBasic: true,
+  },
 ];
 
 /**

@@ -10,9 +10,14 @@ import { getAppPrefKey } from './storage-keys.js';
 // Storage keys using standardized naming convention
 const STORAGE_KEY_MEASUREMENTS = getAppPrefKey('measurements');
 const STORAGE_KEY_GRID = getAppPrefKey('grid');
+const STORAGE_KEY_GRID_SIZE = getAppPrefKey('grid-size');
 const STORAGE_KEY_AUTO_BED = getAppPrefKey('auto-bed');
 const STORAGE_KEY_CAMERA_COLLAPSED = getAppPrefKey('camera-controls-collapsed');
 const STORAGE_KEY_CAMERA_POSITION = getAppPrefKey('camera-controls-position');
+const STORAGE_KEY_LOD_WARNING_DISMISSED = getAppPrefKey('lod-warning-dismissed');
+
+/** Default grid config — 220×220mm matches most common consumer printers (Ender 3) */
+const DEFAULT_GRID_CONFIG = { widthMm: 220, heightMm: 220 };
 
 // Lazy-loaded Three.js modules - loaded on demand to reduce initial bundle size
 let THREE = null;
@@ -68,6 +73,11 @@ async function loadThreeJS() {
 
 export function isThreeJsLoaded() {
   return threeJsLoaded;
+}
+
+/** @returns {object|null} The THREE module if loaded, else null */
+export function getThreeModule() {
+  return THREE;
 }
 
 /**
@@ -150,6 +160,9 @@ export class PreviewManager {
 
     // Grid visibility
     this.gridEnabled = this.loadGridPreference();
+
+    // Grid size (mm) — configurable to match printer bed
+    this.gridConfig = this.loadGridSizePreference();
 
     // Camera projection mode (perspective or orthographic)
     this.projectionMode = 'perspective';
@@ -275,12 +288,7 @@ export class PreviewManager {
 
     // Add grid helper on XY plane (OpenSCAD's ground plane)
     // GridHelper by default creates a grid on XZ plane (Y-up), so we rotate it for Z-up
-    this.gridHelper = new THREE.GridHelper(
-      200,
-      20,
-      colors.gridPrimary,
-      colors.gridSecondary
-    );
+    this.gridHelper = this._createGridHelper(colors);
     // Rotate grid from XZ plane to XY plane (Z-up coordinate system)
     this.gridHelper.rotation.x = Math.PI / 2;
     // Apply saved grid visibility preference
@@ -458,12 +466,7 @@ export class PreviewManager {
         this.gridHelper.material.dispose();
       }
       // Note: linewidth is ignored in WebGL, relying on color contrast instead
-      this.gridHelper = new THREE.GridHelper(
-        200,
-        20,
-        colors.gridPrimary,
-        colors.gridSecondary
-      );
+      this.gridHelper = this._createGridHelper(colors);
       // Rotate grid from XZ plane to XY plane (Z-up coordinate system)
       this.gridHelper.rotation.x = Math.PI / 2;
       // Preserve grid visibility preference when recreating grid
@@ -1016,7 +1019,8 @@ export class PreviewManager {
    * @param {boolean} isCritical - Whether the model is critically large
    */
   showLODWarning(vertexCount, triangleCount, isCritical = false) {
-    // Remove any existing warning first
+    if (this.isLODWarningPermanentlyDismissed()) return;
+
     this.hideLODWarning();
 
     const warningLevel = isCritical ? 'critical' : 'warning';
@@ -1046,6 +1050,9 @@ export class PreviewManager {
         </p>
       </div>
       <div class="lod-warning-actions">
+        <button type="button" class="btn btn-sm btn-ghost" id="lodWarningDismissPermanent" aria-label="Don't show this warning again">
+          Don't show again
+        </button>
         <button type="button" class="btn btn-sm btn-outline" id="lodWarningDismiss" aria-label="Dismiss warning">
           Got it
         </button>
@@ -1054,10 +1061,12 @@ export class PreviewManager {
 
     this.container.appendChild(warningDiv);
 
-    // Add event listener to dismiss button
-    const dismissBtn = warningDiv.querySelector('#lodWarningDismiss');
-    dismissBtn?.addEventListener('click', () => {
+    warningDiv.querySelector('#lodWarningDismiss')?.addEventListener('click', () => {
       this.hideLODWarning();
+    });
+
+    warningDiv.querySelector('#lodWarningDismissPermanent')?.addEventListener('click', () => {
+      this.dismissLODWarningPermanently();
     });
 
     console.log(
@@ -1073,6 +1082,39 @@ export class PreviewManager {
     if (existingWarning) {
       existingWarning.remove();
     }
+  }
+
+  /**
+   * Permanently dismiss the LOD warning so it never reappears across renders.
+   * The preference is stored in localStorage and survives page reloads.
+   */
+  dismissLODWarningPermanently() {
+    try {
+      localStorage.setItem(STORAGE_KEY_LOD_WARNING_DISMISSED, 'true');
+    } catch { /* private browsing / quota — fall back silently */ }
+    this.hideLODWarning();
+    console.log('[Preview] LOD warning permanently dismissed by user');
+  }
+
+  /**
+   * @returns {boolean} Whether the user has permanently dismissed LOD warnings.
+   */
+  isLODWarningPermanentlyDismissed() {
+    try {
+      return localStorage.getItem(STORAGE_KEY_LOD_WARNING_DISMISSED) === 'true';
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Re-enable LOD warnings after a previous permanent dismiss.
+   */
+  resetLODWarningDismissal() {
+    try {
+      localStorage.removeItem(STORAGE_KEY_LOD_WARNING_DISMISSED);
+    } catch { /* ignore */ }
+    console.log('[Preview] LOD warning dismissal reset');
   }
 
   /**
@@ -1823,6 +1865,97 @@ export class PreviewManager {
   }
 
   /**
+   * Create a GridHelper using the current gridConfig dimensions.
+   * Divisions are auto-calculated at 1 per 10mm for a clean appearance.
+   * @param {Object} colors - Theme color object with gridPrimary/gridSecondary
+   * @returns {THREE.GridHelper}
+   */
+  _createGridHelper(colors) {
+    const { widthMm, heightMm } = this.gridConfig;
+    // Use the larger dimension as the GridHelper size (it's square), and scale
+    // height via geometry scaling so rectangular beds are represented correctly.
+    const size = Math.max(widthMm, heightMm);
+    const divisions = Math.round(size / 10);
+    const helper = new THREE.GridHelper(size, divisions, colors.gridPrimary, colors.gridSecondary);
+    // Stretch non-square beds by scaling the shorter axis
+    helper.scale.set(widthMm / size, 1, heightMm / size);
+    return helper;
+  }
+
+  /**
+   * Load grid size from localStorage
+   * @returns {{ widthMm: number, heightMm: number }}
+   */
+  loadGridSizePreference() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY_GRID_SIZE);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed.widthMm === 'number' && typeof parsed.heightMm === 'number') {
+          return { widthMm: parsed.widthMm, heightMm: parsed.heightMm };
+        }
+      }
+    } catch (_) {
+      // Fall through to default
+    }
+    return { ...DEFAULT_GRID_CONFIG };
+  }
+
+  /**
+   * Save grid size to localStorage
+   * @param {{ widthMm: number, heightMm: number }} config
+   */
+  saveGridSizePreference(config) {
+    try {
+      localStorage.setItem(STORAGE_KEY_GRID_SIZE, JSON.stringify(config));
+    } catch (error) {
+      console.warn('[Preview] Could not save grid size:', error);
+    }
+  }
+
+  /**
+   * Return a copy of the current grid config
+   * @returns {{ widthMm: number, heightMm: number }}
+   */
+  getGridSize() {
+    return { ...this.gridConfig };
+  }
+
+  /**
+   * Update the grid to new printer-bed dimensions and persist the preference.
+   * @param {number} widthMm - Bed width in mm (50–500)
+   * @param {number} heightMm - Bed height in mm (50–500)
+   */
+  setGridSize(widthMm, heightMm) {
+    const clamp = (v) => Math.min(500, Math.max(50, Number(v) || 220));
+    this.gridConfig = { widthMm: clamp(widthMm), heightMm: clamp(heightMm) };
+    this.saveGridSizePreference(this.gridConfig);
+
+    if (!this.scene || !this.gridHelper) return;
+
+    // Remove and dispose old grid
+    this.scene.remove(this.gridHelper);
+    if (this.gridHelper.geometry) this.gridHelper.geometry.dispose();
+    if (this.gridHelper.material) {
+      if (Array.isArray(this.gridHelper.material)) {
+        this.gridHelper.material.forEach((m) => m.dispose());
+      } else {
+        this.gridHelper.material.dispose();
+      }
+    }
+
+    // Recreate with new size using current theme colors
+    const themeKey = this.currentTheme || 'light';
+    const colors = PREVIEW_COLORS[themeKey] || PREVIEW_COLORS.light;
+    this.gridHelper = this._createGridHelper(colors);
+    this.gridHelper.rotation.x = Math.PI / 2;
+    this.gridHelper.visible = this.gridEnabled;
+    this.scene.add(this.gridHelper);
+
+    console.log(`[Preview] Grid size updated: ${this.gridConfig.widthMm}×${this.gridConfig.heightMm}mm`);
+  }
+
+  /**
    * Toggle auto-bed feature (place object on Z=0 build plate)
    * @param {boolean} enabled - Enable or disable auto-bed
    */
@@ -2342,6 +2475,34 @@ export class PreviewManager {
 
     console.log(
       `[Preview] Overlay fitted to model XY: ${this.overlayConfig.width.toFixed(1)} x ${this.overlayConfig.height.toFixed(1)} mm`
+    );
+  }
+
+  /**
+   * Resize the reference overlay to match explicit physical screen dimensions (mm).
+   * Use this to snap the overlay to a known tablet screen size selected from the
+   * tablet database (public/data/tablets.json) or from SCAD parameters.
+   *
+   * @param {number} widthMm - Screen width in mm
+   * @param {number} heightMm - Screen height in mm
+   */
+  fitOverlayToScreenDimensions(widthMm, heightMm) {
+    if (typeof widthMm !== 'number' || typeof heightMm !== 'number' || widthMm <= 0 || heightMm <= 0) {
+      console.warn('[Preview] fitOverlayToScreenDimensions: invalid dimensions', widthMm, heightMm);
+      return;
+    }
+
+    this.overlayConfig.width = widthMm;
+    this.overlayConfig.height = heightMm;
+    this.overlayConfig.offsetX = 0;
+    this.overlayConfig.offsetY = 0;
+
+    if (this.overlayConfig.enabled) {
+      this.createOrUpdateReferenceOverlay();
+    }
+
+    console.log(
+      `[Preview] Overlay sized to screen dimensions: ${widthMm} x ${heightMm} mm`
     );
   }
 

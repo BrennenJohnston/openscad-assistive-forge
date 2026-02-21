@@ -38,7 +38,7 @@ import {
   getQualityPreset,
   COMPLEXITY_TIER,
 } from './js/quality-tiers.js';
-import { PreviewManager } from './js/preview.js';
+import { PreviewManager, getThreeModule } from './js/preview.js';
 import {
   AutoPreviewController,
   PREVIEW_STATE,
@@ -153,6 +153,8 @@ import { initParamDetailController } from './js/param-detail-controller.js';
 import { getFileActionsController } from './js/file-actions-controller.js';
 import { getEditActionsController } from './js/edit-actions-controller.js';
 import { getDesignPanelController } from './js/design-panel-controller.js';
+import { getDisplayOptionsController } from './js/display-options-controller.js';
+import { getAnimationController } from './js/animation-controller.js';
 import { getEditorStateManager } from './js/editor-state-manager.js';
 import { TextareaEditor } from './js/textarea-editor.js';
 import {
@@ -2740,6 +2742,24 @@ async function initApp() {
     },
   });
   designPanelController.init();
+
+  // Initialize display options controller (Axes, Edges, Crosshairs, Wireframe)
+  const displayOptionsController = getDisplayOptionsController({
+    getPreviewManager: () => previewManager,
+    getThree: getThreeModule,
+  });
+  displayOptionsController.init();
+
+  // Initialize animation controller ($t animation)
+  const animationController = getAnimationController({
+    onTick: (t) => {
+      const state = stateManager.getState();
+      if (state.uploadedFile?.content && renderController) {
+        stateManager.setState({ animationT: t });
+      }
+    },
+  });
+  animationController.init();
 
   // Listen for "Save to Project" events from UI preferences panel
   document.addEventListener('ui-mode-save-to-project', (e) => {
@@ -14184,6 +14204,17 @@ if (rounded) {
   keyboardConfig.on('flushCaches', () => designPanelController.flushCaches());
   keyboardConfig.on('showAST', () => designPanelController.showAST());
   keyboardConfig.on('checkValidity', () => designPanelController.checkValidity());
+
+  // Display action shortcuts
+  keyboardConfig.on('viewAll', () => {
+    if (previewManager?.mesh) {
+      previewManager.fitCameraToModel();
+      announceImmediate('View fitted to model');
+    }
+  });
+  keyboardConfig.on('toggleAxes', () => displayOptionsController.toggle('axes'));
+  keyboardConfig.on('toggleEdges', () => displayOptionsController.toggle('edges'));
+  keyboardConfig.on('toggleAnimate', () => animationController.togglePlay());
 
   keyboardConfig.on('findReplace', () => {
     const modeManager = getModeManager();

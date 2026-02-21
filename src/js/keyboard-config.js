@@ -253,6 +253,32 @@ export const DEFAULT_SHORTCUTS = {
     key: 'F11',
     description: 'Check geometry validity',
   },
+
+  // Display / View
+  viewAll: {
+    key: 'v',
+    ctrl: true,
+    shift: true,
+    description: 'Fit model in view',
+  },
+  toggleAxes: {
+    key: 'a',
+    ctrl: true,
+    alt: true,
+    description: 'Toggle axes display',
+  },
+  toggleEdges: {
+    key: 'g',
+    ctrl: true,
+    alt: true,
+    description: 'Toggle edges overlay',
+  },
+  toggleAnimate: {
+    key: 'm',
+    ctrl: true,
+    alt: true,
+    description: 'Toggle animation playback',
+  },
 };
 
 /**
@@ -302,6 +328,10 @@ export const SHORTCUT_CATEGORIES = {
   design: {
     label: 'Design',
     actions: ['flushCaches', 'showAST', 'checkValidity'],
+  },
+  display: {
+    label: 'Display',
+    actions: ['viewAll', 'toggleAxes', 'toggleEdges', 'toggleAnimate'],
   },
 };
 
