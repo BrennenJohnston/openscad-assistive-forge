@@ -58,6 +58,7 @@ import {
   formatMissingDependencies,
 } from './js/dependency-checker.js';
 import { getConsolePanel } from './js/console-panel.js';
+import { getErrorLogPanel } from './js/error-log-panel.js';
 import { themeManager, initThemeToggle } from './js/theme-manager.js';
 import {
   presetManager,
@@ -13209,6 +13210,9 @@ if (rounded) {
   // Initialize ConsolePanel for ECHO/WARNING/ERROR display
   const consolePanel = getConsolePanel();
 
+  // Initialize ErrorLogPanel for structured error display
+  const errorLogPanel = getErrorLogPanel();
+
   /**
    * Update console output display
    * Display ECHO/WARNING/ERROR messages for user communication
@@ -13219,6 +13223,7 @@ if (rounded) {
 
     if (!append) {
       consolePanel.clear();
+      errorLogPanel.clear();
     }
 
     lastConsoleOutput = output;
@@ -13236,6 +13241,9 @@ if (rounded) {
     // Feed the ConsolePanel with parsed console output
     // This displays ECHO/WARNING/ERROR in the parameter panel
     consolePanel.addOutput(output);
+
+    // Feed the ErrorLogPanel with the same output for structured display
+    errorLogPanel.addOutput(output);
 
     // Extract ECHO/WARNING/ERROR messages and display in preview drawer
     const consoleMessages = extractConsoleMessages(output);

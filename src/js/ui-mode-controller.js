@@ -44,6 +44,12 @@ const PANEL_REGISTRY = [
     defaultHiddenInBasic: true,
   },
   {
+    id: 'errorLog',
+    label: 'Error Log',
+    selector: '#errorLogPanel',
+    defaultHiddenInBasic: true,
+  },
+  {
     id: 'codeEditor',
     label: 'Code Editor',
     selector: '#expertModeToggle, #expertModePanel',
@@ -240,16 +246,21 @@ export class UIModeController {
    */
   applyMode(mode) {
     const hiddenPanelIds = this._getEffectiveHiddenPanels();
+    const panelResults = [];
 
     for (const panel of PANEL_REGISTRY) {
       const elements = this._queryPanelElements(panel.selector);
+      const shouldHide = mode === 'basic' && hiddenPanelIds.includes(panel.id);
 
-      if (mode === 'basic' && hiddenPanelIds.includes(panel.id)) {
+      if (shouldHide) {
         elements.forEach((el) => el.classList.add(HIDDEN_CLASS));
       } else {
         elements.forEach((el) => el.classList.remove(HIDDEN_CLASS));
       }
+
+      panelResults.push({ id: panel.id, selector: panel.selector, elementsFound: elements.length, hidden: shouldHide });
     }
+
   }
 
   /**
@@ -269,6 +280,159 @@ export class UIModeController {
   }
 
   /**
+   * Get the current hidden panel list for export (project save / manifest sharing).
+   * @returns {{ defaultMode: UIMode, hiddenPanelsInBasic: string[] }}
+   */
+  getPreferencesForExport() {
+    return {
+      defaultMode: this.currentMode,
+      hiddenPanelsInBasic: this._getEffectiveHiddenPanels(),
+    };
+  }
+
+  /**
+   * Import UI preferences (from project metadata or manifest defaults).
+   * @param {Object} prefs
+   * @param {UIMode} [prefs.defaultMode]
+   * @param {string[]} [prefs.hiddenPanelsInBasic]
+   * @param {Object} [options]
+   * @param {boolean} [options.applyImmediately] - Apply mode after import
+   */
+  importPreferences(prefs, options = {}) {
+    if (!prefs || typeof prefs !== 'object') return;
+
+    if (Array.isArray(prefs.hiddenPanelsInBasic)) {
+      this._projectHiddenPanels = prefs.hiddenPanelsInBasic;
+    }
+
+    if (prefs.defaultMode === 'basic' || prefs.defaultMode === 'advanced') {
+      this.currentMode = prefs.defaultMode;
+    }
+
+    if (options.applyImmediately !== false) {
+      this.applyMode(this.currentMode);
+      this._updateToggleButton();
+    }
+  }
+
+  /**
+   * Update the user's default hidden panel list (saved to localStorage).
+   * @param {string} panelId - Panel ID to toggle
+   * @param {boolean} hidden - Whether the panel should be hidden in Basic mode
+   */
+  setPanelHidden(panelId, hidden) {
+    const validIds = PANEL_REGISTRY.map((p) => p.id);
+    if (!validIds.includes(panelId)) return;
+
+    const current = this._getEffectiveHiddenPanels();
+    const updated = hidden
+      ? [...new Set([...current, panelId])]
+      : current.filter((id) => id !== panelId);
+
+    this._saveHiddenPanels(updated);
+
+    if (this.currentMode === 'basic') {
+      this.applyMode('basic');
+    }
+  }
+
+  /**
+   * Reset hidden panel preferences to PANEL_REGISTRY defaults.
+   */
+  resetHiddenPanelsToDefaults() {
+    const defaults = PANEL_REGISTRY.filter((p) => p.defaultHiddenInBasic).map((p) => p.id);
+    this._saveHiddenPanels(defaults);
+    this._projectHiddenPanels = null;
+
+    if (this.currentMode === 'basic') {
+      this.applyMode('basic');
+    }
+  }
+
+  /**
+   * Render the preferences panel into the given container element.
+   * Uses safe DOM building (createElement + textContent) — no innerHTML.
+   * @param {HTMLElement} container - Element to render the preferences into
+   */
+  renderPreferencesPanel(container) {
+    if (!container) return;
+
+    container.textContent = '';
+
+    const heading = document.createElement('h4');
+    heading.className = 'ui-prefs-heading';
+    heading.textContent = 'Basic Mode: Hidden Panels';
+    heading.id = 'uiPrefsHeading';
+    container.appendChild(heading);
+
+    const description = document.createElement('p');
+    description.className = 'ui-prefs-description';
+    description.textContent = 'Select which panels are hidden when Basic mode is active. Parameter controls always remain visible.';
+    container.appendChild(description);
+
+    const group = document.createElement('div');
+    group.setAttribute('role', 'group');
+    group.setAttribute('aria-labelledby', 'uiPrefsHeading');
+    group.className = 'ui-prefs-group';
+
+    const hiddenPanels = this._getEffectiveHiddenPanels();
+
+    for (const panel of PANEL_REGISTRY) {
+      const label = document.createElement('label');
+      label.className = 'ui-prefs-item';
+
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.checked = hiddenPanels.includes(panel.id);
+      checkbox.dataset.panelId = panel.id;
+      checkbox.setAttribute('aria-label', `Hide ${panel.label} in Basic mode`);
+
+      checkbox.addEventListener('change', () => {
+        this.setPanelHidden(panel.id, checkbox.checked);
+        announceImmediate(
+          `${panel.label} will be ${checkbox.checked ? 'hidden' : 'visible'} in Basic mode`,
+          { clearDelayMs: 2000 }
+        );
+      });
+
+      const text = document.createElement('span');
+      text.textContent = panel.label;
+
+      label.appendChild(checkbox);
+      label.appendChild(text);
+      group.appendChild(label);
+    }
+
+    container.appendChild(group);
+
+    const actions = document.createElement('div');
+    actions.className = 'ui-prefs-actions';
+
+    const resetBtn = document.createElement('button');
+    resetBtn.type = 'button';
+    resetBtn.className = 'btn btn-sm btn-outline';
+    resetBtn.textContent = 'Reset to Defaults';
+    resetBtn.addEventListener('click', () => {
+      this.resetHiddenPanelsToDefaults();
+      this.renderPreferencesPanel(container);
+      announceImmediate('Panel preferences reset to defaults', { clearDelayMs: 2000 });
+    });
+    actions.appendChild(resetBtn);
+
+    const saveBtn = document.createElement('button');
+    saveBtn.type = 'button';
+    saveBtn.className = 'btn btn-sm btn-primary ui-prefs-save-project';
+    saveBtn.textContent = 'Save to Project';
+    saveBtn.title = 'Save these preferences to the current project so they transfer when shared';
+    saveBtn.addEventListener('click', () => {
+      this._savePreferencesToProject();
+    });
+    actions.appendChild(saveBtn);
+
+    container.appendChild(actions);
+  }
+
+  /**
    * Initialize the controller: show/hide toggle button per feature flag,
    * wire click handler, apply initial mode.
    */
@@ -285,6 +449,11 @@ export class UIModeController {
 
     btn.addEventListener('click', () => this.toggleMode());
     this._updateToggleButton();
+
+    const prefsContainer = document.getElementById('uiPrefsPanel');
+    if (prefsContainer) {
+      this.renderPreferencesPanel(prefsContainer);
+    }
   }
 
   // ============================================================================
@@ -364,7 +533,7 @@ export class UIModeController {
   }
 
   /**
-   * Update toggle button ARIA attributes to reflect current mode
+   * Update toggle button ARIA attributes and slider position class
    * @private
    */
   _updateToggleButton() {
@@ -373,11 +542,6 @@ export class UIModeController {
 
     const isAdvanced = this.currentMode === 'advanced';
     btn.setAttribute('aria-checked', String(isAdvanced));
-
-    const label = btn.querySelector('.ui-mode-label');
-    if (label) {
-      label.textContent = isAdvanced ? 'Advanced' : 'Basic';
-    }
 
     if (isAdvanced) {
       btn.setAttribute(
@@ -392,6 +556,7 @@ export class UIModeController {
       );
       btn.classList.add('ui-mode-toggle--basic');
     }
+
   }
 
   /**
@@ -476,6 +641,45 @@ export class UIModeController {
         console.warn('[UIModeController] Could not save preferences:', error);
       }
     }
+  }
+
+  /**
+   * Save the hidden panels list to localStorage (user default preferences).
+   * @param {string[]} hiddenPanelIds
+   * @private
+   */
+  _saveHiddenPanels(hiddenPanelIds) {
+    try {
+      const stored = localStorage.getItem(UI_MODE_STORAGE_KEY);
+      const existing = stored ? JSON.parse(stored) : {};
+      const prefs = { ...existing, hiddenPanels: hiddenPanelIds };
+      localStorage.setItem(UI_MODE_STORAGE_KEY, JSON.stringify(prefs));
+    } catch (error) {
+      if (error.name === 'QuotaExceededError') {
+        console.warn('[UIModeController] localStorage quota exceeded — hidden panels not saved');
+      } else {
+        console.warn('[UIModeController] Could not save hidden panels:', error);
+      }
+    }
+  }
+
+  /**
+   * Save UI preferences to the currently loaded project (dispatches custom event).
+   * The main app listens for this event and writes to IndexedDB project metadata.
+   * @private
+   */
+  _savePreferencesToProject() {
+    const prefs = this.getPreferencesForExport();
+
+    const event = new CustomEvent('ui-mode-save-to-project', {
+      detail: { uiPreferences: prefs },
+      bubbles: true,
+    });
+    document.dispatchEvent(event);
+
+    announceImmediate('UI preferences saved to current project', { clearDelayMs: 2000 });
+
+    console.log('[UIModeController] Preferences dispatched for project save:', prefs);
   }
 }
 
