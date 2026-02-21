@@ -279,6 +279,42 @@ export const DEFAULT_SHORTCUTS = {
     alt: true,
     description: 'Toggle animation playback',
   },
+
+  // Panel controls
+  toggleConsole: {
+    key: '1',
+    ctrl: true,
+    alt: true,
+    description: 'Toggle Console panel',
+  },
+  toggleErrorLog: {
+    key: '2',
+    ctrl: true,
+    alt: true,
+    description: 'Toggle Error Log panel',
+  },
+  toggleCodeEditor: {
+    key: '3',
+    ctrl: true,
+    alt: true,
+    description: 'Toggle Code Editor panel',
+  },
+  toggleCustomizer: {
+    key: '4',
+    ctrl: true,
+    alt: true,
+    description: 'Toggle Customizer panel',
+  },
+  nextPanel: {
+    key: ']',
+    ctrl: true,
+    description: 'Focus next panel',
+  },
+  prevPanel: {
+    key: '[',
+    ctrl: true,
+    description: 'Focus previous panel',
+  },
 };
 
 /**
@@ -332,6 +368,10 @@ export const SHORTCUT_CATEGORIES = {
   display: {
     label: 'Display',
     actions: ['viewAll', 'toggleAxes', 'toggleEdges', 'toggleAnimate'],
+  },
+  panels: {
+    label: 'Panels',
+    actions: ['toggleConsole', 'toggleErrorLog', 'toggleCodeEditor', 'toggleCustomizer', 'nextPanel', 'prevPanel'],
   },
 };
 

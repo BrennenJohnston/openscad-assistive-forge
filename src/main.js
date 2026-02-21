@@ -14216,6 +14216,16 @@ if (rounded) {
   keyboardConfig.on('toggleEdges', () => displayOptionsController.toggle('edges'));
   keyboardConfig.on('toggleAnimate', () => animationController.togglePlay());
 
+  keyboardConfig.on('toggleConsole', () => getUIModeController().togglePanelVisibility('consoleOutput'));
+  keyboardConfig.on('toggleErrorLog', () => getUIModeController().togglePanelVisibility('errorLog'));
+  keyboardConfig.on('toggleCodeEditor', () => getUIModeController().togglePanelVisibility('codeEditor'));
+  keyboardConfig.on('toggleCustomizer', () => {
+    const sidebar = document.querySelector('.sidebar');
+    if (sidebar) sidebar.classList.toggle('collapsed');
+  });
+  keyboardConfig.on('nextPanel', () => getUIModeController().cyclePanel(1));
+  keyboardConfig.on('prevPanel', () => getUIModeController().cyclePanel(-1));
+
   keyboardConfig.on('findReplace', () => {
     const modeManager = getModeManager();
     if (modeManager?.isExpertMode?.() && modeManager.getEditorInstance?.()) {

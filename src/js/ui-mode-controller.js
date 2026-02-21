@@ -402,8 +402,11 @@ export class UIModeController {
     const hiddenPanels = this._getEffectiveHiddenPanels();
 
     for (const panel of PANEL_REGISTRY) {
+      const row = document.createElement('div');
+      row.className = 'ui-prefs-item';
+
       const label = document.createElement('label');
-      label.className = 'ui-prefs-item';
+      label.className = 'ui-prefs-item-label';
 
       const checkbox = document.createElement('input');
       checkbox.type = 'checkbox';
@@ -424,7 +427,19 @@ export class UIModeController {
 
       label.appendChild(checkbox);
       label.appendChild(text);
-      group.appendChild(label);
+      row.appendChild(label);
+
+      const toggleBtn = document.createElement('button');
+      toggleBtn.type = 'button';
+      toggleBtn.className = 'btn btn-xs ui-prefs-quick-toggle';
+      toggleBtn.textContent = 'Toggle';
+      toggleBtn.setAttribute('aria-label', `Toggle ${panel.label} now`);
+      toggleBtn.addEventListener('click', () => {
+        this.togglePanelVisibility(panel.id);
+      });
+      row.appendChild(toggleBtn);
+
+      group.appendChild(row);
     }
 
     container.appendChild(group);
@@ -454,6 +469,77 @@ export class UIModeController {
     actions.appendChild(saveBtn);
 
     container.appendChild(actions);
+  }
+
+  /**
+   * Instantly toggle a panel's visibility (open/close for details, hidden class for others).
+   * @param {string} panelId - ID from PANEL_REGISTRY
+   */
+  togglePanelVisibility(panelId) {
+    const panel = PANEL_REGISTRY.find((p) => p.id === panelId);
+    if (!panel) return;
+
+    const elements = this._queryPanelElements(panel.selector);
+    if (elements.length === 0) return;
+
+    const primary = elements[0];
+    if (primary.tagName === 'DETAILS') {
+      primary.open = !primary.open;
+      announceImmediate(
+        `${panel.label} ${primary.open ? 'opened' : 'closed'}`,
+        { clearDelayMs: 1500 }
+      );
+      if (primary.open) {
+        primary.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    } else {
+      const isHidden = primary.classList.toggle(HIDDEN_CLASS);
+      announceImmediate(
+        `${panel.label} ${isHidden ? 'hidden' : 'shown'}`,
+        { clearDelayMs: 1500 }
+      );
+    }
+  }
+
+  /**
+   * Cycle focus to the next visible disclosure panel.
+   * @param {number} direction - 1 for next, -1 for previous
+   */
+  cyclePanel(direction = 1) {
+    const detailsPanels = PANEL_REGISTRY
+      .map((p) => {
+        const el = document.querySelector(p.selector.split(',')[0].trim());
+        return el && el.tagName === 'DETAILS' && !el.classList.contains(HIDDEN_CLASS)
+          ? { el, label: p.label }
+          : null;
+      })
+      .filter(Boolean);
+
+    if (detailsPanels.length === 0) return;
+
+    const focused = document.activeElement;
+    let currentIdx = detailsPanels.findIndex(
+      ({ el }) => el.contains(focused) || el === focused
+    );
+
+    if (currentIdx === -1) {
+      currentIdx = direction === 1 ? -1 : 0;
+    }
+
+    const nextIdx =
+      (currentIdx + direction + detailsPanels.length) % detailsPanels.length;
+    const target = detailsPanels[nextIdx];
+
+    if (!target.el.open) {
+      target.el.open = true;
+    }
+    const summary = target.el.querySelector('summary');
+    if (summary) {
+      summary.focus();
+      summary.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    announceImmediate(target.label, { clearDelayMs: 1500 });
   }
 
   /**

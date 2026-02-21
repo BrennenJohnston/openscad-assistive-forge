@@ -224,32 +224,71 @@ body {
 }
 
 /* ============================================================================
-   UI Mode Toggle Button (Basic / Advanced interface mode)
-   Matches .contrast-toggle pattern — same sizing, focus ring, token usage.
+   UI Mode Toggle — Slider-style segmented control (Basic / Advanced)
+   Both labels always visible; sliding highlight marks the active option.
+   Matches .contrast-toggle sizing and token usage.
    ============================================================================ */
 
 .ui-mode-toggle {
+  position: relative;
   background: var(--color-bg-primary);
   border: 1px solid var(--color-text-primary);
   border-radius: var(--border-radius-md);
-  color: var(--color-text-primary);
   cursor: pointer;
-  padding: var(--space-xs);
-  transition: all var(--motion-base) ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-xs);
-  min-width: var(--size-touch-target);
-  height: var(--size-touch-target);
+  padding: 0;
+  display: inline-grid;
+  grid-template-columns: 1fr 1fr;
+  min-height: var(--size-touch-target);
   flex-shrink: 0;
   font-size: var(--font-size-sm);
   font-weight: 600;
 }
 
+.ui-mode-option {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 var(--space-md);
+  color: var(--color-text-primary);
+  transition: color var(--motion-base) ease;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.ui-mode-slider {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 3px;
+  width: calc(50% - 3px);
+  background: var(--color-accent);
+  border-radius: calc(var(--border-radius-md) - 2px);
+  transition: transform var(--motion-base) ease;
+  pointer-events: none;
+}
+
+/* Advanced mode (default) — slider highlights the right option */
+.ui-mode-toggle:not(.ui-mode-toggle--basic) .ui-mode-slider {
+  transform: translateX(100%);
+}
+
+.ui-mode-toggle:not(.ui-mode-toggle--basic) .ui-mode-option--advanced {
+  color: var(--color-accent-text);
+}
+
+/* Basic mode — slider highlights the left option */
+.ui-mode-toggle--basic .ui-mode-slider {
+  transform: translateX(0);
+}
+
+.ui-mode-toggle--basic .ui-mode-option--basic {
+  color: var(--color-accent-text);
+}
+
 .ui-mode-toggle:hover {
-  background: var(--color-hover-bg);
-  transform: scale(1.05);
+  border-color: var(--color-accent);
 }
 
 .ui-mode-toggle:focus,
@@ -258,32 +297,11 @@ body {
   outline-offset: 2px;
 }
 
-.ui-mode-toggle:active {
-  transform: scale(0.95);
-}
-
-/* Active state when Basic mode is selected */
-.ui-mode-toggle--basic {
-  background: var(--color-accent);
-  color: var(--color-accent-text);
-  border-color: var(--color-accent);
-}
-
-/* High contrast mode: active states */
-:root[data-high-contrast='true'][data-theme='dark'] .ui-mode-toggle:focus,
-:root[data-high-contrast='true'][data-theme='dark'] .ui-mode-toggle:active,
-:root[data-high-contrast='true'][data-theme='dark'] .ui-mode-toggle:hover {
-  background: var(--color-accent) !important;
-  color: var(--color-accent-text) !important;
+/* High contrast mode: reinforce border on interaction */
+:root[data-high-contrast='true'] .ui-mode-toggle:focus,
+:root[data-high-contrast='true'] .ui-mode-toggle:hover {
   border-color: var(--color-accent) !important;
-}
-
-:root[data-high-contrast='true'][data-theme='light'] .ui-mode-toggle:focus,
-:root[data-high-contrast='true'][data-theme='light'] .ui-mode-toggle:active,
-:root[data-high-contrast='true'][data-theme='light'] .ui-mode-toggle:hover {
-  background: var(--color-accent) !important;
-  color: var(--color-accent-text) !important;
-  border-color: var(--color-accent) !important;
+  outline-color: var(--color-focus) !important;
 }
 
 /* Hidden panel class applied by UIModeController in Basic mode */
@@ -291,8 +309,97 @@ body {
   display: none !important;
 }
 
+/* ============================================================================
+   UI Preferences Panel (inside Advanced menu)
+   Checkbox list for customizing which panels are hidden in Basic mode.
+   ============================================================================ */
+
+.ui-prefs-panel {
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--space-md);
+  margin-top: var(--space-md);
+}
+
+.ui-prefs-heading {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold, 700);
+  margin: 0 0 var(--space-xs);
+  color: var(--color-text-primary);
+}
+
+.ui-prefs-description {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary, var(--color-text-primary));
+  margin: 0 0 var(--space-sm);
+  line-height: 1.4;
+}
+
+.ui-prefs-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-md);
+}
+
+.ui-prefs-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  padding: var(--space-xs) 0;
+  min-height: var(--size-touch-target);
+}
+
+.ui-prefs-item-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  cursor: pointer;
+  flex: 1;
+  min-width: 0;
+}
+
+.ui-prefs-item input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--color-accent);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.ui-prefs-quick-toggle {
+  flex-shrink: 0;
+  font-size: var(--font-size-xs);
+  padding: var(--space-xs) var(--space-sm);
+  min-height: var(--size-touch-target);
+}
+
+.ui-prefs-actions {
+  display: flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.ui-prefs-save-project {
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+  border: 1px solid var(--color-accent);
+}
+
+.ui-prefs-save-project:hover {
+  opacity: 0.9;
+}
+
+.ui-prefs-save-project:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .ui-mode-toggle {
+  .ui-mode-toggle,
+  .ui-mode-slider,
+  .ui-mode-option {
     transition: none;
   }
 }
@@ -1336,9 +1443,12 @@ body {
   font-style: italic;
 }
 
-/* View console button */
+/* View console button — aligned right to avoid overlap with status bar */
 .echo-view-console {
   font-size: var(--font-size-xs, 0.75rem);
+  display: block;
+  margin-left: auto;
+  width: fit-content;
 }
 
 /* Respect reduced motion */
