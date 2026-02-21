@@ -239,6 +239,20 @@ export const DEFAULT_SHORTCUTS = {
     ctrl: true,
     description: 'Find and replace in editor',
   },
+
+  // Design tools
+  flushCaches: {
+    key: 'F9',
+    description: 'Flush caches (files, libraries, geometry)',
+  },
+  showAST: {
+    key: 'F10',
+    description: 'Display parsed parameter AST',
+  },
+  checkValidity: {
+    key: 'F11',
+    description: 'Check geometry validity',
+  },
 };
 
 /**
@@ -284,6 +298,10 @@ export const SHORTCUT_CATEGORIES = {
   editing: {
     label: 'Editing',
     actions: ['copyViewportImage', 'jumpNextError', 'jumpPrevError', 'increaseFontSize', 'decreaseFontSize', 'findReplace'],
+  },
+  design: {
+    label: 'Design',
+    actions: ['flushCaches', 'showAST', 'checkValidity'],
   },
 };
 

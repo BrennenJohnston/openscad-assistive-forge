@@ -152,6 +152,7 @@ import { getUIModeController } from './js/ui-mode-controller.js';
 import { initParamDetailController } from './js/param-detail-controller.js';
 import { getFileActionsController } from './js/file-actions-controller.js';
 import { getEditActionsController } from './js/edit-actions-controller.js';
+import { getDesignPanelController } from './js/design-panel-controller.js';
 import { getEditorStateManager } from './js/editor-state-manager.js';
 import { TextareaEditor } from './js/textarea-editor.js';
 import {
@@ -2725,6 +2726,20 @@ async function initApp() {
     },
   });
   editActionsController.init();
+
+  // Initialize design panel controller (Flush Caches, Display AST, Check Validity, Geometry Info)
+  const designPanelController = getDesignPanelController({
+    getPreviewManager: () => previewManager,
+    getWorker: () => renderController?.worker || null,
+    getScadContent: () => stateManager.getState()?.uploadedFile?.content || '',
+    extractParameters,
+    onFlushComplete: () => {
+      stateManager.resetState();
+      const container = document.getElementById('parametersContainer');
+      if (container) container.textContent = '';
+    },
+  });
+  designPanelController.init();
 
   // Listen for "Save to Project" events from UI preferences panel
   document.addEventListener('ui-mode-save-to-project', (e) => {
@@ -14165,6 +14180,11 @@ if (rounded) {
   keyboardConfig.on('jumpPrevError', () => editActionsController.jumpToPrevError());
   keyboardConfig.on('increaseFontSize', () => editActionsController.increaseFontSize());
   keyboardConfig.on('decreaseFontSize', () => editActionsController.decreaseFontSize());
+  // Design action shortcuts
+  keyboardConfig.on('flushCaches', () => designPanelController.flushCaches());
+  keyboardConfig.on('showAST', () => designPanelController.showAST());
+  keyboardConfig.on('checkValidity', () => designPanelController.checkValidity());
+
   keyboardConfig.on('findReplace', () => {
     const modeManager = getModeManager();
     if (modeManager?.isExpertMode?.() && modeManager.getEditorInstance?.()) {

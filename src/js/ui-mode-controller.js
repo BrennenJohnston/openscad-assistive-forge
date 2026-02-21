@@ -115,6 +115,12 @@ const PANEL_REGISTRY = [
     selector: '#editToolsPanel',
     defaultHiddenInBasic: true,
   },
+  {
+    id: 'designTools',
+    label: 'Design Tools',
+    selector: '#designPanel',
+    defaultHiddenInBasic: true,
+  },
 ];
 
 /**

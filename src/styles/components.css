@@ -5187,6 +5187,92 @@ body.first-visit-blocking #app {
   color: var(--color-text-primary);
 }
 
+/* ---- Design Tools Panel ------------------------------------------------- */
+
+.design-panel-body {
+  padding: var(--space-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.design-panel-actions {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-sm);
+}
+
+.design-panel-btn {
+  min-height: var(--size-touch-target);
+}
+
+.design-validity-status {
+  font-size: var(--font-size-sm);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--border-radius-sm);
+  min-height: 0;
+  transition: background-color var(--motion-base);
+}
+
+.design-validity-status:empty {
+  display: none;
+}
+
+.design-validity-status[data-state='valid'] {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+}
+
+.design-validity-status[data-state='invalid'] {
+  background: var(--color-error-bg);
+  color: var(--color-error);
+}
+
+.design-geometry-info {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.design-geometry-dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-2xs) var(--space-md);
+  margin: 0;
+}
+
+.design-geometry-dl dt {
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.design-geometry-dl dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.design-ast-heading {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  margin: 0 0 var(--space-md);
+}
+
+.design-ast-content {
+  max-height: 60vh;
+  overflow: auto;
+  background: var(--color-bg-secondary);
+  padding: var(--space-md);
+  border-radius: var(--border-radius-sm);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-sm);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.design-ast-close {
+  margin-top: var(--space-md);
+  min-height: var(--size-touch-target);
+}
+
 /* ---- Camera Copy Values Grid -------------------------------------------- */
 
 .camera-copy-values {
