@@ -7471,9 +7471,10 @@ async function initApp() {
           return;
         }
 
+        let dismissOverlay = () => {};
         try {
           const fileSizeMB = (file.size / (1024 * 1024)).toFixed(1);
-          let dismissOverlay = showProcessingOverlay(
+          dismissOverlay = showProcessingOverlay(
             `Opening project (${fileSizeMB} MB)…`,
             'This may take a moment for large files. Please do not close or refresh the page.'
           );

@@ -223,7 +223,7 @@ for (const vp of VIEWPORTS) {
       await page.goto('/')
 
       // Listen for aria-live announcements
-      const announcements: string[] = []
+      const announcements = []
       page.on('console', (msg) => {
         if (msg.type() === 'log' && msg.text().includes('Moving to next')) {
           announcements.push(msg.text())
