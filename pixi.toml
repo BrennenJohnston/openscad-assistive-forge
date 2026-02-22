@@ -9,7 +9,7 @@
 #   2. Run `pixi install` to set up the environment
 #   3. Run tasks with `pixi run <task>`
 
-[project]
+[workspace]
 name = "openscad-assistive-forge"
 version = "4.1.0"
 description = "Accessibility-first web-based OpenSCAD customizer"

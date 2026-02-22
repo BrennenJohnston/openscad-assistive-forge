@@ -867,6 +867,31 @@
                     </svg>
                     <span class="btn-text">Import</span>
                   </button>
+                  <!-- Import Folder button — hidden by default; shown by JS when
+                       folder_import flag is on AND webkitdirectory is supported -->
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-outline"
+                    id="importFolderBtn"
+                    aria-label="Import project folder"
+                    title="Import Folder"
+                    hidden
+                  >
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"
+                      ></path>
+                    </svg>
+                    <span class="btn-text">Import Folder</span>
+                  </button>
                 </div>
               </div>
               <p class="saved-projects-description">
@@ -909,6 +934,14 @@
                 type="file"
                 id="importBackupInput"
                 accept=".zip,.json"
+                class="hidden"
+                aria-hidden="true"
+              />
+              <!-- Hidden folder input (shown when folder_import flag + webkitdirectory support) -->
+              <input
+                type="file"
+                id="importFolderInput"
+                webkitdirectory
                 class="hidden"
                 aria-hidden="true"
               />

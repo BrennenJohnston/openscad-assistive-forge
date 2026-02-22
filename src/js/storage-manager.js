@@ -658,6 +658,92 @@ export async function getDetailedStorageInfo() {
 }
 
 // ============================================================================
+// Folder Import (webkitdirectory)
+// ============================================================================
+
+/** Companion file extensions accepted alongside .scad source */
+const FOLDER_IMPORT_COMPANION_EXTS = new Set([
+  '.stl',
+  '.dxf',
+  '.svg',
+  '.dat',
+  '.csv',
+  '.png',
+  '.json',
+]);
+
+/**
+ * Import a project from a FileList produced by an `<input webkitdirectory>`.
+ * Uses the provided mainFilePath to identify the primary .scad entry point.
+ *
+ * @param {FileList|File[]} fileList - Files from the folder selection
+ * @param {string} mainFilePath - Relative path of the primary .scad file (webkitRelativePath)
+ * @returns {Promise<{success: boolean, id?: string, error?: string}>}
+ */
+export async function importProjectFromFiles(fileList, mainFilePath) {
+  try {
+    const files = Array.from(fileList);
+    const mainFile = files.find((f) => f.webkitRelativePath === mainFilePath);
+    if (!mainFile) {
+      return { success: false, error: `Main file not found: ${mainFilePath}` };
+    }
+
+    const mainContent = await mainFile.text();
+    const rootDir = mainFilePath.includes('/')
+      ? mainFilePath.split('/')[0]
+      : '';
+
+    // Collect companion files (non-hidden, allowed extensions)
+    const projectFiles = {};
+    projectFiles[mainFilePath.replace(`${rootDir}/`, '') || mainFilePath] =
+      mainContent;
+
+    for (const f of files) {
+      if (f === mainFile) continue;
+      const rel = f.webkitRelativePath || f.name;
+      const baseName = rel.split('/').pop();
+
+      if (baseName.startsWith('.')) continue; // hidden file
+
+      const ext = baseName.includes('.')
+        ? `.${baseName.split('.').pop().toLowerCase()}`
+        : '';
+
+      if (!FOLDER_IMPORT_COMPANION_EXTS.has(ext) && ext !== '.scad') continue;
+
+      try {
+        const content = await f.text();
+        const relPath = rootDir
+          ? rel.replace(`${rootDir}/`, '')
+          : rel;
+        projectFiles[relPath] = content;
+      } catch {
+        // Binary files (e.g. PNG) — skip text reading for now
+      }
+    }
+
+    const projectName = rootDir || mainFile.name.replace('.scad', '');
+    const mainRelPath = rootDir
+      ? mainFilePath.replace(`${rootDir}/`, '')
+      : mainFilePath;
+
+    const result = await saveProject({
+      name: projectName,
+      originalName: mainFile.name,
+      kind: 'zip',
+      mainFilePath: mainRelPath,
+      content: mainContent,
+      projectFiles,
+      notes: '',
+    });
+
+    return result;
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+// ============================================================================
 // Backup/Export System (v2)
 // ============================================================================
 

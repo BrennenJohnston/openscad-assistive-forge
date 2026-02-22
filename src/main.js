@@ -94,6 +94,7 @@ import {
   getDetailedStorageInfo,
   exportProjectsBackup,
   importProjectsBackup,
+  importProjectFromFiles,
 } from './js/storage-manager.js';
 import {
   showWorkflowProgress,
@@ -2688,6 +2689,169 @@ async function initApp() {
         await handleImportBackup(file);
         importBackupInput.value = ''; // Reset for next import
       }
+    });
+  }
+
+  // Folder import — gated behind feature flag and webkitdirectory feature detection
+  if (
+    _isEnabled('folder_import') &&
+    'webkitdirectory' in document.createElement('input')
+  ) {
+    const importFolderBtn = document.getElementById('importFolderBtn');
+    const importFolderInput = document.getElementById('importFolderInput');
+
+    if (importFolderBtn) importFolderBtn.hidden = false;
+
+    if (importFolderBtn && importFolderInput) {
+      importFolderBtn.addEventListener('click', () => {
+        importFolderInput.value = '';
+        importFolderInput.click();
+      });
+
+      importFolderInput.addEventListener('change', async (e) => {
+        const files = e.target.files;
+        if (!files || files.length === 0) return;
+        await handleFolderImport(files);
+        importFolderInput.value = '';
+      });
+    }
+  }
+
+  /**
+   * Handle a folder selection from the webkitdirectory input.
+   * @param {FileList} files - FileList from <input webkitdirectory>
+   */
+  async function handleFolderImport(files) {
+    const fileArr = Array.from(files);
+
+    // Size guards
+    const MAX_FILES = 100;
+    const MAX_BYTES = 50 * 1024 * 1024; // 50 MB
+    const WARN_FILES = 50;
+
+    const totalBytes = fileArr.reduce((sum, f) => sum + f.size, 0);
+
+    if (fileArr.length > MAX_FILES) {
+      alert(
+        `The selected folder contains ${fileArr.length} files (limit: ${MAX_FILES}). ` +
+          `Please select a smaller project folder.`
+      );
+      return;
+    }
+
+    if (totalBytes > MAX_BYTES) {
+      const mb = (totalBytes / 1024 / 1024).toFixed(1);
+      alert(
+        `The selected folder is ${mb} MB (limit: 50 MB). ` +
+          `Please select a smaller project folder.`
+      );
+      return;
+    }
+
+    if (fileArr.length > WARN_FILES) {
+      console.warn(
+        `[FolderImport] ${fileArr.length} files selected — user may have accidentally chosen a parent directory.`
+      );
+    }
+
+    // Find the root directory name (all files share the same first path segment)
+    const rootDir = fileArr[0]?.webkitRelativePath?.split('/')[0] || '';
+
+    // Detect .scad files in the root
+    const scadInRoot = fileArr.filter((f) => {
+      const rel = f.webkitRelativePath || f.name;
+      const parts = rel.split('/');
+      return parts.length === 2 && parts[1].endsWith('.scad');
+    });
+
+    const scadAnywhere = fileArr.filter((f) =>
+      (f.webkitRelativePath || f.name).endsWith('.scad')
+    );
+
+    let mainFilePath = null;
+
+    if (scadInRoot.length === 1) {
+      mainFilePath = scadInRoot[0].webkitRelativePath;
+    } else if (scadInRoot.length > 1) {
+      // Multiple .scad in root — prompt user
+      mainFilePath = await _promptScadSelection(
+        scadInRoot.map((f) => f.webkitRelativePath),
+        'Multiple .scad files found in the folder root. Select the main file:'
+      );
+    } else if (scadAnywhere.length > 0) {
+      // No .scad in root but found in subdirs
+      mainFilePath = await _promptScadSelection(
+        scadAnywhere.map((f) => f.webkitRelativePath),
+        'No .scad files found in the folder root. Select the main file:'
+      );
+    } else {
+      alert('No OpenSCAD (.scad) files found in the selected folder.');
+      return;
+    }
+
+    if (!mainFilePath) return; // user cancelled the selection
+
+    updateStatus('Importing folder…');
+
+    const result = await importProjectFromFiles(files, mainFilePath);
+
+    if (result.success) {
+      updateStatus(`Folder imported: ${rootDir || mainFilePath}`);
+      await renderSavedProjectsList();
+    } else {
+      alert(`Folder import failed: ${result.error}`);
+    }
+  }
+
+  /**
+   * Show a modal prompting the user to select one .scad file from a list.
+   * @param {string[]} paths - webkitRelativePath values to choose from
+   * @param {string} prompt - Heading text
+   * @returns {Promise<string|null>} Selected path, or null if cancelled
+   */
+  async function _promptScadSelection(paths, prompt) {
+    return new Promise((resolve) => {
+      const dialog = document.createElement('dialog');
+      dialog.className = 'folder-scad-select-dialog';
+      dialog.setAttribute('aria-labelledby', 'scadSelectTitle');
+
+      const optionsHtml = paths
+        .map(
+          (p, i) =>
+            `<label class="import-mode-option">
+              <input type="radio" name="scadFile" value="${p}"${i === 0 ? ' checked' : ''} />
+              <span>${p.split('/').pop()}</span>
+            </label>`
+        )
+        .join('');
+
+      dialog.innerHTML = `
+        <form method="dialog" class="import-mode-form">
+          <h3 id="scadSelectTitle" class="import-mode-title">${prompt}</h3>
+          <fieldset class="import-mode-fieldset">
+            <legend class="import-mode-legend">Select main .scad file</legend>
+            ${optionsHtml}
+          </fieldset>
+          <div class="import-mode-actions">
+            <button type="submit" value="ok" class="btn btn-primary">Import</button>
+            <button type="submit" value="cancel" class="btn btn-outline">Cancel</button>
+          </div>
+        </form>`;
+
+      document.body.appendChild(dialog);
+      dialog.showModal();
+
+      dialog.addEventListener(
+        'close',
+        () => {
+          const returnValue = dialog.returnValue;
+          const selected =
+            dialog.querySelector('input[name="scadFile"]:checked')?.value || null;
+          document.body.removeChild(dialog);
+          resolve(returnValue === 'ok' ? selected : null);
+        },
+        { once: true }
+      );
     });
   }
 
