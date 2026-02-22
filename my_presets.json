@@ -1,0 +1,84 @@
+{
+  "presets": [
+    {
+      "name": "Small Gift Box",
+      "description": "A compact box for small gifts or trinkets",
+      "values": {
+        "box_width": 60,
+        "box_depth": 40,
+        "box_height": 35,
+        "wall_thickness": 2.0,
+        "include_lid": "yes",
+        "lid_fit_gap": 0.3,
+        "rounded_corners": "yes",
+        "corner_radius": 4,
+        "add_feet": "yes",
+        "foot_height": 2
+      }
+    },
+    {
+      "name": "Desktop Tray",
+      "description": "Wide, shallow tray for desk organization",
+      "values": {
+        "box_width": 150,
+        "box_depth": 100,
+        "box_height": 25,
+        "wall_thickness": 2.5,
+        "include_lid": "no",
+        "lid_fit_gap": 0.3,
+        "rounded_corners": "yes",
+        "corner_radius": 6,
+        "add_feet": "yes",
+        "foot_height": 3
+      }
+    },
+    {
+      "name": "Tall Storage Box",
+      "description": "Tall box for pens, brushes, or remotes",
+      "values": {
+        "box_width": 80,
+        "box_depth": 50,
+        "box_height": 120,
+        "wall_thickness": 2.0,
+        "include_lid": "no",
+        "lid_fit_gap": 0.3,
+        "rounded_corners": "yes",
+        "corner_radius": 5,
+        "add_feet": "yes",
+        "foot_height": 2
+      }
+    },
+    {
+      "name": "Snap-Lid Keepsake Box",
+      "description": "Tight-fitting lid for storing small keepsakes",
+      "values": {
+        "box_width": 90,
+        "box_depth": 65,
+        "box_height": 45,
+        "wall_thickness": 3.0,
+        "include_lid": "yes",
+        "lid_fit_gap": 0.2,
+        "rounded_corners": "yes",
+        "corner_radius": 8,
+        "add_feet": "yes",
+        "foot_height": 3
+      }
+    },
+    {
+      "name": "No-Frills Utility Box",
+      "description": "Sharp corners, no feet — prints fast and stacks well",
+      "values": {
+        "box_width": 100,
+        "box_depth": 60,
+        "box_height": 50,
+        "wall_thickness": 2.0,
+        "include_lid": "no",
+        "lid_fit_gap": 0.3,
+        "rounded_corners": "no",
+        "corner_radius": 3,
+        "add_feet": "no",
+        "foot_height": 2
+      }
+    }
+  ]
+}
