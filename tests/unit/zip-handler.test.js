@@ -1,5 +1,14 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { validateZipFile, scanIncludes, resolveIncludePath, getZipStats, createFileTree, extractZipFiles } from '../../src/js/zip-handler.js'
+import {
+  validateZipFile,
+  scanIncludes,
+  resolveIncludePath,
+  getZipStats,
+  createFileTree,
+  extractZipFiles,
+  resolveProjectFile,
+  buildPresetCompanionMap,
+} from '../../src/js/zip-handler.js'
 import JSZip from 'jszip'
 
 describe('ZIP Handler', () => {
@@ -461,6 +470,208 @@ describe('ZIP Handler', () => {
       const stats = getZipStats(files)
       
       expect(stats.otherFiles).toBe(3)
+    })
+  })
+
+  describe('Image extraction as data URLs', () => {
+    it('should extract PNG files as data URLs', async () => {
+      const zip = new JSZip()
+      zip.file('main.scad', 'cube([10, 10, 10]);')
+      zip.file('screenshot.png', new Uint8Array([137, 80, 78, 71])) // PNG magic bytes
+
+      const zipBlob = await zip.generateAsync({ type: 'blob' })
+      const result = await extractZipFiles(zipBlob)
+
+      expect(result.files.has('screenshot.png')).toBe(true)
+      const value = result.files.get('screenshot.png')
+      expect(value).toMatch(/^data:image\/png;base64,/)
+    })
+
+    it('should extract JPG files with jpeg MIME type', async () => {
+      const zip = new JSZip()
+      zip.file('main.scad', 'cube([10, 10, 10]);')
+      zip.file('photo.jpg', new Uint8Array([0xff, 0xd8, 0xff])) // JPEG magic bytes
+
+      const zipBlob = await zip.generateAsync({ type: 'blob' })
+      const result = await extractZipFiles(zipBlob)
+
+      expect(result.files.has('photo.jpg')).toBe(true)
+      const value = result.files.get('photo.jpg')
+      expect(value).toMatch(/^data:image\/jpeg;base64,/)
+    })
+
+    it('should still skip non-image binary files', async () => {
+      const zip = new JSZip()
+      zip.file('main.scad', 'cube([10, 10, 10]);')
+      zip.file('model.stl', new Uint8Array([0x73, 0x74, 0x6c])) // fake STL
+
+      const zipBlob = await zip.generateAsync({ type: 'blob' })
+      const result = await extractZipFiles(zipBlob)
+
+      expect(result.files.has('model.stl')).toBe(false)
+    })
+
+    it('should extract nested PNG files preserving path', async () => {
+      const zip = new JSZip()
+      zip.file('main.scad', 'cube([10, 10, 10]);')
+      zip.file('SVG files/iPad/default.png', new Uint8Array([137, 80, 78, 71]))
+
+      const zipBlob = await zip.generateAsync({ type: 'blob' })
+      const result = await extractZipFiles(zipBlob)
+
+      expect(result.files.has('SVG files/iPad/default.png')).toBe(true)
+      expect(result.files.get('SVG files/iPad/default.png')).toMatch(
+        /^data:image\/png;base64,/
+      )
+    })
+  })
+
+  describe('resolveProjectFile', () => {
+    it('should return content on exact key match', () => {
+      const files = new Map([
+        ['default.svg', '<svg/>'],
+        ['other.svg', '<svg2/>'],
+      ])
+      const result = resolveProjectFile(files, 'default.svg')
+      expect(result).not.toBeNull()
+      expect(result.key).toBe('default.svg')
+      expect(result.content).toBe('<svg/>')
+    })
+
+    it('should return content on basename fallback when one match', () => {
+      const files = new Map([
+        ['SVG files/iPad/CoughDrop/QC 60.svg', '<svg/>'],
+        ['main.scad', '// scad'],
+      ])
+      const result = resolveProjectFile(files, 'QC 60.svg')
+      expect(result).not.toBeNull()
+      expect(result.key).toBe('SVG files/iPad/CoughDrop/QC 60.svg')
+    })
+
+    it('should return null when basename matches multiple files (ambiguous)', () => {
+      const files = new Map([
+        ['SVG files/iPad/App1/default.svg', '<svg1/>'],
+        ['SVG files/iPad/App2/default.svg', '<svg2/>'],
+      ])
+      const result = resolveProjectFile(files, 'default.svg')
+      expect(result).toBeNull()
+    })
+
+    it('should return null when no match exists', () => {
+      const files = new Map([['main.scad', '// code']])
+      const result = resolveProjectFile(files, 'default.svg')
+      expect(result).toBeNull()
+    })
+
+    it('should return null for empty inputs', () => {
+      expect(resolveProjectFile(null, 'file.svg')).toBeNull()
+      expect(resolveProjectFile(new Map(), '')).toBeNull()
+    })
+
+    it('should prefer exact key over basename match', () => {
+      const files = new Map([
+        ['default.svg', '<root svg/>'],
+        ['sub/default.svg', '<nested svg/>'],
+      ])
+      const result = resolveProjectFile(files, 'default.svg')
+      expect(result).not.toBeNull()
+      expect(result.key).toBe('default.svg')
+      expect(result.content).toBe('<root svg/>')
+    })
+  })
+
+  describe('buildPresetCompanionMap', () => {
+    function makeFiles(entries) {
+      return new Map(entries)
+    }
+
+    it('should return empty map for empty inputs', () => {
+      expect(buildPresetCompanionMap(null, null).size).toBe(0)
+      expect(buildPresetCompanionMap(new Map(), {}).size).toBe(0)
+    })
+
+    it('should map preset to the best-matching openings path', () => {
+      // Use multi-char differentiators so the tokeniser can distinguish paths.
+      // Token "7" (len 1) is filtered; "AlphaTab", "BetaTab", "TouchChat", "Snap" are not.
+      const files = makeFiles([
+        ['main.scad', '// scad'],
+        ['openings_and_additions.txt', 'default'],
+        ['Cases/AlphaTab/TouchChat/openings_and_additions.txt', 'at tc'],
+        ['Cases/AlphaTab/Snap/openings_and_additions.txt', 'at snap'],
+        ['Cases/BetaTab/TouchChat/openings_and_additions.txt', 'bt tc'],
+      ])
+      const parameterSets = {
+        'AlphaTab TouchChat': {},
+        'AlphaTab Snap': {},
+        'BetaTab TouchChat': {},
+      }
+      const map = buildPresetCompanionMap(files, parameterSets)
+
+      expect(map.get('AlphaTab TouchChat').openingsPath).toBe(
+        'Cases/AlphaTab/TouchChat/openings_and_additions.txt'
+      )
+      expect(map.get('AlphaTab Snap').openingsPath).toBe(
+        'Cases/AlphaTab/Snap/openings_and_additions.txt'
+      )
+      expect(map.get('BetaTab TouchChat').openingsPath).toBe(
+        'Cases/BetaTab/TouchChat/openings_and_additions.txt'
+      )
+    })
+
+    it('should set openingsPath null when scores are tied (ambiguous)', () => {
+      const files = makeFiles([
+        ['main.scad', '// scad'],
+        ['Cases/Alpha/openings_and_additions.txt', 'alpha'],
+        ['Cases/Beta/openings_and_additions.txt', 'beta'],
+      ])
+      // Preset name tokens score equally on both paths
+      const parameterSets = { 'Cases Device': {} }
+      const map = buildPresetCompanionMap(files, parameterSets)
+      // Both paths score equally for tokens ['cases', 'device']
+      // 'cases' matches both paths, 'device' matches neither — tie
+      expect(map.get('Cases Device').openingsPath).toBeNull()
+    })
+
+    it('should map preset to the best-matching SVG path', () => {
+      const files = makeFiles([
+        ['main.scad', '// scad'],
+        ['openings_and_additions.txt', 'default'],
+        ['SVG files/iPad 7/App1/icon.svg', '<svg1/>'],
+        ['SVG files/iPad 7/App2/icon.svg', '<svg2/>'],
+        ['Cases/iPad 7/App1/openings_and_additions.txt', 'ipad7-app1'],
+        ['Cases/iPad 7/App2/openings_and_additions.txt', 'ipad7-app2'],
+      ])
+      const parameterSets = { 'iPad 7 App1': {}, 'iPad 7 App2': {} }
+      const map = buildPresetCompanionMap(files, parameterSets)
+
+      expect(map.get('iPad 7 App1').svgPath).toBe('SVG files/iPad 7/App1/icon.svg')
+      expect(map.get('iPad 7 App2').svgPath).toBe('SVG files/iPad 7/App2/icon.svg')
+    })
+
+    it('should skip "design default values" preset name', () => {
+      const files = makeFiles([
+        ['main.scad', '// scad'],
+        ['Cases/A/openings_and_additions.txt', 'a'],
+        ['Cases/B/openings_and_additions.txt', 'b'],
+      ])
+      const parameterSets = {
+        'design default values': {},
+        'Preset A': {},
+      }
+      const map = buildPresetCompanionMap(files, parameterSets)
+      expect(map.has('design default values')).toBe(false)
+      expect(map.has('Preset A')).toBe(true)
+    })
+
+    it('should not map openings when openings file is not aliasable (single path)', () => {
+      const files = makeFiles([
+        ['main.scad', '// scad'],
+        ['openings_and_additions.txt', 'only one'],
+      ])
+      const parameterSets = { 'Preset A': {} }
+      const map = buildPresetCompanionMap(files, parameterSets)
+      // Single instance — not aliasable, no mapping needed
+      expect(map.get('Preset A').openingsPath).toBeNull()
     })
   })
 })
