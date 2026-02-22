@@ -1571,6 +1571,26 @@ function _disableAltViewWithPreview(toggleBtn) {
 }
 
 /**
+ * Export the current render result in the given format from a toolbar menu action.
+ * Reads from state directly so it doesn't depend on the outputFormatSelect element.
+ *
+ * @param {string} format - Format key from OUTPUT_FORMATS (e.g. 'stl', 'obj')
+ */
+function _exportFormatFromMenu(format) {
+  const state = stateManager.getState();
+  if (!state.stl) {
+    alert('No rendered model to export. Run Render first.');
+    return;
+  }
+  const filename = generateFilename(
+    state.uploadedFile?.name || 'model',
+    state.parameters || {},
+    format
+  );
+  downloadFile(state.stl, filename, format);
+}
+
+/**
  * Apply toolbar bar / workflow progress mutual exclusion based on UI mode.
  *
  * Advanced mode: toolbar visible, workflowProgress hidden.
@@ -2762,6 +2782,133 @@ async function initApp() {
     },
   });
   fileActionsController.init();
+
+  // ── Toolbar: File menu ──────────────────────────────────────────────────
+  getToolbarMenuController().registerMenuBuilder('file', () => {
+    const state = stateManager.getState();
+    const hasFile = Boolean(state.uploadedFile);
+    const hasRender = Boolean(state.stl);
+
+    // Recent Files submenu items (filenames only; actual re-open via onOpenRecent callback)
+    const recentItems =
+      fileActionsController.recentFiles.length > 0
+        ? fileActionsController.recentFiles.map((entry) => ({
+            type: 'action',
+            label: entry.name,
+            handler: () => fileActionsController.onOpenRecent(entry),
+          }))
+        : [{ type: 'action', label: 'No recent files', disabled: true }];
+
+    // Export submenu: one item per output format
+    const exportItems = Object.entries(OUTPUT_FORMATS).map(([key, fmt]) => ({
+      type: 'action',
+      label: fmt.name,
+      enabled: hasRender,
+      tooltip: hasRender ? fmt.description : 'Render the model first',
+      handler: () => _exportFormatFromMenu(key),
+    }));
+
+    return [
+      {
+        type: 'action',
+        label: 'New File',
+        shortcutAction: 'newFile',
+        handler: () => fileActionsController.onNew(),
+      },
+      {
+        type: 'action',
+        label: 'Open File\u2026',
+        handler: () => document.getElementById('fileInput')?.click(),
+      },
+      {
+        type: 'action',
+        label: 'Recent File',
+        disabled: true,
+        tooltip: 'Coming soon',
+      },
+      { type: 'submenu', label: 'Recent Files', items: recentItems },
+      { type: 'separator' },
+      {
+        type: 'submenu',
+        label: 'Examples',
+        disabled: true,
+        tooltip: 'Coming soon',
+      },
+      {
+        type: 'action',
+        label: 'Reload',
+        shortcutAction: 'reloadFile',
+        enabled: hasFile,
+        tooltip: hasFile ? undefined : 'Open a file first',
+        handler: () => fileActionsController.onReload(),
+      },
+      { type: 'separator' },
+      {
+        type: 'action',
+        label: 'New Window',
+        disabled: true,
+        tooltip: 'Coming soon — single-window web app',
+      },
+      {
+        type: 'action',
+        label: 'Open in New Window',
+        disabled: true,
+        tooltip: 'Coming soon — single-window web app',
+      },
+      {
+        type: 'action',
+        label: 'Close',
+        handler: () => document.getElementById('clearFileBtn')?.click(),
+      },
+      { type: 'separator' },
+      {
+        type: 'action',
+        label: 'Save',
+        shortcutAction: 'saveFile',
+        enabled: hasFile,
+        tooltip: hasFile ? undefined : 'Open a file first',
+        handler: () => fileActionsController.onSave(),
+      },
+      {
+        type: 'action',
+        label: 'Save As\u2026',
+        shortcutAction: 'saveFileAs',
+        enabled: hasFile,
+        tooltip: hasFile ? undefined : 'Open a file first',
+        handler: () => fileActionsController.onSaveAs(),
+      },
+      {
+        type: 'action',
+        label: 'Save All',
+        disabled: true,
+        tooltip: 'Coming soon',
+      },
+      { type: 'separator' },
+      { type: 'submenu', label: 'Export', items: exportItems },
+      {
+        type: 'action',
+        label: 'Export Image',
+        shortcutAction: 'exportImage',
+        enabled: hasFile,
+        tooltip: hasFile ? undefined : 'Open a file first',
+        handler: () => fileActionsController.onExportImage(),
+      },
+      { type: 'separator' },
+      {
+        type: 'action',
+        label: 'Show Library Folder',
+        disabled: true,
+        tooltip: 'Coming soon',
+      },
+      { type: 'separator' },
+      {
+        type: 'action',
+        label: 'Quit',
+        disabled: true,
+        tooltip: 'Coming soon — use browser tab close',
+      },
+    ];
+  });
 
   // Initialize edit actions controller (Copy viewport, camera values, error nav, font size)
   const editActionsController = getEditActionsController({

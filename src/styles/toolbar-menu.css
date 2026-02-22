@@ -203,6 +203,34 @@
   content: '✓ ';
 }
 
+/* Submenu arrow */
+.menu-submenu-arrow {
+  font-size: var(--font-size-2xs);
+  flex-shrink: 0;
+  transition: transform 150ms ease;
+}
+
+.menu-submenu-details[open] > .menu-submenu-summary .menu-submenu-arrow {
+  transform: rotate(90deg);
+}
+
+/* Nested submenu list */
+.menu-items-list--nested {
+  padding-left: var(--space-md);
+  border-left: var(--border-width-thin) solid var(--color-border);
+  margin: var(--space-xs) 0 var(--space-xs) var(--space-md);
+}
+
+/* summary resets — <details>/<summary> natively handles open/close */
+.menu-submenu-summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.menu-submenu-summary::-webkit-details-marker {
+  display: none;
+}
+
 /* ============================================================================
    Theme Variants
    ============================================================================ */
@@ -228,7 +256,8 @@
 @media (prefers-reduced-motion: reduce) {
   .toolbar-menu-btn,
   .toolbar-menu-close,
-  .menu-item-btn {
+  .menu-item-btn,
+  .menu-submenu-arrow {
     transition: none;
   }
 }

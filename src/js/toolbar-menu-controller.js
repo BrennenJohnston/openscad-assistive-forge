@@ -48,6 +48,13 @@ export class ToolbarMenuController {
 
     /** @type {Function|null} Optional global action callback */
     this._onMenuAction = null;
+
+    /**
+     * Per-menu builder functions called on each open to get fresh item definitions.
+     * Builder receives no arguments and returns an Object[] of menu item definitions.
+     * @type {Map<string, Function>}
+     */
+    this._menuBuilders = new Map();
   }
 
   /**
@@ -106,6 +113,9 @@ export class ToolbarMenuController {
 
     // Close sibling menu if one is open
     this.closeAllMenus();
+
+    // Rebuild menu content from its builder (gets fresh enabled/checked state)
+    this.refreshMenuState(menuId);
 
     const modal = this._modals.get(menuId);
 
@@ -212,13 +222,28 @@ export class ToolbarMenuController {
   }
 
   /**
-   * Re-query dynamic enabled/checked states for a menu's items.
-   * Stub in Phase 1; populated per-menu in Phases 2-7.
+   * Register a builder function for a menu.
+   * The builder is called each time the menu opens to obtain fresh item
+   * definitions with up-to-date enabled/checked/content state.
    *
-   * @param {string} _menuId
+   * @param {string} menuId
+   * @param {Function} builderFn - () => Object[] — returns menu item definitions
    */
-  refreshMenuState(_menuId) {
-    // Populated in phases 2-7 when per-menu definitions are added.
+  registerMenuBuilder(menuId, builderFn) {
+    this._menuBuilders.set(menuId, builderFn);
+  }
+
+  /**
+   * Rebuild a menu's content by calling its registered builder.
+   * No-op if no builder is registered for the menu.
+   *
+   * @param {string} menuId
+   */
+  refreshMenuState(menuId) {
+    const builder = this._menuBuilders.get(menuId);
+    if (builder) {
+      this.renderMenuContent(menuId, builder());
+    }
   }
 
   // ============================================================================
@@ -240,22 +265,23 @@ export class ToolbarMenuController {
    * Build a single <li> menu item element from a declarative definition.
    *
    * Supported item types:
-   *   separator  — horizontal rule
-   *   action     — plain button (default)
-   *   toggle     — button with aria-pressed
-   *   radio      — button acting as a radio option (visual indicator via CSS)
-   *   submenu    — button with nested items (stub for Phase 1)
+   *   separator — <li role="separator">
+   *   action    — plain <button> (default when type is omitted)
+   *   toggle    — <button aria-pressed="true/false">
+   *   radio     — <button> with checked indicator (inside fieldset, caller's responsibility)
+   *   submenu   — <details>/<summary> with nested <ul> of child items
    *
    * @param {Object} item
-   * @param {string} item.type
+   * @param {string} [item.type='action']
    * @param {string} [item.id]
    * @param {string} [item.label]
    * @param {boolean} [item.enabled] - When false, renders as aria-disabled
    * @param {boolean} [item.disabled] - Alias for enabled=false
    * @param {string} [item.tooltip]
-   * @param {boolean} [item.checked] - For toggles and radios
+   * @param {boolean} [item.checked] - For toggles
    * @param {string} [item.shortcutAction] - Key in keyboardConfig for shortcut display
    * @param {Function} [item.handler]
+   * @param {Object[]} [item.items] - Child items for type='submenu'
    * @returns {HTMLLIElement}
    * @private
    */
@@ -266,6 +292,10 @@ export class ToolbarMenuController {
       sep.setAttribute('role', 'separator');
       sep.setAttribute('aria-hidden', 'true');
       return sep;
+    }
+
+    if (item.type === 'submenu') {
+      return this._buildSubmenuItem(item);
     }
 
     const li = document.createElement('li');
@@ -313,6 +343,76 @@ export class ToolbarMenuController {
     }
 
     li.appendChild(btn);
+    return li;
+  }
+
+  /**
+   * Build a submenu <li> using <details>/<summary> for native keyboard
+   * expand/collapse without requiring ARIA menu patterns.
+   *
+   * @param {Object} item
+   * @returns {HTMLLIElement}
+   * @private
+   */
+  _buildSubmenuItem(item) {
+    const li = document.createElement('li');
+    li.className = 'menu-item menu-item--submenu';
+
+    const isDisabled = item.enabled === false || item.disabled === true;
+
+    if (isDisabled) {
+      // Render as a plain disabled button when the submenu itself is coming soon
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'menu-item-btn';
+      btn.setAttribute('aria-disabled', 'true');
+      if (item.tooltip) btn.setAttribute('title', item.tooltip);
+
+      const labelSpan = document.createElement('span');
+      labelSpan.className = 'menu-item-label';
+      labelSpan.textContent = item.label || '';
+      btn.appendChild(labelSpan);
+
+      const arrow = document.createElement('span');
+      arrow.className = 'menu-submenu-arrow';
+      arrow.setAttribute('aria-hidden', 'true');
+      arrow.textContent = '▶';
+      btn.appendChild(arrow);
+
+      li.appendChild(btn);
+      return li;
+    }
+
+    const details = document.createElement('details');
+    details.className = 'menu-submenu-details';
+
+    const summary = document.createElement('summary');
+    summary.className = 'menu-item-btn menu-submenu-summary';
+    if (item.tooltip) summary.setAttribute('title', item.tooltip);
+
+    const labelSpan = document.createElement('span');
+    labelSpan.className = 'menu-item-label';
+    labelSpan.textContent = item.label || '';
+    summary.appendChild(labelSpan);
+
+    const arrow = document.createElement('span');
+    arrow.className = 'menu-submenu-arrow';
+    arrow.setAttribute('aria-hidden', 'true');
+    arrow.textContent = '▶';
+    summary.appendChild(arrow);
+
+    details.appendChild(summary);
+
+    const nestedUl = document.createElement('ul');
+    nestedUl.className = 'menu-items-list menu-items-list--nested';
+
+    const childItems = Array.isArray(item.items) ? item.items : [];
+    for (const child of childItems) {
+      nestedUl.appendChild(this._buildMenuItem(child));
+    }
+
+    details.appendChild(nestedUl);
+    li.appendChild(details);
     return li;
   }
 }
