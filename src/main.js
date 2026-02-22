@@ -4952,6 +4952,7 @@ async function initApp() {
   const gridPresetSaveError = document.getElementById('gridPresetSaveError');
   const gridPresetDeleteRow = document.getElementById('gridPresetDeleteRow');
   const deleteGridPresetBtn = document.getElementById('deleteGridPresetBtn');
+  const gridSizeDims = document.getElementById('gridSizeDims');
 
   function applyGridSize(widthMm, heightMm) {
     if (!previewManager) return;
@@ -5002,6 +5003,7 @@ async function initApp() {
     const isCustom = val === 'custom';
     const isUserPreset = val.startsWith(USER_GRID_PREFIX);
 
+    if (gridSizeDims) gridSizeDims.hidden = !isCustom;
     if (gridPresetSaveRow) gridPresetSaveRow.hidden = !isCustom;
     if (gridPresetDeleteRow) gridPresetDeleteRow.hidden = !isUserPreset;
     if (gridPresetSaveError) gridPresetSaveError.textContent = '';

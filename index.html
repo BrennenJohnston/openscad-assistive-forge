@@ -2928,56 +2928,73 @@
                           class="preview-setting-group-label"
                           >Grid size</span
                         >
-                        <label class="preview-setting-inline">
-                          <span>Preset</span>
+                        <!-- Compact single-row: [Preset ▼] [W × H] (dims only shown for Custom) -->
+                        <div class="grid-size-compact-row">
+                          <label for="gridPresetSelect" class="sr-only"
+                            >Printer bed preset</label
+                          >
                           <select
                             id="gridPresetSelect"
+                            class="grid-preset-select"
                             aria-label="Printer bed preset"
                           >
                             <option value="220x220">
-                              220 x 220 mm (Ender 3)
+                              220 × 220 mm (Ender 3)
                             </option>
                             <option value="256x256">
-                              256 x 256 mm (Prusa MK4)
+                              256 × 256 mm (Prusa MK4)
                             </option>
                             <option value="235x235">
-                              235 x 235 mm (Ender 3 V2)
+                              235 × 235 mm (Ender 3 V2)
                             </option>
                             <option value="300x300">
-                              300 x 300 mm (CR-10)
+                              300 × 300 mm (CR-10)
                             </option>
                             <option value="350x350">
-                              350 x 350 mm (Large format)
+                              350 × 350 mm (Large format)
                             </option>
-                            <option value="custom">Custom...</option>
+                            <option value="custom">Custom…</option>
                           </select>
-                        </label>
-                        <label class="preview-setting-inline">
-                          <span>Width (mm)</span>
-                          <input
-                            type="number"
-                            id="gridWidthInput"
-                            min="50"
-                            max="500"
-                            value="220"
-                            aria-describedby="gridSizeHelp"
-                          />
-                        </label>
-                        <label class="preview-setting-inline">
-                          <span>Height (mm)</span>
-                          <input
-                            type="number"
-                            id="gridHeightInput"
-                            min="50"
-                            max="500"
-                            value="220"
-                          />
-                        </label>
+                          <span
+                            class="grid-size-dims"
+                            id="gridSizeDims"
+                            hidden
+                          >
+                            <label for="gridWidthInput" class="sr-only"
+                              >Width mm</label
+                            >
+                            <input
+                              type="number"
+                              id="gridWidthInput"
+                              class="grid-dim-input"
+                              min="50"
+                              max="500"
+                              value="220"
+                              aria-describedby="gridSizeHelp"
+                              aria-label="Grid width in mm"
+                            />
+                            <span aria-hidden="true" class="grid-dim-separator"
+                              >×</span
+                            >
+                            <label for="gridHeightInput" class="sr-only"
+                              >Height mm</label
+                            >
+                            <input
+                              type="number"
+                              id="gridHeightInput"
+                              class="grid-dim-input"
+                              min="50"
+                              max="500"
+                              value="220"
+                              aria-label="Grid height in mm"
+                            />
+                          </span>
+                        </div>
                         <span id="gridSizeHelp" class="sr-only"
                           >Enter printer bed dimensions in millimetres to set
                           the grid size</span
                         >
-                        <!-- Save custom grid preset row -->
+                        <!-- Save custom grid preset row (shown when Custom is selected) -->
                         <div
                           class="grid-preset-save-row"
                           id="gridPresetSaveRow"
@@ -3009,7 +3026,7 @@
                             aria-live="polite"
                           ></span>
                         </div>
-                        <!-- User custom grid presets delete toolbar (shown when user presets exist) -->
+                        <!-- Delete row (shown when a user-saved preset is selected) -->
                         <div
                           class="grid-preset-delete-row"
                           id="gridPresetDeleteRow"

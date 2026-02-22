@@ -2178,6 +2178,79 @@ summary:focus-visible,
   width: 5rem;
 }
 
+/* Compact grid size row: [Preset select] [W × H inputs] on one line */
+.grid-size-compact-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex-wrap: wrap;
+}
+
+.grid-preset-select {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-xs) var(--space-sm);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+
+.grid-size-dims {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex-shrink: 0;
+}
+
+.grid-dim-input {
+  width: 4.5rem;
+  padding: var(--space-xs) var(--space-sm);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  text-align: center;
+}
+
+.grid-dim-input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: var(--focus-ring);
+}
+
+.grid-dim-separator {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  user-select: none;
+}
+
+/* High contrast overrides for compact grid row */
+:root[data-high-contrast='true'] .grid-preset-select,
+:root[data-high-contrast='true'] .grid-dim-input {
+  border-width: 2px;
+}
+
+/* Forced Colors Mode */
+@media (forced-colors: active) {
+  .grid-preset-select,
+  .grid-dim-input {
+    border: 1px solid ButtonText;
+    background: Field;
+    color: FieldText;
+    forced-color-adjust: none;
+  }
+
+  .grid-dim-input:focus,
+  .grid-preset-select:focus {
+    border-color: Highlight;
+    outline: 2px solid Highlight;
+  }
+}
+
 /* Custom grid preset save / delete rows */
 .grid-preset-save-row,
 .grid-preset-delete-row {
