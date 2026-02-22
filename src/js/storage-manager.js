@@ -5,6 +5,7 @@
  */
 
 import { isValidServiceWorkerMessage } from './html-utils.js';
+import { getAppPrefKey } from './storage-keys.js';
 import {
   listSavedProjects,
   listFolders,
@@ -22,6 +23,7 @@ import {
 const FIRST_VISIT_KEY = 'openscad-forge-first-visit-seen';
 const STORAGE_PREFS_KEY = 'openscad-forge-storage-prefs';
 const PERSISTENCE_KEY = 'openscad-forge-persistence-requested';
+const CUSTOM_GRID_PRESETS_KEY = getAppPrefKey('custom-grid-presets');
 
 /**
  * Check if this is the user's first visit
@@ -673,6 +675,15 @@ export async function exportProjectsBackup() {
     const folders = await listFolders();
     const projects = await listSavedProjects();
 
+    // Load custom grid presets for inclusion in backup
+    let customGridPresets = [];
+    try {
+      const raw = localStorage.getItem(CUSTOM_GRID_PRESETS_KEY);
+      if (raw) customGridPresets = JSON.parse(raw) || [];
+    } catch (_) {
+      /* ignore */
+    }
+
     // Create manifest
     const manifest = {
       version: '2.0',
@@ -687,6 +698,8 @@ export async function exportProjectsBackup() {
         createdAt: f.createdAt,
       })),
       projects: [],
+      // Custom grid presets — ignored by standard OpenSCAD desktop
+      customGridPresets,
     };
 
     // Add each project to the ZIP
@@ -968,6 +981,43 @@ export async function importProjectsBackup(file) {
       } catch (error) {
         result.errors.push(
           `Error importing project ${projectRef.name}: ${error.message}`
+        );
+      }
+    }
+
+    // Restore custom grid presets (additive merge — skip duplicates by name)
+    if (
+      Array.isArray(manifest.customGridPresets) &&
+      manifest.customGridPresets.length > 0
+    ) {
+      try {
+        let existing = [];
+        const raw = localStorage.getItem(CUSTOM_GRID_PRESETS_KEY);
+        if (raw) existing = JSON.parse(raw) || [];
+
+        const existingNames = new Set(existing.map((p) => p.name));
+        const toAdd = manifest.customGridPresets.filter(
+          (p) =>
+            p &&
+            typeof p.name === 'string' &&
+            typeof p.widthMm === 'number' &&
+            typeof p.heightMm === 'number' &&
+            !existingNames.has(p.name)
+        );
+
+        if (toAdd.length > 0) {
+          localStorage.setItem(
+            CUSTOM_GRID_PRESETS_KEY,
+            JSON.stringify([...existing, ...toAdd])
+          );
+          console.log(
+            `[StorageManager] Restored ${toAdd.length} custom grid preset(s)`
+          );
+        }
+      } catch (err) {
+        console.warn(
+          '[StorageManager] Failed to restore custom grid presets:',
+          err
         );
       }
     }

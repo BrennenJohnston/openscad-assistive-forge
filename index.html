@@ -2977,6 +2977,53 @@
                           >Enter printer bed dimensions in millimetres to set
                           the grid size</span
                         >
+                        <!-- Save custom grid preset row -->
+                        <div
+                          class="grid-preset-save-row"
+                          id="gridPresetSaveRow"
+                          hidden
+                        >
+                          <label for="gridPresetNameInput" class="sr-only"
+                            >Custom preset name</label
+                          >
+                          <input
+                            type="text"
+                            id="gridPresetNameInput"
+                            class="grid-preset-name-input"
+                            placeholder="Preset name…"
+                            maxlength="80"
+                            aria-describedby="gridPresetSaveError"
+                          />
+                          <button
+                            type="button"
+                            id="saveGridPresetBtn"
+                            class="btn btn-sm btn-primary"
+                            aria-label="Save custom grid size preset"
+                          >
+                            Save
+                          </button>
+                          <span
+                            id="gridPresetSaveError"
+                            class="grid-preset-error"
+                            role="alert"
+                            aria-live="polite"
+                          ></span>
+                        </div>
+                        <!-- User custom grid presets delete toolbar (shown when user presets exist) -->
+                        <div
+                          class="grid-preset-delete-row"
+                          id="gridPresetDeleteRow"
+                          hidden
+                        >
+                          <button
+                            type="button"
+                            id="deleteGridPresetBtn"
+                            class="btn btn-sm btn-outline btn-danger-outline"
+                            aria-label="Delete selected custom grid preset"
+                          >
+                            Delete preset
+                          </button>
+                        </div>
                       </div>
                       <label class="preview-setting">
                         <input

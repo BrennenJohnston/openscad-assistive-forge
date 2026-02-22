@@ -14,6 +14,7 @@ import { getAppPrefKey } from './storage-keys.js';
 const STORAGE_KEY_MEASUREMENTS = getAppPrefKey('measurements');
 const STORAGE_KEY_GRID = getAppPrefKey('grid');
 const STORAGE_KEY_GRID_SIZE = getAppPrefKey('grid-size');
+const STORAGE_KEY_CUSTOM_GRID_PRESETS = getAppPrefKey('custom-grid-presets');
 const STORAGE_KEY_AUTO_BED = getAppPrefKey('auto-bed');
 const STORAGE_KEY_CAMERA_COLLAPSED = getAppPrefKey('camera-controls-collapsed');
 const STORAGE_KEY_CAMERA_POSITION = getAppPrefKey('camera-controls-position');
@@ -1999,6 +2000,100 @@ export class PreviewManager {
     console.log(
       `[Preview] Grid size updated: ${this.gridConfig.widthMm}×${this.gridConfig.heightMm}mm`
     );
+  }
+
+  /**
+   * Load user-saved custom grid presets from localStorage.
+   * @returns {Array<{name: string, widthMm: number, heightMm: number}>}
+   */
+  loadCustomGridPresets() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY_CUSTOM_GRID_PRESETS);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (_) {
+      // fall through
+    }
+    return [];
+  }
+
+  /**
+   * Save a new custom grid preset. Validates bounds and name uniqueness.
+   *
+   * @param {string} name - User-provided preset name (non-empty, non-whitespace-only)
+   * @param {number} widthMm - Width in mm (integer, 50–500)
+   * @param {number} heightMm - Height in mm (integer, 50–500)
+   * @returns {{ success: boolean, error?: string }}
+   */
+  saveCustomGridPreset(name, widthMm, heightMm) {
+    const trimmedName = (name || '').trim();
+    if (!trimmedName) {
+      return { success: false, error: 'Preset name cannot be empty.' };
+    }
+
+    const w = Math.round(Number(widthMm));
+    const h = Math.round(Number(heightMm));
+
+    if (!Number.isFinite(w) || w < 50 || w > 500) {
+      return {
+        success: false,
+        error: `Width must be an integer between 50 and 500 mm (got ${widthMm}).`,
+      };
+    }
+    if (!Number.isFinite(h) || h < 50 || h > 500) {
+      return {
+        success: false,
+        error: `Height must be an integer between 50 and 500 mm (got ${heightMm}).`,
+      };
+    }
+
+    const existing = this.loadCustomGridPresets();
+
+    if (existing.some((p) => p.name === trimmedName)) {
+      return {
+        success: false,
+        error: `A custom preset named "${trimmedName}" already exists.`,
+      };
+    }
+
+    existing.push({ name: trimmedName, widthMm: w, heightMm: h });
+
+    try {
+      localStorage.setItem(
+        STORAGE_KEY_CUSTOM_GRID_PRESETS,
+        JSON.stringify(existing)
+      );
+    } catch (error) {
+      return {
+        success: false,
+        error: `Could not save preset: ${error.message}`,
+      };
+    }
+
+    return { success: true };
+  }
+
+  /**
+   * Delete a user custom grid preset by name.
+   * @param {string} name - Exact preset name to remove
+   * @returns {boolean} True if a preset was removed
+   */
+  deleteCustomGridPreset(name) {
+    const existing = this.loadCustomGridPresets();
+    const next = existing.filter((p) => p.name !== name);
+    if (next.length === existing.length) return false;
+
+    try {
+      localStorage.setItem(
+        STORAGE_KEY_CUSTOM_GRID_PRESETS,
+        JSON.stringify(next)
+      );
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   /**

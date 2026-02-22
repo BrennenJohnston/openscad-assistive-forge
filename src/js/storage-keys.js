@@ -117,6 +117,9 @@ export const PRESERVED_KEYS = [
   'openscad-customizer-presets',
   'openscad-forge-presets-v1',
 
+  // Grid size user presets (managed by preview.js)
+  'openscad-forge-custom-grid-presets',
+
   // Saved projects use IndexedDB primarily
   'openscad-saved-projects',
   'openscad-saved-folders',

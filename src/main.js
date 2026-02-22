@@ -4942,10 +4942,16 @@ async function initApp() {
     });
   }
 
-  // Wire grid size preset selector and custom inputs
+  // Wire grid size preset selector, custom inputs, and user-saved custom presets
   const gridPresetSelect = document.getElementById('gridPresetSelect');
   const gridWidthInput = document.getElementById('gridWidthInput');
   const gridHeightInput = document.getElementById('gridHeightInput');
+  const gridPresetSaveRow = document.getElementById('gridPresetSaveRow');
+  const gridPresetNameInput = document.getElementById('gridPresetNameInput');
+  const saveGridPresetBtn = document.getElementById('saveGridPresetBtn');
+  const gridPresetSaveError = document.getElementById('gridPresetSaveError');
+  const gridPresetDeleteRow = document.getElementById('gridPresetDeleteRow');
+  const deleteGridPresetBtn = document.getElementById('deleteGridPresetBtn');
 
   function applyGridSize(widthMm, heightMm) {
     if (!previewManager) return;
@@ -4955,6 +4961,52 @@ async function initApp() {
     updateStatus(`Grid size updated to ${widthMm} × ${heightMm} mm`);
   }
 
+  // Prefix for user-preset option values to distinguish from built-ins
+  const USER_GRID_PREFIX = 'user:';
+
+  function _populateCustomGridPresets() {
+    if (!gridPresetSelect || !previewManager) return;
+
+    // Remove any existing user optgroup
+    const existing = gridPresetSelect.querySelector(
+      'optgroup[data-user-presets]'
+    );
+    if (existing) existing.remove();
+
+    const userPresets = previewManager.loadCustomGridPresets();
+    if (userPresets.length === 0) return;
+
+    const group = document.createElement('optgroup');
+    group.label = 'My presets';
+    group.setAttribute('data-user-presets', 'true');
+
+    for (const p of userPresets) {
+      const opt = document.createElement('option');
+      opt.value = `${USER_GRID_PREFIX}${p.name}`;
+      opt.textContent = `${p.name} (${p.widthMm}×${p.heightMm} mm)`;
+      group.appendChild(opt);
+    }
+
+    // Insert before "Custom..." option
+    const customOpt = gridPresetSelect.querySelector('option[value="custom"]');
+    if (customOpt) {
+      gridPresetSelect.insertBefore(group, customOpt);
+    } else {
+      gridPresetSelect.appendChild(group);
+    }
+  }
+
+  function _updateGridPresetActionRows() {
+    if (!gridPresetSelect) return;
+    const val = gridPresetSelect.value;
+    const isCustom = val === 'custom';
+    const isUserPreset = val.startsWith(USER_GRID_PREFIX);
+
+    if (gridPresetSaveRow) gridPresetSaveRow.hidden = !isCustom;
+    if (gridPresetDeleteRow) gridPresetDeleteRow.hidden = !isUserPreset;
+    if (gridPresetSaveError) gridPresetSaveError.textContent = '';
+  }
+
   if (gridPresetSelect) {
     // Populate initial values from saved preference
     if (previewManager) {
@@ -4962,11 +5014,26 @@ async function initApp() {
       if (gridWidthInput) gridWidthInput.value = saved.widthMm;
       if (gridHeightInput) gridHeightInput.value = saved.heightMm;
     }
+
+    _populateCustomGridPresets();
+
     gridPresetSelect.addEventListener('change', () => {
       const val = gridPresetSelect.value;
-      if (val === 'custom') return;
+      if (val === 'custom') {
+        _updateGridPresetActionRows();
+        return;
+      }
+      if (val.startsWith(USER_GRID_PREFIX) && previewManager) {
+        const name = val.slice(USER_GRID_PREFIX.length);
+        const presets = previewManager.loadCustomGridPresets();
+        const found = presets.find((p) => p.name === name);
+        if (found) applyGridSize(found.widthMm, found.heightMm);
+        _updateGridPresetActionRows();
+        return;
+      }
       const [w, h] = val.split('x').map(Number);
       if (w && h) applyGridSize(w, h);
+      _updateGridPresetActionRows();
     });
   }
 
@@ -4977,6 +5044,7 @@ async function initApp() {
       if (!isNaN(w) && !isNaN(h)) {
         if (gridPresetSelect) gridPresetSelect.value = 'custom';
         applyGridSize(w, h);
+        _updateGridPresetActionRows();
       }
     });
   }
@@ -4988,7 +5056,45 @@ async function initApp() {
       if (!isNaN(w) && !isNaN(h)) {
         if (gridPresetSelect) gridPresetSelect.value = 'custom';
         applyGridSize(w, h);
+        _updateGridPresetActionRows();
       }
+    });
+  }
+
+  if (saveGridPresetBtn && previewManager) {
+    saveGridPresetBtn.addEventListener('click', () => {
+      const name = gridPresetNameInput?.value || '';
+      const w = parseInt(gridWidthInput?.value || '0', 10);
+      const h = parseInt(gridHeightInput?.value || '0', 10);
+      const result = previewManager.saveCustomGridPreset(name, w, h);
+      if (!result.success) {
+        if (gridPresetSaveError) gridPresetSaveError.textContent = result.error;
+        return;
+      }
+      if (gridPresetSaveError) gridPresetSaveError.textContent = '';
+      if (gridPresetNameInput) gridPresetNameInput.value = '';
+      _populateCustomGridPresets();
+      // Select the newly saved preset
+      const newValue = `${USER_GRID_PREFIX}${name.trim()}`;
+      if (gridPresetSelect) {
+        gridPresetSelect.value = newValue;
+      }
+      _updateGridPresetActionRows();
+      updateStatus(`Custom grid preset "${name.trim()}" saved`);
+    });
+  }
+
+  if (deleteGridPresetBtn && previewManager) {
+    deleteGridPresetBtn.addEventListener('click', () => {
+      const val = gridPresetSelect?.value || '';
+      if (!val.startsWith(USER_GRID_PREFIX)) return;
+      const name = val.slice(USER_GRID_PREFIX.length);
+      if (!confirm(`Delete custom grid preset "${name}"?`)) return;
+      previewManager.deleteCustomGridPreset(name);
+      _populateCustomGridPresets();
+      if (gridPresetSelect) gridPresetSelect.value = 'custom';
+      _updateGridPresetActionRows();
+      updateStatus(`Custom grid preset "${name}" deleted`);
     });
   }
 

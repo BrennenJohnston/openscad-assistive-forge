@@ -2178,6 +2178,68 @@ summary:focus-visible,
   width: 5rem;
 }
 
+/* Custom grid preset save / delete rows */
+.grid-preset-save-row,
+.grid-preset-delete-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex-wrap: wrap;
+  padding-top: var(--space-xs);
+}
+
+.grid-preset-name-input {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-input-bg);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+}
+
+.grid-preset-name-input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: var(--focus-ring);
+}
+
+.grid-preset-error {
+  display: block;
+  flex-basis: 100%;
+  font-size: var(--font-size-xs, 0.75rem);
+  color: var(--color-error);
+}
+
+/* High contrast overrides */
+:root[data-high-contrast='true'] .grid-preset-name-input {
+  border-width: 2px;
+}
+
+:root[data-high-contrast='true'] .grid-preset-name-input:focus {
+  border-width: 3px;
+}
+
+/* Forced Colors Mode */
+@media (forced-colors: active) {
+  .grid-preset-name-input {
+    border: 1px solid ButtonText;
+    background: Field;
+    color: FieldText;
+    forced-color-adjust: none;
+  }
+
+  .grid-preset-name-input:focus {
+    border-color: Highlight;
+    outline: 2px solid Highlight;
+  }
+
+  .grid-preset-error {
+    color: LinkText;
+  }
+}
+
 /* Preview setting hint text (used for engine toggle explanation) */
 .preview-setting-hint {
   flex-basis: 100%;

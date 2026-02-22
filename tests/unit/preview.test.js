@@ -1146,4 +1146,97 @@ describe('PreviewManager', () => {
       })
     })
   })
+
+  describe('Custom Grid Presets', () => {
+    let manager
+
+    beforeEach(() => {
+      manager = new PreviewManager(container)
+      localStorage.clear()
+    })
+
+    it('loadCustomGridPresets() returns [] when nothing is stored', () => {
+      expect(manager.loadCustomGridPresets()).toEqual([])
+    })
+
+    it('saveCustomGridPreset() stores a valid preset and returns success', () => {
+      const result = manager.saveCustomGridPreset('My Printer', 180, 180)
+      expect(result.success).toBe(true)
+      const loaded = manager.loadCustomGridPresets()
+      expect(loaded).toHaveLength(1)
+      expect(loaded[0]).toMatchObject({ name: 'My Printer', widthMm: 180, heightMm: 180 })
+    })
+
+    it('saveCustomGridPreset() rejects empty name', () => {
+      const result = manager.saveCustomGridPreset('', 220, 220)
+      expect(result.success).toBe(false)
+      expect(result.error).toMatch(/name/i)
+    })
+
+    it('saveCustomGridPreset() rejects whitespace-only name', () => {
+      const result = manager.saveCustomGridPreset('   ', 220, 220)
+      expect(result.success).toBe(false)
+    })
+
+    it('saveCustomGridPreset() rejects width below 50', () => {
+      const result = manager.saveCustomGridPreset('Tiny', 49, 220)
+      expect(result.success).toBe(false)
+      expect(result.error).toMatch(/width/i)
+    })
+
+    it('saveCustomGridPreset() rejects width above 500', () => {
+      const result = manager.saveCustomGridPreset('Huge', 501, 220)
+      expect(result.success).toBe(false)
+    })
+
+    it('saveCustomGridPreset() rejects height below 50', () => {
+      const result = manager.saveCustomGridPreset('Bad Height', 220, 49)
+      expect(result.success).toBe(false)
+      expect(result.error).toMatch(/height/i)
+    })
+
+    it('saveCustomGridPreset() rounds decimal widths to integers', () => {
+      const result = manager.saveCustomGridPreset('Decimal', 220.7, 220.3)
+      expect(result.success).toBe(true)
+      const loaded = manager.loadCustomGridPresets()
+      expect(loaded[0].widthMm).toBe(221)
+      expect(loaded[0].heightMm).toBe(220)
+    })
+
+    it('saveCustomGridPreset() rejects duplicate names', () => {
+      manager.saveCustomGridPreset('Dupe', 220, 220)
+      const result = manager.saveCustomGridPreset('Dupe', 300, 300)
+      expect(result.success).toBe(false)
+      expect(result.error).toMatch(/already exists/i)
+    })
+
+    it('deleteCustomGridPreset() removes an existing preset', () => {
+      manager.saveCustomGridPreset('To Delete', 200, 200)
+      const removed = manager.deleteCustomGridPreset('To Delete')
+      expect(removed).toBe(true)
+      expect(manager.loadCustomGridPresets()).toHaveLength(0)
+    })
+
+    it('deleteCustomGridPreset() returns false for non-existent name', () => {
+      const removed = manager.deleteCustomGridPreset('Ghost')
+      expect(removed).toBe(false)
+    })
+
+    it('saves boundary value 50x50 successfully', () => {
+      const result = manager.saveCustomGridPreset('Minimal', 50, 50)
+      expect(result.success).toBe(true)
+    })
+
+    it('saves boundary value 500x500 successfully', () => {
+      const result = manager.saveCustomGridPreset('Maximal', 500, 500)
+      expect(result.success).toBe(true)
+    })
+
+    it('multiple presets accumulate correctly', () => {
+      manager.saveCustomGridPreset('A', 100, 100)
+      manager.saveCustomGridPreset('B', 200, 200)
+      manager.saveCustomGridPreset('C', 300, 300)
+      expect(manager.loadCustomGridPresets()).toHaveLength(3)
+    })
+  })
 })
