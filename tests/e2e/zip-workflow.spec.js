@@ -162,7 +162,7 @@ test.describe('ZIP Upload Workflow', () => {
     await page.waitForTimeout(3000)
 
     // Find and click Generate/Download button
-    const generateButton = page.locator('button:has-text("Generate STL"), button:has-text("Download STL")')
+    const generateButton = page.locator('button:has-text("Generate"), button:has-text("Download")')
     if (!(await generateButton.isVisible())) {
       test.skip()
       return

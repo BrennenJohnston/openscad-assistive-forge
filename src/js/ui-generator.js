@@ -1225,7 +1225,15 @@ function createSelectControl(param, onChange) {
   });
 
   select.addEventListener('change', (e) => {
-    onChange(param.name, e.target.value);
+    let value = e.target.value;
+    if (param.type === 'integer') {
+      const n = parseInt(value, 10);
+      if (!isNaN(n)) value = n;
+    } else if (param.type === 'number') {
+      const n = parseFloat(value);
+      if (!isNaN(n)) value = n;
+    }
+    onChange(param.name, value);
   });
 
   container.appendChild(select);

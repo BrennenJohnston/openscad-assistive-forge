@@ -332,7 +332,10 @@ export function coercePresetValues(presetValues, paramSchema = {}) {
     }
 
     // Coerce based on parameter type in schema
-    coerced[key] = coerceToType(value, paramDef.type);
+    // Desktop parity: type-mismatched values silently keep the default
+    const coercedValue = coerceToType(value, paramDef.type);
+    coerced[key] =
+      coercedValue !== undefined ? coercedValue : paramDef.default ?? value;
   }
 
   return coerced;
@@ -411,7 +414,9 @@ function coerceToType(value, targetType) {
         if (lower === 'true' || lower === 'yes') return true;
         if (lower === 'false' || lower === 'no') return false;
       }
-      return !!value;
+      if (typeof value === 'number') return value !== 0;
+      // Desktop parity: type-mismatched values are silently ignored (keep default)
+      return undefined;
 
     case 'vector':
     case 'array':
@@ -475,6 +480,37 @@ export class PresetManager {
   }
 
   /**
+   * Return presets for a model in the requested sort order.
+   * The virtual "design-defaults" entry is always kept first.
+   * @param {string} modelName
+   * @param {'name-asc'|'name-desc'|'date-created'|'date-modified'} sortOrder
+   * @returns {Object[]}
+   */
+  getSortedPresets(modelName, sortOrder = 'name-asc') {
+    const all = this.getPresetsForModel(modelName);
+    const defaults = all.filter((p) => p.id === 'design-defaults');
+    const rest = all.filter((p) => p.id !== 'design-defaults');
+
+    switch (sortOrder) {
+      case 'name-desc':
+        rest.sort((a, b) => b.name.localeCompare(a.name));
+        break;
+      case 'date-created':
+        rest.sort((a, b) => (b.created || 0) - (a.created || 0));
+        break;
+      case 'date-modified':
+        rest.sort((a, b) => (b.modified || b.created || 0) - (a.modified || a.created || 0));
+        break;
+      case 'name-asc':
+      default:
+        rest.sort((a, b) => a.name.localeCompare(b.name));
+        break;
+    }
+
+    return [...defaults, ...rest];
+  }
+
+  /**
    * Save a new preset
    * @param {string} modelName - Name of the model
    * @param {string} presetName - Name for the preset
@@ -511,6 +547,7 @@ export class PresetManager {
       name: sanitized,
       parameters: { ...parameters },
       description: options.description || '',
+      companionFiles: options.companionFiles || null,
       created:
         existingIndex >= 0
           ? this.presets[modelName][existingIndex].created
@@ -718,7 +755,7 @@ export class PresetManager {
    * @param {string} presetId - ID of the preset
    * @returns {string} JSON string in OpenSCAD native format
    */
-  exportPresetOpenSCADNative(modelName, presetId) {
+  exportPresetOpenSCADNative(modelName, presetId, hiddenParameters = {}) {
     const preset = this.loadPreset(modelName, presetId);
     if (!preset) return null;
 
@@ -726,6 +763,15 @@ export class PresetManager {
     const stringifiedParams = {};
     for (const [key, value] of Object.entries(preset.parameters)) {
       stringifiedParams[key] = stringifyForOpenSCAD(value);
+    }
+
+    // Desktop parity: hidden parameters are included in exported JSON
+    if (hiddenParameters && Object.keys(hiddenParameters).length > 0) {
+      for (const [key, hiddenDef] of Object.entries(hiddenParameters)) {
+        if (!(key in stringifiedParams)) {
+          stringifiedParams[key] = stringifyForOpenSCAD(hiddenDef.value);
+        }
+      }
     }
 
     // Create OpenSCAD native structure with single preset
@@ -991,7 +1037,7 @@ export class PresetManager {
       // Check for Forge format
       if (isForgeFormat(data)) {
         console.log('[PresetManager] Detected Forge format');
-        return this.importForgePresets(data, paramSchema);
+        return this.importForgePresets(data, paramSchema, modelName, hiddenParameterNames);
       }
 
       // Unknown format - provide detailed error
@@ -1028,21 +1074,39 @@ export class PresetManager {
    * Import presets from Forge format JSON
    * @param {Object} data - Parsed Forge format data
    * @param {Object} paramSchema - Parameter schema for type coercion
+   * @param {string|null} modelName - Currently loaded model name; overrides data.modelName when provided
+   * @param {string[]} hiddenParameterNames - Parameter names to strip before saving
    * @returns {Object} Import result
    */
-  importForgePresets(data, paramSchema = {}) {
+  importForgePresets(data, paramSchema = {}, modelName = null, hiddenParameterNames = []) {
     let imported = 0;
     let skipped = 0;
     const results = [];
 
+    // Use the caller-supplied modelName (current loaded model) so presets are
+    // stored under the right key even if the export file has a different name.
+    const targetModelName = modelName || data.modelName;
+
+    const hiddenSet = new Set(hiddenParameterNames);
+
+    /** Strip hidden parameters from a parameters object */
+    function stripHidden(params) {
+      if (!hiddenSet.size) return params;
+      const out = {};
+      for (const [k, v] of Object.entries(params)) {
+        if (!hiddenSet.has(k)) out[k] = v;
+      }
+      return out;
+    }
+
     if (data.type === 'openscad-preset') {
       // Single preset import
       const coercedParams = coercePresetValues(
-        data.preset.parameters,
+        stripHidden(data.preset.parameters),
         paramSchema
       );
       const result = this.savePreset(
-        data.modelName,
+        targetModelName,
         data.preset.name,
         coercedParams,
         { description: data.preset.description }
@@ -1054,11 +1118,11 @@ export class PresetManager {
       for (const preset of data.presets) {
         try {
           const coercedParams = coercePresetValues(
-            preset.parameters,
+            stripHidden(preset.parameters),
             paramSchema
           );
           const result = this.savePreset(
-            data.modelName,
+            targetModelName,
             preset.name,
             coercedParams,
             { description: preset.description }
@@ -1076,7 +1140,7 @@ export class PresetManager {
       success: true,
       imported,
       skipped,
-      modelName: data.modelName,
+      modelName: targetModelName,
       presets: results,
       format: 'forge',
     };
@@ -1392,6 +1456,31 @@ export class PresetManager {
   }
 
   /**
+   * Remove all saved presets for a given model, preserving the virtual
+   * "design default values" entry (id: 'design-defaults').
+   * @param {string} modelName - Model to clear presets for
+   * @param {Object} [options]
+   * @param {boolean} [options.preserveDefaults=true] - Keep the design-defaults entry
+   * @returns {number} Number of presets removed
+   */
+  clearPresetsForModel(modelName, { preserveDefaults = true } = {}) {
+    if (!modelName || !this.presets[modelName]) return 0;
+    const before = this.presets[modelName].length;
+    if (preserveDefaults) {
+      this.presets[modelName] = this.presets[modelName].filter(
+        (p) => p.id === 'design-defaults'
+      );
+    } else {
+      delete this.presets[modelName];
+    }
+    this.persist();
+    const after = this.presets[modelName]?.length ?? 0;
+    const removed = before - after;
+    console.log(`[PresetManager] Cleared ${removed} preset(s) for model: ${modelName}`);
+    return removed;
+  }
+
+  /**
    * Get statistics about presets
    * @returns {Object} Statistics
    */
@@ -1413,11 +1502,21 @@ export class PresetManager {
    * Detects missing, extra, and type-mismatched parameters
    * @param {Object} presetParams - Parameters from the preset
    * @param {Object} currentSchema - Current parameter schema
+   * @param {string[]} hiddenParameterNames - Hidden parameter names to exclude from comparison
    * @returns {Object} Compatibility analysis
    */
-  analyzePresetCompatibility(presetParams, currentSchema) {
-    const presetKeys = new Set(Object.keys(presetParams));
-    const schemaKeys = new Set(Object.keys(currentSchema));
+  analyzePresetCompatibility(presetParams, currentSchema, hiddenParameterNames = []) {
+    const hiddenSet = new Set(hiddenParameterNames);
+    // Unwrap full schema objects that have a .parameters property (e.g. from
+    // state.schema) so we compare against actual parameter definitions, not
+    // top-level structural keys like "groups" or "libraries".
+    const paramEntries = currentSchema?.parameters || currentSchema;
+    const presetKeys = new Set(
+      Object.keys(presetParams).filter((k) => !hiddenSet.has(k))
+    );
+    const schemaKeys = new Set(
+      Object.keys(paramEntries).filter((k) => !hiddenSet.has(k))
+    );
 
     // Find parameters that exist in preset but not in schema (removed/renamed)
     const extraParams = [];
@@ -1438,9 +1537,9 @@ export class PresetManager {
     // Find type mismatches for overlapping parameters
     const typeMismatches = [];
     for (const key of presetKeys) {
-      if (schemaKeys.has(key) && currentSchema[key]) {
+      if (schemaKeys.has(key) && paramEntries[key]) {
         const presetValue = presetParams[key];
-        const expectedType = currentSchema[key].type;
+        const expectedType = paramEntries[key].type;
         const actualType = Array.isArray(presetValue)
           ? 'array'
           : typeof presetValue;

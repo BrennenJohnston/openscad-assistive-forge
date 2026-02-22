@@ -130,3 +130,21 @@ export function formatFileSize(bytes) {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
+
+/**
+ * Sanitize a string for safe use as a filename.
+ * Preserves original case and spaces while removing filesystem-unsafe characters.
+ * @param {string} name - Raw name to sanitize
+ * @returns {string} Safe filename without extension (falls back to 'preset-export' if empty)
+ */
+export function sanitizeFilename(name) {
+  if (!name || typeof name !== 'string') return 'preset-export';
+  const sanitized = name
+    // Strip filesystem-unsafe characters
+    .replace(/[/\\:*?"<>|]/g, '')
+    // Strip leading/trailing whitespace and dots
+    .replace(/^[\s.]+|[\s.]+$/g, '')
+    // Limit length
+    .slice(0, 200);
+  return sanitized || 'preset-export';
+}

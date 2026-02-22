@@ -11,7 +11,7 @@
 
 [project]
 name = "openscad-assistive-forge"
-version = "4.0.0"
+version = "4.1.0"
 description = "Accessibility-first web-based OpenSCAD customizer"
 channels = ["conda-forge"]
 platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
@@ -21,35 +21,36 @@ nodejs = ">=20"
 
 [tasks]
 # Development
-dev = "npm run dev"
-build = "npm run build"
-preview = "npm run preview"
+dev = { cmd = "npm run dev", description = "Start Vite dev server with hot reload on http://localhost:5173" }
+build = { cmd = "npm run build", description = "Build production bundle to dist/ with minification and tree-shaking" }
+preview = { cmd = "npm run preview", description = "Serve the production build locally for pre-deploy verification" }
 
 # Testing
-test = "npm run test:run"
-"test:watch" = "npm run test:watch"
-"test:e2e" = "npm run test:e2e"
-"test:all" = "npm run test:all"
-"test:coverage" = "npm run test:coverage"
+test = { cmd = "npm run test:run", description = "Run Vitest unit tests once and exit" }
+"test:watch" = { cmd = "npm run test:watch", description = "Run Vitest in watch mode, re-running on file changes" }
+"test:e2e" = { cmd = "npm run test:e2e", description = "Run Playwright end-to-end tests (requires dev server running)" }
+"test:all" = { cmd = "npm run test:all", description = "Run unit tests then E2E tests sequentially" }
+"test:coverage" = { cmd = "npm run test:coverage", description = "Run unit tests with code coverage report" }
 
 # Code quality
-lint = "npm run lint"
-format = "npm run format"
-"format:check" = "npm run format:check"
+lint = { cmd = "npm run lint", description = "Run ESLint on src/ to check for code quality issues" }
+format = { cmd = "npm run format", description = "Run Prettier to auto-format all source files" }
+"format:check" = { cmd = "npm run format:check", description = "Check if all source files match Prettier formatting (no writes)" }
 
 # Setup
-setup = { depends-on = ["setup-deps", "setup-wasm", "setup-libraries"] }
-"setup-deps" = "npm ci"
-"setup-wasm" = "npm run setup-wasm"
-"setup-libraries" = "npm run setup-libraries"
+setup = { depends-on = ["setup-deps", "setup-wasm", "setup-libraries"], description = "Full first-time setup: install npm deps, download WASM binary, and fetch libraries" }
+"setup-deps" = { cmd = "npm ci", description = "Install npm dependencies via npm ci (clean install)" }
+"setup-wasm" = { cmd = "npm run setup-wasm", description = "Download the OpenSCAD WASM binary to public/" }
+"setup-libraries" = { cmd = "npm run setup-libraries", description = "Fetch and install OpenSCAD libraries to public/libraries/" }
 
 # Utilities
 clean = { cmd = "rm -rf dist node_modules/.vite", description = "Clean build artifacts" }
-"check-a11y" = "npm run check-a11y"
+"check-a11y" = { cmd = "npm run check-a11y", description = "Run Lighthouse accessibility audit against the dev server (requires server running)" }
+"validate:html" = { cmd = "npm run validate:html", description = "Run W3C Nu HTML/CSS/SVG validation on index.html" }
 
 [feature.ci.tasks]
 # CI-specific tasks
-ci = "npm run test:run && npm run build"
+ci = { cmd = "npm run test:run && npm run build", description = "CI pipeline: run unit tests, then build production bundle" }
 
 [environments]
 default = { features = [], solve-group = "default" }

@@ -13,14 +13,14 @@ describe('ZIP Handler', () => {
       expect(result.error).toBeUndefined()
     })
 
-    it('should reject files over 10MB', () => {
-      const largeSize = 11 * 1024 * 1024 // 11MB
+    it('should reject files over 100MB', () => {
+      const largeSize = 101 * 1024 * 1024 // 101MB
       const largeFile = new File(['x'.repeat(largeSize)], 'large.zip', { type: 'application/zip' })
-      
+
       const result = validateZipFile(largeFile)
-      
+
       expect(result.valid).toBe(false)
-      expect(result.error).toContain('10MB')
+      expect(result.error).toContain('100MB')
     })
 
     it('should reject non-zip files', () => {

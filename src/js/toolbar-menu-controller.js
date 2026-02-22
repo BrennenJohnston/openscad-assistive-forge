@@ -35,6 +35,12 @@ const MENU_LABELS = {
   help: 'Help',
 };
 
+/** Human-readable labels for radio groups */
+const RADIO_GROUP_LABELS = {
+  displayMode: 'Display Mode',
+  projection: 'Projection',
+};
+
 export class ToolbarMenuController {
   constructor() {
     /** @type {Map<string, HTMLElement>} menuId -> toolbar button element */
@@ -55,6 +61,9 @@ export class ToolbarMenuController {
      * @type {Map<string, Function>}
      */
     this._menuBuilders = new Map();
+
+    /** @type {number} Auto-incrementing counter for unique element IDs */
+    this._idCounter = 0;
   }
 
   /**
@@ -106,10 +115,14 @@ export class ToolbarMenuController {
    * @param {string} menuId
    */
   openMenu(menuId) {
-    if (!this._modals.has(menuId)) return;
+    if (!this._modals.has(menuId)) {
+      return;
+    }
 
     // Block opening over a non-toolbar-menu modal
-    if (isAnyModalOpen() && this._openMenuId === null) return;
+    if (isAnyModalOpen() && this._openMenuId === null) {
+      return;
+    }
 
     // Close sibling menu if one is open
     this.closeAllMenus();
@@ -216,8 +229,26 @@ export class ToolbarMenuController {
     if (!listEl) return;
 
     listEl.innerHTML = '';
-    for (const item of items) {
-      listEl.appendChild(this._buildMenuItem(item));
+
+    let i = 0;
+    while (i < items.length) {
+      const item = items[i];
+      if (item.type === 'radio') {
+        const group = item.group;
+        const radioItems = [];
+        while (
+          i < items.length &&
+          items[i].type === 'radio' &&
+          items[i].group === group
+        ) {
+          radioItems.push(items[i]);
+          i++;
+        }
+        listEl.appendChild(this._buildRadioGroup(group, radioItems));
+      } else {
+        listEl.appendChild(this._buildMenuItem(item));
+        i++;
+      }
     }
   }
 
@@ -324,15 +355,34 @@ export class ToolbarMenuController {
     labelSpan.textContent = item.label || '';
     btn.appendChild(labelSpan);
 
+    const describedByIds = [];
+
+    if (item.tooltip) {
+      const tooltipId = `menu-tip-${this._nextId()}`;
+      const tooltipSpan = document.createElement('span');
+      tooltipSpan.id = tooltipId;
+      tooltipSpan.className = 'sr-only';
+      tooltipSpan.textContent = item.tooltip;
+      btn.appendChild(tooltipSpan);
+      describedByIds.push(tooltipId);
+    }
+
     if (item.shortcutAction) {
       const shortcutDef = keyboardConfig.getShortcut(item.shortcutAction);
       if (shortcutDef) {
+        const shortcutId = `menu-kbd-${this._nextId()}`;
         const kbdSpan = document.createElement('span');
+        kbdSpan.id = shortcutId;
         kbdSpan.className = 'menu-item-shortcut';
         kbdSpan.setAttribute('aria-hidden', 'true');
         kbdSpan.textContent = formatShortcut(shortcutDef);
         btn.appendChild(kbdSpan);
+        describedByIds.push(shortcutId);
       }
+    }
+
+    if (describedByIds.length > 0) {
+      btn.setAttribute('aria-describedby', describedByIds.join(' '));
     }
 
     if (!isDisabled && typeof item.handler === 'function') {
@@ -343,6 +393,97 @@ export class ToolbarMenuController {
     }
 
     li.appendChild(btn);
+    return li;
+  }
+
+  /**
+   * Generate a unique numeric ID for aria-describedby and radio group linking.
+   * @returns {number}
+   * @private
+   */
+  _nextId() {
+    return ++this._idCounter;
+  }
+
+  /**
+   * Build a radio group <li> wrapping consecutive radio items in a semantic
+   * <fieldset>/<legend> with native <input type="radio"> elements.
+   *
+   * @param {string} groupName - The group identifier (e.g. 'projection')
+   * @param {Object[]} items - Radio item definitions sharing this group
+   * @returns {HTMLLIElement}
+   * @private
+   */
+  _buildRadioGroup(groupName, items) {
+    const li = document.createElement('li');
+    li.className = 'menu-item menu-item--radio-group';
+
+    const fieldset = document.createElement('fieldset');
+    fieldset.className = 'menu-radio-fieldset';
+
+    const legend = document.createElement('legend');
+    legend.className = 'menu-radio-legend';
+    legend.textContent = RADIO_GROUP_LABELS[groupName] || groupName;
+    fieldset.appendChild(legend);
+
+    const radioName = `radio_${groupName}_${this._nextId()}`;
+
+    for (const item of items) {
+      const label = document.createElement('label');
+      label.className = 'menu-radio-label menu-item-btn';
+
+      const isDisabled = item.enabled === false || item.disabled === true;
+      if (isDisabled) {
+        label.setAttribute('aria-disabled', 'true');
+      }
+      if (item.tooltip) {
+        label.setAttribute('title', item.tooltip);
+        const tipId = `menu-tip-${this._nextId()}`;
+        const tipSpan = document.createElement('span');
+        tipSpan.id = tipId;
+        tipSpan.className = 'sr-only';
+        tipSpan.textContent = item.tooltip;
+        label.appendChild(tipSpan);
+        label.setAttribute('aria-describedby', tipId);
+      }
+
+      const input = document.createElement('input');
+      input.type = 'radio';
+      input.name = radioName;
+      input.value = item.value || item.label;
+      input.className = 'menu-radio-input';
+      if (item.checked) input.checked = true;
+      if (isDisabled) input.disabled = true;
+
+      if (!isDisabled && typeof item.onChange === 'function') {
+        input.addEventListener('change', () => {
+          this.closeAllMenus();
+          item.onChange(input.value);
+        });
+      }
+
+      const labelSpan = document.createElement('span');
+      labelSpan.className = 'menu-item-label';
+      labelSpan.textContent = item.label || '';
+
+      label.appendChild(input);
+      label.appendChild(labelSpan);
+
+      if (item.shortcutAction) {
+        const shortcutDef = keyboardConfig.getShortcut(item.shortcutAction);
+        if (shortcutDef) {
+          const kbdSpan = document.createElement('span');
+          kbdSpan.className = 'menu-item-shortcut';
+          kbdSpan.setAttribute('aria-hidden', 'true');
+          kbdSpan.textContent = formatShortcut(shortcutDef);
+          label.appendChild(kbdSpan);
+        }
+      }
+
+      fieldset.appendChild(label);
+    }
+
+    li.appendChild(fieldset);
     return li;
   }
 

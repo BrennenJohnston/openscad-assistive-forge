@@ -166,6 +166,7 @@ const STORAGE_KEY_LAYOUT_SIZES = getAppPrefKey('layout-sizes');
 import {
   announce as _announce,
   announceImmediate,
+  announceCameraAction,
   announceError as _announceError,
   POLITENESS as _POLITENESS,
 } from './js/announcer.js';
@@ -1626,9 +1627,33 @@ function _exportFormatFromMenu(format) {
  */
 function _applyToolbarModeVisibility(mode) {
   const controller = getToolbarMenuController();
+
+  // Toolbar is only relevant in the main UI (file loaded). On the welcome screen
+  // both the toolbar and workflow progress must be hidden to keep the slot empty.
+  const mainInterfaceEl = document.getElementById('mainInterface');
+  const mainInterfaceVisible =
+    mainInterfaceEl && !mainInterfaceEl.classList.contains('hidden');
+
+  if (!mainInterfaceVisible) {
+    // Welcome screen / no file loaded: hide toolbar and entire workflow-progress
+    // container (including its action buttons — Back/Help/etc. are irrelevant here).
+    controller.hide();
+    hideWorkflowProgress();
+    return;
+  }
+
+  // Main UI is active.
+  // IMPORTANT: #workflowProgress must remain visible in all main-UI states because
+  // it contains essential navigation buttons (#uiModeToggle, #focusModeBtn,
+  // #featuresGuideBtn, #clearFileBtn). Only the .workflow-steps breadcrumbs are
+  // shown/hidden depending on mode.
+  showWorkflowProgress();
+  const stepsEl = document.querySelector('#workflowProgress .workflow-steps');
+
   if (mode === 'advanced') {
     controller.show();
-    hideWorkflowProgress();
+    // Hide breadcrumb steps — toolbar replaces them visually. Action buttons stay.
+    if (stepsEl) stepsEl.classList.add('hidden');
   } else {
     // Basic mode: check if any per-menu buttons are enabled via PANEL_REGISTRY
     const uiMode = getUIModeController();
@@ -1652,11 +1677,13 @@ function _applyToolbarModeVisibility(mode) {
       .map((p) => menuIdMap[p.id]);
 
     if (visibleMenuIds.length > 0) {
+      // Basic mode override: some toolbar buttons visible — hide breadcrumb steps
       controller.setVisibleMenus(visibleMenuIds);
-      hideWorkflowProgress();
+      if (stepsEl) stepsEl.classList.add('hidden');
     } else {
+      // Pure Basic mode: show breadcrumb steps alongside action buttons
       controller.hide();
-      showWorkflowProgress();
+      if (stepsEl) stepsEl.classList.remove('hidden');
     }
   }
 }
@@ -2773,6 +2800,30 @@ async function initApp() {
   // Initialize parameter detail level controller (Show/Inline/Hide/Desc-only)
   initParamDetailController();
 
+  async function _saveCurrentProject(successMessage) {
+    const state = stateManager.getState();
+    if (!state.uploadedFile?.content) return;
+    if (currentSavedProjectId) {
+      const { projectFiles } = state;
+      const projectFilesObj = projectFiles ? Object.fromEntries(projectFiles) : null;
+      const result = await updateProject({
+        id: currentSavedProjectId,
+        content: state.uploadedFile.content,
+        projectFiles: projectFilesObj !== null ? JSON.stringify(projectFilesObj) : undefined,
+      });
+      if (result.success) {
+        updateCompanionSaveButton();
+        stateManager.announceChange(successMessage);
+        updateStatus(successMessage);
+        await renderSavedProjectsList();
+      } else {
+        alert(`Failed to save: ${result.error}`);
+      }
+    } else {
+      await showSaveProjectPrompt(state, { preSave: true });
+    }
+  }
+
   // Initialize file actions controller (New, Reload, Save, Save As, Export Image, Recent)
   const fileActionsController = getFileActionsController({
     onNew: () => {
@@ -2787,39 +2838,20 @@ async function initApp() {
         handleFile(
           null,
           state.uploadedFile.content,
-          null,
-          null,
+          state.projectFiles || null,
+          state.mainFilePath || null,
           'user',
           state.uploadedFile.name
         );
       }
     },
-    onSave: () => {
+    onSave: () => _saveCurrentProject('Project saved'),
+    onSaveAs: async () => {
       const state = stateManager.getState();
-      const content = state.uploadedFile?.content;
-      if (!content) return;
-      const blob = new Blob([content], { type: 'text/plain' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = state.uploadedFile.name || 'model.scad';
-      a.click();
-      URL.revokeObjectURL(url);
+      if (!state.uploadedFile?.content) return;
+      await showSaveProjectPrompt(state, { preSave: true });
     },
-    onSaveAs: () => {
-      const state = stateManager.getState();
-      const content = state.uploadedFile?.content;
-      if (!content) return;
-      const name = prompt('Save as:', state.uploadedFile.name || 'model.scad');
-      if (!name) return;
-      const blob = new Blob([content], { type: 'text/plain' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = name;
-      a.click();
-      URL.revokeObjectURL(url);
-    },
+    onSaveAll: () => _saveCurrentProject('All changes saved'),
     onExportImage: () => {
       const canvas = document.querySelector(
         '#preview canvas, .preview-area canvas'
@@ -2838,6 +2870,11 @@ async function initApp() {
     const state = stateManager.getState();
     const hasFile = Boolean(state.uploadedFile);
     const hasRender = Boolean(state.stl);
+    // Full render = Generate button has been pressed and output matches current params
+    const hasFullRender = Boolean(
+      autoPreviewController?.getCurrentFullSTL(state.parameters) &&
+        !autoPreviewController?.needsFullRender(state.parameters)
+    );
 
     // Recent Files submenu items (filenames only; actual re-open via onOpenRecent callback)
     const recentItems =
@@ -2849,14 +2886,38 @@ async function initApp() {
           }))
         : [{ type: 'action', label: 'No recent files', disabled: true }];
 
-    // Export submenu: one item per output format
-    const exportItems = Object.entries(OUTPUT_FORMATS).map(([key, fmt]) => ({
-      type: 'action',
-      label: fmt.name,
-      enabled: hasRender,
-      tooltip: hasRender ? fmt.description : 'Render the model first',
-      handler: () => _exportFormatFromMenu(key),
-    }));
+    // Export submenu: info notice (when not fully rendered) + geometry/2D formats + Export as Image
+    const exportItems = [
+      ...(!hasFullRender
+        ? [
+            {
+              type: 'action',
+              label: 'ⓘ  Press Generate to enable file exports',
+              disabled: true,
+              tooltip: 'Use the Generate button to fully render the model, then file export options will become available.',
+            },
+            { type: 'separator' },
+          ]
+        : []),
+      ...Object.entries(OUTPUT_FORMATS).map(([key, fmt]) => ({
+        type: 'action',
+        label: fmt.name,
+        enabled: hasFullRender,
+        tooltip: hasFullRender ? fmt.description : 'Press Generate first to enable this export',
+        handler: () => _exportFormatFromMenu(key),
+      })),
+      { type: 'separator' },
+      {
+        type: 'action',
+        label: 'Export as Image\u2026',
+        shortcutAction: 'exportImage',
+        enabled: hasRender,
+        tooltip: hasRender
+          ? 'Save the current viewport as a PNG image'
+          : 'Load and preview a file first',
+        handler: () => fileActionsController.onExportImage(),
+      },
+    ];
 
     return [
       {
@@ -2930,19 +2991,12 @@ async function initApp() {
       {
         type: 'action',
         label: 'Save All',
-        disabled: true,
-        tooltip: 'Coming soon',
+        enabled: hasFile,
+        tooltip: hasFile ? 'Save all changes to current project' : 'Open a file first',
+        handler: () => fileActionsController.onSaveAll(),
       },
       { type: 'separator' },
       { type: 'submenu', label: 'Export', items: exportItems },
-      {
-        type: 'action',
-        label: 'Export Image',
-        shortcutAction: 'exportImage',
-        enabled: hasFile,
-        tooltip: hasFile ? undefined : 'Open a file first',
-        handler: () => fileActionsController.onExportImage(),
-      },
       { type: 'separator' },
       {
         type: 'action',
@@ -3124,8 +3178,26 @@ async function initApp() {
     const state = stateManager.getState();
     const hasFile = Boolean(state.uploadedFile);
     const hasRender = Boolean(state.stl);
+    const apToggle = document.getElementById('autoPreviewToggle');
 
     return [
+      {
+        type: 'toggle',
+        label: 'Automatic Reload and Preview',
+        checked: apToggle?.checked ?? false,
+        handler: () => {
+          if (apToggle) {
+            apToggle.checked = !apToggle.checked;
+            apToggle.dispatchEvent(new Event('change'));
+          }
+        },
+      },
+      {
+        type: 'action',
+        label: 'Reload and Preview',
+        disabled: true,
+        tooltip: 'Coming soon',
+      },
       {
         type: 'action',
         label: 'Preview',
@@ -3153,27 +3225,21 @@ async function initApp() {
         type: 'action',
         label: 'Cancel Render',
         shortcutAction: 'cancelRender',
-        enabled: hasFile,
-        tooltip: hasFile ? undefined : 'Open a file first',
+        enabled: renderController?.isBusy?.(),
+        tooltip: renderController?.isBusy?.()
+          ? undefined
+          : 'No render in progress',
         handler: () => {
           if (renderController?.isBusy?.()) renderController.cancel();
         },
       },
-      { type: 'separator' },
       {
         type: 'action',
-        label: 'Flush Caches',
-        shortcutAction: 'flushCaches',
-        handler: () => designPanelController.flushCaches(),
+        label: '3D Print',
+        disabled: true,
+        tooltip: 'Coming soon',
       },
       { type: 'separator' },
-      {
-        type: 'action',
-        label: 'Display AST',
-        enabled: hasFile,
-        tooltip: hasFile ? undefined : 'Open a file first',
-        handler: () => designPanelController.showAST(),
-      },
       {
         type: 'action',
         label: 'Check Validity',
@@ -3184,10 +3250,37 @@ async function initApp() {
       },
       {
         type: 'action',
+        label: 'Display AST\u2026',
+        shortcutAction: 'showAST',
+        enabled: hasFile,
+        tooltip: hasFile ? undefined : 'Open a file first',
+        handler: () => designPanelController.showAST(),
+      },
+      {
+        type: 'action',
+        label: 'Display CSG Tree\u2026',
+        disabled: true,
+        tooltip: 'Coming soon \u2014 requires custom WASM build',
+      },
+      {
+        type: 'action',
+        label: 'Display CSG Products\u2026',
+        disabled: true,
+        tooltip: 'Coming soon \u2014 requires custom WASM build',
+      },
+      {
+        type: 'action',
         label: 'Geometry Info',
         enabled: hasRender,
         tooltip: hasRender ? undefined : 'Render a model first',
         handler: () => designPanelController.updateGeometryInfo(),
+      },
+      { type: 'separator' },
+      {
+        type: 'action',
+        label: 'Flush Caches',
+        shortcutAction: 'flushCaches',
+        handler: () => designPanelController.flushCaches(),
       },
     ];
   });
@@ -3203,19 +3296,142 @@ async function initApp() {
   getToolbarMenuController().registerMenuBuilder('view', () => {
     const state = stateManager.getState();
     const hasRender = Boolean(state.stl);
+    const projMode = previewManager?.getProjectionMode?.() ?? 'perspective';
 
-    const noRender = { disabled: true, tooltip: 'Render a model first' };
+    function cameraViewHandler(view) {
+      return () => {
+        if (previewManager) {
+          previewManager.setCameraView(view);
+          announceCameraAction(`${view} view`);
+        }
+      };
+    }
 
     return [
+      // -- Display Mode Radio Group (all disabled — requires custom WASM) --
+      {
+        type: 'radio',
+        label: 'Preview',
+        group: 'displayMode',
+        disabled: true,
+        tooltip: 'Coming soon',
+      },
+      {
+        type: 'radio',
+        label: 'Surfaces',
+        group: 'displayMode',
+        disabled: true,
+        tooltip: 'Coming soon',
+      },
+      {
+        type: 'radio',
+        label: 'Wireframe',
+        group: 'displayMode',
+        disabled: true,
+        tooltip: 'Coming soon',
+      },
+      {
+        type: 'radio',
+        label: 'Thrown Together',
+        group: 'displayMode',
+        disabled: true,
+        tooltip: 'Coming soon',
+      },
+      { type: 'separator' },
+      // -- Display Toggles --
+      {
+        type: 'toggle',
+        label: 'Show Edges',
+        shortcutAction: 'toggleEdges',
+        checked: displayOptionsController.get('edges'),
+        handler: () => displayOptionsController.toggle('edges'),
+      },
+      {
+        type: 'toggle',
+        label: 'Show Axes',
+        shortcutAction: 'toggleAxes',
+        checked: displayOptionsController.get('axes'),
+        handler: () => displayOptionsController.toggle('axes'),
+      },
+      {
+        type: 'toggle',
+        label: 'Show Scale Markers',
+        disabled: true,
+        tooltip: 'Coming soon',
+      },
+      {
+        type: 'toggle',
+        label: 'Show Crosshairs',
+        checked: displayOptionsController.get('crosshairs'),
+        handler: () => displayOptionsController.toggle('crosshairs'),
+      },
+      {
+        type: 'toggle',
+        label: 'Animate',
+        shortcutAction: 'toggleAnimate',
+        checked: animationController?.playing ?? false,
+        handler: () => animationController.togglePlay(),
+      },
+      { type: 'separator' },
+      // -- Camera Views --
+      {
+        type: 'action',
+        label: 'Top',
+        shortcutAction: 'viewTop',
+        handler: cameraViewHandler('top'),
+      },
+      {
+        type: 'action',
+        label: 'Bottom',
+        shortcutAction: 'viewBottom',
+        handler: cameraViewHandler('bottom'),
+      },
+      {
+        type: 'action',
+        label: 'Left',
+        shortcutAction: 'viewLeft',
+        handler: cameraViewHandler('left'),
+      },
+      {
+        type: 'action',
+        label: 'Right',
+        shortcutAction: 'viewRight',
+        handler: cameraViewHandler('right'),
+      },
+      {
+        type: 'action',
+        label: 'Front',
+        shortcutAction: 'viewFront',
+        handler: cameraViewHandler('front'),
+      },
+      {
+        type: 'action',
+        label: 'Back',
+        shortcutAction: 'viewBack',
+        handler: cameraViewHandler('back'),
+      },
+      {
+        type: 'action',
+        label: 'Diagonal',
+        shortcutAction: 'viewDiagonal',
+        handler: cameraViewHandler('diagonal'),
+      },
+      {
+        type: 'action',
+        label: 'Center',
+        disabled: true,
+        tooltip: 'Coming soon',
+      },
       {
         type: 'action',
         label: 'View All',
+        shortcutAction: 'viewAll',
         enabled: hasRender,
         tooltip: hasRender ? undefined : 'Render a model first',
         handler: () => {
-          if (previewManager?.mesh) {
+          if (previewManager) {
             previewManager.fitCameraToModel();
-            announceImmediate('View fitted to model');
+            announceCameraAction('View fitted to model');
           }
         },
       },
@@ -3226,141 +3442,73 @@ async function initApp() {
         enabled: hasRender,
         tooltip: hasRender ? undefined : 'Render a model first',
         handler: () => {
-          if (previewManager) previewManager.fitCameraToModel();
+          if (previewManager) {
+            previewManager.fitCameraToModel();
+            announceCameraAction('reset');
+          }
         },
       },
       { type: 'separator' },
-      {
-        type: 'submenu',
-        label: 'Camera Viewpoint',
-        enabled: hasRender,
-        ...(hasRender ? {} : noRender),
-        items: [
-          {
-            type: 'action',
-            label: 'Top',
-            shortcutAction: 'viewTop',
-            handler: () => previewManager?.setCameraView('top'),
-          },
-          {
-            type: 'action',
-            label: 'Bottom',
-            shortcutAction: 'viewBottom',
-            handler: () => previewManager?.setCameraView('bottom'),
-          },
-          {
-            type: 'action',
-            label: 'Front',
-            shortcutAction: 'viewFront',
-            handler: () => previewManager?.setCameraView('front'),
-          },
-          {
-            type: 'action',
-            label: 'Back',
-            shortcutAction: 'viewBack',
-            handler: () => previewManager?.setCameraView('back'),
-          },
-          {
-            type: 'action',
-            label: 'Left',
-            shortcutAction: 'viewLeft',
-            handler: () => previewManager?.setCameraView('left'),
-          },
-          {
-            type: 'action',
-            label: 'Right',
-            shortcutAction: 'viewRight',
-            handler: () => previewManager?.setCameraView('right'),
-          },
-          {
-            type: 'action',
-            label: 'Diagonal',
-            shortcutAction: 'viewDiagonal',
-            handler: () => previewManager?.setCameraView('diagonal'),
-          },
-        ],
-      },
+      // -- Zoom --
       {
         type: 'action',
-        label: 'Toggle Projection',
-        shortcutAction: 'toggleProjection',
-        enabled: hasRender,
-        tooltip: hasRender ? undefined : 'Render a model first',
+        label: 'Zoom In',
         handler: () => {
           if (previewManager) {
-            const newMode = previewManager.toggleProjection();
-            const isPerspective = newMode === 'perspective';
-            const projToggle = document.getElementById('projectionToggle');
-            if (projToggle) {
-              projToggle.setAttribute(
-                'aria-pressed',
-                isPerspective ? 'false' : 'true'
-              );
-              const labelSpan = projToggle.querySelector('span');
-              if (labelSpan) {
-                labelSpan.textContent = isPerspective
-                  ? 'Perspective'
-                  : 'Orthographic';
-              }
-            }
+            previewManager.zoomCamera(1);
+            announceCameraAction('zoom-in');
+          }
+        },
+      },
+      {
+        type: 'action',
+        label: 'Zoom Out',
+        handler: () => {
+          if (previewManager) {
+            previewManager.zoomCamera(-1);
+            announceCameraAction('zoom-out');
           }
         },
       },
       { type: 'separator' },
+      // -- Projection Radio Group --
       {
-        type: 'action',
-        label: 'Show Axes',
-        shortcutAction: 'toggleAxes',
-        handler: () => displayOptionsController.toggle('axes'),
-      },
-      {
-        type: 'action',
-        label: 'Show Edges',
-        shortcutAction: 'toggleEdges',
-        handler: () => displayOptionsController.toggle('edges'),
-      },
-      {
-        type: 'action',
-        label: 'Show Crosshairs',
-        handler: () => displayOptionsController.toggle('crosshairs'),
-      },
-      {
-        type: 'action',
-        label: 'Wireframe',
-        handler: () => displayOptionsController.toggle('wireframe'),
-      },
-      { type: 'separator' },
-      {
-        type: 'action',
-        label: 'Toggle Parameters Sidebar',
-        shortcutAction: 'toggleCustomizer',
-        handler: () => {
-          const sidebar = document.querySelector('.sidebar');
-          if (sidebar) sidebar.classList.toggle('collapsed');
-        },
-      },
-      {
-        type: 'action',
-        label: 'Focus Mode',
-        shortcutAction: 'focusMode',
-        handler: () => document.getElementById('focusModeBtn')?.click(),
-      },
-      { type: 'separator' },
-      {
-        type: 'action',
-        label: 'Show Shortcuts',
-        shortcutAction: 'showShortcutsModal',
-        handler: () => {
-          const modal = document.getElementById('shortcutsModal');
-          const modalBody = document.getElementById('shortcutsModalBody');
-          if (modal && modalBody) {
-            if (!modal.dataset.initialized) {
-              initShortcutsModal(modalBody, () => closeModal(modal));
-              modal.dataset.initialized = 'true';
-            }
-            openModal(modal);
+        type: 'radio',
+        label: 'Perspective',
+        group: 'projection',
+        value: 'perspective',
+        checked: projMode === 'perspective',
+        onChange: () => {
+          if (previewManager && projMode !== 'perspective') {
+            previewManager.toggleProjection();
           }
         },
+      },
+      {
+        type: 'radio',
+        label: 'Orthogonal',
+        group: 'projection',
+        value: 'orthographic',
+        checked: projMode === 'orthographic',
+        onChange: () => {
+          if (previewManager && projMode !== 'orthographic') {
+            previewManager.toggleProjection();
+          }
+        },
+      },
+      { type: 'separator' },
+      // -- Toolbar toggles --
+      {
+        type: 'toggle',
+        label: 'Hide Editor toolbar',
+        disabled: true,
+        tooltip: 'Coming soon',
+      },
+      {
+        type: 'toggle',
+        label: 'Hide 3D View toolbar',
+        disabled: true,
+        tooltip: 'Coming soon',
       },
     ];
   });
@@ -3377,40 +3525,179 @@ async function initApp() {
      * @param {string} label
      * @param {string|undefined} shortcutAction
      */
-    function panelItem(panelId, label, shortcutAction) {
-      const isHidden = hidden.has(panelId);
+    function panelToggle(panelId, label, shortcutAction) {
+      const isVisible = !hidden.has(panelId);
       return {
-        type: 'action',
-        label: `${isHidden ? 'Show' : 'Hide'} ${label}`,
+        type: 'toggle',
+        label,
+        checked: isVisible,
         ...(shortcutAction ? { shortcutAction } : {}),
-        handler: () => uiCtrl.togglePanelVisibility(panelId),
+        handler: () => {
+          uiCtrl.togglePanelVisibility(panelId);
+          _announce(isVisible ? `${label} hidden` : `${label} shown`);
+        },
       };
     }
 
+    const sidebarOpen = !document
+      .querySelector('.sidebar')
+      ?.classList.contains('collapsed');
+
     return [
-      panelItem('consoleOutput', 'Console Output', 'toggleConsole'),
-      panelItem('errorLog', 'Error Log', 'toggleErrorLog'),
-      panelItem('codeEditor', 'Code Editor', 'toggleCodeEditor'),
+      {
+        type: 'action',
+        label: 'Next Window',
+        disabled: true,
+        tooltip: 'Coming soon \u2014 single-window web app',
+      },
+      {
+        type: 'action',
+        label: 'Previous Window',
+        disabled: true,
+        tooltip: 'Coming soon \u2014 single-window web app',
+      },
       { type: 'separator' },
-      panelItem('editTools', 'Edit Tools'),
-      panelItem('designTools', 'Design Tools'),
-      panelItem('displayOptions', 'Display Options'),
+      {
+        type: 'submenu',
+        label: 'Jump To\u2026',
+        disabled: true,
+        tooltip: 'Coming soon',
+      },
       { type: 'separator' },
-      panelItem('fileActions', 'File Actions'),
-      panelItem('libraries', 'Libraries'),
-      panelItem('companionFileManagement', 'Companion Files'),
-      panelItem('presetImportExport', 'Preset Import/Export'),
-      panelItem('renderSettings', 'Render Settings'),
-      panelItem('gridSettings', 'Grid Settings'),
-      panelItem('imageMeasurement', 'Image Measurement'),
-      panelItem('referenceOverlay', 'Reference Overlay'),
-      panelItem('advancedMenu', 'Advanced Menu'),
+      // -- Desktop-parity panel toggles --
+      panelToggle('codeEditor', 'Editor', 'toggleCodeEditor'),
+      panelToggle('consoleOutput', 'Console', 'toggleConsole'),
+      {
+        type: 'toggle',
+        label: 'Customizer',
+        checked: sidebarOpen,
+        shortcutAction: 'toggleCustomizer',
+        handler: () => {
+          const sidebar = document.querySelector('.sidebar');
+          if (sidebar) {
+            sidebar.classList.toggle('collapsed');
+            const nowOpen = !sidebar.classList.contains('collapsed');
+            _announce(nowOpen ? 'Customizer shown' : 'Customizer hidden');
+          }
+        },
+      },
+      panelToggle('errorLog', 'Error-Log', 'toggleErrorLog'),
+      { type: 'separator' },
+      {
+        type: 'action',
+        label: 'Animate',
+        handler: () => {
+          const panel = document.getElementById('animationPanel');
+          if (panel) {
+            panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            const focusable = panel.querySelector('button, input, select');
+            if (focusable) focusable.focus();
+          }
+        },
+      },
+      {
+        type: 'action',
+        label: 'Font List',
+        disabled: true,
+        tooltip: 'Coming soon',
+      },
+      {
+        type: 'action',
+        label: 'Viewport-Control',
+        handler: () => {
+          const panel = document.getElementById('cameraPanel');
+          if (panel) {
+            panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            const focusable = panel.querySelector('button, input, select');
+            if (focusable) focusable.focus();
+          }
+        },
+      },
+      { type: 'separator' },
+      // -- Web-only panel toggles --
+      panelToggle('fileActions', 'File Actions'),
+      panelToggle('editTools', 'Edit Tools'),
+      panelToggle('designTools', 'Design Tools'),
+      panelToggle('displayOptions', 'Display Options'),
+      panelToggle('libraries', 'Libraries'),
+      panelToggle('companionFileManagement', 'Companion Files'),
+      panelToggle('imageMeasurement', 'Image Measurement'),
+      panelToggle('referenceOverlay', 'Reference Overlay'),
+      panelToggle('gridSettings', 'Grid Settings'),
+      panelToggle('renderSettings', 'Render Settings'),
+      panelToggle('presetImportExport', 'Preset Import/Export'),
     ];
   });
 
   // ── Toolbar: Help menu ───────────────────────────────────────────────────
   getToolbarMenuController().registerMenuBuilder('help', () => {
+    function _openFeaturesTab(tabId) {
+      const modal = document.getElementById('featuresGuideModal');
+      if (!modal) return;
+      openModal(modal);
+      const tab = document.getElementById(tabId);
+      if (tab) tab.click();
+    }
+
     return [
+      {
+        type: 'action',
+        label: 'About',
+        handler: () => {
+          const modal = document.getElementById('featuresGuideModal');
+          if (modal) openModal(modal);
+        },
+      },
+      {
+        type: 'action',
+        label: 'OpenSCAD Homepage',
+        tooltip: 'Opens in a new window',
+        handler: () =>
+          window.open('https://openscad.org', '_blank', 'noopener,noreferrer'),
+      },
+      {
+        type: 'action',
+        label: 'Documentation',
+        tooltip: 'Opens in a new window',
+        handler: () =>
+          window.open(
+            'https://openscad.org/documentation.html',
+            '_blank',
+            'noopener,noreferrer'
+          ),
+      },
+      {
+        type: 'action',
+        label: 'Cheat Sheet',
+        tooltip: 'Opens in a new window',
+        handler: () =>
+          window.open(
+            'https://openscad.org/cheatsheet/',
+            '_blank',
+            'noopener,noreferrer'
+          ),
+      },
+      {
+        type: 'action',
+        label: 'Library Info',
+        handler: () => _openFeaturesTab('tab-libraries'),
+      },
+      {
+        type: 'action',
+        label: 'Font List',
+        disabled: true,
+        tooltip: 'Coming soon',
+      },
+      { type: 'separator' },
+      {
+        type: 'action',
+        label: 'Features Guide',
+        shortcutAction: 'showHelp',
+        handler: () => {
+          const modal = document.getElementById('featuresGuideModal');
+          if (modal) openModal(modal);
+        },
+      },
       {
         type: 'action',
         label: 'Keyboard Shortcuts\u2026',
@@ -3427,31 +3714,16 @@ async function initApp() {
           }
         },
       },
-      { type: 'separator' },
       {
         type: 'action',
-        label: 'OpenSCAD Documentation',
-        disabled: true,
-        tooltip: 'Opens in a new tab — coming soon',
-      },
-      {
-        type: 'action',
-        label: 'OpenSCAD Cheat Sheet',
-        disabled: true,
-        tooltip: 'Opens in a new tab — coming soon',
-      },
-      { type: 'separator' },
-      {
-        type: 'action',
-        label: 'Report a Bug\u2026',
-        disabled: true,
-        tooltip: 'Opens GitHub Issues — coming soon',
-      },
-      {
-        type: 'action',
-        label: 'About OpenSCAD Assistive Forge\u2026',
-        disabled: true,
-        tooltip: 'Coming soon',
+        label: 'Report Issue',
+        tooltip: 'Opens in a new window',
+        handler: () =>
+          window.open(
+            'https://github.com/BrennenJohnston/openscad-assistive-forge/issues',
+            '_blank',
+            'noopener,noreferrer'
+          ),
       },
     ];
   });
@@ -6009,12 +6281,11 @@ async function initApp() {
   }
 
   /**
-   * Update the primary action button based on current state
-   * With auto-preview, the button has three states:
-   * - "Download STL" when full-quality STL is ready for current params
-   * - "Generate & Download" when we have a preview but need full render
-   * - "Generate STL" when no preview exists yet
-   * Also shows/hides the fallback download link
+   * Update the primary action button based on current state.
+   * With auto-preview, the button has two states:
+   * - "Download" when full-quality output is ready for current params
+   * - "Generate" when no full render exists yet or params changed
+   * Also shows/hides the fallback download link.
    */
   function updatePrimaryActionButton() {
     const state = stateManager.getState();
@@ -6041,7 +6312,7 @@ async function initApp() {
 
     if (isStlFormat && hasFullQualitySTL && !needsFullRender) {
       // Full quality STL is ready and matches current parameters - show Download
-      primaryActionBtn.textContent = `📥 Download ${formatName}`;
+      primaryActionBtn.textContent = '📥 Download';
       primaryActionBtn.dataset.action = 'download';
       primaryActionBtn.classList.remove('btn-primary');
       primaryActionBtn.classList.add('btn-success');
@@ -6053,7 +6324,7 @@ async function initApp() {
       downloadFallbackLink.classList.add('hidden');
     } else if (isStlFormat) {
       // Need to generate (no full STL yet, or params changed)
-      primaryActionBtn.textContent = `Generate ${formatName}`;
+      primaryActionBtn.textContent = 'Generate';
       primaryActionBtn.dataset.action = 'generate';
       primaryActionBtn.classList.remove('btn-success');
       primaryActionBtn.classList.add('btn-primary');
@@ -6075,7 +6346,7 @@ async function initApp() {
         stateOutputFormat === selectedFormat &&
         !paramsChanged;
       if (hasMatchingOutput) {
-        primaryActionBtn.textContent = `📥 Download ${formatName}`;
+        primaryActionBtn.textContent = '📥 Download';
         primaryActionBtn.dataset.action = 'download';
         primaryActionBtn.classList.remove('btn-primary');
         primaryActionBtn.classList.add('btn-success');
@@ -6084,7 +6355,7 @@ async function initApp() {
           `Download generated ${formatName} file`
         );
       } else {
-        primaryActionBtn.textContent = `Generate ${formatName}`;
+        primaryActionBtn.textContent = 'Generate';
         primaryActionBtn.dataset.action = 'generate';
         primaryActionBtn.classList.remove('btn-success');
         primaryActionBtn.classList.add('btn-primary');
@@ -7399,8 +7670,9 @@ async function initApp() {
       welcomeScreen.classList.add('hidden');
       mainInterface.classList.remove('hidden');
 
-      // Update workflow progress (C3: COGA breadcrumbs)
-      showWorkflowProgress();
+      // Apply mode-aware toolbar/workflow visibility now that the main interface
+      // is active. Advanced: toolbar visible, workflow hidden. Basic: vice versa.
+      _applyToolbarModeVisibility(getUIModeController().getMode());
       completeWorkflowStep('upload');
       setWorkflowStep('customize');
 
@@ -8031,9 +8303,11 @@ async function initApp() {
         // Refresh saved projects list when returning to welcome screen
         await renderSavedProjectsList();
 
-        // Reset and hide workflow progress
+        // Reset workflow step state, then re-apply slot visibility.
+        // _applyToolbarModeVisibility sees mainInterface.hidden=true and hides both
+        // the toolbar and the workflow progress (welcome-screen branch).
         resetWorkflowProgress();
-        hideWorkflowProgress();
+        _applyToolbarModeVisibility(getUIModeController().getMode());
 
         // Exit focus mode if active
         const focusModeBtn = document.getElementById('focusModeBtn');
@@ -9381,7 +9655,7 @@ if (rounded) {
    * Show opt-in save prompt after file upload
    * @param {Object} fileData - Current file state
    */
-  async function showSaveProjectPrompt(fileData) {
+  async function showSaveProjectPrompt(fileData, { preSave = false } = {}) {
     const { uploadedFile, projectFiles, mainFilePath } = fileData;
 
     if (!uploadedFile) return;
@@ -9421,8 +9695,16 @@ if (rounded) {
               <span id="saveProjectNotesCount">0</span> / 5000 characters
             </div>
           </div>
+          <div id="saveProjectDuplicateWarning" style="display:none; margin-top: var(--space-md); padding: var(--space-sm) var(--space-md); border-radius: var(--radius-sm); background: color-mix(in srgb, var(--color-warning, #f59e0b) 15%, transparent); border: 1px solid var(--color-warning, #f59e0b);">
+            <p style="margin: 0 0 var(--space-sm); font-weight: 600; color: var(--color-text-primary);">
+              ⚠ A project named &ldquo;<span id="saveProjectDuplicateName"></span>&rdquo; already exists.
+            </p>
+            <p style="margin: 0; color: var(--color-text-secondary); font-size: var(--text-sm);">
+              Do you want to overwrite it, or save this as a new copy?
+            </p>
+          </div>
         </div>
-        <div class="preset-modal-footer">
+        <div class="preset-modal-footer" id="saveProjectFooter">
           <button class="btn btn-secondary" id="saveProjectNotNow">Not now</button>
           <button class="btn btn-primary" id="saveProjectSave" disabled>Save</button>
         </div>
@@ -9439,6 +9721,15 @@ if (rounded) {
     const saveBtn = modal.querySelector('#saveProjectSave');
     const notNowBtn = modal.querySelector('#saveProjectNotNow');
     const closeBtn = modal.querySelector('.preset-modal-close');
+    const footer = modal.querySelector('#saveProjectFooter');
+    const duplicateWarning = modal.querySelector('#saveProjectDuplicateWarning');
+    const duplicateNameSpan = modal.querySelector('#saveProjectDuplicateName');
+
+    // When called from an explicit Save/Save As action, pre-check the box
+    if (preSave) {
+      checkbox.checked = true;
+      saveBtn.disabled = false;
+    }
 
     // Update save button state based on checkbox
     checkbox.addEventListener('change', () => {
@@ -9459,31 +9750,38 @@ if (rounded) {
       },
     });
 
-    // Handle save
-    saveBtn.addEventListener('click', async () => {
-      if (!checkbox.checked) return;
-
+    async function doSave(overwriteProject) {
       const projectName = nameInput.value.trim() || fileName;
       const notes = notesTextarea.value.trim();
+      const projectFilesObj = projectFiles ? Object.fromEntries(projectFiles) : null;
 
-      // Convert projectFiles Map to object for storage
-      const projectFilesObj = projectFiles
-        ? Object.fromEntries(projectFiles)
-        : null;
-
-      const result = await saveProject({
-        name: projectName,
-        originalName: fileName,
-        kind,
-        mainFilePath: mainFilePath || fileName,
-        content: uploadedFile.content,
-        projectFiles: projectFilesObj,
-        notes,
-      });
+      let result;
+      if (overwriteProject) {
+        result = await updateProject({
+          id: overwriteProject.id,
+          notes,
+          content: uploadedFile.content,
+          projectFiles: projectFilesObj !== null ? JSON.stringify(projectFilesObj) : undefined,
+        });
+        if (result.success) {
+          currentSavedProjectId = overwriteProject.id;
+        }
+      } else {
+        result = await saveProject({
+          name: projectName,
+          originalName: fileName,
+          kind,
+          mainFilePath: mainFilePath || fileName,
+          content: uploadedFile.content,
+          projectFiles: projectFilesObj,
+          notes,
+        });
+        if (result.success) {
+          currentSavedProjectId = result.id;
+        }
+      }
 
       if (result.success) {
-        // Track the saved project ID for companion file auto-save
-        currentSavedProjectId = result.id;
         updateCompanionSaveButton();
         stateManager.announceChange(`Project saved: ${projectName}`);
         updateStatus(`Saved: ${projectName}`);
@@ -9492,12 +9790,39 @@ if (rounded) {
         alert(`Failed to save project: ${result.error}`);
       }
 
-      document.body.removeChild(modal);
+      closeModal(modal);
+      modal.remove();
+    }
+
+    // Handle save — shows inline duplicate confirmation when needed
+    saveBtn.addEventListener('click', async () => {
+      if (!checkbox.checked) return;
+
+      const projectName = nameInput.value.trim() || fileName;
+      const existingProjects = await listSavedProjects();
+      const duplicate = existingProjects.find((p) => p.name === projectName);
+
+      if (duplicate) {
+        // Show inline confirmation — no native dialog
+        duplicateNameSpan.textContent = projectName;
+        duplicateWarning.style.display = 'block';
+
+        // Replace footer buttons with overwrite / new copy choices
+        footer.innerHTML = `
+          <button class="btn btn-secondary" id="saveProjectNewCopy">Save as New Copy</button>
+          <button class="btn btn-danger" id="saveProjectOverwrite">Overwrite Existing</button>
+        `;
+        footer.querySelector('#saveProjectOverwrite').addEventListener('click', () => doSave(duplicate));
+        footer.querySelector('#saveProjectNewCopy').addEventListener('click', () => doSave(null));
+      } else {
+        await doSave(null);
+      }
     });
 
     // Handle close
     const closeHandler = () => {
-      document.body.removeChild(modal);
+      closeModal(modal);
+      modal.remove();
     };
 
     notNowBtn.addEventListener('click', closeHandler);
@@ -9598,12 +9923,14 @@ if (rounded) {
           alert(`Failed to update project: ${result.error}`);
         }
 
-        document.body.removeChild(modal);
+        closeModal(modal);
+        modal.remove();
       });
 
       // Handle close
       const closeHandler = () => {
-        document.body.removeChild(modal);
+        closeModal(modal);
+        modal.remove();
       };
 
       cancelBtn.addEventListener('click', closeHandler);
@@ -15481,7 +15808,7 @@ if (rounded) {
       }
     }
 
-    // D key: Download STL (when button is in download mode)
+    // D key: Download (when button is in download mode)
     if (e.key === 'd' && !e.ctrlKey && !e.metaKey) {
       const target = e.target;
       if (
@@ -15496,7 +15823,7 @@ if (rounded) {
       }
     }
 
-    // G key: Generate STL (when button is in generate mode)
+    // G key: Generate (when button is in generate mode)
     if (e.key === 'g' && !e.ctrlKey && !e.metaKey) {
       const target = e.target;
       if (

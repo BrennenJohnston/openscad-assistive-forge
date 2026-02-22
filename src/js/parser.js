@@ -300,6 +300,39 @@ function parseDefaultValue(valueStr) {
 }
 
 /**
+ * Desktop parity: only literal assignments become Customizer parameters.
+ * Rejects variable references, expressions, and function calls
+ * (desktop comment.cpp line 269: `if (!assignment->getExpr()->isLiteral()) continue;`)
+ * @param {string} valueStr - Raw value string from assignment
+ * @param {Object} parsedResult - Result from parseDefaultValue
+ * @returns {boolean} True if the value is a literal
+ */
+function isLiteralAssignment(valueStr, parsedResult) {
+  const trimmed = valueStr.trim();
+
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return true;
+  }
+
+  if (NUMERIC_LITERAL.test(trimmed)) {
+    return true;
+  }
+
+  if (trimmed === 'true' || trimmed === 'false') {
+    return true;
+  }
+
+  if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+    return parsedResult.type === 'vector';
+  }
+
+  return false;
+}
+
+/**
  * Parse enum values from bracket hint
  * Handles:
  *   - Simple: [opt1, opt2], [opt1,opt2], ["opt 1", "opt 2"], [0,2,4,6]
@@ -602,7 +635,7 @@ export function extractParameters(scadContent) {
   };
 
   // Regex patterns
-  const groupPattern = /\/\*\s*\[\s*([^\]]+)\s*\]\s*\*\//;
+  const groupPattern = /\/\*\s*((?:\[[^\]]*\]\s*)+)\s*\*\//;
   const assignmentPattern = /^([$]?[A-Za-z_][A-Za-z0-9_]*)\s*=\s*([^;]+);/;
   const bracketHintPattern = /\/\/\s*\[([^\]]+)\]/;
   const commentPattern = /\/\/\s*(.+)$/;
@@ -629,10 +662,21 @@ export function extractParameters(scadContent) {
     }
 
     if (depthBefore === 0) {
+      // C2: Desktop parity -- stop parsing at __Customizer_Limit__ sentinel module
+      if (/^module\s+__Customizer_Limit__\s*\(/.test(line)) {
+        break;
+      }
+
       // Check for group
       const groupMatch = line.match(groupPattern);
       if (groupMatch) {
-        let rawGroupName = groupMatch[1].trim();
+        const bracketContentRegex = /\[\s*([^\]]+)\s*\]/g;
+        const bracketParts = [];
+        let bracketInnerMatch;
+        while ((bracketInnerMatch = bracketContentRegex.exec(groupMatch[1])) !== null) {
+          bracketParts.push(bracketInnerMatch[1].trim());
+        }
+        let rawGroupName = bracketParts.join(' - ');
         let groupAnnotation = null;
 
         // Support ":advanced" annotation suffix: /* [GroupName:advanced] */
@@ -699,10 +743,32 @@ export function extractParameters(scadContent) {
         // Parse default value
         const defaultVal = parseDefaultValue(valueStr);
 
+        // C3: Desktop parity -- skip non-literal assignments (expressions, variables, function calls)
+        if (!isLiteralAssignment(valueStr, defaultVal)) {
+          const scopeState = { inBlockComment };
+          const scopeLine = stripForScope(rawLine, scopeState);
+          inBlockComment = scopeState.inBlockComment;
+          for (const ch of scopeLine) {
+            if (ch === '{') scopeDepth += 1;
+            if (ch === '}') scopeDepth = Math.max(0, scopeDepth - 1);
+          }
+          precedingComment = '';
+          continue;
+        }
+
         // Check for bracket hint and comment
         const afterAssignment = line.substring(line.indexOf(';') + 1);
-        const bracketMatch = afterAssignment.match(bracketHintPattern);
-        const commentMatch = afterAssignment.match(commentPattern);
+
+        // C4: Desktop parity -- on multi-assignment lines, annotation applies only to last assignment
+        const codeAfterSemi = afterAssignment
+          .replace(/\/\/.*$/, '')
+          .replace(/\/\*.*?\*\/$/, '')
+          .trim();
+        const isMultiAssignment = assignmentPattern.test(codeAfterSemi);
+        const annotationText = isMultiAssignment ? '' : afterAssignment;
+
+        const bracketMatch = annotationText.match(bracketHintPattern);
+        const commentMatch = annotationText.match(commentPattern);
 
         // Capture preceding comment for description
         const capturedPrecedingComment = precedingComment;
@@ -831,18 +897,62 @@ export function extractParameters(scadContent) {
               if (afterBracket) {
                 param.description = afterBracket;
               }
+            } else if (
+              rangeParts.length === 1 &&
+              isNumericLiteral(hint.trim()) &&
+              (param.type === 'integer' || param.type === 'number')
+            ) {
+              // C1: MakerBot [max] single-number slider (desktop parameterobject.cpp line 55)
+              param.maximum = parseFloat(hint.trim());
+              param.uiType = 'slider';
+
+              const afterBracket = afterAssignment
+                .substring(afterAssignment.indexOf(']') + 1)
+                .trim();
+              if (afterBracket) {
+                param.description = afterBracket;
+              }
             } else {
               // It's an enum: [opt1, opt2, opt3] or labeled [S:Small, M:Medium, L:Large]
               const enumValues = parseEnumValues(hint);
               param.enum = enumValues;
-              param.type = 'string'; // Enums are typically strings
+
+              // Detect boolean enum: [true, false] with a boolean default value.
+              // Preserve the 'boolean' type so buildDefineArgs emits unquoted
+              // true/false instead of the string "true"/"false" (which OpenSCAD
+              // treats as truthy regardless of content).
+              const lowerVals = enumValues.map((item) => item.value.toLowerCase());
+              const isBooleanEnum =
+                enumValues.length === 2 &&
+                lowerVals.includes('true') &&
+                lowerVals.includes('false') &&
+                defaultVal.type === 'boolean';
+
+              // Desktop parity: numeric enums (all values parse as numbers
+              // with a numeric default) must keep their numeric type so that
+              // buildDefineArgs emits unquoted values (e.g. -D angle=0, not
+              // -D angle="0"). Without this, OpenSCAD warns:
+              // "undefined operation (string > number)".
+              const isNumericEnum =
+                !isBooleanEnum &&
+                (defaultVal.type === 'integer' || defaultVal.type === 'number') &&
+                enumValues.every((item) => {
+                  const v = typeof item === 'object' ? item.value : item;
+                  return v.trim() !== '' && !isNaN(Number(v));
+                });
+
+              if (isBooleanEnum || isNumericEnum) {
+                // keep param.type from parseDefaultValue
+              } else {
+                param.type = 'string';
+              }
 
               // Check if it's a yes/no toggle (use value, not label, for comparison)
-              const lowerVals = enumValues.map((item) => item.value.toLowerCase());
               if (
-                enumValues.length === 2 &&
-                lowerVals.includes('yes') &&
-                lowerVals.includes('no')
+                isBooleanEnum ||
+                (enumValues.length === 2 &&
+                  lowerVals.includes('yes') &&
+                  lowerVals.includes('no'))
               ) {
                 param.uiType = 'toggle';
               } else {
@@ -899,7 +1009,7 @@ export function extractParameters(scadContent) {
         if (param.type === 'string' && !param.enum) {
           // Check for a numeric-only comment that specifies max length
           // This matches patterns like: //8 or // 8 or //12
-          const lengthMatch = afterAssignment.match(/\/\/\s*(\d+)\s*$/);
+          const lengthMatch = annotationText.match(/\/\/\s*(\d+)\s*$/);
           if (lengthMatch) {
             const maxLength = parseInt(lengthMatch[1], 10);
             if (maxLength > 0) {
@@ -912,9 +1022,26 @@ export function extractParameters(scadContent) {
           }
         }
 
+        // C5: Fractional step hint for numeric params (desktop parity)
+        // Format: x = 5.5; // .5  (sets spinbox step to 0.5)
+        if (
+          (param.type === 'integer' || param.type === 'number') &&
+          !param.step &&
+          !param.enum
+        ) {
+          const stepMatch = annotationText.match(/\/\/\s*(\.\d+)\s*$/);
+          if (stepMatch) {
+            param.step = parseFloat(stepMatch[1]);
+            param.type = 'number';
+            if (param.description === stepMatch[1]) {
+              param.description = capturedPrecedingComment || '';
+            }
+          }
+        }
+
         // Extract dependency from comment (supports @depends(param==value))
         const fullComment =
-          `${capturedPrecedingComment} ${afterAssignment}`.trim();
+          `${capturedPrecedingComment} ${annotationText}`.trim();
         const dependency = parseDependency(fullComment);
         if (dependency) {
           param.dependency = dependency;

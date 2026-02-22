@@ -782,7 +782,7 @@ function clearMountedFiles() {
 
   const FS = openscadModule.FS;
 
-  // Remove all mounted files
+  // Remove all tracked mounted files
   for (const filePath of mountedFiles.keys()) {
     try {
       FS.unlink(filePath);
@@ -791,31 +791,34 @@ function clearMountedFiles() {
     }
   }
 
-  // Clean up work directory if it exists
+  // Recursively remove the work directory and all its contents
+  function rmRecursive(path) {
+    try {
+      const entries = FS.readdir(path);
+      for (const entry of entries) {
+        if (entry === '.' || entry === '..') continue;
+        const fullPath = `${path}/${entry}`;
+        try {
+          const stat = FS.stat(fullPath);
+          if (FS.isDir(stat.mode)) {
+            rmRecursive(fullPath);
+          } else {
+            FS.unlink(fullPath);
+          }
+        } catch (_e) {
+          // Ignore errors for individual entries
+        }
+      }
+      FS.rmdir(path);
+    } catch (_e) {
+      // Directory may not exist or be already removed
+    }
+  }
+
   try {
     const workDirAnalysis = FS.analyzePath(WORK_DIR);
     if (workDirAnalysis.exists) {
-      // Read directory contents and remove files
-      const entries = FS.readdir(WORK_DIR);
-      for (const entry of entries) {
-        if (entry !== '.' && entry !== '..') {
-          try {
-            const fullPath = `${WORK_DIR}/${entry}`;
-            const stat = FS.stat(fullPath);
-            if (FS.isFile(stat.mode)) {
-              FS.unlink(fullPath);
-            }
-          } catch (_e) {
-            // Ignore cleanup errors for individual files
-          }
-        }
-      }
-      // Try to remove the directory itself
-      try {
-        FS.rmdir(WORK_DIR);
-      } catch (_e) {
-        // Directory may not be empty or may not exist
-      }
+      rmRecursive(WORK_DIR);
     }
   } catch (_error) {
     // Work directory may not exist, ignore
@@ -989,6 +992,18 @@ function clearLibraries() {
 }
 
 /**
+ * Recursively serialize a JS array to OpenSCAD vector syntax, handling nested vectors.
+ * @param {Array} arr
+ * @returns {string} e.g. "[[1,2],[3,4]]"
+ */
+function serializeScadVector(arr) {
+  const parts = arr.map((item) =>
+    Array.isArray(item) ? serializeScadVector(item) : String(item)
+  );
+  return `[${parts.join(',')}]`;
+}
+
+/**
  * Build -D command-line arguments from parameters
  * @param {Object} parameters - Parameter key-value pairs
  * @param {Object} paramTypes - Map of parameter names to their schema types (e.g. { expose_home_button: 'string', MW_version: 'boolean' })
@@ -1038,7 +1053,7 @@ function buildDefineArgs(parameters, paramTypes = {}) {
     } else if (typeof value === 'boolean') {
       formattedValue = value ? 'true' : 'false';
     } else if (Array.isArray(value)) {
-      formattedValue = `[${value.join(',')}]`;
+      formattedValue = serializeScadVector(value);
     } else if (typeof value === 'object' && value.data) {
       // File parameter - use filename
       const escaped = (value.name || 'uploaded_file')
@@ -1112,8 +1127,7 @@ function parametersToScad(parameters, paramTypes = {}) {
       } else if (typeof value === 'boolean') {
         return `${key} = ${value};`;
       } else if (Array.isArray(value)) {
-        // Handle arrays (including RGB arrays)
-        return `${key} = [${value.join(', ')}];`;
+        return `${key} = ${serializeScadVector(value)};`;
       } else {
         return `${key} = ${JSON.stringify(value)};`;
       }
@@ -1161,9 +1175,9 @@ function _applyOverrides(scadContent, parameters, paramTypes = {}) {
       return `"${escaped}"`;
     }
 
-    // Handle arrays
+    // Handle arrays (including nested vectors like [[1,2],[3,4]])
     if (Array.isArray(value)) {
-      return `[${value.join(', ')}]`;
+      return serializeScadVector(value);
     }
 
     // Handle strings
@@ -1430,91 +1444,22 @@ async function renderWithCallMain(
         );
       }
     } catch (error) {
-      // Only retry-without-flags for "silent" numeric aborts where we got no useful output.
-      // If OpenSCAD produced a meaningful error (like empty geometry / unsupported config),
-      // retrying tends to destroy the useful message and replace it with another abort code.
-      const hasUsefulOutput =
-        typeof openscadConsoleOutput === 'string' &&
-        openscadConsoleOutput.trim().length > 0;
-      const isNumericAbort =
-        typeof error === 'number' ||
-        /^\d+$/.test(String(error)) ||
-        (/\b\d{6,}\b/.test(String(error)) && !hasUsefulOutput);
-      const shouldAttemptRetryWithoutFlags =
-        shouldRetryWithoutFlags && !hasUsefulOutput && isNumericAbort;
+      // After callMain throws (especially a numeric abort), the WASM module's
+      // internal state is corrupted. Retrying on the same module is futile —
+      // let the error propagate so the render controller can restart the worker.
+      const isThrownNumeric =
+        typeof error === 'number' || /^\d+$/.test(String(error));
 
-      if (shouldAttemptRetryWithoutFlags) {
+      if (isThrownNumeric) {
         console.warn(
-          '[Worker] Render failed with performance flags, retrying without flags'
+          `[Worker] callMain threw numeric abort (${error}), module likely corrupted — skipping same-module retry`
         );
-        const argsWithoutFlags = [...defineArgs, '-o', outputFile, inputFile];
-
-        // Clear console output for retry
-        openscadConsoleOutput = '';
-
-        let retryExitCode;
-        try {
-          retryExitCode = await module.callMain(argsWithoutFlags);
-        } catch (retryError) {
-          // If the retry throws (often a numeric abort), surface any console output
-          // so the UI can guide the user (e.g., dependency/toggle errors).
-          const retryErrStr = String(retryError);
-          const outputHint = openscadConsoleOutput
-            ? ` Output: ${openscadConsoleOutput.substring(0, 500)}`
-            : '';
-          throw new Error(
-            `OpenSCAD render failed on retry.${outputHint} Raw: ${retryErrStr.substring(0, 80)}`
-          );
-        }
-
-        if (retryExitCode !== 0) {
-          throw new Error(
-            `OpenSCAD compilation failed with exit code ${retryExitCode}. Output: ${openscadConsoleOutput.substring(0, 500)}`
-          );
-        }
-
-        // Retry may return 0 even when it produced empty geometry.
-        if (
-          openscadConsoleOutput.includes('Current top level object is empty') ||
-          openscadConsoleOutput.includes('top-level object is empty')
-        ) {
-          throw new Error(
-            `Current top level object is empty. Output: ${openscadConsoleOutput.substring(0, 500)}`
-          );
-        }
-
-        // Check for 2D object on retry as well
-        if (
-          openscadConsoleOutput.includes(
-            'Current top level object is not a 3D object'
-          ) ||
-          openscadConsoleOutput.includes('Top level object is a 2D object')
-        ) {
-          throw new Error(
-            `MODEL_IS_2D: Your model produces 2D geometry which cannot be displayed in the 3D viewer. ` +
-              `To export: select SVG or DXF output format. ` +
-              `To preview in 3D: adjust your model parameters to produce 3D geometry.`
-          );
-        }
-
-        const retryNotSupportedMatch = openscadConsoleOutput.match(
-          /ECHO:.*is not supported/i
-        );
-        if (retryNotSupportedMatch) {
-          throw new Error(
-            `Configuration is not supported. Output: ${openscadConsoleOutput.substring(0, 500)}`
-          );
-        }
-
-        // Emit warning so UI can show "using default backend"
-        postMessage({
-          type: 'WARNING',
-          message:
-            'Performance flags not supported by this OpenSCAD build (retried without flags)',
-        });
-      } else {
-        throw error; // Re-throw non-flag errors
+        throw error;
       }
+
+      // For non-numeric errors (compilation failures with useful output),
+      // re-throw as-is for the render controller to handle.
+      throw error;
     }
 
     // Read output file
@@ -2112,6 +2057,9 @@ async function render(payload) {
     // Mount additional files for multi-file project include/use resolution
     let mountResult = null;
     if (files && Object.keys(files).length > 0) {
+      // Clear any previously mounted files to ensure clean FS state
+      clearMountedFiles();
+
       // Convert files object to Map
       const filesMap = new Map(Object.entries(files));
 
@@ -2413,6 +2361,7 @@ async function render(payload) {
         code,
         message,
         details,
+        consoleOutput: openscadConsoleOutput || '',
       },
     });
   }

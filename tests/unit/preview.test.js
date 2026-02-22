@@ -395,6 +395,44 @@ describe('PreviewManager', () => {
       // Should not throw
       expect(() => manager.hideLODWarning()).not.toThrow()
     })
+
+    it('"Don\'t show again" permanently dismisses the warning', () => {
+      const manager = new PreviewManager(container)
+      manager.showLODWarning(150000, 50000, false)
+
+      const permanentBtn = container.querySelector('#lodWarningDismissPermanent')
+      expect(permanentBtn).not.toBeNull()
+      permanentBtn.click()
+
+      expect(container.querySelector('#lodWarning')).toBeNull()
+      expect(manager.isLODWarningPermanentlyDismissed()).toBe(true)
+
+      manager.showLODWarning(150000, 50000, false)
+      expect(container.querySelector('#lodWarning')).toBeNull()
+    })
+
+    it('permanent dismiss survives new PreviewManager instances', () => {
+      const manager1 = new PreviewManager(container)
+      manager1.dismissLODWarningPermanently()
+
+      const container2 = document.createElement('div')
+      const manager2 = new PreviewManager(container2)
+      manager2.showLODWarning(150000, 50000, false)
+
+      expect(container2.querySelector('#lodWarning')).toBeNull()
+    })
+
+    it('resetLODWarningDismissal re-enables warnings', () => {
+      const manager = new PreviewManager(container)
+      manager.dismissLODWarningPermanently()
+      expect(manager.isLODWarningPermanentlyDismissed()).toBe(true)
+
+      manager.resetLODWarningDismissal()
+      expect(manager.isLODWarningPermanentlyDismissed()).toBe(false)
+
+      manager.showLODWarning(150000, 50000, false)
+      expect(container.querySelector('#lodWarning')).not.toBeNull()
+    })
   })
 
   describe('LOD Stats', () => {

@@ -20,10 +20,29 @@ export async function extractZipFiles(zipFile) {
     let mainFile = null;
     const scadFiles = [];
 
+    // Binary-only file types that cannot be represented as text and are not
+    // used by OpenSCAD for rendering. Extracting these as UTF-8 text corrupts
+    // their content and wastes significant memory.
+    const BINARY_ONLY_EXTS = new Set([
+      'png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'tiff', 'tif', 'ico',
+      'stl', 'obj', 'amf', '3mf', 'wrl', 'zip', 'gz', 'tar',
+      'mp4', 'mp3', 'wav', 'avi', 'mov',
+      'pdf', 'doc', 'docx', 'xls', 'xlsx',
+    ]);
+
     // Extract all files
     for (const [relativePath, zipEntry] of Object.entries(zipData.files)) {
       // Skip directories
       if (zipEntry.dir) continue;
+
+      // Skip binary-only files: they cannot be stored as text strings and
+      // are not used by the OpenSCAD WASM renderer.
+      const extMatch = relativePath.match(/\.([^./\\]+)$/);
+      const ext = extMatch ? extMatch[1].toLowerCase() : '';
+      if (BINARY_ONLY_EXTS.has(ext)) {
+        console.log(`[ZIP] Skipping binary file (not usable as text): ${relativePath}`);
+        continue;
+      }
 
       // Extract file content as text
       const content = await zipEntry.async('text');
@@ -87,7 +106,7 @@ export async function extractZipFiles(zipFile) {
 /**
  * Detect the main .scad file from a list of candidates
  * Strategy:
- * 1. Look for "main.scad" or files with "main" in the name
+ * 1. Look for "main.scad" or files with "main" in the filename
  * 2. Look for files in the root directory (no subdirectories)
  * 3. Look for the first .scad file with Customizer annotations
  * 4. Fall back to the first .scad file alphabetically
@@ -108,9 +127,9 @@ function detectMainFile(scadFiles, files) {
   );
   if (mainScad) return mainScad;
 
-  // Strategy 2: Look for files with "main" in the name
+  // Strategy 2: Look for files with "main" in the filename (basename only)
   const mainNamed = scadFiles.find((path) =>
-    path.toLowerCase().includes('main')
+    path.split('/').pop().toLowerCase().includes('main')
   );
   if (mainNamed) return mainNamed;
 

@@ -300,6 +300,7 @@ export class RenderController {
     this.renderQueue = Promise.resolve();
     this.memoryUsage = null;
     this.onMemoryWarning = null;
+    this._moduleUsed = false;
 
     // Worker health monitoring
     this._heartbeatId = 0;
@@ -598,6 +599,10 @@ export class RenderController {
         break;
 
       case 'ERROR':
+        // Surface any console output captured before the error (warnings, echos)
+        if (payload.consoleOutput && typeof window.updateConsoleOutput === 'function') {
+          window.updateConsoleOutput(payload.consoleOutput);
+        }
         if (
           this.currentRequest &&
           payload.requestId === this.currentRequest.id
@@ -661,6 +666,14 @@ export class RenderController {
       case 'PONG':
         // Worker heartbeat response — update health tracking
         this._lastPongTimestamp = Date.now();
+        break;
+
+      case 'CONSOLE':
+        // Runtime console output from the WASM engine (e.g. echo/warning during render)
+        if (typeof window.updateConsoleOutput === 'function') {
+          const text = payload?.output || payload?.message;
+          if (text) window.updateConsoleOutput(text);
+        }
         break;
 
       case 'DEBUG_LOG':
@@ -915,6 +928,12 @@ export class RenderController {
       };
 
       const renderOnce = async () => {
+        if (this._moduleUsed) {
+          console.log('[RenderController] Proactive restart: WASM module was used by previous render');
+          await this.restart();
+          this._moduleUsed = false;
+        }
+
         if (!this.ready) {
           throw new Error('Worker not ready. Call init() first.');
         }
@@ -927,6 +946,7 @@ export class RenderController {
             id: requestId,
             resolve: (result) => {
               const renderDurationMs = Math.round(performance.now() - renderStartTime);
+              this._moduleUsed = true;
               console.debug('[Render] Compilation complete:', {
                 requestId,
                 durationMs: renderDurationMs,

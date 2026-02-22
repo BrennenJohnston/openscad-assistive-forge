@@ -324,62 +324,65 @@
         </div>
       </div>
       <div id="toolbarSlot">
-        <div
-          id="toolbarMenuBar"
-          class="toolbar-menu-bar hidden"
-          aria-label="Application menu"
-        >
-          <button
-            class="toolbar-menu-btn btn"
-            id="fileMenuBtn"
-            aria-haspopup="dialog"
-            aria-expanded="false"
-          >
-            File</button
-          ><button
-            class="toolbar-menu-btn btn"
-            id="editMenuBtn"
-            aria-haspopup="dialog"
-            aria-expanded="false"
-          >
-            Edit</button
-          ><button
-            class="toolbar-menu-btn btn"
-            id="designMenuBtn"
-            aria-haspopup="dialog"
-            aria-expanded="false"
-          >
-            Design</button
-          ><button
-            class="toolbar-menu-btn btn"
-            id="viewMenuBtn"
-            aria-haspopup="dialog"
-            aria-expanded="false"
-          >
-            View</button
-          ><button
-            class="toolbar-menu-btn btn"
-            id="windowMenuBtn"
-            aria-haspopup="dialog"
-            aria-expanded="false"
-          >
-            Window</button
-          ><button
-            class="toolbar-menu-btn btn"
-            id="helpMenuBtn"
-            aria-haspopup="dialog"
-            aria-expanded="false"
-          >
-            Help
-          </button>
-        </div>
         <!-- Workflow Progress Indicator (C3: COGA breadcrumbs) - Moved here to prevent header overlap -->
+        <!-- #toolbarMenuBar is a flex sibling of .workflow-steps inside this container so that
+             in Advanced mode the toolbar buttons share the same row as the action buttons,
+             exactly replacing the breadcrumb steps. -->
         <div
           class="workflow-progress hidden"
           id="workflowProgress"
           role="navigation"
           aria-label="Workflow progress"
         >
+          <div
+            id="toolbarMenuBar"
+            class="toolbar-menu-bar hidden"
+            aria-label="Application menu"
+          >
+            <button
+              class="toolbar-menu-btn btn"
+              id="fileMenuBtn"
+              aria-haspopup="dialog"
+              aria-expanded="false"
+            >
+              File</button
+            ><button
+              class="toolbar-menu-btn btn"
+              id="editMenuBtn"
+              aria-haspopup="dialog"
+              aria-expanded="false"
+            >
+              Edit</button
+            ><button
+              class="toolbar-menu-btn btn"
+              id="designMenuBtn"
+              aria-haspopup="dialog"
+              aria-expanded="false"
+            >
+              Design</button
+            ><button
+              class="toolbar-menu-btn btn"
+              id="viewMenuBtn"
+              aria-haspopup="dialog"
+              aria-expanded="false"
+            >
+              View</button
+            ><button
+              class="toolbar-menu-btn btn"
+              id="windowMenuBtn"
+              aria-haspopup="dialog"
+              aria-expanded="false"
+            >
+              Window</button
+            ><button
+              class="toolbar-menu-btn btn"
+              id="helpMenuBtn"
+              aria-haspopup="dialog"
+              aria-expanded="false"
+            >
+              Help
+            </button>
+          </div>
           <ol class="workflow-steps">
             <li class="workflow-step" data-step="upload" aria-current="false">
               <span class="workflow-step-number">1</span>
@@ -652,7 +655,7 @@
                     names
                   </p>
                   <ul class="role-path-tips" aria-label="What you'll learn">
-                    <li>Say button labels: "Click Generate STL"</li>
+                    <li>Say button labels: "Click Generate"</li>
                     <li>Navigate: "Click Help", "Click Reset"</li>
                     <li>All controls have unique, speakable names</li>
                   </ul>
@@ -3844,11 +3847,11 @@
                 <button
                   id="primaryActionBtn"
                   class="btn btn-primary btn-large"
-                  aria-label="Generate STL file from current parameters"
+                  aria-label="Generate output file from current parameters"
                   data-action="generate"
                   data-tutorial-target="primary-action"
                 >
-                  Generate STL
+                  Generate
                 </button>
                 <a
                   id="downloadFallbackLink"

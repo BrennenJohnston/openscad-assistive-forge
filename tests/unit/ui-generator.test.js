@@ -520,8 +520,8 @@ describe('UI Generator', () => {
       const groups = container.querySelectorAll('details.param-group')
       const summaries = container.querySelectorAll('summary')
       expect(groups.length).toBe(2)
-      expect(summaries[0].textContent).toBe('Group A')
-      expect(summaries[1].textContent).toBe('Group B')
+      expect(summaries[0].querySelector('.param-group-label')?.textContent ?? summaries[0].textContent.replace(/✕$/, '')).toBe('Group A')
+      expect(summaries[1].querySelector('.param-group-label')?.textContent ?? summaries[1].textContent.replace(/✕$/, '')).toBe('Group B')
     })
 
     it('skips groups with no parameters', () => {
@@ -538,7 +538,9 @@ describe('UI Generator', () => {
 
       renderParameterUI(schema, container, onChange, {})
 
-      const summaries = Array.from(container.querySelectorAll('summary')).map(el => el.textContent)
+      const summaries = Array.from(container.querySelectorAll('summary')).map(
+        el => el.querySelector('.param-group-label')?.textContent ?? el.textContent.replace(/✕$/, '')
+      )
       expect(summaries).toEqual(['Filled Group'])
     })
 

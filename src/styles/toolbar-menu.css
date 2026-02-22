@@ -16,6 +16,15 @@
   flex-wrap: wrap;
 }
 
+/* When nested inside .workflow-progress as a flex sibling of .workflow-steps,
+   the toolbar bar should fill the left side of the row exactly as .workflow-steps
+   does — flex:1 with no extra padding (the parent already provides spacing). */
+.workflow-progress .toolbar-menu-bar {
+  flex: 1;
+  padding: 0;
+  min-width: 0;
+}
+
 .toolbar-menu-btn {
   padding: var(--space-xs) var(--space-sm);
   min-height: var(--size-touch-target);
@@ -72,9 +81,9 @@
 
 .toolbar-menu-content {
   position: relative;
-  z-index: 1;
-  min-width: 280px;
-  max-width: 380px;
+  z-index: var(--z-index-above-overlay, 1);
+  min-width: var(--toolbar-menu-min-w, 280px);
+  max-width: var(--toolbar-menu-max-w, 380px);
   background: var(--color-bg-primary);
   border: var(--border-width-thin) solid var(--color-border);
   border-radius: var(--border-radius-sm);
@@ -96,7 +105,7 @@
   font-weight: var(--font-weight-medium);
   color: var(--color-text-secondary);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: var(--letter-spacing-wide, 0.05em);
 }
 
 .toolbar-menu-close {
@@ -232,6 +241,63 @@
 }
 
 /* ============================================================================
+   Radio Groups (semantic <fieldset>/<legend>/<input type="radio">)
+   ============================================================================ */
+
+.menu-radio-fieldset {
+  border: none;
+  padding: 0;
+  margin: 0;
+}
+
+.menu-radio-legend {
+  font-size: var(--font-size-2xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wide, 0.05em);
+  padding: var(--space-xs) var(--space-md) 0;
+}
+
+.menu-radio-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  width: 100%;
+  padding: var(--space-xs) var(--space-md);
+  min-height: var(--size-touch-target);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  border-radius: var(--border-radius-sm);
+  text-align: left;
+  color: inherit;
+  font-size: var(--font-size-sm);
+  transition: background-color 150ms ease;
+}
+
+.menu-radio-label:hover {
+  background: var(--color-hover-bg);
+}
+
+.menu-radio-label:focus-within {
+  outline: var(--focus-ring-width) solid var(--color-focus);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.menu-radio-label[aria-disabled='true'] {
+  opacity: var(--opacity-disabled);
+  cursor: not-allowed;
+}
+
+.menu-radio-input {
+  accent-color: var(--color-accent);
+  width: var(--space-md);
+  height: var(--space-md);
+  flex-shrink: 0;
+}
+
+/* ============================================================================
    Theme Variants
    ============================================================================ */
 
@@ -257,6 +323,7 @@
   .toolbar-menu-btn,
   .toolbar-menu-close,
   .menu-item-btn,
+  .menu-radio-label,
   .menu-submenu-arrow {
     transition: none;
   }

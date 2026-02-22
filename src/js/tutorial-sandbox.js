@@ -286,9 +286,14 @@ async function resolveTargetWithRetry(step, timeoutMs = 1500) {
   const startTime = performance.now();
 
   const tryResolve = async () => {
+    // Prefer an already-visible target so multi-selector steps (e.g.
+    // mobile-only + desktop-only) pick the right element for the viewport.
+    const visibleCandidate = resolveStepTarget(step, { requireVisible: true });
+    if (visibleCandidate) return visibleCandidate;
+
+    // Fallback: find any matching element and wait for it to become visible
     const candidate = resolveStepTarget(step, { requireVisible: false });
     if (!candidate) return null;
-    if (isElementVisible(candidate)) return candidate;
 
     const remaining = Math.max(0, timeoutMs - (performance.now() - startTime));
     if (remaining <= 0) return null;
@@ -812,7 +817,7 @@ function getStepContent(step) {
 }
 
 /**
- * Tutorial definitions - Streamlined content for better UX
+ * Tutorial step definitions
  */
 const TUTORIALS = {
   intro: {
@@ -934,23 +939,23 @@ const TUTORIALS = {
         ],
       },
       {
-        title: 'Save a preset (optional, but helpful)',
+        title: 'Save a design (preset)',
         content: `
-          <p><strong>Presets</strong> let you save and switch between different configurations.</p>
+          <p><strong>Designs</strong> (presets) let you save and switch between different configurations.</p>
           <details class="tutorial-more">
             <summary>What each button does</summary>
             <ul>
-              <li><strong>Select</strong> (dropdown) — pick a saved preset</li>
-              <li><strong>Save</strong> — overwrite the current preset with your changes</li>
-              <li><strong>Add (+)</strong> — create a new preset from current settings</li>
-              <li><strong>Delete (\u2212)</strong> — remove the selected preset</li>
-              <li><strong>Import / Export</strong> — share presets as JSON files</li>
+              <li><strong>Select</strong> (dropdown) — pick a saved design</li>
+              <li><strong>Save</strong> — overwrite the current design with your changes</li>
+              <li><strong>Add (+)</strong> — create a new design from current settings</li>
+              <li><strong>Delete (\u2212)</strong> — remove the selected design</li>
+              <li><strong>Import / Export</strong> — share designs as JSON files. You can sort designs or choose to merge or replace all when importing.</li>
             </ul>
           </details>
-          <p class="tutorial-hint">Presets are saved in your browser for this model.</p>
+          <p class="tutorial-hint">Designs are saved in your browser for this model.</p>
         `,
         contentCompact: `
-          <p>Use <strong>Presets</strong> to save, load, and share configurations.</p>
+          <p>Use <strong>Designs</strong> (presets) to save, load, and share configurations.</p>
           <p class="tutorial-hint">Saved in your browser for this model.</p>
         `,
         // Target the clickable summary so the panel can avoid covering it.
@@ -969,12 +974,13 @@ const TUTORIALS = {
             <li>Status and progress</li>
             <li>Model dimensions</li>
             <li>Preview/export quality</li>
+            <li><strong>Grid size</strong> — set the grid to match your printer bed. <strong>Try it:</strong> change the width to match your printer.</li>
           </ul>
           <p class="tutorial-hint">You can resize this drawer using the handle. With keyboard: focus the handle, then use arrow keys.</p>
         `,
         contentCompact: `
           <p>Tap to see status, dimensions, and quality settings.</p>
-          <p class="tutorial-hint">Use the handle to resize.</p>
+          <p class="tutorial-hint">Set the grid size to match your printer bed!</p>
         `,
         highlightSelector: '@preview-drawer-toggle',
         position: 'left',
@@ -1022,13 +1028,14 @@ const TUTORIALS = {
         },
       },
       {
-        title: 'Companion Files',
+        title: 'Companion Files & Screenshot Overlay',
         content: `
           <p>Some designs use extra files (like <code>.txt</code> or <code>.svg</code>). When loaded from a ZIP, they appear in the <strong>Companion Files</strong> section.</p>
+          <p>If a <code>screenshot.png</code> file is included, the app automatically loads it as a <strong>reference overlay</strong> behind your keyguard in the 3D preview — helping you align openings with tablet buttons.</p>
           <p class="tutorial-hint">You can also add files manually using the <strong>Add File</strong> button.</p>
         `,
         contentCompact: `
-          <p>Extra files (<code>.txt</code>, <code>.svg</code>) appear under <strong>Companion Files</strong>.</p>
+          <p>Extra files (<code>.txt</code>, <code>.png</code>) appear under <strong>Companion Files</strong>. Screenshots auto-load as reference overlays.</p>
         `,
         highlightSelector:
           '[data-tutorial-target="companion-files"], #projectFilesControls summary',
@@ -1084,8 +1091,9 @@ const TUTORIALS = {
           <ul>
             <li>Try a different example from the Welcome screen</li>
             <li>Upload your own <code>.scad</code> or <code>.zip</code> project</li>
-            <li>Switch between <strong>Simple</strong> and <strong>Advanced</strong> settings to see more options</li>
-            <li>Use Presets and the Actions menu to save and share your work</li>
+            <li>Save designs and use Import / Export to share your work</li>
+            <li>Set the grid to match your printer bed in Preview Settings</li>
+            <li>Don't need a parameter group right now? Hide it with the button on the group header.</li>
           </ul>
         `,
         position: 'center',
@@ -1150,6 +1158,22 @@ const TUTORIALS = {
         },
       },
       {
+        title: 'Import Designs',
+        content: `
+          <p>In <strong>Import / Export Designs</strong>, you can choose how imported designs are merged:</p>
+          <ul>
+            <li><strong>Merge</strong> — add imports alongside your existing designs</li>
+            <li><strong>Replace all</strong> — delete existing designs and start fresh from the import file</li>
+          </ul>
+          <p class="tutorial-hint">Replace mode always asks for confirmation before deleting.</p>
+        `,
+        contentCompact: `
+          <p>Import designs in <strong>Merge</strong> or <strong>Replace all</strong> mode.</p>
+        `,
+        highlightSelector: '#presetControls summary, @preset-controls',
+        position: 'right',
+      },
+      {
         title: 'All Set!',
         content: `
           <p>You're ready for advanced OpenSCAD workflows.</p>
@@ -1205,6 +1229,23 @@ const TUTORIALS = {
           <p>Dialogs trap focus inside. Press <kbd>Esc</kbd> to close and return to your previous location.</p>
         `,
         position: 'center',
+      },
+      {
+        title: 'Hide Parameter Groups',
+        content: `
+          <p>If a parameter group isn't relevant to your current task, you can hide it:</p>
+          <ul>
+            <li>Tab to a group header, then Tab again to reach the <strong>Hide group</strong> button (×).</li>
+            <li>Press <kbd>Space</kbd> or <kbd>Enter</kbd> to hide the group.</li>
+            <li>A <strong>Show all</strong> button appears at the bottom of the panel — Tab to it and press <kbd>Enter</kbd> to restore all groups.</li>
+          </ul>
+          <p class="tutorial-hint">Hidden groups are remembered per model.</p>
+        `,
+        contentCompact: `
+          <p>Tab to a group's × button to hide it. Tab to "Show all" to restore.</p>
+        `,
+        highlightSelector: '#parametersContainer',
+        position: 'right',
       },
       {
         title: "You're Set!",
@@ -1292,7 +1333,7 @@ const TUTORIALS = {
         content: `
           <p>Say the button label:</p>
           <ul>
-            <li>"Click Generate STL"</li>
+            <li>"Click Generate"</li>
             <li>"Click Reset"</li>
             <li>"Click Help"</li>
           </ul>
@@ -1403,9 +1444,26 @@ const TUTORIALS = {
         position: 'left',
       },
       {
+        title: 'Console Warnings',
+        content: `
+          <p>When a model references a missing file (e.g. <code>include &lt;missing.txt&gt;</code>), the <strong>Console</strong> panel in the Parameters area announces the warning.</p>
+          <ul>
+            <li>A badge count appears on the Console button</li>
+            <li>The live region announces the warning to your screen reader</li>
+            <li>Filter by Warnings to see only relevant messages</li>
+          </ul>
+        `,
+        contentCompact: `
+          <p>Missing-file warnings appear in the <strong>Console</strong> panel with a live region announcement.</p>
+        `,
+        highlightSelector: '[data-tutorial-target="console-panel"], .console-panel-btn',
+        position: 'right',
+      },
+      {
         title: 'Ready!',
         content: `
           <p>All features have proper ARIA labels and live region announcements.</p>
+          <p class="tutorial-hint">New: sort-change, group-hide, and grid-size updates are all announced via live regions.</p>
         `,
         position: 'center',
       },

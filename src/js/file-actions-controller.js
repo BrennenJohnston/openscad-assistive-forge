@@ -30,8 +30,9 @@ export class FileActionsController {
    * @param {Object} [options]
    * @param {Function} [options.onNew]        - () => void — reset to blank state
    * @param {Function} [options.onReload]     - () => void — re-parse current file
-   * @param {Function} [options.onSave]       - () => void — trigger .scad download
-   * @param {Function} [options.onSaveAs]     - () => void — prompt filename then download
+   * @param {Function} [options.onSave]       - () => void — overwrite saved project or show save prompt
+   * @param {Function} [options.onSaveAs]     - () => void — show save-as prompt for new named copy
+   * @param {Function} [options.onSaveAll]    - () => void — overwrite all files in current project
    * @param {Function} [options.onExportImage]- () => void — capture canvas as PNG
    * @param {Function} [options.onOpenRecent] - (entry: RecentFileEntry) => void
    */
@@ -40,6 +41,7 @@ export class FileActionsController {
     this.onReload = options.onReload || (() => {});
     this.onSave = options.onSave || (() => {});
     this.onSaveAs = options.onSaveAs || (() => {});
+    this.onSaveAll = options.onSaveAll || (() => {});
     this.onExportImage = options.onExportImage || (() => {});
     this.onOpenRecent = options.onOpenRecent || (() => {});
 

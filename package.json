@@ -39,7 +39,9 @@
     "test:visual": "playwright test --project=visual-regression",
     "test:visual:update": "playwright test --project=visual-regression --update-snapshots",
     "check-a11y": "lighthouse http://localhost:5173 --only-categories=accessibility --quiet",
-    "check-bundle": "node scripts/check-bundle-budget.js dist"
+    "check-bundle": "node scripts/check-bundle-budget.js dist",
+    "validate:html": "vnu --also-check-css --also-check-svg index.html",
+    "validate:html:built": "vnu --also-check-css --also-check-svg dist/index.html"
   },
   "keywords": [
     "openscad",
@@ -72,6 +74,7 @@
     "png-to-ico": "^3.0.1",
     "prettier": "^3.1.1",
     "vite": "^7.3.1",
+    "vnu-jar": "^22.9.29",
     "vitest": "^4.0.17"
   },
   "dependencies": {
