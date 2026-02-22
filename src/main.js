@@ -48,6 +48,8 @@ import {
   validateZipFile,
   createFileTree,
   getZipStats,
+  resolveProjectFile,
+  buildPresetCompanionMap,
 } from './js/zip-handler.js';
 import { loadManifest, ManifestError } from './js/manifest-loader.js';
 import {
@@ -1937,6 +1939,9 @@ async function initApp() {
   let statusArea = null;
   let cameraPanelController = null; // Declared here, initialized later
   let autoPreviewEnabled = true;
+  // Runtime mapping from preset name to companion file paths (built on ZIP load).
+  // Stores path references only — content is resolved lazily on preset activation.
+  let presetCompanionMap = null;
   let autoPreviewUserEnabled = true;
   let previewQuality = RENDER_QUALITY.PREVIEW;
 
@@ -6946,9 +6951,10 @@ async function initApp() {
 
     if (shouldShow) {
       const screenshotFile = parameters.screenshot_file || 'default.svg';
-      if (projectFiles?.has(screenshotFile)) {
-        if (overlaySourceSelect) overlaySourceSelect.value = screenshotFile;
-        loadOverlayFromProjectFile(screenshotFile)
+      const resolved = resolveProjectFile(projectFiles, screenshotFile);
+      if (resolved) {
+        if (overlaySourceSelect) overlaySourceSelect.value = resolved.key;
+        loadOverlayFromProjectFile(resolved.key)
           .then(() => {
             overlayToggle.checked = true;
             previewManager.setOverlayEnabled(true);
@@ -6960,6 +6966,11 @@ async function initApp() {
               err
             );
           });
+      } else {
+        console.warn(
+          `[App] syncOverlayWithScreenshotParam: "${screenshotFile}" not found ` +
+            'or ambiguous in projectFiles — overlay not displayed.'
+        );
       }
     } else {
       overlayToggle.checked = false;
@@ -7880,6 +7891,19 @@ async function initApp() {
             `Loaded: ${fileName}${companionText} + ${autoImportedCount} preset${autoImportedCount > 1 ? 's' : ''}`
           );
           updatePresetDropdown();
+
+          // Build preset→companion-file path mapping for alias mounting on preset load.
+          // Uses the imported preset names to match against nested file paths in the ZIP.
+          const importedPresets = presetManager.getPresetsForModel(originalFileName);
+          if (importedPresets.length > 0) {
+            const parameterSetsForMap = Object.fromEntries(
+              importedPresets.map((p) => [p.name, p.parameters])
+            );
+            presetCompanionMap = buildPresetCompanionMap(projectFiles, parameterSetsForMap);
+            console.log(
+              `[ZIP] Built preset companion map for ${presetCompanionMap.size} presets`
+            );
+          }
         }
       }
 
@@ -13355,6 +13379,131 @@ if (rounded) {
     updatePresetControlStates();
   }
 
+  /**
+   * Single entry point for applying a preset's parameters AND companion files.
+   * Called by both the Manage Presets modal and the preset dropdown so the two
+   * code paths stay identical in behaviour (Bug D fix).
+   *
+   * Responsibilities:
+   *  1. Merge visible preset parameters onto current state
+   *  2. Re-render parameter UI
+   *  3. Apply explicit preset.companionFiles (embedded content, legacy path)
+   *  4. Alias-mount preset-specific files from presetCompanionMap (ZIP path)
+   *  5. Update auto-preview controller
+   *  6. Sync screenshot overlay
+   *  7. Track current preset selection and update status
+   *
+   * @param {Object} preset - Loaded preset with .parameters, .name, .id
+   */
+  function applyPresetParametersAndCompanions(preset) {
+    isLoadingPreset = true;
+
+    const state = stateManager.getState();
+    const hiddenNames = new Set(
+      Object.keys(state.schema?.hiddenParameters || {})
+    );
+
+    // Merge visible preset params onto current state (desktop OpenSCAD parity)
+    const visiblePresetParams = {};
+    for (const [k, v] of Object.entries(preset.parameters)) {
+      if (!hiddenNames.has(k)) visiblePresetParams[k] = v;
+    }
+    const mergedParams = { ...state.parameters, ...visiblePresetParams };
+    stateManager.setState({ parameters: mergedParams });
+
+    // Re-render UI with merged parameters
+    const parametersContainer = document.getElementById('parametersContainer');
+    renderParameterUI(
+      state.schema,
+      parametersContainer,
+      (values) => {
+        stateManager.setState({ parameters: values });
+        clearPresetSelection(values);
+        if (autoPreviewController) {
+          autoPreviewController.onParameterChange(values);
+        }
+        updatePrimaryActionButton();
+        syncOverlayWithScreenshotParam(values);
+      },
+      mergedParams
+    );
+
+    // Build updated projectFiles, starting from current state
+    const curState = stateManager.getState();
+    const newProjectFiles = curState.projectFiles
+      ? new Map(curState.projectFiles)
+      : new Map();
+
+    // E2: Merge explicit preset.companionFiles (saved presets with embedded content)
+    if (
+      preset.companionFiles &&
+      Object.keys(preset.companionFiles).length > 0
+    ) {
+      for (const [filename, content] of Object.entries(preset.companionFiles)) {
+        newProjectFiles.set(filename, content);
+      }
+    }
+
+    // Phase 5: Alias-mount preset-specific companion files from the ZIP mapping.
+    // Copies the preset-specific file content to the root-level key that the
+    // SCAD `include` / `import` statement resolves to (e.g.
+    // "openings_and_additions.txt" and "default.svg").
+    const companionMapping = presetCompanionMap?.get(preset.name);
+    if (companionMapping) {
+      if (
+        companionMapping.openingsPath &&
+        newProjectFiles.has(companionMapping.openingsPath)
+      ) {
+        newProjectFiles.set(
+          'openings_and_additions.txt',
+          newProjectFiles.get(companionMapping.openingsPath)
+        );
+        console.log(
+          `[Preset] Alias-mounted openings: ${companionMapping.openingsPath}`
+        );
+      }
+      if (
+        companionMapping.svgPath &&
+        newProjectFiles.has(companionMapping.svgPath)
+      ) {
+        newProjectFiles.set(
+          'default.svg',
+          newProjectFiles.get(companionMapping.svgPath)
+        );
+        console.log(
+          `[Preset] Alias-mounted SVG: ${companionMapping.svgPath}`
+        );
+      }
+    }
+
+    stateManager.setState({ projectFiles: newProjectFiles });
+
+    if (autoPreviewController) {
+      autoPreviewController.setProjectFiles(
+        newProjectFiles,
+        curState.mainFilePath
+      );
+      autoPreviewController.onParameterChange(mergedParams);
+    }
+
+    updatePrimaryActionButton();
+    updateProjectFilesUI();
+    syncOverlayWithScreenshotParam(mergedParams);
+    setCurrentPresetSelection(preset);
+
+    isLoadingPreset = false;
+
+    const applied = Object.keys(visiblePresetParams).length;
+    const total = Object.keys(preset.parameters).length;
+    if (applied < total) {
+      updateStatus(
+        `Loaded preset: ${preset.name} (${applied} of ${total} parameters applied)`
+      );
+    } else {
+      updateStatus(`Loaded preset: ${preset.name}`);
+    }
+  }
+
   function setCurrentPresetSelection(preset) {
     if (!preset) {
       forceClearPresetSelection();
@@ -13788,81 +13937,7 @@ if (rounded) {
       } else if (action === 'load') {
         const preset = presetManager.loadPreset(modelName, presetId);
         if (preset) {
-          // Set flag to prevent clearPresetSelection during load
-          isLoadingPreset = true;
-
-          const state = stateManager.getState();
-          // Desktop OpenSCAD parity: MERGE preset parameters onto current state.
-          // Hidden parameters are stored but not retrieved (desktop parity).
-          const hiddenNames = new Set(
-            Object.keys(state.schema?.hiddenParameters || {})
-          );
-          const visiblePresetParams = {};
-          for (const [k, v] of Object.entries(preset.parameters)) {
-            if (!hiddenNames.has(k)) visiblePresetParams[k] = v;
-          }
-          const mergedParams = { ...state.parameters, ...visiblePresetParams };
-          stateManager.setState({ parameters: mergedParams });
-
-          // Re-render UI with merged parameters
-          const parametersContainer = document.getElementById(
-            'parametersContainer'
-          );
-          renderParameterUI(
-            state.schema,
-            parametersContainer,
-            (values) => {
-              stateManager.setState({ parameters: values });
-              clearPresetSelection(values);
-              if (autoPreviewController) {
-                autoPreviewController.onParameterChange(values);
-              }
-              updatePrimaryActionButton();
-            },
-            mergedParams
-          );
-
-          // E2: Swap companion files if the preset has them
-          if (
-            preset.companionFiles &&
-            Object.keys(preset.companionFiles).length > 0
-          ) {
-            const curState = stateManager.getState();
-            const newProjectFiles = curState.projectFiles
-              ? new Map(curState.projectFiles)
-              : new Map();
-
-            for (const [filename, content] of Object.entries(
-              preset.companionFiles
-            )) {
-              newProjectFiles.set(filename, content);
-            }
-
-            stateManager.setState({ projectFiles: newProjectFiles });
-
-            if (autoPreviewController) {
-              autoPreviewController.setProjectFiles(
-                newProjectFiles,
-                curState.mainFilePath
-              );
-            }
-
-            updateProjectFilesUI();
-          }
-
-          // Trigger auto-preview with merged parameters
-          if (autoPreviewController) {
-            autoPreviewController.onParameterChange(mergedParams);
-          }
-          updatePrimaryActionButton();
-
-          // Track the currently loaded preset and update dropdown to show it
-          setCurrentPresetSelection(preset);
-
-          // Clear the loading flag
-          isLoadingPreset = false;
-
-          updateStatus(`Loaded preset: ${preset.name}`);
+          applyPresetParametersAndCompanions(preset);
           closeManagePresetsModalHandler();
         }
       } else if (action === 'delete') {
@@ -14393,7 +14468,7 @@ if (rounded) {
     const preset = presetManager.loadPreset(state.uploadedFile.name, presetId);
 
     if (preset) {
-      // Check compatibility before applying
+      // Log compatibility info (desktop OpenSCAD parity: silently skip extras)
       const hiddenParamNames = new Set(
         Object.keys(state.schema?.hiddenParameters || {})
       );
@@ -14402,9 +14477,6 @@ if (rounded) {
         state.schema?.parameters || state.schema,
         [...hiddenParamNames]
       );
-      // Desktop OpenSCAD parity: silently apply matching parameters, skip extras.
-      // Desktop OpenSCAD never shows a compatibility warning dialog (confirmed from
-      // ParameterWidget.cc:476-502 -- it just skips unknown params with no else clause).
       if (
         compatibility.extraParams.length > 0 ||
         compatibility.missingParams.length > 0
@@ -14416,89 +14488,7 @@ if (rounded) {
         );
       }
 
-      // Set flag to prevent clearPresetSelection during load
-      isLoadingPreset = true;
-
-      // Desktop OpenSCAD parity: MERGE preset parameters onto current state.
-      // "When a dataset is loaded, only the parameters defined in the dataset
-      //  are modified, other parameters are not set to defaults."
-      // Hidden parameters are stored but not retrieved (desktop parity).
-      const applicableParams = {};
-      for (const [k, v] of Object.entries(preset.parameters)) {
-        if (!hiddenParamNames.has(k)) applicableParams[k] = v;
-      }
-      const mergedParams = { ...state.parameters, ...applicableParams };
-      stateManager.setState({ parameters: mergedParams });
-
-      // Re-render UI with merged parameters (FIX: UI wasn't updating before)
-      const parametersContainer = document.getElementById(
-        'parametersContainer'
-      );
-      renderParameterUI(
-        state.schema,
-        parametersContainer,
-        (values) => {
-          stateManager.setState({ parameters: values });
-          clearPresetSelection(values);
-          if (autoPreviewController) {
-            autoPreviewController.onParameterChange(values);
-          }
-          updatePrimaryActionButton();
-          syncOverlayWithScreenshotParam(values);
-        },
-        mergedParams
-      );
-
-      // E2: Swap companion files if the preset has them
-      if (
-        preset.companionFiles &&
-        Object.keys(preset.companionFiles).length > 0
-      ) {
-        const newProjectFiles = state.projectFiles
-          ? new Map(state.projectFiles)
-          : new Map();
-
-        for (const [filename, content] of Object.entries(
-          preset.companionFiles
-        )) {
-          newProjectFiles.set(filename, content);
-        }
-
-        stateManager.setState({ projectFiles: newProjectFiles });
-
-        if (autoPreviewController) {
-          autoPreviewController.setProjectFiles(
-            newProjectFiles,
-            state.mainFilePath
-          );
-        }
-
-        updateProjectFilesUI();
-      }
-
-      // Trigger auto-preview with merged parameters
-      if (autoPreviewController) {
-        autoPreviewController.onParameterChange(mergedParams);
-      }
-      updatePrimaryActionButton();
-      syncOverlayWithScreenshotParam(mergedParams);
-
-      // Track the currently loaded preset (for showing name in dropdown)
-      setCurrentPresetSelection(preset);
-
-      // Clear the loading flag
-      isLoadingPreset = false;
-
-      const applied = Object.keys(applicableParams).length;
-      const total = Object.keys(preset.parameters).length;
-      if (applied < total) {
-        updateStatus(
-          `Loaded preset: ${preset.name} (${applied} of ${total} parameters applied)`
-        );
-      } else {
-        updateStatus(`Loaded preset: ${preset.name}`);
-      }
-
+      applyPresetParametersAndCompanions(preset);
       // Keep showing the preset name in dropdown (don't reset)
       // The dropdown will reset when parameters change (handled in onChange callback)
     }
