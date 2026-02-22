@@ -1193,131 +1193,6 @@
               </button>
             </div>
             <div class="param-panel-body" id="paramPanelBody">
-              <!-- Preset Controls (Collapsed by default on desktop) -->
-              <details
-                class="preset-controls forge-disclosure"
-                id="presetControls"
-                role="region"
-                aria-label="Parameter presets"
-                data-tutorial-target="preset-controls"
-              >
-                <summary class="preset-summary">
-                  <svg
-                    class="btn-icon-svg forge-disclosure-icon"
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="square"
-                    stroke-linejoin="miter"
-                    aria-hidden="true"
-                  >
-                    <rect x="4" y="4" width="16" height="16" rx="0"></rect>
-                    <rect x="7" y="4" width="10" height="6" rx="0"></rect>
-                    <rect x="8" y="14" width="8" height="6" rx="0"></rect>
-                    <line x1="16" y1="7" x2="16" y2="9"></line>
-                  </svg>
-                  <span class="forge-disclosure-title">Presets</span>
-                </summary>
-                <div class="preset-content">
-                  <div class="preset-search">
-                    <label for="presetSearchInput" class="sr-only"
-                      >Search presets</label
-                    ><input
-                      type="text"
-                      id="presetSearchInput"
-                      class="preset-search-input"
-                      placeholder="Search presets..."
-                      aria-describedby="presetSearchStatus"
-                    /><button
-                      id="presetSearchClear"
-                      class="btn-icon btn-icon-sm preset-search-clear"
-                      aria-label="Clear search"
-                      hidden
-                    >
-                      &times;
-                    </button>
-                    <div
-                      id="presetSearchStatus"
-                      class="sr-only"
-                      role="status"
-                      aria-live="polite"
-                    ></div>
-                  </div>
-                  <div class="preset-sort-toolbar" id="presetSortToolbar">
-                    <label for="presetDropdownSort" class="preset-sort-label"
-                      >Sort</label
-                    >
-                    <select
-                      id="presetDropdownSort"
-                      class="preset-sort-select"
-                      aria-label="Sort presets by"
-                    >
-                      <option value="name-asc">Name (A–Z)</option>
-                      <option value="name-desc">Name (Z–A)</option>
-                      <option value="date-created">Date created</option>
-                      <option value="date-modified">Date modified</option>
-                    </select>
-                  </div>
-                  <div class="preset-selector" id="presetSelector">
-                    <label for="presetSelect" class="preset-label sr-only"
-                      >Select preset</label
-                    >
-                    <select
-                      id="presetSelect"
-                      class="preset-select"
-                      aria-label="Select a saved preset to load"
-                    >
-                      <option value="">-- Select Preset --</option>
-                    </select>
-                    <!-- OpenSCAD Customizer-style preset controls: Save, Add, Delete -->
-                  </div>
-                  <div class="preset-actions-row">
-                    <div
-                      class="preset-actions-group"
-                      role="group"
-                      aria-label="Preset management"
-                    >
-                      <button
-                        id="savePresetBtn"
-                        class="btn btn-sm btn-icon"
-                        aria-label="Save Preset — overwrites current preset"
-                        title="Save Preset — overwrites current preset"
-                        disabled
-                      >
-                        💾
-                      </button>
-                      <button
-                        id="addPresetBtn"
-                        class="btn btn-sm btn-icon"
-                        aria-label="Add Preset"
-                        title="Add Preset"
-                      >
-                        +
-                      </button>
-                      <button
-                        id="deletePresetBtn"
-                        class="btn btn-sm btn-icon btn-danger-icon"
-                        aria-label="Delete current preset"
-                        title="Delete current preset"
-                        disabled
-                      >
-                        −
-                      </button>
-                    </div>
-                    <button
-                      id="managePresetsBtn"
-                      class="btn btn-sm btn-outline"
-                      aria-label="Import and export presets"
-                      title="Import and export presets"
-                    >
-                      📋 Import / Export
-                    </button>
-                  </div>
-                </div>
-              </details>
               <!-- Console Output Panel -- Displays ECHO, WARNING, ERROR messages from OpenSCAD -->
               <details
                 class="console-panel forge-disclosure"
@@ -2525,6 +2400,131 @@
                     id="uiPrefsPanel"
                     class="advanced-section ui-prefs-panel"
                   ></div>
+                </div>
+              </details>
+              <!-- Preset Controls -->
+              <details
+                class="preset-controls forge-disclosure"
+                id="presetControls"
+                role="region"
+                aria-label="Parameter presets"
+                data-tutorial-target="preset-controls"
+              >
+                <summary class="preset-summary">
+                  <svg
+                    class="btn-icon-svg forge-disclosure-icon"
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="square"
+                    stroke-linejoin="miter"
+                    aria-hidden="true"
+                  >
+                    <rect x="4" y="4" width="16" height="16" rx="0"></rect>
+                    <rect x="7" y="4" width="10" height="6" rx="0"></rect>
+                    <rect x="8" y="14" width="8" height="6" rx="0"></rect>
+                    <line x1="16" y1="7" x2="16" y2="9"></line>
+                  </svg>
+                  <span class="forge-disclosure-title">Presets</span>
+                </summary>
+                <div class="preset-content">
+                  <div class="preset-search">
+                    <label for="presetSearchInput" class="sr-only"
+                      >Search presets</label
+                    ><input
+                      type="text"
+                      id="presetSearchInput"
+                      class="preset-search-input"
+                      placeholder="Search presets..."
+                      aria-describedby="presetSearchStatus"
+                    /><button
+                      id="presetSearchClear"
+                      class="btn-icon btn-icon-sm preset-search-clear"
+                      aria-label="Clear search"
+                      hidden
+                    >
+                      &times;
+                    </button>
+                    <div
+                      id="presetSearchStatus"
+                      class="sr-only"
+                      role="status"
+                      aria-live="polite"
+                    ></div>
+                  </div>
+                  <div class="preset-sort-toolbar" id="presetSortToolbar">
+                    <label for="presetDropdownSort" class="preset-sort-label"
+                      >Sort</label
+                    >
+                    <select
+                      id="presetDropdownSort"
+                      class="preset-sort-select"
+                      aria-label="Sort presets by"
+                    >
+                      <option value="name-asc">Name (A–Z)</option>
+                      <option value="name-desc">Name (Z–A)</option>
+                      <option value="date-created">Date created</option>
+                      <option value="date-modified">Date modified</option>
+                    </select>
+                  </div>
+                  <div class="preset-selector" id="presetSelector">
+                    <label for="presetSelect" class="preset-label sr-only"
+                      >Select preset</label
+                    >
+                    <select
+                      id="presetSelect"
+                      class="preset-select"
+                      aria-label="Select a saved preset to load"
+                    >
+                      <option value="">-- Select Preset --</option>
+                    </select>
+                    <!-- OpenSCAD Customizer-style preset controls: Save, Add, Delete -->
+                  </div>
+                  <div class="preset-actions-row">
+                    <div
+                      class="preset-actions-group"
+                      role="group"
+                      aria-label="Preset management"
+                    >
+                      <button
+                        id="savePresetBtn"
+                        class="btn btn-sm btn-icon"
+                        aria-label="Save Preset — overwrites current preset"
+                        title="Save Preset — overwrites current preset"
+                        disabled
+                      >
+                        💾
+                      </button>
+                      <button
+                        id="addPresetBtn"
+                        class="btn btn-sm btn-icon"
+                        aria-label="Add Preset"
+                        title="Add Preset"
+                      >
+                        +
+                      </button>
+                      <button
+                        id="deletePresetBtn"
+                        class="btn btn-sm btn-icon btn-danger-icon"
+                        aria-label="Delete current preset"
+                        title="Delete current preset"
+                        disabled
+                      >
+                        −
+                      </button>
+                    </div>
+                    <button
+                      id="managePresetsBtn"
+                      class="btn btn-sm btn-outline"
+                      aria-label="Import and export presets"
+                      title="Import and export presets"
+                    >
+                      📋 Import / Export
+                    </button>
+                  </div>
                 </div>
               </details>
               <div class="customizer-header-row">
