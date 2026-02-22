@@ -725,15 +725,16 @@ export async function touchProject(id) {
 }
 
 /**
- * Update project metadata (name, notes, and/or projectFiles)
+ * Update project metadata and optionally content/projectFiles
  * @param {Object} options
  * @param {string} options.id - Project ID
  * @param {string} [options.name] - New name
  * @param {string} [options.notes] - New notes
+ * @param {string} [options.content] - New main file content
  * @param {string} [options.projectFiles] - New project files (JSON string)
  * @returns {Promise<{success: boolean, error?: string}>}
  */
-export async function updateProject({ id, name, notes, projectFiles }) {
+export async function updateProject({ id, name, notes, content, projectFiles }) {
   try {
     // Ensure database is initialized
     await ensureInitialized();
@@ -754,6 +755,10 @@ export async function updateProject({ id, name, notes, projectFiles }) {
         };
       }
       project.notes = notes;
+    }
+    if (content !== undefined) {
+      project.content = content;
+      project.savedAt = new Date().toISOString();
     }
     if (projectFiles !== undefined) {
       project.projectFiles = projectFiles;

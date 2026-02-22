@@ -1292,7 +1292,7 @@ const TUTORIALS = {
         content: `
           <p>Say the button label:</p>
           <ul>
-            <li>"Click Generate STL"</li>
+            <li>"Click Generate"</li>
             <li>"Click Reset"</li>
             <li>"Click Help"</li>
           </ul>

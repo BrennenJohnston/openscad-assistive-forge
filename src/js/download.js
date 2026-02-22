@@ -43,6 +43,20 @@ export const OUTPUT_FORMATS = {
     description: '3D Manufacturing Format (modern)',
     is2D: false,
   },
+  wrl: {
+    name: 'VRML',
+    extension: '.wrl',
+    mimeType: 'model/vrml',
+    description: 'VRML 2.0 — Virtual Reality Modeling Language',
+    is2D: false,
+  },
+  csg: {
+    name: 'CSG',
+    extension: '.csg',
+    mimeType: 'text/plain',
+    description: 'OpenSCAD CSG tree format',
+    is2D: false,
+  },
   // Laser Cutting / 2D Formats
   svg: {
     name: 'SVG',
@@ -55,7 +69,14 @@ export const OUTPUT_FORMATS = {
     name: 'DXF',
     extension: '.dxf',
     mimeType: 'application/dxf',
-    description: 'DXF - For CAD software and laser cutting',
+    description: 'DXF — For CAD software and laser cutting',
+    is2D: true,
+  },
+  pdf: {
+    name: 'PDF',
+    extension: '.pdf',
+    mimeType: 'application/pdf',
+    description: 'PDF — For 2D designs and documentation',
     is2D: true,
   },
 };
@@ -129,4 +150,19 @@ export function formatFileSize(bytes) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/**
+ * Sanitize a string for safe use as a filename.
+ * Preserves original case and spaces while removing filesystem-unsafe characters.
+ * @param {string} name - Raw name to sanitize
+ * @returns {string} Safe filename without extension (falls back to 'preset-export' if empty)
+ */
+export function sanitizeFilename(name) {
+  if (!name || typeof name !== 'string') return 'preset-export';
+  const sanitized = name
+    .replace(/[/\\:*?"<>|]/g, '')
+    .replace(/^[\s.]+|[\s.]+$/g, '')
+    .slice(0, 200);
+  return sanitized || 'preset-export';
 }

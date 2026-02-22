@@ -3,6 +3,15 @@
  * @license GPL-3.0-or-later
  */
 
+// #region agent log
+window.addEventListener('error', (e) => {
+  fetch('http://127.0.0.1:7246/ingest/8fdfe3b9-f33d-48f1-99f8-e81d685f1617',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'2a0bb7'},body:JSON.stringify({sessionId:'2a0bb7',location:'main.js:global',message:'uncaught error',data:{error:e.message,filename:e.filename,lineno:e.lineno,colno:e.colno},timestamp:Date.now(),hypothesisId:'CRASH'})}).catch(()=>{});
+});
+window.addEventListener('unhandledrejection', (e) => {
+  fetch('http://127.0.0.1:7246/ingest/8fdfe3b9-f33d-48f1-99f8-e81d685f1617',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'2a0bb7'},body:JSON.stringify({sessionId:'2a0bb7',location:'main.js:global',message:'unhandled rejection',data:{reason:String(e.reason),stack:e.reason?.stack?.substring(0,500)},timestamp:Date.now(),hypothesisId:'CRASH'})}).catch(()=>{});
+});
+// #endregion
+
 import './styles/main.css';
 import { extractParameters } from './js/parser.js';
 import {
@@ -1626,11 +1635,25 @@ function _exportFormatFromMenu(format) {
  */
 function _applyToolbarModeVisibility(mode) {
   const controller = getToolbarMenuController();
+  const mainInterfaceVisible =
+    !document.getElementById('welcomeScreen') ||
+    document.getElementById('welcomeScreen').classList.contains('hidden');
+
+  if (!mainInterfaceVisible) {
+    controller.hide();
+    return;
+  }
+
   if (mode === 'advanced') {
     controller.show();
-    hideWorkflowProgress();
+    const wp = document.getElementById('workflowProgress');
+    if (wp) {
+      wp.classList.remove('hidden');
+      wp.querySelectorAll('.workflow-steps').forEach((el) =>
+        el.classList.add('hidden')
+      );
+    }
   } else {
-    // Basic mode: check if any per-menu buttons are enabled via PANEL_REGISTRY
     const uiMode = getUIModeController();
     const registry = uiMode.getRegistry();
     const menuIdMap = {
@@ -1642,7 +1665,6 @@ function _applyToolbarModeVisibility(mode) {
       toolbarMenuHelp: 'help',
     };
 
-    // Determine which toolbar menu buttons are explicitly visible (i.e., NOT hidden)
     const visibleMenuIds = registry
       .filter((p) => p.id in menuIdMap)
       .filter((p) => {
@@ -2787,48 +2809,69 @@ async function initApp() {
         handleFile(
           null,
           state.uploadedFile.content,
-          null,
-          null,
+          state.projectFiles || null,
+          state.mainFilePath || null,
           'user',
           state.uploadedFile.name
         );
       }
     },
-    onSave: () => {
+    onSave: async () => {
       const state = stateManager.getState();
-      const content = state.uploadedFile?.content;
-      if (!content) return;
-      const blob = new Blob([content], { type: 'text/plain' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = state.uploadedFile.name || 'model.scad';
-      a.click();
-      URL.revokeObjectURL(url);
+      if (!state.uploadedFile) return;
+      if (currentSavedProjectId) {
+        const projectFilesObj = state.projectFiles
+          ? Object.fromEntries(state.projectFiles)
+          : null;
+        await updateProject({
+          id: currentSavedProjectId,
+          content: state.uploadedFile.content,
+          projectFiles: projectFilesObj,
+        });
+        updateStatus('Project saved');
+        stateManager.announceChange('Project saved');
+      } else {
+        await showSaveProjectPrompt(state, { preSave: true });
+      }
     },
-    onSaveAs: () => {
+    onSaveAs: async () => {
       const state = stateManager.getState();
-      const content = state.uploadedFile?.content;
-      if (!content) return;
-      const name = prompt('Save as:', state.uploadedFile.name || 'model.scad');
-      if (!name) return;
-      const blob = new Blob([content], { type: 'text/plain' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = name;
-      a.click();
-      URL.revokeObjectURL(url);
+      if (!state.uploadedFile) return;
+      await showSaveProjectPrompt(state, { preSave: true });
+    },
+    onSaveAll: async () => {
+      const state = stateManager.getState();
+      if (!state.uploadedFile) return;
+      if (currentSavedProjectId) {
+        const projectFilesObj = state.projectFiles
+          ? Object.fromEntries(state.projectFiles)
+          : null;
+        await updateProject({
+          id: currentSavedProjectId,
+          content: state.uploadedFile.content,
+          projectFiles: projectFilesObj,
+        });
+        updateStatus('Project saved');
+        stateManager.announceChange('Project saved');
+      } else {
+        await showSaveProjectPrompt(state, { preSave: true });
+      }
     },
     onExportImage: () => {
-      const canvas = document.querySelector(
-        '#preview canvas, .preview-area canvas'
-      );
+      const canvas = document.querySelector('#previewContainer canvas');
       if (!canvas) return;
+      if (previewManager?.renderer && previewManager?.scene) {
+        const cam = previewManager.getActiveCamera?.() ?? previewManager.camera;
+        if (cam) previewManager.renderer.render(previewManager.scene, cam);
+      }
+      const dataUrl = canvas.toDataURL('image/png');
+      if (!dataUrl || dataUrl.length < 100) return;
       const link = document.createElement('a');
       link.download = 'openscad-preview.png';
-      link.href = canvas.toDataURL('image/png');
+      link.href = dataUrl;
+      document.body.appendChild(link);
       link.click();
+      document.body.removeChild(link);
     },
   });
   fileActionsController.init();
@@ -2838,6 +2881,10 @@ async function initApp() {
     const state = stateManager.getState();
     const hasFile = Boolean(state.uploadedFile);
     const hasRender = Boolean(state.stl);
+    const hasFullRender = Boolean(
+      autoPreviewController?.getCurrentFullSTL(state.parameters) &&
+        !autoPreviewController?.needsFullRender(state.parameters)
+    );
 
     // Recent Files submenu items (filenames only; actual re-open via onOpenRecent callback)
     const recentItems =
@@ -2849,14 +2896,38 @@ async function initApp() {
           }))
         : [{ type: 'action', label: 'No recent files', disabled: true }];
 
-    // Export submenu: one item per output format
-    const exportItems = Object.entries(OUTPUT_FORMATS).map(([key, fmt]) => ({
-      type: 'action',
-      label: fmt.name,
-      enabled: hasRender,
-      tooltip: hasRender ? fmt.description : 'Render the model first',
-      handler: () => _exportFormatFromMenu(key),
-    }));
+    // Export submenu: info notice (when not fully rendered) + geometry/2D formats + Export as Image
+    const exportItems = [
+      ...(!hasFullRender
+        ? [
+            {
+              type: 'action',
+              label: '\u24d8  Press Generate to enable file exports',
+              disabled: true,
+              tooltip: 'Use the Generate button to fully render the model, then file export options will become available.',
+            },
+            { type: 'separator' },
+          ]
+        : []),
+      ...Object.entries(OUTPUT_FORMATS).map(([key, fmt]) => ({
+        type: 'action',
+        label: fmt.name,
+        enabled: hasFullRender,
+        tooltip: hasFullRender ? fmt.description : 'Press Generate first to enable this export',
+        handler: () => _exportFormatFromMenu(key),
+      })),
+      { type: 'separator' },
+      {
+        type: 'action',
+        label: 'Export as Image\u2026',
+        shortcutAction: 'exportImage',
+        enabled: hasRender,
+        tooltip: hasRender
+          ? 'Save the current viewport as a PNG image'
+          : 'Load and preview a file first',
+        handler: () => fileActionsController.onExportImage(),
+      },
+    ];
 
     return [
       {
@@ -2930,19 +3001,12 @@ async function initApp() {
       {
         type: 'action',
         label: 'Save All',
-        disabled: true,
-        tooltip: 'Coming soon',
+        enabled: hasFile,
+        tooltip: hasFile ? undefined : 'Open a file first',
+        handler: () => fileActionsController.onSaveAll(),
       },
       { type: 'separator' },
       { type: 'submenu', label: 'Export', items: exportItems },
-      {
-        type: 'action',
-        label: 'Export Image',
-        shortcutAction: 'exportImage',
-        enabled: hasFile,
-        tooltip: hasFile ? undefined : 'Open a file first',
-        handler: () => fileActionsController.onExportImage(),
-      },
       { type: 'separator' },
       {
         type: 'action',
@@ -3620,16 +3684,15 @@ async function initApp() {
       if (formatDef) {
         formatInfo.textContent = formatDef.description;
 
-        // Update button text
         const formatName = formatDef.name;
         if (primaryActionBtn.dataset.action === 'generate') {
-          primaryActionBtn.textContent = `Generate ${formatName}`;
+          primaryActionBtn.textContent = 'Generate';
           primaryActionBtn.setAttribute(
             'aria-label',
             `Generate ${formatName} file from current parameters`
           );
         } else {
-          primaryActionBtn.textContent = `📥 Download ${formatName}`;
+          primaryActionBtn.textContent = '📥 Download';
           primaryActionBtn.setAttribute(
             'aria-label',
             `Download generated ${formatName} file`
@@ -6040,8 +6103,7 @@ async function initApp() {
       autoPreviewController?.needsFullRender(state.parameters);
 
     if (isStlFormat && hasFullQualitySTL && !needsFullRender) {
-      // Full quality STL is ready and matches current parameters - show Download
-      primaryActionBtn.textContent = `📥 Download ${formatName}`;
+      primaryActionBtn.textContent = '📥 Download';
       primaryActionBtn.dataset.action = 'download';
       primaryActionBtn.classList.remove('btn-primary');
       primaryActionBtn.classList.add('btn-success');
@@ -6049,11 +6111,9 @@ async function initApp() {
         'aria-label',
         `Download generated ${formatName} file (full quality)`
       );
-      // Hide fallback since primary button is download
       downloadFallbackLink.classList.add('hidden');
     } else if (isStlFormat) {
-      // Need to generate (no full STL yet, or params changed)
-      primaryActionBtn.textContent = `Generate ${formatName}`;
+      primaryActionBtn.textContent = 'Generate';
       primaryActionBtn.dataset.action = 'generate';
       primaryActionBtn.classList.remove('btn-success');
       primaryActionBtn.classList.add('btn-primary');
@@ -6062,7 +6122,6 @@ async function initApp() {
         `Generate ${formatName} file from current parameters`
       );
 
-      // Show fallback download link if STL exists but params changed
       if (hasGeneratedFile && paramsChanged) {
         downloadFallbackLink.classList.remove('hidden');
       } else {
@@ -6075,7 +6134,7 @@ async function initApp() {
         stateOutputFormat === selectedFormat &&
         !paramsChanged;
       if (hasMatchingOutput) {
-        primaryActionBtn.textContent = `📥 Download ${formatName}`;
+        primaryActionBtn.textContent = '📥 Download';
         primaryActionBtn.dataset.action = 'download';
         primaryActionBtn.classList.remove('btn-primary');
         primaryActionBtn.classList.add('btn-success');
@@ -6084,7 +6143,7 @@ async function initApp() {
           `Download generated ${formatName} file`
         );
       } else {
-        primaryActionBtn.textContent = `Generate ${formatName}`;
+        primaryActionBtn.textContent = 'Generate';
         primaryActionBtn.dataset.action = 'generate';
         primaryActionBtn.classList.remove('btn-success');
         primaryActionBtn.classList.add('btn-primary');
@@ -9381,7 +9440,7 @@ if (rounded) {
    * Show opt-in save prompt after file upload
    * @param {Object} fileData - Current file state
    */
-  async function showSaveProjectPrompt(fileData) {
+  async function showSaveProjectPrompt(fileData, { preSave = false } = {}) {
     const { uploadedFile, projectFiles, mainFilePath } = fileData;
 
     if (!uploadedFile) return;
@@ -9389,7 +9448,6 @@ if (rounded) {
     const kind = projectFiles ? 'zip' : 'scad';
     const fileName = uploadedFile.name || 'untitled.scad';
 
-    // Create modal
     const modal = document.createElement('div');
     modal.className = 'preset-modal save-project-modal';
     modal.setAttribute('role', 'dialog');
@@ -9421,8 +9479,12 @@ if (rounded) {
               <span id="saveProjectNotesCount">0</span> / 5000 characters
             </div>
           </div>
+          <div id="saveProjectDuplicateWarning" style="display:none; margin-top: var(--space-sm); padding: var(--space-sm); border: 1px solid var(--color-warning); border-radius: var(--border-radius-sm); background: var(--color-warning-bg, #fff3cd);">
+            <strong>A project named &ldquo;<span id="saveProjectDuplicateName"></span>&rdquo; already exists.</strong><br />
+            Would you like to overwrite it or save as a new copy?
+          </div>
         </div>
-        <div class="preset-modal-footer">
+        <div class="preset-modal-footer" id="saveProjectFooter">
           <button class="btn btn-secondary" id="saveProjectNotNow">Not now</button>
           <button class="btn btn-primary" id="saveProjectSave" disabled>Save</button>
         </div>
@@ -9431,7 +9493,6 @@ if (rounded) {
 
     document.body.appendChild(modal);
 
-    // Get elements
     const checkbox = modal.querySelector('#saveProjectCheckbox');
     const nameInput = modal.querySelector('#saveProjectName');
     const notesTextarea = modal.querySelector('#saveProjectNotes');
@@ -9439,13 +9500,19 @@ if (rounded) {
     const saveBtn = modal.querySelector('#saveProjectSave');
     const notNowBtn = modal.querySelector('#saveProjectNotNow');
     const closeBtn = modal.querySelector('.preset-modal-close');
+    const duplicateWarning = modal.querySelector('#saveProjectDuplicateWarning');
+    const duplicateNameSpan = modal.querySelector('#saveProjectDuplicateName');
+    const footer = modal.querySelector('#saveProjectFooter');
 
-    // Update save button state based on checkbox
+    if (preSave) {
+      checkbox.checked = true;
+      saveBtn.disabled = false;
+    }
+
     checkbox.addEventListener('change', () => {
       saveBtn.disabled = !checkbox.checked;
     });
 
-    // Setup character counter for notes with validation
     const counter = modal.querySelector('.save-project-notes-counter');
     setupNotesCounter(notesTextarea, notesCount, counter, {
       maxLength: 5000,
@@ -9459,54 +9526,87 @@ if (rounded) {
       },
     });
 
-    // Handle save
-    saveBtn.addEventListener('click', async () => {
-      if (!checkbox.checked) return;
-
+    const doSave = async (existingProject) => {
       const projectName = nameInput.value.trim() || fileName;
       const notes = notesTextarea.value.trim();
-
-      // Convert projectFiles Map to object for storage
       const projectFilesObj = projectFiles
         ? Object.fromEntries(projectFiles)
         : null;
 
-      const result = await saveProject({
-        name: projectName,
-        originalName: fileName,
-        kind,
-        mainFilePath: mainFilePath || fileName,
-        content: uploadedFile.content,
-        projectFiles: projectFilesObj,
-        notes,
-      });
-
-      if (result.success) {
-        // Track the saved project ID for companion file auto-save
-        currentSavedProjectId = result.id;
-        updateCompanionSaveButton();
-        stateManager.announceChange(`Project saved: ${projectName}`);
-        updateStatus(`Saved: ${projectName}`);
-        await renderSavedProjectsList();
+      if (existingProject) {
+        const result = await updateProject({
+          id: existingProject.id,
+          name: projectName,
+          notes,
+          content: uploadedFile.content,
+          projectFiles: projectFilesObj,
+        });
+        if (result.success) {
+          currentSavedProjectId = existingProject.id;
+          updateCompanionSaveButton();
+          stateManager.announceChange(`Project overwritten: ${projectName}`);
+          updateStatus(`Overwritten: ${projectName}`);
+          await renderSavedProjectsList();
+        } else {
+          alert(`Failed to update project: ${result.error}`);
+        }
       } else {
-        alert(`Failed to save project: ${result.error}`);
+        const result = await saveProject({
+          name: projectName,
+          originalName: fileName,
+          kind,
+          mainFilePath: mainFilePath || fileName,
+          content: uploadedFile.content,
+          projectFiles: projectFilesObj,
+          notes,
+        });
+        if (result.success) {
+          currentSavedProjectId = result.id;
+          updateCompanionSaveButton();
+          stateManager.announceChange(`Project saved: ${projectName}`);
+          updateStatus(`Saved: ${projectName}`);
+          await renderSavedProjectsList();
+        } else {
+          alert(`Failed to save project: ${result.error}`);
+        }
       }
 
-      document.body.removeChild(modal);
+      closeModal(modal);
+      modal.remove();
+    };
+
+    saveBtn.addEventListener('click', async () => {
+      if (!checkbox.checked) return;
+
+      const projectName = nameInput.value.trim() || fileName;
+      const allProjects = await listSavedProjects();
+      const duplicate = allProjects.find(
+        (p) => p.name.toLowerCase() === projectName.toLowerCase()
+      );
+
+      if (duplicate) {
+        duplicateNameSpan.textContent = projectName;
+        duplicateWarning.style.display = 'block';
+        footer.innerHTML = `
+          <button class="btn btn-secondary" id="saveProjectNewCopy">Save as New Copy</button>
+          <button class="btn btn-danger" id="saveProjectOverwrite">Overwrite Existing</button>
+        `;
+        footer.querySelector('#saveProjectOverwrite').addEventListener('click', () => doSave(duplicate));
+        footer.querySelector('#saveProjectNewCopy').addEventListener('click', () => doSave(null));
+      } else {
+        await doSave(null);
+      }
     });
 
-    // Handle close
     const closeHandler = () => {
-      document.body.removeChild(modal);
+      closeModal(modal);
+      modal.remove();
     };
 
     notNowBtn.addEventListener('click', closeHandler);
     closeBtn.addEventListener('click', closeHandler);
 
-    // Open modal with focus management
     openModal(modal);
-
-    // Focus the project name input for easy editing
     nameInput.focus();
     nameInput.select();
   }
@@ -9598,12 +9698,14 @@ if (rounded) {
           alert(`Failed to update project: ${result.error}`);
         }
 
-        document.body.removeChild(modal);
+        closeModal(modal);
+        modal.remove();
       });
 
       // Handle close
       const closeHandler = () => {
-        document.body.removeChild(modal);
+        closeModal(modal);
+        modal.remove();
       };
 
       cancelBtn.addEventListener('click', closeHandler);
@@ -15644,4 +15746,9 @@ if (typeof window !== 'undefined') {
 }
 
 // Start the app
-initApp();
+initApp().catch(err => {
+  // #region agent log
+  fetch('http://127.0.0.1:7246/ingest/8fdfe3b9-f33d-48f1-99f8-e81d685f1617',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'2a0bb7'},body:JSON.stringify({sessionId:'2a0bb7',location:'main.js:initApp:toplevel',message:'initApp crashed',data:{error:String(err),stack:err?.stack?.substring(0,500)},timestamp:Date.now(),hypothesisId:'CRASH'})}).catch(()=>{});
+  // #endregion
+  console.error('[FATAL] initApp failed:', err);
+});

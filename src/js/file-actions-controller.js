@@ -40,6 +40,7 @@ export class FileActionsController {
     this.onReload = options.onReload || (() => {});
     this.onSave = options.onSave || (() => {});
     this.onSaveAs = options.onSaveAs || (() => {});
+    this.onSaveAll = options.onSaveAll || (() => {});
     this.onExportImage = options.onExportImage || (() => {});
     this.onOpenRecent = options.onOpenRecent || (() => {});
 
