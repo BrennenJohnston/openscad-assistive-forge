@@ -13929,6 +13929,37 @@ if (rounded) {
     });
   }
 
+  // Handle the result from importAndMergePresets and refresh the UI
+  function _handleImportResult(result, _modelName) {
+    if (result.imported > 0 || result.skipped > 0) {
+      let message = `Imported ${result.imported} design${result.imported !== 1 ? 's' : ''}`;
+      if (result.skipped > 0) {
+        message += ` (${result.skipped} skipped — duplicate names)`;
+      }
+      if (result.errors?.length > 0) {
+        message += `\n\nErrors:\n${result.errors.join('\n')}`;
+      }
+      alert(message);
+      updatePresetDropdown();
+      if (result.presets?.length > 0) {
+        const last = result.presets[result.presets.length - 1];
+        if (last?.id) setCurrentPresetSelection(last);
+      }
+      // Close and reopen the manage modal to reflect new list
+      const existingModal = document.querySelector('.preset-modal');
+      if (existingModal) {
+        closeModal(existingModal);
+        document.body.removeChild(existingModal);
+      }
+      showManagePresetsModal();
+    } else {
+      const errorMsg = result.errors?.length
+        ? `Import failed:\n${result.errors.join('\n')}`
+        : 'No valid designs found in the selected file(s).';
+      alert(errorMsg);
+    }
+  }
+
   // Show manage presets modal
   function showManagePresetsModal() {
     const state = stateManager.getState();
@@ -14138,25 +14169,40 @@ if (rounded) {
       } else if (action === 'import') {
         // Ask user whether to merge with existing presets or replace them all.
         // "Replace" is destructive and always requires confirmation.
+        // Import mode dialog: three options mapped to importAndMergePresets strategies
         const importModeDialog = document.createElement('dialog');
+        importModeDialog.className = 'preset-import-mode-dialog';
         importModeDialog.setAttribute('aria-labelledby', 'importModeTitle');
         importModeDialog.innerHTML = `
-          <form method="dialog" class="import-mode-dialog">
-            <h3 id="importModeTitle">Import designs</h3>
-            <fieldset>
-              <legend>Import mode</legend>
+          <form method="dialog" class="import-mode-form">
+            <h3 id="importModeTitle" class="import-mode-title">Import designs</h3>
+            <fieldset class="import-mode-fieldset">
+              <legend class="import-mode-legend">Import mode</legend>
               <label class="import-mode-option">
                 <input type="radio" name="importMode" value="merge" checked />
-                <span><strong>Merge</strong> — add imported designs to your existing ones</span>
+                <span class="import-mode-label">
+                  <strong>Merge</strong>
+                  <span class="import-mode-desc">Add imported designs; skip any with the same name as existing ones</span>
+                </span>
               </label>
               <label class="import-mode-option">
                 <input type="radio" name="importMode" value="replace" />
-                <span><strong>Replace all</strong> — delete existing designs for this model, then import</span>
+                <span class="import-mode-label">
+                  <strong>Replace</strong>
+                  <span class="import-mode-desc">Delete all existing designs for this model, then import</span>
+                </span>
+              </label>
+              <label class="import-mode-option">
+                <input type="radio" name="importMode" value="copies" />
+                <span class="import-mode-label">
+                  <strong>Import as copies</strong>
+                  <span class="import-mode-desc">Import all designs; rename duplicates with (2), (3)… suffixes</span>
+                </span>
               </label>
             </fieldset>
             <div class="import-mode-actions">
               <button type="submit" value="ok" class="btn btn-primary">Choose files…</button>
-              <button type="submit" value="cancel" class="btn btn-secondary">Cancel</button>
+              <button type="submit" value="cancel" class="btn btn-outline">Cancel</button>
             </div>
           </form>`;
         document.body.appendChild(importModeDialog);
@@ -14181,22 +14227,19 @@ if (rounded) {
         if (!importMode) return; // user cancelled
 
         // Create file input for import
-        // Multi-preset JSON import support
         const input = document.createElement('input');
         input.type = 'file';
         input.accept = '.json';
-        input.multiple = true; // Allow multiple files for batch preset import workflow
+        input.multiple = true;
         input.onchange = async (e) => {
           const files = e.target.files;
           if (!files || files.length === 0) return;
 
           try {
-            // Get current model name and schema for proper import
             const currentState = stateManager.getState();
             const currentModelName = currentState.uploadedFile?.name || null;
             const paramSchema = currentState.schema?.parameters || {};
 
-            // Warn if no model is loaded
             if (!currentModelName) {
               const proceed = confirm(
                 'No model is currently loaded. Presets will be saved as "Unknown Model" and may not appear in the dropdown until you load a matching model.\n\nContinue with import?'
@@ -14210,6 +14253,25 @@ if (rounded) {
               const realCount = existing.filter(
                 (p) => p.id !== 'design-defaults'
               ).length;
+
+              // Reject if import files are empty to avoid silent data loss
+              const fileTexts = await Promise.all(
+                Array.from(files).map((f) => f.text())
+              );
+              const hasValidContent = fileTexts.some((t) => {
+                try {
+                  return !!JSON.parse(t);
+                } catch {
+                  return false;
+                }
+              });
+              if (!hasValidContent) {
+                alert(
+                  'The selected file(s) contain no valid preset data. Import cancelled to protect your existing designs.'
+                );
+                return;
+              }
+
               if (realCount > 0) {
                 const confirmed = confirm(
                   `Replace all designs? This will permanently delete ${realCount} existing design${realCount !== 1 ? 's' : ''} for "${currentModelName}". This cannot be undone.\n\nContinue?`
@@ -14219,76 +14281,36 @@ if (rounded) {
                   preserveDefaults: true,
                 });
               }
+
+              // After clearing, import with overwrite strategy
+              const result = presetManager.importAndMergePresets(
+                fileTexts,
+                currentModelName,
+                paramSchema,
+                'overwrite'
+              );
+              _handleImportResult(result, currentModelName);
+              return;
             }
 
-            let totalImported = 0;
-            let totalSkipped = 0;
-            const errors = [];
-            let lastImportedPresets = [];
+            // Map UI modes to importAndMergePresets conflictStrategy
+            // merge → 'keep' (skip duplicates by name)
+            // copies → 'rename' (append (2), (3) suffix)
+            const conflictStrategy =
+              importMode === 'copies' ? 'rename' : 'keep';
 
-            for (const file of files) {
-              try {
-                const text = await file.text();
-
-                // Log for debugging preset import issues
-                console.log(`[Import] Processing: ${file.name}`);
-
-                const hiddenParameterNames = Object.keys(
-                  currentState.schema?.hiddenParameters || {}
-                );
-                const result = presetManager.importPreset(
-                  text,
-                  currentModelName,
-                  paramSchema,
-                  hiddenParameterNames
-                );
-
-                if (result.success) {
-                  totalImported += result.imported;
-                  totalSkipped += result.skipped || 0;
-                  if (result.presets?.length > 0) {
-                    lastImportedPresets = result.presets;
-                  }
-                  console.log(
-                    `[Import] ${file.name}: ${result.imported} preset(s) imported`
-                  );
-                } else {
-                  errors.push(`${file.name}: ${result.error}`);
-                }
-              } catch (error) {
-                errors.push(`${file.name}: ${error.message}`);
-              }
-            }
-
-            // Show result
-            if (totalImported > 0) {
-              let message = `Imported ${totalImported} design${totalImported !== 1 ? 's' : ''}`;
-              if (totalSkipped > 0) {
-                message += ` (${totalSkipped} skipped)`;
-              }
-              if (errors.length > 0) {
-                message += `\n\nErrors:\n${errors.join('\n')}`;
-              }
-              alert(message);
-              updatePresetDropdown();
-
-              // Auto-select the last imported preset so the user can find it
-              if (lastImportedPresets.length > 0) {
-                const lastPreset =
-                  lastImportedPresets[lastImportedPresets.length - 1];
-                if (lastPreset?.id) {
-                  setCurrentPresetSelection(lastPreset);
-                }
-              }
-
-              // Refresh the modal
-              closeManagePresetsModalHandler();
-              showManagePresetsModal();
-            } else {
-              alert(`Import failed:\n${errors.join('\n')}`);
-            }
+            const fileTexts = await Promise.all(
+              Array.from(files).map((f) => f.text())
+            );
+            const result = presetManager.importAndMergePresets(
+              fileTexts,
+              currentModelName,
+              paramSchema,
+              conflictStrategy
+            );
+            _handleImportResult(result, currentModelName);
           } catch (error) {
-            alert(`Failed to import preset: ${error.message}`);
+            alert(`Failed to import designs: ${error.message}`);
           }
         };
         input.click();
