@@ -20,11 +20,15 @@ export async function extractZipFiles(zipFile) {
     let mainFile = null;
     const scadFiles = [];
 
-    // Binary-only file types that cannot be represented as text and are not
-    // used by OpenSCAD for rendering. Extracting these as UTF-8 text corrupts
-    // their content and wastes significant memory.
+    // Image file types: extracted as base64 data URLs so the preview layer
+    // and THREE.js overlay renderer can consume them directly.
+    const IMAGE_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp']);
+
+    // Non-image binary types that cannot be stored as text strings and are
+    // not used by the OpenSCAD WASM renderer. Extracting these as UTF-8 text
+    // would corrupt their content and waste significant memory.
     const BINARY_ONLY_EXTS = new Set([
-      'png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'tiff', 'tif', 'ico',
+      'bmp', 'tiff', 'tif', 'ico',
       'stl', 'obj', 'amf', '3mf', 'wrl', 'zip', 'gz', 'tar',
       'mp4', 'mp3', 'wav', 'avi', 'mov',
       'pdf', 'doc', 'docx', 'xls', 'xlsx',
@@ -35,19 +39,7 @@ export async function extractZipFiles(zipFile) {
       // Skip directories
       if (zipEntry.dir) continue;
 
-      // Skip binary-only files: they cannot be stored as text strings and
-      // are not used by the OpenSCAD WASM renderer.
-      const extMatch = relativePath.match(/\.([^./\\]+)$/);
-      const ext = extMatch ? extMatch[1].toLowerCase() : '';
-      if (BINARY_ONLY_EXTS.has(ext)) {
-        console.log(`[ZIP] Skipping binary file (not usable as text): ${relativePath}`);
-        continue;
-      }
-
-      // Extract file content as text
-      const content = await zipEntry.async('text');
-
-      // Normalize path (remove leading slashes, convert backslashes)
+      // Normalize path early so it is available for all extraction branches
       const normalizedPath = relativePath
         .replace(/^\/+/, '')
         .replace(/\\/g, '/');
@@ -64,6 +56,28 @@ export async function extractZipFiles(zipFile) {
         continue;
       }
 
+      const extMatch = normalizedPath.match(/\.([^./\\]+)$/);
+      const ext = extMatch ? extMatch[1].toLowerCase() : '';
+
+      // Extract image files as base64 data URLs (binary-safe)
+      if (IMAGE_EXTS.has(ext)) {
+        const base64Data = await zipEntry.async('base64');
+        const mime = ext === 'jpg' ? 'jpeg' : ext;
+        files.set(normalizedPath, `data:image/${mime};base64,${base64Data}`);
+        console.log(
+          `[ZIP] Extracted image: ${normalizedPath} (${base64Data.length} base64 chars)`
+        );
+        continue;
+      }
+
+      // Skip non-image binary files
+      if (BINARY_ONLY_EXTS.has(ext)) {
+        console.log(`[ZIP] Skipping binary file (not usable as text): ${relativePath}`);
+        continue;
+      }
+
+      // Extract file content as text
+      const content = await zipEntry.async('text');
       files.set(normalizedPath, content);
 
       // Track .scad files for main file detection
@@ -286,6 +300,159 @@ export function scanIncludes(content) {
   const includePattern = /(?:include|use)\s*[<"][^>"]+[>"]/g;
   const matches = content.match(includePattern) || [];
   return matches;
+}
+
+/**
+ * Resolve a file from projectFiles by exact key or basename fallback.
+ * Pure function with no side effects — safe to unit-test in isolation.
+ *
+ * Resolution order:
+ *  1. Exact key match (returns immediately)
+ *  2. Basename match (segment after last '/') — succeeds only when exactly
+ *     one file in the Map has that basename; returns null when ambiguous.
+ *
+ * @param {Map<string, string>} projectFiles
+ * @param {string} filename - Exact key or bare filename to resolve
+ * @returns {{ key: string, content: string } | null}
+ */
+export function resolveProjectFile(projectFiles, filename) {
+  if (!projectFiles || !filename) return null;
+
+  if (projectFiles.has(filename)) {
+    return { key: filename, content: projectFiles.get(filename) };
+  }
+
+  const matches = [];
+  for (const key of projectFiles.keys()) {
+    const basename = key.includes('/') ? key.split('/').pop() : key;
+    if (basename === filename) matches.push(key);
+  }
+
+  if (matches.length === 1) {
+    return { key: matches[0], content: projectFiles.get(matches[0]) };
+  }
+
+  if (matches.length > 1) {
+    console.warn(
+      `[resolveProjectFile] "${filename}" matches ${matches.length} paths — ` +
+        'cannot auto-select. Require explicit user selection or preset mapping.'
+    );
+  }
+
+  return null;
+}
+
+/**
+ * Build a runtime mapping from preset names to their specific companion file
+ * paths inside the projectFiles Map. Uses token-scoring heuristics so that
+ * e.g. preset "iPad 7,8,9 - Fintie - TouchChat" maps to
+ * "Cases and App Specifics/iPad 7,8,9/Fintie/TouchChat/openings_and_additions.txt".
+ *
+ * Only basenames that appear at MULTIPLE paths (aliasable) are considered for
+ * the openings file mapping. Single-instance files need no alias.
+ *
+ * Returns path references only — no file content is duplicated.
+ *
+ * @param {Map<string, string>} files - All project files from ZIP extraction
+ * @param {Object} parameterSets - OpenSCAD parameterSets object { "preset name": {...} }
+ * @returns {Map<string, { openingsPath: string|null, svgPath: string|null }>}
+ */
+export function buildPresetCompanionMap(files, parameterSets) {
+  const result = new Map();
+  if (!files || !parameterSets) return result;
+
+  const presetNames = Object.keys(parameterSets).filter(
+    (n) => n !== 'design default values'
+  );
+  if (presetNames.length === 0) return result;
+
+  // Group all file paths by basename
+  const byBasename = new Map();
+  for (const key of files.keys()) {
+    const basename = key.split('/').pop();
+    if (!byBasename.has(basename)) byBasename.set(basename, []);
+    byBasename.get(basename).push(key);
+  }
+
+  // Aliasable basenames: same filename appears under multiple paths
+  const aliasableBasenames = new Map();
+  for (const [basename, paths] of byBasename.entries()) {
+    if (paths.length > 1) aliasableBasenames.set(basename, paths);
+  }
+
+  // All SVG paths in the project
+  const svgPaths = Array.from(files.keys()).filter((k) =>
+    k.toLowerCase().endsWith('.svg')
+  );
+
+  // Tokenise a preset name into meaningful lowercase substrings
+  function tokenise(name) {
+    return name
+      .toLowerCase()
+      .split(/[\s\-_/,().]+/)
+      .filter((t) => t.length > 1);
+  }
+
+  // Count how many tokens from the preset name appear in a candidate path
+  function scorePath(path, tokens) {
+    const lower = path.toLowerCase();
+    return tokens.filter((t) => lower.includes(t)).length;
+  }
+
+  // Return the single best-scoring candidate, or null when ambiguous/no match.
+  // Prefer deeper (longer) paths when scores are tied.
+  function pickBest(candidates, tokens) {
+    if (!candidates || candidates.length === 0) return null;
+    if (candidates.length === 1) {
+      return scorePath(candidates[0], tokens) > 0 ? candidates[0] : null;
+    }
+    const scored = candidates
+      .map((p) => ({ path: p, score: scorePath(p, tokens) }))
+      .sort((a, b) => b.score - a.score || b.path.length - a.path.length);
+    if (scored[0].score === 0) return null;
+    if (scored[0].score === scored[1].score) return null; // ambiguous
+    return scored[0].path;
+  }
+
+  for (const presetName of presetNames) {
+    const tokens = tokenise(presetName);
+
+    let openingsPath = null;
+    const openingsCandidates = aliasableBasenames.get(
+      'openings_and_additions.txt'
+    );
+    if (openingsCandidates) {
+      openingsPath = pickBest(openingsCandidates, tokens);
+      if (!openingsPath) {
+        console.warn(
+          `[PresetCompanionMap] Cannot unambiguously resolve openings path for preset: "${presetName}"`
+        );
+      }
+    }
+
+    let svgPath = null;
+    if (svgPaths.length === 1) {
+      svgPath = svgPaths[0];
+    } else if (svgPaths.length > 1) {
+      svgPath = pickBest(svgPaths, tokens);
+      if (!svgPath) {
+        console.warn(
+          `[PresetCompanionMap] Cannot unambiguously resolve SVG path for preset: "${presetName}"`
+        );
+      }
+    }
+
+    result.set(presetName, { openingsPath, svgPath });
+  }
+
+  const mappedCount = Array.from(result.values()).filter(
+    (v) => v.openingsPath !== null
+  ).length;
+  console.log(
+    `[PresetCompanionMap] Mapped ${mappedCount}/${presetNames.length} presets to openings paths`
+  );
+
+  return result;
 }
 
 /**
