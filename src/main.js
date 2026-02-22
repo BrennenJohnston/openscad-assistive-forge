@@ -13915,6 +13915,53 @@ if (rounded) {
     });
   }
 
+  // Phase 9: Preset search/filter
+  const presetSearchInput = document.getElementById('presetSearchInput');
+  const presetSearchClear = document.getElementById('presetSearchClear');
+  const presetSearchStatus = document.getElementById('presetSearchStatus');
+
+  if (presetSearchInput && presetSearchClear && presetSearchStatus) {
+    let _searchDebounce = null;
+
+    function _applyPresetFilter() {
+      const term = presetSearchInput.value.trim().toLowerCase();
+      const options = Array.from(presetSelect.options);
+      let visible = 0;
+
+      for (const opt of options) {
+        if (!opt.value) {
+          // Keep the placeholder option always visible
+          opt.hidden = false;
+          continue;
+        }
+        const match = !term || opt.text.toLowerCase().includes(term);
+        opt.hidden = !match;
+        if (match) visible++;
+      }
+
+      presetSearchClear.hidden = !presetSearchInput.value;
+
+      const total = options.filter((o) => o.value).length;
+      if (!term) {
+        presetSearchStatus.textContent = '';
+      } else {
+        presetSearchStatus.textContent = `${visible} of ${total} presets match`;
+      }
+    }
+
+    presetSearchInput.addEventListener('input', () => {
+      clearTimeout(_searchDebounce);
+      _searchDebounce = setTimeout(_applyPresetFilter, 150);
+    });
+
+    presetSearchClear.addEventListener('click', () => {
+      presetSearchInput.value = '';
+      _applyPresetFilter();
+      presetSearchStatus.textContent = 'Search cleared, all presets shown';
+      presetSearchInput.focus();
+    });
+  }
+
   // Update button states when preset selection changes
   presetSelect.addEventListener('change', () => {
     updatePresetControlStates();
