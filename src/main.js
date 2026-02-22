@@ -72,7 +72,7 @@ import { ComparisonController } from './js/comparison-controller.js';
 import { ComparisonView } from './js/comparison-view.js';
 import { libraryManager, LIBRARY_DEFINITIONS } from './js/library-manager.js';
 import { RenderQueue } from './js/render-queue.js';
-import { openModal, closeModal, initStaticModals } from './js/modal-manager.js';
+import { openModal, closeModal, initStaticModals, isAnyModalOpen } from './js/modal-manager.js';
 import { translateError } from './js/error-translator.js';
 import {
   getStorageEstimate,
@@ -149,6 +149,8 @@ import {
 import { getModeManager } from './js/mode-manager.js';
 // UI Mode Controller - Basic/Advanced interface layout switching
 import { getUIModeController } from './js/ui-mode-controller.js';
+// Toolbar Menu Controller - File|Edit|Design|View|Window|Help menu bar
+import { getToolbarMenuController } from './js/toolbar-menu-controller.js';
 import { initParamDetailController } from './js/param-detail-controller.js';
 import { getFileActionsController } from './js/file-actions-controller.js';
 import { getEditActionsController } from './js/edit-actions-controller.js';
@@ -1568,6 +1570,54 @@ function _disableAltViewWithPreview(toggleBtn) {
   _updateHfmStatusBar();
 }
 
+/**
+ * Apply toolbar bar / workflow progress mutual exclusion based on UI mode.
+ *
+ * Advanced mode: toolbar visible, workflowProgress hidden.
+ * Basic mode (default): toolbar hidden, workflowProgress managed as-is.
+ * Basic mode (override): when any toolbarMenu* panel is explicitly shown via
+ *   PANEL_REGISTRY, the toolbar bar is shown with only those buttons visible
+ *   and workflowProgress is hidden.
+ *
+ * @param {'basic'|'advanced'} mode
+ */
+function _applyToolbarModeVisibility(mode) {
+  const controller = getToolbarMenuController();
+  if (mode === 'advanced') {
+    controller.show();
+    hideWorkflowProgress();
+  } else {
+    // Basic mode: check if any per-menu buttons are enabled via PANEL_REGISTRY
+    const uiMode = getUIModeController();
+    const registry = uiMode.getRegistry();
+    const menuIdMap = {
+      toolbarMenuFile: 'file',
+      toolbarMenuEdit: 'edit',
+      toolbarMenuDesign: 'design',
+      toolbarMenuView: 'view',
+      toolbarMenuWindow: 'window',
+      toolbarMenuHelp: 'help',
+    };
+
+    // Determine which toolbar menu buttons are explicitly visible (i.e., NOT hidden)
+    const visibleMenuIds = registry
+      .filter((p) => p.id in menuIdMap)
+      .filter((p) => {
+        const el = document.getElementById(`${menuIdMap[p.id]}MenuBtn`);
+        return el && !el.classList.contains('ui-mode-hidden');
+      })
+      .map((p) => menuIdMap[p.id]);
+
+    if (visibleMenuIds.length > 0) {
+      controller.setVisibleMenus(visibleMenuIds);
+      hideWorkflowProgress();
+    } else {
+      controller.hide();
+      showWorkflowProgress();
+    }
+  }
+}
+
 // Initialize app
 async function initApp() {
   console.log('OpenSCAD Assistive Forge v4.1.0');
@@ -2645,6 +2695,13 @@ async function initApp() {
   // Initialize UI mode controller (Basic/Advanced interface layout)
   getUIModeController().init();
 
+  // Initialize toolbar menu bar (File|Edit|Design|View|Window|Help)
+  getToolbarMenuController().init();
+  _applyToolbarModeVisibility(getUIModeController().getMode());
+  getUIModeController().subscribe((newMode) => {
+    _applyToolbarModeVisibility(newMode);
+  });
+
   // Initialize parameter detail level controller (Show/Inline/Hide/Desc-only)
   initParamDetailController();
 
@@ -3522,6 +3579,11 @@ async function initApp() {
    * @param {string|null} info.targetKey - Param key to focus/highlight
    */
   function showDependencyGuidanceModal(info) {
+    if (isAnyModalOpen()) {
+      console.log('[DependencyGuidance] Suppressed — another modal is active');
+      return;
+    }
+
     const { label, current, suggested, targetKey } = info || {};
 
     // Reuse a single modal instance
@@ -6439,12 +6501,6 @@ async function initApp() {
           const stats = getZipStats(files);
           console.log('[ZIP] Statistics:', stats);
 
-          // Show file tree
-          const fileTreeHtml = createFileTree(files, mainFile);
-          const infoArea = document.getElementById('fileInfo');
-          if (infoArea) {
-            infoArea.innerHTML = `${escapeHtml(file.name)} → ${escapeHtml(mainFile)}<br>${fileTreeHtml}`;
-          }
 
           // Get main file content
           fileContent = files.get(mainFile);
@@ -6660,35 +6716,6 @@ async function initApp() {
             : 0;
       const fileSizeStr = formatFileSize(fileSizeBytes);
 
-      // Update file info (preserve file tree for multi-file projects)
-      const fileInfo = document.getElementById('fileInfo');
-      const fileInfoSummary = document.getElementById('fileInfoSummary');
-      const fileInfoDetails = document.getElementById('fileInfoDetails');
-      const fileInfoTree = document.getElementById('fileInfoTree');
-
-      if (fileInfo && fileInfoSummary) {
-        // Always show compact summary
-        const summaryText = `${fileName} (${paramCount} parameters, ${fileSizeStr})`;
-        fileInfoSummary.textContent = summaryText;
-        fileInfoSummary.title = summaryText; // Full text in tooltip
-
-        // Show file tree in disclosure if multi-file project
-        if (
-          projectFiles &&
-          projectFiles.size > 1 &&
-          fileInfoDetails &&
-          fileInfoTree
-        ) {
-          const treeHtml = createFileTree(
-            projectFiles,
-            mainFilePath || fileName
-          );
-          fileInfoTree.innerHTML = treeHtml;
-          fileInfoDetails.classList.remove('hidden');
-        } else if (fileInfoDetails) {
-          fileInfoDetails.classList.add('hidden');
-        }
-      }
 
       // Enable compact header after file is loaded
       const appHeader = document.querySelector('.app-header');
@@ -7290,16 +7317,6 @@ async function initApp() {
         updateStatus('Ready');
         statsArea.textContent = '';
         clearPreviewStats();
-
-        // Clear file info
-        const fileInfoSummary = document.getElementById('fileInfoSummary');
-        const fileInfoDetails = document.getElementById('fileInfoDetails');
-        if (fileInfoSummary) {
-          fileInfoSummary.textContent = '';
-        }
-        if (fileInfoDetails) {
-          fileInfoDetails.classList.add('hidden');
-        }
 
         // Remove compact header
         const appHeader = document.querySelector('.app-header');
@@ -8086,9 +8103,15 @@ if (rounded) {
     }
 
     modal.innerHTML = `
-      <div class="preset-modal-content" style="max-width: 700px;">
+      <div class="preset-modal-content">
         <div class="preset-modal-header">
           <h3 id="fileManagerTitle" class="preset-modal-title">Project Files: ${escapeHtml(project.name)}</h3>
+          <button class="preset-modal-close" id="fileManagerXCloseBtn" aria-label="Close file manager">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
         </div>
 
         <div class="preset-modal-body">
@@ -8124,16 +8147,21 @@ if (rounded) {
     `;
 
     document.body.appendChild(modal);
+    openModal(modal);
+
+    const dismissFileManager = () => {
+      closeModal(modal);
+      document.body.removeChild(modal);
+    };
 
     // Wire up events
+    modal.querySelector('#fileManagerXCloseBtn').addEventListener('click', dismissFileManager);
     const closeBtn = modal.querySelector('#fileManagerCloseBtn');
-    closeBtn.addEventListener('click', () => {
-      document.body.removeChild(modal);
-    });
+    closeBtn.addEventListener('click', dismissFileManager);
 
     const loadBtn = modal.querySelector('#fileManagerLoadBtn');
     loadBtn.addEventListener('click', () => {
-      document.body.removeChild(modal);
+      dismissFileManager();
       loadSavedProject(projectId);
     });
 
@@ -8168,7 +8196,7 @@ if (rounded) {
         });
 
         if (result.success) {
-          document.body.removeChild(modal);
+          dismissFileManager();
           showProjectFileManager(projectId); // Refresh
           stateManager.announceChange(`Main file set to ${path}`);
         }
@@ -8231,7 +8259,7 @@ if (rounded) {
             });
 
             if (result.success) {
-              document.body.removeChild(modal);
+              dismissFileManager();
               showProjectFileManager(projectId); // Refresh to show new files
               stateManager.announceChange(
                 `Added ${addedCount} file${addedCount !== 1 ? 's' : ''} to project`
@@ -8272,7 +8300,7 @@ if (rounded) {
         });
 
         if (result.success) {
-          document.body.removeChild(modal);
+          dismissFileManager();
           showProjectFileManager(projectId);
           stateManager.announceChange(`Created folder "${safeName}"`);
         } else {
@@ -8325,7 +8353,7 @@ if (rounded) {
         });
 
         if (result.success) {
-          document.body.removeChild(modal);
+          dismissFileManager();
           showProjectFileManager(projectId);
           stateManager.announceChange(`Folder renamed to "${safeName}"`);
         } else {
@@ -8377,7 +8405,7 @@ if (rounded) {
         });
 
         if (result.success) {
-          document.body.removeChild(modal);
+          dismissFileManager();
           showProjectFileManager(projectId);
           stateManager.announceChange(`File renamed to "${safeName}"`);
         } else {
@@ -8404,7 +8432,7 @@ if (rounded) {
         });
 
         if (result.success) {
-          document.body.removeChild(modal);
+          dismissFileManager();
           showProjectFileManager(projectId);
           stateManager.announceChange(`Deleted file "${fileName}"`);
         } else {
@@ -8449,7 +8477,7 @@ if (rounded) {
         });
 
         if (result.success) {
-          document.body.removeChild(modal);
+          dismissFileManager();
           showProjectFileManager(projectId);
           stateManager.announceChange(`Deleted folder "${folderName}"`);
         } else {
@@ -8458,15 +8486,6 @@ if (rounded) {
       });
     });
 
-    // Close on escape
-    modal.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        document.body.removeChild(modal);
-      }
-    });
-
-    // Focus close button
-    setTimeout(() => closeBtn.focus(), 100);
   }
 
   /**
@@ -8503,19 +8522,14 @@ if (rounded) {
     `;
 
     document.body.appendChild(modal);
+    openModal(modal);
 
-    const closeBtn = modal.querySelector('#filePreviewCloseBtn');
-    closeBtn.addEventListener('click', () => {
+    const dismissPreview = () => {
+      closeModal(modal);
       document.body.removeChild(modal);
-    });
+    };
 
-    modal.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        document.body.removeChild(modal);
-      }
-    });
-
-    setTimeout(() => closeBtn.focus(), 100);
+    modal.querySelector('#filePreviewCloseBtn').addEventListener('click', dismissPreview);
   }
 
   /**

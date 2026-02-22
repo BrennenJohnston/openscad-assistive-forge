@@ -127,6 +127,42 @@ const PANEL_REGISTRY = [
     selector: '#displayOptionsPanel',
     defaultHiddenInBasic: true,
   },
+  {
+    id: 'toolbarMenuFile',
+    label: 'Toolbar: File',
+    selector: '#fileMenuBtn',
+    defaultHiddenInBasic: true,
+  },
+  {
+    id: 'toolbarMenuEdit',
+    label: 'Toolbar: Edit',
+    selector: '#editMenuBtn',
+    defaultHiddenInBasic: true,
+  },
+  {
+    id: 'toolbarMenuDesign',
+    label: 'Toolbar: Design',
+    selector: '#designMenuBtn',
+    defaultHiddenInBasic: true,
+  },
+  {
+    id: 'toolbarMenuView',
+    label: 'Toolbar: View',
+    selector: '#viewMenuBtn',
+    defaultHiddenInBasic: true,
+  },
+  {
+    id: 'toolbarMenuWindow',
+    label: 'Toolbar: Window',
+    selector: '#windowMenuBtn',
+    defaultHiddenInBasic: true,
+  },
+  {
+    id: 'toolbarMenuHelp',
+    label: 'Toolbar: Help',
+    selector: '#helpMenuBtn',
+    defaultHiddenInBasic: true,
+  },
 ];
 
 /**
