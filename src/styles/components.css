@@ -2321,6 +2321,54 @@ summary:focus-visible,
   outline-offset: 2px;
 }
 
+/* ── Measurement and Overlay tool group ─────────────────────────────────────
+ * Visual grouping for the Image Measurement and Reference Overlay panels.
+ * Both panels keep their independent <details> open/close behavior.
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+.tool-group {
+  display: flex;
+  flex-direction: column;
+  border-left: 3px solid var(--color-accent);
+  padding-left: var(--space-sm);
+  margin: var(--space-sm) 0;
+}
+
+.tool-group-label {
+  font-size: var(--font-size-xs, 0.75rem);
+  font-weight: var(--font-weight-semibold, 600);
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0 0 var(--space-xs) 0;
+  padding: var(--space-xs) 0;
+}
+
+/* High contrast overrides */
+:root[data-high-contrast='true'] .tool-group {
+  border-left-width: 4px;
+  border-left-color: var(--color-text-primary);
+}
+
+:root[data-high-contrast='true'] .tool-group-label {
+  color: var(--color-text-primary);
+  font-weight: 700;
+}
+
+/* Forced Colors Mode */
+@media (forced-colors: active) {
+  .tool-group {
+    border-left: 3px solid Highlight;
+  }
+
+  .tool-group-label {
+    color: HighlightText;
+    background: Highlight;
+    padding: 2px var(--space-xs);
+    forced-color-adjust: none;
+  }
+}
+
 /* Reference Overlay Controls */
 .overlay-details {
   /* Card styling provided by .forge-disclosure */
