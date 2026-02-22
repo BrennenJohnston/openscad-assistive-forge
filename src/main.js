@@ -121,6 +121,7 @@ import {
   debugFlags,
   FLAGS as _FLAGS,
 } from './js/feature-flags.js';
+import { initSearchableCombobox } from './js/searchable-combobox.js';
 import {
   initCSPReporter,
   logViolationSummary as _logViolationSummary,
@@ -13369,6 +13370,9 @@ if (rounded) {
   const DESIGN_DEFAULTS_ID = '__design_defaults__';
   const PRESET_SORT_KEY = 'openscad-forge-preset-sort';
 
+  // Searchable combobox instance (non-null only when searchable_combobox flag is on)
+  let _presetCombobox = null;
+
   // Clear preset selection when parameters are manually changed
   // Track if we're currently loading a preset (to avoid clearing during load)
   let isLoadingPreset = false;
@@ -13671,6 +13675,10 @@ if (rounded) {
       presetSelect.disabled = true;
       presetSelect.innerHTML =
         '<option value="">-- No model loaded --</option>';
+      if (_presetCombobox) {
+        _presetCombobox.update([], null);
+        _presetCombobox.setDisabled(true);
+      }
       currentPresetSignature = null;
       isPresetDirty = false;
       updatePresetControlStates();
@@ -13685,7 +13693,7 @@ if (rounded) {
     // Remember current selection from state (survives dropdown rebuilds)
     const currentPresetId = state.currentPresetId;
 
-    // Clear and rebuild dropdown
+    // Clear and rebuild native select dropdown
     presetSelect.innerHTML = '<option value="">-- Select Preset --</option>';
 
     // "design default values" is ALWAYS first in dropdown (desktop OpenSCAD parity)
@@ -13712,6 +13720,18 @@ if (rounded) {
     const sortSelect = document.getElementById('presetDropdownSort');
     if (sortSelect && sortSelect.value !== currentSortOrder) {
       sortSelect.value = currentSortOrder;
+    }
+
+    // Update combobox if the feature flag is on
+    if (_presetCombobox) {
+      const comboOptions = [
+        { id: DESIGN_DEFAULTS_ID, label: 'design default values', italic: true },
+        ...presets
+          .filter((p) => p.id !== 'design-defaults')
+          .map((p) => ({ id: p.id, label: p.name })),
+      ];
+      _presetCombobox.update(comboOptions, currentPresetId || null);
+      _presetCombobox.setDisabled(false);
     }
 
     // Restore selection if the preset still exists in the list
@@ -14494,6 +14514,39 @@ if (rounded) {
       presetSearchStatus.textContent = 'Search cleared, all presets shown';
       presetSearchInput.focus();
     });
+  }
+
+  // Searchable combobox (searchable_combobox feature flag)
+  if (_isEnabled('searchable_combobox')) {
+    const comboContainer = document.getElementById('presetComboboxContainer');
+    const presetSearchLegacy = document.getElementById('presetSearchLegacy');
+    const presetSelectorLegacy = document.getElementById('presetSelector');
+
+    if (comboContainer) {
+      // Show combobox, hide legacy elements
+      comboContainer.hidden = false;
+      if (presetSearchLegacy) presetSearchLegacy.hidden = true;
+      if (presetSelectorLegacy) presetSelectorLegacy.hidden = true;
+
+      _presetCombobox = initSearchableCombobox({
+        container: comboContainer,
+        placeholder: 'Search presets…',
+        inputId: 'presetComboboxInput',
+        disabled: true,
+      });
+
+      // Mirror combobox selection to the hidden native select for shared event handlers
+      comboContainer.addEventListener('change', (e) => {
+        const id = e.detail?.value;
+        if (id != null) {
+          // Update the native select value so existing change handlers fire
+          if (presetSelect) {
+            presetSelect.value = id;
+            presetSelect.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+        }
+      });
+    }
   }
 
   // Update button states when preset selection changes

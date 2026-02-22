@@ -107,6 +107,26 @@ export const FLAGS = {
     userConfigurable: true,
     killSwitch: false,
   },
+  searchable_combobox: {
+    id: 'searchable_combobox',
+    name: 'Searchable Preset Combobox',
+    description:
+      'Replace the preset search input and native select with a combined searchable combobox widget',
+    default: false,
+    rollout: 0,
+    userConfigurable: false,
+    killSwitch: false,
+  },
+  folder_import: {
+    id: 'folder_import',
+    name: 'Import Project Folder',
+    description:
+      'Allow importing a directory of .scad files and companion resources via the file picker',
+    default: false,
+    rollout: 0,
+    userConfigurable: false,
+    killSwitch: false,
+  },
 };
 
 // Storage key for user preferences

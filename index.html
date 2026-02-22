@@ -2431,7 +2431,8 @@
                   <span class="forge-disclosure-title">Presets</span>
                 </summary>
                 <div class="preset-content">
-                  <div class="preset-search">
+                  <!-- Legacy: search input (hidden when searchable_combobox flag is on) -->
+                  <div class="preset-search" id="presetSearchLegacy">
                     <label for="presetSearchInput" class="sr-only"
                       >Search presets</label
                     ><input
@@ -2470,6 +2471,18 @@
                       <option value="date-modified">Date modified</option>
                     </select>
                   </div>
+                  <!-- Searchable combobox (shown when searchable_combobox flag is on) -->
+                  <div
+                    id="presetComboboxContainer"
+                    class="preset-combobox-container"
+                    hidden
+                  >
+                    <label for="presetComboboxInput" class="sr-only"
+                      >Select preset</label
+                    >
+                    <!-- initSearchableCombobox() populates this container -->
+                  </div>
+                  <!-- Legacy: native select (hidden when searchable_combobox flag is on) -->
                   <div class="preset-selector" id="presetSelector">
                     <label for="presetSelect" class="preset-label sr-only"
                       >Select preset</label
