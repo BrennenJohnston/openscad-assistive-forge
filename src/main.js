@@ -49,10 +49,7 @@ import {
   createFileTree,
   getZipStats,
 } from './js/zip-handler.js';
-import {
-  loadManifest,
-  ManifestError,
-} from './js/manifest-loader.js';
+import { loadManifest, ManifestError } from './js/manifest-loader.js';
 import {
   runPreflightCheck,
   formatMissingDependencies,
@@ -72,7 +69,12 @@ import { ComparisonController } from './js/comparison-controller.js';
 import { ComparisonView } from './js/comparison-view.js';
 import { libraryManager, LIBRARY_DEFINITIONS } from './js/library-manager.js';
 import { RenderQueue } from './js/render-queue.js';
-import { openModal, closeModal, initStaticModals, isAnyModalOpen } from './js/modal-manager.js';
+import {
+  openModal,
+  closeModal,
+  initStaticModals,
+  isAnyModalOpen,
+} from './js/modal-manager.js';
 import { translateError } from './js/error-translator.js';
 import {
   getStorageEstimate,
@@ -111,16 +113,38 @@ import {
   keyboardConfig,
   initShortcutsModal,
 } from './js/keyboard-config.js';
-import { isEnabled as _isEnabled, debugFlags, FLAGS as _FLAGS } from './js/feature-flags.js';
-import { initCSPReporter, logViolationSummary as _logViolationSummary } from './js/csp-reporter.js';
+import {
+  isEnabled as _isEnabled,
+  debugFlags,
+  FLAGS as _FLAGS,
+} from './js/feature-flags.js';
+import {
+  initCSPReporter,
+  logViolationSummary as _logViolationSummary,
+} from './js/csp-reporter.js';
 import {
   migrateStorageKeys,
   getAppPrefKey,
   getDrawerStateKey,
 } from './js/storage-keys.js';
-import { initImageMeasurement, openFullscreen as measureOpenFullscreen, closeFullscreen as measureCloseFullscreen, loadImageFromDataURL, setMeasureMode, clearRulerPoints, getCalibDistancePx } from './js/image-measurement.js';
+import {
+  initImageMeasurement,
+  openFullscreen as measureOpenFullscreen,
+  closeFullscreen as measureCloseFullscreen,
+  loadImageFromDataURL,
+  setMeasureMode,
+  clearRulerPoints,
+  getCalibDistancePx,
+} from './js/image-measurement.js';
 import * as SharedImageStore from './js/shared-image-store.js';
-import { getUnit, setUnit, getScaleFactor, setScaleFactor, onUnitChange, onScaleChange } from './js/unit-sync.js';
+import {
+  getUnit,
+  setUnit,
+  getScaleFactor,
+  setScaleFactor,
+  onUnitChange,
+  onScaleChange,
+} from './js/unit-sync.js';
 
 // Storage keys using standardized naming convention
 const STORAGE_KEY_AUTO_PREVIEW_ENABLED = getAppPrefKey('auto-preview-enabled');
@@ -223,17 +247,13 @@ const EXAMPLE_DEFINITIONS = {
     description: 'Keyguard Designer Demo (multi-file)',
     author: 'Community',
     // Additional files to load (multi-file design package)
-    additionalFiles: [
-      '/examples/keyguard-demo/openings_and_additions.txt',
-    ],
+    additionalFiles: ['/examples/keyguard-demo/openings_and_additions.txt'],
   },
   // Short alias for keyguard demo example
-  'keyguard': {
+  keyguard: {
     path: '/examples/keyguard-demo/keyguard_demo.scad',
     name: 'keyguard_demo.scad',
-    additionalFiles: [
-      '/examples/keyguard-demo/openings_and_additions.txt',
-    ],
+    additionalFiles: ['/examples/keyguard-demo/openings_and_additions.txt'],
   },
   // Additional examples for deep-linking
   'cable-organizer': {
@@ -1334,7 +1354,10 @@ function _injectAltToggle() {
   panToggleBtn.className =
     'btn btn-sm btn-icon camera-btn alt-pan-toggle dpad-center';
   panToggleBtn.setAttribute('aria-pressed', 'false');
-  panToggleBtn.setAttribute('aria-label', 'Toggle alternate pan adjustment mode');
+  panToggleBtn.setAttribute(
+    'aria-label',
+    'Toggle alternate pan adjustment mode'
+  );
   panToggleBtn.setAttribute('title', 'Toggle alternate pan adjustment');
   panToggleBtn.style.display = 'none'; // Hidden until alt view is enabled
   panToggleBtn.innerHTML = `
@@ -1665,7 +1688,9 @@ async function initApp() {
     localStorage.getItem('openscad-forge-wasm-init-completed') !== 'true';
 
   if (wasmCrashDetected && !isRecoveryMode) {
-    console.warn('[Recovery] Detected unclean WASM shutdown — offering recovery mode');
+    console.warn(
+      '[Recovery] Detected unclean WASM shutdown — offering recovery mode'
+    );
     // Clear the flags so we don't loop
     localStorage.removeItem('openscad-forge-wasm-init-started');
     localStorage.removeItem('openscad-forge-wasm-init-completed');
@@ -1693,7 +1718,9 @@ async function initApp() {
 
     // Check for recovery data
     const recoverySource = localStorage.getItem(STORAGE_KEY_RECOVERY_SOURCE);
-    const recoveryTimestamp = localStorage.getItem(STORAGE_KEY_RECOVERY_TIMESTAMP);
+    const recoveryTimestamp = localStorage.getItem(
+      STORAGE_KEY_RECOVERY_TIMESTAMP
+    );
 
     if (recoverySource && recoveryTimestamp) {
       const elapsed = Date.now() - parseInt(recoveryTimestamp, 10);
@@ -1805,65 +1832,80 @@ async function initApp() {
   });
 
   // Memory banner action handlers
-  document.getElementById('memoryBannerDismiss')?.addEventListener('click', () => {
-    const banner = document.getElementById('memoryBanner');
-    if (banner) banner.dataset.visible = 'false';
-  });
+  document
+    .getElementById('memoryBannerDismiss')
+    ?.addEventListener('click', () => {
+      const banner = document.getElementById('memoryBanner');
+      if (banner) banner.dataset.visible = 'false';
+    });
 
   document.getElementById('memoryBannerSave')?.addEventListener('click', () => {
     // Trigger project save - dispatch event that saved-projects system listens for
     document.getElementById('saveProjectBtn')?.click();
   });
 
-  document.getElementById('memoryBannerReduceFn')?.addEventListener('click', () => {
-    // Reduce quality by switching to low quality mode
-    const qualitySelect = document.getElementById('qualityPreset');
-    if (qualitySelect) {
-      qualitySelect.value = 'low';
-      qualitySelect.dispatchEvent(new Event('change'));
-    }
-    // Also reduce auto-preview quality
-    const previewQualitySelect = document.getElementById('previewQualityMode');
-    if (previewQualitySelect) {
-      previewQualitySelect.value = 'fast';
-      previewQualitySelect.dispatchEvent(new Event('change'));
-    }
-    console.log('[Memory] Quality reduced to conserve memory');
-  });
-
-  document.getElementById('memoryBannerDisableAuto')?.addEventListener('click', () => {
-    // Disable auto-preview
-    const autoPreviewToggle = document.getElementById('autoPreviewToggle');
-    if (autoPreviewToggle && autoPreviewToggle.checked) {
-      autoPreviewToggle.checked = false;
-      autoPreviewToggle.dispatchEvent(new Event('change'));
-    }
-    console.log('[Memory] Auto-preview disabled to conserve memory');
-  });
-
-  document.getElementById('memoryBannerExport')?.addEventListener('click', () => {
-    // Trigger STL export
-    const exportBtn = document.getElementById('renderExportButton');
-    if (exportBtn) {
-      exportBtn.click();
-    }
-    console.log('[Memory] STL export triggered for emergency save');
-  });
-
-  document.getElementById('memoryBannerReload')?.addEventListener('click', () => {
-    // Save current state to localStorage before reload
-    try {
-      const currentCode = document.getElementById('openscadSource')?.value || '';
-      if (currentCode) {
-        localStorage.setItem(STORAGE_KEY_RECOVERY_SOURCE, currentCode);
-        localStorage.setItem(STORAGE_KEY_RECOVERY_TIMESTAMP, Date.now().toString());
+  document
+    .getElementById('memoryBannerReduceFn')
+    ?.addEventListener('click', () => {
+      // Reduce quality by switching to low quality mode
+      const qualitySelect = document.getElementById('qualityPreset');
+      if (qualitySelect) {
+        qualitySelect.value = 'low';
+        qualitySelect.dispatchEvent(new Event('change'));
       }
-    } catch (e) {
-      console.error('[Memory] Failed to save recovery state:', e);
-    }
-    // Reload in recovery mode
-    window.location.href = window.location.pathname + '?recovery=true';
-  });
+      // Also reduce auto-preview quality
+      const previewQualitySelect =
+        document.getElementById('previewQualityMode');
+      if (previewQualitySelect) {
+        previewQualitySelect.value = 'fast';
+        previewQualitySelect.dispatchEvent(new Event('change'));
+      }
+      console.log('[Memory] Quality reduced to conserve memory');
+    });
+
+  document
+    .getElementById('memoryBannerDisableAuto')
+    ?.addEventListener('click', () => {
+      // Disable auto-preview
+      const autoPreviewToggle = document.getElementById('autoPreviewToggle');
+      if (autoPreviewToggle && autoPreviewToggle.checked) {
+        autoPreviewToggle.checked = false;
+        autoPreviewToggle.dispatchEvent(new Event('change'));
+      }
+      console.log('[Memory] Auto-preview disabled to conserve memory');
+    });
+
+  document
+    .getElementById('memoryBannerExport')
+    ?.addEventListener('click', () => {
+      // Trigger STL export
+      const exportBtn = document.getElementById('renderExportButton');
+      if (exportBtn) {
+        exportBtn.click();
+      }
+      console.log('[Memory] STL export triggered for emergency save');
+    });
+
+  document
+    .getElementById('memoryBannerReload')
+    ?.addEventListener('click', () => {
+      // Save current state to localStorage before reload
+      try {
+        const currentCode =
+          document.getElementById('openscadSource')?.value || '';
+        if (currentCode) {
+          localStorage.setItem(STORAGE_KEY_RECOVERY_SOURCE, currentCode);
+          localStorage.setItem(
+            STORAGE_KEY_RECOVERY_TIMESTAMP,
+            Date.now().toString()
+          );
+        }
+      } catch (e) {
+        console.error('[Memory] Failed to save recovery state:', e);
+      }
+      // Reload in recovery mode
+      window.location.href = window.location.pathname + '?recovery=true';
+    });
 
   let statusArea = null;
   let cameraPanelController = null; // Declared here, initialized later
@@ -2496,12 +2538,18 @@ async function initApp() {
             resolve(true);
           } catch (error) {
             // Timeout or error occurred
-            console.warn('[Cache Clear] Operation timed out or failed:', error.message);
+            console.warn(
+              '[Cache Clear] Operation timed out or failed:',
+              error.message
+            );
 
             // Force reload anyway - the cache clear may have partially succeeded
             // and reloading is the safest recovery action
             document.body.removeChild(modal);
-            updateStatus('Cache clear taking too long, forcing reload...', 'warning');
+            updateStatus(
+              'Cache clear taking too long, forcing reload...',
+              'warning'
+            );
             setTimeout(() => {
               window.location.reload();
             }, 300);
@@ -2773,7 +2821,9 @@ async function initApp() {
       URL.revokeObjectURL(url);
     },
     onExportImage: () => {
-      const canvas = document.querySelector('#preview canvas, .preview-area canvas');
+      const canvas = document.querySelector(
+        '#preview canvas, .preview-area canvas'
+      );
       if (!canvas) return;
       const link = document.createElement('a');
       link.download = 'openscad-preview.png';
@@ -2919,7 +2969,8 @@ async function initApp() {
       if (modeManager?.isExpertMode?.() && modeManager.getEditorInstance?.()) {
         const editor = modeManager.getEditorInstance();
         if (editor.revealLineInCenter) editor.revealLineInCenter(line);
-        if (editor.setPosition) editor.setPosition({ lineNumber: line, column: 1 });
+        if (editor.setPosition)
+          editor.setPosition({ lineNumber: line, column: 1 });
         if (editor.focus) editor.focus();
       }
     },
@@ -2932,6 +2983,127 @@ async function initApp() {
     },
   });
   editActionsController.init();
+
+  // ── Toolbar: Edit menu ──────────────────────────────────────────────────
+  getToolbarMenuController().registerMenuBuilder('edit', () => {
+    const state = stateManager.getState();
+    const hasFile = Boolean(state.uploadedFile);
+    const canUndo = stateManager.canUndo();
+    const canRedo = stateManager.canRedo();
+
+    const editorOnly = { disabled: true, tooltip: 'Requires Code Editor' };
+
+    return [
+      {
+        type: 'action',
+        label: 'Undo',
+        enabled: canUndo,
+        tooltip: canUndo ? undefined : 'Nothing to undo',
+        handler: () => stateManager.undo(),
+      },
+      {
+        type: 'action',
+        label: 'Redo',
+        enabled: canRedo,
+        tooltip: canRedo ? undefined : 'Nothing to redo',
+        handler: () => stateManager.redo(),
+      },
+      { type: 'separator' },
+      { type: 'action', label: 'Cut', ...editorOnly },
+      { type: 'action', label: 'Copy', ...editorOnly },
+      { type: 'action', label: 'Paste', ...editorOnly },
+      { type: 'separator' },
+      { type: 'action', label: 'Indent', ...editorOnly },
+      { type: 'action', label: 'Unindent', ...editorOnly },
+      { type: 'action', label: 'Comment', ...editorOnly },
+      { type: 'action', label: 'Uncomment', ...editorOnly },
+      { type: 'action', label: 'Convert Tabs to Spaces', ...editorOnly },
+      { type: 'action', label: 'Toggle Bookmark', ...editorOnly },
+      { type: 'action', label: 'Jump to next bookmark', ...editorOnly },
+      { type: 'action', label: 'Jump to previous bookmark', ...editorOnly },
+      { type: 'separator' },
+      { type: 'action', label: 'Show Next Tab', ...editorOnly },
+      { type: 'action', label: 'Show Previous Tab', ...editorOnly },
+      { type: 'separator' },
+      {
+        type: 'action',
+        label: 'Copy Viewport Image',
+        shortcutAction: 'copyViewportImage',
+        enabled: hasFile,
+        tooltip: hasFile ? undefined : 'Open a file first',
+        handler: () => editActionsController.copyViewportImage(),
+      },
+      {
+        type: 'action',
+        label: 'Copy Viewport Translation',
+        enabled: hasFile,
+        tooltip: hasFile ? undefined : 'Open a file first',
+        handler: () => editActionsController.copyTranslation(),
+      },
+      {
+        type: 'action',
+        label: 'Copy Viewport Rotation',
+        enabled: hasFile,
+        tooltip: hasFile ? undefined : 'Open a file first',
+        handler: () => editActionsController.copyRotation(),
+      },
+      {
+        type: 'action',
+        label: 'Copy Viewport Distance',
+        enabled: hasFile,
+        tooltip: hasFile ? undefined : 'Open a file first',
+        handler: () => editActionsController.copyDistance(),
+      },
+      {
+        type: 'action',
+        label: 'Copy Viewport FOV',
+        enabled: hasFile,
+        tooltip: hasFile ? undefined : 'Open a file first',
+        handler: () => editActionsController.copyFov(),
+      },
+      { type: 'separator' },
+      { type: 'action', label: 'Find\u2026', ...editorOnly },
+      { type: 'action', label: 'Find and Replace\u2026', ...editorOnly },
+      { type: 'action', label: 'Find Next', ...editorOnly },
+      { type: 'action', label: 'Find Previous', ...editorOnly },
+      { type: 'action', label: 'Use Selection for Find', ...editorOnly },
+      { type: 'separator' },
+      {
+        type: 'action',
+        label: 'Jump to Next Error',
+        shortcutAction: 'jumpNextError',
+        handler: () => editActionsController.jumpToNextError(),
+      },
+      { type: 'separator' },
+      {
+        type: 'action',
+        label: 'Increase Font Size',
+        shortcutAction: 'increaseFontSize',
+        handler: () => editActionsController.increaseFontSize(),
+      },
+      {
+        type: 'action',
+        label: 'Decrease Font Size',
+        shortcutAction: 'decreaseFontSize',
+        handler: () => editActionsController.decreaseFontSize(),
+      },
+      {
+        type: 'action',
+        label: 'Preferences\u2026',
+        handler: () => {
+          const modal = document.getElementById('shortcutsModal');
+          const modalBody = document.getElementById('shortcutsModalBody');
+          if (modal && modalBody) {
+            if (!modal.dataset.initialized) {
+              initShortcutsModal(modalBody, () => closeModal(modal));
+              modal.dataset.initialized = 'true';
+            }
+            openModal(modal);
+          }
+        },
+      },
+    ];
+  });
 
   // Initialize design panel controller (Flush Caches, Display AST, Check Validity, Geometry Info)
   const designPanelController = getDesignPanelController({
@@ -2947,12 +3119,342 @@ async function initApp() {
   });
   designPanelController.init();
 
+  // ── Toolbar: Design menu ─────────────────────────────────────────────────
+  getToolbarMenuController().registerMenuBuilder('design', () => {
+    const state = stateManager.getState();
+    const hasFile = Boolean(state.uploadedFile);
+    const hasRender = Boolean(state.stl);
+
+    return [
+      {
+        type: 'action',
+        label: 'Preview',
+        shortcutAction: 'preview',
+        enabled: hasFile,
+        tooltip: hasFile ? undefined : 'Open a file first',
+        handler: () => {
+          if (autoPreviewController) {
+            autoPreviewController.onParameterChange(state.parameters);
+          }
+        },
+      },
+      {
+        type: 'action',
+        label: 'Render',
+        shortcutAction: 'render',
+        enabled: hasFile,
+        tooltip: hasFile ? undefined : 'Open a file first',
+        handler: () => {
+          const btn = document.getElementById('primaryActionBtn');
+          if (btn && !btn.disabled) btn.click();
+        },
+      },
+      {
+        type: 'action',
+        label: 'Cancel Render',
+        shortcutAction: 'cancelRender',
+        enabled: hasFile,
+        tooltip: hasFile ? undefined : 'Open a file first',
+        handler: () => {
+          if (renderController?.isBusy?.()) renderController.cancel();
+        },
+      },
+      { type: 'separator' },
+      {
+        type: 'action',
+        label: 'Flush Caches',
+        shortcutAction: 'flushCaches',
+        handler: () => designPanelController.flushCaches(),
+      },
+      { type: 'separator' },
+      {
+        type: 'action',
+        label: 'Display AST',
+        enabled: hasFile,
+        tooltip: hasFile ? undefined : 'Open a file first',
+        handler: () => designPanelController.showAST(),
+      },
+      {
+        type: 'action',
+        label: 'Check Validity',
+        shortcutAction: 'checkValidity',
+        enabled: hasRender,
+        tooltip: hasRender ? undefined : 'Render a model first',
+        handler: () => designPanelController.checkValidity(),
+      },
+      {
+        type: 'action',
+        label: 'Geometry Info',
+        enabled: hasRender,
+        tooltip: hasRender ? undefined : 'Render a model first',
+        handler: () => designPanelController.updateGeometryInfo(),
+      },
+    ];
+  });
+
   // Initialize display options controller (Axes, Edges, Crosshairs, Wireframe)
   const displayOptionsController = getDisplayOptionsController({
     getPreviewManager: () => previewManager,
     getThree: getThreeModule,
   });
   displayOptionsController.init();
+
+  // ── Toolbar: View menu ───────────────────────────────────────────────────
+  getToolbarMenuController().registerMenuBuilder('view', () => {
+    const state = stateManager.getState();
+    const hasRender = Boolean(state.stl);
+
+    const noRender = { disabled: true, tooltip: 'Render a model first' };
+
+    return [
+      {
+        type: 'action',
+        label: 'View All',
+        enabled: hasRender,
+        tooltip: hasRender ? undefined : 'Render a model first',
+        handler: () => {
+          if (previewManager?.mesh) {
+            previewManager.fitCameraToModel();
+            announceImmediate('View fitted to model');
+          }
+        },
+      },
+      {
+        type: 'action',
+        label: 'Reset View',
+        shortcutAction: 'resetView',
+        enabled: hasRender,
+        tooltip: hasRender ? undefined : 'Render a model first',
+        handler: () => {
+          if (previewManager) previewManager.fitCameraToModel();
+        },
+      },
+      { type: 'separator' },
+      {
+        type: 'submenu',
+        label: 'Camera Viewpoint',
+        enabled: hasRender,
+        ...(hasRender ? {} : noRender),
+        items: [
+          {
+            type: 'action',
+            label: 'Top',
+            shortcutAction: 'viewTop',
+            handler: () => previewManager?.setCameraView('top'),
+          },
+          {
+            type: 'action',
+            label: 'Bottom',
+            shortcutAction: 'viewBottom',
+            handler: () => previewManager?.setCameraView('bottom'),
+          },
+          {
+            type: 'action',
+            label: 'Front',
+            shortcutAction: 'viewFront',
+            handler: () => previewManager?.setCameraView('front'),
+          },
+          {
+            type: 'action',
+            label: 'Back',
+            shortcutAction: 'viewBack',
+            handler: () => previewManager?.setCameraView('back'),
+          },
+          {
+            type: 'action',
+            label: 'Left',
+            shortcutAction: 'viewLeft',
+            handler: () => previewManager?.setCameraView('left'),
+          },
+          {
+            type: 'action',
+            label: 'Right',
+            shortcutAction: 'viewRight',
+            handler: () => previewManager?.setCameraView('right'),
+          },
+          {
+            type: 'action',
+            label: 'Diagonal',
+            shortcutAction: 'viewDiagonal',
+            handler: () => previewManager?.setCameraView('diagonal'),
+          },
+        ],
+      },
+      {
+        type: 'action',
+        label: 'Toggle Projection',
+        shortcutAction: 'toggleProjection',
+        enabled: hasRender,
+        tooltip: hasRender ? undefined : 'Render a model first',
+        handler: () => {
+          if (previewManager) {
+            const newMode = previewManager.toggleProjection();
+            const isPerspective = newMode === 'perspective';
+            const projToggle = document.getElementById('projectionToggle');
+            if (projToggle) {
+              projToggle.setAttribute(
+                'aria-pressed',
+                isPerspective ? 'false' : 'true'
+              );
+              const labelSpan = projToggle.querySelector('span');
+              if (labelSpan) {
+                labelSpan.textContent = isPerspective
+                  ? 'Perspective'
+                  : 'Orthographic';
+              }
+            }
+          }
+        },
+      },
+      { type: 'separator' },
+      {
+        type: 'action',
+        label: 'Show Axes',
+        shortcutAction: 'toggleAxes',
+        handler: () => displayOptionsController.toggle('axes'),
+      },
+      {
+        type: 'action',
+        label: 'Show Edges',
+        shortcutAction: 'toggleEdges',
+        handler: () => displayOptionsController.toggle('edges'),
+      },
+      {
+        type: 'action',
+        label: 'Show Crosshairs',
+        handler: () => displayOptionsController.toggle('crosshairs'),
+      },
+      {
+        type: 'action',
+        label: 'Wireframe',
+        handler: () => displayOptionsController.toggle('wireframe'),
+      },
+      { type: 'separator' },
+      {
+        type: 'action',
+        label: 'Toggle Parameters Sidebar',
+        shortcutAction: 'toggleCustomizer',
+        handler: () => {
+          const sidebar = document.querySelector('.sidebar');
+          if (sidebar) sidebar.classList.toggle('collapsed');
+        },
+      },
+      {
+        type: 'action',
+        label: 'Focus Mode',
+        shortcutAction: 'focusMode',
+        handler: () => document.getElementById('focusModeBtn')?.click(),
+      },
+      { type: 'separator' },
+      {
+        type: 'action',
+        label: 'Show Shortcuts',
+        shortcutAction: 'showShortcutsModal',
+        handler: () => {
+          const modal = document.getElementById('shortcutsModal');
+          const modalBody = document.getElementById('shortcutsModalBody');
+          if (modal && modalBody) {
+            if (!modal.dataset.initialized) {
+              initShortcutsModal(modalBody, () => closeModal(modal));
+              modal.dataset.initialized = 'true';
+            }
+            openModal(modal);
+          }
+        },
+      },
+    ];
+  });
+
+  // ── Toolbar: Window menu ─────────────────────────────────────────────────
+  getToolbarMenuController().registerMenuBuilder('window', () => {
+    const uiCtrl = getUIModeController();
+    const hidden = new Set(
+      uiCtrl.getPreferencesForExport().hiddenPanelsInBasic
+    );
+
+    /**
+     * @param {string} panelId
+     * @param {string} label
+     * @param {string|undefined} shortcutAction
+     */
+    function panelItem(panelId, label, shortcutAction) {
+      const isHidden = hidden.has(panelId);
+      return {
+        type: 'action',
+        label: `${isHidden ? 'Show' : 'Hide'} ${label}`,
+        ...(shortcutAction ? { shortcutAction } : {}),
+        handler: () => uiCtrl.togglePanelVisibility(panelId),
+      };
+    }
+
+    return [
+      panelItem('consoleOutput', 'Console Output', 'toggleConsole'),
+      panelItem('errorLog', 'Error Log', 'toggleErrorLog'),
+      panelItem('codeEditor', 'Code Editor', 'toggleCodeEditor'),
+      { type: 'separator' },
+      panelItem('editTools', 'Edit Tools'),
+      panelItem('designTools', 'Design Tools'),
+      panelItem('displayOptions', 'Display Options'),
+      { type: 'separator' },
+      panelItem('fileActions', 'File Actions'),
+      panelItem('libraries', 'Libraries'),
+      panelItem('companionFileManagement', 'Companion Files'),
+      panelItem('presetImportExport', 'Preset Import/Export'),
+      panelItem('renderSettings', 'Render Settings'),
+      panelItem('gridSettings', 'Grid Settings'),
+      panelItem('imageMeasurement', 'Image Measurement'),
+      panelItem('referenceOverlay', 'Reference Overlay'),
+      panelItem('advancedMenu', 'Advanced Menu'),
+    ];
+  });
+
+  // ── Toolbar: Help menu ───────────────────────────────────────────────────
+  getToolbarMenuController().registerMenuBuilder('help', () => {
+    return [
+      {
+        type: 'action',
+        label: 'Keyboard Shortcuts\u2026',
+        shortcutAction: 'showShortcutsModal',
+        handler: () => {
+          const modal = document.getElementById('shortcutsModal');
+          const modalBody = document.getElementById('shortcutsModalBody');
+          if (modal && modalBody) {
+            if (!modal.dataset.initialized) {
+              initShortcutsModal(modalBody, () => closeModal(modal));
+              modal.dataset.initialized = 'true';
+            }
+            openModal(modal);
+          }
+        },
+      },
+      { type: 'separator' },
+      {
+        type: 'action',
+        label: 'OpenSCAD Documentation',
+        disabled: true,
+        tooltip: 'Opens in a new tab — coming soon',
+      },
+      {
+        type: 'action',
+        label: 'OpenSCAD Cheat Sheet',
+        disabled: true,
+        tooltip: 'Opens in a new tab — coming soon',
+      },
+      { type: 'separator' },
+      {
+        type: 'action',
+        label: 'Report a Bug\u2026',
+        disabled: true,
+        tooltip: 'Opens GitHub Issues — coming soon',
+      },
+      {
+        type: 'action',
+        label: 'About OpenSCAD Assistive Forge\u2026',
+        disabled: true,
+        tooltip: 'Coming soon',
+      },
+    ];
+  });
 
   // Initialize animation controller ($t animation)
   const animationController = getAnimationController({
@@ -2980,7 +3482,9 @@ async function initApp() {
         updateStatus('UI preferences saved to project');
       } catch (error) {
         if (error.name === 'QuotaExceededError') {
-          console.warn('[App] localStorage quota exceeded — UI prefs not saved');
+          console.warn(
+            '[App] localStorage quota exceeded — UI prefs not saved'
+          );
         } else {
           console.warn('[App] Could not save UI preferences:', error);
         }
@@ -3010,23 +3514,23 @@ async function initApp() {
   const checkPresetMigration = () => {
     try {
       const migrationInfo = checkMigrationAvailable();
-      
+
       if (migrationInfo.available && !migrationInfo.alreadyOffered) {
         console.log('[App] Legacy presets detected:', {
           presets: migrationInfo.legacyPresetCount,
           models: migrationInfo.legacyModelCount,
         });
-        
+
         // Show migration prompt (non-blocking, user can dismiss)
-        const message = 
+        const message =
           `Found ${migrationInfo.legacyPresetCount} preset(s) from a previous version. ` +
           `Would you like to migrate them to preserve your work?`;
-        
+
         const shouldMigrate = confirm(message);
-        
+
         if (shouldMigrate) {
           const result = migrateFromLegacyStorage({ createBackup: true });
-          
+
           if (result.success) {
             updateStatus(
               `Migrated ${result.migratedPresets} preset(s) successfully!`,
@@ -3050,7 +3554,7 @@ async function initApp() {
       console.warn('[App] Error checking preset migration:', error);
     }
   };
-  
+
   // Check migration after a short delay (after first-visit modal if present)
   setTimeout(checkPresetMigration, 1500);
 
@@ -4249,7 +4753,8 @@ async function initApp() {
   if (manifoldEngineToggle) {
     // Initialize from localStorage (default to true for performance)
     const savedManifoldPref = localStorage.getItem(STORAGE_KEY_MANIFOLD_ENGINE);
-    const manifoldEnabled = savedManifoldPref === null ? true : savedManifoldPref !== 'false';
+    const manifoldEnabled =
+      savedManifoldPref === null ? true : savedManifoldPref !== 'false';
     manifoldEngineToggle.checked = manifoldEnabled;
 
     // Update hint text based on initial state
@@ -4261,7 +4766,10 @@ async function initApp() {
 
     manifoldEngineToggle.addEventListener('change', () => {
       const enabled = manifoldEngineToggle.checked;
-      localStorage.setItem(STORAGE_KEY_MANIFOLD_ENGINE, enabled ? 'true' : 'false');
+      localStorage.setItem(
+        STORAGE_KEY_MANIFOLD_ENGINE,
+        enabled ? 'true' : 'false'
+      );
 
       // Update hint text
       if (manifoldEngineHint) {
@@ -4277,7 +4785,9 @@ async function initApp() {
           : 'Stable engine enabled. Maximum compatibility, slower rendering.'
       );
 
-      console.log(`[App] Render engine: ${enabled ? 'Manifold (fast)' : 'CGAL (stable)'}`);
+      console.log(
+        `[App] Render engine: ${enabled ? 'Manifold (fast)' : 'CGAL (stable)'}`
+      );
 
       // Note: Changes take effect on next render - no need to re-render current model
       // Show a subtle status message
@@ -4455,7 +4965,9 @@ async function initApp() {
     function saveHidden(set) {
       try {
         localStorage.setItem(HIDDEN_KEY, JSON.stringify([...set]));
-      } catch (_) { /* storage full */ }
+      } catch (_) {
+        /* storage full */
+      }
     }
 
     function refreshShowAll() {
@@ -4489,19 +5001,23 @@ async function initApp() {
 
     // Apply saved hidden groups
     const hidden = loadHidden();
-    container.querySelectorAll('.param-group[data-group-id]').forEach((details) => {
-      if (hidden.has(details.dataset.groupId)) {
-        details.setAttribute('hidden', '');
-        const btn = details.querySelector('.param-group-hide-btn');
-        if (btn) btn.setAttribute('aria-pressed', 'true');
-      }
-    });
+    container
+      .querySelectorAll('.param-group[data-group-id]')
+      .forEach((details) => {
+        if (hidden.has(details.dataset.groupId)) {
+          details.setAttribute('hidden', '');
+          const btn = details.querySelector('.param-group-hide-btn');
+          if (btn) btn.setAttribute('aria-pressed', 'true');
+        }
+      });
     refreshShowAll();
 
     // Listen for hide events from group hide buttons
     container.addEventListener('group-hide', (e) => {
       const { groupId, groupLabel } = e.detail;
-      const groupEl = container.querySelector(`.param-group[data-group-id="${groupId}"]`);
+      const groupEl = container.querySelector(
+        `.param-group[data-group-id="${groupId}"]`
+      );
       if (!groupEl) return;
       groupEl.setAttribute('hidden', '');
       const btn = groupEl.querySelector('.param-group-hide-btn');
@@ -4812,9 +5328,12 @@ async function initApp() {
         const data = await resp.json();
         tabletDb = data.tablets || [];
         // Populate options
-        overlayTabletSelect.innerHTML = tabletDb.map((t) =>
-          `<option value="${t.id}" data-w="${t.screenWidthMm ?? ''}" data-h="${t.screenHeightMm ?? ''}">${t.label}</option>`
-        ).join('');
+        overlayTabletSelect.innerHTML = tabletDb
+          .map(
+            (t) =>
+              `<option value="${t.id}" data-w="${t.screenWidthMm ?? ''}" data-h="${t.screenHeightMm ?? ''}">${t.label}</option>`
+          )
+          .join('');
       } catch (err) {
         console.warn('[App] Could not load tablet database:', err);
         tabletDb = [];
@@ -5127,13 +5646,24 @@ async function initApp() {
   const savedOpacity = localStorage.getItem(STORAGE_KEY_MODEL_OPACITY);
   const savedBrightness = localStorage.getItem(STORAGE_KEY_BRIGHTNESS);
   const savedContrast = localStorage.getItem(STORAGE_KEY_CONTRAST);
-  if (savedOpacity && modelOpacityInput) { modelOpacityInput.value = savedOpacity; if (modelOpacityValue) modelOpacityValue.textContent = `${savedOpacity}%`; }
-  if (savedBrightness && brightnessInput) { brightnessInput.value = savedBrightness; if (brightnessValue) brightnessValue.textContent = `${savedBrightness}%`; }
-  if (savedContrast && contrastInput) { contrastInput.value = savedContrast; if (contrastValue) contrastValue.textContent = `${savedContrast}%`; }
+  if (savedOpacity && modelOpacityInput) {
+    modelOpacityInput.value = savedOpacity;
+    if (modelOpacityValue) modelOpacityValue.textContent = `${savedOpacity}%`;
+  }
+  if (savedBrightness && brightnessInput) {
+    brightnessInput.value = savedBrightness;
+    if (brightnessValue) brightnessValue.textContent = `${savedBrightness}%`;
+  }
+  if (savedContrast && contrastInput) {
+    contrastInput.value = savedContrast;
+    if (contrastValue) contrastValue.textContent = `${savedContrast}%`;
+  }
 
   function applyAppearanceToPreview() {
     if (!previewManager) return;
-    previewManager.setModelOpacity(parseInt(modelOpacityInput?.value || '100', 10));
+    previewManager.setModelOpacity(
+      parseInt(modelOpacityInput?.value || '100', 10)
+    );
     previewManager.setBrightness(parseInt(brightnessInput?.value || '100', 10));
     previewManager.setContrast(parseInt(contrastInput?.value || '100', 10));
   }
@@ -5164,9 +5694,18 @@ async function initApp() {
   }
   if (resetAppearanceBtn) {
     resetAppearanceBtn.addEventListener('click', () => {
-      if (modelOpacityInput) { modelOpacityInput.value = '100'; if (modelOpacityValue) modelOpacityValue.textContent = '100%'; }
-      if (brightnessInput) { brightnessInput.value = '100'; if (brightnessValue) brightnessValue.textContent = '100%'; }
-      if (contrastInput) { contrastInput.value = '100'; if (contrastValue) contrastValue.textContent = '100%'; }
+      if (modelOpacityInput) {
+        modelOpacityInput.value = '100';
+        if (modelOpacityValue) modelOpacityValue.textContent = '100%';
+      }
+      if (brightnessInput) {
+        brightnessInput.value = '100';
+        if (brightnessValue) brightnessValue.textContent = '100%';
+      }
+      if (contrastInput) {
+        contrastInput.value = '100';
+        if (contrastValue) contrastValue.textContent = '100%';
+      }
       localStorage.removeItem(STORAGE_KEY_MODEL_OPACITY);
       localStorage.removeItem(STORAGE_KEY_BRIGHTNESS);
       localStorage.removeItem(STORAGE_KEY_CONTRAST);
@@ -5568,9 +6107,10 @@ async function initApp() {
   // the URL intent takes priority over any cached draft (fixes race condition)
   const hasManifestParam = urlParams.get('manifest');
   const hasProjectParam = urlParams.get('project') || urlParams.get('scad');
-  const draft = (!hasManifestParam && !hasProjectParam)
-    ? await stateManager.loadFromLocalStorage()
-    : null;
+  const draft =
+    !hasManifestParam && !hasProjectParam
+      ? await stateManager.loadFromLocalStorage()
+      : null;
 
   if (draft) {
     // If first-visit modal is blocking, defer draft restoration
@@ -6128,7 +6668,8 @@ async function initApp() {
     const includeFlag = parameters.include_screenshot;
     if (includeFlag === undefined) return;
 
-    const shouldShow = includeFlag === 'yes' || includeFlag === true || includeFlag === 'true';
+    const shouldShow =
+      includeFlag === 'yes' || includeFlag === true || includeFlag === 'true';
     const state = stateManager.getState();
     const projectFiles = state.projectFiles;
 
@@ -6136,13 +6677,18 @@ async function initApp() {
       const screenshotFile = parameters.screenshot_file || 'default.svg';
       if (projectFiles?.has(screenshotFile)) {
         if (overlaySourceSelect) overlaySourceSelect.value = screenshotFile;
-        loadOverlayFromProjectFile(screenshotFile).then(() => {
-          overlayToggle.checked = true;
-          previewManager.setOverlayEnabled(true);
-          updateOverlayStatus?.();
-        }).catch((err) => {
-          console.warn('[App] Overlay enable via include_screenshot failed:', err);
-        });
+        loadOverlayFromProjectFile(screenshotFile)
+          .then(() => {
+            overlayToggle.checked = true;
+            previewManager.setOverlayEnabled(true);
+            updateOverlayStatus?.();
+          })
+          .catch((err) => {
+            console.warn(
+              '[App] Overlay enable via include_screenshot failed:',
+              err
+            );
+          });
       }
     } else {
       overlayToggle.checked = false;
@@ -6196,16 +6742,20 @@ async function initApp() {
       overlaySourceSelect.value = screenshotFile;
       console.log(`[App] Auto-selected overlay source: ${screenshotFile}`);
       // Load the overlay image into the preview and enable the toggle
-      loadOverlayFromProjectFile(screenshotFile).then(() => {
-        if (overlayToggle && !overlayToggle.checked) {
-          overlayToggle.checked = true;
-          previewManager?.setOverlayEnabled(true);
-          updateOverlayStatus?.();
-          console.log('[App] Overlay auto-enabled for screenshot companion file');
-        }
-      }).catch((err) => {
-        console.warn('[App] Auto-enable overlay failed:', err);
-      });
+      loadOverlayFromProjectFile(screenshotFile)
+        .then(() => {
+          if (overlayToggle && !overlayToggle.checked) {
+            overlayToggle.checked = true;
+            previewManager?.setOverlayEnabled(true);
+            updateOverlayStatus?.();
+            console.log(
+              '[App] Overlay auto-enabled for screenshot companion file'
+            );
+          }
+        })
+        .catch((err) => {
+          console.warn('[App] Auto-enable overlay failed:', err);
+        });
     }
   }
 
@@ -6482,9 +7032,16 @@ async function initApp() {
 
     // Emit synthetic console warnings for missing companion files so the
     // Console panel mirrors what desktop OpenSCAD would show for missing includes.
-    if (requiredFiles?.files && typeof window.updateConsoleOutput === 'function') {
+    if (
+      requiredFiles?.files &&
+      typeof window.updateConsoleOutput === 'function'
+    ) {
       const projectBasenames = projectFiles
-        ? new Set(Array.from(projectFiles.keys()).map((p) => p.split('/').pop().toLowerCase()))
+        ? new Set(
+            Array.from(projectFiles.keys()).map((p) =>
+              p.split('/').pop().toLowerCase()
+            )
+          )
         : new Set();
       const missing = requiredFiles.files.filter((f) => {
         if (!f.required) return false;
@@ -6605,16 +7162,24 @@ async function initApp() {
           const isScadName = fileNameLower.endsWith('.scad');
           let userMsg;
           if (isZipName) {
-            const limitMB = (FILE_SIZE_LIMITS.ZIP_FILE / (1024 * 1024)).toFixed(0);
+            const limitMB = (FILE_SIZE_LIMITS.ZIP_FILE / (1024 * 1024)).toFixed(
+              0
+            );
             userMsg = `ZIP file is too large (${fileSizeMB} MB). Maximum allowed size is ${limitMB} MB.`;
           } else if (isScadName) {
-            const limitMB = (FILE_SIZE_LIMITS.SCAD_FILE / (1024 * 1024)).toFixed(0);
+            const limitMB = (
+              FILE_SIZE_LIMITS.SCAD_FILE /
+              (1024 * 1024)
+            ).toFixed(0);
             userMsg = `.scad file is too large (${fileSizeMB} MB). Maximum allowed size is ${limitMB} MB.`;
           } else {
             userMsg = 'Please upload a .scad or .zip file.';
           }
           alert(userMsg);
-          console.error('[File Upload] Validation failed:', validateFileUpload.errors);
+          console.error(
+            '[File Upload] Validation failed:',
+            validateFileUpload.errors
+          );
           return;
         }
       }
@@ -6647,7 +7212,6 @@ async function initApp() {
           // Get statistics
           const stats = getZipStats(files);
           console.log('[ZIP] Statistics:', stats);
-
 
           // Get main file content
           fileContent = files.get(mainFile);
@@ -6863,7 +7427,6 @@ async function initApp() {
             : 0;
       const fileSizeStr = formatFileSize(fileSizeBytes);
 
-
       // Enable compact header after file is loaded
       const appHeader = document.querySelector('.app-header');
       if (appHeader) {
@@ -6945,8 +7508,12 @@ async function initApp() {
         const savedProjectPrefs = localStorage.getItem(projectPrefsKey);
         if (savedProjectPrefs) {
           const prefs = JSON.parse(savedProjectPrefs);
-          getUIModeController().importPreferences(prefs, { applyImmediately: false });
-          console.log(`[App] Loaded per-project UI preferences for: ${fileName}`);
+          getUIModeController().importPreferences(prefs, {
+            applyImmediately: false,
+          });
+          console.log(
+            `[App] Loaded per-project UI preferences for: ${fileName}`
+          );
         } else {
           getUIModeController().setProjectHiddenPanels(null);
         }
@@ -6968,23 +7535,36 @@ async function initApp() {
       // After state is set with schema + defaults, scan projectFiles for .json preset files
       if (projectFiles && projectFiles.size > 0) {
         // Diagnostic: log all files available to WASM FS (companion file mount)
-        console.debug('[WASM FS] Companion files mounted:', Array.from(projectFiles.entries()).map(
-          ([path, content]) => ({ path, sizeBytes: content.length })
-        ));
+        console.debug(
+          '[WASM FS] Companion files mounted:',
+          Array.from(projectFiles.entries()).map(([path, content]) => ({
+            path,
+            sizeBytes: content.length,
+          }))
+        );
 
         let autoImportedCount = 0;
         const paramSchema = {};
         // Build param schema for type coercion from extracted parameters
-        for (const [pName, pDef] of Object.entries(extracted.parameters || {})) {
+        for (const [pName, pDef] of Object.entries(
+          extracted.parameters || {}
+        )) {
           paramSchema[pName] = { type: pDef.type || 'string' };
         }
 
         for (const [filePath, fileContentStr] of projectFiles.entries()) {
-          if (filePath.toLowerCase().endsWith('.json') && !filePath.toLowerCase().endsWith('.scad')) {
+          if (
+            filePath.toLowerCase().endsWith('.json') &&
+            !filePath.toLowerCase().endsWith('.scad')
+          ) {
             try {
               console.log(`[ZIP] Auto-importing presets from: ${filePath}`);
-              console.debug(`[ZIP] JSON content preview (first 200 chars): ${fileContentStr.substring(0, 200)}`);
-              const hiddenParamNamesForImport = Object.keys(extracted.hiddenParameters || {});
+              console.debug(
+                `[ZIP] JSON content preview (first 200 chars): ${fileContentStr.substring(0, 200)}`
+              );
+              const hiddenParamNamesForImport = Object.keys(
+                extracted.hiddenParameters || {}
+              );
               const importResult = presetManager.importPreset(
                 fileContentStr,
                 originalFileName,
@@ -6993,13 +7573,21 @@ async function initApp() {
               );
               if (importResult.success && importResult.imported > 0) {
                 autoImportedCount += importResult.imported;
-                console.log(`[ZIP] Auto-imported ${importResult.imported} preset(s) from ${filePath}`);
+                console.log(
+                  `[ZIP] Auto-imported ${importResult.imported} preset(s) from ${filePath}`
+                );
                 console.debug(`[ZIP] Import result details:`, importResult);
               } else if (!importResult.success) {
-                console.warn(`[ZIP] Failed to auto-import presets from ${filePath}:`, importResult.error);
+                console.warn(
+                  `[ZIP] Failed to auto-import presets from ${filePath}:`,
+                  importResult.error
+                );
               }
             } catch (jsonError) {
-              console.warn(`[ZIP] Error auto-importing presets from ${filePath}:`, jsonError.message);
+              console.warn(
+                `[ZIP] Error auto-importing presets from ${filePath}:`,
+                jsonError.message
+              );
             }
           }
         }
@@ -7007,10 +7595,17 @@ async function initApp() {
         if (autoImportedCount > 0) {
           // Count companion files (non-.scad, non-.json)
           const companionCount = Array.from(projectFiles.keys()).filter(
-            (p) => !p.toLowerCase().endsWith('.scad') && !p.toLowerCase().endsWith('.json')
+            (p) =>
+              !p.toLowerCase().endsWith('.scad') &&
+              !p.toLowerCase().endsWith('.json')
           ).length;
-          const companionText = companionCount > 0 ? ` + ${companionCount} companion file${companionCount > 1 ? 's' : ''}` : '';
-          updateStatus(`Loaded: ${fileName}${companionText} + ${autoImportedCount} preset${autoImportedCount > 1 ? 's' : ''}`);
+          const companionText =
+            companionCount > 0
+              ? ` + ${companionCount} companion file${companionCount > 1 ? 's' : ''}`
+              : '';
+          updateStatus(
+            `Loaded: ${fileName}${companionText} + ${autoImportedCount} preset${autoImportedCount > 1 ? 's' : ''}`
+          );
           updatePresetDropdown();
         }
       }
@@ -7237,7 +7832,11 @@ async function initApp() {
         const imageExts = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
         for (const [path, content] of projectFiles) {
           const ext = path.split('.').pop()?.toLowerCase();
-          if (imageExts.includes(ext) && typeof content === 'string' && content.startsWith('data:')) {
+          if (
+            imageExts.includes(ext) &&
+            typeof content === 'string' &&
+            content.startsWith('data:')
+          ) {
             const name = path.includes('/') ? path.split('/').pop() : path;
             SharedImageStore.addImageFromDataUrl(name, content).catch(() => {
               console.warn(`[App] Failed to restore image: ${path}`);
@@ -7357,7 +7956,9 @@ async function initApp() {
   }
 
   // Ctrl+S / Cmd+S keyboard shortcut to save and apply changes
-  const textFileEditorContent = document.getElementById('textFileEditorContent');
+  const textFileEditorContent = document.getElementById(
+    'textFileEditorContent'
+  );
   if (textFileEditorContent && textFileEditorModal) {
     textFileEditorContent.addEventListener('keydown', (e) => {
       // Ctrl+S or Cmd+S to save and apply
@@ -7555,7 +8156,9 @@ if (rounded) {
         );
 
         // Announce to screen readers
-        announceImmediate('New project created. You can customize the parameters or edit the code.');
+        announceImmediate(
+          'New project created. You can customize the parameters or edit the code.'
+        );
 
         console.log('[App] New project created from template');
       } catch (error) {
@@ -8158,7 +8761,11 @@ if (rounded) {
       if (parts.length > 1) {
         const folderName = parts.slice(0, -1).join('/');
         if (!tree.folders[folderName]) tree.folders[folderName] = [];
-        tree.folders[folderName].push({ path, name: parts[parts.length - 1], content });
+        tree.folders[folderName].push({
+          path,
+          name: parts[parts.length - 1],
+          content,
+        });
       } else {
         tree.files.push({ path, name: path, content });
       }
@@ -8217,8 +8824,10 @@ if (rounded) {
     let filesHtml = tree.files.map(renderFileItem).join('');
 
     // Render each folder as a collapsible group
-    for (const [folderName, folderFiles] of Object.entries(tree.folders).sort()) {
-      const visibleFiles = folderFiles.filter(f => f.name !== '.folder');
+    for (const [folderName, folderFiles] of Object.entries(
+      tree.folders
+    ).sort()) {
+      const visibleFiles = folderFiles.filter((f) => f.name !== '.folder');
       const folderFilesHtml = visibleFiles.map(renderFileItem).join('');
       filesHtml += `
         <details class="file-manager-folder" open>
@@ -8302,7 +8911,9 @@ if (rounded) {
     };
 
     // Wire up events
-    modal.querySelector('#fileManagerXCloseBtn').addEventListener('click', dismissFileManager);
+    modal
+      .querySelector('#fileManagerXCloseBtn')
+      .addEventListener('click', dismissFileManager);
     const closeBtn = modal.querySelector('#fileManagerCloseBtn');
     closeBtn.addEventListener('click', dismissFileManager);
 
@@ -8431,7 +9042,9 @@ if (rounded) {
 
         // Check if folder already exists
         const folderPrefix = `${safeName}/`;
-        const exists = Object.keys(projectFiles).some(p => p.startsWith(folderPrefix));
+        const exists = Object.keys(projectFiles).some((p) =>
+          p.startsWith(folderPrefix)
+        );
         if (exists) {
           alert(`Folder "${safeName}" already exists.`);
           return;
@@ -8469,7 +9082,7 @@ if (rounded) {
         // Check if target name already exists
         const targetPrefix = `${safeName}/`;
         const conflict = Object.keys(projectFiles).some(
-          p => p.startsWith(targetPrefix) && !p.startsWith(`${oldName}/`)
+          (p) => p.startsWith(targetPrefix) && !p.startsWith(`${oldName}/`)
         );
         if (conflict) {
           alert(`Folder "${safeName}" already exists.`);
@@ -8481,7 +9094,8 @@ if (rounded) {
         const oldPrefix = `${oldName}/`;
         for (const [path, content] of Object.entries(projectFiles)) {
           if (path.startsWith(oldPrefix)) {
-            updatedProjectFiles[`${safeName}/${path.slice(oldPrefix.length)}`] = content;
+            updatedProjectFiles[`${safeName}/${path.slice(oldPrefix.length)}`] =
+              content;
           } else {
             updatedProjectFiles[path] = content;
           }
@@ -8526,7 +9140,9 @@ if (rounded) {
 
         // Check for conflicts
         if (projectFiles[newPath] !== undefined) {
-          alert(`A file named "${safeName}" already exists${folder ? ` in ${folder}` : ''}.`);
+          alert(
+            `A file named "${safeName}" already exists${folder ? ` in ${folder}` : ''}.`
+          );
           return;
         }
 
@@ -8597,17 +9213,23 @@ if (rounded) {
         const folderPrefix = `${folderName}/`;
 
         // Check if the main file lives in this folder
-        if (project.mainFilePath && project.mainFilePath.startsWith(folderPrefix)) {
-          alert(`Cannot delete folder "${folderName}" because it contains the main file. Move or change the main file first.`);
+        if (
+          project.mainFilePath &&
+          project.mainFilePath.startsWith(folderPrefix)
+        ) {
+          alert(
+            `Cannot delete folder "${folderName}" because it contains the main file. Move or change the main file first.`
+          );
           return;
         }
 
         const fileCount = Object.keys(projectFiles).filter(
-          p => p.startsWith(folderPrefix) && !p.endsWith('/.folder')
+          (p) => p.startsWith(folderPrefix) && !p.endsWith('/.folder')
         ).length;
-        const message = fileCount > 0
-          ? `Delete folder "${folderName}" and its ${fileCount} file${fileCount !== 1 ? 's' : ''}? This cannot be undone.`
-          : `Delete empty folder "${folderName}"?`;
+        const message =
+          fileCount > 0
+            ? `Delete folder "${folderName}" and its ${fileCount} file${fileCount !== 1 ? 's' : ''}? This cannot be undone.`
+            : `Delete empty folder "${folderName}"?`;
 
         if (!confirm(message)) return;
 
@@ -8632,7 +9254,6 @@ if (rounded) {
         }
       });
     });
-
   }
 
   /**
@@ -8676,7 +9297,9 @@ if (rounded) {
       document.body.removeChild(modal);
     };
 
-    modal.querySelector('#filePreviewCloseBtn').addEventListener('click', dismissPreview);
+    modal
+      .querySelector('#filePreviewCloseBtn')
+      .addEventListener('click', dismissPreview);
   }
 
   /**
@@ -8704,10 +9327,9 @@ if (rounded) {
         if (!confirmed) return;
       }
 
-      dismissOverlay = showProcessingOverlay(
-        `Loading "${project.name}"…`,
-        { hint: 'Large projects may take a moment to open.' }
-      );
+      dismissOverlay = showProcessingOverlay(`Loading "${project.name}"…`, {
+        hint: 'Large projects may take a moment to open.',
+      });
 
       // Yield to allow the browser to paint the overlay before heavy work begins
       await new Promise((r) => setTimeout(r, 0));
@@ -9078,7 +9700,9 @@ if (rounded) {
       // ZIP examples must be fetched as binary and routed through ZIP extraction
       if (example.path.toLowerCase().endsWith('.zip')) {
         const blob = await response.blob();
-        const zipFile = new File([blob], example.name, { type: 'application/zip' });
+        const zipFile = new File([blob], example.name, {
+          type: 'application/zip',
+        });
         handleFile(zipFile, null, null, null, 'example');
         return;
       }
@@ -9091,29 +9715,38 @@ if (rounded) {
       let mainFilePath = null;
 
       if (example.additionalFiles && example.additionalFiles.length > 0) {
-        console.log(`[Example] Multi-file package: ${example.additionalFiles.length} additional file(s)`);
-        
+        console.log(
+          `[Example] Multi-file package: ${example.additionalFiles.length} additional file(s)`
+        );
+
         projectFiles = new Map();
-        
+
         const mainFileName = example.path.split('/').pop();
         mainFilePath = mainFileName;
         projectFiles.set(mainFileName, content);
 
-        const additionalPromises = example.additionalFiles.map(async (filePath) => {
-          try {
-            const fileResponse = await fetch(filePath);
-            if (!fileResponse.ok) {
-              console.warn(`[Example] Failed to load additional file: ${filePath}`);
+        const additionalPromises = example.additionalFiles.map(
+          async (filePath) => {
+            try {
+              const fileResponse = await fetch(filePath);
+              if (!fileResponse.ok) {
+                console.warn(
+                  `[Example] Failed to load additional file: ${filePath}`
+                );
+                return null;
+              }
+              const fileContent = await fileResponse.text();
+              const fileName = filePath.split('/').pop();
+              return { fileName, content: fileContent };
+            } catch (error) {
+              console.warn(
+                `[Example] Error loading additional file ${filePath}:`,
+                error
+              );
               return null;
             }
-            const fileContent = await fileResponse.text();
-            const fileName = filePath.split('/').pop();
-            return { fileName, content: fileContent };
-          } catch (error) {
-            console.warn(`[Example] Error loading additional file ${filePath}:`, error);
-            return null;
           }
-        });
+        );
 
         const additionalResults = await Promise.all(additionalPromises);
         for (const result of additionalResults) {
@@ -9184,7 +9817,8 @@ if (rounded) {
   // =========================================
   const initUrlParams = new URLSearchParams(window.location.search);
   // Support both ?example= and ?load= (alias for website embedding)
-  const exampleParam = initUrlParams.get('example') || initUrlParams.get('load');
+  const exampleParam =
+    initUrlParams.get('example') || initUrlParams.get('load');
 
   if (exampleParam) {
     console.log(`[DeepLink] Loading example from URL: ${exampleParam}`);
@@ -9238,9 +9872,13 @@ if (rounded) {
   // Wire manifest banner buttons
   const manifestBanner = document.getElementById('manifestInfoBanner');
   const manifestSaveCopyBtn = document.getElementById('manifestSaveCopyBtn');
-  const manifestDownloadZipBtn = document.getElementById('manifestDownloadZipBtn');
+  const manifestDownloadZipBtn = document.getElementById(
+    'manifestDownloadZipBtn'
+  );
   const manifestResetBtn = document.getElementById('manifestResetBtn');
-  const manifestDismissBanner = document.getElementById('manifestDismissBanner');
+  const manifestDismissBanner = document.getElementById(
+    'manifestDismissBanner'
+  );
 
   if (manifestDismissBanner) {
     manifestDismissBanner.addEventListener('click', () => {
@@ -9253,12 +9891,14 @@ if (rounded) {
       const state = stateManager.getState();
       if (!state.uploadedFile) return;
       const origin = state.manifestOrigin;
-      const forkedFrom = origin ? {
-        manifestUrl: origin.url,
-        originalName: origin.name,
-        originalAuthor: origin.author,
-        forkDate: Date.now(),
-      } : null;
+      const forkedFrom = origin
+        ? {
+            manifestUrl: origin.url,
+            originalName: origin.name,
+            originalAuthor: origin.author,
+            forkDate: Date.now(),
+          }
+        : null;
       try {
         const { saveProject } = await import('./js/saved-projects-manager.js');
         const result = await saveProject({
@@ -9288,14 +9928,23 @@ if (rounded) {
     manifestResetBtn.addEventListener('click', async () => {
       const origin = stateManager.getState().manifestOrigin;
       if (!origin?.url) return;
-      const confirmed = confirm('Reset to the original shared project? Your unsaved changes will be lost.');
+      const confirmed = confirm(
+        'Reset to the original shared project? Your unsaved changes will be lost.'
+      );
       if (!confirmed) return;
       try {
         updateStatus('Reloading original project...');
         const result = await loadManifest(origin.url, {
           onProgress: ({ message }) => updateStatus(message),
         });
-        await handleFile(null, result.mainContent, result.projectFiles, result.mainFile, 'manifest', result.manifest.name);
+        await handleFile(
+          null,
+          result.mainContent,
+          result.projectFiles,
+          result.mainFile,
+          'manifest',
+          result.manifest.name
+        );
         stateManager.setState({
           manifestOrigin: { ...origin, loadedAt: Date.now() },
         });
@@ -9311,13 +9960,19 @@ if (rounded) {
     manifestDownloadZipBtn.addEventListener('click', async () => {
       const state = stateManager.getState();
       const origin = state.manifestOrigin;
-      const projectName = origin?.name || state.uploadedFile?.name?.replace('.scad', '') || 'forge-project';
+      const projectName =
+        origin?.name ||
+        state.uploadedFile?.name?.replace('.scad', '') ||
+        'forge-project';
       try {
         const JSZip = (await import('jszip')).default;
         const zip = new JSZip();
         // Add main SCAD file
         if (state.uploadedFile?.content) {
-          zip.file(state.uploadedFile.name || 'project.scad', state.uploadedFile.content);
+          zip.file(
+            state.uploadedFile.name || 'project.scad',
+            state.uploadedFile.content
+          );
         }
         // Add all project files (companions, presets, screenshots)
         if (state.projectFiles) {
@@ -9370,14 +10025,24 @@ if (rounded) {
           onProgress: ({ message }) => updateStatus(message),
         });
 
-        const { projectFiles, mainFile, mainContent, manifest, defaults } = result;
+        const { projectFiles, mainFile, mainContent, manifest, defaults } =
+          result;
         const projectName = manifest.name || mainFile;
 
-        console.log(`[DeepLink] Manifest loaded: "${projectName}" (${projectFiles.size} files)`);
+        console.log(
+          `[DeepLink] Manifest loaded: "${projectName}" (${projectFiles.size} files)`
+        );
         announceImmediate(`Loading project: ${projectName}`);
 
         // Call handleFile with 'manifest' source to enable origin tracking
-        await handleFile(null, mainContent, projectFiles, mainFile, 'manifest', projectName);
+        await handleFile(
+          null,
+          mainContent,
+          projectFiles,
+          mainFile,
+          'manifest',
+          projectName
+        );
 
         // Store manifest origin in state for provenance tracking
         stateManager.setState({
@@ -9400,7 +10065,10 @@ if (rounded) {
             defaultMode: manifestUiMode || undefined,
             hiddenPanelsInBasic: manifestHiddenPanels || undefined,
           });
-          console.log(`[DeepLink] Applied UI preferences from manifest:`, { manifestUiMode, manifestHiddenPanels });
+          console.log(`[DeepLink] Applied UI preferences from manifest:`, {
+            manifestUiMode,
+            manifestHiddenPanels,
+          });
         }
 
         // --- ?preset=<name> or manifest defaults.preset -----------------
@@ -9416,14 +10084,18 @@ if (rounded) {
               (p) => p.name.toLowerCase() === presetName.toLowerCase()
             );
             if (match) {
-              console.log(`[DeepLink] Applying preset: "${match.name}" (${match.id})`);
+              console.log(
+                `[DeepLink] Applying preset: "${match.name}" (${match.id})`
+              );
 
               // Merge preset parameters onto current state (desktop OpenSCAD parity)
               const mergedParams = { ...state.parameters, ...match.parameters };
               stateManager.setState({ parameters: mergedParams });
 
               // Re-render UI with preset values
-              const parametersContainer = document.getElementById('parametersContainer');
+              const parametersContainer = document.getElementById(
+                'parametersContainer'
+              );
               renderParameterUI(
                 state.schema,
                 parametersContainer,
@@ -9454,11 +10126,17 @@ if (rounded) {
               updatePrimaryActionButton();
 
               updateStatus(`Loaded: ${projectName} — preset: ${match.name}`);
-              announceImmediate(`${projectName} loaded with preset ${match.name}`);
+              announceImmediate(
+                `${projectName} loaded with preset ${match.name}`
+              );
             } else {
-              console.warn(`[DeepLink] Preset not found: "${presetName}". Available:`,
-                presets.map((p) => p.name));
-              updateStatus(`Loaded: ${projectName} (preset "${presetName}" not found)`);
+              console.warn(
+                `[DeepLink] Preset not found: "${presetName}". Available:`,
+                presets.map((p) => p.name)
+              );
+              updateStatus(
+                `Loaded: ${projectName} (preset "${presetName}" not found)`
+              );
               announceImmediate(`${projectName} loaded from manifest`);
             }
           }
@@ -9469,7 +10147,9 @@ if (rounded) {
 
         // Auto-preview if manifest requests it
         if (defaults?.autoPreview && autoPreviewController) {
-          autoPreviewController.onParameterChange(stateManager.getState().parameters);
+          autoPreviewController.onParameterChange(
+            stateManager.getState().parameters
+          );
         }
 
         // Clean up URL parameters
@@ -9491,7 +10171,11 @@ if (rounded) {
           if (autoForkFired) return;
           if (!state.manifestOrigin) return;
           // Only trigger on parameter changes (not rendering state, etc.)
-          if (state.parameters !== prev.parameters && prev.parameters && Object.keys(prev.parameters).length > 0) {
+          if (
+            state.parameters !== prev.parameters &&
+            prev.parameters &&
+            Object.keys(prev.parameters).length > 0
+          ) {
             autoForkFired = true;
             unsubAutoFork();
             // Prompt the user to save a local copy
@@ -9512,21 +10196,23 @@ if (rounded) {
             case 'CORS_ERROR':
               friendlyMsg =
                 "Couldn't reach the file server. The manifest or its files may not be publicly " +
-                'accessible, or the server doesn\'t support CORS. Try hosting on GitHub.';
+                "accessible, or the server doesn't support CORS. Try hosting on GitHub.";
               break;
             case 'VALIDATION_ERROR':
               friendlyMsg = `The manifest file has errors: ${error.details?.errors?.join('; ') || error.message}`;
               break;
             case 'TIMEOUT':
-              friendlyMsg = 'The request timed out. Check your internet connection and try again.';
+              friendlyMsg =
+                'The request timed out. Check your internet connection and try again.';
               break;
             default:
               friendlyMsg = error.message;
           }
         } else {
-          friendlyMsg = error.name === 'TypeError'
-            ? "Couldn't reach the server. The manifest may not be publicly accessible, or CORS may be blocking the request."
-            : error.message;
+          friendlyMsg =
+            error.name === 'TypeError'
+              ? "Couldn't reach the server. The manifest may not be publicly accessible, or CORS may be blocking the request."
+              : error.message;
         }
 
         updateStatus(
@@ -9546,7 +10232,8 @@ if (rounded) {
   // Allows linking directly to any .scad or .zip file hosted on the web
   // Usage: ?project=https://example.com/keyguard.zip or ?scad=https://example.com/box.scad
   // =========================================
-  const projectParam = initUrlParams.get('project') || initUrlParams.get('scad');
+  const projectParam =
+    initUrlParams.get('project') || initUrlParams.get('scad');
 
   if (projectParam && !exampleParam && !manifestParam) {
     console.log(`[DeepLink] Loading project from URL: ${projectParam}`);
@@ -9556,20 +10243,27 @@ if (rounded) {
       try {
         // Validate URL
         const projectUrl = new URL(projectParam);
-        const urlFileName = projectUrl.pathname.split('/').pop() || 'project.scad';
+        const urlFileName =
+          projectUrl.pathname.split('/').pop() || 'project.scad';
         const isZipUrl = urlFileName.toLowerCase().endsWith('.zip');
 
-        console.log(`[DeepLink] Fetching: ${projectParam} (type: ${isZipUrl ? 'ZIP' : 'SCAD'})`);
+        console.log(
+          `[DeepLink] Fetching: ${projectParam} (type: ${isZipUrl ? 'ZIP' : 'SCAD'})`
+        );
 
         const response = await fetch(projectParam);
         if (!response.ok) {
-          throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+          throw new Error(
+            `Server returned ${response.status}: ${response.statusText}`
+          );
         }
 
         if (isZipUrl) {
           // Handle ZIP file: convert response to blob, create File object, pass to handleFile
           const blob = await response.blob();
-          const file = new File([blob], urlFileName, { type: 'application/zip' });
+          const file = new File([blob], urlFileName, {
+            type: 'application/zip',
+          });
           await handleFile(file, null, null, null, 'user');
         } else {
           // Handle single .scad file
@@ -9596,9 +10290,10 @@ if (rounded) {
         announceImmediate(`${urlFileName} loaded from URL link`);
       } catch (error) {
         console.error('[DeepLink] Failed to load project:', error);
-        const friendlyMsg = error.name === 'TypeError'
-          ? "Couldn't reach the server. The file may not be publicly accessible, or CORS may be blocking the request."
-          : `${error.message}`;
+        const friendlyMsg =
+          error.name === 'TypeError'
+            ? "Couldn't reach the server. The file may not be publicly accessible, or CORS may be blocking the request."
+            : `${error.message}`;
         updateStatus(
           `Couldn't load the project from URL. ${friendlyMsg} You can still upload a file manually.`,
           'error'
@@ -9758,7 +10453,9 @@ if (rounded) {
     let isCollapsed = false;
 
     try {
-      const savedState = localStorage.getItem(STORAGE_KEY_PARAM_PANEL_COLLAPSED);
+      const savedState = localStorage.getItem(
+        STORAGE_KEY_PARAM_PANEL_COLLAPSED
+      );
       if (savedState === 'true' && window.innerWidth >= 768) {
         isCollapsed = true;
       }
@@ -9817,7 +10514,10 @@ if (rounded) {
 
       // Persist state
       try {
-        localStorage.setItem(STORAGE_KEY_PARAM_PANEL_COLLAPSED, String(isCollapsed));
+        localStorage.setItem(
+          STORAGE_KEY_PARAM_PANEL_COLLAPSED,
+          String(isCollapsed)
+        );
       } catch (e) {
         console.warn('Could not save to localStorage:', e);
       }
@@ -9869,7 +10569,12 @@ if (rounded) {
   let modeManager = null;
   let editorStateManager = null;
 
-  if (isExpertModeEnabled && expertModeToggle && expertModePanel && expertModeBody) {
+  if (
+    isExpertModeEnabled &&
+    expertModeToggle &&
+    expertModePanel &&
+    expertModeBody
+  ) {
     console.log('[Expert Mode] Feature enabled, initializing...');
 
     // Show the toggle button
@@ -9881,7 +10586,7 @@ if (rounded) {
       onModeChange: handleModeChange,
     });
     editorStateManager = getEditorStateManager();
-    
+
     // Expose modeManager globally for keyboard shortcut handler
     window._modeManager = modeManager;
 
@@ -9962,7 +10667,8 @@ if (rounded) {
       currentEditor.initialize();
 
       // Sync initial code from state
-      const initialCode = editorStateManager.getSource() || window._currentSCADCode || '';
+      const initialCode =
+        editorStateManager.getSource() || window._currentSCADCode || '';
       if (initialCode) {
         currentEditor.setValue(initialCode);
       }
@@ -10039,7 +10745,7 @@ if (rounded) {
       const newCode = e.detail?.code || window._currentSCADCode;
       if (newCode && editorStateManager) {
         editorStateManager.setSource(newCode, { markDirty: false });
-        
+
         // Update editor if in Expert Mode
         if (modeManager.getMode() === 'expert' && currentEditor) {
           currentEditor.setValue(newCode);
@@ -10111,7 +10817,10 @@ if (rounded) {
           document.body.classList.remove('split-dragging');
           // Persist sizes
           try {
-            localStorage.setItem(STORAGE_KEY_LAYOUT_SIZES, JSON.stringify(sizes));
+            localStorage.setItem(
+              STORAGE_KEY_LAYOUT_SIZES,
+              JSON.stringify(sizes)
+            );
           } catch (e) {
             console.warn('Could not save split sizes:', e);
           }
@@ -10296,10 +11005,15 @@ if (rounded) {
     // Wire measurement fullscreen expand/close buttons
     const measureExpandBtn = document.getElementById('measureExpandBtn');
     const measureFsClose = document.getElementById('measureFullscreenClose');
-    const measureFsBackdrop = document.getElementById('measureFullscreenBackdrop');
-    if (measureExpandBtn) measureExpandBtn.addEventListener('click', measureOpenFullscreen);
-    if (measureFsClose) measureFsClose.addEventListener('click', measureCloseFullscreen);
-    if (measureFsBackdrop) measureFsBackdrop.addEventListener('click', measureCloseFullscreen);
+    const measureFsBackdrop = document.getElementById(
+      'measureFullscreenBackdrop'
+    );
+    if (measureExpandBtn)
+      measureExpandBtn.addEventListener('click', measureOpenFullscreen);
+    if (measureFsClose)
+      measureFsClose.addEventListener('click', measureCloseFullscreen);
+    if (measureFsBackdrop)
+      measureFsBackdrop.addEventListener('click', measureCloseFullscreen);
 
     // --- Measurement mode toggle (radiogroup with roving tabindex) ---
     const modeBtns = [
@@ -10321,9 +11035,18 @@ if (rounded) {
       });
       setMeasureMode(modeNames[idx]);
       // Show/hide mode-specific rows
-      if (measureDistRow) measureDistRow.classList.toggle('hidden', modeNames[idx] !== 'ruler');
-      if (measureCalibRow) measureCalibRow.classList.toggle('hidden', modeNames[idx] !== 'calibrate');
-      if (measureCoordRow) measureCoordRow.classList.toggle('hidden', modeNames[idx] === 'calibrate');
+      if (measureDistRow)
+        measureDistRow.classList.toggle('hidden', modeNames[idx] !== 'ruler');
+      if (measureCalibRow)
+        measureCalibRow.classList.toggle(
+          'hidden',
+          modeNames[idx] !== 'calibrate'
+        );
+      if (measureCoordRow)
+        measureCoordRow.classList.toggle(
+          'hidden',
+          modeNames[idx] === 'calibrate'
+        );
     }
 
     modeBtns.forEach((btn, i) => {
@@ -10378,7 +11101,9 @@ if (rounded) {
         hideCalibError();
         const sf = pixelDist / mmVal;
         setScaleFactor(sf);
-        announceImmediate(`Calibration applied: ${sf.toFixed(2)} pixels per millimeter`);
+        announceImmediate(
+          `Calibration applied: ${sf.toFixed(2)} pixels per millimeter`
+        );
 
         // Switch back to Ruler mode after calibration
         activateModeBtn(1);
@@ -10406,9 +11131,12 @@ if (rounded) {
       measureCopyDist.addEventListener('click', () => {
         const el = document.getElementById('measureDistValue');
         if (el && el.textContent !== '--') {
-          navigator.clipboard.writeText(el.textContent).then(() => {
-            announceImmediate(`Distance ${el.textContent} copied`);
-          }).catch(() => {});
+          navigator.clipboard
+            .writeText(el.textContent)
+            .then(() => {
+              announceImmediate(`Distance ${el.textContent} copied`);
+            })
+            .catch(() => {});
         }
       });
     }
@@ -10451,7 +11179,8 @@ if (rounded) {
           measureImageSelect.value = String(record.id);
           if (measureImageSelect.value !== String(record.id)) {
             setTimeout(() => {
-              if (measureImageSelect) measureImageSelect.value = String(record.id);
+              if (measureImageSelect)
+                measureImageSelect.value = String(record.id);
             }, 0);
           }
         }
@@ -10465,7 +11194,8 @@ if (rounded) {
       const imgs = SharedImageStore.getImages();
       if (measureImageSelect) {
         const currentVal = measureImageSelect.value;
-        measureImageSelect.innerHTML = '<option value="">-- No screenshots --</option>';
+        measureImageSelect.innerHTML =
+          '<option value="">-- No screenshots --</option>';
         for (const [id, rec] of imgs) {
           const opt = document.createElement('option');
           opt.value = id;
@@ -10514,19 +11244,40 @@ if (rounded) {
     // Set initial state from persisted values
     if (measureUnitSelect) measureUnitSelect.value = getUnit();
     if (overlayUnitSelect) overlayUnitSelect.value = getUnit();
-    if (scaleFactorInput && getScaleFactor() > 0) scaleFactorInput.value = getScaleFactor();
+    if (scaleFactorInput && getScaleFactor() > 0)
+      scaleFactorInput.value = getScaleFactor();
 
     function updateUnitLabels(unit) {
       if (overlaySizeUnit) overlaySizeUnit.textContent = unit;
       if (overlayOffsetUnit) overlayOffsetUnit.textContent = unit;
       const overlayWidthInput = document.getElementById('overlayWidthInput');
       const overlayHeightInput = document.getElementById('overlayHeightInput');
-      const overlayOffsetXInput = document.getElementById('overlayOffsetXInput');
-      const overlayOffsetYInput = document.getElementById('overlayOffsetYInput');
-      if (overlayWidthInput) overlayWidthInput.setAttribute('aria-label', `Overlay width in ${unit === 'mm' ? 'millimeters' : 'pixels'}`);
-      if (overlayHeightInput) overlayHeightInput.setAttribute('aria-label', `Overlay height in ${unit === 'mm' ? 'millimeters' : 'pixels'}`);
-      if (overlayOffsetXInput) overlayOffsetXInput.setAttribute('aria-label', `Overlay X offset in ${unit === 'mm' ? 'millimeters' : 'pixels'}`);
-      if (overlayOffsetYInput) overlayOffsetYInput.setAttribute('aria-label', `Overlay Y offset in ${unit === 'mm' ? 'millimeters' : 'pixels'}`);
+      const overlayOffsetXInput = document.getElementById(
+        'overlayOffsetXInput'
+      );
+      const overlayOffsetYInput = document.getElementById(
+        'overlayOffsetYInput'
+      );
+      if (overlayWidthInput)
+        overlayWidthInput.setAttribute(
+          'aria-label',
+          `Overlay width in ${unit === 'mm' ? 'millimeters' : 'pixels'}`
+        );
+      if (overlayHeightInput)
+        overlayHeightInput.setAttribute(
+          'aria-label',
+          `Overlay height in ${unit === 'mm' ? 'millimeters' : 'pixels'}`
+        );
+      if (overlayOffsetXInput)
+        overlayOffsetXInput.setAttribute(
+          'aria-label',
+          `Overlay X offset in ${unit === 'mm' ? 'millimeters' : 'pixels'}`
+        );
+      if (overlayOffsetYInput)
+        overlayOffsetYInput.setAttribute(
+          'aria-label',
+          `Overlay Y offset in ${unit === 'mm' ? 'millimeters' : 'pixels'}`
+        );
     }
 
     function syncBothUnitSelects(unit) {
@@ -10536,10 +11287,14 @@ if (rounded) {
     }
 
     if (measureUnitSelect) {
-      measureUnitSelect.addEventListener('change', () => setUnit(measureUnitSelect.value));
+      measureUnitSelect.addEventListener('change', () =>
+        setUnit(measureUnitSelect.value)
+      );
     }
     if (overlayUnitSelect) {
-      overlayUnitSelect.addEventListener('change', () => setUnit(overlayUnitSelect.value));
+      overlayUnitSelect.addEventListener('change', () =>
+        setUnit(overlayUnitSelect.value)
+      );
     }
     if (scaleFactorInput) {
       scaleFactorInput.addEventListener('change', () => {
@@ -11201,7 +11956,9 @@ if (rounded) {
         const outputMarker = '[OpenSCAD output]';
         const markerIdx = error.details.indexOf(outputMarker);
         if (markerIdx !== -1) {
-          const embeddedOutput = error.details.slice(markerIdx + outputMarker.length).trim();
+          const embeddedOutput = error.details
+            .slice(markerIdx + outputMarker.length)
+            .trim();
           if (embeddedOutput) {
             window.updateConsoleOutput(embeddedOutput);
           }
@@ -11348,10 +12105,14 @@ if (rounded) {
   const publishProjectModal = document.getElementById('publishProjectModal');
   const publishModalClose = document.getElementById('publishModalClose');
   const publishModalOverlay = document.getElementById('publishModalOverlay');
-  const publishManifestOutput = document.getElementById('publishManifestOutput');
+  const publishManifestOutput = document.getElementById(
+    'publishManifestOutput'
+  );
   const copyManifestBtn = document.getElementById('copyManifestBtn');
   const publishRepoUrl = document.getElementById('publishRepoUrl');
-  const publishShareLinkContainer = document.getElementById('publishShareLinkContainer');
+  const publishShareLinkContainer = document.getElementById(
+    'publishShareLinkContainer'
+  );
   const publishShareLink = document.getElementById('publishShareLink');
   const copyShareLinkBtn = document.getElementById('copyShareLinkBtn');
 
@@ -11404,7 +12165,10 @@ if (rounded) {
     };
 
     // If a preset is currently selected, include it as the default
-    if (state.currentPresetName && state.currentPresetName !== 'design default values') {
+    if (
+      state.currentPresetName &&
+      state.currentPresetName !== 'design default values'
+    ) {
       manifest.defaults.preset = state.currentPresetName;
     }
 
@@ -11413,9 +12177,12 @@ if (rounded) {
     if (uiModePrefs.defaultMode !== 'advanced') {
       manifest.defaults.uiMode = uiModePrefs.defaultMode;
     }
-    const registryDefaults = getUIModeController().getRegistry()
-      .filter((p) => p.defaultHiddenInBasic).map((p) => p.id);
-    const prefsChanged = JSON.stringify(uiModePrefs.hiddenPanelsInBasic.sort()) !==
+    const registryDefaults = getUIModeController()
+      .getRegistry()
+      .filter((p) => p.defaultHiddenInBasic)
+      .map((p) => p.id);
+    const prefsChanged =
+      JSON.stringify(uiModePrefs.hiddenPanelsInBasic.sort()) !==
       JSON.stringify(registryDefaults.sort());
     if (prefsChanged) {
       manifest.defaults.hiddenPanels = uiModePrefs.hiddenPanelsInBasic;
@@ -11452,21 +12219,30 @@ if (rounded) {
 
     // Close handlers
     if (publishModalClose) {
-      publishModalClose.addEventListener('click', () => closeModal(publishProjectModal));
+      publishModalClose.addEventListener('click', () =>
+        closeModal(publishProjectModal)
+      );
     }
     if (publishModalOverlay) {
-      publishModalOverlay.addEventListener('click', () => closeModal(publishProjectModal));
+      publishModalOverlay.addEventListener('click', () =>
+        closeModal(publishProjectModal)
+      );
     }
 
     // Copy manifest button
     if (copyManifestBtn && publishManifestOutput) {
       copyManifestBtn.addEventListener('click', async () => {
         try {
-          await navigator.clipboard.writeText(publishManifestOutput.textContent);
-          const textSpan = copyManifestBtn.querySelector('.btn-text') || copyManifestBtn;
+          await navigator.clipboard.writeText(
+            publishManifestOutput.textContent
+          );
+          const textSpan =
+            copyManifestBtn.querySelector('.btn-text') || copyManifestBtn;
           const original = textSpan.textContent;
           textSpan.textContent = 'Copied!';
-          setTimeout(() => { textSpan.textContent = original; }, 2000);
+          setTimeout(() => {
+            textSpan.textContent = original;
+          }, 2000);
           updateStatus('Manifest copied to clipboard');
         } catch (_err) {
           prompt('Copy this manifest JSON:', publishManifestOutput.textContent);
@@ -11503,7 +12279,9 @@ if (rounded) {
         try {
           await navigator.clipboard.writeText(publishShareLink.value);
           copyShareLinkBtn.textContent = 'Copied!';
-          setTimeout(() => { copyShareLinkBtn.textContent = 'Copy'; }, 2000);
+          setTimeout(() => {
+            copyShareLinkBtn.textContent = 'Copy';
+          }, 2000);
           updateStatus('Shareable link copied to clipboard');
         } catch (_err) {
           prompt('Copy this link:', publishShareLink.value);
@@ -12174,7 +12952,7 @@ if (rounded) {
         currentPresetId: state.currentPresetId,
         currentPresetName: state.currentPresetName,
         dropdownValue: presetSelect?.value,
-        callerStack: new Error().stack?.split('\n').slice(1, 4).join('\n')
+        callerStack: new Error().stack?.split('\n').slice(1, 4).join('\n'),
       });
     }
 
@@ -12208,7 +12986,8 @@ if (rounded) {
 
     // Save button: enabled when a user preset is selected (not design defaults)
     if (savePresetBtn) {
-      savePresetBtn.disabled = !hasPresetSelected || !hasModel || isDesignDefaults;
+      savePresetBtn.disabled =
+        !hasPresetSelected || !hasModel || isDesignDefaults;
       savePresetBtn.title = isDesignDefaults
         ? 'Design default values cannot be overwritten'
         : !hasPresetSelected
@@ -12226,7 +13005,8 @@ if (rounded) {
 
     // Delete button: enabled when a user preset is selected (not design defaults)
     if (deletePresetBtn) {
-      deletePresetBtn.disabled = !hasPresetSelected || !hasModel || isDesignDefaults;
+      deletePresetBtn.disabled =
+        !hasPresetSelected || !hasModel || isDesignDefaults;
       deletePresetBtn.title = isDesignDefaults
         ? 'Design default values cannot be deleted'
         : hasPresetSelected
@@ -12256,7 +13036,7 @@ if (rounded) {
     console.log('[Preset] Setting selection:', {
       id: preset.id,
       name: preset.name,
-      paramCount: Object.keys(preset.parameters || {}).length
+      paramCount: Object.keys(preset.parameters || {}).length,
     });
 
     setCurrentPresetSignature(preset.parameters);
@@ -12290,9 +13070,10 @@ if (rounded) {
     }
 
     const modelName = state.uploadedFile.name;
-    const currentSortOrder = localStorage.getItem(PRESET_SORT_KEY) || 'name-asc';
+    const currentSortOrder =
+      localStorage.getItem(PRESET_SORT_KEY) || 'name-asc';
     const presets = presetManager.getSortedPresets(modelName, currentSortOrder);
-    
+
     // Remember current selection from state (survives dropdown rebuilds)
     const currentPresetId = state.currentPresetId;
 
@@ -12327,7 +13108,9 @@ if (rounded) {
 
     // Restore selection if the preset still exists in the list
     if (currentPresetId) {
-      const currentPreset = presets.find((preset) => preset.id === currentPresetId);
+      const currentPreset = presets.find(
+        (preset) => preset.id === currentPresetId
+      );
       if (currentPreset) {
         presetSelect.value = currentPresetId;
         setCurrentPresetSignature(currentPreset.parameters);
@@ -12435,7 +13218,11 @@ if (rounded) {
         const companionSnapshot = {};
         if (state.projectFiles) {
           for (const [path, content] of state.projectFiles.entries()) {
-            if (path !== state.mainFilePath && typeof content === 'string' && !content.startsWith('data:')) {
+            if (
+              path !== state.mainFilePath &&
+              typeof content === 'string' &&
+              !content.startsWith('data:')
+            ) {
               companionSnapshot[path] = content;
             }
           }
@@ -12448,7 +13235,10 @@ if (rounded) {
           state.parameters,
           {
             description,
-            companionFiles: Object.keys(companionSnapshot).length > 0 ? companionSnapshot : null,
+            companionFiles:
+              Object.keys(companionSnapshot).length > 0
+                ? companionSnapshot
+                : null,
           }
         );
 
@@ -12582,7 +13372,9 @@ if (rounded) {
             💾 Export All Designs
           </button>
         </div>
-        ${presets.length > 0 ? `
+        ${
+          presets.length > 0
+            ? `
         <details class="preset-list-details" style="padding:0 16px 16px;">
           <summary style="padding:8px 0;cursor:pointer;color:var(--text-secondary, #666);">
             Individual presets (${presets.length})
@@ -12600,7 +13392,9 @@ if (rounded) {
             ${presetsHTML}
           </div>
         </details>
-        ` : '<div class="preset-empty" style="padding:16px;">No designs saved for this model yet. Import a design file or use the + button to create one.</div>'}
+        `
+            : '<div class="preset-empty" style="padding:16px;">No designs saved for this model yet. Import a design file or use the + button to create one.</div>'
+        }
         <div class="preset-modal-footer">
           <button class="btn btn-outline" data-action="close">Close</button>
         </div>
@@ -12616,8 +13410,13 @@ if (rounded) {
       presetSortSelect.addEventListener('change', () => {
         currentSortOrder = presetSortSelect.value;
         localStorage.setItem(PRESET_SORT_KEY, currentSortOrder);
-        const sorted = presetManager.getSortedPresets(modelName, currentSortOrder);
-        presetListContainer.innerHTML = sorted.map((preset) => `
+        const sorted = presetManager.getSortedPresets(
+          modelName,
+          currentSortOrder
+        );
+        presetListContainer.innerHTML = sorted
+          .map(
+            (preset) => `
           <div class="preset-item" data-preset-id="${preset.id}">
             <div class="preset-item-info">
               <h4 class="preset-item-name">${preset.name}</h4>
@@ -12631,10 +13430,13 @@ if (rounded) {
               <button class="btn btn-sm btn-secondary" data-action="export" data-preset-id="${preset.id}" aria-label="Export design ${preset.name}">Export</button>
               <button class="btn btn-sm btn-outline" data-action="delete" data-preset-id="${preset.id}" aria-label="Delete design ${preset.name}">Delete</button>
             </div>
-          </div>`).join('');
+          </div>`
+          )
+          .join('');
         // Keep the main preset dropdown in sync with the new sort order
         updatePresetDropdown();
-        const label = presetSortSelect.options[presetSortSelect.selectedIndex]?.text || '';
+        const label =
+          presetSortSelect.options[presetSortSelect.selectedIndex]?.text || '';
         announceImmediate(`Designs sorted by ${label}`);
       });
     }
@@ -12664,7 +13466,9 @@ if (rounded) {
           const state = stateManager.getState();
           // Desktop OpenSCAD parity: MERGE preset parameters onto current state.
           // Hidden parameters are stored but not retrieved (desktop parity).
-          const hiddenNames = new Set(Object.keys(state.schema?.hiddenParameters || {}));
+          const hiddenNames = new Set(
+            Object.keys(state.schema?.hiddenParameters || {})
+          );
           const visiblePresetParams = {};
           for (const [k, v] of Object.entries(preset.parameters)) {
             if (!hiddenNames.has(k)) visiblePresetParams[k] = v;
@@ -12691,20 +13495,28 @@ if (rounded) {
           );
 
           // E2: Swap companion files if the preset has them
-          if (preset.companionFiles && Object.keys(preset.companionFiles).length > 0) {
+          if (
+            preset.companionFiles &&
+            Object.keys(preset.companionFiles).length > 0
+          ) {
             const curState = stateManager.getState();
             const newProjectFiles = curState.projectFiles
               ? new Map(curState.projectFiles)
               : new Map();
 
-            for (const [filename, content] of Object.entries(preset.companionFiles)) {
+            for (const [filename, content] of Object.entries(
+              preset.companionFiles
+            )) {
               newProjectFiles.set(filename, content);
             }
 
             stateManager.setState({ projectFiles: newProjectFiles });
 
             if (autoPreviewController) {
-              autoPreviewController.setProjectFiles(newProjectFiles, curState.mainFilePath);
+              autoPreviewController.setProjectFiles(
+                newProjectFiles,
+                curState.mainFilePath
+              );
             }
 
             updateProjectFilesUI();
@@ -12751,7 +13563,10 @@ if (rounded) {
         // Pass hidden parameters for desktop parity (included in export but not in UI)
         const currentState = stateManager.getState();
         const hiddenParams = currentState.schema?.hiddenParameters || {};
-        const json = presetManager.exportOpenSCADNativeFormat(modelName, hiddenParams);
+        const json = presetManager.exportOpenSCADNativeFormat(
+          modelName,
+          hiddenParams
+        );
         if (json) {
           const blob = new Blob([json], { type: 'application/json' });
           const url = URL.createObjectURL(blob);
@@ -12762,7 +13577,9 @@ if (rounded) {
           URL.revokeObjectURL(url);
           updateStatus('Exported all designs (OpenSCAD native format)');
         } else {
-          updateStatus('No designs to export. Create some designs first using the + button.');
+          updateStatus(
+            'No designs to export. Create some designs first using the + button.'
+          );
         }
       } else if (action === 'import') {
         // Ask user whether to merge with existing presets or replace them all.
@@ -12792,12 +13609,19 @@ if (rounded) {
         importModeDialog.showModal();
 
         const importMode = await new Promise((resolve) => {
-          importModeDialog.addEventListener('close', () => {
-            const returnValue = importModeDialog.returnValue;
-            const mode = importModeDialog.querySelector('input[name="importMode"]:checked')?.value || 'merge';
-            document.body.removeChild(importModeDialog);
-            resolve(returnValue === 'ok' ? mode : null);
-          }, { once: true });
+          importModeDialog.addEventListener(
+            'close',
+            () => {
+              const returnValue = importModeDialog.returnValue;
+              const mode =
+                importModeDialog.querySelector(
+                  'input[name="importMode"]:checked'
+                )?.value || 'merge';
+              document.body.removeChild(importModeDialog);
+              resolve(returnValue === 'ok' ? mode : null);
+            },
+            { once: true }
+          );
         });
 
         if (!importMode) return; // user cancelled
@@ -12817,7 +13641,7 @@ if (rounded) {
             const currentState = stateManager.getState();
             const currentModelName = currentState.uploadedFile?.name || null;
             const paramSchema = currentState.schema?.parameters || {};
-            
+
             // Warn if no model is loaded
             if (!currentModelName) {
               const proceed = confirm(
@@ -12829,29 +13653,35 @@ if (rounded) {
             // Replace mode: confirm and clear existing presets first
             if (importMode === 'replace' && currentModelName) {
               const existing = presetManager.getPresets(currentModelName) || [];
-              const realCount = existing.filter((p) => p.id !== 'design-defaults').length;
+              const realCount = existing.filter(
+                (p) => p.id !== 'design-defaults'
+              ).length;
               if (realCount > 0) {
                 const confirmed = confirm(
                   `Replace all designs? This will permanently delete ${realCount} existing design${realCount !== 1 ? 's' : ''} for "${currentModelName}". This cannot be undone.\n\nContinue?`
                 );
                 if (!confirmed) return;
-                presetManager.clearPresetsForModel(currentModelName, { preserveDefaults: true });
+                presetManager.clearPresetsForModel(currentModelName, {
+                  preserveDefaults: true,
+                });
               }
             }
-            
+
             let totalImported = 0;
             let totalSkipped = 0;
             const errors = [];
             let lastImportedPresets = [];
-            
+
             for (const file of files) {
               try {
                 const text = await file.text();
-                
+
                 // Log for debugging preset import issues
                 console.log(`[Import] Processing: ${file.name}`);
-                
-                const hiddenParameterNames = Object.keys(currentState.schema?.hiddenParameters || {});
+
+                const hiddenParameterNames = Object.keys(
+                  currentState.schema?.hiddenParameters || {}
+                );
                 const result = presetManager.importPreset(
                   text,
                   currentModelName,
@@ -12865,7 +13695,9 @@ if (rounded) {
                   if (result.presets?.length > 0) {
                     lastImportedPresets = result.presets;
                   }
-                  console.log(`[Import] ${file.name}: ${result.imported} preset(s) imported`);
+                  console.log(
+                    `[Import] ${file.name}: ${result.imported} preset(s) imported`
+                  );
                 } else {
                   errors.push(`${file.name}: ${result.error}`);
                 }
@@ -12888,7 +13720,8 @@ if (rounded) {
 
               // Auto-select the last imported preset so the user can find it
               if (lastImportedPresets.length > 0) {
-                const lastPreset = lastImportedPresets[lastImportedPresets.length - 1];
+                const lastPreset =
+                  lastImportedPresets[lastImportedPresets.length - 1];
                 if (lastPreset?.id) {
                   setCurrentPresetSelection(lastPreset);
                 }
@@ -12948,12 +13781,18 @@ if (rounded) {
 
     // Block saving over "design default values" (immutable, desktop parity)
     if (selectedPresetId === DESIGN_DEFAULTS_ID) {
-      updateStatus('Design default values cannot be overwritten. Use + to create a new preset.', 'warning');
+      updateStatus(
+        'Design default values cannot be overwritten. Use + to create a new preset.',
+        'warning'
+      );
       return;
     }
 
     // Get the preset to update
-    const preset = presetManager.loadPreset(state.uploadedFile.name, selectedPresetId);
+    const preset = presetManager.loadPreset(
+      state.uploadedFile.name,
+      selectedPresetId
+    );
     if (!preset) {
       updateStatus('Preset not found', 'error');
       return;
@@ -12964,7 +13803,11 @@ if (rounded) {
       const companionSnapshot = {};
       if (state.projectFiles) {
         for (const [path, content] of state.projectFiles.entries()) {
-          if (path !== state.mainFilePath && typeof content === 'string' && !content.startsWith('data:')) {
+          if (
+            path !== state.mainFilePath &&
+            typeof content === 'string' &&
+            !content.startsWith('data:')
+          ) {
             companionSnapshot[path] = content;
           }
         }
@@ -12977,7 +13820,10 @@ if (rounded) {
         state.parameters,
         {
           description: preset.description,
-          companionFiles: Object.keys(companionSnapshot).length > 0 ? companionSnapshot : null,
+          companionFiles:
+            Object.keys(companionSnapshot).length > 0
+              ? companionSnapshot
+              : null,
         }
       );
 
@@ -12989,7 +13835,6 @@ if (rounded) {
       setTimeout(() => {
         savePresetBtn.textContent = '💾';
       }, 1500);
-
     } catch (error) {
       updateStatus(`Failed to save preset: ${error.message}`, 'error');
     }
@@ -13015,7 +13860,10 @@ if (rounded) {
     }
 
     // Get preset info for confirmation
-    const preset = presetManager.loadPreset(state.uploadedFile.name, selectedPresetId);
+    const preset = presetManager.loadPreset(
+      state.uploadedFile.name,
+      selectedPresetId
+    );
     if (!preset) {
       updateStatus('Preset not found', 'error');
       return;
@@ -13031,7 +13879,10 @@ if (rounded) {
     }
 
     try {
-      const deleted = presetManager.deletePreset(state.uploadedFile.name, selectedPresetId);
+      const deleted = presetManager.deletePreset(
+        state.uploadedFile.name,
+        selectedPresetId
+      );
       if (deleted) {
         updateStatus(`Deleted preset: ${preset.name}`, 'success');
         updatePresetDropdown(); // Refresh dropdown
@@ -13053,9 +13904,13 @@ if (rounded) {
     presetDropdownSort.addEventListener('change', () => {
       try {
         localStorage.setItem(PRESET_SORT_KEY, presetDropdownSort.value);
-      } catch (_) { /* localStorage overflow — continue with in-memory value */ }
+      } catch (_) {
+        /* localStorage overflow — continue with in-memory value */
+      }
       updatePresetDropdown();
-      const label = presetDropdownSort.options[presetDropdownSort.selectedIndex]?.text || '';
+      const label =
+        presetDropdownSort.options[presetDropdownSort.selectedIndex]?.text ||
+        '';
       announceImmediate(`Presets sorted by ${label}`);
     });
   }
@@ -13124,7 +13979,9 @@ if (rounded) {
       stateManager.setState({ parameters: defaultParams });
 
       // Re-render UI with default parameters
-      const parametersContainer = document.getElementById('parametersContainer');
+      const parametersContainer = document.getElementById(
+        'parametersContainer'
+      );
       renderParameterUI(
         state.schema,
         parametersContainer,
@@ -13162,7 +14019,9 @@ if (rounded) {
 
     if (preset) {
       // Check compatibility before applying
-      const hiddenParamNames = new Set(Object.keys(state.schema?.hiddenParameters || {}));
+      const hiddenParamNames = new Set(
+        Object.keys(state.schema?.hiddenParameters || {})
+      );
       const compatibility = presetManager.analyzePresetCompatibility(
         preset.parameters,
         state.schema?.parameters || state.schema,
@@ -13171,11 +14030,14 @@ if (rounded) {
       // Desktop OpenSCAD parity: silently apply matching parameters, skip extras.
       // Desktop OpenSCAD never shows a compatibility warning dialog (confirmed from
       // ParameterWidget.cc:476-502 -- it just skips unknown params with no else clause).
-      if (compatibility.extraParams.length > 0 || compatibility.missingParams.length > 0) {
+      if (
+        compatibility.extraParams.length > 0 ||
+        compatibility.missingParams.length > 0
+      ) {
         console.info(
           `[Preset] "${preset.name}": ${compatibility.applicableCount} params applied, ` +
-          `${compatibility.extraParams.length} skipped (not in current file), ` +
-          `${compatibility.missingParams.length} kept at defaults (not in preset)`
+            `${compatibility.extraParams.length} skipped (not in current file), ` +
+            `${compatibility.missingParams.length} kept at defaults (not in preset)`
         );
       }
 
@@ -13213,19 +14075,27 @@ if (rounded) {
       );
 
       // E2: Swap companion files if the preset has them
-      if (preset.companionFiles && Object.keys(preset.companionFiles).length > 0) {
+      if (
+        preset.companionFiles &&
+        Object.keys(preset.companionFiles).length > 0
+      ) {
         const newProjectFiles = state.projectFiles
           ? new Map(state.projectFiles)
           : new Map();
 
-        for (const [filename, content] of Object.entries(preset.companionFiles)) {
+        for (const [filename, content] of Object.entries(
+          preset.companionFiles
+        )) {
           newProjectFiles.set(filename, content);
         }
 
         stateManager.setState({ projectFiles: newProjectFiles });
 
         if (autoPreviewController) {
-          autoPreviewController.setProjectFiles(newProjectFiles, state.mainFilePath);
+          autoPreviewController.setProjectFiles(
+            newProjectFiles,
+            state.mainFilePath
+          );
         }
 
         updateProjectFilesUI();
@@ -13247,7 +14117,9 @@ if (rounded) {
       const applied = Object.keys(applicableParams).length;
       const total = Object.keys(preset.parameters).length;
       if (applied < total) {
-        updateStatus(`Loaded preset: ${preset.name} (${applied} of ${total} parameters applied)`);
+        updateStatus(
+          `Loaded preset: ${preset.name} (${applied} of ${total} parameters applied)`
+        );
       } else {
         updateStatus(`Loaded preset: ${preset.name}`);
       }
@@ -13542,7 +14414,8 @@ if (rounded) {
    * @param {string} output - Raw console output
    * @returns {{ type: 'echo'|'warning'|'error', text: string }[]}
    */
-  const _ERR_INFO_PATTERNS = /^(?:Geometries in cache|Geometry cache size|CGAL Polyhedrons in cache|CGAL cache size|Total rendering time|Top level object is|Status:\s|Genus:\s|Vertices:\s|Facets:\s|Could not initialize localization|Compiling design|Rendering design)/i;
+  const _ERR_INFO_PATTERNS =
+    /^(?:Geometries in cache|Geometry cache size|CGAL Polyhedrons in cache|CGAL cache size|Total rendering time|Top level object is|Status:\s|Genus:\s|Vertices:\s|Facets:\s|Could not initialize localization|Compiling design|Rendering design)/i;
 
   function extractConsoleMessages(output) {
     if (!output) return [];
@@ -13562,17 +14435,23 @@ if (rounded) {
         }
 
         if (trimmed.includes('WARNING:') || trimmed.includes('Warning:')) {
-          const warnText = trimmed.startsWith('[ERR] ') ? trimmed.substring(6) : trimmed;
+          const warnText = trimmed.startsWith('[ERR] ')
+            ? trimmed.substring(6)
+            : trimmed;
           return { type: 'warning', text: warnText };
         }
 
         if (trimmed.includes('ERROR:') || trimmed.includes('Error:')) {
-          const errText = trimmed.startsWith('[ERR] ') ? trimmed.substring(6) : trimmed;
+          const errText = trimmed.startsWith('[ERR] ')
+            ? trimmed.substring(6)
+            : trimmed;
           return { type: 'error', text: errText };
         }
 
         if (trimmed.startsWith('[ERR]')) {
-          const text = trimmed.substring(trimmed.startsWith('[ERR] ') ? 6 : 5).trim();
+          const text = trimmed
+            .substring(trimmed.startsWith('[ERR] ') ? 6 : 5)
+            .trim();
           if (!text || _ERR_INFO_PATTERNS.test(text)) {
             return null;
           }
@@ -13596,7 +14475,11 @@ if (rounded) {
     if (!echoDrawer || !echoDrawerLabel || !echoMessagesEl) return;
 
     if (messages.length === 0) {
-      echoDrawer.classList.remove('visible', 'echo-drawer--warning', 'echo-drawer--error');
+      echoDrawer.classList.remove(
+        'visible',
+        'echo-drawer--warning',
+        'echo-drawer--error'
+      );
       echoDrawer.classList.add('collapsed');
       echoDrawerLabel.textContent = 'No messages';
       echoMessagesEl.innerHTML = '';
@@ -13610,8 +14493,10 @@ if (rounded) {
     // Build label describing the mix of message types
     const parts = [];
     if (echoCount > 0) parts.push(`${echoCount} echo`);
-    if (warnCount > 0) parts.push(`${warnCount} warning${warnCount > 1 ? 's' : ''}`);
-    if (errorCount > 0) parts.push(`${errorCount} error${errorCount > 1 ? 's' : ''}`);
+    if (warnCount > 0)
+      parts.push(`${warnCount} warning${warnCount > 1 ? 's' : ''}`);
+    if (errorCount > 0)
+      parts.push(`${errorCount} error${errorCount > 1 ? 's' : ''}`);
     echoDrawerLabel.textContent = `OpenSCAD Messages (${parts.join(', ')})`;
 
     // Set severity class on the drawer for toggle-bar tinting
@@ -13623,7 +14508,8 @@ if (rounded) {
     }
 
     // Render each message as a color-coded line (text-only, no user HTML)
-    const escHtml = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const escHtml = (s) =>
+      s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     echoMessagesEl.innerHTML = messages
       .map((m) => {
         const cls = `echo-msg-line echo-msg-line--${m.type}`;
@@ -13644,9 +14530,12 @@ if (rounded) {
 
     // Build accessible announcement
     const summary = [];
-    if (errorCount > 0) summary.push(`${errorCount} error${errorCount > 1 ? 's' : ''}`);
-    if (warnCount > 0) summary.push(`${warnCount} warning${warnCount > 1 ? 's' : ''}`);
-    if (echoCount > 0) summary.push(`${echoCount} echo message${echoCount > 1 ? 's' : ''}`);
+    if (errorCount > 0)
+      summary.push(`${errorCount} error${errorCount > 1 ? 's' : ''}`);
+    if (warnCount > 0)
+      summary.push(`${warnCount} warning${warnCount > 1 ? 's' : ''}`);
+    if (echoCount > 0)
+      summary.push(`${echoCount} echo message${echoCount > 1 ? 's' : ''}`);
     announceImmediate(`Model has ${summary.join(', ')}`);
   }
 
@@ -13777,9 +14666,13 @@ if (rounded) {
     }
 
     // Generate filename with timestamp
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const timestamp = new Date()
+      .toISOString()
+      .replace(/[:.]/g, '-')
+      .slice(0, 19);
     const state = stateManager.getState();
-    const modelName = state.uploadedFile?.name?.replace('.scad', '') || 'console';
+    const modelName =
+      state.uploadedFile?.name?.replace('.scad', '') || 'console';
     const filename = `${modelName}-console-${timestamp}.txt`;
 
     // Create blob and download
@@ -14269,30 +15162,42 @@ if (rounded) {
     if (previewManager) {
       const newMode = previewManager.toggleProjection();
       const isPerspective = newMode === 'perspective';
-      
+
       // Update desktop toggle button state
       const projToggle = document.getElementById('projectionToggle');
       if (projToggle) {
-        projToggle.setAttribute('aria-pressed', isPerspective ? 'false' : 'true');
-        projToggle.title = isPerspective 
-          ? 'Switch to Orthographic (P)' 
+        projToggle.setAttribute(
+          'aria-pressed',
+          isPerspective ? 'false' : 'true'
+        );
+        projToggle.title = isPerspective
+          ? 'Switch to Orthographic (P)'
           : 'Switch to Perspective (P)';
         const labelSpan = projToggle.querySelector('span');
         if (labelSpan) {
-          labelSpan.textContent = isPerspective ? 'Perspective' : 'Orthographic';
+          labelSpan.textContent = isPerspective
+            ? 'Perspective'
+            : 'Orthographic';
         }
       }
-      
+
       // Update mobile toggle button state
-      const mobileProjToggle = document.getElementById('mobileProjectionToggle');
+      const mobileProjToggle = document.getElementById(
+        'mobileProjectionToggle'
+      );
       if (mobileProjToggle) {
-        mobileProjToggle.setAttribute('aria-pressed', isPerspective ? 'false' : 'true');
-        mobileProjToggle.title = isPerspective 
-          ? 'Switch to Orthographic' 
+        mobileProjToggle.setAttribute(
+          'aria-pressed',
+          isPerspective ? 'false' : 'true'
+        );
+        mobileProjToggle.title = isPerspective
+          ? 'Switch to Orthographic'
           : 'Switch to Perspective';
         const mobileLabelSpan = mobileProjToggle.querySelector('span');
         if (mobileLabelSpan) {
-          mobileLabelSpan.textContent = isPerspective ? 'Perspective' : 'Orthographic';
+          mobileLabelSpan.textContent = isPerspective
+            ? 'Perspective'
+            : 'Orthographic';
         }
       }
     }
@@ -14356,15 +15261,27 @@ if (rounded) {
   keyboardConfig.on('exportImage', () => fileActionsController.onExportImage());
 
   // Edit action shortcuts
-  keyboardConfig.on('copyViewportImage', () => editActionsController.copyViewportImage());
-  keyboardConfig.on('jumpNextError', () => editActionsController.jumpToNextError());
-  keyboardConfig.on('jumpPrevError', () => editActionsController.jumpToPrevError());
-  keyboardConfig.on('increaseFontSize', () => editActionsController.increaseFontSize());
-  keyboardConfig.on('decreaseFontSize', () => editActionsController.decreaseFontSize());
+  keyboardConfig.on('copyViewportImage', () =>
+    editActionsController.copyViewportImage()
+  );
+  keyboardConfig.on('jumpNextError', () =>
+    editActionsController.jumpToNextError()
+  );
+  keyboardConfig.on('jumpPrevError', () =>
+    editActionsController.jumpToPrevError()
+  );
+  keyboardConfig.on('increaseFontSize', () =>
+    editActionsController.increaseFontSize()
+  );
+  keyboardConfig.on('decreaseFontSize', () =>
+    editActionsController.decreaseFontSize()
+  );
   // Design action shortcuts
   keyboardConfig.on('flushCaches', () => designPanelController.flushCaches());
   keyboardConfig.on('showAST', () => designPanelController.showAST());
-  keyboardConfig.on('checkValidity', () => designPanelController.checkValidity());
+  keyboardConfig.on('checkValidity', () =>
+    designPanelController.checkValidity()
+  );
 
   // Display action shortcuts
   keyboardConfig.on('viewAll', () => {
@@ -14373,13 +15290,23 @@ if (rounded) {
       announceImmediate('View fitted to model');
     }
   });
-  keyboardConfig.on('toggleAxes', () => displayOptionsController.toggle('axes'));
-  keyboardConfig.on('toggleEdges', () => displayOptionsController.toggle('edges'));
+  keyboardConfig.on('toggleAxes', () =>
+    displayOptionsController.toggle('axes')
+  );
+  keyboardConfig.on('toggleEdges', () =>
+    displayOptionsController.toggle('edges')
+  );
   keyboardConfig.on('toggleAnimate', () => animationController.togglePlay());
 
-  keyboardConfig.on('toggleConsole', () => getUIModeController().togglePanelVisibility('consoleOutput'));
-  keyboardConfig.on('toggleErrorLog', () => getUIModeController().togglePanelVisibility('errorLog'));
-  keyboardConfig.on('toggleCodeEditor', () => getUIModeController().togglePanelVisibility('codeEditor'));
+  keyboardConfig.on('toggleConsole', () =>
+    getUIModeController().togglePanelVisibility('consoleOutput')
+  );
+  keyboardConfig.on('toggleErrorLog', () =>
+    getUIModeController().togglePanelVisibility('errorLog')
+  );
+  keyboardConfig.on('toggleCodeEditor', () =>
+    getUIModeController().togglePanelVisibility('codeEditor')
+  );
   keyboardConfig.on('toggleCustomizer', () => {
     const sidebar = document.querySelector('.sidebar');
     if (sidebar) sidebar.classList.toggle('collapsed');
