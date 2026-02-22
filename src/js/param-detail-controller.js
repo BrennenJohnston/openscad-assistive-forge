@@ -18,7 +18,12 @@ import { announceImmediate } from './announcer.js';
 const STORAGE_KEY = getAppPrefKey('param-detail-level');
 
 /** @type {readonly ['show', 'inline', 'hide', 'desc-only']} */
-const VALID_LEVELS = /** @type {const} */ (['show', 'inline', 'hide', 'desc-only']);
+const VALID_LEVELS = /** @type {const} */ ([
+  'show',
+  'inline',
+  'hide',
+  'desc-only',
+]);
 
 const DEFAULT_LEVEL = 'hide';
 
@@ -33,7 +38,8 @@ const LEVEL_LABELS = {
   show: 'Show Details: descriptions shown below parameter names',
   inline: 'Inline Details: descriptions shown next to parameter names',
   hide: 'Hide Details: descriptions available as tooltips only',
-  'desc-only': 'Description Only: showing descriptions instead of parameter names',
+  'desc-only':
+    'Description Only: showing descriptions instead of parameter names',
 };
 
 /**

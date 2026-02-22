@@ -79,11 +79,24 @@ export class FileActionsController {
 
   _wireButtons() {
     const ids = {
-      'file-new-btn': () => { this.onNew(); announceImmediate('New file created'); },
-      'file-reload-btn': () => { this.onReload(); announceImmediate('File reloaded'); },
-      'file-save-btn': () => { this.onSave(); },
-      'file-save-as-btn': () => { this.onSaveAs(); },
-      'file-export-image-btn': () => { this.onExportImage(); announceImmediate('Image exported'); },
+      'file-new-btn': () => {
+        this.onNew();
+        announceImmediate('New file created');
+      },
+      'file-reload-btn': () => {
+        this.onReload();
+        announceImmediate('File reloaded');
+      },
+      'file-save-btn': () => {
+        this.onSave();
+      },
+      'file-save-as-btn': () => {
+        this.onSaveAs();
+      },
+      'file-export-image-btn': () => {
+        this.onExportImage();
+        announceImmediate('Image exported');
+      },
     };
     for (const [id, handler] of Object.entries(ids)) {
       const el = document.getElementById(id);

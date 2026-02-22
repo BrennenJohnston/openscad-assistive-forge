@@ -103,7 +103,17 @@ const SCAD_TOKENS = {
     'is_function',
   ],
   // Special variables
-  specials: ['$fn', '$fa', '$fs', '$t', '$vpr', '$vpt', '$vpd', '$vpf', '$children'],
+  specials: [
+    '$fn',
+    '$fa',
+    '$fs',
+    '$t',
+    '$vpr',
+    '$vpt',
+    '$vpd',
+    '$vpf',
+    '$children',
+  ],
   // Constants
   constants: ['true', 'false', 'undef', 'PI'],
 };
@@ -348,9 +358,7 @@ export class TextareaEditor {
 
     // Escape - Announce exit instructions
     if (e.key === 'Escape') {
-      this.announce(
-        'Press Tab to move to next element, or continue editing.'
-      );
+      this.announce('Press Tab to move to next element, or continue editing.');
     }
   }
 
@@ -364,8 +372,10 @@ export class TextareaEditor {
     const end = this.textarea.selectionEnd;
     const value = this.textarea.value;
 
-    this.textarea.value = value.substring(0, start) + text + value.substring(end);
-    this.textarea.selectionStart = this.textarea.selectionEnd = start + text.length;
+    this.textarea.value =
+      value.substring(0, start) + text + value.substring(end);
+    this.textarea.selectionStart = this.textarea.selectionEnd =
+      start + text.length;
 
     this._value = this.textarea.value;
     this._scheduleHighlightUpdate();
@@ -419,8 +429,7 @@ export class TextareaEditor {
     if (trimmedLine.startsWith('//')) {
       // Remove comment
       newLine =
-        line.substring(0, leadingSpaces) +
-        trimmedLine.substring(2).trimStart();
+        line.substring(0, leadingSpaces) + trimmedLine.substring(2).trimStart();
     } else {
       // Add comment
       newLine = line.substring(0, leadingSpaces) + '// ' + trimmedLine;
@@ -489,10 +498,7 @@ export class TextareaEditor {
     );
 
     // Highlight comments
-    html = html.replace(
-      /\/\/.*$/gm,
-      '<span class="hl-comment">$&</span>'
-    );
+    html = html.replace(/\/\/.*$/gm, '<span class="hl-comment">$&</span>');
     html = html.replace(
       /\/\*[\s\S]*?\*\//g,
       '<span class="hl-comment">$&</span>'
@@ -577,7 +583,9 @@ export class TextareaEditor {
     const numbers = [];
 
     for (let i = 1; i <= lineCount; i++) {
-      const className = this._errorLines.has(i) ? 'line-number error' : 'line-number';
+      const className = this._errorLines.has(i)
+        ? 'line-number error'
+        : 'line-number';
       numbers.push(`<span class="${className}">${i}</span>`);
     }
 
@@ -726,10 +734,8 @@ export class TextareaEditor {
   scrollToLine(line) {
     if (!this.textarea) return;
 
-    const lineHeight = parseInt(
-      window.getComputedStyle(this.textarea).lineHeight,
-      10
-    ) || 20;
+    const lineHeight =
+      parseInt(window.getComputedStyle(this.textarea).lineHeight, 10) || 20;
     this.textarea.scrollTop = (line - 1) * lineHeight;
   }
 

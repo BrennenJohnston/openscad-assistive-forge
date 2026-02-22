@@ -105,7 +105,9 @@ export class DisplayOptionsController {
       try {
         const saved = localStorage.getItem(getAppPrefKey(PREF_PREFIX + key));
         if (saved !== null) this.state[key] = saved === 'true';
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
   }
 
@@ -113,7 +115,9 @@ export class DisplayOptionsController {
   _savePref(key, val) {
     try {
       localStorage.setItem(getAppPrefKey(PREF_PREFIX + key), String(val));
-    } catch { /* quota — acceptable */ }
+    } catch {
+      /* quota — acceptable */
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -125,7 +129,10 @@ export class DisplayOptionsController {
       const cb = document.getElementById(`display-${key}`);
       if (cb) {
         cb.addEventListener('change', (e) => {
-          this.set(/** @type {DisplayOption} */ (key), /** @type {HTMLInputElement} */ (e.target).checked);
+          this.set(
+            /** @type {DisplayOption} */ (key),
+            /** @type {HTMLInputElement} */ (e.target).checked
+          );
         });
       }
     }
@@ -139,7 +146,9 @@ export class DisplayOptionsController {
 
   /** @param {string} key */
   _syncCheckbox(key) {
-    const cb = /** @type {HTMLInputElement|null} */ (document.getElementById(`display-${key}`));
+    const cb = /** @type {HTMLInputElement|null} */ (
+      document.getElementById(`display-${key}`)
+    );
     if (cb) cb.checked = this.state[key];
   }
 
@@ -159,10 +168,18 @@ export class DisplayOptionsController {
     if (!pm?.scene) return;
 
     switch (option) {
-      case 'axes': this._applyAxes(pm); break;
-      case 'edges': this._applyEdges(pm); break;
-      case 'crosshairs': this._applyCrosshairs(pm); break;
-      case 'wireframe': this._applyWireframe(pm); break;
+      case 'axes':
+        this._applyAxes(pm);
+        break;
+      case 'edges':
+        this._applyEdges(pm);
+        break;
+      case 'crosshairs':
+        this._applyCrosshairs(pm);
+        break;
+      case 'wireframe':
+        this._applyWireframe(pm);
+        break;
     }
   }
 

@@ -387,7 +387,7 @@ function parseEnumValues(enumStr) {
     // Check for value:label format (colon not inside quotes)
     // Only split on the FIRST colon to allow labels with colons
     const colonIndex = findLabelSeparator(item);
-    
+
     if (colonIndex !== -1) {
       const value = item.substring(0, colonIndex).trim();
       const label = item.substring(colonIndex + 1).trim();
@@ -397,7 +397,7 @@ function parseEnumValues(enumStr) {
         hasLabel: true,
       };
     }
-    
+
     // No label separator - value and label are the same
     return {
       value: item,
@@ -417,11 +417,11 @@ function parseEnumValues(enumStr) {
 function findLabelSeparator(item) {
   let inQuotes = false;
   let quoteChar = null;
-  
+
   for (let i = 0; i < item.length; i++) {
     const char = item[i];
     const prevChar = item[i - 1];
-    
+
     // Track quote state
     if ((char === '"' || char === "'") && prevChar !== '\\') {
       if (!inQuotes) {
@@ -432,13 +432,13 @@ function findLabelSeparator(item) {
         quoteChar = null;
       }
     }
-    
+
     // Found separator colon (not inside quotes)
     if (char === ':' && !inQuotes) {
       return i;
     }
   }
-  
+
   return -1;
 }
 
@@ -673,7 +673,9 @@ export function extractParameters(scadContent) {
         const bracketContentRegex = /\[\s*([^\]]+)\s*\]/g;
         const bracketParts = [];
         let bracketInnerMatch;
-        while ((bracketInnerMatch = bracketContentRegex.exec(groupMatch[1])) !== null) {
+        while (
+          (bracketInnerMatch = bracketContentRegex.exec(groupMatch[1])) !== null
+        ) {
           bracketParts.push(bracketInnerMatch[1].trim());
         }
         let rawGroupName = bracketParts.join(' - ');
@@ -681,7 +683,9 @@ export function extractParameters(scadContent) {
 
         // Support ":advanced" annotation suffix: /* [GroupName:advanced] */
         // Strip the suffix from the display label and store as metadata
-        const annotationMatch = rawGroupName.match(/^(.+?)\s*:\s*(advanced|simple)\s*$/i);
+        const annotationMatch = rawGroupName.match(
+          /^(.+?)\s*:\s*(advanced|simple)\s*$/i
+        );
         if (annotationMatch) {
           rawGroupName = annotationMatch[1].trim();
           groupAnnotation = annotationMatch[2].toLowerCase();
@@ -921,7 +925,9 @@ export function extractParameters(scadContent) {
               // Preserve the 'boolean' type so buildDefineArgs emits unquoted
               // true/false instead of the string "true"/"false" (which OpenSCAD
               // treats as truthy regardless of content).
-              const lowerVals = enumValues.map((item) => item.value.toLowerCase());
+              const lowerVals = enumValues.map((item) =>
+                item.value.toLowerCase()
+              );
               const isBooleanEnum =
                 enumValues.length === 2 &&
                 lowerVals.includes('true') &&
@@ -935,7 +941,8 @@ export function extractParameters(scadContent) {
               // "undefined operation (string > number)".
               const isNumericEnum =
                 !isBooleanEnum &&
-                (defaultVal.type === 'integer' || defaultVal.type === 'number') &&
+                (defaultVal.type === 'integer' ||
+                  defaultVal.type === 'number') &&
                 enumValues.every((item) => {
                   const v = typeof item === 'object' ? item.value : item;
                   return v.trim() !== '' && !isNaN(Number(v));
@@ -989,12 +996,20 @@ export function extractParameters(scadContent) {
 
         // Extract unit for numeric parameters (with tab-name fallback)
         if (param.type === 'integer' || param.type === 'number') {
-          param.unit = extractUnit(param.description, param.name, currentTabUnit);
+          param.unit = extractUnit(
+            param.description,
+            param.name,
+            currentTabUnit
+          );
         }
 
         // Extract unit for vector parameters and apply to components
         if (param.type === 'vector' && param.components) {
-          const unit = extractUnit(param.description, param.name, currentTabUnit);
+          const unit = extractUnit(
+            param.description,
+            param.name,
+            currentTabUnit
+          );
           if (unit) {
             param.unit = unit;
             param.components = param.components.map((comp) => ({

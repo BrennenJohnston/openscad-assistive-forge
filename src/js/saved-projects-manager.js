@@ -121,7 +121,6 @@ export async function initSavedProjectsDB() {
     return { available: true, type: 'localstorage' };
   }
 
-
   // Create and track the initialization promise
   initPromise = (async () => {
     try {
@@ -760,7 +759,13 @@ export async function touchProject(id) {
  * @param {string} [options.projectFiles] - New project files (JSON string)
  * @returns {Promise<{success: boolean, error?: string}>}
  */
-export async function updateProject({ id, name, notes, projectFiles, content }) {
+export async function updateProject({
+  id,
+  name,
+  notes,
+  projectFiles,
+  content,
+}) {
   try {
     // Ensure database is initialized
     await ensureInitialized();

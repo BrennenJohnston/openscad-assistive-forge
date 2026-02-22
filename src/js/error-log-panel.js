@@ -45,7 +45,8 @@ export class ErrorLogPanel {
   /** @param {Object} [options] */
   constructor(options = {}) {
     /** @type {HTMLElement|null} */
-    this.container = options.container || document.getElementById('error-log-output');
+    this.container =
+      options.container || document.getElementById('error-log-output');
     /** @type {HTMLElement|null} */
     this.badge = options.badge || document.getElementById('error-log-badge');
 
@@ -122,10 +123,16 @@ export class ErrorLogPanel {
     } else if (/\bTRACE:/i.test(trimmed)) {
       type = ERROR_LOG_TYPE.TRACE;
       group = 'Runtime';
-    } else if (/^Parser error/i.test(trimmed) || /^Syntax error/i.test(trimmed)) {
+    } else if (
+      /^Parser error/i.test(trimmed) ||
+      /^Syntax error/i.test(trimmed)
+    ) {
       type = ERROR_LOG_TYPE.ERROR;
       group = 'Parse';
-    } else if (/^CGAL error/i.test(trimmed) || /^Mesh (is )?not|manifold/i.test(trimmed)) {
+    } else if (
+      /^CGAL error/i.test(trimmed) ||
+      /^Mesh (is )?not|manifold/i.test(trimmed)
+    ) {
       type = ERROR_LOG_TYPE.ERROR;
       group = 'Geometry';
     }
@@ -209,7 +216,10 @@ export class ErrorLogPanel {
    * @returns {boolean}
    */
   hasIssues() {
-    return this.counts[ERROR_LOG_TYPE.ERROR] > 0 || this.counts[ERROR_LOG_TYPE.WARNING] > 0;
+    return (
+      this.counts[ERROR_LOG_TYPE.ERROR] > 0 ||
+      this.counts[ERROR_LOG_TYPE.WARNING] > 0
+    );
   }
 
   /**
@@ -220,7 +230,7 @@ export class ErrorLogPanel {
     return this.entries
       .map((e) => {
         const ts = new Date(e.timestamp).toISOString();
-        const loc = e.line != null ? `${e.file || ''}:${e.line}` : (e.file || '');
+        const loc = e.line != null ? `${e.file || ''}:${e.line}` : e.file || '';
         return `[${ts}] [${e.type.toUpperCase()}] ${loc ? loc + ' — ' : ''}${e.message}`;
       })
       .join('\n');
@@ -284,11 +294,15 @@ export class ErrorLogPanel {
 
   _updateBadge() {
     if (!this.badge) return;
-    const total = this.counts[ERROR_LOG_TYPE.ERROR] + this.counts[ERROR_LOG_TYPE.WARNING];
+    const total =
+      this.counts[ERROR_LOG_TYPE.ERROR] + this.counts[ERROR_LOG_TYPE.WARNING];
     if (total > 0) {
       this.badge.textContent = String(total);
       this.badge.classList.remove('hidden');
-      this.badge.classList.toggle('has-errors', this.counts[ERROR_LOG_TYPE.ERROR] > 0);
+      this.badge.classList.toggle(
+        'has-errors',
+        this.counts[ERROR_LOG_TYPE.ERROR] > 0
+      );
     } else {
       this.badge.classList.add('hidden');
     }
@@ -296,11 +310,18 @@ export class ErrorLogPanel {
 
   /** @param {ErrorLogEntry} entry */
   _announceIfImportant(entry) {
-    if (entry.type !== ERROR_LOG_TYPE.ERROR && entry.type !== ERROR_LOG_TYPE.WARNING) return;
+    if (
+      entry.type !== ERROR_LOG_TYPE.ERROR &&
+      entry.type !== ERROR_LOG_TYPE.WARNING
+    )
+      return;
     const now = Date.now();
     if (now - this.lastAnnouncement < this.announcementDebounce) {
       clearTimeout(this.pendingAnnouncement);
-      this.pendingAnnouncement = setTimeout(() => this._doAnnounce(entry), this.announcementDebounce);
+      this.pendingAnnouncement = setTimeout(
+        () => this._doAnnounce(entry),
+        this.announcementDebounce
+      );
       return;
     }
     this._doAnnounce(entry);
@@ -333,7 +354,9 @@ export class ErrorLogPanel {
       if (cb) {
         /** @type {HTMLInputElement} */ (cb).checked = this.filters[type];
         cb.addEventListener('change', (e) => {
-          this.filters[type] = /** @type {HTMLInputElement} */ (e.target).checked;
+          this.filters[type] = /** @type {HTMLInputElement} */ (
+            e.target
+          ).checked;
           this.render();
         });
       }
@@ -343,7 +366,8 @@ export class ErrorLogPanel {
     if (clearBtn) clearBtn.addEventListener('click', () => this.clear());
 
     const copyBtn = document.getElementById('error-log-copy-btn');
-    if (copyBtn) copyBtn.addEventListener('click', () => this._copyToClipboard());
+    if (copyBtn)
+      copyBtn.addEventListener('click', () => this._copyToClipboard());
   }
 
   /**
@@ -356,7 +380,8 @@ export class ErrorLogPanel {
     return [...entries].sort((a, b) => {
       const av = a[col] ?? '';
       const bv = b[col] ?? '';
-      if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir;
+      if (typeof av === 'number' && typeof bv === 'number')
+        return (av - bv) * dir;
       return String(av).localeCompare(String(bv)) * dir;
     });
   }
@@ -384,7 +409,10 @@ export class ErrorLogPanel {
       btn.textContent = col.label;
       btn.setAttribute('aria-label', `Sort by ${col.label}`);
       if (this.sortColumn === col.key) {
-        btn.setAttribute('aria-sort', this.sortAscending ? 'ascending' : 'descending');
+        btn.setAttribute(
+          'aria-sort',
+          this.sortAscending ? 'ascending' : 'descending'
+        );
       }
       btn.addEventListener('click', () => {
         if (this.sortColumn === col.key) {
@@ -434,7 +462,9 @@ export class ErrorLogPanel {
       link.className = 'error-log-line-link';
       link.textContent = String(entry.line);
       link.setAttribute('aria-label', `Go to line ${entry.line}`);
-      link.addEventListener('click', () => this.onNavigate(entry.file, entry.line));
+      link.addEventListener('click', () =>
+        this.onNavigate(entry.file, entry.line)
+      );
       lineCell.appendChild(link);
     } else {
       lineCell.textContent = entry.line != null ? String(entry.line) : '—';
@@ -458,7 +488,9 @@ export class ErrorLogPanel {
       if (btn) {
         const orig = btn.textContent;
         btn.textContent = 'Copied!';
-        setTimeout(() => { btn.textContent = orig; }, 1500);
+        setTimeout(() => {
+          btn.textContent = orig;
+        }, 1500);
       }
     } catch {
       const ta = document.createElement('textarea');

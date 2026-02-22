@@ -438,11 +438,15 @@ export function updateDependentParameters(changedParam, newValue) {
         if (control.contains(document.activeElement)) {
           // Find next visible sibling or parent summary
           const group = control.closest('.param-group');
-          const nextVisible = control.nextElementSibling?.matches(':not(.hidden)')
+          const nextVisible = control.nextElementSibling?.matches(
+            ':not(.hidden)'
+          )
             ? control.nextElementSibling
             : group?.querySelector('summary');
           if (nextVisible) {
-            const focusable = nextVisible.querySelector('input, select, textarea, button') || nextVisible;
+            const focusable =
+              nextVisible.querySelector('input, select, textarea, button') ||
+              nextVisible;
             focusable.focus();
           }
         }
@@ -857,10 +861,7 @@ function createSliderControl(param, onChange) {
   input.setAttribute('aria-valuemin', param.minimum);
   input.setAttribute('aria-valuemax', param.maximum);
   input.setAttribute('aria-valuenow', param.default);
-  input.setAttribute(
-    'aria-label',
-    `${formatParamName(param.name)} slider`
-  );
+  input.setAttribute('aria-label', `${formatParamName(param.name)} slider`);
 
   // Create editable spinbox for precise value entry
   const spinbox = document.createElement('input');
@@ -874,7 +875,10 @@ function createSliderControl(param, onChange) {
   // For floats: step="any" so user can type precise decimal values (e.g., 3.14 for [0:0.5:10])
   spinbox.step = param.type === 'integer' ? 1 : 'any';
   spinbox.value = param.default;
-  spinbox.setAttribute('inputmode', param.type === 'integer' ? 'numeric' : 'decimal');
+  spinbox.setAttribute(
+    'inputmode',
+    param.type === 'integer' ? 'numeric' : 'decimal'
+  );
   spinbox.setAttribute(
     'aria-label',
     `${formatParamName(param.name)} value${param.unit ? ' in ' + param.unit : ''}, editable`
@@ -902,7 +906,7 @@ function createSliderControl(param, onChange) {
   const updateValue = (value, source) => {
     const parsedValue =
       param.type === 'integer' ? parseInt(value) : parseFloat(value);
-    
+
     if (isNaN(parsedValue)) return;
 
     // Update both controls bidirectionally
@@ -957,45 +961,50 @@ function createSliderControl(param, onChange) {
   // Keyboard enhancements for spinbox
   spinbox.addEventListener('keydown', (e) => {
     const currentVal = parseFloat(spinbox.value) || 0;
-    
+
     // Shift+Arrow for 10x step increment (power user feature)
     if (e.shiftKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
       e.preventDefault();
       const multiplier = e.key === 'ArrowUp' ? 10 : -10;
       const newValue = currentVal + spinboxStep * multiplier;
-      
+
       // Respect limits unless unlocked
       const limits = originalParameterLimits[param.name];
       if (!limitsUnlocked && limits) {
         if (newValue < limits.min || newValue > limits.max) return;
       }
-      
+
       spinbox.value = newValue;
       spinbox.dispatchEvent(new Event('change', { bubbles: true }));
     }
   });
 
   // Wheel event handler for spinbox (desktop OpenSCAD parity: scroll wheel changes value)
-  spinbox.addEventListener('wheel', (e) => {
-    // Only handle wheel when spinbox is focused (don't hijack page scroll)
-    if (document.activeElement !== spinbox) return;
-    e.preventDefault();
+  spinbox.addEventListener(
+    'wheel',
+    (e) => {
+      // Only handle wheel when spinbox is focused (don't hijack page scroll)
+      if (document.activeElement !== spinbox) return;
+      e.preventDefault();
 
-    const currentVal = parseFloat(spinbox.value) || 0;
-    // Shift+wheel for 10x step (matching Shift+Arrow behavior)
-    const effectiveStep = e.shiftKey ? spinboxStep * 10 : spinboxStep;
-    const direction = e.deltaY < 0 ? 1 : -1; // Scroll up = increment
-    const newValue = currentVal + effectiveStep * direction;
+      const currentVal = parseFloat(spinbox.value) || 0;
+      // Shift+wheel for 10x step (matching Shift+Arrow behavior)
+      const effectiveStep = e.shiftKey ? spinboxStep * 10 : spinboxStep;
+      const direction = e.deltaY < 0 ? 1 : -1; // Scroll up = increment
+      const newValue = currentVal + effectiveStep * direction;
 
-    // Respect limits unless unlocked
-    const limits = originalParameterLimits[param.name];
-    if (!limitsUnlocked && limits) {
-      if (newValue < limits.min || newValue > limits.max) return;
-    }
+      // Respect limits unless unlocked
+      const limits = originalParameterLimits[param.name];
+      if (!limitsUnlocked && limits) {
+        if (newValue < limits.min || newValue > limits.max) return;
+      }
 
-    spinbox.value = param.type === 'integer' ? Math.round(newValue) : newValue;
-    spinbox.dispatchEvent(new Event('change', { bubbles: true }));
-  }, { passive: false });
+      spinbox.value =
+        param.type === 'integer' ? Math.round(newValue) : newValue;
+      spinbox.dispatchEvent(new Event('change', { bubbles: true }));
+    },
+    { passive: false }
+  );
 
   sliderContainer.appendChild(input);
   sliderContainer.appendChild(spinbox);
@@ -1212,10 +1221,10 @@ function createSelectControl(param, onChange) {
     // Support both new labeled format { value, label } and legacy string format
     const value = typeof item === 'object' ? item.value : item;
     const label = typeof item === 'object' ? item.label : item;
-    
+
     option.value = value;
     option.textContent = label;
-    
+
     // Check for selected - compare with string version of default
     const defaultStr = String(param.default);
     if (value === defaultStr || value === param.default) {
@@ -1263,9 +1272,7 @@ function createToggleControl(param, onChange) {
   // Determine if this is a boolean (true/false) or yes/no toggle
   const isBoolean = param.type === 'boolean';
   const defaultStr = String(param.default).toLowerCase();
-  const isChecked = isBoolean
-    ? defaultStr === 'true'
-    : defaultStr === 'yes';
+  const isChecked = isBoolean ? defaultStr === 'true' : defaultStr === 'yes';
 
   const input = document.createElement('input');
   input.type = 'checkbox';
@@ -1283,8 +1290,12 @@ function createToggleControl(param, onChange) {
   input.addEventListener('change', (e) => {
     // Return appropriate value type based on parameter type
     const value = isBoolean
-      ? (e.target.checked ? 'true' : 'false')
-      : (e.target.checked ? 'yes' : 'no');
+      ? e.target.checked
+        ? 'true'
+        : 'false'
+      : e.target.checked
+        ? 'yes'
+        : 'no';
     input.setAttribute('aria-checked', String(e.target.checked));
     onChange(param.name, value);
   });
@@ -1322,7 +1333,7 @@ function createTextInput(param, onChange) {
   if (param.maxLength && param.maxLength > 0) {
     input.maxLength = param.maxLength;
     input.setAttribute('aria-describedby', `${input.id}-hint`);
-    
+
     // Add a hint about the character limit for accessibility
     const hint = document.createElement('span');
     hint.id = `${input.id}-hint`;
@@ -1785,7 +1796,9 @@ function createRawControl(param, onChange) {
   input.className = 'raw-input';
   input.value =
     param.rawValue ||
-    (Array.isArray(param.default) ? JSON.stringify(param.default) : param.default);
+    (Array.isArray(param.default)
+      ? JSON.stringify(param.default)
+      : param.default);
   input.setAttribute(
     'aria-label',
     `Enter ${formatParamName(param.name)} as OpenSCAD expression`
@@ -1845,7 +1858,7 @@ export function renderParameterUI(
   // Also collect global parameters (isGlobal: true) to show on all tabs (OpenSCAD Customizer spec)
   const paramsByGroup = {};
   const globalParams = [];
-  
+
   Object.values(parameters).forEach((param) => {
     if (!paramsByGroup[param.group]) {
       paramsByGroup[param.group] = [];
@@ -1857,14 +1870,14 @@ export function renderParameterUI(
         : param.default;
     // Create a copy of param with the effective default
     const paramWithValue = { ...param, default: effectiveDefault };
-    
+
     // Collect global parameters separately (they'll be shown on ALL groups)
     if (param.isGlobal) {
       globalParams.push(paramWithValue);
     } else {
       paramsByGroup[param.group].push(paramWithValue);
     }
-    
+
     currentValues[param.name] = effectiveDefault;
 
     // Store the original default value (from schema, not initialValues)
@@ -1895,14 +1908,18 @@ export function renderParameterUI(
   // Render each group
   sortedGroups.forEach((group, index) => {
     const groupParams = paramsByGroup[group.id] || [];
-    
+
     // Skip groups with no params (unless there are global params to show)
     if (groupParams.length === 0 && globalParams.length === 0) return;
 
     // Combine global params (shown at top of every group) with group-specific params
     // Global params are sorted by their order, then group params by their order
-    const sortedGlobalParams = [...globalParams].sort((a, b) => a.order - b.order);
-    const sortedGroupParams = [...groupParams].sort((a, b) => a.order - b.order);
+    const sortedGlobalParams = [...globalParams].sort(
+      (a, b) => a.order - b.order
+    );
+    const sortedGroupParams = [...groupParams].sort(
+      (a, b) => a.order - b.order
+    );
     const allGroupParams = [...sortedGlobalParams, ...sortedGroupParams];
 
     const details = document.createElement('details');
@@ -1937,10 +1954,12 @@ export function renderParameterUI(
       e.stopPropagation();
       e.preventDefault();
       // Dispatch custom event so main.js can persist the hidden state
-      details.dispatchEvent(new CustomEvent('group-hide', {
-        bubbles: true,
-        detail: { groupId: group.id, groupLabel: group.label },
-      }));
+      details.dispatchEvent(
+        new CustomEvent('group-hide', {
+          bubbles: true,
+          detail: { groupId: group.id, groupLabel: group.label },
+        })
+      );
     });
     summary.appendChild(hideBtn);
 

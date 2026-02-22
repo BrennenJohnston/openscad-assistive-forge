@@ -8,6 +8,7 @@ import {
   extractZipFiles,
   resolveProjectFile,
   buildPresetCompanionMap,
+  applyCompanionAliases,
 } from '../../src/js/zip-handler.js'
 import JSZip from 'jszip'
 
@@ -672,6 +673,133 @@ describe('ZIP Handler', () => {
       const map = buildPresetCompanionMap(files, parameterSets)
       // Single instance — not aliasable, no mapping needed
       expect(map.get('Preset A').openingsPath).toBeNull()
+    })
+  })
+
+  describe('applyCompanionAliases', () => {
+    it('should set root-level openings key from mapped nested path', () => {
+      const files = new Map([
+        ['main.scad', '// scad'],
+        ['openings_and_additions.txt', 'default openings'],
+        ['Cases/iPad/TouchChat/openings_and_additions.txt', 'preset openings'],
+      ])
+      const mapping = {
+        openingsPath: 'Cases/iPad/TouchChat/openings_and_additions.txt',
+        svgPath: null,
+      }
+      const result = applyCompanionAliases(files, mapping)
+      expect(result.get('openings_and_additions.txt')).toBe('preset openings')
+    })
+
+    it('should set root-level default.svg from mapped SVG path', () => {
+      const files = new Map([
+        ['main.scad', '// scad'],
+        ['SVG files/iPad/App/icon.svg', '<svg>app icon</svg>'],
+      ])
+      const mapping = {
+        openingsPath: null,
+        svgPath: 'SVG files/iPad/App/icon.svg',
+      }
+      const result = applyCompanionAliases(files, mapping)
+      expect(result.get('default.svg')).toBe('<svg>app icon</svg>')
+    })
+
+    it('should set both alias keys when mapping has both paths', () => {
+      const files = new Map([
+        ['main.scad', '// scad'],
+        ['openings_and_additions.txt', 'default'],
+        ['Cases/iPad/TC/openings_and_additions.txt', 'tc openings'],
+        ['SVG files/iPad/TC/screen.svg', '<svg>tc</svg>'],
+      ])
+      const mapping = {
+        openingsPath: 'Cases/iPad/TC/openings_and_additions.txt',
+        svgPath: 'SVG files/iPad/TC/screen.svg',
+      }
+      const result = applyCompanionAliases(files, mapping)
+      expect(result.get('openings_and_additions.txt')).toBe('tc openings')
+      expect(result.get('default.svg')).toBe('<svg>tc</svg>')
+    })
+
+    it('should not mutate the original Map', () => {
+      const files = new Map([
+        ['main.scad', '// scad'],
+        ['openings_and_additions.txt', 'original'],
+        ['Cases/A/openings_and_additions.txt', 'preset A'],
+      ])
+      const mapping = {
+        openingsPath: 'Cases/A/openings_and_additions.txt',
+        svgPath: null,
+      }
+      applyCompanionAliases(files, mapping)
+      expect(files.get('openings_and_additions.txt')).toBe('original')
+      expect(files.has('default.svg')).toBe(false)
+    })
+
+    it('should return unchanged copy when mapping is null', () => {
+      const files = new Map([
+        ['main.scad', '// scad'],
+        ['openings_and_additions.txt', 'default'],
+      ])
+      const result = applyCompanionAliases(files, null)
+      expect(result.get('openings_and_additions.txt')).toBe('default')
+      expect(result.has('default.svg')).toBe(false)
+    })
+
+    it('should skip alias when mapped source path is missing from files', () => {
+      const files = new Map([
+        ['main.scad', '// scad'],
+        ['openings_and_additions.txt', 'default'],
+      ])
+      const mapping = {
+        openingsPath: 'Cases/Missing/openings_and_additions.txt',
+        svgPath: 'SVG files/Missing/icon.svg',
+      }
+      const result = applyCompanionAliases(files, mapping)
+      expect(result.get('openings_and_additions.txt')).toBe('default')
+      expect(result.has('default.svg')).toBe(false)
+    })
+
+    it('should preserve all original entries alongside aliases', () => {
+      const files = new Map([
+        ['main.scad', '// scad'],
+        ['openings_and_additions.txt', 'default'],
+        ['Cases/A/openings_and_additions.txt', 'preset A'],
+        ['Cases/B/openings_and_additions.txt', 'preset B'],
+        ['SVG files/A/icon.svg', '<svg>a</svg>'],
+      ])
+      const mapping = {
+        openingsPath: 'Cases/A/openings_and_additions.txt',
+        svgPath: 'SVG files/A/icon.svg',
+      }
+      const result = applyCompanionAliases(files, mapping)
+      expect(result.size).toBe(files.size + 1)
+      expect(result.get('Cases/B/openings_and_additions.txt')).toBe('preset B')
+      expect(result.get('Cases/A/openings_and_additions.txt')).toBe('preset A')
+    })
+
+    it('should integrate with buildPresetCompanionMap output', () => {
+      const files = new Map([
+        ['main.scad', '// scad'],
+        ['openings_and_additions.txt', 'root default'],
+        ['Cases/AlphaTab/TouchChat/openings_and_additions.txt', 'at tc'],
+        ['Cases/AlphaTab/Snap/openings_and_additions.txt', 'at snap'],
+        ['SVG files/AlphaTab/TouchChat/icon.svg', '<svg>at tc</svg>'],
+        ['SVG files/AlphaTab/Snap/icon.svg', '<svg>at snap</svg>'],
+      ])
+      const parameterSets = {
+        'AlphaTab TouchChat': {},
+        'AlphaTab Snap': {},
+      }
+      const companionMap = buildPresetCompanionMap(files, parameterSets)
+      const tcMapping = companionMap.get('AlphaTab TouchChat')
+      const tcResult = applyCompanionAliases(files, tcMapping)
+      expect(tcResult.get('openings_and_additions.txt')).toBe('at tc')
+      expect(tcResult.get('default.svg')).toBe('<svg>at tc</svg>')
+
+      const snapMapping = companionMap.get('AlphaTab Snap')
+      const snapResult = applyCompanionAliases(files, snapMapping)
+      expect(snapResult.get('openings_and_additions.txt')).toBe('at snap')
+      expect(snapResult.get('default.svg')).toBe('<svg>at snap</svg>')
     })
   })
 })

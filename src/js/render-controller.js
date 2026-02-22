@@ -586,7 +586,10 @@ export class RenderController {
                 metrics.shift();
               }
 
-              localStorage.setItem(STORAGE_KEY_METRICS_LOG, JSON.stringify(metrics));
+              localStorage.setItem(
+                STORAGE_KEY_METRICS_LOG,
+                JSON.stringify(metrics)
+              );
               console.log('[Perf] Render timing:', payload.timing);
             } catch (error) {
               console.warn('[Perf] Failed to log metrics:', error);
@@ -600,7 +603,10 @@ export class RenderController {
 
       case 'ERROR':
         // Surface any console output captured before the error (warnings, echos)
-        if (payload.consoleOutput && typeof window.updateConsoleOutput === 'function') {
+        if (
+          payload.consoleOutput &&
+          typeof window.updateConsoleOutput === 'function'
+        ) {
           window.updateConsoleOutput(payload.consoleOutput);
         }
         if (
@@ -929,7 +935,9 @@ export class RenderController {
 
       const renderOnce = async () => {
         if (this._moduleUsed) {
-          console.log('[RenderController] Proactive restart: WASM module was used by previous render');
+          console.log(
+            '[RenderController] Proactive restart: WASM module was used by previous render'
+          );
           await this.restart();
           this._moduleUsed = false;
         }
@@ -945,7 +953,9 @@ export class RenderController {
           this.currentRequest = {
             id: requestId,
             resolve: (result) => {
-              const renderDurationMs = Math.round(performance.now() - renderStartTime);
+              const renderDurationMs = Math.round(
+                performance.now() - renderStartTime
+              );
               this._moduleUsed = true;
               console.debug('[Render] Compilation complete:', {
                 requestId,
@@ -958,7 +968,9 @@ export class RenderController {
               resolve(result);
             },
             reject: (error) => {
-              const renderDurationMs = Math.round(performance.now() - renderStartTime);
+              const renderDurationMs = Math.round(
+                performance.now() - renderStartTime
+              );
               console.debug('[Render] Compilation failed:', {
                 requestId,
                 durationMs: renderDurationMs,
@@ -982,8 +994,9 @@ export class RenderController {
           // Engine selection: manifold_engine feature flag controls Manifold vs CGAL backend
           // Default to true (Manifold) for performance, user can disable for compatibility
           const manifoldPref = localStorage.getItem(STORAGE_KEY_MANIFOLD);
-          const useManifold = manifoldPref === null ? true : manifoldPref !== 'false';
-          
+          const useManifold =
+            manifoldPref === null ? true : manifoldPref !== 'false';
+
           // CAUTION: lazy-union may produce incorrect geometry in WASM
           // (OpenSCAD #350, #4169, #6060, Playground #115).
           // Default is OFF. Only enable if user explicitly opts in via settings.
@@ -1020,7 +1033,7 @@ export class RenderController {
             if (this.currentRequest?.id === requestId) {
               console.error(
                 `[RenderController] Render watchdog fired after ${watchdogMs}ms — ` +
-                `worker is hung. Hard cancelling.`
+                  `worker is hung. Hard cancelling.`
               );
               this.cancel({ hard: true });
             }
@@ -1151,7 +1164,10 @@ export class RenderController {
     try {
       await this.init();
     } catch (err) {
-      console.error('[RenderController] Failed to reinitialize worker after hard cancel:', err);
+      console.error(
+        '[RenderController] Failed to reinitialize worker after hard cancel:',
+        err
+      );
     }
   }
 

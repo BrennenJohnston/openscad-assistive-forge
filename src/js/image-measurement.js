@@ -15,7 +15,12 @@
 
 import { announce, POLITENESS } from './announcer.js';
 import { createDocumentFocusTrap } from './focus-trap.js';
-import { getUnit, getScaleFactor, onUnitChange, onScaleChange } from './unit-sync.js';
+import {
+  getUnit,
+  getScaleFactor,
+  onUnitChange,
+  onScaleChange,
+} from './unit-sync.js';
 
 // ---------------------------------------------------------------------------
 // State
@@ -184,8 +189,14 @@ export function initImageMeasurement(opts = {}) {
   if (container) observer.observe(container);
 
   // Subscribe to unit/scale changes for mm display
-  onUnitChange(() => { updateCoordOutputs(); updateDistanceOutput(); });
-  onScaleChange(() => { updateCoordOutputs(); updateDistanceOutput(); });
+  onUnitChange(() => {
+    updateCoordOutputs();
+    updateDistanceOutput();
+  });
+  onScaleChange(() => {
+    updateCoordOutputs();
+    updateDistanceOutput();
+  });
 }
 
 /**
@@ -228,7 +239,8 @@ export function getImageDimensions() {
  * @param {'point'|'ruler'|'calibrate'} mode
  */
 export function setMeasureMode(mode) {
-  if (!['point', 'ruler', 'calibrate'].includes(mode) || mode === measureMode) return;
+  if (!['point', 'ruler', 'calibrate'].includes(mode) || mode === measureMode)
+    return;
   if (measureMode === 'point' && pinned) unpinCrosshair();
   rulerA = null;
   rulerB = null;
@@ -238,7 +250,8 @@ export function setMeasureMode(mode) {
   measureMode = mode;
   updateHelpText();
   updateDistanceOutput();
-  const modeLabel = mode === 'point' ? 'Point' : mode === 'ruler' ? 'Ruler' : 'Calibrate';
+  const modeLabel =
+    mode === 'point' ? 'Point' : mode === 'ruler' ? 'Ruler' : 'Calibrate';
   announce(`${modeLabel} mode`, POLITENESS.POLITE);
   redraw();
 }
@@ -512,7 +525,9 @@ function drawGhostCrosshair(gx, gy, cw, ch) {
 
 function drawModeOverlay(ox, oy, cw, ch, ptA, ptB, showDistPill) {
   const fc = forcedColorsMql.matches;
-  const color = fc ? 'CanvasText' : (getComputedColor('--color-accent') || 'rgba(100, 180, 255, 0.9)');
+  const color = fc
+    ? 'CanvasText'
+    : getComputedColor('--color-accent') || 'rgba(100, 180, 255, 0.9)';
   const ringColor = fc ? 'Highlight' : color;
 
   // Draw tracking crosshair while placing points
@@ -523,10 +538,24 @@ function drawModeOverlay(ox, oy, cw, ch, ptA, ptB, showDistPill) {
   }
 
   if (ptA) {
-    drawMarker(ox + ptA.x * zoom, oy + ptA.y * zoom, 'A', color, activePoint === 'a', ringColor);
+    drawMarker(
+      ox + ptA.x * zoom,
+      oy + ptA.y * zoom,
+      'A',
+      color,
+      activePoint === 'a',
+      ringColor
+    );
   }
   if (ptB) {
-    drawMarker(ox + ptB.x * zoom, oy + ptB.y * zoom, 'B', color, activePoint === 'b', ringColor);
+    drawMarker(
+      ox + ptB.x * zoom,
+      oy + ptB.y * zoom,
+      'B',
+      color,
+      activePoint === 'b',
+      ringColor
+    );
   }
 
   if (ptA && ptB) {
@@ -579,13 +608,18 @@ function drawDistancePill(mx, my) {
 
   const unit = getUnit();
   const sf = getScaleFactor();
-  const text = (unit === 'mm' && sf > 0)
-    ? `${(distPx / sf).toFixed(1)} mm`
-    : `${distPx.toFixed(1)} px`;
+  const text =
+    unit === 'mm' && sf > 0
+      ? `${(distPx / sf).toFixed(1)} mm`
+      : `${distPx.toFixed(1)} px`;
 
   const fc = forcedColorsMql.matches;
-  const pillBg = fc ? 'Canvas' : (getComputedColor('--color-bg-elevated') || 'rgba(0, 0, 0, 0.7)');
-  const pillText = fc ? 'CanvasText' : (getComputedColor('--color-text-primary') || '#fff');
+  const pillBg = fc
+    ? 'Canvas'
+    : getComputedColor('--color-bg-elevated') || 'rgba(0, 0, 0, 0.7)';
+  const pillText = fc
+    ? 'CanvasText'
+    : getComputedColor('--color-text-primary') || '#fff';
 
   ctx.save();
   ctx.font = '12px sans-serif';
@@ -645,11 +679,23 @@ function updateCoordOutputs() {
     if (coordXOutput) coordXOutput.textContent = (crossX / sf).toFixed(1);
     if (coordYOutput) coordYOutput.textContent = (crossY / sf).toFixed(1);
   } else if (unit === 'mm' && sf <= 0) {
-    if (coordXOutput) { coordXOutput.textContent = '--'; coordXOutput.title = 'Calibrate or set scale factor to display mm values'; }
-    if (coordYOutput) { coordYOutput.textContent = '--'; coordYOutput.title = 'Calibrate or set scale factor to display mm values'; }
+    if (coordXOutput) {
+      coordXOutput.textContent = '--';
+      coordXOutput.title = 'Calibrate or set scale factor to display mm values';
+    }
+    if (coordYOutput) {
+      coordYOutput.textContent = '--';
+      coordYOutput.title = 'Calibrate or set scale factor to display mm values';
+    }
   } else {
-    if (coordXOutput) { coordXOutput.textContent = crossX; coordXOutput.title = ''; }
-    if (coordYOutput) { coordYOutput.textContent = crossY; coordYOutput.title = ''; }
+    if (coordXOutput) {
+      coordXOutput.textContent = crossX;
+      coordXOutput.title = '';
+    }
+    if (coordYOutput) {
+      coordYOutput.textContent = crossY;
+      coordYOutput.title = '';
+    }
   }
 }
 
@@ -753,10 +799,16 @@ function handleRulerClick(coords) {
 function handleCalibrateClick(coords) {
   if (!calibA) {
     calibA = { x: coords.x, y: coords.y };
-    announce(`Calibration Point A set at ${coords.x}, ${coords.y}`, POLITENESS.POLITE);
+    announce(
+      `Calibration Point A set at ${coords.x}, ${coords.y}`,
+      POLITENESS.POLITE
+    );
   } else {
     calibB = { x: coords.x, y: coords.y };
-    announce(`Calibration Point B set at ${coords.x}, ${coords.y}`, POLITENESS.POLITE);
+    announce(
+      `Calibration Point B set at ${coords.x}, ${coords.y}`,
+      POLITENESS.POLITE
+    );
   }
   updateCalibPixels();
 }
@@ -901,16 +953,20 @@ function handleModeKeyDown(e, step) {
     case 'ArrowDown': {
       if (target) {
         if (e.key === 'ArrowLeft') target.x = Math.max(0, target.x - step);
-        if (e.key === 'ArrowRight') target.x = Math.min(imgNaturalW - 1, target.x + step);
+        if (e.key === 'ArrowRight')
+          target.x = Math.min(imgNaturalW - 1, target.x + step);
         if (e.key === 'ArrowUp') target.y = Math.max(0, target.y - step);
-        if (e.key === 'ArrowDown') target.y = Math.min(imgNaturalH - 1, target.y + step);
+        if (e.key === 'ArrowDown')
+          target.y = Math.min(imgNaturalH - 1, target.y + step);
         if (isRuler) updateDistanceOutput();
         else updateCalibPixels();
       } else {
         if (e.key === 'ArrowLeft') crossX = Math.max(0, crossX - step);
-        if (e.key === 'ArrowRight') crossX = Math.min(imgNaturalW - 1, crossX + step);
+        if (e.key === 'ArrowRight')
+          crossX = Math.min(imgNaturalW - 1, crossX + step);
         if (e.key === 'ArrowUp') crossY = Math.max(0, crossY - step);
-        if (e.key === 'ArrowDown') crossY = Math.min(imgNaturalH - 1, crossY + step);
+        if (e.key === 'ArrowDown')
+          crossY = Math.min(imgNaturalH - 1, crossY + step);
       }
       return true;
     }
@@ -990,7 +1046,10 @@ function copyCoord(axis) {
   navigator.clipboard
     .writeText(value)
     .then(() => {
-      announce(`${label} coordinate ${value} ${unitLabel} copied`, POLITENESS.POLITE);
+      announce(
+        `${label} coordinate ${value} ${unitLabel} copied`,
+        POLITENESS.POLITE
+      );
       if (onCoordinateCopied) {
         onCoordinateCopied(axis, parseFloat(value));
       }
@@ -1071,9 +1130,10 @@ function updateDistanceOutput() {
   }
   const unit = getUnit();
   const sf = getScaleFactor();
-  const text = (unit === 'mm' && sf > 0)
-    ? `${(distPx / sf).toFixed(1)} mm`
-    : `${distPx.toFixed(1)} px`;
+  const text =
+    unit === 'mm' && sf > 0
+      ? `${(distPx / sf).toFixed(1)} mm`
+      : `${distPx.toFixed(1)} px`;
   distOutput.textContent = text;
   announce(`Distance: ${text}`, POLITENESS.POLITE);
 }
@@ -1097,12 +1157,19 @@ function updateHelpText() {
         'Click to pin crosshair. Double-click or Escape to unpin. Arrow keys move crosshair; Shift+arrows for 10 px steps. Enter/Space toggles pin. Scroll to zoom.';
       break;
     case 'ruler':
-      if (!rulerA) helpText.textContent = 'Click to place Point A. Arrow keys nudge active point. Tab cycles A/B. Escape clears.';
-      else if (!rulerB) helpText.textContent = 'Click to place Point B. Arrow keys nudge active point. Tab cycles A/B. Escape clears.';
-      else helpText.textContent = 'Click to move Point B. Arrow keys nudge active point. Tab cycles A/B. Escape clears.';
+      if (!rulerA)
+        helpText.textContent =
+          'Click to place Point A. Arrow keys nudge active point. Tab cycles A/B. Escape clears.';
+      else if (!rulerB)
+        helpText.textContent =
+          'Click to place Point B. Arrow keys nudge active point. Tab cycles A/B. Escape clears.';
+      else
+        helpText.textContent =
+          'Click to move Point B. Arrow keys nudge active point. Tab cycles A/B. Escape clears.';
       break;
     case 'calibrate':
-      helpText.textContent = 'Click two points on a known distance, enter real mm, click Apply.';
+      helpText.textContent =
+        'Click two points on a known distance, enter real mm, click Apply.';
       break;
   }
 }

@@ -335,7 +335,16 @@ export const SHORTCUT_CATEGORIES = {
   },
   cameraViews: {
     label: 'Camera Views',
-    actions: ['viewTop', 'viewBottom', 'viewFront', 'viewBack', 'viewLeft', 'viewRight', 'viewDiagonal', 'toggleProjection'],
+    actions: [
+      'viewTop',
+      'viewBottom',
+      'viewFront',
+      'viewBack',
+      'viewLeft',
+      'viewRight',
+      'viewDiagonal',
+      'toggleProjection',
+    ],
   },
   parameters: {
     label: 'Parameters',
@@ -359,7 +368,14 @@ export const SHORTCUT_CATEGORIES = {
   },
   editing: {
     label: 'Editing',
-    actions: ['copyViewportImage', 'jumpNextError', 'jumpPrevError', 'increaseFontSize', 'decreaseFontSize', 'findReplace'],
+    actions: [
+      'copyViewportImage',
+      'jumpNextError',
+      'jumpPrevError',
+      'increaseFontSize',
+      'decreaseFontSize',
+      'findReplace',
+    ],
   },
   design: {
     label: 'Design',
@@ -371,7 +387,14 @@ export const SHORTCUT_CATEGORIES = {
   },
   panels: {
     label: 'Panels',
-    actions: ['toggleConsole', 'toggleErrorLog', 'toggleCodeEditor', 'toggleCustomizer', 'nextPanel', 'prevPanel'],
+    actions: [
+      'toggleConsole',
+      'toggleErrorLog',
+      'toggleCodeEditor',
+      'toggleCustomizer',
+      'nextPanel',
+      'prevPanel',
+    ],
   },
 };
 

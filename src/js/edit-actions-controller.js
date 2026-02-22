@@ -65,14 +65,19 @@ export class EditActionsController {
 
     try {
       const blob = await new Promise((resolve, reject) => {
-        canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('toBlob failed'))), 'image/png');
+        canvas.toBlob(
+          (b) => (b ? resolve(b) : reject(new Error('toBlob failed'))),
+          'image/png'
+        );
       });
       await navigator.clipboard.write([
         new ClipboardItem({ 'image/png': blob }),
       ]);
       announceImmediate('Viewport image copied to clipboard');
     } catch {
-      announceImmediate('Could not copy image — try right-click and "Save image as"');
+      announceImmediate(
+        'Could not copy image — try right-click and "Save image as"'
+      );
     }
   }
 
@@ -84,7 +89,11 @@ export class EditActionsController {
   _getTarget() {
     const pm = this.getPreviewManager();
     return pm?.controls?.target
-      ? { x: pm.controls.target.x, y: pm.controls.target.y, z: pm.controls.target.z }
+      ? {
+          x: pm.controls.target.x,
+          y: pm.controls.target.y,
+          z: pm.controls.target.z,
+        }
       : null;
   }
 
@@ -99,7 +108,10 @@ export class EditActionsController {
 
   async copyTranslation() {
     const t = this._getTarget();
-    if (!t) { announceImmediate('No model loaded'); return; }
+    if (!t) {
+      announceImmediate('No model loaded');
+      return;
+    }
     const text = `[${t.x.toFixed(2)}, ${t.y.toFixed(2)}, ${t.z.toFixed(2)}]`;
     await this._copyText(text, 'Translation copied');
   }
@@ -107,13 +119,19 @@ export class EditActionsController {
   async copyRotation() {
     const pos = this._getCameraPos();
     const t = this._getTarget();
-    if (!pos || !t) { announceImmediate('No model loaded'); return; }
+    if (!pos || !t) {
+      announceImmediate('No model loaded');
+      return;
+    }
 
     const dx = pos.x - t.x;
     const dy = pos.y - t.y;
     const dz = pos.z - t.z;
     const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-    if (dist < 1e-6) { announceImmediate('Camera at target — no rotation'); return; }
+    if (dist < 1e-6) {
+      announceImmediate('Camera at target — no rotation');
+      return;
+    }
 
     const elevation = Math.asin(dz / dist) * (180 / Math.PI);
     const azimuth = Math.atan2(dx, -dy) * (180 / Math.PI);
@@ -124,7 +142,10 @@ export class EditActionsController {
   async copyDistance() {
     const pos = this._getCameraPos();
     const t = this._getTarget();
-    if (!pos || !t) { announceImmediate('No model loaded'); return; }
+    if (!pos || !t) {
+      announceImmediate('No model loaded');
+      return;
+    }
 
     const dx = pos.x - t.x;
     const dy = pos.y - t.y;
@@ -136,7 +157,10 @@ export class EditActionsController {
   async copyFov() {
     const pm = this.getPreviewManager();
     const fov = pm?.camera?.fov;
-    if (fov == null) { announceImmediate('No preview available'); return; }
+    if (fov == null) {
+      announceImmediate('No preview available');
+      return;
+    }
     await this._copyText(String(fov.toFixed(1)), 'FOV copied');
   }
 

@@ -1,6 +1,6 @@
 /**
  * Centralized Screen Reader Announcer Utility
- * 
+ *
  * Consolidates announcement logic from:
  * - ui-generator.js (announceChange)
  * - camera-panel-controller.js (announceAction)
@@ -11,14 +11,14 @@
  * - workflow-progress.js (step announcements)
  * - console-panel.js (console error/warning announcements)
  * - tutorial-sandbox.js (tutorial announcements)
- * 
+ *
  * Uses dual live regions:
  * - #srAnnouncer (polite) for routine status updates
  * - #srAnnouncerAssertive (assertive) for errors and critical warnings
- * 
+ *
  * Uses consistent debouncing and clear-then-set pattern for reliable
  * repeat announcements.
- * 
+ *
  * @license GPL-3.0-or-later
  */
 
@@ -49,23 +49,31 @@ function getTimerRefs(politeness) {
   if (politeness === POLITENESS.ASSERTIVE) {
     return {
       getTimeout: () => announceTimeoutAssertive,
-      setTimeout: (v) => { announceTimeoutAssertive = v; },
+      setTimeout: (v) => {
+        announceTimeoutAssertive = v;
+      },
       getClearTimeout: () => clearTimeoutAssertive,
-      setClearTimeout: (v) => { clearTimeoutAssertive = v; },
+      setClearTimeout: (v) => {
+        clearTimeoutAssertive = v;
+      },
     };
   }
   return {
     getTimeout: () => announceTimeoutPolite,
-    setTimeout: (v) => { announceTimeoutPolite = v; },
+    setTimeout: (v) => {
+      announceTimeoutPolite = v;
+    },
     getClearTimeout: () => clearTimeoutPolite,
-    setClearTimeout: (v) => { clearTimeoutPolite = v; },
+    setClearTimeout: (v) => {
+      clearTimeoutPolite = v;
+    },
   };
 }
 
 /**
  * Announce a message to screen readers via the live region.
  * Uses debouncing to prevent announcement spam from rapid state changes.
- * 
+ *
  * @param {string} message - The message to announce
  * @param {Object} [options] - Configuration options
  * @param {number} [options.debounceMs=350] - Debounce delay in milliseconds (0 for immediate)
@@ -82,9 +90,10 @@ export function announce(message, options = {}) {
   } = options;
 
   // Route to the appropriate live region
-  const announcerId = politeness === POLITENESS.ASSERTIVE 
-    ? 'srAnnouncerAssertive' 
-    : 'srAnnouncer';
+  const announcerId =
+    politeness === POLITENESS.ASSERTIVE
+      ? 'srAnnouncerAssertive'
+      : 'srAnnouncer';
   const srAnnouncer = document.getElementById(announcerId);
   if (!srAnnouncer) return;
 
@@ -138,7 +147,7 @@ export function announce(message, options = {}) {
 /**
  * Announce immediately without debouncing.
  * Use for discrete user-initiated actions like button clicks.
- * 
+ *
  * @param {string} message - The message to announce
  * @param {Object} [options] - Configuration options (same as announce, minus debounce)
  * @param {string} [options.politeness='polite'] - 'polite' for routine status, 'assertive' for errors/critical
@@ -150,7 +159,7 @@ export function announceImmediate(message, options = {}) {
 /**
  * Announce an error or critical warning via the assertive live region.
  * Use for error messages that need immediate user attention.
- * 
+ *
  * @param {string} message - The error message to announce
  * @param {Object} [options] - Configuration options
  * @param {number} [options.clearDelayMs=3000] - Delay before clearing (errors stay longer)
@@ -167,7 +176,7 @@ export function announceError(message, options = {}) {
 /**
  * Announce a camera action with standard formatting.
  * Use for camera control feedback (rotate, pan, zoom, etc.)
- * 
+ *
  * @param {string} action - The action identifier (e.g., 'ArrowLeft', 'zoom-in')
  * @param {Object} [options] - Additional options
  * @param {boolean} [options.shiftKey=false] - Whether shift key was held (modifies pan/rotate)
@@ -217,7 +226,7 @@ export function announceCameraAction(action, options = {}) {
 /**
  * Announce a parameter change.
  * Use for form control value changes (sliders, toggles, etc.)
- * 
+ *
  * @param {string} message - The change description
  */
 export function announceChange(message) {
@@ -228,7 +237,7 @@ export function announceChange(message) {
 /**
  * Cancel any pending announcements.
  * Use when the context changes and pending announcements are no longer relevant.
- * 
+ *
  * @param {string} [politeness] - Optional: only cancel for specific politeness level
  */
 export function cancelPendingAnnouncements(politeness) {

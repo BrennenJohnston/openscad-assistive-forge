@@ -121,18 +121,25 @@ export class AnimationController {
     try {
       const fps = parseInt(localStorage.getItem(FPS_KEY), 10);
       if (!isNaN(fps) && fps >= MIN_FPS && fps <= MAX_FPS) this.fps = fps;
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     try {
       const steps = parseInt(localStorage.getItem(STEPS_KEY), 10);
-      if (!isNaN(steps) && steps >= MIN_STEPS && steps <= MAX_STEPS) this.steps = steps;
-    } catch { /* ignore */ }
+      if (!isNaN(steps) && steps >= MIN_STEPS && steps <= MAX_STEPS)
+        this.steps = steps;
+    } catch {
+      /* ignore */
+    }
   }
 
   _savePrefs() {
     try {
       localStorage.setItem(FPS_KEY, String(this.fps));
       localStorage.setItem(STEPS_KEY, String(this.steps));
-    } catch { /* quota */ }
+    } catch {
+      /* quota */
+    }
   }
 
   _wireControls() {
@@ -145,7 +152,9 @@ export class AnimationController {
     const stepBtn = document.getElementById('anim-step-btn');
     if (stepBtn) stepBtn.addEventListener('click', () => this.stepForward());
 
-    const fpsInput = /** @type {HTMLInputElement|null} */ (document.getElementById('anim-fps'));
+    const fpsInput = /** @type {HTMLInputElement|null} */ (
+      document.getElementById('anim-fps')
+    );
     if (fpsInput) {
       fpsInput.value = String(this.fps);
       fpsInput.addEventListener('input', () => {
@@ -158,7 +167,9 @@ export class AnimationController {
       });
     }
 
-    const stepsInput = /** @type {HTMLInputElement|null} */ (document.getElementById('anim-steps'));
+    const stepsInput = /** @type {HTMLInputElement|null} */ (
+      document.getElementById('anim-steps')
+    );
     if (stepsInput) {
       stepsInput.value = String(this.steps);
       stepsInput.addEventListener('input', () => {
@@ -177,7 +188,10 @@ export class AnimationController {
     const btn = document.getElementById('anim-play-btn');
     if (btn) {
       btn.textContent = this.playing ? 'Pause' : 'Play';
-      btn.setAttribute('aria-label', this.playing ? 'Pause animation' : 'Play animation');
+      btn.setAttribute(
+        'aria-label',
+        this.playing ? 'Pause animation' : 'Play animation'
+      );
     }
   }
 
@@ -185,7 +199,9 @@ export class AnimationController {
     const el = document.getElementById('anim-t-value');
     if (el) el.textContent = `$t = ${this.getT().toFixed(3)}`;
 
-    const progress = /** @type {HTMLInputElement|null} */ (document.getElementById('anim-progress'));
+    const progress = /** @type {HTMLInputElement|null} */ (
+      document.getElementById('anim-progress')
+    );
     if (progress) progress.value = String(this.currentStep);
     if (progress) progress.max = String(Math.max(0, this.steps - 1));
   }

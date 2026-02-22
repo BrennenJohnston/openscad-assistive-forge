@@ -237,7 +237,10 @@ export function fromJsonSchema(schema) {
       } else if (prop.format === 'file') {
         param.type = 'file';
         param.uiType = 'file';
-      } else if (prop.format === 'vector' || (prop.type === 'array' && prop['x-dimension'])) {
+      } else if (
+        prop.format === 'vector' ||
+        (prop.type === 'array' && prop['x-dimension'])
+      ) {
         param.type = 'vector';
         param.uiType = 'vector';
         if (prop['x-dimension'] !== undefined) {

@@ -471,7 +471,10 @@ export class AutoPreviewController {
             metrics.shift();
           }
 
-          localStorage.setItem(STORAGE_KEY_METRICS_LOG, JSON.stringify(metrics));
+          localStorage.setItem(
+            STORAGE_KEY_METRICS_LOG,
+            JSON.stringify(metrics)
+          );
           console.log('[Perf] Cache hit');
         } catch (error) {
           console.warn('[Perf] Failed to log cached metrics:', error);

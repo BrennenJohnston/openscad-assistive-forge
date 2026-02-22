@@ -28,10 +28,28 @@ export async function extractZipFiles(zipFile) {
     // not used by the OpenSCAD WASM renderer. Extracting these as UTF-8 text
     // would corrupt their content and waste significant memory.
     const BINARY_ONLY_EXTS = new Set([
-      'bmp', 'tiff', 'tif', 'ico',
-      'stl', 'obj', 'amf', '3mf', 'wrl', 'zip', 'gz', 'tar',
-      'mp4', 'mp3', 'wav', 'avi', 'mov',
-      'pdf', 'doc', 'docx', 'xls', 'xlsx',
+      'bmp',
+      'tiff',
+      'tif',
+      'ico',
+      'stl',
+      'obj',
+      'amf',
+      '3mf',
+      'wrl',
+      'zip',
+      'gz',
+      'tar',
+      'mp4',
+      'mp3',
+      'wav',
+      'avi',
+      'mov',
+      'pdf',
+      'doc',
+      'docx',
+      'xls',
+      'xlsx',
     ]);
 
     // Extract all files
@@ -72,7 +90,9 @@ export async function extractZipFiles(zipFile) {
 
       // Skip non-image binary files
       if (BINARY_ONLY_EXTS.has(ext)) {
-        console.log(`[ZIP] Skipping binary file (not usable as text): ${relativePath}`);
+        console.log(
+          `[ZIP] Skipping binary file (not usable as text): ${relativePath}`
+        );
         continue;
       }
 
@@ -104,7 +124,8 @@ export async function extractZipFiles(zipFile) {
     const fileClassification = {};
     for (const [filePath, content] of files.entries()) {
       const ext = filePath.split('.').pop()?.toLowerCase() || 'unknown';
-      if (!fileClassification[ext]) fileClassification[ext] = { count: 0, totalBytes: 0 };
+      if (!fileClassification[ext])
+        fileClassification[ext] = { count: 0, totalBytes: 0 };
       fileClassification[ext].count++;
       fileClassification[ext].totalBytes += content.length;
     }
@@ -451,6 +472,37 @@ export function buildPresetCompanionMap(files, parameterSets) {
   console.log(
     `[PresetCompanionMap] Mapped ${mappedCount}/${presetNames.length} presets to openings paths`
   );
+
+  return result;
+}
+
+/**
+ * Apply companion file alias mounting to a projectFiles Map.
+ * Copies preset-specific file content from nested paths to the root-level
+ * keys that SCAD include/import statements resolve to.
+ *
+ * Pure function — returns a new Map without mutating the input.
+ *
+ * @param {Map<string, string>} projectFiles
+ * @param {{ openingsPath: string|null, svgPath: string|null }|null} companionMapping
+ * @returns {Map<string, string>}
+ */
+export function applyCompanionAliases(projectFiles, companionMapping) {
+  const result = new Map(projectFiles);
+  if (!companionMapping) return result;
+
+  if (
+    companionMapping.openingsPath &&
+    result.has(companionMapping.openingsPath)
+  ) {
+    result.set(
+      'openings_and_additions.txt',
+      result.get(companionMapping.openingsPath)
+    );
+  }
+  if (companionMapping.svgPath && result.has(companionMapping.svgPath)) {
+    result.set('default.svg', result.get(companionMapping.svgPath));
+  }
 
   return result;
 }

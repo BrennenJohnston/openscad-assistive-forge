@@ -49,12 +49,7 @@ const PANEL_REGISTRY = [
     selector: '#errorLogPanel',
     defaultHiddenInBasic: true,
   },
-  {
-    id: 'fileActions',
-    label: 'File Actions',
-    selector: '#filePanel',
-    defaultHiddenInBasic: true,
-  },
+  // fileActions panel removed — now in File toolbar menu
   {
     id: 'codeEditor',
     label: 'Code Editor',
@@ -109,22 +104,13 @@ const PANEL_REGISTRY = [
     selector: '.preview-setting-group--quality',
     defaultHiddenInBasic: true,
   },
+  // editTools panel removed — now in Edit toolbar menu
+  // designTools panel removed — now in Design toolbar menu
+  // displayOptions panel removed — toggles now in View toolbar menu
   {
-    id: 'editTools',
-    label: 'Edit Tools',
-    selector: '#editToolsPanel',
-    defaultHiddenInBasic: true,
-  },
-  {
-    id: 'designTools',
-    label: 'Design Tools',
-    selector: '#designPanel',
-    defaultHiddenInBasic: true,
-  },
-  {
-    id: 'displayOptions',
-    label: 'Display Options',
-    selector: '#displayOptionsPanel',
+    id: 'animationPanel',
+    label: 'Animation',
+    selector: '#animationPanel',
     defaultHiddenInBasic: true,
   },
   {
@@ -252,33 +238,24 @@ export class UIModeController {
 
     const previousMode = this.currentMode;
 
-    console.log(`[UIModeController] Switching from ${previousMode} to ${targetMode}`);
+    console.log(
+      `[UIModeController] Switching from ${previousMode} to ${targetMode}`
+    );
 
     this.currentMode = targetMode;
-
-    // Apply panel visibility
     this.applyMode(targetMode);
-
-    // Update toggle button ARIA state
     this._updateToggleButton();
-
-    // Notify subscribers
     this._notifySubscribers(targetMode, previousMode);
-
-    // Call mode change callback
     this.onModeChange(targetMode, previousMode);
 
-    // Announce to screen reader
     if (!options.skipAnnouncement) {
       this._announceSwitch(targetMode);
     }
 
-    // Move focus after switch (WCAG 2.4.3)
+    // WCAG 2.4.3: move focus to a meaningful element after mode switch
     if (!options.skipFocus) {
       requestAnimationFrame(() => this._manageFocusAfterSwitch(targetMode));
     }
-
-    // Save mode preference
     this._savePreferences();
 
     return true;
@@ -318,9 +295,13 @@ export class UIModeController {
         elements.forEach((el) => el.classList.remove(HIDDEN_CLASS));
       }
 
-      panelResults.push({ id: panel.id, selector: panel.selector, elementsFound: elements.length, hidden: shouldHide });
+      panelResults.push({
+        id: panel.id,
+        selector: panel.selector,
+        elementsFound: elements.length,
+        hidden: shouldHide,
+      });
     }
-
   }
 
   /**
@@ -400,7 +381,9 @@ export class UIModeController {
    * Reset hidden panel preferences to PANEL_REGISTRY defaults.
    */
   resetHiddenPanelsToDefaults() {
-    const defaults = PANEL_REGISTRY.filter((p) => p.defaultHiddenInBasic).map((p) => p.id);
+    const defaults = PANEL_REGISTRY.filter((p) => p.defaultHiddenInBasic).map(
+      (p) => p.id
+    );
     this._saveHiddenPanels(defaults);
     this._projectHiddenPanels = null;
 
@@ -427,7 +410,8 @@ export class UIModeController {
 
     const description = document.createElement('p');
     description.className = 'ui-prefs-description';
-    description.textContent = 'Select which panels are hidden when Basic mode is active. Parameter controls always remain visible.';
+    description.textContent =
+      'Select which panels are hidden when Basic mode is active. Parameter controls always remain visible.';
     container.appendChild(description);
 
     const group = document.createElement('div');
@@ -490,7 +474,9 @@ export class UIModeController {
     resetBtn.addEventListener('click', () => {
       this.resetHiddenPanelsToDefaults();
       this.renderPreferencesPanel(container);
-      announceImmediate('Panel preferences reset to defaults', { clearDelayMs: 2000 });
+      announceImmediate('Panel preferences reset to defaults', {
+        clearDelayMs: 2000,
+      });
     });
     actions.appendChild(resetBtn);
 
@@ -498,7 +484,8 @@ export class UIModeController {
     saveBtn.type = 'button';
     saveBtn.className = 'btn btn-sm btn-primary ui-prefs-save-project';
     saveBtn.textContent = 'Save to Project';
-    saveBtn.title = 'Save these preferences to the current project so they transfer when shared';
+    saveBtn.title =
+      'Save these preferences to the current project so they transfer when shared';
     saveBtn.addEventListener('click', () => {
       this._savePreferencesToProject();
     });
@@ -530,10 +517,9 @@ export class UIModeController {
       }
     } else {
       const isHidden = primary.classList.toggle(HIDDEN_CLASS);
-      announceImmediate(
-        `${panel.label} ${isHidden ? 'hidden' : 'shown'}`,
-        { clearDelayMs: 1500 }
-      );
+      announceImmediate(`${panel.label} ${isHidden ? 'hidden' : 'shown'}`, {
+        clearDelayMs: 1500,
+      });
     }
   }
 
@@ -542,14 +528,14 @@ export class UIModeController {
    * @param {number} direction - 1 for next, -1 for previous
    */
   cyclePanel(direction = 1) {
-    const detailsPanels = PANEL_REGISTRY
-      .map((p) => {
-        const el = document.querySelector(p.selector.split(',')[0].trim());
-        return el && el.tagName === 'DETAILS' && !el.classList.contains(HIDDEN_CLASS)
-          ? { el, label: p.label }
-          : null;
-      })
-      .filter(Boolean);
+    const detailsPanels = PANEL_REGISTRY.map((p) => {
+      const el = document.querySelector(p.selector.split(',')[0].trim());
+      return el &&
+        el.tagName === 'DETAILS' &&
+        !el.classList.contains(HIDDEN_CLASS)
+        ? { el, label: p.label }
+        : null;
+    }).filter(Boolean);
 
     if (detailsPanels.length === 0) return;
 
@@ -629,7 +615,9 @@ export class UIModeController {
       // Fall through to defaults
     }
 
-    return PANEL_REGISTRY.filter((p) => p.defaultHiddenInBasic).map((p) => p.id);
+    return PANEL_REGISTRY.filter((p) => p.defaultHiddenInBasic).map(
+      (p) => p.id
+    );
   }
 
   /**
@@ -702,7 +690,6 @@ export class UIModeController {
       );
       btn.classList.add('ui-mode-toggle--basic');
     }
-
   }
 
   /**
@@ -742,8 +729,7 @@ export class UIModeController {
     const messages = {
       basic:
         'Switched to Basic mode. Advanced panels are now hidden. Parameter controls remain accessible.',
-      advanced:
-        'Switched to Advanced mode. All panels are now visible.',
+      advanced: 'Switched to Advanced mode. All panels are now visible.',
     };
 
     announceImmediate(messages[mode] || `Switched to ${mode} mode`, {
@@ -782,7 +768,9 @@ export class UIModeController {
       localStorage.setItem(UI_MODE_STORAGE_KEY, JSON.stringify(prefs));
     } catch (error) {
       if (error.name === 'QuotaExceededError') {
-        console.warn('[UIModeController] localStorage quota exceeded — mode preference not saved');
+        console.warn(
+          '[UIModeController] localStorage quota exceeded — mode preference not saved'
+        );
       } else {
         console.warn('[UIModeController] Could not save preferences:', error);
       }
@@ -802,7 +790,9 @@ export class UIModeController {
       localStorage.setItem(UI_MODE_STORAGE_KEY, JSON.stringify(prefs));
     } catch (error) {
       if (error.name === 'QuotaExceededError') {
-        console.warn('[UIModeController] localStorage quota exceeded — hidden panels not saved');
+        console.warn(
+          '[UIModeController] localStorage quota exceeded — hidden panels not saved'
+        );
       } else {
         console.warn('[UIModeController] Could not save hidden panels:', error);
       }
@@ -823,9 +813,14 @@ export class UIModeController {
     });
     document.dispatchEvent(event);
 
-    announceImmediate('UI preferences saved to current project', { clearDelayMs: 2000 });
+    announceImmediate('UI preferences saved to current project', {
+      clearDelayMs: 2000,
+    });
 
-    console.log('[UIModeController] Preferences dispatched for project save:', prefs);
+    console.log(
+      '[UIModeController] Preferences dispatched for project save:',
+      prefs
+    );
   }
 }
 

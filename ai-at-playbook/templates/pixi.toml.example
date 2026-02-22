@@ -1,0 +1,21 @@
+# Example pixi.toml for AT projects
+# Copy to your project root, rename to pixi.toml, and fill in [CONFIGURE: ...] values.
+# See https://pixi.sh/latest/ for full documentation.
+
+[project]
+name = "[CONFIGURE: project name]"
+description = "[CONFIGURE: one-line project description]"
+channels = ["conda-forge"]
+platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
+
+[dependencies]
+nodejs = ">=20"
+
+[tasks]
+dev = { cmd = "[CONFIGURE: dev server command, e.g., npm run dev]", description = "Start development server" }
+build = { cmd = "[CONFIGURE: build command, e.g., npm run build]", description = "Production build" }
+test = { cmd = "[CONFIGURE: unit test command, e.g., npm run test:run]", description = "Run unit tests" }
+"test:e2e" = { cmd = "[CONFIGURE: e2e command, e.g., npx playwright test]", description = "Run end-to-end tests" }
+lint = { cmd = "[CONFIGURE: lint command, e.g., npx eslint src/]", description = "Run linter" }
+format = { cmd = "[CONFIGURE: format command, e.g., npx prettier --write .]", description = "Run formatter" }
+"format:check" = { cmd = "[CONFIGURE: format check command, e.g., npx prettier --check .]", description = "Check formatting without writing" }

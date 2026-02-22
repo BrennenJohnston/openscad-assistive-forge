@@ -853,7 +853,7 @@ describe('PreviewManager', () => {
         
         expect(manager.overlayConfig).toBeDefined()
         expect(manager.overlayConfig.enabled).toBe(false)
-        expect(manager.overlayConfig.opacity).toBe(0.5)
+        expect(manager.overlayConfig.opacity).toBe(1.0)
         expect(manager.overlayConfig.offsetX).toBe(0)
         expect(manager.overlayConfig.offsetY).toBe(0)
         expect(manager.overlayConfig.rotationDeg).toBe(0)

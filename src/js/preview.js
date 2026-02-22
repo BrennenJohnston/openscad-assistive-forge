@@ -4,7 +4,10 @@
  */
 
 import { normalizeHexColor } from './color-utils.js';
-import { announceCameraAction as announceCamera, announceImmediate } from './announcer.js';
+import {
+  announceCameraAction as announceCamera,
+  announceImmediate,
+} from './announcer.js';
 import { getAppPrefKey } from './storage-keys.js';
 
 // Storage keys using standardized naming convention
@@ -14,7 +17,9 @@ const STORAGE_KEY_GRID_SIZE = getAppPrefKey('grid-size');
 const STORAGE_KEY_AUTO_BED = getAppPrefKey('auto-bed');
 const STORAGE_KEY_CAMERA_COLLAPSED = getAppPrefKey('camera-controls-collapsed');
 const STORAGE_KEY_CAMERA_POSITION = getAppPrefKey('camera-controls-position');
-const STORAGE_KEY_LOD_WARNING_DISMISSED = getAppPrefKey('lod-warning-dismissed');
+const STORAGE_KEY_LOD_WARNING_DISMISSED = getAppPrefKey(
+  'lod-warning-dismissed'
+);
 
 /** Default grid config — 220×220mm matches most common consumer printers (Ender 3) */
 const DEFAULT_GRID_CONFIG = { widthMm: 220, heightMm: 220 };
@@ -166,7 +171,7 @@ export class PreviewManager {
 
     // Camera projection mode (perspective or orthographic)
     this.projectionMode = 'perspective';
-    this.orthoCamera = null;  // Lazy-created orthographic camera
+    this.orthoCamera = null; // Lazy-created orthographic camera
 
     // Auto-bed: place object on Z=0 build plate
     this.autoBedEnabled = this.loadAutoBedPreference();
@@ -185,7 +190,7 @@ export class PreviewManager {
     this.referenceTexture = null; // THREE.Texture for the image
     this.overlayConfig = {
       enabled: false,
-      opacity: 0.5,
+      opacity: 1.0,
       offsetX: 0, // mm
       offsetY: 0, // mm
       rotationDeg: 0,
@@ -195,6 +200,7 @@ export class PreviewManager {
       lockAspect: true,
       intrinsicAspect: null, // Width/height ratio from source image
       sourceFileName: null, // Name of the file used as overlay source
+      svgColor: null, // Recolor SVG strokes/fills (null = original colors)
     };
 
     // Overlay measurements (dimension lines on the overlay)
@@ -333,7 +339,9 @@ export class PreviewManager {
 
       // Update orthographic camera frustum if it exists
       if (this.orthoCamera) {
-        const frustumHeight = (this.orthoCamera.top - this.orthoCamera.bottom) / (this.orthoCamera.zoom || 1);
+        const frustumHeight =
+          (this.orthoCamera.top - this.orthoCamera.bottom) /
+          (this.orthoCamera.zoom || 1);
         this.orthoCamera.left = (frustumHeight * newAspect) / -2;
         this.orthoCamera.right = (frustumHeight * newAspect) / 2;
         this.orthoCamera.updateProjectionMatrix();
@@ -656,8 +664,10 @@ export class PreviewManager {
     controlPanel.setAttribute('aria-label', 'Camera controls');
 
     // Persisted preferences: collapsed + position (keyboard-accessible “move”)
-    const isCollapsed = localStorage.getItem(STORAGE_KEY_CAMERA_COLLAPSED) === 'true';
-    const position = localStorage.getItem(STORAGE_KEY_CAMERA_POSITION) || 'bottom-right'; // bottom-right | bottom-left | top-right | top-left
+    const isCollapsed =
+      localStorage.getItem(STORAGE_KEY_CAMERA_COLLAPSED) === 'true';
+    const position =
+      localStorage.getItem(STORAGE_KEY_CAMERA_POSITION) || 'bottom-right'; // bottom-right | bottom-left | top-right | top-left
     controlPanel.dataset.collapsed = isCollapsed ? 'true' : 'false';
     controlPanel.dataset.position = position;
 
@@ -770,7 +780,10 @@ export class PreviewManager {
       toggleBtn.title = nextCollapsed
         ? 'Show camera controls'
         : 'Hide camera controls';
-      localStorage.setItem(STORAGE_KEY_CAMERA_COLLAPSED, nextCollapsed ? 'true' : 'false');
+      localStorage.setItem(
+        STORAGE_KEY_CAMERA_COLLAPSED,
+        nextCollapsed ? 'true' : 'false'
+      );
     };
 
     const positions = ['bottom-right', 'bottom-left', 'top-right', 'top-left'];
@@ -1061,13 +1074,17 @@ export class PreviewManager {
 
     this.container.appendChild(warningDiv);
 
-    warningDiv.querySelector('#lodWarningDismiss')?.addEventListener('click', () => {
-      this.hideLODWarning();
-    });
+    warningDiv
+      .querySelector('#lodWarningDismiss')
+      ?.addEventListener('click', () => {
+        this.hideLODWarning();
+      });
 
-    warningDiv.querySelector('#lodWarningDismissPermanent')?.addEventListener('click', () => {
-      this.dismissLODWarningPermanently();
-    });
+    warningDiv
+      .querySelector('#lodWarningDismissPermanent')
+      ?.addEventListener('click', () => {
+        this.dismissLODWarningPermanently();
+      });
 
     console.log(
       `[Preview] LOD warning shown: ${vertexCount} vertices (${warningLevel})`
@@ -1091,7 +1108,9 @@ export class PreviewManager {
   dismissLODWarningPermanently() {
     try {
       localStorage.setItem(STORAGE_KEY_LOD_WARNING_DISMISSED, 'true');
-    } catch { /* private browsing / quota — fall back silently */ }
+    } catch {
+      /* private browsing / quota — fall back silently */
+    }
     this.hideLODWarning();
     console.log('[Preview] LOD warning permanently dismissed by user');
   }
@@ -1113,7 +1132,9 @@ export class PreviewManager {
   resetLODWarningDismissal() {
     try {
       localStorage.removeItem(STORAGE_KEY_LOD_WARNING_DISMISSED);
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     console.log('[Preview] LOD warning dismissal reset');
   }
 
@@ -1159,8 +1180,8 @@ export class PreviewManager {
 
     // OpenSCAD default diagonal: $vpr = [55, 0, 25]
     // azimuth 25° from front, elevation 35° above XY plane
-    const azimuth = 25 * (Math.PI / 180);    // 25° - OpenSCAD default
-    const elevation = 35 * (Math.PI / 180);  // 35° (= 90° - 55°) above XY plane
+    const azimuth = 25 * (Math.PI / 180); // 25° - OpenSCAD default
+    const elevation = 35 * (Math.PI / 180); // 35° (= 90° - 55°) above XY plane
 
     const horizontalDist = cameraDistance * Math.cos(elevation);
     const verticalDist = cameraDistance * Math.sin(elevation);
@@ -1173,7 +1194,7 @@ export class PreviewManager {
     camera.position.set(
       center.x + horizontalDist * Math.sin(azimuth), // X: slightly right
       center.y - horizontalDist * Math.cos(azimuth), // Y: mostly front (negative Y)
-      center.z + verticalDist                         // Z: above
+      center.z + verticalDist // Z: above
     );
     camera.lookAt(center);
 
@@ -1223,7 +1244,11 @@ export class PreviewManager {
     back: { name: 'Back', direction: [0, 1, 0], up: [0, 0, 1] },
     left: { name: 'Left', direction: [-1, 0, 0], up: [0, 0, 1] },
     right: { name: 'Right', direction: [1, 0, 0], up: [0, 0, 1] },
-    diagonal: { name: 'Diagonal', direction: [0.346, -0.742, 0.574], up: [0, 0, 1] },
+    diagonal: {
+      name: 'Diagonal',
+      direction: [0.346, -0.742, 0.574],
+      up: [0, 0, 1],
+    },
   };
 
   /**
@@ -1341,7 +1366,6 @@ export class PreviewManager {
       // Switch controls to orthographic camera
       this.controls.object = this.orthoCamera;
       this.controls.update();
-
     } else {
       // ------ Switch to perspective ------
       this.projectionMode = 'perspective';
@@ -1361,7 +1385,8 @@ export class PreviewManager {
     }
 
     // Announce change to screen readers
-    const modeName = this.projectionMode === 'perspective' ? 'Perspective' : 'Orthographic';
+    const modeName =
+      this.projectionMode === 'perspective' ? 'Perspective' : 'Orthographic';
     this.announceCameraAction(`${modeName} projection`);
 
     console.log(`[Preview] Switched to ${this.projectionMode} projection`);
@@ -1408,7 +1433,9 @@ export class PreviewManager {
 
     // For orthographic cameras, adjust frustum instead of distance
     if (this.projectionMode === 'orthographic' && this.orthoCamera) {
-      const frustumHeight = (this.orthoCamera.top - this.orthoCamera.bottom) / (this.orthoCamera.zoom || 1);
+      const frustumHeight =
+        (this.orthoCamera.top - this.orthoCamera.bottom) /
+        (this.orthoCamera.zoom || 1);
       this.orthoCamera.left = (frustumHeight * newAspect) / -2;
       this.orthoCamera.right = (frustumHeight * newAspect) / 2;
       this.orthoCamera.updateProjectionMatrix();
@@ -1537,7 +1564,10 @@ export class PreviewManager {
   panCamera(deltaRight, deltaUp) {
     const camera = this.getActiveCamera();
     // Extract camera's local right (column 0) and up (column 1) from world matrix
-    const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
+    const right = new THREE.Vector3().setFromMatrixColumn(
+      camera.matrixWorld,
+      0
+    );
     const up = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1);
 
     const panOffset = new THREE.Vector3()
@@ -1590,8 +1620,10 @@ export class PreviewManager {
       Math.min(Math.PI / 2 - 0.01, verticalAngle + angle)
     );
 
-    offset.x = currentDist * Math.cos(newVerticalAngle) * Math.cos(horizontalAngle);
-    offset.y = currentDist * Math.cos(newVerticalAngle) * Math.sin(horizontalAngle);
+    offset.x =
+      currentDist * Math.cos(newVerticalAngle) * Math.cos(horizontalAngle);
+    offset.y =
+      currentDist * Math.cos(newVerticalAngle) * Math.sin(horizontalAngle);
     offset.z = currentDist * Math.sin(newVerticalAngle);
 
     camera.position.copy(this.controls.target).add(offset);
@@ -1816,7 +1848,10 @@ export class PreviewManager {
    */
   saveMeasurementPreference(enabled) {
     try {
-      localStorage.setItem(STORAGE_KEY_MEASUREMENTS, enabled ? 'true' : 'false');
+      localStorage.setItem(
+        STORAGE_KEY_MEASUREMENTS,
+        enabled ? 'true' : 'false'
+      );
     } catch (error) {
       console.warn('[Preview] Could not save measurement preference:', error);
     }
@@ -1876,7 +1911,12 @@ export class PreviewManager {
     // height via geometry scaling so rectangular beds are represented correctly.
     const size = Math.max(widthMm, heightMm);
     const divisions = Math.round(size / 10);
-    const helper = new THREE.GridHelper(size, divisions, colors.gridPrimary, colors.gridSecondary);
+    const helper = new THREE.GridHelper(
+      size,
+      divisions,
+      colors.gridPrimary,
+      colors.gridSecondary
+    );
     // Stretch non-square beds by scaling the shorter axis
     helper.scale.set(widthMm / size, 1, heightMm / size);
     return helper;
@@ -1891,7 +1931,11 @@ export class PreviewManager {
       const raw = localStorage.getItem(STORAGE_KEY_GRID_SIZE);
       if (raw) {
         const parsed = JSON.parse(raw);
-        if (parsed && typeof parsed.widthMm === 'number' && typeof parsed.heightMm === 'number') {
+        if (
+          parsed &&
+          typeof parsed.widthMm === 'number' &&
+          typeof parsed.heightMm === 'number'
+        ) {
           return { widthMm: parsed.widthMm, heightMm: parsed.heightMm };
         }
       }
@@ -1952,7 +1996,9 @@ export class PreviewManager {
     this.gridHelper.visible = this.gridEnabled;
     this.scene.add(this.gridHelper);
 
-    console.log(`[Preview] Grid size updated: ${this.gridConfig.widthMm}×${this.gridConfig.heightMm}mm`);
+    console.log(
+      `[Preview] Grid size updated: ${this.gridConfig.widthMm}×${this.gridConfig.heightMm}mm`
+    );
   }
 
   /**
@@ -2200,18 +2246,23 @@ export class PreviewManager {
       console.log('[Preview] Overlay source cleared');
       this.overlayConfig.sourceFileName = null;
       this.overlayConfig.intrinsicAspect = null;
+      this._lastSvgContent = null;
       this.removeReferenceOverlay();
       return;
     }
 
     try {
       if (kind === 'svg') {
-        // Convert SVG text to texture
-        const { texture, aspect } =
-          await this.svgTextToCanvasTexture(dataUrlOrText);
+        this._lastSvgContent = dataUrlOrText;
+        // Convert SVG text to texture, applying recolor for dark-mode visibility
+        const { texture, aspect } = await this.svgTextToCanvasTexture(
+          dataUrlOrText,
+          this.overlayConfig.svgColor
+        );
         this.referenceTexture = texture;
         this.overlayConfig.intrinsicAspect = aspect;
       } else {
+        this._lastSvgContent = null;
         // Load raster image (PNG/JPG) as texture
         const { texture, aspect } =
           await this.rasterDataUrlToTexture(dataUrlOrText);
@@ -2242,11 +2293,15 @@ export class PreviewManager {
   }
 
   /**
-   * Convert SVG text to a Three.js CanvasTexture
+   * Convert SVG text to a Three.js CanvasTexture.
+   * When recolorHex is provided, all non-transparent pixels are replaced
+   * with that colour — making dark SVGs visible on dark backgrounds.
+   *
    * @param {string} svgContent - SVG markup
+   * @param {string|null} [recolorHex=null] - CSS hex colour (e.g. '#ffffff')
    * @returns {Promise<{texture: THREE.CanvasTexture, aspect: number}>}
    */
-  async svgTextToCanvasTexture(svgContent) {
+  async svgTextToCanvasTexture(svgContent, recolorHex = null) {
     // Parse SVG to extract viewBox/dimensions for aspect ratio
     const parser = new DOMParser();
     const svgDoc = parser.parseFromString(svgContent, 'image/svg+xml');
@@ -2304,6 +2359,15 @@ export class PreviewManager {
       const ctx = canvas.getContext('2d');
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+      // Recolor: replace all non-transparent pixels with the chosen colour.
+      // Uses 'source-in' compositing so alpha/shape is preserved.
+      if (recolorHex) {
+        ctx.globalCompositeOperation = 'source-in';
+        ctx.fillStyle = recolorHex;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.globalCompositeOperation = 'source-over';
+      }
     } finally {
       URL.revokeObjectURL(url);
     }
@@ -2487,8 +2551,17 @@ export class PreviewManager {
    * @param {number} heightMm - Screen height in mm
    */
   fitOverlayToScreenDimensions(widthMm, heightMm) {
-    if (typeof widthMm !== 'number' || typeof heightMm !== 'number' || widthMm <= 0 || heightMm <= 0) {
-      console.warn('[Preview] fitOverlayToScreenDimensions: invalid dimensions', widthMm, heightMm);
+    if (
+      typeof widthMm !== 'number' ||
+      typeof heightMm !== 'number' ||
+      widthMm <= 0 ||
+      heightMm <= 0
+    ) {
+      console.warn(
+        '[Preview] fitOverlayToScreenDimensions: invalid dimensions',
+        widthMm,
+        heightMm
+      );
       return;
     }
 
@@ -2537,6 +2610,33 @@ export class PreviewManager {
 
     if (this.referenceOverlay && this.referenceOverlay.material) {
       this.referenceOverlay.material.opacity = this.overlayConfig.opacity;
+    }
+  }
+
+  /**
+   * Set the SVG recolor hex and re-rasterise the current overlay if it is SVG.
+   * Pass null to revert to original SVG colours.
+   * @param {string|null} hexColor - CSS hex colour (e.g. '#ffffff') or null
+   */
+  async setOverlaySvgColor(hexColor) {
+    this.overlayConfig.svgColor = hexColor || null;
+
+    // Re-rasterise if the current source is SVG
+    if (this._lastSvgContent) {
+      if (this.referenceTexture) {
+        this.referenceTexture.dispose();
+        this.referenceTexture = null;
+      }
+      const { texture, aspect } = await this.svgTextToCanvasTexture(
+        this._lastSvgContent,
+        this.overlayConfig.svgColor
+      );
+      this.referenceTexture = texture;
+      this.overlayConfig.intrinsicAspect = aspect;
+
+      if (this.overlayConfig.enabled) {
+        this.createOrUpdateReferenceOverlay();
+      }
     }
   }
 
@@ -3057,7 +3157,8 @@ export class PreviewManager {
     const bs = this._brightnessScale;
     const cf = this._contrastFactor;
     // Brightness scales all base intensities; contrast shifts ambient/directional ratio
-    this.ambientLight.intensity = this.baseLightIntensities.ambient * bs * (2 - cf);
+    this.ambientLight.intensity =
+      this.baseLightIntensities.ambient * bs * (2 - cf);
     this.directionalLight1.intensity = this.baseLightIntensities.dir1 * bs * cf;
     this.directionalLight2.intensity = this.baseLightIntensities.dir2 * bs * cf;
   }

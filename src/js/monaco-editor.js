@@ -136,7 +136,8 @@ const SCAD_MONARCH_TOKENS = {
 
   symbols: /[=><!~?:&|+\-*/^%]+/,
 
-  escapes: /\\(?:[abfnrtv\\"']|x[0-9A-Fa-f]{1,4}|u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8})/,
+  escapes:
+    /\\(?:[abfnrtv\\"']|x[0-9A-Fa-f]{1,4}|u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8})/,
 
   tokenizer: {
     root: [
@@ -492,12 +493,14 @@ export class MonacoEditor {
     this._setupEventHandlers();
 
     // Listen for theme changes
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-      this._isDark = e.matches;
-      this.editor.updateOptions({
-        theme: this._isDark ? 'openscad-dark' : 'openscad-light',
+    window
+      .matchMedia('(prefers-color-scheme: dark)')
+      .addEventListener('change', (e) => {
+        this._isDark = e.matches;
+        this.editor.updateOptions({
+          theme: this._isDark ? 'openscad-dark' : 'openscad-light',
+        });
       });
-    });
 
     console.log('[MonacoEditor] Editor initialized');
   }
@@ -515,21 +518,15 @@ export class MonacoEditor {
     });
 
     // Keyboard shortcuts
-    this.editor.addCommand(
-      monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS,
-      () => {
-        this.onSave();
-        this.announce('Saved');
-      }
-    );
+    this.editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+      this.onSave();
+      this.announce('Saved');
+    });
 
-    this.editor.addCommand(
-      monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter,
-      () => {
-        this.onRun();
-        this.announce('Generating preview');
-      }
-    );
+    this.editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
+      this.onRun();
+      this.announce('Generating preview');
+    });
   }
 
   /**
@@ -565,7 +562,9 @@ export class MonacoEditor {
    */
   getPosition() {
     const pos = this.editor?.getPosition();
-    return pos ? { line: pos.lineNumber, column: pos.column } : { line: 1, column: 1 };
+    return pos
+      ? { line: pos.lineNumber, column: pos.column }
+      : { line: 1, column: 1 };
   }
 
   /**

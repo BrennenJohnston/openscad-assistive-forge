@@ -17,11 +17,17 @@ const images = new Map(); // id -> { id, name, dataUrl, objectUrl, width, height
 const subscribers = new Set();
 
 function notify() {
-  document.dispatchEvent(new CustomEvent('forge:images-change', {
-    detail: { count: images.size },
-  }));
+  document.dispatchEvent(
+    new CustomEvent('forge:images-change', {
+      detail: { count: images.size },
+    })
+  );
   for (const cb of subscribers) {
-    try { cb(images); } catch { /* subscriber error */ }
+    try {
+      cb(images);
+    } catch {
+      /* subscriber error */
+    }
   }
 }
 
@@ -38,7 +44,8 @@ function resolveNameConflict(name) {
 function dimensionsFromDataUrl(dataUrl) {
   return new Promise((resolve) => {
     const img = new Image();
-    img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+    img.onload = () =>
+      resolve({ width: img.naturalWidth, height: img.naturalHeight });
     img.onerror = () => resolve({ width: 0, height: 0 });
     img.src = dataUrl;
   });

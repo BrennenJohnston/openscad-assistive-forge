@@ -258,14 +258,19 @@ export function initCameraPanelController(options = {}) {
       if (pm?.toggleProjection) {
         const newMode = pm.toggleProjection();
         const isPerspective = newMode === 'perspective';
-        projToggle.setAttribute('aria-pressed', isPerspective ? 'false' : 'true');
+        projToggle.setAttribute(
+          'aria-pressed',
+          isPerspective ? 'false' : 'true'
+        );
         projToggle.title = isPerspective
           ? 'Switch to Orthographic (P)'
           : 'Switch to Perspective (P)';
         // Update button label
         const labelSpan = projToggle.querySelector('span');
         if (labelSpan) {
-          labelSpan.textContent = isPerspective ? 'Perspective' : 'Orthographic';
+          labelSpan.textContent = isPerspective
+            ? 'Perspective'
+            : 'Orthographic';
         }
         // Sync mobile projection toggle
         syncMobileProjectionToggle(newMode);
@@ -279,14 +284,19 @@ export function initCameraPanelController(options = {}) {
       if (pm?.toggleProjection) {
         const newMode = pm.toggleProjection();
         const isPerspective = newMode === 'perspective';
-        mobileProjToggle.setAttribute('aria-pressed', isPerspective ? 'false' : 'true');
+        mobileProjToggle.setAttribute(
+          'aria-pressed',
+          isPerspective ? 'false' : 'true'
+        );
         mobileProjToggle.title = isPerspective
           ? 'Switch to Orthographic'
           : 'Switch to Perspective';
         // Update button label
         const labelSpan = mobileProjToggle.querySelector('span');
         if (labelSpan) {
-          labelSpan.textContent = isPerspective ? 'Perspective' : 'Orthographic';
+          labelSpan.textContent = isPerspective
+            ? 'Perspective'
+            : 'Orthographic';
         }
         // Sync desktop projection toggle
         syncDesktopProjectionToggle(newMode);
@@ -298,16 +308,23 @@ export function initCameraPanelController(options = {}) {
      * @param {string} mode - 'perspective' or 'orthographic'
      */
     function syncMobileProjectionToggle(mode) {
-      const mobileProjToggle = document.getElementById('mobileProjectionToggle');
+      const mobileProjToggle = document.getElementById(
+        'mobileProjectionToggle'
+      );
       if (mobileProjToggle) {
         const isPerspective = mode === 'perspective';
-        mobileProjToggle.setAttribute('aria-pressed', isPerspective ? 'false' : 'true');
+        mobileProjToggle.setAttribute(
+          'aria-pressed',
+          isPerspective ? 'false' : 'true'
+        );
         mobileProjToggle.title = isPerspective
           ? 'Switch to Orthographic'
           : 'Switch to Perspective';
         const labelSpan = mobileProjToggle.querySelector('span');
         if (labelSpan) {
-          labelSpan.textContent = isPerspective ? 'Perspective' : 'Orthographic';
+          labelSpan.textContent = isPerspective
+            ? 'Perspective'
+            : 'Orthographic';
         }
       }
     }
@@ -320,13 +337,18 @@ export function initCameraPanelController(options = {}) {
       const projToggle = document.getElementById('projectionToggle');
       if (projToggle) {
         const isPerspective = mode === 'perspective';
-        projToggle.setAttribute('aria-pressed', isPerspective ? 'false' : 'true');
+        projToggle.setAttribute(
+          'aria-pressed',
+          isPerspective ? 'false' : 'true'
+        );
         projToggle.title = isPerspective
           ? 'Switch to Orthographic (P)'
           : 'Switch to Perspective (P)';
         const labelSpan = projToggle.querySelector('span');
         if (labelSpan) {
-          labelSpan.textContent = isPerspective ? 'Perspective' : 'Orthographic';
+          labelSpan.textContent = isPerspective
+            ? 'Perspective'
+            : 'Orthographic';
         }
       }
     }

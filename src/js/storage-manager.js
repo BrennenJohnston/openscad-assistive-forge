@@ -141,7 +141,12 @@ export async function checkStorageQuota(bytesToSave = 0) {
       };
     }
 
-    return { safe: true, remainingBytes: remaining, percentUsed, message: null };
+    return {
+      safe: true,
+      remainingBytes: remaining,
+      percentUsed,
+      message: null,
+    };
   } catch (_error) {
     return fallback;
   }

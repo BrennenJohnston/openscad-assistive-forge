@@ -12,7 +12,11 @@
  */
 
 import { createFocusTrap } from './focus-trap.js';
-import { announceImmediate, announceError, POLITENESS as _POLITENESS } from './announcer.js';
+import {
+  announceImmediate,
+  announceError,
+  POLITENESS as _POLITENESS,
+} from './announcer.js';
 
 /**
  * Tutorial step definition
@@ -934,9 +938,7 @@ const TUTORIALS = {
         position: 'left',
         // Collapse the Preview Settings drawer so it doesn't obscure the 3D canvas.
         // The drawer gets its own dedicated step later ("Preview Settings & Info").
-        ensure: [
-          { type: 'clickIfExpanded', selector: '#previewDrawerToggle' },
-        ],
+        ensure: [{ type: 'clickIfExpanded', selector: '#previewDrawerToggle' }],
       },
       {
         title: 'Save a design (preset)',
@@ -1456,7 +1458,8 @@ const TUTORIALS = {
         contentCompact: `
           <p>Missing-file warnings appear in the <strong>Console</strong> panel with a live region announcement.</p>
         `,
-        highlightSelector: '[data-tutorial-target="console-panel"], .console-panel-btn',
+        highlightSelector:
+          '[data-tutorial-target="console-panel"], .console-panel-btn',
         position: 'right',
       },
       {

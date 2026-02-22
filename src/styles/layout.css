@@ -1419,7 +1419,10 @@ body {
 
 /* Drawer severity tinting — toggle bar changes color based on highest severity */
 .echo-drawer--warning .echo-drawer-toggle {
-  background: var(--color-warning-bg, color-mix(in srgb, var(--color-warning) 15%, transparent));
+  background: var(
+    --color-warning-bg,
+    color-mix(in srgb, var(--color-warning) 15%, transparent)
+  );
 }
 
 .echo-drawer--warning .echo-drawer-label,
@@ -1428,7 +1431,10 @@ body {
 }
 
 .echo-drawer--error .echo-drawer-toggle {
-  background: var(--color-error-bg, color-mix(in srgb, var(--color-error) 15%, transparent));
+  background: var(
+    --color-error-bg,
+    color-mix(in srgb, var(--color-error) 15%, transparent)
+  );
 }
 
 .echo-drawer--error .echo-drawer-label,
@@ -1673,7 +1679,6 @@ body {
   .param-header-actions #collapseParamPanelBtn {
     margin-left: auto;
   }
-
 
   .btn-collapse-panel {
     background: var(--color-bg-tertiary);
@@ -3649,15 +3654,9 @@ details summary:focus,
   /* Minimal header padding */
   :root .app-header {
     padding: var(--space-2xs) var(--space-sm);
-    padding-top: calc(
-      var(--space-2xs) + env(safe-area-inset-top, 0px)
-    );
-    padding-left: calc(
-      var(--space-sm) + env(safe-area-inset-left, 0px)
-    );
-    padding-right: calc(
-      var(--space-sm) + env(safe-area-inset-right, 0px)
-    );
+    padding-top: calc(var(--space-2xs) + env(safe-area-inset-top, 0px));
+    padding-left: calc(var(--space-sm) + env(safe-area-inset-left, 0px));
+    padding-right: calc(var(--space-sm) + env(safe-area-inset-right, 0px));
   }
 
   /* Single row layout - logo and buttons inline */

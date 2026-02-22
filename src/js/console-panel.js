@@ -26,7 +26,8 @@ export const CONSOLE_ENTRY_TYPE = {
  */
 export class ConsolePanel {
   constructor(options = {}) {
-    this.container = options.container || document.getElementById('console-output');
+    this.container =
+      options.container || document.getElementById('console-output');
     this.badge = options.badge || document.getElementById('console-badge');
     this.entries = [];
     this.maxEntries = options.maxEntries || 1000;
@@ -168,9 +169,11 @@ export class ConsolePanel {
         this.addEntry(entry);
         hasNewEntries = true;
         // Track ECHO, WARNING, and ERROR messages for auto-expand
-        if (entry.type === CONSOLE_ENTRY_TYPE.ECHO ||
-            entry.type === CONSOLE_ENTRY_TYPE.WARNING ||
-            entry.type === CONSOLE_ENTRY_TYPE.ERROR) {
+        if (
+          entry.type === CONSOLE_ENTRY_TYPE.ECHO ||
+          entry.type === CONSOLE_ENTRY_TYPE.WARNING ||
+          entry.type === CONSOLE_ENTRY_TYPE.ERROR
+        ) {
           hasEchoOrImportant = true;
         }
       }
@@ -195,7 +198,9 @@ export class ConsolePanel {
     const consolePanel = document.getElementById('consolePanel');
     if (consolePanel && !consolePanel.open) {
       consolePanel.open = true;
-      console.log('[ConsolePanel] Auto-expanded: ECHO/WARNING/ERROR message detected');
+      console.log(
+        '[ConsolePanel] Auto-expanded: ECHO/WARNING/ERROR message detected'
+      );
     }
   }
 
@@ -259,9 +264,11 @@ export class ConsolePanel {
   announceIfImportant(entry) {
     // Announce ECHO, warnings, and errors to screen readers
     // SCAD authors use echo() to communicate important info to users
-    if (entry.type !== CONSOLE_ENTRY_TYPE.ECHO &&
-        entry.type !== CONSOLE_ENTRY_TYPE.WARNING && 
-        entry.type !== CONSOLE_ENTRY_TYPE.ERROR) {
+    if (
+      entry.type !== CONSOLE_ENTRY_TYPE.ECHO &&
+      entry.type !== CONSOLE_ENTRY_TYPE.WARNING &&
+      entry.type !== CONSOLE_ENTRY_TYPE.ERROR
+    ) {
       return;
     }
 
@@ -344,7 +351,7 @@ export class ConsolePanel {
    */
   renderEntry(entry) {
     const time = new Date(entry.timestamp);
-    const timeStr = time.toLocaleTimeString('en-US', { 
+    const timeStr = time.toLocaleTimeString('en-US', {
       hour12: false,
       hour: '2-digit',
       minute: '2-digit',
@@ -358,7 +365,8 @@ export class ConsolePanel {
     const safeMessage = this.escapeHtml(entry.message);
 
     // WARNING and ERROR entries get role="alert" for screen reader announcement (WCAG 4.1.3)
-    const entryRole = (entry.type === 'warning' || entry.type === 'error') ? 'alert' : 'listitem';
+    const entryRole =
+      entry.type === 'warning' || entry.type === 'error' ? 'alert' : 'listitem';
 
     return `
       <div class="console-entry ${typeClass}" role="${entryRole}">
@@ -415,7 +423,7 @@ export class ConsolePanel {
 
     try {
       await navigator.clipboard.writeText(text);
-      
+
       // Visual feedback
       const copyBtn = document.getElementById('console-copy-btn');
       if (copyBtn) {

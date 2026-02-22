@@ -270,7 +270,9 @@ export class MemoryMonitor {
    * @returns {MemorySample|null}
    */
   getLatestSample() {
-    return this.history.length > 0 ? this.history[this.history.length - 1] : null;
+    return this.history.length > 0
+      ? this.history[this.history.length - 1]
+      : null;
   }
 
   /**

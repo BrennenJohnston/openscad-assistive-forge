@@ -50,6 +50,7 @@ import {
   getZipStats,
   resolveProjectFile,
   buildPresetCompanionMap,
+  applyCompanionAliases,
 } from './js/zip-handler.js';
 import { loadManifest, ManifestError } from './js/manifest-loader.js';
 import {
@@ -157,6 +158,8 @@ const STORAGE_KEY_STATUS_BAR = getAppPrefKey('status-bar');
 const STORAGE_KEY_OVERLAY_ENABLED = getAppPrefKey('overlay-enabled');
 const STORAGE_KEY_OVERLAY_OPACITY = getAppPrefKey('overlay-opacity');
 const STORAGE_KEY_OVERLAY_SOURCE = getAppPrefKey('overlay-source');
+const STORAGE_KEY_OVERLAY_SVG_COLOR = getAppPrefKey('overlay-svg-color');
+const STORAGE_KEY_OVERLAY_AUTO_COLOR = getAppPrefKey('overlay-auto-color');
 const STORAGE_KEY_AUTO_ROTATE = getAppPrefKey('auto-rotate');
 const STORAGE_KEY_ROTATE_SPEED = getAppPrefKey('rotate-speed');
 const STORAGE_KEY_MODEL_COLOR = getAppPrefKey('model-color');
@@ -2810,11 +2813,16 @@ async function initApp() {
     if (!state.uploadedFile?.content) return;
     if (currentSavedProjectId) {
       const { projectFiles } = state;
-      const projectFilesObj = projectFiles ? Object.fromEntries(projectFiles) : null;
+      const projectFilesObj = projectFiles
+        ? Object.fromEntries(projectFiles)
+        : null;
       const result = await updateProject({
         id: currentSavedProjectId,
         content: state.uploadedFile.content,
-        projectFiles: projectFilesObj !== null ? JSON.stringify(projectFilesObj) : undefined,
+        projectFiles:
+          projectFilesObj !== null
+            ? JSON.stringify(projectFilesObj)
+            : undefined,
       });
       if (result.success) {
         updateCompanionSaveButton();
@@ -2878,7 +2886,7 @@ async function initApp() {
     // Full render = Generate button has been pressed and output matches current params
     const hasFullRender = Boolean(
       autoPreviewController?.getCurrentFullSTL(state.parameters) &&
-        !autoPreviewController?.needsFullRender(state.parameters)
+      !autoPreviewController?.needsFullRender(state.parameters)
     );
 
     // Recent Files submenu items (filenames only; actual re-open via onOpenRecent callback)
@@ -2899,7 +2907,8 @@ async function initApp() {
               type: 'action',
               label: 'ⓘ  Press Generate to enable file exports',
               disabled: true,
-              tooltip: 'Use the Generate button to fully render the model, then file export options will become available.',
+              tooltip:
+                'Use the Generate button to fully render the model, then file export options will become available.',
             },
             { type: 'separator' },
           ]
@@ -2908,7 +2917,9 @@ async function initApp() {
         type: 'action',
         label: fmt.name,
         enabled: hasFullRender,
-        tooltip: hasFullRender ? fmt.description : 'Press Generate first to enable this export',
+        tooltip: hasFullRender
+          ? fmt.description
+          : 'Press Generate first to enable this export',
         handler: () => _exportFormatFromMenu(key),
       })),
       { type: 'separator' },
@@ -2997,7 +3008,9 @@ async function initApp() {
         type: 'action',
         label: 'Save All',
         enabled: hasFile,
-        tooltip: hasFile ? 'Save all changes to current project' : 'Open a file first',
+        tooltip: hasFile
+          ? 'Save all changes to current project'
+          : 'Open a file first',
         handler: () => fileActionsController.onSaveAll(),
       },
       { type: 'separator' },
@@ -3058,14 +3071,14 @@ async function initApp() {
         label: 'Undo',
         enabled: canUndo,
         tooltip: canUndo ? undefined : 'Nothing to undo',
-        handler: () => stateManager.undo(),
+        handler: () => performUndo(),
       },
       {
         type: 'action',
         label: 'Redo',
         enabled: canRedo,
         tooltip: canRedo ? undefined : 'Nothing to redo',
-        handler: () => stateManager.redo(),
+        handler: () => performRedo(),
       },
       { type: 'separator' },
       { type: 'action', label: 'Cut', ...editorOnly },
@@ -3620,10 +3633,7 @@ async function initApp() {
       },
       { type: 'separator' },
       // -- Web-only panel toggles --
-      panelToggle('fileActions', 'File Actions'),
-      panelToggle('editTools', 'Edit Tools'),
-      panelToggle('designTools', 'Design Tools'),
-      panelToggle('displayOptions', 'Display Options'),
+      // fileActions, editTools, designTools, displayOptions removed — now in toolbar menus
       panelToggle('libraries', 'Libraries'),
       panelToggle('companionFileManagement', 'Companion Files'),
       panelToggle('imageMeasurement', 'Image Measurement'),
@@ -4655,6 +4665,10 @@ async function initApp() {
   const overlayToggle = document.getElementById('overlayToggle');
   const overlayOpacityInput = document.getElementById('overlayOpacityInput');
   const overlayOpacityValue = document.getElementById('overlayOpacityValue');
+  const overlayColorInput = document.getElementById('overlayColorInput');
+  const overlayAutoColorToggle = document.getElementById(
+    'overlayAutoColorToggle'
+  );
   const overlayFitModelBtn = document.getElementById('overlayFitModelBtn');
   const overlayCenterBtn = document.getElementById('overlayCenterBtn');
   const overlayWidthInput = document.getElementById('overlayWidthInput');
@@ -5582,6 +5596,61 @@ async function initApp() {
       }
     });
   }
+
+  // SVG overlay color — auto-adapts to theme so dark SVGs stay visible on dark backgrounds
+  function getThemeAwareSvgColor() {
+    const root = document.documentElement;
+    const explicit = root.getAttribute('data-theme');
+    const prefersDark = window.matchMedia?.(
+      '(prefers-color-scheme: dark)'
+    )?.matches;
+    const isDark = explicit === 'dark' || (!explicit && prefersDark);
+    return isDark ? '#ffffff' : '#000000';
+  }
+
+  function applyOverlaySvgColor() {
+    const autoColor = overlayAutoColorToggle?.checked ?? true;
+    const color = autoColor
+      ? getThemeAwareSvgColor()
+      : overlayColorInput?.value || '#000000';
+    if (overlayColorInput && autoColor) {
+      overlayColorInput.value = color;
+    }
+    if (previewManager) {
+      previewManager.setOverlaySvgColor(color);
+    }
+    localStorage.setItem(STORAGE_KEY_OVERLAY_SVG_COLOR, color);
+    localStorage.setItem(
+      STORAGE_KEY_OVERLAY_AUTO_COLOR,
+      autoColor ? 'true' : 'false'
+    );
+  }
+
+  if (overlayColorInput) {
+    overlayColorInput.addEventListener('input', () => {
+      if (overlayAutoColorToggle) overlayAutoColorToggle.checked = false;
+      applyOverlaySvgColor();
+    });
+  }
+
+  if (overlayAutoColorToggle) {
+    overlayAutoColorToggle.addEventListener('change', () => {
+      if (overlayColorInput)
+        overlayColorInput.disabled = overlayAutoColorToggle.checked;
+      applyOverlaySvgColor();
+    });
+  }
+
+  // Re-apply SVG color when theme changes
+  const themeObserver = new MutationObserver(() => {
+    if (overlayAutoColorToggle?.checked) {
+      applyOverlaySvgColor();
+    }
+  });
+  themeObserver.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['data-theme', 'data-high-contrast'],
+  });
 
   // Wire fit to model button
   if (overlayFitModelBtn) {
@@ -7002,20 +7071,22 @@ async function initApp() {
       return;
     }
 
-    // Look for screenshot_file variable in SCAD source
+    // Look for screenshot_file variable in SCAD source (resolve via basename fallback)
     let screenshotFile = null;
     if (requiredFiles && requiredFiles.files) {
       const screenshotVar = requiredFiles.files.find(
         (f) => f.variableName === 'screenshot_file'
       );
-      if (screenshotVar && projectFiles.has(screenshotVar.path)) {
-        screenshotFile = screenshotVar.path;
+      if (screenshotVar) {
+        const resolved = resolveProjectFile(projectFiles, screenshotVar.path);
+        if (resolved) screenshotFile = resolved.key;
       }
     }
 
-    // Fallback: look for default.svg (common screenshot overlay convention)
-    if (!screenshotFile && projectFiles.has('default.svg')) {
-      screenshotFile = 'default.svg';
+    // Fallback: resolve default.svg (handles root or single nested match)
+    if (!screenshotFile) {
+      const resolved = resolveProjectFile(projectFiles, 'default.svg');
+      if (resolved) screenshotFile = resolved.key;
     }
 
     // If found, select it in the dropdown and auto-load + enable the overlay.
@@ -7156,6 +7227,20 @@ async function initApp() {
 
       // Auto-save to tracked saved project
       await autoSaveCompanionFiles();
+
+      // If include_screenshot is active but no overlay is displayed yet,
+      // re-sync so the newly added file can be picked up as the overlay source.
+      const currentParams = stateManager.getState().parameters;
+      const includeFlag = currentParams?.include_screenshot;
+      if (
+        (includeFlag === 'yes' ||
+          includeFlag === true ||
+          includeFlag === 'true') &&
+        overlayToggle &&
+        !overlayToggle.checked
+      ) {
+        syncOverlayWithScreenshotParam(currentParams);
+      }
     } catch (error) {
       console.error('[ProjectFiles] Error adding file:', error);
       updateStatus(`Failed to add file: ${error.message}`, 'error');
@@ -7894,12 +7979,16 @@ async function initApp() {
 
           // Build preset→companion-file path mapping for alias mounting on preset load.
           // Uses the imported preset names to match against nested file paths in the ZIP.
-          const importedPresets = presetManager.getPresetsForModel(originalFileName);
+          const importedPresets =
+            presetManager.getPresetsForModel(originalFileName);
           if (importedPresets.length > 0) {
             const parameterSetsForMap = Object.fromEntries(
               importedPresets.map((p) => [p.name, p.parameters])
             );
-            presetCompanionMap = buildPresetCompanionMap(projectFiles, parameterSetsForMap);
+            presetCompanionMap = buildPresetCompanionMap(
+              projectFiles,
+              parameterSetsForMap
+            );
             console.log(
               `[ZIP] Built preset companion map for ${presetCompanionMap.size} presets`
             );
@@ -8011,6 +8100,31 @@ async function initApp() {
               overlayOpacityValue.textContent = `${opacity}%`;
             }
           }
+        }
+
+        // Initialize overlay SVG color from localStorage or auto-detect
+        const savedAutoColor = localStorage.getItem(
+          STORAGE_KEY_OVERLAY_AUTO_COLOR
+        );
+        const isAutoColor = savedAutoColor !== 'false';
+        if (overlayAutoColorToggle) {
+          overlayAutoColorToggle.checked = isAutoColor;
+        }
+        if (overlayColorInput) {
+          overlayColorInput.disabled = isAutoColor;
+        }
+        if (isAutoColor) {
+          const themeColor = getThemeAwareSvgColor();
+          if (overlayColorInput) overlayColorInput.value = themeColor;
+          previewManager.overlayConfig.svgColor = themeColor;
+        } else {
+          const savedColor = localStorage.getItem(
+            STORAGE_KEY_OVERLAY_SVG_COLOR
+          );
+          if (savedColor && overlayColorInput) {
+            overlayColorInput.value = savedColor;
+          }
+          previewManager.overlayConfig.svgColor = savedColor || '#000000';
         }
 
         // Apply persisted model appearance controls
@@ -9747,7 +9861,9 @@ if (rounded) {
     const notNowBtn = modal.querySelector('#saveProjectNotNow');
     const closeBtn = modal.querySelector('.preset-modal-close');
     const footer = modal.querySelector('#saveProjectFooter');
-    const duplicateWarning = modal.querySelector('#saveProjectDuplicateWarning');
+    const duplicateWarning = modal.querySelector(
+      '#saveProjectDuplicateWarning'
+    );
     const duplicateNameSpan = modal.querySelector('#saveProjectDuplicateName');
 
     // When called from an explicit Save/Save As action, pre-check the box
@@ -9778,7 +9894,9 @@ if (rounded) {
     async function doSave(overwriteProject) {
       const projectName = nameInput.value.trim() || fileName;
       const notes = notesTextarea.value.trim();
-      const projectFilesObj = projectFiles ? Object.fromEntries(projectFiles) : null;
+      const projectFilesObj = projectFiles
+        ? Object.fromEntries(projectFiles)
+        : null;
 
       let result;
       if (overwriteProject) {
@@ -9786,7 +9904,10 @@ if (rounded) {
           id: overwriteProject.id,
           notes,
           content: uploadedFile.content,
-          projectFiles: projectFilesObj !== null ? JSON.stringify(projectFilesObj) : undefined,
+          projectFiles:
+            projectFilesObj !== null
+              ? JSON.stringify(projectFilesObj)
+              : undefined,
         });
         if (result.success) {
           currentSavedProjectId = overwriteProject.id;
@@ -9837,8 +9958,12 @@ if (rounded) {
           <button class="btn btn-secondary" id="saveProjectNewCopy">Save as New Copy</button>
           <button class="btn btn-danger" id="saveProjectOverwrite">Overwrite Existing</button>
         `;
-        footer.querySelector('#saveProjectOverwrite').addEventListener('click', () => doSave(duplicate));
-        footer.querySelector('#saveProjectNewCopy').addEventListener('click', () => doSave(null));
+        footer
+          .querySelector('#saveProjectOverwrite')
+          .addEventListener('click', () => doSave(duplicate));
+        footer
+          .querySelector('#saveProjectNewCopy')
+          .addEventListener('click', () => doSave(null));
       } else {
         await doSave(null);
       }
@@ -10654,16 +10779,16 @@ if (rounded) {
     }, 500);
   }
 
-  // Undo/Redo buttons
-  const undoBtn = document.getElementById('undoBtn');
-  const redoBtn = document.getElementById('redoBtn');
-
-  undoBtn?.addEventListener('click', () => {
+  /**
+   * Perform undo: restores previous parameter state, re-renders UI, and
+   * triggers auto-preview.  Called by Edit toolbar menu, Undo button,
+   * and keyboard shortcut.
+   */
+  function performUndo() {
     const previousParams = stateManager.undo();
     if (previousParams) {
       const state = stateManager.getState();
 
-      // Re-render UI with undone parameters
       const parametersContainer = document.getElementById(
         'parametersContainer'
       );
@@ -10682,21 +10807,24 @@ if (rounded) {
         previousParams
       );
 
-      // Trigger auto-preview with undone params
       if (autoPreviewController && state.uploadedFile) {
         autoPreviewController.onParameterChange(previousParams);
       }
 
       updatePrimaryActionButton();
     }
-  });
+  }
 
-  redoBtn?.addEventListener('click', () => {
+  /**
+   * Perform redo: restores next parameter state, re-renders UI, and
+   * triggers auto-preview.  Called by Edit toolbar menu, Redo button,
+   * and keyboard shortcut.
+   */
+  function performRedo() {
     const nextParams = stateManager.redo();
     if (nextParams) {
       const state = stateManager.getState();
 
-      // Re-render UI with redone parameters
       const parametersContainer = document.getElementById(
         'parametersContainer'
       );
@@ -10715,12 +10843,29 @@ if (rounded) {
         nextParams
       );
 
-      // Trigger auto-preview with redone params
       if (autoPreviewController && state.uploadedFile) {
         autoPreviewController.onParameterChange(nextParams);
       }
 
       updatePrimaryActionButton();
+    }
+  }
+
+  // Undo/Redo buttons in Parameters header — delegates to shared logic
+  const undoBtn = document.getElementById('undoBtn');
+  const redoBtn = document.getElementById('redoBtn');
+
+  undoBtn?.addEventListener('click', () => {
+    const state = stateManager.getState();
+    if (state.uploadedFile && stateManager.canUndo()) {
+      performUndo();
+    }
+  });
+
+  redoBtn?.addEventListener('click', () => {
+    const state = stateManager.getState();
+    if (state.uploadedFile && stateManager.canRedo()) {
+      performRedo();
     }
   });
 
@@ -13444,43 +13589,29 @@ if (rounded) {
       }
     }
 
-    // Phase 5: Alias-mount preset-specific companion files from the ZIP mapping.
-    // Copies the preset-specific file content to the root-level key that the
-    // SCAD `include` / `import` statement resolves to (e.g.
-    // "openings_and_additions.txt" and "default.svg").
+    // Alias-mount preset-specific companion files from the ZIP mapping.
     const companionMapping = presetCompanionMap?.get(preset.name);
-    if (companionMapping) {
-      if (
-        companionMapping.openingsPath &&
-        newProjectFiles.has(companionMapping.openingsPath)
-      ) {
-        newProjectFiles.set(
-          'openings_and_additions.txt',
-          newProjectFiles.get(companionMapping.openingsPath)
-        );
-        console.log(
-          `[Preset] Alias-mounted openings: ${companionMapping.openingsPath}`
-        );
-      }
-      if (
-        companionMapping.svgPath &&
-        newProjectFiles.has(companionMapping.svgPath)
-      ) {
-        newProjectFiles.set(
-          'default.svg',
-          newProjectFiles.get(companionMapping.svgPath)
-        );
-        console.log(
-          `[Preset] Alias-mounted SVG: ${companionMapping.svgPath}`
-        );
-      }
+    const aliasedFiles = applyCompanionAliases(
+      newProjectFiles,
+      companionMapping
+    );
+    if (
+      companionMapping?.openingsPath &&
+      aliasedFiles.has('openings_and_additions.txt')
+    ) {
+      console.log(
+        `[Preset] Alias-mounted openings: ${companionMapping.openingsPath}`
+      );
+    }
+    if (companionMapping?.svgPath && aliasedFiles.has('default.svg')) {
+      console.log(`[Preset] Alias-mounted SVG: ${companionMapping.svgPath}`);
     }
 
-    stateManager.setState({ projectFiles: newProjectFiles });
+    stateManager.setState({ projectFiles: aliasedFiles });
 
     if (autoPreviewController) {
       autoPreviewController.setProjectFiles(
-        newProjectFiles,
+        aliasedFiles,
         curState.mainFilePath
       );
       autoPreviewController.onParameterChange(mergedParams);
@@ -14642,11 +14773,9 @@ if (rounded) {
       return;
     }
 
-    // Show modal
     sourceViewerModal.classList.remove('hidden');
     sourceViewerContent.value = state.uploadedFile.content;
 
-    // Show file info
     const lineCount = state.uploadedFile.content.split('\n').length;
     const charCount = state.uploadedFile.content.length;
     sourceViewerInfo.innerHTML = `
@@ -14655,7 +14784,6 @@ if (rounded) {
       <span>📊 ${charCount.toLocaleString()} characters</span>
     `;
 
-    // Focus textarea for accessibility
     setTimeout(() => sourceViewerContent.focus(), 100);
   });
 
@@ -14675,7 +14803,6 @@ if (rounded) {
       }, 2000);
     } catch (error) {
       console.error('Failed to copy source:', error);
-      // Fallback
       const textarea = document.createElement('textarea');
       textarea.value = state.uploadedFile.content;
       document.body.appendChild(textarea);
@@ -14689,7 +14816,6 @@ if (rounded) {
     }
   });
 
-  // Source viewer modal close handlers
   sourceViewerClose?.addEventListener('click', () => {
     sourceViewerModal.classList.add('hidden');
   });
@@ -15083,10 +15209,9 @@ if (rounded) {
     }
   });
 
-  // Reset All Button (in Advanced Menu)
+  // Reset All Button (in customizer header)
   const resetAllBtn = document.getElementById('resetAllBtn');
   resetAllBtn?.addEventListener('click', () => {
-    // Same as main reset button
     resetBtn?.click();
   });
 
@@ -15103,7 +15228,6 @@ if (rounded) {
       return;
     }
 
-    // Populate group selector
     resetGroupSelect.innerHTML = '';
     state.schema.groups.forEach((group) => {
       const option = document.createElement('option');
@@ -15112,7 +15236,6 @@ if (rounded) {
       resetGroupSelect.appendChild(option);
     });
 
-    // Show selector
     resetGroupSelector.classList.remove('hidden');
   });
 
@@ -15122,10 +15245,8 @@ if (rounded) {
 
     if (!groupId || !state.schema) return;
 
-    // Record state for undo
     stateManager.recordParameterState();
 
-    // Find parameters in this group and reset them
     const defaults = getAllDefaults();
     const newParams = { ...state.parameters };
     let resetCount = 0;
@@ -15139,7 +15260,6 @@ if (rounded) {
 
     stateManager.setState({ parameters: newParams });
 
-    // Re-render UI
     const parametersContainer = document.getElementById('parametersContainer');
     renderParameterUI(
       state.schema,
@@ -15156,12 +15276,10 @@ if (rounded) {
       newParams
     );
 
-    // Trigger auto-preview
     if (autoPreviewController && state.uploadedFile) {
       autoPreviewController.onParameterChange(newParams);
     }
 
-    // Hide selector and update status
     resetGroupSelector.classList.add('hidden');
     const groupLabel =
       state.schema.groups.find((g) => g.id === groupId)?.label || groupId;
@@ -15186,12 +15304,10 @@ if (rounded) {
       return;
     }
 
-    // Format parameters as JSON
     const json = JSON.stringify(state.parameters, null, 2);
     paramsJsonContent.value = json;
     paramsJsonModal.classList.remove('hidden');
 
-    // Focus textarea for accessibility
     setTimeout(() => paramsJsonContent.focus(), 100);
   });
 
@@ -15228,21 +15344,17 @@ if (rounded) {
       return;
     }
 
-    // Get default parameters from schema
     const defaultParams = state.schema.parameters || {};
 
-    // Use preset manager to export changed parameters
     const changedJson = presetManager.exportChangedParametersJSON(
       state.parameters,
       defaultParams,
       state.currentModelName || 'Unknown Model'
     );
 
-    // Parse to check change count
     const parsed = JSON.parse(changedJson);
 
     if (parsed.message && parsed.changeCount === undefined) {
-      // No changes made
       updateStatus('All parameters are at default values');
       announceImmediate(
         'All parameters are at default values. Nothing to export.'
@@ -15250,12 +15362,10 @@ if (rounded) {
       return;
     }
 
-    // Download as JSON file
     const blob = new Blob([changedJson], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
 
-    // Generate filename with model name and date
     const baseName = (state.currentModelName || 'model').replace(
       /\.(scad|zip)$/i,
       ''
@@ -15266,7 +15376,6 @@ if (rounded) {
     a.click();
     URL.revokeObjectURL(url);
 
-    // Update status
     const changeCount = parsed.changeCount || 0;
     updateStatus(`Exported ${changeCount} changed parameter(s)`);
     announceImmediate(
@@ -15761,7 +15870,7 @@ if (rounded) {
     if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
       if (state.uploadedFile && stateManager.canUndo()) {
         e.preventDefault();
-        undoBtn?.click();
+        performUndo();
       }
     }
 
@@ -15772,7 +15881,7 @@ if (rounded) {
     ) {
       if (state.uploadedFile && stateManager.canRedo()) {
         e.preventDefault();
-        redoBtn?.click();
+        performRedo();
       }
     }
 

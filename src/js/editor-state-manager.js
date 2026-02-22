@@ -246,7 +246,9 @@ export class EditorStateManager {
     }
 
     // Announce restoration
-    this._announce(`Editor content restored. Cursor at line ${this.cursor.line}.`);
+    this._announce(
+      `Editor content restored. Cursor at line ${this.cursor.line}.`
+    );
   }
 
   /**
@@ -455,10 +457,8 @@ export class EditorStateManager {
    * @private
    */
   _calculateScrollLine(textarea) {
-    const lineHeight = parseInt(
-      window.getComputedStyle(textarea).lineHeight,
-      10
-    ) || 20;
+    const lineHeight =
+      parseInt(window.getComputedStyle(textarea).lineHeight, 10) || 20;
     return Math.floor(textarea.scrollTop / lineHeight) + 1;
   }
 
@@ -469,10 +469,8 @@ export class EditorStateManager {
    * @private
    */
   _scrollToLine(textarea, line) {
-    const lineHeight = parseInt(
-      window.getComputedStyle(textarea).lineHeight,
-      10
-    ) || 20;
+    const lineHeight =
+      parseInt(window.getComputedStyle(textarea).lineHeight, 10) || 20;
     textarea.scrollTop = (line - 1) * lineHeight;
   }
 

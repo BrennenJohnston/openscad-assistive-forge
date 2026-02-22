@@ -313,7 +313,9 @@ async function initWASM(baseUrl = '') {
         integrityData = await integrityResp.json();
         console.log(`[Worker] WASM build: ${integrityData.build}`);
         if (integrityData.knownIssues?.length) {
-          console.log(`[Worker] Known issues: ${integrityData.knownIssues.length} documented`);
+          console.log(
+            `[Worker] Known issues: ${integrityData.knownIssues.length} documented`
+          );
         }
 
         // Verify sizes of both JS loader and WASM binary
@@ -329,7 +331,10 @@ async function initWASM(baseUrl = '') {
 
           try {
             const headResp = await fetch(url, { method: 'HEAD' });
-            const actualSize = parseInt(headResp.headers.get('content-length'), 10);
+            const actualSize = parseInt(
+              headResp.headers.get('content-length'),
+              10
+            );
             if (actualSize && actualSize !== expected.size) {
               mismatches.push(
                 `${name}: expected ${expected.size} bytes, got ${actualSize}`
@@ -347,7 +352,8 @@ async function initWASM(baseUrl = '') {
             type: 'WARNING',
             payload: {
               code: 'WASM_INTEGRITY',
-              message: 'WASM file integrity check detected a size mismatch. Files may need re-downloading.',
+              message:
+                'WASM file integrity check detected a size mismatch. Files may need re-downloading.',
               severity: 'warning',
             },
           });
@@ -667,12 +673,12 @@ const WORK_DIR = '/work';
 /**
  * Mount files into OpenSCAD virtual filesystem
  * Enable include/use statements to resolve companion files correctly
- * 
+ *
  * Files are mounted under /work/ directory so that:
  * - Main file runs from /work/mainfile.scad
  * - Include files like openings_and_additions.txt are at /work/openings_and_additions.txt
  * - OpenSCAD's include path resolution finds them correctly
- * 
+ *
  * @param {Map<string, string>} files - Map of file paths to content
  * @param {Object} options - Mount options
  * @param {boolean} options.useWorkDir - Mount under /work/ (default: true for multi-file projects)
@@ -687,7 +693,7 @@ async function mountFiles(files, options = {}) {
   const FS = module.FS;
   const useWorkDir = options.useWorkDir !== false && files.size > 1;
   const baseDir = useWorkDir ? WORK_DIR : '';
-  
+
   // Create work directory if needed
   if (useWorkDir) {
     try {
@@ -695,7 +701,10 @@ async function mountFiles(files, options = {}) {
       console.log(`[Worker FS] Created work directory: ${WORK_DIR}`);
     } catch (error) {
       if (error.code !== 'EEXIST') {
-        console.warn(`[Worker FS] Work directory creation warning:`, error.message);
+        console.warn(
+          `[Worker FS] Work directory creation warning:`,
+          error.message
+        );
       }
     }
   }
@@ -709,7 +718,7 @@ async function mountFiles(files, options = {}) {
       console.warn(`[Worker FS] Skipping invalid path: ${filePath}`);
       continue;
     }
-    
+
     // Extract all directory components
     const parts = filePath.split('/');
     let currentPath = baseDir;
@@ -740,15 +749,15 @@ async function mountFiles(files, options = {}) {
 
   // Write files - track the resolved paths
   const resolvedPaths = new Map();
-  
+
   for (const [filePath, content] of files.entries()) {
     // Security: Skip path traversal attempts
     if (filePath.includes('..') || filePath.startsWith('/')) {
       continue;
     }
-    
+
     const resolvedPath = baseDir ? `${baseDir}/${filePath}` : filePath;
-    
+
     try {
       FS.writeFile(resolvedPath, content);
       mountedFiles.set(resolvedPath, content);
@@ -762,8 +771,10 @@ async function mountFiles(files, options = {}) {
     }
   }
 
-  console.log(`[Worker FS] Successfully mounted ${files.size} files under ${baseDir || '/'}`);
-  
+  console.log(
+    `[Worker FS] Successfully mounted ${files.size} files under ${baseDir || '/'}`
+  );
+
   return {
     workDir: baseDir,
     files: resolvedPaths,
@@ -1036,7 +1047,10 @@ function buildDefineArgs(parameters, paramTypes = {}) {
 
       if (isBooleanParam && (lowerValue === 'true' || lowerValue === 'yes')) {
         formattedValue = 'true';
-      } else if (isBooleanParam && (lowerValue === 'false' || lowerValue === 'no')) {
+      } else if (
+        isBooleanParam &&
+        (lowerValue === 'false' || lowerValue === 'no')
+      ) {
         formattedValue = 'false';
       }
       // Check if this is a color (hex string)
@@ -1116,7 +1130,10 @@ function parametersToScad(parameters, paramTypes = {}) {
 
         if (isBooleanParam && (lowerValue === 'true' || lowerValue === 'yes')) {
           return `${key} = true;`;
-        } else if (isBooleanParam && (lowerValue === 'false' || lowerValue === 'no')) {
+        } else if (
+          isBooleanParam &&
+          (lowerValue === 'false' || lowerValue === 'no')
+        ) {
           return `${key} = false;`;
         }
         // ALL non-boolean strings (including "yes"/"no" dropdowns) stay as quoted strings
@@ -1188,7 +1205,10 @@ function _applyOverrides(scadContent, parameters, paramTypes = {}) {
 
       if (isBooleanParam && (lowerValue === 'true' || lowerValue === 'yes')) {
         return 'true';
-      } else if (isBooleanParam && (lowerValue === 'false' || lowerValue === 'no')) {
+      } else if (
+        isBooleanParam &&
+        (lowerValue === 'false' || lowerValue === 'no')
+      ) {
         return 'false';
       }
       // ALL non-boolean strings (including "yes"/"no" dropdowns) stay as quoted strings
@@ -1264,11 +1284,11 @@ async function renderWithCallMain(
   const supportsBinarySTL = Boolean(capabilities.hasBinarySTL);
   const enableLazyUnion =
     Boolean(renderOptions?.enableLazyUnion) && supportsLazyUnion;
-  
+
   // Engine selection: Use Manifold by default, but allow user to disable
   // renderOptions.useManifold: undefined/true = use Manifold, false = use CGAL (stable)
   const useManifold = renderOptions?.useManifold !== false;
-  
+
   const performanceFlags = [];
   if (supportsManifold && useManifold) {
     performanceFlags.push('--backend=Manifold');
@@ -1658,7 +1678,11 @@ function validateDXFOutput(content) {
   }
 
   // Check for DXF structure after any comment lines
-  if (startIdx >= lines.length || lines[startIdx] !== '0' || !lines.includes('SECTION')) {
+  if (
+    startIdx >= lines.length ||
+    lines[startIdx] !== '0' ||
+    !lines.includes('SECTION')
+  ) {
     return {
       valid: false,
       error:
@@ -1757,8 +1781,12 @@ function postProcessDXF(outputBuffer) {
   // Sections are: 0/SECTION, 2/<name>, ..., 0/ENDSEC
   const sections = []; // {name, startIdx, endIdx}
   for (let i = 0; i < pairs.length; i++) {
-    if (pairs[i].code === '0' && pairs[i].value === 'SECTION' &&
-        i + 1 < pairs.length && pairs[i + 1].code === '2') {
+    if (
+      pairs[i].code === '0' &&
+      pairs[i].value === 'SECTION' &&
+      i + 1 < pairs.length &&
+      pairs[i + 1].code === '2'
+    ) {
       const name = pairs[i + 1].value;
       // Find matching ENDSEC
       for (let j = i + 2; j < pairs.length; j++) {
@@ -1771,20 +1799,33 @@ function postProcessDXF(outputBuffer) {
   }
 
   // Extract EXTMIN/EXTMAX from HEADER for optional re-use
-  const headerSection = sections.find(s => s.name === 'HEADER');
-  let extMin = null, extMax = null;
+  const headerSection = sections.find((s) => s.name === 'HEADER');
+  let extMin = null,
+    extMax = null;
   if (headerSection) {
     for (let i = headerSection.startIdx; i <= headerSection.endIdx; i++) {
       if (pairs[i].code === '9' && pairs[i].value === '$EXTMIN') {
         extMin = { x: 0, y: 0 };
-        for (let j = i + 1; j <= headerSection.endIdx && pairs[j].code !== '9' && pairs[j].code !== '0'; j++) {
+        for (
+          let j = i + 1;
+          j <= headerSection.endIdx &&
+          pairs[j].code !== '9' &&
+          pairs[j].code !== '0';
+          j++
+        ) {
           if (pairs[j].code === '10') extMin.x = parseFloat(pairs[j].value);
           if (pairs[j].code === '20') extMin.y = parseFloat(pairs[j].value);
         }
       }
       if (pairs[i].code === '9' && pairs[i].value === '$EXTMAX') {
         extMax = { x: 0, y: 0 };
-        for (let j = i + 1; j <= headerSection.endIdx && pairs[j].code !== '9' && pairs[j].code !== '0'; j++) {
+        for (
+          let j = i + 1;
+          j <= headerSection.endIdx &&
+          pairs[j].code !== '9' &&
+          pairs[j].code !== '0';
+          j++
+        ) {
           if (pairs[j].code === '10') extMax.x = parseFloat(pairs[j].value);
           if (pairs[j].code === '20') extMax.y = parseFloat(pairs[j].value);
         }
@@ -1793,7 +1834,7 @@ function postProcessDXF(outputBuffer) {
   }
 
   // Parse LWPOLYLINE entities from the ENTITIES section
-  const entitiesSection = sections.find(s => s.name === 'ENTITIES');
+  const entitiesSection = sections.find((s) => s.name === 'ENTITIES');
   const parsedEntities = []; // Each is {type, layer, pairs} or {type:'LWPOLYLINE', layer, vertices, closed}
 
   if (entitiesSection) {
@@ -1837,7 +1878,11 @@ function postProcessDXF(outputBuffer) {
           parsedEntities.push({ type: 'LWPOLYLINE', layer, vertices, closed });
         } else {
           // Keep other entity types as raw pairs
-          parsedEntities.push({ type: entityType, layer: '0', rawPairs: entityPairs });
+          parsedEntities.push({
+            type: entityType,
+            layer: '0',
+            rawPairs: entityPairs,
+          });
         }
       } else {
         i++;
@@ -1875,7 +1920,7 @@ function postProcessDXF(outputBuffer) {
   emit(0, 'ENDSEC');
 
   // TABLES section -- copy from original, stripping any subclass markers
-  const tablesSection = sections.find(s => s.name === 'TABLES');
+  const tablesSection = sections.find((s) => s.name === 'TABLES');
   if (tablesSection) {
     emit(0, 'SECTION');
     emit(2, 'TABLES');
@@ -1910,7 +1955,7 @@ function postProcessDXF(outputBuffer) {
     } else {
       // Emit non-LWPOLYLINE entities as-is (skip subclass markers)
       emit(0, entity.type);
-      for (const ep of (entity.rawPairs || [])) {
+      for (const ep of entity.rawPairs || []) {
         if (ep.code === '100') continue; // Strip subclass markers
         emit(ep.code, ep.value);
       }
@@ -2083,7 +2128,7 @@ async function render(payload) {
           message: 'Files mounted successfully',
         },
       });
-      
+
       console.log('[Worker] Files mounted under:', mountResult.workDir);
     }
     console.log('[Worker] Rendering with parameters:', parameters);
@@ -2131,7 +2176,7 @@ async function render(payload) {
       // For multi-file projects, use the work directory path
       // For multi-file projects, include/use statements must resolve correctly
       let mainFileToUse;
-      
+
       if (mainFile && mountResult && mountResult.workDir) {
         // Multi-file project: use the work directory path
         mainFileToUse = `${mountResult.workDir}/${mainFile}`;
@@ -2142,7 +2187,7 @@ async function render(payload) {
       } else {
         // Single file or no mounted files: use /tmp
         mainFileToUse = '/tmp/input.scad';
-        
+
         // Write to temporary location
         const module = await ensureOpenSCADModule();
         if (!module || !module.FS) {
@@ -2412,7 +2457,8 @@ function getMemoryUsage() {
   const percent = Math.round((used / limit) * 100);
 
   // Growth since last render start (helps detect memory leaks between renders)
-  const growthMB = heapBeforeRenderMB > 0 ? heapTotalMB - heapBeforeRenderMB : 0;
+  const growthMB =
+    heapBeforeRenderMB > 0 ? heapTotalMB - heapBeforeRenderMB : 0;
 
   return {
     used,

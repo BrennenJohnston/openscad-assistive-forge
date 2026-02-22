@@ -1054,9 +1054,8 @@
               <div class="param-header-actions">
                 <button
                   id="undoBtn"
-                  class="btn btn-sm btn-outline btn-with-icon"
-                  aria-label="Undo last parameter change (Ctrl+Z)"
-                  title="Undo (Ctrl+Z)"
+                  class="btn btn-sm btn-icon"
+                  aria-label="Undo last parameter change"
                   disabled
                 >
                   <svg
@@ -1067,20 +1066,18 @@
                     fill="none"
                     stroke="currentColor"
                     stroke-width="2"
-                    stroke-linecap="square"
-                    stroke-linejoin="miter"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
                     aria-hidden="true"
                   >
-                    <polyline points="9 14 4 9 9 4"></polyline>
-                    <path d="M20 20v-7a4 4 0 0 0-4-4H4"></path>
+                    <polyline points="1 4 1 10 7 10"></polyline>
+                    <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
                   </svg>
-                  <span class="btn-text">Undo</span>
                 </button>
                 <button
                   id="redoBtn"
-                  class="btn btn-sm btn-outline btn-with-icon"
-                  aria-label="Redo parameter change (Ctrl+Shift+Z)"
-                  title="Redo (Ctrl+Shift+Z)"
+                  class="btn btn-sm btn-icon"
+                  aria-label="Redo last parameter change"
                   disabled
                 >
                   <svg
@@ -1091,14 +1088,13 @@
                     fill="none"
                     stroke="currentColor"
                     stroke-width="2"
-                    stroke-linecap="square"
-                    stroke-linejoin="miter"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
                     aria-hidden="true"
                   >
-                    <polyline points="15 14 20 9 15 4"></polyline>
-                    <path d="M4 20v-7a4 4 0 0 1 4-4h12"></path>
+                    <polyline points="23 4 23 10 17 10"></polyline>
+                    <path d="M20.49 15a9 9 0 1 1-2.13-9.36L23 10"></path>
                   </svg>
-                  <span class="btn-text">Redo</span>
                 </button>
                 <button
                   id="resetBtn"
@@ -1416,88 +1412,7 @@
                 </div>
               </details>
               <!-- File Actions Panel -->
-              <details
-                class="file-panel forge-disclosure"
-                id="filePanel"
-                role="region"
-                aria-label="File actions"
-              >
-                <summary>
-                  <svg
-                    class="btn-icon-svg forge-disclosure-icon"
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    aria-hidden="true"
-                  >
-                    <path
-                      d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
-                    ></path>
-                    <polyline points="14 2 14 8 20 8"></polyline>
-                  </svg>
-                  <span class="forge-disclosure-title">File Actions</span>
-                </summary>
-                <div class="file-panel-content">
-                  <div class="file-panel-actions">
-                    <button
-                      type="button"
-                      id="file-new-btn"
-                      class="btn btn-sm btn-outline"
-                      aria-label="New file"
-                    >
-                      New
-                    </button>
-                    <button
-                      type="button"
-                      id="file-reload-btn"
-                      class="btn btn-sm btn-outline"
-                      aria-label="Reload current file"
-                    >
-                      Reload
-                    </button>
-                    <button
-                      type="button"
-                      id="file-save-btn"
-                      class="btn btn-sm btn-outline"
-                      aria-label="Save file"
-                    >
-                      Save
-                    </button>
-                    <button
-                      type="button"
-                      id="file-save-as-btn"
-                      class="btn btn-sm btn-outline"
-                      aria-label="Save file as"
-                    >
-                      Save As
-                    </button>
-                    <button
-                      type="button"
-                      id="file-export-image-btn"
-                      class="btn btn-sm btn-outline"
-                      aria-label="Export preview as image"
-                    >
-                      Export Image
-                    </button>
-                  </div>
-                  <div class="file-recent-section">
-                    <h4 class="file-recent-heading">Recent Files</h4>
-                    <div
-                      id="file-recent-list"
-                      class="file-recent-list"
-                      role="region"
-                      aria-label="Recent files"
-                    >
-                      <div class="file-recent-empty">No recent files.</div>
-                    </div>
-                  </div>
-                </div>
-              </details>
+              <!-- File Actions panel removed: all features now in File toolbar menu -->
               <!-- Error Log Panel -->
               <details
                 class="error-log-panel forge-disclosure"
@@ -1904,97 +1819,7 @@
                   </p>
                 </div>
               </details>
-              <!-- Edit Tools -->
-              <details
-                class="edit-tools-panel forge-disclosure"
-                id="editToolsPanel"
-                role="region"
-                aria-label="Edit tools"
-              >
-                <summary>
-                  <svg
-                    class="btn-icon-svg forge-disclosure-icon"
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    aria-hidden="true"
-                  >
-                    <path
-                      d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"
-                    ></path>
-                    <path
-                      d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"
-                    ></path>
-                  </svg>
-                  <span class="forge-disclosure-title">Edit Tools</span>
-                </summary>
-                <div class="edit-tools-body forge-disclosure-body">
-                  <div class="edit-tools-section">
-                    <h4 class="edit-tools-section-title">Viewport</h4>
-                    <button
-                      type="button"
-                      class="btn btn-sm btn-outline edit-tools-btn"
-                      id="edit-copy-viewport-btn"
-                      aria-label="Copy viewport image to clipboard (Ctrl+Shift+C)"
-                    >
-                      Copy Viewport Image
-                    </button>
-                  </div>
-                  <div class="edit-tools-section">
-                    <h4 class="edit-tools-section-title">Error Navigation</h4>
-                    <div class="edit-tools-row">
-                      <button
-                        type="button"
-                        class="btn btn-sm btn-outline edit-tools-btn"
-                        id="edit-jump-prev-error-btn"
-                        aria-label="Jump to previous error (Ctrl+Alt+Shift+E)"
-                      >
-                        Previous Error
-                      </button>
-                      <button
-                        type="button"
-                        class="btn btn-sm btn-outline edit-tools-btn"
-                        id="edit-jump-next-error-btn"
-                        aria-label="Jump to next error (Ctrl+Alt+E)"
-                      >
-                        Next Error
-                      </button>
-                    </div>
-                  </div>
-                  <div class="edit-tools-section">
-                    <h4 class="edit-tools-section-title">Font Size</h4>
-                    <div class="edit-tools-row edit-tools-font-row">
-                      <button
-                        type="button"
-                        class="btn btn-sm btn-icon edit-tools-btn"
-                        id="edit-font-decrease-btn"
-                        aria-label="Decrease font size (Ctrl+-)"
-                      >
-                        −
-                      </button>
-                      <span
-                        id="edit-font-size-value"
-                        class="edit-tools-font-value"
-                        aria-live="polite"
-                        >14px</span
-                      >
-                      <button
-                        type="button"
-                        class="btn btn-sm btn-icon edit-tools-btn"
-                        id="edit-font-increase-btn"
-                        aria-label="Increase font size (Ctrl+=)"
-                      >
-                        +
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </details>
+              <!-- Edit Tools panel removed: all features now in Edit toolbar menu -->
               <div
                 id="measureFullscreenBackdrop"
                 class="measure-fullscreen-backdrop hidden"
@@ -2099,21 +1924,52 @@
                         min="0"
                         max="100"
                         step="5"
-                        value="50"
+                        value="100"
                         aria-labelledby="overlayOpacityLabel"
                         aria-describedby="overlayOpacityHelp"
                         aria-valuemin="0"
                         aria-valuemax="100"
-                        aria-valuenow="50"
+                        aria-valuenow="100"
                       />
                       <span class="slider-value" id="overlayOpacityValue"
-                        >50%</span
+                        >100%</span
                       >
                     </div>
                   </div>
                   <span id="overlayOpacityHelp" class="sr-only"
                     >Adjust reference overlay transparency from 0 to 100
                     percent</span
+                  >
+                  <div class="overlay-control overlay-color-control">
+                    <label
+                      class="overlay-control-label"
+                      for="overlayColorInput"
+                      id="overlayColorLabel"
+                    >
+                      SVG Color
+                    </label>
+                    <div class="overlay-color-row">
+                      <input
+                        type="color"
+                        id="overlayColorInput"
+                        value="#000000"
+                        aria-labelledby="overlayColorLabel"
+                        aria-describedby="overlayColorHelp"
+                      />
+                      <label class="overlay-auto-color-toggle">
+                        <input
+                          type="checkbox"
+                          id="overlayAutoColorToggle"
+                          checked
+                        />
+                        <span>Auto (match theme)</span>
+                      </label>
+                    </div>
+                  </div>
+                  <span id="overlayColorHelp" class="sr-only"
+                    >Choose the color applied to SVG overlay strokes and fills.
+                    Auto mode picks a visible color for the current
+                    theme.</span
                   >
                   <div class="overlay-control overlay-fit-buttons">
                     <button
@@ -2281,12 +2137,14 @@
                   </details>
                 </div>
               </details>
-              <!-- Design Tools Panel -->
+              <!-- Design Tools panel removed: all features now in Design toolbar menu -->
+              <!-- Display Options panel removed: toggles now in View toolbar menu -->
+              <!-- Animation controls kept as standalone panel -->
               <details
-                class="design-panel forge-disclosure"
-                id="designPanel"
+                class="animation-panel forge-disclosure"
+                id="animationPanel"
                 role="region"
-                aria-label="Design tools"
+                aria-label="Animation controls"
               >
                 <summary>
                   <svg
@@ -2301,184 +2159,66 @@
                     stroke-linejoin="round"
                     aria-hidden="true"
                   >
-                    <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
-                    <polyline points="2 17 12 22 22 17"></polyline>
-                    <polyline points="2 12 12 17 22 12"></polyline>
+                    <polygon points="5 3 19 12 5 21 5 3"></polygon>
                   </svg>
-                  <span class="forge-disclosure-title">Design Tools</span>
+                  <span class="forge-disclosure-title">Animation ($t)</span>
                 </summary>
-                <div class="design-panel-body forge-disclosure-body">
-                  <div class="design-panel-actions">
-                    <button
-                      type="button"
-                      class="btn btn-sm btn-outline design-panel-btn"
-                      id="design-flush-btn"
-                      aria-label="Flush caches — clear files, libraries, and geometry (F9)"
-                    >
-                      Flush Caches
-                    </button>
-                    <button
-                      type="button"
-                      class="btn btn-sm btn-outline design-panel-btn"
-                      id="design-ast-btn"
-                      aria-label="Display parsed parameter AST (F10)"
-                    >
-                      Display AST
-                    </button>
-                    <button
-                      type="button"
-                      class="btn btn-sm btn-outline design-panel-btn"
-                      id="design-validity-btn"
-                      aria-label="Check geometry validity (F11)"
-                    >
-                      Check Validity
-                    </button>
-                    <button
-                      type="button"
-                      class="btn btn-sm btn-outline design-panel-btn"
-                      id="design-geometry-btn"
-                      aria-label="Show geometry information"
-                    >
-                      Geometry Info
-                    </button>
-                  </div>
-                  <div
-                    id="design-validity-status"
-                    class="design-validity-status"
-                    aria-live="polite"
-                  ></div>
-                  <div
-                    id="design-geometry-info"
-                    class="design-geometry-info"
-                    aria-live="polite"
-                  >
-                    No geometry loaded.
-                  </div>
-                </div>
-              </details>
-              <!-- Display Options -->
-              <details
-                class="display-options-panel forge-disclosure"
-                id="displayOptionsPanel"
-                role="region"
-                aria-label="Display options"
-              >
-                <summary>
-                  <svg
-                    class="btn-icon-svg forge-disclosure-icon"
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    aria-hidden="true"
-                  >
-                    <path
-                      d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"
-                    ></path>
-                    <circle cx="12" cy="12" r="3"></circle>
-                  </svg>
-                  <span class="forge-disclosure-title">Display Options</span>
-                </summary>
-                <div class="display-options-body forge-disclosure-body">
-                  <fieldset class="display-options-toggles">
-                    <legend class="sr-only">Display helpers</legend>
-                    <label class="display-option-label"
-                      ><input
-                        type="checkbox"
-                        id="display-axes"
-                        class="display-option-cb"
-                      />
-                      Show Axes</label
-                    >
-                    <label class="display-option-label"
-                      ><input
-                        type="checkbox"
-                        id="display-edges"
-                        class="display-option-cb"
-                      />
-                      Show Edges</label
-                    >
-                    <label class="display-option-label"
-                      ><input
-                        type="checkbox"
-                        id="display-crosshairs"
-                        class="display-option-cb"
-                      />
-                      Show Crosshairs</label
-                    >
-                    <label class="display-option-label"
-                      ><input
-                        type="checkbox"
-                        id="display-wireframe"
-                        class="display-option-cb"
-                      />
-                      Wireframe Mode</label
-                    >
-                  </fieldset>
-                  <div class="display-options-section">
-                    <h4 class="display-options-section-title">
-                      Animation ($t)
-                    </h4>
-                    <div class="anim-controls">
-                      <div class="anim-controls-row">
-                        <button
-                          type="button"
-                          class="btn btn-sm btn-outline anim-btn"
-                          id="anim-play-btn"
-                          aria-label="Play animation"
-                        >
-                          Play
-                        </button>
-                        <button
-                          type="button"
-                          class="btn btn-sm btn-outline anim-btn"
-                          id="anim-step-btn"
-                          aria-label="Step animation forward"
-                        >
-                          Step
-                        </button>
-                        <button
-                          type="button"
-                          class="btn btn-sm btn-outline anim-btn"
-                          id="anim-reset-btn"
-                          aria-label="Reset animation to start"
-                        >
-                          Reset
-                        </button>
-                      </div>
-                      <div class="anim-controls-row">
-                        <label for="anim-fps" class="anim-label">FPS</label>
-                        <input
-                          type="number"
-                          id="anim-fps"
-                          class="anim-input"
-                          min="1"
-                          max="30"
-                          value="10"
-                          aria-label="Animation frames per second"
-                        />
-                        <label for="anim-steps" class="anim-label">Steps</label>
-                        <input
-                          type="number"
-                          id="anim-steps"
-                          class="anim-input"
-                          min="2"
-                          max="1000"
-                          value="100"
-                          aria-label="Total animation steps"
-                        />
-                      </div>
-                      <span
-                        id="anim-t-value"
-                        class="anim-t-display"
-                        aria-live="off"
-                        >$t = 0.000</span
+                <div class="animation-panel-body forge-disclosure-body">
+                  <div class="anim-controls">
+                    <div class="anim-controls-row">
+                      <button
+                        type="button"
+                        class="btn btn-sm btn-outline anim-btn"
+                        id="anim-play-btn"
+                        aria-label="Play animation"
                       >
+                        Play
+                      </button>
+                      <button
+                        type="button"
+                        class="btn btn-sm btn-outline anim-btn"
+                        id="anim-step-btn"
+                        aria-label="Step animation forward"
+                      >
+                        Step
+                      </button>
+                      <button
+                        type="button"
+                        class="btn btn-sm btn-outline anim-btn"
+                        id="anim-reset-btn"
+                        aria-label="Reset animation to start"
+                      >
+                        Reset
+                      </button>
                     </div>
+                    <div class="anim-controls-row">
+                      <label for="anim-fps" class="anim-label">FPS</label>
+                      <input
+                        type="number"
+                        id="anim-fps"
+                        class="anim-input"
+                        min="1"
+                        max="30"
+                        value="10"
+                        aria-label="Animation frames per second"
+                      />
+                      <label for="anim-steps" class="anim-label">Steps</label>
+                      <input
+                        type="number"
+                        id="anim-steps"
+                        class="anim-input"
+                        min="2"
+                        max="1000"
+                        value="100"
+                        aria-label="Total animation steps"
+                      />
+                    </div>
+                    <span
+                      id="anim-t-value"
+                      class="anim-t-display"
+                      aria-live="off"
+                      >$t = 0.000</span
+                    >
                   </div>
                 </div>
               </details>
