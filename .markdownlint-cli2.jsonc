@@ -10,6 +10,8 @@
     "**/public/libraries/**",
     "**/public/wasm/**",
     "**/public/fonts/**",
-    "TEST_REPORT.md"
+    "TEST_REPORT.md",
+    "docs/OPENSCAD_LANGUAGE_REFERENCE.md",
+    "**/.volkswitch/**"
   ]
 }
