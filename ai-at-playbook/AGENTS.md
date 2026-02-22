@@ -34,47 +34,44 @@ Tool-specific versions of these same rules:
 
 These files MUST NOT be edited by AI agents:
 
-- `public/wasm/` — OpenSCAD WASM runtime (official builds, binary)
-- `public/libraries/` — vendored OpenSCAD libraries
-- `public/fonts/*.ttf` — vendored font files
-- `LICENSE`, `SECURITY.md` — legal / security policy
-- `public/sw.js` — service worker (high care, controls offline/caching)
-- `src/worker/openscad-worker.js` — WASM interface (high care)
-- `src/js/parser.js` — OpenSCAD customizer parser (high care)
-- `src/js/validation-constants.js` — security boundary constants (moderate care)
+- `[CONFIGURE: paths to vendored binaries, e.g., public/wasm/, public/libraries/]`
+- `[CONFIGURE: paths to vendored fonts, e.g., public/fonts/*.ttf]`
+- `[CONFIGURE: paths to other protected files, e.g., LICENSE, SECURITY.md]`
 
 ## 3. Environment tool preference
 
-Pixi is the optional environment tool. The `pixi.toml` defines all project
-tasks with descriptions. When Pixi is installed:
+When `[CONFIGURE: environment tool, e.g., Pixi]` is installed and a
+`[CONFIGURE: config file, e.g., pixi.toml]` exists:
 
-1. ALL commands MUST use `pixi run`
+1. ALL commands MUST use `[CONFIGURE: prefix, e.g., pixi run]`
 2. NEVER generate standalone shell scripts for tasks that have an equivalent
-3. Check `pixi.toml` for existing tasks before constructing commands
+3. Check the config file for existing tasks before constructing commands
 4. If no matching task exists, suggest adding one rather than creating a script
 
-When Pixi is **not** installed, fall back to the equivalent `npm run` commands
-from `package.json`. The `pixi.toml` tasks are thin wrappers around npm scripts,
-so the behavior is identical.
+ALL shell commands issued by AI agents MUST run inside the project's
+environment tool. Never default to bash, zsh, or PowerShell directly. Use the
+environment tool's task runner for all build, test, lint, and serve operations.
+If a task does not exist in the config file, propose adding it rather than
+running a raw command.
 
 Exceptions: one-off file operations (mkdir, cp, mv), git commands, initial setup.
 
 ## 4. Commit convention
 
-- Use conventional commit prefixes: `feat:`, `fix:`, `docs:`, `style:`, `refactor:`, `perf:`, `test:`, `chore:`, `ci:`
-- NEVER use `git commit -m`. Write message to `.git/COMMIT_MSG` and commit with
-  `git commit -F .git/COMMIT_MSG`.
-- Work from the `develop` branch
+- Use conventional commit prefixes: `feat:`, `fix:`, `docs:`, `test:`, `chore:`
+- `[CONFIGURE: commit authorship rule, e.g., "NEVER use git commit -m. Write message to .git/COMMIT_MSG and commit with git commit -F .git/COMMIT_MSG."]`
+- Work from the `[CONFIGURE: default branch, e.g., develop]` branch
 - Feature branches: `feat/short-name`, `fix/short-name`, etc.
 - PR descriptions MUST note when AI was used to generate code. Use the label
-  `ai-assisted` and briefly describe which parts were AI-generated.
+  `[CONFIGURE: AI disclosure label, e.g., ai-assisted]` and briefly describe
+  which parts were AI-generated.
 - Use commit trailers for AI disclosure: `Assisted-By: <tool>` for AIL-1 work,
   `Generated-By: <tool>` for AIL-2 work. Place the trailer on the last line of
   the commit message body.
 
 ## 5. Accessibility requirements
 
-- WCAG target: WCAG 2.2 Level AA
+- WCAG target: `[CONFIGURE: e.g., WCAG 2.2 Level AA]`
 - Minimum touch target: 44x44px (use `--size-touch-target` or equivalent token)
 - Icon-only buttons require `aria-label`
 - All five system preference media queries must be respected:
@@ -87,17 +84,17 @@ Exceptions: one-off file operations (mkdir, cp, mv), git commands, initial setup
 - NEVER add `unsafe-eval` or `unsafe-inline` to CSP
 - NEVER lower dependency audit severity level
 - NEVER commit secrets, credentials, or API keys
-- NEVER modify WASM binary files — use the documented update procedure in `.cursor/rules/gold-standard.md`
+- `[CONFIGURE: additional security rules]`
 
 ## 7. Quality gates
 
 Run before every PR:
 
-- Lint: `npm run lint`
-- Format: `npm run format`
-- Unit tests: `npm run test:run`
-- E2E tests: `npm run test:e2e`
-- Bundle budget: `npm run check-bundle`
+- Lint: `[CONFIGURE: lint command]`
+- Format: `[CONFIGURE: format command]`
+- Unit tests: `[CONFIGURE: unit test command]`
+- E2E tests: `[CONFIGURE: e2e test command]`
+- `[CONFIGURE: additional quality gates]`
 
 ### Test-first for AI-generated code
 
