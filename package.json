@@ -41,7 +41,9 @@
     "check-a11y": "lighthouse http://localhost:5173 --only-categories=accessibility --quiet",
     "check-bundle": "node scripts/check-bundle-budget.js dist",
     "validate:html": "vnu --also-check-css --also-check-svg index.html",
-    "validate:html:built": "vnu --also-check-css --also-check-svg dist/index.html"
+    "validate:html:built": "vnu --also-check-css --also-check-svg dist/index.html",
+    "bloat-scan": "node scripts/bloat-scanner.js src/",
+    "import-check": "node scripts/import-check.js src/"
   },
   "keywords": [
     "openscad",

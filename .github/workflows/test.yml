@@ -28,6 +28,12 @@ jobs:
       - name: Run linter
         run: npm run lint
       
+      - name: Check for hallucinated imports
+        run: npm run import-check
+      
+      - name: Scan for AI code bloat
+        run: npm run bloat-scan
+      
       - name: Run unit tests
         run: npm run test:run
       

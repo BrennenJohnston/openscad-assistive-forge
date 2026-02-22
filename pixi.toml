@@ -54,6 +54,8 @@ clean = { cmd = "rm -rf dist node_modules/.vite", description = "Clean build art
 "check-bundle" = { cmd = "npm run check-bundle", description = "Check production bundle sizes against budget limits" }
 "validate:html" = { cmd = "npm run validate:html", description = "Run W3C Nu HTML/CSS/SVG validation on index.html" }
 "validate:html:built" = { cmd = "npm run validate:html:built", description = "Run W3C Nu HTML/CSS/SVG validation on built dist/index.html" }
+"bloat-scan" = { cmd = "npm run bloat-scan", description = "Scan src/ for AI-specific code and doc bloat patterns" }
+"import-check" = { cmd = "npm run import-check", description = "Check that all import/require statements resolve to real files or packages" }
 
 [feature.ci.tasks]
 # CI-specific tasks
