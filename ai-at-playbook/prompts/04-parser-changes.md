@@ -14,8 +14,14 @@ before changing parsing logic.
 ## CONSTRAINTS
 - Write a failing test for the new behavior BEFORE changing the parser
 - Run the full test suite after every change
-- Test with all fixture files to ensure backward compatibility
+- Test with all fixture files to verify backward compatibility
 - Edge cases matter more than the happy path — focus on boundary inputs
+- Prioritize quality infrastructure (tests, linting, accessibility checks, CI
+  configuration) over new features. Build safeguards first; features second.
+- Treat this codebase as legacy code — even if it is new, architectural history
+  may have been lost. When modifying existing code: wrap in tests first, build
+  equitable interfaces around opaque sections, recover understanding
+  incrementally. Prefer refactoring to rewriting.
 
 ## ACCEPTANCE CRITERIA
 - [ ] New test(s) written and passing

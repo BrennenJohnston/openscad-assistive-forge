@@ -19,6 +19,10 @@ before applying a fix.
 - Check OSS reference projects for known related bugs first
 - Write a regression test that fails without the fix
 - Keep the fix minimal — touch only what's necessary
+- Treat this codebase as legacy code — even if it is new, architectural history
+  may have been lost. When modifying existing code: wrap in tests first, build
+  equitable interfaces around opaque sections, recover understanding
+  incrementally. Prefer refactoring to rewriting.
 
 ## ACCEPTANCE CRITERIA
 - [ ] Bug reproduced reliably

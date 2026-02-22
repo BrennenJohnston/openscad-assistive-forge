@@ -20,6 +20,17 @@ change must work on mobile, tablet, desktop, and with assistive technology.
   high contrast, forced colors, reduced transparency)
 - Pointer-type density: compact layout for `pointer: fine`, full touch targets
   for `pointer: coarse`
+- Always prefer native semantic elements (`button`, `details`, `fieldset`,
+  `nav`, `main`, headings) over ARIA roles and attributes. If you use an ARIA
+  attribute, justify why a native element cannot achieve the same result. ARIA
+  overuse correlates with twice as many accessibility errors compared to pages
+  without it [E2, WebAIM Million 2025].
+- Prioritize quality infrastructure (tests, linting, accessibility checks, CI
+  configuration) over new features. Build safeguards first; features second.
+- Treat this codebase as legacy code — even if it is new, architectural history
+  may have been lost. When modifying existing code: wrap in tests first, build
+  equitable interfaces around opaque sections, recover understanding
+  incrementally. Prefer refactoring to rewriting.
 
 ## ACCEPTANCE CRITERIA
 - [ ] Layout works at all 4 breakpoint widths

@@ -35,7 +35,7 @@ Each builds on the previous one.
 
 ## 1. Golden rules
 
-Seven blocking rules that every AI agent must follow, regardless of tool.
+Eight blocking rules that every AI agent must follow, regardless of tool.
 
 | Rule | Why |
 | --- | --- |
@@ -46,6 +46,7 @@ Seven blocking rules that every AI agent must follow, regardless of tool.
 | Semantic HTML before ARIA | ARIA is a repair tool, not a design tool |
 | OSS-first search before new code | Prevents duplicate implementations and phantom dependencies |
 | One feature or fix per PR | Keeps reviews meaningful and reverts safe |
+| Never delegate comprehension-critical tasks | Lower-tier models corrupt research foundations; errors compound downstream |
 
 **Enforced in:**
 [AGENTS.md](../AGENTS.md) | [CLAUDE.md](../CLAUDE.md) |
@@ -148,7 +149,7 @@ communicate with maintainers, and respect governance and codes of conduct.
 **Guides:**
 [OSS_CONTRIBUTION_AI_GUIDE.md](OSS_CONTRIBUTION_AI_GUIDE.md) |
 [CODE_OF_CONDUCT_ENFORCEMENT.md](CODE_OF_CONDUCT_ENFORCEMENT.md) |
-[COMMUNITY_FUNNEL.md](COMMUNITY_FUNNEL.md) |
+[COMMUNITY_FUNNEL.md](COMMUNITY_FUNNEL.md) (includes graduated contributor AI policy with AIL levels) |
 [OSS_WORKFLOW_METRICS.md](OSS_WORKFLOW_METRICS.md)
 
 **Templates:**
@@ -173,7 +174,7 @@ AI agents default to raw shell commands. If your project uses an environment too
 ## 8. Responsive UI and multi-device guardrails
 
 Eight responsive UI checks plus five mandatory system preference media queries
-ensure AT web projects work across devices and user preferences.
+keep AT web projects usable across devices and user preferences.
 
 **Guides:**
 [RESPONSIVE_UI_GUARDRAILS.md](RESPONSIVE_UI_GUARDRAILS.md) |
@@ -188,7 +189,8 @@ ensure AT web projects work across devices and user preferences.
 
 A repeatable 4-week cycle: build -> refactor -> stabilize. Each phase has
 different AI rules. Sprint plans that try to do everything at once have a 7%
-completion rate; narrow-scope plans complete at 50%.
+completion rate; narrow-scope plans complete at 50%. Includes guidance for
+bootstrapping the test phase from zero coverage using AI test generation tools.
 
 **Full guide:** [PROCESS_CADENCE.md](PROCESS_CADENCE.md)
 
@@ -280,13 +282,26 @@ The same rules ship in four formats so every contributor's AI tool can read them
 | `.cursor/rules/golden-rules.mdc` | Cursor |
 | `.github/copilot-instructions.md` | GitHub Copilot |
 
+**Industry convergence on AGENTS.md:** `AGENTS.md` has become the de facto
+standard for AI coding tool configuration, adopted by 20,000+ projects and
+supported by all major tools (Cursor, Claude Code, Copilot, Windsurf, Cline).
+If you maintain only one file, make it `AGENTS.md`.
+
+**Consolidation option:** [SurfContext](https://github.com/jjuliano/SurfContext)
+can auto-generate tool-specific rule files from a single `AGENTS.md` source,
+reducing the maintenance burden of keeping four files in sync. This playbook
+keeps the 4-file approach as the default because tool-specific formatting
+differences still matter (Cursor's `.mdc` format, Copilot's frontmatter
+conventions), but SurfContext is a viable alternative for teams that want a
+single source of truth.
+
 **Propagation guide:** [ORG_LEVEL_PROPAGATION.md](ORG_LEVEL_PROPAGATION.md)
 
 ---
 
 ## 18. Prompt library
 
-Fifteen ready-to-use prompts for common development scenarios. Each uses one
+Sixteen ready-to-use prompts for common development scenarios. Each uses one
 dominant technique (per arXiv:2412.20545), stays under 500 words, and includes
 acceptance criteria and anti-patterns.
 
@@ -296,23 +311,77 @@ acceptance criteria and anti-patterns.
 | --- | --- | --- |
 | 01 | WASM / Worker debugging | Persona |
 | 02 | UI layout + accessibility | Persona |
-| 03 | CSS design tokens | Chain-of-thought |
+| 03 | CSS design tokens | Persona |
 | 04 | Parser changes | Persona |
 | 05 | Service worker / PWA | Persona |
 | 06 | Security changes | Persona |
-| 07 | Test writing | Chain-of-thought |
+| 07 | Test writing | Persona |
 | 08 | Documentation writing | Persona |
-| 09 | Performance optimization | Chain-of-thought |
-| 10 | Bug triage | Chain-of-thought |
+| 09 | Performance optimization | Persona |
+| 10 | Bug triage | Persona |
 | 11 | Accessibility remediation | Persona |
 | 12 | New feature design | Chain-of-thought |
 | 13 | Responsive UI change | Persona |
 | 14 | 3D-print AT device design | Persona |
 | 15 | Open source contribution | Persona |
+| 16 | Research synthesis | Persona |
 
 ---
 
-## 19. Lessons from development history
+## 19. Session boundary protocol
+
+Rules for multi-session AI tasks: re-read source documents before producing
+derivatives, maintain a session handoff inventory, run fabrication self-checks,
+and verify verbatim quotes. Session-boundary context loss is functionally
+equivalent to delegation to a lower-tier model.
+
+**Full guide:** [SESSION_BOUNDARY_PROTOCOL.md](SESSION_BOUNDARY_PROTOCOL.md)
+
+**Checklist:** [multi-session-handoff.md](../checklists/multi-session-handoff.md)
+
+---
+
+## 20. AI task delegation rules
+
+Rules for when AI agents may delegate work to subagents or lower-tier models
+and when they must not. Comprehension-critical tasks (reading, analyzing,
+summarizing source material) must always use the primary model in the session.
+Mechanical tasks (formatting, scaffolding, file operations) may use cheaper
+models or subagents. Also defines AI-appropriate vs. AI-inappropriate task
+boundaries.
+
+**Full guide:** [AI_TASK_DELEGATION_RULES.md](AI_TASK_DELEGATION_RULES.md)
+
+**Pre-task checklist:** [ai-task-scoping.md](../checklists/ai-task-scoping.md)
+
+---
+
+## 21. PR review: accessibility + AI guardrails
+
+A combined checklist for PR review covering both accessibility requirements and
+AI-specific guardrails. Includes checks for focus management, keyboard
+operability, screen reader testing, AI usage disclosure, test-first
+verification, and PR description accuracy.
+
+**Checklist:**
+[pr-review-ai-accessibility.md](../checklists/pr-review-ai-accessibility.md)
+
+---
+
+## 22. Alt text strategy
+
+Human-in-the-loop strategy for alt text on assistive technology content. AI
+does not generate alt text — the risk of false positives creating
+inaccessibility is too high. Three-part strategy: transparent gap indicator,
+community contribution model, upstream encouragement. CI tooling for automated
+detection of missing alt text in PRs and Markdown files.
+
+**Guide:** [DOCS_AND_EVIDENCE_ACCESSIBILITY.md](DOCS_AND_EVIDENCE_ACCESSIBILITY.md)
+(Alt text strategy + CI tooling sections)
+
+---
+
+## 23. Lessons from development history
 
 Analysis of 100 Cursor development plans from the origin project. Key findings:
 
@@ -325,7 +394,7 @@ Analysis of 100 Cursor development plans from the origin project. Key findings:
 
 ---
 
-## 20. Recommended plan template
+## 24. Recommended plan template
 
 Based on the empirical analysis, use this template when planning AI-assisted work:
 
@@ -347,6 +416,11 @@ Based on the empirical analysis, use this template when planning AI-assisted wor
 - [ ] All existing tests pass
 - [ ] AI bloat scan passes (no narrating comments, no hallucinated imports)
 
+## Delegation Guardrail
+- Comprehension-critical tasks in this plan: [list tasks that must NOT be delegated]
+- Delegation-safe tasks in this plan: [list tasks that MAY be delegated]
+- Verification: [ ] All comprehension-critical tasks were performed by the primary model
+
 ## OSS-First Search (if feature)
 - Searched: [what was searched]
 - Found: [what was found, or "nothing suitable"]
@@ -361,6 +435,16 @@ Based on the empirical analysis, use this template when planning AI-assisted wor
 - [ ] Pre-commit checklist passes
 - [ ] Post-AI-edit verification protocol completed (Tier 1 + applicable Tier 2/3)
 ```
+
+---
+
+## 25. Lead developer choices needed
+
+Decisions that require the lead developer's input before they can be
+implemented. Organized by research question, each decision includes the
+options, supporting evidence, and the default outcome if no decision is made.
+
+**Full guide:** [LEAD_DEVELOPER_CHOICES_NEEDED.md](LEAD_DEVELOPER_CHOICES_NEEDED.md)
 
 ---
 

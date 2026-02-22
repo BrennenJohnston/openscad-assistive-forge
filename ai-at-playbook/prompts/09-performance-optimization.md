@@ -15,6 +15,12 @@ profile before guessing, and you verify improvements with numbers.
 - Profile with browser DevTools or Lighthouse to identify the bottleneck
 - Verify the optimization actually improved the metric (not just "looks faster")
 - Do not optimize code that isn't in the hot path
+- Prioritize quality infrastructure (tests, linting, accessibility checks, CI
+  configuration) over new features. Build safeguards first; features second.
+- Treat this codebase as legacy code — even if it is new, architectural history
+  may have been lost. When modifying existing code: wrap in tests first, build
+  equitable interfaces around opaque sections, recover understanding
+  incrementally. Prefer refactoring to rewriting.
 
 ## ACCEPTANCE CRITERIA
 - [ ] Baseline measurement recorded (before)

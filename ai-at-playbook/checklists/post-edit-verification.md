@@ -17,8 +17,8 @@ features and major changes.
 | Unit tests pass | `[CONFIGURE: unit test command]` | Yes |
 | E2E tests pass | `[CONFIGURE: e2e test command]` | Yes |
 | Bundle budget met | `[CONFIGURE: budget check command]` | Yes (if applicable) |
-| AI code bloat scan | Run Phase 11A checklist against diff | Warning |
-| AI doc bloat scan | Run Phase 11B checklist against changed `.md` files | Warning |
+| AI code bloat scan | Run `checklists/ai-code-bloat-scan.md` against diff | Warning |
+| AI doc bloat scan | Run `checklists/ai-doc-bloat-scan.md` against changed `.md` files | Warning |
 | No hallucinated imports | Verify all imports resolve to actual files | Yes |
 | No scope creep | `git diff --name-only` matches stated task scope | Warning |
 | Protected files untouched | Cross-reference diff against file protection registry | Yes |
@@ -44,6 +44,8 @@ features and major changes.
 | Rollback procedure documented | Verify rollback path exists and is tested | Warning |
 | CHANGELOG entry drafted | Verify user-facing changes are documented | Warning |
 | Accessibility conformance | Verify WCAG criteria addressed if UI changed | Yes (for UI) |
+| Delegation quality verified | If any part of this work was delegated to a subagent or lower-tier model, verify no comprehension-critical tasks were delegated. If they were, the delegated output must be re-done by the primary model. | Yes |
+| Source-derivative consistency check | For any artifact derived from source documents (summaries, syntheses, planning documents), spot-check a sample of claims against their cited sources. Verify that attributed quotes exist in the source, participant lists match, and topic descriptions are accurate. Always trace claims back to original source documents, not to other derivative artifacts. Verifying a synthesis against a summary (both derivatives) inherits any propagated errors from the summary. Sound verification requires grounding each step against previously-verified premises [R1, You et al., EMNLP 2025]. | Yes |
 
 ## When to use which tier
 
@@ -94,4 +96,6 @@ For projects that want to automate parts of this:
 - [ ] Rollback procedure documented
 - [ ] CHANGELOG entry drafted
 - [ ] Accessibility conformance verified
+- [ ] Delegation quality verified (no comprehension-critical tasks delegated)
+- [ ] Source-derivative consistency check (spot-check claims against original sources, not other derivatives)
 ```

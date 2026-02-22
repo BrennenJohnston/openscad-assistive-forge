@@ -35,8 +35,8 @@ tagged so screen readers use the right voice/pronunciation. See
 Landing/first-run UI must provide context and progressive disclosure. Avoid the
 "wall of controls" experience. Prefer a warm, guided entry into complex interactions.
 
-From team discussion, the goal is to prevent the "big hand" experience -- where a
-new user sees everything at once and doesn't know where to start.
+The goal is to prevent the "wall of controls" experience -- where a new user sees
+everything at once and doesn't know where to start.
 
 ### 6. Staging readiness gate
 

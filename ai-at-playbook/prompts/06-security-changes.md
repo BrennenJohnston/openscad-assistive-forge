@@ -18,6 +18,12 @@ maintainer approval and a documented justification.
 - NEVER disable SBOM generation
 - NEVER commit secrets, credentials, or API keys
 - Document the threat model for any security-related change
+- Prioritize quality infrastructure (tests, linting, accessibility checks, CI
+  configuration) over new features. Build safeguards first; features second.
+- Treat this codebase as legacy code — even if it is new, architectural history
+  may have been lost. When modifying existing code: wrap in tests first, build
+  equitable interfaces around opaque sections, recover understanding
+  incrementally. Prefer refactoring to rewriting.
 
 ## ACCEPTANCE CRITERIA
 - [ ] No security headers removed or weakened

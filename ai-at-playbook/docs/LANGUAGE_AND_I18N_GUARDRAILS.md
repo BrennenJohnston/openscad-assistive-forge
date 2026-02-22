@@ -6,8 +6,8 @@ metadata is wrong or missing, the screen reader uses the wrong voice and pronunc
 
 This guide adds language-aware guardrails for AT web projects.
 
-**Source:** Team discussion ("language information probably needs to be in the
-database"), standard web accessibility requirements for language metadata.
+**Source:** Internal development experience, standard web accessibility requirements
+for language metadata.
 
 ## Baseline requirements
 

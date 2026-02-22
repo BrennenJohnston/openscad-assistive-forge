@@ -1,8 +1,7 @@
 # Security Operations Baseline
 
 Minimum security operations for AI-assisted open source projects. These are the
-basics -- not a comprehensive security program, but the floor below which you
-shouldn't go.
+basics -- not a full security program, but the floor below which you shouldn't go.
 
 **Source:** Open Source Guides security recommendations, Project CodeGuard
 (CoSAI, 2025).

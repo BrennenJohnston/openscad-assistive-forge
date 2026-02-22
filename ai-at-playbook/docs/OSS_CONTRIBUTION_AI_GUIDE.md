@@ -9,13 +9,13 @@ your open source project should follow the same norms that human contributors fo
 They need to be told explicitly, because they default to corporate-formal patterns that
 damage community warmth.
 
-**Source:** GitHub Open Source Guides (Sections 1-13), team discussion transcripts
-(2026-02-20).
+**Source:** GitHub Open Source Guides (Sections 1-13), internal development
+experience.
 
 ## Why this matters
 
-From the team discussion (2026-02-20): "I'm hoping that this can also be applied to
-other people like me in the AT field that want to try learning how to use AI coding."
+This playbook is designed to be reusable by anyone in the AT field who wants to
+learn AI-assisted development with proper guardrails.
 
 AI agents that submit PRs, create issues, or interact with community members must follow
 the same norms that human contributors follow — and must be told explicitly, because
@@ -50,7 +50,7 @@ When an AI agent creates or suggests a GitHub issue:
 When an AI agent creates or assists with a pull request:
 
 1. **Keep PRs small** — "Small PRs land. Huge PRs usually stall." (Open Source Guides
-   Section 7.3, origin project's Rule 8)
+   Section 7.3, Golden Rule 7)
 2. **Reference the issue** — Link to the issue being addressed with "Closes #N" or
    "Fixes #N" syntax.
 3. **Write a meaningful description** — Explain the WHY, not just the WHAT. Include:

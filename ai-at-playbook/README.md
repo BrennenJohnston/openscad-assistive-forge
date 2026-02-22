@@ -5,19 +5,18 @@ assistive technology software. Drop it into your project, fill in the
 `[CONFIGURE: ...]` placeholders, and your AI assistant gets guardrails that protect
 accessibility, security, open source norms, and code quality.
 
-This playbook grew out of the [OpenSCAD Assistive Forge](https://github.com/BrennenJohnston/openscad-assistive-forge)
-project and 100+ AI-assisted development sessions. The rules are grounded in
-peer-reviewed research on AI coding productivity (see the Scientific Foundations
-table in `docs/PLAYBOOK.md`) and hard-won lessons from shipping an accessibility-first
-web app with AI assistance.
+This playbook grew out of a real-world assistive technology project and 100+
+AI-assisted development sessions. The rules are grounded in peer-reviewed research
+on AI coding productivity (see the Scientific Foundations table in `docs/PLAYBOOK.md`)
+and hard-won lessons from shipping an accessibility-first web app with AI assistance.
 
 ## What's inside
 
 | Folder | What you'll find |
 | --- | --- |
-| `docs/` | Deep-dive guides: AT scope, OSS contribution, responsive UI, process cadence, token economics, legal, maintainer sustainability, and more |
+| `docs/` | Deep-dive guides: AT scope, OSS contribution, responsive UI, process cadence, token economics, legal, maintainer sustainability, GitHub Open Source Guides reference index, and more |
 | `checklists/` | Quick-reference checklists: bloat scanning, post-edit verification, OSS-first search, responsive UI, docs accessibility |
-| `prompts/` | 15 copy-and-paste prompt templates covering WASM debugging, accessibility remediation, 3D-print AT devices, OSS contribution, and more |
+| `prompts/` | 16 copy-and-paste prompt templates covering WASM debugging, accessibility remediation, 3D-print AT devices, OSS contribution, research synthesis, and more |
 | `templates/` | Ready-to-copy config files for Cursor, GitHub Copilot, issue templates, PR templates, `.editorconfig`, and `pixi.toml` |
 | `scripts/` | Optional automation: bloat scanner, hallucinated import detector |
 | `AGENTS.md` | Universal golden rules (works with any AI tool) |
@@ -30,7 +29,7 @@ web app with AI assistance.
 **Pattern 1: Copy and configure (simplest)**
 
 ```bash
-git clone https://github.com/BrennenJohnston/ai-assistive-tech-guardrails.git /tmp/playbook
+git clone https://github.com/[CONFIGURE: your-username]/ai-assistive-tech-guardrails.git /tmp/playbook
 cp /tmp/playbook/AGENTS.md ./AGENTS.md
 cp /tmp/playbook/CLAUDE.md ./CLAUDE.md
 cp -r /tmp/playbook/templates/.github ./.github
@@ -40,7 +39,7 @@ cp -r /tmp/playbook/templates/.github ./.github
 **Pattern 2: Git submodule (stays updated)**
 
 ```bash
-git submodule add https://github.com/BrennenJohnston/ai-assistive-tech-guardrails.git .playbook
+git submodule add https://github.com/[CONFIGURE: your-username]/ai-assistive-tech-guardrails.git .playbook
 # Reference .playbook/AGENTS.md from your project rules
 ```
 
@@ -83,9 +82,9 @@ Dual-licensed:
 
 See `LICENSE` for full text.
 
-## Origin project
+## Origin
 
-This playbook was extracted from the [OpenSCAD Assistive Forge](https://github.com/BrennenJohnston/openscad-assistive-forge)
-project — a browser-based OpenSCAD customizer that renders parametric 3D models
-client-side via WebAssembly, with an accessibility-first UI. The rules here are
-designed to work for any assistive technology project, not just that one.
+This playbook was extracted from a real-world assistive technology project — a
+browser-based tool that generates accessible 3D models client-side via WebAssembly,
+with an accessibility-first UI. The rules here are designed to work for any
+assistive technology project, not just the one that inspired them.

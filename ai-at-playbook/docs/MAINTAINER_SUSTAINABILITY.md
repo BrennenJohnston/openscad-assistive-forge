@@ -5,7 +5,7 @@ AI-assisted development adds its own unique burnout patterns on top of the famil
 This guide names them so you can watch for them, and gives you templates for setting
 boundaries.
 
-**Source:** Open Source Guides (Sections 2, 7), team discussion transcripts.
+**Source:** Open Source Guides (Sections 2, 7), internal development experience.
 
 ## AI-specific burnout patterns
 
@@ -22,7 +22,7 @@ and over.
 ### 2. Rule management overhead
 
 Rules grow with every AI failure. Maintaining rules becomes a project unto itself.
-(From discussion: "Cursor preferences are getting out of control.") Every time the AI
+Rule sets tend to grow unchecked as new edge cases surface. Every time the AI
 does something wrong, you add a rule to prevent it. Soon you're spending more time
 managing rules than writing code.
 
@@ -51,13 +51,13 @@ learned last month works differently this month.
 Adapted from Open Source Guides Section 2.1 ("Set boundaries"):
 
 - **Time-box AI sessions** -- 90 minutes max, then step away and review
-- **Define "AI days" vs "hands-on days"** -- Not every day should involve AI tools
-  (From discussion: "Is one week an AI week? Is another week a maintenance week?")
+- **Define "AI days" vs "hands-on days"** -- Not every day should involve AI tools.
+  Designate some weeks for AI-assisted building and others for hands-on maintenance.
 - **Communicate AI boundaries in README** -- "This project uses AI-assisted development.
   AI-generated PRs are reviewed with the same rigor as human PRs."
 - **Don't feel guilty about NOT using AI** -- Sometimes manual refactoring is more
-  effective and more educational (From discussion: "I'm getting a lot of peace out of
-  doing what I'm doing because I am mowing down lines of code")
+  effective and more educational. Hands-on code removal and cleanup can be deeply
+  satisfying work.
 
 ### Boundary template (for your README or CONTRIBUTING.md)
 
@@ -80,9 +80,9 @@ This project uses AI coding tools for some tasks. Here's what that means for you
 - **Use PR checklists to offload review** -- The post-edit verification checklist
   (see `checklists/post-edit-verification.md`) turns review into a structured process
   any contributor can follow
-- **Record video for bug reports** -- (From discussion: "If you record 10 to 15 minutes
-  of testing, it would take me longer to review a pull request") Video is faster than
-  written reproduction steps and more accessible to screen reader users who can listen
+- **Record video for bug reports** -- A 10-15 minute testing video is often faster
+  to produce and review than written reproduction steps, and more accessible to
+  screen reader users who can listen
 
 ## Resourcing and funding
 

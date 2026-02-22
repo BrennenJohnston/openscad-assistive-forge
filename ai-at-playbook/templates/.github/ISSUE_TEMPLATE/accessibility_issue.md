@@ -42,6 +42,16 @@ labels: a11y
 - Browser: [e.g., Chrome 120, Firefox 115]
 - OS: [e.g., Windows 11, macOS 14]
 
+## AI usage level
+
+- [ ] **AIL-0**: No AI tools used
+- [ ] **AIL-1**: AI-assisted (human wrote the core logic; AI helped with boilerplate, lookups, or suggestions)
+- [ ] **AIL-2**: AI-generated (AI produced the primary output; human reviewed and edited)
+
+## Learning objective
+
+`[CONFIGURE: What skill are you practicing or building with this issue? e.g., "learning WCAG criteria", "first accessibility report", "screen reader testing". Leave blank if not applicable.]`
+
 ## Evidence
 
 [Attach screenshots, video recording, or screen reader audio if available.]

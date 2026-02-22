@@ -54,9 +54,10 @@ to **Blocking** if your project has link-checking in CI.
 
 ## The tone problem in detail
 
-This pattern deserves extra attention. The origin project's `CONTRIBUTING.md` starts
-with "Hey — thanks for taking a look." The `README.md` says "Because I work in the
-assistive technology field, I love parametric OpenSCAD models..." That's the voice.
+This pattern deserves extra attention. A good `CONTRIBUTING.md` might start with
+"Hey — thanks for taking a look." A `README.md` might say "I build tools for people
+who need them most — that's why accessibility comes first in this project." That's
+the voice.
 
 AI tools consistently replace this kind of warmth with corporate formality. Three
 audit plans were needed to undo it. Your project has its own voice — protect it.

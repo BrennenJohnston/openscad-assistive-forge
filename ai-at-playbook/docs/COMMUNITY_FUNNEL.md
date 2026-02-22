@@ -4,7 +4,7 @@ This guide translates Open Source Guides Sections 5-7 into lightweight community
 guardrails for AT projects. The goal: earn users, retain contributors, and reduce
 maintainer load -- without adding bureaucratic overhead.
 
-**Source:** Open Source Guides (Sections 5-7), team discussion transcripts.
+**Source:** Open Source Guides (Sections 5-7), internal development experience.
 
 ## Minimal "home" + message
 
@@ -47,10 +47,9 @@ Reduce friction at each step.
 
 ## Alt-text contribution PR template (non-code on-ramp)
 
-From team discussion: "You make a PR with between six to ten images with ellipses in
-the alt text. And then a group can come along and make those changes on GitHub."
-
-This is a tested, inclusive contribution pattern for AT projects:
+Create a PR with placeholder alt text across several images, then invite contributors
+to fill in real descriptions. This is a tested, inclusive contribution pattern for
+AT projects:
 
 1. Maintainer creates a PR with placeholder alt text (`alt="..."` or
    `alt="[needs description]"`)
@@ -75,6 +74,46 @@ Adds placeholder alt text to [N] images that need human-written descriptions.
 - Keep descriptions under 150 characters when possible
 - If you are a screen reader user, your perspective is especially valuable here
 ```
+
+## Contributor AI policy
+
+Projects that accept AI-assisted contributions need a graduated policy — not a
+binary allow/ban. The OpenTelemetry model defines three levels:
+
+| Level | Name | What it means |
+| --- | --- | --- |
+| **AIL-0** | No AI | Contributor wrote all code and prose without AI tools |
+| **AIL-1** | AI-assisted | Human wrote the core logic; AI helped with boilerplate, lookups, or suggestions |
+| **AIL-2** | AI-generated | AI produced the primary output; human reviewed and edited |
+
+### Graduated first-contribution restriction
+
+New contributors should demonstrate human competence before submitting
+AI-generated work. A recommended approach:
+
+- **First `[CONFIGURE: e.g., 1, 3]` contributions**: AIL-0 or AIL-1 only. The
+  contributor must show they understand the codebase, the workflow, and the
+  project's standards without leaning on AI-generated output.
+- **After the threshold**: AIL-2 contributions are accepted, subject to the
+  same review rigor as any other PR.
+
+This prevents a flood of low-context AI-generated PRs from contributors who
+have not yet invested in understanding the project. It also creates a natural
+on-ramp: contributors who start with human-first work build the context
+needed to use AI tools effectively.
+
+### Disclosure mechanism
+
+AI usage is disclosed per-issue and per-PR using the AIL levels above. The
+issue templates include an "AI usage level" checkbox set; PRs use the same
+labels. Commit messages use the `Assisted-By:` or `Generated-By:` trailer
+(see the commit convention in the agent rule files).
+
+### Project-specific configuration
+
+- **First-contribution threshold:** `[CONFIGURE: number of human-first contributions required, e.g., 1, 3]`
+- **AI policy enforcement:** `[CONFIGURE: e.g., "honor system", "maintainer review", "CI label check"]`
+- **AIL label names:** `[CONFIGURE: e.g., "ail-0", "ail-1", "ail-2" or project-specific labels]`
 
 ## Public process defaults
 

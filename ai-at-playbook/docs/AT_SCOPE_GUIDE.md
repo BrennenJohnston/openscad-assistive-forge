@@ -30,8 +30,8 @@ your AI rules (`AGENTS.md`, `.cursor/rules/`, etc.), emphasize these guardrails.
 
 ## The legacy code perspective
 
-From team discussion: "Even though it's new, legacy code is code where history's been
-lost. We've got a lot of ambiguous history in this project."
+AI-generated codebases accumulate ambiguous history fast. Even new code becomes
+legacy when the reasoning behind decisions is lost between sessions.
 
 AI-generated codebases should be treated as legacy code because:
 
@@ -54,8 +54,9 @@ approach is the same: understand first, then change.
 
 ## Human-in-the-loop patterns for AT
 
-From team discussion on alt text: "If an alt text hasn't been created for an image, it
-has a red border or a voiceover that says unfinished image description."
+Missing alt text should produce a visible indicator — a border change, a screen
+reader announcement, or both — so incomplete descriptions are never mistaken for
+finished ones.
 
 AI should NEVER autonomously complete these AT-critical tasks:
 
@@ -87,7 +88,7 @@ AI SHOULD:
 
 ## "Construction underway" pattern
 
-From team discussion: "It's like a construction underway type of sign."
+Incomplete features need a visible "construction underway" marker.
 
 When a feature is incomplete — especially an accessibility feature — AI should generate
 visible indicators rather than leaving a gap. A missing alt text with no indicator looks

@@ -23,6 +23,12 @@ Tool-specific versions of these same rules:
 6. Search for existing libraries and project modules before adding dependencies or
    writing new utility code.
 7. Keep PRs small. One feature or fix per PR.
+8. NEVER delegate comprehension-critical tasks (reading, analyzing, summarizing
+   source documents) to subagents or lower-tier models. The model that reasons
+   over source material must be the primary model in the session.
+9. Give AI one function or component at a time. Never give AI a whole feature,
+   module, or architectural decision. Each AI task must have clearly defined
+   inputs, outputs, and boundaries.
 
 ## 2. Protected files (never modify)
 
@@ -42,6 +48,12 @@ When `[CONFIGURE: environment tool, e.g., Pixi]` is installed and a
 3. Check the config file for existing tasks before constructing commands
 4. If no matching task exists, suggest adding one rather than creating a script
 
+ALL shell commands issued by AI agents MUST run inside the project's
+environment tool. Never default to bash, zsh, or PowerShell directly. Use the
+environment tool's task runner for all build, test, lint, and serve operations.
+If a task does not exist in the config file, propose adding it rather than
+running a raw command.
+
 Exceptions: one-off file operations (mkdir, cp, mv), git commands, initial setup.
 
 ## 4. Commit convention
@@ -50,6 +62,12 @@ Exceptions: one-off file operations (mkdir, cp, mv), git commands, initial setup
 - `[CONFIGURE: commit authorship rule, e.g., "NEVER use git commit -m. Write message to .git/COMMIT_MSG and commit with git commit -F .git/COMMIT_MSG."]`
 - Work from the `[CONFIGURE: default branch, e.g., develop]` branch
 - Feature branches: `feat/short-name`, `fix/short-name`, etc.
+- PR descriptions MUST note when AI was used to generate code. Use the label
+  `[CONFIGURE: AI disclosure label, e.g., ai-assisted]` and briefly describe
+  which parts were AI-generated.
+- Use commit trailers for AI disclosure: `Assisted-By: <tool>` for AIL-1 work,
+  `Generated-By: <tool>` for AIL-2 work. Place the trailer on the last line of
+  the commit message body.
 
 ## 5. Accessibility requirements
 
@@ -77,3 +95,22 @@ Run before every PR:
 - Unit tests: `[CONFIGURE: unit test command]`
 - E2E tests: `[CONFIGURE: e2e test command]`
 - `[CONFIGURE: additional quality gates]`
+
+### Test-first for AI-generated code
+
+When AI generates implementation code, tests for that code MUST already exist OR
+be written by a human first. Tests serve as the specification. AI-generated code
+that passes existing tests is acceptable; AI-generated tests of AI-generated
+code are not a sufficient quality gate.
+
+### Gold standard pattern
+
+Before AI replicates a component pattern, a human-crafted "gold standard"
+implementation must exist. AI's role is pattern replication, not architectural
+design. The gold standard must be reviewed and approved before AI extends it.
+
+### Complexity removal as progress
+
+Measure progress by code removed, not just code added. PRs that delete
+unnecessary abstractions, reduce dependencies, or simplify interfaces are
+valuable. If a file can be deleted without breaking tests, it should be.

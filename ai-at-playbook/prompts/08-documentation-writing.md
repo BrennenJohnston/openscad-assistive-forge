@@ -16,6 +16,10 @@ values warm, clear, human writing over corporate formality.
 - Use Mermaid for diagrams when helpful
 - Never hardcode counts (test counts, line counts, etc.) — they drift
 - Cite file paths when referencing code
+- NEVER delegate source document reading, analysis, or summarization to subagents
+  or lower-tier models. If this task involves synthesizing information from primary
+  sources (meeting notes, transcripts, research documents), you must read and
+  reason about those sources directly.
 
 ## ACCEPTANCE CRITERIA
 - [ ] Tone matches existing project documentation

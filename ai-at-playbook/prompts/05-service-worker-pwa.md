@@ -15,6 +15,12 @@ cache strategies, cache invalidation pitfalls, and offline-first architecture.
 - Test offline functionality
 - Never add new trusted origins without security review
 - Preserve `skipWaiting()` and `clients.claim()` behavior
+- Prioritize quality infrastructure (tests, linting, accessibility checks, CI
+  configuration) over new features. Build safeguards first; features second.
+- Treat this codebase as legacy code — even if it is new, architectural history
+  may have been lost. When modifying existing code: wrap in tests first, build
+  equitable interfaces around opaque sections, recover understanding
+  incrementally. Prefer refactoring to rewriting.
 
 ## ACCEPTANCE CRITERIA
 - [ ] Cache invalidation tested: old cached assets are replaced by new build
