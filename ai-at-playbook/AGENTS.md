@@ -45,18 +45,17 @@ These files MUST NOT be edited by AI agents:
 
 ## 3. Environment tool preference
 
-When Pixi is installed and a `pixi.toml` exists:
+Pixi is the optional environment tool. The `pixi.toml` defines all project
+tasks with descriptions. When Pixi is installed:
 
 1. ALL commands MUST use `pixi run`
 2. NEVER generate standalone shell scripts for tasks that have an equivalent
-3. Check the config file for existing tasks before constructing commands
+3. Check `pixi.toml` for existing tasks before constructing commands
 4. If no matching task exists, suggest adding one rather than creating a script
 
-ALL shell commands issued by AI agents MUST run inside the project's
-environment tool. Never default to bash, zsh, or PowerShell directly. Use the
-environment tool's task runner for all build, test, lint, and serve operations.
-If a task does not exist in the config file, propose adding it rather than
-running a raw command.
+When Pixi is **not** installed, fall back to the equivalent `npm run` commands
+from `package.json`. The `pixi.toml` tasks are thin wrappers around npm scripts,
+so the behavior is identical.
 
 Exceptions: one-off file operations (mkdir, cp, mv), git commands, initial setup.
 

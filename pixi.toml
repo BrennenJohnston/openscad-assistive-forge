@@ -31,6 +31,11 @@ test = { cmd = "npm run test:run", description = "Run Vitest unit tests once and
 "test:e2e" = { cmd = "npm run test:e2e", description = "Run Playwright end-to-end tests (requires dev server running)" }
 "test:all" = { cmd = "npm run test:all", description = "Run unit tests then E2E tests sequentially" }
 "test:coverage" = { cmd = "npm run test:coverage", description = "Run unit tests with code coverage report" }
+"test:ui" = { cmd = "npm run test:ui", description = "Run Vitest with interactive browser UI" }
+"test:e2e:headed" = { cmd = "npm run test:e2e:headed", description = "Run Playwright E2E tests in headed browser mode" }
+"test:e2e:debug" = { cmd = "npm run test:e2e:debug", description = "Run Playwright E2E tests in debug mode with inspector" }
+"test:visual" = { cmd = "npm run test:visual", description = "Run visual regression tests comparing screenshots" }
+"test:visual:update" = { cmd = "npm run test:visual:update", description = "Update visual regression test snapshots" }
 
 # Code quality
 lint = { cmd = "npm run lint", description = "Run ESLint on src/ to check for code quality issues" }
@@ -46,7 +51,9 @@ setup = { depends-on = ["setup-deps", "setup-wasm", "setup-libraries"], descript
 # Utilities
 clean = { cmd = "rm -rf dist node_modules/.vite", description = "Clean build artifacts" }
 "check-a11y" = { cmd = "npm run check-a11y", description = "Run Lighthouse accessibility audit against the dev server (requires server running)" }
+"check-bundle" = { cmd = "npm run check-bundle", description = "Check production bundle sizes against budget limits" }
 "validate:html" = { cmd = "npm run validate:html", description = "Run W3C Nu HTML/CSS/SVG validation on index.html" }
+"validate:html:built" = { cmd = "npm run validate:html:built", description = "Run W3C Nu HTML/CSS/SVG validation on built dist/index.html" }
 
 [feature.ci.tasks]
 # CI-specific tasks

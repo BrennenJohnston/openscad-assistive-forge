@@ -32,13 +32,15 @@ Do NOT edit these files under any circumstances:
 
 ## Environment tool
 
-When Pixi is available with `pixi.toml`:
+Pixi is the optional environment tool. The `pixi.toml` defines all project
+tasks with descriptions. When Pixi is installed:
 - ALL commands via `pixi run`
 - Never generate standalone scripts when a task exists
-- Read task descriptions in the config file before constructing commands
+- Read task descriptions in `pixi.toml` before constructing commands
 - Suggest adding tasks rather than writing scripts
-- ALL shell commands MUST run inside the environment tool. Never default to
-  bash, zsh, or PowerShell directly.
+
+When Pixi is **not** installed, fall back to the equivalent `npm run` commands
+from `package.json`. The tasks are thin wrappers around npm scripts.
 
 Exceptions: file operations, git commands, initial setup.
 
