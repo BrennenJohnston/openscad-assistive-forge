@@ -23,7 +23,7 @@ switches, and other AT hardware. Every design decision prioritises:
 | **Issue triage** | Label new issues within 7 days; close stale issues after 90 days with a comment. |
 | **Accessibility testing** | Every PR that touches UI must be manually tested with keyboard-only navigation. Screen reader testing (NVDA/VoiceOver) is expected for new UI components. |
 | **Code style** | ESLint + Prettier are enforced in CI. Run `npm run format` and `npm run lint` before opening a PR. |
-| **Conventional commits** | Use [Conventional Commits](https://www.conventionalcommits.org/) format: `feat:`, `fix:`, `docs:`, `chore:`, `refactor:`, `test:`. |
+| **Conventional commits** | Use [Conventional Commits](https://www.conventionalcommits.org/) format: `feat:`, `fix:`, `docs:`, `style:`, `refactor:`, `perf:`, `test:`, `chore:`, `ci:`. |
 
 ---
 
