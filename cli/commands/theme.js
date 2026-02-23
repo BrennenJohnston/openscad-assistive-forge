@@ -303,20 +303,16 @@ button.secondary:hover {
  * @returns {string} New hex color
  */
 function shadeColor(hex, amount) {
-  // Remove # if present
   hex = hex.replace('#', '');
-  
-  // Convert to RGB
+
   let r = parseInt(hex.substring(0, 2), 16);
   let g = parseInt(hex.substring(2, 4), 16);
   let b = parseInt(hex.substring(4, 6), 16);
-  
-  // Calculate new values
+
   r = Math.max(0, Math.min(255, r + amount));
   g = Math.max(0, Math.min(255, g + amount));
   b = Math.max(0, Math.min(255, b + amount));
-  
-  // Convert back to hex
+
   return '#' + ((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1);
 }
 
@@ -330,7 +326,6 @@ function createCustomTheme(options) {
   const secondary = options.secondary || '#64748b';
   const background = options.background || '#ffffff';
   
-  // Auto-generate related colors
   return {
     primary,
     primaryHover: shadeColor(primary, -20),

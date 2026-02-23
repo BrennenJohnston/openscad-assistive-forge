@@ -267,7 +267,6 @@ export async function scaffoldCommand(options) {
   try {
     console.log(chalk.blue('🏗️  OpenSCAD Forge - Project Scaffolding'));
     
-    // Validate inputs
     const schemaPath = resolve(options.schema);
     const scadPath = resolve(options.scad);
     const outDir = resolve(options.out);
@@ -277,14 +276,12 @@ export async function scaffoldCommand(options) {
     console.log(chalk.gray(`Output: ${outDir}`));
     console.log(chalk.gray(`Template: ${options.template}`));
     
-    // Check if output directory exists
     if (existsSync(outDir)) {
       console.error(chalk.red(`✗ Output directory already exists: ${outDir}`));
       console.log(chalk.yellow('Hint: Choose a different output directory or remove the existing one'));
       process.exit(1);
     }
     
-    // Read schema
     let schema;
     try {
       const schemaContent = readFileSync(schemaPath, 'utf-8');
@@ -294,7 +291,6 @@ export async function scaffoldCommand(options) {
       process.exit(1);
     }
     
-    // Read OpenSCAD file
     let scadContent;
     try {
       scadContent = readFileSync(scadPath, 'utf-8');
@@ -305,10 +301,8 @@ export async function scaffoldCommand(options) {
     
     console.log(chalk.green('✓ Files validated'));
     
-    // Get template directory
     const templateDir = getTemplateDir(options.template);
-    
-    // Determine source directory based on template
+
     let srcDir;
     if (options.template === 'vanilla') {
       srcDir = join(__dirname, '..', '..', 'src');
@@ -329,13 +323,11 @@ export async function scaffoldCommand(options) {
     }
     
     console.log(chalk.gray('Copying template files...'));
-    
-    // Create output directory structure
+
     mkdirSync(outDir, { recursive: true });
     mkdirSync(join(outDir, 'src'), { recursive: true });
     mkdirSync(join(outDir, 'public'), { recursive: true });
     
-    // Copy src directory
     try {
       cpSync(srcDir, join(outDir, 'src'), { recursive: true });
       console.log(chalk.green('✓ Copied source files'));
@@ -344,7 +336,6 @@ export async function scaffoldCommand(options) {
       process.exit(1);
     }
     
-    // Copy public directory
     const publicDir = join(__dirname, '..', '..', 'public');
     if (existsSync(publicDir)) {
       try {
@@ -356,7 +347,6 @@ export async function scaffoldCommand(options) {
       }
     }
     
-    // Generate index.html
     if (['react', 'vue', 'svelte', 'angular', 'preact'].includes(options.template)) {
       // Use framework template
       const templatePath = join(__dirname, '..', 'templates', options.template, 'index.html.template');
@@ -373,26 +363,21 @@ export async function scaffoldCommand(options) {
     }
     console.log(chalk.green('✓ Generated index.html'));
     
-    // Generate package.json
     const packageJson = generatePackageJson(schema, options);
     writeFileSync(join(outDir, 'package.json'), JSON.stringify(packageJson, null, 2) + '\n', 'utf-8');
     console.log(chalk.green('✓ Generated package.json'));
     
-    // Generate README.md
     const readme = generateReadme(schema, options);
     writeFileSync(join(outDir, 'README.md'), readme, 'utf-8');
     console.log(chalk.green('✓ Generated README.md'));
     
-    // Copy or generate vite.config.js
     if (['react', 'vue', 'svelte', 'angular', 'preact'].includes(options.template)) {
-      // Use framework-specific vite config
       const viteConfigTemplate = readFileSync(
         join(__dirname, '..', 'templates', options.template, 'vite.config.js.template'),
         'utf-8'
       );
       writeFileSync(join(outDir, 'vite.config.js'), viteConfigTemplate, 'utf-8');
     } else {
-      // Use vanilla vite config
       const viteConfigSrc = join(__dirname, '..', '..', 'vite.config.js');
       if (existsSync(viteConfigSrc)) {
         cpSync(viteConfigSrc, join(outDir, 'vite.config.js'));
@@ -400,14 +385,12 @@ export async function scaffoldCommand(options) {
     }
     console.log(chalk.green('✓ Generated vite.config.js'));
     
-    // Copy .gitignore
     const gitignoreSrc = join(__dirname, '..', '..', '.gitignore');
     if (existsSync(gitignoreSrc)) {
       cpSync(gitignoreSrc, join(outDir, '.gitignore'));
       console.log(chalk.green('✓ Copied .gitignore'));
     }
     
-    // Generate theme CSS if --theme is provided
     if (options.theme && options.theme !== 'blue') {
       const preset = THEME_PRESETS[options.theme];
       if (preset) {
@@ -419,15 +402,13 @@ export async function scaffoldCommand(options) {
         writeFileSync(themeCSSPath, themeCSS, 'utf-8');
         console.log(chalk.green(`✓ Generated ${options.theme} theme CSS`));
         
-        // Update index.html to include theme.css
         const indexPath = join(outDir, 'index.html');
         if (existsSync(indexPath)) {
           let html = readFileSync(indexPath, 'utf-8');
           // Add theme CSS import before </head>
           const headClose = html.indexOf('</head>');
           if (headClose !== -1) {
-            const themeLink = '    <link rel="stylesheet" href="/src/styles/theme.css" />\n  ';
-            html = html.slice(0, headClose) + themeLink + html.slice(headClose);
+            html = html.slice(0, headClose) + '    <link rel="stylesheet" href="/src/styles/theme.css" />\n  ' + html.slice(headClose);
             writeFileSync(indexPath, html, 'utf-8');
             console.log(chalk.green('✓ Updated index.html with theme reference'));
           }
@@ -438,7 +419,6 @@ export async function scaffoldCommand(options) {
       }
     }
     
-    // Copy tsconfig.json for Angular
     if (options.template === 'angular') {
       const tsconfigTemplate = readFileSync(
         join(__dirname, '..', 'templates', 'angular', 'tsconfig.json.template'),
@@ -448,7 +428,6 @@ export async function scaffoldCommand(options) {
       console.log(chalk.green('✓ Generated tsconfig.json'));
     }
     
-    // Summary
     console.log(chalk.blue('\n📋 Summary:'));
     console.log(chalk.gray(`  Project: ${packageJson.name}`));
     console.log(chalk.gray(`  Parameters: ${Object.keys(schema.properties || {}).length}`));

@@ -548,7 +548,6 @@ export async function validateCommand(webapp, options) {
     
     const webappPath = resolve(webapp);
     
-    // Check if webapp directory exists
     if (!existsSync(webappPath)) {
       console.error(chalk.red(`✗ Webapp directory not found: ${webappPath}`));
       process.exit(1);
@@ -559,15 +558,12 @@ export async function validateCommand(webapp, options) {
       timestamp: new Date().toISOString(),
     };
     
-    // Validate schema
     console.log(chalk.gray('Validating parameter schema...'));
     results.schema = validateSchema(webappPath);
-    
-    // Validate UI
+
     console.log(chalk.gray('Validating UI components...'));
     results.ui = validateUI(webappPath);
-    
-    // Run test cases if provided
+
     if (options.cases) {
       const casesPath = resolve(options.cases);
       if (!existsSync(casesPath)) {
@@ -579,11 +575,9 @@ export async function validateCommand(webapp, options) {
       }
     }
     
-    // Format and output results
     const output = formatResults(results, options.format);
     console.log(output);
-    
-    // Exit with appropriate code
+
     const allValid = results.schema.valid && results.ui.valid;
     if (!allValid) {
       process.exit(1);

@@ -147,7 +147,6 @@ export async function extractCommand(file, options) {
     console.log(chalk.blue('🔍 OpenSCAD Forge - Parameter Extraction'));
     console.log(chalk.gray(`Input: ${file}`));
 
-    // Read the .scad file
     const filePath = resolve(file);
     let scadContent;
     try {
@@ -159,7 +158,6 @@ export async function extractCommand(file, options) {
 
     console.log(chalk.gray('Parsing parameters...'));
 
-    // Extract parameters using the parser
     const extracted = extractParameters(scadContent);
 
     if (!extracted.parameters || Object.keys(extracted.parameters).length === 0) {
@@ -178,10 +176,8 @@ export async function extractCommand(file, options) {
     const groupCount = extracted.groups?.length || 0;
     console.log(chalk.green(`✓ Found ${paramCount} parameter(s) in ${groupCount} group(s)`));
 
-    // Convert to JSON Schema
     const schema = toJsonSchema(extracted, file);
 
-    // Format output
     let output;
     if (options.format === 'yaml') {
       output = YAML.stringify(schema);
@@ -193,7 +189,6 @@ export async function extractCommand(file, options) {
       process.exit(1);
     }
 
-    // Write output
     const outPath = resolve(options.out);
     try {
       writeFileSync(outPath, output + '\n', 'utf-8');
@@ -203,14 +198,12 @@ export async function extractCommand(file, options) {
       process.exit(1);
     }
 
-    // Summary
     console.log(chalk.blue('\n📋 Summary:'));
     console.log(chalk.gray(`  Parameters: ${paramCount}`));
     console.log(chalk.gray(`  Groups: ${groupCount}`));
     console.log(chalk.gray(`  Schema version: draft-07`));
     console.log(chalk.gray(`  Output format: ${options.format}`));
 
-    // List parameters by group
     if (groupCount > 0) {
       console.log(chalk.blue('\n📦 Parameters by group:'));
       for (const group of extracted.groups) {

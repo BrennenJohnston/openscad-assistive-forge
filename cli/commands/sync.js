@@ -413,13 +413,11 @@ export async function syncCommand(webapp, options) {
     
     const webappPath = resolve(webapp);
     
-    // Check if webapp directory exists
     if (!existsSync(webappPath)) {
       console.error(chalk.red(`✗ Webapp directory not found: ${webappPath}`));
       process.exit(1);
     }
     
-    // Detect issues
     console.log(chalk.gray('Scanning for issues...\n'));
     const issues = detectIssues(webappPath);
     
@@ -428,19 +426,16 @@ export async function syncCommand(webapp, options) {
       return;
     }
     
-    // Display issues
     console.log(chalk.cyan(`Found ${issues.length} issue(s):\n`));
     for (const issue of issues) {
       console.log(formatIssue(issue));
     }
     console.log();
     
-    // Count auto-fixable issues
     const autoFixable = issues.filter((i) => i.autoFixable);
     console.log(chalk.blue(`Auto-fixable: ${autoFixable.length}/${issues.length}`));
     console.log();
     
-    // Apply fixes if requested
     if (options.dryRun) {
       console.log(chalk.yellow('🔍 Dry run mode - no changes applied'));
       console.log(chalk.gray('Run without --dry-run to apply fixes'));
@@ -455,7 +450,6 @@ export async function syncCommand(webapp, options) {
       return;
     }
     
-    // Determine which issues to fix
     let issuesToFix = [];
     if (options.force) {
       issuesToFix = issues;
@@ -465,7 +459,6 @@ export async function syncCommand(webapp, options) {
       console.log(chalk.blue('Applying safe fixes...'));
     }
     
-    // Apply fixes
     let fixed = 0;
     let failed = 0;
     
@@ -490,7 +483,6 @@ export async function syncCommand(webapp, options) {
     }
     console.log(chalk.blue('═'.repeat(60)));
     
-    // Re-scan to show remaining issues
     const remainingIssues = detectIssues(webappPath);
     if (remainingIssues.length > 0) {
       console.log();
