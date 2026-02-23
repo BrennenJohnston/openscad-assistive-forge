@@ -8276,6 +8276,12 @@ async function initApp() {
       welcomeScreen.classList.add('hidden');
       mainInterface.classList.remove('hidden');
 
+      // Update file info summary (used by E2E tests and screen readers)
+      const fileInfoSummaryEl = document.getElementById('fileInfoSummary');
+      if (fileInfoSummaryEl && fileName) {
+        fileInfoSummaryEl.textContent = fileName;
+      }
+
       // Apply mode-aware toolbar/workflow visibility now that the main interface
       // is active. Advanced: toolbar visible, workflow hidden. Basic: vice versa.
       _applyToolbarModeVisibility(getUIModeController().getMode());
@@ -12520,6 +12526,9 @@ if (rounded) {
       _handleUnlock();
       return 'Alt View unlocked. Refresh to persist.';
     };
+
+    // Expose startTutorial globally for E2E test automation
+    window.startTutorial = (tutorialId) => startTutorial(tutorialId);
 
     // Initialize actions drawer toggle
     const initActionsDrawer = () => {

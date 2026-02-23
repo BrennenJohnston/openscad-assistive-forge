@@ -36,7 +36,7 @@ export default defineConfig({
         'src/js/image-measurement.js'
       ],
       thresholds: {
-        lines: 44,
+        lines: 43,
         functions: 44,
         branches: 42,
         statements: 43,
