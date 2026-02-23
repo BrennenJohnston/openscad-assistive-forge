@@ -210,7 +210,7 @@ for (const vp of VIEWPORTS) {
 
       // The tutorial should either show a recovery dialog or auto-advance
       const recoveryDialog = page.locator(
-        '.tutorial-recovery, [class*="tutorial-help"], dialog:has-text("Tutorial")'
+        '.tutorial-error-modal, .tutorial-recovery, [class*="tutorial-help"], [data-testid="tutorial-error-dialog"]'
       )
       const recovered = await recoveryDialog.isVisible().catch(() => false)
       // Either recovery dialog is shown OR tutorial advanced gracefully
@@ -291,7 +291,7 @@ test('tutorial: no infinite retry loop when target is missing', async ({ page })
   // It should NOT still be cycling retries indefinitely
   const panelExists = await page.locator('.tutorial-overlay').isVisible().catch(() => false)
   const recoveryVisible = await page
-    .locator('.tutorial-recovery, [class*="tutorial-help"]')
+    .locator('.tutorial-error-modal, .tutorial-recovery, [class*="tutorial-help"], [data-testid="tutorial-error-dialog"]')
     .isVisible()
     .catch(() => false)
 
