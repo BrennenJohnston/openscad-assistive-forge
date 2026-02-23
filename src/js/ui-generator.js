@@ -1974,7 +1974,11 @@ export function renderParameterUI(
         currentParameterValues[name] = value;
         // Update dependent parameters visibility
         updateDependentParameters(name, value);
-        onChange(currentValues);
+        // Pass a shallow copy so callers (e.g. stateManager.setState) never
+        // hold a reference to our mutable currentValues object — this is
+        // critical for undo/redo: recordParameterState() must snapshot the
+        // *previous* state.parameters before the next mutation.
+        onChange({ ...currentValues });
       };
 
       switch (param.uiType) {
@@ -2031,7 +2035,7 @@ export function renderParameterUI(
   // Re-apply detail level to newly rendered parameters
   reapplyDetailLevel();
 
-  return currentValues;
+  return { ...currentValues };
 }
 
 /**

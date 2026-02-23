@@ -4,9 +4,9 @@
  * Controls how parameter descriptions are displayed in the customizer panel.
  * Maps to desktop OpenSCAD's comboBoxDetails / DescLoD enum:
  *
- * - show:      Description below parameter name (full layout)
+ * - show:      Description below parameter name (full layout — default)
  * - inline:    Description inline next to parameter name
- * - hide:      Description hidden, tooltip-only (default — preserves existing behavior)
+ * - hide:      Description hidden, tooltip-only
  * - desc-only: Only description shown; parameter name visually hidden when description exists
  *
  * @license GPL-3.0-or-later
@@ -25,7 +25,7 @@ const VALID_LEVELS = /** @type {const} */ ([
   'desc-only',
 ]);
 
-const DEFAULT_LEVEL = 'hide';
+const DEFAULT_LEVEL = 'show';
 
 /**
  * @typedef {'show' | 'inline' | 'hide' | 'desc-only'} DetailLevel

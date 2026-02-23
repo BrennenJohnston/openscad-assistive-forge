@@ -163,7 +163,7 @@ export class UIModeController {
    */
   constructor(options = {}) {
     /** @type {UIMode} */
-    this.currentMode = 'advanced';
+    this.currentMode = 'basic';
 
     /** @type {Function} */
     this.onModeChange = options.onModeChange || (() => {});

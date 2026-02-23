@@ -12,6 +12,7 @@
  */
 
 import { createFocusTrap } from './focus-trap.js';
+import { getUIModeController } from './ui-mode-controller.js';
 import {
   announceImmediate,
   announceError,
@@ -42,6 +43,7 @@ let currentStepIndex = 0;
 let tutorialOverlay = null;
 let triggerElement = null;
 let previousFocus = null; // Store focus to restore on close
+let preTutorialMode = null; // Store UI mode to restore on close
 let completionListeners = [];
 let stepCompleted = true;
 let resizeObserver = null;
@@ -2021,6 +2023,14 @@ export async function startTutorial(tutorialId, { triggerEl } = {}) {
   activeTutorial = tutorial;
   currentStepIndex = startIndex;
   isMinimized = false;
+
+  // Switch to Basic mode for intro tutorial so the UI is simplified
+  const modeCtrl = getUIModeController();
+  preTutorialMode = modeCtrl.getMode();
+  if (tutorialId === 'intro' && preTutorialMode !== 'basic') {
+    modeCtrl.switchMode('basic', { skipAnnouncement: true, skipFocus: true });
+  }
+
   createTutorialOverlay();
   await showStep(startIndex);
   announceToScreenReader(
@@ -3575,6 +3585,18 @@ export function closeTutorial(completed = false) {
 
   previousFocus = null;
   triggerElement = null;
+
+  // Restore pre-tutorial UI mode if the tutorial changed it
+  if (preTutorialMode) {
+    const modeCtrl = getUIModeController();
+    if (modeCtrl.getMode() !== preTutorialMode) {
+      modeCtrl.switchMode(preTutorialMode, {
+        skipAnnouncement: true,
+        skipFocus: true,
+      });
+    }
+  }
+  preTutorialMode = null;
 
   activeTutorial = null;
   currentStepIndex = 0;

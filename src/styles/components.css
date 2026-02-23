@@ -257,6 +257,15 @@ summary:focus-visible,
   background-color: var(--color-success-hover);
 }
 
+.btn-danger {
+  background-color: var(--color-error);
+  color: var(--color-on-error);
+}
+
+.btn-danger:hover:not(:disabled) {
+  background-color: var(--color-error-hover);
+}
+
 .btn-secondary {
   background-color: var(--color-bg-secondary);
   color: var(--color-text-primary);
@@ -3363,7 +3372,7 @@ summary:focus-visible,
   display: none;
 }
 
-/* Hide Details: description hidden, tooltip-only (default behavior) */
+/* Hide Details: description hidden, tooltip-only */
 [data-detail-level='hide'] .param-description {
   display: none;
 }

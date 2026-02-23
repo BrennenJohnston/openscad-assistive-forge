@@ -1017,7 +1017,8 @@ function showConfirmDialog(
   message,
   title = 'Confirm Action',
   confirmLabel = 'Confirm',
-  cancelLabel = 'Cancel'
+  cancelLabel = 'Cancel',
+  { destructive = false } = {}
 ) {
   return new Promise((resolve) => {
     const modal = document.createElement('div');
@@ -1026,6 +1027,8 @@ function showConfirmDialog(
     modal.setAttribute('aria-labelledby', 'confirmDialogTitle');
     modal.setAttribute('aria-describedby', 'confirmDialogMessage');
     modal.setAttribute('aria-modal', 'true');
+
+    const confirmBtnClass = destructive ? 'btn btn-danger' : 'btn btn-primary';
 
     modal.innerHTML = `
       <div class="preset-modal-content confirm-modal-content">
@@ -1037,7 +1040,7 @@ function showConfirmDialog(
         </div>
         <div class="preset-form-actions">
           <button type="button" class="btn btn-secondary" data-action="cancel">${cancelLabel}</button>
-          <button type="button" class="btn btn-primary" data-action="confirm">${confirmLabel}</button>
+          <button type="button" class="${confirmBtnClass}" data-action="confirm">${confirmLabel}</button>
         </div>
       </div>
     `;
@@ -4238,6 +4241,11 @@ async function initApp() {
         );
         // Update memory indicator
         updateMemoryIndicator(memoryInfo);
+        // Feed into MemoryMonitor for badge updates
+        const monitor = _getMemoryMonitor();
+        if (monitor) {
+          monitor.updateFromWorker(memoryInfo);
+        }
         showMemoryWarning(memoryInfo);
         if (previewQualityMode === 'auto') {
           autoPreviewHints.forceFastUntil =
@@ -4606,6 +4614,12 @@ async function initApp() {
           const memoryInfo = await renderController.getMemoryUsage();
           if (memoryInfo && memoryInfo.available !== false) {
             updateMemoryIndicator(memoryInfo);
+            // Feed worker memory data into the MemoryMonitor so the
+            // badge reflects actual WASM heap, not main-thread JS heap.
+            const monitor = _getMemoryMonitor();
+            if (monitor) {
+              monitor.updateFromWorker(memoryInfo);
+            }
           }
         } catch (_e) {
           // Silently ignore polling errors
@@ -8235,6 +8249,24 @@ async function initApp() {
       // Clear undo/redo history on new file upload
       stateManager.clearHistory();
 
+      // Project isolation: reset all project-scoped state so data from
+      // a previously loaded project never bleeds into the new one.
+      forceClearPresetSelection();
+      presetCompanionMap = null;
+
+      // Clear the reference overlay (SVG/image) from the previous project so it
+      // doesn't appear under the new project's model.
+      if (previewManager) {
+        previewManager.setReferenceOverlaySource({
+          kind: null,
+          name: null,
+          dataUrlOrText: null,
+        });
+        previewManager.setOverlayEnabled(false);
+      }
+      if (overlayToggle) overlayToggle.checked = false;
+      if (overlaySourceSelect) overlaySourceSelect.value = '';
+
       // Reset saved project tracking for new uploads (not reloads from saved projects)
       if (source !== 'saved') {
         currentSavedProjectId = null;
@@ -8943,10 +8975,22 @@ async function initApp() {
           closeFeaturesGuide();
         }
 
-        // Clear preview
+        // Clear preview and remove any loaded overlay from the previous project
         if (previewManager) {
           previewManager.clear();
+          previewManager.setReferenceOverlaySource({
+            kind: null,
+            name: null,
+            dataUrlOrText: null,
+          });
+          previewManager.setOverlayEnabled(false);
         }
+
+        // Reset overlay UI controls so the previous project's state doesn't linger
+        if (overlayToggle) overlayToggle.checked = false;
+        if (overlaySourceSelect) overlaySourceSelect.value = '';
+        updateOverlaySourceDropdown();
+        updateOverlayStatus();
 
         // Reset status
         updateStatus('Ready');
@@ -14742,10 +14786,18 @@ if (rounded) {
           closeManagePresetsModalHandler();
         }
       } else if (action === 'delete') {
-        if (confirm('Are you sure you want to delete this preset?')) {
+        const presetToDelete = presetManager.loadPreset(modelName, presetId);
+        const presetLabel = presetToDelete?.name || 'this preset';
+        const confirmed = await showConfirmDialog(
+          `Are you sure you want to delete "<strong>${presetLabel}</strong>"?<br><br>This action <strong>cannot be undone</strong>.`,
+          'Delete Preset',
+          'Delete',
+          'Cancel',
+          { destructive: true }
+        );
+        if (confirmed) {
           presetManager.deletePreset(modelName, presetId);
           updatePresetDropdown();
-          // Refresh the modal
           closeManagePresetsModalHandler();
           showManagePresetsModal();
         }
@@ -15064,9 +15116,13 @@ if (rounded) {
       return;
     }
 
-    // Show confirmation dialog
-    const confirmed = confirm(
-      `Delete preset "${preset.name}"?\n\nThis action cannot be undone.`
+    // Show warning modal — deletion is irreversible
+    const confirmed = await showConfirmDialog(
+      `Are you sure you want to delete the preset "<strong>${preset.name}</strong>"?<br><br>This action <strong>cannot be undone</strong>.`,
+      'Delete Preset',
+      'Delete',
+      'Cancel',
+      { destructive: true }
     );
 
     if (!confirmed) {
@@ -15439,9 +15495,13 @@ if (rounded) {
     updatePresetDropdown();
   });
 
-  // Initialize preset dropdown after file upload
+  // Refresh preset dropdown whenever the loaded project changes (including
+  // switching from one project to another, not just the initial load).
   stateManager.subscribe((state, prevState) => {
-    if (state.uploadedFile && !prevState.uploadedFile) {
+    if (
+      state.uploadedFile &&
+      state.uploadedFile.name !== prevState.uploadedFile?.name
+    ) {
       updatePresetDropdown();
     }
   });
