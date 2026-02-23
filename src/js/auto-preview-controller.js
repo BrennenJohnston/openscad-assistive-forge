@@ -504,11 +504,49 @@ export class AutoPreviewController {
   }
 
   /**
+   * Detect whether the current parameters will produce 2D-only geometry.
+   * When true, an STL preview render would fail with "not a 3D object" and
+   * corrupt the WASM module — so we skip it entirely.
+   * @param {Object} parameters - Current parameter values
+   * @returns {boolean}
+   */
+  static is2DOnlyParameters(parameters) {
+    if (!parameters) return false;
+    const gen = parameters.generate;
+    if (typeof gen !== 'string') return false;
+    const lower = gen.toLowerCase();
+    return (
+      lower.includes('svg') ||
+      lower.includes('dxf') ||
+      lower.includes('first layer')
+    );
+  }
+
+  /**
    * Render preview with reduced quality
    * @param {Object} parameters - Parameter values
    * @param {string} paramHash - Parameter hash
    */
   async renderPreview(parameters, paramHash) {
+    // Skip STL preview for known 2D-only parameter combinations.
+    // These always produce 2D geometry that cannot be exported to STL,
+    // and the failed render corrupts the WASM module for subsequent calls.
+    if (AutoPreviewController.is2DOnlyParameters(parameters)) {
+      console.log(
+        '[AutoPreview] Skipping STL preview for 2D-only generate mode:',
+        parameters.generate
+      );
+      const error = new Error(
+        'MODEL_IS_2D: Your model produces 2D geometry which cannot be displayed in the 3D viewer. ' +
+          'To export: select SVG or DXF output format. ' +
+          'To preview in 3D: adjust your model parameters to produce 3D geometry.'
+      );
+      error.code = 'MODEL_IS_2D';
+      this.setState(PREVIEW_STATE.ERROR, { error: error.message });
+      this.onError(error, 'preview');
+      return;
+    }
+
     const localScadVersion = this.scadVersion;
     const { quality, qualityKey } = this.resolvePreviewQualityInfo(parameters);
     const cacheKey = this.getPreviewCacheKey(paramHash, qualityKey);

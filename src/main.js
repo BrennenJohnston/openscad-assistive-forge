@@ -15606,6 +15606,33 @@ if (rounded) {
   // State for console output
   let lastConsoleOutput = '';
 
+  const BENIGN_OPENSCAD_CONSOLE_PATTERNS = [
+    /Could not initialize localization \(application path is '\/'\)\.?/i,
+    /WARNING:\s*Viewall and autocenter disabled in favor of \$vp\*/i,
+  ];
+
+  function normalizeOpenSCADConsoleOutput(output) {
+    if (!output || typeof output !== 'string') return '';
+
+    const normalizedLines = output
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0)
+      .map((line) => {
+        if (line.startsWith('[ERR] ')) return line.substring(6).trim();
+        if (line.startsWith('[ERR]')) return line.substring(5).trim();
+        return line;
+      })
+      .filter(
+        (line) =>
+          !BENIGN_OPENSCAD_CONSOLE_PATTERNS.some((pattern) =>
+            pattern.test(line)
+          )
+      );
+
+    return normalizedLines.join('\n');
+  }
+
   // Initialize ConsolePanel for ECHO/WARNING/ERROR display
   const consolePanel = getConsolePanel();
 
@@ -15619,13 +15646,26 @@ if (rounded) {
    */
   function updateConsoleOutput(output, { append = false } = {}) {
     if (!output || output.trim() === '') return;
+    const normalizedOutput = normalizeOpenSCADConsoleOutput(output);
 
     if (!append) {
       consolePanel.clear();
       errorLogPanel.clear();
     }
 
-    lastConsoleOutput = output;
+    if (!normalizedOutput || normalizedOutput.trim() === '') {
+      lastConsoleOutput = '';
+      updatePreviewDrawer([]);
+      if (consoleOutput && !consoleOutputModal?.classList.contains('hidden')) {
+        renderConsoleOutput('');
+      }
+      if (consoleBadge) {
+        consoleBadge.classList.add('hidden');
+      }
+      return;
+    }
+
+    lastConsoleOutput = normalizedOutput;
 
     // Show badge to indicate new output
     if (consoleBadge) {
@@ -15634,18 +15674,18 @@ if (rounded) {
 
     // If modal is open, update it
     if (consoleOutput && !consoleOutputModal?.classList.contains('hidden')) {
-      renderConsoleOutput(output);
+      renderConsoleOutput(normalizedOutput);
     }
 
     // Feed the ConsolePanel with parsed console output
     // This displays ECHO/WARNING/ERROR in the parameter panel
-    consolePanel.addOutput(output);
+    consolePanel.addOutput(normalizedOutput);
 
     // Feed the ErrorLogPanel with the same output for structured display
-    errorLogPanel.addOutput(output);
+    errorLogPanel.addOutput(normalizedOutput);
 
     // Extract ECHO/WARNING/ERROR messages and display in preview drawer
-    const consoleMessages = extractConsoleMessages(output);
+    const consoleMessages = extractConsoleMessages(normalizedOutput);
     updatePreviewDrawer(consoleMessages);
 
     const echoCount = consoleMessages.filter((m) => m.type === 'echo').length;

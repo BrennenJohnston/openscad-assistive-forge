@@ -159,6 +159,13 @@ const ERROR_TRANSLATIONS = [
     code: 'EMPTY_GEOMETRY',
   },
   {
+    pattern: /MODEL_NOT_2D|Current top level object is not a 2D object/i,
+    message:
+      'Your model produces 3D geometry but SVG/DXF export requires 2D output. ' +
+      'Enable "use Laser Cutting best practices" or ensure your model uses projection() to produce 2D geometry.',
+    code: 'MODEL_NOT_2D',
+  },
+  {
     // Detect "not supported" ECHO messages from OpenSCAD models
     pattern: /is not supported for/i,
     message:
@@ -1334,10 +1341,15 @@ async function renderWithCallMain(
         shouldWriteInput = true;
       }
     }
+    // 2D export flag used later for guard checks and fallback handling.
+    const is2DExport = format === 'svg' || format === 'dxf';
+
     if (shouldWriteInput) {
       module.FS.writeFile(inputFile, scadContent);
       wroteTempInput = true;
-    } // Build -D arguments
+    }
+
+    // Build -D arguments
     const defineArgs = buildDefineArgs(parameters, paramTypes);
 
     // Path resolution for import()/use/include:
@@ -1371,7 +1383,7 @@ async function renderWithCallMain(
     if (/\broof\s*\(/m.test(scadContent)) {
       riskyFunctions.push('roof()');
     }
-    if (/\bprojection\s*\(/m.test(scadContent)) {
+    if (!is2DExport && /\bprojection\s*\(/m.test(scadContent)) {
       riskyFunctions.push('projection()');
     }
     if (riskyFunctions.length > 0) {
@@ -1389,7 +1401,6 @@ async function renderWithCallMain(
     }
 
     // Build command: [performance flags, -D key=value, ...] -o outputFile inputFile
-    // Note: removed -I flag as it's not supported by this OpenSCAD WASM build
     const args = [
       ...performanceFlags,
       ...exportFlags,
@@ -1418,11 +1429,29 @@ async function renderWithCallMain(
     try {
       const exitCode = await module.callMain(args);
 
-      // Check exit code - non-zero means compilation failed
+      // Check exit code - non-zero means compilation failed.
       if (exitCode !== 0) {
-        throw new Error(
+        // Check if this is a 3D-to-2D format mismatch (model produces 3D but exporting to SVG/DXF).
+        // OpenSCAD returns exit code 1 with "not a 2D object" — this is recoverable, not a module crash.
+        const is2DFormat = format === 'svg' || format === 'dxf';
+        const modelIsNot2D =
+          openscadConsoleOutput.includes('Current top level object is not a 2D object') ||
+          openscadConsoleOutput.includes('not a 2D object');
+
+        if (is2DFormat && modelIsNot2D) {
+          throw new Error(
+            'MODEL_NOT_2D: Your model produces 3D geometry but SVG/DXF requires 2D output. ' +
+            'Ensure your model uses projection() or enable "use Laser Cutting best practices" to produce 2D geometry.'
+          );
+        }
+
+        // Any other non-zero exit corrupts the WASM module's internal state —
+        // signal the render controller to restart before the next render.
+        const err = new Error(
           `OpenSCAD compilation failed with exit code ${exitCode}. Output: ${openscadConsoleOutput.substring(0, 500)}`
         );
+        err.needsRestart = true;
+        throw err;
       }
 
       // Check for empty geometry - OpenSCAD returns exit code 0 but produces no output
@@ -2149,6 +2178,14 @@ async function render(payload) {
     const format = (outputFormat || 'stl').toLowerCase();
     const formatName = format.toUpperCase();
 
+    // For 2D formats (SVG/DXF), enforce laser-cut compatible parameters.
+    // Some keyguard models reject "first layer for SVG/DXF" when type_of_keyguard
+    // remains "3D-Printed", producing "not a 2D object" at runtime.
+    if (format === 'svg' || format === 'dxf') {
+      parameters.use_Laser_Cutting_best_practices = 'yes';
+      parameters.type_of_keyguard = 'Laser-Cut';
+    }
+
     // Track render timing
     let renderStartTime = 0;
     let renderDurationMs = 0;
@@ -2275,16 +2312,28 @@ async function render(payload) {
 
     // Validate 2D format outputs (SVG/DXF) - they may be "valid" but empty
     if (resultFormat === 'svg' || resultFormat === 'dxf') {
-      const validationResult = validate2DOutput(outputBuffer, resultFormat);
-      if (!validationResult.valid) {
-        throw new Error(validationResult.error);
+      try {
+        const validationResult = validate2DOutput(outputBuffer, resultFormat);
+        if (!validationResult.valid) {
+          throw new Error(validationResult.error);
+        }
+      } catch (validationError) {
+        if (validationError.message?.startsWith('SVG ') || validationError.message?.startsWith('DXF ') || validationError.message?.startsWith('Invalid ')) {
+          throw validationError;
+        }
+        console.warn(`[Worker] 2D validation threw unexpectedly: ${validationError.message}`);
+        throw validationError;
       }
     }
 
     // Post-process DXF to fix known OpenSCAD WASM compatibility issues
     // (upstream issue: github.com/openscad/openscad/issues/4268)
     if (resultFormat === 'dxf') {
-      outputBuffer = postProcessDXF(outputBuffer);
+      try {
+        outputBuffer = postProcessDXF(outputBuffer);
+      } catch (dxfError) {
+        console.warn('[Worker] DXF post-processing failed, using raw output:', dxfError.message);
+      }
     }
 
     // For binary STL, read triangle count from header
@@ -2329,13 +2378,11 @@ async function render(payload) {
             renderMs: workerRenderMs,
             wasmInitMs: wasmInitDurationMs,
           },
-          // Include console output for echo() messages (critical for user communication)
           consoleOutput: openscadConsoleOutput || '',
         },
       },
       [outputBuffer]
     ); // Transfer ownership of ArrayBuffer
-
     console.log(
       `[Worker] Render complete: ${triangleCount} triangles in ${workerRenderMs}ms`
     );
@@ -2390,14 +2437,37 @@ async function render(payload) {
         openscadConsoleOutput.includes('Top level object is a 2D object'));
 
     if (confirmed2DModel) {
-      // Override to MODEL_IS_2D so the UI can show informational guidance
-      // instead of alarming red error messages. The UI handles this gracefully.
       code = 'MODEL_IS_2D';
       message =
         'Your model produces 2D geometry which cannot be previewed in the 3D viewer. ' +
         'To export: select SVG or DXF output format. ' +
         'To preview in 3D: adjust your model parameters to produce 3D geometry.';
     }
+
+    // Reverse case: 3D model exported to a 2D format (SVG/DXF)
+    const confirmedNot2D =
+      is2DOutput &&
+      (translated.raw?.includes('MODEL_NOT_2D') ||
+        openscadConsoleOutput?.includes('Current top level object is not a 2D object') ||
+        openscadConsoleOutput?.includes('not a 2D object'));
+
+    if (confirmedNot2D) {
+      code = 'MODEL_NOT_2D';
+      message =
+        'Your model produces 3D geometry but SVG/DXF export requires 2D output. ' +
+        'Enable "use Laser Cutting best practices" or ensure your model uses projection() to produce 2D geometry.';
+    }
+
+    // Signal that the WASM module needs a restart before the next render.
+    // callMain with non-zero exit or a numeric abort corrupts module state.
+    const needsRestart =
+      error?.needsRestart === true ||
+      typeof error === 'number' ||
+      /^\d+$/.test(String(error)) ||
+      code === 'INTERNAL_ERROR' ||
+      code === 'WASM_ABORT' ||
+      code === 'WASM_UNREACHABLE' ||
+      code === 'WASM_OOB';
 
     self.postMessage({
       type: 'ERROR',
@@ -2407,6 +2477,7 @@ async function render(payload) {
         message,
         details,
         consoleOutput: openscadConsoleOutput || '',
+        needsRestart,
       },
     });
   }

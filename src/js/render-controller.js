@@ -421,8 +421,24 @@ export class RenderController {
 
         this.worker.onerror = (error) => {
           const message =
-            error?.message || 'Worker error during initialization';
+            error?.message || 'Worker error';
           console.error('[RenderController] Worker error:', error);
+
+          // If a render is in progress, reject it immediately so the UI
+          // doesn't hang waiting for a watchdog timeout.
+          if (this.currentRequest) {
+            const renderError = new Error(
+              'The rendering engine crashed unexpectedly. ' +
+              'This may be caused by projection() or roof() in your model. ' +
+              'The engine will restart automatically for the next render.'
+            );
+            renderError.code = 'WASM_ABORT';
+            renderError.needsRestart = true;
+            this._moduleUsed = true;
+            this.currentRequest.reject(renderError);
+            this.currentRequest = null;
+          }
+
           if (onProgress) {
             onProgress(-1, 'Failed to initialize: ' + message);
           }
@@ -613,6 +629,13 @@ export class RenderController {
           this.currentRequest &&
           payload.requestId === this.currentRequest.id
         ) {
+          // If the worker signals that the WASM module is corrupted after this
+          // error (non-zero exit code, numeric abort, etc.), mark the module as
+          // used so the proactive restart fires before the next render attempt.
+          if (payload.needsRestart) {
+            this._moduleUsed = true;
+          }
+
           const error = new Error(payload.message);
           error.code = payload.code;
           error.details = payload.details;
