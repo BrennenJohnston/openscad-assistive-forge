@@ -32,15 +32,13 @@ async function setBaseline(page) {
 
 /** Open a tutorial by programmatically calling startTutorial() in the page */
 async function startTutorial(page, tutorialId) {
-  await page.evaluate((id) => {
-    // The tutorial sandbox exposes startTutorial globally after init
-    if (typeof window.startTutorial === 'function') {
-      window.startTutorial(id)
-    } else {
-      // Fallback: click the tutorial button if exposed
-      const btn = document.querySelector(`[data-tutorial-id="${id}"]`)
-      if (btn) btn.click()
-    }
+  // Wait for the app to expose window.startTutorial (set during app init)
+  await page.waitForFunction(() => typeof window.startTutorial === 'function', {
+    timeout: 10000,
+  })
+  // Invoke and wait for the async startTutorial to complete
+  await page.evaluate(async (id) => {
+    await window.startTutorial(id)
   }, tutorialId)
 }
 
