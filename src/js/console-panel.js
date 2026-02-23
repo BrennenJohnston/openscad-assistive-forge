@@ -1,6 +1,7 @@
 /**
  * Console Panel - Display OpenSCAD echo/warning/error messages
- * Display OpenSCAD echo/warning/error messages -- programs use console to communicate with users
+ *
+ * Programs use echo() to communicate with users; these messages must be visible.
  * @license GPL-3.0-or-later
  */
 

@@ -1,7 +1,7 @@
 # Release Audit Checklist
 
 Started: 2026-02-23
-Last updated: 2026-02-23
+Last updated: 2026-02-23 (Session 3)
 
 ## Status Key
 
@@ -19,8 +19,8 @@ Last updated: 2026-02-23
 
 | Status | File | Session | Bloat Findings | Notes |
 |--------|------|---------|----------------|-------|
-| [x] | index.html | 1 | 0 blocking, 0 warnings | Clean; 3 informational comments noting removed panels (intentional) |
-| [x] | src/main.js | 1 | 0 blocking, 0 warnings | Assessment only (17K lines). Findings: (1) commented-out animation import line 191 (intentional, preserved per comment); (2) `_stopMemoryPolling` defined but never called line 4620 (prefixed `_`, intentional reservation); (3) `window._showRenderEstimate` debug export line 4873 (intentional); (4) `openGuidedTour` stub with TODO line 16236 (known future work). No edits made per plan protocol. |
+| [x] | index.html | 1 | 0 blocking, 0 warnings | Clean; 3 informational comments noting removed panels (intentional). Re-verified 2026-02-23 after commits 7e5974a/0f69323: workflow step breadcrumbs removed, terminology fixes ("Saved Designs"→"Saved Projects", "Reference Overlay"→"Reference Image"), keyboard shortcut label updated. All changes legitimate. |
+| [x] | src/main.js | 1 | 0 blocking, 0 warnings | Assessment only (17K lines). Findings: (1) commented-out animation import line 191 (intentional); (2) `_stopMemoryPolling` defined but never called (prefixed `_`, intentional reservation); (3) `window._showRenderEstimate` debug export (intentional); (4) `openGuidedTour` stub with TODO (known future work). No edits per plan protocol. Re-verified 2026-02-23 after commits 7e5974a/0f69323: removed 3 unused workflow-progress imports, cleaned dead stepsEl code, added deferred WASM init for deep-link. All changes clean. |
 | [x] | src/js/state.js | 1 | 0 blocking, 0 warnings | Clean. Verbose console.log on every draft save (lines 217, 252, 257, 272) — noted but not edited (no dev-only guard pattern established in codebase). |
 | [x] | src/js/version.js | 1 | 0 blocking, 0 warnings | Clean. |
 | [x] | src/js/feature-flags.js | 1 | 0 blocking, 0 warnings | Clean. Emoji in debugFlags() console output is acceptable (debug-only function). |
@@ -30,25 +30,25 @@ Last updated: 2026-02-23
 
 | Status | File | Session | Bloat Findings | Notes |
 |--------|------|---------|----------------|-------|
-| [ ] | src/js/ui-generator.js | 2 | - | - |
-| [ ] | src/js/ui-mode-controller.js | 2 | - | - |
-| [ ] | src/js/mode-manager.js | 2 | - | - |
-| [ ] | src/js/toolbar-menu-controller.js | 2 | - | - |
-| [ ] | src/js/html-utils.js | 2 | - | - |
-| [ ] | src/js/drawer-controller.js | 2 | - | - |
-| [ ] | src/js/display-options-controller.js | 2 | - | - |
-| [ ] | src/js/file-actions-controller.js | 2 | - | - |
+| [x] | src/js/ui-generator.js | 2 | 0 blocking, 0 warnings | ~1800 lines. `renderFromSchema` and `renderFromSchemaSync` exported but never imported anywhere (JSDoc notes "not integrated into main workflow"). Dead exports — noted but not removed (API boundary rule). `createFileControl` uses emoji (📁, ✕) in button text — functional UI labels, acceptable. No other issues. |
+| [E] | src/js/ui-mode-controller.js | 2 | 0 blocking, 0 warnings | Removed unused `panelResults` array in `applyMode()` — built but never read or returned. All other code clean. |
+| [x] | src/js/mode-manager.js | 2 | 0 blocking, 0 warnings | Clean. Well-structured singleton with proper subscriber pattern. |
+| [x] | src/js/toolbar-menu-controller.js | 2 | 0 blocking, 0 warnings | Clean. Good ARIA implementation with radio group and submenu support. |
+| [x] | src/js/html-utils.js | 2 | 0 blocking, 0 warnings | Clean. 3 small utility functions, all actively used. |
+| [x] | src/js/drawer-controller.js | 2 | 0 blocking, 0 warnings | Clean. Solid pointer event guard logic for accidental backdrop close prevention. |
+| [x] | src/js/display-options-controller.js | 2 | 0 blocking, 0 warnings | Clean. Good Three.js overlay management with proper dispose(). |
+| [x] | src/js/file-actions-controller.js | 2 | 0 blocking, 0 warnings | Clean. `file-save-all-btn` wired in constructor but not in `_wireButtons()` — intentional (no DOM element for it yet). |
 
 ### Session 3 — Editors and Text Handling
 
 | Status | File | Session | Bloat Findings | Notes |
 |--------|------|---------|----------------|-------|
-| [ ] | src/js/monaco-editor.js | 3 | - | - |
-| [ ] | src/js/textarea-editor.js | 3 | - | - |
-| [ ] | src/js/editor-state-manager.js | 3 | - | - |
-| [ ] | src/js/edit-actions-controller.js | 3 | - | - |
-| [ ] | src/js/console-panel.js | 3 | - | - |
-| [ ] | src/js/error-log-panel.js | 3 | - | - |
+| [E] | src/js/monaco-editor.js | 3 | 0 blocking, 0 warnings | Removed ~12 narrating comments (section headers restating constant/method names). `verifyMonacoCSP()` exported but never imported — dead export noted, not removed (API boundary rule). |
+| [E] | src/js/textarea-editor.js | 3 | 0 blocking, 0 warnings | Removed ~20 narrating comments in token categories, `_createDOM`, `_attachEventListeners`, `_handleKeyDown`, `_highlightCode`. |
+| [E] | src/js/editor-state-manager.js | 3 | 0 blocking, 0 warnings | Removed dead `_modeSnapshots` state — written in `captureState()` but never read anywhere. |
+| [x] | src/js/edit-actions-controller.js | 3 | 0 blocking, 0 warnings | Clean. `document.execCommand('copy')` fallback is deprecated but acceptable (same pattern in console-panel). |
+| [E] | src/js/console-panel.js | 3 | 0 blocking, 0 warnings | Fixed duplicate description line in file header. |
+| [x] | src/js/error-log-panel.js | 3 | 0 blocking, 0 warnings | Clean. Well-structured with good ARIA table implementation. |
 
 ### Session 4 — Rendering Pipeline
 
@@ -526,3 +526,26 @@ Last updated: 2026-02-23
 - Total files to review: ~280 (across 20 sessions)
 - Skipped files documented above
 - Ready for Session 1
+
+### Session 1 Re-verification — 2026-02-23
+
+- Session 1 was completed before code changes; re-verified `index.html` and `src/main.js` after commits 7e5974a and 0f69323
+- Changes were all legitimate feature/fix work: workflow breadcrumbs removed, terminology fixes, deferred WASM init for deep-link
+- Bloat scan: 0 blocking, 0 warnings
+- No additional edits needed; Session 1 findings remain valid
+
+### Session 2 — 2026-02-23
+
+- Files reviewed: 8
+- Files edited: 1 (`src/js/ui-mode-controller.js`)
+- Bloat scan: 0 blocking, 0 warnings (before and after)
+- Tests pass: yes (1370/1370)
+- Summary: One dead code removal — unused `panelResults` debug array in `applyMode()`. `ui-generator.js` has two dead exports (`renderFromSchema`, `renderFromSchemaSync`) noted but preserved per API boundary rule. All other files clean.
+
+### Session 3 — 2026-02-23
+
+- Files reviewed: 6
+- Files edited: 4 (`monaco-editor.js`, `textarea-editor.js`, `editor-state-manager.js`, `console-panel.js`)
+- Bloat scan: 0 blocking, 0 warnings (before and after)
+- Tests pass: yes (1370/1370)
+- Summary: Removed ~32 narrating comments across monaco-editor.js and textarea-editor.js (section headers that restated what the code already said). Removed dead `_modeSnapshots` state from editor-state-manager.js (written but never read). Fixed duplicate description line in console-panel.js header. `verifyMonacoCSP()` in monaco-editor.js is a dead export (never imported) — noted but preserved per API boundary rule.

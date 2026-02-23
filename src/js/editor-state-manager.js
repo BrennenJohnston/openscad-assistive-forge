@@ -71,12 +71,6 @@ export class EditorStateManager {
     /** @type {HTMLTextAreaElement|null} - Reference to textarea element */
     this.textareaElement = null;
 
-    /** @type {Object} - Mode-specific saved state */
-    this._modeSnapshots = {
-      standard: null,
-      expert: null,
-    };
-
     /** @type {Set<Function>} */
     this.subscribers = new Set();
 
@@ -225,10 +219,6 @@ export class EditorStateManager {
     if (fromMode === 'expert') {
       this._captureFromExpertMode();
     }
-    // Standard mode state is captured via parameters
-
-    // Save mode-specific snapshot
-    this._modeSnapshots[fromMode] = this._createSnapshot();
   }
 
   /**
@@ -620,7 +610,6 @@ export class EditorStateManager {
     this.scrollLine = 1;
     this.isDirty = false;
     this.errors = [];
-    this._modeSnapshots = { standard: null, expert: null };
   }
 }
 

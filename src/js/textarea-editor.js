@@ -14,9 +14,7 @@
  * @license GPL-3.0-or-later
  */
 
-// OpenSCAD syntax tokens for highlighting
 const SCAD_TOKENS = {
-  // Keywords
   keywords: [
     'module',
     'function',
@@ -31,7 +29,6 @@ const SCAD_TOKENS = {
     'include',
     'use',
   ],
-  // Built-in modules
   builtins: [
     'cube',
     'sphere',
@@ -62,7 +59,6 @@ const SCAD_TOKENS = {
     'render',
     'children',
   ],
-  // Built-in functions
   functions: [
     'abs',
     'sign',
@@ -102,7 +98,6 @@ const SCAD_TOKENS = {
     'is_list',
     'is_function',
   ],
-  // Special variables
   specials: [
     '$fn',
     '$fa',
@@ -114,7 +109,6 @@ const SCAD_TOKENS = {
     '$vpf',
     '$children',
   ],
-  // Constants
   constants: ['true', 'false', 'undef', 'PI'],
 };
 
@@ -189,27 +183,22 @@ export class TextareaEditor {
     this.container.innerHTML = '';
     this.container.className = 'textarea-editor';
 
-    // Editor wrapper
     const wrapper = document.createElement('div');
     wrapper.className = 'textarea-editor-wrapper';
 
-    // Line numbers gutter
     this.lineNumbers = document.createElement('div');
     this.lineNumbers.className = 'textarea-line-numbers';
     this.lineNumbers.setAttribute('aria-hidden', 'true');
     wrapper.appendChild(this.lineNumbers);
 
-    // Editor area (textarea + overlay)
     const editorArea = document.createElement('div');
     editorArea.className = 'textarea-editor-area';
 
-    // Syntax highlighting overlay (behind textarea)
     this.highlightOverlay = document.createElement('pre');
     this.highlightOverlay.className = 'textarea-highlight-overlay';
     this.highlightOverlay.setAttribute('aria-hidden', 'true');
     editorArea.appendChild(this.highlightOverlay);
 
-    // Main textarea
     this.textarea = document.createElement('textarea');
     this.textarea.className = 'textarea-editor-input';
     this.textarea.id = 'expert-mode-textarea';
@@ -229,7 +218,6 @@ export class TextareaEditor {
     wrapper.appendChild(editorArea);
     this.container.appendChild(wrapper);
 
-    // Screen reader instructions (visually hidden)
     const instructions = document.createElement('div');
     instructions.id = 'textarea-editor-instructions';
     instructions.className = 'visually-hidden';
@@ -237,7 +225,6 @@ export class TextareaEditor {
       'OpenSCAD code editor. Press Ctrl+Enter to preview. Press Ctrl+S to save. Press Escape then Tab to exit editor.';
     this.container.appendChild(instructions);
 
-    // Status bar
     const statusBar = document.createElement('div');
     statusBar.className = 'textarea-editor-status';
     statusBar.id = 'textarea-editor-status';
@@ -255,8 +242,6 @@ export class TextareaEditor {
     statusBar.appendChild(charCount);
 
     this.container.appendChild(statusBar);
-
-    // Initialize line numbers
     this._updateLineNumbers();
   }
 
@@ -265,7 +250,6 @@ export class TextareaEditor {
    * @private
    */
   _attachEventListeners() {
-    // Input handling with debounced highlighting
     this.textarea.addEventListener('input', (e) => {
       this._value = e.target.value;
       this._scheduleHighlightUpdate();
@@ -274,17 +258,14 @@ export class TextareaEditor {
       this._updateStatusBar();
     });
 
-    // Scroll sync between textarea and line numbers
     this.textarea.addEventListener('scroll', () => {
       this._syncScroll();
     });
 
-    // Keyboard shortcuts
     this.textarea.addEventListener('keydown', (e) => {
       this._handleKeyDown(e);
     });
 
-    // Selection/cursor change
     this.textarea.addEventListener('select', () => {
       this._updateStatusBar();
     });
@@ -294,13 +275,11 @@ export class TextareaEditor {
     });
 
     this.textarea.addEventListener('keyup', (e) => {
-      // Update status on arrow keys
       if (e.key.startsWith('Arrow')) {
         this._updateStatusBar();
       }
     });
 
-    // Focus handling
     this.textarea.addEventListener('focus', () => {
       this.container.classList.add('focused');
     });
@@ -319,7 +298,6 @@ export class TextareaEditor {
     const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
     const modKey = isMac ? e.metaKey : e.ctrlKey;
 
-    // Ctrl+S / Cmd+S - Save
     if (modKey && e.key === 's') {
       e.preventDefault();
       this.onSave();
@@ -327,7 +305,6 @@ export class TextareaEditor {
       return;
     }
 
-    // Ctrl+Enter / Cmd+Enter - Run preview
     if (modKey && e.key === 'Enter') {
       e.preventDefault();
       this.onRun();
@@ -335,28 +312,24 @@ export class TextareaEditor {
       return;
     }
 
-    // Tab handling - insert spaces instead of tab character
     if (e.key === 'Tab' && !e.shiftKey) {
       e.preventDefault();
-      this._insertAtCursor('  '); // 2 spaces
+      this._insertAtCursor('  ');
       return;
     }
 
-    // Enter - auto-indent
     if (e.key === 'Enter' && !modKey) {
       e.preventDefault();
       this._handleEnterKey();
       return;
     }
 
-    // Ctrl+/ - Toggle comment
     if (modKey && e.key === '/') {
       e.preventDefault();
       this._toggleComment();
       return;
     }
 
-    // Escape - Announce exit instructions
     if (e.key === 'Escape') {
       this.announce('Press Tab to move to next element, or continue editing.');
     }
@@ -488,57 +461,48 @@ export class TextareaEditor {
    * @private
    */
   _highlightCode(code) {
-    // Escape HTML first
     let html = this._escapeHtml(code);
 
-    // Highlight strings (single and double quotes)
     html = html.replace(
       /"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g,
       '<span class="hl-string">$&</span>'
     );
 
-    // Highlight comments
     html = html.replace(/\/\/.*$/gm, '<span class="hl-comment">$&</span>');
     html = html.replace(
       /\/\*[\s\S]*?\*\//g,
       '<span class="hl-comment">$&</span>'
     );
 
-    // Highlight numbers
     html = html.replace(
       /\b-?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?\b/g,
       '<span class="hl-number">$&</span>'
     );
 
-    // Highlight keywords
     const keywordPattern = new RegExp(
       `\\b(${SCAD_TOKENS.keywords.join('|')})\\b`,
       'g'
     );
     html = html.replace(keywordPattern, '<span class="hl-keyword">$1</span>');
 
-    // Highlight builtins
     const builtinPattern = new RegExp(
       `\\b(${SCAD_TOKENS.builtins.join('|')})\\b`,
       'g'
     );
     html = html.replace(builtinPattern, '<span class="hl-builtin">$1</span>');
 
-    // Highlight functions
     const functionPattern = new RegExp(
       `\\b(${SCAD_TOKENS.functions.join('|')})\\b`,
       'g'
     );
     html = html.replace(functionPattern, '<span class="hl-function">$1</span>');
 
-    // Highlight special variables
     const specialPattern = new RegExp(
       `(${SCAD_TOKENS.specials.map((s) => s.replace('$', '\\$')).join('|')})\\b`,
       'g'
     );
     html = html.replace(specialPattern, '<span class="hl-special">$1</span>');
 
-    // Highlight constants
     const constantPattern = new RegExp(
       `\\b(${SCAD_TOKENS.constants.join('|')})\\b`,
       'g'
