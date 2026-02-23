@@ -101,4 +101,4 @@ colored_box();
 // 2. Or enter hex codes directly (RRGGBB format)
 // 3. Adjust dimensions using the sliders
 // 4. Toggle features with yes/no switches
-// 5. Click "Generate STL" to create your customized box
+// 5. Click "Generate" to create your customized box

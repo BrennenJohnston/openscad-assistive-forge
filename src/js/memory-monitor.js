@@ -95,7 +95,7 @@ export class MemoryMonitor {
    * @returns {MemorySample}
    */
   getCurrentUsage() {
-    // Try WASM heap first
+    // Try WASM heap first (only available if setWasmInterface was called)
     if (this.wasmMemoryInterface?.getMemoryUsage) {
       const wasmMem = this.wasmMemoryInterface.getMemoryUsage();
       return {
@@ -106,24 +106,10 @@ export class MemoryMonitor {
       };
     }
 
-    // Fallback: Check Chrome's performance.memory (deprecated but useful)
-    if (
-      typeof performance !== 'undefined' &&
-      'memory' in performance &&
-      performance.memory
-    ) {
-      const mem = performance.memory;
-      return {
-        timestamp: Date.now(),
-        heapMB: Math.round(mem.usedJSHeapSize / 1024 / 1024),
-        heapLimitMB: Math.round(mem.jsHeapSizeLimit / 1024 / 1024),
-        heapPercent: Math.round(
-          (mem.usedJSHeapSize / mem.jsHeapSizeLimit) * 100
-        ),
-      };
-    }
-
-    // No memory info available - return unknown state
+    // No direct WASM interface — rely on updateFromWorker() for data.
+    // Do NOT fall back to performance.memory: it measures the main-thread
+    // JS heap (naturally 400-600MB+ for a complex app), not the WASM
+    // worker heap. Using it here would trigger false warning badges.
     return {
       timestamp: Date.now(),
       heapMB: 0,
@@ -270,7 +256,9 @@ export class MemoryMonitor {
    * @returns {MemorySample|null}
    */
   getLatestSample() {
-    return this.history.length > 0 ? this.history[this.history.length - 1] : null;
+    return this.history.length > 0
+      ? this.history[this.history.length - 1]
+      : null;
   }
 
   /**

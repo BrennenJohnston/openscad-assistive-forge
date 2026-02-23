@@ -20,6 +20,7 @@ const ASSETS_STORE = 'assets';
 const LS_KEY = 'openscad-saved-projects';
 const LS_FOLDERS_KEY = 'openscad-saved-folders';
 const SCHEMA_VERSION = 2; // Project schema version
+const LS_MAX_PROJECT_FILES_BYTES = 2 * 1024 * 1024; // 2 MB -- beyond this, LS stringify OOMs the tab
 
 let db = null;
 let storageType = null; // 'indexeddb' or 'localstorage'
@@ -65,7 +66,6 @@ function generateUniqueName(baseName, existingProjects) {
     }
   }
 
-  // Return the next available name
   return `${baseName} (${maxSuffix + 1})`;
 }
 
@@ -119,7 +119,6 @@ export async function initSavedProjectsDB() {
     storageType = 'localstorage';
     return { available: true, type: 'localstorage' };
   }
-
 
   // Create and track the initialization promise
   initPromise = (async () => {
@@ -533,6 +532,7 @@ export async function saveProject({
 
     // Create project record with v2 schema
     const now = Date.now();
+
     const project = {
       id: generateId('project'),
       schemaVersion: SCHEMA_VERSION,
@@ -541,7 +541,13 @@ export async function saveProject({
       kind,
       mainFilePath,
       content,
-      projectFiles: projectFiles ? JSON.stringify(projectFiles) : null,
+      projectFiles: projectFiles
+        ? JSON.stringify(
+            projectFiles instanceof Map
+              ? Object.fromEntries(projectFiles)
+              : projectFiles
+          )
+        : null,
       folderId: folderId, // v2: parent folder (null = root)
       overlayFiles: {}, // v2: overlay metadata
       presets: [], // v2: project-scoped presets metadata
@@ -573,9 +579,19 @@ export async function saveProject({
           '[Saved Projects] IndexedDB save failed:',
           indexedDbError
         );
-        // Fall back to localStorage
+        // Fall back to localStorage — strip projectFiles if too large to avoid OOM crash
+        const pfLen = project.projectFiles ? project.projectFiles.length : 0;
+        const projectForLS =
+          pfLen > LS_MAX_PROJECT_FILES_BYTES
+            ? { ...project, projectFiles: null }
+            : project;
+        if (pfLen > LS_MAX_PROJECT_FILES_BYTES) {
+          console.warn(
+            `[Saved Projects] IndexedDB failed and project files too large for LS fallback (${(pfLen / 1024 / 1024).toFixed(1)}MB). Saving metadata-only to localStorage.`
+          );
+        }
         const projects = getFromLocalStorage();
-        projects.push(project);
+        projects.push(projectForLS);
         saveToLocalStorage(projects);
         console.log(
           `[Saved Projects] Fallback: Project saved to localStorage: ${project.name}`
@@ -587,7 +603,22 @@ export async function saveProject({
         const lsProjects = getFromLocalStorage();
         // Don't add duplicates
         if (!lsProjects.find((p) => p.id === project.id)) {
-          lsProjects.push(project);
+          // localStorage has a ~5-10MB quota. Projects with large projectFiles
+          // (ZIP imports) exceed this limit and calling JSON.stringify on them
+          // causes an OOM tab crash (not a catchable JS exception). Strip
+          // projectFiles from the LS backup for large projects — the full data
+          // is preserved in IndexedDB.
+          const pfLen = project.projectFiles ? project.projectFiles.length : 0;
+          const projectForLS =
+            pfLen > LS_MAX_PROJECT_FILES_BYTES
+              ? { ...project, projectFiles: null }
+              : project;
+          if (pfLen > LS_MAX_PROJECT_FILES_BYTES) {
+            console.log(
+              `[Saved Projects] Project files too large for LS backup (${(pfLen / 1024 / 1024).toFixed(1)}MB), saving metadata-only copy to localStorage`
+            );
+          }
+          lsProjects.push(projectForLS);
           saveToLocalStorage(lsProjects);
           console.log('[Saved Projects] Backup copy saved to localStorage');
         }
@@ -733,7 +764,13 @@ export async function touchProject(id) {
  * @param {string} [options.projectFiles] - New project files (JSON string)
  * @returns {Promise<{success: boolean, error?: string}>}
  */
-export async function updateProject({ id, name, notes, projectFiles }) {
+export async function updateProject({
+  id,
+  name,
+  notes,
+  projectFiles,
+  content,
+}) {
   try {
     // Ensure database is initialized
     await ensureInitialized();
@@ -757,6 +794,10 @@ export async function updateProject({ id, name, notes, projectFiles }) {
     }
     if (projectFiles !== undefined) {
       project.projectFiles = projectFiles;
+    }
+    if (content !== undefined) {
+      project.content = content;
+      project.savedAt = Date.now();
     }
 
     // Validate updated project

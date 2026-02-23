@@ -13,6 +13,16 @@ npm run dev
 
 Open `http://localhost:5173`.
 
+**Alternative (Pixi):** If you have [Pixi](https://pixi.sh/) installed, you can
+use `pixi run` instead of `npm run` for any task. Pixi provides a reproducible
+environment with Node.js pinned via conda-forge. See `pixi.toml` for all
+available tasks and their descriptions.
+
+```bash
+pixi install
+pixi run dev
+```
+
 ## What’s helpful
 
 - Fixes for accessibility issues (keyboard traps, focus order, labeling, contrast, motion)

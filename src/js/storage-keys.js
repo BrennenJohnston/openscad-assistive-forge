@@ -27,15 +27,20 @@ export const KEY_MIGRATIONS = {
   // ============================================================================
   // Drawer State Keys -> openscad-drawer-{name}-state
   // ============================================================================
-  'openscad-customizer-param-panel-collapsed': 'openscad-drawer-parameters-state',
+  'openscad-customizer-param-panel-collapsed':
+    'openscad-drawer-parameters-state',
   'openscad-customizer-camera-panel-collapsed': 'openscad-drawer-camera-state',
-  'openscad-customizer-camera-drawer-collapsed': 'openscad-drawer-camera-mobile-state',
-  'openscad-customizer-drawer-collapsed': 'openscad-drawer-preview-settings-state',
+  'openscad-customizer-camera-drawer-collapsed':
+    'openscad-drawer-camera-mobile-state',
+  'openscad-customizer-drawer-collapsed':
+    'openscad-drawer-preview-settings-state',
   // Note: 'openscad-drawer-actions-state' already follows spec
 
   // Preview camera controls (not a drawer, but similar collapse pattern)
-  'openscad-camera-controls-collapsed': 'openscad-forge-camera-controls-collapsed',
-  'openscad-camera-controls-position': 'openscad-forge-camera-controls-position',
+  'openscad-camera-controls-collapsed':
+    'openscad-forge-camera-controls-collapsed',
+  'openscad-camera-controls-position':
+    'openscad-forge-camera-controls-position',
 
   // ============================================================================
   // Drawer Size Keys -> openscad-drawer-{name}-width/height
@@ -112,6 +117,13 @@ export const PRESERVED_KEYS = [
   'openscad-customizer-presets',
   'openscad-forge-presets-v1',
 
+  // Grid size user presets (managed by preview.js)
+  'openscad-forge-custom-grid-presets',
+
+  // WASM crash-detection flags (set before/after WASM init; cleared on recovery)
+  'openscad-forge-wasm-init-started',
+  'openscad-forge-wasm-init-completed',
+
   // Saved projects use IndexedDB primarily
   'openscad-saved-projects',
   'openscad-saved-folders',
@@ -151,7 +163,9 @@ export function migrateStorageKeys(options = {}) {
     return results;
   }
 
-  console.log(`[StorageKeys] Running migration (v${MIGRATION_VERSION})${dryRun ? ' [DRY RUN]' : ''}`);
+  console.log(
+    `[StorageKeys] Running migration (v${MIGRATION_VERSION})${dryRun ? ' [DRY RUN]' : ''}`
+  );
 
   for (const [oldKey, newKey] of Object.entries(KEY_MIGRATIONS)) {
     try {
@@ -166,7 +180,9 @@ export function migrateStorageKeys(options = {}) {
       // Check if new key already exists (don't overwrite)
       const newValue = localStorage.getItem(newKey);
       if (newValue !== null) {
-        console.log(`[StorageKeys] Skipping ${oldKey} -> ${newKey} (new key already exists)`);
+        console.log(
+          `[StorageKeys] Skipping ${oldKey} -> ${newKey} (new key already exists)`
+        );
         results.skipped.push(oldKey);
         continue;
       }
@@ -200,7 +216,9 @@ export function migrateStorageKeys(options = {}) {
   // Mark migration as complete
   if (!dryRun && results.errors.length === 0) {
     localStorage.setItem(MIGRATION_KEY, String(MIGRATION_VERSION));
-    console.log(`[StorageKeys] Migration complete: ${results.migrated.length} keys migrated, ${results.skipped.length} skipped`);
+    console.log(
+      `[StorageKeys] Migration complete: ${results.migrated.length} keys migrated, ${results.skipped.length} skipped`
+    );
   }
 
   return results;

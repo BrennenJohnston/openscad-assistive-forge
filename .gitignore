@@ -27,7 +27,6 @@ localhost_*.report.html
 *.code-workspace
 
 # Pixi (optional environment manager)
-# Uncomment to track lock file: pixi.lock
 .pixi/
 
 # Editor workspace

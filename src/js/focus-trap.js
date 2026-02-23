@@ -1,13 +1,13 @@
 /**
  * Focus Trap Utility
- * 
+ *
  * Consolidates focus trap implementations from:
  * - modal-manager.js (element-level trap)
  * - drawer-controller.js (document-level capturing trap)
  * - tutorial-sandbox.js (element-level trap)
- * 
+ *
  * Supports both element-level and document-level patterns with a single API.
- * 
+ *
  * @license GPL-3.0-or-later
  */
 
@@ -68,7 +68,7 @@ export function getFocusableElements(container, options = {}) {
 /**
  * Create an element-level focus trap
  * Attaches a keydown handler to the container element.
- * 
+ *
  * @param {HTMLElement} container - Container to trap focus within
  * @param {Object} [options] - Options
  * @param {Function} [options.onEscape] - Callback when Escape is pressed (if not provided, Escape is not handled)
@@ -167,7 +167,7 @@ export function createFocusTrap(container, options = {}) {
  * Create a document-level focus trap with focus recovery
  * Attaches a capturing keydown handler to document.
  * Handles focus escaping the container and brings it back.
- * 
+ *
  * @param {HTMLElement} container - Container to trap focus within
  * @param {Object} [options] - Options
  * @param {Function} [options.onEscape] - Callback when Escape is pressed
@@ -283,7 +283,7 @@ export function createDocumentFocusTrap(container, options = {}) {
 /**
  * Simple focus trap function (backward compatible)
  * Returns a keydown handler that can be attached to an element.
- * 
+ *
  * @param {HTMLElement} container - Container to trap focus within
  * @returns {Function} Keydown handler function
  */

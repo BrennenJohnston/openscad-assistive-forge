@@ -1152,9 +1152,7 @@ describe('Parameter Parser', () => {
       expect(param.enum.some(e => e.value === 'other tablet')).toBe(true)
     })
 
-    it('should parse float step shorthand "// .1" as description (current parser behavior)', () => {
-      // keyguard_v75.scad uses "// .1" to indicate step=0.1 for numeric params
-      // e.g.: keyguard_thickness = 4.0; // .1
+    it('should parse float step shorthand "// .1" as spinbox step (C5)', () => {
       const scad = `
         /*[Keyguard Basics]*/
         keyguard_thickness = 4.0; // .1
@@ -1164,9 +1162,8 @@ describe('Parameter Parser', () => {
 
       expect(param).toBeDefined()
       expect(param.default).toBe(4.0)
-      // Current parser: "// .1" is parsed as a description, not a step annotation
-      // This documents the current behavior for future reference
       expect(param.type).toBe('number')
+      expect(param.step).toBe(0.1)
     })
 
     it('should parse range without step [0:10000] as slider with integer step', () => {
@@ -1493,6 +1490,94 @@ describe('Parameter Parser', () => {
       const result = extractParameters(scad)
       expect(result.parameters.status_bar.unit).toBe('px')
       expect(result.parameters.count.unit).toBeNull()
+    })
+
+    it('should parse MakerBot [max] single-number slider (C1)', () => {
+      const scad = `
+        /*[Options]*/
+        sliderWithMax = 34; // [50]
+      `
+      const result = extractParameters(scad)
+      const param = result.parameters.sliderWithMax
+
+      expect(param).toBeDefined()
+      expect(param.default).toBe(34)
+      expect(param.maximum).toBe(50)
+      expect(param.uiType).toBe('slider')
+    })
+
+    it('should stop parsing at __Customizer_Limit__ module (C2)', () => {
+      const scad = `
+        visible = 10; // [0:100]
+
+        module __Customizer_Limit__() {}
+
+        hidden_after_limit = 42;
+        also_hidden = "text";
+      `
+      const result = extractParameters(scad)
+
+      expect(result.parameters.visible).toBeDefined()
+      expect(result.parameters.hidden_after_limit).toBeUndefined()
+      expect(result.parameters.also_hidden).toBeUndefined()
+    })
+
+    it('should filter out non-literal scalar assignments (C3)', () => {
+      const scad = `
+        literal = 42;
+        expression = a + b;
+        func_call = sin(45);
+        var_ref = otherVar;
+        quoted = "hello";
+      `
+      const result = extractParameters(scad)
+
+      expect(result.parameters.literal).toBeDefined()
+      expect(result.parameters.quoted).toBeDefined()
+      expect(result.parameters.expression).toBeUndefined()
+      expect(result.parameters.func_call).toBeUndefined()
+      expect(result.parameters.var_ref).toBeUndefined()
+    })
+
+    it('should suppress annotation on first assignment of multi-assignment line (C4)', () => {
+      const scad = `
+        x25=12; x26="text"; //[1:34]
+      `
+      const result = extractParameters(scad)
+
+      // First assignment captured but should have NO annotation
+      if (result.parameters.x25) {
+        expect(result.parameters.x25.minimum).toBeUndefined()
+        expect(result.parameters.x25.maximum).toBeUndefined()
+        expect(result.parameters.x25.uiType).toBe('input')
+      }
+    })
+
+    it('should parse fractional step hint // .5 for numbers (C5)', () => {
+      const scad = `
+        spinbox = 5.5; // .5
+      `
+      const result = extractParameters(scad)
+      const param = result.parameters.spinbox
+
+      expect(param).toBeDefined()
+      expect(param.step).toBe(0.5)
+      expect(param.type).toBe('number')
+    })
+
+    it('should join multi-bracket groups with dash (C8)', () => {
+      const scad = `
+        /* [a] [b] */
+        param1 = 1;
+        /* [x] [y] [z] */
+        param2 = 2;
+      `
+      const result = extractParameters(scad)
+
+      expect(result.parameters.param1.group).toBe('a - b')
+      expect(result.parameters.param2.group).toBe('x - y - z')
+      expect(result.groups.find(g => g.id === 'a - b')).toBeDefined()
+      expect(result.groups.find(g => g.id === 'x - y - z')).toBeDefined()
     })
 
     it('should handle the real keyguard_v75.scad file if available', () => {

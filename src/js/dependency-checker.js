@@ -262,7 +262,11 @@ export function formatMissingDependencies(missing) {
  * @param {Object} options - Check options
  * @returns {Object} Preflight result
  */
-export function runPreflightCheck(scadContent, uploadedFilenames, options = {}) {
+export function runPreflightCheck(
+  scadContent,
+  uploadedFilenames,
+  options = {}
+) {
   const dependencies = extractDependencies(scadContent);
   const { hasMissing, missing } = checkDependencies(
     dependencies,

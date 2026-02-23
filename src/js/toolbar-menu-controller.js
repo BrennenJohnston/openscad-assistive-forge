@@ -1,0 +1,580 @@
+/**
+ * Toolbar Menu Controller
+ * Manages the 6-button application menu bar: File|Edit|Design|View|Window|Help
+ * Each button opens a modal dialog containing menu items.
+ *
+ * Modal pattern delegates to modal-manager.js for focus trapping, Escape close,
+ * and focus restoration. Menu content (items) is populated in Phases 2-7.
+ *
+ * ARIA approach: toolbar buttons use aria-haspopup="dialog"; menus use
+ * role="dialog" with semantic <button>/<ul> inside — not role="menubar"/
+ * role="menu", which would require the full ARIA menu keyboard model.
+ *
+ * @license GPL-3.0-or-later
+ */
+
+import {
+  openModal,
+  closeModal,
+  setupModalCloseHandlers,
+  isAnyModalOpen,
+} from './modal-manager.js';
+import { keyboardConfig, formatShortcut } from './keyboard-config.js';
+import { announce } from './announcer.js';
+
+/** Ordered menu identifiers matching the toolbar button order */
+const MENU_IDS = ['file', 'edit', 'design', 'view', 'window', 'help'];
+
+/** Human-readable labels for each menu */
+const MENU_LABELS = {
+  file: 'File',
+  edit: 'Edit',
+  design: 'Design',
+  view: 'View',
+  window: 'Window',
+  help: 'Help',
+};
+
+/** Human-readable labels for radio groups */
+const RADIO_GROUP_LABELS = {
+  displayMode: 'Display Mode',
+  projection: 'Projection',
+};
+
+export class ToolbarMenuController {
+  constructor() {
+    /** @type {Map<string, HTMLElement>} menuId -> toolbar button element */
+    this._buttons = new Map();
+
+    /** @type {Map<string, HTMLElement>} menuId -> modal element */
+    this._modals = new Map();
+
+    /** @type {string|null} ID of the currently open menu, or null */
+    this._openMenuId = null;
+
+    /** @type {Function|null} Optional global action callback */
+    this._onMenuAction = null;
+
+    /**
+     * Per-menu builder functions called on each open to get fresh item definitions.
+     * Builder receives no arguments and returns an Object[] of menu item definitions.
+     * @type {Map<string, Function>}
+     */
+    this._menuBuilders = new Map();
+
+    /** @type {number} Auto-incrementing counter for unique element IDs */
+    this._idCounter = 0;
+  }
+
+  /**
+   * Initialize: wire toolbar buttons to modal open handlers and set up
+   * close handlers (overlay click, close button, Escape) for each menu modal.
+   *
+   * @param {Object} [options]
+   * @param {Function} [options.onMenuAction] - Called with (actionId, data) for each menu action
+   */
+  init(options = {}) {
+    this._onMenuAction = options.onMenuAction || null;
+
+    const bar = document.getElementById('toolbarMenuBar');
+    if (!bar) {
+      console.warn('[ToolbarMenuController] #toolbarMenuBar not found in DOM');
+      return;
+    }
+
+    for (const menuId of MENU_IDS) {
+      const btn = document.getElementById(`${menuId}MenuBtn`);
+      const modal = document.getElementById(`${menuId}MenuModal`);
+
+      if (!btn || !modal) {
+        console.warn(
+          `[ToolbarMenuController] Missing button or modal for menu: ${menuId}`
+        );
+        continue;
+      }
+
+      this._buttons.set(menuId, btn);
+      this._modals.set(menuId, modal);
+
+      // Delegate close behaviours to modal-manager: overlay click, .modal-close
+      // button click, and Escape keydown are all handled by setupModalCloseHandlers.
+      setupModalCloseHandlers(modal, {
+        closeButton: '.modal-close',
+        overlay: '.modal-overlay',
+      });
+
+      btn.addEventListener('click', () => this.openMenu(menuId));
+    }
+  }
+
+  /**
+   * Open a menu modal.
+   * Skips if a non-menu modal (e.g. Features Guide, Render Queue) is currently
+   * open. Closes any currently-open menu first to prevent menu stacking.
+   *
+   * @param {string} menuId
+   */
+  openMenu(menuId) {
+    if (!this._modals.has(menuId)) {
+      return;
+    }
+
+    // Block opening over a non-toolbar-menu modal
+    if (isAnyModalOpen() && this._openMenuId === null) {
+      return;
+    }
+
+    // Close sibling menu if one is open
+    this.closeAllMenus();
+
+    // Rebuild menu content from its builder (gets fresh enabled/checked state)
+    this.refreshMenuState(menuId);
+
+    const modal = this._modals.get(menuId);
+
+    this._openMenuId = menuId;
+    this._setButtonExpanded(menuId, true);
+
+    openModal(modal, {
+      onClose: () => {
+        this._setButtonExpanded(menuId, false);
+        if (this._openMenuId === menuId) {
+          this._openMenuId = null;
+        }
+      },
+    });
+
+    announce(`${MENU_LABELS[menuId]} menu opened`, { clearDelayMs: 1500 });
+  }
+
+  /**
+   * Close a specific menu modal.
+   * @param {string} menuId
+   */
+  closeMenu(menuId) {
+    if (!this._modals.has(menuId)) return;
+    closeModal(this._modals.get(menuId));
+    this._setButtonExpanded(menuId, false);
+    if (this._openMenuId === menuId) {
+      this._openMenuId = null;
+    }
+  }
+
+  /**
+   * Close all open menu modals (at most one can be open at a time).
+   */
+  closeAllMenus() {
+    if (this._openMenuId !== null) {
+      this.closeMenu(this._openMenuId);
+    }
+  }
+
+  /**
+   * Show the entire toolbar menu bar.
+   */
+  show() {
+    const bar = document.getElementById('toolbarMenuBar');
+    if (bar) bar.classList.remove('hidden');
+  }
+
+  /**
+   * Hide the entire toolbar menu bar.
+   */
+  hide() {
+    const bar = document.getElementById('toolbarMenuBar');
+    if (bar) bar.classList.add('hidden');
+  }
+
+  /**
+   * Show only the specified menu buttons; hide all others.
+   * Used for Basic mode per-menu overrides: the bar is shown when at least
+   * one menu ID is included, hidden when the array is empty.
+   *
+   * @param {string[]} visibleMenuIds - Menu IDs whose buttons should be visible
+   */
+  setVisibleMenus(visibleMenuIds) {
+    const bar = document.getElementById('toolbarMenuBar');
+    if (!bar) return;
+
+    if (visibleMenuIds.length > 0) {
+      bar.classList.remove('hidden');
+    } else {
+      bar.classList.add('hidden');
+      return;
+    }
+
+    for (const menuId of MENU_IDS) {
+      const btn = this._buttons.get(menuId);
+      if (!btn) continue;
+      if (visibleMenuIds.includes(menuId)) {
+        btn.classList.remove('hidden');
+      } else {
+        btn.classList.add('hidden');
+      }
+    }
+  }
+
+  /**
+   * Render menu items into a menu's list container.
+   * Called by individual menu phases (2-7) after the menu definition is built.
+   *
+   * @param {string} menuId
+   * @param {Object[]} items - Array of menu item definition objects
+   */
+  renderMenuContent(menuId, items) {
+    const modal = this._modals.get(menuId);
+    if (!modal) return;
+
+    const listEl = modal.querySelector(`#${menuId}MenuItems`);
+    if (!listEl) return;
+
+    listEl.innerHTML = '';
+
+    let i = 0;
+    while (i < items.length) {
+      const item = items[i];
+      if (item.type === 'radio') {
+        const group = item.group;
+        const radioItems = [];
+        while (
+          i < items.length &&
+          items[i].type === 'radio' &&
+          items[i].group === group
+        ) {
+          radioItems.push(items[i]);
+          i++;
+        }
+        listEl.appendChild(this._buildRadioGroup(group, radioItems));
+      } else {
+        listEl.appendChild(this._buildMenuItem(item));
+        i++;
+      }
+    }
+  }
+
+  /**
+   * Register a builder function for a menu.
+   * The builder is called each time the menu opens to obtain fresh item
+   * definitions with up-to-date enabled/checked/content state.
+   *
+   * @param {string} menuId
+   * @param {Function} builderFn - () => Object[] — returns menu item definitions
+   */
+  registerMenuBuilder(menuId, builderFn) {
+    this._menuBuilders.set(menuId, builderFn);
+  }
+
+  /**
+   * Rebuild a menu's content by calling its registered builder.
+   * No-op if no builder is registered for the menu.
+   *
+   * @param {string} menuId
+   */
+  refreshMenuState(menuId) {
+    const builder = this._menuBuilders.get(menuId);
+    if (builder) {
+      this.renderMenuContent(menuId, builder());
+    }
+  }
+
+  // ============================================================================
+  // Private helpers
+  // ============================================================================
+
+  /**
+   * Update aria-expanded on a toolbar button.
+   * @param {string} menuId
+   * @param {boolean} expanded
+   * @private
+   */
+  _setButtonExpanded(menuId, expanded) {
+    const btn = this._buttons.get(menuId);
+    if (btn) btn.setAttribute('aria-expanded', String(expanded));
+  }
+
+  /**
+   * Build a single <li> menu item element from a declarative definition.
+   *
+   * Supported item types:
+   *   separator — <li role="separator">
+   *   action    — plain <button> (default when type is omitted)
+   *   toggle    — <button aria-pressed="true/false">
+   *   radio     — <button> with checked indicator (inside fieldset, caller's responsibility)
+   *   submenu   — <details>/<summary> with nested <ul> of child items
+   *
+   * @param {Object} item
+   * @param {string} [item.type='action']
+   * @param {string} [item.id]
+   * @param {string} [item.label]
+   * @param {boolean} [item.enabled] - When false, renders as aria-disabled
+   * @param {boolean} [item.disabled] - Alias for enabled=false
+   * @param {string} [item.tooltip]
+   * @param {boolean} [item.checked] - For toggles
+   * @param {string} [item.shortcutAction] - Key in keyboardConfig for shortcut display
+   * @param {Function} [item.handler]
+   * @param {Object[]} [item.items] - Child items for type='submenu'
+   * @returns {HTMLLIElement}
+   * @private
+   */
+  _buildMenuItem(item) {
+    if (item.type === 'separator') {
+      const sep = document.createElement('li');
+      sep.className = 'menu-separator';
+      sep.setAttribute('role', 'separator');
+      sep.setAttribute('aria-hidden', 'true');
+      return sep;
+    }
+
+    if (item.type === 'submenu') {
+      return this._buildSubmenuItem(item);
+    }
+
+    const li = document.createElement('li');
+    li.className = 'menu-item';
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'menu-item-btn';
+
+    if (item.id) btn.id = item.id;
+
+    const isDisabled = item.enabled === false || item.disabled === true;
+    if (isDisabled) {
+      btn.setAttribute('aria-disabled', 'true');
+    }
+    if (item.tooltip) {
+      btn.setAttribute('title', item.tooltip);
+    }
+
+    if (item.type === 'toggle') {
+      btn.setAttribute('aria-pressed', String(Boolean(item.checked)));
+    }
+
+    const labelSpan = document.createElement('span');
+    labelSpan.className = 'menu-item-label';
+    labelSpan.textContent = item.label || '';
+    btn.appendChild(labelSpan);
+
+    const describedByIds = [];
+
+    if (item.tooltip) {
+      const tooltipId = `menu-tip-${this._nextId()}`;
+      const tooltipSpan = document.createElement('span');
+      tooltipSpan.id = tooltipId;
+      tooltipSpan.className = 'sr-only';
+      tooltipSpan.textContent = item.tooltip;
+      btn.appendChild(tooltipSpan);
+      describedByIds.push(tooltipId);
+    }
+
+    if (item.shortcutAction) {
+      const shortcutDef = keyboardConfig.getShortcut(item.shortcutAction);
+      if (shortcutDef) {
+        const shortcutId = `menu-kbd-${this._nextId()}`;
+        const kbdSpan = document.createElement('span');
+        kbdSpan.id = shortcutId;
+        kbdSpan.className = 'menu-item-shortcut';
+        kbdSpan.setAttribute('aria-hidden', 'true');
+        kbdSpan.textContent = formatShortcut(shortcutDef);
+        btn.appendChild(kbdSpan);
+        describedByIds.push(shortcutId);
+      }
+    }
+
+    if (describedByIds.length > 0) {
+      btn.setAttribute('aria-describedby', describedByIds.join(' '));
+    }
+
+    if (!isDisabled && typeof item.handler === 'function') {
+      btn.addEventListener('click', () => {
+        this.closeAllMenus();
+        item.handler();
+      });
+    }
+
+    li.appendChild(btn);
+    return li;
+  }
+
+  /**
+   * Generate a unique numeric ID for aria-describedby and radio group linking.
+   * @returns {number}
+   * @private
+   */
+  _nextId() {
+    return ++this._idCounter;
+  }
+
+  /**
+   * Build a radio group <li> wrapping consecutive radio items in a semantic
+   * <fieldset>/<legend> with native <input type="radio"> elements.
+   *
+   * @param {string} groupName - The group identifier (e.g. 'projection')
+   * @param {Object[]} items - Radio item definitions sharing this group
+   * @returns {HTMLLIElement}
+   * @private
+   */
+  _buildRadioGroup(groupName, items) {
+    const li = document.createElement('li');
+    li.className = 'menu-item menu-item--radio-group';
+
+    const fieldset = document.createElement('fieldset');
+    fieldset.className = 'menu-radio-fieldset';
+
+    const legend = document.createElement('legend');
+    legend.className = 'menu-radio-legend';
+    legend.textContent = RADIO_GROUP_LABELS[groupName] || groupName;
+    fieldset.appendChild(legend);
+
+    const radioName = `radio_${groupName}_${this._nextId()}`;
+
+    for (const item of items) {
+      const label = document.createElement('label');
+      label.className = 'menu-radio-label menu-item-btn';
+
+      const isDisabled = item.enabled === false || item.disabled === true;
+      if (isDisabled) {
+        label.setAttribute('aria-disabled', 'true');
+      }
+      if (item.tooltip) {
+        label.setAttribute('title', item.tooltip);
+        const tipId = `menu-tip-${this._nextId()}`;
+        const tipSpan = document.createElement('span');
+        tipSpan.id = tipId;
+        tipSpan.className = 'sr-only';
+        tipSpan.textContent = item.tooltip;
+        label.appendChild(tipSpan);
+        label.setAttribute('aria-describedby', tipId);
+      }
+
+      const input = document.createElement('input');
+      input.type = 'radio';
+      input.name = radioName;
+      input.value = item.value || item.label;
+      input.className = 'menu-radio-input';
+      if (item.checked) input.checked = true;
+      if (isDisabled) input.disabled = true;
+
+      if (!isDisabled && typeof item.onChange === 'function') {
+        input.addEventListener('change', () => {
+          this.closeAllMenus();
+          item.onChange(input.value);
+        });
+      }
+
+      const labelSpan = document.createElement('span');
+      labelSpan.className = 'menu-item-label';
+      labelSpan.textContent = item.label || '';
+
+      label.appendChild(input);
+      label.appendChild(labelSpan);
+
+      if (item.shortcutAction) {
+        const shortcutDef = keyboardConfig.getShortcut(item.shortcutAction);
+        if (shortcutDef) {
+          const kbdSpan = document.createElement('span');
+          kbdSpan.className = 'menu-item-shortcut';
+          kbdSpan.setAttribute('aria-hidden', 'true');
+          kbdSpan.textContent = formatShortcut(shortcutDef);
+          label.appendChild(kbdSpan);
+        }
+      }
+
+      fieldset.appendChild(label);
+    }
+
+    li.appendChild(fieldset);
+    return li;
+  }
+
+  /**
+   * Build a submenu <li> using <details>/<summary> for native keyboard
+   * expand/collapse without requiring ARIA menu patterns.
+   *
+   * @param {Object} item
+   * @returns {HTMLLIElement}
+   * @private
+   */
+  _buildSubmenuItem(item) {
+    const li = document.createElement('li');
+    li.className = 'menu-item menu-item--submenu';
+
+    const isDisabled = item.enabled === false || item.disabled === true;
+
+    if (isDisabled) {
+      // Render as a plain disabled button when the submenu itself is coming soon
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'menu-item-btn';
+      btn.setAttribute('aria-disabled', 'true');
+      if (item.tooltip) btn.setAttribute('title', item.tooltip);
+
+      const labelSpan = document.createElement('span');
+      labelSpan.className = 'menu-item-label';
+      labelSpan.textContent = item.label || '';
+      btn.appendChild(labelSpan);
+
+      const arrow = document.createElement('span');
+      arrow.className = 'menu-submenu-arrow';
+      arrow.setAttribute('aria-hidden', 'true');
+      arrow.textContent = '▶';
+      btn.appendChild(arrow);
+
+      li.appendChild(btn);
+      return li;
+    }
+
+    const details = document.createElement('details');
+    details.className = 'menu-submenu-details';
+
+    const summary = document.createElement('summary');
+    summary.className = 'menu-item-btn menu-submenu-summary';
+    if (item.tooltip) summary.setAttribute('title', item.tooltip);
+
+    const labelSpan = document.createElement('span');
+    labelSpan.className = 'menu-item-label';
+    labelSpan.textContent = item.label || '';
+    summary.appendChild(labelSpan);
+
+    const arrow = document.createElement('span');
+    arrow.className = 'menu-submenu-arrow';
+    arrow.setAttribute('aria-hidden', 'true');
+    arrow.textContent = '▶';
+    summary.appendChild(arrow);
+
+    details.appendChild(summary);
+
+    const nestedUl = document.createElement('ul');
+    nestedUl.className = 'menu-items-list menu-items-list--nested';
+
+    const childItems = Array.isArray(item.items) ? item.items : [];
+    for (const child of childItems) {
+      nestedUl.appendChild(this._buildMenuItem(child));
+    }
+
+    details.appendChild(nestedUl);
+    li.appendChild(details);
+    return li;
+  }
+}
+
+// Singleton
+let _instance = null;
+
+/**
+ * Get (or create) the ToolbarMenuController singleton.
+ * @returns {ToolbarMenuController}
+ */
+export function getToolbarMenuController() {
+  if (!_instance) {
+    _instance = new ToolbarMenuController();
+  }
+  return _instance;
+}
+
+/**
+ * Reset the singleton. Used in unit tests.
+ */
+export function resetToolbarMenuController() {
+  _instance = null;
+}

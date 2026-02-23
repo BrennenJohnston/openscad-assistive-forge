@@ -14,7 +14,7 @@ assignees: ''
 
 ## WCAG Success Criterion (if known)
 
-**Which WCAG 2.1 guideline does this relate to?**
+**Which WCAG 2.2 guideline does this relate to?**
 
 - [ ] 1.1 Text Alternatives
 - [ ] 1.3 Adaptable

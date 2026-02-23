@@ -20,15 +20,44 @@ export async function extractZipFiles(zipFile) {
     let mainFile = null;
     const scadFiles = [];
 
+    // Image file types: extracted as base64 data URLs so the preview layer
+    // and THREE.js overlay renderer can consume them directly.
+    const IMAGE_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp']);
+
+    // Non-image binary types that cannot be stored as text strings and are
+    // not used by the OpenSCAD WASM renderer. Extracting these as UTF-8 text
+    // would corrupt their content and waste significant memory.
+    const BINARY_ONLY_EXTS = new Set([
+      'bmp',
+      'tiff',
+      'tif',
+      'ico',
+      'stl',
+      'obj',
+      'amf',
+      '3mf',
+      'wrl',
+      'zip',
+      'gz',
+      'tar',
+      'mp4',
+      'mp3',
+      'wav',
+      'avi',
+      'mov',
+      'pdf',
+      'doc',
+      'docx',
+      'xls',
+      'xlsx',
+    ]);
+
     // Extract all files
     for (const [relativePath, zipEntry] of Object.entries(zipData.files)) {
       // Skip directories
       if (zipEntry.dir) continue;
 
-      // Extract file content as text
-      const content = await zipEntry.async('text');
-
-      // Normalize path (remove leading slashes, convert backslashes)
+      // Normalize path early so it is available for all extraction branches
       const normalizedPath = relativePath
         .replace(/^\/+/, '')
         .replace(/\\/g, '/');
@@ -45,6 +74,30 @@ export async function extractZipFiles(zipFile) {
         continue;
       }
 
+      const extMatch = normalizedPath.match(/\.([^./\\]+)$/);
+      const ext = extMatch ? extMatch[1].toLowerCase() : '';
+
+      // Extract image files as base64 data URLs (binary-safe)
+      if (IMAGE_EXTS.has(ext)) {
+        const base64Data = await zipEntry.async('base64');
+        const mime = ext === 'jpg' ? 'jpeg' : ext;
+        files.set(normalizedPath, `data:image/${mime};base64,${base64Data}`);
+        console.log(
+          `[ZIP] Extracted image: ${normalizedPath} (${base64Data.length} base64 chars)`
+        );
+        continue;
+      }
+
+      // Skip non-image binary files
+      if (BINARY_ONLY_EXTS.has(ext)) {
+        console.log(
+          `[ZIP] Skipping binary file (not usable as text): ${relativePath}`
+        );
+        continue;
+      }
+
+      // Extract file content as text
+      const content = await zipEntry.async('text');
       files.set(normalizedPath, content);
 
       // Track .scad files for main file detection
@@ -71,7 +124,8 @@ export async function extractZipFiles(zipFile) {
     const fileClassification = {};
     for (const [filePath, content] of files.entries()) {
       const ext = filePath.split('.').pop()?.toLowerCase() || 'unknown';
-      if (!fileClassification[ext]) fileClassification[ext] = { count: 0, totalBytes: 0 };
+      if (!fileClassification[ext])
+        fileClassification[ext] = { count: 0, totalBytes: 0 };
       fileClassification[ext].count++;
       fileClassification[ext].totalBytes += content.length;
     }
@@ -87,7 +141,7 @@ export async function extractZipFiles(zipFile) {
 /**
  * Detect the main .scad file from a list of candidates
  * Strategy:
- * 1. Look for "main.scad" or files with "main" in the name
+ * 1. Look for "main.scad" or files with "main" in the filename
  * 2. Look for files in the root directory (no subdirectories)
  * 3. Look for the first .scad file with Customizer annotations
  * 4. Fall back to the first .scad file alphabetically
@@ -108,9 +162,9 @@ function detectMainFile(scadFiles, files) {
   );
   if (mainScad) return mainScad;
 
-  // Strategy 2: Look for files with "main" in the name
+  // Strategy 2: Look for files with "main" in the filename (basename only)
   const mainNamed = scadFiles.find((path) =>
-    path.toLowerCase().includes('main')
+    path.split('/').pop().toLowerCase().includes('main')
   );
   if (mainNamed) return mainNamed;
 
@@ -177,28 +231,118 @@ export function validateZipFile(file) {
 }
 
 /**
+ * Build a recursive nested tree from a flat Map<path, content>.
+ *
+ * Each node has the shape:
+ *   { folders: Map<string, node>, files: [{ path, name, content }] }
+ *
+ * Paths are forward-slash delimited. Leading slashes are stripped.
+ * Sentinel `.folder` entries (used to represent empty folders) are excluded
+ * from the files array but their parent folder node is still created.
+ *
+ * @param {Map<string, string>} fileMap - Flat path → content map
+ * @returns {{ folders: Map<string, object>, files: Array<{path:string, name:string, content:string}> }}
+ */
+export function buildNestedTree(fileMap) {
+  const root = { folders: new Map(), files: [] };
+
+  for (const [rawPath, content] of fileMap.entries()) {
+    const path = rawPath.replace(/^\/+/, '');
+    const parts = path.split('/');
+    let node = root;
+
+    // Walk / create intermediate folder nodes
+    for (let i = 0; i < parts.length - 1; i++) {
+      const segment = parts[i];
+      if (!node.folders.has(segment)) {
+        node.folders.set(segment, { folders: new Map(), files: [] });
+      }
+      node = node.folders.get(segment);
+    }
+
+    const filename = parts[parts.length - 1];
+    // Skip hidden sentinel entries used to represent empty folders
+    if (filename !== '.folder') {
+      node.files.push({ path, name: filename, content });
+    }
+  }
+
+  return root;
+}
+
+/**
+ * Retrieve the subtree node at a given path (array of folder name segments).
+ * Returns the root node when pathSegments is empty.
+ * Returns null if any segment along the path does not exist.
+ *
+ * @param {{ folders: Map<string, object>, files: Array }} tree - Root node
+ * @param {string[]} pathSegments - Ordered folder names, e.g. ['Cases', 'iPad 7,8,9']
+ * @returns {{ folders: Map<string, object>, files: Array } | null}
+ */
+export function getNodeAtPath(tree, pathSegments) {
+  let node = tree;
+  for (const segment of pathSegments) {
+    if (!node.folders.has(segment)) return null;
+    node = node.folders.get(segment);
+  }
+  return node;
+}
+
+/**
+ * Count all files recursively under a tree node (excluding sentinel .folder entries,
+ * which are already excluded during buildNestedTree).
+ *
+ * @param {{ folders: Map<string, object>, files: Array }} node
+ * @returns {number}
+ */
+export function countFilesRecursive(node) {
+  let count = node.files.length;
+  for (const child of node.folders.values()) {
+    count += countFilesRecursive(child);
+  }
+  return count;
+}
+
+/**
  * Create a file tree structure for display
  * @param {Map<string, string>} files - Extracted files
  * @param {string} mainFile - Main .scad file path
  * @returns {string} - HTML representation of file tree
  */
 export function createFileTree(files, mainFile) {
-  const fileList = Array.from(files.keys()).sort();
+  const tree = buildNestedTree(files);
 
-  const items = fileList.map((path) => {
-    const isMain = path === mainFile;
-    const icon = path.endsWith('.scad') ? '📄' : '📎';
-    const badge = isMain ? ' <span class="file-tree-badge">main</span>' : '';
-    const className = isMain ? 'file-tree-item main' : 'file-tree-item';
+  function renderNode(node, depth) {
+    const indent = depth > 0 ? `style="padding-left:${depth * 16}px"` : '';
+    let html = '';
 
-    // Escape path to prevent XSS attacks from malicious ZIP file names
-    return `<div class="${className}">${icon} ${escapeHtml(path)}${badge}</div>`;
-  });
+    // Render subfolders first (sorted)
+    for (const [folderName, child] of [...node.folders.entries()].sort((a, b) =>
+      a[0].localeCompare(b[0])
+    )) {
+      const childCount = countFilesRecursive(child);
+      html += `<div class="file-tree-item file-tree-folder" ${indent}>📁 ${escapeHtml(folderName)} <span class="file-tree-count">(${childCount})</span></div>`;
+      html += renderNode(child, depth + 1);
+    }
+
+    // Render files (sorted)
+    for (const file of [...node.files].sort((a, b) =>
+      a.name.localeCompare(b.name)
+    )) {
+      const isMain = file.path === mainFile;
+      const icon = file.name.endsWith('.scad') ? '📄' : '📎';
+      const badge = isMain ? ' <span class="file-tree-badge">main</span>' : '';
+      const className = isMain ? 'file-tree-item main' : 'file-tree-item';
+      html += `<div class="${className}" ${indent}>${icon} ${escapeHtml(file.name)}${badge}</div>`;
+    }
+
+    return html;
+  }
 
   return `
     <div class="file-tree">
       <div class="file-tree-header">📦 ZIP Contents (${files.size} files)</div>
-      ${items.join('')}
+      ${renderNode(tree, 0)}
     </div>
   `;
 }
@@ -267,6 +411,189 @@ export function scanIncludes(content) {
   const includePattern = /(?:include|use)\s*[<"][^>"]+[>"]/g;
   const matches = content.match(includePattern) || [];
   return matches;
+}
+
+/**
+ * Resolve a file from projectFiles by exact key or basename fallback.
+ * Pure function with no side effects — safe to unit-test in isolation.
+ *
+ * Resolution order:
+ *  1. Exact key match (returns immediately)
+ *  2. Basename match (segment after last '/') — succeeds only when exactly
+ *     one file in the Map has that basename; returns null when ambiguous.
+ *
+ * @param {Map<string, string>} projectFiles
+ * @param {string} filename - Exact key or bare filename to resolve
+ * @returns {{ key: string, content: string } | null}
+ */
+export function resolveProjectFile(projectFiles, filename) {
+  if (!projectFiles || !filename) return null;
+
+  if (projectFiles.has(filename)) {
+    return { key: filename, content: projectFiles.get(filename) };
+  }
+
+  const matches = [];
+  for (const key of projectFiles.keys()) {
+    const basename = key.includes('/') ? key.split('/').pop() : key;
+    if (basename === filename) matches.push(key);
+  }
+
+  if (matches.length === 1) {
+    return { key: matches[0], content: projectFiles.get(matches[0]) };
+  }
+
+  if (matches.length > 1) {
+    console.warn(
+      `[resolveProjectFile] "${filename}" matches ${matches.length} paths — ` +
+        'cannot auto-select. Require explicit user selection or preset mapping.'
+    );
+  }
+
+  return null;
+}
+
+/**
+ * Build a runtime mapping from preset names to their specific companion file
+ * paths inside the projectFiles Map. Uses token-scoring heuristics so that
+ * e.g. preset "iPad 7,8,9 - Fintie - TouchChat" maps to
+ * "Cases and App Specifics/iPad 7,8,9/Fintie/TouchChat/openings_and_additions.txt".
+ *
+ * Only basenames that appear at MULTIPLE paths (aliasable) are considered for
+ * the openings file mapping. Single-instance files need no alias.
+ *
+ * Returns path references only — no file content is duplicated.
+ *
+ * @param {Map<string, string>} files - All project files from ZIP extraction
+ * @param {Object} parameterSets - OpenSCAD parameterSets object { "preset name": {...} }
+ * @returns {Map<string, { openingsPath: string|null, svgPath: string|null }>}
+ */
+export function buildPresetCompanionMap(files, parameterSets) {
+  const result = new Map();
+  if (!files || !parameterSets) return result;
+
+  const presetNames = Object.keys(parameterSets).filter(
+    (n) => n !== 'design default values'
+  );
+  if (presetNames.length === 0) return result;
+
+  // Group all file paths by basename
+  const byBasename = new Map();
+  for (const key of files.keys()) {
+    const basename = key.split('/').pop();
+    if (!byBasename.has(basename)) byBasename.set(basename, []);
+    byBasename.get(basename).push(key);
+  }
+
+  // Aliasable basenames: same filename appears under multiple paths
+  const aliasableBasenames = new Map();
+  for (const [basename, paths] of byBasename.entries()) {
+    if (paths.length > 1) aliasableBasenames.set(basename, paths);
+  }
+
+  // All SVG paths in the project
+  const svgPaths = Array.from(files.keys()).filter((k) =>
+    k.toLowerCase().endsWith('.svg')
+  );
+
+  // Tokenise a preset name into meaningful lowercase substrings
+  function tokenise(name) {
+    return name
+      .toLowerCase()
+      .split(/[\s\-_/,().]+/)
+      .filter((t) => t.length > 1);
+  }
+
+  // Count how many tokens from the preset name appear in a candidate path
+  function scorePath(path, tokens) {
+    const lower = path.toLowerCase();
+    return tokens.filter((t) => lower.includes(t)).length;
+  }
+
+  // Prefer deeper (longer) paths when scores are tied.
+  function pickBest(candidates, tokens) {
+    if (!candidates || candidates.length === 0) return null;
+    if (candidates.length === 1) {
+      return scorePath(candidates[0], tokens) > 0 ? candidates[0] : null;
+    }
+    const scored = candidates
+      .map((p) => ({ path: p, score: scorePath(p, tokens) }))
+      .sort((a, b) => b.score - a.score || b.path.length - a.path.length);
+    if (scored[0].score === 0) return null;
+    if (scored[0].score === scored[1].score) return null; // ambiguous
+    return scored[0].path;
+  }
+
+  for (const presetName of presetNames) {
+    const tokens = tokenise(presetName);
+
+    let openingsPath = null;
+    const openingsCandidates = aliasableBasenames.get(
+      'openings_and_additions.txt'
+    );
+    if (openingsCandidates) {
+      openingsPath = pickBest(openingsCandidates, tokens);
+      if (!openingsPath) {
+        console.warn(
+          `[PresetCompanionMap] Cannot unambiguously resolve openings path for preset: "${presetName}"`
+        );
+      }
+    }
+
+    let svgPath = null;
+    if (svgPaths.length === 1) {
+      svgPath = svgPaths[0];
+    } else if (svgPaths.length > 1) {
+      svgPath = pickBest(svgPaths, tokens);
+      if (!svgPath) {
+        console.warn(
+          `[PresetCompanionMap] Cannot unambiguously resolve SVG path for preset: "${presetName}"`
+        );
+      }
+    }
+
+    result.set(presetName, { openingsPath, svgPath });
+  }
+
+  const mappedCount = Array.from(result.values()).filter(
+    (v) => v.openingsPath !== null
+  ).length;
+  console.log(
+    `[PresetCompanionMap] Mapped ${mappedCount}/${presetNames.length} presets to openings paths`
+  );
+
+  return result;
+}
+
+/**
+ * Apply companion file alias mounting to a projectFiles Map.
+ * Copies preset-specific file content from nested paths to the root-level
+ * keys that SCAD include/import statements resolve to.
+ *
+ * Pure function — returns a new Map without mutating the input.
+ *
+ * @param {Map<string, string>} projectFiles
+ * @param {{ openingsPath: string|null, svgPath: string|null }|null} companionMapping
+ * @returns {Map<string, string>}
+ */
+export function applyCompanionAliases(projectFiles, companionMapping) {
+  const result = new Map(projectFiles);
+  if (!companionMapping) return result;
+
+  if (
+    companionMapping.openingsPath &&
+    result.has(companionMapping.openingsPath)
+  ) {
+    result.set(
+      'openings_and_additions.txt',
+      result.get(companionMapping.openingsPath)
+    );
+  }
+  if (companionMapping.svgPath && result.has(companionMapping.svgPath)) {
+    result.set('default.svg', result.get(companionMapping.svgPath));
+  }
+
+  return result;
 }
 
 /**

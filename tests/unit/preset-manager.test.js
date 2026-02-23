@@ -1177,6 +1177,28 @@ describe('Preset Manager', () => {
       expect(result.missingParams).toContain('new2')
       expect(result.compatibleCount).toBe(1) // shared
     })
+
+    it('unwraps schema.parameters when passed a full schema object', () => {
+      const preset = { width: 100, height: 50 }
+      const fullSchema = {
+        parameters: { width: { type: 'number' }, height: { type: 'number' } },
+        groups: ['Settings'],
+        hiddenParameters: { $fn: { type: 'number' } },
+        libraries: ['BOSL2']
+      }
+      const result = presetManager.analyzePresetCompatibility(preset, fullSchema)
+      expect(result.isCompatible).toBe(true)
+      expect(result.extraParams).toEqual([])
+      expect(result.missingParams).toEqual([])
+    })
+
+    it('excludes hidden parameters from comparison', () => {
+      const preset = { width: 100 }
+      const schema = { width: { type: 'number' }, $fn: { type: 'number' } }
+      const result = presetManager.analyzePresetCompatibility(preset, schema, ['$fn'])
+      expect(result.isCompatible).toBe(true)
+      expect(result.missingParams).not.toContain('$fn')
+    })
   })
 
   describe('extractScadVersion', () => {

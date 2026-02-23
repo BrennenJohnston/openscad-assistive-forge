@@ -574,6 +574,24 @@
   font-family: var(--font-family-mono);
 }
 
+:root[data-ui-variant='mono'] .echo-drawer--warning .echo-drawer-toggle {
+  background: color-mix(in srgb, var(--color-warning) 15%, transparent);
+}
+
+:root[data-ui-variant='mono'] .echo-drawer--warning .echo-drawer-label,
+:root[data-ui-variant='mono'] .echo-drawer--warning .echo-drawer-arrow {
+  color: var(--color-warning);
+}
+
+:root[data-ui-variant='mono'] .echo-drawer--error .echo-drawer-toggle {
+  background: color-mix(in srgb, var(--color-error) 15%, transparent);
+}
+
+:root[data-ui-variant='mono'] .echo-drawer--error .echo-drawer-label,
+:root[data-ui-variant='mono'] .echo-drawer--error .echo-drawer-arrow {
+  color: var(--color-error);
+}
+
 :root[data-ui-variant='mono'] .echo-messages {
   background: var(--color-bg-secondary);
   color: var(--color-accent);

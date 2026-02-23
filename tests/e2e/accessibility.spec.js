@@ -2028,8 +2028,8 @@ test.describe('Tutorial CSS and Styling - Phase 6.4', () => {
   });
 });
 
-test.describe('Settings Level & Disclosure Section Accessibility', () => {
-  test('advanced mode is always on — no settings-hidden classes present', async ({ page }) => {
+test.describe('UI Mode Toggle & Disclosure Section Accessibility', () => {
+  test('UI mode toggle exists and defaults to Advanced mode', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI');
 
     await page.goto('/');
@@ -2039,19 +2039,62 @@ test.describe('Settings Level & Disclosure Section Accessibility', () => {
     await page.setInputFiles('#fileInput', fixturePath);
     await page.waitForSelector('.param-control', { timeout: 30_000 });
 
-    // No Simple/Advanced toggle should exist
-    const settingsToggle = page.locator('#settingsLevelToggle');
-    await expect(settingsToggle).toHaveCount(0);
+    // Legacy toggle must not exist
+    const legacyToggle = page.locator('#settingsLevelToggle');
+    await expect(legacyToggle).toHaveCount(0);
 
-    // No elements should have settings-hidden class
-    const hiddenCount = await page.locator('.settings-hidden').count();
-    expect(hiddenCount).toBe(0);
+    // No legacy settings-hidden classes present
+    const legacyHiddenCount = await page.locator('.settings-hidden').count();
+    expect(legacyHiddenCount).toBe(0);
 
-    // Advanced menu should be visible (not hidden)
+    // New UI mode toggle must exist and be visible
+    const uiModeToggle = page.locator('#uiModeToggle');
+    await expect(uiModeToggle).toHaveCount(1);
+    await expect(uiModeToggle).toBeVisible();
+
+    // Toggle must have role="switch" and correct initial ARIA state (Advanced = true)
+    await expect(uiModeToggle).toHaveAttribute('role', 'switch');
+    await expect(uiModeToggle).toHaveAttribute('aria-checked', 'true');
+
+    // Toggle must be keyboard-operable (focusable)
+    await uiModeToggle.focus();
+    await expect(uiModeToggle).toBeFocused();
+
+    // In Advanced mode, #advancedMenu must not have ui-mode-hidden class
     const advancedMenu = page.locator('#advancedMenu');
     if (await advancedMenu.count() > 0) {
-      await expect(advancedMenu).not.toHaveClass(/settings-hidden/);
+      await expect(advancedMenu).not.toHaveClass(/ui-mode-hidden/);
     }
+  });
+
+  test('UI mode toggle switches to Basic mode and hides correct panels', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI');
+
+    await page.goto('/');
+    await waitForWasmReady(page);
+
+    const fixturePath = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad');
+    await page.setInputFiles('#fileInput', fixturePath);
+    await page.waitForSelector('.param-control', { timeout: 30_000 });
+
+    const uiModeToggle = page.locator('#uiModeToggle');
+
+    // Click to switch to Basic mode
+    await uiModeToggle.click();
+    await expect(uiModeToggle).toHaveAttribute('aria-checked', 'false');
+
+    // Parameter controls must remain visible in Basic mode
+    const paramControls = page.locator('.param-control');
+    const paramCount = await paramControls.count();
+    expect(paramCount).toBeGreaterThan(0);
+
+    // Click again to switch back to Advanced mode
+    await uiModeToggle.click();
+    await expect(uiModeToggle).toHaveAttribute('aria-checked', 'true');
+
+    // In Advanced mode, no panels should have ui-mode-hidden class
+    const hiddenPanels = await page.locator('.ui-mode-hidden').count();
+    expect(hiddenPanels).toBe(0);
   });
 
   test('all disclosure sections are keyboard-operable', async ({ page }) => {

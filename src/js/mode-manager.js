@@ -147,7 +147,9 @@ export class ModeManager {
 
     const previousMode = this.currentMode;
 
-    console.log(`[ModeManager] Switching from ${previousMode} to ${targetMode}`);
+    console.log(
+      `[ModeManager] Switching from ${previousMode} to ${targetMode}`
+    );
 
     // Capture state before switching
     if (this.stateManager) {
@@ -285,19 +287,25 @@ export class ModeManager {
         }
       } else if (mode === 'expert') {
         // Focus the code editor (textarea fallback or Monaco container)
-        const textarea = document.querySelector('#textareaEditor, .textarea-editor textarea');
+        const textarea = document.querySelector(
+          '#textareaEditor, .textarea-editor textarea'
+        );
         if (textarea) {
           textarea.focus();
           return;
         }
-        const monacoContainer = document.querySelector('.monaco-editor textarea');
+        const monacoContainer = document.querySelector(
+          '.monaco-editor textarea'
+        );
         if (monacoContainer) {
           monacoContainer.focus();
           return;
         }
       }
       // Fallback: focus the mode toggle button itself
-      const modeToggle = document.querySelector('#expertModeToggle, [data-action="toggle-mode"]');
+      const modeToggle = document.querySelector(
+        '#expertModeToggle, [data-action="toggle-mode"]'
+      );
       if (modeToggle) {
         modeToggle.focus();
       }

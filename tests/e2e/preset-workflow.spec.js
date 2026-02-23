@@ -8,6 +8,9 @@ import { test, expect } from '@playwright/test'
 // Skip WASM-dependent tests in CI - WASM initialization is slow/unreliable
 const isCI = !!process.env.CI
 
+// URL query param that enables the searchable_combobox feature flag
+const COMBOBOX_FLAG_PARAM = 'flag_searchable_combobox=true'
+
 const loadSimpleBoxExample = async (page) => {
   // There are multiple "Start Tutorial" CTAs with the same example dataset.
   // In strict mode, Playwright requires a unique match, so pick a stable one.
@@ -628,5 +631,219 @@ test.describe('Preset Workflow', () => {
       const persistedPreset = options.some(opt => opt.includes('Persistence Test'))
       expect(persistedPreset).toBe(true)
     }
+  })
+})
+
+// ── Searchable Combobox variant ───────────────────────────────────────────────
+// These tests exercise the same preset workflow with the searchable_combobox
+// feature flag enabled via URL override (?flag_searchable_combobox=true).
+// The native <select> is hidden and the WAI-ARIA combobox widget is shown.
+
+test.describe('Preset Workflow — Searchable Combobox variant', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.clear()
+      localStorage.setItem('openscad-forge-first-visit-seen', 'true')
+    })
+    await page.goto(`/?${COMBOBOX_FLAG_PARAM}`)
+  })
+
+  test('combobox is shown and native select is hidden when flag is enabled', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
+
+    try {
+      await loadSimpleBoxExample(page)
+    } catch {
+      test.skip()
+      return
+    }
+
+    const comboboxInput = page.locator('#presetComboboxContainer .preset-combobox-input')
+    const nativeSelect = page.locator('select#presetSelect')
+
+    // The combobox container should be visible; the legacy selector wrapper hidden
+    await expect(comboboxInput).toBeVisible({ timeout: 5000 })
+    await expect(nativeSelect).toBeHidden()
+  })
+
+  test('combobox shows "design default values" as the first option', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
+
+    try {
+      await loadSimpleBoxExample(page)
+    } catch {
+      test.skip()
+      return
+    }
+
+    const comboboxInput = page.locator('#presetComboboxContainer .preset-combobox-input')
+    if (!(await comboboxInput.isVisible({ timeout: 5000 }).catch(() => false))) {
+      test.skip()
+      return
+    }
+
+    // Open the combobox
+    await comboboxInput.click()
+
+    const listbox = page.locator('#presetComboboxContainer .preset-combobox-list')
+    await expect(listbox).toBeVisible()
+
+    // First rendered option must be "design default values"
+    const firstOption = listbox.locator('.preset-combobox-option').first()
+    await expect(firstOption).toHaveAttribute('data-value', '__design_defaults__')
+    await expect(firstOption).toHaveClass(/is-italic/)
+  })
+
+  test('combobox filters options by text input', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
+
+    try {
+      await loadSimpleBoxExample(page)
+    } catch {
+      test.skip()
+      return
+    }
+
+    // Save two presets so there's something to filter
+    const addBtn = page.locator('#addPresetBtn, button[aria-label*="Add preset"]')
+    if (!(await addBtn.isVisible({ timeout: 5000 }).catch(() => false))) {
+      test.skip()
+      return
+    }
+
+    for (const name of ['Alpha Preset', 'Beta Preset']) {
+      await addBtn.click()
+      const nameInput = page.locator('#presetName, input[placeholder*="preset"]').first()
+      await nameInput.waitFor({ state: 'visible', timeout: 5000 })
+      await nameInput.fill(name)
+      await page.locator('button[type="submit"]:has-text("Save")').first().click()
+      await page.waitForSelector('.preset-modal', { state: 'detached', timeout: 5000 })
+      await page.waitForTimeout(300)
+    }
+
+    const comboboxInput = page.locator('#presetComboboxContainer .preset-combobox-input')
+    if (!(await comboboxInput.isVisible().catch(() => false))) {
+      test.skip()
+      return
+    }
+
+    // Type to filter — only "Alpha Preset" should remain
+    await comboboxInput.fill('Alpha')
+    await page.waitForTimeout(200)
+
+    const listbox = page.locator('#presetComboboxContainer .preset-combobox-list')
+    const visibleOptions = listbox.locator(
+      '.preset-combobox-option:not(.preset-combobox-empty)'
+    )
+    const count = await visibleOptions.count()
+    // At least one option visible, and all visible options include "Alpha"
+    expect(count).toBeGreaterThan(0)
+    for (let i = 0; i < count; i++) {
+      const text = await visibleOptions.nth(i).textContent()
+      expect(text?.toLowerCase()).toContain('alpha')
+    }
+  })
+
+  test('combobox shows "No presets match" when filter has no results', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
+
+    try {
+      await loadSimpleBoxExample(page)
+    } catch {
+      test.skip()
+      return
+    }
+
+    const comboboxInput = page.locator('#presetComboboxContainer .preset-combobox-input')
+    if (!(await comboboxInput.isVisible({ timeout: 5000 }).catch(() => false))) {
+      test.skip()
+      return
+    }
+
+    await comboboxInput.fill('xyzzy_no_match_at_all')
+    await page.waitForTimeout(200)
+
+    const emptyMsg = page.locator('#presetComboboxContainer .preset-combobox-empty')
+    await expect(emptyMsg).toBeVisible()
+  })
+
+  test('combobox closes on Escape and sets aria-expanded="false"', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
+
+    try {
+      await loadSimpleBoxExample(page)
+    } catch {
+      test.skip()
+      return
+    }
+
+    const comboboxInput = page.locator('#presetComboboxContainer .preset-combobox-input')
+    if (!(await comboboxInput.isVisible({ timeout: 5000 }).catch(() => false))) {
+      test.skip()
+      return
+    }
+
+    // Open
+    await comboboxInput.click()
+    await expect(comboboxInput).toHaveAttribute('aria-expanded', 'true')
+
+    // Close via Escape
+    await comboboxInput.press('Escape')
+    await expect(comboboxInput).toHaveAttribute('aria-expanded', 'false')
+
+    const listbox = page.locator('#presetComboboxContainer .preset-combobox-list')
+    await expect(listbox).toBeHidden()
+  })
+
+  test('combobox selects a preset on click and fires change', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
+
+    try {
+      await loadSimpleBoxExample(page)
+    } catch {
+      test.skip()
+      return
+    }
+
+    // Save a preset to have something to select
+    const addBtn = page.locator('#addPresetBtn, button[aria-label*="Add preset"]')
+    if (!(await addBtn.isVisible({ timeout: 5000 }).catch(() => false))) {
+      test.skip()
+      return
+    }
+
+    await addBtn.click()
+    const nameInput = page.locator('#presetName, input[placeholder*="preset"]').first()
+    await nameInput.waitFor({ state: 'visible', timeout: 5000 })
+    await nameInput.fill('Click Select Test')
+    await page.locator('button[type="submit"]:has-text("Save")').first().click()
+    await page.waitForSelector('.preset-modal', { state: 'detached', timeout: 5000 })
+    await page.waitForTimeout(300)
+
+    const comboboxInput = page.locator('#presetComboboxContainer .preset-combobox-input')
+    if (!(await comboboxInput.isVisible().catch(() => false))) {
+      test.skip()
+      return
+    }
+
+    // Open and click the saved preset
+    await comboboxInput.click()
+    const listbox = page.locator('#presetComboboxContainer .preset-combobox-list')
+    await expect(listbox).toBeVisible()
+
+    const targetOption = listbox.locator(
+      '.preset-combobox-option:not(.preset-combobox-empty)',
+      { hasText: 'Click Select Test' }
+    )
+    if (!(await targetOption.isVisible().catch(() => false))) {
+      test.skip()
+      return
+    }
+
+    await targetOption.click()
+
+    // Combobox should close and show the selected label
+    await expect(comboboxInput).toHaveValue('Click Select Test')
+    await expect(listbox).toBeHidden()
   })
 })

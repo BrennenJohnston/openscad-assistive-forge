@@ -4,15 +4,26 @@
  */
 
 import { normalizeHexColor } from './color-utils.js';
-import { announceCameraAction as announceCamera, announceImmediate } from './announcer.js';
+import {
+  announceCameraAction as announceCamera,
+  announceImmediate,
+} from './announcer.js';
 import { getAppPrefKey } from './storage-keys.js';
 
 // Storage keys using standardized naming convention
 const STORAGE_KEY_MEASUREMENTS = getAppPrefKey('measurements');
 const STORAGE_KEY_GRID = getAppPrefKey('grid');
+const STORAGE_KEY_GRID_SIZE = getAppPrefKey('grid-size');
+const STORAGE_KEY_CUSTOM_GRID_PRESETS = getAppPrefKey('custom-grid-presets');
 const STORAGE_KEY_AUTO_BED = getAppPrefKey('auto-bed');
 const STORAGE_KEY_CAMERA_COLLAPSED = getAppPrefKey('camera-controls-collapsed');
 const STORAGE_KEY_CAMERA_POSITION = getAppPrefKey('camera-controls-position');
+const STORAGE_KEY_LOD_WARNING_DISMISSED = getAppPrefKey(
+  'lod-warning-dismissed'
+);
+
+/** Default grid config — 220×220mm matches most common consumer printers (Ender 3) */
+const DEFAULT_GRID_CONFIG = { widthMm: 220, heightMm: 220 };
 
 // Lazy-loaded Three.js modules - loaded on demand to reduce initial bundle size
 let THREE = null;
@@ -68,6 +79,11 @@ async function loadThreeJS() {
 
 export function isThreeJsLoaded() {
   return threeJsLoaded;
+}
+
+/** @returns {object|null} The THREE module if loaded, else null */
+export function getThreeModule() {
+  return THREE;
 }
 
 /**
@@ -151,9 +167,12 @@ export class PreviewManager {
     // Grid visibility
     this.gridEnabled = this.loadGridPreference();
 
+    // Grid size (mm) — configurable to match printer bed
+    this.gridConfig = this.loadGridSizePreference();
+
     // Camera projection mode (perspective or orthographic)
     this.projectionMode = 'perspective';
-    this.orthoCamera = null;  // Lazy-created orthographic camera
+    this.orthoCamera = null; // Lazy-created orthographic camera
 
     // Auto-bed: place object on Z=0 build plate
     this.autoBedEnabled = this.loadAutoBedPreference();
@@ -172,16 +191,17 @@ export class PreviewManager {
     this.referenceTexture = null; // THREE.Texture for the image
     this.overlayConfig = {
       enabled: false,
-      opacity: 0.5,
+      opacity: 1.0,
       offsetX: 0, // mm
       offsetY: 0, // mm
       rotationDeg: 0,
-      width: 200, // mm (default; will be replaced by "fit to model XY" when possible)
+      width: 200, // mm (default; replaced by SVG physical size or explicit sizing)
       height: 150, // mm
       zPosition: -0.25, // Slightly below Z=0 build plate (avoid z-fighting with grid)
       lockAspect: true,
       intrinsicAspect: null, // Width/height ratio from source image
       sourceFileName: null, // Name of the file used as overlay source
+      svgColor: null, // Recolor SVG strokes/fills (null = original colors)
     };
 
     // Overlay measurements (dimension lines on the overlay)
@@ -275,12 +295,7 @@ export class PreviewManager {
 
     // Add grid helper on XY plane (OpenSCAD's ground plane)
     // GridHelper by default creates a grid on XZ plane (Y-up), so we rotate it for Z-up
-    this.gridHelper = new THREE.GridHelper(
-      200,
-      20,
-      colors.gridPrimary,
-      colors.gridSecondary
-    );
+    this.gridHelper = this._createGridHelper(colors);
     // Rotate grid from XZ plane to XY plane (Z-up coordinate system)
     this.gridHelper.rotation.x = Math.PI / 2;
     // Apply saved grid visibility preference
@@ -325,7 +340,9 @@ export class PreviewManager {
 
       // Update orthographic camera frustum if it exists
       if (this.orthoCamera) {
-        const frustumHeight = (this.orthoCamera.top - this.orthoCamera.bottom) / (this.orthoCamera.zoom || 1);
+        const frustumHeight =
+          (this.orthoCamera.top - this.orthoCamera.bottom) /
+          (this.orthoCamera.zoom || 1);
         this.orthoCamera.left = (frustumHeight * newAspect) / -2;
         this.orthoCamera.right = (frustumHeight * newAspect) / 2;
         this.orthoCamera.updateProjectionMatrix();
@@ -458,12 +475,7 @@ export class PreviewManager {
         this.gridHelper.material.dispose();
       }
       // Note: linewidth is ignored in WebGL, relying on color contrast instead
-      this.gridHelper = new THREE.GridHelper(
-        200,
-        20,
-        colors.gridPrimary,
-        colors.gridSecondary
-      );
+      this.gridHelper = this._createGridHelper(colors);
       // Rotate grid from XZ plane to XY plane (Z-up coordinate system)
       this.gridHelper.rotation.x = Math.PI / 2;
       // Preserve grid visibility preference when recreating grid
@@ -653,8 +665,10 @@ export class PreviewManager {
     controlPanel.setAttribute('aria-label', 'Camera controls');
 
     // Persisted preferences: collapsed + position (keyboard-accessible “move”)
-    const isCollapsed = localStorage.getItem(STORAGE_KEY_CAMERA_COLLAPSED) === 'true';
-    const position = localStorage.getItem(STORAGE_KEY_CAMERA_POSITION) || 'bottom-right'; // bottom-right | bottom-left | top-right | top-left
+    const isCollapsed =
+      localStorage.getItem(STORAGE_KEY_CAMERA_COLLAPSED) === 'true';
+    const position =
+      localStorage.getItem(STORAGE_KEY_CAMERA_POSITION) || 'bottom-right'; // bottom-right | bottom-left | top-right | top-left
     controlPanel.dataset.collapsed = isCollapsed ? 'true' : 'false';
     controlPanel.dataset.position = position;
 
@@ -767,7 +781,10 @@ export class PreviewManager {
       toggleBtn.title = nextCollapsed
         ? 'Show camera controls'
         : 'Hide camera controls';
-      localStorage.setItem(STORAGE_KEY_CAMERA_COLLAPSED, nextCollapsed ? 'true' : 'false');
+      localStorage.setItem(
+        STORAGE_KEY_CAMERA_COLLAPSED,
+        nextCollapsed ? 'true' : 'false'
+      );
     };
 
     const positions = ['bottom-right', 'bottom-left', 'top-right', 'top-left'];
@@ -1016,7 +1033,8 @@ export class PreviewManager {
    * @param {boolean} isCritical - Whether the model is critically large
    */
   showLODWarning(vertexCount, triangleCount, isCritical = false) {
-    // Remove any existing warning first
+    if (this.isLODWarningPermanentlyDismissed()) return;
+
     this.hideLODWarning();
 
     const warningLevel = isCritical ? 'critical' : 'warning';
@@ -1046,6 +1064,9 @@ export class PreviewManager {
         </p>
       </div>
       <div class="lod-warning-actions">
+        <button type="button" class="btn btn-sm btn-ghost" id="lodWarningDismissPermanent" aria-label="Don't show this warning again">
+          Don't show again
+        </button>
         <button type="button" class="btn btn-sm btn-outline" id="lodWarningDismiss" aria-label="Dismiss warning">
           Got it
         </button>
@@ -1054,11 +1075,17 @@ export class PreviewManager {
 
     this.container.appendChild(warningDiv);
 
-    // Add event listener to dismiss button
-    const dismissBtn = warningDiv.querySelector('#lodWarningDismiss');
-    dismissBtn?.addEventListener('click', () => {
-      this.hideLODWarning();
-    });
+    warningDiv
+      .querySelector('#lodWarningDismiss')
+      ?.addEventListener('click', () => {
+        this.hideLODWarning();
+      });
+
+    warningDiv
+      .querySelector('#lodWarningDismissPermanent')
+      ?.addEventListener('click', () => {
+        this.dismissLODWarningPermanently();
+      });
 
     console.log(
       `[Preview] LOD warning shown: ${vertexCount} vertices (${warningLevel})`
@@ -1073,6 +1100,43 @@ export class PreviewManager {
     if (existingWarning) {
       existingWarning.remove();
     }
+  }
+
+  /**
+   * Permanently dismiss the LOD warning so it never reappears across renders.
+   * The preference is stored in localStorage and survives page reloads.
+   */
+  dismissLODWarningPermanently() {
+    try {
+      localStorage.setItem(STORAGE_KEY_LOD_WARNING_DISMISSED, 'true');
+    } catch {
+      /* private browsing / quota — fall back silently */
+    }
+    this.hideLODWarning();
+    console.log('[Preview] LOD warning permanently dismissed by user');
+  }
+
+  /**
+   * @returns {boolean} Whether the user has permanently dismissed LOD warnings.
+   */
+  isLODWarningPermanentlyDismissed() {
+    try {
+      return localStorage.getItem(STORAGE_KEY_LOD_WARNING_DISMISSED) === 'true';
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Re-enable LOD warnings after a previous permanent dismiss.
+   */
+  resetLODWarningDismissal() {
+    try {
+      localStorage.removeItem(STORAGE_KEY_LOD_WARNING_DISMISSED);
+    } catch {
+      /* ignore */
+    }
+    console.log('[Preview] LOD warning dismissal reset');
   }
 
   /**
@@ -1117,8 +1181,8 @@ export class PreviewManager {
 
     // OpenSCAD default diagonal: $vpr = [55, 0, 25]
     // azimuth 25° from front, elevation 35° above XY plane
-    const azimuth = 25 * (Math.PI / 180);    // 25° - OpenSCAD default
-    const elevation = 35 * (Math.PI / 180);  // 35° (= 90° - 55°) above XY plane
+    const azimuth = 25 * (Math.PI / 180); // 25° - OpenSCAD default
+    const elevation = 35 * (Math.PI / 180); // 35° (= 90° - 55°) above XY plane
 
     const horizontalDist = cameraDistance * Math.cos(elevation);
     const verticalDist = cameraDistance * Math.sin(elevation);
@@ -1131,7 +1195,7 @@ export class PreviewManager {
     camera.position.set(
       center.x + horizontalDist * Math.sin(azimuth), // X: slightly right
       center.y - horizontalDist * Math.cos(azimuth), // Y: mostly front (negative Y)
-      center.z + verticalDist                         // Z: above
+      center.z + verticalDist // Z: above
     );
     camera.lookAt(center);
 
@@ -1181,7 +1245,11 @@ export class PreviewManager {
     back: { name: 'Back', direction: [0, 1, 0], up: [0, 0, 1] },
     left: { name: 'Left', direction: [-1, 0, 0], up: [0, 0, 1] },
     right: { name: 'Right', direction: [1, 0, 0], up: [0, 0, 1] },
-    diagonal: { name: 'Diagonal', direction: [0.346, -0.742, 0.574], up: [0, 0, 1] },
+    diagonal: {
+      name: 'Diagonal',
+      direction: [0.346, -0.742, 0.574],
+      up: [0, 0, 1],
+    },
   };
 
   /**
@@ -1299,7 +1367,6 @@ export class PreviewManager {
       // Switch controls to orthographic camera
       this.controls.object = this.orthoCamera;
       this.controls.update();
-
     } else {
       // ------ Switch to perspective ------
       this.projectionMode = 'perspective';
@@ -1319,7 +1386,8 @@ export class PreviewManager {
     }
 
     // Announce change to screen readers
-    const modeName = this.projectionMode === 'perspective' ? 'Perspective' : 'Orthographic';
+    const modeName =
+      this.projectionMode === 'perspective' ? 'Perspective' : 'Orthographic';
     this.announceCameraAction(`${modeName} projection`);
 
     console.log(`[Preview] Switched to ${this.projectionMode} projection`);
@@ -1366,7 +1434,9 @@ export class PreviewManager {
 
     // For orthographic cameras, adjust frustum instead of distance
     if (this.projectionMode === 'orthographic' && this.orthoCamera) {
-      const frustumHeight = (this.orthoCamera.top - this.orthoCamera.bottom) / (this.orthoCamera.zoom || 1);
+      const frustumHeight =
+        (this.orthoCamera.top - this.orthoCamera.bottom) /
+        (this.orthoCamera.zoom || 1);
       this.orthoCamera.left = (frustumHeight * newAspect) / -2;
       this.orthoCamera.right = (frustumHeight * newAspect) / 2;
       this.orthoCamera.updateProjectionMatrix();
@@ -1495,7 +1565,10 @@ export class PreviewManager {
   panCamera(deltaRight, deltaUp) {
     const camera = this.getActiveCamera();
     // Extract camera's local right (column 0) and up (column 1) from world matrix
-    const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
+    const right = new THREE.Vector3().setFromMatrixColumn(
+      camera.matrixWorld,
+      0
+    );
     const up = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1);
 
     const panOffset = new THREE.Vector3()
@@ -1548,8 +1621,10 @@ export class PreviewManager {
       Math.min(Math.PI / 2 - 0.01, verticalAngle + angle)
     );
 
-    offset.x = currentDist * Math.cos(newVerticalAngle) * Math.cos(horizontalAngle);
-    offset.y = currentDist * Math.cos(newVerticalAngle) * Math.sin(horizontalAngle);
+    offset.x =
+      currentDist * Math.cos(newVerticalAngle) * Math.cos(horizontalAngle);
+    offset.y =
+      currentDist * Math.cos(newVerticalAngle) * Math.sin(horizontalAngle);
     offset.z = currentDist * Math.sin(newVerticalAngle);
 
     camera.position.copy(this.controls.target).add(offset);
@@ -1774,7 +1849,10 @@ export class PreviewManager {
    */
   saveMeasurementPreference(enabled) {
     try {
-      localStorage.setItem(STORAGE_KEY_MEASUREMENTS, enabled ? 'true' : 'false');
+      localStorage.setItem(
+        STORAGE_KEY_MEASUREMENTS,
+        enabled ? 'true' : 'false'
+      );
     } catch (error) {
       console.warn('[Preview] Could not save measurement preference:', error);
     }
@@ -1819,6 +1897,202 @@ export class PreviewManager {
       localStorage.setItem(STORAGE_KEY_GRID, enabled ? 'true' : 'false');
     } catch (error) {
       console.warn('[Preview] Could not save grid preference:', error);
+    }
+  }
+
+  /**
+   * Create a GridHelper using the current gridConfig dimensions.
+   * Divisions are auto-calculated at 1 per 10mm for a clean appearance.
+   * @param {Object} colors - Theme color object with gridPrimary/gridSecondary
+   * @returns {THREE.GridHelper}
+   */
+  _createGridHelper(colors) {
+    const { widthMm, heightMm } = this.gridConfig;
+    // Use the larger dimension as the GridHelper size (it's square), and scale
+    // height via geometry scaling so rectangular beds are represented correctly.
+    const size = Math.max(widthMm, heightMm);
+    const divisions = Math.round(size / 10);
+    const helper = new THREE.GridHelper(
+      size,
+      divisions,
+      colors.gridPrimary,
+      colors.gridSecondary
+    );
+    // Stretch non-square beds by scaling the shorter axis
+    helper.scale.set(widthMm / size, 1, heightMm / size);
+    return helper;
+  }
+
+  /**
+   * Load grid size from localStorage
+   * @returns {{ widthMm: number, heightMm: number }}
+   */
+  loadGridSizePreference() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY_GRID_SIZE);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (
+          parsed &&
+          typeof parsed.widthMm === 'number' &&
+          typeof parsed.heightMm === 'number'
+        ) {
+          return { widthMm: parsed.widthMm, heightMm: parsed.heightMm };
+        }
+      }
+    } catch (_) {
+      // Fall through to default
+    }
+    return { ...DEFAULT_GRID_CONFIG };
+  }
+
+  /**
+   * Save grid size to localStorage
+   * @param {{ widthMm: number, heightMm: number }} config
+   */
+  saveGridSizePreference(config) {
+    try {
+      localStorage.setItem(STORAGE_KEY_GRID_SIZE, JSON.stringify(config));
+    } catch (error) {
+      console.warn('[Preview] Could not save grid size:', error);
+    }
+  }
+
+  /**
+   * Return a copy of the current grid config
+   * @returns {{ widthMm: number, heightMm: number }}
+   */
+  getGridSize() {
+    return { ...this.gridConfig };
+  }
+
+  /**
+   * Update the grid to new printer-bed dimensions and persist the preference.
+   * @param {number} widthMm - Bed width in mm (50–500)
+   * @param {number} heightMm - Bed height in mm (50–500)
+   */
+  setGridSize(widthMm, heightMm) {
+    const clamp = (v) => Math.min(500, Math.max(50, Number(v) || 220));
+    this.gridConfig = { widthMm: clamp(widthMm), heightMm: clamp(heightMm) };
+    this.saveGridSizePreference(this.gridConfig);
+
+    if (!this.scene || !this.gridHelper) return;
+
+    // Remove and dispose old grid
+    this.scene.remove(this.gridHelper);
+    if (this.gridHelper.geometry) this.gridHelper.geometry.dispose();
+    if (this.gridHelper.material) {
+      if (Array.isArray(this.gridHelper.material)) {
+        this.gridHelper.material.forEach((m) => m.dispose());
+      } else {
+        this.gridHelper.material.dispose();
+      }
+    }
+
+    // Recreate with new size using current theme colors
+    const themeKey = this.currentTheme || 'light';
+    const colors = PREVIEW_COLORS[themeKey] || PREVIEW_COLORS.light;
+    this.gridHelper = this._createGridHelper(colors);
+    this.gridHelper.rotation.x = Math.PI / 2;
+    this.gridHelper.visible = this.gridEnabled;
+    this.scene.add(this.gridHelper);
+
+    console.log(
+      `[Preview] Grid size updated: ${this.gridConfig.widthMm}×${this.gridConfig.heightMm}mm`
+    );
+  }
+
+  /**
+   * Load user-saved custom grid presets from localStorage.
+   * @returns {Array<{name: string, widthMm: number, heightMm: number}>}
+   */
+  loadCustomGridPresets() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY_CUSTOM_GRID_PRESETS);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (_) {
+      // fall through
+    }
+    return [];
+  }
+
+  /**
+   * Save a new custom grid preset. Validates bounds and name uniqueness.
+   *
+   * @param {string} name - User-provided preset name (non-empty, non-whitespace-only)
+   * @param {number} widthMm - Width in mm (integer, 50–500)
+   * @param {number} heightMm - Height in mm (integer, 50–500)
+   * @returns {{ success: boolean, error?: string }}
+   */
+  saveCustomGridPreset(name, widthMm, heightMm) {
+    const trimmedName = (name || '').trim();
+    if (!trimmedName) {
+      return { success: false, error: 'Preset name cannot be empty.' };
+    }
+
+    const w = Math.round(Number(widthMm));
+    const h = Math.round(Number(heightMm));
+
+    if (!Number.isFinite(w) || w < 50 || w > 500) {
+      return {
+        success: false,
+        error: `Width must be an integer between 50 and 500 mm (got ${widthMm}).`,
+      };
+    }
+    if (!Number.isFinite(h) || h < 50 || h > 500) {
+      return {
+        success: false,
+        error: `Height must be an integer between 50 and 500 mm (got ${heightMm}).`,
+      };
+    }
+
+    const existing = this.loadCustomGridPresets();
+
+    if (existing.some((p) => p.name === trimmedName)) {
+      return {
+        success: false,
+        error: `A custom preset named "${trimmedName}" already exists.`,
+      };
+    }
+
+    existing.push({ name: trimmedName, widthMm: w, heightMm: h });
+
+    try {
+      localStorage.setItem(
+        STORAGE_KEY_CUSTOM_GRID_PRESETS,
+        JSON.stringify(existing)
+      );
+    } catch (error) {
+      return {
+        success: false,
+        error: `Could not save preset: ${error.message}`,
+      };
+    }
+
+    return { success: true };
+  }
+
+  /**
+   * Delete a user custom grid preset by name.
+   * @param {string} name - Exact preset name to remove
+   * @returns {boolean} True if a preset was removed
+   */
+  deleteCustomGridPreset(name) {
+    const existing = this.loadCustomGridPresets();
+    const next = existing.filter((p) => p.name !== name);
+    if (next.length === existing.length) return false;
+
+    try {
+      localStorage.setItem(
+        STORAGE_KEY_CUSTOM_GRID_PRESETS,
+        JSON.stringify(next)
+      );
+      return true;
+    } catch (_) {
+      return false;
     }
   }
 
@@ -2067,32 +2341,46 @@ export class PreviewManager {
       console.log('[Preview] Overlay source cleared');
       this.overlayConfig.sourceFileName = null;
       this.overlayConfig.intrinsicAspect = null;
+      this._lastSvgContent = null;
       this.removeReferenceOverlay();
       return;
     }
 
     try {
       if (kind === 'svg') {
-        // Convert SVG text to texture
-        const { texture, aspect } =
-          await this.svgTextToCanvasTexture(dataUrlOrText);
+        this._lastSvgContent = dataUrlOrText;
+        const { texture, aspect, widthMm, heightMm } =
+          await this.svgTextToCanvasTexture(
+            dataUrlOrText,
+            this.overlayConfig.svgColor
+          );
         this.referenceTexture = texture;
         this.overlayConfig.intrinsicAspect = aspect;
+
+        // Use the SVG's physical mm dimensions (computed via the same 96 DPI
+        // convention that OpenSCAD desktop uses for SVG import). This ensures
+        // the overlay is sized identically to how OpenSCAD interprets the file.
+        if (widthMm && heightMm) {
+          this.overlayConfig.width = widthMm;
+          this.overlayConfig.height = heightMm;
+        } else if (this.overlayConfig.lockAspect && aspect) {
+          this.overlayConfig.height = this.overlayConfig.width / aspect;
+        }
       } else {
-        // Load raster image (PNG/JPG) as texture
+        this._lastSvgContent = null;
         const { texture, aspect } =
           await this.rasterDataUrlToTexture(dataUrlOrText);
         this.referenceTexture = texture;
         this.overlayConfig.intrinsicAspect = aspect;
+
+        // Raster images have no inherent physical size — keep current width
+        // and derive height from aspect ratio
+        if (this.overlayConfig.lockAspect && aspect) {
+          this.overlayConfig.height = this.overlayConfig.width / aspect;
+        }
       }
 
       this.overlayConfig.sourceFileName = name;
-
-      // Apply aspect ratio to dimensions if locked
-      if (this.overlayConfig.lockAspect && this.overlayConfig.intrinsicAspect) {
-        this.overlayConfig.height =
-          this.overlayConfig.width / this.overlayConfig.intrinsicAspect;
-      }
 
       // Create/update the overlay if enabled
       if (this.overlayConfig.enabled) {
@@ -2100,7 +2388,9 @@ export class PreviewManager {
       }
 
       console.log(
-        `[Preview] Overlay source set: ${name} (${kind}, aspect: ${this.overlayConfig.intrinsicAspect?.toFixed(2) || 'unknown'})`
+        `[Preview] Overlay source set: ${name} (${kind}, ` +
+          `${this.overlayConfig.width.toFixed(1)} × ${this.overlayConfig.height.toFixed(1)} mm, ` +
+          `aspect: ${this.overlayConfig.intrinsicAspect?.toFixed(2) || 'unknown'})`
       );
     } catch (error) {
       console.error('[Preview] Failed to load overlay source:', error);
@@ -2109,12 +2399,62 @@ export class PreviewManager {
   }
 
   /**
-   * Convert SVG text to a Three.js CanvasTexture
-   * @param {string} svgContent - SVG markup
-   * @returns {Promise<{texture: THREE.CanvasTexture, aspect: number}>}
+   * Parse an SVG length value (e.g. "200", "200px", "175.6mm", "2in") and
+   * return the equivalent size in millimeters using the same 96 DPI default
+   * that OpenSCAD desktop uses for SVG import.
+   *
+   * @param {string|null} raw - Raw attribute value (may include unit suffix)
+   * @returns {number|null} Size in mm, or null if unparseable
    */
-  async svgTextToCanvasTexture(svgContent) {
-    // Parse SVG to extract viewBox/dimensions for aspect ratio
+  static svgLengthToMm(raw) {
+    if (!raw) return null;
+    const str = String(raw).trim();
+    if (!str) return null;
+
+    // OpenSCAD default: 96 user-units per inch (CSS reference pixel)
+    const OPENSCAD_DPI = 96;
+    const MM_PER_INCH = 25.4;
+
+    // CSS absolute-length units → mm conversion factors
+    const unitFactors = {
+      mm: 1,
+      cm: 10,
+      in: MM_PER_INCH,
+      pt: MM_PER_INCH / 72, // 1pt = 1/72 inch
+      pc: MM_PER_INCH / 6, // 1pc = 1/6 inch
+      px: MM_PER_INCH / OPENSCAD_DPI, // 1px = 1/96 inch
+    };
+
+    const match = str.match(
+      /^([+-]?\d*\.?\d+(?:e[+-]?\d+)?)\s*(mm|cm|in|pt|pc|px)?$/i
+    );
+    if (!match) return null;
+
+    const value = parseFloat(match[1]);
+    if (!isFinite(value) || value <= 0) return null;
+
+    const unit = (match[2] || '').toLowerCase();
+
+    // Unitless values are treated as user-units at 96 DPI (same as px)
+    const factor = unitFactors[unit] || unitFactors.px;
+    return value * factor;
+  }
+
+  /**
+   * Convert SVG text to a Three.js CanvasTexture.
+   * When recolorHex is provided, all non-transparent pixels are replaced
+   * with that colour — making dark SVGs visible on dark backgrounds.
+   *
+   * Also computes the physical mm dimensions of the SVG using the same
+   * 96 DPI convention that OpenSCAD desktop uses for SVG import, so the
+   * overlay can be sized to match the real-world measurements the SVG
+   * was saved with.
+   *
+   * @param {string} svgContent - SVG markup
+   * @param {string|null} [recolorHex=null] - CSS hex colour (e.g. '#ffffff')
+   * @returns {Promise<{texture: THREE.CanvasTexture, aspect: number, widthMm: number|null, heightMm: number|null}>}
+   */
+  async svgTextToCanvasTexture(svgContent, recolorHex = null) {
     const parser = new DOMParser();
     const svgDoc = parser.parseFromString(svgContent, 'image/svg+xml');
     const svgEl = svgDoc.querySelector('svg');
@@ -2123,7 +2463,7 @@ export class PreviewManager {
       throw new Error('Invalid SVG: no <svg> element found');
     }
 
-    // Determine intrinsic dimensions and aspect ratio
+    // --- Determine pixel dimensions for canvas rendering ---
     let intrinsicWidth, intrinsicHeight;
 
     const viewBox = svgEl.getAttribute('viewBox');
@@ -2132,7 +2472,6 @@ export class PreviewManager {
       intrinsicWidth = vbWidth;
       intrinsicHeight = vbHeight;
     } else {
-      // Fall back to explicit width/height attributes
       intrinsicWidth =
         parseFloat(svgEl.getAttribute('width')) ||
         parseFloat(svgEl.style.width) ||
@@ -2144,6 +2483,26 @@ export class PreviewManager {
     }
 
     const aspect = intrinsicWidth / intrinsicHeight;
+
+    // --- Compute physical mm size (OpenSCAD 96 DPI convention) ---
+    // Priority: explicit width/height with units → viewBox at 96 DPI
+    const rawW = svgEl.getAttribute('width');
+    const rawH = svgEl.getAttribute('height');
+    let widthMm = PreviewManager.svgLengthToMm(rawW);
+    let heightMm = PreviewManager.svgLengthToMm(rawH);
+
+    // If width/height are missing or unparseable, fall back to viewBox
+    // dimensions treated as user-units at 96 DPI (OpenSCAD default).
+    if (widthMm === null && viewBox) {
+      const OPENSCAD_DPI = 96;
+      const [, , vbW] = viewBox.split(/[\s,]+/).map(parseFloat);
+      widthMm = (vbW * 25.4) / OPENSCAD_DPI;
+    }
+    if (heightMm === null && viewBox) {
+      const OPENSCAD_DPI = 96;
+      const [, , , vbH] = viewBox.split(/[\s,]+/).map(parseFloat);
+      heightMm = (vbH * 25.4) / OPENSCAD_DPI;
+    }
 
     // Determine canvas resolution (bounded to avoid memory spikes)
     const maxDim = this.getMaxTextureResolution();
@@ -2171,6 +2530,15 @@ export class PreviewManager {
       const ctx = canvas.getContext('2d');
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+      // Recolor: replace all non-transparent pixels with the chosen colour.
+      // Uses 'source-in' compositing so alpha/shape is preserved.
+      if (recolorHex) {
+        ctx.globalCompositeOperation = 'source-in';
+        ctx.fillStyle = recolorHex;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.globalCompositeOperation = 'source-over';
+      }
     } finally {
       URL.revokeObjectURL(url);
     }
@@ -2179,7 +2547,7 @@ export class PreviewManager {
     const texture = new THREE.CanvasTexture(canvas);
     texture.needsUpdate = true;
 
-    return { texture, aspect };
+    return { texture, aspect, widthMm, heightMm };
   }
 
   /**
@@ -2346,6 +2714,43 @@ export class PreviewManager {
   }
 
   /**
+   * Resize the reference overlay to match explicit physical screen dimensions (mm).
+   * Use this to snap the overlay to a known tablet screen size selected from the
+   * tablet database (public/data/tablets.json) or from SCAD parameters.
+   *
+   * @param {number} widthMm - Screen width in mm
+   * @param {number} heightMm - Screen height in mm
+   */
+  fitOverlayToScreenDimensions(widthMm, heightMm) {
+    if (
+      typeof widthMm !== 'number' ||
+      typeof heightMm !== 'number' ||
+      widthMm <= 0 ||
+      heightMm <= 0
+    ) {
+      console.warn(
+        '[Preview] fitOverlayToScreenDimensions: invalid dimensions',
+        widthMm,
+        heightMm
+      );
+      return;
+    }
+
+    this.overlayConfig.width = widthMm;
+    this.overlayConfig.height = heightMm;
+    this.overlayConfig.offsetX = 0;
+    this.overlayConfig.offsetY = 0;
+
+    if (this.overlayConfig.enabled) {
+      this.createOrUpdateReferenceOverlay();
+    }
+
+    console.log(
+      `[Preview] Overlay sized to screen dimensions: ${widthMm} x ${heightMm} mm`
+    );
+  }
+
+  /**
    * Enable or disable the reference overlay visibility
    * @param {boolean} enabled - Whether the overlay should be visible
    */
@@ -2376,6 +2781,33 @@ export class PreviewManager {
 
     if (this.referenceOverlay && this.referenceOverlay.material) {
       this.referenceOverlay.material.opacity = this.overlayConfig.opacity;
+    }
+  }
+
+  /**
+   * Set the SVG recolor hex and re-rasterise the current overlay if it is SVG.
+   * Pass null to revert to original SVG colours.
+   * @param {string|null} hexColor - CSS hex colour (e.g. '#ffffff') or null
+   */
+  async setOverlaySvgColor(hexColor) {
+    this.overlayConfig.svgColor = hexColor || null;
+
+    // Re-rasterise if the current source is SVG
+    if (this._lastSvgContent) {
+      if (this.referenceTexture) {
+        this.referenceTexture.dispose();
+        this.referenceTexture = null;
+      }
+      const { texture, aspect } = await this.svgTextToCanvasTexture(
+        this._lastSvgContent,
+        this.overlayConfig.svgColor
+      );
+      this.referenceTexture = texture;
+      this.overlayConfig.intrinsicAspect = aspect;
+
+      if (this.overlayConfig.enabled) {
+        this.createOrUpdateReferenceOverlay();
+      }
     }
   }
 
@@ -2896,7 +3328,8 @@ export class PreviewManager {
     const bs = this._brightnessScale;
     const cf = this._contrastFactor;
     // Brightness scales all base intensities; contrast shifts ambient/directional ratio
-    this.ambientLight.intensity = this.baseLightIntensities.ambient * bs * (2 - cf);
+    this.ambientLight.intensity =
+      this.baseLightIntensities.ambient * bs * (2 - cf);
     this.directionalLight1.intensity = this.baseLightIntensities.dir1 * bs * cf;
     this.directionalLight2.intensity = this.baseLightIntensities.dir2 * bs * cf;
   }

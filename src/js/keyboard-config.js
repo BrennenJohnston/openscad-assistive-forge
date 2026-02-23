@@ -151,6 +151,35 @@ export const DEFAULT_SHORTCUTS = {
     description: 'Focus saved projects list',
   },
 
+  // File actions
+  newFile: {
+    key: 'n',
+    ctrl: true,
+    description: 'New file',
+  },
+  saveFile: {
+    key: 's',
+    ctrl: true,
+    description: 'Save file',
+  },
+  saveFileAs: {
+    key: 's',
+    ctrl: true,
+    shift: true,
+    description: 'Save file as',
+  },
+  reloadFile: {
+    key: 'r',
+    ctrl: true,
+    description: 'Reload file',
+  },
+  exportImage: {
+    key: 'i',
+    ctrl: true,
+    shift: true,
+    description: 'Export preview as image',
+  },
+
   // Navigation
   nextParameter: {
     key: 'ArrowDown',
@@ -174,6 +203,114 @@ export const DEFAULT_SHORTCUTS = {
     alt: true,
     description: 'Jump to previous parameter group',
   },
+
+  // Edit actions
+  copyViewportImage: {
+    key: 'c',
+    ctrl: true,
+    shift: true,
+    description: 'Copy viewport image to clipboard',
+  },
+  jumpNextError: {
+    key: 'e',
+    ctrl: true,
+    alt: true,
+    description: 'Jump to next error',
+  },
+  jumpPrevError: {
+    key: 'e',
+    ctrl: true,
+    alt: true,
+    shift: true,
+    description: 'Jump to previous error',
+  },
+  increaseFontSize: {
+    key: '=',
+    ctrl: true,
+    description: 'Increase editor font size',
+  },
+  decreaseFontSize: {
+    key: '-',
+    ctrl: true,
+    description: 'Decrease editor font size',
+  },
+  findReplace: {
+    key: 'h',
+    ctrl: true,
+    description: 'Find and replace in editor',
+  },
+
+  // Design tools
+  flushCaches: {
+    key: 'F9',
+    description: 'Flush caches (files, libraries, geometry)',
+  },
+  showAST: {
+    key: 'F10',
+    description: 'Display parsed parameter AST',
+  },
+  checkValidity: {
+    key: 'F11',
+    description: 'Check geometry validity',
+  },
+
+  // Display / View
+  viewAll: {
+    key: 'v',
+    ctrl: true,
+    shift: true,
+    description: 'Fit model in view',
+  },
+  toggleAxes: {
+    key: 'a',
+    ctrl: true,
+    alt: true,
+    description: 'Toggle axes display',
+  },
+  toggleEdges: {
+    key: 'g',
+    ctrl: true,
+    alt: true,
+    description: 'Toggle edges overlay',
+  },
+  // toggleAnimate: removed from UI pending full debug; key binding preserved here for future re-integration
+  // toggleAnimate: { key: 'm', ctrl: true, alt: true, description: 'Toggle animation playback' },
+
+  // Panel controls
+  toggleConsole: {
+    key: '1',
+    ctrl: true,
+    alt: true,
+    description: 'Toggle Console panel',
+  },
+  toggleErrorLog: {
+    key: '2',
+    ctrl: true,
+    alt: true,
+    description: 'Toggle Error Log panel',
+  },
+  toggleCodeEditor: {
+    key: '3',
+    ctrl: true,
+    alt: true,
+    description: 'Toggle Code Editor panel',
+  },
+  toggleCustomizer: {
+    key: '4',
+    ctrl: true,
+    alt: true,
+    description: 'Toggle Customizer panel',
+  },
+  nextPanel: {
+    key: ']',
+    ctrl: true,
+    description: 'Focus next panel',
+  },
+  prevPanel: {
+    key: '[',
+    ctrl: true,
+    description: 'Focus previous panel',
+  },
 };
 
 /**
@@ -194,7 +331,16 @@ export const SHORTCUT_CATEGORIES = {
   },
   cameraViews: {
     label: 'Camera Views',
-    actions: ['viewTop', 'viewBottom', 'viewFront', 'viewBack', 'viewLeft', 'viewRight', 'viewDiagonal', 'toggleProjection'],
+    actions: [
+      'viewTop',
+      'viewBottom',
+      'viewFront',
+      'viewBack',
+      'viewLeft',
+      'viewRight',
+      'viewDiagonal',
+      'toggleProjection',
+    ],
   },
   parameters: {
     label: 'Parameters',
@@ -208,9 +354,43 @@ export const SHORTCUT_CATEGORIES = {
     label: 'Help',
     actions: ['showHelp', 'showShortcutsModal'],
   },
+  file: {
+    label: 'File',
+    actions: ['newFile', 'saveFile', 'saveFileAs', 'reloadFile', 'exportImage'],
+  },
   navigation: {
     label: 'Navigation',
     actions: ['nextParameter', 'prevParameter', 'nextGroup', 'prevGroup'],
+  },
+  editing: {
+    label: 'Editing',
+    actions: [
+      'copyViewportImage',
+      'jumpNextError',
+      'jumpPrevError',
+      'increaseFontSize',
+      'decreaseFontSize',
+      'findReplace',
+    ],
+  },
+  design: {
+    label: 'Design',
+    actions: ['flushCaches', 'showAST', 'checkValidity'],
+  },
+  display: {
+    label: 'Display',
+    actions: ['viewAll', 'toggleAxes', 'toggleEdges'],
+  },
+  panels: {
+    label: 'Panels',
+    actions: [
+      'toggleConsole',
+      'toggleErrorLog',
+      'toggleCodeEditor',
+      'toggleCustomizer',
+      'nextPanel',
+      'prevPanel',
+    ],
   },
 };
 

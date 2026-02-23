@@ -56,8 +56,12 @@ Keep them boring:
 - `feat: ...`
 - `fix: ...`
 - `docs: ...`
+- `style: ...`
+- `refactor: ...`
+- `perf: ...`
 - `test: ...`
 - `chore: ...`
+- `ci: ...`
 
 ## PRs
 

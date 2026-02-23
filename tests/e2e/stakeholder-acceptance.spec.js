@@ -67,13 +67,13 @@ test.describe('Stakeholder Acceptance Tests', () => {
     await loadSimpleBoxExample(page)
     await page.waitForTimeout(1000)
     
-    // Check Save button tooltip
+    // Check Save button accessible label (aria-label is stable; title changes with preset selection state)
     const saveBtn = page.locator('#savePresetBtn, button[aria-label*="Save preset"]')
     if (await saveBtn.isVisible()) {
-      const title = await saveBtn.getAttribute('title')
-      console.log('Save button title:', title)
-      expect(title).toContain('Save Preset')
-      expect(title).toContain('overwrites current preset')
+      const ariaLabel = await saveBtn.getAttribute('aria-label')
+      console.log('Save button aria-label:', ariaLabel)
+      expect(ariaLabel).toContain('Save Preset')
+      expect(ariaLabel).toContain('overwrites current preset')
     }
     
     // Check Add button title

@@ -135,7 +135,8 @@ export async function clearCaches() {
   overlay.id = 'cache-clear-overlay';
   overlay.setAttribute('role', 'alert');
   overlay.setAttribute('aria-live', 'assertive');
-  overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.5);color:white;font-size:1.2em;';
+  overlay.style.cssText =
+    'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.5);color:white;font-size:1.2em;';
   overlay.textContent = 'Clearing cache and reloading...';
   document.body.appendChild(overlay);
 

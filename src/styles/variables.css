@@ -228,6 +228,7 @@
   --color-accent-hover: #002b80;
   --color-accent-text: #ffffff;
   --color-accent-subtle: #e6f0ff;
+  --color-accent-fg: #003d99; /* Same as accent: solid dark blue already passes AAA */
 
   /* Text on Solid Semantic Surfaces */
   --color-on-accent: #ffffff;
@@ -300,6 +301,7 @@
   --color-accent-hover: #99ccff; /* Even lighter on hover */
   --color-accent-text: #000000;
   --color-accent-subtle: #003d66;
+  --color-accent-fg: #66b3ff; /* Same as accent: light blue already passes on black */
 
   /* Text on Solid Semantic Surfaces */
   --color-on-accent: #000000;

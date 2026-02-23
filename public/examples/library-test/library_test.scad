@@ -21,7 +21,7 @@ height = 28; // [10:50]
 radius = 4; // [1:15]
 
 /*[Options]*/
-// Box style (Note: "Rounded" may cause CGAL errors with certain parameter combinations)
+// Box style
 style = "Simple"; // [Simple, Rounded]
 
 /*[Hidden]*/
@@ -38,7 +38,7 @@ module main() {
         // Use MCAD's rounded box function
         // roundedBox(size, radius, sidesonly)
         // - size: [x, y, z] dimensions
-        // - radius: corner radius  
+        // - radius: corner radius
         // - sidesonly: true = round only vertical edges, false = round all edges
         roundedBox([width, depth, height], radius, sidesonly);
     } else {

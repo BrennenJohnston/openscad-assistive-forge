@@ -6,7 +6,7 @@
 // File upload size limits (in bytes)
 export const FILE_SIZE_LIMITS = {
   SCAD_FILE: 5 * 1024 * 1024, // 5MB for individual .scad files
-  ZIP_FILE: 10 * 1024 * 1024, // 10MB for .zip archives
+  ZIP_FILE: 100 * 1024 * 1024, // 100MB for .zip archives (multi-file projects with STLs/images)
 };
 
 // URL param limits

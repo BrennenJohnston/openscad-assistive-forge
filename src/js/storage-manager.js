@@ -5,6 +5,7 @@
  */
 
 import { isValidServiceWorkerMessage } from './html-utils.js';
+import { getAppPrefKey } from './storage-keys.js';
 import {
   listSavedProjects,
   listFolders,
@@ -22,6 +23,7 @@ import {
 const FIRST_VISIT_KEY = 'openscad-forge-first-visit-seen';
 const STORAGE_PREFS_KEY = 'openscad-forge-storage-prefs';
 const PERSISTENCE_KEY = 'openscad-forge-persistence-requested';
+const CUSTOM_GRID_PRESETS_KEY = getAppPrefKey('custom-grid-presets');
 
 /**
  * Check if this is the user's first visit
@@ -141,7 +143,12 @@ export async function checkStorageQuota(bytesToSave = 0) {
       };
     }
 
-    return { safe: true, remainingBytes: remaining, percentUsed, message: null };
+    return {
+      safe: true,
+      remainingBytes: remaining,
+      percentUsed,
+      message: null,
+    };
   } catch (_error) {
     return fallback;
   }
@@ -651,6 +658,91 @@ export async function getDetailedStorageInfo() {
 }
 
 // ============================================================================
+// Folder Import (webkitdirectory)
+// ============================================================================
+
+/** Companion file extensions accepted alongside .scad source */
+const FOLDER_IMPORT_COMPANION_EXTS = new Set([
+  '.stl',
+  '.dxf',
+  '.svg',
+  '.dat',
+  '.csv',
+  '.png',
+  '.json',
+  '.txt',
+]);
+
+/**
+ * Import a project from a FileList produced by an `<input webkitdirectory>`.
+ * Uses the provided mainFilePath to identify the primary .scad entry point.
+ *
+ * @param {FileList|File[]} fileList - Files from the folder selection
+ * @param {string} mainFilePath - Relative path of the primary .scad file (webkitRelativePath)
+ * @returns {Promise<{success: boolean, id?: string, error?: string}>}
+ */
+export async function importProjectFromFiles(fileList, mainFilePath) {
+  try {
+    const files = Array.from(fileList);
+    const mainFile = files.find((f) => f.webkitRelativePath === mainFilePath);
+    if (!mainFile) {
+      return { success: false, error: `Main file not found: ${mainFilePath}` };
+    }
+
+    const mainContent = await mainFile.text();
+    const rootDir = mainFilePath.includes('/')
+      ? mainFilePath.split('/')[0]
+      : '';
+
+    // Collect companion files (non-hidden, allowed extensions)
+    const projectFiles = {};
+    projectFiles[mainFilePath.replace(`${rootDir}/`, '') || mainFilePath] =
+      mainContent;
+
+    for (const f of files) {
+      if (f === mainFile) continue;
+      const rel = f.webkitRelativePath || f.name;
+      const baseName = rel.split('/').pop();
+
+      if (baseName.startsWith('.')) continue; // hidden file
+
+      const ext = baseName.includes('.')
+        ? `.${baseName.split('.').pop().toLowerCase()}`
+        : '';
+
+      if (!FOLDER_IMPORT_COMPANION_EXTS.has(ext) && ext !== '.scad') continue;
+
+      try {
+        const content = await f.text();
+        const relPath = rootDir ? rel.replace(`${rootDir}/`, '') : rel;
+        projectFiles[relPath] = content;
+      } catch {
+        // Binary files (e.g. PNG) — skip text reading for now
+      }
+    }
+
+    const projectName = rootDir || mainFile.name.replace('.scad', '');
+    const mainRelPath = rootDir
+      ? mainFilePath.replace(`${rootDir}/`, '')
+      : mainFilePath;
+
+    const result = await saveProject({
+      name: projectName,
+      originalName: mainFile.name,
+      kind: 'zip',
+      mainFilePath: mainRelPath,
+      content: mainContent,
+      projectFiles,
+      notes: '',
+    });
+
+    return result;
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+// ============================================================================
 // Backup/Export System (v2)
 // ============================================================================
 
@@ -668,6 +760,15 @@ export async function exportProjectsBackup() {
     const folders = await listFolders();
     const projects = await listSavedProjects();
 
+    // Load custom grid presets for inclusion in backup
+    let customGridPresets = [];
+    try {
+      const raw = localStorage.getItem(CUSTOM_GRID_PRESETS_KEY);
+      if (raw) customGridPresets = JSON.parse(raw) || [];
+    } catch (_) {
+      /* ignore */
+    }
+
     // Create manifest
     const manifest = {
       version: '2.0',
@@ -682,6 +783,8 @@ export async function exportProjectsBackup() {
         createdAt: f.createdAt,
       })),
       projects: [],
+      // Custom grid presets — ignored by standard OpenSCAD desktop
+      customGridPresets,
     };
 
     // Add each project to the ZIP
@@ -963,6 +1066,43 @@ export async function importProjectsBackup(file) {
       } catch (error) {
         result.errors.push(
           `Error importing project ${projectRef.name}: ${error.message}`
+        );
+      }
+    }
+
+    // Restore custom grid presets (additive merge — skip duplicates by name)
+    if (
+      Array.isArray(manifest.customGridPresets) &&
+      manifest.customGridPresets.length > 0
+    ) {
+      try {
+        let existing = [];
+        const raw = localStorage.getItem(CUSTOM_GRID_PRESETS_KEY);
+        if (raw) existing = JSON.parse(raw) || [];
+
+        const existingNames = new Set(existing.map((p) => p.name));
+        const toAdd = manifest.customGridPresets.filter(
+          (p) =>
+            p &&
+            typeof p.name === 'string' &&
+            typeof p.widthMm === 'number' &&
+            typeof p.heightMm === 'number' &&
+            !existingNames.has(p.name)
+        );
+
+        if (toAdd.length > 0) {
+          localStorage.setItem(
+            CUSTOM_GRID_PRESETS_KEY,
+            JSON.stringify([...existing, ...toAdd])
+          );
+          console.log(
+            `[StorageManager] Restored ${toAdd.length} custom grid preset(s)`
+          );
+        }
+      } catch (err) {
+        console.warn(
+          '[StorageManager] Failed to restore custom grid presets:',
+          err
         );
       }
     }

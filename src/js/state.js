@@ -8,88 +8,72 @@ import { getAppPrefKey } from './storage-keys.js';
 
 /**
  * Parameter History Manager for Undo/Redo functionality
- * Uses a past/present/future pattern for state management
+ *
+ * Undo-stack model: callers push the CURRENT state BEFORE making a change.
+ * The undoStack holds prior snapshots; the redoStack holds snapshots
+ * displaced by undo operations. The live application state is always
+ * "ahead" of the undoStack top.
  */
 export class ParameterHistory {
   constructor(maxSize = 50) {
     this.maxSize = maxSize;
-    this.history = [];
-    this.currentIndex = -1;
+    this.undoStack = [];
+    this.redoStack = [];
   }
 
   /**
-   * Push a new state to history
+   * Record the current state before a change.
+   * Clears the redo stack (new branch of history).
    * @param {Object} state - Parameter state to save
    */
   push(state) {
-    // Remove any future states if we're not at the end
-    this.history = this.history.slice(0, this.currentIndex + 1);
+    this.undoStack.push(this.cloneState(state));
+    this.redoStack = [];
 
-    // Add new state
-    this.history.push(this.cloneState(state));
-    this.currentIndex++;
-
-    // Trim history if it exceeds max size
-    if (this.history.length > this.maxSize) {
-      this.history.shift();
-      this.currentIndex--;
+    if (this.undoStack.length > this.maxSize) {
+      this.undoStack.shift();
     }
   }
 
   /**
-   * Undo - go back to previous state
-   * @returns {Object|null} Previous state or null if at beginning
+   * Undo — restore the most recent snapshot.
+   * @param {Object} currentLiveState - The live application state (pushed onto redoStack)
+   * @returns {Object|null} Previous state or null if nothing to undo
    */
-  undo() {
+  undo(currentLiveState) {
     if (!this.canUndo()) return null;
-
-    this.currentIndex--;
-    return this.cloneState(this.history[this.currentIndex]);
+    this.redoStack.push(this.cloneState(currentLiveState));
+    return this.undoStack.pop();
   }
 
   /**
-   * Redo - go forward to next state
-   * @returns {Object|null} Next state or null if at end
+   * Redo — re-apply the most recently undone state.
+   * @param {Object} currentLiveState - The live application state (pushed onto undoStack)
+   * @returns {Object|null} Next state or null if nothing to redo
    */
-  redo() {
+  redo(currentLiveState) {
     if (!this.canRedo()) return null;
-
-    this.currentIndex++;
-    return this.cloneState(this.history[this.currentIndex]);
+    this.undoStack.push(this.cloneState(currentLiveState));
+    return this.redoStack.pop();
   }
 
-  /**
-   * Check if undo is possible
-   * @returns {boolean}
-   */
   canUndo() {
-    return this.currentIndex > 0;
+    return this.undoStack.length > 0;
   }
 
-  /**
-   * Check if redo is possible
-   * @returns {boolean}
-   */
   canRedo() {
-    return this.currentIndex < this.history.length - 1;
+    return this.redoStack.length > 0;
   }
 
-  /**
-   * Clear all history
-   */
   clear() {
-    this.history = [];
-    this.currentIndex = -1;
+    this.undoStack = [];
+    this.redoStack = [];
   }
 
-  /**
-   * Get statistics about history
-   * @returns {Object}
-   */
   getStats() {
     return {
-      total: this.history.length,
-      current: this.currentIndex,
+      undoDepth: this.undoStack.length,
+      redoDepth: this.redoStack.length,
       canUndo: this.canUndo(),
       canRedo: this.canRedo(),
     };
@@ -104,7 +88,6 @@ export class ParameterHistory {
     try {
       return JSON.parse(JSON.stringify(state));
     } catch (e) {
-      // Fallback for non-serializable values (functions, circular refs, etc.)
       console.warn(
         '[State] Could not serialize state, using shallow clone:',
         e
@@ -304,6 +287,7 @@ export class StateManager {
       Object.keys(this.state.parameters).length > 0
     ) {
       this.history.push(this.state.parameters);
+      this.updateUndoRedoButtons();
     }
   }
 
@@ -328,16 +312,14 @@ export class StateManager {
    * @returns {Object|null} Previous parameters or null
    */
   undo() {
-    const previousState = this.history.undo();
+    const liveParams = this.state.parameters;
+    const previousState = this.history.undo(liveParams);
     if (!previousState) return null;
 
     this.isUndoRedo = true;
-
-    const prevParams = { ...this.state.parameters };
     this.setState({ parameters: previousState });
 
-    // Find what changed for screen reader announcement
-    const changedParam = this.findChangedParameter(prevParams, previousState);
+    const changedParam = this.findChangedParameter(liveParams, previousState);
     if (changedParam) {
       this.announceChange(
         `Undid: ${changedParam.name.replace(/_/g, ' ')} → ${changedParam.value}`
@@ -355,16 +337,14 @@ export class StateManager {
    * @returns {Object|null} Next parameters or null
    */
   redo() {
-    const nextState = this.history.redo();
+    const liveParams = this.state.parameters;
+    const nextState = this.history.redo(liveParams);
     if (!nextState) return null;
 
     this.isUndoRedo = true;
-
-    const prevParams = { ...this.state.parameters };
     this.setState({ parameters: nextState });
 
-    // Find what changed for screen reader announcement
-    const changedParam = this.findChangedParameter(prevParams, nextState);
+    const changedParam = this.findChangedParameter(liveParams, nextState);
     if (changedParam) {
       this.announceChange(
         `Redid: ${changedParam.name.replace(/_/g, ' ')} → ${changedParam.value}`

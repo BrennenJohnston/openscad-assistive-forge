@@ -159,6 +159,13 @@ const ERROR_TRANSLATIONS = [
     code: 'EMPTY_GEOMETRY',
   },
   {
+    pattern: /MODEL_NOT_2D|Current top level object is not a 2D object/i,
+    message:
+      'Your model produces 3D geometry but SVG/DXF export requires 2D output. ' +
+      'Enable "use Laser Cutting best practices" or ensure your model uses projection() to produce 2D geometry.',
+    code: 'MODEL_NOT_2D',
+  },
+  {
     // Detect "not supported" ECHO messages from OpenSCAD models
     pattern: /is not supported for/i,
     message:
@@ -313,7 +320,9 @@ async function initWASM(baseUrl = '') {
         integrityData = await integrityResp.json();
         console.log(`[Worker] WASM build: ${integrityData.build}`);
         if (integrityData.knownIssues?.length) {
-          console.log(`[Worker] Known issues: ${integrityData.knownIssues.length} documented`);
+          console.log(
+            `[Worker] Known issues: ${integrityData.knownIssues.length} documented`
+          );
         }
 
         // Verify sizes of both JS loader and WASM binary
@@ -329,7 +338,10 @@ async function initWASM(baseUrl = '') {
 
           try {
             const headResp = await fetch(url, { method: 'HEAD' });
-            const actualSize = parseInt(headResp.headers.get('content-length'), 10);
+            const actualSize = parseInt(
+              headResp.headers.get('content-length'),
+              10
+            );
             if (actualSize && actualSize !== expected.size) {
               mismatches.push(
                 `${name}: expected ${expected.size} bytes, got ${actualSize}`
@@ -347,7 +359,8 @@ async function initWASM(baseUrl = '') {
             type: 'WARNING',
             payload: {
               code: 'WASM_INTEGRITY',
-              message: 'WASM file integrity check detected a size mismatch. Files may need re-downloading.',
+              message:
+                'WASM file integrity check detected a size mismatch. Files may need re-downloading.',
               severity: 'warning',
             },
           });
@@ -667,12 +680,12 @@ const WORK_DIR = '/work';
 /**
  * Mount files into OpenSCAD virtual filesystem
  * Enable include/use statements to resolve companion files correctly
- * 
+ *
  * Files are mounted under /work/ directory so that:
  * - Main file runs from /work/mainfile.scad
  * - Include files like openings_and_additions.txt are at /work/openings_and_additions.txt
  * - OpenSCAD's include path resolution finds them correctly
- * 
+ *
  * @param {Map<string, string>} files - Map of file paths to content
  * @param {Object} options - Mount options
  * @param {boolean} options.useWorkDir - Mount under /work/ (default: true for multi-file projects)
@@ -687,7 +700,7 @@ async function mountFiles(files, options = {}) {
   const FS = module.FS;
   const useWorkDir = options.useWorkDir !== false && files.size > 1;
   const baseDir = useWorkDir ? WORK_DIR : '';
-  
+
   // Create work directory if needed
   if (useWorkDir) {
     try {
@@ -695,7 +708,10 @@ async function mountFiles(files, options = {}) {
       console.log(`[Worker FS] Created work directory: ${WORK_DIR}`);
     } catch (error) {
       if (error.code !== 'EEXIST') {
-        console.warn(`[Worker FS] Work directory creation warning:`, error.message);
+        console.warn(
+          `[Worker FS] Work directory creation warning:`,
+          error.message
+        );
       }
     }
   }
@@ -709,7 +725,7 @@ async function mountFiles(files, options = {}) {
       console.warn(`[Worker FS] Skipping invalid path: ${filePath}`);
       continue;
     }
-    
+
     // Extract all directory components
     const parts = filePath.split('/');
     let currentPath = baseDir;
@@ -740,15 +756,15 @@ async function mountFiles(files, options = {}) {
 
   // Write files - track the resolved paths
   const resolvedPaths = new Map();
-  
+
   for (const [filePath, content] of files.entries()) {
     // Security: Skip path traversal attempts
     if (filePath.includes('..') || filePath.startsWith('/')) {
       continue;
     }
-    
+
     const resolvedPath = baseDir ? `${baseDir}/${filePath}` : filePath;
-    
+
     try {
       FS.writeFile(resolvedPath, content);
       mountedFiles.set(resolvedPath, content);
@@ -762,8 +778,10 @@ async function mountFiles(files, options = {}) {
     }
   }
 
-  console.log(`[Worker FS] Successfully mounted ${files.size} files under ${baseDir || '/'}`);
-  
+  console.log(
+    `[Worker FS] Successfully mounted ${files.size} files under ${baseDir || '/'}`
+  );
+
   return {
     workDir: baseDir,
     files: resolvedPaths,
@@ -782,7 +800,7 @@ function clearMountedFiles() {
 
   const FS = openscadModule.FS;
 
-  // Remove all mounted files
+  // Remove all tracked mounted files
   for (const filePath of mountedFiles.keys()) {
     try {
       FS.unlink(filePath);
@@ -791,31 +809,34 @@ function clearMountedFiles() {
     }
   }
 
-  // Clean up work directory if it exists
+  // Recursively remove the work directory and all its contents
+  function rmRecursive(path) {
+    try {
+      const entries = FS.readdir(path);
+      for (const entry of entries) {
+        if (entry === '.' || entry === '..') continue;
+        const fullPath = `${path}/${entry}`;
+        try {
+          const stat = FS.stat(fullPath);
+          if (FS.isDir(stat.mode)) {
+            rmRecursive(fullPath);
+          } else {
+            FS.unlink(fullPath);
+          }
+        } catch (_e) {
+          // Ignore errors for individual entries
+        }
+      }
+      FS.rmdir(path);
+    } catch (_e) {
+      // Directory may not exist or be already removed
+    }
+  }
+
   try {
     const workDirAnalysis = FS.analyzePath(WORK_DIR);
     if (workDirAnalysis.exists) {
-      // Read directory contents and remove files
-      const entries = FS.readdir(WORK_DIR);
-      for (const entry of entries) {
-        if (entry !== '.' && entry !== '..') {
-          try {
-            const fullPath = `${WORK_DIR}/${entry}`;
-            const stat = FS.stat(fullPath);
-            if (FS.isFile(stat.mode)) {
-              FS.unlink(fullPath);
-            }
-          } catch (_e) {
-            // Ignore cleanup errors for individual files
-          }
-        }
-      }
-      // Try to remove the directory itself
-      try {
-        FS.rmdir(WORK_DIR);
-      } catch (_e) {
-        // Directory may not be empty or may not exist
-      }
+      rmRecursive(WORK_DIR);
     }
   } catch (_error) {
     // Work directory may not exist, ignore
@@ -989,6 +1010,18 @@ function clearLibraries() {
 }
 
 /**
+ * Recursively serialize a JS array to OpenSCAD vector syntax, handling nested vectors.
+ * @param {Array} arr
+ * @returns {string} e.g. "[[1,2],[3,4]]"
+ */
+function serializeScadVector(arr) {
+  const parts = arr.map((item) =>
+    Array.isArray(item) ? serializeScadVector(item) : String(item)
+  );
+  return `[${parts.join(',')}]`;
+}
+
+/**
  * Build -D command-line arguments from parameters
  * @param {Object} parameters - Parameter key-value pairs
  * @param {Object} paramTypes - Map of parameter names to their schema types (e.g. { expose_home_button: 'string', MW_version: 'boolean' })
@@ -1021,7 +1054,10 @@ function buildDefineArgs(parameters, paramTypes = {}) {
 
       if (isBooleanParam && (lowerValue === 'true' || lowerValue === 'yes')) {
         formattedValue = 'true';
-      } else if (isBooleanParam && (lowerValue === 'false' || lowerValue === 'no')) {
+      } else if (
+        isBooleanParam &&
+        (lowerValue === 'false' || lowerValue === 'no')
+      ) {
         formattedValue = 'false';
       }
       // Check if this is a color (hex string)
@@ -1038,7 +1074,7 @@ function buildDefineArgs(parameters, paramTypes = {}) {
     } else if (typeof value === 'boolean') {
       formattedValue = value ? 'true' : 'false';
     } else if (Array.isArray(value)) {
-      formattedValue = `[${value.join(',')}]`;
+      formattedValue = serializeScadVector(value);
     } else if (typeof value === 'object' && value.data) {
       // File parameter - use filename
       const escaped = (value.name || 'uploaded_file')
@@ -1101,7 +1137,10 @@ function parametersToScad(parameters, paramTypes = {}) {
 
         if (isBooleanParam && (lowerValue === 'true' || lowerValue === 'yes')) {
           return `${key} = true;`;
-        } else if (isBooleanParam && (lowerValue === 'false' || lowerValue === 'no')) {
+        } else if (
+          isBooleanParam &&
+          (lowerValue === 'false' || lowerValue === 'no')
+        ) {
           return `${key} = false;`;
         }
         // ALL non-boolean strings (including "yes"/"no" dropdowns) stay as quoted strings
@@ -1112,8 +1151,7 @@ function parametersToScad(parameters, paramTypes = {}) {
       } else if (typeof value === 'boolean') {
         return `${key} = ${value};`;
       } else if (Array.isArray(value)) {
-        // Handle arrays (including RGB arrays)
-        return `${key} = [${value.join(', ')}];`;
+        return `${key} = ${serializeScadVector(value)};`;
       } else {
         return `${key} = ${JSON.stringify(value)};`;
       }
@@ -1161,9 +1199,9 @@ function _applyOverrides(scadContent, parameters, paramTypes = {}) {
       return `"${escaped}"`;
     }
 
-    // Handle arrays
+    // Handle arrays (including nested vectors like [[1,2],[3,4]])
     if (Array.isArray(value)) {
-      return `[${value.join(', ')}]`;
+      return serializeScadVector(value);
     }
 
     // Handle strings
@@ -1174,7 +1212,10 @@ function _applyOverrides(scadContent, parameters, paramTypes = {}) {
 
       if (isBooleanParam && (lowerValue === 'true' || lowerValue === 'yes')) {
         return 'true';
-      } else if (isBooleanParam && (lowerValue === 'false' || lowerValue === 'no')) {
+      } else if (
+        isBooleanParam &&
+        (lowerValue === 'false' || lowerValue === 'no')
+      ) {
         return 'false';
       }
       // ALL non-boolean strings (including "yes"/"no" dropdowns) stay as quoted strings
@@ -1250,11 +1291,11 @@ async function renderWithCallMain(
   const supportsBinarySTL = Boolean(capabilities.hasBinarySTL);
   const enableLazyUnion =
     Boolean(renderOptions?.enableLazyUnion) && supportsLazyUnion;
-  
+
   // Engine selection: Use Manifold by default, but allow user to disable
   // renderOptions.useManifold: undefined/true = use Manifold, false = use CGAL (stable)
   const useManifold = renderOptions?.useManifold !== false;
-  
+
   const performanceFlags = [];
   if (supportsManifold && useManifold) {
     performanceFlags.push('--backend=Manifold');
@@ -1270,7 +1311,7 @@ async function renderWithCallMain(
   if (format === 'stl' && supportsBinarySTL) {
     exportFlags.push('--export-format=binstl');
   }
-  const shouldRetryWithoutFlags =
+  const _shouldRetryWithoutFlags =
     performanceFlags.length > 0 || exportFlags.length > 0;
 
   try {
@@ -1300,10 +1341,15 @@ async function renderWithCallMain(
         shouldWriteInput = true;
       }
     }
+    // 2D export flag used later for guard checks and fallback handling.
+    const is2DExport = format === 'svg' || format === 'dxf';
+
     if (shouldWriteInput) {
       module.FS.writeFile(inputFile, scadContent);
       wroteTempInput = true;
-    } // Build -D arguments
+    }
+
+    // Build -D arguments
     const defineArgs = buildDefineArgs(parameters, paramTypes);
 
     // Path resolution for import()/use/include:
@@ -1337,7 +1383,7 @@ async function renderWithCallMain(
     if (/\broof\s*\(/m.test(scadContent)) {
       riskyFunctions.push('roof()');
     }
-    if (/\bprojection\s*\(/m.test(scadContent)) {
+    if (!is2DExport && /\bprojection\s*\(/m.test(scadContent)) {
       riskyFunctions.push('projection()');
     }
     if (riskyFunctions.length > 0) {
@@ -1355,7 +1401,6 @@ async function renderWithCallMain(
     }
 
     // Build command: [performance flags, -D key=value, ...] -o outputFile inputFile
-    // Note: removed -I flag as it's not supported by this OpenSCAD WASM build
     const args = [
       ...performanceFlags,
       ...exportFlags,
@@ -1384,11 +1429,29 @@ async function renderWithCallMain(
     try {
       const exitCode = await module.callMain(args);
 
-      // Check exit code - non-zero means compilation failed
+      // Check exit code - non-zero means compilation failed.
       if (exitCode !== 0) {
-        throw new Error(
+        // Check if this is a 3D-to-2D format mismatch (model produces 3D but exporting to SVG/DXF).
+        // OpenSCAD returns exit code 1 with "not a 2D object" — this is recoverable, not a module crash.
+        const is2DFormat = format === 'svg' || format === 'dxf';
+        const modelIsNot2D =
+          openscadConsoleOutput.includes('Current top level object is not a 2D object') ||
+          openscadConsoleOutput.includes('not a 2D object');
+
+        if (is2DFormat && modelIsNot2D) {
+          throw new Error(
+            'MODEL_NOT_2D: Your model produces 3D geometry but SVG/DXF requires 2D output. ' +
+            'Ensure your model uses projection() or enable "use Laser Cutting best practices" to produce 2D geometry.'
+          );
+        }
+
+        // Any other non-zero exit corrupts the WASM module's internal state —
+        // signal the render controller to restart before the next render.
+        const err = new Error(
           `OpenSCAD compilation failed with exit code ${exitCode}. Output: ${openscadConsoleOutput.substring(0, 500)}`
         );
+        err.needsRestart = true;
+        throw err;
       }
 
       // Check for empty geometry - OpenSCAD returns exit code 0 but produces no output
@@ -1430,91 +1493,22 @@ async function renderWithCallMain(
         );
       }
     } catch (error) {
-      // Only retry-without-flags for "silent" numeric aborts where we got no useful output.
-      // If OpenSCAD produced a meaningful error (like empty geometry / unsupported config),
-      // retrying tends to destroy the useful message and replace it with another abort code.
-      const hasUsefulOutput =
-        typeof openscadConsoleOutput === 'string' &&
-        openscadConsoleOutput.trim().length > 0;
-      const isNumericAbort =
-        typeof error === 'number' ||
-        /^\d+$/.test(String(error)) ||
-        (/\b\d{6,}\b/.test(String(error)) && !hasUsefulOutput);
-      const shouldAttemptRetryWithoutFlags =
-        shouldRetryWithoutFlags && !hasUsefulOutput && isNumericAbort;
+      // After callMain throws (especially a numeric abort), the WASM module's
+      // internal state is corrupted. Retrying on the same module is futile —
+      // let the error propagate so the render controller can restart the worker.
+      const isThrownNumeric =
+        typeof error === 'number' || /^\d+$/.test(String(error));
 
-      if (shouldAttemptRetryWithoutFlags) {
+      if (isThrownNumeric) {
         console.warn(
-          '[Worker] Render failed with performance flags, retrying without flags'
+          `[Worker] callMain threw numeric abort (${error}), module likely corrupted — skipping same-module retry`
         );
-        const argsWithoutFlags = [...defineArgs, '-o', outputFile, inputFile];
-
-        // Clear console output for retry
-        openscadConsoleOutput = '';
-
-        let retryExitCode;
-        try {
-          retryExitCode = await module.callMain(argsWithoutFlags);
-        } catch (retryError) {
-          // If the retry throws (often a numeric abort), surface any console output
-          // so the UI can guide the user (e.g., dependency/toggle errors).
-          const retryErrStr = String(retryError);
-          const outputHint = openscadConsoleOutput
-            ? ` Output: ${openscadConsoleOutput.substring(0, 500)}`
-            : '';
-          throw new Error(
-            `OpenSCAD render failed on retry.${outputHint} Raw: ${retryErrStr.substring(0, 80)}`
-          );
-        }
-
-        if (retryExitCode !== 0) {
-          throw new Error(
-            `OpenSCAD compilation failed with exit code ${retryExitCode}. Output: ${openscadConsoleOutput.substring(0, 500)}`
-          );
-        }
-
-        // Retry may return 0 even when it produced empty geometry.
-        if (
-          openscadConsoleOutput.includes('Current top level object is empty') ||
-          openscadConsoleOutput.includes('top-level object is empty')
-        ) {
-          throw new Error(
-            `Current top level object is empty. Output: ${openscadConsoleOutput.substring(0, 500)}`
-          );
-        }
-
-        // Check for 2D object on retry as well
-        if (
-          openscadConsoleOutput.includes(
-            'Current top level object is not a 3D object'
-          ) ||
-          openscadConsoleOutput.includes('Top level object is a 2D object')
-        ) {
-          throw new Error(
-            `MODEL_IS_2D: Your model produces 2D geometry which cannot be displayed in the 3D viewer. ` +
-              `To export: select SVG or DXF output format. ` +
-              `To preview in 3D: adjust your model parameters to produce 3D geometry.`
-          );
-        }
-
-        const retryNotSupportedMatch = openscadConsoleOutput.match(
-          /ECHO:.*is not supported/i
-        );
-        if (retryNotSupportedMatch) {
-          throw new Error(
-            `Configuration is not supported. Output: ${openscadConsoleOutput.substring(0, 500)}`
-          );
-        }
-
-        // Emit warning so UI can show "using default backend"
-        postMessage({
-          type: 'WARNING',
-          message:
-            'Performance flags not supported by this OpenSCAD build (retried without flags)',
-        });
-      } else {
-        throw error; // Re-throw non-flag errors
+        throw error;
       }
+
+      // For non-numeric errors (compilation failures with useful output),
+      // re-throw as-is for the render controller to handle.
+      throw error;
     }
 
     // Read output file
@@ -1713,7 +1707,11 @@ function validateDXFOutput(content) {
   }
 
   // Check for DXF structure after any comment lines
-  if (startIdx >= lines.length || lines[startIdx] !== '0' || !lines.includes('SECTION')) {
+  if (
+    startIdx >= lines.length ||
+    lines[startIdx] !== '0' ||
+    !lines.includes('SECTION')
+  ) {
     return {
       valid: false,
       error:
@@ -1812,8 +1810,12 @@ function postProcessDXF(outputBuffer) {
   // Sections are: 0/SECTION, 2/<name>, ..., 0/ENDSEC
   const sections = []; // {name, startIdx, endIdx}
   for (let i = 0; i < pairs.length; i++) {
-    if (pairs[i].code === '0' && pairs[i].value === 'SECTION' &&
-        i + 1 < pairs.length && pairs[i + 1].code === '2') {
+    if (
+      pairs[i].code === '0' &&
+      pairs[i].value === 'SECTION' &&
+      i + 1 < pairs.length &&
+      pairs[i + 1].code === '2'
+    ) {
       const name = pairs[i + 1].value;
       // Find matching ENDSEC
       for (let j = i + 2; j < pairs.length; j++) {
@@ -1826,20 +1828,33 @@ function postProcessDXF(outputBuffer) {
   }
 
   // Extract EXTMIN/EXTMAX from HEADER for optional re-use
-  const headerSection = sections.find(s => s.name === 'HEADER');
-  let extMin = null, extMax = null;
+  const headerSection = sections.find((s) => s.name === 'HEADER');
+  let extMin = null,
+    extMax = null;
   if (headerSection) {
     for (let i = headerSection.startIdx; i <= headerSection.endIdx; i++) {
       if (pairs[i].code === '9' && pairs[i].value === '$EXTMIN') {
         extMin = { x: 0, y: 0 };
-        for (let j = i + 1; j <= headerSection.endIdx && pairs[j].code !== '9' && pairs[j].code !== '0'; j++) {
+        for (
+          let j = i + 1;
+          j <= headerSection.endIdx &&
+          pairs[j].code !== '9' &&
+          pairs[j].code !== '0';
+          j++
+        ) {
           if (pairs[j].code === '10') extMin.x = parseFloat(pairs[j].value);
           if (pairs[j].code === '20') extMin.y = parseFloat(pairs[j].value);
         }
       }
       if (pairs[i].code === '9' && pairs[i].value === '$EXTMAX') {
         extMax = { x: 0, y: 0 };
-        for (let j = i + 1; j <= headerSection.endIdx && pairs[j].code !== '9' && pairs[j].code !== '0'; j++) {
+        for (
+          let j = i + 1;
+          j <= headerSection.endIdx &&
+          pairs[j].code !== '9' &&
+          pairs[j].code !== '0';
+          j++
+        ) {
           if (pairs[j].code === '10') extMax.x = parseFloat(pairs[j].value);
           if (pairs[j].code === '20') extMax.y = parseFloat(pairs[j].value);
         }
@@ -1848,7 +1863,7 @@ function postProcessDXF(outputBuffer) {
   }
 
   // Parse LWPOLYLINE entities from the ENTITIES section
-  const entitiesSection = sections.find(s => s.name === 'ENTITIES');
+  const entitiesSection = sections.find((s) => s.name === 'ENTITIES');
   const parsedEntities = []; // Each is {type, layer, pairs} or {type:'LWPOLYLINE', layer, vertices, closed}
 
   if (entitiesSection) {
@@ -1892,7 +1907,11 @@ function postProcessDXF(outputBuffer) {
           parsedEntities.push({ type: 'LWPOLYLINE', layer, vertices, closed });
         } else {
           // Keep other entity types as raw pairs
-          parsedEntities.push({ type: entityType, layer: '0', rawPairs: entityPairs });
+          parsedEntities.push({
+            type: entityType,
+            layer: '0',
+            rawPairs: entityPairs,
+          });
         }
       } else {
         i++;
@@ -1930,7 +1949,7 @@ function postProcessDXF(outputBuffer) {
   emit(0, 'ENDSEC');
 
   // TABLES section -- copy from original, stripping any subclass markers
-  const tablesSection = sections.find(s => s.name === 'TABLES');
+  const tablesSection = sections.find((s) => s.name === 'TABLES');
   if (tablesSection) {
     emit(0, 'SECTION');
     emit(2, 'TABLES');
@@ -1965,7 +1984,7 @@ function postProcessDXF(outputBuffer) {
     } else {
       // Emit non-LWPOLYLINE entities as-is (skip subclass markers)
       emit(0, entity.type);
-      for (const ep of (entity.rawPairs || [])) {
+      for (const ep of entity.rawPairs || []) {
         if (ep.code === '100') continue; // Strip subclass markers
         emit(ep.code, ep.value);
       }
@@ -2112,6 +2131,9 @@ async function render(payload) {
     // Mount additional files for multi-file project include/use resolution
     let mountResult = null;
     if (files && Object.keys(files).length > 0) {
+      // Clear any previously mounted files to ensure clean FS state
+      clearMountedFiles();
+
       // Convert files object to Map
       const filesMap = new Map(Object.entries(files));
 
@@ -2135,7 +2157,7 @@ async function render(payload) {
           message: 'Files mounted successfully',
         },
       });
-      
+
       console.log('[Worker] Files mounted under:', mountResult.workDir);
     }
     console.log('[Worker] Rendering with parameters:', parameters);
@@ -2155,6 +2177,14 @@ async function render(payload) {
     // Determine the format to render
     const format = (outputFormat || 'stl').toLowerCase();
     const formatName = format.toUpperCase();
+
+    // For 2D formats (SVG/DXF), enforce laser-cut compatible parameters.
+    // Some keyguard models reject "first layer for SVG/DXF" when type_of_keyguard
+    // remains "3D-Printed", producing "not a 2D object" at runtime.
+    if (format === 'svg' || format === 'dxf') {
+      parameters.use_Laser_Cutting_best_practices = 'yes';
+      parameters.type_of_keyguard = 'Laser-Cut';
+    }
 
     // Track render timing
     let renderStartTime = 0;
@@ -2183,7 +2213,7 @@ async function render(payload) {
       // For multi-file projects, use the work directory path
       // For multi-file projects, include/use statements must resolve correctly
       let mainFileToUse;
-      
+
       if (mainFile && mountResult && mountResult.workDir) {
         // Multi-file project: use the work directory path
         mainFileToUse = `${mountResult.workDir}/${mainFile}`;
@@ -2194,7 +2224,7 @@ async function render(payload) {
       } else {
         // Single file or no mounted files: use /tmp
         mainFileToUse = '/tmp/input.scad';
-        
+
         // Write to temporary location
         const module = await ensureOpenSCADModule();
         if (!module || !module.FS) {
@@ -2282,16 +2312,28 @@ async function render(payload) {
 
     // Validate 2D format outputs (SVG/DXF) - they may be "valid" but empty
     if (resultFormat === 'svg' || resultFormat === 'dxf') {
-      const validationResult = validate2DOutput(outputBuffer, resultFormat);
-      if (!validationResult.valid) {
-        throw new Error(validationResult.error);
+      try {
+        const validationResult = validate2DOutput(outputBuffer, resultFormat);
+        if (!validationResult.valid) {
+          throw new Error(validationResult.error);
+        }
+      } catch (validationError) {
+        if (validationError.message?.startsWith('SVG ') || validationError.message?.startsWith('DXF ') || validationError.message?.startsWith('Invalid ')) {
+          throw validationError;
+        }
+        console.warn(`[Worker] 2D validation threw unexpectedly: ${validationError.message}`);
+        throw validationError;
       }
     }
 
     // Post-process DXF to fix known OpenSCAD WASM compatibility issues
     // (upstream issue: github.com/openscad/openscad/issues/4268)
     if (resultFormat === 'dxf') {
-      outputBuffer = postProcessDXF(outputBuffer);
+      try {
+        outputBuffer = postProcessDXF(outputBuffer);
+      } catch (dxfError) {
+        console.warn('[Worker] DXF post-processing failed, using raw output:', dxfError.message);
+      }
     }
 
     // For binary STL, read triangle count from header
@@ -2336,13 +2378,11 @@ async function render(payload) {
             renderMs: workerRenderMs,
             wasmInitMs: wasmInitDurationMs,
           },
-          // Include console output for echo() messages (critical for user communication)
           consoleOutput: openscadConsoleOutput || '',
         },
       },
       [outputBuffer]
     ); // Transfer ownership of ArrayBuffer
-
     console.log(
       `[Worker] Render complete: ${triangleCount} triangles in ${workerRenderMs}ms`
     );
@@ -2397,14 +2437,37 @@ async function render(payload) {
         openscadConsoleOutput.includes('Top level object is a 2D object'));
 
     if (confirmed2DModel) {
-      // Override to MODEL_IS_2D so the UI can show informational guidance
-      // instead of alarming red error messages. The UI handles this gracefully.
       code = 'MODEL_IS_2D';
       message =
         'Your model produces 2D geometry which cannot be previewed in the 3D viewer. ' +
         'To export: select SVG or DXF output format. ' +
         'To preview in 3D: adjust your model parameters to produce 3D geometry.';
     }
+
+    // Reverse case: 3D model exported to a 2D format (SVG/DXF)
+    const confirmedNot2D =
+      is2DOutput &&
+      (translated.raw?.includes('MODEL_NOT_2D') ||
+        openscadConsoleOutput?.includes('Current top level object is not a 2D object') ||
+        openscadConsoleOutput?.includes('not a 2D object'));
+
+    if (confirmedNot2D) {
+      code = 'MODEL_NOT_2D';
+      message =
+        'Your model produces 3D geometry but SVG/DXF export requires 2D output. ' +
+        'Enable "use Laser Cutting best practices" or ensure your model uses projection() to produce 2D geometry.';
+    }
+
+    // Signal that the WASM module needs a restart before the next render.
+    // callMain with non-zero exit or a numeric abort corrupts module state.
+    const needsRestart =
+      error?.needsRestart === true ||
+      typeof error === 'number' ||
+      /^\d+$/.test(String(error)) ||
+      code === 'INTERNAL_ERROR' ||
+      code === 'WASM_ABORT' ||
+      code === 'WASM_UNREACHABLE' ||
+      code === 'WASM_OOB';
 
     self.postMessage({
       type: 'ERROR',
@@ -2413,6 +2476,8 @@ async function render(payload) {
         code,
         message,
         details,
+        consoleOutput: openscadConsoleOutput || '',
+        needsRestart,
       },
     });
   }
@@ -2463,7 +2528,8 @@ function getMemoryUsage() {
   const percent = Math.round((used / limit) * 100);
 
   // Growth since last render start (helps detect memory leaks between renders)
-  const growthMB = heapBeforeRenderMB > 0 ? heapTotalMB - heapBeforeRenderMB : 0;
+  const growthMB =
+    heapBeforeRenderMB > 0 ? heapTotalMB - heapBeforeRenderMB : 0;
 
   return {
     used,

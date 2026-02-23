@@ -481,13 +481,10 @@ describe('State Management', () => {
 
   describe('Undo/Redo History', () => {
     beforeEach(() => {
-      // Set up initial parameters
       state.setState({ 
         parameters: { width: 50, height: 30 },
         defaults: { width: 50, height: 30 }
       })
-      // Push initial state to history to enable undo
-      state.history.push({ width: 50, height: 30 })
     })
 
     it('should initially have empty history after clear', () => {
@@ -497,18 +494,16 @@ describe('State Management', () => {
     })
 
     it('should record parameter state for undo', () => {
-      // Change parameters and record new state
+      state.recordParameterState()
       state.setState({ parameters: { width: 60, height: 30 } })
-      state.history.push({ width: 60, height: 30 })
       
       expect(state.canUndo()).toBe(true)
       expect(state.canRedo()).toBe(false)
     })
 
     it('should undo parameter change', () => {
-      // Make a change
+      state.recordParameterState()
       state.setState({ parameters: { width: 60, height: 30 } })
-      state.history.push({ width: 60, height: 30 })
       
       const previousState = state.undo()
       
@@ -516,37 +511,33 @@ describe('State Management', () => {
     })
 
     it('should redo undone change', () => {
-      // Make first change
+      state.recordParameterState()
       state.setState({ parameters: { width: 60, height: 30 } })
-      state.history.push({ width: 60, height: 30 })
-      
-      // Make second change
+
+      state.recordParameterState()
       state.setState({ parameters: { width: 60, height: 40 } })
-      state.history.push({ width: 60, height: 40 })
       
-      state.undo() // Go back to width: 60, height: 30
-      state.undo() // Go back to width: 50, height: 30
+      state.undo()
       
       expect(state.canRedo()).toBe(true)
       
       const nextState = state.redo()
-      expect(nextState).toEqual({ width: 60, height: 30 })
+      expect(nextState).toEqual({ width: 60, height: 40 })
     })
 
     it('should clear future history on new change after undo', () => {
-      // Make changes
+      state.recordParameterState()
       state.setState({ parameters: { width: 60, height: 30 } })
-      state.history.push({ width: 60, height: 30 })
-      
+
+      state.recordParameterState()
       state.setState({ parameters: { width: 70, height: 30 } })
-      state.history.push({ width: 70, height: 30 })
       
-      state.undo() // Go back to width: 60
+      state.undo()
       
       expect(state.canRedo()).toBe(true)
       
-      // Make a new change - should clear redo history
-      state.history.push({ width: 65, height: 30 })
+      state.recordParameterState()
+      state.setState({ parameters: { width: 65, height: 30 } })
       
       expect(state.canRedo()).toBe(false)
     })
@@ -557,14 +548,13 @@ describe('State Management', () => {
       
       state.recordParameterState()
       
-      // History should not be recorded when disabled
-      expect(state.history.history.length).toBe(0)
+      expect(state.history.undoStack.length).toBe(0)
     })
 
     it('should clear history', () => {
-      // Add a second state so we can undo
-      state.history.push({ width: 60, height: 30 })
-      expect(state.canUndo()).toBe(true) // Has two states, can undo
+      state.recordParameterState()
+      state.setState({ parameters: { width: 60, height: 30 } })
+      expect(state.canUndo()).toBe(true)
       
       state.clearHistory()
       
@@ -576,13 +566,11 @@ describe('State Management', () => {
       state.clearHistory()
       state.history.maxSize = 3
       
-      // Record more changes than max size
       for (let i = 0; i < 5; i++) {
         state.history.push({ width: 50 + i, height: 30 })
       }
       
-      // Should only keep maxSize items
-      expect(state.history.history.length).toBeLessThanOrEqual(3)
+      expect(state.history.undoStack.length).toBeLessThanOrEqual(3)
     })
 
     it('should return null when undo not available', () => {
@@ -597,16 +585,16 @@ describe('State Management', () => {
     })
 
     it('should get history stats', () => {
-      // Already have initial state in history
-      state.history.push({ width: 60, height: 30 })
+      state.recordParameterState()
+      state.setState({ parameters: { width: 60, height: 30 } })
       
       const stats = state.getHistoryStats()
       
-      expect(stats).toHaveProperty('total')
-      expect(stats).toHaveProperty('current')
+      expect(stats).toHaveProperty('undoDepth')
+      expect(stats).toHaveProperty('redoDepth')
       expect(stats).toHaveProperty('canUndo')
       expect(stats).toHaveProperty('canRedo')
-      expect(stats.total).toBe(2)
+      expect(stats.undoDepth).toBe(1)
       expect(stats.canUndo).toBe(true)
       expect(stats.canRedo).toBe(false)
     })
@@ -721,8 +709,7 @@ describe('State Management', () => {
       
       state.updateParameter('width', 100)
       
-      // History should have been recorded
-      expect(state.history.history.length).toBeGreaterThan(0)
+      expect(state.history.undoStack.length).toBeGreaterThan(0)
     })
 
     it('should not record history during undo/redo', () => {
@@ -735,8 +722,7 @@ describe('State Management', () => {
       
       state.updateParameter('width', 100)
       
-      // History should not have been recorded
-      expect(state.history.history.length).toBe(0)
+      expect(state.history.undoStack.length).toBe(0)
     })
   })
 
@@ -767,7 +753,7 @@ describe('State Management', () => {
   })
 })
 
-describe('ParameterHistory', () => {
+describe('ParameterHistory (undo-stack model)', () => {
   let history
 
   beforeEach(() => {
@@ -775,9 +761,9 @@ describe('ParameterHistory', () => {
   })
 
   describe('Initialization', () => {
-    it('should initialize with empty history', () => {
-      expect(history.history).toEqual([])
-      expect(history.currentIndex).toBe(-1)
+    it('should initialize with empty stacks', () => {
+      expect(history.undoStack).toEqual([])
+      expect(history.redoStack).toEqual([])
     })
 
     it('should use default max size of 50', () => {
@@ -791,101 +777,94 @@ describe('ParameterHistory', () => {
   })
 
   describe('Push', () => {
-    it('should add state to history', () => {
+    it('should add state to undo stack', () => {
       history.push({ width: 50 })
       
-      expect(history.history.length).toBe(1)
-      expect(history.currentIndex).toBe(0)
+      expect(history.undoStack.length).toBe(1)
+      expect(history.canUndo()).toBe(true)
     })
 
     it('should deep clone state', () => {
       const state = { width: 50, nested: { value: 10 } }
       history.push(state)
       
-      // Modify original
       state.width = 100
       state.nested.value = 20
       
-      // History should have original values
-      expect(history.history[0].width).toBe(50)
-      expect(history.history[0].nested.value).toBe(10)
+      expect(history.undoStack[0].width).toBe(50)
+      expect(history.undoStack[0].nested.value).toBe(10)
     })
 
-    it('should trim history when exceeding max size', () => {
+    it('should trim undo stack when exceeding max size', () => {
       for (let i = 0; i < 10; i++) {
         history.push({ width: i })
       }
       
-      expect(history.history.length).toBe(5)
-      // Oldest entries should be removed
-      expect(history.history[0].width).toBe(5)
+      expect(history.undoStack.length).toBe(5)
+      expect(history.undoStack[0].width).toBe(5)
     })
 
-    it('should clear future states when pushing after undo', () => {
+    it('should clear redo stack on new push', () => {
       history.push({ width: 50 })
       history.push({ width: 60 })
-      history.push({ width: 70 })
       
-      history.undo() // Back to 60
-      history.undo() // Back to 50
+      history.undo({ width: 70 })
+      expect(history.canRedo()).toBe(true)
       
       history.push({ width: 55 })
-      
-      expect(history.history.length).toBe(2)
-      expect(history.history[1].width).toBe(55)
+      expect(history.canRedo()).toBe(false)
     })
   })
 
   describe('Undo', () => {
-    it('should return previous state', () => {
+    it('should return previous state after one push', () => {
       history.push({ width: 50 })
-      history.push({ width: 60 })
       
-      const prev = history.undo()
+      const prev = history.undo({ width: 60 })
       
       expect(prev).toEqual({ width: 50 })
-      expect(history.currentIndex).toBe(0)
+      expect(history.canUndo()).toBe(false)
+      expect(history.canRedo()).toBe(true)
     })
 
-    it('should return null when at beginning', () => {
+    it('should push current live state onto redo stack', () => {
       history.push({ width: 50 })
-      
-      const prev = history.undo()
-      
-      expect(prev).toBeNull()
+      history.undo({ width: 60 })
+
+      expect(history.redoStack.length).toBe(1)
+      expect(history.redoStack[0]).toEqual({ width: 60 })
     })
 
-    it('should return null when history is empty', () => {
-      const prev = history.undo()
-      
+    it('should return null when undo stack is empty', () => {
+      const prev = history.undo({ width: 60 })
       expect(prev).toBeNull()
     })
   })
 
   describe('Redo', () => {
-    it('should return next state', () => {
+    it('should return undone state', () => {
       history.push({ width: 50 })
-      history.push({ width: 60 })
+      history.undo({ width: 60 })
       
-      history.undo()
-      const next = history.redo()
+      const next = history.redo({ width: 50 })
       
       expect(next).toEqual({ width: 60 })
-      expect(history.currentIndex).toBe(1)
     })
 
-    it('should return null when at end', () => {
+    it('should push current live state onto undo stack when redoing', () => {
       history.push({ width: 50 })
-      history.push({ width: 60 })
+      history.undo({ width: 60 })
       
-      const next = history.redo()
+      history.redo({ width: 50 })
       
-      expect(next).toBeNull()
+      expect(history.undoStack.length).toBe(1)
+      expect(history.undoStack[0]).toEqual({ width: 50 })
     })
 
-    it('should return null when history is empty', () => {
-      const next = history.redo()
+    it('should return null when redo stack is empty', () => {
+      history.push({ width: 50 })
       
+      const next = history.redo({ width: 60 })
       expect(next).toBeNull()
     })
   })
@@ -896,13 +875,8 @@ describe('ParameterHistory', () => {
       expect(history.canRedo()).toBe(false)
     })
 
-    it('should return correct values after push', () => {
+    it('canUndo is true after first push', () => {
       history.push({ width: 50 })
-      
-      expect(history.canUndo()).toBe(false) // Only one state
-      expect(history.canRedo()).toBe(false)
-      
-      history.push({ width: 60 })
       
       expect(history.canUndo()).toBe(true)
       expect(history.canRedo()).toBe(false)
@@ -910,9 +884,7 @@ describe('ParameterHistory', () => {
 
     it('should return correct values after undo', () => {
       history.push({ width: 50 })
-      history.push({ width: 60 })
-      
-      history.undo()
+      history.undo({ width: 60 })
       
       expect(history.canUndo()).toBe(false)
       expect(history.canRedo()).toBe(true)
@@ -920,14 +892,15 @@ describe('ParameterHistory', () => {
   })
 
   describe('Clear', () => {
-    it('should clear all history', () => {
+    it('should clear both stacks', () => {
       history.push({ width: 50 })
       history.push({ width: 60 })
+      history.undo({ width: 70 })
       
       history.clear()
       
-      expect(history.history).toEqual([])
-      expect(history.currentIndex).toBe(-1)
+      expect(history.undoStack).toEqual([])
+      expect(history.redoStack).toEqual([])
     })
   })
 
@@ -938,8 +911,8 @@ describe('ParameterHistory', () => {
       
       const stats = history.getStats()
       
-      expect(stats.total).toBe(2)
-      expect(stats.current).toBe(1)
+      expect(stats.undoDepth).toBe(2)
+      expect(stats.redoDepth).toBe(0)
       expect(stats.canUndo).toBe(true)
       expect(stats.canRedo).toBe(false)
     })

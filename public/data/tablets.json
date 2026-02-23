@@ -1,0 +1,84 @@
+{
+  "version": 1,
+  "description": "Screen dimensions in mm for common AAC tablets. Used for Reference Overlay auto-sizing.",
+  "tablets": [
+    {
+      "id": "ipad-pro-11-m4",
+      "label": "iPad Pro 11\" M4 (2024)",
+      "screenWidthMm": 175.6,
+      "screenHeightMm": 237.3
+    },
+    {
+      "id": "ipad-pro-11-m2",
+      "label": "iPad Pro 11\" M2 (2022)",
+      "screenWidthMm": 175.6,
+      "screenHeightMm": 237.3
+    },
+    {
+      "id": "ipad-pro-12-9",
+      "label": "iPad Pro 12.9\" (all gen)",
+      "screenWidthMm": 214.9,
+      "screenHeightMm": 285.8
+    },
+    {
+      "id": "ipad-air-11-m2",
+      "label": "iPad Air 11\" M2 (2024)",
+      "screenWidthMm": 175.6,
+      "screenHeightMm": 237.3
+    },
+    {
+      "id": "ipad-air-13-m2",
+      "label": "iPad Air 13\" M2 (2024)",
+      "screenWidthMm": 211.8,
+      "screenHeightMm": 281.5
+    },
+    {
+      "id": "ipad-10th",
+      "label": "iPad 10th Gen (2022)",
+      "screenWidthMm": 175.6,
+      "screenHeightMm": 237.8
+    },
+    {
+      "id": "ipad-9th",
+      "label": "iPad 9th Gen (2021)",
+      "screenWidthMm": 160.0,
+      "screenHeightMm": 213.4
+    },
+    {
+      "id": "ipad-mini-6",
+      "label": "iPad mini 6th Gen",
+      "screenWidthMm": 127.7,
+      "screenHeightMm": 172.8
+    },
+    {
+      "id": "surface-pro-11",
+      "label": "Surface Pro 11\"",
+      "screenWidthMm": 179.8,
+      "screenHeightMm": 261.0
+    },
+    {
+      "id": "samsung-tab-s9",
+      "label": "Samsung Galaxy Tab S9",
+      "screenWidthMm": 166.0,
+      "screenHeightMm": 263.2
+    },
+    {
+      "id": "samsung-tab-s9-ultra",
+      "label": "Samsung Galaxy Tab S9 Ultra",
+      "screenWidthMm": 208.1,
+      "screenHeightMm": 326.4
+    },
+    {
+      "id": "amazon-fire-hd10",
+      "label": "Amazon Fire HD 10",
+      "screenWidthMm": 160.0,
+      "screenHeightMm": 254.3
+    },
+    {
+      "id": "custom",
+      "label": "Custom dimensions…",
+      "screenWidthMm": null,
+      "screenHeightMm": null
+    }
+  ]
+}

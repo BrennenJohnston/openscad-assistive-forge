@@ -19,6 +19,7 @@ import {
   downloadFile,
   generateFilename,
   formatFileSize,
+  sanitizeFilename,
   OUTPUT_FORMATS,
 } from './js/download.js';
 import {
@@ -37,7 +38,7 @@ import {
   getQualityPreset,
   COMPLEXITY_TIER,
 } from './js/quality-tiers.js';
-import { PreviewManager } from './js/preview.js';
+import { PreviewManager, getThreeModule } from './js/preview.js';
 import {
   AutoPreviewController,
   PREVIEW_STATE,
@@ -45,18 +46,21 @@ import {
 import {
   extractZipFiles,
   validateZipFile,
-  createFileTree,
   getZipStats,
+  resolveProjectFile,
+  buildPresetCompanionMap,
+  applyCompanionAliases,
+  buildNestedTree,
+  getNodeAtPath,
+  countFilesRecursive,
 } from './js/zip-handler.js';
-import {
-  loadManifest,
-  ManifestError,
-} from './js/manifest-loader.js';
+import { loadManifest, ManifestError } from './js/manifest-loader.js';
 import {
   runPreflightCheck,
   formatMissingDependencies,
 } from './js/dependency-checker.js';
 import { getConsolePanel } from './js/console-panel.js';
+import { getErrorLogPanel } from './js/error-log-panel.js';
 import { themeManager, initThemeToggle } from './js/theme-manager.js';
 import {
   presetManager,
@@ -70,7 +74,12 @@ import { ComparisonController } from './js/comparison-controller.js';
 import { ComparisonView } from './js/comparison-view.js';
 import { libraryManager, LIBRARY_DEFINITIONS } from './js/library-manager.js';
 import { RenderQueue } from './js/render-queue.js';
-import { openModal, closeModal, initStaticModals } from './js/modal-manager.js';
+import {
+  openModal,
+  closeModal,
+  initStaticModals,
+  isAnyModalOpen,
+} from './js/modal-manager.js';
 import { translateError } from './js/error-translator.js';
 import {
   getStorageEstimate,
@@ -87,6 +96,7 @@ import {
   getDetailedStorageInfo,
   exportProjectsBackup,
   importProjectsBackup,
+  importProjectFromFiles,
 } from './js/storage-manager.js';
 import {
   showWorkflowProgress,
@@ -109,16 +119,39 @@ import {
   keyboardConfig,
   initShortcutsModal,
 } from './js/keyboard-config.js';
-import { isEnabled as _isEnabled, debugFlags, FLAGS as _FLAGS } from './js/feature-flags.js';
-import { initCSPReporter, logViolationSummary as _logViolationSummary } from './js/csp-reporter.js';
+import {
+  isEnabled as _isEnabled,
+  debugFlags,
+  FLAGS as _FLAGS,
+} from './js/feature-flags.js';
+import { initSearchableCombobox } from './js/searchable-combobox.js';
+import {
+  initCSPReporter,
+  logViolationSummary as _logViolationSummary,
+} from './js/csp-reporter.js';
 import {
   migrateStorageKeys,
   getAppPrefKey,
   getDrawerStateKey,
 } from './js/storage-keys.js';
-import { initImageMeasurement, openFullscreen as measureOpenFullscreen, closeFullscreen as measureCloseFullscreen, loadImageFromDataURL, setMeasureMode, clearRulerPoints, getCalibDistancePx } from './js/image-measurement.js';
+import {
+  initImageMeasurement,
+  openFullscreen as measureOpenFullscreen,
+  closeFullscreen as measureCloseFullscreen,
+  loadImageFromDataURL,
+  setMeasureMode,
+  clearRulerPoints,
+  getCalibDistancePx,
+} from './js/image-measurement.js';
 import * as SharedImageStore from './js/shared-image-store.js';
-import { getUnit, setUnit, getScaleFactor, setScaleFactor, onUnitChange, onScaleChange } from './js/unit-sync.js';
+import {
+  getUnit,
+  setUnit,
+  getScaleFactor,
+  setScaleFactor,
+  onUnitChange,
+  onScaleChange,
+} from './js/unit-sync.js';
 
 // Storage keys using standardized naming convention
 const STORAGE_KEY_AUTO_PREVIEW_ENABLED = getAppPrefKey('auto-preview-enabled');
@@ -129,6 +162,8 @@ const STORAGE_KEY_STATUS_BAR = getAppPrefKey('status-bar');
 const STORAGE_KEY_OVERLAY_ENABLED = getAppPrefKey('overlay-enabled');
 const STORAGE_KEY_OVERLAY_OPACITY = getAppPrefKey('overlay-opacity');
 const STORAGE_KEY_OVERLAY_SOURCE = getAppPrefKey('overlay-source');
+const STORAGE_KEY_OVERLAY_SVG_COLOR = getAppPrefKey('overlay-svg-color');
+const STORAGE_KEY_OVERLAY_AUTO_COLOR = getAppPrefKey('overlay-auto-color');
 const STORAGE_KEY_AUTO_ROTATE = getAppPrefKey('auto-rotate');
 const STORAGE_KEY_ROTATE_SPEED = getAppPrefKey('rotate-speed');
 const STORAGE_KEY_MODEL_COLOR = getAppPrefKey('model-color');
@@ -140,11 +175,23 @@ const STORAGE_KEY_LAYOUT_SIZES = getAppPrefKey('layout-sizes');
 import {
   announce as _announce,
   announceImmediate,
+  announceCameraAction,
   announceError as _announceError,
   POLITENESS as _POLITENESS,
 } from './js/announcer.js';
 // Expert Mode (M2) - Code editor integration
 import { getModeManager } from './js/mode-manager.js';
+// UI Mode Controller - Basic/Advanced interface layout switching
+import { getUIModeController } from './js/ui-mode-controller.js';
+// Toolbar Menu Controller - File|Edit|Design|View|Window|Help menu bar
+import { getToolbarMenuController } from './js/toolbar-menu-controller.js';
+import { initParamDetailController } from './js/param-detail-controller.js';
+import { getFileActionsController } from './js/file-actions-controller.js';
+import { getEditActionsController } from './js/edit-actions-controller.js';
+import { getDesignPanelController } from './js/design-panel-controller.js';
+import { getDisplayOptionsController } from './js/display-options-controller.js';
+// Animation controller import preserved for future development — see ./js/animation-controller.js
+// import { getAnimationController } from './js/animation-controller.js';
 import { getEditorStateManager } from './js/editor-state-manager.js';
 import { TextareaEditor } from './js/textarea-editor.js';
 import {
@@ -211,17 +258,13 @@ const EXAMPLE_DEFINITIONS = {
     description: 'Keyguard Designer Demo (multi-file)',
     author: 'Community',
     // Additional files to load (multi-file design package)
-    additionalFiles: [
-      '/examples/keyguard-demo/openings_and_additions.txt',
-    ],
+    additionalFiles: ['/examples/keyguard-demo/openings_and_additions.txt'],
   },
   // Short alias for keyguard demo example
-  'keyguard': {
+  keyguard: {
     path: '/examples/keyguard-demo/keyguard_demo.scad',
     name: 'keyguard_demo.scad',
-    additionalFiles: [
-      '/examples/keyguard-demo/openings_and_additions.txt',
-    ],
+    additionalFiles: ['/examples/keyguard-demo/openings_and_additions.txt'],
   },
   // Additional examples for deep-linking
   'cable-organizer': {
@@ -287,6 +330,11 @@ let renderQueue = null;
 
 // Track which saved project is currently loaded (for auto-saving companion files)
 let currentSavedProjectId = null;
+
+// Navigation path for the Companion Files panel tree (module-level so it
+// survives re-renders triggered by add/remove actions).
+// Each element is a folder name segment, e.g. ['Cases', 'iPad 7,8,9'].
+let companionCurrentPath = [];
 
 // Screen reader announcer - now uses centralized announcer.js
 // (Local implementation removed - use imported announce/announceImmediate/announceError)
@@ -969,7 +1017,8 @@ function showConfirmDialog(
   message,
   title = 'Confirm Action',
   confirmLabel = 'Confirm',
-  cancelLabel = 'Cancel'
+  cancelLabel = 'Cancel',
+  { destructive = false } = {}
 ) {
   return new Promise((resolve) => {
     const modal = document.createElement('div');
@@ -978,6 +1027,8 @@ function showConfirmDialog(
     modal.setAttribute('aria-labelledby', 'confirmDialogTitle');
     modal.setAttribute('aria-describedby', 'confirmDialogMessage');
     modal.setAttribute('aria-modal', 'true');
+
+    const confirmBtnClass = destructive ? 'btn btn-danger' : 'btn btn-primary';
 
     modal.innerHTML = `
       <div class="preset-modal-content confirm-modal-content">
@@ -989,7 +1040,7 @@ function showConfirmDialog(
         </div>
         <div class="preset-form-actions">
           <button type="button" class="btn btn-secondary" data-action="cancel">${cancelLabel}</button>
-          <button type="button" class="btn btn-primary" data-action="confirm">${confirmLabel}</button>
+          <button type="button" class="${confirmBtnClass}" data-action="confirm">${confirmLabel}</button>
         </div>
       </div>
     `;
@@ -1044,6 +1095,12 @@ function showConfirmDialog(
  * @param {string} packageName - Name of the uploaded package
  * @returns {Promise<boolean>} True if user chooses to continue, false to cancel
  */
+/**
+ * Show missing dependencies dialog with options to cancel, continue, or add files.
+ * @param {{ includes: string[], uses: string[], imports: string[] }} missing
+ * @param {string} packageName
+ * @returns {Promise<{ action: 'cancel'|'continue'|'add-files', addedFiles?: Map<string,string> }>}
+ */
 function showMissingDependenciesDialog(missing, packageName) {
   return new Promise((resolve) => {
     const modal = document.createElement('div');
@@ -1053,7 +1110,6 @@ function showMissingDependenciesDialog(missing, packageName) {
     modal.setAttribute('aria-describedby', 'missingDepsList');
     modal.setAttribute('aria-modal', 'true');
 
-    // Build list of missing files
     const allMissing = [
       ...missing.includes.map((f) => ({ file: f, type: 'include' })),
       ...missing.uses.map((f) => ({ file: f, type: 'use' })),
@@ -1063,7 +1119,7 @@ function showMissingDependenciesDialog(missing, packageName) {
     const fileListHtml = allMissing
       .map(
         ({ file, type }) =>
-          `<li class="missing-dep-item">
+          `<li class="missing-dep-item" data-file="${escapeHtml(file)}">
             <span class="missing-dep-file">${escapeHtml(file)}</span>
             <span class="missing-dep-type">(${type})</span>
           </li>`
@@ -1079,24 +1135,31 @@ function showMissingDependenciesDialog(missing, packageName) {
         </div>
         <div class="missing-deps-body">
           <p>
-            The design package <strong>"${escapeHtml(packageName)}"</strong> 
+            The design package <strong>"${escapeHtml(packageName)}"</strong>
             references files that weren't included:
           </p>
           <ul id="missingDepsList" class="missing-deps-list" aria-label="Missing files">
             ${fileListHtml}
           </ul>
           <p class="missing-deps-hint">
-            Without these files, the design may not render correctly.
-            For <code>include</code> files like <code>openings_and_additions.txt</code>,
-            you need to include them in your ZIP package.
+            You can add the missing files now, continue without them, or cancel.
           </p>
+          <input type="file" class="missing-deps-file-input" multiple
+                 accept=".scad,.txt,.csv,.dat,.json,.dxf,.svg,.stl,.png,.jpg"
+                 aria-label="Select missing dependency files" hidden />
+          <div class="missing-deps-added hidden" aria-live="polite">
+            <span class="missing-deps-added-count"></span>
+          </div>
         </div>
-        <div class="preset-form-actions">
+        <div class="preset-form-actions missing-deps-actions">
           <button type="button" class="btn btn-secondary" data-action="cancel">
             Cancel Upload
           </button>
-          <button type="button" class="btn btn-primary" data-action="continue">
+          <button type="button" class="btn btn-secondary" data-action="continue">
             Continue Anyway
+          </button>
+          <button type="button" class="btn btn-primary" data-action="add-files">
+            Add Missing Files…
           </button>
         </div>
       </div>
@@ -1104,42 +1167,118 @@ function showMissingDependenciesDialog(missing, packageName) {
 
     document.body.appendChild(modal);
 
+    const fileInput = modal.querySelector('.missing-deps-file-input');
+    const addedDisplay = modal.querySelector('.missing-deps-added');
+    const addedCount = modal.querySelector('.missing-deps-added-count');
+    const addedFiles = new Map();
+
     const cleanup = (result) => {
       closeModal(modal);
       document.body.removeChild(modal);
       resolve(result);
     };
 
-    // Handle button clicks
+    const addFilesBtn = modal.querySelector('[data-action="add-files"]');
+    const continueBtn = modal.querySelector('[data-action="continue"]');
+    const titleEl = modal.querySelector('#missingDepsTitle');
+    const hintEl = modal.querySelector('.missing-deps-hint');
+
+    const updateAddedDisplay = () => {
+      if (addedFiles.size === 0) return;
+
+      addedDisplay.classList.remove('hidden');
+      addedCount.textContent = `${addedFiles.size} file${addedFiles.size > 1 ? 's' : ''} added: ${Array.from(addedFiles.keys()).join(', ')}`;
+
+      // Mark resolved items in the list
+      const items = modal.querySelectorAll('.missing-dep-item');
+      let resolvedCount = 0;
+      items.forEach((item) => {
+        const fileName = item.dataset.file;
+        const baseName = fileName.split('/').pop();
+        const resolved = addedFiles.has(fileName) || addedFiles.has(baseName);
+        item.classList.toggle('missing-dep-resolved', resolved);
+        if (resolved) resolvedCount++;
+      });
+
+      const allResolved = resolvedCount === allMissing.length;
+
+      if (allResolved) {
+        // All files resolved — transform the dialog to a success state
+        titleEl.textContent = '✅ All Files Added';
+        hintEl.textContent =
+          'All missing files have been provided. You can now load the project.';
+        hintEl.style.borderLeftColor = 'var(--color-success, #38a169)';
+        hintEl.style.background =
+          'color-mix(in srgb, var(--color-success, #38a169) 12%, transparent)';
+
+        // Promote "Continue" to primary with clear load label, demote "Add Files"
+        continueBtn.textContent = 'Load Project';
+        continueBtn.className = 'btn btn-success';
+        addFilesBtn.className = 'btn btn-secondary';
+        addFilesBtn.textContent = 'Add More Files…';
+        continueBtn.focus();
+      } else {
+        // Partial resolution — keep "Add Files" primary but update hint
+        const remaining = allMissing.length - resolvedCount;
+        hintEl.textContent = `${resolvedCount} of ${allMissing.length} resolved. ${remaining} file${remaining > 1 ? 's' : ''} still missing.`;
+
+        // Restore button states in case user removed files and re-added
+        continueBtn.textContent = 'Continue Anyway';
+        continueBtn.className = 'btn btn-secondary';
+        addFilesBtn.className = 'btn btn-primary';
+        addFilesBtn.textContent = 'Add Missing Files…';
+      }
+    };
+
+    // Read selected files as text and store them
+    fileInput.addEventListener('change', async () => {
+      const selectedFiles = fileInput.files;
+      if (!selectedFiles || selectedFiles.length === 0) return;
+
+      for (const f of selectedFiles) {
+        try {
+          const text = await f.text();
+          addedFiles.set(f.name, text);
+        } catch (_e) {
+          console.warn(`[MissingDeps] Could not read file: ${f.name}`);
+        }
+      }
+      updateAddedDisplay();
+      fileInput.value = '';
+    });
+
     modal.addEventListener('click', (e) => {
       const btn = e.target.closest('button[data-action]');
       if (!btn) return;
 
-      if (btn.dataset.action === 'continue') {
-        cleanup(true);
+      if (btn.dataset.action === 'add-files') {
+        fileInput.click();
+      } else if (btn.dataset.action === 'continue') {
+        if (addedFiles.size > 0) {
+          cleanup({ action: 'add-files', addedFiles });
+        } else {
+          cleanup({ action: 'continue' });
+        }
       } else if (btn.dataset.action === 'cancel') {
-        cleanup(false);
+        cleanup({ action: 'cancel' });
       }
     });
 
-    // Close on backdrop click (cancel)
     modal.addEventListener('click', (e) => {
       if (e.target === modal) {
-        cleanup(false);
+        cleanup({ action: 'cancel' });
       }
     });
 
-    // Escape closes (cancel)
     modal.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
         e.preventDefault();
-        cleanup(false);
+        cleanup({ action: 'cancel' });
       }
     });
 
-    // Open modal with focus management
     openModal(modal, {
-      focusTarget: modal.querySelector('[data-action="cancel"]'),
+      focusTarget: modal.querySelector('[data-action="add-files"]'),
     });
   });
 }
@@ -1234,7 +1373,10 @@ function _injectAltToggle() {
   panToggleBtn.className =
     'btn btn-sm btn-icon camera-btn alt-pan-toggle dpad-center';
   panToggleBtn.setAttribute('aria-pressed', 'false');
-  panToggleBtn.setAttribute('aria-label', 'Toggle alternate pan adjustment mode');
+  panToggleBtn.setAttribute(
+    'aria-label',
+    'Toggle alternate pan adjustment mode'
+  );
   panToggleBtn.setAttribute('title', 'Toggle alternate pan adjustment');
   panToggleBtn.style.display = 'none'; // Hidden until alt view is enabled
   panToggleBtn.innerHTML = `
@@ -1470,6 +1612,100 @@ function _disableAltViewWithPreview(toggleBtn) {
   _updateHfmStatusBar();
 }
 
+/**
+ * Export the current render result in the given format from a toolbar menu action.
+ * Reads from state directly so it doesn't depend on the outputFormatSelect element.
+ *
+ * @param {string} format - Format key from OUTPUT_FORMATS (e.g. 'stl', 'obj')
+ */
+function _exportFormatFromMenu(format) {
+  const state = stateManager.getState();
+  if (!state.stl) {
+    alert('No rendered model to export. Run Render first.');
+    return;
+  }
+  const filename = generateFilename(
+    state.uploadedFile?.name || 'model',
+    state.parameters || {},
+    format
+  );
+  downloadFile(state.stl, filename, format);
+}
+
+/**
+ * Apply toolbar bar / workflow progress mutual exclusion based on UI mode.
+ *
+ * Advanced mode: toolbar visible, workflowProgress hidden.
+ * Basic mode (default): toolbar hidden, workflowProgress managed as-is.
+ * Basic mode (override): when any toolbarMenu* panel is explicitly shown via
+ *   PANEL_REGISTRY, the toolbar bar is shown with only those buttons visible
+ *   and workflowProgress is hidden.
+ *
+ * @param {'basic'|'advanced'} mode
+ */
+function _applyToolbarModeVisibility(mode) {
+  const controller = getToolbarMenuController();
+
+  // Toolbar is only relevant in the main UI (file loaded). On the welcome screen
+  // both the toolbar and workflow progress must be hidden to keep the slot empty.
+  const mainInterfaceEl = document.getElementById('mainInterface');
+  const mainInterfaceVisible =
+    mainInterfaceEl && !mainInterfaceEl.classList.contains('hidden');
+
+  if (!mainInterfaceVisible) {
+    // Welcome screen / no file loaded: hide toolbar and entire workflow-progress
+    // container (including its action buttons — Back/Help/etc. are irrelevant here).
+    controller.hide();
+    hideWorkflowProgress();
+    return;
+  }
+
+  // Main UI is active.
+  // IMPORTANT: #workflowProgress must remain visible in all main-UI states because
+  // it contains essential navigation buttons (#uiModeToggle, #focusModeBtn,
+  // #featuresGuideBtn, #clearFileBtn). Only the .workflow-steps breadcrumbs are
+  // shown/hidden depending on mode.
+  showWorkflowProgress();
+  const stepsEl = document.querySelector('#workflowProgress .workflow-steps');
+
+  if (mode === 'advanced') {
+    controller.show();
+    // Hide breadcrumb steps — toolbar replaces them visually. Action buttons stay.
+    if (stepsEl) stepsEl.classList.add('hidden');
+  } else {
+    // Basic mode: check if any per-menu buttons are enabled via PANEL_REGISTRY
+    const uiMode = getUIModeController();
+    const registry = uiMode.getRegistry();
+    const menuIdMap = {
+      toolbarMenuFile: 'file',
+      toolbarMenuEdit: 'edit',
+      toolbarMenuDesign: 'design',
+      toolbarMenuView: 'view',
+      toolbarMenuWindow: 'window',
+      toolbarMenuHelp: 'help',
+    };
+
+    // Determine which toolbar menu buttons are explicitly visible (i.e., NOT hidden)
+    const visibleMenuIds = registry
+      .filter((p) => p.id in menuIdMap)
+      .filter((p) => {
+        const el = document.getElementById(`${menuIdMap[p.id]}MenuBtn`);
+        return el && !el.classList.contains('ui-mode-hidden');
+      })
+      .map((p) => menuIdMap[p.id]);
+
+    if (visibleMenuIds.length > 0) {
+      // Basic mode override: some toolbar buttons visible — hide breadcrumb steps
+      controller.setVisibleMenus(visibleMenuIds);
+      if (stepsEl) stepsEl.classList.add('hidden');
+    } else {
+      // Pure Basic mode: show breadcrumb steps alongside action buttons
+      controller.hide();
+      if (stepsEl) stepsEl.classList.remove('hidden');
+    }
+  }
+}
+
 // Initialize app
 async function initApp() {
   console.log('OpenSCAD Assistive Forge v4.1.0');
@@ -1497,7 +1733,9 @@ async function initApp() {
     localStorage.getItem('openscad-forge-wasm-init-completed') !== 'true';
 
   if (wasmCrashDetected && !isRecoveryMode) {
-    console.warn('[Recovery] Detected unclean WASM shutdown — offering recovery mode');
+    console.warn(
+      '[Recovery] Detected unclean WASM shutdown — offering recovery mode'
+    );
     // Clear the flags so we don't loop
     localStorage.removeItem('openscad-forge-wasm-init-started');
     localStorage.removeItem('openscad-forge-wasm-init-completed');
@@ -1525,7 +1763,9 @@ async function initApp() {
 
     // Check for recovery data
     const recoverySource = localStorage.getItem(STORAGE_KEY_RECOVERY_SOURCE);
-    const recoveryTimestamp = localStorage.getItem(STORAGE_KEY_RECOVERY_TIMESTAMP);
+    const recoveryTimestamp = localStorage.getItem(
+      STORAGE_KEY_RECOVERY_TIMESTAMP
+    );
 
     if (recoverySource && recoveryTimestamp) {
       const elapsed = Date.now() - parseInt(recoveryTimestamp, 10);
@@ -1637,69 +1877,87 @@ async function initApp() {
   });
 
   // Memory banner action handlers
-  document.getElementById('memoryBannerDismiss')?.addEventListener('click', () => {
-    const banner = document.getElementById('memoryBanner');
-    if (banner) banner.dataset.visible = 'false';
-  });
+  document
+    .getElementById('memoryBannerDismiss')
+    ?.addEventListener('click', () => {
+      const banner = document.getElementById('memoryBanner');
+      if (banner) banner.dataset.visible = 'false';
+    });
 
   document.getElementById('memoryBannerSave')?.addEventListener('click', () => {
     // Trigger project save - dispatch event that saved-projects system listens for
     document.getElementById('saveProjectBtn')?.click();
   });
 
-  document.getElementById('memoryBannerReduceFn')?.addEventListener('click', () => {
-    // Reduce quality by switching to low quality mode
-    const qualitySelect = document.getElementById('qualityPreset');
-    if (qualitySelect) {
-      qualitySelect.value = 'low';
-      qualitySelect.dispatchEvent(new Event('change'));
-    }
-    // Also reduce auto-preview quality
-    const previewQualitySelect = document.getElementById('previewQualityMode');
-    if (previewQualitySelect) {
-      previewQualitySelect.value = 'fast';
-      previewQualitySelect.dispatchEvent(new Event('change'));
-    }
-    console.log('[Memory] Quality reduced to conserve memory');
-  });
-
-  document.getElementById('memoryBannerDisableAuto')?.addEventListener('click', () => {
-    // Disable auto-preview
-    const autoPreviewToggle = document.getElementById('autoPreviewToggle');
-    if (autoPreviewToggle && autoPreviewToggle.checked) {
-      autoPreviewToggle.checked = false;
-      autoPreviewToggle.dispatchEvent(new Event('change'));
-    }
-    console.log('[Memory] Auto-preview disabled to conserve memory');
-  });
-
-  document.getElementById('memoryBannerExport')?.addEventListener('click', () => {
-    // Trigger STL export
-    const exportBtn = document.getElementById('renderExportButton');
-    if (exportBtn) {
-      exportBtn.click();
-    }
-    console.log('[Memory] STL export triggered for emergency save');
-  });
-
-  document.getElementById('memoryBannerReload')?.addEventListener('click', () => {
-    // Save current state to localStorage before reload
-    try {
-      const currentCode = document.getElementById('openscadSource')?.value || '';
-      if (currentCode) {
-        localStorage.setItem(STORAGE_KEY_RECOVERY_SOURCE, currentCode);
-        localStorage.setItem(STORAGE_KEY_RECOVERY_TIMESTAMP, Date.now().toString());
+  document
+    .getElementById('memoryBannerReduceFn')
+    ?.addEventListener('click', () => {
+      // Reduce quality by switching to low quality mode
+      const qualitySelect = document.getElementById('qualityPreset');
+      if (qualitySelect) {
+        qualitySelect.value = 'low';
+        qualitySelect.dispatchEvent(new Event('change'));
       }
-    } catch (e) {
-      console.error('[Memory] Failed to save recovery state:', e);
-    }
-    // Reload in recovery mode
-    window.location.href = window.location.pathname + '?recovery=true';
-  });
+      // Also reduce auto-preview quality
+      const previewQualitySelect =
+        document.getElementById('previewQualityMode');
+      if (previewQualitySelect) {
+        previewQualitySelect.value = 'fast';
+        previewQualitySelect.dispatchEvent(new Event('change'));
+      }
+      console.log('[Memory] Quality reduced to conserve memory');
+    });
+
+  document
+    .getElementById('memoryBannerDisableAuto')
+    ?.addEventListener('click', () => {
+      // Disable auto-preview
+      const autoPreviewToggle = document.getElementById('autoPreviewToggle');
+      if (autoPreviewToggle && autoPreviewToggle.checked) {
+        autoPreviewToggle.checked = false;
+        autoPreviewToggle.dispatchEvent(new Event('change'));
+      }
+      console.log('[Memory] Auto-preview disabled to conserve memory');
+    });
+
+  document
+    .getElementById('memoryBannerExport')
+    ?.addEventListener('click', () => {
+      // Trigger STL export
+      const exportBtn = document.getElementById('renderExportButton');
+      if (exportBtn) {
+        exportBtn.click();
+      }
+      console.log('[Memory] STL export triggered for emergency save');
+    });
+
+  document
+    .getElementById('memoryBannerReload')
+    ?.addEventListener('click', () => {
+      // Save current state to localStorage before reload
+      try {
+        const currentCode =
+          document.getElementById('openscadSource')?.value || '';
+        if (currentCode) {
+          localStorage.setItem(STORAGE_KEY_RECOVERY_SOURCE, currentCode);
+          localStorage.setItem(
+            STORAGE_KEY_RECOVERY_TIMESTAMP,
+            Date.now().toString()
+          );
+        }
+      } catch (e) {
+        console.error('[Memory] Failed to save recovery state:', e);
+      }
+      // Reload in recovery mode
+      window.location.href = window.location.pathname + '?recovery=true';
+    });
 
   let statusArea = null;
   let cameraPanelController = null; // Declared here, initialized later
   let autoPreviewEnabled = true;
+  // Runtime mapping from preset name to companion file paths (built on ZIP load).
+  // Stores path references only — content is resolved lazily on preset activation.
+  let presetCompanionMap = null;
   let autoPreviewUserEnabled = true;
   let previewQuality = RENDER_QUALITY.PREVIEW;
 
@@ -1720,9 +1978,7 @@ async function initApp() {
   } catch (e) {
     console.error('Failed to import validation constants:', e);
   }
-  // Default to 'balanced' mode (~50% quality) for faster preview during parameter changes
-  // The adaptive system will determine appropriate full quality when generating STL
-  let previewQualityMode = 'balanced';
+  let previewQualityMode = 'auto';
 
   const AUTO_PREVIEW_FORCE_FAST_MS = 2 * 60 * 1000;
   // MANIFOLD OPTIMIZED: Raised threshold since Manifold renders much faster
@@ -2019,6 +2275,14 @@ async function initApp() {
       setTimeout(() => {
         statusArea.textContent = originalText;
       }, 5000);
+    }
+  });
+
+  // B1 fix: Terminate WASM worker before page unload to prevent browser freeze.
+  // Without this, a mid-render worker blocks the unload sequence on some browsers.
+  window.addEventListener('beforeunload', () => {
+    if (renderController) {
+      renderController.terminate();
     }
   });
 
@@ -2322,12 +2586,18 @@ async function initApp() {
             resolve(true);
           } catch (error) {
             // Timeout or error occurred
-            console.warn('[Cache Clear] Operation timed out or failed:', error.message);
+            console.warn(
+              '[Cache Clear] Operation timed out or failed:',
+              error.message
+            );
 
             // Force reload anyway - the cache clear may have partially succeeded
             // and reloading is the safest recovery action
             document.body.removeChild(modal);
-            updateStatus('Cache clear taking too long, forcing reload...', 'warning');
+            updateStatus(
+              'Cache clear taking too long, forcing reload...',
+              'warning'
+            );
             setTimeout(() => {
               window.location.reload();
             }, 300);
@@ -2430,6 +2700,259 @@ async function initApp() {
         await handleImportBackup(file);
         importBackupInput.value = ''; // Reset for next import
       }
+    });
+  }
+
+  // Folder import — gated behind feature flag and webkitdirectory feature detection
+  if (
+    _isEnabled('folder_import') &&
+    'webkitdirectory' in document.createElement('input')
+  ) {
+    const importFolderBtn = document.getElementById('importFolderBtn');
+    const importFolderInput = document.getElementById('importFolderInput');
+
+    if (importFolderBtn) importFolderBtn.hidden = false;
+
+    if (importFolderBtn && importFolderInput) {
+      importFolderBtn.addEventListener('click', async () => {
+        // Use the modern File System Access API if available (more reliable than webkitdirectory)
+        if ('showDirectoryPicker' in window) {
+          let dismissOverlay = () => {};
+          try {
+            const dirHandle = await window.showDirectoryPicker();
+            dismissOverlay = showProcessingOverlay(
+              `Reading folder "${dirHandle.name}"…`,
+              'Scanning files and subfolders. Please do not close or refresh the page.'
+            );
+            const files = [];
+            try {
+              await _collectFilesFromDir(dirHandle, dirHandle.name, files);
+            } catch (collectErr) {
+              dismissOverlay();
+              alert(`Error reading folder contents: ${collectErr.message}`);
+              return;
+            }
+            if (files.length === 0) {
+              dismissOverlay();
+              alert(
+                'No files found in the selected folder. The folder may be empty.'
+              );
+              return;
+            }
+            dismissOverlay();
+            await handleFolderImport(files);
+          } catch (err) {
+            dismissOverlay();
+            if (err.name === 'AbortError') {
+              updateStatus('Folder selection cancelled');
+              return;
+            }
+            alert(`Folder import error: ${err.message}`);
+          }
+        } else {
+          // Fallback to webkitdirectory input
+          importFolderInput.value = '';
+          importFolderInput.click();
+        }
+      });
+
+      // Fallback: webkitdirectory input change handler
+      importFolderInput.addEventListener('change', async (e) => {
+        try {
+          const files = e.target.files;
+          if (!files || files.length === 0) {
+            updateStatus('No files in selected folder');
+            return;
+          }
+          await handleFolderImport(files);
+          importFolderInput.value = '';
+        } catch (err) {
+          alert(`Folder import error: ${err.message}`);
+        }
+      });
+    }
+  }
+
+  /**
+   * Recursively collect files from a FileSystemDirectoryHandle.
+   * Attaches webkitRelativePath to each File for compatibility with handleFolderImport.
+   */
+  async function _collectFilesFromDir(dirHandle, basePath, out) {
+    for await (const entry of dirHandle.values()) {
+      if (entry.kind === 'file') {
+        const file = await entry.getFile();
+        const relPath = `${basePath}/${entry.name}`;
+        Object.defineProperty(file, 'webkitRelativePath', {
+          value: relPath,
+          writable: false,
+        });
+        out.push(file);
+      } else if (entry.kind === 'directory') {
+        await _collectFilesFromDir(entry, `${basePath}/${entry.name}`, out);
+      }
+    }
+  }
+
+  /**
+   * Handle a folder selection from the webkitdirectory input or showDirectoryPicker.
+   * @param {FileList|File[]} files - FileList or array of Files with webkitRelativePath
+   */
+  async function handleFolderImport(files) {
+    const fileArr = Array.from(files);
+    let dismissOverlay = () => {};
+
+    dismissOverlay = showProcessingOverlay(
+      `Processing ${fileArr.length} files from folder…`,
+      'Analyzing project structure. Please do not close or refresh the page.'
+    );
+
+    // Size guards — generous limits for real-world multi-folder projects
+    const MAX_FILES = 500;
+    const MAX_BYTES = 100 * 1024 * 1024; // 100 MB
+    const WARN_FILES = 200;
+
+    const totalBytes = fileArr.reduce((sum, f) => sum + f.size, 0);
+
+    if (fileArr.length > MAX_FILES) {
+      dismissOverlay();
+      alert(
+        `The selected folder contains ${fileArr.length} files (limit: ${MAX_FILES}). ` +
+          `Please select a smaller project folder.`
+      );
+      return;
+    }
+
+    if (totalBytes > MAX_BYTES) {
+      dismissOverlay();
+      const mb = (totalBytes / 1024 / 1024).toFixed(1);
+      alert(
+        `The selected folder is ${mb} MB (limit: 100 MB). ` +
+          `Please select a smaller project folder.`
+      );
+      return;
+    }
+
+    if (fileArr.length > WARN_FILES) {
+      console.warn(
+        `[FolderImport] ${fileArr.length} files selected — large project folder.`
+      );
+    }
+
+    // Find the root directory name (all files share the same first path segment)
+    const rootDir = fileArr[0]?.webkitRelativePath?.split('/')[0] || '';
+
+    // Detect .scad files in the root
+    const scadInRoot = fileArr.filter((f) => {
+      const rel = f.webkitRelativePath || f.name;
+      const parts = rel.split('/');
+      return parts.length === 2 && parts[1].endsWith('.scad');
+    });
+
+    const scadAnywhere = fileArr.filter((f) =>
+      (f.webkitRelativePath || f.name).endsWith('.scad')
+    );
+
+    let mainFilePath = null;
+
+    if (scadInRoot.length === 1) {
+      mainFilePath = scadInRoot[0].webkitRelativePath;
+    } else if (scadInRoot.length > 1) {
+      dismissOverlay();
+      mainFilePath = await _promptScadSelection(
+        scadInRoot.map((f) => f.webkitRelativePath),
+        'Multiple .scad files found in the folder root. Select the main file:'
+      );
+    } else if (scadAnywhere.length > 0) {
+      dismissOverlay();
+      mainFilePath = await _promptScadSelection(
+        scadAnywhere.map((f) => f.webkitRelativePath),
+        'No .scad files found in the folder root. Select the main file:'
+      );
+    } else {
+      dismissOverlay();
+      alert('No OpenSCAD (.scad) files found in the selected folder.');
+      return;
+    }
+
+    if (!mainFilePath) return;
+
+    const totalMB = (totalBytes / (1024 * 1024)).toFixed(1);
+    dismissOverlay = showProcessingOverlay(
+      `Importing folder "${rootDir}" (${fileArr.length} files, ${totalMB} MB)…`,
+      'This may take a moment for large projects. Please do not close or refresh the page.'
+    );
+
+    try {
+      const result = await importProjectFromFiles(files, mainFilePath);
+
+      dismissOverlay();
+
+      if (result.success) {
+        updateStatus(`Folder imported: ${rootDir || mainFilePath}`);
+        await renderSavedProjectsList();
+        // Auto-load the imported project (matches .zip behaviour)
+        if (result.id) {
+          await loadSavedProject(result.id);
+        }
+      } else {
+        alert(`Folder import failed: ${result.error}`);
+      }
+    } catch (err) {
+      dismissOverlay();
+      alert(`Folder import failed: ${err.message}`);
+    }
+  }
+
+  /**
+   * Show a modal prompting the user to select one .scad file from a list.
+   * @param {string[]} paths - webkitRelativePath values to choose from
+   * @param {string} prompt - Heading text
+   * @returns {Promise<string|null>} Selected path, or null if cancelled
+   */
+  async function _promptScadSelection(paths, prompt) {
+    return new Promise((resolve) => {
+      const dialog = document.createElement('dialog');
+      dialog.className = 'folder-scad-select-dialog';
+      dialog.setAttribute('aria-labelledby', 'scadSelectTitle');
+
+      const optionsHtml = paths
+        .map(
+          (p, i) =>
+            `<label class="import-mode-option">
+              <input type="radio" name="scadFile" value="${p}"${i === 0 ? ' checked' : ''} />
+              <span>${p.split('/').pop()}</span>
+            </label>`
+        )
+        .join('');
+
+      dialog.innerHTML = `
+        <form method="dialog" class="import-mode-form">
+          <h3 id="scadSelectTitle" class="import-mode-title">${prompt}</h3>
+          <fieldset class="import-mode-fieldset">
+            <legend class="import-mode-legend">Select main .scad file</legend>
+            ${optionsHtml}
+          </fieldset>
+          <div class="import-mode-actions">
+            <button type="submit" value="ok" class="btn btn-primary">Import</button>
+            <button type="submit" value="cancel" class="btn btn-outline">Cancel</button>
+          </div>
+        </form>`;
+
+      document.body.appendChild(dialog);
+      dialog.showModal();
+
+      dialog.addEventListener(
+        'close',
+        () => {
+          const returnValue = dialog.returnValue;
+          const selected =
+            dialog.querySelector('input[name="scadFile"]:checked')?.value ||
+            null;
+          document.body.removeChild(dialog);
+          resolve(returnValue === 'ok' ? selected : null);
+        },
+        { once: true }
+      );
     });
   }
 
@@ -2538,6 +3061,964 @@ async function initApp() {
     );
   }
 
+  // Initialize UI mode controller (Basic/Advanced interface layout)
+  getUIModeController().init();
+
+  // Initialize toolbar menu bar (File|Edit|Design|View|Window|Help)
+  getToolbarMenuController().init();
+  _applyToolbarModeVisibility(getUIModeController().getMode());
+  getUIModeController().subscribe((newMode) => {
+    _applyToolbarModeVisibility(newMode);
+  });
+
+  // Initialize parameter detail level controller (Show/Inline/Hide/Desc-only)
+  initParamDetailController();
+
+  async function _saveCurrentProject(successMessage) {
+    const state = stateManager.getState();
+    if (!state.uploadedFile?.content) return;
+    if (currentSavedProjectId) {
+      const { projectFiles } = state;
+      const projectFilesObj = projectFiles
+        ? Object.fromEntries(projectFiles)
+        : null;
+      const result = await updateProject({
+        id: currentSavedProjectId,
+        content: state.uploadedFile.content,
+        projectFiles:
+          projectFilesObj !== null
+            ? JSON.stringify(projectFilesObj)
+            : undefined,
+      });
+      if (result.success) {
+        updateCompanionSaveButton();
+        stateManager.announceChange(successMessage);
+        updateStatus(successMessage);
+        await renderSavedProjectsList();
+      } else {
+        alert(`Failed to save: ${result.error}`);
+      }
+    } else {
+      await showSaveProjectPrompt(state, { preSave: true });
+    }
+  }
+
+  // Initialize file actions controller (New, Reload, Save, Save As, Export Image, Recent)
+  const fileActionsController = getFileActionsController({
+    onNew: () => {
+      stateManager.resetState();
+      const container = document.getElementById('parametersContainer');
+      if (container) container.textContent = '';
+      if (previewManager) previewManager.clearScene();
+    },
+    onReload: () => {
+      const state = stateManager.getState();
+      if (state.uploadedFile) {
+        handleFile(
+          null,
+          state.uploadedFile.content,
+          state.projectFiles || null,
+          state.mainFilePath || null,
+          'user',
+          state.uploadedFile.name
+        );
+      }
+    },
+    onSave: () => _saveCurrentProject('Project saved'),
+    onSaveAs: async () => {
+      const state = stateManager.getState();
+      if (!state.uploadedFile?.content) return;
+      await showSaveProjectPrompt(state, { preSave: true });
+    },
+    onSaveAll: () => _saveCurrentProject('All changes saved'),
+    onExportImage: () => {
+      const canvas = document.querySelector(
+        '#preview canvas, .preview-area canvas'
+      );
+      if (!canvas) return;
+      const link = document.createElement('a');
+      link.download = 'openscad-preview.png';
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    },
+  });
+  fileActionsController.init();
+
+  // ── Toolbar: File menu ──────────────────────────────────────────────────
+  getToolbarMenuController().registerMenuBuilder('file', () => {
+    const state = stateManager.getState();
+    const hasFile = Boolean(state.uploadedFile);
+    const hasRender = Boolean(state.stl);
+    // Full render = Generate button has been pressed and output matches current params
+    const hasFullRender = Boolean(
+      autoPreviewController?.getCurrentFullSTL(state.parameters) &&
+      !autoPreviewController?.needsFullRender(state.parameters)
+    );
+
+    // Recent Files submenu items (filenames only; actual re-open via onOpenRecent callback)
+    const recentItems =
+      fileActionsController.recentFiles.length > 0
+        ? fileActionsController.recentFiles.map((entry) => ({
+            type: 'action',
+            label: entry.name,
+            handler: () => fileActionsController.onOpenRecent(entry),
+          }))
+        : [{ type: 'action', label: 'No recent files', disabled: true }];
+
+    // Export submenu: info notice (when not fully rendered) + geometry/2D formats + Export as Image
+    const exportItems = [
+      ...(!hasFullRender
+        ? [
+            {
+              type: 'action',
+              label: 'ⓘ  Press Generate to enable file exports',
+              disabled: true,
+              tooltip:
+                'Use the Generate button to fully render the model, then file export options will become available.',
+            },
+            { type: 'separator' },
+          ]
+        : []),
+      ...Object.entries(OUTPUT_FORMATS).map(([key, fmt]) => ({
+        type: 'action',
+        label: fmt.name,
+        enabled: hasFullRender,
+        tooltip: hasFullRender
+          ? fmt.description
+          : 'Press Generate first to enable this export',
+        handler: () => _exportFormatFromMenu(key),
+      })),
+      { type: 'separator' },
+      {
+        type: 'action',
+        label: 'Export as Image\u2026',
+        shortcutAction: 'exportImage',
+        enabled: hasRender,
+        tooltip: hasRender
+          ? 'Save the current viewport as a PNG image'
+          : 'Load and preview a file first',
+        handler: () => fileActionsController.onExportImage(),
+      },
+    ];
+
+    return [
+      {
+        type: 'action',
+        label: 'New File',
+        shortcutAction: 'newFile',
+        handler: () => fileActionsController.onNew(),
+      },
+      {
+        type: 'action',
+        label: 'Open File\u2026',
+        handler: () => document.getElementById('fileInput')?.click(),
+      },
+      {
+        type: 'action',
+        label: 'Recent File',
+        disabled: true,
+        tooltip: 'Coming soon',
+      },
+      { type: 'submenu', label: 'Recent Files', items: recentItems },
+      { type: 'separator' },
+      {
+        type: 'submenu',
+        label: 'Examples',
+        disabled: true,
+        tooltip: 'Coming soon',
+      },
+      {
+        type: 'action',
+        label: 'Reload',
+        shortcutAction: 'reloadFile',
+        enabled: hasFile,
+        tooltip: hasFile ? undefined : 'Open a file first',
+        handler: () => fileActionsController.onReload(),
+      },
+      { type: 'separator' },
+      {
+        type: 'action',
+        label: 'New Window',
+        disabled: true,
+        tooltip: 'Coming soon — single-window web app',
+      },
+      {
+        type: 'action',
+        label: 'Open in New Window',
+        disabled: true,
+        tooltip: 'Coming soon — single-window web app',
+      },
+      {
+        type: 'action',
+        label: 'Close',
+        handler: () => document.getElementById('clearFileBtn')?.click(),
+      },
+      { type: 'separator' },
+      {
+        type: 'action',
+        label: 'Save',
+        shortcutAction: 'saveFile',
+        enabled: hasFile,
+        tooltip: hasFile ? undefined : 'Open a file first',
+        handler: () => fileActionsController.onSave(),
+      },
+      {
+        type: 'action',
+        label: 'Save As\u2026',
+        shortcutAction: 'saveFileAs',
+        enabled: hasFile,
+        tooltip: hasFile ? undefined : 'Open a file first',
+        handler: () => fileActionsController.onSaveAs(),
+      },
+      {
+        type: 'action',
+        label: 'Save All',
+        enabled: hasFile,
+        tooltip: hasFile
+          ? 'Save all changes to current project'
+          : 'Open a file first',
+        handler: () => fileActionsController.onSaveAll(),
+      },
+      { type: 'separator' },
+      { type: 'submenu', label: 'Export', items: exportItems },
+      { type: 'separator' },
+      {
+        type: 'action',
+        label: 'Show Library Folder',
+        disabled: true,
+        tooltip: 'Coming soon',
+      },
+      { type: 'separator' },
+      {
+        type: 'action',
+        label: 'Quit',
+        disabled: true,
+        tooltip: 'Coming soon — use browser tab close',
+      },
+    ];
+  });
+
+  // Initialize edit actions controller (Copy viewport, camera values, error nav, font size)
+  const editActionsController = getEditActionsController({
+    getPreviewManager: () => previewManager,
+    getErrorLogPanel: () => errorLogPanel,
+    onJumpToLine: (file, line) => {
+      const modeManager = getModeManager();
+      if (modeManager?.isExpertMode?.() && modeManager.getEditorInstance?.()) {
+        const editor = modeManager.getEditorInstance();
+        if (editor.revealLineInCenter) editor.revealLineInCenter(line);
+        if (editor.setPosition)
+          editor.setPosition({ lineNumber: line, column: 1 });
+        if (editor.focus) editor.focus();
+      }
+    },
+    onFontSizeChange: (size) => {
+      const modeManager = getModeManager();
+      if (modeManager?.isExpertMode?.() && modeManager.getEditorInstance?.()) {
+        const editor = modeManager.getEditorInstance();
+        if (editor.updateOptions) editor.updateOptions({ fontSize: size });
+      }
+    },
+  });
+  editActionsController.init();
+
+  // ── Toolbar: Edit menu ──────────────────────────────────────────────────
+  getToolbarMenuController().registerMenuBuilder('edit', () => {
+    const state = stateManager.getState();
+    const hasFile = Boolean(state.uploadedFile);
+    const canUndo = stateManager.canUndo();
+    const canRedo = stateManager.canRedo();
+
+    const editorOnly = { disabled: true, tooltip: 'Requires Code Editor' };
+
+    return [
+      {
+        type: 'action',
+        label: 'Undo',
+        enabled: canUndo,
+        tooltip: canUndo ? undefined : 'Nothing to undo',
+        handler: () => performUndo(),
+      },
+      {
+        type: 'action',
+        label: 'Redo',
+        enabled: canRedo,
+        tooltip: canRedo ? undefined : 'Nothing to redo',
+        handler: () => performRedo(),
+      },
+      { type: 'separator' },
+      { type: 'action', label: 'Cut', ...editorOnly },
+      { type: 'action', label: 'Copy', ...editorOnly },
+      { type: 'action', label: 'Paste', ...editorOnly },
+      { type: 'separator' },
+      { type: 'action', label: 'Indent', ...editorOnly },
+      { type: 'action', label: 'Unindent', ...editorOnly },
+      { type: 'action', label: 'Comment', ...editorOnly },
+      { type: 'action', label: 'Uncomment', ...editorOnly },
+      { type: 'action', label: 'Convert Tabs to Spaces', ...editorOnly },
+      { type: 'action', label: 'Toggle Bookmark', ...editorOnly },
+      { type: 'action', label: 'Jump to next bookmark', ...editorOnly },
+      { type: 'action', label: 'Jump to previous bookmark', ...editorOnly },
+      { type: 'separator' },
+      { type: 'action', label: 'Show Next Tab', ...editorOnly },
+      { type: 'action', label: 'Show Previous Tab', ...editorOnly },
+      { type: 'separator' },
+      {
+        type: 'action',
+        label: 'Copy Viewport Image',
+        shortcutAction: 'copyViewportImage',
+        enabled: hasFile,
+        tooltip: hasFile ? undefined : 'Open a file first',
+        handler: () => editActionsController.copyViewportImage(),
+      },
+      {
+        type: 'action',
+        label: 'Copy Viewport Translation',
+        enabled: hasFile,
+        tooltip: hasFile ? undefined : 'Open a file first',
+        handler: () => editActionsController.copyTranslation(),
+      },
+      {
+        type: 'action',
+        label: 'Copy Viewport Rotation',
+        enabled: hasFile,
+        tooltip: hasFile ? undefined : 'Open a file first',
+        handler: () => editActionsController.copyRotation(),
+      },
+      {
+        type: 'action',
+        label: 'Copy Viewport Distance',
+        enabled: hasFile,
+        tooltip: hasFile ? undefined : 'Open a file first',
+        handler: () => editActionsController.copyDistance(),
+      },
+      {
+        type: 'action',
+        label: 'Copy Viewport FOV',
+        enabled: hasFile,
+        tooltip: hasFile ? undefined : 'Open a file first',
+        handler: () => editActionsController.copyFov(),
+      },
+      { type: 'separator' },
+      { type: 'action', label: 'Find\u2026', ...editorOnly },
+      { type: 'action', label: 'Find and Replace\u2026', ...editorOnly },
+      { type: 'action', label: 'Find Next', ...editorOnly },
+      { type: 'action', label: 'Find Previous', ...editorOnly },
+      { type: 'action', label: 'Use Selection for Find', ...editorOnly },
+      { type: 'separator' },
+      {
+        type: 'action',
+        label: 'Jump to Next Error',
+        shortcutAction: 'jumpNextError',
+        handler: () => editActionsController.jumpToNextError(),
+      },
+      { type: 'separator' },
+      {
+        type: 'action',
+        label: 'Increase Font Size',
+        shortcutAction: 'increaseFontSize',
+        handler: () => editActionsController.increaseFontSize(),
+      },
+      {
+        type: 'action',
+        label: 'Decrease Font Size',
+        shortcutAction: 'decreaseFontSize',
+        handler: () => editActionsController.decreaseFontSize(),
+      },
+      {
+        type: 'action',
+        label: 'Preferences\u2026',
+        handler: () => {
+          const modal = document.getElementById('shortcutsModal');
+          const modalBody = document.getElementById('shortcutsModalBody');
+          if (modal && modalBody) {
+            if (!modal.dataset.initialized) {
+              initShortcutsModal(modalBody, () => closeModal(modal));
+              modal.dataset.initialized = 'true';
+            }
+            openModal(modal);
+          }
+        },
+      },
+    ];
+  });
+
+  // Initialize design panel controller (Flush Caches, Display AST, Check Validity, Geometry Info)
+  const designPanelController = getDesignPanelController({
+    getPreviewManager: () => previewManager,
+    getWorker: () => renderController?.worker || null,
+    getScadContent: () => stateManager.getState()?.uploadedFile?.content || '',
+    extractParameters,
+    onFlushComplete: () => {
+      stateManager.resetState();
+      const container = document.getElementById('parametersContainer');
+      if (container) container.textContent = '';
+    },
+  });
+  designPanelController.init();
+
+  // ── Toolbar: Design menu ─────────────────────────────────────────────────
+  getToolbarMenuController().registerMenuBuilder('design', () => {
+    const state = stateManager.getState();
+    const hasFile = Boolean(state.uploadedFile);
+    const hasRender = Boolean(state.stl);
+    const apToggle = document.getElementById('autoPreviewToggle');
+
+    return [
+      {
+        type: 'toggle',
+        label: 'Automatic Reload and Preview',
+        checked: apToggle?.checked ?? false,
+        handler: () => {
+          if (apToggle) {
+            apToggle.checked = !apToggle.checked;
+            apToggle.dispatchEvent(new Event('change'));
+          }
+        },
+      },
+      {
+        type: 'action',
+        label: 'Reload and Preview',
+        disabled: true,
+        tooltip: 'Coming soon',
+      },
+      {
+        type: 'action',
+        label: 'Preview',
+        shortcutAction: 'preview',
+        enabled: hasFile,
+        tooltip: hasFile ? undefined : 'Open a file first',
+        handler: () => {
+          if (autoPreviewController) {
+            autoPreviewController.onParameterChange(state.parameters);
+          }
+        },
+      },
+      {
+        type: 'action',
+        label: 'Render',
+        shortcutAction: 'render',
+        enabled: hasFile,
+        tooltip: hasFile ? undefined : 'Open a file first',
+        handler: () => {
+          const btn = document.getElementById('primaryActionBtn');
+          if (btn && !btn.disabled) btn.click();
+        },
+      },
+      {
+        type: 'action',
+        label: 'Cancel Render',
+        shortcutAction: 'cancelRender',
+        enabled: renderController?.isBusy?.(),
+        tooltip: renderController?.isBusy?.()
+          ? undefined
+          : 'No render in progress',
+        handler: () => {
+          if (renderController?.isBusy?.()) renderController.cancel();
+        },
+      },
+      {
+        type: 'action',
+        label: '3D Print',
+        disabled: true,
+        tooltip: 'Coming soon',
+      },
+      { type: 'separator' },
+      {
+        type: 'action',
+        label: 'Check Validity',
+        shortcutAction: 'checkValidity',
+        enabled: hasRender,
+        tooltip: hasRender ? undefined : 'Render a model first',
+        handler: () => designPanelController.checkValidity(),
+      },
+      {
+        type: 'action',
+        label: 'Display AST\u2026',
+        shortcutAction: 'showAST',
+        enabled: hasFile,
+        tooltip: hasFile ? undefined : 'Open a file first',
+        handler: () => designPanelController.showAST(),
+      },
+      {
+        type: 'action',
+        label: 'Display CSG Tree\u2026',
+        disabled: true,
+        tooltip: 'Coming soon \u2014 requires custom WASM build',
+      },
+      {
+        type: 'action',
+        label: 'Display CSG Products\u2026',
+        disabled: true,
+        tooltip: 'Coming soon \u2014 requires custom WASM build',
+      },
+      {
+        type: 'action',
+        label: 'Geometry Info',
+        enabled: hasRender,
+        tooltip: hasRender ? undefined : 'Render a model first',
+        handler: () => designPanelController.updateGeometryInfo(),
+      },
+      { type: 'separator' },
+      {
+        type: 'action',
+        label: 'Flush Caches',
+        shortcutAction: 'flushCaches',
+        handler: () => designPanelController.flushCaches(),
+      },
+    ];
+  });
+
+  // Initialize display options controller (Axes, Edges, Crosshairs, Wireframe)
+  const displayOptionsController = getDisplayOptionsController({
+    getPreviewManager: () => previewManager,
+    getThree: getThreeModule,
+  });
+  displayOptionsController.init();
+
+  // ── Toolbar: View menu ───────────────────────────────────────────────────
+  getToolbarMenuController().registerMenuBuilder('view', () => {
+    const state = stateManager.getState();
+    const hasRender = Boolean(state.stl);
+    const projMode = previewManager?.getProjectionMode?.() ?? 'perspective';
+
+    function cameraViewHandler(view) {
+      return () => {
+        if (previewManager) {
+          previewManager.setCameraView(view);
+          announceCameraAction(`${view} view`);
+        }
+      };
+    }
+
+    return [
+      // -- Display Mode Radio Group (all disabled — requires custom WASM) --
+      {
+        type: 'radio',
+        label: 'Preview',
+        group: 'displayMode',
+        disabled: true,
+        tooltip: 'Coming soon',
+      },
+      {
+        type: 'radio',
+        label: 'Surfaces',
+        group: 'displayMode',
+        disabled: true,
+        tooltip: 'Coming soon',
+      },
+      {
+        type: 'radio',
+        label: 'Wireframe',
+        group: 'displayMode',
+        disabled: true,
+        tooltip: 'Coming soon',
+      },
+      {
+        type: 'radio',
+        label: 'Thrown Together',
+        group: 'displayMode',
+        disabled: true,
+        tooltip: 'Coming soon',
+      },
+      { type: 'separator' },
+      // -- Display Toggles --
+      {
+        type: 'toggle',
+        label: 'Show Edges',
+        shortcutAction: 'toggleEdges',
+        checked: displayOptionsController.get('edges'),
+        handler: () => displayOptionsController.toggle('edges'),
+      },
+      {
+        type: 'toggle',
+        label: 'Show Axes',
+        shortcutAction: 'toggleAxes',
+        checked: displayOptionsController.get('axes'),
+        handler: () => displayOptionsController.toggle('axes'),
+      },
+      {
+        type: 'toggle',
+        label: 'Show Scale Markers',
+        disabled: true,
+        tooltip: 'Coming soon',
+      },
+      {
+        type: 'toggle',
+        label: 'Show Crosshairs',
+        checked: displayOptionsController.get('crosshairs'),
+        handler: () => displayOptionsController.toggle('crosshairs'),
+      },
+      { type: 'separator' },
+      // -- Camera Views --
+      {
+        type: 'action',
+        label: 'Top',
+        shortcutAction: 'viewTop',
+        handler: cameraViewHandler('top'),
+      },
+      {
+        type: 'action',
+        label: 'Bottom',
+        shortcutAction: 'viewBottom',
+        handler: cameraViewHandler('bottom'),
+      },
+      {
+        type: 'action',
+        label: 'Left',
+        shortcutAction: 'viewLeft',
+        handler: cameraViewHandler('left'),
+      },
+      {
+        type: 'action',
+        label: 'Right',
+        shortcutAction: 'viewRight',
+        handler: cameraViewHandler('right'),
+      },
+      {
+        type: 'action',
+        label: 'Front',
+        shortcutAction: 'viewFront',
+        handler: cameraViewHandler('front'),
+      },
+      {
+        type: 'action',
+        label: 'Back',
+        shortcutAction: 'viewBack',
+        handler: cameraViewHandler('back'),
+      },
+      {
+        type: 'action',
+        label: 'Diagonal',
+        shortcutAction: 'viewDiagonal',
+        handler: cameraViewHandler('diagonal'),
+      },
+      {
+        type: 'action',
+        label: 'Center',
+        disabled: true,
+        tooltip: 'Coming soon',
+      },
+      {
+        type: 'action',
+        label: 'View All',
+        shortcutAction: 'viewAll',
+        enabled: hasRender,
+        tooltip: hasRender ? undefined : 'Render a model first',
+        handler: () => {
+          if (previewManager) {
+            previewManager.fitCameraToModel();
+            announceCameraAction('View fitted to model');
+          }
+        },
+      },
+      {
+        type: 'action',
+        label: 'Reset View',
+        shortcutAction: 'resetView',
+        enabled: hasRender,
+        tooltip: hasRender ? undefined : 'Render a model first',
+        handler: () => {
+          if (previewManager) {
+            previewManager.fitCameraToModel();
+            announceCameraAction('reset');
+          }
+        },
+      },
+      { type: 'separator' },
+      // -- Zoom --
+      {
+        type: 'action',
+        label: 'Zoom In',
+        handler: () => {
+          if (previewManager) {
+            previewManager.zoomCamera(1);
+            announceCameraAction('zoom-in');
+          }
+        },
+      },
+      {
+        type: 'action',
+        label: 'Zoom Out',
+        handler: () => {
+          if (previewManager) {
+            previewManager.zoomCamera(-1);
+            announceCameraAction('zoom-out');
+          }
+        },
+      },
+      { type: 'separator' },
+      // -- Projection Radio Group --
+      {
+        type: 'radio',
+        label: 'Perspective',
+        group: 'projection',
+        value: 'perspective',
+        checked: projMode === 'perspective',
+        onChange: () => {
+          if (previewManager && projMode !== 'perspective') {
+            previewManager.toggleProjection();
+          }
+        },
+      },
+      {
+        type: 'radio',
+        label: 'Orthogonal',
+        group: 'projection',
+        value: 'orthographic',
+        checked: projMode === 'orthographic',
+        onChange: () => {
+          if (previewManager && projMode !== 'orthographic') {
+            previewManager.toggleProjection();
+          }
+        },
+      },
+      { type: 'separator' },
+      // -- Toolbar toggles --
+      {
+        type: 'toggle',
+        label: 'Hide Editor toolbar',
+        disabled: true,
+        tooltip: 'Coming soon',
+      },
+      {
+        type: 'toggle',
+        label: 'Hide 3D View toolbar',
+        disabled: true,
+        tooltip: 'Coming soon',
+      },
+    ];
+  });
+
+  // ── Toolbar: Window menu ─────────────────────────────────────────────────
+  getToolbarMenuController().registerMenuBuilder('window', () => {
+    const uiCtrl = getUIModeController();
+    const hidden = new Set(
+      uiCtrl.getPreferencesForExport().hiddenPanelsInBasic
+    );
+
+    /**
+     * @param {string} panelId
+     * @param {string} label
+     * @param {string|undefined} shortcutAction
+     */
+    function panelToggle(panelId, label, shortcutAction) {
+      const isVisible = !hidden.has(panelId);
+      return {
+        type: 'toggle',
+        label,
+        checked: isVisible,
+        ...(shortcutAction ? { shortcutAction } : {}),
+        handler: () => {
+          uiCtrl.togglePanelVisibility(panelId);
+          _announce(isVisible ? `${label} hidden` : `${label} shown`);
+        },
+      };
+    }
+
+    const sidebarOpen = !document
+      .querySelector('.sidebar')
+      ?.classList.contains('collapsed');
+
+    return [
+      {
+        type: 'action',
+        label: 'Next Window',
+        disabled: true,
+        tooltip: 'Coming soon \u2014 single-window web app',
+      },
+      {
+        type: 'action',
+        label: 'Previous Window',
+        disabled: true,
+        tooltip: 'Coming soon \u2014 single-window web app',
+      },
+      { type: 'separator' },
+      {
+        type: 'submenu',
+        label: 'Jump To\u2026',
+        disabled: true,
+        tooltip: 'Coming soon',
+      },
+      { type: 'separator' },
+      // -- Desktop-parity panel toggles --
+      panelToggle('codeEditor', 'Editor', 'toggleCodeEditor'),
+      panelToggle('consoleOutput', 'Console', 'toggleConsole'),
+      {
+        type: 'toggle',
+        label: 'Customizer',
+        checked: sidebarOpen,
+        shortcutAction: 'toggleCustomizer',
+        handler: () => {
+          const sidebar = document.querySelector('.sidebar');
+          if (sidebar) {
+            sidebar.classList.toggle('collapsed');
+            const nowOpen = !sidebar.classList.contains('collapsed');
+            _announce(nowOpen ? 'Customizer shown' : 'Customizer hidden');
+          }
+        },
+      },
+      panelToggle('errorLog', 'Error-Log', 'toggleErrorLog'),
+      { type: 'separator' },
+      {
+        type: 'action',
+        label: 'Font List',
+        disabled: true,
+        tooltip: 'Coming soon',
+      },
+      {
+        type: 'action',
+        label: 'Viewport-Control',
+        handler: () => {
+          const panel = document.getElementById('cameraPanel');
+          if (panel) {
+            panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            const focusable = panel.querySelector('button, input, select');
+            if (focusable) focusable.focus();
+          }
+        },
+      },
+      { type: 'separator' },
+      // -- Web-only panel toggles --
+      // fileActions, editTools, designTools, displayOptions removed — now in toolbar menus
+      panelToggle('libraries', 'Libraries'),
+      panelToggle('companionFileManagement', 'Companion Files'),
+      panelToggle('imageMeasurement', 'Image Measurement'),
+      panelToggle('referenceOverlay', 'Reference Overlay'),
+      panelToggle('gridSettings', 'Grid Settings'),
+      panelToggle('renderSettings', 'Render Settings'),
+      panelToggle('presetImportExport', 'Preset Import/Export'),
+    ];
+  });
+
+  // ── Toolbar: Help menu ───────────────────────────────────────────────────
+  getToolbarMenuController().registerMenuBuilder('help', () => {
+    function _openFeaturesTab(tabId) {
+      const modal = document.getElementById('featuresGuideModal');
+      if (!modal) return;
+      openModal(modal);
+      const tab = document.getElementById(tabId);
+      if (tab) tab.click();
+    }
+
+    return [
+      {
+        type: 'action',
+        label: 'About',
+        handler: () => {
+          const modal = document.getElementById('featuresGuideModal');
+          if (modal) openModal(modal);
+        },
+      },
+      {
+        type: 'action',
+        label: 'OpenSCAD Homepage',
+        tooltip: 'Opens in a new window',
+        handler: () =>
+          window.open('https://openscad.org', '_blank', 'noopener,noreferrer'),
+      },
+      {
+        type: 'action',
+        label: 'Documentation',
+        tooltip: 'Opens in a new window',
+        handler: () =>
+          window.open(
+            'https://openscad.org/documentation.html',
+            '_blank',
+            'noopener,noreferrer'
+          ),
+      },
+      {
+        type: 'action',
+        label: 'Cheat Sheet',
+        tooltip: 'Opens in a new window',
+        handler: () =>
+          window.open(
+            'https://openscad.org/cheatsheet/',
+            '_blank',
+            'noopener,noreferrer'
+          ),
+      },
+      {
+        type: 'action',
+        label: 'Library Info',
+        handler: () => _openFeaturesTab('tab-libraries'),
+      },
+      {
+        type: 'action',
+        label: 'Font List',
+        disabled: true,
+        tooltip: 'Coming soon',
+      },
+      { type: 'separator' },
+      {
+        type: 'action',
+        label: 'Features Guide',
+        shortcutAction: 'showHelp',
+        handler: () => {
+          const modal = document.getElementById('featuresGuideModal');
+          if (modal) openModal(modal);
+        },
+      },
+      {
+        type: 'action',
+        label: 'Keyboard Shortcuts\u2026',
+        shortcutAction: 'showShortcutsModal',
+        handler: () => {
+          const modal = document.getElementById('shortcutsModal');
+          const modalBody = document.getElementById('shortcutsModalBody');
+          if (modal && modalBody) {
+            if (!modal.dataset.initialized) {
+              initShortcutsModal(modalBody, () => closeModal(modal));
+              modal.dataset.initialized = 'true';
+            }
+            openModal(modal);
+          }
+        },
+      },
+      {
+        type: 'action',
+        label: 'Report Issue',
+        tooltip: 'Opens in a new window',
+        handler: () =>
+          window.open(
+            'https://github.com/BrennenJohnston/openscad-assistive-forge/issues',
+            '_blank',
+            'noopener,noreferrer'
+          ),
+      },
+    ];
+  });
+
+  // Animation controller ($t) initialization removed from UI wiring — see animation-controller.js for future re-integration
+
+  // Listen for "Save to Project" events from UI preferences panel
+  document.addEventListener('ui-mode-save-to-project', (e) => {
+    const prefs = e.detail?.uiPreferences;
+    if (!prefs) return;
+
+    const state = stateManager.getState();
+    const modelName = state.uploadedFile?.name;
+    if (modelName) {
+      try {
+        const key = `openscad-forge-ui-prefs-${modelName}`;
+        localStorage.setItem(key, JSON.stringify(prefs));
+        console.log(`[App] UI preferences saved for project: ${modelName}`);
+        updateStatus('UI preferences saved to project');
+      } catch (error) {
+        if (error.name === 'QuotaExceededError') {
+          console.warn(
+            '[App] localStorage quota exceeded — UI prefs not saved'
+          );
+        } else {
+          console.warn('[App] Could not save UI preferences:', error);
+        }
+      }
+    } else {
+      updateStatus('Load a project first to save preferences');
+    }
+  });
+
   // Initialize theme toggle button
   initThemeToggle('themeToggle', (theme, activeTheme, message) => {
     console.log(`[App] ${message}`);
@@ -2558,23 +4039,23 @@ async function initApp() {
   const checkPresetMigration = () => {
     try {
       const migrationInfo = checkMigrationAvailable();
-      
+
       if (migrationInfo.available && !migrationInfo.alreadyOffered) {
         console.log('[App] Legacy presets detected:', {
           presets: migrationInfo.legacyPresetCount,
           models: migrationInfo.legacyModelCount,
         });
-        
+
         // Show migration prompt (non-blocking, user can dismiss)
-        const message = 
+        const message =
           `Found ${migrationInfo.legacyPresetCount} preset(s) from a previous version. ` +
           `Would you like to migrate them to preserve your work?`;
-        
+
         const shouldMigrate = confirm(message);
-        
+
         if (shouldMigrate) {
           const result = migrateFromLegacyStorage({ createBackup: true });
-          
+
           if (result.success) {
             updateStatus(
               `Migrated ${result.migratedPresets} preset(s) successfully!`,
@@ -2598,7 +4079,7 @@ async function initApp() {
       console.warn('[App] Error checking preset migration:', error);
     }
   };
-  
+
   // Check migration after a short delay (after first-visit modal if present)
   setTimeout(checkPresetMigration, 1500);
 
@@ -2760,6 +4241,11 @@ async function initApp() {
         );
         // Update memory indicator
         updateMemoryIndicator(memoryInfo);
+        // Feed into MemoryMonitor for badge updates
+        const monitor = _getMemoryMonitor();
+        if (monitor) {
+          monitor.updateFromWorker(memoryInfo);
+        }
         showMemoryWarning(memoryInfo);
         if (previewQualityMode === 'auto') {
           autoPreviewHints.forceFastUntil =
@@ -3128,6 +4614,12 @@ async function initApp() {
           const memoryInfo = await renderController.getMemoryUsage();
           if (memoryInfo && memoryInfo.available !== false) {
             updateMemoryIndicator(memoryInfo);
+            // Feed worker memory data into the MemoryMonitor so the
+            // badge reflects actual WASM heap, not main-thread JS heap.
+            const monitor = _getMemoryMonitor();
+            if (monitor) {
+              monitor.updateFromWorker(memoryInfo);
+            }
           }
         } catch (_e) {
           // Silently ignore polling errors
@@ -3274,6 +4766,11 @@ async function initApp() {
    * @param {string|null} info.targetKey - Param key to focus/highlight
    */
   function showDependencyGuidanceModal(info) {
+    if (isAnyModalOpen()) {
+      console.log('[DependencyGuidance] Suppressed — another modal is active');
+      return;
+    }
+
     const { label, current, suggested, targetKey } = info || {};
 
     // Reuse a single modal instance
@@ -3417,6 +4914,10 @@ async function initApp() {
   const overlayToggle = document.getElementById('overlayToggle');
   const overlayOpacityInput = document.getElementById('overlayOpacityInput');
   const overlayOpacityValue = document.getElementById('overlayOpacityValue');
+  const overlayColorInput = document.getElementById('overlayColorInput');
+  const overlayAutoColorToggle = document.getElementById(
+    'overlayAutoColorToggle'
+  );
   const overlayFitModelBtn = document.getElementById('overlayFitModelBtn');
   const overlayCenterBtn = document.getElementById('overlayCenterBtn');
   const overlayWidthInput = document.getElementById('overlayWidthInput');
@@ -3428,6 +4929,12 @@ async function initApp() {
   const overlayRotationValue = document.getElementById('overlayRotationValue');
   const overlayStatus = document.getElementById('overlayStatus');
   const overlayFileInput = document.getElementById('overlayFileInput');
+  const overlayManualOverrideToggle = document.getElementById(
+    'overlayManualOverrideToggle'
+  );
+  const overlayCalibrationFieldset = document.getElementById(
+    'overlayCalibrationFieldset'
+  );
   const overlayDimensionsValue = document.getElementById(
     'overlayDimensionsValue'
   );
@@ -3638,6 +5145,9 @@ async function initApp() {
   }
 
   if (previewQualitySelect) {
+    if (previewQualitySelect.querySelector('option[value="auto"]')) {
+      previewQualitySelect.value = 'auto';
+    }
     applyPreviewQualityMode();
     previewQualitySelect.addEventListener('change', () => {
       applyPreviewQualityMode();
@@ -3651,6 +5161,9 @@ async function initApp() {
   }
 
   if (exportQualitySelect) {
+    if (exportQualitySelect.querySelector('option[value="model"]')) {
+      exportQualitySelect.value = 'model';
+    }
     applyExportQualityMode();
     exportQualitySelect.addEventListener('change', () => {
       applyExportQualityMode();
@@ -3680,6 +5193,171 @@ async function initApp() {
         previewManager.toggleGrid(enabled);
       }
       console.log(`[App] Grid ${enabled ? 'enabled' : 'disabled'}`);
+    });
+  }
+
+  // Wire grid size preset selector, custom inputs, and user-saved custom presets
+  const gridPresetSelect = document.getElementById('gridPresetSelect');
+  const gridWidthInput = document.getElementById('gridWidthInput');
+  const gridHeightInput = document.getElementById('gridHeightInput');
+  const gridPresetSaveRow = document.getElementById('gridPresetSaveRow');
+  const gridPresetNameInput = document.getElementById('gridPresetNameInput');
+  const saveGridPresetBtn = document.getElementById('saveGridPresetBtn');
+  const gridPresetSaveError = document.getElementById('gridPresetSaveError');
+  const gridPresetDeleteRow = document.getElementById('gridPresetDeleteRow');
+  const deleteGridPresetBtn = document.getElementById('deleteGridPresetBtn');
+  const gridSizeDims = document.getElementById('gridSizeDims');
+
+  function applyGridSize(widthMm, heightMm) {
+    if (!previewManager) return;
+    previewManager.setGridSize(widthMm, heightMm);
+    if (gridWidthInput) gridWidthInput.value = widthMm;
+    if (gridHeightInput) gridHeightInput.value = heightMm;
+    updateStatus(`Grid size updated to ${widthMm} × ${heightMm} mm`);
+  }
+
+  // Prefix for user-preset option values to distinguish from built-ins
+  const USER_GRID_PREFIX = 'user:';
+
+  function _populateCustomGridPresets() {
+    if (!gridPresetSelect || !previewManager) return;
+
+    // Remove any existing user optgroup
+    const existing = gridPresetSelect.querySelector(
+      'optgroup[data-user-presets]'
+    );
+    if (existing) existing.remove();
+
+    const userPresets = previewManager.loadCustomGridPresets();
+    if (userPresets.length === 0) return;
+
+    const group = document.createElement('optgroup');
+    group.label = 'My presets';
+    group.setAttribute('data-user-presets', 'true');
+
+    for (const p of userPresets) {
+      const opt = document.createElement('option');
+      opt.value = `${USER_GRID_PREFIX}${p.name}`;
+      opt.textContent = `${p.name} (${p.widthMm}×${p.heightMm} mm)`;
+      group.appendChild(opt);
+    }
+
+    // Insert before "Custom..." option
+    const customOpt = gridPresetSelect.querySelector('option[value="custom"]');
+    if (customOpt) {
+      gridPresetSelect.insertBefore(group, customOpt);
+    } else {
+      gridPresetSelect.appendChild(group);
+    }
+  }
+
+  function _updateGridPresetActionRows() {
+    if (!gridPresetSelect) return;
+    const val = gridPresetSelect.value;
+    const isCustom = val === 'custom';
+    const isUserPreset = val.startsWith(USER_GRID_PREFIX);
+
+    if (gridSizeDims) gridSizeDims.hidden = !isCustom;
+    if (gridPresetSaveRow) gridPresetSaveRow.hidden = !isCustom;
+    if (gridPresetDeleteRow) gridPresetDeleteRow.hidden = !isUserPreset;
+    if (gridPresetSaveError) gridPresetSaveError.textContent = '';
+  }
+
+  if (gridPresetSelect) {
+    // Populate initial values from saved preference
+    if (previewManager) {
+      const saved = previewManager.getGridSize();
+      if (gridWidthInput) gridWidthInput.value = saved.widthMm;
+      if (gridHeightInput) gridHeightInput.value = saved.heightMm;
+    }
+
+    _populateCustomGridPresets();
+
+    gridPresetSelect.addEventListener('change', () => {
+      const val = gridPresetSelect.value;
+      if (val === 'custom') {
+        _updateGridPresetActionRows();
+        return;
+      }
+      if (val.startsWith(USER_GRID_PREFIX) && previewManager) {
+        const name = val.slice(USER_GRID_PREFIX.length);
+        const presets = previewManager.loadCustomGridPresets();
+        const found = presets.find((p) => p.name === name);
+        if (found) applyGridSize(found.widthMm, found.heightMm);
+        _updateGridPresetActionRows();
+        return;
+      }
+      const [w, h] = val.split('x').map(Number);
+      if (w && h) applyGridSize(w, h);
+      _updateGridPresetActionRows();
+    });
+  }
+
+  if (gridWidthInput) {
+    gridWidthInput.addEventListener('change', () => {
+      const w = parseInt(gridWidthInput.value, 10);
+      const h = parseInt(gridHeightInput?.value || '220', 10);
+      if (!isNaN(w) && !isNaN(h)) {
+        if (gridPresetSelect) gridPresetSelect.value = 'custom';
+        applyGridSize(w, h);
+        _updateGridPresetActionRows();
+      }
+    });
+  }
+
+  if (gridHeightInput) {
+    gridHeightInput.addEventListener('change', () => {
+      const w = parseInt(gridWidthInput?.value || '220', 10);
+      const h = parseInt(gridHeightInput.value, 10);
+      if (!isNaN(w) && !isNaN(h)) {
+        if (gridPresetSelect) gridPresetSelect.value = 'custom';
+        applyGridSize(w, h);
+        _updateGridPresetActionRows();
+      }
+    });
+  }
+
+  if (saveGridPresetBtn) {
+    saveGridPresetBtn.addEventListener('click', () => {
+      if (!previewManager) {
+        if (gridPresetSaveError)
+          gridPresetSaveError.textContent =
+            'Preview not ready yet. Please load a model first.';
+        return;
+      }
+      const name = gridPresetNameInput?.value || '';
+      const w = parseInt(gridWidthInput?.value || '0', 10);
+      const h = parseInt(gridHeightInput?.value || '0', 10);
+      const result = previewManager.saveCustomGridPreset(name, w, h);
+      if (!result.success) {
+        if (gridPresetSaveError) gridPresetSaveError.textContent = result.error;
+        return;
+      }
+      if (gridPresetSaveError) gridPresetSaveError.textContent = '';
+      if (gridPresetNameInput) gridPresetNameInput.value = '';
+      _populateCustomGridPresets();
+      // Select the newly saved preset
+      const newValue = `${USER_GRID_PREFIX}${name.trim()}`;
+      if (gridPresetSelect) {
+        gridPresetSelect.value = newValue;
+      }
+      _updateGridPresetActionRows();
+      updateStatus(`Custom grid preset "${name.trim()}" saved`);
+    });
+  }
+
+  if (deleteGridPresetBtn) {
+    deleteGridPresetBtn.addEventListener('click', () => {
+      if (!previewManager) return;
+      const val = gridPresetSelect?.value || '';
+      if (!val.startsWith(USER_GRID_PREFIX)) return;
+      const name = val.slice(USER_GRID_PREFIX.length);
+      if (!confirm(`Delete custom grid preset "${name}"?`)) return;
+      previewManager.deleteCustomGridPreset(name);
+      _populateCustomGridPresets();
+      if (gridPresetSelect) gridPresetSelect.value = 'custom';
+      _updateGridPresetActionRows();
+      updateStatus(`Custom grid preset "${name}" deleted`);
     });
   }
 
@@ -3736,7 +5414,8 @@ async function initApp() {
   if (manifoldEngineToggle) {
     // Initialize from localStorage (default to true for performance)
     const savedManifoldPref = localStorage.getItem(STORAGE_KEY_MANIFOLD_ENGINE);
-    const manifoldEnabled = savedManifoldPref === null ? true : savedManifoldPref !== 'false';
+    const manifoldEnabled =
+      savedManifoldPref === null ? true : savedManifoldPref !== 'false';
     manifoldEngineToggle.checked = manifoldEnabled;
 
     // Update hint text based on initial state
@@ -3748,7 +5427,10 @@ async function initApp() {
 
     manifoldEngineToggle.addEventListener('change', () => {
       const enabled = manifoldEngineToggle.checked;
-      localStorage.setItem(STORAGE_KEY_MANIFOLD_ENGINE, enabled ? 'true' : 'false');
+      localStorage.setItem(
+        STORAGE_KEY_MANIFOLD_ENGINE,
+        enabled ? 'true' : 'false'
+      );
 
       // Update hint text
       if (manifoldEngineHint) {
@@ -3764,7 +5446,9 @@ async function initApp() {
           : 'Stable engine enabled. Maximum compatibility, slower rendering.'
       );
 
-      console.log(`[App] Render engine: ${enabled ? 'Manifold (fast)' : 'CGAL (stable)'}`);
+      console.log(
+        `[App] Render engine: ${enabled ? 'Manifold (fast)' : 'CGAL (stable)'}`
+      );
 
       // Note: Changes take effect on next render - no need to re-render current model
       // Show a subtle status message
@@ -3917,6 +5601,138 @@ async function initApp() {
     } catch (error) {
       console.error('[App] Failed to load overlay:', error);
       updateStatus(`Failed to load overlay: ${error.message}`, 'error');
+    }
+  }
+
+  /**
+   * Apply persisted hidden-group state to a rendered parameter container
+   * and wire up the group-hide event + show-all link.
+   * @param {HTMLElement} container - The parametersContainer element
+   * @param {string} modelName - Current model name (used as storage key)
+   */
+  function applyHiddenGroups(container, modelName) {
+    if (!container || !modelName) return;
+
+    const HIDDEN_KEY = `openscad-forge-hidden-groups-${modelName}`;
+
+    function loadHidden() {
+      try {
+        return new Set(JSON.parse(localStorage.getItem(HIDDEN_KEY) || '[]'));
+      } catch {
+        return new Set();
+      }
+    }
+
+    function saveHidden(set) {
+      try {
+        localStorage.setItem(HIDDEN_KEY, JSON.stringify([...set]));
+      } catch (_) {
+        /* storage full */
+      }
+    }
+
+    function refreshShowAll() {
+      const existing = container.querySelector('.param-groups-show-all');
+      const hiddenGroups = container.querySelectorAll('.param-group[hidden]');
+      const count = hiddenGroups.length;
+      if (count === 0) {
+        existing?.remove();
+        return;
+      }
+      if (!existing) {
+        const link = document.createElement('button');
+        link.className = 'param-groups-show-all btn btn-sm btn-outline';
+        link.type = 'button';
+        link.setAttribute('aria-live', 'polite');
+        container.appendChild(link);
+        link.addEventListener('click', () => {
+          container.querySelectorAll('.param-group[hidden]').forEach((el) => {
+            el.removeAttribute('hidden');
+            const btn = el.querySelector('.param-group-hide-btn');
+            if (btn) btn.setAttribute('aria-pressed', 'false');
+          });
+          saveHidden(new Set());
+          refreshShowAll();
+          announceImmediate('All parameter groups shown');
+        });
+      }
+      container.querySelector('.param-groups-show-all').textContent =
+        `${count} group${count !== 1 ? 's' : ''} hidden — Show all`;
+    }
+
+    // Apply saved hidden groups
+    const hidden = loadHidden();
+    container
+      .querySelectorAll('.param-group[data-group-id]')
+      .forEach((details) => {
+        if (hidden.has(details.dataset.groupId)) {
+          details.setAttribute('hidden', '');
+          const btn = details.querySelector('.param-group-hide-btn');
+          if (btn) btn.setAttribute('aria-pressed', 'true');
+        }
+      });
+    refreshShowAll();
+
+    // Listen for hide events from group hide buttons
+    container.addEventListener('group-hide', (e) => {
+      const { groupId, groupLabel } = e.detail;
+      const groupEl = container.querySelector(
+        `.param-group[data-group-id="${groupId}"]`
+      );
+      if (!groupEl) return;
+      groupEl.setAttribute('hidden', '');
+      const btn = groupEl.querySelector('.param-group-hide-btn');
+      if (btn) btn.setAttribute('aria-pressed', 'true');
+      const hiddenSet = loadHidden();
+      hiddenSet.add(groupId);
+      saveHidden(hiddenSet);
+      refreshShowAll();
+      announceImmediate(`${groupLabel} group hidden`);
+    });
+  }
+
+  /**
+   * C1: Auto-size the reference overlay from SCAD parameters.
+   *
+   * Priority order (first match wins):
+   *   1. Explicit `screen_width_mm` + `screen_height_mm` parameters
+   *   2. Keyguard case opening: `width_of_opening_in_case` + `height_of_opening_in_case`
+   *      (these represent the visible screen area the SVG screenshot covers)
+   *
+   * The `orientation` parameter ("landscape"/"portrait") swaps width/height when
+   * the case-opening dimensions are in portrait but the SVG is landscape or vice-versa.
+   *
+   * @param {Object} paramValues - Current parameter values
+   */
+  function autoApplyScreenDimensionsFromParams(paramValues) {
+    if (!previewManager || !paramValues) return;
+
+    // Priority 1: explicit screen dimensions
+    const sw = parseFloat(paramValues['screen_width_mm']);
+    const sh = parseFloat(paramValues['screen_height_mm']);
+    if (!isNaN(sw) && !isNaN(sh) && sw > 0 && sh > 0) {
+      previewManager.fitOverlayToScreenDimensions(sw, sh);
+      console.log(
+        `[App] Overlay auto-sized from screen_width/height_mm: ${sw} × ${sh} mm`
+      );
+      return;
+    }
+
+    // Priority 2: keyguard case opening dimensions (physical screen area)
+    let cw = parseFloat(paramValues['width_of_opening_in_case']);
+    let ch = parseFloat(paramValues['height_of_opening_in_case']);
+    if (!isNaN(cw) && !isNaN(ch) && cw > 0 && ch > 0) {
+      const orientation = (paramValues['orientation'] || '').toLowerCase();
+      if (orientation === 'landscape' && ch > cw) {
+        [cw, ch] = [ch, cw];
+      } else if (orientation === 'portrait' && cw > ch) {
+        [cw, ch] = [ch, cw];
+      }
+      previewManager.fitOverlayToScreenDimensions(cw, ch);
+      console.log(
+        `[App] Overlay auto-sized from case opening: ${cw} × ${ch} mm (${orientation || 'default'})`
+      );
+      return;
     }
   }
 
@@ -4180,6 +5996,72 @@ async function initApp() {
     });
   }
 
+  // SVG overlay color — auto-adapts to theme so dark SVGs stay visible on dark backgrounds
+  function getThemeAwareSvgColor() {
+    const root = document.documentElement;
+    const explicit = root.getAttribute('data-theme');
+    const prefersDark = window.matchMedia?.(
+      '(prefers-color-scheme: dark)'
+    )?.matches;
+    const isDark = explicit === 'dark' || (!explicit && prefersDark);
+    return isDark ? '#ffffff' : '#000000';
+  }
+
+  function applyOverlaySvgColor() {
+    const autoColor = overlayAutoColorToggle?.checked ?? true;
+    const color = autoColor
+      ? getThemeAwareSvgColor()
+      : overlayColorInput?.value || '#000000';
+    if (overlayColorInput && autoColor) {
+      overlayColorInput.value = color;
+    }
+    if (previewManager) {
+      previewManager.setOverlaySvgColor(color);
+    }
+    localStorage.setItem(STORAGE_KEY_OVERLAY_SVG_COLOR, color);
+    localStorage.setItem(
+      STORAGE_KEY_OVERLAY_AUTO_COLOR,
+      autoColor ? 'true' : 'false'
+    );
+  }
+
+  if (overlayColorInput) {
+    overlayColorInput.addEventListener('input', () => {
+      if (overlayAutoColorToggle) overlayAutoColorToggle.checked = false;
+      applyOverlaySvgColor();
+    });
+  }
+
+  if (overlayAutoColorToggle) {
+    overlayAutoColorToggle.addEventListener('change', () => {
+      if (overlayColorInput)
+        overlayColorInput.disabled = overlayAutoColorToggle.checked;
+      applyOverlaySvgColor();
+    });
+  }
+
+  // Re-apply SVG color when theme changes
+  const themeObserver = new MutationObserver(() => {
+    if (overlayAutoColorToggle?.checked) {
+      applyOverlaySvgColor();
+    }
+  });
+  themeObserver.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['data-theme', 'data-high-contrast'],
+  });
+
+  // Wire manual calibration override toggle
+  if (overlayManualOverrideToggle && overlayCalibrationFieldset) {
+    overlayManualOverrideToggle.addEventListener('change', () => {
+      const enabled = overlayManualOverrideToggle.checked;
+      overlayCalibrationFieldset.disabled = !enabled;
+      console.log(
+        `[App] Overlay manual calibration ${enabled ? 'enabled' : 'disabled'}`
+      );
+    });
+  }
+
   // Wire fit to model button
   if (overlayFitModelBtn) {
     overlayFitModelBtn.addEventListener('click', () => {
@@ -4189,6 +6071,49 @@ async function initApp() {
       }
     });
   }
+
+  // Wire tablet device selector for overlay auto-sizing (C1: hybrid approach)
+  const overlayTabletSelect = document.getElementById('overlayTabletSelect');
+  if (overlayTabletSelect) {
+    // Lazy-load the tablet database on first interaction
+    let tabletDb = null;
+    async function loadTabletDb() {
+      if (tabletDb) return tabletDb;
+      try {
+        const resp = await fetch('/data/tablets.json');
+        const data = await resp.json();
+        tabletDb = data.tablets || [];
+        // Populate options
+        overlayTabletSelect.innerHTML = tabletDb
+          .map(
+            (t) =>
+              `<option value="${t.id}" data-w="${t.screenWidthMm ?? ''}" data-h="${t.screenHeightMm ?? ''}">${t.label}</option>`
+          )
+          .join('');
+      } catch (err) {
+        console.warn('[App] Could not load tablet database:', err);
+        tabletDb = [];
+      }
+      return tabletDb;
+    }
+
+    overlayTabletSelect.addEventListener('focus', () => loadTabletDb());
+    overlayTabletSelect.addEventListener('change', async () => {
+      await loadTabletDb();
+      const opt = overlayTabletSelect.selectedOptions[0];
+      if (!opt) return;
+      const w = parseFloat(opt.dataset.w);
+      const h = parseFloat(opt.dataset.h);
+      if (!isNaN(w) && !isNaN(h) && previewManager) {
+        previewManager.fitOverlayToScreenDimensions(w, h);
+        updateOverlayUIFromConfig();
+        updateStatus(`Overlay sized to ${opt.text}: ${w} × ${h} mm`);
+      }
+    });
+  }
+
+  // Auto-detect screen_width_mm / screen_height_mm SCAD parameters for overlay sizing
+  // Called when parameters are rendered — see autoApplyScreenDimensionsFromParams()
 
   // Wire center button
   if (overlayCenterBtn) {
@@ -4477,13 +6402,24 @@ async function initApp() {
   const savedOpacity = localStorage.getItem(STORAGE_KEY_MODEL_OPACITY);
   const savedBrightness = localStorage.getItem(STORAGE_KEY_BRIGHTNESS);
   const savedContrast = localStorage.getItem(STORAGE_KEY_CONTRAST);
-  if (savedOpacity && modelOpacityInput) { modelOpacityInput.value = savedOpacity; if (modelOpacityValue) modelOpacityValue.textContent = `${savedOpacity}%`; }
-  if (savedBrightness && brightnessInput) { brightnessInput.value = savedBrightness; if (brightnessValue) brightnessValue.textContent = `${savedBrightness}%`; }
-  if (savedContrast && contrastInput) { contrastInput.value = savedContrast; if (contrastValue) contrastValue.textContent = `${savedContrast}%`; }
+  if (savedOpacity && modelOpacityInput) {
+    modelOpacityInput.value = savedOpacity;
+    if (modelOpacityValue) modelOpacityValue.textContent = `${savedOpacity}%`;
+  }
+  if (savedBrightness && brightnessInput) {
+    brightnessInput.value = savedBrightness;
+    if (brightnessValue) brightnessValue.textContent = `${savedBrightness}%`;
+  }
+  if (savedContrast && contrastInput) {
+    contrastInput.value = savedContrast;
+    if (contrastValue) contrastValue.textContent = `${savedContrast}%`;
+  }
 
   function applyAppearanceToPreview() {
     if (!previewManager) return;
-    previewManager.setModelOpacity(parseInt(modelOpacityInput?.value || '100', 10));
+    previewManager.setModelOpacity(
+      parseInt(modelOpacityInput?.value || '100', 10)
+    );
     previewManager.setBrightness(parseInt(brightnessInput?.value || '100', 10));
     previewManager.setContrast(parseInt(contrastInput?.value || '100', 10));
   }
@@ -4514,9 +6450,18 @@ async function initApp() {
   }
   if (resetAppearanceBtn) {
     resetAppearanceBtn.addEventListener('click', () => {
-      if (modelOpacityInput) { modelOpacityInput.value = '100'; if (modelOpacityValue) modelOpacityValue.textContent = '100%'; }
-      if (brightnessInput) { brightnessInput.value = '100'; if (brightnessValue) brightnessValue.textContent = '100%'; }
-      if (contrastInput) { contrastInput.value = '100'; if (contrastValue) contrastValue.textContent = '100%'; }
+      if (modelOpacityInput) {
+        modelOpacityInput.value = '100';
+        if (modelOpacityValue) modelOpacityValue.textContent = '100%';
+      }
+      if (brightnessInput) {
+        brightnessInput.value = '100';
+        if (brightnessValue) brightnessValue.textContent = '100%';
+      }
+      if (contrastInput) {
+        contrastInput.value = '100';
+        if (contrastValue) contrastValue.textContent = '100%';
+      }
       localStorage.removeItem(STORAGE_KEY_MODEL_OPACITY);
       localStorage.removeItem(STORAGE_KEY_BRIGHTNESS);
       localStorage.removeItem(STORAGE_KEY_CONTRAST);
@@ -4820,12 +6765,11 @@ async function initApp() {
   }
 
   /**
-   * Update the primary action button based on current state
-   * With auto-preview, the button has three states:
-   * - "Download STL" when full-quality STL is ready for current params
-   * - "Generate & Download" when we have a preview but need full render
-   * - "Generate STL" when no preview exists yet
-   * Also shows/hides the fallback download link
+   * Update the primary action button based on current state.
+   * With auto-preview, the button has two states:
+   * - "Download" when full-quality output is ready for current params
+   * - "Generate" when no full render exists yet or params changed
+   * Also shows/hides the fallback download link.
    */
   function updatePrimaryActionButton() {
     const state = stateManager.getState();
@@ -4852,7 +6796,7 @@ async function initApp() {
 
     if (isStlFormat && hasFullQualitySTL && !needsFullRender) {
       // Full quality STL is ready and matches current parameters - show Download
-      primaryActionBtn.textContent = `📥 Download ${formatName}`;
+      primaryActionBtn.textContent = '📥 Download';
       primaryActionBtn.dataset.action = 'download';
       primaryActionBtn.classList.remove('btn-primary');
       primaryActionBtn.classList.add('btn-success');
@@ -4864,7 +6808,7 @@ async function initApp() {
       downloadFallbackLink.classList.add('hidden');
     } else if (isStlFormat) {
       // Need to generate (no full STL yet, or params changed)
-      primaryActionBtn.textContent = `Generate ${formatName}`;
+      primaryActionBtn.textContent = 'Generate';
       primaryActionBtn.dataset.action = 'generate';
       primaryActionBtn.classList.remove('btn-success');
       primaryActionBtn.classList.add('btn-primary');
@@ -4886,7 +6830,7 @@ async function initApp() {
         stateOutputFormat === selectedFormat &&
         !paramsChanged;
       if (hasMatchingOutput) {
-        primaryActionBtn.textContent = `📥 Download ${formatName}`;
+        primaryActionBtn.textContent = '📥 Download';
         primaryActionBtn.dataset.action = 'download';
         primaryActionBtn.classList.remove('btn-primary');
         primaryActionBtn.classList.add('btn-success');
@@ -4895,7 +6839,7 @@ async function initApp() {
           `Download generated ${formatName} file`
         );
       } else {
-        primaryActionBtn.textContent = `Generate ${formatName}`;
+        primaryActionBtn.textContent = 'Generate';
         primaryActionBtn.dataset.action = 'generate';
         primaryActionBtn.classList.remove('btn-success');
         primaryActionBtn.classList.add('btn-primary');
@@ -4909,8 +6853,7 @@ async function initApp() {
   }
 
   // Import shared validation schemas (FILE_SIZE_LIMITS is now imported at top of initApp() to avoid TDZ)
-  const { validateFileUpload, getValidationErrorMessage } =
-    await import('./js/validation-schemas.js');
+  const { validateFileUpload } = await import('./js/validation-schemas.js');
 
   // Check for saved draft - but only if first-visit modal is not blocking
   // If first-visit is blocking, defer draft restoration until user accepts
@@ -4918,9 +6861,10 @@ async function initApp() {
   // the URL intent takes priority over any cached draft (fixes race condition)
   const hasManifestParam = urlParams.get('manifest');
   const hasProjectParam = urlParams.get('project') || urlParams.get('scad');
-  const draft = (!hasManifestParam && !hasProjectParam)
-    ? await stateManager.loadFromLocalStorage()
-    : null;
+  const draft =
+    !hasManifestParam && !hasProjectParam
+      ? await stateManager.loadFromLocalStorage()
+      : null;
 
   if (draft) {
     // If first-visit modal is blocking, defer draft restoration
@@ -5410,17 +7354,66 @@ async function initApp() {
       }
     }
 
-    // Build file list HTML
-    const fileList = Array.from(projectFiles.keys()).sort();
+    // Build nested tree and render the current folder view
+    const tree = buildNestedTree(projectFiles);
 
-    const items = fileList.map((path) => {
+    // Validate that companionCurrentPath still points to a valid node;
+    // if the user deleted a folder we were inside, reset to root.
+    if (getNodeAtPath(tree, companionCurrentPath) === null) {
+      companionCurrentPath = [];
+    }
+
+    const currentNode = getNodeAtPath(tree, companionCurrentPath) || tree;
+
+    // --- Breadcrumb bar ---
+    const crumbItems = companionCurrentPath.map((segment, idx) => {
+      const targetDepth = idx; // clicking this crumb navigates to segments[0..idx]
+      return `<li class="file-nav-breadcrumb-item">
+        <button class="file-nav-breadcrumb-btn" data-depth="${targetDepth + 1}" aria-label="Navigate to ${escapeHtml(segment)}">${escapeHtml(segment)}</button>
+      </li>`;
+    });
+
+    const breadcrumbHtml =
+      companionCurrentPath.length > 0
+        ? `<nav class="file-nav-breadcrumbs" aria-label="Folder navigation">
+            <ol class="file-nav-breadcrumb-list">
+              <li class="file-nav-breadcrumb-item">
+                <button class="file-nav-breadcrumb-btn file-nav-breadcrumb-home" data-depth="0" aria-label="Navigate to root">🏠</button>
+              </li>
+              ${crumbItems.join('')}
+            </ol>
+          </nav>`
+        : '';
+
+    // --- Folder rows ---
+    const sortedFolders = [...currentNode.folders.entries()].sort((a, b) =>
+      a[0].localeCompare(b[0])
+    );
+    const folderItems = sortedFolders.map(([folderName, childNode]) => {
+      const count = countFilesRecursive(childNode);
+      return `
+        <div class="project-file-item file-nav-folder-row" role="button" tabindex="0"
+             data-folder-enter="${escapeHtml(folderName)}"
+             aria-label="Open folder ${escapeHtml(folderName)}, ${count} file${count !== 1 ? 's' : ''}">
+          <span class="project-file-icon" aria-hidden="true">📁</span>
+          <span class="project-file-name">${escapeHtml(folderName)}</span>
+          <span class="project-file-size file-nav-folder-count">${count} file${count !== 1 ? 's' : ''}</span>
+          <span class="file-nav-folder-chevron" aria-hidden="true">›</span>
+        </div>`;
+    });
+
+    // --- File rows ---
+    const sortedFiles = [...currentNode.files].sort((a, b) =>
+      a.name.localeCompare(b.name)
+    );
+    const fileItems = sortedFiles.map(({ path, name }) => {
       const isMain = path === mainFilePath;
       const content = projectFiles.get(path);
       const size =
         typeof content === 'string'
           ? formatFileSize(new Blob([content]).size)
           : '—';
-      const ext = path.split('.').pop().toLowerCase();
+      const ext = name.split('.').pop().toLowerCase();
       const isEditable = ['txt', 'csv', 'json', 'scad'].includes(ext);
       const icon = getFileIcon(ext);
 
@@ -5429,10 +7422,10 @@ async function initApp() {
         : '';
       const editBtn =
         isEditable && !isMain
-          ? `<button class="project-file-btn" data-action="edit" data-path="${escapeHtml(path)}" aria-label="Edit ${escapeHtml(path)}">✏️</button>`
+          ? `<button class="project-file-btn" data-action="edit" data-path="${escapeHtml(path)}" aria-label="Edit ${escapeHtml(name)}">✏️</button>`
           : '';
       const removeBtn = !isMain
-        ? `<button class="project-file-btn btn-danger" data-action="remove" data-path="${escapeHtml(path)}" aria-label="Remove ${escapeHtml(path)}">✕</button>`
+        ? `<button class="project-file-btn btn-danger" data-action="remove" data-path="${escapeHtml(path)}" aria-label="Remove ${escapeHtml(name)}">✕</button>`
         : '';
 
       const itemClass = isMain
@@ -5442,20 +7435,60 @@ async function initApp() {
       return `
         <div class="${itemClass}" role="listitem">
           <span class="project-file-icon" aria-hidden="true">${icon}</span>
-          <span class="project-file-name" title="${escapeHtml(path)}">${escapeHtml(path)}</span>
+          <span class="project-file-name" title="${escapeHtml(path)}">${escapeHtml(name)}</span>
           ${mainBadge}
           <span class="project-file-size">${size}</span>
           <div class="project-file-actions">
             ${editBtn}
             ${removeBtn}
           </div>
-        </div>
-      `;
+        </div>`;
     });
 
-    container.innerHTML = items.join('');
+    container.innerHTML =
+      breadcrumbHtml +
+      '<div role="list">' +
+      folderItems.join('') +
+      fileItems.join('') +
+      '</div>';
 
-    // Attach event handlers
+    // Breadcrumb navigation
+    container.querySelectorAll('.file-nav-breadcrumb-btn').forEach((btn) => {
+      const depth = parseInt(btn.dataset.depth, 10);
+      const activate = () => {
+        companionCurrentPath = companionCurrentPath.slice(0, depth);
+        renderProjectFilesList(projectFiles, mainFilePath, requiredFiles);
+      };
+      btn.addEventListener('click', activate);
+      btn.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          activate();
+        }
+      });
+    });
+
+    // Folder row navigation
+    container.querySelectorAll('[data-folder-enter]').forEach((row) => {
+      const folderName = row.dataset.folderEnter;
+      const enter = () => {
+        companionCurrentPath = [...companionCurrentPath, folderName];
+        renderProjectFilesList(projectFiles, mainFilePath, requiredFiles);
+      };
+      row.addEventListener('click', enter);
+      row.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          enter();
+        } else if (e.key === 'Escape' && companionCurrentPath.length > 0) {
+          e.preventDefault();
+          companionCurrentPath = companionCurrentPath.slice(0, -1);
+          renderProjectFilesList(projectFiles, mainFilePath, requiredFiles);
+        }
+      });
+    });
+
+    // File action buttons
     container.querySelectorAll('button[data-action]').forEach((btn) => {
       btn.addEventListener('click', handleProjectFileAction);
     });
@@ -5465,6 +7498,55 @@ async function initApp() {
 
     // Auto-select overlay source based on screenshot_file variable detection
     autoSelectOverlaySource(requiredFiles);
+  }
+
+  /**
+   * Sync overlay visibility with the include_screenshot SCAD parameter.
+   * Called on parameter change and preset load so the overlay tracks user intent.
+   * @param {Object} parameters - Current parameter values
+   */
+  function syncOverlayWithScreenshotParam(parameters) {
+    if (!overlayToggle || !previewManager || !parameters) return;
+
+    const includeFlag = parameters.include_screenshot;
+    if (includeFlag === undefined) return;
+
+    const shouldShow =
+      includeFlag === 'yes' || includeFlag === true || includeFlag === 'true';
+    const state = stateManager.getState();
+    const projectFiles = state.projectFiles;
+
+    if (shouldShow) {
+      const screenshotFile = parameters.screenshot_file || 'default.svg';
+      const resolved = resolveProjectFile(projectFiles, screenshotFile);
+      if (resolved) {
+        if (overlaySourceSelect) overlaySourceSelect.value = resolved.key;
+        loadOverlayFromProjectFile(resolved.key)
+          .then(() => {
+            // SVG 96 DPI size applied; SCAD case-opening / screen dims override.
+            autoApplyScreenDimensionsFromParams(parameters);
+            overlayToggle.checked = true;
+            previewManager.setOverlayEnabled(true);
+            updateOverlayUIFromConfig();
+            updateOverlayStatus?.();
+          })
+          .catch((err) => {
+            console.warn(
+              '[App] Overlay enable via include_screenshot failed:',
+              err
+            );
+          });
+      } else {
+        console.warn(
+          `[App] syncOverlayWithScreenshotParam: "${screenshotFile}" not found ` +
+            'or ambiguous in projectFiles — overlay not displayed.'
+        );
+      }
+    } else {
+      overlayToggle.checked = false;
+      previewManager.setOverlayEnabled(false);
+      updateOverlayStatus?.();
+    }
   }
 
   /**
@@ -5490,26 +7572,48 @@ async function initApp() {
       return;
     }
 
-    // Look for screenshot_file variable in SCAD source
+    // Look for screenshot_file variable in SCAD source (resolve via basename fallback)
     let screenshotFile = null;
     if (requiredFiles && requiredFiles.files) {
       const screenshotVar = requiredFiles.files.find(
         (f) => f.variableName === 'screenshot_file'
       );
-      if (screenshotVar && projectFiles.has(screenshotVar.path)) {
-        screenshotFile = screenshotVar.path;
+      if (screenshotVar) {
+        const resolved = resolveProjectFile(projectFiles, screenshotVar.path);
+        if (resolved) screenshotFile = resolved.key;
       }
     }
 
-    // Fallback: look for default.svg (common screenshot overlay convention)
-    if (!screenshotFile && projectFiles.has('default.svg')) {
-      screenshotFile = 'default.svg';
+    // Fallback: resolve default.svg (handles root or single nested match)
+    if (!screenshotFile) {
+      const resolved = resolveProjectFile(projectFiles, 'default.svg');
+      if (resolved) screenshotFile = resolved.key;
     }
 
-    // If found, select it in the dropdown (but don't auto-enable the overlay)
+    // If found, select it in the dropdown and auto-load + enable the overlay.
+    // AAC keyguard designers need the overlay active immediately on project load.
     if (screenshotFile) {
       overlaySourceSelect.value = screenshotFile;
       console.log(`[App] Auto-selected overlay source: ${screenshotFile}`);
+      // Load the overlay image into the preview and enable the toggle
+      loadOverlayFromProjectFile(screenshotFile)
+        .then(() => {
+          // SVG 96 DPI size applied; SCAD case-opening / screen dims override.
+          const currentParams = stateManager.getState().parameters;
+          autoApplyScreenDimensionsFromParams(currentParams);
+          if (overlayToggle && !overlayToggle.checked) {
+            overlayToggle.checked = true;
+            previewManager?.setOverlayEnabled(true);
+            updateOverlayUIFromConfig();
+            updateOverlayStatus?.();
+            console.log(
+              '[App] Overlay auto-enabled for screenshot companion file'
+            );
+          }
+        })
+        .catch((err) => {
+          console.warn('[App] Auto-enable overlay failed:', err);
+        });
     }
   }
 
@@ -5628,6 +7732,20 @@ async function initApp() {
 
       // Auto-save to tracked saved project
       await autoSaveCompanionFiles();
+
+      // If include_screenshot is active but no overlay is displayed yet,
+      // re-sync so the newly added file can be picked up as the overlay source.
+      const currentParams = stateManager.getState().parameters;
+      const includeFlag = currentParams?.include_screenshot;
+      if (
+        (includeFlag === 'yes' ||
+          includeFlag === true ||
+          includeFlag === 'true') &&
+        overlayToggle &&
+        !overlayToggle.checked
+      ) {
+        syncOverlayWithScreenshotParam(currentParams);
+      }
     } catch (error) {
       console.error('[ProjectFiles] Error adding file:', error);
       updateStatus(`Failed to add file: ${error.message}`, 'error');
@@ -5784,19 +7902,80 @@ async function initApp() {
     const requiredFiles = detectRequiredCompanionFiles(uploadedFile.content);
     renderProjectFilesList(projectFiles, mainFilePath, requiredFiles);
 
-    // Auto-expand companion files panel when editable .txt files are present
-    // Makes the companion file editor more discoverable for clinician workflows
-    if (projectFiles && projectFiles.size > 1) {
-      const hasEditableTxtFiles = Array.from(projectFiles.keys()).some(
-        (p) => p.toLowerCase().endsWith('.txt') && p !== mainFilePath
-      );
-      if (hasEditableTxtFiles) {
-        const details = document.querySelector('.project-files-details');
-        if (details && !details.open) {
-          details.open = true;
-        }
+    // Emit synthetic console warnings for missing companion files so the
+    // Console panel mirrors what desktop OpenSCAD would show for missing includes.
+    if (
+      requiredFiles?.files &&
+      typeof window.updateConsoleOutput === 'function'
+    ) {
+      const projectBasenames = projectFiles
+        ? new Set(
+            Array.from(projectFiles.keys()).map((p) =>
+              p.split('/').pop().toLowerCase()
+            )
+          )
+        : new Set();
+      const missing = requiredFiles.files.filter((f) => {
+        if (!f.required) return false;
+        if (!projectFiles) return true;
+        if (projectFiles.has(f.path)) return false;
+        return !projectBasenames.has(f.path.split('/').pop().toLowerCase());
+      });
+      if (missing.length > 0) {
+        const warnings = missing
+          .map((f) => `WARNING: Can't open include file '${f.path}'.`)
+          .join('\n');
+        window.updateConsoleOutput(warnings);
       }
     }
+  }
+
+  /**
+   * Show a full-screen processing overlay for long operations.
+   * @param {string} message - Primary message
+   * @param {Object} [opts]
+   * @param {string} [opts.hint] - Secondary hint text
+   * @param {number} [opts.delayMs=0] - Delay before showing (0 = immediate)
+   * @returns {Function} dismiss callback (safe to call multiple times)
+   */
+  function showProcessingOverlay(message, opts = {}) {
+    const { hint = 'Please do not close or refresh the page.', delayMs = 0 } =
+      typeof opts === 'string' ? { hint: opts } : opts;
+    let dismissed = false;
+    let timerId = null;
+
+    const show = () => {
+      if (dismissed) return;
+      let overlay = document.getElementById('processingOverlay');
+      if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'processingOverlay';
+        overlay.className = 'processing-overlay';
+        overlay.setAttribute('role', 'alert');
+        overlay.setAttribute('aria-live', 'assertive');
+        overlay.innerHTML = `
+          <div class="processing-spinner"></div>
+          <div class="processing-message"></div>
+          <div class="processing-hint"></div>
+        `;
+        document.body.appendChild(overlay);
+      }
+      overlay.querySelector('.processing-message').textContent = message;
+      overlay.querySelector('.processing-hint').textContent = hint;
+    };
+
+    if (delayMs > 0) {
+      timerId = setTimeout(show, delayMs);
+    } else {
+      show();
+    }
+
+    return () => {
+      dismissed = true;
+      if (timerId) clearTimeout(timerId);
+      const el = document.getElementById('processingOverlay');
+      if (el) el.remove();
+    };
   }
 
   // Handle file upload (supports both .scad and .zip files)
@@ -5836,8 +8015,25 @@ async function initApp() {
 
         const isValid = validateFileUpload(fileMeta);
         if (!isValid) {
-          const errorMsg = getValidationErrorMessage(validateFileUpload.errors);
-          alert(`Invalid file: ${errorMsg}`);
+          const fileSizeMB = (file.size / (1024 * 1024)).toFixed(1);
+          const isZipName = fileNameLower.endsWith('.zip');
+          const isScadName = fileNameLower.endsWith('.scad');
+          let userMsg;
+          if (isZipName) {
+            const limitMB = (FILE_SIZE_LIMITS.ZIP_FILE / (1024 * 1024)).toFixed(
+              0
+            );
+            userMsg = `ZIP file is too large (${fileSizeMB} MB). Maximum allowed size is ${limitMB} MB.`;
+          } else if (isScadName) {
+            const limitMB = (
+              FILE_SIZE_LIMITS.SCAD_FILE /
+              (1024 * 1024)
+            ).toFixed(0);
+            userMsg = `.scad file is too large (${fileSizeMB} MB). Maximum allowed size is ${limitMB} MB.`;
+          } else {
+            userMsg = 'Please upload a .scad or .zip file.';
+          }
+          alert(userMsg);
           console.error(
             '[File Upload] Validation failed:',
             validateFileUpload.errors
@@ -5848,7 +8044,6 @@ async function initApp() {
 
       const isZip = fileNameLower.endsWith('.zip');
       const isScad = fileNameLower.endsWith('.scad');
-
       if (!isZip && !isScad) {
         alert('Please upload a .scad or .zip file');
         return;
@@ -5863,20 +8058,19 @@ async function initApp() {
           return;
         }
 
+        let dismissOverlay = () => {};
         try {
+          const fileSizeMB = (file.size / (1024 * 1024)).toFixed(1);
+          dismissOverlay = showProcessingOverlay(
+            `Opening project (${fileSizeMB} MB)…`,
+            'This may take a moment for large files. Please do not close or refresh the page.'
+          );
           updateStatus('Extracting ZIP file...');
           const { files, mainFile } = await extractZipFiles(file);
 
           // Get statistics
           const stats = getZipStats(files);
           console.log('[ZIP] Statistics:', stats);
-
-          // Show file tree
-          const fileTreeHtml = createFileTree(files, mainFile);
-          const infoArea = document.getElementById('fileInfo');
-          if (infoArea) {
-            infoArea.innerHTML = `${escapeHtml(file.name)} → ${escapeHtml(mainFile)}<br>${fileTreeHtml}`;
-          }
 
           // Get main file content
           fileContent = files.get(mainFile);
@@ -5905,22 +8099,47 @@ async function initApp() {
               '[ZIP] Missing dependencies detected:',
               preflight.missing
             );
-            // Show missing dependencies dialog
-            const shouldContinue = await showMissingDependenciesDialog(
+            // Dismiss the processing overlay so the dialog is accessible
+            dismissOverlay();
+
+            const result = await showMissingDependenciesDialog(
               preflight.missing,
               file.name
             );
-            if (!shouldContinue) {
+
+            if (result.action === 'cancel') {
               updateStatus('Upload cancelled - missing dependencies');
               return;
             }
-            // User chose to continue anyway - log warning
-            console.warn(
-              '[ZIP] Continuing despite missing files:',
-              formatMissingDependencies(preflight.missing)
+
+            if (result.action === 'add-files' && result.addedFiles?.size > 0) {
+              for (const [name, content] of result.addedFiles) {
+                files.set(name, content);
+                projectFiles.set(name, content);
+              }
+              console.log(
+                `[ZIP] User added ${result.addedFiles.size} missing file(s):`,
+                Array.from(result.addedFiles.keys())
+              );
+            }
+
+            // Re-show overlay while we finish loading
+            dismissOverlay = showProcessingOverlay(
+              `Opening project…`,
+              result.action === 'add-files'
+                ? 'Loading with added files.'
+                : 'Continuing with available files.'
             );
+
+            if (result.action === 'continue') {
+              console.warn(
+                '[ZIP] Continuing despite missing files:',
+                formatMissingDependencies(preflight.missing)
+              );
+            }
           }
 
+          dismissOverlay();
           // Continue with extracted content, passing mainFilePath and original ZIP name
           // The original ZIP filename is used as the default project name when saving
           const zipFileName = file.name;
@@ -5934,6 +8153,7 @@ async function initApp() {
           );
           return;
         } catch (error) {
+          dismissOverlay();
           console.error('[ZIP] Extraction failed:', error);
           updateStatus('Failed to extract ZIP file');
           alert(error.message);
@@ -6029,6 +8249,24 @@ async function initApp() {
       // Clear undo/redo history on new file upload
       stateManager.clearHistory();
 
+      // Project isolation: reset all project-scoped state so data from
+      // a previously loaded project never bleeds into the new one.
+      forceClearPresetSelection();
+      presetCompanionMap = null;
+
+      // Clear the reference overlay (SVG/image) from the previous project so it
+      // doesn't appear under the new project's model.
+      if (previewManager) {
+        previewManager.setReferenceOverlaySource({
+          kind: null,
+          name: null,
+          dataUrlOrText: null,
+        });
+        previewManager.setOverlayEnabled(false);
+      }
+      if (overlayToggle) overlayToggle.checked = false;
+      if (overlaySourceSelect) overlaySourceSelect.value = '';
+
       // Reset saved project tracking for new uploads (not reloads from saved projects)
       if (source !== 'saved') {
         currentSavedProjectId = null;
@@ -6038,8 +8276,15 @@ async function initApp() {
       welcomeScreen.classList.add('hidden');
       mainInterface.classList.remove('hidden');
 
-      // Update workflow progress (C3: COGA breadcrumbs)
-      showWorkflowProgress();
+      // Update file info summary (used by E2E tests and screen readers)
+      const fileInfoSummaryEl = document.getElementById('fileInfoSummary');
+      if (fileInfoSummaryEl && fileName) {
+        fileInfoSummaryEl.textContent = fileName;
+      }
+
+      // Apply mode-aware toolbar/workflow visibility now that the main interface
+      // is active. Advanced: toolbar visible, workflow hidden. Basic: vice versa.
+      _applyToolbarModeVisibility(getUIModeController().getMode());
       completeWorkflowStep('upload');
       setWorkflowStep('customize');
 
@@ -6057,45 +8302,6 @@ async function initApp() {
         }
       }
 
-      // Calculate file size
-      const fileSizeBytes =
-        typeof fileContent === 'string'
-          ? new Blob([fileContent]).size
-          : typeof file?.size === 'number'
-            ? file.size
-            : 0;
-      const fileSizeStr = formatFileSize(fileSizeBytes);
-
-      // Update file info (preserve file tree for multi-file projects)
-      const fileInfo = document.getElementById('fileInfo');
-      const fileInfoSummary = document.getElementById('fileInfoSummary');
-      const fileInfoDetails = document.getElementById('fileInfoDetails');
-      const fileInfoTree = document.getElementById('fileInfoTree');
-
-      if (fileInfo && fileInfoSummary) {
-        // Always show compact summary
-        const summaryText = `${fileName} (${paramCount} parameters, ${fileSizeStr})`;
-        fileInfoSummary.textContent = summaryText;
-        fileInfoSummary.title = summaryText; // Full text in tooltip
-
-        // Show file tree in disclosure if multi-file project
-        if (
-          projectFiles &&
-          projectFiles.size > 1 &&
-          fileInfoDetails &&
-          fileInfoTree
-        ) {
-          const treeHtml = createFileTree(
-            projectFiles,
-            mainFilePath || fileName
-          );
-          fileInfoTree.innerHTML = treeHtml;
-          fileInfoDetails.classList.remove('hidden');
-        } else if (fileInfoDetails) {
-          fileInfoDetails.classList.add('hidden');
-        }
-      }
-
       // Enable compact header after file is loaded
       const appHeader = document.querySelector('.app-header');
       if (appHeader) {
@@ -6108,7 +8314,6 @@ async function initApp() {
       );
       if (complexityTierLabel) {
         const tierName = adaptiveConfig.tierName;
-        // Avoid emoji icons so the badge stays in-theme (mono mode) and consistent.
         complexityTierLabel.textContent = tierName;
         complexityTierLabel.className = `complexity-tier-label tier-${adaptiveConfig.tier}`;
         complexityTierLabel.title =
@@ -6161,6 +8366,8 @@ async function initApp() {
           }
           // Update button state when parameters change
           updatePrimaryActionButton();
+          // Sync overlay with include_screenshot param
+          syncOverlayWithScreenshotParam(values);
         }
       );
 
@@ -6170,43 +8377,92 @@ async function initApp() {
         defaults: { ...currentValues },
       });
 
-      // Settings level is always 'advanced' — all groups visible, no toggle needed
-      localStorage.setItem('openscad-forge-settings-level', 'advanced');
+      // Load per-project UI preferences if saved, then apply panel visibility
+      try {
+        const projectPrefsKey = `openscad-forge-ui-prefs-${fileName}`;
+        const savedProjectPrefs = localStorage.getItem(projectPrefsKey);
+        if (savedProjectPrefs) {
+          const prefs = JSON.parse(savedProjectPrefs);
+          getUIModeController().importPreferences(prefs, {
+            applyImmediately: false,
+          });
+          console.log(
+            `[App] Loaded per-project UI preferences for: ${fileName}`
+          );
+        } else {
+          getUIModeController().setProjectHiddenPanels(null);
+        }
+      } catch {
+        getUIModeController().setProjectHiddenPanels(null);
+      }
+      getUIModeController().applyCurrentMode();
+
+      // Track file in recent files list
+      fileActionsController.trackOpen(fileName);
+
+      // Apply hidden groups from saved preference and set up hide/show-all behavior
+      applyHiddenGroups(parametersContainer, extracted?.modelName || fileName);
+
+      // C1: Auto-size overlay from SCAD parameters (screen dims or case opening)
+      autoApplyScreenDimensionsFromParams(currentValues);
 
       // Auto-import JSON presets from ZIP companion files (Item 14: desktop parity)
       // After state is set with schema + defaults, scan projectFiles for .json preset files
       if (projectFiles && projectFiles.size > 0) {
         // Diagnostic: log all files available to WASM FS (companion file mount)
-        console.debug('[WASM FS] Companion files mounted:', Array.from(projectFiles.entries()).map(
-          ([path, content]) => ({ path, sizeBytes: content.length })
-        ));
+        console.debug(
+          '[WASM FS] Companion files mounted:',
+          Array.from(projectFiles.entries()).map(([path, content]) => ({
+            path,
+            sizeBytes: content.length,
+          }))
+        );
 
         let autoImportedCount = 0;
         const paramSchema = {};
         // Build param schema for type coercion from extracted parameters
-        for (const [pName, pDef] of Object.entries(extracted.parameters || {})) {
+        for (const [pName, pDef] of Object.entries(
+          extracted.parameters || {}
+        )) {
           paramSchema[pName] = { type: pDef.type || 'string' };
         }
 
         for (const [filePath, fileContentStr] of projectFiles.entries()) {
-          if (filePath.toLowerCase().endsWith('.json') && !filePath.toLowerCase().endsWith('.scad')) {
+          if (
+            filePath.toLowerCase().endsWith('.json') &&
+            !filePath.toLowerCase().endsWith('.scad')
+          ) {
             try {
               console.log(`[ZIP] Auto-importing presets from: ${filePath}`);
-              console.debug(`[ZIP] JSON content preview (first 200 chars): ${fileContentStr.substring(0, 200)}`);
+              console.debug(
+                `[ZIP] JSON content preview (first 200 chars): ${fileContentStr.substring(0, 200)}`
+              );
+              const hiddenParamNamesForImport = Object.keys(
+                extracted.hiddenParameters || {}
+              );
               const importResult = presetManager.importPreset(
                 fileContentStr,
                 originalFileName,
-                paramSchema
+                paramSchema,
+                hiddenParamNamesForImport
               );
               if (importResult.success && importResult.imported > 0) {
                 autoImportedCount += importResult.imported;
-                console.log(`[ZIP] Auto-imported ${importResult.imported} preset(s) from ${filePath}`);
+                console.log(
+                  `[ZIP] Auto-imported ${importResult.imported} preset(s) from ${filePath}`
+                );
                 console.debug(`[ZIP] Import result details:`, importResult);
               } else if (!importResult.success) {
-                console.warn(`[ZIP] Failed to auto-import presets from ${filePath}:`, importResult.error);
+                console.warn(
+                  `[ZIP] Failed to auto-import presets from ${filePath}:`,
+                  importResult.error
+                );
               }
             } catch (jsonError) {
-              console.warn(`[ZIP] Error auto-importing presets from ${filePath}:`, jsonError.message);
+              console.warn(
+                `[ZIP] Error auto-importing presets from ${filePath}:`,
+                jsonError.message
+              );
             }
           }
         }
@@ -6214,11 +8470,35 @@ async function initApp() {
         if (autoImportedCount > 0) {
           // Count companion files (non-.scad, non-.json)
           const companionCount = Array.from(projectFiles.keys()).filter(
-            (p) => !p.toLowerCase().endsWith('.scad') && !p.toLowerCase().endsWith('.json')
+            (p) =>
+              !p.toLowerCase().endsWith('.scad') &&
+              !p.toLowerCase().endsWith('.json')
           ).length;
-          const companionText = companionCount > 0 ? ` + ${companionCount} companion file${companionCount > 1 ? 's' : ''}` : '';
-          updateStatus(`Loaded: ${fileName}${companionText} + ${autoImportedCount} preset${autoImportedCount > 1 ? 's' : ''}`);
+          const companionText =
+            companionCount > 0
+              ? ` + ${companionCount} companion file${companionCount > 1 ? 's' : ''}`
+              : '';
+          updateStatus(
+            `Loaded: ${fileName}${companionText} + ${autoImportedCount} preset${autoImportedCount > 1 ? 's' : ''}`
+          );
           updatePresetDropdown();
+
+          // Build preset→companion-file path mapping for alias mounting on preset load.
+          // Uses the imported preset names to match against nested file paths in the ZIP.
+          const importedPresets =
+            presetManager.getPresetsForModel(originalFileName);
+          if (importedPresets.length > 0) {
+            const parameterSetsForMap = Object.fromEntries(
+              importedPresets.map((p) => [p.name, p.parameters])
+            );
+            presetCompanionMap = buildPresetCompanionMap(
+              projectFiles,
+              parameterSetsForMap
+            );
+            console.log(
+              `[ZIP] Built preset companion map for ${presetCompanionMap.size} presets`
+            );
+          }
         }
       }
 
@@ -6273,6 +8553,12 @@ async function initApp() {
         updateStatus(`Ready - ${paramCount} parameters loaded`);
       }
 
+      // Auto-expand the Presets panel when a project loads
+      const presetControlsEl = document.getElementById('presetControls');
+      if (presetControlsEl && !presetControlsEl.open) {
+        presetControlsEl.open = true;
+      }
+
       // Move focus to the first parameter input after file load (WCAG 2.4.3 Focus Order)
       // This tells screen reader users that parameters are now available to customize
       requestAnimationFrame(() => {
@@ -6299,6 +8585,13 @@ async function initApp() {
           gridToggle.checked = previewManager.gridEnabled;
         }
 
+        // Sync grid size inputs with saved preference
+        {
+          const savedGrid = previewManager.getGridSize();
+          if (gridWidthInput) gridWidthInput.value = savedGrid.widthMm;
+          if (gridHeightInput) gridHeightInput.value = savedGrid.heightMm;
+        }
+
         // Sync auto-bed toggle with saved preference
         if (autoBedToggle) {
           autoBedToggle.checked = previewManager.autoBedEnabled;
@@ -6319,6 +8612,31 @@ async function initApp() {
               overlayOpacityValue.textContent = `${opacity}%`;
             }
           }
+        }
+
+        // Initialize overlay SVG color from localStorage or auto-detect
+        const savedAutoColor = localStorage.getItem(
+          STORAGE_KEY_OVERLAY_AUTO_COLOR
+        );
+        const isAutoColor = savedAutoColor !== 'false';
+        if (overlayAutoColorToggle) {
+          overlayAutoColorToggle.checked = isAutoColor;
+        }
+        if (overlayColorInput) {
+          overlayColorInput.disabled = isAutoColor;
+        }
+        if (isAutoColor) {
+          const themeColor = getThemeAwareSvgColor();
+          if (overlayColorInput) overlayColorInput.value = themeColor;
+          previewManager.overlayConfig.svgColor = themeColor;
+        } else {
+          const savedColor = localStorage.getItem(
+            STORAGE_KEY_OVERLAY_SVG_COLOR
+          );
+          if (savedColor && overlayColorInput) {
+            overlayColorInput.value = savedColor;
+          }
+          previewManager.overlayConfig.svgColor = savedColor || '#000000';
         }
 
         // Apply persisted model appearance controls
@@ -6437,7 +8755,11 @@ async function initApp() {
         const imageExts = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
         for (const [path, content] of projectFiles) {
           const ext = path.split('.').pop()?.toLowerCase();
-          if (imageExts.includes(ext) && typeof content === 'string' && content.startsWith('data:')) {
+          if (
+            imageExts.includes(ext) &&
+            typeof content === 'string' &&
+            content.startsWith('data:')
+          ) {
             const name = path.includes('/') ? path.split('/').pop() : path;
             SharedImageStore.addImageFromDataUrl(name, content).catch(() => {
               console.warn(`[App] Failed to restore image: ${path}`);
@@ -6557,7 +8879,9 @@ async function initApp() {
   }
 
   // Ctrl+S / Cmd+S keyboard shortcut to save and apply changes
-  const textFileEditorContent = document.getElementById('textFileEditorContent');
+  const textFileEditorContent = document.getElementById(
+    'textFileEditorContent'
+  );
   if (textFileEditorContent && textFileEditorModal) {
     textFileEditorContent.addEventListener('keydown', (e) => {
       // Ctrl+S or Cmd+S to save and apply
@@ -6603,7 +8927,7 @@ async function initApp() {
         // Reset file input
         fileInput.value = '';
 
-        // Clear state
+        // Clear state (including preset selection so it doesn't survive reload)
         stateManager.setState({
           uploadedFile: null,
           projectFiles: null,
@@ -6615,6 +8939,8 @@ async function initApp() {
           outputFormat: 'stl',
           stlStats: null,
           detectedLibraries: [],
+          currentPresetId: null,
+          currentPresetName: null,
         });
 
         // Clear history
@@ -6628,9 +8954,11 @@ async function initApp() {
         // Refresh saved projects list when returning to welcome screen
         await renderSavedProjectsList();
 
-        // Reset and hide workflow progress
+        // Reset workflow step state, then re-apply slot visibility.
+        // _applyToolbarModeVisibility sees mainInterface.hidden=true and hides both
+        // the toolbar and the workflow progress (welcome-screen branch).
         resetWorkflowProgress();
-        hideWorkflowProgress();
+        _applyToolbarModeVisibility(getUIModeController().getMode());
 
         // Exit focus mode if active
         const focusModeBtn = document.getElementById('focusModeBtn');
@@ -6653,25 +8981,27 @@ async function initApp() {
           closeFeaturesGuide();
         }
 
-        // Clear preview
+        // Clear preview and remove any loaded overlay from the previous project
         if (previewManager) {
           previewManager.clear();
+          previewManager.setReferenceOverlaySource({
+            kind: null,
+            name: null,
+            dataUrlOrText: null,
+          });
+          previewManager.setOverlayEnabled(false);
         }
+
+        // Reset overlay UI controls so the previous project's state doesn't linger
+        if (overlayToggle) overlayToggle.checked = false;
+        if (overlaySourceSelect) overlaySourceSelect.value = '';
+        updateOverlaySourceDropdown();
+        updateOverlayStatus();
 
         // Reset status
         updateStatus('Ready');
         statsArea.textContent = '';
         clearPreviewStats();
-
-        // Clear file info
-        const fileInfoSummary = document.getElementById('fileInfoSummary');
-        const fileInfoDetails = document.getElementById('fileInfoDetails');
-        if (fileInfoSummary) {
-          fileInfoSummary.textContent = '';
-        }
-        if (fileInfoDetails) {
-          fileInfoDetails.classList.add('hidden');
-        }
 
         // Remove compact header
         const appHeader = document.querySelector('.app-header');
@@ -6763,7 +9093,9 @@ if (rounded) {
         );
 
         // Announce to screen readers
-        announceImmediate('New project created. You can customize the parameters or edit the code.');
+        announceImmediate(
+          'New project created. You can customize the parameters or edit the code.'
+        );
 
         console.log('[App] New project created from template');
       } catch (error) {
@@ -7345,10 +9677,14 @@ if (rounded) {
       return;
     }
 
-    const projectFiles =
+    // currentFiles is a plain object (path → content) kept in sync with DB
+    let currentFiles =
       typeof project.projectFiles === 'string'
         ? JSON.parse(project.projectFiles)
-        : project.projectFiles;
+        : { ...project.projectFiles };
+
+    // Navigation path local to this modal closure — cleaned up when modal closes
+    let fmCurrentPath = [];
 
     const modal = document.createElement('div');
     modal.className = 'preset-modal file-manager-modal';
@@ -7356,111 +9692,16 @@ if (rounded) {
     modal.setAttribute('aria-labelledby', 'fileManagerTitle');
     modal.setAttribute('aria-modal', 'true');
 
-    // Build nested folder tree from flat file entries
-    const fileEntries = Object.entries(projectFiles);
-
-    // Group files by folder
-    const tree = { files: [], folders: {} };
-    for (const [path, content] of fileEntries) {
-      const parts = path.split('/');
-      if (parts.length > 1) {
-        const folderName = parts.slice(0, -1).join('/');
-        if (!tree.folders[folderName]) tree.folders[folderName] = [];
-        tree.folders[folderName].push({ path, name: parts[parts.length - 1], content });
-      } else {
-        tree.files.push({ path, name: path, content });
-      }
-    }
-
-    function renderFileItem(file) {
-      const isMain = file.path === project.mainFilePath;
-      const size = new Blob([file.content]).size;
-      const iconClass = isMain ? 'main-file' : '';
-      return `
-        <div class="file-manager-item" data-path="${escapeHtml(file.path)}">
-          <svg class="file-manager-item-icon ${iconClass}" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-            ${
-              isMain
-                ? '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line>'
-                : '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline>'
-            }
-          </svg>
-          <span class="file-manager-item-path">${escapeHtml(file.name)}</span>
-          <span class="file-manager-item-size">${formatFileSize(size)}</span>
-          <div class="file-manager-item-actions">
-            ${
-              isMain
-                ? '<span class="file-manager-main-badge">Main</span>'
-                : `
-              <button class="btn btn-sm btn-icon btn-set-main-file" data-path="${escapeHtml(file.path)}" aria-label="Set as main file" title="Set as main">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                  <polyline points="20 6 9 17 4 12"></polyline>
-                </svg>
-              </button>
-            `
-            }
-            <button class="btn btn-sm btn-icon btn-preview-file" data-path="${escapeHtml(file.path)}" aria-label="Preview file" title="Preview">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                <circle cx="12" cy="12" r="3"></circle>
-              </svg>
-            </button>
-            <button class="btn btn-sm btn-icon btn-rename-project-file" data-path="${escapeHtml(file.path)}" aria-label="Rename file" title="Rename">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-              </svg>
-            </button>
-            <button class="btn btn-sm btn-icon btn-delete-project-file${isMain ? ' btn-disabled' : ''}" data-path="${escapeHtml(file.path)}" aria-label="Delete file" title="${isMain ? 'Cannot delete main file' : 'Delete'}"${isMain ? ' disabled' : ''}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                <polyline points="3 6 5 6 21 6"></polyline>
-                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-              </svg>
-            </button>
-          </div>
-        </div>`;
-    }
-
-    // Render root-level files first, then folders
-    let filesHtml = tree.files.map(renderFileItem).join('');
-
-    // Render each folder as a collapsible group
-    for (const [folderName, folderFiles] of Object.entries(tree.folders).sort()) {
-      const visibleFiles = folderFiles.filter(f => f.name !== '.folder');
-      const folderFilesHtml = visibleFiles.map(renderFileItem).join('');
-      filesHtml += `
-        <details class="file-manager-folder" open>
-          <summary class="file-manager-folder-header">
-            <svg class="file-manager-folder-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-            </svg>
-            <span class="file-manager-folder-name">${escapeHtml(folderName)}</span>
-            <span class="file-manager-folder-count">${visibleFiles.length} file${visibleFiles.length !== 1 ? 's' : ''}</span>
-            <div class="file-manager-folder-actions">
-              <button class="btn btn-sm btn-icon btn-rename-project-folder" data-folder="${escapeHtml(folderName)}" aria-label="Rename folder" title="Rename">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                </svg>
-              </button>
-              <button class="btn btn-sm btn-icon btn-delete-project-folder" data-folder="${escapeHtml(folderName)}" aria-label="Delete folder" title="Delete folder">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                  <polyline points="3 6 5 6 21 6"></polyline>
-                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                </svg>
-              </button>
-            </div>
-          </summary>
-          <div class="file-manager-folder-contents">
-            ${folderFilesHtml || '<p class="file-manager-empty-folder">Empty folder</p>'}
-          </div>
-        </details>`;
-    }
-
     modal.innerHTML = `
-      <div class="preset-modal-content" style="max-width: 700px;">
+      <div class="preset-modal-content">
         <div class="preset-modal-header">
           <h3 id="fileManagerTitle" class="preset-modal-title">Project Files: ${escapeHtml(project.name)}</h3>
+          <button class="preset-modal-close" id="fileManagerXCloseBtn" aria-label="Close file manager">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
         </div>
 
         <div class="preset-modal-body">
@@ -7480,12 +9721,11 @@ if (rounded) {
               </svg>
               New Folder
             </button>
-            <span class="file-manager-count">${fileEntries.length} file${fileEntries.length !== 1 ? 's' : ''}</span>
+            <span class="file-manager-count" id="fmFileCount"></span>
           </div>
 
-          <div class="file-manager-tree">
-            ${filesHtml || '<p class="text-muted">No files in project</p>'}
-          </div>
+          <div id="fmBreadcrumbs"></div>
+          <div class="file-manager-tree" id="fmTree"></div>
         </div>
 
         <div class="preset-modal-footer">
@@ -7496,62 +9736,425 @@ if (rounded) {
     `;
 
     document.body.appendChild(modal);
+    openModal(modal);
 
-    // Wire up events
-    const closeBtn = modal.querySelector('#fileManagerCloseBtn');
-    closeBtn.addEventListener('click', () => {
+    const dismissFileManager = () => {
+      closeModal(modal);
       document.body.removeChild(modal);
-    });
+    };
 
-    const loadBtn = modal.querySelector('#fileManagerLoadBtn');
-    loadBtn.addEventListener('click', () => {
-      document.body.removeChild(modal);
-      loadSavedProject(projectId);
-    });
+    // ------------------------------------------------------------------ //
+    // renderFmView — re-renders breadcrumbs + tree without closing modal  //
+    // ------------------------------------------------------------------ //
+    function renderFmView() {
+      const fileMap = new Map(Object.entries(currentFiles));
+      const tree = buildNestedTree(fileMap);
 
-    // Preview file buttons
-    modal.querySelectorAll('.btn-preview-file').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const path = btn.dataset.path;
-        const content = projectFiles[path];
-        showFilePreviewModal(path, content);
-      });
-    });
+      // Validate path still exists after mutations
+      if (getNodeAtPath(tree, fmCurrentPath) === null) {
+        fmCurrentPath = [];
+      }
+      const node = getNodeAtPath(tree, fmCurrentPath) || tree;
 
-    // Set main file buttons
-    modal.querySelectorAll('.btn-set-main-file').forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        const path = btn.dataset.path;
-        // Update project main file path
-        project.mainFilePath = path;
-        project.content = projectFiles[path];
+      const totalFiles = Object.keys(currentFiles).filter(
+        (p) => !p.endsWith('/.folder')
+      ).length;
+      const countEl = modal.querySelector('#fmFileCount');
+      if (countEl)
+        countEl.textContent = `${totalFiles} file${totalFiles !== 1 ? 's' : ''}`;
 
-        const projectToSave = { ...project };
-        if (typeof projectToSave.projectFiles === 'object') {
-          projectToSave.projectFiles = JSON.stringify(
-            projectToSave.projectFiles
-          );
-        }
-
-        const result = await updateProject({
-          id: projectId,
-          name: project.name,
-          notes: project.notes,
+      // --- Breadcrumbs ---
+      const breadcrumbsEl = modal.querySelector('#fmBreadcrumbs');
+      if (fmCurrentPath.length > 0) {
+        const crumbItems = fmCurrentPath.map((seg, idx) => {
+          return `<li class="file-nav-breadcrumb-item">
+            <button class="file-nav-breadcrumb-btn" data-depth="${idx + 1}" aria-label="Navigate to ${escapeHtml(seg)}">${escapeHtml(seg)}</button>
+          </li>`;
         });
+        breadcrumbsEl.innerHTML = `
+          <nav class="file-nav-breadcrumbs file-nav-breadcrumbs--modal" aria-label="Folder navigation">
+            <ol class="file-nav-breadcrumb-list">
+              <li class="file-nav-breadcrumb-item">
+                <button class="file-nav-breadcrumb-btn file-nav-breadcrumb-home" data-depth="0" aria-label="Navigate to root">🏠 Root</button>
+              </li>
+              ${crumbItems.join('')}
+            </ol>
+          </nav>`;
+        breadcrumbsEl
+          .querySelectorAll('.file-nav-breadcrumb-btn')
+          .forEach((btn) => {
+            btn.addEventListener('click', () => {
+              fmCurrentPath = fmCurrentPath.slice(
+                0,
+                parseInt(btn.dataset.depth, 10)
+              );
+              renderFmView();
+            });
+          });
+      } else {
+        breadcrumbsEl.innerHTML = '';
+      }
 
-        if (result.success) {
-          document.body.removeChild(modal);
-          showProjectFileManager(projectId); // Refresh
-          stateManager.announceChange(`Main file set to ${path}`);
-        }
+      // --- Folder rows ---
+      const sortedFolders = [...node.folders.entries()].sort((a, b) =>
+        a[0].localeCompare(b[0])
+      );
+
+      // Build the full path prefix for a folder at current depth
+      const makeFolderFullPath = (name) => [...fmCurrentPath, name].join('/');
+
+      const folderRowsHtml = sortedFolders
+        .map(([folderName, childNode]) => {
+          const count = countFilesRecursive(childNode);
+          const fullPath = makeFolderFullPath(folderName);
+          return `
+          <div class="file-manager-item file-nav-folder-row" role="button" tabindex="0"
+               data-folder-enter="${escapeHtml(folderName)}"
+               aria-label="Open folder ${escapeHtml(folderName)}, ${count} file${count !== 1 ? 's' : ''}">
+            <svg class="file-manager-item-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+            </svg>
+            <span class="file-manager-item-path">${escapeHtml(folderName)}</span>
+            <span class="file-manager-item-size file-nav-folder-count">${count} file${count !== 1 ? 's' : ''}</span>
+            <div class="file-manager-item-actions">
+              <button class="btn btn-sm btn-icon btn-rename-project-folder" data-folder="${escapeHtml(fullPath)}" aria-label="Rename folder ${escapeHtml(folderName)}" title="Rename">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                </svg>
+              </button>
+              <button class="btn btn-sm btn-icon btn-delete-project-folder" data-folder="${escapeHtml(fullPath)}" aria-label="Delete folder ${escapeHtml(folderName)}" title="Delete folder">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <polyline points="3 6 5 6 21 6"></polyline>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                </svg>
+              </button>
+              <span class="file-nav-folder-chevron" aria-hidden="true">›</span>
+            </div>
+          </div>`;
+        })
+        .join('');
+
+      // --- File rows ---
+      const sortedFiles = [...node.files].sort((a, b) =>
+        a.name.localeCompare(b.name)
+      );
+
+      const fileRowsHtml = sortedFiles
+        .map((file) => {
+          const isMain = file.path === project.mainFilePath;
+          const size = new Blob([file.content]).size;
+          const iconClass = isMain ? 'main-file' : '';
+          return `
+          <div class="file-manager-item" data-path="${escapeHtml(file.path)}">
+            <svg class="file-manager-item-icon ${iconClass}" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              ${
+                isMain
+                  ? '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line>'
+                  : '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline>'
+              }
+            </svg>
+            <span class="file-manager-item-path">${escapeHtml(file.name)}</span>
+            <span class="file-manager-item-size">${formatFileSize(size)}</span>
+            <div class="file-manager-item-actions">
+              ${
+                isMain
+                  ? '<span class="file-manager-main-badge">Main</span>'
+                  : `<button class="btn btn-sm btn-icon btn-set-main-file" data-path="${escapeHtml(file.path)}" aria-label="Set as main file" title="Set as main">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                      </svg>
+                    </button>`
+              }
+              <button class="btn btn-sm btn-icon btn-preview-file" data-path="${escapeHtml(file.path)}" aria-label="Preview file" title="Preview">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                  <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+              </button>
+              <button class="btn btn-sm btn-icon btn-rename-project-file" data-path="${escapeHtml(file.path)}" aria-label="Rename file" title="Rename">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                </svg>
+              </button>
+              <button class="btn btn-sm btn-icon btn-delete-project-file${isMain ? ' btn-disabled' : ''}" data-path="${escapeHtml(file.path)}" aria-label="Delete file" title="${isMain ? 'Cannot delete main file' : 'Delete'}"${isMain ? ' disabled' : ''}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <polyline points="3 6 5 6 21 6"></polyline>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                </svg>
+              </button>
+            </div>
+          </div>`;
+        })
+        .join('');
+
+      const treeEl = modal.querySelector('#fmTree');
+      treeEl.innerHTML =
+        folderRowsHtml + fileRowsHtml ||
+        '<p class="text-muted">No files in this folder</p>';
+
+      // --- Wire folder navigation ---
+      treeEl.querySelectorAll('[data-folder-enter]').forEach((row) => {
+        const folderName = row.dataset.folderEnter;
+        const enter = () => {
+          fmCurrentPath = [...fmCurrentPath, folderName];
+          renderFmView();
+        };
+        row.addEventListener('click', (e) => {
+          // Don't navigate if a button inside the row was clicked
+          if (e.target.closest('button')) return;
+          enter();
+        });
+        row.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            enter();
+          } else if (e.key === 'Escape' && fmCurrentPath.length > 0) {
+            e.preventDefault();
+            fmCurrentPath = fmCurrentPath.slice(0, -1);
+            renderFmView();
+          }
+        });
       });
+
+      // --- Preview file buttons ---
+      treeEl.querySelectorAll('.btn-preview-file').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const path = btn.dataset.path;
+          showFilePreviewModal(path, currentFiles[path]);
+        });
+      });
+
+      // --- Set main file buttons ---
+      treeEl.querySelectorAll('.btn-set-main-file').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const path = btn.dataset.path;
+          project.mainFilePath = path;
+          const result = await updateProject({
+            id: projectId,
+            mainFilePath: path,
+          });
+          if (result.success) {
+            stateManager.announceChange(`Main file set to ${path}`);
+            renderFmView();
+          }
+        });
+      });
+
+      // --- Rename folder buttons ---
+      treeEl.querySelectorAll('.btn-rename-project-folder').forEach((btn) => {
+        btn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const oldFullPath = btn.dataset.folder; // e.g. "Cases/iPad 7,8,9"
+          const oldName = oldFullPath.split('/').pop();
+          const newName = prompt(`Rename folder "${oldName}" to:`, oldName);
+          if (!newName || !newName.trim() || newName.trim() === oldName) return;
+          const safeName = newName.trim().replace(/[\\/:*?"<>|]/g, '_');
+          const parentPrefix = oldFullPath.includes('/')
+            ? oldFullPath.slice(0, oldFullPath.lastIndexOf('/') + 1)
+            : '';
+          const newFullPath = parentPrefix + safeName;
+          const oldPrefix = oldFullPath + '/';
+          const newPrefix = newFullPath + '/';
+
+          const conflict = Object.keys(currentFiles).some(
+            (p) => p.startsWith(newPrefix) && !p.startsWith(oldPrefix)
+          );
+          if (conflict) {
+            alert(`Folder "${safeName}" already exists.`);
+            return;
+          }
+
+          const updatedFiles = {};
+          for (const [path, content] of Object.entries(currentFiles)) {
+            updatedFiles[
+              path.startsWith(oldPrefix)
+                ? newPrefix + path.slice(oldPrefix.length)
+                : path
+            ] = content;
+          }
+
+          let newMainFilePath = project.mainFilePath;
+          if (newMainFilePath && newMainFilePath.startsWith(oldPrefix)) {
+            newMainFilePath =
+              newPrefix + newMainFilePath.slice(oldPrefix.length);
+          }
+
+          const result = await updateProject({
+            id: projectId,
+            projectFiles: JSON.stringify(updatedFiles),
+            mainFilePath: newMainFilePath,
+          });
+
+          if (result.success) {
+            currentFiles = updatedFiles;
+            project.mainFilePath = newMainFilePath;
+            // If we renamed a folder we're currently inside, update path
+            fmCurrentPath = fmCurrentPath.map((seg, idx) => {
+              const prefix = fmCurrentPath.slice(0, idx + 1).join('/');
+              return prefix === oldFullPath ? safeName : seg;
+            });
+            stateManager.announceChange(`Folder renamed to "${safeName}"`);
+            renderFmView();
+          } else {
+            alert(`Failed to rename folder: ${result.error}`);
+          }
+        });
+      });
+
+      // --- Rename file buttons ---
+      treeEl.querySelectorAll('.btn-rename-project-file').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const oldPath = btn.dataset.path;
+          const parts = oldPath.split('/');
+          const oldName = parts[parts.length - 1];
+          const folder = parts.length > 1 ? parts.slice(0, -1).join('/') : '';
+
+          const newName = prompt(`Rename "${oldName}" to:`, oldName);
+          if (!newName || !newName.trim() || newName.trim() === oldName) return;
+          const safeName = newName.trim().replace(/[\\/:*?"<>|]/g, '_');
+          const newPath = folder ? `${folder}/${safeName}` : safeName;
+
+          if (newPath === oldPath) return;
+          if (currentFiles[newPath] !== undefined) {
+            alert(
+              `A file named "${safeName}" already exists${folder ? ` in ${folder}` : ''}.`
+            );
+            return;
+          }
+
+          const updatedFiles = {};
+          for (const [path, content] of Object.entries(currentFiles)) {
+            updatedFiles[path === oldPath ? newPath : path] = content;
+          }
+
+          let newMainFilePath = project.mainFilePath;
+          if (newMainFilePath === oldPath) newMainFilePath = newPath;
+
+          const result = await updateProject({
+            id: projectId,
+            projectFiles: JSON.stringify(updatedFiles),
+            mainFilePath: newMainFilePath,
+          });
+
+          if (result.success) {
+            currentFiles = updatedFiles;
+            project.mainFilePath = newMainFilePath;
+            stateManager.announceChange(`File renamed to "${safeName}"`);
+            renderFmView();
+          } else {
+            alert(`Failed to rename file: ${result.error}`);
+          }
+        });
+      });
+
+      // --- Delete file buttons ---
+      treeEl.querySelectorAll('.btn-delete-project-file').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const filePath = btn.dataset.path;
+          if (filePath === project.mainFilePath) return;
+
+          const fileName = filePath.split('/').pop();
+          if (!confirm(`Delete "${fileName}"? This cannot be undone.`)) return;
+
+          const updatedFiles = { ...currentFiles };
+          delete updatedFiles[filePath];
+
+          const result = await updateProject({
+            id: projectId,
+            projectFiles: JSON.stringify(updatedFiles),
+          });
+
+          if (result.success) {
+            currentFiles = updatedFiles;
+            stateManager.announceChange(`Deleted file "${fileName}"`);
+            renderFmView();
+          } else {
+            alert(`Failed to delete file: ${result.error}`);
+          }
+        });
+      });
+
+      // --- Delete folder buttons ---
+      treeEl.querySelectorAll('.btn-delete-project-folder').forEach((btn) => {
+        btn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const folderFullPath = btn.dataset.folder;
+          const folderName = folderFullPath.split('/').pop();
+          const folderPrefix = folderFullPath + '/';
+
+          if (
+            project.mainFilePath &&
+            project.mainFilePath.startsWith(folderPrefix)
+          ) {
+            alert(
+              `Cannot delete folder "${folderName}" because it contains the main file. Move or change the main file first.`
+            );
+            return;
+          }
+
+          const fileCount = Object.keys(currentFiles).filter(
+            (p) => p.startsWith(folderPrefix) && !p.endsWith('/.folder')
+          ).length;
+          const message =
+            fileCount > 0
+              ? `Delete folder "${folderName}" and its ${fileCount} file${fileCount !== 1 ? 's' : ''}? This cannot be undone.`
+              : `Delete empty folder "${folderName}"?`;
+
+          if (!confirm(message)) return;
+
+          const updatedFiles = {};
+          for (const [path, content] of Object.entries(currentFiles)) {
+            if (!path.startsWith(folderPrefix)) updatedFiles[path] = content;
+          }
+
+          const result = await updateProject({
+            id: projectId,
+            projectFiles: JSON.stringify(updatedFiles),
+          });
+
+          if (result.success) {
+            currentFiles = updatedFiles;
+            // If we deleted a folder we're inside, navigate up
+            const deletedPathStr = folderFullPath;
+            const currentPathStr = fmCurrentPath.join('/');
+            if (
+              currentPathStr === deletedPathStr ||
+              currentPathStr.startsWith(deletedPathStr + '/')
+            ) {
+              fmCurrentPath = folderFullPath.includes('/')
+                ? folderFullPath.split('/').slice(0, -1)
+                : [];
+            }
+            stateManager.announceChange(`Deleted folder "${folderName}"`);
+            renderFmView();
+          } else {
+            alert(`Failed to delete folder: ${result.error}`);
+          }
+        });
+      });
+    }
+
+    // Initial render
+    renderFmView();
+
+    // Wire up static modal buttons
+    modal
+      .querySelector('#fileManagerXCloseBtn')
+      .addEventListener('click', dismissFileManager);
+    modal
+      .querySelector('#fileManagerCloseBtn')
+      .addEventListener('click', dismissFileManager);
+    modal.querySelector('#fileManagerLoadBtn').addEventListener('click', () => {
+      dismissFileManager();
+      loadSavedProject(projectId);
     });
 
     // Add file button
     const addFileBtn = modal.querySelector('#addFileToProjectBtn');
     if (addFileBtn) {
       addFileBtn.addEventListener('click', () => {
-        // Create a temporary file input
         const fileInput = document.createElement('input');
         fileInput.type = 'file';
         fileInput.multiple = true;
@@ -7562,19 +10165,19 @@ if (rounded) {
           if (files.length === 0) return;
 
           let addedCount = 0;
-          const updatedProjectFiles = { ...projectFiles };
+          const updatedFiles = { ...currentFiles };
+          // Place new files in the currently viewed folder
+          const folderPrefix =
+            fmCurrentPath.length > 0 ? fmCurrentPath.join('/') + '/' : '';
 
           for (const file of files) {
             try {
-              // Determine how to read the file
               const ext = file.name.split('.').pop().toLowerCase();
               const isText = ['scad', 'json', 'txt', 'svg'].includes(ext);
-
               let content;
               if (isText) {
                 content = await file.text();
               } else {
-                // For binary files, store as base64 data URL
                 content = await new Promise((resolve, reject) => {
                   const reader = new FileReader();
                   reader.onload = () => resolve(reader.result);
@@ -7582,10 +10185,7 @@ if (rounded) {
                   reader.readAsDataURL(file);
                 });
               }
-
-              // Use the filename as the path
-              // If file already exists, it will be overwritten
-              updatedProjectFiles[file.name] = content;
+              updatedFiles[folderPrefix + file.name] = content;
               addedCount++;
             } catch (err) {
               console.error(
@@ -7596,18 +10196,16 @@ if (rounded) {
           }
 
           if (addedCount > 0) {
-            // Update project with new files
             const result = await updateProject({
               id: projectId,
-              projectFiles: JSON.stringify(updatedProjectFiles),
+              projectFiles: JSON.stringify(updatedFiles),
             });
-
             if (result.success) {
-              document.body.removeChild(modal);
-              showProjectFileManager(projectId); // Refresh to show new files
+              currentFiles = updatedFiles;
               stateManager.announceChange(
                 `Added ${addedCount} file${addedCount !== 1 ? 's' : ''} to project`
               );
+              renderFmView();
             } else {
               alert(`Failed to add files: ${result.error}`);
             }
@@ -7618,227 +10216,42 @@ if (rounded) {
       });
     }
 
-    // New folder button
+    // New folder button — creates folder inside currently viewed folder
     const addFolderBtn = modal.querySelector('#addFolderToProjectBtn');
     if (addFolderBtn) {
       addFolderBtn.addEventListener('click', async () => {
         const folderName = prompt('Enter folder name:');
         if (!folderName || !folderName.trim()) return;
         const safeName = folderName.trim().replace(/[\\/:*?"<>|]/g, '_');
+        const parentPrefix =
+          fmCurrentPath.length > 0 ? fmCurrentPath.join('/') + '/' : '';
+        const newFolderPrefix = parentPrefix + safeName + '/';
 
-        // Check if folder already exists
-        const folderPrefix = `${safeName}/`;
-        const exists = Object.keys(projectFiles).some(p => p.startsWith(folderPrefix));
+        const exists = Object.keys(currentFiles).some((p) =>
+          p.startsWith(newFolderPrefix)
+        );
         if (exists) {
           alert(`Folder "${safeName}" already exists.`);
           return;
         }
 
-        // Create folder with a hidden sentinel entry
-        const updatedProjectFiles = { ...projectFiles };
-        updatedProjectFiles[`${safeName}/.folder`] = '';
+        const updatedFiles = { ...currentFiles };
+        updatedFiles[`${newFolderPrefix}.folder`] = '';
 
         const result = await updateProject({
           id: projectId,
-          projectFiles: JSON.stringify(updatedProjectFiles),
+          projectFiles: JSON.stringify(updatedFiles),
         });
 
         if (result.success) {
-          document.body.removeChild(modal);
-          showProjectFileManager(projectId);
+          currentFiles = updatedFiles;
           stateManager.announceChange(`Created folder "${safeName}"`);
+          renderFmView();
         } else {
           alert(`Failed to create folder: ${result.error}`);
         }
       });
     }
-
-    // Rename folder buttons
-    modal.querySelectorAll('.btn-rename-project-folder').forEach((btn) => {
-      btn.addEventListener('click', async (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const oldName = btn.dataset.folder;
-        const newName = prompt(`Rename folder "${oldName}" to:`, oldName);
-        if (!newName || !newName.trim() || newName.trim() === oldName) return;
-        const safeName = newName.trim().replace(/[\\/:*?"<>|]/g, '_');
-
-        // Check if target name already exists
-        const targetPrefix = `${safeName}/`;
-        const conflict = Object.keys(projectFiles).some(
-          p => p.startsWith(targetPrefix) && !p.startsWith(`${oldName}/`)
-        );
-        if (conflict) {
-          alert(`Folder "${safeName}" already exists.`);
-          return;
-        }
-
-        // Rename all file paths under the old folder
-        const updatedProjectFiles = {};
-        const oldPrefix = `${oldName}/`;
-        for (const [path, content] of Object.entries(projectFiles)) {
-          if (path.startsWith(oldPrefix)) {
-            updatedProjectFiles[`${safeName}/${path.slice(oldPrefix.length)}`] = content;
-          } else {
-            updatedProjectFiles[path] = content;
-          }
-        }
-
-        // Update mainFilePath if it was in the renamed folder
-        let newMainFilePath = project.mainFilePath;
-        if (newMainFilePath && newMainFilePath.startsWith(oldPrefix)) {
-          newMainFilePath = `${safeName}/${newMainFilePath.slice(oldPrefix.length)}`;
-        }
-
-        const result = await updateProject({
-          id: projectId,
-          projectFiles: JSON.stringify(updatedProjectFiles),
-          mainFilePath: newMainFilePath,
-        });
-
-        if (result.success) {
-          document.body.removeChild(modal);
-          showProjectFileManager(projectId);
-          stateManager.announceChange(`Folder renamed to "${safeName}"`);
-        } else {
-          alert(`Failed to rename folder: ${result.error}`);
-        }
-      });
-    });
-
-    // Rename file buttons
-    modal.querySelectorAll('.btn-rename-project-file').forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        const oldPath = btn.dataset.path;
-        const parts = oldPath.split('/');
-        const oldName = parts[parts.length - 1];
-        const folder = parts.length > 1 ? parts.slice(0, -1).join('/') : '';
-
-        const newName = prompt(`Rename "${oldName}" to:`, oldName);
-        if (!newName || !newName.trim() || newName.trim() === oldName) return;
-        const safeName = newName.trim().replace(/[\\/:*?"<>|]/g, '_');
-        const newPath = folder ? `${folder}/${safeName}` : safeName;
-
-        if (newPath === oldPath) return;
-
-        // Check for conflicts
-        if (projectFiles[newPath] !== undefined) {
-          alert(`A file named "${safeName}" already exists${folder ? ` in ${folder}` : ''}.`);
-          return;
-        }
-
-        const updatedProjectFiles = {};
-        for (const [path, content] of Object.entries(projectFiles)) {
-          if (path === oldPath) {
-            updatedProjectFiles[newPath] = content;
-          } else {
-            updatedProjectFiles[path] = content;
-          }
-        }
-
-        // Update mainFilePath if the renamed file was the main file
-        let newMainFilePath = project.mainFilePath;
-        if (newMainFilePath === oldPath) {
-          newMainFilePath = newPath;
-        }
-
-        const result = await updateProject({
-          id: projectId,
-          projectFiles: JSON.stringify(updatedProjectFiles),
-          mainFilePath: newMainFilePath,
-        });
-
-        if (result.success) {
-          document.body.removeChild(modal);
-          showProjectFileManager(projectId);
-          stateManager.announceChange(`File renamed to "${safeName}"`);
-        } else {
-          alert(`Failed to rename file: ${result.error}`);
-        }
-      });
-    });
-
-    // Delete file buttons
-    modal.querySelectorAll('.btn-delete-project-file').forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        const filePath = btn.dataset.path;
-        if (filePath === project.mainFilePath) return;
-
-        const fileName = filePath.split('/').pop();
-        if (!confirm(`Delete "${fileName}"? This cannot be undone.`)) return;
-
-        const updatedProjectFiles = { ...projectFiles };
-        delete updatedProjectFiles[filePath];
-
-        const result = await updateProject({
-          id: projectId,
-          projectFiles: JSON.stringify(updatedProjectFiles),
-        });
-
-        if (result.success) {
-          document.body.removeChild(modal);
-          showProjectFileManager(projectId);
-          stateManager.announceChange(`Deleted file "${fileName}"`);
-        } else {
-          alert(`Failed to delete file: ${result.error}`);
-        }
-      });
-    });
-
-    // Delete folder buttons
-    modal.querySelectorAll('.btn-delete-project-folder').forEach((btn) => {
-      btn.addEventListener('click', async (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const folderName = btn.dataset.folder;
-        const folderPrefix = `${folderName}/`;
-
-        // Check if the main file lives in this folder
-        if (project.mainFilePath && project.mainFilePath.startsWith(folderPrefix)) {
-          alert(`Cannot delete folder "${folderName}" because it contains the main file. Move or change the main file first.`);
-          return;
-        }
-
-        const fileCount = Object.keys(projectFiles).filter(
-          p => p.startsWith(folderPrefix) && !p.endsWith('/.folder')
-        ).length;
-        const message = fileCount > 0
-          ? `Delete folder "${folderName}" and its ${fileCount} file${fileCount !== 1 ? 's' : ''}? This cannot be undone.`
-          : `Delete empty folder "${folderName}"?`;
-
-        if (!confirm(message)) return;
-
-        const updatedProjectFiles = {};
-        for (const [path, content] of Object.entries(projectFiles)) {
-          if (!path.startsWith(folderPrefix)) {
-            updatedProjectFiles[path] = content;
-          }
-        }
-
-        const result = await updateProject({
-          id: projectId,
-          projectFiles: JSON.stringify(updatedProjectFiles),
-        });
-
-        if (result.success) {
-          document.body.removeChild(modal);
-          showProjectFileManager(projectId);
-          stateManager.announceChange(`Deleted folder "${folderName}"`);
-        } else {
-          alert(`Failed to delete folder: ${result.error}`);
-        }
-      });
-    });
-
-    // Close on escape
-    modal.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        document.body.removeChild(modal);
-      }
-    });
-
-    // Focus close button
-    setTimeout(() => closeBtn.focus(), 100);
   }
 
   /**
@@ -7875,19 +10288,16 @@ if (rounded) {
     `;
 
     document.body.appendChild(modal);
+    openModal(modal);
 
-    const closeBtn = modal.querySelector('#filePreviewCloseBtn');
-    closeBtn.addEventListener('click', () => {
+    const dismissPreview = () => {
+      closeModal(modal);
       document.body.removeChild(modal);
-    });
+    };
 
-    modal.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        document.body.removeChild(modal);
-      }
-    });
-
-    setTimeout(() => closeBtn.focus(), 100);
+    modal
+      .querySelector('#filePreviewCloseBtn')
+      .addEventListener('click', dismissPreview);
   }
 
   /**
@@ -7895,6 +10305,7 @@ if (rounded) {
    * @param {string} projectId
    */
   async function loadSavedProject(projectId) {
+    let dismissOverlay = () => {};
     try {
       const project = await getProject(projectId);
       if (!project) {
@@ -7914,15 +10325,19 @@ if (rounded) {
         if (!confirmed) return;
       }
 
+      dismissOverlay = showProcessingOverlay(`Loading "${project.name}"…`, {
+        hint: 'Large projects may take a moment to open.',
+      });
+
+      // Yield to allow the browser to paint the overlay before heavy work begins
+      await new Promise((r) => setTimeout(r, 0));
+
       // Reconstruct file data
       const content = project.content;
       const fileName = project.originalName;
-      // getProject() already parses projectFiles from JSON string to object
       const projectFiles = project.projectFiles
         ? new Map(Object.entries(project.projectFiles))
         : null;
-      // FIX: For single-file projects, mainFilePath should be null so content gets written to /tmp/input.scad
-      // The mainFilePath is only meaningful for multi-file ZIP projects where files are mounted to the FS
       const mainFilePath =
         projectFiles && projectFiles.size > 0 ? project.mainFilePath : null;
 
@@ -7933,15 +10348,16 @@ if (rounded) {
       currentSavedProjectId = projectId;
 
       // Load the file (reuse existing handleFile logic)
-      // Pass project.name as the 6th arg so uploadedFile.name shows the saved project name
       await handleFile(
         { name: fileName },
         content,
         projectFiles,
         mainFilePath,
         'saved',
-        project.name // Use the saved project name for display
+        project.name
       );
+
+      dismissOverlay();
 
       // Update companion save button after loading
       updateCompanionSaveButton();
@@ -7953,6 +10369,7 @@ if (rounded) {
       // Re-render list to update "last opened" time
       await renderSavedProjectsList();
     } catch (error) {
+      dismissOverlay();
       console.error('Error loading saved project:', error);
       alert(`Failed to load project: ${error.message}`);
     }
@@ -7962,7 +10379,7 @@ if (rounded) {
    * Show opt-in save prompt after file upload
    * @param {Object} fileData - Current file state
    */
-  async function showSaveProjectPrompt(fileData) {
+  async function showSaveProjectPrompt(fileData, { preSave = false } = {}) {
     const { uploadedFile, projectFiles, mainFilePath } = fileData;
 
     if (!uploadedFile) return;
@@ -8002,8 +10419,16 @@ if (rounded) {
               <span id="saveProjectNotesCount">0</span> / 5000 characters
             </div>
           </div>
+          <div id="saveProjectDuplicateWarning" style="display:none; margin-top: var(--space-md); padding: var(--space-sm) var(--space-md); border-radius: var(--radius-sm); background: color-mix(in srgb, var(--color-warning, #f59e0b) 15%, transparent); border: 1px solid var(--color-warning, #f59e0b);">
+            <p style="margin: 0 0 var(--space-sm); font-weight: 600; color: var(--color-text-primary);">
+              ⚠ A project named &ldquo;<span id="saveProjectDuplicateName"></span>&rdquo; already exists.
+            </p>
+            <p style="margin: 0; color: var(--color-text-secondary); font-size: var(--text-sm);">
+              Do you want to overwrite it, or save this as a new copy?
+            </p>
+          </div>
         </div>
-        <div class="preset-modal-footer">
+        <div class="preset-modal-footer" id="saveProjectFooter">
           <button class="btn btn-secondary" id="saveProjectNotNow">Not now</button>
           <button class="btn btn-primary" id="saveProjectSave" disabled>Save</button>
         </div>
@@ -8020,6 +10445,17 @@ if (rounded) {
     const saveBtn = modal.querySelector('#saveProjectSave');
     const notNowBtn = modal.querySelector('#saveProjectNotNow');
     const closeBtn = modal.querySelector('.preset-modal-close');
+    const footer = modal.querySelector('#saveProjectFooter');
+    const duplicateWarning = modal.querySelector(
+      '#saveProjectDuplicateWarning'
+    );
+    const duplicateNameSpan = modal.querySelector('#saveProjectDuplicateName');
+
+    // When called from an explicit Save/Save As action, pre-check the box
+    if (preSave) {
+      checkbox.checked = true;
+      saveBtn.disabled = false;
+    }
 
     // Update save button state based on checkbox
     checkbox.addEventListener('change', () => {
@@ -8040,31 +10476,43 @@ if (rounded) {
       },
     });
 
-    // Handle save
-    saveBtn.addEventListener('click', async () => {
-      if (!checkbox.checked) return;
-
+    async function doSave(overwriteProject) {
       const projectName = nameInput.value.trim() || fileName;
       const notes = notesTextarea.value.trim();
-
-      // Convert projectFiles Map to object for storage
       const projectFilesObj = projectFiles
         ? Object.fromEntries(projectFiles)
         : null;
 
-      const result = await saveProject({
-        name: projectName,
-        originalName: fileName,
-        kind,
-        mainFilePath: mainFilePath || fileName,
-        content: uploadedFile.content,
-        projectFiles: projectFilesObj,
-        notes,
-      });
+      let result;
+      if (overwriteProject) {
+        result = await updateProject({
+          id: overwriteProject.id,
+          notes,
+          content: uploadedFile.content,
+          projectFiles:
+            projectFilesObj !== null
+              ? JSON.stringify(projectFilesObj)
+              : undefined,
+        });
+        if (result.success) {
+          currentSavedProjectId = overwriteProject.id;
+        }
+      } else {
+        result = await saveProject({
+          name: projectName,
+          originalName: fileName,
+          kind,
+          mainFilePath: mainFilePath || fileName,
+          content: uploadedFile.content,
+          projectFiles: projectFilesObj,
+          notes,
+        });
+        if (result.success) {
+          currentSavedProjectId = result.id;
+        }
+      }
 
       if (result.success) {
-        // Track the saved project ID for companion file auto-save
-        currentSavedProjectId = result.id;
         updateCompanionSaveButton();
         stateManager.announceChange(`Project saved: ${projectName}`);
         updateStatus(`Saved: ${projectName}`);
@@ -8073,12 +10521,43 @@ if (rounded) {
         alert(`Failed to save project: ${result.error}`);
       }
 
-      document.body.removeChild(modal);
+      closeModal(modal);
+      modal.remove();
+    }
+
+    // Handle save — shows inline duplicate confirmation when needed
+    saveBtn.addEventListener('click', async () => {
+      if (!checkbox.checked) return;
+
+      const projectName = nameInput.value.trim() || fileName;
+      const existingProjects = await listSavedProjects();
+      const duplicate = existingProjects.find((p) => p.name === projectName);
+
+      if (duplicate) {
+        // Show inline confirmation — no native dialog
+        duplicateNameSpan.textContent = projectName;
+        duplicateWarning.style.display = 'block';
+
+        // Replace footer buttons with overwrite / new copy choices
+        footer.innerHTML = `
+          <button class="btn btn-secondary" id="saveProjectNewCopy">Save as New Copy</button>
+          <button class="btn btn-danger" id="saveProjectOverwrite">Overwrite Existing</button>
+        `;
+        footer
+          .querySelector('#saveProjectOverwrite')
+          .addEventListener('click', () => doSave(duplicate));
+        footer
+          .querySelector('#saveProjectNewCopy')
+          .addEventListener('click', () => doSave(null));
+      } else {
+        await doSave(null);
+      }
     });
 
     // Handle close
     const closeHandler = () => {
-      document.body.removeChild(modal);
+      closeModal(modal);
+      modal.remove();
     };
 
     notNowBtn.addEventListener('click', closeHandler);
@@ -8179,12 +10658,14 @@ if (rounded) {
           alert(`Failed to update project: ${result.error}`);
         }
 
-        document.body.removeChild(modal);
+        closeModal(modal);
+        modal.remove();
       });
 
       // Handle close
       const closeHandler = () => {
-        document.body.removeChild(modal);
+        closeModal(modal);
+        modal.remove();
       };
 
       cancelBtn.addEventListener('click', closeHandler);
@@ -8269,51 +10750,65 @@ if (rounded) {
       const response = await fetch(example.path);
       if (!response.ok) throw new Error('Failed to fetch example');
 
-      const content = await response.text();
-      console.log('Example loaded:', example.name, content.length, 'bytes');
-
-      // Close modal if requested
+      // Close modal if requested (before any async processing)
       if (closeFeaturesGuideModal) {
         const featuresGuideModal =
           document.getElementById('featuresGuideModal');
         if (featuresGuideModal) {
-          // Use shared modal manager so focus restores correctly
           closeModal(featuresGuideModal);
         }
       }
 
+      // ZIP examples must be fetched as binary and routed through ZIP extraction
+      if (example.path.toLowerCase().endsWith('.zip')) {
+        const blob = await response.blob();
+        const zipFile = new File([blob], example.name, {
+          type: 'application/zip',
+        });
+        handleFile(zipFile, null, null, null, 'example');
+        return;
+      }
+
+      const content = await response.text();
+      console.log('Example loaded:', example.name, content.length, 'bytes');
+
       // Check for multi-file design package with additionalFiles
-      // This supports examples with additionalFiles like openings_and_additions.txt
       let projectFiles = null;
       let mainFilePath = null;
 
       if (example.additionalFiles && example.additionalFiles.length > 0) {
-        console.log(`[Example] Multi-file package: ${example.additionalFiles.length} additional file(s)`);
-        
-        // Load all additional files
+        console.log(
+          `[Example] Multi-file package: ${example.additionalFiles.length} additional file(s)`
+        );
+
         projectFiles = new Map();
-        
-        // Add main file
+
         const mainFileName = example.path.split('/').pop();
         mainFilePath = mainFileName;
         projectFiles.set(mainFileName, content);
 
-        // Load additional files in parallel
-        const additionalPromises = example.additionalFiles.map(async (filePath) => {
-          try {
-            const fileResponse = await fetch(filePath);
-            if (!fileResponse.ok) {
-              console.warn(`[Example] Failed to load additional file: ${filePath}`);
+        const additionalPromises = example.additionalFiles.map(
+          async (filePath) => {
+            try {
+              const fileResponse = await fetch(filePath);
+              if (!fileResponse.ok) {
+                console.warn(
+                  `[Example] Failed to load additional file: ${filePath}`
+                );
+                return null;
+              }
+              const fileContent = await fileResponse.text();
+              const fileName = filePath.split('/').pop();
+              return { fileName, content: fileContent };
+            } catch (error) {
+              console.warn(
+                `[Example] Error loading additional file ${filePath}:`,
+                error
+              );
               return null;
             }
-            const fileContent = await fileResponse.text();
-            const fileName = filePath.split('/').pop();
-            return { fileName, content: fileContent };
-          } catch (error) {
-            console.warn(`[Example] Error loading additional file ${filePath}:`, error);
-            return null;
           }
-        });
+        );
 
         const additionalResults = await Promise.all(additionalPromises);
         for (const result of additionalResults) {
@@ -8326,7 +10821,6 @@ if (rounded) {
         console.log(`[Example] Total files in package: ${projectFiles.size}`);
       }
 
-      // Treat as uploaded file (with optional multi-file support)
       handleFile(
         { name: example.name },
         content,
@@ -8385,7 +10879,8 @@ if (rounded) {
   // =========================================
   const initUrlParams = new URLSearchParams(window.location.search);
   // Support both ?example= and ?load= (alias for website embedding)
-  const exampleParam = initUrlParams.get('example') || initUrlParams.get('load');
+  const exampleParam =
+    initUrlParams.get('example') || initUrlParams.get('load');
 
   if (exampleParam) {
     console.log(`[DeepLink] Loading example from URL: ${exampleParam}`);
@@ -8436,12 +10931,79 @@ if (rounded) {
     banner.classList.remove('hidden');
   }
 
+  /**
+   * Show the manifest save-copy modal after a shared project loads.
+   * Returns a Promise that resolves to 'save' or 'skip'.
+   * If the first-visit modal is still blocking, waits for it to close first.
+   */
+  function showManifestSaveCopyModal(projectName, author) {
+    return new Promise((resolve) => {
+      const doShow = () => {
+        const modal = document.getElementById('manifest-save-copy-modal');
+        if (!modal) {
+          resolve('skip');
+          return;
+        }
+
+        const nameEl = document.getElementById('manifestSaveCopyProjectName');
+        const authorLine = document.getElementById(
+          'manifestSaveCopyAuthorLine'
+        );
+        const authorEl = document.getElementById('manifestSaveCopyAuthor');
+        const saveBtn = document.getElementById('manifestSaveCopySave');
+        const skipBtn = document.getElementById('manifestSaveCopySkip');
+
+        if (nameEl) nameEl.textContent = projectName || 'Untitled Project';
+        if (author && authorEl && authorLine) {
+          authorEl.textContent = author;
+          authorLine.style.display = '';
+        }
+
+        const cleanup = (result) => {
+          closeModal(modal);
+          resolve(result);
+        };
+
+        saveBtn.addEventListener('click', () => cleanup('save'), {
+          once: true,
+        });
+        skipBtn.addEventListener('click', () => cleanup('skip'), {
+          once: true,
+        });
+
+        modal.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape') {
+            e.preventDefault();
+            cleanup('skip');
+          }
+        });
+
+        openModal(modal, { focusTarget: saveBtn });
+      };
+
+      if (firstVisitBlocking) {
+        const waitForFirstVisit = setInterval(() => {
+          if (!firstVisitBlocking) {
+            clearInterval(waitForFirstVisit);
+            setTimeout(doShow, 300);
+          }
+        }, 200);
+      } else {
+        doShow();
+      }
+    });
+  }
+
   // Wire manifest banner buttons
   const manifestBanner = document.getElementById('manifestInfoBanner');
   const manifestSaveCopyBtn = document.getElementById('manifestSaveCopyBtn');
-  const manifestDownloadZipBtn = document.getElementById('manifestDownloadZipBtn');
+  const manifestDownloadZipBtn = document.getElementById(
+    'manifestDownloadZipBtn'
+  );
   const manifestResetBtn = document.getElementById('manifestResetBtn');
-  const manifestDismissBanner = document.getElementById('manifestDismissBanner');
+  const manifestDismissBanner = document.getElementById(
+    'manifestDismissBanner'
+  );
 
   if (manifestDismissBanner) {
     manifestDismissBanner.addEventListener('click', () => {
@@ -8454,27 +11016,34 @@ if (rounded) {
       const state = stateManager.getState();
       if (!state.uploadedFile) return;
       const origin = state.manifestOrigin;
-      const forkedFrom = origin ? {
-        manifestUrl: origin.url,
-        originalName: origin.name,
-        originalAuthor: origin.author,
-        forkDate: Date.now(),
-      } : null;
+      const forkedFrom = origin
+        ? {
+            manifestUrl: origin.url,
+            originalName: origin.name,
+            originalAuthor: origin.author,
+            forkDate: Date.now(),
+          }
+        : null;
       try {
         const { saveProject } = await import('./js/saved-projects-manager.js');
+        const projectFilesObj =
+          state.projectFiles instanceof Map
+            ? Object.fromEntries(state.projectFiles)
+            : state.projectFiles || null;
         const result = await saveProject({
           name: state.uploadedFile.name.replace('.scad', ''),
           originalName: state.uploadedFile.name,
           kind: state.projectFiles ? 'zip' : 'scad',
           mainFilePath: state.mainFilePath || state.uploadedFile.name,
           content: state.uploadedFile.content,
-          projectFiles: state.projectFiles || null,
+          projectFiles: projectFilesObj,
           forkedFrom,
         });
         if (result.success) {
           currentSavedProjectId = result.id;
           updateStatus('Local copy saved');
           announceImmediate('Local copy saved to browser storage');
+          await renderSavedProjectsList();
         } else {
           updateStatus(`Save failed: ${result.error}`, 'error');
         }
@@ -8489,14 +11058,23 @@ if (rounded) {
     manifestResetBtn.addEventListener('click', async () => {
       const origin = stateManager.getState().manifestOrigin;
       if (!origin?.url) return;
-      const confirmed = confirm('Reset to the original shared project? Your unsaved changes will be lost.');
+      const confirmed = confirm(
+        'Reset to the original shared project? Your unsaved changes will be lost.'
+      );
       if (!confirmed) return;
       try {
         updateStatus('Reloading original project...');
         const result = await loadManifest(origin.url, {
           onProgress: ({ message }) => updateStatus(message),
         });
-        await handleFile(null, result.mainContent, result.projectFiles, result.mainFile, 'manifest', result.manifest.name);
+        await handleFile(
+          null,
+          result.mainContent,
+          result.projectFiles,
+          result.mainFile,
+          'manifest',
+          result.manifest.name
+        );
         stateManager.setState({
           manifestOrigin: { ...origin, loadedAt: Date.now() },
         });
@@ -8511,32 +11089,46 @@ if (rounded) {
   if (manifestDownloadZipBtn) {
     manifestDownloadZipBtn.addEventListener('click', async () => {
       const state = stateManager.getState();
+      if (!state.uploadedFile) return;
       const origin = state.manifestOrigin;
-      const projectName = origin?.name || state.uploadedFile?.name?.replace('.scad', '') || 'forge-project';
-      try {
-        const JSZip = (await import('jszip')).default;
-        const zip = new JSZip();
-        // Add main SCAD file
-        if (state.uploadedFile?.content) {
-          zip.file(state.uploadedFile.name || 'project.scad', state.uploadedFile.content);
-        }
-        // Add all project files (companions, presets, screenshots)
-        if (state.projectFiles) {
-          for (const [path, content] of state.projectFiles) {
-            zip.file(path, content);
+      const projectName =
+        origin?.name ||
+        state.uploadedFile?.name?.replace('.scad', '') ||
+        'forge-project';
+      const forkedFrom = origin
+        ? {
+            manifestUrl: origin.url,
+            originalName: origin.name,
+            originalAuthor: origin.author,
+            forkDate: Date.now(),
           }
+        : null;
+      try {
+        const { saveProject } = await import('./js/saved-projects-manager.js');
+        const projectFilesObj =
+          state.projectFiles instanceof Map
+            ? Object.fromEntries(state.projectFiles)
+            : state.projectFiles || null;
+        const result = await saveProject({
+          name: projectName,
+          originalName: state.uploadedFile.name,
+          kind: state.projectFiles ? 'zip' : 'scad',
+          mainFilePath: state.mainFilePath || state.uploadedFile.name,
+          content: state.uploadedFile.content,
+          projectFiles: projectFilesObj,
+          forkedFrom,
+        });
+        if (result.success) {
+          currentSavedProjectId = result.id;
+          updateStatus(`Saved: ${projectName}`);
+          announceImmediate(`Project saved to Saved Designs: ${projectName}`);
+          await renderSavedProjectsList();
+        } else {
+          updateStatus(`Save failed: ${result.error}`, 'error');
         }
-        const blob = await zip.generateAsync({ type: 'blob' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${projectName}.zip`;
-        a.click();
-        URL.revokeObjectURL(url);
-        updateStatus(`Downloaded: ${projectName}.zip`);
       } catch (err) {
-        console.error('[Manifest] ZIP export failed:', err);
-        updateStatus('Failed to export ZIP', 'error');
+        console.error('[Manifest] Save ZIP failed:', err);
+        updateStatus('Failed to save project', 'error');
       }
     });
   }
@@ -8571,14 +11163,24 @@ if (rounded) {
           onProgress: ({ message }) => updateStatus(message),
         });
 
-        const { projectFiles, mainFile, mainContent, manifest, defaults } = result;
+        const { projectFiles, mainFile, mainContent, manifest, defaults } =
+          result;
         const projectName = manifest.name || mainFile;
 
-        console.log(`[DeepLink] Manifest loaded: "${projectName}" (${projectFiles.size} files)`);
+        console.log(
+          `[DeepLink] Manifest loaded: "${projectName}" (${projectFiles.size} files)`
+        );
         announceImmediate(`Loading project: ${projectName}`);
 
         // Call handleFile with 'manifest' source to enable origin tracking
-        await handleFile(null, mainContent, projectFiles, mainFile, 'manifest', projectName);
+        await handleFile(
+          null,
+          mainContent,
+          projectFiles,
+          mainFile,
+          'manifest',
+          projectName
+        );
 
         // Store manifest origin in state for provenance tracking
         stateManager.setState({
@@ -8593,6 +11195,20 @@ if (rounded) {
         // Show the manifest info banner
         showManifestInfoBanner(manifest.name, manifest.author);
 
+        // --- ?uiMode= or manifest defaults.uiMode / defaults.hiddenPanels ---
+        const manifestUiMode = initUrlParams.get('uiMode') || defaults?.uiMode;
+        const manifestHiddenPanels = defaults?.hiddenPanels;
+        if (manifestUiMode || manifestHiddenPanels) {
+          getUIModeController().importPreferences({
+            defaultMode: manifestUiMode || undefined,
+            hiddenPanelsInBasic: manifestHiddenPanels || undefined,
+          });
+          console.log(`[DeepLink] Applied UI preferences from manifest:`, {
+            manifestUiMode,
+            manifestHiddenPanels,
+          });
+        }
+
         // --- ?preset=<name> or manifest defaults.preset -----------------
         const presetName = initUrlParams.get('preset') || defaults?.preset;
         if (presetName) {
@@ -8606,14 +11222,18 @@ if (rounded) {
               (p) => p.name.toLowerCase() === presetName.toLowerCase()
             );
             if (match) {
-              console.log(`[DeepLink] Applying preset: "${match.name}" (${match.id})`);
+              console.log(
+                `[DeepLink] Applying preset: "${match.name}" (${match.id})`
+              );
 
               // Merge preset parameters onto current state (desktop OpenSCAD parity)
               const mergedParams = { ...state.parameters, ...match.parameters };
               stateManager.setState({ parameters: mergedParams });
 
               // Re-render UI with preset values
-              const parametersContainer = document.getElementById('parametersContainer');
+              const parametersContainer = document.getElementById(
+                'parametersContainer'
+              );
               renderParameterUI(
                 state.schema,
                 parametersContainer,
@@ -8644,11 +11264,17 @@ if (rounded) {
               updatePrimaryActionButton();
 
               updateStatus(`Loaded: ${projectName} — preset: ${match.name}`);
-              announceImmediate(`${projectName} loaded with preset ${match.name}`);
+              announceImmediate(
+                `${projectName} loaded with preset ${match.name}`
+              );
             } else {
-              console.warn(`[DeepLink] Preset not found: "${presetName}". Available:`,
-                presets.map((p) => p.name));
-              updateStatus(`Loaded: ${projectName} (preset "${presetName}" not found)`);
+              console.warn(
+                `[DeepLink] Preset not found: "${presetName}". Available:`,
+                presets.map((p) => p.name)
+              );
+              updateStatus(
+                `Loaded: ${projectName} (preset "${presetName}" not found)`
+              );
               announceImmediate(`${projectName} loaded from manifest`);
             }
           }
@@ -8659,7 +11285,9 @@ if (rounded) {
 
         // Auto-preview if manifest requests it
         if (defaults?.autoPreview && autoPreviewController) {
-          autoPreviewController.onParameterChange(stateManager.getState().parameters);
+          autoPreviewController.onParameterChange(
+            stateManager.getState().parameters
+          );
         }
 
         // Clean up URL parameters
@@ -8674,25 +11302,14 @@ if (rounded) {
 
         console.log(`[DeepLink] Manifest load complete: ${projectName}`);
 
-        // Auto-fork: listen for the first user-initiated parameter change
-        // and prompt to save a local copy (fires once per manifest session)
-        let autoForkFired = false;
-        const unsubAutoFork = stateManager.subscribe((state, prev) => {
-          if (autoForkFired) return;
-          if (!state.manifestOrigin) return;
-          // Only trigger on parameter changes (not rendering state, etc.)
-          if (state.parameters !== prev.parameters && prev.parameters && Object.keys(prev.parameters).length > 0) {
-            autoForkFired = true;
-            unsubAutoFork();
-            // Prompt the user to save a local copy
-            const wantSave = confirm(
-              `You're editing a shared project. Save a local copy to keep your changes?`
-            );
-            if (wantSave && manifestSaveCopyBtn) {
-              manifestSaveCopyBtn.click();
-            }
-          }
-        });
+        // Show the save-copy modal (waits for first-visit modal if needed)
+        const saveCopyChoice = await showManifestSaveCopyModal(
+          projectName,
+          manifest.author
+        );
+        if (saveCopyChoice === 'save' && manifestSaveCopyBtn) {
+          manifestSaveCopyBtn.click();
+        }
       } catch (error) {
         console.error('[DeepLink] Manifest load failed:', error);
 
@@ -8702,21 +11319,23 @@ if (rounded) {
             case 'CORS_ERROR':
               friendlyMsg =
                 "Couldn't reach the file server. The manifest or its files may not be publicly " +
-                'accessible, or the server doesn\'t support CORS. Try hosting on GitHub.';
+                "accessible, or the server doesn't support CORS. Try hosting on GitHub.";
               break;
             case 'VALIDATION_ERROR':
               friendlyMsg = `The manifest file has errors: ${error.details?.errors?.join('; ') || error.message}`;
               break;
             case 'TIMEOUT':
-              friendlyMsg = 'The request timed out. Check your internet connection and try again.';
+              friendlyMsg =
+                'The request timed out. Check your internet connection and try again.';
               break;
             default:
               friendlyMsg = error.message;
           }
         } else {
-          friendlyMsg = error.name === 'TypeError'
-            ? "Couldn't reach the server. The manifest may not be publicly accessible, or CORS may be blocking the request."
-            : error.message;
+          friendlyMsg =
+            error.name === 'TypeError'
+              ? "Couldn't reach the server. The manifest may not be publicly accessible, or CORS may be blocking the request."
+              : error.message;
         }
 
         updateStatus(
@@ -8736,7 +11355,8 @@ if (rounded) {
   // Allows linking directly to any .scad or .zip file hosted on the web
   // Usage: ?project=https://example.com/keyguard.zip or ?scad=https://example.com/box.scad
   // =========================================
-  const projectParam = initUrlParams.get('project') || initUrlParams.get('scad');
+  const projectParam =
+    initUrlParams.get('project') || initUrlParams.get('scad');
 
   if (projectParam && !exampleParam && !manifestParam) {
     console.log(`[DeepLink] Loading project from URL: ${projectParam}`);
@@ -8746,20 +11366,27 @@ if (rounded) {
       try {
         // Validate URL
         const projectUrl = new URL(projectParam);
-        const urlFileName = projectUrl.pathname.split('/').pop() || 'project.scad';
+        const urlFileName =
+          projectUrl.pathname.split('/').pop() || 'project.scad';
         const isZipUrl = urlFileName.toLowerCase().endsWith('.zip');
 
-        console.log(`[DeepLink] Fetching: ${projectParam} (type: ${isZipUrl ? 'ZIP' : 'SCAD'})`);
+        console.log(
+          `[DeepLink] Fetching: ${projectParam} (type: ${isZipUrl ? 'ZIP' : 'SCAD'})`
+        );
 
         const response = await fetch(projectParam);
         if (!response.ok) {
-          throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+          throw new Error(
+            `Server returned ${response.status}: ${response.statusText}`
+          );
         }
 
         if (isZipUrl) {
           // Handle ZIP file: convert response to blob, create File object, pass to handleFile
           const blob = await response.blob();
-          const file = new File([blob], urlFileName, { type: 'application/zip' });
+          const file = new File([blob], urlFileName, {
+            type: 'application/zip',
+          });
           await handleFile(file, null, null, null, 'user');
         } else {
           // Handle single .scad file
@@ -8786,9 +11413,10 @@ if (rounded) {
         announceImmediate(`${urlFileName} loaded from URL link`);
       } catch (error) {
         console.error('[DeepLink] Failed to load project:', error);
-        const friendlyMsg = error.name === 'TypeError'
-          ? "Couldn't reach the server. The file may not be publicly accessible, or CORS may be blocking the request."
-          : `${error.message}`;
+        const friendlyMsg =
+          error.name === 'TypeError'
+            ? "Couldn't reach the server. The file may not be publicly accessible, or CORS may be blocking the request."
+            : `${error.message}`;
         updateStatus(
           `Couldn't load the project from URL. ${friendlyMsg} You can still upload a file manually.`,
           'error'
@@ -8797,16 +11425,16 @@ if (rounded) {
     }, 500);
   }
 
-  // Undo/Redo buttons
-  const undoBtn = document.getElementById('undoBtn');
-  const redoBtn = document.getElementById('redoBtn');
-
-  undoBtn?.addEventListener('click', () => {
+  /**
+   * Perform undo: restores previous parameter state, re-renders UI, and
+   * triggers auto-preview.  Called by Edit toolbar menu, Undo button,
+   * and keyboard shortcut.
+   */
+  function performUndo() {
     const previousParams = stateManager.undo();
     if (previousParams) {
       const state = stateManager.getState();
 
-      // Re-render UI with undone parameters
       const parametersContainer = document.getElementById(
         'parametersContainer'
       );
@@ -8825,21 +11453,24 @@ if (rounded) {
         previousParams
       );
 
-      // Trigger auto-preview with undone params
       if (autoPreviewController && state.uploadedFile) {
         autoPreviewController.onParameterChange(previousParams);
       }
 
       updatePrimaryActionButton();
     }
-  });
+  }
 
-  redoBtn?.addEventListener('click', () => {
+  /**
+   * Perform redo: restores next parameter state, re-renders UI, and
+   * triggers auto-preview.  Called by Edit toolbar menu, Redo button,
+   * and keyboard shortcut.
+   */
+  function performRedo() {
     const nextParams = stateManager.redo();
     if (nextParams) {
       const state = stateManager.getState();
 
-      // Re-render UI with redone parameters
       const parametersContainer = document.getElementById(
         'parametersContainer'
       );
@@ -8858,12 +11489,29 @@ if (rounded) {
         nextParams
       );
 
-      // Trigger auto-preview with redone params
       if (autoPreviewController && state.uploadedFile) {
         autoPreviewController.onParameterChange(nextParams);
       }
 
       updatePrimaryActionButton();
+    }
+  }
+
+  // Undo/Redo buttons in Parameters header — delegates to shared logic
+  const undoBtn = document.getElementById('undoBtn');
+  const redoBtn = document.getElementById('redoBtn');
+
+  undoBtn?.addEventListener('click', () => {
+    const state = stateManager.getState();
+    if (state.uploadedFile && stateManager.canUndo()) {
+      performUndo();
+    }
+  });
+
+  redoBtn?.addEventListener('click', () => {
+    const state = stateManager.getState();
+    if (state.uploadedFile && stateManager.canRedo()) {
+      performRedo();
     }
   });
 
@@ -8948,7 +11596,9 @@ if (rounded) {
     let isCollapsed = false;
 
     try {
-      const savedState = localStorage.getItem(STORAGE_KEY_PARAM_PANEL_COLLAPSED);
+      const savedState = localStorage.getItem(
+        STORAGE_KEY_PARAM_PANEL_COLLAPSED
+      );
       if (savedState === 'true' && window.innerWidth >= 768) {
         isCollapsed = true;
       }
@@ -9007,7 +11657,10 @@ if (rounded) {
 
       // Persist state
       try {
-        localStorage.setItem(STORAGE_KEY_PARAM_PANEL_COLLAPSED, String(isCollapsed));
+        localStorage.setItem(
+          STORAGE_KEY_PARAM_PANEL_COLLAPSED,
+          String(isCollapsed)
+        );
       } catch (e) {
         console.warn('Could not save to localStorage:', e);
       }
@@ -9059,12 +11712,16 @@ if (rounded) {
   let modeManager = null;
   let editorStateManager = null;
 
-  if (isExpertModeEnabled && expertModeToggle && expertModePanel && expertModeBody) {
+  if (
+    isExpertModeEnabled &&
+    expertModeToggle &&
+    expertModePanel &&
+    expertModeBody
+  ) {
     console.log('[Expert Mode] Feature enabled, initializing...');
 
     // Show the toggle button
     expertModeToggle.classList.remove('hidden');
-
 
     // Initialize managers
     modeManager = getModeManager({
@@ -9072,7 +11729,7 @@ if (rounded) {
       onModeChange: handleModeChange,
     });
     editorStateManager = getEditorStateManager();
-    
+
     // Expose modeManager globally for keyboard shortcut handler
     window._modeManager = modeManager;
 
@@ -9153,7 +11810,8 @@ if (rounded) {
       currentEditor.initialize();
 
       // Sync initial code from state
-      const initialCode = editorStateManager.getSource() || window._currentSCADCode || '';
+      const initialCode =
+        editorStateManager.getSource() || window._currentSCADCode || '';
       if (initialCode) {
         currentEditor.setValue(initialCode);
       }
@@ -9230,7 +11888,7 @@ if (rounded) {
       const newCode = e.detail?.code || window._currentSCADCode;
       if (newCode && editorStateManager) {
         editorStateManager.setSource(newCode, { markDirty: false });
-        
+
         // Update editor if in Expert Mode
         if (modeManager.getMode() === 'expert' && currentEditor) {
           currentEditor.setValue(newCode);
@@ -9302,7 +11960,10 @@ if (rounded) {
           document.body.classList.remove('split-dragging');
           // Persist sizes
           try {
-            localStorage.setItem(STORAGE_KEY_LAYOUT_SIZES, JSON.stringify(sizes));
+            localStorage.setItem(
+              STORAGE_KEY_LAYOUT_SIZES,
+              JSON.stringify(sizes)
+            );
           } catch (e) {
             console.warn('Could not save split sizes:', e);
           }
@@ -9487,10 +12148,15 @@ if (rounded) {
     // Wire measurement fullscreen expand/close buttons
     const measureExpandBtn = document.getElementById('measureExpandBtn');
     const measureFsClose = document.getElementById('measureFullscreenClose');
-    const measureFsBackdrop = document.getElementById('measureFullscreenBackdrop');
-    if (measureExpandBtn) measureExpandBtn.addEventListener('click', measureOpenFullscreen);
-    if (measureFsClose) measureFsClose.addEventListener('click', measureCloseFullscreen);
-    if (measureFsBackdrop) measureFsBackdrop.addEventListener('click', measureCloseFullscreen);
+    const measureFsBackdrop = document.getElementById(
+      'measureFullscreenBackdrop'
+    );
+    if (measureExpandBtn)
+      measureExpandBtn.addEventListener('click', measureOpenFullscreen);
+    if (measureFsClose)
+      measureFsClose.addEventListener('click', measureCloseFullscreen);
+    if (measureFsBackdrop)
+      measureFsBackdrop.addEventListener('click', measureCloseFullscreen);
 
     // --- Measurement mode toggle (radiogroup with roving tabindex) ---
     const modeBtns = [
@@ -9512,9 +12178,18 @@ if (rounded) {
       });
       setMeasureMode(modeNames[idx]);
       // Show/hide mode-specific rows
-      if (measureDistRow) measureDistRow.classList.toggle('hidden', modeNames[idx] !== 'ruler');
-      if (measureCalibRow) measureCalibRow.classList.toggle('hidden', modeNames[idx] !== 'calibrate');
-      if (measureCoordRow) measureCoordRow.classList.toggle('hidden', modeNames[idx] === 'calibrate');
+      if (measureDistRow)
+        measureDistRow.classList.toggle('hidden', modeNames[idx] !== 'ruler');
+      if (measureCalibRow)
+        measureCalibRow.classList.toggle(
+          'hidden',
+          modeNames[idx] !== 'calibrate'
+        );
+      if (measureCoordRow)
+        measureCoordRow.classList.toggle(
+          'hidden',
+          modeNames[idx] === 'calibrate'
+        );
     }
 
     modeBtns.forEach((btn, i) => {
@@ -9569,7 +12244,9 @@ if (rounded) {
         hideCalibError();
         const sf = pixelDist / mmVal;
         setScaleFactor(sf);
-        announceImmediate(`Calibration applied: ${sf.toFixed(2)} pixels per millimeter`);
+        announceImmediate(
+          `Calibration applied: ${sf.toFixed(2)} pixels per millimeter`
+        );
 
         // Switch back to Ruler mode after calibration
         activateModeBtn(1);
@@ -9597,9 +12274,12 @@ if (rounded) {
       measureCopyDist.addEventListener('click', () => {
         const el = document.getElementById('measureDistValue');
         if (el && el.textContent !== '--') {
-          navigator.clipboard.writeText(el.textContent).then(() => {
-            announceImmediate(`Distance ${el.textContent} copied`);
-          }).catch(() => {});
+          navigator.clipboard
+            .writeText(el.textContent)
+            .then(() => {
+              announceImmediate(`Distance ${el.textContent} copied`);
+            })
+            .catch(() => {});
         }
       });
     }
@@ -9642,7 +12322,8 @@ if (rounded) {
           measureImageSelect.value = String(record.id);
           if (measureImageSelect.value !== String(record.id)) {
             setTimeout(() => {
-              if (measureImageSelect) measureImageSelect.value = String(record.id);
+              if (measureImageSelect)
+                measureImageSelect.value = String(record.id);
             }, 0);
           }
         }
@@ -9656,7 +12337,8 @@ if (rounded) {
       const imgs = SharedImageStore.getImages();
       if (measureImageSelect) {
         const currentVal = measureImageSelect.value;
-        measureImageSelect.innerHTML = '<option value="">-- No screenshots --</option>';
+        measureImageSelect.innerHTML =
+          '<option value="">-- No screenshots --</option>';
         for (const [id, rec] of imgs) {
           const opt = document.createElement('option');
           opt.value = id;
@@ -9705,19 +12387,40 @@ if (rounded) {
     // Set initial state from persisted values
     if (measureUnitSelect) measureUnitSelect.value = getUnit();
     if (overlayUnitSelect) overlayUnitSelect.value = getUnit();
-    if (scaleFactorInput && getScaleFactor() > 0) scaleFactorInput.value = getScaleFactor();
+    if (scaleFactorInput && getScaleFactor() > 0)
+      scaleFactorInput.value = getScaleFactor();
 
     function updateUnitLabels(unit) {
       if (overlaySizeUnit) overlaySizeUnit.textContent = unit;
       if (overlayOffsetUnit) overlayOffsetUnit.textContent = unit;
       const overlayWidthInput = document.getElementById('overlayWidthInput');
       const overlayHeightInput = document.getElementById('overlayHeightInput');
-      const overlayOffsetXInput = document.getElementById('overlayOffsetXInput');
-      const overlayOffsetYInput = document.getElementById('overlayOffsetYInput');
-      if (overlayWidthInput) overlayWidthInput.setAttribute('aria-label', `Overlay width in ${unit === 'mm' ? 'millimeters' : 'pixels'}`);
-      if (overlayHeightInput) overlayHeightInput.setAttribute('aria-label', `Overlay height in ${unit === 'mm' ? 'millimeters' : 'pixels'}`);
-      if (overlayOffsetXInput) overlayOffsetXInput.setAttribute('aria-label', `Overlay X offset in ${unit === 'mm' ? 'millimeters' : 'pixels'}`);
-      if (overlayOffsetYInput) overlayOffsetYInput.setAttribute('aria-label', `Overlay Y offset in ${unit === 'mm' ? 'millimeters' : 'pixels'}`);
+      const overlayOffsetXInput = document.getElementById(
+        'overlayOffsetXInput'
+      );
+      const overlayOffsetYInput = document.getElementById(
+        'overlayOffsetYInput'
+      );
+      if (overlayWidthInput)
+        overlayWidthInput.setAttribute(
+          'aria-label',
+          `Overlay width in ${unit === 'mm' ? 'millimeters' : 'pixels'}`
+        );
+      if (overlayHeightInput)
+        overlayHeightInput.setAttribute(
+          'aria-label',
+          `Overlay height in ${unit === 'mm' ? 'millimeters' : 'pixels'}`
+        );
+      if (overlayOffsetXInput)
+        overlayOffsetXInput.setAttribute(
+          'aria-label',
+          `Overlay X offset in ${unit === 'mm' ? 'millimeters' : 'pixels'}`
+        );
+      if (overlayOffsetYInput)
+        overlayOffsetYInput.setAttribute(
+          'aria-label',
+          `Overlay Y offset in ${unit === 'mm' ? 'millimeters' : 'pixels'}`
+        );
     }
 
     function syncBothUnitSelects(unit) {
@@ -9727,10 +12430,14 @@ if (rounded) {
     }
 
     if (measureUnitSelect) {
-      measureUnitSelect.addEventListener('change', () => setUnit(measureUnitSelect.value));
+      measureUnitSelect.addEventListener('change', () =>
+        setUnit(measureUnitSelect.value)
+      );
     }
     if (overlayUnitSelect) {
-      overlayUnitSelect.addEventListener('change', () => setUnit(overlayUnitSelect.value));
+      overlayUnitSelect.addEventListener('change', () =>
+        setUnit(overlayUnitSelect.value)
+      );
     }
     if (scaleFactorInput) {
       scaleFactorInput.addEventListener('change', () => {
@@ -9819,6 +12526,9 @@ if (rounded) {
       _handleUnlock();
       return 'Alt View unlocked. Refresh to persist.';
     };
+
+    // Expose startTutorial globally for E2E test automation
+    window.startTutorial = (tutorialId) => startTutorial(tutorialId);
 
     // Initialize actions drawer toggle
     const initActionsDrawer = () => {
@@ -10386,6 +13096,21 @@ if (rounded) {
     } catch (error) {
       console.error('Generation failed:', error);
 
+      // Extract OpenSCAD console output embedded in error.details and surface it
+      // to the Console panel. This is how missing-include warnings reach the user.
+      if (error.details && typeof window.updateConsoleOutput === 'function') {
+        const outputMarker = '[OpenSCAD output]';
+        const markerIdx = error.details.indexOf(outputMarker);
+        if (markerIdx !== -1) {
+          const embeddedOutput = error.details
+            .slice(markerIdx + outputMarker.length)
+            .trim();
+          if (embeddedOutput) {
+            window.updateConsoleOutput(embeddedOutput);
+          }
+        }
+      }
+
       // Special-case: configuration dependency / empty geometry guidance
       if (handleConfigDependencyError(error)) {
         return;
@@ -10526,10 +13251,14 @@ if (rounded) {
   const publishProjectModal = document.getElementById('publishProjectModal');
   const publishModalClose = document.getElementById('publishModalClose');
   const publishModalOverlay = document.getElementById('publishModalOverlay');
-  const publishManifestOutput = document.getElementById('publishManifestOutput');
+  const publishManifestOutput = document.getElementById(
+    'publishManifestOutput'
+  );
   const copyManifestBtn = document.getElementById('copyManifestBtn');
   const publishRepoUrl = document.getElementById('publishRepoUrl');
-  const publishShareLinkContainer = document.getElementById('publishShareLinkContainer');
+  const publishShareLinkContainer = document.getElementById(
+    'publishShareLinkContainer'
+  );
   const publishShareLink = document.getElementById('publishShareLink');
   const copyShareLinkBtn = document.getElementById('copyShareLinkBtn');
 
@@ -10582,8 +13311,27 @@ if (rounded) {
     };
 
     // If a preset is currently selected, include it as the default
-    if (state.currentPresetName && state.currentPresetName !== 'design default values') {
+    if (
+      state.currentPresetName &&
+      state.currentPresetName !== 'design default values'
+    ) {
       manifest.defaults.preset = state.currentPresetName;
+    }
+
+    // Include UI mode preferences so shared links apply the same panel visibility
+    const uiModePrefs = getUIModeController().getPreferencesForExport();
+    if (uiModePrefs.defaultMode !== 'advanced') {
+      manifest.defaults.uiMode = uiModePrefs.defaultMode;
+    }
+    const registryDefaults = getUIModeController()
+      .getRegistry()
+      .filter((p) => p.defaultHiddenInBasic)
+      .map((p) => p.id);
+    const prefsChanged =
+      JSON.stringify(uiModePrefs.hiddenPanelsInBasic.sort()) !==
+      JSON.stringify(registryDefaults.sort());
+    if (prefsChanged) {
+      manifest.defaults.hiddenPanels = uiModePrefs.hiddenPanelsInBasic;
     }
 
     return manifest;
@@ -10617,21 +13365,30 @@ if (rounded) {
 
     // Close handlers
     if (publishModalClose) {
-      publishModalClose.addEventListener('click', () => closeModal(publishProjectModal));
+      publishModalClose.addEventListener('click', () =>
+        closeModal(publishProjectModal)
+      );
     }
     if (publishModalOverlay) {
-      publishModalOverlay.addEventListener('click', () => closeModal(publishProjectModal));
+      publishModalOverlay.addEventListener('click', () =>
+        closeModal(publishProjectModal)
+      );
     }
 
     // Copy manifest button
     if (copyManifestBtn && publishManifestOutput) {
       copyManifestBtn.addEventListener('click', async () => {
         try {
-          await navigator.clipboard.writeText(publishManifestOutput.textContent);
-          const textSpan = copyManifestBtn.querySelector('.btn-text') || copyManifestBtn;
+          await navigator.clipboard.writeText(
+            publishManifestOutput.textContent
+          );
+          const textSpan =
+            copyManifestBtn.querySelector('.btn-text') || copyManifestBtn;
           const original = textSpan.textContent;
           textSpan.textContent = 'Copied!';
-          setTimeout(() => { textSpan.textContent = original; }, 2000);
+          setTimeout(() => {
+            textSpan.textContent = original;
+          }, 2000);
           updateStatus('Manifest copied to clipboard');
         } catch (_err) {
           prompt('Copy this manifest JSON:', publishManifestOutput.textContent);
@@ -10668,7 +13425,9 @@ if (rounded) {
         try {
           await navigator.clipboard.writeText(publishShareLink.value);
           copyShareLinkBtn.textContent = 'Copied!';
-          setTimeout(() => { copyShareLinkBtn.textContent = 'Copy'; }, 2000);
+          setTimeout(() => {
+            copyShareLinkBtn.textContent = 'Copy';
+          }, 2000);
           updateStatus('Shareable link copied to clipboard');
         } catch (_err) {
           prompt('Copy this link:', publishShareLink.value);
@@ -11257,6 +14016,10 @@ if (rounded) {
   // "design default values" -- always first in preset dropdown (desktop OpenSCAD parity)
   // Virtual preset ID for the immutable defaults entry (not stored in PresetManager)
   const DESIGN_DEFAULTS_ID = '__design_defaults__';
+  const PRESET_SORT_KEY = 'openscad-forge-preset-sort';
+
+  // Searchable combobox instance (non-null only when searchable_combobox flag is on)
+  let _presetCombobox = null;
 
   // Clear preset selection when parameters are manually changed
   // Track if we're currently loading a preset (to avoid clearing during load)
@@ -11338,7 +14101,7 @@ if (rounded) {
         currentPresetId: state.currentPresetId,
         currentPresetName: state.currentPresetName,
         dropdownValue: presetSelect?.value,
-        callerStack: new Error().stack?.split('\n').slice(1, 4).join('\n')
+        callerStack: new Error().stack?.split('\n').slice(1, 4).join('\n'),
       });
     }
 
@@ -11372,7 +14135,8 @@ if (rounded) {
 
     // Save button: enabled when a user preset is selected (not design defaults)
     if (savePresetBtn) {
-      savePresetBtn.disabled = !hasPresetSelected || !hasModel || isDesignDefaults;
+      savePresetBtn.disabled =
+        !hasPresetSelected || !hasModel || isDesignDefaults;
       savePresetBtn.title = isDesignDefaults
         ? 'Design default values cannot be overwritten'
         : !hasPresetSelected
@@ -11390,7 +14154,8 @@ if (rounded) {
 
     // Delete button: enabled when a user preset is selected (not design defaults)
     if (deletePresetBtn) {
-      deletePresetBtn.disabled = !hasPresetSelected || !hasModel || isDesignDefaults;
+      deletePresetBtn.disabled =
+        !hasPresetSelected || !hasModel || isDesignDefaults;
       deletePresetBtn.title = isDesignDefaults
         ? 'Design default values cannot be deleted'
         : hasPresetSelected
@@ -11411,6 +14176,137 @@ if (rounded) {
     updatePresetControlStates();
   }
 
+  /**
+   * Single entry point for applying a preset's parameters AND companion files.
+   * Called by both the Manage Presets modal and the preset dropdown so the two
+   * code paths stay identical in behaviour (Bug D fix).
+   *
+   * Responsibilities:
+   *  1. Merge visible preset parameters onto current state
+   *  2. Re-render parameter UI
+   *  3. Apply explicit preset.companionFiles (embedded content, legacy path)
+   *  4. Alias-mount preset-specific files from presetCompanionMap (ZIP path)
+   *  5. Update auto-preview controller
+   *  6. Sync screenshot overlay
+   *  7. Track current preset selection and update status
+   *
+   * @param {Object} preset - Loaded preset with .parameters, .name, .id
+   */
+  function applyPresetParametersAndCompanions(preset) {
+    isLoadingPreset = true;
+
+    const state = stateManager.getState();
+    const hiddenNames = new Set(
+      Object.keys(state.schema?.hiddenParameters || {})
+    );
+
+    // Merge visible preset params onto current state (desktop OpenSCAD parity)
+    const visiblePresetParams = {};
+    for (const [k, v] of Object.entries(preset.parameters)) {
+      if (!hiddenNames.has(k)) visiblePresetParams[k] = v;
+    }
+    const mergedParams = { ...state.parameters, ...visiblePresetParams };
+    stateManager.setState({ parameters: mergedParams });
+
+    // Re-render UI with merged parameters
+    const parametersContainer = document.getElementById('parametersContainer');
+    renderParameterUI(
+      state.schema,
+      parametersContainer,
+      (values) => {
+        stateManager.setState({ parameters: values });
+        clearPresetSelection(values);
+        if (autoPreviewController) {
+          autoPreviewController.onParameterChange(values);
+        }
+        updatePrimaryActionButton();
+        syncOverlayWithScreenshotParam(values);
+      },
+      mergedParams
+    );
+
+    // Build updated projectFiles, starting from current state
+    const curState = stateManager.getState();
+    const newProjectFiles = curState.projectFiles
+      ? new Map(curState.projectFiles)
+      : new Map();
+
+    // E2: Merge explicit preset.companionFiles (saved presets with embedded content)
+    if (
+      preset.companionFiles &&
+      Object.keys(preset.companionFiles).length > 0
+    ) {
+      for (const [filename, content] of Object.entries(preset.companionFiles)) {
+        newProjectFiles.set(filename, content);
+      }
+    }
+
+    // Alias-mount preset-specific companion files from the ZIP mapping.
+    const companionMapping = presetCompanionMap?.get(preset.name);
+    const aliasedFiles = applyCompanionAliases(
+      newProjectFiles,
+      companionMapping
+    );
+    if (
+      companionMapping?.openingsPath &&
+      aliasedFiles.has('openings_and_additions.txt')
+    ) {
+      console.log(
+        `[Preset] Alias-mounted openings: ${companionMapping.openingsPath}`
+      );
+    }
+    if (companionMapping?.svgPath && aliasedFiles.has('default.svg')) {
+      console.log(`[Preset] Alias-mounted SVG: ${companionMapping.svgPath}`);
+    }
+
+    stateManager.setState({ projectFiles: aliasedFiles });
+
+    if (autoPreviewController) {
+      autoPreviewController.setProjectFiles(
+        aliasedFiles,
+        curState.mainFilePath
+      );
+      autoPreviewController.onParameterChange(mergedParams);
+    }
+
+    updatePrimaryActionButton();
+    updateProjectFilesUI();
+
+    // When the preset has a mapped SVG, force-select the aliased default.svg
+    // in the overlay dropdown. Without this, the dropdown retains the previous
+    // preset's SVG path (which still exists in the Map) and autoSelectOverlaySource
+    // returns early, leaving the overlay stale.
+    if (companionMapping?.svgPath && aliasedFiles.has('default.svg')) {
+      if (overlaySourceSelect) {
+        overlaySourceSelect.value = 'default.svg';
+      }
+      loadOverlayFromProjectFile('default.svg')
+        .then(() => {
+          // SVG 96 DPI size applied; SCAD case-opening / screen dims override.
+          autoApplyScreenDimensionsFromParams(mergedParams);
+          updateOverlayUIFromConfig();
+        })
+        .catch((err) => {
+          console.warn('[Preset] Failed to load preset SVG overlay:', err);
+        });
+    }
+
+    syncOverlayWithScreenshotParam(mergedParams);
+    setCurrentPresetSelection(preset);
+
+    isLoadingPreset = false;
+
+    const applied = Object.keys(visiblePresetParams).length;
+    const total = Object.keys(preset.parameters).length;
+    if (applied < total) {
+      updateStatus(
+        `Loaded preset: ${preset.name} (${applied} of ${total} parameters applied)`
+      );
+    } else {
+      updateStatus(`Loaded preset: ${preset.name}`);
+    }
+  }
+
   function setCurrentPresetSelection(preset) {
     if (!preset) {
       forceClearPresetSelection();
@@ -11420,7 +14316,7 @@ if (rounded) {
     console.log('[Preset] Setting selection:', {
       id: preset.id,
       name: preset.name,
-      paramCount: Object.keys(preset.parameters || {}).length
+      paramCount: Object.keys(preset.parameters || {}).length,
     });
 
     setCurrentPresetSignature(preset.parameters);
@@ -11438,6 +14334,7 @@ if (rounded) {
 
   // Update preset dropdown based on current model
   // Preserves current selection if the preset still exists
+  // Applies the user's saved sort preference (shared with Import/Export modal)
   function updatePresetDropdown() {
     const state = stateManager.getState();
     const presetSelect = document.getElementById('presetSelect');
@@ -11446,6 +14343,10 @@ if (rounded) {
       presetSelect.disabled = true;
       presetSelect.innerHTML =
         '<option value="">-- No model loaded --</option>';
+      if (_presetCombobox) {
+        _presetCombobox.update([], null);
+        _presetCombobox.setDisabled(true);
+      }
       currentPresetSignature = null;
       isPresetDirty = false;
       updatePresetControlStates();
@@ -11453,12 +14354,14 @@ if (rounded) {
     }
 
     const modelName = state.uploadedFile.name;
-    const presets = presetManager.getPresetsForModel(modelName);
-    
+    const currentSortOrder =
+      localStorage.getItem(PRESET_SORT_KEY) || 'name-asc';
+    const presets = presetManager.getSortedPresets(modelName, currentSortOrder);
+
     // Remember current selection from state (survives dropdown rebuilds)
     const currentPresetId = state.currentPresetId;
 
-    // Clear and rebuild dropdown
+    // Clear and rebuild native select dropdown
     presetSelect.innerHTML = '<option value="">-- Select Preset --</option>';
 
     // "design default values" is ALWAYS first in dropdown (desktop OpenSCAD parity)
@@ -11466,11 +14369,12 @@ if (rounded) {
     const defaultsOption = document.createElement('option');
     defaultsOption.value = DESIGN_DEFAULTS_ID;
     defaultsOption.textContent = 'design default values';
-    defaultsOption.style.fontStyle = 'italic'; // Visually distinguish from user presets
+    defaultsOption.style.fontStyle = 'italic';
     presetSelect.appendChild(defaultsOption);
 
     if (presets.length > 0) {
       presets.forEach((preset) => {
+        if (preset.id === 'design-defaults') return;
         const option = document.createElement('option');
         option.value = preset.id;
         option.textContent = preset.name;
@@ -11479,15 +14383,38 @@ if (rounded) {
     }
 
     presetSelect.disabled = false;
-    
+
+    // Sync the sort toolbar dropdown to reflect the active sort order
+    const sortSelect = document.getElementById('presetDropdownSort');
+    if (sortSelect && sortSelect.value !== currentSortOrder) {
+      sortSelect.value = currentSortOrder;
+    }
+
+    // Update combobox if the feature flag is on
+    if (_presetCombobox) {
+      const comboOptions = [
+        {
+          id: DESIGN_DEFAULTS_ID,
+          label: 'design default values',
+          italic: true,
+        },
+        ...presets
+          .filter((p) => p.id !== 'design-defaults')
+          .map((p) => ({ id: p.id, label: p.name })),
+      ];
+      _presetCombobox.update(comboOptions, currentPresetId || null);
+      _presetCombobox.setDisabled(false);
+    }
+
     // Restore selection if the preset still exists in the list
     if (currentPresetId) {
-      const currentPreset = presets.find((preset) => preset.id === currentPresetId);
+      const currentPreset = presets.find(
+        (preset) => preset.id === currentPresetId
+      );
       if (currentPreset) {
         presetSelect.value = currentPresetId;
         setCurrentPresetSignature(currentPreset.parameters);
       } else {
-        // Preset was deleted or doesn't exist for this model - clear state
         forceClearPresetSelection();
       }
     } else {
@@ -11587,12 +14514,32 @@ if (rounded) {
       }
 
       try {
+        // E2: Capture companion files (text-only, exclude images and main file)
+        const companionSnapshot = {};
+        if (state.projectFiles) {
+          for (const [path, content] of state.projectFiles.entries()) {
+            if (
+              path !== state.mainFilePath &&
+              typeof content === 'string' &&
+              !content.startsWith('data:')
+            ) {
+              companionSnapshot[path] = content;
+            }
+          }
+        }
+
         // Save preset and capture returned object (contains id and name)
         const savedPreset = presetManager.savePreset(
           state.uploadedFile.name,
           finalName,
           state.parameters,
-          { description }
+          {
+            description,
+            companionFiles:
+              Object.keys(companionSnapshot).length > 0
+                ? companionSnapshot
+                : null,
+          }
         );
 
         updateStatus(`Preset "${finalName}" saved`);
@@ -11654,6 +14601,37 @@ if (rounded) {
     });
   }
 
+  // Handle the result from importAndMergePresets and refresh the UI
+  function _handleImportResult(result, _modelName) {
+    if (result.imported > 0 || result.skipped > 0) {
+      let message = `Imported ${result.imported} design${result.imported !== 1 ? 's' : ''}`;
+      if (result.skipped > 0) {
+        message += ` (${result.skipped} skipped — duplicate names)`;
+      }
+      if (result.errors?.length > 0) {
+        message += `\n\nErrors:\n${result.errors.join('\n')}`;
+      }
+      alert(message);
+      updatePresetDropdown();
+      if (result.presets?.length > 0) {
+        const last = result.presets[result.presets.length - 1];
+        if (last?.id) setCurrentPresetSelection(last);
+      }
+      // Close and reopen the manage modal to reflect new list
+      const existingModal = document.querySelector('.preset-modal');
+      if (existingModal) {
+        closeModal(existingModal);
+        document.body.removeChild(existingModal);
+      }
+      showManagePresetsModal();
+    } else {
+      const errorMsg = result.errors?.length
+        ? `Import failed:\n${result.errors.join('\n')}`
+        : 'No valid designs found in the selected file(s).';
+      alert(errorMsg);
+    }
+  }
+
   // Show manage presets modal
   function showManagePresetsModal() {
     const state = stateManager.getState();
@@ -11664,7 +14642,8 @@ if (rounded) {
     }
 
     const modelName = state.uploadedFile.name;
-    const presets = presetManager.getPresetsForModel(modelName);
+    let currentSortOrder = localStorage.getItem(PRESET_SORT_KEY) || 'name-asc';
+    const presets = presetManager.getSortedPresets(modelName, currentSortOrder);
 
     const modal = document.createElement('div');
     modal.className = 'preset-modal';
@@ -11713,27 +14692,40 @@ if (rounded) {
     modal.innerHTML = `
       <div class="preset-modal-content">
         <div class="preset-modal-header">
-          <h3 id="managePresetsTitle" class="preset-modal-title">Import / Export Presets</h3>
+          <h3 id="managePresetsTitle" class="preset-modal-title">Import / Export Designs (Presets)</h3>
           <button class="preset-modal-close" aria-label="Close dialog" data-action="close">&times;</button>
         </div>
         <div class="preset-import-export-actions" style="display:flex;gap:12px;padding:16px;border-bottom:1px solid var(--border-color, #e0e0e0);">
           <button class="btn btn-primary" data-action="import" style="flex:1;padding:12px;font-size:1em;">
-            📂 Import Presets
+            📂 Import Designs
           </button>
           <button class="btn btn-primary" data-action="export-all" style="flex:1;padding:12px;font-size:1em;">
-            💾 Export All Presets
+            💾 Export All Designs
           </button>
         </div>
-        ${presets.length > 0 ? `
+        ${
+          presets.length > 0
+            ? `
         <details class="preset-list-details" style="padding:0 16px 16px;">
           <summary style="padding:8px 0;cursor:pointer;color:var(--text-secondary, #666);">
             Individual presets (${presets.length})
           </summary>
-          <div class="preset-list">
+          <div class="preset-list-toolbar">
+            <label class="preset-sort-label" for="presetSortSelect">Sort</label>
+            <select id="presetSortSelect" class="preset-sort-select" aria-label="Sort presets by">
+              <option value="name-asc"${currentSortOrder === 'name-asc' ? ' selected' : ''}>Name (A–Z)</option>
+              <option value="name-desc"${currentSortOrder === 'name-desc' ? ' selected' : ''}>Name (Z–A)</option>
+              <option value="date-created"${currentSortOrder === 'date-created' ? ' selected' : ''}>Date created (newest)</option>
+              <option value="date-modified"${currentSortOrder === 'date-modified' ? ' selected' : ''}>Date modified (newest)</option>
+            </select>
+          </div>
+          <div class="preset-list" id="presetListContainer">
             ${presetsHTML}
           </div>
         </details>
-        ` : '<div class="preset-empty" style="padding:16px;">No presets saved for this model yet. Import a preset file or use the + button to create one.</div>'}
+        `
+            : '<div class="preset-empty" style="padding:16px;">No designs saved for this model yet. Import a design file or use the + button to create one.</div>'
+        }
         <div class="preset-modal-footer">
           <button class="btn btn-outline" data-action="close">Close</button>
         </div>
@@ -11742,6 +14734,44 @@ if (rounded) {
 
     document.body.appendChild(modal);
 
+    // Wire sort selector
+    const presetSortSelect = modal.querySelector('#presetSortSelect');
+    const presetListContainer = modal.querySelector('#presetListContainer');
+    if (presetSortSelect && presetListContainer) {
+      presetSortSelect.addEventListener('change', () => {
+        currentSortOrder = presetSortSelect.value;
+        localStorage.setItem(PRESET_SORT_KEY, currentSortOrder);
+        const sorted = presetManager.getSortedPresets(
+          modelName,
+          currentSortOrder
+        );
+        presetListContainer.innerHTML = sorted
+          .map(
+            (preset) => `
+          <div class="preset-item" data-preset-id="${preset.id}">
+            <div class="preset-item-info">
+              <h4 class="preset-item-name">${preset.name}</h4>
+              <p class="preset-item-meta">
+                ${preset.description || 'No description'} •
+                Created ${formatDate(preset.created)}
+              </p>
+            </div>
+            <div class="preset-item-actions">
+              <button class="btn btn-sm btn-primary" data-action="load" data-preset-id="${preset.id}" aria-label="Load design ${preset.name}">Load</button>
+              <button class="btn btn-sm btn-secondary" data-action="export" data-preset-id="${preset.id}" aria-label="Export design ${preset.name}">Export</button>
+              <button class="btn btn-sm btn-outline" data-action="delete" data-preset-id="${preset.id}" aria-label="Delete design ${preset.name}">Delete</button>
+            </div>
+          </div>`
+          )
+          .join('');
+        // Keep the main preset dropdown in sync with the new sort order
+        updatePresetDropdown();
+        const label =
+          presetSortSelect.options[presetSortSelect.selectedIndex]?.text || '';
+        announceImmediate(`Designs sorted by ${label}`);
+      });
+    }
+
     // Close handler for dynamic modal
     const closeManagePresetsModalHandler = () => {
       closeModal(modal);
@@ -11749,7 +14779,7 @@ if (rounded) {
     };
 
     // Handle actions
-    modal.addEventListener('click', (e) => {
+    modal.addEventListener('click', async (e) => {
       const btn = e.target.closest('button[data-action]');
       if (!btn) return;
 
@@ -11761,54 +14791,22 @@ if (rounded) {
       } else if (action === 'load') {
         const preset = presetManager.loadPreset(modelName, presetId);
         if (preset) {
-          // Set flag to prevent clearPresetSelection during load
-          isLoadingPreset = true;
-
-          const state = stateManager.getState();
-          // Desktop OpenSCAD parity: MERGE preset parameters onto current state
-          // "Only the parameters defined in the dataset are modified"
-          const mergedParams = { ...state.parameters, ...preset.parameters };
-          stateManager.setState({ parameters: mergedParams });
-
-          // Re-render UI with merged parameters
-          const parametersContainer = document.getElementById(
-            'parametersContainer'
-          );
-          renderParameterUI(
-            state.schema,
-            parametersContainer,
-            (values) => {
-              stateManager.setState({ parameters: values });
-              // Clear preset selection when parameters are manually changed
-              clearPresetSelection(values);
-              if (autoPreviewController) {
-                autoPreviewController.onParameterChange(values);
-              }
-              updatePrimaryActionButton();
-            },
-            mergedParams // Pass merged values as initial values
-          );
-
-          // Trigger auto-preview with merged parameters
-          if (autoPreviewController) {
-            autoPreviewController.onParameterChange(mergedParams);
-          }
-          updatePrimaryActionButton();
-
-          // Track the currently loaded preset and update dropdown to show it
-          setCurrentPresetSelection(preset);
-
-          // Clear the loading flag
-          isLoadingPreset = false;
-
-          updateStatus(`Loaded preset: ${preset.name}`);
+          applyPresetParametersAndCompanions(preset);
           closeManagePresetsModalHandler();
         }
       } else if (action === 'delete') {
-        if (confirm('Are you sure you want to delete this preset?')) {
+        const presetToDelete = presetManager.loadPreset(modelName, presetId);
+        const presetLabel = presetToDelete?.name || 'this preset';
+        const confirmed = await showConfirmDialog(
+          `Are you sure you want to delete "<strong>${presetLabel}</strong>"?<br><br>This action <strong>cannot be undone</strong>.`,
+          'Delete Preset',
+          'Delete',
+          'Cancel',
+          { destructive: true }
+        );
+        if (confirmed) {
           presetManager.deletePreset(modelName, presetId);
           updatePresetDropdown();
-          // Refresh the modal
           closeManagePresetsModalHandler();
           showManagePresetsModal();
         }
@@ -11820,17 +14818,20 @@ if (rounded) {
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
-          a.download = `preset-${preset.name.toLowerCase().replace(/\s+/g, '-')}.json`;
+          a.download = `${sanitizeFilename(preset.name)}.json`;
           a.click();
           URL.revokeObjectURL(url);
-          updateStatus(`Exported preset: ${preset.name}`);
+          updateStatus(`Exported design: ${preset.name}`);
         }
       } else if (action === 'export-all') {
         // Export in OpenSCAD native format (includes "design default values" as first entry)
         // Pass hidden parameters for desktop parity (included in export but not in UI)
         const currentState = stateManager.getState();
         const hiddenParams = currentState.schema?.hiddenParameters || {};
-        const json = presetManager.exportOpenSCADNativeFormat(modelName, hiddenParams);
+        const json = presetManager.exportOpenSCADNativeFormat(
+          modelName,
+          hiddenParams
+        );
         if (json) {
           const blob = new Blob([json], { type: 'application/json' });
           const url = URL.createObjectURL(blob);
@@ -11839,83 +14840,157 @@ if (rounded) {
           a.download = `${modelName.replace('.scad', '')}-presets.json`;
           a.click();
           URL.revokeObjectURL(url);
-          updateStatus('Exported all presets (OpenSCAD native format)');
+          updateStatus('Exported all designs (OpenSCAD native format)');
         } else {
-          updateStatus('No presets to export. Create some presets first using the + button.');
+          updateStatus(
+            'No designs to export. Create some designs first using the + button.'
+          );
         }
       } else if (action === 'import') {
+        // Ask user whether to merge with existing presets or replace them all.
+        // "Replace" is destructive and always requires confirmation.
+        // Import mode dialog: three options mapped to importAndMergePresets strategies
+        const importModeDialog = document.createElement('dialog');
+        importModeDialog.className = 'preset-import-mode-dialog';
+        importModeDialog.setAttribute('aria-labelledby', 'importModeTitle');
+        importModeDialog.innerHTML = `
+          <form method="dialog" class="import-mode-form">
+            <h3 id="importModeTitle" class="import-mode-title">Import designs</h3>
+            <fieldset class="import-mode-fieldset">
+              <legend class="import-mode-legend">Import mode</legend>
+              <label class="import-mode-option">
+                <input type="radio" name="importMode" value="merge" checked />
+                <span class="import-mode-label">
+                  <strong>Merge</strong>
+                  <span class="import-mode-desc">Add imported designs; skip any with the same name as existing ones</span>
+                </span>
+              </label>
+              <label class="import-mode-option">
+                <input type="radio" name="importMode" value="replace" />
+                <span class="import-mode-label">
+                  <strong>Replace</strong>
+                  <span class="import-mode-desc">Delete all existing designs for this model, then import</span>
+                </span>
+              </label>
+              <label class="import-mode-option">
+                <input type="radio" name="importMode" value="copies" />
+                <span class="import-mode-label">
+                  <strong>Import as copies</strong>
+                  <span class="import-mode-desc">Import all designs; rename duplicates with (2), (3)… suffixes</span>
+                </span>
+              </label>
+            </fieldset>
+            <div class="import-mode-actions">
+              <button type="submit" value="ok" class="btn btn-primary">Choose files…</button>
+              <button type="submit" value="cancel" class="btn btn-outline">Cancel</button>
+            </div>
+          </form>`;
+        document.body.appendChild(importModeDialog);
+        importModeDialog.showModal();
+
+        const importMode = await new Promise((resolve) => {
+          importModeDialog.addEventListener(
+            'close',
+            () => {
+              const returnValue = importModeDialog.returnValue;
+              const mode =
+                importModeDialog.querySelector(
+                  'input[name="importMode"]:checked'
+                )?.value || 'merge';
+              document.body.removeChild(importModeDialog);
+              resolve(returnValue === 'ok' ? mode : null);
+            },
+            { once: true }
+          );
+        });
+
+        if (!importMode) return; // user cancelled
+
         // Create file input for import
-        // Multi-preset JSON import support
         const input = document.createElement('input');
         input.type = 'file';
         input.accept = '.json';
-        input.multiple = true; // Allow multiple files for batch preset import workflow
+        input.multiple = true;
         input.onchange = async (e) => {
           const files = e.target.files;
           if (!files || files.length === 0) return;
 
           try {
-            // Get current model name and schema for proper import
             const currentState = stateManager.getState();
             const currentModelName = currentState.uploadedFile?.name || null;
             const paramSchema = currentState.schema?.parameters || {};
-            
-            // Warn if no model is loaded
+
             if (!currentModelName) {
               const proceed = confirm(
                 'No model is currently loaded. Presets will be saved as "Unknown Model" and may not appear in the dropdown until you load a matching model.\n\nContinue with import?'
               );
               if (!proceed) return;
             }
-            
-            let totalImported = 0;
-            let totalSkipped = 0;
-            const errors = [];
-            
-            for (const file of files) {
-              try {
-                const text = await file.text();
-                
-                // Log for debugging preset import issues
-                console.log(`[Import] Processing: ${file.name}`);
-                
-                const result = presetManager.importPreset(
-                  text,
-                  currentModelName,
-                  paramSchema
-                );
 
-                if (result.success) {
-                  totalImported += result.imported;
-                  totalSkipped += result.skipped || 0;
-                  console.log(`[Import] ${file.name}: ${result.imported} preset(s) imported`);
-                } else {
-                  errors.push(`${file.name}: ${result.error}`);
+            // Replace mode: confirm and clear existing presets first
+            if (importMode === 'replace' && currentModelName) {
+              const existing = presetManager.getPresets(currentModelName) || [];
+              const realCount = existing.filter(
+                (p) => p.id !== 'design-defaults'
+              ).length;
+
+              // Reject if import files are empty to avoid silent data loss
+              const fileTexts = await Promise.all(
+                Array.from(files).map((f) => f.text())
+              );
+              const hasValidContent = fileTexts.some((t) => {
+                try {
+                  return !!JSON.parse(t);
+                } catch {
+                  return false;
                 }
-              } catch (error) {
-                errors.push(`${file.name}: ${error.message}`);
+              });
+              if (!hasValidContent) {
+                alert(
+                  'The selected file(s) contain no valid preset data. Import cancelled to protect your existing designs.'
+                );
+                return;
               }
+
+              if (realCount > 0) {
+                const confirmed = confirm(
+                  `Replace all designs? This will permanently delete ${realCount} existing design${realCount !== 1 ? 's' : ''} for "${currentModelName}". This cannot be undone.\n\nContinue?`
+                );
+                if (!confirmed) return;
+                presetManager.clearPresetsForModel(currentModelName, {
+                  preserveDefaults: true,
+                });
+              }
+
+              // After clearing, import with overwrite strategy
+              const result = presetManager.importAndMergePresets(
+                fileTexts,
+                currentModelName,
+                paramSchema,
+                'overwrite'
+              );
+              _handleImportResult(result, currentModelName);
+              return;
             }
 
-            // Show result
-            if (totalImported > 0) {
-              let message = `Imported ${totalImported} preset(s)`;
-              if (totalSkipped > 0) {
-                message += ` (${totalSkipped} skipped)`;
-              }
-              if (errors.length > 0) {
-                message += `\n\nErrors:\n${errors.join('\n')}`;
-              }
-              alert(message);
-              updatePresetDropdown();
-              // Refresh the modal
-              closeManagePresetsModalHandler();
-              showManagePresetsModal();
-            } else {
-              alert(`Import failed:\n${errors.join('\n')}`);
-            }
+            // Map UI modes to importAndMergePresets conflictStrategy
+            // merge → 'keep' (skip duplicates by name)
+            // copies → 'rename' (append (2), (3) suffix)
+            const conflictStrategy =
+              importMode === 'copies' ? 'rename' : 'keep';
+
+            const fileTexts = await Promise.all(
+              Array.from(files).map((f) => f.text())
+            );
+            const result = presetManager.importAndMergePresets(
+              fileTexts,
+              currentModelName,
+              paramSchema,
+              conflictStrategy
+            );
+            _handleImportResult(result, currentModelName);
           } catch (error) {
-            alert(`Failed to import preset: ${error.message}`);
+            alert(`Failed to import designs: ${error.message}`);
           }
         };
         input.click();
@@ -11962,24 +15037,50 @@ if (rounded) {
 
     // Block saving over "design default values" (immutable, desktop parity)
     if (selectedPresetId === DESIGN_DEFAULTS_ID) {
-      updateStatus('Design default values cannot be overwritten. Use + to create a new preset.', 'warning');
+      updateStatus(
+        'Design default values cannot be overwritten. Use + to create a new preset.',
+        'warning'
+      );
       return;
     }
 
     // Get the preset to update
-    const preset = presetManager.loadPreset(state.uploadedFile.name, selectedPresetId);
+    const preset = presetManager.loadPreset(
+      state.uploadedFile.name,
+      selectedPresetId
+    );
     if (!preset) {
       updateStatus('Preset not found', 'error');
       return;
     }
 
     try {
+      // E2: Capture companion files (text-only, exclude images and main file)
+      const companionSnapshot = {};
+      if (state.projectFiles) {
+        for (const [path, content] of state.projectFiles.entries()) {
+          if (
+            path !== state.mainFilePath &&
+            typeof content === 'string' &&
+            !content.startsWith('data:')
+          ) {
+            companionSnapshot[path] = content;
+          }
+        }
+      }
+
       // Save/overwrite the current preset with current parameters
       const savedPreset = presetManager.savePreset(
         state.uploadedFile.name,
         preset.name, // Use existing name - this will overwrite
         state.parameters,
-        { description: preset.description } // Preserve description
+        {
+          description: preset.description,
+          companionFiles:
+            Object.keys(companionSnapshot).length > 0
+              ? companionSnapshot
+              : null,
+        }
       );
 
       updateStatus(`Preset "${preset.name}" saved`, 'success');
@@ -11990,7 +15091,6 @@ if (rounded) {
       setTimeout(() => {
         savePresetBtn.textContent = '💾';
       }, 1500);
-
     } catch (error) {
       updateStatus(`Failed to save preset: ${error.message}`, 'error');
     }
@@ -12016,15 +15116,22 @@ if (rounded) {
     }
 
     // Get preset info for confirmation
-    const preset = presetManager.loadPreset(state.uploadedFile.name, selectedPresetId);
+    const preset = presetManager.loadPreset(
+      state.uploadedFile.name,
+      selectedPresetId
+    );
     if (!preset) {
       updateStatus('Preset not found', 'error');
       return;
     }
 
-    // Show confirmation dialog
-    const confirmed = confirm(
-      `Delete preset "${preset.name}"?\n\nThis action cannot be undone.`
+    // Show warning modal — deletion is irreversible
+    const confirmed = await showConfirmDialog(
+      `Are you sure you want to delete the preset "<strong>${preset.name}</strong>"?<br><br>This action <strong>cannot be undone</strong>.`,
+      'Delete Preset',
+      'Delete',
+      'Cancel',
+      { destructive: true }
     );
 
     if (!confirmed) {
@@ -12032,7 +15139,10 @@ if (rounded) {
     }
 
     try {
-      const deleted = presetManager.deletePreset(state.uploadedFile.name, selectedPresetId);
+      const deleted = presetManager.deletePreset(
+        state.uploadedFile.name,
+        selectedPresetId
+      );
       if (deleted) {
         updateStatus(`Deleted preset: ${preset.name}`, 'success');
         updatePresetDropdown(); // Refresh dropdown
@@ -12047,6 +15157,103 @@ if (rounded) {
 
   // Manage button: Import/export modal
   managePresetsBtn.addEventListener('click', showManagePresetsModal);
+
+  // Preset sort control: re-sort dropdown when sort order changes
+  const presetDropdownSort = document.getElementById('presetDropdownSort');
+  if (presetDropdownSort) {
+    presetDropdownSort.addEventListener('change', () => {
+      try {
+        localStorage.setItem(PRESET_SORT_KEY, presetDropdownSort.value);
+      } catch (_) {
+        /* localStorage overflow — continue with in-memory value */
+      }
+      updatePresetDropdown();
+      const label =
+        presetDropdownSort.options[presetDropdownSort.selectedIndex]?.text ||
+        '';
+      announceImmediate(`Presets sorted by ${label}`);
+    });
+  }
+
+  // Phase 9: Preset search/filter
+  const presetSearchInput = document.getElementById('presetSearchInput');
+  const presetSearchClear = document.getElementById('presetSearchClear');
+  const presetSearchStatus = document.getElementById('presetSearchStatus');
+
+  if (presetSearchInput && presetSearchClear && presetSearchStatus) {
+    let _searchDebounce = null;
+
+    function _applyPresetFilter() {
+      const term = presetSearchInput.value.trim().toLowerCase();
+      const options = Array.from(presetSelect.options);
+      let visible = 0;
+
+      for (const opt of options) {
+        if (!opt.value) {
+          // Keep the placeholder option always visible
+          opt.hidden = false;
+          continue;
+        }
+        const match = !term || opt.text.toLowerCase().includes(term);
+        opt.hidden = !match;
+        if (match) visible++;
+      }
+
+      presetSearchClear.hidden = !presetSearchInput.value;
+
+      const total = options.filter((o) => o.value).length;
+      if (!term) {
+        presetSearchStatus.textContent = '';
+      } else {
+        presetSearchStatus.textContent = `${visible} of ${total} presets match`;
+      }
+    }
+
+    presetSearchInput.addEventListener('input', () => {
+      clearTimeout(_searchDebounce);
+      _searchDebounce = setTimeout(_applyPresetFilter, 150);
+    });
+
+    presetSearchClear.addEventListener('click', () => {
+      presetSearchInput.value = '';
+      _applyPresetFilter();
+      presetSearchStatus.textContent = 'Search cleared, all presets shown';
+      presetSearchInput.focus();
+    });
+  }
+
+  // Searchable combobox (searchable_combobox feature flag)
+  if (_isEnabled('searchable_combobox')) {
+    const comboContainer = document.getElementById('presetComboboxContainer');
+    const presetSearchLegacy = document.getElementById('presetSearchLegacy');
+    const presetSelectorLegacy = document.getElementById('presetSelector');
+
+    if (comboContainer) {
+      // Show combobox, hide legacy elements
+      comboContainer.hidden = false;
+      if (presetSearchLegacy) presetSearchLegacy.hidden = true;
+      if (presetSelectorLegacy) presetSelectorLegacy.hidden = true;
+
+      _presetCombobox = initSearchableCombobox({
+        container: comboContainer,
+        placeholder: 'Search presets…',
+        inputId: 'presetComboboxInput',
+        disabled: true,
+      });
+
+      // Mirror combobox selection to the hidden native select for shared event handlers
+      comboContainer.addEventListener('change', (e) => {
+        const id = e.detail?.value;
+        if (id != null) {
+          // Update the native select value so existing change handlers fire
+          if (presetSelect) {
+            presetSelect.value = id;
+            presetSelect.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+        }
+      });
+    }
+  }
 
   // Update button states when preset selection changes
   presetSelect.addEventListener('change', () => {
@@ -12112,7 +15319,9 @@ if (rounded) {
       stateManager.setState({ parameters: defaultParams });
 
       // Re-render UI with default parameters
-      const parametersContainer = document.getElementById('parametersContainer');
+      const parametersContainer = document.getElementById(
+        'parametersContainer'
+      );
       renderParameterUI(
         state.schema,
         parametersContainer,
@@ -12149,84 +15358,27 @@ if (rounded) {
     const preset = presetManager.loadPreset(state.uploadedFile.name, presetId);
 
     if (preset) {
-      // Check preset compatibility with current schema
+      // Log compatibility info (desktop OpenSCAD parity: silently skip extras)
+      const hiddenParamNames = new Set(
+        Object.keys(state.schema?.hiddenParameters || {})
+      );
       const compatibility = presetManager.analyzePresetCompatibility(
         preset.parameters,
-        state.schema || {}
+        state.schema?.parameters || state.schema,
+        [...hiddenParamNames]
       );
-
-      // If there are compatibility issues, show a warning dialog
-      if (!compatibility.isCompatible) {
-        // Remember previous selection to restore on cancel
-        const previousPresetId = state.currentPresetId || '';
-        
-        const action = await showPresetCompatibilityWarning(
-          preset,
-          compatibility,
-          state
+      if (
+        compatibility.extraParams.length > 0 ||
+        compatibility.missingParams.length > 0
+      ) {
+        console.info(
+          `[Preset] "${preset.name}": ${compatibility.applicableCount} params applied, ` +
+            `${compatibility.extraParams.length} skipped (not in current file), ` +
+            `${compatibility.missingParams.length} kept at defaults (not in preset)`
         );
-
-        if (action === 'cancel') {
-          // Restore dropdown to previous selection (not just clear it)
-          const presetSelectEl = document.getElementById('presetSelect');
-          if (presetSelectEl) {
-            presetSelectEl.value = previousPresetId;
-          }
-          return;
-        }
-        // action === 'apply' - continue with loading
       }
 
-      // Set flag to prevent clearPresetSelection during load
-      isLoadingPreset = true;
-
-      // Desktop OpenSCAD parity: MERGE preset parameters onto current state
-      // "Only the parameters defined in the dataset are modified, other parameters are not set to defaults"
-      const mergedParams = { ...state.parameters, ...preset.parameters };
-      stateManager.setState({ parameters: mergedParams });
-
-      // Re-render UI with merged parameters (FIX: UI wasn't updating before)
-      const parametersContainer = document.getElementById(
-        'parametersContainer'
-      );
-      renderParameterUI(
-        state.schema,
-        parametersContainer,
-        (values) => {
-          stateManager.setState({ parameters: values });
-          // Clear preset selection when parameters are manually changed
-          clearPresetSelection(values);
-          if (autoPreviewController) {
-            autoPreviewController.onParameterChange(values);
-          }
-          updatePrimaryActionButton();
-        },
-        mergedParams // Pass merged values as initial values
-      );
-
-      // Trigger auto-preview with merged parameters
-      if (autoPreviewController) {
-        autoPreviewController.onParameterChange(mergedParams);
-      }
-      updatePrimaryActionButton();
-
-      // Track the currently loaded preset (for showing name in dropdown)
-      setCurrentPresetSelection(preset);
-
-      // Clear the loading flag
-      isLoadingPreset = false;
-
-      // Update status with compatibility info if there were issues
-      if (!compatibility.isCompatible) {
-        const issueCount =
-          compatibility.extraParams.length + compatibility.missingParams.length;
-        updateStatus(
-          `Loaded preset: ${preset.name} (${issueCount} parameter differences)`
-        );
-      } else {
-        updateStatus(`Loaded preset: ${preset.name}`);
-      }
-
+      applyPresetParametersAndCompanions(preset);
       // Keep showing the preset name in dropdown (don't reset)
       // The dropdown will reset when parameters change (handled in onChange callback)
     }
@@ -12239,7 +15391,7 @@ if (rounded) {
    * @param {Object} state - Current app state
    * @returns {Promise<string>} 'apply' or 'cancel'
    */
-  function showPresetCompatibilityWarning(preset, compatibility, state) {
+  function _showPresetCompatibilityWarning(preset, compatibility, state) {
     return new Promise((resolve) => {
       // Check for SCAD version info
       const scadVersion = state.uploadedFile?.content
@@ -12352,9 +15504,13 @@ if (rounded) {
     updatePresetDropdown();
   });
 
-  // Initialize preset dropdown after file upload
+  // Refresh preset dropdown whenever the loaded project changes (including
+  // switching from one project to another, not just the initial load).
   stateManager.subscribe((state, prevState) => {
-    if (state.uploadedFile && !prevState.uploadedFile) {
+    if (
+      state.uploadedFile &&
+      state.uploadedFile.name !== prevState.uploadedFile?.name
+    ) {
       updatePresetDropdown();
     }
   });
@@ -12380,11 +15536,9 @@ if (rounded) {
       return;
     }
 
-    // Show modal
     sourceViewerModal.classList.remove('hidden');
     sourceViewerContent.value = state.uploadedFile.content;
 
-    // Show file info
     const lineCount = state.uploadedFile.content.split('\n').length;
     const charCount = state.uploadedFile.content.length;
     sourceViewerInfo.innerHTML = `
@@ -12393,7 +15547,6 @@ if (rounded) {
       <span>📊 ${charCount.toLocaleString()} characters</span>
     `;
 
-    // Focus textarea for accessibility
     setTimeout(() => sourceViewerContent.focus(), 100);
   });
 
@@ -12413,7 +15566,6 @@ if (rounded) {
       }, 2000);
     } catch (error) {
       console.error('Failed to copy source:', error);
-      // Fallback
       const textarea = document.createElement('textarea');
       textarea.value = state.uploadedFile.content;
       document.body.appendChild(textarea);
@@ -12427,7 +15579,6 @@ if (rounded) {
     }
   });
 
-  // Source viewer modal close handlers
   sourceViewerClose?.addEventListener('click', () => {
     sourceViewerModal.classList.add('hidden');
   });
@@ -12464,18 +15615,66 @@ if (rounded) {
   // State for console output
   let lastConsoleOutput = '';
 
+  const BENIGN_OPENSCAD_CONSOLE_PATTERNS = [
+    /Could not initialize localization \(application path is '\/'\)\.?/i,
+    /WARNING:\s*Viewall and autocenter disabled in favor of \$vp\*/i,
+  ];
+
+  function normalizeOpenSCADConsoleOutput(output) {
+    if (!output || typeof output !== 'string') return '';
+
+    const normalizedLines = output
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0)
+      .map((line) => {
+        if (line.startsWith('[ERR] ')) return line.substring(6).trim();
+        if (line.startsWith('[ERR]')) return line.substring(5).trim();
+        return line;
+      })
+      .filter(
+        (line) =>
+          !BENIGN_OPENSCAD_CONSOLE_PATTERNS.some((pattern) =>
+            pattern.test(line)
+          )
+      );
+
+    return normalizedLines.join('\n');
+  }
+
   // Initialize ConsolePanel for ECHO/WARNING/ERROR display
   const consolePanel = getConsolePanel();
+
+  // Initialize ErrorLogPanel for structured error display
+  const errorLogPanel = getErrorLogPanel();
 
   /**
    * Update console output display
    * Display ECHO/WARNING/ERROR messages for user communication
    * @param {string} output - Console output from OpenSCAD render
    */
-  function updateConsoleOutput(output) {
+  function updateConsoleOutput(output, { append = false } = {}) {
     if (!output || output.trim() === '') return;
+    const normalizedOutput = normalizeOpenSCADConsoleOutput(output);
 
-    lastConsoleOutput = output;
+    if (!append) {
+      consolePanel.clear();
+      errorLogPanel.clear();
+    }
+
+    if (!normalizedOutput || normalizedOutput.trim() === '') {
+      lastConsoleOutput = '';
+      updatePreviewDrawer([]);
+      if (consoleOutput && !consoleOutputModal?.classList.contains('hidden')) {
+        renderConsoleOutput('');
+      }
+      if (consoleBadge) {
+        consoleBadge.classList.add('hidden');
+      }
+      return;
+    }
+
+    lastConsoleOutput = normalizedOutput;
 
     // Show badge to indicate new output
     if (consoleBadge) {
@@ -12484,86 +15683,154 @@ if (rounded) {
 
     // If modal is open, update it
     if (consoleOutput && !consoleOutputModal?.classList.contains('hidden')) {
-      renderConsoleOutput(output);
+      renderConsoleOutput(normalizedOutput);
     }
 
     // Feed the ConsolePanel with parsed console output
     // This displays ECHO/WARNING/ERROR in the parameter panel
-    consolePanel.addOutput(output);
+    consolePanel.addOutput(normalizedOutput);
 
-    // Extract ECHO messages and display in status bar
-    const echoMessages = extractEchoMessages(output);
-    updateStatusBarEcho(echoMessages);
+    // Feed the ErrorLogPanel with the same output for structured display
+    errorLogPanel.addOutput(normalizedOutput);
 
-    // Log for debugging
-    const echoCount = echoMessages.length;
+    // Extract ECHO/WARNING/ERROR messages and display in preview drawer
+    const consoleMessages = extractConsoleMessages(normalizedOutput);
+    updatePreviewDrawer(consoleMessages);
+
+    const echoCount = consoleMessages.filter((m) => m.type === 'echo').length;
     if (echoCount > 0) {
       console.log(`[Console] ${echoCount} ECHO statement(s) captured`);
     }
   }
 
   /**
-   * Extract ECHO messages from console output
+   * Extract ECHO, WARNING, and ERROR messages from console output.
    * @param {string} output - Raw console output
-   * @returns {string[]} Array of ECHO message contents
+   * @returns {{ type: 'echo'|'warning'|'error', text: string }[]}
    */
-  function extractEchoMessages(output) {
+  const _ERR_INFO_PATTERNS =
+    /^(?:Geometries in cache|Geometry cache size|CGAL Polyhedrons in cache|CGAL cache size|Total rendering time|Top level object is|Status:\s|Genus:\s|Vertices:\s|Facets:\s|Could not initialize localization|Compiling design|Rendering design)/i;
+
+  function extractConsoleMessages(output) {
     if (!output) return [];
 
-    const echoLines = output
+    return output
       .split('\n')
-      .filter((line) => line.includes('ECHO:'));
-    return echoLines
       .map((line) => {
-        // Extract the message content after "ECHO:"
-        const match = line.match(/ECHO:\s*"?([^"]*)"?/);
-        return match ? match[1].trim() : line.replace(/.*ECHO:\s*/, '').trim();
+        const trimmed = line.trim();
+        if (!trimmed) return null;
+
+        if (trimmed.startsWith('ECHO:')) {
+          const match = trimmed.match(/ECHO:\s*"?([^"]*)"?/);
+          const text = match
+            ? match[1].trim()
+            : trimmed.replace(/.*ECHO:\s*/, '').trim();
+          return text.length > 0 ? { type: 'echo', text } : null;
+        }
+
+        if (trimmed.includes('WARNING:') || trimmed.includes('Warning:')) {
+          const warnText = trimmed.startsWith('[ERR] ')
+            ? trimmed.substring(6)
+            : trimmed;
+          return { type: 'warning', text: warnText };
+        }
+
+        if (trimmed.includes('ERROR:') || trimmed.includes('Error:')) {
+          const errText = trimmed.startsWith('[ERR] ')
+            ? trimmed.substring(6)
+            : trimmed;
+          return { type: 'error', text: errText };
+        }
+
+        if (trimmed.startsWith('[ERR]')) {
+          const text = trimmed
+            .substring(trimmed.startsWith('[ERR] ') ? 6 : 5)
+            .trim();
+          if (!text || _ERR_INFO_PATTERNS.test(text)) {
+            return null;
+          }
+          return { type: 'error', text };
+        }
+
+        return null;
       })
-      .filter((msg) => msg.length > 0);
+      .filter(Boolean);
   }
 
   /**
-   * Update the echo drawer display
-   * @param {string[]} echoMessages - Array of ECHO messages
+   * Update the preview drawer to show ECHO, WARNING, and ERROR messages.
+   * @param {{ type: 'echo'|'warning'|'error', text: string }[]} messages
    */
-  function updateStatusBarEcho(echoMessages) {
+  function updatePreviewDrawer(messages) {
     const echoDrawer = document.getElementById('echoDrawer');
     const echoDrawerLabel = document.getElementById('echoDrawerLabel');
     const echoMessagesEl = document.getElementById('echoMessages');
 
     if (!echoDrawer || !echoDrawerLabel || !echoMessagesEl) return;
 
-    if (echoMessages.length === 0) {
-      echoDrawer.classList.remove('visible');
+    if (messages.length === 0) {
+      echoDrawer.classList.remove(
+        'visible',
+        'echo-drawer--warning',
+        'echo-drawer--error'
+      );
       echoDrawer.classList.add('collapsed');
-      echoDrawerLabel.textContent = 'No echo messages';
-      echoMessagesEl.textContent = '';
+      echoDrawerLabel.textContent = 'No messages';
+      echoMessagesEl.innerHTML = '';
       return;
     }
 
-    // Update label with count
-    echoDrawerLabel.textContent = `ECHO Messages (${echoMessages.length})`;
+    const echoCount = messages.filter((m) => m.type === 'echo').length;
+    const warnCount = messages.filter((m) => m.type === 'warning').length;
+    const errorCount = messages.filter((m) => m.type === 'error').length;
 
-    // Show all ECHO messages, each on its own line
-    const formattedMessages = echoMessages
-      .map((msg) => `ECHO: ${msg}`)
+    // Build label describing the mix of message types
+    const parts = [];
+    if (echoCount > 0) parts.push(`${echoCount} echo`);
+    if (warnCount > 0)
+      parts.push(`${warnCount} warning${warnCount > 1 ? 's' : ''}`);
+    if (errorCount > 0)
+      parts.push(`${errorCount} error${errorCount > 1 ? 's' : ''}`);
+    echoDrawerLabel.textContent = `OpenSCAD Messages (${parts.join(', ')})`;
+
+    // Set severity class on the drawer for toggle-bar tinting
+    echoDrawer.classList.remove('echo-drawer--warning', 'echo-drawer--error');
+    if (errorCount > 0) {
+      echoDrawer.classList.add('echo-drawer--error');
+    } else if (warnCount > 0) {
+      echoDrawer.classList.add('echo-drawer--warning');
+    }
+
+    // Render each message as a color-coded line (text-only, no user HTML)
+    const escHtml = (s) =>
+      s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    echoMessagesEl.innerHTML = messages
+      .map((m) => {
+        const cls = `echo-msg-line echo-msg-line--${m.type}`;
+        const prefix =
+          m.type === 'echo' ? 'ECHO: ' : m.type === 'warning' ? '' : '';
+        return `<span class="${cls}">${escHtml(prefix + m.text)}</span>`;
+      })
       .join('\n');
-    echoMessagesEl.textContent = formattedMessages;
 
-    // Show the drawer and EXPAND it by default so user sees the messages
+    // Show the drawer expanded
     echoDrawer.classList.add('visible');
     echoDrawer.classList.remove('collapsed');
 
-    // Update aria-expanded on toggle button
     const toggleBtn = document.getElementById('echoDrawerToggle');
     if (toggleBtn) {
       toggleBtn.setAttribute('aria-expanded', 'true');
     }
 
-    // Announce to screen readers
-    announceImmediate(
-      `Model has ${echoMessages.length} echo message${echoMessages.length > 1 ? 's' : ''}: ${echoMessages[0]}`
-    );
+    // Build accessible announcement
+    const summary = [];
+    if (errorCount > 0)
+      summary.push(`${errorCount} error${errorCount > 1 ? 's' : ''}`);
+    if (warnCount > 0)
+      summary.push(`${warnCount} warning${warnCount > 1 ? 's' : ''}`);
+    if (echoCount > 0)
+      summary.push(`${echoCount} echo message${echoCount > 1 ? 's' : ''}`);
+    announceImmediate(`Model has ${summary.join(', ')}`);
   }
 
   /**
@@ -12693,9 +15960,13 @@ if (rounded) {
     }
 
     // Generate filename with timestamp
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const timestamp = new Date()
+      .toISOString()
+      .replace(/[:.]/g, '-')
+      .slice(0, 19);
     const state = stateManager.getState();
-    const modelName = state.uploadedFile?.name?.replace('.scad', '') || 'console';
+    const modelName =
+      state.uploadedFile?.name?.replace('.scad', '') || 'console';
     const filename = `${modelName}-console-${timestamp}.txt`;
 
     // Create blob and download
@@ -12741,10 +16012,9 @@ if (rounded) {
     }
   });
 
-  // Reset All Button (in Advanced Menu)
+  // Reset All Button (in customizer header)
   const resetAllBtn = document.getElementById('resetAllBtn');
   resetAllBtn?.addEventListener('click', () => {
-    // Same as main reset button
     resetBtn?.click();
   });
 
@@ -12761,7 +16031,6 @@ if (rounded) {
       return;
     }
 
-    // Populate group selector
     resetGroupSelect.innerHTML = '';
     state.schema.groups.forEach((group) => {
       const option = document.createElement('option');
@@ -12770,7 +16039,6 @@ if (rounded) {
       resetGroupSelect.appendChild(option);
     });
 
-    // Show selector
     resetGroupSelector.classList.remove('hidden');
   });
 
@@ -12780,10 +16048,8 @@ if (rounded) {
 
     if (!groupId || !state.schema) return;
 
-    // Record state for undo
     stateManager.recordParameterState();
 
-    // Find parameters in this group and reset them
     const defaults = getAllDefaults();
     const newParams = { ...state.parameters };
     let resetCount = 0;
@@ -12797,7 +16063,6 @@ if (rounded) {
 
     stateManager.setState({ parameters: newParams });
 
-    // Re-render UI
     const parametersContainer = document.getElementById('parametersContainer');
     renderParameterUI(
       state.schema,
@@ -12814,12 +16079,10 @@ if (rounded) {
       newParams
     );
 
-    // Trigger auto-preview
     if (autoPreviewController && state.uploadedFile) {
       autoPreviewController.onParameterChange(newParams);
     }
 
-    // Hide selector and update status
     resetGroupSelector.classList.add('hidden');
     const groupLabel =
       state.schema.groups.find((g) => g.id === groupId)?.label || groupId;
@@ -12844,12 +16107,10 @@ if (rounded) {
       return;
     }
 
-    // Format parameters as JSON
     const json = JSON.stringify(state.parameters, null, 2);
     paramsJsonContent.value = json;
     paramsJsonModal.classList.remove('hidden');
 
-    // Focus textarea for accessibility
     setTimeout(() => paramsJsonContent.focus(), 100);
   });
 
@@ -12886,21 +16147,17 @@ if (rounded) {
       return;
     }
 
-    // Get default parameters from schema
     const defaultParams = state.schema.parameters || {};
 
-    // Use preset manager to export changed parameters
     const changedJson = presetManager.exportChangedParametersJSON(
       state.parameters,
       defaultParams,
       state.currentModelName || 'Unknown Model'
     );
 
-    // Parse to check change count
     const parsed = JSON.parse(changedJson);
 
     if (parsed.message && parsed.changeCount === undefined) {
-      // No changes made
       updateStatus('All parameters are at default values');
       announceImmediate(
         'All parameters are at default values. Nothing to export.'
@@ -12908,12 +16165,10 @@ if (rounded) {
       return;
     }
 
-    // Download as JSON file
     const blob = new Blob([changedJson], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
 
-    // Generate filename with model name and date
     const baseName = (state.currentModelName || 'model').replace(
       /\.(scad|zip)$/i,
       ''
@@ -12924,7 +16179,6 @@ if (rounded) {
     a.click();
     URL.revokeObjectURL(url);
 
-    // Update status
     const changeCount = parsed.changeCount || 0;
     updateStatus(`Exported ${changeCount} changed parameter(s)`);
     announceImmediate(
@@ -13185,30 +16439,42 @@ if (rounded) {
     if (previewManager) {
       const newMode = previewManager.toggleProjection();
       const isPerspective = newMode === 'perspective';
-      
+
       // Update desktop toggle button state
       const projToggle = document.getElementById('projectionToggle');
       if (projToggle) {
-        projToggle.setAttribute('aria-pressed', isPerspective ? 'false' : 'true');
-        projToggle.title = isPerspective 
-          ? 'Switch to Orthographic (P)' 
+        projToggle.setAttribute(
+          'aria-pressed',
+          isPerspective ? 'false' : 'true'
+        );
+        projToggle.title = isPerspective
+          ? 'Switch to Orthographic (P)'
           : 'Switch to Perspective (P)';
         const labelSpan = projToggle.querySelector('span');
         if (labelSpan) {
-          labelSpan.textContent = isPerspective ? 'Perspective' : 'Orthographic';
+          labelSpan.textContent = isPerspective
+            ? 'Perspective'
+            : 'Orthographic';
         }
       }
-      
+
       // Update mobile toggle button state
-      const mobileProjToggle = document.getElementById('mobileProjectionToggle');
+      const mobileProjToggle = document.getElementById(
+        'mobileProjectionToggle'
+      );
       if (mobileProjToggle) {
-        mobileProjToggle.setAttribute('aria-pressed', isPerspective ? 'false' : 'true');
-        mobileProjToggle.title = isPerspective 
-          ? 'Switch to Orthographic' 
+        mobileProjToggle.setAttribute(
+          'aria-pressed',
+          isPerspective ? 'false' : 'true'
+        );
+        mobileProjToggle.title = isPerspective
+          ? 'Switch to Orthographic'
           : 'Switch to Perspective';
         const mobileLabelSpan = mobileProjToggle.querySelector('span');
         if (mobileLabelSpan) {
-          mobileLabelSpan.textContent = isPerspective ? 'Perspective' : 'Orthographic';
+          mobileLabelSpan.textContent = isPerspective
+            ? 'Perspective'
+            : 'Orthographic';
         }
       }
     }
@@ -13261,6 +16527,76 @@ if (rounded) {
         modal.dataset.initialized = 'true';
       }
       openModal(modal);
+    }
+  });
+
+  // File action shortcuts
+  keyboardConfig.on('newFile', () => fileActionsController.onNew());
+  keyboardConfig.on('saveFile', () => fileActionsController.onSave());
+  keyboardConfig.on('saveFileAs', () => fileActionsController.onSaveAs());
+  keyboardConfig.on('reloadFile', () => fileActionsController.onReload());
+  keyboardConfig.on('exportImage', () => fileActionsController.onExportImage());
+
+  // Edit action shortcuts
+  keyboardConfig.on('copyViewportImage', () =>
+    editActionsController.copyViewportImage()
+  );
+  keyboardConfig.on('jumpNextError', () =>
+    editActionsController.jumpToNextError()
+  );
+  keyboardConfig.on('jumpPrevError', () =>
+    editActionsController.jumpToPrevError()
+  );
+  keyboardConfig.on('increaseFontSize', () =>
+    editActionsController.increaseFontSize()
+  );
+  keyboardConfig.on('decreaseFontSize', () =>
+    editActionsController.decreaseFontSize()
+  );
+  // Design action shortcuts
+  keyboardConfig.on('flushCaches', () => designPanelController.flushCaches());
+  keyboardConfig.on('showAST', () => designPanelController.showAST());
+  keyboardConfig.on('checkValidity', () =>
+    designPanelController.checkValidity()
+  );
+
+  // Display action shortcuts
+  keyboardConfig.on('viewAll', () => {
+    if (previewManager?.mesh) {
+      previewManager.fitCameraToModel();
+      announceImmediate('View fitted to model');
+    }
+  });
+  keyboardConfig.on('toggleAxes', () =>
+    displayOptionsController.toggle('axes')
+  );
+  keyboardConfig.on('toggleEdges', () =>
+    displayOptionsController.toggle('edges')
+  );
+  keyboardConfig.on('toggleConsole', () =>
+    getUIModeController().togglePanelVisibility('consoleOutput')
+  );
+  keyboardConfig.on('toggleErrorLog', () =>
+    getUIModeController().togglePanelVisibility('errorLog')
+  );
+  keyboardConfig.on('toggleCodeEditor', () =>
+    getUIModeController().togglePanelVisibility('codeEditor')
+  );
+  keyboardConfig.on('toggleCustomizer', () => {
+    const sidebar = document.querySelector('.sidebar');
+    if (sidebar) sidebar.classList.toggle('collapsed');
+  });
+  keyboardConfig.on('nextPanel', () => getUIModeController().cyclePanel(1));
+  keyboardConfig.on('prevPanel', () => getUIModeController().cyclePanel(-1));
+
+  keyboardConfig.on('findReplace', () => {
+    const modeManager = getModeManager();
+    if (modeManager?.isExpertMode?.() && modeManager.getEditorInstance?.()) {
+      const editor = modeManager.getEditorInstance();
+      if (editor.getAction) {
+        const action = editor.getAction('editor.action.startFindReplaceAction');
+        if (action) action.run();
+      }
     }
   });
 
@@ -13335,7 +16671,7 @@ if (rounded) {
     if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
       if (state.uploadedFile && stateManager.canUndo()) {
         e.preventDefault();
-        undoBtn?.click();
+        performUndo();
       }
     }
 
@@ -13346,7 +16682,7 @@ if (rounded) {
     ) {
       if (state.uploadedFile && stateManager.canRedo()) {
         e.preventDefault();
-        redoBtn?.click();
+        performRedo();
       }
     }
 
@@ -13373,7 +16709,7 @@ if (rounded) {
       }
     }
 
-    // D key: Download STL (when button is in download mode)
+    // D key: Download (when button is in download mode)
     if (e.key === 'd' && !e.ctrlKey && !e.metaKey) {
       const target = e.target;
       if (
@@ -13388,7 +16724,7 @@ if (rounded) {
       }
     }
 
-    // G key: Generate STL (when button is in generate mode)
+    // G key: Generate (when button is in generate mode)
     if (e.key === 'g' && !e.ctrlKey && !e.metaKey) {
       const target = e.target;
       if (

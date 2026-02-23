@@ -98,6 +98,35 @@ export const FLAGS = {
     userConfigurable: true,
     killSwitch: false,
   },
+  basic_advanced_mode: {
+    id: 'basic_advanced_mode',
+    name: 'Basic/Advanced Mode',
+    description: 'Toggle between simplified and full interface layouts',
+    default: true,
+    rollout: 100,
+    userConfigurable: true,
+    killSwitch: false,
+  },
+  searchable_combobox: {
+    id: 'searchable_combobox',
+    name: 'Searchable Preset Combobox',
+    description:
+      'Replace the preset search input and native select with a combined searchable combobox widget',
+    default: true,
+    rollout: 100,
+    userConfigurable: true,
+    killSwitch: false,
+  },
+  folder_import: {
+    id: 'folder_import',
+    name: 'Import Project Folder',
+    description:
+      'Allow importing a directory of .scad files and companion resources via the file picker',
+    default: true,
+    rollout: 100,
+    userConfigurable: true,
+    killSwitch: false,
+  },
 };
 
 // Storage key for user preferences

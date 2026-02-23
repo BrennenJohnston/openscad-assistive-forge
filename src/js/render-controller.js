@@ -300,6 +300,7 @@ export class RenderController {
     this.renderQueue = Promise.resolve();
     this.memoryUsage = null;
     this.onMemoryWarning = null;
+    this._moduleUsed = false;
 
     // Worker health monitoring
     this._heartbeatId = 0;
@@ -420,8 +421,24 @@ export class RenderController {
 
         this.worker.onerror = (error) => {
           const message =
-            error?.message || 'Worker error during initialization';
+            error?.message || 'Worker error';
           console.error('[RenderController] Worker error:', error);
+
+          // If a render is in progress, reject it immediately so the UI
+          // doesn't hang waiting for a watchdog timeout.
+          if (this.currentRequest) {
+            const renderError = new Error(
+              'The rendering engine crashed unexpectedly. ' +
+              'This may be caused by projection() or roof() in your model. ' +
+              'The engine will restart automatically for the next render.'
+            );
+            renderError.code = 'WASM_ABORT';
+            renderError.needsRestart = true;
+            this._moduleUsed = true;
+            this.currentRequest.reject(renderError);
+            this.currentRequest = null;
+          }
+
           if (onProgress) {
             onProgress(-1, 'Failed to initialize: ' + message);
           }
@@ -585,7 +602,10 @@ export class RenderController {
                 metrics.shift();
               }
 
-              localStorage.setItem(STORAGE_KEY_METRICS_LOG, JSON.stringify(metrics));
+              localStorage.setItem(
+                STORAGE_KEY_METRICS_LOG,
+                JSON.stringify(metrics)
+              );
               console.log('[Perf] Render timing:', payload.timing);
             } catch (error) {
               console.warn('[Perf] Failed to log metrics:', error);
@@ -598,10 +618,24 @@ export class RenderController {
         break;
 
       case 'ERROR':
+        // Surface any console output captured before the error (warnings, echos)
+        if (
+          payload.consoleOutput &&
+          typeof window.updateConsoleOutput === 'function'
+        ) {
+          window.updateConsoleOutput(payload.consoleOutput);
+        }
         if (
           this.currentRequest &&
           payload.requestId === this.currentRequest.id
         ) {
+          // If the worker signals that the WASM module is corrupted after this
+          // error (non-zero exit code, numeric abort, etc.), mark the module as
+          // used so the proactive restart fires before the next render attempt.
+          if (payload.needsRestart) {
+            this._moduleUsed = true;
+          }
+
           const error = new Error(payload.message);
           error.code = payload.code;
           error.details = payload.details;
@@ -661,6 +695,14 @@ export class RenderController {
       case 'PONG':
         // Worker heartbeat response — update health tracking
         this._lastPongTimestamp = Date.now();
+        break;
+
+      case 'CONSOLE':
+        // Runtime console output from the WASM engine (e.g. echo/warning during render)
+        if (typeof window.updateConsoleOutput === 'function') {
+          const text = payload?.output || payload?.message;
+          if (text) window.updateConsoleOutput(text);
+        }
         break;
 
       case 'DEBUG_LOG':
@@ -915,6 +957,14 @@ export class RenderController {
       };
 
       const renderOnce = async () => {
+        if (this._moduleUsed) {
+          console.log(
+            '[RenderController] Proactive restart: WASM module was used by previous render'
+          );
+          await this.restart();
+          this._moduleUsed = false;
+        }
+
         if (!this.ready) {
           throw new Error('Worker not ready. Call init() first.');
         }
@@ -926,7 +976,10 @@ export class RenderController {
           this.currentRequest = {
             id: requestId,
             resolve: (result) => {
-              const renderDurationMs = Math.round(performance.now() - renderStartTime);
+              const renderDurationMs = Math.round(
+                performance.now() - renderStartTime
+              );
+              this._moduleUsed = true;
               console.debug('[Render] Compilation complete:', {
                 requestId,
                 durationMs: renderDurationMs,
@@ -938,7 +991,9 @@ export class RenderController {
               resolve(result);
             },
             reject: (error) => {
-              const renderDurationMs = Math.round(performance.now() - renderStartTime);
+              const renderDurationMs = Math.round(
+                performance.now() - renderStartTime
+              );
               console.debug('[Render] Compilation failed:', {
                 requestId,
                 durationMs: renderDurationMs,
@@ -962,8 +1017,9 @@ export class RenderController {
           // Engine selection: manifold_engine feature flag controls Manifold vs CGAL backend
           // Default to true (Manifold) for performance, user can disable for compatibility
           const manifoldPref = localStorage.getItem(STORAGE_KEY_MANIFOLD);
-          const useManifold = manifoldPref === null ? true : manifoldPref !== 'false';
-          
+          const useManifold =
+            manifoldPref === null ? true : manifoldPref !== 'false';
+
           // CAUTION: lazy-union may produce incorrect geometry in WASM
           // (OpenSCAD #350, #4169, #6060, Playground #115).
           // Default is OFF. Only enable if user explicitly opts in via settings.
@@ -1000,7 +1056,7 @@ export class RenderController {
             if (this.currentRequest?.id === requestId) {
               console.error(
                 `[RenderController] Render watchdog fired after ${watchdogMs}ms — ` +
-                `worker is hung. Hard cancelling.`
+                  `worker is hung. Hard cancelling.`
               );
               this.cancel({ hard: true });
             }
@@ -1131,7 +1187,10 @@ export class RenderController {
     try {
       await this.init();
     } catch (err) {
-      console.error('[RenderController] Failed to reinitialize worker after hard cancel:', err);
+      console.error(
+        '[RenderController] Failed to reinitialize worker after hard cancel:',
+        err
+      );
     }
   }
 

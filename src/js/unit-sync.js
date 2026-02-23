@@ -16,7 +16,8 @@ const SCALE_KEY = 'forge_scale_factor';
 const DEFAULT_SCALE_PX_PER_MM = 10.39;
 
 let currentUnit = localStorage.getItem(UNIT_KEY) || 'px';
-let scaleFactor = parseFloat(localStorage.getItem(SCALE_KEY)) || DEFAULT_SCALE_PX_PER_MM;
+let scaleFactor =
+  parseFloat(localStorage.getItem(SCALE_KEY)) || DEFAULT_SCALE_PX_PER_MM;
 
 export function getUnit() {
   return currentUnit;
@@ -27,9 +28,11 @@ export function setUnit(unit) {
   if (unit === currentUnit) return;
   currentUnit = unit;
   localStorage.setItem(UNIT_KEY, unit);
-  document.dispatchEvent(new CustomEvent('forge:unit-change', {
-    detail: { unit: currentUnit, scaleFactor },
-  }));
+  document.dispatchEvent(
+    new CustomEvent('forge:unit-change', {
+      detail: { unit: currentUnit, scaleFactor },
+    })
+  );
 }
 
 export function getScaleFactor() {
@@ -45,9 +48,11 @@ export function setScaleFactor(pxPerMm) {
   } else {
     localStorage.removeItem(SCALE_KEY);
   }
-  document.dispatchEvent(new CustomEvent('forge:scale-change', {
-    detail: { unit: currentUnit, scaleFactor },
-  }));
+  document.dispatchEvent(
+    new CustomEvent('forge:scale-change', {
+      detail: { unit: currentUnit, scaleFactor },
+    })
+  );
 }
 
 /**

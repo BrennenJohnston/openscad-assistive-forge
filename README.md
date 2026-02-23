@@ -47,6 +47,10 @@ npm run dev
 
 Then open `http://localhost:5173`.
 
+**Optional:** If you have [Pixi](https://pixi.sh/) installed, `pixi run dev`
+(and all other tasks) work as drop-in replacements for `npm run`. See
+`pixi.toml` for the full task list.
+
 ## CLI (developer toolchain)
 
 This repo also has a CLI (`openscad-forge`) for extracting parameters and scaffolding standalone customizers.

@@ -50,6 +50,10 @@
   --color-accent-hover: var(--yellow-10);
   --color-accent-text: var(--slate-12); /* Text on accent backgrounds */
   --color-accent-subtle: var(--yellow-4);
+  /* Foreground accent for icons/links on light backgrounds.
+     Yellow-9 (#FFE629) is ~1.3:1 on white — fails WCAG for both text and UI components.
+     Amber-11 (~#AD5700) achieves ~5.1:1 on white, passing AA for normal text and 3:1 for icons. */
+  --color-accent-fg: var(--amber-11);
 
   /* ========================================================================
      Text on Solid Semantic Surfaces
@@ -177,6 +181,8 @@
   --color-accent-hover: var(--yellow-10);
   --color-accent-text: var(--slate-1); /* Light text on dark yellow */
   --color-accent-subtle: var(--yellow-4);
+  /* On dark backgrounds yellow-9 (~#FFE629) achieves ~12:1 — no amber swap needed */
+  --color-accent-fg: var(--yellow-9);
 
   /* Text on Solid Semantic Surfaces */
   --color-on-accent: var(--color-accent-text);
@@ -256,6 +262,7 @@
     --color-accent-hover: var(--yellow-10);
     --color-accent-text: var(--slate-1);
     --color-accent-subtle: var(--yellow-4);
+    --color-accent-fg: var(--yellow-9);
 
     /* Text on Solid Semantic Surfaces */
     --color-on-accent: var(--color-accent-text);
@@ -337,6 +344,7 @@
   --color-accent-hover: var(--yellow-10);
   --color-accent-text: var(--slate-12);
   --color-accent-subtle: var(--yellow-4);
+  --color-accent-fg: var(--amber-11);
 
   /* Text on Solid Semantic Surfaces */
   --color-on-accent: var(--color-accent-text);

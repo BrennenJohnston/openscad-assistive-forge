@@ -30,7 +30,7 @@ const STORAGE_KEYS = {
   current: 'openscad-forge-presets-v2',
   legacy: [
     'openscad-customizer-presets', // Original format (v1, unversioned)
-    'openscad-forge-presets-v1',   // If we ever used this
+    'openscad-forge-presets-v1', // If we ever used this
   ],
   backup: 'openscad-forge-presets-backup',
   migrationFlag: 'openscad-forge-migration-offered',
@@ -43,24 +43,24 @@ const STORAGE_KEYS = {
  */
 function detectStorageVersion(data) {
   if (!data || typeof data !== 'object') return 0;
-  
+
   // Check for versioned wrapper
   if ('version' in data && 'presets' in data) {
     return data.version;
   }
-  
+
   // Check for legacy format (raw presets by model name)
   // Legacy format: { "model.scad": [{ id, name, parameters, ... }], ... }
   const keys = Object.keys(data);
   if (keys.length === 0) return 0;
-  
+
   // Check if it looks like legacy presets (arrays of preset objects)
   const firstValue = data[keys[0]];
   if (Array.isArray(firstValue)) {
     // Likely legacy format
     return 1;
   }
-  
+
   return 0;
 }
 
@@ -76,11 +76,12 @@ export function checkMigrationAvailable() {
     legacyModelCount: 0,
     alreadyOffered: false,
   };
-  
+
   try {
     // Check if migration was already offered
-    result.alreadyOffered = localStorage.getItem(STORAGE_KEYS.migrationFlag) === 'true';
-    
+    result.alreadyOffered =
+      localStorage.getItem(STORAGE_KEYS.migrationFlag) === 'true';
+
     // Check each legacy key
     for (const key of STORAGE_KEYS.legacy) {
       const stored = localStorage.getItem(key);
@@ -88,18 +89,18 @@ export function checkMigrationAvailable() {
         try {
           const data = JSON.parse(stored);
           const version = detectStorageVersion(data);
-          
+
           if (version === 1) {
             // Count presets in legacy data
             let presetCount = 0;
             const modelCount = Object.keys(data).length;
-            
+
             for (const modelPresets of Object.values(data)) {
               if (Array.isArray(modelPresets)) {
                 presetCount += modelPresets.length;
               }
             }
-            
+
             if (presetCount > 0) {
               result.available = true;
               result.legacyKey = key;
@@ -114,9 +115,12 @@ export function checkMigrationAvailable() {
       }
     }
   } catch (error) {
-    console.warn('[PresetManager] Error checking migration availability:', error);
+    console.warn(
+      '[PresetManager] Error checking migration availability:',
+      error
+    );
   }
-  
+
   return result;
 }
 
@@ -129,7 +133,7 @@ export function checkMigrationAvailable() {
  */
 export function migrateFromLegacyStorage(options = {}) {
   const { createBackup = true, deleteLegacy = false } = options;
-  
+
   const result = {
     success: false,
     migratedPresets: 0,
@@ -137,19 +141,19 @@ export function migrateFromLegacyStorage(options = {}) {
     backupCreated: false,
     errors: [],
   };
-  
+
   try {
     const migrationInfo = checkMigrationAvailable();
-    
+
     if (!migrationInfo.available) {
       result.errors.push('No legacy data found to migrate');
       return result;
     }
-    
+
     // Load legacy data
     const legacyRaw = localStorage.getItem(migrationInfo.legacyKey);
     const legacyData = JSON.parse(legacyRaw);
-    
+
     // Create backup if requested
     if (createBackup) {
       try {
@@ -166,7 +170,7 @@ export function migrateFromLegacyStorage(options = {}) {
         // Continue with migration anyway
       }
     }
-    
+
     // Load current data (if any)
     let currentData = {};
     try {
@@ -180,18 +184,18 @@ export function migrateFromLegacyStorage(options = {}) {
     } catch {
       // No current data or invalid, start fresh
     }
-    
+
     // Merge legacy presets into current data
     for (const [modelName, presets] of Object.entries(legacyData)) {
       if (!Array.isArray(presets)) continue;
-      
+
       if (!currentData[modelName]) {
         currentData[modelName] = [];
       }
-      
+
       // Add presets, avoiding duplicates by ID
-      const existingIds = new Set(currentData[modelName].map(p => p.id));
-      
+      const existingIds = new Set(currentData[modelName].map((p) => p.id));
+
       for (const preset of presets) {
         if (!existingIds.has(preset.id)) {
           // Add migration metadata
@@ -202,42 +206,43 @@ export function migrateFromLegacyStorage(options = {}) {
           existingIds.add(preset.id);
         }
       }
-      
+
       result.migratedModels++;
     }
-    
+
     // Save migrated data in versioned format
     const versionedData = {
       version: STORAGE_SCHEMA_VERSION,
       presets: currentData,
       lastMigration: Date.now(),
     };
-    
+
     localStorage.setItem(STORAGE_KEYS.current, JSON.stringify(versionedData));
-    
+
     // Mark migration as complete
     localStorage.setItem(STORAGE_KEYS.migrationFlag, 'true');
-    
+
     // Optionally delete legacy data
     if (deleteLegacy) {
       try {
         localStorage.removeItem(migrationInfo.legacyKey);
-        console.log(`[PresetManager] Deleted legacy storage: ${migrationInfo.legacyKey}`);
+        console.log(
+          `[PresetManager] Deleted legacy storage: ${migrationInfo.legacyKey}`
+        );
       } catch {
         // Non-critical error
       }
     }
-    
+
     result.success = true;
     console.log(
       `[PresetManager] Migration complete: ${result.migratedPresets} presets from ${result.migratedModels} models`
     );
-    
   } catch (error) {
     result.errors.push(`Migration failed: ${error.message}`);
     console.error('[PresetManager] Migration error:', error);
   }
-  
+
   return result;
 }
 
@@ -274,25 +279,30 @@ export function resetMigrationFlag() {
  */
 function isOpenSCADNativeFormat(data) {
   if (!data || typeof data !== 'object') return false;
-  
+
   // Check for parameterSets object
   if (!('parameterSets' in data) || typeof data.parameterSets !== 'object') {
     return false;
   }
-  
+
   // Must have at least one preset in parameterSets
   const presetCount = Object.keys(data.parameterSets).length;
   if (presetCount === 0) {
     return false;
   }
-  
+
   // fileFormatVersion is optional (some older exports may not have it)
   // If present, it should be a string
-  if ('fileFormatVersion' in data && typeof data.fileFormatVersion !== 'string') {
+  if (
+    'fileFormatVersion' in data &&
+    typeof data.fileFormatVersion !== 'string'
+  ) {
     return false;
   }
-  
-  console.log(`[PresetManager] Detected OpenSCAD native format with ${presetCount} preset(s)`);
+
+  console.log(
+    `[PresetManager] Detected OpenSCAD native format with ${presetCount} preset(s)`
+  );
   return true;
 }
 
@@ -332,7 +342,10 @@ export function coercePresetValues(presetValues, paramSchema = {}) {
     }
 
     // Coerce based on parameter type in schema
-    coerced[key] = coerceToType(value, paramDef.type);
+    // Desktop parity: type-mismatched values silently keep the default
+    const coercedValue = coerceToType(value, paramDef.type);
+    coerced[key] =
+      coercedValue !== undefined ? coercedValue : (paramDef.default ?? value);
   }
 
   return coerced;
@@ -340,15 +353,15 @@ export function coercePresetValues(presetValues, paramSchema = {}) {
 
 /**
  * Auto-detect type from a value (for parameters not in schema)
- * 
+ *
  * IMPORTANT: "yes"/"no" are NOT converted to boolean here because without
  * schema context we cannot distinguish between a boolean parameter (MW_version = false)
  * and a string dropdown parameter (expose_home_button = "yes"; //[yes,no]).
  * Converting "yes"/"no" to boolean breaks OpenSCAD string comparisons like
  * `if (expose_home_button == "yes")` because `true != "yes"` in OpenSCAD.
- * 
+ *
  * Only "true"/"false" are converted (these are unambiguously boolean literals).
- * 
+ *
  * @param {*} value - The value to detect type for
  * @returns {*} - Value with proper type
  */
@@ -411,7 +424,9 @@ function coerceToType(value, targetType) {
         if (lower === 'true' || lower === 'yes') return true;
         if (lower === 'false' || lower === 'no') return false;
       }
-      return !!value;
+      if (typeof value === 'number') return value !== 0;
+      // Desktop parity: type-mismatched values are silently ignored (keep default)
+      return undefined;
 
     case 'vector':
     case 'array':
@@ -475,6 +490,40 @@ export class PresetManager {
   }
 
   /**
+   * Return presets for a model in the requested sort order.
+   * The virtual "design-defaults" entry is always kept first.
+   * @param {string} modelName
+   * @param {'name-asc'|'name-desc'|'date-created'|'date-modified'} sortOrder
+   * @returns {Object[]}
+   */
+  getSortedPresets(modelName, sortOrder = 'name-asc') {
+    const all = this.getPresetsForModel(modelName);
+    const defaults = all.filter((p) => p.id === 'design-defaults');
+    const rest = all.filter((p) => p.id !== 'design-defaults');
+
+    switch (sortOrder) {
+      case 'name-desc':
+        rest.sort((a, b) => b.name.localeCompare(a.name));
+        break;
+      case 'date-created':
+        rest.sort((a, b) => (b.created || 0) - (a.created || 0));
+        break;
+      case 'date-modified':
+        rest.sort(
+          (a, b) =>
+            (b.modified || b.created || 0) - (a.modified || a.created || 0)
+        );
+        break;
+      case 'name-asc':
+      default:
+        rest.sort((a, b) => a.name.localeCompare(b.name));
+        break;
+    }
+
+    return [...defaults, ...rest];
+  }
+
+  /**
    * Save a new preset
    * @param {string} modelName - Name of the model
    * @param {string} presetName - Name for the preset
@@ -511,6 +560,7 @@ export class PresetManager {
       name: sanitized,
       parameters: { ...parameters },
       description: options.description || '',
+      companionFiles: options.companionFiles || null,
       created:
         existingIndex >= 0
           ? this.presets[modelName][existingIndex].created
@@ -718,7 +768,7 @@ export class PresetManager {
    * @param {string} presetId - ID of the preset
    * @returns {string} JSON string in OpenSCAD native format
    */
-  exportPresetOpenSCADNative(modelName, presetId) {
+  exportPresetOpenSCADNative(modelName, presetId, hiddenParameters = {}) {
     const preset = this.loadPreset(modelName, presetId);
     if (!preset) return null;
 
@@ -726,6 +776,15 @@ export class PresetManager {
     const stringifiedParams = {};
     for (const [key, value] of Object.entries(preset.parameters)) {
       stringifiedParams[key] = stringifyForOpenSCAD(value);
+    }
+
+    // Desktop parity: hidden parameters are included in exported JSON
+    if (hiddenParameters && Object.keys(hiddenParameters).length > 0) {
+      for (const [key, hiddenDef] of Object.entries(hiddenParameters)) {
+        if (!(key in stringifiedParams)) {
+          stringifiedParams[key] = stringifyForOpenSCAD(hiddenDef.value);
+        }
+      }
     }
 
     // Create OpenSCAD native structure with single preset
@@ -969,7 +1028,12 @@ export class PresetManager {
    * @param {Object} paramSchema - Optional parameter schema for type coercion
    * @returns {Object} Import result with status and details
    */
-  importPreset(json, modelName = null, paramSchema = {}, hiddenParameterNames = []) {
+  importPreset(
+    json,
+    modelName = null,
+    paramSchema = {},
+    hiddenParameterNames = []
+  ) {
     try {
       const data = JSON.parse(json);
 
@@ -985,13 +1049,23 @@ export class PresetManager {
       // Check for OpenSCAD native format first
       if (isOpenSCADNativeFormat(data)) {
         console.log('[PresetManager] Detected OpenSCAD native format');
-        return this.importOpenSCADNativePresets(data, modelName, paramSchema, hiddenParameterNames);
+        return this.importOpenSCADNativePresets(
+          data,
+          modelName,
+          paramSchema,
+          hiddenParameterNames
+        );
       }
 
       // Check for Forge format
       if (isForgeFormat(data)) {
         console.log('[PresetManager] Detected Forge format');
-        return this.importForgePresets(data, paramSchema);
+        return this.importForgePresets(
+          data,
+          paramSchema,
+          modelName,
+          hiddenParameterNames
+        );
       }
 
       // Unknown format - provide detailed error
@@ -1005,7 +1079,7 @@ export class PresetManager {
       if (Array.isArray(data)) {
         formatHints.push('File is an array, not an object');
       }
-      
+
       console.error('[PresetManager] Unknown format:', {
         dataType: typeof data,
         keys: Object.keys(data),
@@ -1028,21 +1102,44 @@ export class PresetManager {
    * Import presets from Forge format JSON
    * @param {Object} data - Parsed Forge format data
    * @param {Object} paramSchema - Parameter schema for type coercion
+   * @param {string|null} modelName - Currently loaded model name; overrides data.modelName when provided
+   * @param {string[]} hiddenParameterNames - Parameter names to strip before saving
    * @returns {Object} Import result
    */
-  importForgePresets(data, paramSchema = {}) {
+  importForgePresets(
+    data,
+    paramSchema = {},
+    modelName = null,
+    hiddenParameterNames = []
+  ) {
     let imported = 0;
     let skipped = 0;
     const results = [];
 
+    // Use the caller-supplied modelName (current loaded model) so presets are
+    // stored under the right key even if the export file has a different name.
+    const targetModelName = modelName || data.modelName;
+
+    const hiddenSet = new Set(hiddenParameterNames);
+
+    /** Strip hidden parameters from a parameters object */
+    function stripHidden(params) {
+      if (!hiddenSet.size) return params;
+      const out = {};
+      for (const [k, v] of Object.entries(params)) {
+        if (!hiddenSet.has(k)) out[k] = v;
+      }
+      return out;
+    }
+
     if (data.type === 'openscad-preset') {
       // Single preset import
       const coercedParams = coercePresetValues(
-        data.preset.parameters,
+        stripHidden(data.preset.parameters),
         paramSchema
       );
       const result = this.savePreset(
-        data.modelName,
+        targetModelName,
         data.preset.name,
         coercedParams,
         { description: data.preset.description }
@@ -1054,11 +1151,11 @@ export class PresetManager {
       for (const preset of data.presets) {
         try {
           const coercedParams = coercePresetValues(
-            preset.parameters,
+            stripHidden(preset.parameters),
             paramSchema
           );
           const result = this.savePreset(
-            data.modelName,
+            targetModelName,
             preset.name,
             coercedParams,
             { description: preset.description }
@@ -1076,7 +1173,7 @@ export class PresetManager {
       success: true,
       imported,
       skipped,
-      modelName: data.modelName,
+      modelName: targetModelName,
       presets: results,
       format: 'forge',
     };
@@ -1090,7 +1187,12 @@ export class PresetManager {
    * @param {Object} paramSchema - Parameter schema for type coercion
    * @returns {Object} Import result
    */
-  importOpenSCADNativePresets(data, modelName, paramSchema = {}, hiddenParameterNames = []) {
+  importOpenSCADNativePresets(
+    data,
+    modelName,
+    paramSchema = {},
+    hiddenParameterNames = []
+  ) {
     const { parameterSets, fileFormatVersion } = data;
 
     // Validate format version (warn but continue for unknown versions)
@@ -1132,7 +1234,9 @@ export class PresetManager {
         // the Forge generates from .scad source. Importing it would create a
         // stored preset that collides with the immutable virtual preset.
         if (presetName === 'design default values') {
-          console.log(`[PresetManager] Skipping virtual preset: "${presetName}"`);
+          console.log(
+            `[PresetManager] Skipping virtual preset: "${presetName}"`
+          );
           continue;
         }
 
@@ -1146,8 +1250,13 @@ export class PresetManager {
 
         // Defensive: skip presets with no values or non-object values
         if (!presetValues || typeof presetValues !== 'object') {
-          console.warn(`[PresetManager] Skipping preset "${presetName}": invalid values`);
-          errors.push({ presetName, error: 'Invalid preset values (not an object)' });
+          console.warn(
+            `[PresetManager] Skipping preset "${presetName}": invalid values`
+          );
+          errors.push({
+            presetName,
+            error: 'Invalid preset values (not an object)',
+          });
           skipped++;
           continue;
         }
@@ -1158,7 +1267,10 @@ export class PresetManager {
         try {
           coercedValues = coercePresetValues(presetValues, safeSchema);
         } catch (coercionError) {
-          console.warn(`[PresetManager] Coercion failed for "${presetName}", storing raw values:`, coercionError.message);
+          console.warn(
+            `[PresetManager] Coercion failed for "${presetName}", storing raw values:`,
+            coercionError.message
+          );
           // Fallback: store raw values without coercion
           coercedValues = { ...presetValues };
         }
@@ -1227,12 +1339,12 @@ export class PresetManager {
     try {
       // Try loading from versioned storage first
       const stored = localStorage.getItem(this.storageKey);
-      
+
       let presets = {};
-      
+
       if (stored) {
         const data = JSON.parse(stored);
-        
+
         // Check for versioned wrapper
         if (data.version && data.presets) {
           // Versioned format (v2+)
@@ -1250,7 +1362,7 @@ export class PresetManager {
         if (legacyStored) {
           const legacyData = JSON.parse(legacyStored);
           const version = detectStorageVersion(legacyData);
-          
+
           if (version === 1) {
             // Legacy format - use it directly but also save in new format
             presets = legacyData;
@@ -1296,7 +1408,9 @@ export class PresetManager {
    */
   persist() {
     if (!this.isStorageAvailable()) {
-      console.warn('[PresetManager] localStorage not available, presets not saved');
+      console.warn(
+        '[PresetManager] localStorage not available, presets not saved'
+      );
       return;
     }
 
@@ -1307,10 +1421,12 @@ export class PresetManager {
         presets: this.presets,
         lastSaved: Date.now(),
       };
-      
+
       const serialized = JSON.stringify(versionedData);
       localStorage.setItem(this.storageKey, serialized);
-      console.log('[PresetManager] Presets saved (v' + STORAGE_SCHEMA_VERSION + ')');
+      console.log(
+        '[PresetManager] Presets saved (v' + STORAGE_SCHEMA_VERSION + ')'
+      );
     } catch (error) {
       console.error('[PresetManager] Failed to save presets:', error);
       if (error.name === 'QuotaExceededError') {
@@ -1392,6 +1508,33 @@ export class PresetManager {
   }
 
   /**
+   * Remove all saved presets for a given model, preserving the virtual
+   * "design default values" entry (id: 'design-defaults').
+   * @param {string} modelName - Model to clear presets for
+   * @param {Object} [options]
+   * @param {boolean} [options.preserveDefaults=true] - Keep the design-defaults entry
+   * @returns {number} Number of presets removed
+   */
+  clearPresetsForModel(modelName, { preserveDefaults = true } = {}) {
+    if (!modelName || !this.presets[modelName]) return 0;
+    const before = this.presets[modelName].length;
+    if (preserveDefaults) {
+      this.presets[modelName] = this.presets[modelName].filter(
+        (p) => p.id === 'design-defaults'
+      );
+    } else {
+      delete this.presets[modelName];
+    }
+    this.persist();
+    const after = this.presets[modelName]?.length ?? 0;
+    const removed = before - after;
+    console.log(
+      `[PresetManager] Cleared ${removed} preset(s) for model: ${modelName}`
+    );
+    return removed;
+  }
+
+  /**
    * Get statistics about presets
    * @returns {Object} Statistics
    */
@@ -1413,11 +1556,25 @@ export class PresetManager {
    * Detects missing, extra, and type-mismatched parameters
    * @param {Object} presetParams - Parameters from the preset
    * @param {Object} currentSchema - Current parameter schema
+   * @param {string[]} hiddenParameterNames - Hidden parameter names to exclude from comparison
    * @returns {Object} Compatibility analysis
    */
-  analyzePresetCompatibility(presetParams, currentSchema) {
-    const presetKeys = new Set(Object.keys(presetParams));
-    const schemaKeys = new Set(Object.keys(currentSchema));
+  analyzePresetCompatibility(
+    presetParams,
+    currentSchema,
+    hiddenParameterNames = []
+  ) {
+    const hiddenSet = new Set(hiddenParameterNames);
+    // Unwrap full schema objects that have a .parameters property (e.g. from
+    // state.schema) so we compare against actual parameter definitions, not
+    // top-level structural keys like "groups" or "libraries".
+    const paramEntries = currentSchema?.parameters || currentSchema;
+    const presetKeys = new Set(
+      Object.keys(presetParams).filter((k) => !hiddenSet.has(k))
+    );
+    const schemaKeys = new Set(
+      Object.keys(paramEntries).filter((k) => !hiddenSet.has(k))
+    );
 
     // Find parameters that exist in preset but not in schema (removed/renamed)
     const extraParams = [];
@@ -1438,9 +1595,9 @@ export class PresetManager {
     // Find type mismatches for overlapping parameters
     const typeMismatches = [];
     for (const key of presetKeys) {
-      if (schemaKeys.has(key) && currentSchema[key]) {
+      if (schemaKeys.has(key) && paramEntries[key]) {
         const presetValue = presetParams[key];
-        const expectedType = currentSchema[key].type;
+        const expectedType = paramEntries[key].type;
         const actualType = Array.isArray(presetValue)
           ? 'array'
           : typeof presetValue;
