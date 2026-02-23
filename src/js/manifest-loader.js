@@ -5,6 +5,10 @@
  * downloads all referenced project files in parallel, and assembles
  * them into a project Map compatible with handleFile().
  *
+ * Supports two loading modes:
+ *  - Uncompressed: individual files declared in files.main / files.companions / files.presets
+ *  - Bundle: a single .zip declared in files.bundle (extracted via zip-handler.js)
+ *
  * This enables "one-link project sharing": an external author hosts
  * a manifest + files on GitHub (CORS-friendly) and generates a single
  * URL that opens Forge with everything pre-loaded.
@@ -12,6 +16,8 @@
  * @license GPL-3.0-or-later
  * @see docs/research/PROJECT_SHARING_REFERENCES.md
  */
+
+import { extractZipFiles } from './zip-handler.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -85,14 +91,39 @@ export function validateManifest(data) {
   if (!data.files || typeof data.files !== 'object') {
     errors.push('Missing required field: "files"');
   } else {
-    // files.main — required, must end in .scad
-    if (!data.files.main || typeof data.files.main !== 'string') {
-      errors.push('Missing required field: "files.main" (path to .scad file)');
-    } else if (!data.files.main.toLowerCase().endsWith('.scad')) {
-      errors.push('"files.main" must point to a .scad file');
+    const hasBundle =
+      data.files.bundle !== undefined && data.files.bundle !== null;
+
+    // files.bundle — optional .zip path; when present, files.main is optional
+    if (hasBundle) {
+      if (typeof data.files.bundle !== 'string' || !data.files.bundle) {
+        errors.push(
+          '"files.bundle" must be a non-empty string path to a .zip file'
+        );
+      } else if (!data.files.bundle.toLowerCase().endsWith('.zip')) {
+        errors.push('"files.bundle" must point to a .zip file');
+      }
     }
 
-    // files.companions — optional array of strings
+    // files.main — required unless files.bundle is present; must end in .scad
+    if (!hasBundle) {
+      if (!data.files.main || typeof data.files.main !== 'string') {
+        errors.push(
+          'Missing required field: "files.main" (path to .scad file)'
+        );
+      } else if (!data.files.main.toLowerCase().endsWith('.scad')) {
+        errors.push('"files.main" must point to a .scad file');
+      }
+    } else if (data.files.main !== undefined) {
+      // files.main is optional with bundle but must still be valid if present
+      if (typeof data.files.main !== 'string' || !data.files.main) {
+        errors.push('"files.main" must be a non-empty string when specified');
+      } else if (!data.files.main.toLowerCase().endsWith('.scad')) {
+        errors.push('"files.main" must point to a .scad file');
+      }
+    }
+
+    // files.companions — optional array of strings (not used with bundle)
     if (data.files.companions !== undefined) {
       if (!Array.isArray(data.files.companions)) {
         errors.push('"files.companions" must be an array of file paths');
@@ -124,7 +155,7 @@ export function validateManifest(data) {
       }
     }
 
-    // Count total files to prevent abuse
+    // Count total files to prevent abuse (bundle counts as 1)
     const totalFiles = countManifestFiles(data.files);
     if (totalFiles > MAX_FILE_COUNT) {
       errors.push(
@@ -215,6 +246,57 @@ async function fetchWithTimeout(url, timeoutMs = FETCH_TIMEOUT_MS) {
 }
 
 /**
+ * Fetch a binary file as a Blob with CORS-aware error handling.
+ * Used for bundle (.zip) downloads.
+ *
+ * @param {string} url       Fully-resolved URL
+ * @param {string} fileName  Human-readable name for error messages
+ * @returns {Promise<Blob>}
+ */
+async function fetchBlob(url, fileName) {
+  try {
+    const response = await fetchWithTimeout(url);
+
+    if (!response.ok) {
+      throw new ManifestError(
+        `Failed to download "${fileName}": server returned ${response.status} ${response.statusText}`,
+        'HTTP_ERROR',
+        { status: response.status, url }
+      );
+    }
+
+    const contentLength = response.headers.get('content-length');
+    if (contentLength && parseInt(contentLength, 10) > MAX_TOTAL_SIZE_BYTES) {
+      throw new ManifestError(
+        `Bundle "${fileName}" exceeds the ${Math.round(MAX_TOTAL_SIZE_BYTES / (1024 * 1024))}MB size limit`,
+        'FILE_TOO_LARGE',
+        { url, size: parseInt(contentLength, 10) }
+      );
+    }
+
+    return await response.blob();
+  } catch (error) {
+    if (error instanceof ManifestError) throw error;
+
+    if (error.name === 'TypeError') {
+      throw new ManifestError(
+        `Couldn't fetch bundle "${fileName}". The file may not be publicly accessible, ` +
+          `or the server doesn't support CORS. ` +
+          `Try hosting on GitHub (raw.githubusercontent.com includes CORS headers).`,
+        'CORS_ERROR',
+        { url }
+      );
+    }
+
+    throw new ManifestError(
+      `Network error fetching bundle "${fileName}": ${error.message}`,
+      'NETWORK_ERROR',
+      { url }
+    );
+  }
+}
+
+/**
  * Fetch a single file with CORS-aware error handling.
  *
  * @param {string} url       Fully-resolved URL
@@ -272,15 +354,20 @@ async function fetchFile(url, fileName) {
 
 /**
  * Count total files declared in a manifest's `files` block.
+ * A bundle counts as 1 file regardless of its contents.
  */
 function countManifestFiles(files) {
   let count = 0;
-  if (files.main) count += 1;
-  if (files.companions) count += files.companions.length;
-  if (files.presets) {
-    count += Array.isArray(files.presets) ? files.presets.length : 1;
+  if (files.bundle) {
+    count += 1;
+  } else {
+    if (files.main) count += 1;
+    if (files.companions) count += files.companions.length;
+    if (files.presets) {
+      count += Array.isArray(files.presets) ? files.presets.length : 1;
+    }
+    if (files.assets) count += files.assets.length;
   }
-  if (files.assets) count += files.assets.length;
   return count;
 }
 
@@ -395,7 +482,14 @@ export async function loadManifest(manifestUrl, { onProgress } = {}) {
   }
 
   // ------------------------------------------------------------------
-  // Step 3: Build resolved file list
+  // Bundle path: files.bundle is present — download zip and extract
+  // ------------------------------------------------------------------
+  if (manifestData.files.bundle) {
+    return loadManifestBundle(manifestData, manifestUrl, progress);
+  }
+
+  // ------------------------------------------------------------------
+  // Step 3: Build resolved file list (uncompressed path)
   // ------------------------------------------------------------------
   const filesToFetch = buildFileList(manifestData.files, manifestUrl);
 
@@ -471,6 +565,91 @@ export async function loadManifest(manifestUrl, { onProgress } = {}) {
   );
 
   progress({ stage: 'complete', message: 'Project loaded from manifest' });
+
+  return {
+    manifest: manifestData,
+    projectFiles,
+    mainFile,
+    mainContent,
+    defaults: manifestData.defaults || {},
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Bundle loading helper
+// ---------------------------------------------------------------------------
+
+/**
+ * Load a project from a manifest with `files.bundle` set.
+ * Downloads the .zip, extracts it, and applies manifest defaults.
+ *
+ * @param {Object}   manifestData  Validated manifest object
+ * @param {string}   manifestUrl   URL the manifest was fetched from
+ * @param {function} progress      Progress callback
+ * @returns {Promise<{manifest, projectFiles, mainFile, mainContent, defaults}>}
+ */
+async function loadManifestBundle(manifestData, manifestUrl, progress) {
+  const bundlePath = manifestData.files.bundle;
+  const bundleUrl = resolveFileUrl(bundlePath, manifestUrl);
+
+  console.log(`[Manifest] Bundle path detected: ${bundlePath}`);
+
+  progress({
+    stage: 'download',
+    message: `Downloading bundle ${bundlePath}...`,
+    total: 1,
+    completed: 0,
+  });
+
+  // Download the zip as a Blob
+  const zipBlob = await fetchBlob(bundleUrl, bundlePath);
+
+  progress({
+    stage: 'download',
+    message: `Downloaded ${bundlePath}, extracting...`,
+    total: 1,
+    completed: 1,
+  });
+
+  // Extract using the shared zip-handler
+  let extracted;
+  try {
+    extracted = await extractZipFiles(zipBlob);
+  } catch (error) {
+    throw new ManifestError(
+      `Failed to extract bundle "${bundlePath}": ${error.message}`,
+      'BUNDLE_EXTRACT_ERROR',
+      { url: bundleUrl }
+    );
+  }
+
+  const projectFiles = extracted.files;
+  let mainFile = extracted.mainFile;
+
+  // If files.main is explicitly specified in the manifest, use it as override
+  if (manifestData.files.main) {
+    const override = manifestData.files.main;
+    if (projectFiles.has(override)) {
+      mainFile = override;
+    } else {
+      console.warn(
+        `[Manifest] files.main override "${override}" not found in bundle — ` +
+          `falling back to auto-detected main: "${mainFile}"`
+      );
+    }
+  }
+
+  const mainContent = projectFiles.get(mainFile) ?? null;
+
+  console.log(
+    `[Manifest] Bundle assembled: ${projectFiles.size} files, ` +
+      `main="${mainFile}"`
+  );
+
+  progress({
+    stage: 'complete',
+    message: 'Project loaded from bundle manifest',
+  });
 
   return {
     manifest: manifestData,

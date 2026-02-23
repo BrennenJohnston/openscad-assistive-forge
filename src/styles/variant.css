@@ -440,11 +440,6 @@
   border-bottom: 1px solid var(--color-border);
 }
 
-:root[data-ui-variant='mono'] .workflow-step[aria-current='true'] {
-  background: var(--color-hover-bg);
-  border-color: var(--color-accent);
-}
-
 /* Actions bar */
 :root[data-ui-variant='mono'] .actions-bar {
   background: var(--color-bg-primary);

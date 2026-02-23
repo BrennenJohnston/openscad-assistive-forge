@@ -295,10 +295,10 @@ test.describe('New Accessibility Features (WCAG 2.2)', () => {
     expect(zoomButtons).toBeGreaterThanOrEqual(2)
   })
 
-  test('should have workflow progress indicator with proper ARIA', async ({ page }) => {
+  test('should have workflow progress toolbar with proper ARIA', async ({ page }) => {
     await page.goto('/')
     
-    // Check workflow progress structure
+    // Check workflow progress container exists
     const workflowProgress = page.locator('#workflowProgress')
     
     // Verify role and label
@@ -308,11 +308,7 @@ test.describe('New Accessibility Features (WCAG 2.2)', () => {
     expect(role).toBe('navigation')
     expect(label).toBeTruthy()
     
-    // Verify steps are list items
-    const steps = await workflowProgress.locator('.workflow-step').all()
-    expect(steps.length).toBe(4) // upload, customize, render, download
-    
-    console.log('Workflow progress has proper ARIA structure')
+    console.log('Workflow progress toolbar has proper ARIA structure')
   })
 
   test('should have parameter search with accessible input', async ({ page }) => {
@@ -564,7 +560,7 @@ test.describe('Error Translation (COGA)', () => {
   })
 })
 
-test.describe('Workflow Progress Indicator', () => {
+test.describe('Workflow Progress Toolbar', () => {
   test('should have proper structure and ARIA attributes', async ({ page }) => {
     await page.goto('/')
     
@@ -575,23 +571,12 @@ test.describe('Workflow Progress Indicator', () => {
     const label = await workflowProgress.getAttribute('aria-label')
     
     expect(role).toBe('navigation')
-    expect(label).toContain('progress')
+    expect(label).toBeTruthy()
     
-    // Verify all 4 steps exist
-    const steps = await workflowProgress.locator('.workflow-step').all()
-    expect(steps.length).toBe(4)
-    
-    // Verify step data attributes
-    const stepTypes = ['upload', 'customize', 'render', 'download']
-    for (let i = 0; i < steps.length; i++) {
-      const stepAttr = await steps[i].getAttribute('data-step')
-      expect(stepAttr).toBe(stepTypes[i])
-    }
-    
-    console.log('Workflow progress has all 4 steps with correct structure')
+    console.log('Workflow progress toolbar has correct ARIA structure')
   })
 
-  test('workflow progress should update on file upload', async ({ page }) => {
+  test('workflow progress toolbar should be visible after file upload', async ({ page }) => {
     // Skip in CI - requires WASM to process uploaded file
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
     
@@ -605,25 +590,11 @@ test.describe('Workflow Progress Indicator', () => {
       await fileInput.setInputFiles(fixturePath)
       await page.waitForSelector('#fileInfo:has-text("parameters")', { timeout: 15000 })
       
-      // Check that workflow progress is visible
+      // Check that workflow progress container is visible
       const workflowProgress = page.locator('#workflowProgress')
       await expect(workflowProgress).toBeVisible()
       
-      // Check that customize step is active
-      const customizeStep = page.locator('.workflow-step[data-step="customize"]')
-      const isActive = await customizeStep.evaluate(el => 
-        el.classList.contains('active') || el.getAttribute('aria-current') === 'step'
-      )
-      
-      expect(isActive).toBe(true)
-      
-      // Check that upload step is completed
-      const uploadStep = page.locator('.workflow-step[data-step="upload"]')
-      const isCompleted = await uploadStep.evaluate(el => el.classList.contains('completed'))
-      
-      expect(isCompleted).toBe(true)
-      
-      console.log('Workflow progress updated correctly after file upload')
+      console.log('Workflow progress toolbar visible after file upload')
     } catch (error) {
       console.log('Could not complete workflow progress test:', error.message)
       test.skip()
@@ -1157,7 +1128,7 @@ test.describe('Screen Reader Support', () => {
 
       // Step 6 -> Step 7 (requires opening Presets details)
       await nextBtn.click()
-      await expect(stepTitle).toHaveText('Save a preset (optional, but helpful)')
+      await expect(stepTitle).toHaveText('Save a design (preset)')
 
       const presets = page.locator('#presetControls')
       // With mobile docking/auto-minimize, this should now be a real, tappable interaction.

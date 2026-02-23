@@ -64,7 +64,7 @@ const PANEL_REGISTRY = [
   },
   {
     id: 'referenceOverlay',
-    label: 'Reference Overlay',
+    label: 'Reference Image',
     selector: '#overlaySection',
     defaultHiddenInBasic: true,
   },
@@ -163,7 +163,7 @@ export class UIModeController {
    */
   constructor(options = {}) {
     /** @type {UIMode} */
-    this.currentMode = 'basic';
+    this.currentMode = 'advanced';
 
     /** @type {Function} */
     this.onModeChange = options.onModeChange || (() => {});

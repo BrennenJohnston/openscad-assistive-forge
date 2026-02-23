@@ -420,8 +420,7 @@ export class RenderController {
         };
 
         this.worker.onerror = (error) => {
-          const message =
-            error?.message || 'Worker error';
+          const message = error?.message || 'Worker error';
           console.error('[RenderController] Worker error:', error);
 
           // If a render is in progress, reject it immediately so the UI
@@ -429,8 +428,8 @@ export class RenderController {
           if (this.currentRequest) {
             const renderError = new Error(
               'The rendering engine crashed unexpectedly. ' +
-              'This may be caused by projection() or roof() in your model. ' +
-              'The engine will restart automatically for the next render.'
+                'This may be caused by projection() or roof() in your model. ' +
+                'The engine will restart automatically for the next render.'
             );
             renderError.code = 'WASM_ABORT';
             renderError.needsRestart = true;

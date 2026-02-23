@@ -125,7 +125,7 @@ Load saved projects using **Open File** and selecting the `.json` file.
 The preview settings area has two tools for working with reference images:
 
 - **Image Measurement** -- load any image and read pixel coordinates from it. Handy when a model needs measurements from screenshots or reference drawings. Details in the [Standard Mode Guide](./STANDARD_MODE_GUIDE.md#image-measurement).
-- **Reference Overlay** -- display an image behind the 3D model so you can compare alignment visually. Details in the [Standard Mode Guide](./STANDARD_MODE_GUIDE.md#reference-overlay).
+- **Reference Image** -- display an image behind the 3D model so you can compare alignment visually. Details in the [Standard Mode Guide](./STANDARD_MODE_GUIDE.md#reference-image).
 
 ## Next Steps
 

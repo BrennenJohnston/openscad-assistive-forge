@@ -99,7 +99,7 @@ Check the project's documentation for the expected syntax and examples.
 
 ### 6. Verify alignment with the reference overlay
 
-Use the **Reference Overlay** panel to display your screenshot behind the 3D model:
+Use the **Reference Image** panel to display your screenshot behind the 3D model:
 
 1. Upload your screenshot as the overlay source image
 2. Toggle the overlay on
@@ -213,5 +213,5 @@ Use PETG for the final version, PLA for quick test prints.
 **Related guides:**
 
 - [Getting Started](./GETTING_STARTED.md) -- First-time user introduction
-- [Standard Mode Guide](./STANDARD_MODE_GUIDE.md) -- All parameter types, Image Measurement, and Reference Overlay docs
+- [Standard Mode Guide](./STANDARD_MODE_GUIDE.md) -- All parameter types, Image Measurement, and Reference Image docs
 - [Accessibility Guide](./ACCESSIBILITY_GUIDE.md) -- Keyboard, screen reader, and high-contrast support

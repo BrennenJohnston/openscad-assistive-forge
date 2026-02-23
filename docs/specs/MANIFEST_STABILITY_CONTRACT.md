@@ -39,12 +39,23 @@ The `forgeManifest` field in your JSON declares which schema version you're usin
 
 **Required:**
 - `forgeManifest`: Must be `"1.0"`
-- `files.main`: Path to the main `.scad` file
+- `files.main`: Path to the main `.scad` file **— optional when `files.bundle` is set**
 
 **Optional (all preserved):**
 - `name`, `id`, `author`, `description`, `homepage`
+- `files.bundle`: Path to a `.zip` bundle file (additive field, v1.0)
 - `files.companions`, `files.presets`, `files.assets`
 - `defaults.preset`, `defaults.autoPreview`, `defaults.skipWelcome`
+
+### `files.bundle` (additive field)
+
+`files.bundle` was added as an additive optional field in schema version `"1.0"`. When present:
+
+- Forge downloads the referenced `.zip` and extracts it using the same logic as `?project=<url>`
+- `files.main` becomes optional; if omitted, the main `.scad` file is auto-detected from the archive
+- If `files.main` is specified alongside `files.bundle`, it is used as an explicit override
+
+Existing manifests without `files.bundle` are unaffected — this is a non-breaking additive change per the policy above.
 
 ---
 

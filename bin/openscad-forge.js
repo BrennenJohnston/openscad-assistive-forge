@@ -17,6 +17,7 @@ import { validateCommand } from '../cli/commands/validate.js';
 import { syncCommand } from '../cli/commands/sync.js';
 import { themeCommand } from '../cli/commands/theme.js';
 import { ciCommand } from '../cli/commands/ci.js';
+import { manifestCommand } from '../cli/commands/manifest.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -100,5 +101,15 @@ program
   .option('-o, --out <path>', 'Output directory', '.')
   .option('--list', 'List available providers', false)
   .action(ciCommand);
+
+// Manifest command
+program
+  .command('manifest <path>')
+  .description('Auto-generate forge-manifest.json from a local folder or .zip file')
+  .option('-o, --out <path>', 'Output file path (default: stdout)')
+  .option('--zip', 'Generate a bundle-style manifest pointing to a .zip file', false)
+  .option('--name <name>', 'Project name (defaults to folder/file name)')
+  .option('--author <author>', 'Author name')
+  .action(manifestCommand);
 
 program.parse();

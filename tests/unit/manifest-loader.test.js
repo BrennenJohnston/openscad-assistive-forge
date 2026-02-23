@@ -7,6 +7,22 @@ import {
 } from '../../src/js/manifest-loader.js'
 
 // ---------------------------------------------------------------------------
+// Helpers shared across describe blocks
+// ---------------------------------------------------------------------------
+
+/** Build a mock Response (text) */
+function makeMockResponse(body, { ok = true, status = 200, headers = {} } = {}) {
+  return {
+    ok,
+    status,
+    statusText: ok ? 'OK' : 'Not Found',
+    headers: { get: (name) => headers[name.toLowerCase()] || null },
+    text: () => Promise.resolve(typeof body === 'string' ? body : JSON.stringify(body)),
+    blob: () => Promise.resolve(new Blob([typeof body === 'string' ? body : JSON.stringify(body)])),
+  }
+}
+
+// ---------------------------------------------------------------------------
 // ManifestError
 // ---------------------------------------------------------------------------
 
@@ -404,5 +420,197 @@ describe('loadManifest', () => {
 
     const result = await loadManifest(manifestUrl)
     expect(result.defaults).toEqual({})
+  })
+})
+
+// ---------------------------------------------------------------------------
+// validateManifest — files.bundle field
+// ---------------------------------------------------------------------------
+
+describe('validateManifest — files.bundle', () => {
+  const base = { forgeManifest: '1.0' }
+
+  it('should accept a bundle-only manifest (no files.main required)', () => {
+    const data = { ...base, files: { bundle: 'project.zip' } }
+    const result = validateManifest(data)
+    expect(result.valid).toBe(true)
+    expect(result.errors).toHaveLength(0)
+  })
+
+  it('should accept a bundle manifest with optional files.main override', () => {
+    const data = { ...base, files: { bundle: 'project.zip', main: 'design.scad' } }
+    expect(validateManifest(data).valid).toBe(true)
+  })
+
+  it('should accept a bundle manifest with defaults', () => {
+    const data = {
+      ...base,
+      files: { bundle: 'project.zip' },
+      defaults: { autoPreview: true },
+    }
+    expect(validateManifest(data).valid).toBe(true)
+  })
+
+  it('should reject a bundle that does not end in .zip', () => {
+    const data = { ...base, files: { bundle: 'project.tar.gz' } }
+    const result = validateManifest(data)
+    expect(result.valid).toBe(false)
+    expect(result.errors[0]).toMatch(/\.zip/)
+  })
+
+  it('should reject a non-string bundle value', () => {
+    const data = { ...base, files: { bundle: 42 } }
+    expect(validateManifest(data).valid).toBe(false)
+  })
+
+  it('should reject an empty string bundle value', () => {
+    const data = { ...base, files: { bundle: '' } }
+    expect(validateManifest(data).valid).toBe(false)
+  })
+
+  it('should still require files.main to be a .scad file when provided with bundle', () => {
+    const data = { ...base, files: { bundle: 'project.zip', main: 'thing.stl' } }
+    const result = validateManifest(data)
+    expect(result.valid).toBe(false)
+    expect(result.errors[0]).toMatch(/\.scad/)
+  })
+
+  it('should still require files.main when no bundle is present', () => {
+    const data = { ...base, files: {} }
+    const result = validateManifest(data)
+    expect(result.valid).toBe(false)
+    expect(result.errors).toEqual(
+      expect.arrayContaining([expect.stringMatching(/files\.main/)])
+    )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// loadManifest — bundle path
+// ---------------------------------------------------------------------------
+
+describe('loadManifest — bundle path', () => {
+  const manifestUrl =
+    'https://raw.githubusercontent.com/user/repo/main/forge-manifest.json'
+
+  const bundleManifest = {
+    forgeManifest: '1.0',
+    name: 'Bundle Project',
+    files: { bundle: 'project.zip' },
+    defaults: { autoPreview: true },
+  }
+
+  /** Create a tiny valid in-memory JSZip buffer (just a valid zip header bytes) */
+  async function makeZipBlob(fileContents) {
+    // Use JSZip to create a real zip for extraction
+    const JSZip = (await import('jszip')).default
+    const zip = new JSZip()
+    for (const [name, content] of Object.entries(fileContents)) {
+      zip.file(name, content)
+    }
+    const buffer = await zip.generateAsync({ type: 'arraybuffer' })
+    return new Blob([buffer], { type: 'application/zip' })
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    global.fetch = vi.fn()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('should extract a zip bundle and return project files', async () => {
+    const zipBlob = await makeZipBlob({
+      'design.scad': 'module box() {}',
+      'helper.txt': 'helper content',
+    })
+
+    global.fetch
+      .mockResolvedValueOnce(makeMockResponse(bundleManifest))   // manifest
+      .mockResolvedValueOnce({ ok: true, status: 200,
+        headers: { get: () => null },
+        blob: () => Promise.resolve(zipBlob) })                   // bundle zip
+
+    const result = await loadManifest(manifestUrl)
+
+    expect(result.manifest).toEqual(bundleManifest)
+    expect(result.projectFiles).toBeInstanceOf(Map)
+    expect(result.projectFiles.has('design.scad')).toBe(true)
+    expect(result.mainFile).toBe('design.scad')
+    expect(result.defaults).toEqual({ autoPreview: true })
+  })
+
+  it('should use files.main override when specified in bundle manifest', async () => {
+    const overrideManifest = {
+      forgeManifest: '1.0',
+      files: { bundle: 'project.zip', main: 'secondary.scad' },
+    }
+
+    const zipBlob = await makeZipBlob({
+      'main.scad': 'module main() {}',
+      'secondary.scad': 'module secondary() {}',
+    })
+
+    global.fetch
+      .mockResolvedValueOnce(makeMockResponse(overrideManifest))
+      .mockResolvedValueOnce({ ok: true, status: 200,
+        headers: { get: () => null },
+        blob: () => Promise.resolve(zipBlob) })
+
+    const result = await loadManifest(manifestUrl)
+
+    expect(result.mainFile).toBe('secondary.scad')
+  })
+
+  it('should throw BUNDLE_EXTRACT_ERROR when zip is invalid', async () => {
+    global.fetch
+      .mockResolvedValueOnce(makeMockResponse(bundleManifest))
+      .mockResolvedValueOnce({ ok: true, status: 200,
+        headers: { get: () => null },
+        blob: () => Promise.resolve(new Blob(['not a zip'])) })
+
+    await expect(loadManifest(manifestUrl)).rejects.toSatisfy(
+      (err) => err instanceof ManifestError && err.code === 'BUNDLE_EXTRACT_ERROR'
+    )
+  })
+
+  it('should throw ManifestError on HTTP error fetching bundle', async () => {
+    global.fetch
+      .mockResolvedValueOnce(makeMockResponse(bundleManifest))
+      .mockResolvedValueOnce({ ok: false, status: 404,
+        statusText: 'Not Found',
+        headers: { get: () => null },
+        blob: () => Promise.resolve(new Blob([])) })
+
+    await expect(loadManifest(manifestUrl)).rejects.toThrow(ManifestError)
+  })
+
+  it('should throw ManifestError on CORS error fetching bundle', async () => {
+    global.fetch
+      .mockResolvedValueOnce(makeMockResponse(bundleManifest))
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+
+    await expect(loadManifest(manifestUrl)).rejects.toSatisfy(
+      (err) => err instanceof ManifestError && err.code === 'CORS_ERROR'
+    )
+  })
+
+  it('should invoke onProgress callbacks during bundle load', async () => {
+    const zipBlob = await makeZipBlob({ 'design.scad': 'module x() {}' })
+
+    global.fetch
+      .mockResolvedValueOnce(makeMockResponse(bundleManifest))
+      .mockResolvedValueOnce({ ok: true, status: 200,
+        headers: { get: () => null },
+        blob: () => Promise.resolve(zipBlob) })
+
+    const progress = vi.fn()
+    await loadManifest(manifestUrl, { onProgress: progress })
+
+    expect(progress).toHaveBeenCalledWith(expect.objectContaining({ stage: 'manifest' }))
+    expect(progress).toHaveBeenCalledWith(expect.objectContaining({ stage: 'download' }))
+    expect(progress).toHaveBeenCalledWith(expect.objectContaining({ stage: 'complete' }))
   })
 })

@@ -994,7 +994,6 @@ const TUTORIALS = {
         content: `
           <p>Open the <strong>Actions</strong> drawer for extra tools:</p>
           <ul>
-            <li><strong>Share Link</strong> — copy a link with your current settings</li>
             <li><strong>Export Params</strong> — download your settings as JSON</li>
             <li><strong>Compare</strong> — track changes</li>
             <li><strong>Queue</strong> — batch multiple renders</li>

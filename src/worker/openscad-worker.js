@@ -1435,13 +1435,14 @@ async function renderWithCallMain(
         // OpenSCAD returns exit code 1 with "not a 2D object" — this is recoverable, not a module crash.
         const is2DFormat = format === 'svg' || format === 'dxf';
         const modelIsNot2D =
-          openscadConsoleOutput.includes('Current top level object is not a 2D object') ||
-          openscadConsoleOutput.includes('not a 2D object');
+          openscadConsoleOutput.includes(
+            'Current top level object is not a 2D object'
+          ) || openscadConsoleOutput.includes('not a 2D object');
 
         if (is2DFormat && modelIsNot2D) {
           throw new Error(
             'MODEL_NOT_2D: Your model produces 3D geometry but SVG/DXF requires 2D output. ' +
-            'Ensure your model uses projection() or enable "use Laser Cutting best practices" to produce 2D geometry.'
+              'Ensure your model uses projection() or enable "use Laser Cutting best practices" to produce 2D geometry.'
           );
         }
 
@@ -2318,10 +2319,16 @@ async function render(payload) {
           throw new Error(validationResult.error);
         }
       } catch (validationError) {
-        if (validationError.message?.startsWith('SVG ') || validationError.message?.startsWith('DXF ') || validationError.message?.startsWith('Invalid ')) {
+        if (
+          validationError.message?.startsWith('SVG ') ||
+          validationError.message?.startsWith('DXF ') ||
+          validationError.message?.startsWith('Invalid ')
+        ) {
           throw validationError;
         }
-        console.warn(`[Worker] 2D validation threw unexpectedly: ${validationError.message}`);
+        console.warn(
+          `[Worker] 2D validation threw unexpectedly: ${validationError.message}`
+        );
         throw validationError;
       }
     }
@@ -2332,7 +2339,10 @@ async function render(payload) {
       try {
         outputBuffer = postProcessDXF(outputBuffer);
       } catch (dxfError) {
-        console.warn('[Worker] DXF post-processing failed, using raw output:', dxfError.message);
+        console.warn(
+          '[Worker] DXF post-processing failed, using raw output:',
+          dxfError.message
+        );
       }
     }
 
@@ -2448,7 +2458,9 @@ async function render(payload) {
     const confirmedNot2D =
       is2DOutput &&
       (translated.raw?.includes('MODEL_NOT_2D') ||
-        openscadConsoleOutput?.includes('Current top level object is not a 2D object') ||
+        openscadConsoleOutput?.includes(
+          'Current top level object is not a 2D object'
+        ) ||
         openscadConsoleOutput?.includes('not a 2D object'));
 
     if (confirmedNot2D) {

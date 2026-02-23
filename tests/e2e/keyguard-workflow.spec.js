@@ -420,7 +420,7 @@ test.describe('Console Output Exposure', () => {
   });
 });
 
-test.describe('Reference Overlay', () => {
+test.describe('Reference Image', () => {
   /**
    * Create a keyguard ZIP with SVG screenshot file
    * @returns {Promise<string>} Path to the created ZIP file

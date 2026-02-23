@@ -9,7 +9,7 @@ checks = {
         'Parameter Group Visibility',
         'Console Warnings for Missing Files',
         'Grid Size (Printer Bed)',
-        'Screenshot Reference Overlay',
+        'Screenshot Reference Image',
         'Import Modes',
         'Sort Designs',
         'Live Region Announcements',

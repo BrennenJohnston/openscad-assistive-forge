@@ -506,7 +506,7 @@ export async function clearAppCachesOnly() {
 }
 
 /**
- * Clear all user data (Saved Designs, preferences) - "factory reset"
+ * Clear all user data (Saved Projects, preferences) - "factory reset"
  * @returns {Promise<boolean>}
  */
 export async function clearAllUserData() {
@@ -540,10 +540,10 @@ export async function clearAllUserData() {
 }
 
 /**
- * Clear cache with optional preservation of Saved Designs
+ * Clear cache with optional preservation of Saved Projects
  * @param {Object} options - Clear options
  * @param {boolean} options.clearAppCaches - Clear app caches (default: true)
- * @param {boolean} options.preserveSavedDesigns - Preserve saved designs (default: false - user must opt in)
+ * @param {boolean} options.preserveSavedDesigns - Preserve saved projects (default: false - user must opt in)
  * @returns {Promise<{success: boolean, appCachesCleared: boolean, userDataCleared: boolean}>}
  */
 export async function clearCacheWithOptions({
