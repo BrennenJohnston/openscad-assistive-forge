@@ -70,11 +70,13 @@ async function getTutorialPanelRect(page) {
   })
 }
 
-/** Navigate to next tutorial step */
+/** Navigate to next tutorial step (skips if button is disabled) */
 async function nextStep(page) {
   const nextBtn = page.locator(
     'button:has-text("Next"), button[class*="tutorial-next"], button[aria-label*="Next"]'
   ).first()
+  const isEnabled = await nextBtn.isEnabled().catch(() => false)
+  if (!isEnabled) return
   await nextBtn.click()
   await page.waitForTimeout(300) // allow animation
 }
@@ -169,12 +171,15 @@ for (const vp of VIEWPORTS) {
             expect(panel.height, `[${label}] Panel has zero height`).toBeGreaterThan(0)
           }
 
-          // Try to advance; stop if no Next button
+          // Try to advance; stop if no Next button or if button is disabled
+          // (disabled means step has a completion requirement the test can't fulfill)
           const nextBtn = page.locator(
             'button:has-text("Next"), button[class*="tutorial-next"]'
           ).first()
           const isNextVisible = await nextBtn.isVisible().catch(() => false)
           if (!isNextVisible) break
+          const isNextEnabled = await nextBtn.isEnabled().catch(() => false)
+          if (!isNextEnabled) break
           await nextBtn.click()
           await page.waitForTimeout(300)
         }
