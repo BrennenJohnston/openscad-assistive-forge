@@ -1304,7 +1304,7 @@ async function renderWithCallMain(
   if (format === 'stl' && supportsBinarySTL) {
     exportFlags.push('--export-format=binstl');
   }
-  const shouldRetryWithoutFlags =
+  const _shouldRetryWithoutFlags =
     performanceFlags.length > 0 || exportFlags.length > 0;
 
   try {

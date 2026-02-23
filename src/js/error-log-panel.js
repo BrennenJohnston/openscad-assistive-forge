@@ -108,7 +108,7 @@ export class ErrorLogPanel {
     let group = 'General';
     let file = sourceFile;
     let lineNum = null;
-    let message = trimmed;
+    const message = trimmed;
 
     // ERROR: patterns
     if (/\bERROR:/i.test(trimmed)) {

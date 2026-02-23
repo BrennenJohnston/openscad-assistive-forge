@@ -194,7 +194,6 @@ export function isAnyModalOpen() {
  * @returns {HTMLElement|null}
  */
 export function getActiveModal() {
-  // Return the most recently opened modal
   const entries = Array.from(modalStates.entries());
   return entries.length > 0 ? entries[entries.length - 1][0] : null;
 }

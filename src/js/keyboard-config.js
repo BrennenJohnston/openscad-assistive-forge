@@ -273,12 +273,8 @@ export const DEFAULT_SHORTCUTS = {
     alt: true,
     description: 'Toggle edges overlay',
   },
-  toggleAnimate: {
-    key: 'm',
-    ctrl: true,
-    alt: true,
-    description: 'Toggle animation playback',
-  },
+  // toggleAnimate: removed from UI pending full debug; key binding preserved here for future re-integration
+  // toggleAnimate: { key: 'm', ctrl: true, alt: true, description: 'Toggle animation playback' },
 
   // Panel controls
   toggleConsole: {
@@ -383,7 +379,7 @@ export const SHORTCUT_CATEGORIES = {
   },
   display: {
     label: 'Display',
-    actions: ['viewAll', 'toggleAxes', 'toggleEdges', 'toggleAnimate'],
+    actions: ['viewAll', 'toggleAxes', 'toggleEdges'],
   },
   panels: {
     label: 'Panels',

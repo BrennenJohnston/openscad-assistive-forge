@@ -195,7 +195,7 @@ export class PreviewManager {
       offsetX: 0, // mm
       offsetY: 0, // mm
       rotationDeg: 0,
-      width: 200, // mm (default; will be replaced by "fit to model XY" when possible)
+      width: 200, // mm (default; replaced by SVG physical size or explicit sizing)
       height: 150, // mm
       zPosition: -0.25, // Slightly below Z=0 build plate (avoid z-fighting with grid)
       lockAspect: true,
@@ -2349,29 +2349,38 @@ export class PreviewManager {
     try {
       if (kind === 'svg') {
         this._lastSvgContent = dataUrlOrText;
-        // Convert SVG text to texture, applying recolor for dark-mode visibility
-        const { texture, aspect } = await this.svgTextToCanvasTexture(
-          dataUrlOrText,
-          this.overlayConfig.svgColor
-        );
+        const { texture, aspect, widthMm, heightMm } =
+          await this.svgTextToCanvasTexture(
+            dataUrlOrText,
+            this.overlayConfig.svgColor
+          );
         this.referenceTexture = texture;
         this.overlayConfig.intrinsicAspect = aspect;
+
+        // Use the SVG's physical mm dimensions (computed via the same 96 DPI
+        // convention that OpenSCAD desktop uses for SVG import). This ensures
+        // the overlay is sized identically to how OpenSCAD interprets the file.
+        if (widthMm && heightMm) {
+          this.overlayConfig.width = widthMm;
+          this.overlayConfig.height = heightMm;
+        } else if (this.overlayConfig.lockAspect && aspect) {
+          this.overlayConfig.height = this.overlayConfig.width / aspect;
+        }
       } else {
         this._lastSvgContent = null;
-        // Load raster image (PNG/JPG) as texture
         const { texture, aspect } =
           await this.rasterDataUrlToTexture(dataUrlOrText);
         this.referenceTexture = texture;
         this.overlayConfig.intrinsicAspect = aspect;
+
+        // Raster images have no inherent physical size — keep current width
+        // and derive height from aspect ratio
+        if (this.overlayConfig.lockAspect && aspect) {
+          this.overlayConfig.height = this.overlayConfig.width / aspect;
+        }
       }
 
       this.overlayConfig.sourceFileName = name;
-
-      // Apply aspect ratio to dimensions if locked
-      if (this.overlayConfig.lockAspect && this.overlayConfig.intrinsicAspect) {
-        this.overlayConfig.height =
-          this.overlayConfig.width / this.overlayConfig.intrinsicAspect;
-      }
 
       // Create/update the overlay if enabled
       if (this.overlayConfig.enabled) {
@@ -2379,7 +2388,9 @@ export class PreviewManager {
       }
 
       console.log(
-        `[Preview] Overlay source set: ${name} (${kind}, aspect: ${this.overlayConfig.intrinsicAspect?.toFixed(2) || 'unknown'})`
+        `[Preview] Overlay source set: ${name} (${kind}, ` +
+          `${this.overlayConfig.width.toFixed(1)} × ${this.overlayConfig.height.toFixed(1)} mm, ` +
+          `aspect: ${this.overlayConfig.intrinsicAspect?.toFixed(2) || 'unknown'})`
       );
     } catch (error) {
       console.error('[Preview] Failed to load overlay source:', error);
@@ -2388,16 +2399,62 @@ export class PreviewManager {
   }
 
   /**
+   * Parse an SVG length value (e.g. "200", "200px", "175.6mm", "2in") and
+   * return the equivalent size in millimeters using the same 96 DPI default
+   * that OpenSCAD desktop uses for SVG import.
+   *
+   * @param {string|null} raw - Raw attribute value (may include unit suffix)
+   * @returns {number|null} Size in mm, or null if unparseable
+   */
+  static svgLengthToMm(raw) {
+    if (!raw) return null;
+    const str = String(raw).trim();
+    if (!str) return null;
+
+    // OpenSCAD default: 96 user-units per inch (CSS reference pixel)
+    const OPENSCAD_DPI = 96;
+    const MM_PER_INCH = 25.4;
+
+    // CSS absolute-length units → mm conversion factors
+    const unitFactors = {
+      mm: 1,
+      cm: 10,
+      in: MM_PER_INCH,
+      pt: MM_PER_INCH / 72, // 1pt = 1/72 inch
+      pc: MM_PER_INCH / 6, // 1pc = 1/6 inch
+      px: MM_PER_INCH / OPENSCAD_DPI, // 1px = 1/96 inch
+    };
+
+    const match = str.match(
+      /^([+-]?\d*\.?\d+(?:e[+-]?\d+)?)\s*(mm|cm|in|pt|pc|px)?$/i
+    );
+    if (!match) return null;
+
+    const value = parseFloat(match[1]);
+    if (!isFinite(value) || value <= 0) return null;
+
+    const unit = (match[2] || '').toLowerCase();
+
+    // Unitless values are treated as user-units at 96 DPI (same as px)
+    const factor = unitFactors[unit] || unitFactors.px;
+    return value * factor;
+  }
+
+  /**
    * Convert SVG text to a Three.js CanvasTexture.
    * When recolorHex is provided, all non-transparent pixels are replaced
    * with that colour — making dark SVGs visible on dark backgrounds.
    *
+   * Also computes the physical mm dimensions of the SVG using the same
+   * 96 DPI convention that OpenSCAD desktop uses for SVG import, so the
+   * overlay can be sized to match the real-world measurements the SVG
+   * was saved with.
+   *
    * @param {string} svgContent - SVG markup
    * @param {string|null} [recolorHex=null] - CSS hex colour (e.g. '#ffffff')
-   * @returns {Promise<{texture: THREE.CanvasTexture, aspect: number}>}
+   * @returns {Promise<{texture: THREE.CanvasTexture, aspect: number, widthMm: number|null, heightMm: number|null}>}
    */
   async svgTextToCanvasTexture(svgContent, recolorHex = null) {
-    // Parse SVG to extract viewBox/dimensions for aspect ratio
     const parser = new DOMParser();
     const svgDoc = parser.parseFromString(svgContent, 'image/svg+xml');
     const svgEl = svgDoc.querySelector('svg');
@@ -2406,7 +2463,7 @@ export class PreviewManager {
       throw new Error('Invalid SVG: no <svg> element found');
     }
 
-    // Determine intrinsic dimensions and aspect ratio
+    // --- Determine pixel dimensions for canvas rendering ---
     let intrinsicWidth, intrinsicHeight;
 
     const viewBox = svgEl.getAttribute('viewBox');
@@ -2415,7 +2472,6 @@ export class PreviewManager {
       intrinsicWidth = vbWidth;
       intrinsicHeight = vbHeight;
     } else {
-      // Fall back to explicit width/height attributes
       intrinsicWidth =
         parseFloat(svgEl.getAttribute('width')) ||
         parseFloat(svgEl.style.width) ||
@@ -2427,6 +2483,26 @@ export class PreviewManager {
     }
 
     const aspect = intrinsicWidth / intrinsicHeight;
+
+    // --- Compute physical mm size (OpenSCAD 96 DPI convention) ---
+    // Priority: explicit width/height with units → viewBox at 96 DPI
+    const rawW = svgEl.getAttribute('width');
+    const rawH = svgEl.getAttribute('height');
+    let widthMm = PreviewManager.svgLengthToMm(rawW);
+    let heightMm = PreviewManager.svgLengthToMm(rawH);
+
+    // If width/height are missing or unparseable, fall back to viewBox
+    // dimensions treated as user-units at 96 DPI (OpenSCAD default).
+    if (widthMm === null && viewBox) {
+      const OPENSCAD_DPI = 96;
+      const [, , vbW] = viewBox.split(/[\s,]+/).map(parseFloat);
+      widthMm = (vbW * 25.4) / OPENSCAD_DPI;
+    }
+    if (heightMm === null && viewBox) {
+      const OPENSCAD_DPI = 96;
+      const [, , , vbH] = viewBox.split(/[\s,]+/).map(parseFloat);
+      heightMm = (vbH * 25.4) / OPENSCAD_DPI;
+    }
 
     // Determine canvas resolution (bounded to avoid memory spikes)
     const maxDim = this.getMaxTextureResolution();
@@ -2471,7 +2547,7 @@ export class PreviewManager {
     const texture = new THREE.CanvasTexture(canvas);
     texture.needsUpdate = true;
 
-    return { texture, aspect };
+    return { texture, aspect, widthMm, heightMm };
   }
 
   /**

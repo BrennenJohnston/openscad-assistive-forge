@@ -112,9 +112,9 @@ export const FLAGS = {
     name: 'Searchable Preset Combobox',
     description:
       'Replace the preset search input and native select with a combined searchable combobox widget',
-    default: false,
-    rollout: 0,
-    userConfigurable: false,
+    default: true,
+    rollout: 100,
+    userConfigurable: true,
     killSwitch: false,
   },
   folder_import: {
@@ -122,9 +122,9 @@ export const FLAGS = {
     name: 'Import Project Folder',
     description:
       'Allow importing a directory of .scad files and companion resources via the file picker',
-    default: false,
-    rollout: 0,
-    userConfigurable: false,
+    default: true,
+    rollout: 100,
+    userConfigurable: true,
     killSwitch: false,
   },
 };

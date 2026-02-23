@@ -66,7 +66,6 @@ function generateUniqueName(baseName, existingProjects) {
     }
   }
 
-  // Return the next available name
   return `${baseName} (${maxSuffix + 1})`;
 }
 
@@ -542,7 +541,13 @@ export async function saveProject({
       kind,
       mainFilePath,
       content,
-      projectFiles: projectFiles ? JSON.stringify(projectFiles) : null,
+      projectFiles: projectFiles
+        ? JSON.stringify(
+            projectFiles instanceof Map
+              ? Object.fromEntries(projectFiles)
+              : projectFiles
+          )
+        : null,
       folderId: folderId, // v2: parent folder (null = root)
       overlayFiles: {}, // v2: overlay metadata
       presets: [], // v2: project-scoped presets metadata

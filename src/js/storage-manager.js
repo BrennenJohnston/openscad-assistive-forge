@@ -670,6 +670,7 @@ const FOLDER_IMPORT_COMPANION_EXTS = new Set([
   '.csv',
   '.png',
   '.json',
+  '.txt',
 ]);
 
 /**
@@ -713,9 +714,7 @@ export async function importProjectFromFiles(fileList, mainFilePath) {
 
       try {
         const content = await f.text();
-        const relPath = rootDir
-          ? rel.replace(`${rootDir}/`, '')
-          : rel;
+        const relPath = rootDir ? rel.replace(`${rootDir}/`, '') : rel;
         projectFiles[relPath] = content;
       } catch {
         // Binary files (e.g. PNG) — skip text reading for now

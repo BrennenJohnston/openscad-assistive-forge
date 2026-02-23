@@ -120,6 +120,10 @@ export const PRESERVED_KEYS = [
   // Grid size user presets (managed by preview.js)
   'openscad-forge-custom-grid-presets',
 
+  // WASM crash-detection flags (set before/after WASM init; cleared on recovery)
+  'openscad-forge-wasm-init-started',
+  'openscad-forge-wasm-init-completed',
+
   // Saved projects use IndexedDB primarily
   'openscad-saved-projects',
   'openscad-saved-folders',

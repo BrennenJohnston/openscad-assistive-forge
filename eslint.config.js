@@ -23,7 +23,10 @@ export default [
           caughtErrorsIgnorePattern: '^_',
         },
       ],
-      'no-console': ['warn', { allow: ['warn', 'error', 'info', 'log', 'debug'] }],
+      'no-console': [
+        'warn',
+        { allow: ['warn', 'error', 'info', 'log', 'debug', 'group', 'groupEnd'] },
+      ],
       // Security: prevent eval and implied eval (setTimeout/setInterval with strings)
       'no-eval': 'error',
       'no-implied-eval': 'error',

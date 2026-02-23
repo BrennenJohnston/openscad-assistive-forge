@@ -231,28 +231,118 @@ export function validateZipFile(file) {
 }
 
 /**
+ * Build a recursive nested tree from a flat Map<path, content>.
+ *
+ * Each node has the shape:
+ *   { folders: Map<string, node>, files: [{ path, name, content }] }
+ *
+ * Paths are forward-slash delimited. Leading slashes are stripped.
+ * Sentinel `.folder` entries (used to represent empty folders) are excluded
+ * from the files array but their parent folder node is still created.
+ *
+ * @param {Map<string, string>} fileMap - Flat path → content map
+ * @returns {{ folders: Map<string, object>, files: Array<{path:string, name:string, content:string}> }}
+ */
+export function buildNestedTree(fileMap) {
+  const root = { folders: new Map(), files: [] };
+
+  for (const [rawPath, content] of fileMap.entries()) {
+    const path = rawPath.replace(/^\/+/, '');
+    const parts = path.split('/');
+    let node = root;
+
+    // Walk / create intermediate folder nodes
+    for (let i = 0; i < parts.length - 1; i++) {
+      const segment = parts[i];
+      if (!node.folders.has(segment)) {
+        node.folders.set(segment, { folders: new Map(), files: [] });
+      }
+      node = node.folders.get(segment);
+    }
+
+    const filename = parts[parts.length - 1];
+    // Skip hidden sentinel entries used to represent empty folders
+    if (filename !== '.folder') {
+      node.files.push({ path, name: filename, content });
+    }
+  }
+
+  return root;
+}
+
+/**
+ * Retrieve the subtree node at a given path (array of folder name segments).
+ * Returns the root node when pathSegments is empty.
+ * Returns null if any segment along the path does not exist.
+ *
+ * @param {{ folders: Map<string, object>, files: Array }} tree - Root node
+ * @param {string[]} pathSegments - Ordered folder names, e.g. ['Cases', 'iPad 7,8,9']
+ * @returns {{ folders: Map<string, object>, files: Array } | null}
+ */
+export function getNodeAtPath(tree, pathSegments) {
+  let node = tree;
+  for (const segment of pathSegments) {
+    if (!node.folders.has(segment)) return null;
+    node = node.folders.get(segment);
+  }
+  return node;
+}
+
+/**
+ * Count all files recursively under a tree node (excluding sentinel .folder entries,
+ * which are already excluded during buildNestedTree).
+ *
+ * @param {{ folders: Map<string, object>, files: Array }} node
+ * @returns {number}
+ */
+export function countFilesRecursive(node) {
+  let count = node.files.length;
+  for (const child of node.folders.values()) {
+    count += countFilesRecursive(child);
+  }
+  return count;
+}
+
+/**
  * Create a file tree structure for display
  * @param {Map<string, string>} files - Extracted files
  * @param {string} mainFile - Main .scad file path
  * @returns {string} - HTML representation of file tree
  */
 export function createFileTree(files, mainFile) {
-  const fileList = Array.from(files.keys()).sort();
+  const tree = buildNestedTree(files);
 
-  const items = fileList.map((path) => {
-    const isMain = path === mainFile;
-    const icon = path.endsWith('.scad') ? '📄' : '📎';
-    const badge = isMain ? ' <span class="file-tree-badge">main</span>' : '';
-    const className = isMain ? 'file-tree-item main' : 'file-tree-item';
+  function renderNode(node, depth) {
+    const indent = depth > 0 ? `style="padding-left:${depth * 16}px"` : '';
+    let html = '';
 
-    // Escape path to prevent XSS attacks from malicious ZIP file names
-    return `<div class="${className}">${icon} ${escapeHtml(path)}${badge}</div>`;
-  });
+    // Render subfolders first (sorted)
+    for (const [folderName, child] of [...node.folders.entries()].sort((a, b) =>
+      a[0].localeCompare(b[0])
+    )) {
+      const childCount = countFilesRecursive(child);
+      html += `<div class="file-tree-item file-tree-folder" ${indent}>📁 ${escapeHtml(folderName)} <span class="file-tree-count">(${childCount})</span></div>`;
+      html += renderNode(child, depth + 1);
+    }
+
+    // Render files (sorted)
+    for (const file of [...node.files].sort((a, b) =>
+      a.name.localeCompare(b.name)
+    )) {
+      const isMain = file.path === mainFile;
+      const icon = file.name.endsWith('.scad') ? '📄' : '📎';
+      const badge = isMain ? ' <span class="file-tree-badge">main</span>' : '';
+      const className = isMain ? 'file-tree-item main' : 'file-tree-item';
+      html += `<div class="${className}" ${indent}>${icon} ${escapeHtml(file.name)}${badge}</div>`;
+    }
+
+    return html;
+  }
 
   return `
     <div class="file-tree">
       <div class="file-tree-header">📦 ZIP Contents (${files.size} files)</div>
-      ${items.join('')}
+      ${renderNode(tree, 0)}
     </div>
   `;
 }
@@ -420,7 +510,6 @@ export function buildPresetCompanionMap(files, parameterSets) {
     return tokens.filter((t) => lower.includes(t)).length;
   }
 
-  // Return the single best-scoring candidate, or null when ambiguous/no match.
   // Prefer deeper (longer) paths when scores are tied.
   function pickBest(candidates, tokens) {
     if (!candidates || candidates.length === 0) return null;

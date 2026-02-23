@@ -171,16 +171,34 @@ export function initSearchableCombobox({
     return found ? found.label : '';
   }
 
+  // ── Position the fixed-position dropdown beneath the input ──────────────────
+
+  function positionList() {
+    const rect = inputWrap.getBoundingClientRect();
+    list.style.position = 'fixed';
+    list.style.top = `${rect.bottom}px`;
+    list.style.left = `${rect.left}px`;
+    list.style.width = `${rect.width}px`;
+    const spaceBelow = window.innerHeight - rect.bottom - 8;
+    list.style.maxHeight = `${Math.min(280, Math.max(120, spaceBelow))}px`;
+  }
+
   // ── Open / close ─────────────────────────────────────────────────────────────
 
   function openList() {
     if (isOpen || input.disabled) return;
     isOpen = true;
     list.hidden = false;
+    positionList();
     chevronBtn.classList.add('is-open');
     container.classList.add('is-open');
     comboNav.start();
-    renderOptions(input.value);
+    // Clear the input so the full unfiltered list is shown on open.
+    // The selected label is restored by closeList() if the user dismisses
+    // without making a new selection.
+    input.value = '';
+    input.select();
+    renderOptions('');
   }
 
   function closeList(keepFilter = false) {
@@ -204,6 +222,7 @@ export function initSearchableCombobox({
     if (!found) return;
     selectedId = id;
     input.value = found.label;
+    input.placeholder = found.label;
     closeList(false);
     container.dispatchEvent(
       new CustomEvent('change', {
@@ -263,7 +282,7 @@ export function initSearchableCombobox({
   });
 
   // Reset filter text to current selection label if focus leaves without commit
-  input.addEventListener('blur', (e) => {
+  input.addEventListener('blur', (_e) => {
     // Delay to allow click events on list items to fire first
     setTimeout(() => {
       if (!container.contains(document.activeElement)) {
@@ -279,6 +298,19 @@ export function initSearchableCombobox({
   }
   document.addEventListener('click', handleOutsideClick, true);
 
+  // Reposition the fixed dropdown when the scrollable ancestor scrolls or window resizes
+  function handleScrollOrResize() {
+    if (isOpen) positionList();
+  }
+  const scrollParent =
+    container.closest('.param-panel') ||
+    container.closest('[style*="overflow"]');
+  if (scrollParent)
+    scrollParent.addEventListener('scroll', handleScrollOrResize, {
+      passive: true,
+    });
+  window.addEventListener('resize', handleScrollOrResize, { passive: true });
+
   // Close when parent <details> closes (details toggle event bubbles up)
   function handleDetailsToggle(e) {
     const details = e.target;
@@ -293,8 +325,10 @@ export function initSearchableCombobox({
   function update(newOptions, newSelectedId) {
     allOptions = Array.isArray(newOptions) ? newOptions : [];
     selectedId = newSelectedId ?? null;
-    input.value = getLabelForId(selectedId);
-    if (isOpen) renderOptions(input.value);
+    const label = getLabelForId(selectedId);
+    input.value = label;
+    if (label) input.placeholder = label;
+    if (isOpen) renderOptions('');
   }
 
   function getValue() {
@@ -304,8 +338,10 @@ export function initSearchableCombobox({
   function setValue(id) {
     const found = id != null ? allOptions.find((o) => o.id === id) : null;
     selectedId = found ? id : null;
-    input.value = getLabelForId(selectedId);
-    if (isOpen) renderOptions(input.value);
+    const label = getLabelForId(selectedId);
+    input.value = label;
+    if (label) input.placeholder = label;
+    if (isOpen) renderOptions('');
   }
 
   function setDisabled(dis) {
@@ -317,6 +353,9 @@ export function initSearchableCombobox({
 
   function destroy() {
     document.removeEventListener('click', handleOutsideClick, true);
+    if (scrollParent)
+      scrollParent.removeEventListener('scroll', handleScrollOrResize);
+    window.removeEventListener('resize', handleScrollOrResize);
     comboNav.destroy();
     container.innerHTML = '';
     container.classList.remove('preset-combobox', 'is-open', 'is-disabled');

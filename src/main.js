@@ -46,11 +46,13 @@ import {
 import {
   extractZipFiles,
   validateZipFile,
-  createFileTree,
   getZipStats,
   resolveProjectFile,
   buildPresetCompanionMap,
   applyCompanionAliases,
+  buildNestedTree,
+  getNodeAtPath,
+  countFilesRecursive,
 } from './js/zip-handler.js';
 import { loadManifest, ManifestError } from './js/manifest-loader.js';
 import {
@@ -188,7 +190,8 @@ import { getFileActionsController } from './js/file-actions-controller.js';
 import { getEditActionsController } from './js/edit-actions-controller.js';
 import { getDesignPanelController } from './js/design-panel-controller.js';
 import { getDisplayOptionsController } from './js/display-options-controller.js';
-import { getAnimationController } from './js/animation-controller.js';
+// Animation controller import preserved for future development — see ./js/animation-controller.js
+// import { getAnimationController } from './js/animation-controller.js';
 import { getEditorStateManager } from './js/editor-state-manager.js';
 import { TextareaEditor } from './js/textarea-editor.js';
 import {
@@ -327,6 +330,11 @@ let renderQueue = null;
 
 // Track which saved project is currently loaded (for auto-saving companion files)
 let currentSavedProjectId = null;
+
+// Navigation path for the Companion Files panel tree (module-level so it
+// survives re-renders triggered by add/remove actions).
+// Each element is a folder name segment, e.g. ['Cases', 'iPad 7,8,9'].
+let companionCurrentPath = [];
 
 // Screen reader announcer - now uses centralized announcer.js
 // (Local implementation removed - use imported announce/announceImmediate/announceError)
@@ -2703,35 +2711,107 @@ async function initApp() {
     if (importFolderBtn) importFolderBtn.hidden = false;
 
     if (importFolderBtn && importFolderInput) {
-      importFolderBtn.addEventListener('click', () => {
-        importFolderInput.value = '';
-        importFolderInput.click();
+      importFolderBtn.addEventListener('click', async () => {
+        // Use the modern File System Access API if available (more reliable than webkitdirectory)
+        if ('showDirectoryPicker' in window) {
+          let dismissOverlay = () => {};
+          try {
+            const dirHandle = await window.showDirectoryPicker();
+            dismissOverlay = showProcessingOverlay(
+              `Reading folder "${dirHandle.name}"…`,
+              'Scanning files and subfolders. Please do not close or refresh the page.'
+            );
+            const files = [];
+            try {
+              await _collectFilesFromDir(dirHandle, dirHandle.name, files);
+            } catch (collectErr) {
+              dismissOverlay();
+              alert(`Error reading folder contents: ${collectErr.message}`);
+              return;
+            }
+            if (files.length === 0) {
+              dismissOverlay();
+              alert(
+                'No files found in the selected folder. The folder may be empty.'
+              );
+              return;
+            }
+            dismissOverlay();
+            await handleFolderImport(files);
+          } catch (err) {
+            dismissOverlay();
+            if (err.name === 'AbortError') {
+              updateStatus('Folder selection cancelled');
+              return;
+            }
+            alert(`Folder import error: ${err.message}`);
+          }
+        } else {
+          // Fallback to webkitdirectory input
+          importFolderInput.value = '';
+          importFolderInput.click();
+        }
       });
 
+      // Fallback: webkitdirectory input change handler
       importFolderInput.addEventListener('change', async (e) => {
-        const files = e.target.files;
-        if (!files || files.length === 0) return;
-        await handleFolderImport(files);
-        importFolderInput.value = '';
+        try {
+          const files = e.target.files;
+          if (!files || files.length === 0) {
+            updateStatus('No files in selected folder');
+            return;
+          }
+          await handleFolderImport(files);
+          importFolderInput.value = '';
+        } catch (err) {
+          alert(`Folder import error: ${err.message}`);
+        }
       });
     }
   }
 
   /**
-   * Handle a folder selection from the webkitdirectory input.
-   * @param {FileList} files - FileList from <input webkitdirectory>
+   * Recursively collect files from a FileSystemDirectoryHandle.
+   * Attaches webkitRelativePath to each File for compatibility with handleFolderImport.
+   */
+  async function _collectFilesFromDir(dirHandle, basePath, out) {
+    for await (const entry of dirHandle.values()) {
+      if (entry.kind === 'file') {
+        const file = await entry.getFile();
+        const relPath = `${basePath}/${entry.name}`;
+        Object.defineProperty(file, 'webkitRelativePath', {
+          value: relPath,
+          writable: false,
+        });
+        out.push(file);
+      } else if (entry.kind === 'directory') {
+        await _collectFilesFromDir(entry, `${basePath}/${entry.name}`, out);
+      }
+    }
+  }
+
+  /**
+   * Handle a folder selection from the webkitdirectory input or showDirectoryPicker.
+   * @param {FileList|File[]} files - FileList or array of Files with webkitRelativePath
    */
   async function handleFolderImport(files) {
     const fileArr = Array.from(files);
+    let dismissOverlay = () => {};
 
-    // Size guards
-    const MAX_FILES = 100;
-    const MAX_BYTES = 50 * 1024 * 1024; // 50 MB
-    const WARN_FILES = 50;
+    dismissOverlay = showProcessingOverlay(
+      `Processing ${fileArr.length} files from folder…`,
+      'Analyzing project structure. Please do not close or refresh the page.'
+    );
+
+    // Size guards — generous limits for real-world multi-folder projects
+    const MAX_FILES = 500;
+    const MAX_BYTES = 100 * 1024 * 1024; // 100 MB
+    const WARN_FILES = 200;
 
     const totalBytes = fileArr.reduce((sum, f) => sum + f.size, 0);
 
     if (fileArr.length > MAX_FILES) {
+      dismissOverlay();
       alert(
         `The selected folder contains ${fileArr.length} files (limit: ${MAX_FILES}). ` +
           `Please select a smaller project folder.`
@@ -2740,9 +2820,10 @@ async function initApp() {
     }
 
     if (totalBytes > MAX_BYTES) {
+      dismissOverlay();
       const mb = (totalBytes / 1024 / 1024).toFixed(1);
       alert(
-        `The selected folder is ${mb} MB (limit: 50 MB). ` +
+        `The selected folder is ${mb} MB (limit: 100 MB). ` +
           `Please select a smaller project folder.`
       );
       return;
@@ -2750,7 +2831,7 @@ async function initApp() {
 
     if (fileArr.length > WARN_FILES) {
       console.warn(
-        `[FolderImport] ${fileArr.length} files selected — user may have accidentally chosen a parent directory.`
+        `[FolderImport] ${fileArr.length} files selected — large project folder.`
       );
     }
 
@@ -2773,33 +2854,49 @@ async function initApp() {
     if (scadInRoot.length === 1) {
       mainFilePath = scadInRoot[0].webkitRelativePath;
     } else if (scadInRoot.length > 1) {
-      // Multiple .scad in root — prompt user
+      dismissOverlay();
       mainFilePath = await _promptScadSelection(
         scadInRoot.map((f) => f.webkitRelativePath),
         'Multiple .scad files found in the folder root. Select the main file:'
       );
     } else if (scadAnywhere.length > 0) {
-      // No .scad in root but found in subdirs
+      dismissOverlay();
       mainFilePath = await _promptScadSelection(
         scadAnywhere.map((f) => f.webkitRelativePath),
         'No .scad files found in the folder root. Select the main file:'
       );
     } else {
+      dismissOverlay();
       alert('No OpenSCAD (.scad) files found in the selected folder.');
       return;
     }
 
-    if (!mainFilePath) return; // user cancelled the selection
+    if (!mainFilePath) return;
 
-    updateStatus('Importing folder…');
+    const totalMB = (totalBytes / (1024 * 1024)).toFixed(1);
+    dismissOverlay = showProcessingOverlay(
+      `Importing folder "${rootDir}" (${fileArr.length} files, ${totalMB} MB)…`,
+      'This may take a moment for large projects. Please do not close or refresh the page.'
+    );
 
-    const result = await importProjectFromFiles(files, mainFilePath);
+    try {
+      const result = await importProjectFromFiles(files, mainFilePath);
 
-    if (result.success) {
-      updateStatus(`Folder imported: ${rootDir || mainFilePath}`);
-      await renderSavedProjectsList();
-    } else {
-      alert(`Folder import failed: ${result.error}`);
+      dismissOverlay();
+
+      if (result.success) {
+        updateStatus(`Folder imported: ${rootDir || mainFilePath}`);
+        await renderSavedProjectsList();
+        // Auto-load the imported project (matches .zip behaviour)
+        if (result.id) {
+          await loadSavedProject(result.id);
+        }
+      } else {
+        alert(`Folder import failed: ${result.error}`);
+      }
+    } catch (err) {
+      dismissOverlay();
+      alert(`Folder import failed: ${err.message}`);
     }
   }
 
@@ -2846,7 +2943,8 @@ async function initApp() {
         () => {
           const returnValue = dialog.returnValue;
           const selected =
-            dialog.querySelector('input[name="scadFile"]:checked')?.value || null;
+            dialog.querySelector('input[name="scadFile"]:checked')?.value ||
+            null;
           document.body.removeChild(dialog);
           resolve(returnValue === 'ok' ? selected : null);
         },
@@ -3548,13 +3646,6 @@ async function initApp() {
         checked: displayOptionsController.get('crosshairs'),
         handler: () => displayOptionsController.toggle('crosshairs'),
       },
-      {
-        type: 'toggle',
-        label: 'Animate',
-        shortcutAction: 'toggleAnimate',
-        checked: animationController?.playing ?? false,
-        handler: () => animationController.togglePlay(),
-      },
       { type: 'separator' },
       // -- Camera Views --
       {
@@ -3768,18 +3859,6 @@ async function initApp() {
       { type: 'separator' },
       {
         type: 'action',
-        label: 'Animate',
-        handler: () => {
-          const panel = document.getElementById('animationPanel');
-          if (panel) {
-            panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            const focusable = panel.querySelector('button, input, select');
-            if (focusable) focusable.focus();
-          }
-        },
-      },
-      {
-        type: 'action',
         label: 'Font List',
         disabled: true,
         tooltip: 'Coming soon',
@@ -3908,16 +3987,7 @@ async function initApp() {
     ];
   });
 
-  // Initialize animation controller ($t animation)
-  const animationController = getAnimationController({
-    onTick: (t) => {
-      const state = stateManager.getState();
-      if (state.uploadedFile?.content && renderController) {
-        stateManager.setState({ animationT: t });
-      }
-    },
-  });
-  animationController.init();
+  // Animation controller ($t) initialization removed from UI wiring — see animation-controller.js for future re-integration
 
   // Listen for "Save to Project" events from UI preferences panel
   document.addEventListener('ui-mode-save-to-project', (e) => {
@@ -4845,6 +4915,12 @@ async function initApp() {
   const overlayRotationValue = document.getElementById('overlayRotationValue');
   const overlayStatus = document.getElementById('overlayStatus');
   const overlayFileInput = document.getElementById('overlayFileInput');
+  const overlayManualOverrideToggle = document.getElementById(
+    'overlayManualOverrideToggle'
+  );
+  const overlayCalibrationFieldset = document.getElementById(
+    'overlayCalibrationFieldset'
+  );
   const overlayDimensionsValue = document.getElementById(
     'overlayDimensionsValue'
   );
@@ -5227,8 +5303,14 @@ async function initApp() {
     });
   }
 
-  if (saveGridPresetBtn && previewManager) {
+  if (saveGridPresetBtn) {
     saveGridPresetBtn.addEventListener('click', () => {
+      if (!previewManager) {
+        if (gridPresetSaveError)
+          gridPresetSaveError.textContent =
+            'Preview not ready yet. Please load a model first.';
+        return;
+      }
       const name = gridPresetNameInput?.value || '';
       const w = parseInt(gridWidthInput?.value || '0', 10);
       const h = parseInt(gridHeightInput?.value || '0', 10);
@@ -5250,8 +5332,9 @@ async function initApp() {
     });
   }
 
-  if (deleteGridPresetBtn && previewManager) {
+  if (deleteGridPresetBtn) {
     deleteGridPresetBtn.addEventListener('click', () => {
+      if (!previewManager) return;
       const val = gridPresetSelect?.value || '';
       if (!val.startsWith(USER_GRID_PREFIX)) return;
       const name = val.slice(USER_GRID_PREFIX.length);
@@ -5595,18 +5678,47 @@ async function initApp() {
   }
 
   /**
-   * C1: If the current SCAD model exposes `screen_width_mm` and `screen_height_mm`
-   * parameters, automatically size the reference overlay to those values.
-   * This is the SCAD-parameter binding half of the hybrid overlay auto-sizing approach.
+   * C1: Auto-size the reference overlay from SCAD parameters.
+   *
+   * Priority order (first match wins):
+   *   1. Explicit `screen_width_mm` + `screen_height_mm` parameters
+   *   2. Keyguard case opening: `width_of_opening_in_case` + `height_of_opening_in_case`
+   *      (these represent the visible screen area the SVG screenshot covers)
+   *
+   * The `orientation` parameter ("landscape"/"portrait") swaps width/height when
+   * the case-opening dimensions are in portrait but the SVG is landscape or vice-versa.
+   *
    * @param {Object} paramValues - Current parameter values
    */
   function autoApplyScreenDimensionsFromParams(paramValues) {
     if (!previewManager || !paramValues) return;
-    const w = parseFloat(paramValues['screen_width_mm']);
-    const h = parseFloat(paramValues['screen_height_mm']);
-    if (!isNaN(w) && !isNaN(h) && w > 0 && h > 0) {
-      previewManager.fitOverlayToScreenDimensions(w, h);
-      console.log(`[App] Overlay auto-sized from SCAD params: ${w} × ${h} mm`);
+
+    // Priority 1: explicit screen dimensions
+    const sw = parseFloat(paramValues['screen_width_mm']);
+    const sh = parseFloat(paramValues['screen_height_mm']);
+    if (!isNaN(sw) && !isNaN(sh) && sw > 0 && sh > 0) {
+      previewManager.fitOverlayToScreenDimensions(sw, sh);
+      console.log(
+        `[App] Overlay auto-sized from screen_width/height_mm: ${sw} × ${sh} mm`
+      );
+      return;
+    }
+
+    // Priority 2: keyguard case opening dimensions (physical screen area)
+    let cw = parseFloat(paramValues['width_of_opening_in_case']);
+    let ch = parseFloat(paramValues['height_of_opening_in_case']);
+    if (!isNaN(cw) && !isNaN(ch) && cw > 0 && ch > 0) {
+      const orientation = (paramValues['orientation'] || '').toLowerCase();
+      if (orientation === 'landscape' && ch > cw) {
+        [cw, ch] = [ch, cw];
+      } else if (orientation === 'portrait' && cw > ch) {
+        [cw, ch] = [ch, cw];
+      }
+      previewManager.fitOverlayToScreenDimensions(cw, ch);
+      console.log(
+        `[App] Overlay auto-sized from case opening: ${cw} × ${ch} mm (${orientation || 'default'})`
+      );
+      return;
     }
   }
 
@@ -5924,6 +6036,17 @@ async function initApp() {
     attributes: true,
     attributeFilter: ['data-theme', 'data-high-contrast'],
   });
+
+  // Wire manual calibration override toggle
+  if (overlayManualOverrideToggle && overlayCalibrationFieldset) {
+    overlayManualOverrideToggle.addEventListener('change', () => {
+      const enabled = overlayManualOverrideToggle.checked;
+      overlayCalibrationFieldset.disabled = !enabled;
+      console.log(
+        `[App] Overlay manual calibration ${enabled ? 'enabled' : 'disabled'}`
+      );
+    });
+  }
 
   // Wire fit to model button
   if (overlayFitModelBtn) {
@@ -6716,8 +6839,7 @@ async function initApp() {
   }
 
   // Import shared validation schemas (FILE_SIZE_LIMITS is now imported at top of initApp() to avoid TDZ)
-  const { validateFileUpload, getValidationErrorMessage } =
-    await import('./js/validation-schemas.js');
+  const { validateFileUpload } = await import('./js/validation-schemas.js');
 
   // Check for saved draft - but only if first-visit modal is not blocking
   // If first-visit is blocking, defer draft restoration until user accepts
@@ -7218,17 +7340,66 @@ async function initApp() {
       }
     }
 
-    // Build file list HTML
-    const fileList = Array.from(projectFiles.keys()).sort();
+    // Build nested tree and render the current folder view
+    const tree = buildNestedTree(projectFiles);
 
-    const items = fileList.map((path) => {
+    // Validate that companionCurrentPath still points to a valid node;
+    // if the user deleted a folder we were inside, reset to root.
+    if (getNodeAtPath(tree, companionCurrentPath) === null) {
+      companionCurrentPath = [];
+    }
+
+    const currentNode = getNodeAtPath(tree, companionCurrentPath) || tree;
+
+    // --- Breadcrumb bar ---
+    const crumbItems = companionCurrentPath.map((segment, idx) => {
+      const targetDepth = idx; // clicking this crumb navigates to segments[0..idx]
+      return `<li class="file-nav-breadcrumb-item">
+        <button class="file-nav-breadcrumb-btn" data-depth="${targetDepth + 1}" aria-label="Navigate to ${escapeHtml(segment)}">${escapeHtml(segment)}</button>
+      </li>`;
+    });
+
+    const breadcrumbHtml =
+      companionCurrentPath.length > 0
+        ? `<nav class="file-nav-breadcrumbs" aria-label="Folder navigation">
+            <ol class="file-nav-breadcrumb-list">
+              <li class="file-nav-breadcrumb-item">
+                <button class="file-nav-breadcrumb-btn file-nav-breadcrumb-home" data-depth="0" aria-label="Navigate to root">🏠</button>
+              </li>
+              ${crumbItems.join('')}
+            </ol>
+          </nav>`
+        : '';
+
+    // --- Folder rows ---
+    const sortedFolders = [...currentNode.folders.entries()].sort((a, b) =>
+      a[0].localeCompare(b[0])
+    );
+    const folderItems = sortedFolders.map(([folderName, childNode]) => {
+      const count = countFilesRecursive(childNode);
+      return `
+        <div class="project-file-item file-nav-folder-row" role="button" tabindex="0"
+             data-folder-enter="${escapeHtml(folderName)}"
+             aria-label="Open folder ${escapeHtml(folderName)}, ${count} file${count !== 1 ? 's' : ''}">
+          <span class="project-file-icon" aria-hidden="true">📁</span>
+          <span class="project-file-name">${escapeHtml(folderName)}</span>
+          <span class="project-file-size file-nav-folder-count">${count} file${count !== 1 ? 's' : ''}</span>
+          <span class="file-nav-folder-chevron" aria-hidden="true">›</span>
+        </div>`;
+    });
+
+    // --- File rows ---
+    const sortedFiles = [...currentNode.files].sort((a, b) =>
+      a.name.localeCompare(b.name)
+    );
+    const fileItems = sortedFiles.map(({ path, name }) => {
       const isMain = path === mainFilePath;
       const content = projectFiles.get(path);
       const size =
         typeof content === 'string'
           ? formatFileSize(new Blob([content]).size)
           : '—';
-      const ext = path.split('.').pop().toLowerCase();
+      const ext = name.split('.').pop().toLowerCase();
       const isEditable = ['txt', 'csv', 'json', 'scad'].includes(ext);
       const icon = getFileIcon(ext);
 
@@ -7237,10 +7408,10 @@ async function initApp() {
         : '';
       const editBtn =
         isEditable && !isMain
-          ? `<button class="project-file-btn" data-action="edit" data-path="${escapeHtml(path)}" aria-label="Edit ${escapeHtml(path)}">✏️</button>`
+          ? `<button class="project-file-btn" data-action="edit" data-path="${escapeHtml(path)}" aria-label="Edit ${escapeHtml(name)}">✏️</button>`
           : '';
       const removeBtn = !isMain
-        ? `<button class="project-file-btn btn-danger" data-action="remove" data-path="${escapeHtml(path)}" aria-label="Remove ${escapeHtml(path)}">✕</button>`
+        ? `<button class="project-file-btn btn-danger" data-action="remove" data-path="${escapeHtml(path)}" aria-label="Remove ${escapeHtml(name)}">✕</button>`
         : '';
 
       const itemClass = isMain
@@ -7250,20 +7421,60 @@ async function initApp() {
       return `
         <div class="${itemClass}" role="listitem">
           <span class="project-file-icon" aria-hidden="true">${icon}</span>
-          <span class="project-file-name" title="${escapeHtml(path)}">${escapeHtml(path)}</span>
+          <span class="project-file-name" title="${escapeHtml(path)}">${escapeHtml(name)}</span>
           ${mainBadge}
           <span class="project-file-size">${size}</span>
           <div class="project-file-actions">
             ${editBtn}
             ${removeBtn}
           </div>
-        </div>
-      `;
+        </div>`;
     });
 
-    container.innerHTML = items.join('');
+    container.innerHTML =
+      breadcrumbHtml +
+      '<div role="list">' +
+      folderItems.join('') +
+      fileItems.join('') +
+      '</div>';
 
-    // Attach event handlers
+    // Breadcrumb navigation
+    container.querySelectorAll('.file-nav-breadcrumb-btn').forEach((btn) => {
+      const depth = parseInt(btn.dataset.depth, 10);
+      const activate = () => {
+        companionCurrentPath = companionCurrentPath.slice(0, depth);
+        renderProjectFilesList(projectFiles, mainFilePath, requiredFiles);
+      };
+      btn.addEventListener('click', activate);
+      btn.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          activate();
+        }
+      });
+    });
+
+    // Folder row navigation
+    container.querySelectorAll('[data-folder-enter]').forEach((row) => {
+      const folderName = row.dataset.folderEnter;
+      const enter = () => {
+        companionCurrentPath = [...companionCurrentPath, folderName];
+        renderProjectFilesList(projectFiles, mainFilePath, requiredFiles);
+      };
+      row.addEventListener('click', enter);
+      row.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          enter();
+        } else if (e.key === 'Escape' && companionCurrentPath.length > 0) {
+          e.preventDefault();
+          companionCurrentPath = companionCurrentPath.slice(0, -1);
+          renderProjectFilesList(projectFiles, mainFilePath, requiredFiles);
+        }
+      });
+    });
+
+    // File action buttons
     container.querySelectorAll('button[data-action]').forEach((btn) => {
       btn.addEventListener('click', handleProjectFileAction);
     });
@@ -7298,8 +7509,11 @@ async function initApp() {
         if (overlaySourceSelect) overlaySourceSelect.value = resolved.key;
         loadOverlayFromProjectFile(resolved.key)
           .then(() => {
+            // SVG 96 DPI size applied; SCAD case-opening / screen dims override.
+            autoApplyScreenDimensionsFromParams(parameters);
             overlayToggle.checked = true;
             previewManager.setOverlayEnabled(true);
+            updateOverlayUIFromConfig();
             updateOverlayStatus?.();
           })
           .catch((err) => {
@@ -7370,9 +7584,13 @@ async function initApp() {
       // Load the overlay image into the preview and enable the toggle
       loadOverlayFromProjectFile(screenshotFile)
         .then(() => {
+          // SVG 96 DPI size applied; SCAD case-opening / screen dims override.
+          const currentParams = stateManager.getState().parameters;
+          autoApplyScreenDimensionsFromParams(currentParams);
           if (overlayToggle && !overlayToggle.checked) {
             overlayToggle.checked = true;
             previewManager?.setOverlayEnabled(true);
+            updateOverlayUIFromConfig();
             updateOverlayStatus?.();
             console.log(
               '[App] Overlay auto-enabled for screenshot companion file'
@@ -7694,20 +7912,6 @@ async function initApp() {
           .map((f) => `WARNING: Can't open include file '${f.path}'.`)
           .join('\n');
         window.updateConsoleOutput(warnings);
-      }
-    }
-
-    // Auto-expand companion files panel when editable .txt files are present
-    // Makes the companion file editor more discoverable for clinician workflows
-    if (projectFiles && projectFiles.size > 1) {
-      const hasEditableTxtFiles = Array.from(projectFiles.keys()).some(
-        (p) => p.toLowerCase().endsWith('.txt') && p !== mainFilePath
-      );
-      if (hasEditableTxtFiles) {
-        const details = document.querySelector('.project-files-details');
-        if (details && !details.open) {
-          details.open = true;
-        }
       }
     }
   }
@@ -8060,15 +8264,6 @@ async function initApp() {
         }
       }
 
-      // Calculate file size
-      const fileSizeBytes =
-        typeof fileContent === 'string'
-          ? new Blob([fileContent]).size
-          : typeof file?.size === 'number'
-            ? file.size
-            : 0;
-      const fileSizeStr = formatFileSize(fileSizeBytes);
-
       // Enable compact header after file is loaded
       const appHeader = document.querySelector('.app-header');
       if (appHeader) {
@@ -8170,7 +8365,7 @@ async function initApp() {
       // Apply hidden groups from saved preference and set up hide/show-all behavior
       applyHiddenGroups(parametersContainer, extracted?.modelName || fileName);
 
-      // C1: Auto-size overlay from SCAD parameters screen_width_mm / screen_height_mm
+      // C1: Auto-size overlay from SCAD parameters (screen dims or case opening)
       autoApplyScreenDimensionsFromParams(currentValues);
 
       // Auto-import JSON presets from ZIP companion files (Item 14: desktop parity)
@@ -8318,6 +8513,12 @@ async function initApp() {
         );
       } else {
         updateStatus(`Ready - ${paramCount} parameters loaded`);
+      }
+
+      // Auto-expand the Presets panel when a project loads
+      const presetControlsEl = document.getElementById('presetControls');
+      if (presetControlsEl && !presetControlsEl.open) {
+        presetControlsEl.open = true;
       }
 
       // Move focus to the first parameter input after file load (WCAG 2.4.3 Focus Order)
@@ -9426,123 +9627,20 @@ if (rounded) {
       return;
     }
 
-    const projectFiles =
+    // currentFiles is a plain object (path → content) kept in sync with DB
+    let currentFiles =
       typeof project.projectFiles === 'string'
         ? JSON.parse(project.projectFiles)
-        : project.projectFiles;
+        : { ...project.projectFiles };
+
+    // Navigation path local to this modal closure — cleaned up when modal closes
+    let fmCurrentPath = [];
 
     const modal = document.createElement('div');
     modal.className = 'preset-modal file-manager-modal';
     modal.setAttribute('role', 'dialog');
     modal.setAttribute('aria-labelledby', 'fileManagerTitle');
     modal.setAttribute('aria-modal', 'true');
-
-    // Build nested folder tree from flat file entries
-    const fileEntries = Object.entries(projectFiles);
-
-    // Group files by folder
-    const tree = { files: [], folders: {} };
-    for (const [path, content] of fileEntries) {
-      const parts = path.split('/');
-      if (parts.length > 1) {
-        const folderName = parts.slice(0, -1).join('/');
-        if (!tree.folders[folderName]) tree.folders[folderName] = [];
-        tree.folders[folderName].push({
-          path,
-          name: parts[parts.length - 1],
-          content,
-        });
-      } else {
-        tree.files.push({ path, name: path, content });
-      }
-    }
-
-    function renderFileItem(file) {
-      const isMain = file.path === project.mainFilePath;
-      const size = new Blob([file.content]).size;
-      const iconClass = isMain ? 'main-file' : '';
-      return `
-        <div class="file-manager-item" data-path="${escapeHtml(file.path)}">
-          <svg class="file-manager-item-icon ${iconClass}" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-            ${
-              isMain
-                ? '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line>'
-                : '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline>'
-            }
-          </svg>
-          <span class="file-manager-item-path">${escapeHtml(file.name)}</span>
-          <span class="file-manager-item-size">${formatFileSize(size)}</span>
-          <div class="file-manager-item-actions">
-            ${
-              isMain
-                ? '<span class="file-manager-main-badge">Main</span>'
-                : `
-              <button class="btn btn-sm btn-icon btn-set-main-file" data-path="${escapeHtml(file.path)}" aria-label="Set as main file" title="Set as main">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                  <polyline points="20 6 9 17 4 12"></polyline>
-                </svg>
-              </button>
-            `
-            }
-            <button class="btn btn-sm btn-icon btn-preview-file" data-path="${escapeHtml(file.path)}" aria-label="Preview file" title="Preview">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                <circle cx="12" cy="12" r="3"></circle>
-              </svg>
-            </button>
-            <button class="btn btn-sm btn-icon btn-rename-project-file" data-path="${escapeHtml(file.path)}" aria-label="Rename file" title="Rename">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-              </svg>
-            </button>
-            <button class="btn btn-sm btn-icon btn-delete-project-file${isMain ? ' btn-disabled' : ''}" data-path="${escapeHtml(file.path)}" aria-label="Delete file" title="${isMain ? 'Cannot delete main file' : 'Delete'}"${isMain ? ' disabled' : ''}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                <polyline points="3 6 5 6 21 6"></polyline>
-                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-              </svg>
-            </button>
-          </div>
-        </div>`;
-    }
-
-    // Render root-level files first, then folders
-    let filesHtml = tree.files.map(renderFileItem).join('');
-
-    // Render each folder as a collapsible group
-    for (const [folderName, folderFiles] of Object.entries(
-      tree.folders
-    ).sort()) {
-      const visibleFiles = folderFiles.filter((f) => f.name !== '.folder');
-      const folderFilesHtml = visibleFiles.map(renderFileItem).join('');
-      filesHtml += `
-        <details class="file-manager-folder" open>
-          <summary class="file-manager-folder-header">
-            <svg class="file-manager-folder-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-            </svg>
-            <span class="file-manager-folder-name">${escapeHtml(folderName)}</span>
-            <span class="file-manager-folder-count">${visibleFiles.length} file${visibleFiles.length !== 1 ? 's' : ''}</span>
-            <div class="file-manager-folder-actions">
-              <button class="btn btn-sm btn-icon btn-rename-project-folder" data-folder="${escapeHtml(folderName)}" aria-label="Rename folder" title="Rename">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                </svg>
-              </button>
-              <button class="btn btn-sm btn-icon btn-delete-project-folder" data-folder="${escapeHtml(folderName)}" aria-label="Delete folder" title="Delete folder">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                  <polyline points="3 6 5 6 21 6"></polyline>
-                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                </svg>
-              </button>
-            </div>
-          </summary>
-          <div class="file-manager-folder-contents">
-            ${folderFilesHtml || '<p class="file-manager-empty-folder">Empty folder</p>'}
-          </div>
-        </details>`;
-    }
 
     modal.innerHTML = `
       <div class="preset-modal-content">
@@ -9573,12 +9671,11 @@ if (rounded) {
               </svg>
               New Folder
             </button>
-            <span class="file-manager-count">${fileEntries.length} file${fileEntries.length !== 1 ? 's' : ''}</span>
+            <span class="file-manager-count" id="fmFileCount"></span>
           </div>
 
-          <div class="file-manager-tree">
-            ${filesHtml || '<p class="text-muted">No files in project</p>'}
-          </div>
+          <div id="fmBreadcrumbs"></div>
+          <div class="file-manager-tree" id="fmTree"></div>
         </div>
 
         <div class="preset-modal-footer">
@@ -9596,62 +9693,418 @@ if (rounded) {
       document.body.removeChild(modal);
     };
 
-    // Wire up events
+    // ------------------------------------------------------------------ //
+    // renderFmView — re-renders breadcrumbs + tree without closing modal  //
+    // ------------------------------------------------------------------ //
+    function renderFmView() {
+      const fileMap = new Map(Object.entries(currentFiles));
+      const tree = buildNestedTree(fileMap);
+
+      // Validate path still exists after mutations
+      if (getNodeAtPath(tree, fmCurrentPath) === null) {
+        fmCurrentPath = [];
+      }
+      const node = getNodeAtPath(tree, fmCurrentPath) || tree;
+
+      const totalFiles = Object.keys(currentFiles).filter(
+        (p) => !p.endsWith('/.folder')
+      ).length;
+      const countEl = modal.querySelector('#fmFileCount');
+      if (countEl)
+        countEl.textContent = `${totalFiles} file${totalFiles !== 1 ? 's' : ''}`;
+
+      // --- Breadcrumbs ---
+      const breadcrumbsEl = modal.querySelector('#fmBreadcrumbs');
+      if (fmCurrentPath.length > 0) {
+        const crumbItems = fmCurrentPath.map((seg, idx) => {
+          return `<li class="file-nav-breadcrumb-item">
+            <button class="file-nav-breadcrumb-btn" data-depth="${idx + 1}" aria-label="Navigate to ${escapeHtml(seg)}">${escapeHtml(seg)}</button>
+          </li>`;
+        });
+        breadcrumbsEl.innerHTML = `
+          <nav class="file-nav-breadcrumbs file-nav-breadcrumbs--modal" aria-label="Folder navigation">
+            <ol class="file-nav-breadcrumb-list">
+              <li class="file-nav-breadcrumb-item">
+                <button class="file-nav-breadcrumb-btn file-nav-breadcrumb-home" data-depth="0" aria-label="Navigate to root">🏠 Root</button>
+              </li>
+              ${crumbItems.join('')}
+            </ol>
+          </nav>`;
+        breadcrumbsEl
+          .querySelectorAll('.file-nav-breadcrumb-btn')
+          .forEach((btn) => {
+            btn.addEventListener('click', () => {
+              fmCurrentPath = fmCurrentPath.slice(
+                0,
+                parseInt(btn.dataset.depth, 10)
+              );
+              renderFmView();
+            });
+          });
+      } else {
+        breadcrumbsEl.innerHTML = '';
+      }
+
+      // --- Folder rows ---
+      const sortedFolders = [...node.folders.entries()].sort((a, b) =>
+        a[0].localeCompare(b[0])
+      );
+
+      // Build the full path prefix for a folder at current depth
+      const makeFolderFullPath = (name) => [...fmCurrentPath, name].join('/');
+
+      const folderRowsHtml = sortedFolders
+        .map(([folderName, childNode]) => {
+          const count = countFilesRecursive(childNode);
+          const fullPath = makeFolderFullPath(folderName);
+          return `
+          <div class="file-manager-item file-nav-folder-row" role="button" tabindex="0"
+               data-folder-enter="${escapeHtml(folderName)}"
+               aria-label="Open folder ${escapeHtml(folderName)}, ${count} file${count !== 1 ? 's' : ''}">
+            <svg class="file-manager-item-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+            </svg>
+            <span class="file-manager-item-path">${escapeHtml(folderName)}</span>
+            <span class="file-manager-item-size file-nav-folder-count">${count} file${count !== 1 ? 's' : ''}</span>
+            <div class="file-manager-item-actions">
+              <button class="btn btn-sm btn-icon btn-rename-project-folder" data-folder="${escapeHtml(fullPath)}" aria-label="Rename folder ${escapeHtml(folderName)}" title="Rename">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                </svg>
+              </button>
+              <button class="btn btn-sm btn-icon btn-delete-project-folder" data-folder="${escapeHtml(fullPath)}" aria-label="Delete folder ${escapeHtml(folderName)}" title="Delete folder">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <polyline points="3 6 5 6 21 6"></polyline>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                </svg>
+              </button>
+              <span class="file-nav-folder-chevron" aria-hidden="true">›</span>
+            </div>
+          </div>`;
+        })
+        .join('');
+
+      // --- File rows ---
+      const sortedFiles = [...node.files].sort((a, b) =>
+        a.name.localeCompare(b.name)
+      );
+
+      const fileRowsHtml = sortedFiles
+        .map((file) => {
+          const isMain = file.path === project.mainFilePath;
+          const size = new Blob([file.content]).size;
+          const iconClass = isMain ? 'main-file' : '';
+          return `
+          <div class="file-manager-item" data-path="${escapeHtml(file.path)}">
+            <svg class="file-manager-item-icon ${iconClass}" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              ${
+                isMain
+                  ? '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line>'
+                  : '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline>'
+              }
+            </svg>
+            <span class="file-manager-item-path">${escapeHtml(file.name)}</span>
+            <span class="file-manager-item-size">${formatFileSize(size)}</span>
+            <div class="file-manager-item-actions">
+              ${
+                isMain
+                  ? '<span class="file-manager-main-badge">Main</span>'
+                  : `<button class="btn btn-sm btn-icon btn-set-main-file" data-path="${escapeHtml(file.path)}" aria-label="Set as main file" title="Set as main">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                      </svg>
+                    </button>`
+              }
+              <button class="btn btn-sm btn-icon btn-preview-file" data-path="${escapeHtml(file.path)}" aria-label="Preview file" title="Preview">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                  <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+              </button>
+              <button class="btn btn-sm btn-icon btn-rename-project-file" data-path="${escapeHtml(file.path)}" aria-label="Rename file" title="Rename">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                </svg>
+              </button>
+              <button class="btn btn-sm btn-icon btn-delete-project-file${isMain ? ' btn-disabled' : ''}" data-path="${escapeHtml(file.path)}" aria-label="Delete file" title="${isMain ? 'Cannot delete main file' : 'Delete'}"${isMain ? ' disabled' : ''}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <polyline points="3 6 5 6 21 6"></polyline>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                </svg>
+              </button>
+            </div>
+          </div>`;
+        })
+        .join('');
+
+      const treeEl = modal.querySelector('#fmTree');
+      treeEl.innerHTML =
+        folderRowsHtml + fileRowsHtml ||
+        '<p class="text-muted">No files in this folder</p>';
+
+      // --- Wire folder navigation ---
+      treeEl.querySelectorAll('[data-folder-enter]').forEach((row) => {
+        const folderName = row.dataset.folderEnter;
+        const enter = () => {
+          fmCurrentPath = [...fmCurrentPath, folderName];
+          renderFmView();
+        };
+        row.addEventListener('click', (e) => {
+          // Don't navigate if a button inside the row was clicked
+          if (e.target.closest('button')) return;
+          enter();
+        });
+        row.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            enter();
+          } else if (e.key === 'Escape' && fmCurrentPath.length > 0) {
+            e.preventDefault();
+            fmCurrentPath = fmCurrentPath.slice(0, -1);
+            renderFmView();
+          }
+        });
+      });
+
+      // --- Preview file buttons ---
+      treeEl.querySelectorAll('.btn-preview-file').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const path = btn.dataset.path;
+          showFilePreviewModal(path, currentFiles[path]);
+        });
+      });
+
+      // --- Set main file buttons ---
+      treeEl.querySelectorAll('.btn-set-main-file').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const path = btn.dataset.path;
+          project.mainFilePath = path;
+          const result = await updateProject({
+            id: projectId,
+            mainFilePath: path,
+          });
+          if (result.success) {
+            stateManager.announceChange(`Main file set to ${path}`);
+            renderFmView();
+          }
+        });
+      });
+
+      // --- Rename folder buttons ---
+      treeEl.querySelectorAll('.btn-rename-project-folder').forEach((btn) => {
+        btn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const oldFullPath = btn.dataset.folder; // e.g. "Cases/iPad 7,8,9"
+          const oldName = oldFullPath.split('/').pop();
+          const newName = prompt(`Rename folder "${oldName}" to:`, oldName);
+          if (!newName || !newName.trim() || newName.trim() === oldName) return;
+          const safeName = newName.trim().replace(/[\\/:*?"<>|]/g, '_');
+          const parentPrefix = oldFullPath.includes('/')
+            ? oldFullPath.slice(0, oldFullPath.lastIndexOf('/') + 1)
+            : '';
+          const newFullPath = parentPrefix + safeName;
+          const oldPrefix = oldFullPath + '/';
+          const newPrefix = newFullPath + '/';
+
+          const conflict = Object.keys(currentFiles).some(
+            (p) => p.startsWith(newPrefix) && !p.startsWith(oldPrefix)
+          );
+          if (conflict) {
+            alert(`Folder "${safeName}" already exists.`);
+            return;
+          }
+
+          const updatedFiles = {};
+          for (const [path, content] of Object.entries(currentFiles)) {
+            updatedFiles[
+              path.startsWith(oldPrefix)
+                ? newPrefix + path.slice(oldPrefix.length)
+                : path
+            ] = content;
+          }
+
+          let newMainFilePath = project.mainFilePath;
+          if (newMainFilePath && newMainFilePath.startsWith(oldPrefix)) {
+            newMainFilePath =
+              newPrefix + newMainFilePath.slice(oldPrefix.length);
+          }
+
+          const result = await updateProject({
+            id: projectId,
+            projectFiles: JSON.stringify(updatedFiles),
+            mainFilePath: newMainFilePath,
+          });
+
+          if (result.success) {
+            currentFiles = updatedFiles;
+            project.mainFilePath = newMainFilePath;
+            // If we renamed a folder we're currently inside, update path
+            fmCurrentPath = fmCurrentPath.map((seg, idx) => {
+              const prefix = fmCurrentPath.slice(0, idx + 1).join('/');
+              return prefix === oldFullPath ? safeName : seg;
+            });
+            stateManager.announceChange(`Folder renamed to "${safeName}"`);
+            renderFmView();
+          } else {
+            alert(`Failed to rename folder: ${result.error}`);
+          }
+        });
+      });
+
+      // --- Rename file buttons ---
+      treeEl.querySelectorAll('.btn-rename-project-file').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const oldPath = btn.dataset.path;
+          const parts = oldPath.split('/');
+          const oldName = parts[parts.length - 1];
+          const folder = parts.length > 1 ? parts.slice(0, -1).join('/') : '';
+
+          const newName = prompt(`Rename "${oldName}" to:`, oldName);
+          if (!newName || !newName.trim() || newName.trim() === oldName) return;
+          const safeName = newName.trim().replace(/[\\/:*?"<>|]/g, '_');
+          const newPath = folder ? `${folder}/${safeName}` : safeName;
+
+          if (newPath === oldPath) return;
+          if (currentFiles[newPath] !== undefined) {
+            alert(
+              `A file named "${safeName}" already exists${folder ? ` in ${folder}` : ''}.`
+            );
+            return;
+          }
+
+          const updatedFiles = {};
+          for (const [path, content] of Object.entries(currentFiles)) {
+            updatedFiles[path === oldPath ? newPath : path] = content;
+          }
+
+          let newMainFilePath = project.mainFilePath;
+          if (newMainFilePath === oldPath) newMainFilePath = newPath;
+
+          const result = await updateProject({
+            id: projectId,
+            projectFiles: JSON.stringify(updatedFiles),
+            mainFilePath: newMainFilePath,
+          });
+
+          if (result.success) {
+            currentFiles = updatedFiles;
+            project.mainFilePath = newMainFilePath;
+            stateManager.announceChange(`File renamed to "${safeName}"`);
+            renderFmView();
+          } else {
+            alert(`Failed to rename file: ${result.error}`);
+          }
+        });
+      });
+
+      // --- Delete file buttons ---
+      treeEl.querySelectorAll('.btn-delete-project-file').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const filePath = btn.dataset.path;
+          if (filePath === project.mainFilePath) return;
+
+          const fileName = filePath.split('/').pop();
+          if (!confirm(`Delete "${fileName}"? This cannot be undone.`)) return;
+
+          const updatedFiles = { ...currentFiles };
+          delete updatedFiles[filePath];
+
+          const result = await updateProject({
+            id: projectId,
+            projectFiles: JSON.stringify(updatedFiles),
+          });
+
+          if (result.success) {
+            currentFiles = updatedFiles;
+            stateManager.announceChange(`Deleted file "${fileName}"`);
+            renderFmView();
+          } else {
+            alert(`Failed to delete file: ${result.error}`);
+          }
+        });
+      });
+
+      // --- Delete folder buttons ---
+      treeEl.querySelectorAll('.btn-delete-project-folder').forEach((btn) => {
+        btn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const folderFullPath = btn.dataset.folder;
+          const folderName = folderFullPath.split('/').pop();
+          const folderPrefix = folderFullPath + '/';
+
+          if (
+            project.mainFilePath &&
+            project.mainFilePath.startsWith(folderPrefix)
+          ) {
+            alert(
+              `Cannot delete folder "${folderName}" because it contains the main file. Move or change the main file first.`
+            );
+            return;
+          }
+
+          const fileCount = Object.keys(currentFiles).filter(
+            (p) => p.startsWith(folderPrefix) && !p.endsWith('/.folder')
+          ).length;
+          const message =
+            fileCount > 0
+              ? `Delete folder "${folderName}" and its ${fileCount} file${fileCount !== 1 ? 's' : ''}? This cannot be undone.`
+              : `Delete empty folder "${folderName}"?`;
+
+          if (!confirm(message)) return;
+
+          const updatedFiles = {};
+          for (const [path, content] of Object.entries(currentFiles)) {
+            if (!path.startsWith(folderPrefix)) updatedFiles[path] = content;
+          }
+
+          const result = await updateProject({
+            id: projectId,
+            projectFiles: JSON.stringify(updatedFiles),
+          });
+
+          if (result.success) {
+            currentFiles = updatedFiles;
+            // If we deleted a folder we're inside, navigate up
+            const deletedPathStr = folderFullPath;
+            const currentPathStr = fmCurrentPath.join('/');
+            if (
+              currentPathStr === deletedPathStr ||
+              currentPathStr.startsWith(deletedPathStr + '/')
+            ) {
+              fmCurrentPath = folderFullPath.includes('/')
+                ? folderFullPath.split('/').slice(0, -1)
+                : [];
+            }
+            stateManager.announceChange(`Deleted folder "${folderName}"`);
+            renderFmView();
+          } else {
+            alert(`Failed to delete folder: ${result.error}`);
+          }
+        });
+      });
+    }
+
+    // Initial render
+    renderFmView();
+
+    // Wire up static modal buttons
     modal
       .querySelector('#fileManagerXCloseBtn')
       .addEventListener('click', dismissFileManager);
-    const closeBtn = modal.querySelector('#fileManagerCloseBtn');
-    closeBtn.addEventListener('click', dismissFileManager);
-
-    const loadBtn = modal.querySelector('#fileManagerLoadBtn');
-    loadBtn.addEventListener('click', () => {
+    modal
+      .querySelector('#fileManagerCloseBtn')
+      .addEventListener('click', dismissFileManager);
+    modal.querySelector('#fileManagerLoadBtn').addEventListener('click', () => {
       dismissFileManager();
       loadSavedProject(projectId);
-    });
-
-    // Preview file buttons
-    modal.querySelectorAll('.btn-preview-file').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const path = btn.dataset.path;
-        const content = projectFiles[path];
-        showFilePreviewModal(path, content);
-      });
-    });
-
-    // Set main file buttons
-    modal.querySelectorAll('.btn-set-main-file').forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        const path = btn.dataset.path;
-        // Update project main file path
-        project.mainFilePath = path;
-        project.content = projectFiles[path];
-
-        const projectToSave = { ...project };
-        if (typeof projectToSave.projectFiles === 'object') {
-          projectToSave.projectFiles = JSON.stringify(
-            projectToSave.projectFiles
-          );
-        }
-
-        const result = await updateProject({
-          id: projectId,
-          name: project.name,
-          notes: project.notes,
-        });
-
-        if (result.success) {
-          dismissFileManager();
-          showProjectFileManager(projectId); // Refresh
-          stateManager.announceChange(`Main file set to ${path}`);
-        }
-      });
     });
 
     // Add file button
     const addFileBtn = modal.querySelector('#addFileToProjectBtn');
     if (addFileBtn) {
       addFileBtn.addEventListener('click', () => {
-        // Create a temporary file input
         const fileInput = document.createElement('input');
         fileInput.type = 'file';
         fileInput.multiple = true;
@@ -9662,19 +10115,19 @@ if (rounded) {
           if (files.length === 0) return;
 
           let addedCount = 0;
-          const updatedProjectFiles = { ...projectFiles };
+          const updatedFiles = { ...currentFiles };
+          // Place new files in the currently viewed folder
+          const folderPrefix =
+            fmCurrentPath.length > 0 ? fmCurrentPath.join('/') + '/' : '';
 
           for (const file of files) {
             try {
-              // Determine how to read the file
               const ext = file.name.split('.').pop().toLowerCase();
               const isText = ['scad', 'json', 'txt', 'svg'].includes(ext);
-
               let content;
               if (isText) {
                 content = await file.text();
               } else {
-                // For binary files, store as base64 data URL
                 content = await new Promise((resolve, reject) => {
                   const reader = new FileReader();
                   reader.onload = () => resolve(reader.result);
@@ -9682,10 +10135,7 @@ if (rounded) {
                   reader.readAsDataURL(file);
                 });
               }
-
-              // Use the filename as the path
-              // If file already exists, it will be overwritten
-              updatedProjectFiles[file.name] = content;
+              updatedFiles[folderPrefix + file.name] = content;
               addedCount++;
             } catch (err) {
               console.error(
@@ -9696,18 +10146,16 @@ if (rounded) {
           }
 
           if (addedCount > 0) {
-            // Update project with new files
             const result = await updateProject({
               id: projectId,
-              projectFiles: JSON.stringify(updatedProjectFiles),
+              projectFiles: JSON.stringify(updatedFiles),
             });
-
             if (result.success) {
-              dismissFileManager();
-              showProjectFileManager(projectId); // Refresh to show new files
+              currentFiles = updatedFiles;
               stateManager.announceChange(
                 `Added ${addedCount} file${addedCount !== 1 ? 's' : ''} to project`
               );
+              renderFmView();
             } else {
               alert(`Failed to add files: ${result.error}`);
             }
@@ -9718,228 +10166,42 @@ if (rounded) {
       });
     }
 
-    // New folder button
+    // New folder button — creates folder inside currently viewed folder
     const addFolderBtn = modal.querySelector('#addFolderToProjectBtn');
     if (addFolderBtn) {
       addFolderBtn.addEventListener('click', async () => {
         const folderName = prompt('Enter folder name:');
         if (!folderName || !folderName.trim()) return;
         const safeName = folderName.trim().replace(/[\\/:*?"<>|]/g, '_');
+        const parentPrefix =
+          fmCurrentPath.length > 0 ? fmCurrentPath.join('/') + '/' : '';
+        const newFolderPrefix = parentPrefix + safeName + '/';
 
-        // Check if folder already exists
-        const folderPrefix = `${safeName}/`;
-        const exists = Object.keys(projectFiles).some((p) =>
-          p.startsWith(folderPrefix)
+        const exists = Object.keys(currentFiles).some((p) =>
+          p.startsWith(newFolderPrefix)
         );
         if (exists) {
           alert(`Folder "${safeName}" already exists.`);
           return;
         }
 
-        // Create folder with a hidden sentinel entry
-        const updatedProjectFiles = { ...projectFiles };
-        updatedProjectFiles[`${safeName}/.folder`] = '';
+        const updatedFiles = { ...currentFiles };
+        updatedFiles[`${newFolderPrefix}.folder`] = '';
 
         const result = await updateProject({
           id: projectId,
-          projectFiles: JSON.stringify(updatedProjectFiles),
+          projectFiles: JSON.stringify(updatedFiles),
         });
 
         if (result.success) {
-          dismissFileManager();
-          showProjectFileManager(projectId);
+          currentFiles = updatedFiles;
           stateManager.announceChange(`Created folder "${safeName}"`);
+          renderFmView();
         } else {
           alert(`Failed to create folder: ${result.error}`);
         }
       });
     }
-
-    // Rename folder buttons
-    modal.querySelectorAll('.btn-rename-project-folder').forEach((btn) => {
-      btn.addEventListener('click', async (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const oldName = btn.dataset.folder;
-        const newName = prompt(`Rename folder "${oldName}" to:`, oldName);
-        if (!newName || !newName.trim() || newName.trim() === oldName) return;
-        const safeName = newName.trim().replace(/[\\/:*?"<>|]/g, '_');
-
-        // Check if target name already exists
-        const targetPrefix = `${safeName}/`;
-        const conflict = Object.keys(projectFiles).some(
-          (p) => p.startsWith(targetPrefix) && !p.startsWith(`${oldName}/`)
-        );
-        if (conflict) {
-          alert(`Folder "${safeName}" already exists.`);
-          return;
-        }
-
-        // Rename all file paths under the old folder
-        const updatedProjectFiles = {};
-        const oldPrefix = `${oldName}/`;
-        for (const [path, content] of Object.entries(projectFiles)) {
-          if (path.startsWith(oldPrefix)) {
-            updatedProjectFiles[`${safeName}/${path.slice(oldPrefix.length)}`] =
-              content;
-          } else {
-            updatedProjectFiles[path] = content;
-          }
-        }
-
-        // Update mainFilePath if it was in the renamed folder
-        let newMainFilePath = project.mainFilePath;
-        if (newMainFilePath && newMainFilePath.startsWith(oldPrefix)) {
-          newMainFilePath = `${safeName}/${newMainFilePath.slice(oldPrefix.length)}`;
-        }
-
-        const result = await updateProject({
-          id: projectId,
-          projectFiles: JSON.stringify(updatedProjectFiles),
-          mainFilePath: newMainFilePath,
-        });
-
-        if (result.success) {
-          dismissFileManager();
-          showProjectFileManager(projectId);
-          stateManager.announceChange(`Folder renamed to "${safeName}"`);
-        } else {
-          alert(`Failed to rename folder: ${result.error}`);
-        }
-      });
-    });
-
-    // Rename file buttons
-    modal.querySelectorAll('.btn-rename-project-file').forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        const oldPath = btn.dataset.path;
-        const parts = oldPath.split('/');
-        const oldName = parts[parts.length - 1];
-        const folder = parts.length > 1 ? parts.slice(0, -1).join('/') : '';
-
-        const newName = prompt(`Rename "${oldName}" to:`, oldName);
-        if (!newName || !newName.trim() || newName.trim() === oldName) return;
-        const safeName = newName.trim().replace(/[\\/:*?"<>|]/g, '_');
-        const newPath = folder ? `${folder}/${safeName}` : safeName;
-
-        if (newPath === oldPath) return;
-
-        // Check for conflicts
-        if (projectFiles[newPath] !== undefined) {
-          alert(
-            `A file named "${safeName}" already exists${folder ? ` in ${folder}` : ''}.`
-          );
-          return;
-        }
-
-        const updatedProjectFiles = {};
-        for (const [path, content] of Object.entries(projectFiles)) {
-          if (path === oldPath) {
-            updatedProjectFiles[newPath] = content;
-          } else {
-            updatedProjectFiles[path] = content;
-          }
-        }
-
-        // Update mainFilePath if the renamed file was the main file
-        let newMainFilePath = project.mainFilePath;
-        if (newMainFilePath === oldPath) {
-          newMainFilePath = newPath;
-        }
-
-        const result = await updateProject({
-          id: projectId,
-          projectFiles: JSON.stringify(updatedProjectFiles),
-          mainFilePath: newMainFilePath,
-        });
-
-        if (result.success) {
-          dismissFileManager();
-          showProjectFileManager(projectId);
-          stateManager.announceChange(`File renamed to "${safeName}"`);
-        } else {
-          alert(`Failed to rename file: ${result.error}`);
-        }
-      });
-    });
-
-    // Delete file buttons
-    modal.querySelectorAll('.btn-delete-project-file').forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        const filePath = btn.dataset.path;
-        if (filePath === project.mainFilePath) return;
-
-        const fileName = filePath.split('/').pop();
-        if (!confirm(`Delete "${fileName}"? This cannot be undone.`)) return;
-
-        const updatedProjectFiles = { ...projectFiles };
-        delete updatedProjectFiles[filePath];
-
-        const result = await updateProject({
-          id: projectId,
-          projectFiles: JSON.stringify(updatedProjectFiles),
-        });
-
-        if (result.success) {
-          dismissFileManager();
-          showProjectFileManager(projectId);
-          stateManager.announceChange(`Deleted file "${fileName}"`);
-        } else {
-          alert(`Failed to delete file: ${result.error}`);
-        }
-      });
-    });
-
-    // Delete folder buttons
-    modal.querySelectorAll('.btn-delete-project-folder').forEach((btn) => {
-      btn.addEventListener('click', async (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const folderName = btn.dataset.folder;
-        const folderPrefix = `${folderName}/`;
-
-        // Check if the main file lives in this folder
-        if (
-          project.mainFilePath &&
-          project.mainFilePath.startsWith(folderPrefix)
-        ) {
-          alert(
-            `Cannot delete folder "${folderName}" because it contains the main file. Move or change the main file first.`
-          );
-          return;
-        }
-
-        const fileCount = Object.keys(projectFiles).filter(
-          (p) => p.startsWith(folderPrefix) && !p.endsWith('/.folder')
-        ).length;
-        const message =
-          fileCount > 0
-            ? `Delete folder "${folderName}" and its ${fileCount} file${fileCount !== 1 ? 's' : ''}? This cannot be undone.`
-            : `Delete empty folder "${folderName}"?`;
-
-        if (!confirm(message)) return;
-
-        const updatedProjectFiles = {};
-        for (const [path, content] of Object.entries(projectFiles)) {
-          if (!path.startsWith(folderPrefix)) {
-            updatedProjectFiles[path] = content;
-          }
-        }
-
-        const result = await updateProject({
-          id: projectId,
-          projectFiles: JSON.stringify(updatedProjectFiles),
-        });
-
-        if (result.success) {
-          dismissFileManager();
-          showProjectFileManager(projectId);
-          stateManager.announceChange(`Deleted folder "${folderName}"`);
-        } else {
-          alert(`Failed to delete folder: ${result.error}`);
-        }
-      });
-    });
   }
 
   /**
@@ -10619,6 +10881,69 @@ if (rounded) {
     banner.classList.remove('hidden');
   }
 
+  /**
+   * Show the manifest save-copy modal after a shared project loads.
+   * Returns a Promise that resolves to 'save' or 'skip'.
+   * If the first-visit modal is still blocking, waits for it to close first.
+   */
+  function showManifestSaveCopyModal(projectName, author) {
+    return new Promise((resolve) => {
+      const doShow = () => {
+        const modal = document.getElementById('manifest-save-copy-modal');
+        if (!modal) {
+          resolve('skip');
+          return;
+        }
+
+        const nameEl = document.getElementById('manifestSaveCopyProjectName');
+        const authorLine = document.getElementById(
+          'manifestSaveCopyAuthorLine'
+        );
+        const authorEl = document.getElementById('manifestSaveCopyAuthor');
+        const saveBtn = document.getElementById('manifestSaveCopySave');
+        const skipBtn = document.getElementById('manifestSaveCopySkip');
+
+        if (nameEl) nameEl.textContent = projectName || 'Untitled Project';
+        if (author && authorEl && authorLine) {
+          authorEl.textContent = author;
+          authorLine.style.display = '';
+        }
+
+        const cleanup = (result) => {
+          closeModal(modal);
+          resolve(result);
+        };
+
+        saveBtn.addEventListener('click', () => cleanup('save'), {
+          once: true,
+        });
+        skipBtn.addEventListener('click', () => cleanup('skip'), {
+          once: true,
+        });
+
+        modal.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape') {
+            e.preventDefault();
+            cleanup('skip');
+          }
+        });
+
+        openModal(modal, { focusTarget: saveBtn });
+      };
+
+      if (firstVisitBlocking) {
+        const waitForFirstVisit = setInterval(() => {
+          if (!firstVisitBlocking) {
+            clearInterval(waitForFirstVisit);
+            setTimeout(doShow, 300);
+          }
+        }, 200);
+      } else {
+        doShow();
+      }
+    });
+  }
+
   // Wire manifest banner buttons
   const manifestBanner = document.getElementById('manifestInfoBanner');
   const manifestSaveCopyBtn = document.getElementById('manifestSaveCopyBtn');
@@ -10651,19 +10976,24 @@ if (rounded) {
         : null;
       try {
         const { saveProject } = await import('./js/saved-projects-manager.js');
+        const projectFilesObj =
+          state.projectFiles instanceof Map
+            ? Object.fromEntries(state.projectFiles)
+            : state.projectFiles || null;
         const result = await saveProject({
           name: state.uploadedFile.name.replace('.scad', ''),
           originalName: state.uploadedFile.name,
           kind: state.projectFiles ? 'zip' : 'scad',
           mainFilePath: state.mainFilePath || state.uploadedFile.name,
           content: state.uploadedFile.content,
-          projectFiles: state.projectFiles || null,
+          projectFiles: projectFilesObj,
           forkedFrom,
         });
         if (result.success) {
           currentSavedProjectId = result.id;
           updateStatus('Local copy saved');
           announceImmediate('Local copy saved to browser storage');
+          await renderSavedProjectsList();
         } else {
           updateStatus(`Save failed: ${result.error}`, 'error');
         }
@@ -10709,38 +11039,46 @@ if (rounded) {
   if (manifestDownloadZipBtn) {
     manifestDownloadZipBtn.addEventListener('click', async () => {
       const state = stateManager.getState();
+      if (!state.uploadedFile) return;
       const origin = state.manifestOrigin;
       const projectName =
         origin?.name ||
         state.uploadedFile?.name?.replace('.scad', '') ||
         'forge-project';
-      try {
-        const JSZip = (await import('jszip')).default;
-        const zip = new JSZip();
-        // Add main SCAD file
-        if (state.uploadedFile?.content) {
-          zip.file(
-            state.uploadedFile.name || 'project.scad',
-            state.uploadedFile.content
-          );
-        }
-        // Add all project files (companions, presets, screenshots)
-        if (state.projectFiles) {
-          for (const [path, content] of state.projectFiles) {
-            zip.file(path, content);
+      const forkedFrom = origin
+        ? {
+            manifestUrl: origin.url,
+            originalName: origin.name,
+            originalAuthor: origin.author,
+            forkDate: Date.now(),
           }
+        : null;
+      try {
+        const { saveProject } = await import('./js/saved-projects-manager.js');
+        const projectFilesObj =
+          state.projectFiles instanceof Map
+            ? Object.fromEntries(state.projectFiles)
+            : state.projectFiles || null;
+        const result = await saveProject({
+          name: projectName,
+          originalName: state.uploadedFile.name,
+          kind: state.projectFiles ? 'zip' : 'scad',
+          mainFilePath: state.mainFilePath || state.uploadedFile.name,
+          content: state.uploadedFile.content,
+          projectFiles: projectFilesObj,
+          forkedFrom,
+        });
+        if (result.success) {
+          currentSavedProjectId = result.id;
+          updateStatus(`Saved: ${projectName}`);
+          announceImmediate(`Project saved to Saved Designs: ${projectName}`);
+          await renderSavedProjectsList();
+        } else {
+          updateStatus(`Save failed: ${result.error}`, 'error');
         }
-        const blob = await zip.generateAsync({ type: 'blob' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${projectName}.zip`;
-        a.click();
-        URL.revokeObjectURL(url);
-        updateStatus(`Downloaded: ${projectName}.zip`);
       } catch (err) {
-        console.error('[Manifest] ZIP export failed:', err);
-        updateStatus('Failed to export ZIP', 'error');
+        console.error('[Manifest] Save ZIP failed:', err);
+        updateStatus('Failed to save project', 'error');
       }
     });
   }
@@ -10914,29 +11252,14 @@ if (rounded) {
 
         console.log(`[DeepLink] Manifest load complete: ${projectName}`);
 
-        // Auto-fork: listen for the first user-initiated parameter change
-        // and prompt to save a local copy (fires once per manifest session)
-        let autoForkFired = false;
-        const unsubAutoFork = stateManager.subscribe((state, prev) => {
-          if (autoForkFired) return;
-          if (!state.manifestOrigin) return;
-          // Only trigger on parameter changes (not rendering state, etc.)
-          if (
-            state.parameters !== prev.parameters &&
-            prev.parameters &&
-            Object.keys(prev.parameters).length > 0
-          ) {
-            autoForkFired = true;
-            unsubAutoFork();
-            // Prompt the user to save a local copy
-            const wantSave = confirm(
-              `You're editing a shared project. Save a local copy to keep your changes?`
-            );
-            if (wantSave && manifestSaveCopyBtn) {
-              manifestSaveCopyBtn.click();
-            }
-          }
-        });
+        // Show the save-copy modal (waits for first-visit modal if needed)
+        const saveCopyChoice = await showManifestSaveCopyModal(
+          projectName,
+          manifest.author
+        );
+        if (saveCopyChoice === 'save' && manifestSaveCopyBtn) {
+          manifestSaveCopyBtn.click();
+        }
       } catch (error) {
         console.error('[DeepLink] Manifest load failed:', error);
 
@@ -13895,6 +14218,26 @@ if (rounded) {
 
     updatePrimaryActionButton();
     updateProjectFilesUI();
+
+    // When the preset has a mapped SVG, force-select the aliased default.svg
+    // in the overlay dropdown. Without this, the dropdown retains the previous
+    // preset's SVG path (which still exists in the Map) and autoSelectOverlaySource
+    // returns early, leaving the overlay stale.
+    if (companionMapping?.svgPath && aliasedFiles.has('default.svg')) {
+      if (overlaySourceSelect) {
+        overlaySourceSelect.value = 'default.svg';
+      }
+      loadOverlayFromProjectFile('default.svg')
+        .then(() => {
+          // SVG 96 DPI size applied; SCAD case-opening / screen dims override.
+          autoApplyScreenDimensionsFromParams(mergedParams);
+          updateOverlayUIFromConfig();
+        })
+        .catch((err) => {
+          console.warn('[Preset] Failed to load preset SVG overlay:', err);
+        });
+    }
+
     syncOverlayWithScreenshotParam(mergedParams);
     setCurrentPresetSelection(preset);
 
@@ -13997,7 +14340,11 @@ if (rounded) {
     // Update combobox if the feature flag is on
     if (_presetCombobox) {
       const comboOptions = [
-        { id: DESIGN_DEFAULTS_ID, label: 'design default values', italic: true },
+        {
+          id: DESIGN_DEFAULTS_ID,
+          label: 'design default values',
+          italic: true,
+        },
         ...presets
           .filter((p) => p.id !== 'design-defaults')
           .map((p) => ({ id: p.id, label: p.name })),
@@ -14979,7 +15326,7 @@ if (rounded) {
    * @param {Object} state - Current app state
    * @returns {Promise<string>} 'apply' or 'cancel'
    */
-  function showPresetCompatibilityWarning(preset, compatibility, state) {
+  function _showPresetCompatibilityWarning(preset, compatibility, state) {
     return new Promise((resolve) => {
       // Check for SCAD version info
       const scadVersion = state.uploadedFile?.content
@@ -16117,8 +16464,6 @@ if (rounded) {
   keyboardConfig.on('toggleEdges', () =>
     displayOptionsController.toggle('edges')
   );
-  keyboardConfig.on('toggleAnimate', () => animationController.togglePlay());
-
   keyboardConfig.on('toggleConsole', () =>
     getUIModeController().togglePanelVisibility('consoleOutput')
   );

@@ -107,12 +107,7 @@ const PANEL_REGISTRY = [
   // editTools panel removed — now in Edit toolbar menu
   // designTools panel removed — now in Design toolbar menu
   // displayOptions panel removed — toggles now in View toolbar menu
-  {
-    id: 'animationPanel',
-    label: 'Animation',
-    selector: '#animationPanel',
-    defaultHiddenInBasic: true,
-  },
+  // animationPanel removed from UI pending full debug; AnimationController preserved in animation-controller.js
   {
     id: 'toolbarMenuFile',
     label: 'Toolbar: File',

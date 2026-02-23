@@ -695,6 +695,32 @@ summary:focus-visible,
   border-width: 2px;
 }
 
+/* Import Folder button — enhanced border in high-contrast mode */
+:root[data-high-contrast='true'] #importFolderBtn {
+  border-width: 2px;
+  font-weight: 600;
+}
+
+@media (forced-colors: active) {
+  #importFolderBtn {
+    border: 1px solid ButtonText;
+    color: ButtonText;
+    background: ButtonFace;
+    forced-color-adjust: none;
+  }
+
+  #importFolderBtn:hover:not(:disabled) {
+    border-color: Highlight;
+    color: HighlightText;
+    background: Highlight;
+  }
+
+  #importFolderBtn:focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+}
+
 .saved-projects-description {
   margin-bottom: var(--space-md);
   color: var(--color-text-secondary);
@@ -2456,54 +2482,6 @@ summary:focus-visible,
   outline-offset: 2px;
 }
 
-/* ── Measurement and Overlay tool group ─────────────────────────────────────
- * Visual grouping for the Image Measurement and Reference Overlay panels.
- * Both panels keep their independent <details> open/close behavior.
- * ─────────────────────────────────────────────────────────────────────────── */
-
-.tool-group {
-  display: flex;
-  flex-direction: column;
-  border-left: 3px solid var(--color-accent);
-  padding-left: var(--space-sm);
-  margin: var(--space-sm) 0;
-}
-
-.tool-group-label {
-  font-size: var(--font-size-xs, 0.75rem);
-  font-weight: var(--font-weight-semibold, 600);
-  color: var(--color-text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin: 0 0 var(--space-xs) 0;
-  padding: var(--space-xs) 0;
-}
-
-/* High contrast overrides */
-:root[data-high-contrast='true'] .tool-group {
-  border-left-width: 4px;
-  border-left-color: var(--color-text-primary);
-}
-
-:root[data-high-contrast='true'] .tool-group-label {
-  color: var(--color-text-primary);
-  font-weight: 700;
-}
-
-/* Forced Colors Mode */
-@media (forced-colors: active) {
-  .tool-group {
-    border-left: 3px solid Highlight;
-  }
-
-  .tool-group-label {
-    color: HighlightText;
-    background: Highlight;
-    padding: 2px var(--space-xs);
-    forced-color-adjust: none;
-  }
-}
-
 /* Reference Overlay Controls */
 .overlay-details {
   /* Card styling provided by .forge-disclosure */
@@ -2701,6 +2679,24 @@ summary:focus-visible,
   flex-direction: column;
   gap: var(--space-sm);
   padding: var(--space-sm) 0;
+}
+
+.overlay-override-toggle {
+  margin-bottom: var(--space-xs);
+}
+
+.overlay-calibration-fieldset {
+  border: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.overlay-calibration-fieldset:disabled {
+  opacity: 0.4;
+  pointer-events: none;
 }
 
 .overlay-size-row,
@@ -4293,6 +4289,17 @@ select:focus-visible {
   font-family: var(--font-family-base);
 }
 
+.file-tree-item.file-tree-folder {
+  font-weight: var(--font-weight-semibold, 600);
+  color: var(--color-text-primary);
+}
+
+.file-tree-count {
+  font-weight: 400;
+  font-size: var(--font-size-2xs);
+  color: var(--color-text-secondary);
+}
+
 /* Format Selector */
 .format-selector {
   display: flex;
@@ -4740,7 +4747,9 @@ select:focus-visible {
   background: transparent;
   color: var(--color-text-secondary);
   cursor: pointer;
-  transition: transform var(--motion-fast), color var(--motion-fast);
+  transition:
+    transform var(--motion-fast),
+    color var(--motion-fast);
 }
 
 .preset-combobox-chevron:disabled {
@@ -4752,13 +4761,11 @@ select:focus-visible {
   transform: rotate(180deg);
 }
 
-/* Listbox dropdown */
+/* Listbox dropdown — uses position:fixed (set in JS) to escape
+   overflow:hidden/auto ancestors like .param-panel and .forge-disclosure */
 .preset-combobox-list {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  z-index: var(--z-index-dropdown, 200);
+  position: fixed;
+  z-index: var(--z-index-modal, 1000);
   list-style: none;
   margin: 0;
   padding: var(--space-xs) 0;
@@ -4770,6 +4777,7 @@ select:focus-visible {
   max-height: 280px;
   overflow-y: auto;
   overscroll-behavior: contain;
+  box-sizing: border-box;
 }
 
 /* Option items */
@@ -5030,7 +5038,7 @@ body.first-visit-blocking #app {
   padding: var(--space-xs) var(--space-sm);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
-  background: var(--color-surface-raised);
+  background: var(--color-input-bg);
   color: var(--color-text-primary);
   font-size: var(--font-size-sm);
   transition:
@@ -6681,6 +6689,186 @@ body.first-visit-blocking #app {
   background: var(--color-error-bg, rgba(220, 53, 69, 0.1));
   border-color: var(--color-error);
   color: var(--color-error);
+}
+
+/* ------------------------------------------------------------------ */
+/* File-nav: breadcrumbs + folder rows shared by companion panel      */
+/* and the file-manager modal                                          */
+/* ------------------------------------------------------------------ */
+
+/* Breadcrumb bar — compact to fit in the constrained companion panel */
+.file-nav-breadcrumbs {
+  display: flex;
+  align-items: center;
+  padding: var(--space-2xs) var(--space-xs);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  margin-bottom: var(--space-xs);
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Modal variant gets a bit more breathing room */
+.file-nav-breadcrumbs--modal {
+  padding: var(--space-xs) var(--space-sm);
+  margin-bottom: var(--space-sm);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--color-bg-primary);
+}
+
+.file-nav-breadcrumb-list {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow: hidden;
+}
+
+.file-nav-breadcrumb-item {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  flex-shrink: 1;
+}
+
+/* Separator chevron between crumbs */
+.file-nav-breadcrumb-item:not(:last-child)::after {
+  content: '›';
+  color: var(--color-text-secondary);
+  padding: 0 var(--space-2xs);
+  flex-shrink: 0;
+}
+
+.file-nav-breadcrumb-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  padding: var(--space-2xs) var(--space-xs);
+  background: transparent;
+  border: none;
+  border-radius: var(--border-radius-sm);
+  cursor: pointer;
+  color: var(--color-accent-fg);
+  font-size: var(--font-size-2xs);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 10ch;
+  transition: background-color var(--motion-fast);
+}
+
+/* Home crumb is always fully visible */
+.file-nav-breadcrumb-home {
+  max-width: none;
+  flex-shrink: 0;
+}
+
+/* Last crumb = current folder — not a link */
+.file-nav-breadcrumb-item:last-child .file-nav-breadcrumb-btn {
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-semibold, 600);
+  pointer-events: none;
+  max-width: 16ch;
+}
+
+.file-nav-breadcrumb-btn:hover {
+  background: var(--color-hover-bg);
+  text-decoration: underline;
+}
+
+.file-nav-breadcrumb-btn:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* Folder navigation row — looks like a sibling of file rows */
+.file-nav-folder-row {
+  cursor: pointer;
+  background: var(--color-bg-secondary);
+}
+
+.file-nav-folder-row:hover {
+  background: var(--color-hover-bg);
+}
+
+.file-nav-folder-row:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* Folder item count badge */
+.file-nav-folder-count {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-2xs);
+  flex-shrink: 0;
+}
+
+/* Chevron at the end of folder rows */
+.file-nav-folder-chevron {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  flex-shrink: 0;
+  margin-left: var(--space-2xs);
+}
+
+/* High contrast overrides */
+:root[data-high-contrast='true'] .file-nav-breadcrumbs {
+  border-width: 2px;
+}
+
+:root[data-high-contrast='true'] .file-nav-breadcrumb-btn {
+  color: LinkText;
+}
+
+:root[data-high-contrast='true']
+  .file-nav-breadcrumb-item:last-child
+  .file-nav-breadcrumb-btn {
+  color: CanvasText;
+}
+
+:root[data-high-contrast='true'] .file-nav-folder-row {
+  border-width: 2px;
+}
+
+/* Forced-colors (Windows High Contrast) */
+@media (forced-colors: active) {
+  .file-nav-breadcrumbs {
+    border-color: CanvasText;
+    background: Canvas;
+  }
+
+  .file-nav-breadcrumb-btn {
+    color: LinkText;
+    forced-color-adjust: none;
+  }
+
+  .file-nav-breadcrumb-item:last-child .file-nav-breadcrumb-btn {
+    color: CanvasText;
+  }
+
+  .file-nav-folder-row {
+    border-color: CanvasText;
+    background: Canvas;
+  }
+
+  .file-nav-folder-chevron,
+  .file-nav-folder-count {
+    color: CanvasText;
+  }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .file-nav-breadcrumb-btn,
+  .file-nav-folder-row {
+    transition: none;
+  }
 }
 
 /* Add file button area */

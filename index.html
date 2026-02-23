@@ -1203,7 +1203,7 @@
                 type="button"
                 id="manifestDownloadZipBtn"
                 class="btn btn-sm btn-outline"
-                aria-label="Download this project as a ZIP file for offline use"
+                aria-label="Save this project with all files to Saved Designs"
               >
                 Download ZIP
               </button>
@@ -1419,18 +1419,6 @@
                   </div>
                 </div>
               </details>
-              <!-- Measurement and Overlay group -->
-              <div
-                class="tool-group"
-                role="group"
-                aria-labelledby="measureOverlayGroupLabel"
-              >
-                <h3
-                  id="measureOverlayGroupLabel"
-                  class="tool-group-label"
-                >
-                  Measurement and Overlay
-                </h3>
               <!-- Image Measurement Tool -->
               <details
                 class="measure-details forge-disclosure"
@@ -1891,51 +1879,7 @@
                     Auto mode picks a visible color for the current
                     theme.</span
                   >
-                  <div class="overlay-control overlay-fit-buttons">
-                    <button
-                      type="button"
-                      id="overlayFitModelBtn"
-                      class="btn btn-sm btn-outline"
-                      aria-label="Fit overlay to model XY bounds"
-                    >
-                      Fit to model
-                    </button>
-                    <button
-                      type="button"
-                      id="overlayCenterBtn"
-                      class="btn btn-sm btn-outline"
-                      aria-label="Center overlay under model"
-                    >
-                      Center
-                    </button>
-                  </div>
-                  <!-- Unit toggle + Scale factor -->
-                  <div class="overlay-control overlay-unit-row">
-                    <label class="overlay-control-label" for="overlayUnitSelect"
-                      >Unit</label
-                    >
-                    <select
-                      id="overlayUnitSelect"
-                      class="overlay-unit-select"
-                      aria-label="Overlay dimension unit"
-                    >
-                      <option value="px">px</option>
-                      <option value="mm" selected>mm</option>
-                    </select>
-                    <label class="overlay-scale-label" for="scaleFactorInput"
-                      >Scale</label
-                    >
-                    <input
-                      type="number"
-                      id="scaleFactorInput"
-                      class="overlay-scale-input"
-                      min="0.01"
-                      step="0.01"
-                      placeholder="px/mm"
-                      aria-label="Scale factor: pixels per millimeter"
-                    />
-                  </div>
-                  <!-- Overlay Dimensions Display -->
+                  <!-- Overlay Dimensions Display (read-only) -->
                   <div
                     class="overlay-control overlay-dimensions-display"
                     id="overlayDimensionsDisplay"
@@ -1947,202 +1891,185 @@
                       >-- &times; -- mm</span
                     >
                   </div>
-                  <!-- Size Controls -->
-                  <div class="overlay-control overlay-size-inputs">
-                    <label class="overlay-control-label" id="overlaySizeLabel"
-                      >Size (<span id="overlaySizeUnit">mm</span>)</label
-                    >
-                    <div class="overlay-size-row">
-                      <label class="overlay-size-field">
-                        <span class="sr-only">Width</span>
-                        <input
-                          type="number"
-                          id="overlayWidthInput"
-                          min="1"
-                          max="1000"
-                          step="1"
-                          value="200"
-                          aria-label="Overlay width in millimeters"
-                        />
-                        <span aria-hidden="true">W</span>
-                      </label>
-                      <button
-                        type="button"
-                        id="overlayAspectLockBtn"
-                        class="btn-icon overlay-aspect-lock"
-                        aria-pressed="true"
-                        aria-label="Lock aspect ratio"
-                        title="Lock aspect ratio"
-                      >
-                        🔗
-                      </button>
-                      <label class="overlay-size-field">
-                        <span class="sr-only">Height</span>
-                        <input
-                          type="number"
-                          id="overlayHeightInput"
-                          min="1"
-                          max="1000"
-                          step="1"
-                          value="150"
-                          aria-label="Overlay height in millimeters"
-                        />
-                        <span aria-hidden="true">H</span>
-                      </label>
-                    </div>
-                  </div>
-                  <!-- Offset Controls -->
-                  <div class="overlay-control overlay-offset-inputs">
-                    <label class="overlay-control-label" id="overlayOffsetLabel"
-                      >Offset (<span id="overlayOffsetUnit">mm</span>)</label
-                    >
-                    <div class="overlay-offset-row">
-                      <label class="overlay-offset-field">
-                        <span class="sr-only">X offset</span>
-                        <input
-                          type="number"
-                          id="overlayOffsetXInput"
-                          min="-500"
-                          max="500"
-                          step="1"
-                          value="0"
-                          aria-label="Overlay X offset in millimeters"
-                        />
-                        <span aria-hidden="true">X</span>
-                      </label>
-                      <label class="overlay-offset-field">
-                        <span class="sr-only">Y offset</span>
-                        <input
-                          type="number"
-                          id="overlayOffsetYInput"
-                          min="-500"
-                          max="500"
-                          step="1"
-                          value="0"
-                          aria-label="Overlay Y offset in millimeters"
-                        />
-                        <span aria-hidden="true">Y</span>
-                      </label>
-                    </div>
-                  </div>
                   <details class="overlay-advanced-details">
                     <summary class="overlay-advanced-summary">
                       More options
                     </summary>
                     <div class="overlay-advanced-controls">
-                      <div class="overlay-control overlay-rotation-control">
-                        <label
-                          class="overlay-control-label"
-                          for="overlayRotationInput"
-                          id="overlayRotationLabel"
-                        >
-                          Rotation
-                        </label>
-                        <div class="slider-container">
-                          <input
-                            type="range"
-                            id="overlayRotationInput"
-                            min="-180"
-                            max="180"
-                            step="1"
-                            value="0"
-                            aria-labelledby="overlayRotationLabel"
-                          />
-                          <span class="slider-value" id="overlayRotationValue"
-                            >0°</span
+                      <!-- Manual override master toggle -->
+                      <label class="overlay-enable-toggle overlay-override-toggle">
+                        <input
+                          type="checkbox"
+                          id="overlayManualOverrideToggle"
+                          aria-describedby="overlayManualOverrideHelp"
+                        />
+                        <span>Enable manual calibration</span>
+                      </label>
+                      <span id="overlayManualOverrideHelp" class="sr-only"
+                        >When off, the overlay uses the SVG file's saved
+                        dimensions. Turn on to manually adjust size, position,
+                        and fit.</span
+                      >
+                      <!-- All calibration controls below are gated by the toggle -->
+                      <fieldset
+                        id="overlayCalibrationFieldset"
+                        class="overlay-calibration-fieldset"
+                        disabled
+                      >
+                        <legend class="sr-only">Manual calibration controls</legend>
+                        <div class="overlay-control overlay-fit-buttons">
+                          <button
+                            type="button"
+                            id="overlayFitModelBtn"
+                            class="btn btn-sm btn-outline"
+                            aria-label="Fit overlay to model XY bounds"
                           >
+                            Fit to model
+                          </button>
+                          <button
+                            type="button"
+                            id="overlayCenterBtn"
+                            class="btn btn-sm btn-outline"
+                            aria-label="Center overlay under model"
+                          >
+                            Center
+                          </button>
                         </div>
-                      </div>
+                        <!-- Unit toggle + Scale factor -->
+                        <div class="overlay-control overlay-unit-row">
+                          <label class="overlay-control-label" for="overlayUnitSelect"
+                            >Unit</label
+                          >
+                          <select
+                            id="overlayUnitSelect"
+                            class="overlay-unit-select"
+                            aria-label="Overlay dimension unit"
+                          >
+                            <option value="px">px</option>
+                            <option value="mm" selected>mm</option>
+                          </select>
+                          <label class="overlay-scale-label" for="scaleFactorInput"
+                            >Scale</label
+                          >
+                          <input
+                            type="number"
+                            id="scaleFactorInput"
+                            class="overlay-scale-input"
+                            min="0.01"
+                            step="0.01"
+                            placeholder="px/mm"
+                            aria-label="Scale factor: pixels per millimeter"
+                          />
+                        </div>
+                        <!-- Size Controls -->
+                        <div class="overlay-control overlay-size-inputs">
+                          <label class="overlay-control-label" id="overlaySizeLabel"
+                            >Size (<span id="overlaySizeUnit">mm</span>)</label
+                          >
+                          <div class="overlay-size-row">
+                            <label class="overlay-size-field">
+                              <span class="sr-only">Width</span>
+                              <input
+                                type="number"
+                                id="overlayWidthInput"
+                                min="1"
+                                max="1000"
+                                step="1"
+                                value="200"
+                                aria-label="Overlay width in millimeters"
+                              />
+                              <span aria-hidden="true">W</span>
+                            </label>
+                            <button
+                              type="button"
+                              id="overlayAspectLockBtn"
+                              class="btn-icon overlay-aspect-lock"
+                              aria-pressed="true"
+                              aria-label="Lock aspect ratio"
+                              title="Lock aspect ratio"
+                            >
+                              🔗
+                            </button>
+                            <label class="overlay-size-field">
+                              <span class="sr-only">Height</span>
+                              <input
+                                type="number"
+                                id="overlayHeightInput"
+                                min="1"
+                                max="1000"
+                                step="1"
+                                value="150"
+                                aria-label="Overlay height in millimeters"
+                              />
+                              <span aria-hidden="true">H</span>
+                            </label>
+                          </div>
+                        </div>
+                        <!-- Offset Controls -->
+                        <div class="overlay-control overlay-offset-inputs">
+                          <label class="overlay-control-label" id="overlayOffsetLabel"
+                            >Offset (<span id="overlayOffsetUnit">mm</span>)</label
+                          >
+                          <div class="overlay-offset-row">
+                            <label class="overlay-offset-field">
+                              <span class="sr-only">X offset</span>
+                              <input
+                                type="number"
+                                id="overlayOffsetXInput"
+                                min="-500"
+                                max="500"
+                                step="1"
+                                value="0"
+                                aria-label="Overlay X offset in millimeters"
+                              />
+                              <span aria-hidden="true">X</span>
+                            </label>
+                            <label class="overlay-offset-field">
+                              <span class="sr-only">Y offset</span>
+                              <input
+                                type="number"
+                                id="overlayOffsetYInput"
+                                min="-500"
+                                max="500"
+                                step="1"
+                                value="0"
+                                aria-label="Overlay Y offset in millimeters"
+                              />
+                              <span aria-hidden="true">Y</span>
+                            </label>
+                          </div>
+                        </div>
+                        <div class="overlay-control overlay-rotation-control">
+                          <label
+                            class="overlay-control-label"
+                            for="overlayRotationInput"
+                            id="overlayRotationLabel"
+                          >
+                            Rotation
+                          </label>
+                          <div class="slider-container">
+                            <input
+                              type="range"
+                              id="overlayRotationInput"
+                              min="-180"
+                              max="180"
+                              step="1"
+                              value="0"
+                              aria-labelledby="overlayRotationLabel"
+                            />
+                            <span class="slider-value" id="overlayRotationValue"
+                              >0°</span
+                            >
+                          </div>
+                        </div>
+                      </fieldset>
                     </div>
                   </details>
                 </div>
               </details>
-              </div><!-- end .tool-group (Measurement and Overlay) -->
               <!-- Design Tools panel removed: all features now in Design toolbar menu -->
               <!-- Display Options panel removed: toggles now in View toolbar menu -->
-              <!-- Animation controls kept as standalone panel -->
-              <details
-                class="animation-panel forge-disclosure"
-                id="animationPanel"
-                role="region"
-                aria-label="Animation controls"
-              >
-                <summary>
-                  <svg
-                    class="btn-icon-svg forge-disclosure-icon"
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    aria-hidden="true"
-                  >
-                    <polygon points="5 3 19 12 5 21 5 3"></polygon>
-                  </svg>
-                  <span class="forge-disclosure-title">Animation ($t)</span>
-                </summary>
-                <div class="animation-panel-body forge-disclosure-body">
-                  <div class="anim-controls">
-                    <div class="anim-controls-row">
-                      <button
-                        type="button"
-                        class="btn btn-sm btn-outline anim-btn"
-                        id="anim-play-btn"
-                        aria-label="Play animation"
-                      >
-                        Play
-                      </button>
-                      <button
-                        type="button"
-                        class="btn btn-sm btn-outline anim-btn"
-                        id="anim-step-btn"
-                        aria-label="Step animation forward"
-                      >
-                        Step
-                      </button>
-                      <button
-                        type="button"
-                        class="btn btn-sm btn-outline anim-btn"
-                        id="anim-reset-btn"
-                        aria-label="Reset animation to start"
-                      >
-                        Reset
-                      </button>
-                    </div>
-                    <div class="anim-controls-row">
-                      <label for="anim-fps" class="anim-label">FPS</label>
-                      <input
-                        type="number"
-                        id="anim-fps"
-                        class="anim-input"
-                        min="1"
-                        max="30"
-                        value="10"
-                        aria-label="Animation frames per second"
-                      />
-                      <label for="anim-steps" class="anim-label">Steps</label>
-                      <input
-                        type="number"
-                        id="anim-steps"
-                        class="anim-input"
-                        min="2"
-                        max="1000"
-                        value="100"
-                        aria-label="Total animation steps"
-                      />
-                    </div>
-                    <span
-                      id="anim-t-value"
-                      class="anim-t-display"
-                      aria-live="off"
-                      >$t = 0.000</span
-                    >
-                  </div>
-                </div>
-              </details>
+              <!-- Animation ($t) panel removed from UI pending full debug; backend AnimationController preserved -->
               <!-- Library Controls -->
               <div
                 class="library-controls hidden"
@@ -2587,10 +2514,7 @@
                 </div>
               </details>
               <div class="customizer-header-row">
-                <label class="customizer-header-control" for="autoPreviewToggle"
-                  ><input type="checkbox" id="autoPreviewToggle" /> Automatic
-                  Preview</label
-                ><label for="paramDetailLevel" class="sr-only"
+                <label for="paramDetailLevel" class="sr-only"
                   >Show Details</label
                 ><select
                   id="paramDetailLevel"
@@ -4580,48 +4504,6 @@
                   <span>Perspective</span>
                 </button>
               </div>
-              <!-- Copy Camera Values -->
-              <div class="camera-control-section">
-                <h3 class="camera-control-section-title">Copy Camera Values</h3>
-                <div
-                  class="camera-copy-values"
-                  role="group"
-                  aria-label="Copy camera values to clipboard"
-                >
-                  <button
-                    type="button"
-                    class="btn btn-sm btn-outline camera-btn-full"
-                    id="edit-copy-translation-btn"
-                    aria-label="Copy camera translation"
-                  >
-                    Translation
-                  </button>
-                  <button
-                    type="button"
-                    class="btn btn-sm btn-outline camera-btn-full"
-                    id="edit-copy-rotation-btn"
-                    aria-label="Copy camera rotation"
-                  >
-                    Rotation
-                  </button>
-                  <button
-                    type="button"
-                    class="btn btn-sm btn-outline camera-btn-full"
-                    id="edit-copy-distance-btn"
-                    aria-label="Copy camera distance"
-                  >
-                    Distance
-                  </button>
-                  <button
-                    type="button"
-                    class="btn btn-sm btn-outline camera-btn-full"
-                    id="edit-copy-fov-btn"
-                    aria-label="Copy camera field of view"
-                  >
-                    FOV
-                  </button>
-                </div>
-              </div>
               <!-- Keyboard Shortcuts Help -->
               <div class="camera-shortcuts-help">
                 <details class="camera-shortcuts-details">
@@ -6056,6 +5938,65 @@ No console output yet. Generate a model to see output.</pre
             id="first-visit-continue"
           >
             Download &amp; Continue
+          </button>
+        </div>
+      </div>
+    </div>
+    <!-- Manifest Save-Copy Modal (shown after first-visit disclaimer for shared projects) -->
+    <div
+      class="modal hidden"
+      id="manifest-save-copy-modal"
+      role="dialog"
+      aria-labelledby="manifest-save-copy-title"
+      aria-describedby="manifest-save-copy-description"
+      aria-modal="true"
+    >
+      <div class="modal-overlay" id="manifestSaveCopyOverlay"></div>
+      <div class="modal-content modal-medium">
+        <div class="modal-header">
+          <h2 id="manifest-save-copy-title">Shared Project</h2>
+        </div>
+        <div class="modal-body" id="manifest-save-copy-description">
+          <p>
+            You've been directed to a shared project:
+            <strong id="manifestSaveCopyProjectName"></strong>
+          </p>
+          <p id="manifestSaveCopyAuthorLine" style="display: none">
+            Created by <strong id="manifestSaveCopyAuthor"></strong>
+          </p>
+          <h3>Before you start</h3>
+          <ul class="features-list">
+            <li>
+              <strong>This is a shared link:</strong> Any parameter changes you
+              make are not automatically saved.
+            </li>
+            <li>
+              <strong>Save a copy</strong> to keep your changes in Saved
+              Designs, where you can reload them later.
+            </li>
+            <li>
+              <strong>Download as ZIP</strong> to save the full project
+              (including companion files) to your Saved Designs.
+            </li>
+          </ul>
+          <p class="features-note">
+            You can also save a copy later from the project banner.
+          </p>
+        </div>
+        <div class="modal-footer" style="display: flex; gap: var(--space-sm); justify-content: flex-end; padding-top: var(--space-md); border-top: 1px solid var(--color-border); flex-wrap: wrap;">
+          <button
+            type="button"
+            class="btn btn-secondary"
+            id="manifestSaveCopySkip"
+          >
+            Skip for Now
+          </button>
+          <button
+            type="button"
+            class="btn btn-primary"
+            id="manifestSaveCopySave"
+          >
+            Save My Copy
           </button>
         </div>
       </div>
