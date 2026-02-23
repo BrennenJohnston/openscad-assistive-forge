@@ -608,12 +608,9 @@ async function checkCapabilities() {
     module.print = (text) => helpOutput.push(String(text));
     module.printErr = (text) => helpOutput.push(String(text));
 
-    let _helpError = null;
-
     try {
       await module.callMain(['--help']);
-    } catch (error) {
-      _helpError = String(error?.message || error);
+    } catch (_error) {
       // --help might exit with non-zero, that's okay
     }
 
@@ -928,8 +925,6 @@ async function mountLibraries(libraries) {
 
       if (manifest && Array.isArray(manifest.files)) {
         const files = manifest.files || [];
-        let _mountedCount = 0;
-        let _failedCount = 0;
         let failedSample = null;
 
         ensureDir(libRoot);
@@ -958,9 +953,7 @@ async function mountLibraries(libraries) {
 
               FS.writeFile(filePath, content);
               totalMounted++;
-              _mountedCount++;
             } else {
-              _failedCount++;
               if (!failedSample) failedSample = file;
             }
           } catch (error) {
@@ -968,7 +961,6 @@ async function mountLibraries(libraries) {
               `[Worker FS] Failed to mount ${file} from ${lib.id}:`,
               error.message
             );
-            _failedCount++;
             if (!failedSample) failedSample = file;
           }
         }
@@ -1311,9 +1303,6 @@ async function renderWithCallMain(
   if (format === 'stl' && supportsBinarySTL) {
     exportFlags.push('--export-format=binstl');
   }
-  const _shouldRetryWithoutFlags =
-    performanceFlags.length > 0 || exportFlags.length > 0;
-
   try {
     const module = await ensureOpenSCADModule();
     if (!module || !module.FS) {
@@ -1533,55 +1522,6 @@ async function renderWithCallMain(
   } catch (error) {
     console.error(`[Worker] Render via callMain to ${format} failed:`, error);
     throw error;
-  }
-}
-
-/**
- * Render using export method (fallback for formats without dedicated renderTo* methods)
- * @param {string} scadContent - OpenSCAD source code
- * @param {string} format - Output format (obj, off, amf, 3mf)
- * @returns {Promise<string|ArrayBuffer>} Rendered data
- */
-async function _renderWithExport(scadContent, format) {
-  // This is a fallback approach if OpenSCAD WASM doesn't have format-specific methods
-  // We'll try using the file system approach: write .scad, export to format
-
-  const inputFile = '/tmp/input.scad';
-  const outputFile = `/tmp/output.${format}`;
-
-  try {
-    const module = await ensureOpenSCADModule();
-    if (!module || !module.FS) {
-      throw new Error('OpenSCAD filesystem not available');
-    }
-
-    // Ensure /tmp directory exists
-    try {
-      module.FS.mkdir('/tmp');
-    } catch (_e) {
-      // May already exist
-    }
-
-    // Write input file
-    module.FS.writeFile(inputFile, scadContent);
-
-    // Execute OpenSCAD export command
-    // This assumes OpenSCAD WASM supports command-line style operations
-    await module.callMain(['-o', outputFile, inputFile]);
-
-    // Read output file
-    const outputData = module.FS.readFile(outputFile);
-
-    // Clean up
-    module.FS.unlink(inputFile);
-    module.FS.unlink(outputFile);
-
-    return outputData;
-  } catch (error) {
-    console.error(`[Worker] Export to ${format} failed:`, error);
-    throw new Error(
-      `Export to ${format.toUpperCase()} format not supported by OpenSCAD WASM`
-    );
   }
 }
 
@@ -2554,11 +2494,6 @@ function getMemoryUsage() {
   };
 }
 
-// Worker health heartbeat — responds immediately to prove the event loop is live.
-// During a blocking callMain() render, this will NOT respond (expected).
-// The render controller uses the absence of a response to detect hung workers.
-let _lastHeartbeatId = null;
-
 // Message handler
 self.onmessage = async (e) => {
   const { type, payload } = e.data;
@@ -2570,7 +2505,6 @@ self.onmessage = async (e) => {
 
     case 'PING':
       // Heartbeat response — proves the worker event loop is responsive
-      _lastHeartbeatId = payload?.id;
       self.postMessage({
         type: 'PONG',
         payload: {

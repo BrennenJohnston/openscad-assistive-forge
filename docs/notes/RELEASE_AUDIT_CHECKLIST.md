@@ -1,7 +1,7 @@
 # Release Audit Checklist
 
 Started: 2026-02-23
-Last updated: 2026-02-23 (Session 8)
+Last updated: 2026-02-23 (Session 9)
 
 ## Status Key
 
@@ -127,15 +127,15 @@ Last updated: 2026-02-23 (Session 8)
 
 | Status | File | Session | Bloat Findings | Notes |
 |--------|------|---------|----------------|-------|
-| [ ] | src/styles/main.css | 9 | - | - |
-| [ ] | src/styles/reset.css | 9 | - | - |
-| [ ] | src/styles/variables.css | 9 | - | - |
-| [ ] | src/styles/semantic-tokens.css | 9 | - | - |
-| [ ] | src/styles/color-scales.css | 9 | - | - |
-| [ ] | src/styles/components.css | 9 | - | ~11K lines; flag for consolidation review |
-| [ ] | src/styles/layout.css | 9 | - | - |
-| [ ] | src/styles/toolbar-menu.css | 9 | - | - |
-| [ ] | src/styles/variant.css | 9 | - | - |
+| [x] | src/styles/main.css | 9 | 0 blocking, 0 warnings | Clean. 7-line import barrel. |
+| [x] | src/styles/reset.css | 9 | 0 blocking, 0 warnings | Clean. Standard modern reset with WCAG [hidden] support and .sr-only. |
+| [x] | src/styles/variables.css | 9 | 0 blocking, 0 warnings | Clean. Comprehensive design token file: spacing, typography, z-index, breakpoints, density media queries, high-contrast, forced-colors, prefers-contrast. Two DEPRECATED aliases (--radius-sm, --radius-md) preserved for backward compat. |
+| [x] | src/styles/semantic-tokens.css | 9 | 0 blocking, 0 warnings | Clean. Four theme contexts each defining the full semantic token set. Intentional repetition -- CSS cascade requires it. Well-documented WCAG contrast rationale in comments. |
+| [x] | src/styles/color-scales.css | 9 | 0 blocking, 0 warnings | Clean. 19-line Radix Colors import barrel with MIT license note. |
+| [E] | src/styles/components.css | 9 | 0 blocking, 0 warnings | ~12,868 lines. Fixed 5 undefined token refs: --color-surface-hover, --color-focus-ring (x2), --color-primary, --color-primary-hover, --color-text-on-primary. All were silent fallback-to-empty bugs in .param-group-hide-btn and .tutorial-reopen-drawer-btn. |
+| [E] | src/styles/layout.css | 9 | 0 blocking, 0 warnings | ~4,194 lines. Fixed 2 undefined token refs: --color-border-strong -> --color-text-primary (auto-rotate-toggle hover, x2). Removed duplicate section header comment for Preview Status Bar. |
+| [x] | src/styles/toolbar-menu.css | 9 | 0 blocking, 0 warnings | Clean. 370 lines. Token-only styling for toolbar menu bar, modal, items, radio groups, theme variants, reduced-motion, and mobile. |
+| [x] | src/styles/variant.css | 9 | 0 blocking, 0 warnings | Clean. 968 lines. Green phosphor (dark) and amber phosphor (light) terminal variant. Cursor theming, form control overrides, emoji text replacements, scrollbar styling, and HC mode all correct. |
 
 ---
 
@@ -589,3 +589,11 @@ Last updated: 2026-02-23 (Session 8)
 - Bloat scan: 0 blocking, 0 warnings (before and after)
 - Tests pass: yes (1370/1370)
 - Summary: Utilities, features, and remaining modules are clean. Removed one dead import alias (`POLITENESS as _POLITENESS`) from `tutorial-sandbox.js` -- imported from announcer.js but never referenced in the file. All other files are clean: zip-handler.js has solid security (path-traversal guard) and heuristic preset companion mapping; error-translator.js implements COGA-aligned user-friendly error messages; _hfm.js is a well-documented ASCII art renderer using 6D shape vectors; _seq.js is a Konami code detector. Notable non-issues: empty catch in shared-image-store.js (intentional subscriber isolation), alert() in comparison-view.js (intentional fallback), handleMouseLeave empty body in image-measurement.js (intentional coordinate preservation), inline CSS in sw-manager.js showUpdateToast (intentional self-contained toast). This session completes Phase 1 (Core Application). Next: PAUSE-4 human review break before Session 9 (CSS).
+
+### Session 9 — 2026-02-23
+
+- Files reviewed: 9
+- Files edited: 2 (`src/styles/components.css`, `src/styles/layout.css`)
+- Bloat scan: 0 blocking, 0 warnings (before and after)
+- Tests pass: yes (1370/1370)
+- Summary: All CSS stylesheets are well-structured with comprehensive accessibility coverage (forced-colors, prefers-contrast, prefers-reduced-motion, high-contrast mode). Found and fixed 7 undefined CSS custom property references that were silently falling back to empty/none: `--color-surface-hover` (should be `--color-hover-bg`), `--color-focus-ring` (should be `--color-focus`, 2 uses), `--color-border-strong` (should be `--color-text-primary`, 2 uses), `--color-primary`/`--color-primary-hover` (should be `--color-accent`/`--color-accent-hover`), and `--color-text-on-primary` (should be `--color-on-accent`). Also removed one duplicate section header comment in layout.css (two consecutive block comment headers for the Preview Status Bar). The `variant.css` retro terminal theme (green phosphor / amber phosphor) is well-implemented with proper forced-colors and cursor overrides. This session completes Phase 2 (Stylesheets). Next: PAUSE-5 human review break before Session 10 (Unit Tests Part 1).

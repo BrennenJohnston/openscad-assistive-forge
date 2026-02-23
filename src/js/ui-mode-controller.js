@@ -278,7 +278,6 @@ export class UIModeController {
    */
   applyMode(mode) {
     const hiddenPanelIds = this._getEffectiveHiddenPanels();
-    const panelResults = [];
 
     for (const panel of PANEL_REGISTRY) {
       const elements = this._queryPanelElements(panel.selector);
@@ -289,13 +288,6 @@ export class UIModeController {
       } else {
         elements.forEach((el) => el.classList.remove(HIDDEN_CLASS));
       }
-
-      panelResults.push({
-        id: panel.id,
-        selector: panel.selector,
-        elementsFound: elements.length,
-        hidden: shouldHide,
-      });
     }
   }
 

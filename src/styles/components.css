@@ -128,14 +128,14 @@ summary:focus-visible,
 }
 
 .param-group-hide-btn:hover {
-  background: var(--color-surface-hover);
+  background: var(--color-hover-bg);
   border-color: var(--color-border);
   color: var(--color-text-primary);
 }
 
 .param-group-hide-btn:focus-visible {
   opacity: 1;
-  outline: 2px solid var(--color-focus-ring);
+  outline: 2px solid var(--color-focus);
   outline-offset: 2px;
 }
 
@@ -10202,8 +10202,8 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
   padding: var(--space-2xs) var(--space-xs);
   font-size: var(--font-size-xs);
   font-weight: 600;
-  background: var(--color-primary);
-  color: var(--color-text-on-primary, white);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
   border: none;
   border-radius: var(--border-radius-sm);
   cursor: pointer;
@@ -10212,12 +10212,12 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
 
 .tutorial-reopen-drawer-btn:hover,
 .tutorial-reopen-drawer-btn:focus {
-  background: var(--color-primary-hover);
+  background: var(--color-accent-hover);
   outline: none;
 }
 
 .tutorial-reopen-drawer-btn:focus-visible {
-  box-shadow: 0 0 0 2px var(--color-focus-ring);
+  box-shadow: 0 0 0 2px var(--color-focus);
 }
 
 /* Footer with navigation */

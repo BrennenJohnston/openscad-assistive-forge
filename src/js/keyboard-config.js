@@ -1113,7 +1113,6 @@ function endKeyCapture(success) {
  * @param {string} conflictDescription - Description of conflicting action
  */
 function showConflictWarning(button, conflictDescription) {
-  const _originalContent = button.innerHTML;
   button.innerHTML = `<span class="key-conflict-warning">Already used by: ${conflictDescription}</span>`;
   button.classList.add('conflict');
 
