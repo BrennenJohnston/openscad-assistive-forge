@@ -279,24 +279,32 @@ test('tutorial: no infinite retry loop when target is missing', async ({ page })
   await startTutorial(page, 'intro')
   await waitForTutorialOverlay(page)
 
-  // Remove ALL tutorial targets to force maximum failures
+  // Advance past the intro step (step 0 has no target) to a step that has
+  // a spotlight target, so removal triggers the failure-recovery path.
+  await nextStep(page) // step 0 → 1
+  await page.waitForTimeout(500)
+  await nextStep(page) // step 1 → 2 (step 2 has highlightSelector)
+  await page.waitForTimeout(500)
+
+  // Remove ALL tutorial targets to force maximum consecutive failures
   await page.evaluate(() => {
     document.querySelectorAll('[data-tutorial-target]').forEach((el) => el.remove())
   })
 
-  // Wait longer than the max retry window (3 × retryDelay) + buffer
+  // Wait longer than the max retry window (MAX_CONSECUTIVE_FAILURES × retryDelay) + buffer
   await page.waitForTimeout(10_000)
 
-  // The overlay should have stopped (exited or recovery dialog shown)
-  // It should NOT still be cycling retries indefinitely
+  // The tutorial should have either exited or shown a recovery dialog.
+  // It should NOT still be cycling retries indefinitely.
   const panelExists = await page.locator('.tutorial-overlay').isVisible().catch(() => false)
   const recoveryVisible = await page
-    .locator('.tutorial-error-modal, .tutorial-recovery, [class*="tutorial-help"], [data-testid="tutorial-error-dialog"]')
+    .locator('.tutorial-error-modal, [data-testid="tutorial-error-dialog"]')
     .isVisible()
     .catch(() => false)
 
-  // If panel still exists, it must be showing recovery, not spinning
-  if (panelExists) {
-    expect(recoveryVisible, 'Tutorial should show recovery after max failures').toBe(true)
-  }
+  // Acceptable outcomes: tutorial exited (no panel) OR recovery dialog is shown
+  expect(
+    !panelExists || recoveryVisible,
+    'Tutorial should exit or show recovery dialog after max failures — not loop indefinitely'
+  ).toBe(true)
 })
