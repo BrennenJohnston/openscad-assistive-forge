@@ -4,9 +4,25 @@
 
 Copy these files into your own GitHub repository and you can be sharing a parametric design in about 15 minutes — no programming experience required.
 
+This branch includes templates for **both sharing approaches** — choose the one that fits your workflow.
+
 ---
 
-## What's here (3 files + this README)
+## Which approach should I use?
+
+| Scenario | Recommended approach |
+|----------|---------------------|
+| Small project (1–5 files) | **Uncompressed manifest** (`files.main` + `files.companions`) |
+| Large project / many files | **ZIP bundle manifest** (`files.bundle`) |
+| Already distributing a `.zip` | **ZIP bundle manifest** |
+| Want to update individual files without rebuilding | **Uncompressed manifest** |
+| Quick one-off share | `?project=<url>` (no manifest needed) |
+
+---
+
+## Approach A: Uncompressed manifest (individual files)
+
+### What's here
 
 | File | Purpose |
 |------|---------|
@@ -16,32 +32,26 @@ Copy these files into your own GitHub repository and you can be sharing a parame
 
 ### Try it live right now
 
-Paste this link into your browser to see the template in action:
-
 ```
 https://openscad-assistive-forge.pages.dev/?manifest=https://raw.githubusercontent.com/BrennenJohnston/openscad-assistive-forge/example-manifest/forge-manifest.json
 ```
 
----
+### How to make it your own
 
-## How to make it your own
-
-### Step 1 — Get the files into your own repository
+#### Step 1 — Get the files into your own repository
 
 **Option A: Download and upload (simplest)**
 
 1. Click **Code > Download ZIP** on this branch
 2. Create a new repository on GitHub ([github.com/new](https://github.com/new)) — set it to **Public**
-3. Upload the three project files (`forge-manifest.json`, `my_design.scad`, `my_presets.json`) to your new repo
+3. Upload `forge-manifest.json`, `my_design.scad`, and `my_presets.json` to your new repo
 
 **Option B: Fork this repository**
 
 1. Click **Fork** at the top-right of this page
 2. GitHub creates a copy at `github.com/YOUR_USERNAME/openscad-assistive-forge`
 
----
-
-### Step 2 — Replace `my_design.scad` with your design
+#### Step 2 — Replace `my_design.scad` with your design
 
 Upload your `.scad` file. Then open `forge-manifest.json` and change `"main"` to match your filename:
 
@@ -62,11 +72,10 @@ If your design uses companion files (like a `.txt` lookup table or a second `.sc
 }
 ```
 
----
+#### Step 3 — Edit your presets (optional)
 
-### Step 3 — Edit your presets (optional)
-
-Open `my_presets.json`. Each object in the `"presets"` array is one dropdown entry in Forge. Parameter names must exactly match the variable names in your `.scad` file (case-sensitive).
+Open `my_presets.json`. Each object in the `"presets"` array is one dropdown entry in Forge.
+Parameter names must exactly match the variable names in your `.scad` file (case-sensitive).
 
 ```json
 {
@@ -79,11 +88,7 @@ Open `my_presets.json`. Each object in the `"presets"` array is one dropdown ent
 }
 ```
 
----
-
-### Step 4 — Update `forge-manifest.json`
-
-Fill in your own details:
+#### Step 4 — Update `forge-manifest.json`
 
 ```json
 {
@@ -104,9 +109,7 @@ Fill in your own details:
 }
 ```
 
----
-
-### Step 5 — Build your shareable link
+#### Step 5 — Build your shareable link
 
 ```
 https://openscad-assistive-forge.pages.dev/?manifest=https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPO/main/forge-manifest.json
@@ -116,7 +119,106 @@ Replace `YOUR_USERNAME` and `YOUR_REPO`. Test the link in a private/incognito wi
 
 ---
 
-### Step 6 — Share!
+## Approach B: ZIP bundle manifest
+
+Use this if you're already distributing a `.zip` file, or have many files and want to keep them in one archive.
+
+### Template file: `forge-manifest-zip.json`
+
+```json
+{
+  "forgeManifest": "1.0",
+  "name": "My First Forge Project",
+  "author": "Your Name Here",
+  "description": "A parametric storage box — replace this description with your own",
+  "homepage": "https://github.com/YOUR_USERNAME/YOUR_REPO",
+  "files": {
+    "bundle": "my_project.zip"
+  },
+  "defaults": {
+    "preset": "Small Gift Box",
+    "autoPreview": true,
+    "skipWelcome": false
+  }
+}
+```
+
+When `files.bundle` is set, Forge downloads the `.zip` and extracts it automatically. The main `.scad` file is detected from the archive contents.
+
+### How to use
+
+1. Bundle your files into a `.zip` (e.g., `my_project.zip`) and upload it to your repository
+2. Rename `forge-manifest-zip.json` to `forge-manifest.json` (or use it alongside the uncompressed version)
+3. Set `"bundle"` to your `.zip` filename
+4. Build your shareable link the same way:
+
+```
+https://openscad-assistive-forge.pages.dev/?manifest=https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPO/main/forge-manifest.json
+```
+
+#### Optional: specify the main file explicitly
+
+Forge auto-detects the main `.scad` file from the zip, but you can override it:
+
+```json
+"files": {
+  "bundle": "my_project.zip",
+  "main": "specific_file.scad"
+}
+```
+
+### Auto-generating the manifest with the CLI
+
+If you have the developer CLI installed, you can generate the manifest automatically:
+
+```bash
+# From a folder (uncompressed manifest)
+npx openscad-forge manifest ./my_project_folder -o forge-manifest.json --name "My Project" --author "Your Name"
+
+# From a .zip file (bundle manifest)
+npx openscad-forge manifest ./my_project.zip -o forge-manifest.json --name "My Project" --author "Your Name"
+
+# Force bundle-style manifest from a folder
+npx openscad-forge manifest ./my_project_folder --zip -o forge-manifest.json
+```
+
+---
+
+## Manifest field reference
+
+### Common fields
+
+| Field | Required | Notes |
+|-------|----------|-------|
+| `forgeManifest` | Yes | Always `"1.0"` |
+| `name` | No | Shown in the Forge status bar |
+| `author` | No | Your name or organisation |
+| `description` | No | One-line description |
+| `homepage` | No | Link back to your repo or page |
+| `defaults.preset` | No | Preset to auto-select |
+| `defaults.autoPreview` | No | Start 3D preview on load (default `false`) |
+| `defaults.skipWelcome` | No | Skip the welcome screen (default `false`) |
+
+### Uncompressed approach fields
+
+| Field | Required | Notes |
+|-------|----------|-------|
+| `files.main` | **Yes** (unless `files.bundle` is set) | Your main `.scad` filename |
+| `files.companions` | No | Array of extra files to load |
+| `files.presets` | No | Preset JSON filename |
+
+### ZIP bundle approach fields
+
+| Field | Required | Notes |
+|-------|----------|-------|
+| `files.bundle` | **Yes** (for this approach) | Path to your `.zip` file |
+| `files.main` | No | Override the auto-detected main file inside the zip |
+
+Full specification: [Manifest Sharing Guide](https://github.com/BrennenJohnston/openscad-assistive-forge/blob/main/docs/guides/MANIFEST_SHARING_GUIDE.md)
+
+---
+
+## Share!
 
 Paste the link anywhere: email, forum, social media, or embed it on a webpage:
 
@@ -125,26 +227,6 @@ Paste the link anywhere: email, forum, social media, or embed it on a webpage:
 ```
 
 The link always loads the latest version of your files — you never need to update the link itself.
-
----
-
-## Manifest field reference
-
-| Field | Required | Notes |
-|-------|----------|-------|
-| `forgeManifest` | Yes | Always `"1.0"` |
-| `files.main` | Yes | Your main `.scad` filename |
-| `name` | No | Shown in the Forge status bar |
-| `author` | No | Your name or organisation |
-| `description` | No | One-line description |
-| `homepage` | No | Link back to your repo or page |
-| `files.companions` | No | Array of extra files to load |
-| `files.presets` | No | Preset JSON filename |
-| `defaults.preset` | No | Preset to auto-select |
-| `defaults.autoPreview` | No | Start 3D preview on load (default `false`) |
-| `defaults.skipWelcome` | No | Skip the welcome screen (default `false`) |
-
-Full specification: [Manifest Sharing Guide](https://github.com/BrennenJohnston/openscad-assistive-forge/blob/main/docs/guides/MANIFEST_SHARING_GUIDE.md)
 
 ---
 
@@ -157,6 +239,7 @@ Full specification: [Manifest Sharing Guide](https://github.com/BrennenJohnston/
 | "Invalid manifest" | Validate your JSON at [jsonlint.com](https://jsonlint.com). Common: missing comma, trailing comma, mismatched quotes. |
 | Parameters don't appear | Your `.scad` file needs Customizer annotations: `width = 50; // [10:100]` |
 | Preset not found | The name in `defaults.preset` must exactly match a `"name"` in your presets file. |
+| ZIP bundle not loading | Make sure the `.zip` filename in `"bundle"` exactly matches the uploaded file (case-sensitive). |
 
 ---
 
