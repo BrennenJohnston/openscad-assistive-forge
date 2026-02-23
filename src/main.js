@@ -3017,6 +3017,53 @@ async function initApp() {
       pendingWasmInit = false;
       await ensureWasmInitialized();
     }
+
+    // If a project was loaded while WASM was still initializing (e.g. manifest
+    // deep-link on first visit), the auto-preview controller could not be created
+    // at handleFile time. Now that WASM is ready, retroactively set it up and
+    // trigger the initial preview so the 3D object appears.
+    const postInitState = stateManager.getState();
+    if (
+      postInitState.uploadedFile &&
+      !autoPreviewController &&
+      renderController
+    ) {
+      await initAutoPreviewController(false);
+      if (autoPreviewController) {
+        const colorParamNames = Object.values(
+          postInitState.schema?.parameters || {}
+        )
+          .filter((p) => p.uiType === 'color')
+          .map((p) => p.name);
+        autoPreviewController.setColorParamNames(colorParamNames);
+        autoPreviewController.setParamTypes(postInitState.paramTypes || {});
+        autoPreviewController.setScadContent(
+          postInitState.uploadedFile.content
+        );
+        autoPreviewController.setProjectFiles(
+          postInitState.projectFiles || null,
+          postInitState.mainFilePath || postInitState.uploadedFile.name
+        );
+        const libsForRender = getEnabledLibrariesForRender();
+        autoPreviewController.setEnabledLibraries(libsForRender);
+        if (autoPreviewEnabled) {
+          autoPreviewController
+            .forcePreview(postInitState.parameters)
+            .then((initiated) => {
+              if (initiated) {
+                console.log('[FirstVisit] Deferred initial preview started');
+              }
+            })
+            .catch((error) => {
+              console.error(
+                '[FirstVisit] Deferred initial preview failed:',
+                error
+              );
+            });
+        }
+      }
+    }
+
     // Restore pending draft if one was deferred
     if (pendingDraft) {
       const draftToRestore = pendingDraft;
@@ -13124,6 +13171,18 @@ if (rounded) {
         stlStats: result.stats,
         lastRenderTime: duration,
       });
+
+      // When the auto-preview controller handled the render, it already loaded
+      // the STL into the 3D viewer. For the direct-render fallback path, we
+      // must load it ourselves so the model is visible.
+      const stlData = result.data || result.stl;
+      if (!autoPreviewController && previewManager && stlData) {
+        try {
+          await previewManager.loadSTL(stlData, { preserveCamera: false });
+        } catch (loadErr) {
+          console.warn('[Generate] Failed to load STL into preview:', loadErr);
+        }
+      }
 
       // Store console output for the Console panel (echo/warning/error display)
       if (
