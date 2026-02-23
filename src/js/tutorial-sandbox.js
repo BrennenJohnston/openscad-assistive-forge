@@ -13,11 +13,7 @@
 
 import { createFocusTrap } from './focus-trap.js';
 import { getUIModeController } from './ui-mode-controller.js';
-import {
-  announceImmediate,
-  announceError,
-  POLITENESS as _POLITENESS,
-} from './announcer.js';
+import { announceImmediate, announceError } from './announcer.js';
 
 /**
  * Tutorial step definition

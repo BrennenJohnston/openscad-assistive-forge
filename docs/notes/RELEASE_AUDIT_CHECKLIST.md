@@ -1,7 +1,7 @@
 # Release Audit Checklist
 
 Started: 2026-02-23
-Last updated: 2026-02-23 (Session 3)
+Last updated: 2026-02-23 (Session 8)
 
 ## Status Key
 
@@ -54,70 +54,70 @@ Last updated: 2026-02-23 (Session 3)
 
 | Status | File | Session | Bloat Findings | Notes |
 |--------|------|---------|----------------|-------|
-| [ ] | src/js/preview.js | 4 | - | - |
-| [ ] | src/js/render-controller.js | 4 | - | - |
-| [ ] | src/js/render-queue.js | 4 | - | - |
-| [ ] | src/js/auto-preview-controller.js | 4 | - | - |
-| [ ] | src/js/quality-tiers.js | 4 | - | - |
-| [ ] | src/js/camera-panel-controller.js | 4 | - | - |
-| [ ] | src/worker/openscad-worker.js | 4 | - | - |
+| [x] | src/js/preview.js | 4 | 0 blocking, 0 warnings | ~2890 lines. Clean Three.js manager. Lazy-loads Three.js on demand. Good ARIA/keyboard camera controls. LOD warning system well-implemented. No dead code. |
+| [x] | src/js/render-controller.js | 4 | 0 blocking, 0 warnings | Clean. Re-exports quality-tiers.js for convenience. Worker health monitoring, cancel watchdog, and proactive restart logic all correct. `_cancelWatchdogHandle` properly cleared in `terminate()`. |
+| [x] | src/js/render-queue.js | 4 | 0 blocking, 0 warnings | Clean. Well-structured class with proper state machine. `exportQueue`/`importQueue` are exported API — preserved. |
+| [x] | src/js/auto-preview-controller.js | 4 | 0 blocking, 0 warnings | Clean. Complex but well-organized debounce/cache/state logic. `is2DOnlyParameters` static method is correct guard against WASM corruption. |
+| [x] | src/js/quality-tiers.js | 4 | 0 blocking, 0 warnings | Clean. Well-documented Manifold-optimized quality presets. All functions actively used. |
+| [x] | src/js/camera-panel-controller.js | 4 | 0 blocking, 0 warnings | Clean. Good ARIA implementation for desktop panel + mobile drawer. Mutual exclusion between camera/actions drawers is correct. |
+| [E] | src/worker/openscad-worker.js | 4 | 0 blocking, 0 warnings | Removed 5 dead items: (1) `_renderWithExport()` — defined but never called; (2) `_shouldRetryWithoutFlags` — assigned but never read; (3) `_helpError` — assigned but never read; (4) `_lastHeartbeatId` module-level var — assigned but never read; (5) `_mountedCount`/`_failedCount` in `mountLibraries` — assigned but never read. |
 
 ### Session 5 — Storage, Projects, and Presets
 
 | Status | File | Session | Bloat Findings | Notes |
 |--------|------|---------|----------------|-------|
-| [ ] | src/js/storage-manager.js | 5 | - | - |
-| [ ] | src/js/saved-projects-manager.js | 5 | - | - |
-| [ ] | src/js/preset-manager.js | 5 | - | - |
+| [x] | src/js/storage-manager.js | 5 | 0 blocking, 0 warnings | Clean. ~1193 lines. `clearCachedData()` and `clearAppCachesOnly()` share near-identical SW+CacheStorage clearing logic — consolidation opportunity noted but not edited (API boundary rule). |
+| [x] | src/js/saved-projects-manager.js | 5 | 0 blocking, 0 warnings | Clean. ~2040 lines. Complex IndexedDB+localStorage dual-write pattern is well-justified. Verbose console.log on every operation is consistent with diagnostic design (same pattern as state.js). No dead code. |
+| [x] | src/js/preset-manager.js | 5 | 0 blocking, 0 warnings | Clean. ~1719 lines. `importOpenSCADNativePresets` embeds `'Imported from OpenSCAD preset file'` in preset metadata — user-facing text, acceptable. No dead code. |
 
 ### Session 6 — Parsing, Schema, and Manifest
 
 | Status | File | Session | Bloat Findings | Notes |
 |--------|------|---------|----------------|-------|
-| [ ] | src/js/parser.js | 6 | - | - |
-| [ ] | src/js/schema-generator.js | 6 | - | - |
-| [ ] | src/js/manifest-loader.js | 6 | - | - |
-| [ ] | src/js/validation-schemas.js | 6 | - | - |
-| [ ] | src/js/validation-constants.js | 6 | - | - |
+| [E] | src/js/parser.js | 6 | 0 blocking, 0 warnings | Removed empty `else if (!line.startsWith('//'))` block (lines 659-662) — placeholder with comment but no code. All parsing logic correct; desktop parity comments well-documented. |
+| [x] | src/js/schema-generator.js | 6 | 0 blocking, 0 warnings | Clean. Bidirectional JSON Schema conversion. Minor redundancy in `fromJsonSchema()` (two branches both set `uiType = 'input'`) — harmless switch fallthrough pattern. |
+| [x] | src/js/manifest-loader.js | 6 | 0 blocking, 0 warnings | Clean. Well-structured with `ManifestError` class, timeout handling, CORS-aware error messages, and bundle/uncompressed dual-path loading. |
+| [x] | src/js/validation-schemas.js | 6 | 0 blocking, 0 warnings | Clean. Three `@reserved` exports (`createParameterValidator`, `validateParameterValue`, `clampParameterValues`) — explicitly flagged as planned-but-not-yet-integrated; preserved per API boundary rule. |
+| [x] | src/js/validation-constants.js | 6 | 0 blocking, 0 warnings | Clean. Simple constants file. |
 
 ### Session 7 — Accessibility and Input
 
 | Status | File | Session | Bloat Findings | Notes |
 |--------|------|---------|----------------|-------|
-| [ ] | src/js/announcer.js | 7 | - | - |
-| [ ] | src/js/focus-trap.js | 7 | - | - |
-| [ ] | src/js/keyboard-config.js | 7 | - | - |
-| [ ] | src/js/searchable-combobox.js | 7 | - | - |
-| [ ] | src/js/gamepad-controller.js | 7 | - | - |
-| [ ] | src/js/modal-manager.js | 7 | - | - |
-| [ ] | src/js/param-detail-controller.js | 7 | - | - |
+| [x] | src/js/announcer.js | 7 | 0 blocking, 0 warnings | Clean. Dual live-region pattern (polite/assertive) with per-level timer management. Well-structured. |
+| [x] | src/js/focus-trap.js | 7 | 0 blocking, 0 warnings | Clean. Two trap patterns (element-level and document-level) both actively used. `trapFocusHandler` backward-compat export is used. |
+| [E] | src/js/keyboard-config.js | 7 | 0 blocking, 0 warnings | Removed dead `_originalContent` variable in `showConflictWarning()` — assigned but never read (timeout restores hardcoded prompt string instead). All other code clean. |
+| [x] | src/js/searchable-combobox.js | 7 | 0 blocking, 0 warnings | Clean. Well-implemented WAI-ARIA combobox using @github/combobox-nav. Fixed-position dropdown with scroll/resize repositioning. Proper destroy() cleanup. |
+| [x] | src/js/gamepad-controller.js | 7 | 0 blocking, 0 warnings | Clean. Full W3C Standard Gamepad API implementation. `GamepadState` is internal; `GamepadController` exported. All methods used. |
+| [x] | src/js/modal-manager.js | 7 | 0 blocking, 0 warnings | Clean. Proper focus trap + trigger restoration pattern. `createModal` returns promise-based API. Escape handled at modal level (correct — focus trap does not need onEscape here). |
+| [x] | src/js/param-detail-controller.js | 7 | 0 blocking, 0 warnings | Clean. Compact 4-level detail controller with localStorage persistence and screen reader announcement. |
 
 ### Session 8 — Utilities, Features, and Remaining Modules
 
 | Status | File | Session | Bloat Findings | Notes |
 |--------|------|---------|----------------|-------|
-| [ ] | src/js/zip-handler.js | 8 | - | - |
-| [ ] | src/js/download.js | 8 | - | - |
-| [ ] | src/js/error-translator.js | 8 | - | - |
-| [ ] | src/js/color-utils.js | 8 | - | - |
-| [ ] | src/js/unit-sync.js | 8 | - | - |
-| [ ] | src/js/comparison-controller.js | 8 | - | - |
-| [ ] | src/js/comparison-view.js | 8 | - | - |
-| [ ] | src/js/image-measurement.js | 8 | - | - |
-| [ ] | src/js/shared-image-store.js | 8 | - | - |
-| [ ] | src/js/tutorial-sandbox.js | 8 | - | - |
-| [ ] | src/js/workflow-progress.js | 8 | - | - |
-| [ ] | src/js/preview-settings-drawer.js | 8 | - | - |
-| [ ] | src/js/design-panel-controller.js | 8 | - | - |
-| [ ] | src/js/animation-controller.js | 8 | - | - |
-| [ ] | src/js/theme-manager.js | 8 | - | - |
-| [ ] | src/js/dependency-checker.js | 8 | - | - |
-| [ ] | src/js/library-manager.js | 8 | - | - |
-| [ ] | src/js/sw-manager.js | 8 | - | - |
-| [ ] | src/js/memory-monitor.js | 8 | - | - |
-| [ ] | src/js/csp-reporter.js | 8 | - | - |
-| [ ] | src/js/_hfm.js | 8 | - | - |
-| [ ] | src/js/_seq.js | 8 | - | - |
+| [x] | src/js/zip-handler.js | 8 | 0 blocking, 0 warnings | Clean. ~628 lines. Security path-traversal check, image base64 extraction, nested tree builder, preset companion map heuristics all active. Emoji in createFileTree are functional UI labels. |
+| [x] | src/js/download.js | 8 | 0 blocking, 0 warnings | Clean. downloadSTL is a named legacy-compat wrapper for downloadFile. All functions actively used. |
+| [x] | src/js/error-translator.js | 8 | 0 blocking, 0 warnings | Clean. Pattern-matching error translator with COGA-aligned user messages. Emoji in createFriendlyErrorDisplay is a UI label with aria-hidden. |
+| [x] | src/js/color-utils.js | 8 | 0 blocking, 0 warnings | Clean. Three small utility functions, all actively used. |
+| [x] | src/js/unit-sync.js | 8 | 0 blocking, 0 warnings | Clean. Compact event-bus for mm/px unit sync between Image Measurement and Reference Overlay. |
+| [x] | src/js/comparison-controller.js | 8 | 0 blocking, 0 warnings | Clean. Well-structured class with proper subscriber pattern. |
+| [x] | src/js/comparison-view.js | 8 | 0 blocking, 0 warnings | Clean. alert() calls in handleRenderAll/handleRenderVariant are intentional fallbacks (no modal infrastructure wired in comparison view). |
+| [x] | src/js/image-measurement.js | 8 | 0 blocking, 0 warnings | Clean. ~1046 lines. Complex canvas measurement tool with keyboard/pointer/zoom/ruler/calibrate modes and accessibility. handleMouseLeave is intentionally empty (keeps last coordinate visible). |
+| [x] | src/js/shared-image-store.js | 8 | 0 blocking, 0 warnings | Clean. Empty catch block is intentional (subscriber errors must not propagate). |
+| [E] | src/js/tutorial-sandbox.js | 8 | 0 blocking, 0 warnings | Removed dead import alias POLITENESS as _POLITENESS -- imported but never used anywhere in the file. |
+| [x] | src/js/workflow-progress.js | 8 | 0 blocking, 0 warnings | Clean. Tiny 3-function module for #workflowProgress container visibility. |
+| [x] | src/js/preview-settings-drawer.js | 8 | 0 blocking, 0 warnings | Clean. Responsive drawer with localStorage persistence and on-screen keyboard detection. |
+| [x] | src/js/design-panel-controller.js | 8 | 0 blocking, 0 warnings | Clean. Design-menu equivalent (Flush Caches, AST, Validity, Geometry Info). Singleton with reset for testing. |
+| [x] | src/js/animation-controller.js | 8 | 0 blocking, 0 warnings | Clean. \ animation controller with FPS/steps preferences, proper interval management, and dispose(). |
+| [x] | src/js/theme-manager.js | 8 | 0 blocking, 0 warnings | Clean. removeListener is a convenience method alongside the unsubscribe-function pattern. MutationObserver for external data-theme mutations is well-justified. |
+| [x] | src/js/dependency-checker.js | 8 | 0 blocking, 0 warnings | Clean. Regex-based dependency scanner for include/use/import statements. All functions actively used. |
+| [x] | src/js/library-manager.js | 8 | 0 blocking, 0 warnings | Clean. NopSCADlib and dotSCAD in LIBRARY_DEFINITIONS are defined but not yet deployed to public/libraries/ -- future expansion, not dead code. |
+| [x] | src/js/sw-manager.js | 8 | 0 blocking, 0 warnings | Clean. Inline CSS in showUpdateToast is intentional (self-contained toast, no external stylesheet dependency). |
+| [x] | src/js/memory-monitor.js | 8 | 0 blocking, 0 warnings | Clean. Feature-flag gated. WASM-only heap measurement (correctly avoids performance.memory false positives). |
+| [x] | src/js/csp-reporter.js | 8 | 0 blocking, 0 warnings | Clean. Feature-flag gated. Emoji in console.group is debug-only console output, acceptable. |
+| [x] | src/js/_hfm.js | 8 | 0 blocking, 0 warnings | Clean. ~628 lines. ASCII art renderer using 6D shape vectors (Harri technique). Well-documented algorithm with attribution note. All internal functions used. |
+| [x] | src/js/_seq.js | 8 | 0 blocking, 0 warnings | Clean. Konami code sequence detector. Compact and correct. |
 
 ---
 
@@ -549,3 +549,43 @@ Last updated: 2026-02-23 (Session 3)
 - Bloat scan: 0 blocking, 0 warnings (before and after)
 - Tests pass: yes (1370/1370)
 - Summary: Removed ~32 narrating comments across monaco-editor.js and textarea-editor.js (section headers that restated what the code already said). Removed dead `_modeSnapshots` state from editor-state-manager.js (written but never read). Fixed duplicate description line in console-panel.js header. `verifyMonacoCSP()` in monaco-editor.js is a dead export (never imported) — noted but preserved per API boundary rule.
+
+### Session 4 — 2026-02-23
+
+- Files reviewed: 7
+- Files edited: 1 (`src/worker/openscad-worker.js`)
+- Bloat scan: 0 blocking, 0 warnings (before and after)
+- Tests pass: yes (1370/1370)
+- Summary: Rendering pipeline files are clean and well-structured. Removed 5 dead items from openscad-worker.js: the `_renderWithExport()` fallback function (defined but never called from the message handler — all renders go through `renderWithCallMain`), `_shouldRetryWithoutFlags` variable (assigned but never read), `_helpError` variable in `checkCapabilities` (assigned but never read), `_lastHeartbeatId` module-level variable (assigned but never read), and `_mountedCount`/`_failedCount` counters in `mountLibraries` (assigned but never read — only `failedSample` was used for logging). All other files (preview.js, render-controller.js, render-queue.js, auto-preview-controller.js, quality-tiers.js, camera-panel-controller.js) are clean with no issues.
+
+### Session 5 — 2026-02-23
+
+- Files reviewed: 3
+- Files edited: 0
+- Bloat scan: 0 blocking, 0 warnings (before and after)
+- Tests pass: yes (1370/1370)
+- Summary: All three storage/persistence modules are clean. `storage-manager.js` has a minor consolidation opportunity (`clearCachedData` and `clearAppCachesOnly` share near-identical SW+CacheStorage logic) — noted for Session 21 but not edited per API boundary rule. `saved-projects-manager.js` is a well-structured ~2K-line IndexedDB+localStorage dual-write module with no dead code. `preset-manager.js` has thorough OpenSCAD-native and Forge format import/export with correct type coercion logic; no dead code. This session was the first after the PAUSE-2 human review break.
+
+### Session 6 — 2026-02-23
+
+- Files reviewed: 5
+- Files edited: 1 (`src/js/parser.js`)
+- Bloat scan: 0 blocking, 0 warnings (before and after)
+- Tests pass: yes (1370/1370)
+- Summary: Parsing, schema, and manifest modules are clean. Removed one empty `else if` placeholder block from `parser.js` (lines 659-662 — had a comment but no code). Three `@reserved` exports in `validation-schemas.js` are intentional API reservations, preserved per API boundary rule. `manifest-loader.js` is well-structured with proper error classification and CORS-aware messaging. `schema-generator.js` has a minor harmless redundancy in `fromJsonSchema()` (two branches both assign `uiType = 'input'`). `validation-constants.js` is a clean constants file.
+
+### Session 7 — 2026-02-23
+
+- Files reviewed: 7
+- Files edited: 1 (`src/js/keyboard-config.js`)
+- Bloat scan: 0 blocking, 0 warnings (before and after)
+- Tests pass: yes (1370/1370)
+- Summary: Accessibility and input modules are clean and well-implemented. Removed one dead `_originalContent` variable from `keyboard-config.js`'s `showConflictWarning()` — it was assigned but never read (the timeout callback hardcodes the "Press a key..." prompt string instead of restoring from the variable). `announcer.js` has a solid dual live-region design with per-politeness-level debounce timers. `focus-trap.js` provides both element-level and document-level trap patterns, both actively used. `searchable-combobox.js` is a well-implemented WAI-ARIA combobox delegating keyboard navigation to @github/combobox-nav. `gamepad-controller.js` is a complete W3C Standard Gamepad API implementation. `modal-manager.js` correctly handles focus trap + trigger restoration. `param-detail-controller.js` is a compact, clean controller. This session was the first after the PAUSE-3 human review break.
+
+### Session 8 — 2026-02-23
+
+- Files reviewed: 22
+- Files edited: 1 (`src/js/tutorial-sandbox.js`)
+- Bloat scan: 0 blocking, 0 warnings (before and after)
+- Tests pass: yes (1370/1370)
+- Summary: Utilities, features, and remaining modules are clean. Removed one dead import alias (`POLITENESS as _POLITENESS`) from `tutorial-sandbox.js` -- imported from announcer.js but never referenced in the file. All other files are clean: zip-handler.js has solid security (path-traversal guard) and heuristic preset companion mapping; error-translator.js implements COGA-aligned user-friendly error messages; _hfm.js is a well-documented ASCII art renderer using 6D shape vectors; _seq.js is a Konami code detector. Notable non-issues: empty catch in shared-image-store.js (intentional subscriber isolation), alert() in comparison-view.js (intentional fallback), handleMouseLeave empty body in image-measurement.js (intentional coordinate preservation), inline CSS in sw-manager.js showUpdateToast (intentional self-contained toast). This session completes Phase 1 (Core Application). Next: PAUSE-4 human review break before Session 9 (CSS).
