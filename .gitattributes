@@ -10,7 +10,6 @@
 #   git lfs pull
 #
 # GitHub's "Download ZIP" and web-based uploads work without LFS installed.
-
 *.zip filter=lfs diff=lfs merge=lfs -text
 *.stl filter=lfs diff=lfs merge=lfs -text
 *.3mf filter=lfs diff=lfs merge=lfs -text
