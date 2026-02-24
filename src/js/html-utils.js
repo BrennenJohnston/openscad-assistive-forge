@@ -22,7 +22,6 @@ export function escapeHtml(text) {
  * @returns {boolean} - True if message is valid
  */
 export function isValidServiceWorkerMessage(event, allowedTypes) {
-  // Validate event data exists and is an object
   if (!event || !event.data || typeof event.data !== 'object') {
     return false;
   }
@@ -77,19 +76,14 @@ export function setupNotesCounter(
       isValid = true;
     }
 
-    // Call validation callback if provided
     if (onValidChange) {
       onValidChange(isValid, length);
     }
   };
 
-  // Set up event listener
   textarea.addEventListener('input', updateCounter);
-
-  // Initial update
   updateCounter();
 
-  // Return cleanup function
   return () => {
     textarea.removeEventListener('input', updateCounter);
   };

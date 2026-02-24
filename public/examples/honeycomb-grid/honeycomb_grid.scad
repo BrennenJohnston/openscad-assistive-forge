@@ -90,18 +90,5 @@ module hexagon(radius) {
     ]);
 }
 
-// Optional: Add reinforcement frame
-module frame() {
-    difference() {
-        linear_extrude(height = grid_height)
-            offset(r = wall_thickness)
-            square([total_width, total_depth]);
-        
-        translate([wall_thickness, wall_thickness, -0.1])
-            linear_extrude(height = grid_height + 0.2)
-            square([total_width - wall_thickness, total_depth - wall_thickness]);
-    }
-}
-
 // Render
 honeycomb_grid();

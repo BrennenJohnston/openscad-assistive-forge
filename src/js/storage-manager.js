@@ -367,19 +367,16 @@ export function updateStoragePrefs(updates) {
  * @returns {boolean}
  */
 export function shouldDeferLargeDownloads() {
-  // Check user preference first
   const prefs = getStoragePrefs();
   if (prefs.allowLargeDownloads === false) {
     return true;
   }
 
-  // Check network conditions
   const connection = getConnectionInfo();
   if (connection.supported && connection.isMetered) {
     return true;
   }
 
-  // Check Save-Data preference
   if (prefersReducedData()) {
     return true;
   }
@@ -752,11 +749,9 @@ export async function importProjectFromFiles(fileList, mainFilePath) {
  */
 export async function exportProjectsBackup() {
   try {
-    // Dynamically import JSZip
     const JSZip = (await import('jszip')).default;
     const zip = new JSZip();
 
-    // Get all folders and projects
     const folders = await listFolders();
     const projects = await listSavedProjects();
 
@@ -769,7 +764,6 @@ export async function exportProjectsBackup() {
       /* ignore */
     }
 
-    // Create manifest
     const manifest = {
       version: '2.0',
       exportedAt: new Date().toISOString(),
@@ -787,12 +781,10 @@ export async function exportProjectsBackup() {
       customGridPresets,
     };
 
-    // Add each project to the ZIP
     for (const projectSummary of projects) {
       const project = await getProject(projectSummary.id);
       if (!project) continue;
 
-      // Build folder path
       const folderPath = await buildFolderPath(project.folderId, folders);
       const projectDir = folderPath
         ? `${folderPath}/${sanitizeFileName(project.name)}`
@@ -817,7 +809,6 @@ export async function exportProjectsBackup() {
         );
       }
 
-      // Add project metadata
       const projectMeta = {
         id: project.id,
         name: project.name,
@@ -873,10 +864,8 @@ export async function exportProjectsBackup() {
       });
     }
 
-    // Add manifest
     zip.file('manifest.json', JSON.stringify(manifest, null, 2));
 
-    // Generate ZIP
     const blob = await zip.generateAsync({
       type: 'blob',
       compression: 'DEFLATE',
@@ -916,7 +905,6 @@ export async function exportSingleProject(projectId) {
 
     const projectDir = sanitizeFileName(project.name);
 
-    // Add main content
     if (project.kind === 'zip' && project.projectFiles) {
       const parsedFiles =
         typeof project.projectFiles === 'string'
@@ -933,7 +921,6 @@ export async function exportSingleProject(projectId) {
       );
     }
 
-    // Build project metadata including UI preferences
     const projectMeta = {
       id: project.id,
       name: project.name,
@@ -1037,11 +1024,9 @@ export async function importProjectsBackup(file) {
   };
 
   try {
-    // Dynamically import JSZip
     const JSZip = (await import('jszip')).default;
     const zip = await JSZip.loadAsync(file);
 
-    // Read manifest
     const manifestFile = zip.file('manifest.json');
     if (!manifestFile) {
       result.errors.push('Invalid backup file: missing manifest.json');
@@ -1050,7 +1035,6 @@ export async function importProjectsBackup(file) {
 
     const manifest = JSON.parse(await manifestFile.async('string'));
 
-    // Validate manifest version
     if (!manifest.version || !manifest.version.startsWith('2.')) {
       console.warn(
         `[StorageManager] Unknown backup version: ${manifest.version}`
@@ -1113,7 +1097,6 @@ export async function importProjectsBackup(file) {
           // Get main file content
           content = projectFiles[projectMeta.mainFilePath] || '';
         } else {
-          // Single SCAD file
           const mainFile = zip.file(
             `${projectRef.path}/${projectMeta.mainFilePath || 'main.scad'}`
           );
@@ -1122,7 +1105,6 @@ export async function importProjectsBackup(file) {
           }
         }
 
-        // Save project
         const saveResult = await saveProject({
           name: projectMeta.name,
           originalName: projectMeta.originalName,

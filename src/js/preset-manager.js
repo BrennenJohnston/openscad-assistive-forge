@@ -4,7 +4,6 @@
  * @license GPL-3.0-or-later
  */
 
-// Import validation at module level
 let validatePresetsCollectionFn = null;
 (async () => {
   const { validatePresetsCollection } = await import('./validation-schemas.js');
@@ -44,7 +43,6 @@ const STORAGE_KEYS = {
 function detectStorageVersion(data) {
   if (!data || typeof data !== 'object') return 0;
 
-  // Check for versioned wrapper
   if ('version' in data && 'presets' in data) {
     return data.version;
   }
@@ -54,11 +52,9 @@ function detectStorageVersion(data) {
   const keys = Object.keys(data);
   if (keys.length === 0) return 0;
 
-  // Check if it looks like legacy presets (arrays of preset objects)
   const firstValue = data[keys[0]];
   if (Array.isArray(firstValue)) {
-    // Likely legacy format
-    return 1;
+    return 1; // Legacy format: { "model.scad": [preset, ...], ... }
   }
 
   return 0;
@@ -78,11 +74,9 @@ export function checkMigrationAvailable() {
   };
 
   try {
-    // Check if migration was already offered
     result.alreadyOffered =
       localStorage.getItem(STORAGE_KEYS.migrationFlag) === 'true';
 
-    // Check each legacy key
     for (const key of STORAGE_KEYS.legacy) {
       const stored = localStorage.getItem(key);
       if (stored) {
@@ -91,7 +85,6 @@ export function checkMigrationAvailable() {
           const version = detectStorageVersion(data);
 
           if (version === 1) {
-            // Count presets in legacy data
             let presetCount = 0;
             const modelCount = Object.keys(data).length;
 
@@ -150,11 +143,9 @@ export function migrateFromLegacyStorage(options = {}) {
       return result;
     }
 
-    // Load legacy data
     const legacyRaw = localStorage.getItem(migrationInfo.legacyKey);
     const legacyData = JSON.parse(legacyRaw);
 
-    // Create backup if requested
     if (createBackup) {
       try {
         const backupData = {
@@ -171,7 +162,6 @@ export function migrateFromLegacyStorage(options = {}) {
       }
     }
 
-    // Load current data (if any)
     let currentData = {};
     try {
       const currentRaw = localStorage.getItem(STORAGE_KEYS.current);
@@ -185,7 +175,6 @@ export function migrateFromLegacyStorage(options = {}) {
       // No current data or invalid, start fresh
     }
 
-    // Merge legacy presets into current data
     for (const [modelName, presets] of Object.entries(legacyData)) {
       if (!Array.isArray(presets)) continue;
 
@@ -210,7 +199,6 @@ export function migrateFromLegacyStorage(options = {}) {
       result.migratedModels++;
     }
 
-    // Save migrated data in versioned format
     const versionedData = {
       version: STORAGE_SCHEMA_VERSION,
       presets: currentData,
@@ -219,10 +207,8 @@ export function migrateFromLegacyStorage(options = {}) {
 
     localStorage.setItem(STORAGE_KEYS.current, JSON.stringify(versionedData));
 
-    // Mark migration as complete
     localStorage.setItem(STORAGE_KEYS.migrationFlag, 'true');
 
-    // Optionally delete legacy data
     if (deleteLegacy) {
       try {
         localStorage.removeItem(migrationInfo.legacyKey);
@@ -280,12 +266,10 @@ export function resetMigrationFlag() {
 function isOpenSCADNativeFormat(data) {
   if (!data || typeof data !== 'object') return false;
 
-  // Check for parameterSets object
   if (!('parameterSets' in data) || typeof data.parameterSets !== 'object') {
     return false;
   }
 
-  // Must have at least one preset in parameterSets
   const presetCount = Object.keys(data.parameterSets).length;
   if (presetCount === 0) {
     return false;
@@ -372,7 +356,6 @@ function autoDetectType(value) {
   if (value === 'true') return true;
   if (value === 'false') return false;
 
-  // Check for array/vector notation
   if (value.startsWith('[') && value.endsWith(']')) {
     try {
       return JSON.parse(value);
@@ -381,7 +364,6 @@ function autoDetectType(value) {
     }
   }
 
-  // Check for number
   const num = parseFloat(value);
   if (!isNaN(num) && String(num) === value.trim()) {
     return num;
@@ -472,7 +454,6 @@ function stringifyForOpenSCAD(value) {
  */
 export class PresetManager {
   constructor() {
-    // Use versioned storage key
     this.storageKey = STORAGE_KEYS.current;
     this.legacyStorageKey = STORAGE_KEYS.legacy[0]; // For backwards compatibility
     this.presets = this.loadAllPresets();
@@ -536,18 +517,15 @@ export class PresetManager {
       throw new Error('Model name, preset name, and parameters are required');
     }
 
-    // Sanitize preset name
     const sanitized = presetName.trim();
     if (!sanitized) {
       throw new Error('Preset name cannot be empty');
     }
 
-    // Initialize model presets if needed
     if (!this.presets[modelName]) {
       this.presets[modelName] = [];
     }
 
-    // Check for duplicate name
     const existingIndex = this.presets[modelName].findIndex(
       (p) => p.name === sanitized
     );
@@ -568,7 +546,6 @@ export class PresetManager {
       modified: Date.now(),
     };
 
-    // Replace existing or add new
     if (existingIndex >= 0) {
       this.presets[modelName][existingIndex] = preset;
       console.log(`Updated preset: ${sanitized}`);
@@ -650,7 +627,6 @@ export class PresetManager {
     const sanitized = newName.trim();
     if (!sanitized) return false;
 
-    // Check for duplicate name
     const modelPresets = this.presets[modelName];
     const duplicate = modelPresets.find(
       (p) => p.id !== presetId && p.name === sanitized
@@ -726,7 +702,6 @@ export class PresetManager {
   exportOpenSCADNativeFormat(modelName, hiddenParameters = {}) {
     const presets = this.getPresetsForModel(modelName);
 
-    // Build parameterSets object
     const parameterSets = {};
 
     // "design default values" is ALWAYS first in export (desktop OpenSCAD parity)
@@ -753,7 +728,6 @@ export class PresetManager {
       }
     }
 
-    // Create OpenSCAD native structure
     const openscadJSON = {
       parameterSets: parameterSets,
       fileFormatVersion: '1',
@@ -772,7 +746,6 @@ export class PresetManager {
     const preset = this.loadPreset(modelName, presetId);
     if (!preset) return null;
 
-    // Convert values to strings
     const stringifiedParams = {};
     for (const [key, value] of Object.entries(preset.parameters)) {
       stringifiedParams[key] = stringifyForOpenSCAD(value);
@@ -787,7 +760,6 @@ export class PresetManager {
       }
     }
 
-    // Create OpenSCAD native structure with single preset
     const openscadJSON = {
       parameterSets: {
         [preset.name]: stringifiedParams,
@@ -883,7 +855,6 @@ export class PresetManager {
   exportChangedParametersJSON(currentParams, defaultParams, modelName) {
     const changed = this.getChangedParameters(currentParams, defaultParams);
 
-    // Count changes
     const changeCount = Object.keys(changed).length;
     if (changeCount === 0) {
       return JSON.stringify(
@@ -897,7 +868,6 @@ export class PresetManager {
       );
     }
 
-    // Build export structure
     const exportData = {
       type: 'openscad-changed-parameters',
       modelName,
@@ -930,7 +900,6 @@ export class PresetManager {
     const errors = [];
     const presetNames = new Set();
 
-    // Get existing preset names
     const existingPresets = this.getPresetsForModel(modelName);
     existingPresets.forEach((p) => presetNames.add(p.name));
 
@@ -939,7 +908,6 @@ export class PresetManager {
         const data = JSON.parse(jsonStrings[i]);
         let presetsToImport = [];
 
-        // Convert to common format
         if (isOpenSCADNativeFormat(data)) {
           for (const [name, params] of Object.entries(data.parameterSets)) {
             presetsToImport.push({
@@ -964,8 +932,7 @@ export class PresetManager {
           continue;
         }
 
-        // Process presets with conflict handling
-        for (const preset of presetsToImport) {
+      for (const preset of presetsToImport) {
           let finalName = preset.name;
 
           if (presetNames.has(finalName)) {
@@ -1046,7 +1013,6 @@ export class PresetManager {
         hasType: 'type' in data,
       });
 
-      // Check for OpenSCAD native format first
       if (isOpenSCADNativeFormat(data)) {
         console.log('[PresetManager] Detected OpenSCAD native format');
         return this.importOpenSCADNativePresets(
@@ -1057,7 +1023,6 @@ export class PresetManager {
         );
       }
 
-      // Check for Forge format
       if (isForgeFormat(data)) {
         console.log('[PresetManager] Detected Forge format');
         return this.importForgePresets(
@@ -1133,7 +1098,6 @@ export class PresetManager {
     }
 
     if (data.type === 'openscad-preset') {
-      // Single preset import
       const coercedParams = coercePresetValues(
         stripHidden(data.preset.parameters),
         paramSchema
@@ -1147,7 +1111,6 @@ export class PresetManager {
       imported = 1;
       results.push(result);
     } else if (data.type === 'openscad-presets-collection') {
-      // Multiple presets import
       for (const preset of data.presets) {
         try {
           const coercedParams = coercePresetValues(
@@ -1285,7 +1248,6 @@ export class PresetManager {
           }
         }
 
-        // Save the preset
         const result = this.savePreset(
           effectiveModelName,
           presetName,
@@ -1337,7 +1299,6 @@ export class PresetManager {
     }
 
     try {
-      // Try loading from versioned storage first
       const stored = localStorage.getItem(this.storageKey);
 
       let presets = {};
@@ -1373,7 +1334,6 @@ export class PresetManager {
         }
       }
 
-      // Validate presets collections with Ajv (if available)
       if (validatePresetsCollectionFn && Object.keys(presets).length > 0) {
         const validatedData = {};
 
@@ -1415,7 +1375,6 @@ export class PresetManager {
     }
 
     try {
-      // Save in versioned format
       const versionedData = {
         version: STORAGE_SCHEMA_VERSION,
         presets: this.presets,

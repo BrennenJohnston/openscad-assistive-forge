@@ -43,7 +43,7 @@ The project uses the official **OpenSCAD Assistive Web Forge Logo** which featur
 
 ## Screenshots
 
-The manifest also references screenshots in `/screenshots/`:
+Screenshots can be placed in `/screenshots/` and added to the PWA manifest:
 - `desktop.png` (1280x720) - Desktop view
 - `mobile.png` (750x1334) - Mobile view
 

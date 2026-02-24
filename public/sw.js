@@ -221,15 +221,12 @@ async function cacheFirst(request) {
   const cached = await cache.match(request);
   
   if (cached) {
-    // Return cached response immediately
     return cached;
   }
   
   try {
-    // Not in cache, fetch from network
     const response = await fetch(request);
     
-    // Cache successful responses
     if (response && response.status === 200) {
       // Clone the response (can only be consumed once)
       const responseToCache = response.clone();
@@ -266,10 +263,8 @@ async function networkFirst(request) {
   const cache = await caches.open(CACHE_NAME);
   
   try {
-    // Try network first
     const response = await fetch(request);
     
-    // Cache successful responses
     if (response && response.status === 200) {
       const responseToCache = response.clone();
       cache.put(request, responseToCache);

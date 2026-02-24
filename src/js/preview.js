@@ -928,10 +928,8 @@ export class PreviewManager {
           'bytes'
         );
 
-        // Remove any existing LOD warning
         this.hideLODWarning();
 
-        // Remove existing mesh
         if (this.mesh) {
           this.scene.remove(this.mesh);
           this.mesh.geometry.dispose();
@@ -939,7 +937,6 @@ export class PreviewManager {
           this.mesh = null;
         }
 
-        // Load STL
         const loader = new STLLoader();
         const geometry = loader.parse(stlData);
 
@@ -986,7 +983,6 @@ export class PreviewManager {
           flatShading: false,
         });
 
-        // Create mesh
         this.mesh = new THREE.Mesh(geometry, material);
         this.scene.add(this.mesh);
 
@@ -1009,7 +1005,6 @@ export class PreviewManager {
           this._postLoadHook();
         }
 
-        // Show measurements if enabled
         if (this.measurementsEnabled) {
           this.showMeasurements();
         }
@@ -1444,7 +1439,6 @@ export class PreviewManager {
       return;
     }
 
-    // Get current camera distance from target
     const currentDistance = camera.position.distanceTo(this.controls.target);
 
     // Calculate adjustment factor
@@ -1478,12 +1472,10 @@ export class PreviewManager {
       .subVectors(camera.position, this.controls.target)
       .normalize();
 
-    // Update camera position along the same viewing direction
     camera.position
       .copy(this.controls.target)
       .addScaledVector(direction, clampedDistance);
 
-    // Update controls
     this.controls.update();
 
     console.log(
@@ -1676,26 +1668,20 @@ export class PreviewManager {
   showMeasurements() {
     if (!this.mesh) return;
 
-    // Remove existing measurements
     this.hideMeasurements();
 
-    // Calculate dimensions
     this.dimensions = this.calculateDimensions();
     if (!this.dimensions) return;
 
-    // Create group for all measurement visuals
     this.measurementHelpers = new THREE.Group();
     this.measurementHelpers.name = 'measurements';
 
-    // Get bounding box
     const box = new THREE.Box3().setFromObject(this.mesh);
     const min = box.min;
     const max = box.max;
 
-    // Choose color based on theme
     const lineColor = this.currentTheme.includes('dark') ? 0xff6b6b : 0xff0000;
 
-    // Create bounding box edges
     const boxHelper = new THREE.BoxHelper(this.mesh, lineColor);
     // Note: linewidth is ignored in WebGL, relying on color contrast instead
     this.measurementHelpers.add(boxHelper);
@@ -2621,7 +2607,6 @@ export class PreviewManager {
     const { width, height, opacity, offsetX, offsetY, rotationDeg, zPosition } =
       this.overlayConfig;
 
-    // Create the mesh if it doesn't exist
     if (!this.referenceOverlay) {
       const geometry = new THREE.PlaneGeometry(width, height);
       const material = new THREE.MeshBasicMaterial({
@@ -2641,7 +2626,6 @@ export class PreviewManager {
 
       console.log('[Preview] Reference overlay created');
     } else {
-      // Update existing mesh
       // Update geometry if size changed
       const geo = this.referenceOverlay.geometry;
       if (geo.parameters.width !== width || geo.parameters.height !== height) {
@@ -2649,13 +2633,11 @@ export class PreviewManager {
         this.referenceOverlay.geometry = new THREE.PlaneGeometry(width, height);
       }
 
-      // Update material
       this.referenceOverlay.material.map = this.referenceTexture;
       this.referenceOverlay.material.opacity = opacity;
       this.referenceOverlay.material.needsUpdate = true;
     }
 
-    // Update position and rotation
     this.referenceOverlay.position.set(offsetX, offsetY, zPosition);
     this.referenceOverlay.rotation.z = (rotationDeg * Math.PI) / 180;
 
@@ -2703,7 +2685,6 @@ export class PreviewManager {
     this.overlayConfig.offsetX = 0;
     this.overlayConfig.offsetY = 0;
 
-    // Update the overlay mesh
     if (this.overlayConfig.enabled) {
       this.createOrUpdateReferenceOverlay();
     }

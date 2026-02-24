@@ -73,12 +73,6 @@ module base_plate() {
         rounded_cube(width, base_depth, base_thickness, corner_radius);
     }
     
-    // Cable hole
-    if (cable_hole == "yes") {
-        translate([width/2, base_depth - wall_thickness, -0.1]) {
-            // Slot for cable access
-        }
-    }
 }
 
 module back_support() {

@@ -155,6 +155,9 @@ export class TextareaEditor {
     /** @type {number} */
     this._debounceTimeout = null;
 
+    /** @type {number} */
+    this._highlightTimeout = null;
+
     /** @type {Set<number>} */
     this._errorLines = new Set();
 
