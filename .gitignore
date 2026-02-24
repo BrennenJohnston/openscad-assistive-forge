@@ -1,5 +1,6 @@
 node_modules/
 dist/
+.vite/
 .DS_Store
 *.log
 .env
@@ -37,3 +38,6 @@ localhost_*.report.html
 
 # Internal planning documents (not for public release)
 docs/planning/
+
+# Developer scratch / temp files
+_em_temp/

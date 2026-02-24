@@ -1,6 +1,6 @@
 # Release Notes
 
-## v4.2.0 (2026-02-02)
+## v4.2.0 (unreleased)
 
 A big update focused on accessibility, security, and reliability. This brings the app up to WCAG 2.2 AA / Section 508 conformance.
 
@@ -12,7 +12,7 @@ Edit OpenSCAD code directly in the browser with full syntax highlighting and rea
 
 - **Monaco Editor**: VS Code-style editing experience with OpenSCAD syntax support
 - **Accessible Text Editor**: Native textarea fallback with full AT compatibility
-- **Mode Switching**: Seamless transition between Standard Mode (parameter UI) and Expert Mode (code editor)
+- **Mode Switching**: Switch between Standard Mode (parameter UI) and Expert Mode (code editor) without losing state
 - **State Preservation**: Cursor position, scroll, and selection preserved across mode switches
 - **Keyboard Shortcut**: Press `Ctrl+E` to toggle Expert Mode
 
@@ -69,7 +69,7 @@ Intelligent memory monitoring with graceful degradation prevents crashes on comp
 
 ### Technical Details
 
-- **Unit Tests**: 1171 tests passing (100%)
+- **Unit Tests**: 1383 tests passing (100%)
 - **E2E Tests**: Cross-browser automation suite
 - **Lighthouse Accessibility**: 96% score
 - **Security Vulnerabilities**: 0 high/critical
@@ -80,7 +80,7 @@ Intelligent memory monitoring with graceful degradation prevents crashes on comp
 
 ### From v4.1.x
 
-This is a seamless upgrade with no breaking changes:
+This is a backward-compatible upgrade with no breaking changes:
 
 1. Clear browser cache for best experience
 2. New features available immediately

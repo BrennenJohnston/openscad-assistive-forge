@@ -1,6 +1,5 @@
 // Keyguard Demo
 // A simplified example demonstrating multi-file project support
-// A multi-file project demonstrating companion file support
 // Version: demo
 
 /* [Keyguard Settings] */

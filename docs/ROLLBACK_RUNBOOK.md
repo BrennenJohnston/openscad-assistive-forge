@@ -1,8 +1,7 @@
 # Rollback Runbook
 
-**Version**: 4.2.0  
-**Last Updated**: 2026-02-02  
-**Owner**: On-call maintainer
+**Version**: 4.1.0  
+**Last Updated**: 2026-02-24
 
 This runbook provides step-by-step procedures for rolling back OpenSCAD Assistive Forge in production.
 
@@ -224,66 +223,13 @@ After any rollback, verify:
 
 ---
 
-## Rollback Drill Schedule
-
-**Frequency**: Quarterly  
-**Duration**: 30 minutes  
-**Participants**: On-call maintainer
-
-### Drill Procedure
-
-1. Deploy intentional "test" change to preview environment
-2. Execute Cloudflare rollback (Procedure 2)
-3. Time the process
-4. Document results
-5. Review and update this runbook if needed
-
-### Drill Log
-
-| Date | Participant | Method Tested | Time | Issues |
-|------|-------------|---------------|------|--------|
-| [TBD] | [Name] | Cloudflare rollback | [Time] | [Notes] |
-
----
-
-## Escalation
-
-### When to Escalate
-
-- Rollback procedure fails
-- Issue persists after rollback
-- Data loss suspected
-- Security breach confirmed
-
-### Escalation Contacts
-
-| Role | Contact | When |
-|------|---------|------|
-| Project Lead | [TBD] | Any escalation |
-| CEO | [TBD] | Critical security, data loss |
-| Cloudflare Support | https://support.cloudflare.com | Platform issues |
-
----
-
 ## Post-Rollback Actions
 
 After any production rollback:
 
-1. **Immediate** (within 1 hour)
-   - [ ] Verify production is stable
-   - [ ] Notify stakeholders of resolution
-   - [ ] Create incident tracking issue
-
-2. **Same day**
-   - [ ] Write incident summary
-   - [ ] Identify root cause
-   - [ ] Plan fix timeline
-
-3. **Within 1 week**
-   - [ ] Complete incident report
-   - [ ] Implement fix
-   - [ ] Add regression test
-   - [ ] Update documentation if needed
+1. **Immediate**: Verify production is stable, create a tracking issue
+2. **Same day**: Write a short incident summary, identify root cause
+3. **Within a week**: Implement the fix, add a regression test if applicable
 
 ---
 

@@ -52,7 +52,6 @@ export class ConsolePanel {
       info: 0,
     };
 
-    // Initialize if container exists
     if (this.container) {
       this.initFilters();
     }
@@ -322,7 +321,6 @@ export class ConsolePanel {
   render() {
     if (!this.container) return;
 
-    // Filter entries based on current filter settings
     const visibleEntries = this.entries.filter((e) => this.filters[e.type]);
 
     if (visibleEntries.length === 0) {
@@ -340,8 +338,6 @@ export class ConsolePanel {
       .join('');
 
     this.container.innerHTML = entriesHtml;
-
-    // Auto-scroll to bottom
     this.container.scrollTop = this.container.scrollHeight;
   }
 
@@ -362,7 +358,6 @@ export class ConsolePanel {
     const typeClass = `console-entry--${entry.type}`;
     const typeLabel = entry.type.toUpperCase();
 
-    // Escape message for safe HTML rendering
     const safeMessage = this.escapeHtml(entry.message);
 
     // WARNING and ERROR entries get role="alert" for screen reader announcement (WCAG 4.1.3)
@@ -425,7 +420,6 @@ export class ConsolePanel {
     try {
       await navigator.clipboard.writeText(text);
 
-      // Visual feedback
       const copyBtn = document.getElementById('console-copy-btn');
       if (copyBtn) {
         const originalText = copyBtn.textContent;

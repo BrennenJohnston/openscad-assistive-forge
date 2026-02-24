@@ -111,7 +111,7 @@ This replicates the end-to-end workflow for a multi-file SCAD project with prese
 
 After any changes, verify:
 
-- [ ] `npm run test:run` -- all unit tests pass (1184+).
+- [ ] `npm run test:run` -- all unit tests pass (1383+).
 - [ ] `npm run test:e2e` -- E2E tests pass on Chromium.
 - [ ] Vector parameter widgets still render correctly.
 - [ ] Expert Mode toggle (Ctrl+E) is functional.

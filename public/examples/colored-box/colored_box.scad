@@ -16,15 +16,11 @@ use_colors = "yes"; // [yes, no] Use colors in preview
 add_lid = "yes"; // [yes, no] Add a lid
 add_feet = "yes"; // [yes, no] Add feet to bottom
 
-// Module: Colored Box
-// This demonstrates how color parameters work in OpenSCAD Assistive Forge
-// Colors are passed as RGB arrays [r, g, b] with values 0-255
-
 module colored_box() {
     difference() {
         // Outer box
         if (use_colors == "yes") {
-            color(box_color / 255)  // Convert RGB array to 0-1 range
+            color(str("#", box_color))
             cube([width, depth, height]);
         } else {
             cube([width, depth, height]);
@@ -45,7 +41,7 @@ module colored_box() {
         foot_height = 5;
         
         if (use_colors == "yes") {
-            color(accent_color / 255)  // Accent color for feet
+            color(str("#", accent_color))
             for (x = [foot_size, width - foot_size * 2]) {
                 for (y = [foot_size, depth - foot_size * 2]) {
                     translate([x, y, -foot_height])
@@ -67,7 +63,7 @@ module colored_box() {
         lid_overlap = wall_thickness / 2;
         
         if (use_colors == "yes") {
-            color(accent_color / 255)  // Accent color for lid
+            color(str("#", accent_color))
             translate([0, 0, height])
             difference() {
                 cube([width, depth, wall_thickness]);

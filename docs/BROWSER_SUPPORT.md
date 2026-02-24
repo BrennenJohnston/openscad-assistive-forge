@@ -1,6 +1,6 @@
 # Browser Support Statement
 
-**Version**: 4.2.0  
+**Version**: 4.1.0  
 **Effective Date**: 2026-02-02  
 **Status**: Production
 
@@ -61,7 +61,7 @@ OpenSCAD Assistive Forge requires the following browser capabilities:
 | **WebAssembly** | OpenSCAD geometry engine | None (required) |
 | **Web Workers** | Background rendering | None (required) |
 | **WebGL 2.0** | 3D preview rendering | None (required) |
-| **SharedArrayBuffer** | WASM threading | Single-threaded fallback |
+| **SharedArrayBuffer** | Cross-origin isolation (COOP/COEP) | Not currently used for threading; WASM build is single-threaded |
 | **localStorage** | User preferences | Session-only storage |
 | **IndexedDB** | Project storage | localStorage fallback |
 
@@ -74,7 +74,7 @@ Cross-Origin-Opener-Policy: same-origin
 Cross-Origin-Embedder-Policy: require-corp
 ```
 
-Browsers without these headers will operate in single-threaded mode, which may affect performance for complex models.
+These headers are required by the browser to enable `SharedArrayBuffer`, which the hosting platform uses for cross-origin isolation. The current WASM build is single-threaded regardless of header presence.
 
 ---
 
@@ -134,7 +134,7 @@ To verify your browser meets requirements:
 |-------|-------|----------|
 | "WebAssembly not supported" | Browser too old | Update browser |
 | Blank 3D preview | WebGL disabled | Enable hardware acceleration |
-| Slow performance | SharedArrayBuffer unavailable | Check browser settings or use supported browser |
+| Slow performance | Limited device memory or CPU | Use desktop browser or reduce model complexity |
 | Models fail to render | Insufficient memory | Use desktop browser or reduce model complexity |
 
 ---
@@ -159,4 +159,4 @@ When reporting, please include:
 
 | Version | Date | Changes |
 |---------|------|---------|
-| 4.2.0 | 2026-02-02 | Initial supported browsers statement |
+| 4.1.0 | 2026-02-02 | Initial supported browsers statement |

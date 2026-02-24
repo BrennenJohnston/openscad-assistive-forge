@@ -32,7 +32,6 @@ playwright.config.js @BrennenJohnston
 /bin/ @BrennenJohnston
 
 # Accessibility-critical files (require extra attention)
-/src/js/accessibility/ @BrennenJohnston
 /src/js/modal-manager.js @BrennenJohnston
 /src/styles/ @BrennenJohnston
 lighthouse*.json @BrennenJohnston

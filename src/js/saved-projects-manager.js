@@ -87,13 +87,11 @@ async function ensureInitialized() {
     return; // Already initialized
   }
 
-  // If initialization is in progress, wait for it
   if (initPromise) {
     await initPromise;
     return;
   }
 
-  // Re-initialize if needed
   console.warn('[Saved Projects] Re-initializing database connection');
   await initSavedProjectsDB();
 }
@@ -111,7 +109,6 @@ export async function initSavedProjectsDB() {
     return { available: true, type: 'localstorage' };
   }
 
-  // Check if IndexedDB is available
   if (!window.indexedDB) {
     console.warn(
       '[Saved Projects] IndexedDB not available, falling back to localStorage'
@@ -436,7 +433,6 @@ function saveToLocalStorage(projects) {
  */
 export async function listSavedProjects() {
   try {
-    // Ensure database is initialized
     await ensureInitialized();
 
     let projects = [];
@@ -505,10 +501,8 @@ export async function saveProject({
   forkedFrom = null,
 }) {
   try {
-    // Ensure database is initialized
     await ensureInitialized();
 
-    // Check project count limit
     const existingProjects = await listSavedProjects();
     if (existingProjects.length >= STORAGE_LIMITS.MAX_SAVED_PROJECTS_COUNT) {
       return {
@@ -517,7 +511,6 @@ export async function saveProject({
       };
     }
 
-    // Validate project size
     const contentSize = new Blob([content]).size;
     if (contentSize > STORAGE_LIMITS.MAX_SAVED_PROJECT_SIZE) {
       return {
@@ -526,11 +519,9 @@ export async function saveProject({
       };
     }
 
-    // Generate unique name if duplicate exists
     const baseName = name || originalName;
     const uniqueName = generateUniqueName(baseName, existingProjects);
 
-    // Create project record with v2 schema
     const now = Date.now();
 
     const project = {
@@ -557,7 +548,6 @@ export async function saveProject({
       lastLoadedAt: now,
     };
 
-    // Validate against schema
     const valid = validateSavedProject(project);
     if (!valid) {
       const errorMsg = getValidationErrorMessage(validateSavedProject.errors);
@@ -655,12 +645,10 @@ export async function saveProject({
  */
 export async function getProject(id) {
   try {
-    // Ensure database is initialized
     await ensureInitialized();
 
     let project = null;
 
-    // Try IndexedDB first
     if (storageType === 'indexeddb') {
       try {
         const projects = await getFromIndexedDB();
@@ -687,7 +675,6 @@ export async function getProject(id) {
       project.projectFiles &&
       typeof project.projectFiles === 'string'
     ) {
-      // Parse projectFiles back to object
       try {
         project.projectFiles = JSON.parse(project.projectFiles);
       } catch (e) {
@@ -710,7 +697,6 @@ export async function getProject(id) {
  */
 export async function touchProject(id) {
   try {
-    // Ensure database is initialized
     await ensureInitialized();
 
     const project = await getProject(id);
@@ -772,7 +758,6 @@ export async function updateProject({
   content,
 }) {
   try {
-    // Ensure database is initialized
     await ensureInitialized();
 
     const project = await getProject(id);
@@ -800,7 +785,6 @@ export async function updateProject({
       project.savedAt = Date.now();
     }
 
-    // Validate updated project
     const tempProject = { ...project };
     if (
       tempProject.projectFiles &&
@@ -818,7 +802,6 @@ export async function updateProject({
       };
     }
 
-    // Prepare project for storage
     const projectToSave = { ...project };
     if (
       projectToSave.projectFiles &&
@@ -873,7 +856,6 @@ export async function updateProject({
  */
 export async function deleteProject(id) {
   try {
-    // Ensure database is initialized
     await ensureInitialized();
 
     // v2: Delete all project files and assets first
@@ -931,7 +913,6 @@ export async function getSavedProjectsSummary() {
     const projects = await listSavedProjects();
     const count = projects.length;
 
-    // Approximate total size
     let totalApproxBytes = 0;
     for (const project of projects) {
       totalApproxBytes += new Blob([project.content]).size;
@@ -1058,7 +1039,6 @@ export async function createFolder({ name, parentId = null, color = null }) {
       return { success: false, error: 'Folder name is required' };
     }
 
-    // Verify parent folder exists if specified
     if (parentId) {
       const parentFolder = await getFolder(parentId);
       if (!parentFolder) {
@@ -1236,34 +1216,27 @@ export async function deleteFolder(id, deleteContents = false) {
       return { success: false, error: 'Folder not found' };
     }
 
-    // Get all projects in this folder
     const projectsInFolder = await getProjectsInFolder(id);
 
-    // Get all subfolders
     const allFolders = await listFolders();
     const childFolders = allFolders.filter((f) => f.parentId === id);
 
     if (deleteContents) {
-      // Delete all projects in folder
       for (const project of projectsInFolder) {
         await deleteProject(project.id);
       }
-      // Recursively delete child folders
       for (const childFolder of childFolders) {
         await deleteFolder(childFolder.id, true);
       }
     } else {
-      // Move projects to root (folderId = null)
       for (const project of projectsInFolder) {
-        await moveProject(project.id, null);
+        await moveProject(project.id, null); // move to root
       }
-      // Move child folders to parent of deleted folder
       for (const childFolder of childFolders) {
         await moveFolder(childFolder.id, folder.parentId);
       }
     }
 
-    // Delete the folder itself
     if (
       storageType === 'indexeddb' &&
       db &&
@@ -1364,20 +1337,17 @@ export async function getFolderTree() {
     const folders = await listFolders();
     const projects = await listSavedProjects();
 
-    // Build a map for quick lookup
     const folderMap = new Map();
     folders.forEach((f) => {
       folderMap.set(f.id, { ...f, children: [], projects: [] });
     });
 
-    // Assign projects to their folders
     projects.forEach((p) => {
       if (p.folderId && folderMap.has(p.folderId)) {
         folderMap.get(p.folderId).projects.push(p);
       }
     });
 
-    // Build tree structure
     const roots = [];
     const rootProjects = projects.filter((p) => !p.folderId);
 
@@ -1389,7 +1359,6 @@ export async function getFolderTree() {
       }
     });
 
-    // Sort folders and projects by name
     const sortByName = (a, b) => a.name.localeCompare(b.name);
     roots.sort(sortByName);
     folderMap.forEach((f) => {
@@ -1486,7 +1455,6 @@ export async function moveProject(projectId, folderId) {
 
     project.folderId = folderId;
 
-    // Prepare project for storage
     const projectToSave = { ...project };
     if (
       projectToSave.projectFiles &&
@@ -1499,7 +1467,7 @@ export async function moveProject(projectId, folderId) {
       await saveToIndexedDB(projectToSave);
     }
 
-    // Also update localStorage
+    // Also update localStorage (dual-write)
     const lsProjects = getFromLocalStorage();
     const index = lsProjects.findIndex((p) => p.id === projectId);
     if (index >= 0) {
@@ -1558,7 +1526,6 @@ export async function addProjectFile({
   try {
     await ensureInitialized();
 
-    // Verify project exists
     const project = await getProject(projectId);
     if (!project) {
       return { success: false, error: 'Project not found' };
@@ -1646,7 +1613,6 @@ export async function deleteProjectFile(fileId) {
     await ensureInitialized();
 
     if (storageType === 'indexeddb' && db) {
-      // Get the file first to check if it has an asset
       const file = await new Promise((resolve, reject) => {
         const transaction = db.transaction([PROJECT_FILES_STORE], 'readonly');
         const store = transaction.objectStore(PROJECT_FILES_STORE);
@@ -1655,12 +1621,10 @@ export async function deleteProjectFile(fileId) {
         request.onerror = () => reject(request.error);
       });
 
-      // Delete the asset if present
       if (file && file.assetId) {
         await deleteAsset(file.assetId);
       }
 
-      // Delete the file record
       await new Promise((resolve, reject) => {
         const transaction = db.transaction([PROJECT_FILES_STORE], 'readwrite');
         const store = transaction.objectStore(PROJECT_FILES_STORE);
@@ -1820,13 +1784,11 @@ export async function saveOverlayToProject(
       return { success: false, error: 'Project not found' };
     }
 
-    // Store the binary data as an asset
     const assetResult = await storeAsset({ data, mimeType, fileName });
     if (!assetResult.success) {
       return assetResult;
     }
 
-    // Add a project file record pointing to the asset
     const fileResult = await addProjectFile({
       projectId,
       path: `overlays/${fileName}`,
@@ -1838,7 +1800,6 @@ export async function saveOverlayToProject(
       return fileResult;
     }
 
-    // Update project overlay metadata
     project.overlayFiles = project.overlayFiles || {};
     project.overlayFiles[fileName] = {
       assetId: assetResult.id,
@@ -1848,7 +1809,6 @@ export async function saveOverlayToProject(
       addedAt: Date.now(),
     };
 
-    // Save updated project
     const projectToSave = { ...project };
     if (
       projectToSave.projectFiles &&
@@ -1923,7 +1883,6 @@ export async function savePresetToProject(
       return { success: false, error: 'Project not found' };
     }
 
-    // Create preset file content
     const presetContent = JSON.stringify(
       {
         name,
@@ -1935,14 +1894,11 @@ export async function savePresetToProject(
       2
     );
 
-    // Sanitize filename
     const safeFileName = name.replace(/[^a-zA-Z0-9_-]/g, '_') + '.json';
     const path = `presets/${safeFileName}`;
 
-    // Check if preset already exists
     const existingFile = await getProjectFileByPath(projectId, path);
     if (existingFile) {
-      // Update existing file
       existingFile.textContent = presetContent;
       existingFile.updatedAt = Date.now();
 
@@ -1959,7 +1915,6 @@ export async function savePresetToProject(
         });
       }
     } else {
-      // Add new file
       await addProjectFile({
         projectId,
         path,
@@ -1969,7 +1924,6 @@ export async function savePresetToProject(
       });
     }
 
-    // Update project preset metadata
     project.presets = project.presets || [];
     const existingIndex = project.presets.findIndex((p) => p.name === name);
     const presetMeta = { name, path, addedAt: Date.now() };
@@ -1980,7 +1934,6 @@ export async function savePresetToProject(
       project.presets.push(presetMeta);
     }
 
-    // Save updated project
     const projectToSave = { ...project };
     if (
       projectToSave.projectFiles &&
