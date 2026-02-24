@@ -29,11 +29,11 @@ const SUPPORTED_VERSIONS = ['1.0'];
 /** Per-file fetch timeout (ms) */
 const FETCH_TIMEOUT_MS = 30_000;
 
-/** Maximum individual file size (bytes) — 10 MB */
-const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
+/** Maximum individual file size (bytes) — 50 MB */
+const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024;
 
-/** Maximum total project size (bytes) — 50 MB */
-const MAX_TOTAL_SIZE_BYTES = 50 * 1024 * 1024;
+/** Maximum total project size (bytes) — 500 MB */
+const MAX_TOTAL_SIZE_BYTES = 500 * 1024 * 1024;
 
 /** Maximum number of files a manifest may declare */
 const MAX_FILE_COUNT = 50;
@@ -215,6 +215,48 @@ export function resolveFileUrl(filePath, manifestUrl) {
 }
 
 // ---------------------------------------------------------------------------
+// Git LFS helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Detect whether text content is a Git LFS pointer file.
+ *
+ * An LFS pointer has the exact format:
+ *   version https://git-lfs.github.com/spec/v1
+ *   oid sha256:<64-hex-chars>
+ *   size <bytes>
+ *
+ * @param {string} text  Content to inspect
+ * @returns {{ oid: string, size: number } | null}  Parsed pointer or null
+ */
+export function detectLfsPointer(text) {
+  if (!text.startsWith('version https://git-lfs.github.com/spec/v1')) return null;
+  const oidMatch = text.match(/^oid sha256:([a-f0-9]{64})$/m);
+  const sizeMatch = text.match(/^size (\d+)$/m);
+  if (!oidMatch || !sizeMatch) return null;
+  return { oid: oidMatch[1], size: parseInt(sizeMatch[1], 10) };
+}
+
+/**
+ * Rewrite a raw.githubusercontent.com URL to the media.githubusercontent.com
+ * equivalent that serves actual LFS file contents.
+ *
+ * raw:   https://raw.githubusercontent.com/OWNER/REPO/BRANCH/path
+ * media: https://media.githubusercontent.com/media/OWNER/REPO/BRANCH/path
+ *
+ * Non-raw URLs are returned unchanged.
+ *
+ * @param {string} rawUrl
+ * @returns {string}
+ */
+export function resolveGitHubLfsUrl(rawUrl) {
+  return rawUrl.replace(
+    'https://raw.githubusercontent.com/',
+    'https://media.githubusercontent.com/media/'
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Fetch helpers
 // ---------------------------------------------------------------------------
 
@@ -249,6 +291,10 @@ async function fetchWithTimeout(url, timeoutMs = FETCH_TIMEOUT_MS) {
  * Fetch a binary file as a Blob with CORS-aware error handling.
  * Used for bundle (.zip) downloads.
  *
+ * Transparently handles Git LFS pointer files: if raw.githubusercontent.com
+ * returns a small text response that looks like an LFS pointer, the fetch is
+ * retried against media.githubusercontent.com which serves the actual content.
+ *
  * @param {string} url       Fully-resolved URL
  * @param {string} fileName  Human-readable name for error messages
  * @returns {Promise<Blob>}
@@ -272,6 +318,31 @@ async function fetchBlob(url, fileName) {
         'FILE_TOO_LARGE',
         { url, size: parseInt(contentLength, 10) }
       );
+    }
+
+    // LFS pointer detection: raw.githubusercontent.com returns a ~130-byte
+    // text file instead of the real binary when the file is LFS-tracked.
+    // Detect this and re-fetch from media.githubusercontent.com.
+    // Strategy: clone the response so we can read it as text without consuming
+    // the original, then fall back to the original blob if not an LFS pointer.
+    const rawSize = contentLength ? parseInt(contentLength, 10) : null;
+    if (rawSize === null || rawSize < 1024) {
+      const cloned = response.clone();
+      const text = await cloned.text();
+      const lfsPointer = detectLfsPointer(text);
+      if (lfsPointer) {
+        const mediaUrl = resolveGitHubLfsUrl(url);
+        if (mediaUrl === url) {
+          // URL was not a raw.githubusercontent.com URL — cannot redirect
+          throw new ManifestError(
+            `"${fileName}" is a Git LFS pointer but the URL is not a raw.githubusercontent.com URL. ` +
+              `Ensure the file is hosted on GitHub and the manifest URL points to raw.githubusercontent.com.`,
+            'LFS_POINTER',
+            { url, oid: lfsPointer.oid, size: lfsPointer.size }
+          );
+        }
+        return fetchBlob(mediaUrl, fileName);
+      }
     }
 
     return await response.blob();
@@ -446,6 +517,32 @@ function buildFileList(files, manifestUrl) {
  */
 export async function loadManifest(manifestUrl, { onProgress } = {}) {
   const progress = onProgress || (() => {});
+
+  // ------------------------------------------------------------------
+  // Step 0: Reject placeholder / template URLs before hitting the network
+  // ------------------------------------------------------------------
+  const PLACEHOLDER_PATTERNS = [
+    'YOUR_USERNAME',
+    'YOUR_REPO',
+    'YOUR_GITHUB_USERNAME',
+    'OWNER',
+    'REPOSITORY',
+    '________',
+  ];
+
+  const upperUrl = manifestUrl.toUpperCase();
+  const matchedPlaceholder = PLACEHOLDER_PATTERNS.find((p) =>
+    upperUrl.includes(p)
+  );
+  if (matchedPlaceholder) {
+    throw new ManifestError(
+      `The manifest URL still contains the placeholder "${matchedPlaceholder}". ` +
+        `Replace it with your actual GitHub username and repository name. ` +
+        `See the Manifest Sharing Guide for details.`,
+      'INVALID_URL',
+      { url: manifestUrl, placeholder: matchedPlaceholder }
+    );
+  }
 
   // ------------------------------------------------------------------
   // Step 1: Fetch the manifest itself

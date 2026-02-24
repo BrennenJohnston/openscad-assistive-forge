@@ -4,6 +4,8 @@ import {
   resolveFileUrl,
   ManifestError,
   loadManifest,
+  detectLfsPointer,
+  resolveGitHubLfsUrl,
 } from '../../src/js/manifest-loader.js'
 
 // ---------------------------------------------------------------------------
@@ -12,14 +14,42 @@ import {
 
 /** Build a mock Response (text) */
 function makeMockResponse(body, { ok = true, status = 200, headers = {} } = {}) {
-  return {
+  const bodyStr = typeof body === 'string' ? body : JSON.stringify(body)
+  const mock = {
     ok,
     status,
     statusText: ok ? 'OK' : 'Not Found',
     headers: { get: (name) => headers[name.toLowerCase()] || null },
-    text: () => Promise.resolve(typeof body === 'string' ? body : JSON.stringify(body)),
-    blob: () => Promise.resolve(new Blob([typeof body === 'string' ? body : JSON.stringify(body)])),
+    text: () => Promise.resolve(bodyStr),
+    blob: () => Promise.resolve(new Blob([bodyStr])),
   }
+  mock.clone = () => ({ ...mock })
+  return mock
+}
+
+/** Build a mock blob Response for binary downloads */
+function makeMockBlobResponse(blob, { ok = true, status = 200, contentLength = null, textContent = '' } = {}) {
+  const mock = {
+    ok,
+    status,
+    statusText: ok ? 'OK' : 'Not Found',
+    headers: { get: (h) => (h === 'content-length' && contentLength !== null ? String(contentLength) : null) },
+    text: () => Promise.resolve(textContent),
+    blob: () => Promise.resolve(blob),
+  }
+  mock.clone = () => ({ ...mock })
+  return mock
+}
+
+/** Create a real in-memory ZIP blob using JSZip */
+async function makeZipBlob(fileContents) {
+  const JSZip = (await import('jszip')).default
+  const zip = new JSZip()
+  for (const [name, content] of Object.entries(fileContents)) {
+    zip.file(name, content)
+  }
+  const buffer = await zip.generateAsync({ type: 'arraybuffer' })
+  return new Blob([buffer], { type: 'application/zip' })
 }
 
 // ---------------------------------------------------------------------------
@@ -355,7 +385,7 @@ describe('loadManifest', () => {
     global.fetch
       .mockResolvedValueOnce(mockResponse(sampleManifest))
       .mockResolvedValueOnce(
-        mockResponse('code', { headers: { 'content-length': String(20 * 1024 * 1024) } })
+        mockResponse('code', { headers: { 'content-length': String(60 * 1024 * 1024) } })
       )
       .mockResolvedValueOnce(mockResponse('ok'))
       .mockResolvedValueOnce(mockResponse('ok'))
@@ -500,18 +530,6 @@ describe('loadManifest — bundle path', () => {
     defaults: { autoPreview: true },
   }
 
-  /** Create a tiny valid in-memory JSZip buffer (just a valid zip header bytes) */
-  async function makeZipBlob(fileContents) {
-    // Use JSZip to create a real zip for extraction
-    const JSZip = (await import('jszip')).default
-    const zip = new JSZip()
-    for (const [name, content] of Object.entries(fileContents)) {
-      zip.file(name, content)
-    }
-    const buffer = await zip.generateAsync({ type: 'arraybuffer' })
-    return new Blob([buffer], { type: 'application/zip' })
-  }
-
   beforeEach(() => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     global.fetch = vi.fn()
@@ -529,9 +547,7 @@ describe('loadManifest — bundle path', () => {
 
     global.fetch
       .mockResolvedValueOnce(makeMockResponse(bundleManifest))   // manifest
-      .mockResolvedValueOnce({ ok: true, status: 200,
-        headers: { get: () => null },
-        blob: () => Promise.resolve(zipBlob) })                   // bundle zip
+      .mockResolvedValueOnce(makeMockBlobResponse(zipBlob))      // bundle zip
 
     const result = await loadManifest(manifestUrl)
 
@@ -555,9 +571,7 @@ describe('loadManifest — bundle path', () => {
 
     global.fetch
       .mockResolvedValueOnce(makeMockResponse(overrideManifest))
-      .mockResolvedValueOnce({ ok: true, status: 200,
-        headers: { get: () => null },
-        blob: () => Promise.resolve(zipBlob) })
+      .mockResolvedValueOnce(makeMockBlobResponse(zipBlob))
 
     const result = await loadManifest(manifestUrl)
 
@@ -567,9 +581,7 @@ describe('loadManifest — bundle path', () => {
   it('should throw BUNDLE_EXTRACT_ERROR when zip is invalid', async () => {
     global.fetch
       .mockResolvedValueOnce(makeMockResponse(bundleManifest))
-      .mockResolvedValueOnce({ ok: true, status: 200,
-        headers: { get: () => null },
-        blob: () => Promise.resolve(new Blob(['not a zip'])) })
+      .mockResolvedValueOnce(makeMockBlobResponse(new Blob(['not a zip'])))
 
     await expect(loadManifest(manifestUrl)).rejects.toSatisfy(
       (err) => err instanceof ManifestError && err.code === 'BUNDLE_EXTRACT_ERROR'
@@ -579,10 +591,7 @@ describe('loadManifest — bundle path', () => {
   it('should throw ManifestError on HTTP error fetching bundle', async () => {
     global.fetch
       .mockResolvedValueOnce(makeMockResponse(bundleManifest))
-      .mockResolvedValueOnce({ ok: false, status: 404,
-        statusText: 'Not Found',
-        headers: { get: () => null },
-        blob: () => Promise.resolve(new Blob([])) })
+      .mockResolvedValueOnce(makeMockBlobResponse(new Blob([]), { ok: false, status: 404 }))
 
     await expect(loadManifest(manifestUrl)).rejects.toThrow(ManifestError)
   })
@@ -602,9 +611,7 @@ describe('loadManifest — bundle path', () => {
 
     global.fetch
       .mockResolvedValueOnce(makeMockResponse(bundleManifest))
-      .mockResolvedValueOnce({ ok: true, status: 200,
-        headers: { get: () => null },
-        blob: () => Promise.resolve(zipBlob) })
+      .mockResolvedValueOnce(makeMockBlobResponse(zipBlob))
 
     const progress = vi.fn()
     await loadManifest(manifestUrl, { onProgress: progress })
@@ -612,5 +619,187 @@ describe('loadManifest — bundle path', () => {
     expect(progress).toHaveBeenCalledWith(expect.objectContaining({ stage: 'manifest' }))
     expect(progress).toHaveBeenCalledWith(expect.objectContaining({ stage: 'download' }))
     expect(progress).toHaveBeenCalledWith(expect.objectContaining({ stage: 'complete' }))
+  })
+})
+
+// ---------------------------------------------------------------------------
+// detectLfsPointer
+// ---------------------------------------------------------------------------
+
+describe('detectLfsPointer', () => {
+  const validPointer = [
+    'version https://git-lfs.github.com/spec/v1',
+    'oid sha256:4d7a214614ab2935c943f9e0ff69d22eadbb8f32b1258daaa5e2ca24d17e2393',
+    'size 65697432',
+  ].join('\n')
+
+  it('should parse a valid LFS pointer', () => {
+    const result = detectLfsPointer(validPointer)
+    expect(result).not.toBeNull()
+    expect(result.oid).toBe('4d7a214614ab2935c943f9e0ff69d22eadbb8f32b1258daaa5e2ca24d17e2393')
+    expect(result.size).toBe(65697432)
+  })
+
+  it('should return null for regular file content', () => {
+    expect(detectLfsPointer('PK\x03\x04...')).toBeNull()
+    expect(detectLfsPointer('module design() {}')).toBeNull()
+    expect(detectLfsPointer('')).toBeNull()
+  })
+
+  it('should return null when oid line is missing', () => {
+    const noOid = 'version https://git-lfs.github.com/spec/v1\nsize 65697432\n'
+    expect(detectLfsPointer(noOid)).toBeNull()
+  })
+
+  it('should return null when size line is missing', () => {
+    const noSize = 'version https://git-lfs.github.com/spec/v1\noid sha256:4d7a214614ab2935c943f9e0ff69d22eadbb8f32b1258daaa5e2ca24d17e2393\n'
+    expect(detectLfsPointer(noSize)).toBeNull()
+  })
+
+  it('should return null when oid hash is wrong length', () => {
+    const shortOid = [
+      'version https://git-lfs.github.com/spec/v1',
+      'oid sha256:4d7a214614ab2935',
+      'size 65697432',
+    ].join('\n')
+    expect(detectLfsPointer(shortOid)).toBeNull()
+  })
+
+  it('should handle pointer with trailing newline', () => {
+    const result = detectLfsPointer(validPointer + '\n')
+    expect(result).not.toBeNull()
+    expect(result.size).toBe(65697432)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// resolveGitHubLfsUrl
+// ---------------------------------------------------------------------------
+
+describe('resolveGitHubLfsUrl', () => {
+  it('should replace raw.githubusercontent.com with media.githubusercontent.com/media', () => {
+    const raw = 'https://raw.githubusercontent.com/owner/repo/main/designs/bundle.zip'
+    const expected = 'https://media.githubusercontent.com/media/owner/repo/main/designs/bundle.zip'
+    expect(resolveGitHubLfsUrl(raw)).toBe(expected)
+  })
+
+  it('should return non-raw URLs unchanged', () => {
+    const url = 'https://example.com/files/bundle.zip'
+    expect(resolveGitHubLfsUrl(url)).toBe(url)
+  })
+
+  it('should return media URLs unchanged', () => {
+    const url = 'https://media.githubusercontent.com/media/owner/repo/main/bundle.zip'
+    expect(resolveGitHubLfsUrl(url)).toBe(url)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// fetchBlob LFS redirect (via loadManifest integration)
+// ---------------------------------------------------------------------------
+
+describe('loadManifest — LFS pointer redirect', () => {
+  const manifestUrl = 'https://raw.githubusercontent.com/alice/my-project/main/forge-manifest.json'
+
+  const lfsPointerText = [
+    'version https://git-lfs.github.com/spec/v1',
+    'oid sha256:4d7a214614ab2935c943f9e0ff69d22eadbb8f32b1258daaa5e2ca24d17e2393',
+    'size 65697432',
+  ].join('\n')
+
+  beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn())
+  })
+
+  it('should transparently re-fetch from media URL when raw URL returns an LFS pointer', async () => {
+    const bundleManifest = {
+      forgeManifest: '1.0',
+      files: { bundle: 'bundle.zip' },
+    }
+
+    const zipBlob = await makeZipBlob({ 'design.scad': 'module x() {}' })
+
+    global.fetch
+      // 1. manifest fetch
+      .mockResolvedValueOnce(makeMockResponse(bundleManifest))
+      // 2. raw bundle fetch — returns LFS pointer (small, < 1 KB)
+      .mockResolvedValueOnce(makeMockBlobResponse(
+        new Blob([lfsPointerText], { type: 'text/plain' }),
+        { contentLength: lfsPointerText.length, textContent: lfsPointerText }
+      ))
+      // 3. media bundle fetch — returns real ZIP
+      .mockResolvedValueOnce(makeMockBlobResponse(zipBlob))
+
+    const result = await loadManifest(manifestUrl)
+
+    expect(result.projectFiles.has('design.scad')).toBe(true)
+
+    // Verify the third fetch went to media.githubusercontent.com
+    const calls = global.fetch.mock.calls
+    expect(calls[2][0]).toContain('media.githubusercontent.com/media/')
+  })
+
+  it('should throw LFS_POINTER error when non-GitHub URL returns an LFS pointer', async () => {
+    const bundleManifest = {
+      forgeManifest: '1.0',
+      files: { bundle: 'https://example.com/bundle.zip' },
+    }
+
+    global.fetch
+      .mockResolvedValueOnce(makeMockResponse(bundleManifest))
+      .mockResolvedValueOnce(makeMockBlobResponse(
+        new Blob([lfsPointerText], { type: 'text/plain' }),
+        { contentLength: lfsPointerText.length, textContent: lfsPointerText }
+      ))
+
+    await expect(loadManifest(manifestUrl)).rejects.toSatisfy(
+      (err) => err instanceof ManifestError && err.code === 'LFS_POINTER'
+    )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Size limits
+// ---------------------------------------------------------------------------
+
+describe('Size limits', () => {
+  const manifestUrl = 'https://raw.githubusercontent.com/alice/my-project/main/forge-manifest.json'
+
+  beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn())
+  })
+
+  it('should reject a bundle reported as larger than 500 MB via content-length', async () => {
+    const bundleManifest = {
+      forgeManifest: '1.0',
+      files: { bundle: 'bundle.zip' },
+    }
+
+    const oversizeBytes = 501 * 1024 * 1024
+
+    global.fetch
+      .mockResolvedValueOnce(makeMockResponse(bundleManifest))
+      .mockResolvedValueOnce(makeMockBlobResponse(new Blob([]), { contentLength: oversizeBytes }))
+
+    await expect(loadManifest(manifestUrl)).rejects.toSatisfy(
+      (err) => err instanceof ManifestError && err.code === 'FILE_TOO_LARGE'
+    )
+  })
+
+  it('should accept a bundle reported as 200 MB via content-length', async () => {
+    const bundleManifest = {
+      forgeManifest: '1.0',
+      files: { bundle: 'bundle.zip' },
+    }
+
+    const zipBlob = await makeZipBlob({ 'design.scad': 'module x() {}' })
+    const twoHundredMB = 200 * 1024 * 1024
+
+    global.fetch
+      .mockResolvedValueOnce(makeMockResponse(bundleManifest))
+      .mockResolvedValueOnce(makeMockBlobResponse(zipBlob, { contentLength: twoHundredMB }))
+
+    const result = await loadManifest(manifestUrl)
+    expect(result.projectFiles.has('design.scad')).toBe(true)
   })
 })
