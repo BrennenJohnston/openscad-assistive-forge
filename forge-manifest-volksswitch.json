@@ -1,0 +1,15 @@
+{
+  "forgeManifest": "1.0",
+  "name": "Customizable 3D-Printable Keyguard Designer",
+  "author": "Volksswitch.org",
+  "description": "Customizable, 3D printable keyguard for grid-based, free-form, and hybrid AAC apps on tablets",
+  "homepage": "https://volksswitch.org/index.php/volks-devices/customizable-3d-printable-keyguard-for-grid-based-free-form-and-hybrid-aac-apps-on-tablets/",
+  "files": {
+    "bundle": "ready_to_print_designs.zip",
+    "main": "keyguard_v75.scad"
+  },
+  "defaults": {
+    "autoPreview": true,
+    "skipWelcome": false
+  }
+}

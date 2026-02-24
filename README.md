@@ -184,6 +184,25 @@ npx openscad-forge manifest ./my_project_folder --zip -o forge-manifest.json
 
 ---
 
+## Example: Volksswitch.org Keyguard Designer
+
+This branch includes a real-world ZIP bundle example from [Volksswitch.org](https://volksswitch.org/index.php/volks-devices/customizable-3d-printable-keyguard-for-grid-based-free-form-and-hybrid-aac-apps-on-tablets/) — a customizable, 3D-printable keyguard designer for AAC apps on tablets.
+
+| File | Purpose |
+|------|---------|
+| `forge-manifest-volksswitch.json` | Manifest pointing to the keyguard designer ZIP bundle |
+| `ready_to_print_designs.zip` | Full keyguard designer package (v75) with case/app presets |
+
+### Try it live
+
+```
+https://openscad-assistive-forge.pages.dev/?manifest=https://raw.githubusercontent.com/BrennenJohnston/openscad-assistive-forge/example-manifest/forge-manifest-volksswitch.json
+```
+
+This is a good example of the ZIP bundle approach for a large, multi-file project with companion data files.
+
+---
+
 ## Manifest field reference
 
 ### Common fields
