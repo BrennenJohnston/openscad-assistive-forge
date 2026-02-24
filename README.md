@@ -265,6 +265,25 @@ This is a good example of the ZIP bundle approach for a large, multi-file projec
 
 ---
 
+## Example: Braille Card & Cylinder STL Generator
+
+A personal project demonstrating the ZIP bundle approach for a self-contained assistive technology design.
+
+| File | Purpose |
+|------|---------|
+| `forge-manifest-braille.json` | Manifest pointing to the Braille generator ZIP bundle |
+| `Braille_Card_And_Cylinder_STL_Generator.zip` | Full project package — `.scad` file, parameter mapping, and README |
+
+### Try it live
+
+```
+https://openscad-assistive-forge.pages.dev/?manifest=https://raw.githubusercontent.com/BrennenJohnston/openscad-assistive-forge/example-manifest/forge-manifest-braille.json
+```
+
+This is a good example of the ZIP bundle approach for a small, self-contained project. The ZIP is under 100 MB so no Git LFS is required — it is committed directly.
+
+---
+
 ## Manifest field reference
 
 ### Common fields
