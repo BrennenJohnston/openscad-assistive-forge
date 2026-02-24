@@ -95,6 +95,7 @@ import {
   clearCacheWithOptions,
   getDetailedStorageInfo,
   exportProjectsBackup,
+  exportSingleProject,
   importProjectsBackup,
   importProjectFromFiles,
 } from './js/storage-manager.js';
@@ -2612,9 +2613,16 @@ async function initApp() {
 
   // Export backup handler
   async function handleExportBackup() {
+    const dismissOverlay = showProcessingOverlay(
+      'Exporting projects backup...',
+      {
+        hint: 'Packaging all projects. Please do not close or refresh the page.',
+      }
+    );
     try {
       updateStatus('Creating backup...', 'info');
       const result = await exportProjectsBackup();
+      dismissOverlay();
 
       if (result.success && result.blob) {
         // Download the file
@@ -2633,8 +2641,40 @@ async function initApp() {
         updateStatus(`Export failed: ${result.error}`, 'error');
       }
     } catch (error) {
+      dismissOverlay();
       console.error('[Storage] Export error:', error);
       updateStatus('Failed to export backup', 'error');
+    }
+  }
+
+  // Download a single project as a ZIP
+  async function downloadSingleProject(projectId) {
+    const dismissOverlay = showProcessingOverlay('Preparing download...', {
+      hint: 'Packaging project files. Please do not close or refresh the page.',
+    });
+    try {
+      const result = await exportSingleProject(projectId);
+      dismissOverlay();
+
+      if (result.success && result.blob) {
+        const url = URL.createObjectURL(result.blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = result.fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        updateStatus(`Project downloaded: ${result.fileName}`, 'success');
+        stateManager.announceChange('Project downloaded successfully');
+      } else {
+        updateStatus(`Download failed: ${result.error}`, 'error');
+      }
+    } catch (error) {
+      dismissOverlay();
+      console.error('[Storage] Single-project download error:', error);
+      updateStatus('Failed to download project', 'error');
     }
   }
 
@@ -9489,6 +9529,9 @@ if (rounded) {
             <button class="btn btn-secondary btn-edit-project" data-project-id="${project.id}">
               Edit
             </button>
+            <button class="btn btn-secondary btn-download-project" data-project-id="${project.id}" title="Download this project as a ZIP">
+              Export
+            </button>
             <button class="btn btn-danger btn-delete-project" data-project-id="${project.id}">
               Delete
             </button>
@@ -9584,6 +9627,13 @@ if (rounded) {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         showEditProjectModal(btn.dataset.projectId);
+      });
+    });
+
+    container.querySelectorAll('.btn-download-project').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        downloadSingleProject(btn.dataset.projectId);
       });
     });
 

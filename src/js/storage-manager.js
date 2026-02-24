@@ -830,7 +830,16 @@ export async function exportProjectsBackup() {
         lastLoadedAt: project.lastLoadedAt,
         overlayFiles: project.overlayFiles || {},
         presets: project.presets || [],
+        uiPreferences: null,
       };
+      try {
+        const raw = localStorage.getItem(
+          `openscad-forge-ui-prefs-${project.originalName}`
+        );
+        if (raw) projectMeta.uiPreferences = JSON.parse(raw);
+      } catch (_) {
+        /* ignore */
+      }
       zip.file(
         `${projectDir}/project.json`,
         JSON.stringify(projectMeta, null, 2)
@@ -886,6 +895,131 @@ export async function exportProjectsBackup() {
     return {
       success: false,
       error: error.message || 'Failed to create backup',
+    };
+  }
+}
+
+/**
+ * Export a single project as a ZIP file
+ * @param {string} projectId - The project ID to export
+ * @returns {Promise<{success: boolean, blob?: Blob, fileName?: string, error?: string}>}
+ */
+export async function exportSingleProject(projectId) {
+  try {
+    const JSZip = (await import('jszip')).default;
+    const zip = new JSZip();
+
+    const project = await getProject(projectId);
+    if (!project) {
+      return { success: false, error: 'Project not found' };
+    }
+
+    const projectDir = sanitizeFileName(project.name);
+
+    // Add main content
+    if (project.kind === 'zip' && project.projectFiles) {
+      const parsedFiles =
+        typeof project.projectFiles === 'string'
+          ? JSON.parse(project.projectFiles)
+          : project.projectFiles;
+
+      for (const [filePath, content] of Object.entries(parsedFiles)) {
+        zip.file(`${projectDir}/files/${filePath}`, content);
+      }
+    } else {
+      zip.file(
+        `${projectDir}/${project.mainFilePath || 'main.scad'}`,
+        project.content
+      );
+    }
+
+    // Build project metadata including UI preferences
+    const projectMeta = {
+      id: project.id,
+      name: project.name,
+      originalName: project.originalName,
+      kind: project.kind,
+      mainFilePath: project.mainFilePath,
+      folderId: project.folderId,
+      notes: project.notes,
+      savedAt: project.savedAt,
+      lastLoadedAt: project.lastLoadedAt,
+      overlayFiles: project.overlayFiles || {},
+      presets: project.presets || [],
+      uiPreferences: null,
+    };
+
+    try {
+      const raw = localStorage.getItem(
+        `openscad-forge-ui-prefs-${project.originalName}`
+      );
+      if (raw) projectMeta.uiPreferences = JSON.parse(raw);
+    } catch (_) {
+      /* ignore */
+    }
+
+    zip.file(
+      `${projectDir}/project.json`,
+      JSON.stringify(projectMeta, null, 2)
+    );
+
+    // Add project files (presets, overlays)
+    try {
+      const files = await getProjectFiles(project.id);
+      for (const file of files) {
+        if (file.textContent) {
+          zip.file(`${projectDir}/${file.path}`, file.textContent);
+        } else if (file.assetId) {
+          const asset = await getAsset(file.assetId);
+          if (asset && asset.data) {
+            zip.file(`${projectDir}/${file.path}`, asset.data);
+          }
+        }
+      }
+    } catch (error) {
+      console.warn(
+        `[StorageManager] Error exporting project files for ${project.name}:`,
+        error
+      );
+    }
+
+    // Add a minimal manifest so the ZIP is recognisable by importProjectsBackup
+    const manifest = {
+      version: '2.0',
+      exportedAt: new Date().toISOString(),
+      foldersCount: 0,
+      projectsCount: 1,
+      folders: [],
+      projects: [
+        {
+          id: project.id,
+          name: project.name,
+          folderId: null,
+          path: projectDir,
+        },
+      ],
+      customGridPresets: [],
+    };
+    zip.file('manifest.json', JSON.stringify(manifest, null, 2));
+
+    const blob = await zip.generateAsync({
+      type: 'blob',
+      compression: 'DEFLATE',
+      compressionOptions: { level: 6 },
+    });
+
+    const fileName = `${sanitizeFileName(project.name)}.zip`;
+
+    console.log(
+      `[StorageManager] Single-project export: ${fileName} (${formatBytes(blob.size)})`
+    );
+
+    return { success: true, blob, fileName };
+  } catch (error) {
+    console.error('[StorageManager] Error exporting single project:', error);
+    return {
+      success: false,
+      error: error.message || 'Failed to export project',
     };
   }
 }
@@ -1056,6 +1190,20 @@ export async function importProjectsBackup(file) {
                   `[StorageManager] Failed to import overlay: ${path}`
                 );
               }
+            }
+          }
+
+          // Restore UI preferences if present in the backup
+          if (projectMeta.uiPreferences && projectMeta.originalName) {
+            try {
+              localStorage.setItem(
+                `openscad-forge-ui-prefs-${projectMeta.originalName}`,
+                JSON.stringify(projectMeta.uiPreferences)
+              );
+            } catch (_e) {
+              console.warn(
+                `[StorageManager] Failed to restore UI preferences for ${projectMeta.name}`
+              );
             }
           }
         } else {
