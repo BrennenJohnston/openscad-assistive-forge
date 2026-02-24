@@ -224,6 +224,78 @@ import {
 } from './js/saved-projects-manager.js';
 import Split from 'split.js';
 
+/**
+ * Resolve parameters for 2D export (SVG/DXF) using the parsed parameter schema.
+ * For each parameter that has an enum with a 2D-compatible value, overrides the
+ * current value so the model produces 2D geometry for the export.
+ *
+ * Replaces the worker-side hardcoded approach (which only handled keyguard-specific
+ * parameters and missed the critical `generate` parameter).
+ *
+ * @param {Object} parameters - Current UI parameter values
+ * @param {Object|null} schema - Parsed schema from extractParameters() (schema.parameters)
+ * @param {string} format - Output format ('svg' or 'dxf')
+ * @returns {Object} Parameter object with 2D-compatible overrides applied
+ */
+function resolve2DExportParameters(parameters, schema, format) {
+  if (format !== 'svg' && format !== 'dxf') return parameters;
+  const schemaParams = schema?.parameters;
+  if (!schemaParams) return parameters;
+
+  const resolved = { ...parameters };
+
+  for (const [name, pDef] of Object.entries(schemaParams)) {
+    const enumValues = pDef.enum;
+    if (!Array.isArray(enumValues) || enumValues.length === 0) continue;
+
+    if (name === 'generate') {
+      // Find the enum option whose value contains 2D export keywords
+      const twoDEntry = enumValues.find((entry) => {
+        const v = String(
+          typeof entry === 'object' ? entry.value : entry
+        ).toLowerCase();
+        return (
+          v.includes('svg') || v.includes('dxf') || v.includes('first layer')
+        );
+      });
+      if (twoDEntry !== undefined) {
+        resolved[name] =
+          typeof twoDEntry === 'object' ? twoDEntry.value : twoDEntry;
+      }
+      continue;
+    }
+
+    if (name === 'type_of_keyguard') {
+      const laserEntry = enumValues.find((entry) => {
+        const v = String(
+          typeof entry === 'object' ? entry.value : entry
+        ).toLowerCase();
+        return v.includes('laser');
+      });
+      if (laserEntry !== undefined) {
+        resolved[name] =
+          typeof laserEntry === 'object' ? laserEntry.value : laserEntry;
+      }
+      continue;
+    }
+
+    if (name === 'use_Laser_Cutting_best_practices') {
+      const yesEntry = enumValues.find((entry) => {
+        const v = String(
+          typeof entry === 'object' ? entry.value : entry
+        ).toLowerCase();
+        return v === 'yes';
+      });
+      if (yesEntry !== undefined) {
+        resolved[name] =
+          typeof yesEntry === 'object' ? yesEntry.value : yesEntry;
+      }
+    }
+  }
+
+  return resolved;
+}
+
 // Example definitions (used by welcome screen, Features Guide, and deep-linking)
 // Direct-launch URLs for external website integration
 // Usage: ?load=keyguard-demo or ?example=simple-box
@@ -4129,6 +4201,26 @@ async function initApp() {
     const state = stateManager.getState();
     const modelName = state.uploadedFile?.name;
     if (modelName) {
+      // Primary path: persist uiPreferences into the IndexedDB project record
+      if (currentSavedProjectId) {
+        updateProject({ id: currentSavedProjectId, uiPreferences: prefs }).then(
+          (result) => {
+            if (result.success) {
+              console.log(
+                `[App] UI preferences saved to project record: ${modelName}`
+              );
+            } else {
+              console.warn(
+                '[App] Could not save UI preferences to project record:',
+                result.error
+              );
+            }
+          }
+        );
+      }
+
+      // Fallback path: keep the legacy localStorage key in sync for one release
+      // so that projects loaded before this change still have preferences available.
       try {
         const key = `openscad-forge-ui-prefs-${modelName}`;
         localStorage.setItem(key, JSON.stringify(prefs));
@@ -10507,6 +10599,25 @@ if (rounded) {
         project.name
       );
 
+      // Apply per-project UI preferences from the project record (authoritative
+      // source). This overrides whatever handleFile loaded from the legacy
+      // openscad-forge-ui-prefs-{fileName} localStorage key.
+      if (project.uiPreferences != null) {
+        try {
+          getUIModeController().importPreferences(project.uiPreferences, {
+            applyImmediately: true,
+          });
+          console.log(
+            `[App] Applied per-project UI preferences from project record: ${project.name}`
+          );
+        } catch (prefsErr) {
+          console.warn(
+            '[App] Could not apply project UI preferences:',
+            prefsErr
+          );
+        }
+      }
+
       dismissOverlay();
 
       // Update companion save button after loading
@@ -13333,9 +13444,16 @@ if (rounded) {
         // Direct render with specified format
         // Pass files/mainFile/libraries for multi-file projects
         const libsForRender = getEnabledLibrariesForRender();
+        // For 2D formats, use schema-aware parameter resolution so models that
+        // require a specific 'generate' (or equivalent) value produce 2D geometry.
+        const renderParameters = resolve2DExportParameters(
+          state.parameters,
+          state.schema,
+          outputFormat
+        );
         result = await renderController.renderFull(
           state.uploadedFile.content,
-          state.parameters,
+          renderParameters,
           {
             outputFormat,
             paramTypes: state.paramTypes || {},
@@ -13431,6 +13549,54 @@ if (rounded) {
       // Special-case: configuration dependency / empty geometry guidance
       if (handleConfigDependencyError(error)) {
         return;
+      }
+
+      // Special-case: SVG/DXF export failures with "not a 2D object" or empty output.
+      // Guide the user to select the 2D-compatible 'generate' parameter value.
+      const currentFormat = outputFormatSelect?.value || 'stl';
+      if (currentFormat === 'svg' || currentFormat === 'dxf') {
+        const msg = (error?.message || '').toLowerCase();
+        const is2DGeometryError =
+          msg.includes('not a 2d') ||
+          msg.includes('no geometry') ||
+          msg.includes('empty') ||
+          msg.includes('missing') ||
+          msg.includes('svgcontains no geometry') ||
+          msg.includes('svg output is empty') ||
+          msg.includes('dxf output is empty');
+        if (is2DGeometryError) {
+          const currentState = stateManager.getState();
+          const schemaParams = currentState.schema?.parameters || {};
+          const generateParam = schemaParams.generate;
+          let guidance = '';
+          if (generateParam?.enum) {
+            const twoDOption = generateParam.enum.find((entry) => {
+              const v = String(
+                typeof entry === 'object' ? entry.value : entry
+              ).toLowerCase();
+              return (
+                v.includes('svg') ||
+                v.includes('dxf') ||
+                v.includes('first layer')
+              );
+            });
+            if (twoDOption) {
+              const val =
+                typeof twoDOption === 'object' ? twoDOption.value : twoDOption;
+              guidance = `\n\nTo export ${currentFormat.toUpperCase()}: set the "generate" parameter to "${val}" and try again.`;
+            }
+          }
+          if (!guidance) {
+            guidance = `\n\nTo export ${currentFormat.toUpperCase()}: your model must produce 2D geometry. Look for a "generate" or mode parameter and select the 2D/laser-cut option.`;
+          }
+          updateStatus(
+            `Error: ${currentFormat.toUpperCase()} export requires 2D geometry`
+          );
+          alert(
+            `${currentFormat.toUpperCase()} export failed — model did not produce 2D geometry.${guidance}`
+          );
+          return;
+        }
       }
 
       // Use COGA-compliant friendly error translation

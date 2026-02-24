@@ -932,7 +932,7 @@ export class PresetManager {
           continue;
         }
 
-      for (const preset of presetsToImport) {
+        for (const preset of presetsToImport) {
           let finalName = preset.name;
 
           if (presetNames.has(finalName)) {

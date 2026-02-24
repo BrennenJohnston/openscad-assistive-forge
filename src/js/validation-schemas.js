@@ -145,6 +145,8 @@ const savedProjectSchema = {
       default: '',
     },
     forkedFrom: { type: ['object', 'null'], default: null },
+    // v2 sidecar: per-project UI preferences (Basic/Advanced mode + hidden panels)
+    uiPreferences: { type: ['object', 'null'], default: null },
     savedAt: { type: 'number', minimum: 0 },
     lastLoadedAt: { type: 'number', minimum: 0 },
   },

@@ -565,6 +565,48 @@ describe('Capability Detection', () => {
   })
 })
 
+describe('Capabilities caching across worker restarts', () => {
+  it('stores capabilities when READY message is received', () => {
+    const controller = new RenderController()
+    const caps = { hasManifold: true, hasFastCSG: false, hasLazyUnion: true, hasBinarySTL: true, version: '2024.12' }
+    controller.handleMessage({ type: 'READY', payload: { capabilities: caps } })
+    expect(controller.capabilities).toEqual(caps)
+  })
+
+  it('restart() passes cached capabilities to init()', async () => {
+    const controller = new RenderController()
+    controller.capabilities = { hasManifold: true, hasFastCSG: false, hasLazyUnion: false, hasBinarySTL: true, version: '2024.12' }
+
+    const initSpy = vi.fn().mockResolvedValue(undefined)
+    controller.terminate = vi.fn()
+    controller.init = initSpy
+    controller.startHealthMonitoring = vi.fn()
+
+    await controller.restart()
+
+    expect(initSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ cachedCapabilities: controller.capabilities })
+    )
+  })
+
+  it('restart() passes null capabilities when none were detected yet', async () => {
+    const controller = new RenderController()
+    // No capabilities set — restart should pass null
+    expect(controller.capabilities).toBeUndefined()
+
+    const initSpy = vi.fn().mockResolvedValue(undefined)
+    controller.terminate = vi.fn()
+    controller.init = initSpy
+    controller.startHealthMonitoring = vi.fn()
+
+    await controller.restart()
+
+    expect(initSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ cachedCapabilities: null })
+    )
+  })
+})
+
 describe('Binary STL Detection', () => {
   it('detects binary STL by bytes per triangle', () => {
     // Binary STL: ~50 bytes per triangle (12 bytes normal + 36 bytes vertices + 2 attribute)
