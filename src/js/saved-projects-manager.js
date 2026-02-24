@@ -499,6 +499,7 @@ export async function saveProject({
   notes = '',
   folderId = null,
   forkedFrom = null,
+  uiPreferences = null,
 }) {
   try {
     await ensureInitialized();
@@ -544,6 +545,7 @@ export async function saveProject({
       presets: [], // v2: project-scoped presets metadata
       notes: notes || '',
       forkedFrom: forkedFrom || null,
+      uiPreferences: uiPreferences || null, // v2: per-project UI preferences sidecar
       savedAt: now,
       lastLoadedAt: now,
     };
@@ -742,12 +744,14 @@ export async function touchProject(id) {
 }
 
 /**
- * Update project metadata (name, notes, and/or projectFiles)
+ * Update project metadata (name, notes, projectFiles, and/or uiPreferences)
  * @param {Object} options
  * @param {string} options.id - Project ID
  * @param {string} [options.name] - New name
  * @param {string} [options.notes] - New notes
  * @param {string} [options.projectFiles] - New project files (JSON string)
+ * @param {string} [options.content] - New main file content
+ * @param {Object|null} [options.uiPreferences] - Per-project UI preferences sidecar
  * @returns {Promise<{success: boolean, error?: string}>}
  */
 export async function updateProject({
@@ -756,6 +760,7 @@ export async function updateProject({
   notes,
   projectFiles,
   content,
+  uiPreferences,
 }) {
   try {
     await ensureInitialized();
@@ -783,6 +788,9 @@ export async function updateProject({
     if (content !== undefined) {
       project.content = content;
       project.savedAt = Date.now();
+    }
+    if (uiPreferences !== undefined) {
+      project.uiPreferences = uiPreferences || null;
     }
 
     const tempProject = { ...project };

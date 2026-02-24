@@ -13,6 +13,7 @@ import {
   getProjectFiles,
   getAsset,
   saveProject,
+  updateProject,
   createFolder,
   storeAsset,
   addProjectFile,
@@ -809,6 +810,20 @@ export async function exportProjectsBackup() {
         );
       }
 
+      // Prefer uiPreferences from the project record (authoritative); fall back
+      // to the legacy localStorage key for projects saved before this change.
+      let uiPreferences = project.uiPreferences ?? null;
+      if (uiPreferences == null) {
+        try {
+          const raw = localStorage.getItem(
+            `openscad-forge-ui-prefs-${project.originalName}`
+          );
+          if (raw) uiPreferences = JSON.parse(raw);
+        } catch (_) {
+          /* ignore */
+        }
+      }
+
       const projectMeta = {
         id: project.id,
         name: project.name,
@@ -821,16 +836,8 @@ export async function exportProjectsBackup() {
         lastLoadedAt: project.lastLoadedAt,
         overlayFiles: project.overlayFiles || {},
         presets: project.presets || [],
-        uiPreferences: null,
+        uiPreferences,
       };
-      try {
-        const raw = localStorage.getItem(
-          `openscad-forge-ui-prefs-${project.originalName}`
-        );
-        if (raw) projectMeta.uiPreferences = JSON.parse(raw);
-      } catch (_) {
-        /* ignore */
-      }
       zip.file(
         `${projectDir}/project.json`,
         JSON.stringify(projectMeta, null, 2)
@@ -921,6 +928,20 @@ export async function exportSingleProject(projectId) {
       );
     }
 
+    // Prefer uiPreferences from the project record (authoritative); fall back
+    // to the legacy localStorage key for projects saved before this change.
+    let uiPreferences = project.uiPreferences ?? null;
+    if (uiPreferences == null) {
+      try {
+        const raw = localStorage.getItem(
+          `openscad-forge-ui-prefs-${project.originalName}`
+        );
+        if (raw) uiPreferences = JSON.parse(raw);
+      } catch (_) {
+        /* ignore */
+      }
+    }
+
     const projectMeta = {
       id: project.id,
       name: project.name,
@@ -933,17 +954,8 @@ export async function exportSingleProject(projectId) {
       lastLoadedAt: project.lastLoadedAt,
       overlayFiles: project.overlayFiles || {},
       presets: project.presets || [],
-      uiPreferences: null,
+      uiPreferences,
     };
-
-    try {
-      const raw = localStorage.getItem(
-        `openscad-forge-ui-prefs-${project.originalName}`
-      );
-      if (raw) projectMeta.uiPreferences = JSON.parse(raw);
-    } catch (_) {
-      /* ignore */
-    }
 
     zip.file(
       `${projectDir}/project.json`,
@@ -1175,17 +1187,28 @@ export async function importProjectsBackup(file) {
             }
           }
 
-          // Restore UI preferences if present in the backup
-          if (projectMeta.uiPreferences && projectMeta.originalName) {
+          // Restore UI preferences: write into the project record (authoritative)
+          // and keep the legacy localStorage key in sync for backward compatibility.
+          if (projectMeta.uiPreferences != null) {
             try {
-              localStorage.setItem(
-                `openscad-forge-ui-prefs-${projectMeta.originalName}`,
-                JSON.stringify(projectMeta.uiPreferences)
-              );
+              await updateProject({
+                id: saveResult.id,
+                uiPreferences: projectMeta.uiPreferences,
+              });
             } catch (_e) {
               console.warn(
-                `[StorageManager] Failed to restore UI preferences for ${projectMeta.name}`
+                `[StorageManager] Failed to restore UI preferences to project record for ${projectMeta.name}`
               );
+            }
+            if (projectMeta.originalName) {
+              try {
+                localStorage.setItem(
+                  `openscad-forge-ui-prefs-${projectMeta.originalName}`,
+                  JSON.stringify(projectMeta.uiPreferences)
+                );
+              } catch (_e) {
+                /* localStorage backup is best-effort */
+              }
             }
           }
         } else {

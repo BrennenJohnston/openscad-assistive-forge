@@ -4201,6 +4201,26 @@ async function initApp() {
     const state = stateManager.getState();
     const modelName = state.uploadedFile?.name;
     if (modelName) {
+      // Primary path: persist uiPreferences into the IndexedDB project record
+      if (currentSavedProjectId) {
+        updateProject({ id: currentSavedProjectId, uiPreferences: prefs }).then(
+          (result) => {
+            if (result.success) {
+              console.log(
+                `[App] UI preferences saved to project record: ${modelName}`
+              );
+            } else {
+              console.warn(
+                '[App] Could not save UI preferences to project record:',
+                result.error
+              );
+            }
+          }
+        );
+      }
+
+      // Fallback path: keep the legacy localStorage key in sync for one release
+      // so that projects loaded before this change still have preferences available.
       try {
         const key = `openscad-forge-ui-prefs-${modelName}`;
         localStorage.setItem(key, JSON.stringify(prefs));
@@ -10578,6 +10598,25 @@ if (rounded) {
         'saved',
         project.name
       );
+
+      // Apply per-project UI preferences from the project record (authoritative
+      // source). This overrides whatever handleFile loaded from the legacy
+      // openscad-forge-ui-prefs-{fileName} localStorage key.
+      if (project.uiPreferences != null) {
+        try {
+          getUIModeController().importPreferences(project.uiPreferences, {
+            applyImmediately: true,
+          });
+          console.log(
+            `[App] Applied per-project UI preferences from project record: ${project.name}`
+          );
+        } catch (prefsErr) {
+          console.warn(
+            '[App] Could not apply project UI preferences:',
+            prefsErr
+          );
+        }
+      }
 
       dismissOverlay();
 
