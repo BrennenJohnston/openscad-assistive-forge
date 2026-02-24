@@ -20,6 +20,68 @@ This branch includes templates for **both sharing approaches** — choose the on
 
 ---
 
+## Large file support (Git LFS)
+
+This branch uses **Git LFS** to store ZIP bundles. This lets you commit files of 200 MB or more without hitting GitHub's 100 MB hard limit.
+
+### For most users — no action needed
+
+| Workflow | LFS required? |
+|----------|--------------|
+| Clicking the live Forge link | No |
+| GitHub "Download ZIP" button | No |
+| Uploading files via GitHub web UI | No |
+| Forking or cloning this branch | **Yes** — install Git LFS first |
+
+### If you clone or fork this branch
+
+Install Git LFS before cloning:
+
+```bash
+# Install Git LFS (one-time, per machine)
+git lfs install
+
+# Then clone as normal
+git clone https://github.com/YOUR_USERNAME/YOUR_REPO
+```
+
+If you already cloned without LFS, download the LFS objects afterwards:
+
+```bash
+git lfs pull
+```
+
+Without Git LFS installed, ZIP bundles will appear as ~130-byte text files (LFS pointer files) rather than real archives. The live Forge link will still work — Forge automatically detects and resolves LFS pointers.
+
+### Size guidance
+
+| Bundle size | Recommended hosting |
+|-------------|-------------------|
+| Under 100 MB | Commit directly — no LFS needed |
+| 100 MB – 2 GB | Git LFS (this branch uses this approach) |
+| Over 2 GB | GitHub Releases or external storage |
+
+**GitHub Free LFS quota:** 10 GiB storage, 10 GiB bandwidth per month. Each Forge load counts against bandwidth. Approximate monthly download limits:
+
+| Bundle size | Free tier | With 1 data pack (+50 GiB) |
+|-------------|-----------|---------------------------|
+| 50 MB | ~200 loads/month | ~1,200 loads/month |
+| 100 MB | ~100 loads/month | ~600 loads/month |
+| 170 MB | ~59 loads/month | ~352 loads/month |
+| 500 MB | ~20 loads/month | ~120 loads/month |
+
+**Important:** When the monthly bandwidth quota is exhausted, LFS downloads stop entirely — users receive the ~130-byte pointer file. Forge handles this gracefully and will show an error rather than silently failing.
+
+**Alternative — GitHub Releases:** Release assets have **no bandwidth quota** and work up to 2 GB. Point your manifest's `"bundle"` field to the absolute release asset URL:
+
+```json
+"files": {
+  "bundle": "https://github.com/YOUR_USERNAME/YOUR_REPO/releases/download/v1.0/my_project.zip"
+}
+```
+
+---
+
 ## Approach A: Uncompressed manifest (individual files)
 
 ### What's here
@@ -259,6 +321,9 @@ The link always loads the latest version of your files — you never need to upd
 | Parameters don't appear | Your `.scad` file needs Customizer annotations: `width = 50; // [10:100]` |
 | Preset not found | The name in `defaults.preset` must exactly match a `"name"` in your presets file. |
 | ZIP bundle not loading | Make sure the `.zip` filename in `"bundle"` exactly matches the uploaded file (case-sensitive). |
+| ZIP is ~130 bytes / not a real ZIP | You're seeing an LFS pointer file. Install Git LFS: `git lfs install && git lfs pull`. The live Forge link is unaffected. |
+| "Bundle exceeds size limit" | Forge supports bundles up to 500 MB. For larger files, host externally and use an absolute URL in the manifest. |
+| LFS bandwidth exhausted | GitHub Free allows ~10 GiB/month. Switch to GitHub Releases (unlimited bandwidth) for high-traffic projects. |
 
 ---
 
