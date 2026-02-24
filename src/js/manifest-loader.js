@@ -230,7 +230,8 @@ export function resolveFileUrl(filePath, manifestUrl) {
  * @returns {{ oid: string, size: number } | null}  Parsed pointer or null
  */
 export function detectLfsPointer(text) {
-  if (!text.startsWith('version https://git-lfs.github.com/spec/v1')) return null;
+  if (!text.startsWith('version https://git-lfs.github.com/spec/v1'))
+    return null;
   const oidMatch = text.match(/^oid sha256:([a-f0-9]{64})$/m);
   const sizeMatch = text.match(/^size (\d+)$/m);
   if (!oidMatch || !sizeMatch) return null;

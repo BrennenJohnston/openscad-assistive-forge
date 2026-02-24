@@ -2968,11 +2968,46 @@ async function initApp() {
     }
   });
 
+  // ═══════════════════════════════════════════════════════════════════════
+  // FIRST-VISIT GATE — Critical Initialization Barrier
+  //
+  // On the very first visit the app shows a blocking disclosure modal that
+  // the user must accept before any downloads (WASM, manifest files, etc.)
+  // can begin. Several subsystems depend on this gate:
+  //
+  //   ┌──────────────────────────────────────────────────────────────────┐
+  //   │  Z-INDEX STACK (highest on top)                                 │
+  //   │                                                                 │
+  //   │  z: 10000  Processing overlay  (.processing-overlay)            │
+  //   │  z: 10000  Tutorial panel      (--z-index-tutorial-panel)       │
+  //   │  z:  9999  Skip-link / Tutorial spotlight                       │
+  //   │  z:  1000  Modals              (--z-index-modal)                │
+  //   │  z:   950  Modal backdrop      (--z-index-modal-backdrop)       │
+  //   │  z:   900  Drawers             (--z-index-drawer)               │
+  //   └──────────────────────────────────────────────────────────────────┘
+  //
+  // INVARIANT: The processing overlay (z: 10000) MUST NEVER be shown while
+  // the first-visit modal (z: 1000) is open. Because the overlay sits
+  // above the modal, it would cover the "Download & Continue" button and
+  // trap the user in an infinite spinner. All code paths that call
+  // showProcessingOverlay() must first await waitForFirstVisitAcceptance().
+  //
+  // Subsystems that respect this gate:
+  //   - Manifest deep-link handler  (?manifest=<url>)
+  //   - WASM initialization         (ensureWasmInitialized)
+  //   - Draft restoration           (pendingDraft)
+  //   - Save-copy modal             (showManifestSaveCopyModal)
+  //
+  // See also: the per-step lifecycle comments in the manifest deep-link
+  // handler below for the exact required ordering of overlay → download →
+  // process → dismiss → save-copy.
+  // ═══════════════════════════════════════════════════════════════════════
   const appRoot = document.getElementById('app');
   let firstVisitBlocking = false;
   let hasUserAcceptedDownload = !isFirstVisit();
   let pendingWasmInit = false;
-  let pendingDraft = null; // Draft to restore after first-visit modal is dismissed
+  let pendingDraft = null;
+  const firstVisitReadyResolvers = [];
 
   const setFirstVisitBlocking = (blocked) => {
     firstVisitBlocking = blocked;
@@ -2987,6 +3022,15 @@ async function initApp() {
       }
     }
     document.body.classList.toggle('first-visit-blocking', blocked);
+  };
+
+  const waitForFirstVisitAcceptance = () => {
+    if (!firstVisitBlocking && hasUserAcceptedDownload) {
+      return Promise.resolve();
+    }
+    return new Promise((resolve) => {
+      firstVisitReadyResolvers.push(resolve);
+    });
   };
 
   // First-visit modal check
@@ -3013,6 +3057,10 @@ async function initApp() {
     markFirstVisitComplete();
     closeModal(firstVisitModal);
     setFirstVisitBlocking(false);
+    if (firstVisitReadyResolvers.length > 0) {
+      const resolvers = firstVisitReadyResolvers.splice(0);
+      resolvers.forEach((resolve) => resolve());
+    }
     if (pendingWasmInit) {
       pendingWasmInit = false;
       await ensureWasmInitialized();
@@ -3167,14 +3215,20 @@ async function initApp() {
     },
     onSaveAll: () => _saveCurrentProject('All changes saved'),
     onExportImage: () => {
-      const canvas = document.querySelector(
-        '#preview canvas, .preview-area canvas'
-      );
+      const canvas = document.querySelector('#previewContainer canvas');
       if (!canvas) return;
+      if (previewManager?.renderer && previewManager?.scene) {
+        const cam = previewManager.getActiveCamera?.() ?? previewManager.camera;
+        if (cam) previewManager.renderer.render(previewManager.scene, cam);
+      }
+      const dataUrl = canvas.toDataURL('image/png');
+      if (!dataUrl || dataUrl.length < 100) return;
       const link = document.createElement('a');
       link.download = 'openscad-preview.png';
-      link.href = canvas.toDataURL('image/png');
+      link.href = dataUrl;
+      document.body.appendChild(link);
       link.click();
+      document.body.removeChild(link);
     },
   });
   fileActionsController.init();
@@ -7974,6 +8028,13 @@ async function initApp() {
 
   /**
    * Show a full-screen processing overlay for long operations.
+   *
+   * IMPORTANT: This overlay renders at z-index 10000, which is ABOVE all
+   * modals (z-index 1000). Callers MUST ensure no blocking modal (especially
+   * the first-visit disclosure) is open when invoking this function, or the
+   * modal's buttons will be unreachable. Always await
+   * waitForFirstVisitAcceptance() before calling this.
+   *
    * @param {string} message - Primary message
    * @param {Object} [opts]
    * @param {string} [opts.hint] - Secondary hint text
@@ -11047,7 +11108,12 @@ if (rounded) {
   /**
    * Show the manifest save-copy modal after a shared project loads.
    * Returns a Promise that resolves to 'save' or 'skip'.
-   * If the first-visit modal is still blocking, waits for it to close first.
+   *
+   * If the first-visit modal is still blocking, this function polls until
+   * it closes before showing the save-copy modal. In the normal manifest
+   * deep-link flow this should never happen because step 1 of the lifecycle
+   * already awaits waitForFirstVisitAcceptance(), but the guard is kept as
+   * a defensive fallback for any future code paths that call this directly.
    */
   function showManifestSaveCopyModal(projectName, author) {
     return new Promise((resolve) => {
@@ -11279,10 +11345,67 @@ if (rounded) {
       mainInterface.classList.remove('hidden');
     }
 
+    // ─────────────────────────────────────────────────────────────────────
+    // MANIFEST DEEP-LINK LIFECYCLE — ORDER OF OPERATIONS
+    //
+    // The steps below MUST execute in this exact order. Reordering them
+    // causes hard-to-diagnose bugs (e.g. the processing overlay covering
+    // the first-visit modal, trapping the user in an infinite spinner).
+    //
+    //  1. GATE: Wait for first-visit acceptance (if needed).
+    //     The first-visit modal (z-index 1000) must be resolved before
+    //     anything else. No overlay or download may start while it is open.
+    //
+    //  2. OVERLAY: Show the processing overlay (z-index 10000).
+    //     Only shown AFTER the first-visit gate clears. This prevents the
+    //     overlay from stacking on top of the first-visit modal and making
+    //     the "Download & Continue" button unreachable.
+    //
+    //  3. DOWNLOAD: Fetch manifest and project files via loadManifest().
+    //     Progress messages update both the status bar and the overlay.
+    //
+    //  4. PROCESS: Call handleFile() to parse and load the project.
+    //
+    //  5. DISMISS OVERLAY: Remove the processing overlay so the editor
+    //     is visible before the save-copy modal appears.
+    //
+    //  6. SAVE-COPY MODAL: Prompt the user to save a local copy.
+    //     This modal has its own first-visit guard, but by this point
+    //     the gate has already been cleared in step 1.
+    //
+    // ERROR PATH: If any step after the overlay is shown throws, the
+    // catch block dismisses the overlay to prevent it from getting stuck.
+    // ─────────────────────────────────────────────────────────────────────
     setTimeout(async () => {
+      let dismissOverlay = null;
       try {
+        // Step 1 — GATE: first-visit acceptance must complete before we
+        // show any overlay or start any network requests. The first-visit
+        // modal sits at z-index 1000; the processing overlay at z-index
+        // 10000. Showing the overlay first would bury the modal and trap
+        // the user in an infinite spinner.
+        if (firstVisitBlocking || !hasUserAcceptedDownload) {
+          updateStatus('Waiting for download acceptance...');
+          await waitForFirstVisitAcceptance();
+        }
+
+        // Step 2 — OVERLAY: safe to show now that no blocking modal is open
+        dismissOverlay = showProcessingOverlay(
+          'Loading project from manifest...',
+          {
+            hint: 'Downloading project files. Please do not close or refresh the page.',
+          }
+        );
+
+        // Step 3 — DOWNLOAD
         const result = await loadManifest(manifestParam, {
-          onProgress: ({ message }) => updateStatus(message),
+          onProgress: ({ message }) => {
+            updateStatus(message);
+            const msgEl = document.querySelector(
+              '#processingOverlay .processing-message'
+            );
+            if (msgEl) msgEl.textContent = message;
+          },
         });
 
         const { projectFiles, mainFile, mainContent, manifest, defaults } =
@@ -11294,7 +11417,7 @@ if (rounded) {
         );
         announceImmediate(`Loading project: ${projectName}`);
 
-        // Call handleFile with 'manifest' source to enable origin tracking
+        // Step 4 — PROCESS: parse and load the project into the editor
         await handleFile(
           null,
           mainContent,
@@ -11303,6 +11426,9 @@ if (rounded) {
           'manifest',
           projectName
         );
+
+        // Step 5 — DISMISS OVERLAY before showing the save-copy modal
+        if (dismissOverlay) dismissOverlay();
 
         // Store manifest origin in state for provenance tracking
         stateManager.setState({
@@ -11424,7 +11550,7 @@ if (rounded) {
 
         console.log(`[DeepLink] Manifest load complete: ${projectName}`);
 
-        // Show the save-copy modal (waits for first-visit modal if needed)
+        // Step 6 — SAVE-COPY MODAL: prompt user to save a local copy
         const saveCopyChoice = await showManifestSaveCopyModal(
           projectName,
           manifest.author
@@ -11433,11 +11559,19 @@ if (rounded) {
           manifestSaveCopyBtn.click();
         }
       } catch (error) {
+        // ERROR PATH: dismiss overlay if it was shown (it's null if the
+        // error occurred before step 2, e.g. during first-visit wait)
+        if (dismissOverlay) dismissOverlay();
         console.error('[DeepLink] Manifest load failed:', error);
 
         let friendlyMsg;
         if (error instanceof ManifestError) {
           switch (error.code) {
+            case 'INVALID_URL':
+              friendlyMsg =
+                error.message +
+                ' Open the Manifest Sharing Guide for step-by-step instructions.';
+              break;
             case 'CORS_ERROR':
               friendlyMsg =
                 "Couldn't reach the file server. The manifest or its files may not be publicly " +
@@ -11464,6 +11598,16 @@ if (rounded) {
           `Couldn't load the project from manifest. ${friendlyMsg} You can still upload a file manually.`,
           'error'
         );
+
+        // Clean up URL so the user isn't stuck in a reload loop
+        initUrlParams.delete('manifest');
+        initUrlParams.delete('preset');
+        initUrlParams.delete('skipWelcome');
+        initUrlParams.delete('skipwelcome');
+        const failCleanUrl = initUrlParams.toString()
+          ? `${window.location.pathname}?${initUrlParams}`
+          : window.location.pathname;
+        history.replaceState(null, '', failCleanUrl);
 
         // Show welcome screen again on failure so the user isn't stuck
         welcomeScreen.classList.remove('hidden');

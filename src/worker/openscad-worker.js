@@ -607,6 +607,7 @@ async function checkCapabilities() {
     const originalPrintErr = module.printErr;
     module.print = (text) => helpOutput.push(String(text));
     module.printErr = (text) => helpOutput.push(String(text));
+    const consoleOutputBeforeHelp = openscadConsoleOutput.length;
 
     try {
       await module.callMain(['--help']);
@@ -616,7 +617,16 @@ async function checkCapabilities() {
 
     module.print = originalPrint;
     module.printErr = originalPrintErr;
-    const helpText = helpOutput.join('\n');
+    // Some OpenSCAD WASM builds keep internal print callbacks and do not honor
+    // runtime reassignment of module.print/module.printErr. In that case,
+    // helpOutput stays empty while output still lands in openscadConsoleOutput.
+    let helpText = helpOutput.join('\n');
+    if (helpText.trim().length === 0) {
+      const consoleDelta = openscadConsoleOutput.slice(consoleOutputBeforeHelp);
+      if (consoleDelta.trim().length > 0) {
+        helpText = consoleDelta;
+      }
+    }
 
     // Parse capabilities from help text
     // Note: Modern OpenSCAD uses --backend=Manifold instead of --enable=manifold

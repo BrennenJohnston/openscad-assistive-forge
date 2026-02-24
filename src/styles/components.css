@@ -3869,7 +3869,14 @@ select:focus-visible {
   }
 }
 
-/* Processing Overlay — shown during long operations (ZIP extraction, etc.) */
+/* Processing Overlay — shown during long operations (ZIP extraction, etc.)
+ *
+ * z-index: 10000 — intentionally ABOVE all modals (z-index: 1000).
+ * This means the overlay will cover any open modal. Code that shows this
+ * overlay MUST first ensure no blocking modal (especially the first-visit
+ * disclosure) is visible, or the user will be trapped behind the overlay.
+ * See the "FIRST-VISIT GATE" and "MANIFEST DEEP-LINK LIFECYCLE" comments
+ * in src/main.js for the required ordering. */
 .processing-overlay {
   position: fixed;
   inset: 0;

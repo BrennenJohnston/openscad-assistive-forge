@@ -89,6 +89,6 @@ export default defineConfig({
     format: 'es',
   },
   optimizeDeps: {
-    exclude: ['openscad-wasm'], // If we vendor WASM
+    exclude: ['openscad-wasm'],
   },
 });
