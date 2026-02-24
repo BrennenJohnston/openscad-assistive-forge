@@ -251,8 +251,12 @@ function resolve2DExportParameters(parameters, schema, format) {
     if (name === 'generate') {
       // Find the enum option whose value contains 2D export keywords
       const twoDEntry = enumValues.find((entry) => {
-        const v = String(typeof entry === 'object' ? entry.value : entry).toLowerCase();
-        return v.includes('svg') || v.includes('dxf') || v.includes('first layer');
+        const v = String(
+          typeof entry === 'object' ? entry.value : entry
+        ).toLowerCase();
+        return (
+          v.includes('svg') || v.includes('dxf') || v.includes('first layer')
+        );
       });
       if (twoDEntry !== undefined) {
         resolved[name] =
@@ -263,7 +267,9 @@ function resolve2DExportParameters(parameters, schema, format) {
 
     if (name === 'type_of_keyguard') {
       const laserEntry = enumValues.find((entry) => {
-        const v = String(typeof entry === 'object' ? entry.value : entry).toLowerCase();
+        const v = String(
+          typeof entry === 'object' ? entry.value : entry
+        ).toLowerCase();
         return v.includes('laser');
       });
       if (laserEntry !== undefined) {
@@ -275,7 +281,9 @@ function resolve2DExportParameters(parameters, schema, format) {
 
     if (name === 'use_Laser_Cutting_best_practices') {
       const yesEntry = enumValues.find((entry) => {
-        const v = String(typeof entry === 'object' ? entry.value : entry).toLowerCase();
+        const v = String(
+          typeof entry === 'object' ? entry.value : entry
+        ).toLowerCase();
         return v === 'yes';
       });
       if (yesEntry !== undefined) {
@@ -13528,7 +13536,9 @@ if (rounded) {
                 typeof entry === 'object' ? entry.value : entry
               ).toLowerCase();
               return (
-                v.includes('svg') || v.includes('dxf') || v.includes('first layer')
+                v.includes('svg') ||
+                v.includes('dxf') ||
+                v.includes('first layer')
               );
             });
             if (twoDOption) {
@@ -13540,8 +13550,12 @@ if (rounded) {
           if (!guidance) {
             guidance = `\n\nTo export ${currentFormat.toUpperCase()}: your model must produce 2D geometry. Look for a "generate" or mode parameter and select the 2D/laser-cut option.`;
           }
-          updateStatus(`Error: ${currentFormat.toUpperCase()} export requires 2D geometry`);
-          alert(`${currentFormat.toUpperCase()} export failed — model did not produce 2D geometry.${guidance}`);
+          updateStatus(
+            `Error: ${currentFormat.toUpperCase()} export requires 2D geometry`
+          );
+          alert(
+            `${currentFormat.toUpperCase()} export failed — model did not produce 2D geometry.${guidance}`
+          );
           return;
         }
       }

@@ -450,7 +450,9 @@ async function initWASM(baseUrl = '', cachedCapabilities = null) {
     // the actual render) corrupts Emscripten global state and degrades geometry output.
     let detectedCapabilities;
     if (cachedCapabilities) {
-      console.log('[Worker] Using cached capabilities — skipping callMain --help');
+      console.log(
+        '[Worker] Using cached capabilities — skipping callMain --help'
+      );
       detectedCapabilities = cachedCapabilities;
     } else {
       self.postMessage({
@@ -2522,7 +2524,10 @@ self.onmessage = async (e) => {
 
   switch (type) {
     case 'INIT':
-      await initWASM(payload?.assetBaseUrl, payload?.cachedCapabilities || null);
+      await initWASM(
+        payload?.assetBaseUrl,
+        payload?.cachedCapabilities || null
+      );
       break;
 
     case 'PING':
