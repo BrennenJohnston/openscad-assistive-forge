@@ -440,7 +440,6 @@ export async function ciCommand(options) {
       return;
     }
     
-    // Check provider
     if (!options.provider) {
       console.error(chalk.red('✗ Provider required'));
       console.log(chalk.yellow('Use --provider <name> or --list to see options'));
@@ -456,28 +455,23 @@ export async function ciCommand(options) {
     
     console.log(chalk.green(`✓ Using provider: ${template.name}`));
     
-    // Determine output directory
     const outDir = resolve(options.out);
     console.log(chalk.gray(`Output: ${outDir}`));
     
-    // Write files
     let filesCreated = 0;
     for (const [filePath, content] of Object.entries(template.files)) {
       const fullPath = join(outDir, filePath);
       const fileDir = fullPath.substring(0, fullPath.lastIndexOf('/') || fullPath.lastIndexOf('\\\\'));
-      
-      // Create directory if needed
+
       if (!existsSync(fileDir)) {
         mkdirSync(fileDir, { recursive: true });
       }
-      
-      // Check if file exists
+
       if (existsSync(fullPath)) {
         console.log(chalk.yellow(`⚠ Skipped (exists): ${filePath}`));
         continue;
       }
-      
-      // Write file
+
       writeFileSync(fullPath, content, 'utf-8');
       console.log(chalk.green(`✓ Created: ${filePath}`));
       filesCreated++;

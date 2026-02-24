@@ -128,14 +128,14 @@ summary:focus-visible,
 }
 
 .param-group-hide-btn:hover {
-  background: var(--color-surface-hover);
+  background: var(--color-hover-bg);
   border-color: var(--color-border);
   color: var(--color-text-primary);
 }
 
 .param-group-hide-btn:focus-visible {
   opacity: 1;
-  outline: 2px solid var(--color-focus-ring);
+  outline: 2px solid var(--color-focus);
   outline-offset: 2px;
 }
 
@@ -2642,6 +2642,11 @@ summary:focus-visible,
   cursor: pointer;
 }
 
+.overlay-color-row input[type='color'].overlay-color-auto {
+  opacity: 0.45;
+  cursor: pointer;
+}
+
 .overlay-auto-color-toggle {
   display: flex;
   align-items: center;
@@ -3864,7 +3869,14 @@ select:focus-visible {
   }
 }
 
-/* Processing Overlay — shown during long operations (ZIP extraction, etc.) */
+/* Processing Overlay — shown during long operations (ZIP extraction, etc.)
+ *
+ * z-index: 10000 — intentionally ABOVE all modals (z-index: 1000).
+ * This means the overlay will cover any open modal. Code that shows this
+ * overlay MUST first ensure no blocking modal (especially the first-visit
+ * disclosure) is visible, or the user will be trapped behind the overlay.
+ * See the "FIRST-VISIT GATE" and "MANIFEST DEEP-LINK LIFECYCLE" comments
+ * in src/main.js for the required ordering. */
 .processing-overlay {
   position: fixed;
   inset: 0;
@@ -4782,6 +4794,7 @@ select:focus-visible {
   border-top: none;
   border-radius: 0 0 var(--border-radius-sm) var(--border-radius-sm);
   background: var(--color-input-bg);
+  color: var(--color-text-primary);
   box-shadow: var(--shadow-md);
   max-height: 280px;
   overflow-y: auto;
@@ -10196,8 +10209,8 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
   padding: var(--space-2xs) var(--space-xs);
   font-size: var(--font-size-xs);
   font-weight: 600;
-  background: var(--color-primary);
-  color: var(--color-text-on-primary, white);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
   border: none;
   border-radius: var(--border-radius-sm);
   cursor: pointer;
@@ -10206,12 +10219,12 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
 
 .tutorial-reopen-drawer-btn:hover,
 .tutorial-reopen-drawer-btn:focus {
-  background: var(--color-primary-hover);
+  background: var(--color-accent-hover);
   outline: none;
 }
 
 .tutorial-reopen-drawer-btn:focus-visible {
-  box-shadow: 0 0 0 2px var(--color-focus-ring);
+  box-shadow: 0 0 0 2px var(--color-focus);
 }
 
 /* Footer with navigation */
@@ -11062,31 +11075,20 @@ body.tutorial-body-locked {
   box-shadow: var(--shadow-sm);
   /* Ensure it's within the app flow, not overlaying */
   width: 100%;
-  /* Flexbox layout for steps + actions */
+  /* Flexbox layout: menu bar on the left, actions pinned to the right */
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
   gap: var(--space-md);
 }
 
-.workflow-steps {
-  display: flex;
-  justify-content: flex-start;
-  align-items: center;
-  gap: 0;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  flex: 1;
-  max-width: 500px;
-}
-
-/* Workflow action buttons container */
+/* Workflow action buttons container — always pinned to the right */
 .workflow-actions {
   display: flex;
   align-items: center;
   gap: var(--space-xs);
   flex-shrink: 0;
+  margin-left: auto;
 }
 
 .workflow-actions .btn {
@@ -11109,71 +11111,6 @@ body.tutorial-body-locked {
     min-width: 32px;
     padding: var(--space-xs);
   }
-}
-
-.workflow-step {
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-  position: relative;
-  flex: 1;
-  justify-content: center;
-}
-
-.workflow-step-number {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: var(--color-bg-secondary);
-  border: 2px solid var(--color-border);
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all var(--motion-slow);
-}
-
-.workflow-step-label {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-  font-weight: 500;
-  transition: color var(--motion-slow);
-}
-
-/* Active step */
-.workflow-step[aria-current='step'],
-.workflow-step.active {
-  .workflow-step-number {
-    background: var(--color-accent);
-    border-color: var(--color-accent);
-    color: var(--color-on-accent);
-  }
-  .workflow-step-label {
-    color: var(--color-text-primary);
-    font-weight: 600;
-  }
-}
-
-/* Completed step */
-.workflow-step.completed {
-  .workflow-step-number {
-    background: var(--color-success);
-    border-color: var(--color-success);
-    color: var(--color-on-success);
-  }
-  .workflow-step-number::after {
-    content: '✓';
-  }
-  .workflow-step-label {
-    color: var(--color-text-primary);
-    font-weight: 600;
-  }
-}
-
-.workflow-step.completed::after {
-  background: var(--color-success);
 }
 
 /* =========================================
@@ -11288,10 +11225,6 @@ body.tutorial-body-locked {
   border-width: 3px;
 }
 
-[data-high-contrast='true'] .workflow-step-number {
-  border-width: 3px;
-}
-
 [data-high-contrast='true'] .error-message-friendly {
   border-width: 3px;
 }
@@ -11309,21 +11242,17 @@ body.tutorial-body-locked {
   .workflow-progress {
     padding: var(--space-xs) var(--space-sm);
     gap: var(--space-sm);
-  }
-
-  .workflow-step-label {
-    display: none;
-  }
-
-  .workflow-step-number {
-    width: 32px;
-    height: 32px;
-    font-size: var(--font-size-base);
+    flex-wrap: wrap;
+    overflow-x: hidden;
+    max-width: 100%;
   }
 
   /* Compact workflow action buttons on mobile */
   .workflow-actions {
     gap: var(--space-xs);
+    flex-shrink: 1;
+    flex-wrap: wrap;
+    justify-content: flex-end;
   }
 
   .workflow-actions .btn-text {
@@ -11337,13 +11266,6 @@ body.tutorial-body-locked {
 }
 
 /* Reduced motion */
-@media (prefers-reduced-motion: reduce) {
-  .workflow-step-number,
-  .workflow-step-label {
-    transition: none;
-  }
-}
-
 @media (forced-colors: active) {
   /* Skip link must be visible */
   .skip-link {
@@ -11932,6 +11854,34 @@ body.tutorial-body-locked {
 .shortcuts-modal-body {
   max-height: 60vh;
   overflow-y: auto;
+}
+
+.shortcuts-preset-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-md);
+  padding: var(--space-sm) var(--space-md);
+  background: var(--color-bg-secondary);
+  border-radius: var(--border-radius-sm);
+  border: 1px solid var(--color-border);
+}
+
+.shortcuts-preset-label {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.shortcuts-preset-select {
+  font-size: var(--font-size-sm);
+  padding: 2px var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  cursor: pointer;
 }
 
 .shortcuts-editor-intro {

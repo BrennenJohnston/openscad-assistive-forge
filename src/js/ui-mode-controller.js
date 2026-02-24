@@ -64,7 +64,7 @@ const PANEL_REGISTRY = [
   },
   {
     id: 'referenceOverlay',
-    label: 'Reference Overlay',
+    label: 'Reference Image',
     selector: '#overlaySection',
     defaultHiddenInBasic: true,
   },
@@ -163,7 +163,7 @@ export class UIModeController {
    */
   constructor(options = {}) {
     /** @type {UIMode} */
-    this.currentMode = 'basic';
+    this.currentMode = 'advanced';
 
     /** @type {Function} */
     this.onModeChange = options.onModeChange || (() => {});
@@ -278,7 +278,6 @@ export class UIModeController {
    */
   applyMode(mode) {
     const hiddenPanelIds = this._getEffectiveHiddenPanels();
-    const panelResults = [];
 
     for (const panel of PANEL_REGISTRY) {
       const elements = this._queryPanelElements(panel.selector);
@@ -289,13 +288,6 @@ export class UIModeController {
       } else {
         elements.forEach((el) => el.classList.remove(HIDDEN_CLASS));
       }
-
-      panelResults.push({
-        id: panel.id,
-        selector: panel.selector,
-        elementsFound: elements.length,
-        hidden: shouldHide,
-      });
     }
   }
 

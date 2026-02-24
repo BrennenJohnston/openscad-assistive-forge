@@ -81,9 +81,10 @@ The manifest file tells Forge which files to load and how to set things up.
 | `"name"` | No | A human-readable name shown in the status bar |
 | `"author"` | No | Your name or organization |
 | `"description"` | No | A brief description of your design |
-| `"files.main"` | **Yes** | The filename of your main `.scad` file |
+| `"files.main"` | **Yes** (unless `files.bundle` is set) | The filename of your main `.scad` file |
 | `"files.companions"` | No | A list of companion files, e.g., `["helper.txt", "parts.scad"]` |
 | `"files.presets"` | No | Your preset JSON file, e.g., `"my_presets.json"` |
+| `"files.bundle"` | No | Path to a `.zip` file — see [ZIP Bundle](#zip-bundle-single-zip-file) section |
 | `"defaults.preset"` | No | Name of a preset to auto-select on load |
 | `"defaults.autoPreview"` | No | `true` to start a 3D preview automatically |
 | `"defaults.skipWelcome"` | No | `true` to skip the welcome screen |
@@ -167,22 +168,83 @@ When someone clicks your manifest link, their browser fetches your project files
 
 ---
 
-## Alternative: ZIP Bundle (No Manifest Needed)
+## ZIP Bundle (Single ZIP File)
 
-If you prefer a simpler approach, Forge can also load ZIP files from a URL:
+You can distribute your project as a single `.zip` file and still get the full manifest experience (name, author, presets, defaults, sharing banner).
+
+### Option A: ZIP Bundle with a manifest (`files.bundle`)
+
+Add `files.bundle` to your manifest instead of listing individual files:
+
+```json
+{
+  "forgeManifest": "1.0",
+  "name": "Ready to Print Designs",
+  "author": "Your Name",
+  "files": {
+    "bundle": "ready_to_print_designs.zip"
+  },
+  "defaults": { "autoPreview": true }
+}
+```
+
+When `files.bundle` is set:
+
+- Forge downloads the single `.zip` and extracts it automatically
+- The main `.scad` file is auto-detected from the archive (same heuristics as `?project=`)
+- You can optionally specify `files.main` to override the auto-detection:
+
+```json
+"files": {
+  "bundle": "ready_to_print_designs.zip",
+  "main": "specific_file.scad"
+}
+```
+
+The shareable link works the same way:
+
+```
+https://openscad-assistive-forge.pages.dev/?manifest=https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPO/main/forge-manifest.json
+```
+
+### Option B: `?project=` URL (No Manifest Needed)
+
+If you prefer a simpler approach without a manifest file, Forge can also load ZIP files from a URL:
 
 ```
 https://openscad-assistive-forge.pages.dev/?project=https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPO/main/my_project.zip
 ```
 
-Bundle your `.scad`, companion files, and preset `.json` into a single ZIP. Forge will extract it, detect the main file, and auto-import presets.
+Bundle your `.scad`, companion files, and preset `.json` into a single ZIP. Forge will extract it, detect the main file, and auto-import presets -- but without manifest metadata (name, author, custom defaults).
 
-| | Manifest | ZIP Bundle |
-|--|----------|------------|
-| File count | 1 manifest + N files (parallel downloads) | 1 ZIP file |
-| Updating | Edit individual files | Re-create the ZIP |
-| Preset selection | `?preset=` URL param + manifest defaults | Auto-imports all presets |
-| Hosting | Files can be in different locations | Single file |
+### When to use which approach
+
+| | Uncompressed manifest | ZIP bundle manifest | `?project=` |
+|--|----------------------|---------------------|-------------|
+| File count | 1 manifest + N files | 1 manifest + 1 ZIP | 1 ZIP only |
+| Metadata (name, author) | Yes | Yes | No |
+| Custom defaults | Yes | Yes | No |
+| Updating | Edit individual files | Re-create the ZIP | Re-create the ZIP |
+| Preset selection | `?preset=` + manifest defaults | `?preset=` + manifest defaults | Auto-imports all |
+| Best for | Small projects (1-5 files) | Large projects / many files | Quick one-off share |
+---
+
+## CLI Quickstart: Auto-generate a manifest
+
+If you have the Forge developer CLI installed, you can generate `forge-manifest.json` automatically instead of writing it by hand:
+
+```bash
+# From a folder — generates an uncompressed manifest
+npx openscad-forge manifest ./my_project_folder -o forge-manifest.json --name "My Project" --author "Your Name"
+
+# From a .zip file — generates a bundle manifest (files.bundle)
+npx openscad-forge manifest ./my_project.zip -o forge-manifest.json --name "My Project" --author "Your Name"
+
+# Folder with --zip flag — generates a bundle manifest pointing to a .zip
+npx openscad-forge manifest ./my_project_folder --zip -o forge-manifest.json
+```
+
+The command scans for `.scad` files, auto-detects the main file, finds companion and preset files, and writes the manifest. Review and adjust the output before committing.
 
 ---
 
@@ -245,6 +307,26 @@ Bundle your `.scad`, companion files, and preset `.json` into a single ZIP. Forg
 }
 ```
 
+### Example 4: Large Project as ZIP Bundle
+
+```json
+{
+  "forgeManifest": "1.0",
+  "name": "Ready to Print Designs Collection",
+  "author": "Community",
+  "description": "A large collection of ready-to-print assistive device designs",
+  "files": {
+    "bundle": "ready_to_print_designs.zip"
+  },
+  "defaults": {
+    "autoPreview": true,
+    "skipWelcome": true
+  }
+}
+```
+
+This is ideal for projects with many files — just upload a single `.zip` and let Forge detect the main file automatically.
+
 ---
 
 ## Manifest Specification Reference
@@ -254,7 +336,7 @@ Bundle your `.scad`, companion files, and preset `.json` into a single ZIP. Forg
 | Field | Type | Description |
 |-------|------|-------------|
 | `forgeManifest` | `string` | Schema version. Must be `"1.0"`. |
-| `files.main` | `string` | Path to the main `.scad` file (relative to manifest). |
+| `files.main` | `string` | Path to the main `.scad` file. **Required unless `files.bundle` is set.** |
 
 ### Optional Fields
 
@@ -265,6 +347,7 @@ Bundle your `.scad`, companion files, and preset `.json` into a single ZIP. Forg
 | `author` | `string` | Author name or attribution. |
 | `description` | `string` | Brief project description. |
 | `homepage` | `string` | URL to the project's home page. |
+| `files.bundle` | `string` | Path to a `.zip` bundle. When set, `files.main` becomes optional (auto-detected). |
 | `files.companions` | `string[]` | Companion files (`.txt`, `.scad`, etc.) loaded into the VFS. |
 | `files.presets` | `string` or `string[]` | Preset JSON file(s) -- auto-imported on load. |
 | `files.assets` | `string[]` | Additional assets (SVG, etc.). |
@@ -314,3 +397,105 @@ Forge runs with `Cross-Origin-Embedder-Policy: require-corp`, which means extern
 | Cloudflare Pages (`*.pages.dev`) | Yes | Yes | Another alternative |
 
 **WordPress, Squarespace, and most CMS platforms do NOT include CORS headers.** Host your project files on GitHub even if your website is elsewhere.
+
+---
+
+## Large File Hosting
+
+Forge supports ZIP bundles up to **500 MB**. For bundles over 100 MB, you need to choose a hosting strategy that fits your file size and expected traffic.
+
+### Git LFS (recommended for 100 MB – 2 GB bundles)
+
+GitHub blocks files over 100 MB and warns above 50 MB. **Git LFS** stores large files outside the regular Git object store, allowing bundles up to 2 GB.
+
+Forge automatically detects Git LFS pointer files and re-fetches the real content from `media.githubusercontent.com`. No manifest changes are needed — the same relative path works whether the file is in regular Git or LFS.
+
+**Setup (one-time, per machine):**
+
+```bash
+git lfs install
+git lfs track "*.zip" "*.stl" "*.3mf"
+git add .gitattributes
+git commit -m "chore: add Git LFS tracking"
+```
+
+Then add and commit your ZIP as normal — Git LFS handles the rest.
+
+**GitHub Free LFS quotas:**
+
+| Resource | GitHub Free | GitHub Team/Enterprise |
+|----------|-------------|----------------------|
+| Per-file size | 2 GB | 4–5 GB |
+| Storage quota | 10 GiB | 250 GiB |
+| Bandwidth quota | 10 GiB/month | 250 GiB/month |
+| Extra data packs | $5/month for +50 GiB | same |
+
+**Important:** Bandwidth is a hard cutoff. When the monthly quota is exhausted, LFS downloads stop entirely — users receive the ~130-byte pointer file. Downloads do not slow down; they stop. Forge will show an error rather than silently failing.
+
+**Practical download limits per month (GitHub Free — 10 GiB bandwidth):**
+
+| Bundle size | Free tier | With 1 data pack (+50 GiB) |
+|-------------|-----------|---------------------------|
+| 50 MB | ~200 loads/month | ~1,200 loads/month |
+| 100 MB | ~100 loads/month | ~600 loads/month |
+| 170 MB | ~59 loads/month | ~352 loads/month |
+| 250 MB | ~40 loads/month | ~240 loads/month |
+| 500 MB | ~20 loads/month | ~120 loads/month |
+| 1 GB | ~10 loads/month | ~60 loads/month |
+| 2 GB (max) | ~5 loads/month | ~30 loads/month |
+
+**Recommendation:** Best for projects under ~200 MB with moderate traffic (fewer than 50 loads/month). For higher traffic, use GitHub Releases.
+
+### GitHub Releases (recommended for high-traffic projects)
+
+Release assets are served from GitHub's CDN with **no bandwidth quota**. This is the single biggest advantage for shared projects.
+
+**How to use:**
+
+1. Create a release on GitHub (Releases > Draft a new release)
+2. Upload your ZIP as a release asset
+3. Copy the asset URL (e.g., `https://github.com/USER/REPO/releases/download/v1.0/my_project.zip`)
+4. Use the absolute URL in your manifest:
+
+```json
+{
+  "forgeManifest": "1.0",
+  "files": {
+    "bundle": "https://github.com/USER/REPO/releases/download/v1.0/my_project.zip"
+  }
+}
+```
+
+**Limits:** 2 GB per asset. No bandwidth quota. No Git LFS installation required for users cloning your repo.
+
+**Trade-off:** Updates require creating a new release and updating the manifest URL to point to the new version tag.
+
+### External Object Storage (for bundles over 2 GB)
+
+For projects exceeding 2 GB or needing guaranteed unlimited access:
+
+| Provider | Storage cost | Egress (download) cost | Per-file limit |
+|----------|-------------|----------------------|---------------|
+| Cloudflare R2 | ~$0.015/GB/month | **Free** | 5 GB (Workers) |
+| Backblaze B2 | ~$0.006/GB/month | Free via Cloudflare | 5 GB |
+| AWS S3 | ~$0.023/GB/month | ~$0.09/GB | 5 TB |
+
+Use an absolute URL in the manifest's `"bundle"` field, the same as with GitHub Releases.
+
+### Decision guide
+
+```
+Bundle under 100 MB?
+  → Commit directly — no LFS needed
+
+Bundle 100 MB – 2 GB, fewer than 50 loads/month?
+  → Git LFS works well
+
+Bundle 100 MB – 2 GB, more than 50 loads/month?
+  → GitHub Releases (unlimited bandwidth, no LFS setup for users)
+
+Bundle over 2 GB?
+  → External storage (Cloudflare R2 recommended)
+```
+
+All three approaches work with Forge manifests. Use a relative path for repo-hosted files, or an absolute `https://` URL for Releases or external storage.

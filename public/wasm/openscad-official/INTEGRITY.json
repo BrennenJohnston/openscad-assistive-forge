@@ -6,8 +6,8 @@
   "archive": "OpenSCAD-2025.03.25.wasm24456-WebAssembly-web.zip",
   "files": {
     "openscad.js": {
-      "sha256": "c372ba1259b34c144b1ced4bb22a502d0118ae8ee0e4bb46571a1b77ee22593b",
-      "size": 124582
+      "sha256": "904a47f29e63afb597bedef747da3b457d8ea17cc793c462c6c8b444e918a62e",
+      "size": 124567
     },
     "openscad.wasm": {
       "sha256": "f72ce246c02c0e501990837102be383326b153fd761774ebfacce5c80c5ecf26",

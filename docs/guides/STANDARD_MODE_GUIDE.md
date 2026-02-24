@@ -289,13 +289,13 @@ The image dimensions show up next to the Browse button so you can verify the fil
 
 ---
 
-## Reference Overlay
+## Reference Image
 
-Want to see how your model lines up against a reference image? The Reference Overlay puts any image behind the 3D model in the preview so you can compare visually.
+Want to see how your model lines up against a reference image? The Reference Image puts any image behind the 3D model in the preview so you can compare visually.
 
 ### Setting it up
 
-1. Open the **Reference Overlay** panel in the preview settings area
+1. Open the **Reference Image** panel in the preview settings area
 2. Pick an image from your project files, or upload one
 3. Toggle **Show overlay** on
 4. Enter the overlay's real-world width and height in mm

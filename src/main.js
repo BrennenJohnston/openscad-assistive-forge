@@ -95,15 +95,13 @@ import {
   clearCacheWithOptions,
   getDetailedStorageInfo,
   exportProjectsBackup,
+  exportSingleProject,
   importProjectsBackup,
   importProjectFromFiles,
 } from './js/storage-manager.js';
 import {
   showWorkflowProgress,
   hideWorkflowProgress,
-  setWorkflowStep,
-  completeWorkflowStep,
-  resetWorkflowProgress,
 } from './js/workflow-progress.js';
 import { startTutorial, closeTutorial } from './js/tutorial-sandbox.js';
 import { initDrawerController } from './js/drawer-controller.js';
@@ -1661,17 +1659,12 @@ function _applyToolbarModeVisibility(mode) {
   }
 
   // Main UI is active.
-  // IMPORTANT: #workflowProgress must remain visible in all main-UI states because
-  // it contains essential navigation buttons (#uiModeToggle, #focusModeBtn,
-  // #featuresGuideBtn, #clearFileBtn). Only the .workflow-steps breadcrumbs are
-  // shown/hidden depending on mode.
+  // #workflowProgress must remain visible because it contains essential navigation
+  // buttons (#uiModeToggle, #focusModeBtn, #featuresGuideBtn, #clearFileBtn).
   showWorkflowProgress();
-  const stepsEl = document.querySelector('#workflowProgress .workflow-steps');
 
   if (mode === 'advanced') {
     controller.show();
-    // Hide breadcrumb steps — toolbar replaces them visually. Action buttons stay.
-    if (stepsEl) stepsEl.classList.add('hidden');
   } else {
     // Basic mode: check if any per-menu buttons are enabled via PANEL_REGISTRY
     const uiMode = getUIModeController();
@@ -1695,13 +1688,9 @@ function _applyToolbarModeVisibility(mode) {
       .map((p) => menuIdMap[p.id]);
 
     if (visibleMenuIds.length > 0) {
-      // Basic mode override: some toolbar buttons visible — hide breadcrumb steps
       controller.setVisibleMenus(visibleMenuIds);
-      if (stepsEl) stepsEl.classList.add('hidden');
     } else {
-      // Pure Basic mode: show breadcrumb steps alongside action buttons
       controller.hide();
-      if (stepsEl) stepsEl.classList.remove('hidden');
     }
   }
 }
@@ -2442,7 +2431,7 @@ async function initApp() {
                 <div class="cache-size-value">${storageInfo.appCacheFormatted}</div>
               </div>
               <div class="cache-size-item">
-                <div class="cache-size-label">Saved Designs</div>
+                <div class="cache-size-label">Saved Projects</div>
                 <div class="cache-size-value">${storageInfo.savedDesignsCount} project${storageInfo.savedDesignsCount !== 1 ? 's' : ''}</div>
               </div>
             </div>
@@ -2460,7 +2449,7 @@ async function initApp() {
                 <input type="checkbox" id="preserveSavedDesigns" />
                 <div class="cache-clear-option-content">
                   <div class="cache-clear-option-label">
-                    Keep my Saved Designs
+                    Keep my Saved Projects
                     <span class="preservation-indicator danger" id="preserveIndicator">
                       <span aria-hidden="true">⚠️</span> Will be deleted
                     </span>
@@ -2624,9 +2613,16 @@ async function initApp() {
 
   // Export backup handler
   async function handleExportBackup() {
+    const dismissOverlay = showProcessingOverlay(
+      'Exporting projects backup...',
+      {
+        hint: 'Packaging all projects. Please do not close or refresh the page.',
+      }
+    );
     try {
       updateStatus('Creating backup...', 'info');
       const result = await exportProjectsBackup();
+      dismissOverlay();
 
       if (result.success && result.blob) {
         // Download the file
@@ -2645,8 +2641,40 @@ async function initApp() {
         updateStatus(`Export failed: ${result.error}`, 'error');
       }
     } catch (error) {
+      dismissOverlay();
       console.error('[Storage] Export error:', error);
       updateStatus('Failed to export backup', 'error');
+    }
+  }
+
+  // Download a single project as a ZIP
+  async function downloadSingleProject(projectId) {
+    const dismissOverlay = showProcessingOverlay('Preparing download...', {
+      hint: 'Packaging project files. Please do not close or refresh the page.',
+    });
+    try {
+      const result = await exportSingleProject(projectId);
+      dismissOverlay();
+
+      if (result.success && result.blob) {
+        const url = URL.createObjectURL(result.blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = result.fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        updateStatus(`Project downloaded: ${result.fileName}`, 'success');
+        stateManager.announceChange('Project downloaded successfully');
+      } else {
+        updateStatus(`Download failed: ${result.error}`, 'error');
+      }
+    } catch (error) {
+      dismissOverlay();
+      console.error('[Storage] Single-project download error:', error);
+      updateStatus('Failed to download project', 'error');
     }
   }
 
@@ -2980,11 +3008,46 @@ async function initApp() {
     }
   });
 
+  // ═══════════════════════════════════════════════════════════════════════
+  // FIRST-VISIT GATE — Critical Initialization Barrier
+  //
+  // On the very first visit the app shows a blocking disclosure modal that
+  // the user must accept before any downloads (WASM, manifest files, etc.)
+  // can begin. Several subsystems depend on this gate:
+  //
+  //   ┌──────────────────────────────────────────────────────────────────┐
+  //   │  Z-INDEX STACK (highest on top)                                 │
+  //   │                                                                 │
+  //   │  z: 10000  Processing overlay  (.processing-overlay)            │
+  //   │  z: 10000  Tutorial panel      (--z-index-tutorial-panel)       │
+  //   │  z:  9999  Skip-link / Tutorial spotlight                       │
+  //   │  z:  1000  Modals              (--z-index-modal)                │
+  //   │  z:   950  Modal backdrop      (--z-index-modal-backdrop)       │
+  //   │  z:   900  Drawers             (--z-index-drawer)               │
+  //   └──────────────────────────────────────────────────────────────────┘
+  //
+  // INVARIANT: The processing overlay (z: 10000) MUST NEVER be shown while
+  // the first-visit modal (z: 1000) is open. Because the overlay sits
+  // above the modal, it would cover the "Download & Continue" button and
+  // trap the user in an infinite spinner. All code paths that call
+  // showProcessingOverlay() must first await waitForFirstVisitAcceptance().
+  //
+  // Subsystems that respect this gate:
+  //   - Manifest deep-link handler  (?manifest=<url>)
+  //   - WASM initialization         (ensureWasmInitialized)
+  //   - Draft restoration           (pendingDraft)
+  //   - Save-copy modal             (showManifestSaveCopyModal)
+  //
+  // See also: the per-step lifecycle comments in the manifest deep-link
+  // handler below for the exact required ordering of overlay → download →
+  // process → dismiss → save-copy.
+  // ═══════════════════════════════════════════════════════════════════════
   const appRoot = document.getElementById('app');
   let firstVisitBlocking = false;
   let hasUserAcceptedDownload = !isFirstVisit();
   let pendingWasmInit = false;
-  let pendingDraft = null; // Draft to restore after first-visit modal is dismissed
+  let pendingDraft = null;
+  const firstVisitReadyResolvers = [];
 
   const setFirstVisitBlocking = (blocked) => {
     firstVisitBlocking = blocked;
@@ -2999,6 +3062,15 @@ async function initApp() {
       }
     }
     document.body.classList.toggle('first-visit-blocking', blocked);
+  };
+
+  const waitForFirstVisitAcceptance = () => {
+    if (!firstVisitBlocking && hasUserAcceptedDownload) {
+      return Promise.resolve();
+    }
+    return new Promise((resolve) => {
+      firstVisitReadyResolvers.push(resolve);
+    });
   };
 
   // First-visit modal check
@@ -3025,10 +3097,61 @@ async function initApp() {
     markFirstVisitComplete();
     closeModal(firstVisitModal);
     setFirstVisitBlocking(false);
+    if (firstVisitReadyResolvers.length > 0) {
+      const resolvers = firstVisitReadyResolvers.splice(0);
+      resolvers.forEach((resolve) => resolve());
+    }
     if (pendingWasmInit) {
       pendingWasmInit = false;
       await ensureWasmInitialized();
     }
+
+    // If a project was loaded while WASM was still initializing (e.g. manifest
+    // deep-link on first visit), the auto-preview controller could not be created
+    // at handleFile time. Now that WASM is ready, retroactively set it up and
+    // trigger the initial preview so the 3D object appears.
+    const postInitState = stateManager.getState();
+    if (
+      postInitState.uploadedFile &&
+      !autoPreviewController &&
+      renderController
+    ) {
+      await initAutoPreviewController(false);
+      if (autoPreviewController) {
+        const colorParamNames = Object.values(
+          postInitState.schema?.parameters || {}
+        )
+          .filter((p) => p.uiType === 'color')
+          .map((p) => p.name);
+        autoPreviewController.setColorParamNames(colorParamNames);
+        autoPreviewController.setParamTypes(postInitState.paramTypes || {});
+        autoPreviewController.setScadContent(
+          postInitState.uploadedFile.content
+        );
+        autoPreviewController.setProjectFiles(
+          postInitState.projectFiles || null,
+          postInitState.mainFilePath || postInitState.uploadedFile.name
+        );
+        const libsForRender = getEnabledLibrariesForRender();
+        autoPreviewController.setEnabledLibraries(libsForRender);
+        if (autoPreviewEnabled) {
+          autoPreviewController
+            .forcePreview(postInitState.parameters)
+            .then((initiated) => {
+              if (initiated) {
+                console.log('[FirstVisit] Deferred initial preview started');
+              }
+            })
+            .catch((error) => {
+              console.error(
+                '[FirstVisit] Deferred initial preview failed:',
+                error
+              );
+            });
+        }
+      }
+    }
+
     // Restore pending draft if one was deferred
     if (pendingDraft) {
       const draftToRestore = pendingDraft;
@@ -3132,14 +3255,20 @@ async function initApp() {
     },
     onSaveAll: () => _saveCurrentProject('All changes saved'),
     onExportImage: () => {
-      const canvas = document.querySelector(
-        '#preview canvas, .preview-area canvas'
-      );
+      const canvas = document.querySelector('#previewContainer canvas');
       if (!canvas) return;
+      if (previewManager?.renderer && previewManager?.scene) {
+        const cam = previewManager.getActiveCamera?.() ?? previewManager.camera;
+        if (cam) previewManager.renderer.render(previewManager.scene, cam);
+      }
+      const dataUrl = canvas.toDataURL('image/png');
+      if (!dataUrl || dataUrl.length < 100) return;
       const link = document.createElement('a');
       link.download = 'openscad-preview.png';
-      link.href = canvas.toDataURL('image/png');
+      link.href = dataUrl;
+      document.body.appendChild(link);
       link.click();
+      document.body.removeChild(link);
     },
   });
   fileActionsController.init();
@@ -3884,7 +4013,7 @@ async function initApp() {
       panelToggle('libraries', 'Libraries'),
       panelToggle('companionFileManagement', 'Companion Files'),
       panelToggle('imageMeasurement', 'Image Measurement'),
-      panelToggle('referenceOverlay', 'Reference Overlay'),
+      panelToggle('referenceOverlay', 'Reference Image'),
       panelToggle('gridSettings', 'Grid Settings'),
       panelToggle('renderSettings', 'Render Settings'),
       panelToggle('presetImportExport', 'Preset Import/Export'),
@@ -6027,15 +6156,22 @@ async function initApp() {
 
   if (overlayColorInput) {
     overlayColorInput.addEventListener('input', () => {
-      if (overlayAutoColorToggle) overlayAutoColorToggle.checked = false;
+      if (overlayAutoColorToggle) {
+        overlayAutoColorToggle.checked = false;
+        overlayColorInput.classList.remove('overlay-color-auto');
+      }
       applyOverlaySvgColor();
     });
   }
 
   if (overlayAutoColorToggle) {
     overlayAutoColorToggle.addEventListener('change', () => {
-      if (overlayColorInput)
-        overlayColorInput.disabled = overlayAutoColorToggle.checked;
+      if (overlayColorInput) {
+        overlayColorInput.classList.toggle(
+          'overlay-color-auto',
+          overlayAutoColorToggle.checked
+        );
+      }
       applyOverlaySvgColor();
     });
   }
@@ -7932,6 +8068,13 @@ async function initApp() {
 
   /**
    * Show a full-screen processing overlay for long operations.
+   *
+   * IMPORTANT: This overlay renders at z-index 10000, which is ABOVE all
+   * modals (z-index 1000). Callers MUST ensure no blocking modal (especially
+   * the first-visit disclosure) is open when invoking this function, or the
+   * modal's buttons will be unreachable. Always await
+   * waitForFirstVisitAcceptance() before calling this.
+   *
    * @param {string} message - Primary message
    * @param {Object} [opts]
    * @param {string} [opts.hint] - Secondary hint text
@@ -8004,9 +8147,16 @@ async function initApp() {
       const fileNameLower = fileName.toLowerCase();
       // Only validate file metadata for actual File objects (user uploads)
       // Skip validation when content is already provided (example loading path)
+      const isZip = fileNameLower.endsWith('.zip');
+      const isScad = fileNameLower.endsWith('.scad');
       const isActualFileUpload = !content && file instanceof File;
 
       if (isActualFileUpload) {
+        if (!isZip && !isScad) {
+          alert('Please upload a .scad or .zip file');
+          return;
+        }
+
         // Validate file metadata with Ajv before processing
         const fileMeta = {
           name: fileNameLower,
@@ -8040,13 +8190,6 @@ async function initApp() {
           );
           return;
         }
-      }
-
-      const isZip = fileNameLower.endsWith('.zip');
-      const isScad = fileNameLower.endsWith('.scad');
-      if (!isZip && !isScad) {
-        alert('Please upload a .scad or .zip file');
-        return;
       }
 
       // Handle ZIP files - but SKIP if content is already provided (e.g., from saved project)
@@ -8285,8 +8428,6 @@ async function initApp() {
       // Apply mode-aware toolbar/workflow visibility now that the main interface
       // is active. Advanced: toolbar visible, workflow hidden. Basic: vice versa.
       _applyToolbarModeVisibility(getUIModeController().getMode());
-      completeWorkflowStep('upload');
-      setWorkflowStep('customize');
 
       // Detect include/use statements for single-file uploads
       let includeUseWarning = '';
@@ -8623,7 +8764,7 @@ async function initApp() {
           overlayAutoColorToggle.checked = isAutoColor;
         }
         if (overlayColorInput) {
-          overlayColorInput.disabled = isAutoColor;
+          overlayColorInput.classList.toggle('overlay-color-auto', isAutoColor);
         }
         if (isAutoColor) {
           const themeColor = getThemeAwareSvgColor();
@@ -8957,7 +9098,6 @@ async function initApp() {
         // Reset workflow step state, then re-apply slot visibility.
         // _applyToolbarModeVisibility sees mainInterface.hidden=true and hides both
         // the toolbar and the workflow progress (welcome-screen branch).
-        resetWorkflowProgress();
         _applyToolbarModeVisibility(getUIModeController().getMode());
 
         // Exit focus mode if active
@@ -9389,6 +9529,9 @@ if (rounded) {
             <button class="btn btn-secondary btn-edit-project" data-project-id="${project.id}">
               Edit
             </button>
+            <button class="btn btn-secondary btn-download-project" data-project-id="${project.id}" title="Download this project as a ZIP">
+              Export
+            </button>
             <button class="btn btn-danger btn-delete-project" data-project-id="${project.id}">
               Delete
             </button>
@@ -9484,6 +9627,13 @@ if (rounded) {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         showEditProjectModal(btn.dataset.projectId);
+      });
+    });
+
+    container.querySelectorAll('.btn-download-project').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        downloadSingleProject(btn.dataset.projectId);
       });
     });
 
@@ -10928,13 +11078,92 @@ if (rounded) {
     if (name) parts[0] = `Shared project: <strong>${name}</strong>`;
     if (author) parts.push(`by ${author}`);
     if (text) text.innerHTML = parts.join(' ');
+    const saveBtn = document.getElementById('manifestSaveCopyBtn');
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Save My Copy';
+    }
     banner.classList.remove('hidden');
+  }
+
+  /**
+   * Show an inline overwrite confirmation when saving a manifest copy
+   * that conflicts with an existing project name.
+   * Returns a Promise resolving to 'overwrite', 'new-copy', or 'cancel'.
+   */
+  function showManifestOverwriteConfirm(projectName) {
+    return new Promise((resolve) => {
+      const modal = document.createElement('div');
+      modal.className = 'preset-modal';
+      modal.setAttribute('role', 'dialog');
+      modal.setAttribute('aria-labelledby', 'manifestOverwriteTitle');
+      modal.setAttribute('aria-modal', 'true');
+
+      modal.innerHTML = `
+        <div class="preset-modal-content">
+          <div class="preset-modal-header">
+            <h3 id="manifestOverwriteTitle" class="preset-modal-title">Project Already Exists</h3>
+            <button class="preset-modal-close" aria-label="Close dialog">&times;</button>
+          </div>
+          <div class="modal-body">
+            <div style="margin-top: var(--space-md); padding: var(--space-sm) var(--space-md); border-radius: var(--radius-sm); background: color-mix(in srgb, var(--color-warning, #f59e0b) 15%, transparent); border: 1px solid var(--color-warning, #f59e0b);">
+              <p style="margin: 0 0 var(--space-sm); font-weight: 600; color: var(--color-text-primary);">
+                &#9888; A project named &ldquo;${escapeHtml(projectName)}&rdquo; already exists.
+              </p>
+              <p style="margin: 0; color: var(--color-text-secondary); font-size: var(--text-sm);">
+                Do you want to overwrite it, or save this as a new copy?
+              </p>
+            </div>
+          </div>
+          <div class="preset-modal-footer">
+            <button class="btn btn-secondary" id="manifestOverwriteCancel">Cancel</button>
+            <button class="btn btn-secondary" id="manifestOverwriteNewCopy">Save as New Copy</button>
+            <button class="btn btn-danger" id="manifestOverwriteReplace">Overwrite Existing</button>
+          </div>
+        </div>
+      `;
+
+      document.body.appendChild(modal);
+
+      const cleanup = (result) => {
+        closeModal(modal);
+        modal.remove();
+        resolve(result);
+      };
+
+      modal
+        .querySelector('.preset-modal-close')
+        .addEventListener('click', () => cleanup('cancel'));
+      modal
+        .querySelector('#manifestOverwriteCancel')
+        .addEventListener('click', () => cleanup('cancel'));
+      modal
+        .querySelector('#manifestOverwriteNewCopy')
+        .addEventListener('click', () => cleanup('new-copy'));
+      modal
+        .querySelector('#manifestOverwriteReplace')
+        .addEventListener('click', () => cleanup('overwrite'));
+
+      modal.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          cleanup('cancel');
+        }
+      });
+
+      openModal(modal);
+    });
   }
 
   /**
    * Show the manifest save-copy modal after a shared project loads.
    * Returns a Promise that resolves to 'save' or 'skip'.
-   * If the first-visit modal is still blocking, waits for it to close first.
+   *
+   * If the first-visit modal is still blocking, this function polls until
+   * it closes before showing the save-copy modal. In the normal manifest
+   * deep-link flow this should never happen because step 1 of the lifecycle
+   * already awaits waitForFirstVisitAcceptance(), but the guard is kept as
+   * a defensive fallback for any future code paths that call this directly.
    */
   function showManifestSaveCopyModal(projectName, author) {
     return new Promise((resolve) => {
@@ -10997,9 +11226,6 @@ if (rounded) {
   // Wire manifest banner buttons
   const manifestBanner = document.getElementById('manifestInfoBanner');
   const manifestSaveCopyBtn = document.getElementById('manifestSaveCopyBtn');
-  const manifestDownloadZipBtn = document.getElementById(
-    'manifestDownloadZipBtn'
-  );
   const manifestResetBtn = document.getElementById('manifestResetBtn');
   const manifestDismissBanner = document.getElementById(
     'manifestDismissBanner'
@@ -11015,7 +11241,12 @@ if (rounded) {
     manifestSaveCopyBtn.addEventListener('click', async () => {
       const state = stateManager.getState();
       if (!state.uploadedFile) return;
+
+      if (manifestSaveCopyBtn.disabled) return;
+      manifestSaveCopyBtn.disabled = true;
+
       const origin = state.manifestOrigin;
+      const projectName = state.uploadedFile.name.replace('.scad', '');
       const forkedFrom = origin
         ? {
             manifestUrl: origin.url,
@@ -11025,31 +11256,85 @@ if (rounded) {
           }
         : null;
       try {
-        const { saveProject } = await import('./js/saved-projects-manager.js');
+        const { saveProject, listSavedProjects, updateProject } =
+          await import('./js/saved-projects-manager.js');
         const projectFilesObj =
           state.projectFiles instanceof Map
             ? Object.fromEntries(state.projectFiles)
             : state.projectFiles || null;
-        const result = await saveProject({
-          name: state.uploadedFile.name.replace('.scad', ''),
-          originalName: state.uploadedFile.name,
-          kind: state.projectFiles ? 'zip' : 'scad',
-          mainFilePath: state.mainFilePath || state.uploadedFile.name,
-          content: state.uploadedFile.content,
-          projectFiles: projectFilesObj,
-          forkedFrom,
-        });
-        if (result.success) {
-          currentSavedProjectId = result.id;
-          updateStatus('Local copy saved');
-          announceImmediate('Local copy saved to browser storage');
-          await renderSavedProjectsList();
+
+        const existingProjects = await listSavedProjects();
+        const duplicate = existingProjects.find((p) => p.name === projectName);
+
+        if (duplicate) {
+          const overwrite = await showManifestOverwriteConfirm(projectName);
+          if (overwrite === 'cancel') {
+            manifestSaveCopyBtn.disabled = false;
+            return;
+          }
+          if (overwrite === 'overwrite') {
+            const result = await updateProject({
+              id: duplicate.id,
+              content: state.uploadedFile.content,
+              projectFiles:
+                projectFilesObj !== null
+                  ? JSON.stringify(projectFilesObj)
+                  : undefined,
+            });
+            if (result.success) {
+              currentSavedProjectId = duplicate.id;
+            } else {
+              updateStatus(`Save failed: ${result.error}`, 'error');
+              manifestSaveCopyBtn.disabled = false;
+              return;
+            }
+          } else {
+            const result = await saveProject({
+              name: projectName,
+              originalName: state.uploadedFile.name,
+              kind: state.projectFiles ? 'zip' : 'scad',
+              mainFilePath: state.mainFilePath || state.uploadedFile.name,
+              content: state.uploadedFile.content,
+              projectFiles: projectFilesObj,
+              forkedFrom,
+            });
+            if (result.success) {
+              currentSavedProjectId = result.id;
+            } else {
+              updateStatus(`Save failed: ${result.error}`, 'error');
+              manifestSaveCopyBtn.disabled = false;
+              return;
+            }
+          }
         } else {
-          updateStatus(`Save failed: ${result.error}`, 'error');
+          const result = await saveProject({
+            name: projectName,
+            originalName: state.uploadedFile.name,
+            kind: state.projectFiles ? 'zip' : 'scad',
+            mainFilePath: state.mainFilePath || state.uploadedFile.name,
+            content: state.uploadedFile.content,
+            projectFiles: projectFilesObj,
+            forkedFrom,
+          });
+          if (result.success) {
+            currentSavedProjectId = result.id;
+          } else {
+            updateStatus(`Save failed: ${result.error}`, 'error');
+            manifestSaveCopyBtn.disabled = false;
+            return;
+          }
         }
+
+        manifestSaveCopyBtn.textContent = 'Saved!';
+        updateStatus('Local copy saved');
+        announceImmediate('Local copy saved to browser storage');
+        await renderSavedProjectsList();
+
+        if (manifestBanner) manifestBanner.classList.add('hidden');
       } catch (err) {
         console.error('[Manifest] Save copy failed:', err);
         updateStatus('Failed to save local copy', 'error');
+        manifestSaveCopyBtn.disabled = false;
       }
     });
   }
@@ -11086,53 +11371,6 @@ if (rounded) {
     });
   }
 
-  if (manifestDownloadZipBtn) {
-    manifestDownloadZipBtn.addEventListener('click', async () => {
-      const state = stateManager.getState();
-      if (!state.uploadedFile) return;
-      const origin = state.manifestOrigin;
-      const projectName =
-        origin?.name ||
-        state.uploadedFile?.name?.replace('.scad', '') ||
-        'forge-project';
-      const forkedFrom = origin
-        ? {
-            manifestUrl: origin.url,
-            originalName: origin.name,
-            originalAuthor: origin.author,
-            forkDate: Date.now(),
-          }
-        : null;
-      try {
-        const { saveProject } = await import('./js/saved-projects-manager.js');
-        const projectFilesObj =
-          state.projectFiles instanceof Map
-            ? Object.fromEntries(state.projectFiles)
-            : state.projectFiles || null;
-        const result = await saveProject({
-          name: projectName,
-          originalName: state.uploadedFile.name,
-          kind: state.projectFiles ? 'zip' : 'scad',
-          mainFilePath: state.mainFilePath || state.uploadedFile.name,
-          content: state.uploadedFile.content,
-          projectFiles: projectFilesObj,
-          forkedFrom,
-        });
-        if (result.success) {
-          currentSavedProjectId = result.id;
-          updateStatus(`Saved: ${projectName}`);
-          announceImmediate(`Project saved to Saved Designs: ${projectName}`);
-          await renderSavedProjectsList();
-        } else {
-          updateStatus(`Save failed: ${result.error}`, 'error');
-        }
-      } catch (err) {
-        console.error('[Manifest] Save ZIP failed:', err);
-        updateStatus('Failed to save project', 'error');
-      }
-    });
-  }
-
   // =========================================
   // Manifest deep-link: ?manifest=<url> support
   // Loads a full project from a forge-manifest.json hosted externally.
@@ -11157,10 +11395,67 @@ if (rounded) {
       mainInterface.classList.remove('hidden');
     }
 
+    // ─────────────────────────────────────────────────────────────────────
+    // MANIFEST DEEP-LINK LIFECYCLE — ORDER OF OPERATIONS
+    //
+    // The steps below MUST execute in this exact order. Reordering them
+    // causes hard-to-diagnose bugs (e.g. the processing overlay covering
+    // the first-visit modal, trapping the user in an infinite spinner).
+    //
+    //  1. GATE: Wait for first-visit acceptance (if needed).
+    //     The first-visit modal (z-index 1000) must be resolved before
+    //     anything else. No overlay or download may start while it is open.
+    //
+    //  2. OVERLAY: Show the processing overlay (z-index 10000).
+    //     Only shown AFTER the first-visit gate clears. This prevents the
+    //     overlay from stacking on top of the first-visit modal and making
+    //     the "Download & Continue" button unreachable.
+    //
+    //  3. DOWNLOAD: Fetch manifest and project files via loadManifest().
+    //     Progress messages update both the status bar and the overlay.
+    //
+    //  4. PROCESS: Call handleFile() to parse and load the project.
+    //
+    //  5. DISMISS OVERLAY: Remove the processing overlay so the editor
+    //     is visible before the save-copy modal appears.
+    //
+    //  6. SAVE-COPY MODAL: Prompt the user to save a local copy.
+    //     This modal has its own first-visit guard, but by this point
+    //     the gate has already been cleared in step 1.
+    //
+    // ERROR PATH: If any step after the overlay is shown throws, the
+    // catch block dismisses the overlay to prevent it from getting stuck.
+    // ─────────────────────────────────────────────────────────────────────
     setTimeout(async () => {
+      let dismissOverlay = null;
       try {
+        // Step 1 — GATE: first-visit acceptance must complete before we
+        // show any overlay or start any network requests. The first-visit
+        // modal sits at z-index 1000; the processing overlay at z-index
+        // 10000. Showing the overlay first would bury the modal and trap
+        // the user in an infinite spinner.
+        if (firstVisitBlocking || !hasUserAcceptedDownload) {
+          updateStatus('Waiting for download acceptance...');
+          await waitForFirstVisitAcceptance();
+        }
+
+        // Step 2 — OVERLAY: safe to show now that no blocking modal is open
+        dismissOverlay = showProcessingOverlay(
+          'Loading project from manifest...',
+          {
+            hint: 'Downloading project files. Please do not close or refresh the page.',
+          }
+        );
+
+        // Step 3 — DOWNLOAD
         const result = await loadManifest(manifestParam, {
-          onProgress: ({ message }) => updateStatus(message),
+          onProgress: ({ message }) => {
+            updateStatus(message);
+            const msgEl = document.querySelector(
+              '#processingOverlay .processing-message'
+            );
+            if (msgEl) msgEl.textContent = message;
+          },
         });
 
         const { projectFiles, mainFile, mainContent, manifest, defaults } =
@@ -11172,7 +11467,7 @@ if (rounded) {
         );
         announceImmediate(`Loading project: ${projectName}`);
 
-        // Call handleFile with 'manifest' source to enable origin tracking
+        // Step 4 — PROCESS: parse and load the project into the editor
         await handleFile(
           null,
           mainContent,
@@ -11181,6 +11476,9 @@ if (rounded) {
           'manifest',
           projectName
         );
+
+        // Step 5 — DISMISS OVERLAY before showing the save-copy modal
+        if (dismissOverlay) dismissOverlay();
 
         // Store manifest origin in state for provenance tracking
         stateManager.setState({
@@ -11302,7 +11600,7 @@ if (rounded) {
 
         console.log(`[DeepLink] Manifest load complete: ${projectName}`);
 
-        // Show the save-copy modal (waits for first-visit modal if needed)
+        // Step 6 — SAVE-COPY MODAL: prompt user to save a local copy
         const saveCopyChoice = await showManifestSaveCopyModal(
           projectName,
           manifest.author
@@ -11311,11 +11609,19 @@ if (rounded) {
           manifestSaveCopyBtn.click();
         }
       } catch (error) {
+        // ERROR PATH: dismiss overlay if it was shown (it's null if the
+        // error occurred before step 2, e.g. during first-visit wait)
+        if (dismissOverlay) dismissOverlay();
         console.error('[DeepLink] Manifest load failed:', error);
 
         let friendlyMsg;
         if (error instanceof ManifestError) {
           switch (error.code) {
+            case 'INVALID_URL':
+              friendlyMsg =
+                error.message +
+                ' Open the Manifest Sharing Guide for step-by-step instructions.';
+              break;
             case 'CORS_ERROR':
               friendlyMsg =
                 "Couldn't reach the file server. The manifest or its files may not be publicly " +
@@ -11342,6 +11648,16 @@ if (rounded) {
           `Couldn't load the project from manifest. ${friendlyMsg} You can still upload a file manually.`,
           'error'
         );
+
+        // Clean up URL so the user isn't stuck in a reload loop
+        initUrlParams.delete('manifest');
+        initUrlParams.delete('preset');
+        initUrlParams.delete('skipWelcome');
+        initUrlParams.delete('skipwelcome');
+        const failCleanUrl = initUrlParams.toString()
+          ? `${window.location.pathname}?${initUrlParams}`
+          : window.location.pathname;
+        history.replaceState(null, '', failCleanUrl);
 
         // Show welcome screen again on failure so the user isn't stuck
         welcomeScreen.classList.remove('hidden');
@@ -12936,8 +13252,6 @@ if (rounded) {
         );
         downloadFile(fullSTL.stl, filename, outputFormat);
         updateStatus(`Downloaded: ${filename}`);
-        // Mark workflow download step as complete
-        completeWorkflowStep('download');
         return;
       }
 
@@ -12955,8 +13269,6 @@ if (rounded) {
 
       downloadFile(state.stl, filename, outputFormat);
       updateStatus(`Downloaded: ${filename}`);
-      // Mark workflow download step as complete
-      completeWorkflowStep('download');
       return;
     }
 
@@ -12990,9 +13302,6 @@ if (rounded) {
       if (autoPreviewController) {
         autoPreviewController.cancelPending();
       }
-
-      // Update workflow progress to render step
-      setWorkflowStep('render');
 
       // Show render time estimate for complex models
       const estimate = estimateRenderTime(
@@ -13057,6 +13366,18 @@ if (rounded) {
         lastRenderTime: duration,
       });
 
+      // When the auto-preview controller handled the render, it already loaded
+      // the STL into the 3D viewer. For the direct-render fallback path, we
+      // must load it ourselves so the model is visible.
+      const stlData = result.data || result.stl;
+      if (!autoPreviewController && previewManager && stlData) {
+        try {
+          await previewManager.loadSTL(stlData, { preserveCamera: false });
+        } catch (loadErr) {
+          console.warn('[Generate] Failed to load STL into preview:', loadErr);
+        }
+      }
+
       // Store console output for the Console panel (echo/warning/error display)
       if (
         result.consoleOutput &&
@@ -13079,10 +13400,6 @@ if (rounded) {
 
       // Log performance metrics
       logRenderPerformance(result);
-
-      // Update workflow progress to render complete
-      completeWorkflowStep('render');
-      setWorkflowStep('download');
 
       // Simple status - ready to download (use 'success' type to keep visible)
       // Use correct format name instead of hardcoded "STL"
@@ -13164,53 +13481,7 @@ if (rounded) {
 
     downloadSTL(state.stl, filename);
     updateStatus(`Downloaded (previous STL): ${filename}`);
-    // Mark workflow download step as complete
-    completeWorkflowStep('download');
   });
-
-  // Copy Share Link button
-  const shareBtn = document.getElementById('shareBtn');
-  if (shareBtn) {
-    shareBtn.addEventListener('click', async () => {
-      const state = stateManager.getState();
-
-      if (!state.uploadedFile) {
-        alert('No file uploaded yet');
-        return;
-      }
-
-      // Get only non-default parameters for sharing
-      const nonDefaultParams = {};
-      for (const [key, value] of Object.entries(state.parameters)) {
-        if (state.defaults[key] !== value) {
-          nonDefaultParams[key] = value;
-        }
-      }
-
-      const shareUrl = getShareableURL(nonDefaultParams);
-
-      try {
-        // Try modern clipboard API
-        await navigator.clipboard.writeText(shareUrl);
-        updateStatus('Share link copied to clipboard!');
-
-        // Visual feedback
-        const textSpan = shareBtn.querySelector('.btn-text');
-        if (textSpan) {
-          const originalText = textSpan.textContent;
-          textSpan.textContent = '✅ Copied!';
-          setTimeout(() => {
-            textSpan.textContent = originalText;
-          }, 2000);
-        }
-      } catch (error) {
-        // Fallback for older browsers
-        console.error('Failed to copy to clipboard:', error);
-        prompt('Copy this link to share:', shareUrl);
-        updateStatus('Share link ready');
-      }
-    });
-  }
 
   // Export Parameters button
   const exportParamsBtn = document.getElementById('exportParamsBtn');
@@ -16375,6 +16646,18 @@ if (rounded) {
     }
   });
 
+  keyboardConfig.on('reloadAndPreview', () => {
+    const state = stateManager.getState();
+    if (state.uploadedFile) {
+      fileActionsController.onReload();
+      if (autoPreviewController) {
+        autoPreviewController.onParameterChange(
+          stateManager.getState().parameters
+        );
+      }
+    }
+  });
+
   keyboardConfig.on('cancelRender', () => {
     if (renderController && renderController.isRendering()) {
       renderController.cancel();
@@ -16433,6 +16716,13 @@ if (rounded) {
 
   keyboardConfig.on('viewDiagonal', () => {
     if (previewManager) previewManager.setCameraView('diagonal');
+  });
+
+  keyboardConfig.on('viewCenter', () => {
+    if (previewManager) {
+      previewManager.resetCamera();
+      announceImmediate('View centered');
+    }
   });
 
   keyboardConfig.on('toggleProjection', () => {
@@ -16573,6 +16863,9 @@ if (rounded) {
   keyboardConfig.on('toggleEdges', () =>
     displayOptionsController.toggle('edges')
   );
+  keyboardConfig.on('toggleCrosshairs', () =>
+    displayOptionsController.toggle('crosshairs')
+  );
   keyboardConfig.on('toggleConsole', () =>
     getUIModeController().togglePanelVisibility('consoleOutput')
   );
@@ -16588,6 +16881,41 @@ if (rounded) {
   });
   keyboardConfig.on('nextPanel', () => getUIModeController().cyclePanel(1));
   keyboardConfig.on('prevPanel', () => getUIModeController().cyclePanel(-1));
+
+  keyboardConfig.on('find', () => {
+    const modeManager = getModeManager();
+    if (modeManager?.isExpertMode?.() && modeManager.getEditorInstance?.()) {
+      const editor = modeManager.getEditorInstance();
+      if (editor.getAction) {
+        const action = editor.getAction('actions.find');
+        if (action) action.run();
+      }
+    }
+  });
+
+  keyboardConfig.on('findNext', () => {
+    const modeManager = getModeManager();
+    if (modeManager?.isExpertMode?.() && modeManager.getEditorInstance?.()) {
+      const editor = modeManager.getEditorInstance();
+      if (editor.getAction) {
+        const action = editor.getAction('editor.action.nextMatchFindAction');
+        if (action) action.run();
+      }
+    }
+  });
+
+  keyboardConfig.on('findPrevious', () => {
+    const modeManager = getModeManager();
+    if (modeManager?.isExpertMode?.() && modeManager.getEditorInstance?.()) {
+      const editor = modeManager.getEditorInstance();
+      if (editor.getAction) {
+        const action = editor.getAction(
+          'editor.action.previousMatchFindAction'
+        );
+        if (action) action.run();
+      }
+    }
+  });
 
   keyboardConfig.on('findReplace', () => {
     const modeManager = getModeManager();

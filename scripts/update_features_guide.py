@@ -70,7 +70,7 @@ WF_NEW = (
     '              <li>Choose from common presets (Ender 3, Prusa MK4, CR-10, large format) or enter custom mm values.</li>'
     '              <li>The grid updates immediately and the setting is remembered across sessions.</li>'
     '            </ul>'
-    '            <h4>Screenshot Reference Overlay</h4>'
+    '            <h4>Screenshot Reference Image</h4>'
     '            <ul class="features-list">'
     '              <li>Include a <code>screenshot.png</code> in your ZIP project and it is automatically loaded as a reference overlay behind your keyguard in the 3D preview.</li>'
     '              <li>Choose a tablet from the <strong>Size to device</strong> dropdown to snap the overlay to known screen dimensions.</li>'

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Screen dimensions in mm for common AAC tablets. Used for Reference Overlay auto-sizing.",
+  "description": "Screen dimensions in mm for common AAC tablets. Used for Reference Image auto-sizing.",
   "tablets": [
     {
       "id": "ipad-pro-11-m4",

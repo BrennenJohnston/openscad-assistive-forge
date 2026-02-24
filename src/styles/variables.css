@@ -89,7 +89,13 @@
   --motion-base: 180ms;
   --motion-slow: 240ms;
 
-  /* Z-Index Scale */
+  /* Z-Index Scale
+   * CAUTION: The processing overlay (.processing-overlay) uses a hardcoded
+   * z-index: 10000 in components.css, placing it at the same level as the
+   * tutorial panel. Because modals sit at z: 1000, any overlay shown while
+   * a modal is open will cover the modal's buttons. Always gate overlay
+   * display behind waitForFirstVisitAcceptance() in JS. See the
+   * "FIRST-VISIT GATE" comment block in src/main.js. */
   --z-index-base: 1;
   --z-index-sticky: 10;
   --z-index-dropdown: 100;

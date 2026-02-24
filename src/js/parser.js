@@ -656,9 +656,6 @@ export function extractParameters(scadContent) {
       if (commentText && !line.match(bracketHintPattern)) {
         precedingComment = commentText;
       }
-    } else if (!line.startsWith('//')) {
-      // Reset preceding comment if we hit a non-comment line that's not a parameter
-      // (will be captured below if it's a parameter assignment)
     }
 
     if (depthBefore === 0) {

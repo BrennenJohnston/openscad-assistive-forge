@@ -1125,13 +1125,6 @@ body {
 }
 
 /* ============================================================================
-   Preview Status Bar - Floating status overlay at bottom of preview
-   ============================================================================
-   Shows processing status, progress, and render information while viewing
-   the 3D model. Styled as a system dialog/toast notification.
-   ============================================================================ */
-
-/* ============================================================================
    Preview Status Bar - Compact left-aligned overlay
    ============================================================================
    Shows processing status and render statistics. Positioned at bottom-left
@@ -2020,7 +2013,7 @@ body {
 
 .camera-btn.auto-rotate-toggle:hover {
   background: var(--color-bg-tertiary);
-  border-color: var(--color-border-strong);
+  border-color: var(--color-text-primary);
 }
 
 .camera-btn.auto-rotate-toggle.active,
@@ -2211,6 +2204,7 @@ body {
     margin: 0;
     padding: var(--space-sm);
     background: var(--color-bg-primary);
+    color: var(--color-text-primary);
     border: 1px solid var(--color-border);
     border-radius: var(--border-radius-md);
     box-shadow: var(--shadow-lg);
@@ -3141,7 +3135,7 @@ details summary:focus,
 
   .camera-drawer-btn.auto-rotate-toggle:hover {
     background: var(--color-bg-tertiary);
-    border-color: var(--color-border-strong);
+    border-color: var(--color-text-primary);
   }
 
   .camera-drawer-btn.auto-rotate-toggle.active,

@@ -150,7 +150,7 @@ export async function extractZipFiles(zipFile) {
  * @param {Map<string, string>} files - All extracted files
  * @returns {string|null} - Path to main file
  */
-function detectMainFile(scadFiles, files) {
+export function detectMainFile(scadFiles, files) {
   if (scadFiles.length === 0) return null;
   if (scadFiles.length === 1) return scadFiles[0];
 
@@ -189,7 +189,7 @@ function detectMainFile(scadFiles, files) {
  * @param {string} content - File content
  * @returns {boolean}
  */
-function hasCustomizerAnnotations(content) {
+export function hasCustomizerAnnotations(content) {
   // Look for common Customizer patterns
   const patterns = [
     /\/\*\s*\[.*?\]\s*\*\//, // /*[Group]*/

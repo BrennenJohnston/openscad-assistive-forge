@@ -846,7 +846,7 @@ describe('PreviewManager', () => {
     })
   })
 
-  describe('Reference Overlay', () => {
+  describe('Reference Image', () => {
     describe('Overlay Configuration', () => {
       it('initializes with default overlay config', () => {
         const manager = new PreviewManager(container)

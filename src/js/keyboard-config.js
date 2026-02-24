@@ -10,20 +10,22 @@
 const STORAGE_KEY = 'openscad-forge-keyboard-shortcuts';
 
 /**
- * Default keyboard shortcuts
+ * Default keyboard shortcuts aligned to OpenSCAD desktop (2026.02.19).
  * Format: { action: { key, ctrl?, shift?, alt?, meta?, description } }
  */
 export const DEFAULT_SHORTCUTS = {
-  // Rendering
+  // Rendering (F-keys match OpenSCAD desktop)
   render: {
-    key: 'Enter',
-    ctrl: true,
+    key: 'F6',
     description: 'Render model (full quality)',
   },
   preview: {
-    key: 'p',
-    ctrl: true,
+    key: 'F5',
     description: 'Preview model (fast)',
+  },
+  reloadAndPreview: {
+    key: 'F4',
+    description: 'Reload file and preview',
   },
   cancelRender: {
     key: 'Escape',
@@ -32,9 +34,8 @@ export const DEFAULT_SHORTCUTS = {
 
   // Downloads
   download: {
-    key: 'd',
-    ctrl: true,
-    description: 'Download rendered model',
+    key: 'F7',
+    description: 'Export STL / download rendered model',
   },
   exportParams: {
     key: 'e',
@@ -65,14 +66,14 @@ export const DEFAULT_SHORTCUTS = {
     description: 'Reset camera view',
   },
 
-  // Camera view presets (matches OpenSCAD desktop numpad layout)
+  // Camera view presets (matches OpenSCAD desktop Ctrl+numpad layout)
   viewTop: {
-    key: '5',
+    key: '4',
     ctrl: true,
     description: 'Top view',
   },
   viewBottom: {
-    key: '0',
+    key: '5',
     ctrl: true,
     description: 'Bottom view',
   },
@@ -82,24 +83,30 @@ export const DEFAULT_SHORTCUTS = {
     description: 'Front view',
   },
   viewBack: {
-    key: '2',
+    key: '9',
     ctrl: true,
     description: 'Back view',
   },
   viewLeft: {
-    key: '4',
+    key: '6',
     ctrl: true,
     description: 'Left view',
   },
   viewRight: {
-    key: '6',
+    key: '7',
     ctrl: true,
     description: 'Right view',
   },
   viewDiagonal: {
-    key: '1',
+    key: '0',
     ctrl: true,
     description: 'Diagonal isometric view',
+  },
+  viewCenter: {
+    key: '0',
+    ctrl: true,
+    shift: true,
+    description: 'Center / reset all view',
   },
   toggleProjection: {
     key: 'p',
@@ -116,18 +123,21 @@ export const DEFAULT_SHORTCUTS = {
   searchParams: {
     key: 'f',
     ctrl: true,
+    shift: true,
     description: 'Focus parameter search',
   },
 
-  // Theme
+  // Theme (shifted to avoid OpenSCAD conflicts)
   toggleTheme: {
     key: 't',
     ctrl: true,
+    shift: true,
     description: 'Toggle light/dark theme',
   },
   toggleHighContrast: {
     key: 'h',
     ctrl: true,
+    shift: true,
     description: 'Toggle high contrast mode',
   },
 
@@ -140,6 +150,7 @@ export const DEFAULT_SHORTCUTS = {
   showShortcutsModal: {
     key: 'k',
     ctrl: true,
+    shift: true,
     description: 'Open keyboard shortcuts settings',
   },
 
@@ -234,15 +245,33 @@ export const DEFAULT_SHORTCUTS = {
     ctrl: true,
     description: 'Decrease editor font size',
   },
-  findReplace: {
-    key: 'h',
+  find: {
+    key: 'f',
     ctrl: true,
+    description: 'Find in editor',
+  },
+  findNext: {
+    key: 'g',
+    ctrl: true,
+    description: 'Find next match',
+  },
+  findPrevious: {
+    key: 'g',
+    ctrl: true,
+    shift: true,
+    description: 'Find previous match',
+  },
+  findReplace: {
+    key: 'f',
+    ctrl: true,
+    alt: true,
     description: 'Find and replace in editor',
   },
 
   // Design tools
   flushCaches: {
     key: 'F9',
+    ctrl: true,
     description: 'Flush caches (files, libraries, geometry)',
   },
   showAST: {
@@ -261,17 +290,20 @@ export const DEFAULT_SHORTCUTS = {
     shift: true,
     description: 'Fit model in view',
   },
-  toggleAxes: {
-    key: 'a',
+  toggleEdges: {
+    key: '1',
     ctrl: true,
-    alt: true,
+    description: 'Toggle edges overlay',
+  },
+  toggleAxes: {
+    key: '2',
+    ctrl: true,
     description: 'Toggle axes display',
   },
-  toggleEdges: {
-    key: 'g',
+  toggleCrosshairs: {
+    key: '3',
     ctrl: true,
-    alt: true,
-    description: 'Toggle edges overlay',
+    description: 'Toggle crosshairs overlay',
   },
   // toggleAnimate: removed from UI pending full debug; key binding preserved here for future re-integration
   // toggleAnimate: { key: 'm', ctrl: true, alt: true, description: 'Toggle animation playback' },
@@ -304,13 +336,42 @@ export const DEFAULT_SHORTCUTS = {
   nextPanel: {
     key: ']',
     ctrl: true,
+    alt: true,
     description: 'Focus next panel',
   },
   prevPanel: {
     key: '[',
     ctrl: true,
+    alt: true,
     description: 'Focus previous panel',
   },
+};
+
+/**
+ * Legacy Forge shortcut preset (pre-2026 layout, for existing users who prefer the old keys).
+ * Stored as overrides — only the keys that differ from DEFAULT_SHORTCUTS are listed.
+ */
+export const LEGACY_FORGE_SHORTCUTS = {
+  render: { key: 'Enter', ctrl: true },
+  preview: { key: 'p', ctrl: true },
+  reloadAndPreview: { key: 'F4' },
+  download: { key: 'd', ctrl: true },
+  viewTop: { key: '5', ctrl: true },
+  viewBottom: { key: '0', ctrl: true },
+  viewBack: { key: '2', ctrl: true },
+  viewLeft: { key: '4', ctrl: true },
+  viewRight: { key: '6', ctrl: true },
+  viewDiagonal: { key: '1', ctrl: true },
+  searchParams: { key: 'f', ctrl: true },
+  toggleTheme: { key: 't', ctrl: true },
+  toggleHighContrast: { key: 'h', ctrl: true },
+  showShortcutsModal: { key: 'k', ctrl: true },
+  findReplace: { key: 'h', ctrl: true },
+  flushCaches: { key: 'F9' },
+  toggleAxes: { key: 'a', ctrl: true, alt: true },
+  toggleEdges: { key: 'g', ctrl: true, alt: true },
+  nextPanel: { key: ']', ctrl: true },
+  prevPanel: { key: '[', ctrl: true },
 };
 
 /**
@@ -319,7 +380,7 @@ export const DEFAULT_SHORTCUTS = {
 export const SHORTCUT_CATEGORIES = {
   rendering: {
     label: 'Rendering',
-    actions: ['render', 'preview', 'cancelRender'],
+    actions: ['render', 'preview', 'reloadAndPreview', 'cancelRender'],
   },
   downloads: {
     label: 'Downloads & Export',
@@ -339,6 +400,7 @@ export const SHORTCUT_CATEGORIES = {
       'viewLeft',
       'viewRight',
       'viewDiagonal',
+      'viewCenter',
       'toggleProjection',
     ],
   },
@@ -370,6 +432,9 @@ export const SHORTCUT_CATEGORIES = {
       'jumpPrevError',
       'increaseFontSize',
       'decreaseFontSize',
+      'find',
+      'findNext',
+      'findPrevious',
       'findReplace',
     ],
   },
@@ -379,7 +444,7 @@ export const SHORTCUT_CATEGORIES = {
   },
   display: {
     label: 'Display',
-    actions: ['viewAll', 'toggleAxes', 'toggleEdges'],
+    actions: ['viewAll', 'toggleEdges', 'toggleAxes', 'toggleCrosshairs'],
   },
   panels: {
     label: 'Panels',
@@ -646,10 +711,33 @@ class KeyboardConfig {
   }
 
   /**
-   * Reset all shortcuts to defaults
+   * Reset all shortcuts to defaults (OpenSCAD Desktop preset)
    */
   resetAll() {
     this.shortcuts = { ...DEFAULT_SHORTCUTS };
+    this.save();
+    this._notifyChange();
+  }
+
+  /**
+   * Apply a named preset
+   * @param {'openscad'|'legacy'} preset
+   */
+  applyPreset(preset) {
+    if (preset === 'legacy') {
+      this.shortcuts = { ...DEFAULT_SHORTCUTS };
+      for (const [action, override] of Object.entries(LEGACY_FORGE_SHORTCUTS)) {
+        if (this.shortcuts[action]) {
+          this.shortcuts[action] = {
+            ...this.shortcuts[action],
+            ...override,
+          };
+        }
+      }
+    } else {
+      // 'openscad' or unknown — use the OpenSCAD Desktop defaults
+      this.shortcuts = { ...DEFAULT_SHORTCUTS };
+    }
     this.save();
     this._notifyChange();
   }
@@ -830,6 +918,16 @@ export function generateShortcutsHelpHTML() {
 export function generateShortcutsEditorHTML() {
   const shortcuts = keyboardConfig.getAllShortcuts();
   let html = '<div class="shortcuts-editor">';
+  html += '<div class="shortcuts-preset-bar">';
+  html +=
+    '  <label for="shortcutsPresetSelect" class="shortcuts-preset-label">Preset:</label>';
+  html +=
+    '  <select id="shortcutsPresetSelect" class="shortcuts-preset-select">';
+  html += '    <option value="openscad">OpenSCAD Desktop</option>';
+  html += '    <option value="legacy">Legacy Forge</option>';
+  html += '    <option value="custom">Custom</option>';
+  html += '  </select>';
+  html += '</div>';
   html +=
     '<p class="shortcuts-editor-intro">Click on a shortcut to change it. Press Escape to cancel.</p>';
 
@@ -1015,7 +1113,6 @@ function endKeyCapture(success) {
  * @param {string} conflictDescription - Description of conflicting action
  */
 function showConflictWarning(button, conflictDescription) {
-  const _originalContent = button.innerHTML;
   button.innerHTML = `<span class="key-conflict-warning">Already used by: ${conflictDescription}</span>`;
   button.classList.add('conflict');
 
@@ -1026,17 +1123,6 @@ function showConflictWarning(button, conflictDescription) {
       button.classList.remove('conflict');
     }
   }, 2000);
-}
-
-/**
- * Refresh the shortcuts editor UI after a change
- */
-export function refreshShortcutsEditor() {
-  const container = document.getElementById('shortcutsModalBody');
-  if (container) {
-    container.innerHTML = generateShortcutsEditorHTML();
-    attachShortcutsEditorListeners(container);
-  }
 }
 
 /**
@@ -1066,6 +1152,33 @@ export function attachShortcutsEditorListeners(container) {
 }
 
 /**
+ * Refresh the shortcuts editor UI after a change
+ */
+export function refreshShortcutsEditor() {
+  const container = document.getElementById('shortcutsModalBody');
+  if (container) {
+    container.innerHTML = generateShortcutsEditorHTML();
+    attachShortcutsEditorListeners(container);
+    _attachPresetListener(container);
+  }
+}
+
+/**
+ * Attach preset selector listener
+ * @param {HTMLElement} container
+ */
+function _attachPresetListener(container) {
+  const select = container.querySelector('#shortcutsPresetSelect');
+  if (!select) return;
+  select.addEventListener('change', () => {
+    const preset = select.value;
+    if (preset === 'custom') return;
+    keyboardConfig.applyPreset(preset);
+    refreshShortcutsEditor();
+  });
+}
+
+/**
  * Initialize the shortcuts modal
  * @param {HTMLElement} modalBody - Modal body element
  * @param {Function} closeModal - Function to close the modal
@@ -1074,6 +1187,7 @@ export function initShortcutsModal(modalBody, closeModal) {
   // Generate and insert the editor HTML
   modalBody.innerHTML = generateShortcutsEditorHTML();
   attachShortcutsEditorListeners(modalBody);
+  _attachPresetListener(modalBody);
 
   // Handle Reset All button
   const resetAllBtn = document.getElementById('shortcutsResetAll');

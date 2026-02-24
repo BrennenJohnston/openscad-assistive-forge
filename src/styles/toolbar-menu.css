@@ -27,14 +27,14 @@
 
 .toolbar-menu-btn {
   padding: var(--space-xs) var(--space-sm);
-  min-height: var(--size-touch-target);
-  font-size: var(--font-size-sm);
+  min-height: 32px;
+  font-size: var(--font-size-xs);
   font-weight: var(--font-weight-medium);
   border-radius: var(--border-radius-sm);
-  background: transparent;
-  border: var(--border-width-thin) solid transparent;
+  background: var(--color-bg-secondary);
+  border: var(--border-width-thin) solid var(--color-border);
+  color: var(--color-text-primary);
   cursor: pointer;
-  color: inherit;
   transition:
     background-color 150ms ease,
     border-color 150ms ease;
@@ -42,6 +42,7 @@
 
 .toolbar-menu-btn:hover {
   background: var(--color-hover-bg);
+  border-color: var(--color-text-primary);
 }
 
 .toolbar-menu-btn:focus-visible {
@@ -85,6 +86,7 @@
   min-width: var(--toolbar-menu-min-w, 280px);
   max-width: var(--toolbar-menu-max-w, 380px);
   background: var(--color-bg-primary);
+  color: var(--color-text-primary);
   border: var(--border-width-thin) solid var(--color-border);
   border-radius: var(--border-radius-sm);
   box-shadow: var(--shadow-md);
@@ -344,5 +346,25 @@
     max-width: 100%;
     border-radius: var(--border-radius-sm) var(--border-radius-sm) 0 0;
     margin-top: 0;
+  }
+
+  /* Toolbar layout: action buttons on first row, menu bar on second row */
+  .workflow-progress {
+    flex-wrap: wrap;
+    overflow-x: hidden;
+    max-width: 100%;
+  }
+
+  .workflow-progress .toolbar-menu-bar {
+    flex: 1 1 100%;
+    order: 2;
+  }
+
+  .workflow-actions {
+    flex: 1 1 auto;
+    flex-shrink: 1;
+    flex-wrap: wrap;
+    order: 1;
+    justify-content: flex-end;
   }
 }

@@ -1,6 +1,6 @@
 /**
  * E2E tests for terminology consistency
- * Verifies that "Saved Designs" and "Companion Files" terminology is used consistently
+ * Verifies that "Saved Projects" and "Companion Files" terminology is used consistently
  * @license GPL-3.0-or-later
  */
 
@@ -49,23 +49,23 @@ const createMultiFileZipFixture = async () => {
   return zipPath
 }
 
-test.describe('Terminology Consistency - Saved Designs', () => {
-  test('welcome screen shows "Saved Designs" heading', async ({ page }) => {
+test.describe('Terminology Consistency - Saved Projects', () => {
+  test('welcome screen shows "Saved Projects" heading', async ({ page }) => {
     await page.goto('/')
     
-    // Check for the saved designs section
+    // Check for the saved projects section
     const heading = page.locator('#saved-projects-heading')
     
     if (await heading.isVisible().catch(() => false)) {
       const text = await heading.textContent()
-      expect(text.toLowerCase()).toContain('saved design')
-      // Should NOT contain "Saved Project"
-      expect(text.toLowerCase()).not.toContain('saved project')
+      expect(text.toLowerCase()).toContain('saved project')
+      // Should NOT contain "Saved Design"
+      expect(text.toLowerCase()).not.toContain('saved design')
     }
   })
 
-  test('empty state uses "saved designs" terminology', async ({ page }) => {
-    // Clear any saved designs first
+  test('empty state uses "saved projects" terminology', async ({ page }) => {
+    // Clear any saved projects first
     await page.addInitScript(() => {
       // Clear IndexedDB saved projects
       if (typeof indexedDB !== 'undefined') {
@@ -80,12 +80,12 @@ test.describe('Terminology Consistency - Saved Designs', () => {
     
     if (await emptyState.isVisible().catch(() => false)) {
       const text = await emptyState.textContent()
-      // Should use "designs" not "projects"
-      expect(text.toLowerCase()).toContain('design')
+      // Should use "project" not "design"
+      expect(text.toLowerCase()).toContain('project')
     }
   })
 
-  test('saved designs list has correct aria-label', async ({ page }) => {
+  test('saved projects list has correct aria-label', async ({ page }) => {
     await page.goto('/')
     
     const list = page.locator('#savedProjectsList')
@@ -94,7 +94,7 @@ test.describe('Terminology Consistency - Saved Designs', () => {
     if (await list.count() > 0) {
       const ariaLabel = await list.getAttribute('aria-label')
       if (ariaLabel) {
-        expect(ariaLabel.toLowerCase()).toContain('design')
+        expect(ariaLabel.toLowerCase()).toContain('project')
       }
     }
   })
@@ -112,7 +112,7 @@ test.describe('Terminology Consistency - Saved Designs', () => {
       return
     }
     
-    // Look for save design button
+    // Look for save project button
     const saveBtn = page.locator('button:has-text("Save"), button[aria-label*="Save"]').first()
     
     if (await saveBtn.isVisible().catch(() => false)) {
@@ -120,17 +120,17 @@ test.describe('Terminology Consistency - Saved Designs', () => {
       const ariaLabel = await saveBtn.getAttribute('aria-label')
       const title = await saveBtn.getAttribute('title')
       
-      // If it mentions "project", it should be updated to "design"
+      // If it mentions "design", it should be updated to "project"
       const combinedText = `${text || ''} ${ariaLabel || ''} ${title || ''}`.toLowerCase()
       
-      if (combinedText.includes('project')) {
+      if (combinedText.includes('saved design')) {
         // This is a terminology issue that should be flagged
-        console.warn('Found "project" terminology in save button, should be "design"')
+        console.warn('Found "saved design" terminology in save button, should be "saved project"')
       }
     }
   })
 
-  test('load confirmation dialog uses "Saved Design" terminology', async ({ page }) => {
+  test('load confirmation dialog uses "Saved Project" terminology', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
     
     // First, save a design
@@ -143,7 +143,7 @@ test.describe('Terminology Consistency - Saved Designs', () => {
       return
     }
     
-    // Try to save the current design
+    // Try to save the current project
     const saveBtn = page.locator('button:has-text("Save")').first()
     if (!(await saveBtn.isVisible().catch(() => false))) {
       test.skip()
@@ -155,8 +155,8 @@ test.describe('Terminology Consistency - Saved Designs', () => {
     expect(await page.locator('body').isVisible()).toBe(true)
   })
 
-  test('delete confirmation uses "Saved Design" terminology', async ({ page }) => {
-    // This would require having a saved design and clicking delete
+  test('delete confirmation uses "Saved Project" terminology', async ({ page }) => {
+    // This would require having a saved project and clicking delete
     // Testing the actual dialog would be more complex
     // For now, verify the page loads without terminology errors
     await page.goto('/')
@@ -212,7 +212,7 @@ test.describe('Terminology Consistency - Companion Files', () => {
 })
 
 test.describe('Terminology - No Old Terms', () => {
-  test('welcome screen does not use "Saved Project" (singular or plural)', async ({ page }) => {
+  test('welcome screen does not use "Saved Design" (singular or plural)', async ({ page }) => {
     await page.goto('/')
     
     // Get all visible text on welcome screen
@@ -220,17 +220,16 @@ test.describe('Terminology - No Old Terms', () => {
     
     if (await welcomeScreen.isVisible().catch(() => false)) {
       const text = await welcomeScreen.textContent()
-      // Should not contain "Saved Project" anywhere visible
-      // (exception: internal IDs are fine)
+      // Should not contain "Saved Design" anywhere visible
       const lowerText = text.toLowerCase()
       
       // Count occurrences of "saved project" vs "saved design"
       const projectCount = (lowerText.match(/saved project/g) || []).length
       const designCount = (lowerText.match(/saved design/g) || []).length
       
-      // Should have more "design" references than "project" references
+      // Should have more "project" references than "design" references
       // Or no references to either (both are fine)
-      expect(projectCount).toBeLessThanOrEqual(designCount)
+      expect(designCount).toBeLessThanOrEqual(projectCount)
     }
   })
 
@@ -278,10 +277,10 @@ test.describe('Accessibility Labels Terminology', () => {
       
       const lowerLabel = ariaLabel.toLowerCase()
       
-      // If it mentions saved items, should use "design" not "project"
+      // If it mentions saved items, should use "project" not "design"
       if (lowerLabel.includes('saved')) {
-        if (lowerLabel.includes('project') && !lowerLabel.includes('design')) {
-          console.warn(`Found aria-label with "project" terminology: "${ariaLabel}"`)
+        if (lowerLabel.includes('design') && !lowerLabel.includes('project')) {
+          console.warn(`Found aria-label with "design" terminology: "${ariaLabel}"`)
         }
       }
       
@@ -305,8 +304,8 @@ test.describe('Accessibility Labels Terminology', () => {
       const lowerTitle = title.toLowerCase()
       
       // Check for old terminology
-      if (lowerTitle.includes('saved project')) {
-        console.warn(`Found title with "saved project": "${title}"`)
+      if (lowerTitle.includes('saved design')) {
+        console.warn(`Found title with "saved design": "${title}"`)
       }
     }
   })
@@ -332,9 +331,9 @@ test.describe('Status Messages Terminology', () => {
       const statusText = await statusArea.textContent()
       const lowerStatus = statusText.toLowerCase()
       
-      // If status mentions saved items, should use "design"
-      if (lowerStatus.includes('saved project')) {
-        console.warn('Status message uses "saved project", consider "saved design"')
+      // If status mentions saved items, should use "project"
+      if (lowerStatus.includes('saved design')) {
+        console.warn('Status message uses "saved design", consider "saved project"')
       }
     }
   })

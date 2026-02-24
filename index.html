@@ -383,28 +383,6 @@
               Help
             </button>
           </div>
-          <ol class="workflow-steps">
-            <li class="workflow-step" data-step="upload" aria-current="false">
-              <span class="workflow-step-number">1</span>
-              <span class="workflow-step-label">Upload</span>
-            </li>
-            <li
-              class="workflow-step"
-              data-step="customize"
-              aria-current="false"
-            >
-              <span class="workflow-step-number">2</span>
-              <span class="workflow-step-label">Customize</span>
-            </li>
-            <li class="workflow-step" data-step="render" aria-current="false">
-              <span class="workflow-step-number">3</span>
-              <span class="workflow-step-label">Generate</span>
-            </li>
-            <li class="workflow-step" data-step="download" aria-current="false">
-              <span class="workflow-step-number">4</span>
-              <span class="workflow-step-label">Download</span>
-            </li>
-          </ol>
           <div class="workflow-actions">
             <button
               id="uiModeToggle"
@@ -810,14 +788,14 @@
                 </div>
               </details>
             </div>
-            <!-- Saved Designs Section (v2 with folder tree) -->
+            <!-- Saved Projects Section (v2 with folder tree) -->
             <section
               class="saved-projects-panel"
               id="savedProjectsPanel"
               aria-labelledby="saved-projects-heading"
             >
               <div class="saved-projects-header">
-                <h3 id="saved-projects-heading">Saved Designs</h3>
+                <h3 id="saved-projects-heading">Saved Projects</h3>
                 <div class="saved-projects-actions">
                   <button
                     type="button"
@@ -921,13 +899,13 @@
                   class="saved-projects-list"
                   id="savedProjectsList"
                   role="list"
-                  aria-label="Saved designs"
+                  aria-label="Saved projects"
                 >
                   <!-- Dynamically populated with projects -->
                 </div>
               </div>
               <p class="saved-projects-empty hidden" id="savedProjectsEmpty">
-                No saved designs yet. Upload a file and choose to save it.
+                No saved projects yet. Upload a file and choose to save it.
               </p>
               <!-- Hidden file input for import -->
               <input
@@ -1199,14 +1177,6 @@
                 aria-label="Save a local copy of this shared project to browser storage"
               >
                 Save My Copy
-              </button>
-              <button
-                type="button"
-                id="manifestDownloadZipBtn"
-                class="btn btn-sm btn-outline"
-                aria-label="Save this project with all files to Saved Designs"
-              >
-                Download ZIP
               </button>
               <button
                 type="button"
@@ -1734,12 +1704,12 @@
                 class="measure-fullscreen-backdrop hidden"
                 aria-hidden="true"
               ></div>
-              <!-- Reference Overlay Controls -->
+              <!-- Reference Image Controls -->
               <details
                 class="overlay-details forge-disclosure"
                 id="overlaySection"
                 role="region"
-                aria-label="Reference overlay controls"
+                aria-label="Reference image controls"
               >
                 <summary class="overlay-summary">
                   <svg
@@ -1759,7 +1729,7 @@
                     <polyline points="21 15 16 10 5 21"></polyline>
                   </svg>
                   <span class="overlay-summary-text forge-disclosure-title"
-                    >Reference Overlay</span
+                    >Reference Image</span
                   >
                   <span class="overlay-status" id="overlayStatus">Off</span>
                 </summary>
@@ -2678,8 +2648,8 @@
                   <button
                     id="expertRunPreviewBtn"
                     class="btn btn-sm btn-primary"
-                    aria-label="Run preview (Ctrl+Enter)"
-                    title="Preview (Ctrl+Enter)"
+                    aria-label="Run preview (F5)"
+                    title="Preview (F5)"
                   >
                     ▶ Preview
                   </button>
@@ -3499,34 +3469,6 @@
                     </svg>
                     <span class="btn-text">Queue</span>
                     <span class="queue-badge" id="queueBadge">0</span>
-                  </button>
-                  <span
-                    class="actions-drawer-divider"
-                    aria-hidden="true"
-                  ></span>
-                  <button
-                    id="shareBtn"
-                    class="btn btn-sm btn-secondary actions-drawer-btn"
-                    aria-label="Copy shareable link with current parameters"
-                  >
-                    <svg
-                      class="btn-icon-svg"
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      aria-hidden="true"
-                    >
-                      <path
-                        d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"
-                      ></path>
-                      <path
-                        d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"
-                      ></path>
-                    </svg>
-                    <span class="btn-text">Share Link</span>
                   </button>
                   <button
                     id="exportParamsBtn"
@@ -4385,8 +4327,8 @@
                     type="button"
                     class="btn btn-sm btn-outline camera-view-btn"
                     data-view="top"
-                    aria-label="Top view (Ctrl+5)"
-                    title="Top view (Ctrl+5)"
+                    aria-label="Top view (Ctrl+4)"
+                    title="Top view (Ctrl+4)"
                   >
                     Top
                   </button>
@@ -4403,8 +4345,8 @@
                     type="button"
                     class="btn btn-sm btn-outline camera-view-btn"
                     data-view="right"
-                    aria-label="Right side view (Ctrl+6)"
-                    title="Right side view (Ctrl+6)"
+                    aria-label="Right side view (Ctrl+7)"
+                    title="Right side view (Ctrl+7)"
                   >
                     Right
                   </button>
@@ -4412,8 +4354,8 @@
                     type="button"
                     class="btn btn-sm btn-outline camera-view-btn"
                     data-view="left"
-                    aria-label="Left side view (Ctrl+4)"
-                    title="Left side view (Ctrl+4)"
+                    aria-label="Left side view (Ctrl+6)"
+                    title="Left side view (Ctrl+6)"
                   >
                     Left
                   </button>
@@ -4421,8 +4363,8 @@
                     type="button"
                     class="btn btn-sm btn-outline camera-view-btn"
                     data-view="back"
-                    aria-label="Back view (Ctrl+2)"
-                    title="Back view (Ctrl+2)"
+                    aria-label="Back view (Ctrl+9)"
+                    title="Back view (Ctrl+9)"
                   >
                     Back
                   </button>
@@ -4430,8 +4372,8 @@
                     type="button"
                     class="btn btn-sm btn-outline camera-view-btn"
                     data-view="bottom"
-                    aria-label="Bottom view (Ctrl+0)"
-                    title="Bottom view (Ctrl+0)"
+                    aria-label="Bottom view (Ctrl+5)"
+                    title="Bottom view (Ctrl+5)"
                   >
                     Bottom
                   </button>
@@ -4439,8 +4381,8 @@
                     type="button"
                     class="btn btn-sm btn-outline camera-view-btn"
                     data-view="diagonal"
-                    aria-label="Diagonal isometric view (Ctrl+1)"
-                    title="Diagonal isometric view (Ctrl+1)"
+                    aria-label="Diagonal isometric view (Ctrl+0)"
+                    title="Diagonal isometric view (Ctrl+0)"
                   >
                     Diagonal
                   </button>
@@ -5091,10 +5033,6 @@
             <h4>Sharing Your Configuration</h4>
             <ul class="features-list">
               <li>
-                <strong>Share Link</strong> (Actions menu) – Copy a URL that
-                includes your current parameters
-              </li>
-              <li>
                 <strong>Export Params</strong> (Actions menu) – Download your
                 current settings as a JSON file
               </li>
@@ -5285,7 +5223,7 @@
                 across sessions.
               </li>
             </ul>
-            <h4>Screenshot Reference Overlay</h4>
+            <h4>Screenshot Reference Image</h4>
             <ul class="features-list">
               <li>
                 Include a <code>screenshot.png</code> in your ZIP project and it
@@ -5331,10 +5269,6 @@
               Open the <strong>Actions</strong> drawer to find power features:
             </p>
             <ul class="features-list">
-              <li>
-                <strong>Share Link</strong> – Copy a URL with your current
-                parameters
-              </li>
               <li>
                 <strong>Export Params</strong> – Download your configuration as
                 JSON
@@ -5974,10 +5908,6 @@ No console output yet. Generate a model to see output.</pre
             <li>
               <strong>Save a copy</strong> to keep your changes in Saved
               Designs, where you can reload them later.
-            </li>
-            <li>
-              <strong>Download as ZIP</strong> to save the full project
-              (including companion files) to your Saved Designs.
             </li>
           </ul>
           <p class="features-note">

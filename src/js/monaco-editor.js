@@ -15,7 +15,6 @@
  * @license GPL-3.0-or-later
  */
 
-// OpenSCAD language definition for Monaco
 const SCAD_LANGUAGE_DEF = {
   id: 'openscad',
   extensions: ['.scad'],
@@ -23,7 +22,6 @@ const SCAD_LANGUAGE_DEF = {
   mimetypes: ['text/x-openscad'],
 };
 
-// OpenSCAD syntax highlighting rules
 const SCAD_MONARCH_TOKENS = {
   keywords: [
     'module',
@@ -322,8 +320,6 @@ function configureAndLoadMonaco(resolve, reject) {
 
   require(['vs/editor/editor.main'], () => {
     console.log('[MonacoEditor] Monaco loaded successfully');
-
-    // Register OpenSCAD language
     registerOpenSCADLanguage();
 
     monacoLoaded = true;
@@ -341,16 +337,9 @@ function registerOpenSCADLanguage() {
   const monaco = window.monaco;
   if (!monaco) return;
 
-  // Register language
   monaco.languages.register(SCAD_LANGUAGE_DEF);
-
-  // Set tokenizer
   monaco.languages.setMonarchTokensProvider('openscad', SCAD_MONARCH_TOKENS);
-
-  // Register light theme
   monaco.editor.defineTheme('openscad-light', SCAD_THEME);
-
-  // Register dark theme
   monaco.editor.defineTheme('openscad-dark', SCAD_DARK_THEME);
 
   // Register completion provider
@@ -366,7 +355,6 @@ function registerOpenSCADLanguage() {
 
       const suggestions = [];
 
-      // Add keywords
       SCAD_MONARCH_TOKENS.keywords.forEach((kw) => {
         suggestions.push({
           label: kw,
@@ -376,7 +364,6 @@ function registerOpenSCADLanguage() {
         });
       });
 
-      // Add builtins
       SCAD_MONARCH_TOKENS.builtins.forEach((bi) => {
         suggestions.push({
           label: bi,
@@ -388,7 +375,6 @@ function registerOpenSCADLanguage() {
         });
       });
 
-      // Add functions
       SCAD_MONARCH_TOKENS.functions.forEach((fn) => {
         suggestions.push({
           label: fn,
@@ -458,7 +444,6 @@ export class MonacoEditor {
    * @returns {Promise<void>}
    */
   async initialize() {
-    // Load Monaco if not already loaded
     await loadMonaco();
 
     const monaco = window.monaco;
@@ -466,10 +451,8 @@ export class MonacoEditor {
       throw new Error('Monaco not available after loading');
     }
 
-    // Detect dark mode
     this._isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
 
-    // Create editor
     this.editor = monaco.editor.create(this.container, {
       value: '',
       language: 'openscad',
@@ -489,10 +472,8 @@ export class MonacoEditor {
       ariaLabel: 'OpenSCAD code editor',
     });
 
-    // Set up event handlers
     this._setupEventHandlers();
 
-    // Listen for theme changes
     window
       .matchMedia('(prefers-color-scheme: dark)')
       .addEventListener('change', (e) => {
@@ -512,12 +493,10 @@ export class MonacoEditor {
   _setupEventHandlers() {
     const monaco = window.monaco;
 
-    // Content change
     this.editor.onDidChangeModelContent(() => {
       this.onChange(this.editor.getValue());
     });
 
-    // Keyboard shortcuts
     this.editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
       this.onSave();
       this.announce('Saved');

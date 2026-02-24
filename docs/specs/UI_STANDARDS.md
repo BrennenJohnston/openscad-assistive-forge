@@ -737,7 +737,7 @@ All toolbar buttons, drawer toggles, panel collapse buttons, and modal close but
 
 ### `.forge-disclosure` — Shared Disclosure Contract
 
-All collapsible `<details>` sections (Presets, Console Output, Reference Overlay, Libraries, Companion Files, Advanced) must use the `.forge-disclosure` class on the `<details>` element. This provides a uniform `<summary>` layout with consistent chevron animation via `::after`, spacing, font weight, touch target sizing, and `prefers-reduced-motion` support.
+All collapsible `<details>` sections (Presets, Console Output, Reference Image, Libraries, Companion Files, Advanced) must use the `.forge-disclosure` class on the `<details>` element. This provides a uniform `<summary>` layout with consistent chevron animation via `::after`, spacing, font weight, touch target sizing, and `prefers-reduced-motion` support.
 
 **Chevron:** CSS border-based via `::after`, rotates from -45deg (closed) to 45deg (open).
 

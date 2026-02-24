@@ -43,6 +43,28 @@ export const OUTPUT_FORMATS = {
     description: '3D Manufacturing Format (modern)',
     is2D: false,
   },
+  // Additional 3D Formats
+  wrl: {
+    name: 'VRML',
+    extension: '.wrl',
+    mimeType: 'model/vrml',
+    description: 'VRML - Virtual Reality Modeling Language',
+    is2D: false,
+  },
+  csg: {
+    name: 'CSG',
+    extension: '.csg',
+    mimeType: 'text/plain',
+    description: 'OpenSCAD CSG tree format',
+    is2D: false,
+  },
+  pdf: {
+    name: 'PDF',
+    extension: '.pdf',
+    mimeType: 'application/pdf',
+    description: 'PDF - 2D projection export',
+    is2D: true,
+  },
   // Laser Cutting / 2D Formats
   svg: {
     name: 'SVG',
