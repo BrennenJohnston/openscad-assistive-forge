@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Stakeholder Sanitization & Feature Generalization
 
-Comprehensive scrub of all stakeholder-specific references, feature generalization,
+Scrub of stakeholder-specific references, feature generalization,
 manifest sharing hardening, and ongoing containment protocols.
 
 ### Changed
@@ -89,7 +89,7 @@ Security hardening, saved projects, documentation overhaul, and accessibility im
 
 ### Technical
 
-- 890 unit tests passing (100%)
+- 1383 unit tests passing (100%)
 - 0 linter errors
 - Production build: 125KB gzipped (main), 187KB gzipped (Three.js)
 

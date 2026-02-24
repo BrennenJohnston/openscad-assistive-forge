@@ -191,22 +191,26 @@ Projects save everything: code, parameters, and metadata.
 ### Saving a Project
 
 1. Click **"Save Project"** in the header toolbar
-2. Enter a filename (or accept the default)
-3. A `.json` file downloads
+2. Enter a project name
+3. The project is saved to your browser's storage (IndexedDB)
 
 ### Loading a Project
 
-1. Click **"Open File"** in the header
-2. Select a `.json` project file
+1. Open the **Saved Projects** panel
+2. Select a project from your saved list
 3. Everything restores: code, parameters, and settings
+
+### Exporting and Importing Projects
+
+To move a project to another device, export it as a ZIP from the Saved Projects panel. To import, upload the ZIP using **Open File**.
 
 ### Project vs Preset
 
 | Feature | Preset | Project |
 |---------|--------|---------|
-| Saves parameters | ✅ | ✅ |
-| Saves code | ❌ | ✅ |
-| Portable | Via JSON | `.json` file |
+| Saves parameters | Yes | Yes |
+| Saves code | No | Yes |
+| Portable | Via JSON export | ZIP export from Saved Projects |
 | Use case | Same model, different settings | Complete backup |
 
 ---
@@ -401,4 +405,4 @@ If the app crashed previously:
 - [Getting Started](./GETTING_STARTED.md) - First-time user introduction
 - [Expert Mode Guide](./EXPERT_MODE_GUIDE.md) - Code editing interface
 - [Accessibility Guide](./ACCESSIBILITY_GUIDE.md) - Keyboard and screen reader use
-- [Troubleshooting](../TROUBLESHOOTING.md) - Technical issues
+- [Troubleshooting](./TROUBLESHOOTING_USER_GUIDE.md) - Common issues and solutions

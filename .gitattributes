@@ -1,15 +1,11 @@
-# Git LFS tracking for large binary files
-# See: https://git-lfs.com
-#
-# Files matching these patterns are stored in Git LFS rather than as regular
-# Git objects. This allows bundles of 200+ MB to be committed without hitting
-# GitHub's 100 MB hard limit or 50 MB warning threshold.
-#
-# Users who clone or fork this branch need Git LFS installed:
-#   git lfs install
-#   git lfs pull
-#
-# GitHub's "Download ZIP" and web-based uploads work without LFS installed.
-*.zip filter=lfs diff=lfs merge=lfs -text
-*.stl filter=lfs diff=lfs merge=lfs -text
-*.3mf filter=lfs diff=lfs merge=lfs -text
+# Normalize line endings to LF in the repo, check out as native on each OS.
+* text=auto eol=lf
+
+# Binary assets — never touch these.
+*.png binary
+*.ico binary
+*.wasm binary
+*.stl binary
+*.3mf binary
+*.zip binary
+*.gz binary

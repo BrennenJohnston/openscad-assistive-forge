@@ -77,8 +77,8 @@ All visual properties must use tokens from `src/styles/variables.css` (never har
 | `--border-radius-md` | 8px | Standard components |
 | `--border-radius-lg` | 12px | Large panels |
 | `--border-radius-pill` | 999px | Pill buttons and toggles |
-| `--radius-sm` | 6px | Alternative small radius |
-| `--radius-md` | 10px | Alternative medium radius |
+| `--radius-sm` | 6px | **DEPRECATED** alias — use `--border-radius-sm` instead |
+| `--radius-md` | 10px | **DEPRECATED** alias — use `--border-radius-md` instead |
 
 ### Focus Ring Tokens
 
@@ -655,7 +655,7 @@ function loadDrawerSize(drawerName, defaultSize) {
 ### Integration with Existing Accessibility Guides
 
 **Related Documentation:**
-- **[ACCESSIBILITY_GUIDE.md](ACCESSIBILITY_GUIDE.md)** - Keyboard navigation, screen reader patterns, live regions
+- **[ACCESSIBILITY_GUIDE.md](../guides/ACCESSIBILITY_GUIDE.md)** - Keyboard navigation, screen reader patterns, live regions
 - **[CAMERA_CONTROLS_ACCESSIBILITY.md](CAMERA_CONTROLS_ACCESSIBILITY.md)** - Camera-specific accessibility patterns
 
 **Rule:** All new UI components must follow patterns documented in these guides.

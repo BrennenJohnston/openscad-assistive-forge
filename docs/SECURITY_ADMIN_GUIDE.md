@@ -172,8 +172,8 @@ The application uses npm for JavaScript dependencies:
 # Audit for vulnerabilities
 npm audit
 
-# Generate Software Bill of Materials
-npm run sbom
+# Generate Software Bill of Materials (run in CI via npx)
+npx @cyclonedx/cyclonedx-npm --output-file sbom.json
 ```
 
 ### Automated Checks
@@ -197,7 +197,7 @@ Process for security updates:
 
 ### SBOM Location
 
-Software Bill of Materials can be regenerated with `npm audit` or third-party SBOM tooling. Check release artifacts for the latest SBOM.
+The SBOM is generated in CI via `npx @cyclonedx/cyclonedx-npm`. Check the CI artifacts for the latest SBOM.
 
 ---
 

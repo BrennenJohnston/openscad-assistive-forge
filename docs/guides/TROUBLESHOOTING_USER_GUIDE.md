@@ -110,8 +110,8 @@ Before diving into specific issues, try these common solutions:
 **Solutions:**
 
 1. **Save as Preset**: Use "Save Preset" to persist values
-2. **Save Project**: Download a project file for full backup
-3. **Check localStorage**: Your browser may be clearing storage
+2. **Save Project**: Use "Save Project" to store to browser storage (IndexedDB)
+3. **Check browser storage**: Your browser may be clearing storage
 4. **Private/Incognito mode**: Storage doesn't persist in private mode
 
 ---

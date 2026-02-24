@@ -8,7 +8,7 @@ OpenSCAD Assistive Forge is a browser-only application. There's no backend. Ever
 
 - OpenSCAD WASM runs in a Web Worker so the UI stays responsive
 - Three.js renders the 3D preview
-- localStorage stores presets, projects, and preferences
+- IndexedDB + localStorage store projects, presets, and preferences
 - Service worker caches assets for offline use
 
 The main flow: user uploads a `.scad` file, the parser extracts Customizer annotations, the UI generator builds controls, the user tweaks parameters, the worker renders OpenSCAD, and Three.js displays the result.
@@ -226,14 +226,14 @@ flowchart LR
     Root --> Vars[CSS custom properties update]
     Vars --> UI[All components re-render colors]
     
-    Note[Colors defined once in<br/>src/styles/theme.css<br/>Components reference<br/>var(--color-text)]
+    Note[Colors defined once in<br/>src/styles/semantic-tokens.css<br/>Components reference<br/>var(--color-text)]
 ```
 
 The theme manager sets `data-theme="high-contrast"` on the root element, and all colors update instantly. This works even if JavaScript is disabled after initial load.
 
 ## Storage structure
 
-Everything in localStorage uses namespaced keys to avoid conflicts:
+Preferences and presets live in localStorage with namespaced keys. Projects use IndexedDB as the primary store with localStorage metadata:
 
 ```mermaid
 graph TB
@@ -264,7 +264,7 @@ Projects include everything needed to restore your work: the SCAD file, current 
 
 ## Saved projects
 
-Users can save projects to localStorage and export them as ZIP files:
+Users can save projects to browser storage (IndexedDB with localStorage metadata) and export them as ZIP files:
 
 ```mermaid
 sequenceDiagram
@@ -454,7 +454,7 @@ flowchart TB
 - `src/js/tutorial-sandbox.js` - guided tutorials
 
 **Utilities:**
-- `src/js/storage-manager.js` - localStorage wrapper
+- `src/js/storage-manager.js` - storage wrapper (localStorage + IndexedDB)
 - `src/js/theme-manager.js` - light/dark/high-contrast themes
 - `src/js/validation-schemas.js` - JSON schema generation
 - `src/js/sw-manager.js` - service worker registration
@@ -479,7 +479,7 @@ The best order for building a mental model:
 3. **`src/js/state.js`** -- the single source of truth for current parameter values. All changes flow through here.
 4. **`src/js/render-controller.js`** -- sends the SCAD code + current parameters to the WASM worker and gets STL bytes back.
 5. **`src/js/preview.js`** -- takes STL bytes and renders them with Three.js. Also handles the reference overlay, measurements, and camera.
-6. **`src/main.js`** -- wires everything together. This file is large (~5000+ lines) because it's the orchestration layer. Don't try to read it top-to-bottom; search for the feature you care about.
+6. **`src/main.js`** -- wires everything together. This file is large (~17,000 lines) because it's the orchestration layer. Don't try to read it top-to-bottom; search for the feature you care about.
 
 ### Common debugging paths
 

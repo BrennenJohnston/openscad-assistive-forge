@@ -100,13 +100,13 @@ Load saved presets from the **Presets** dropdown in the Parameters panel.
 
 ### Save Project
 
-To save the entire project (code + parameters):
+To save the entire project (code + parameters) to your browser:
 
 1. Click **"Save Project"** in the header
-2. Choose a filename
-3. The `.json` file downloads to your computer
+2. Enter a name for the project
+3. The project is saved to your browser's storage (IndexedDB)
 
-Load saved projects using **Open File** and selecting the `.json` file.
+Load saved projects from the **Saved Projects** panel. Projects stay in your browser until you delete them or clear browser data. To move a project to another device, export it as a ZIP from the Saved Projects panel.
 
 ## Keyboard Shortcuts
 
@@ -145,4 +145,4 @@ The preview settings area has two tools for working with reference images:
 
 - [Accessibility Guide](./ACCESSIBILITY_GUIDE.md) - Detailed accessibility information
 - [Keyguard Workflow](./KEYGUARD_WORKFLOW_GUIDE.md) - AAC keyguard customization
-- [Troubleshooting](../TROUBLESHOOTING.md) - Common issues and solutions
+- [Troubleshooting](./TROUBLESHOOTING_USER_GUIDE.md) - Common issues and solutions

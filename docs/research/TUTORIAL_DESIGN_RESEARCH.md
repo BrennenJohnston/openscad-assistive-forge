@@ -279,8 +279,7 @@ Based on this research, the following manual tests are critical:
 
 - [Accessibility Guide](../guides/ACCESSIBILITY_GUIDE.md) - Comprehensive accessibility features
 - [Keyguard Workflow Guide](../guides/KEYGUARD_WORKFLOW_GUIDE.md) - Keyboard-first workflow details
-- [Welcome Screen Feature Paths](../guides/WELCOME_SCREEN_FEATURE_PATHS.md) - Role-based tutorial system
-- [Welcome Feature Paths Inventory](../WELCOME_FEATURE_PATHS_INVENTORY.md) - Detailed role mapping
+- [Welcome Screen](../guides/WELCOME_SCREEN.md) - Welcome screen and role-based tutorial system
 
 ---
 

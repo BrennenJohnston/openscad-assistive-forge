@@ -4,10 +4,10 @@ Notes on keeping the app fast.
 
 ## Bundle size
 
-Current bundle (v4.0.0):
-- `index.js` ~180KB gzipped
-- Three.js lazy-loaded (~600KB uncompressed)
-- OpenSCAD WASM lazy-loaded from CDN (~2MB)
+Current bundle (v4.1.0):
+- `index.js` ~125KB gzipped (main), ~187KB gzipped (Three.js chunk)
+- Three.js lazy-loaded via code splitting
+- OpenSCAD WASM vendored in `public/wasm/` (~2MB, loaded on first render)
 
 Lighthouse performance score: 85+
 
@@ -75,9 +75,9 @@ Static assets are cached in the service worker for offline use:
 
 ## Browser differences
 
-Chrome/Chromium: use `SharedArrayBuffer` for faster WASM threading.
+The current WASM build (`openscad-wasm-prebuilt@1.2.0`) is single-threaded and does not use `SharedArrayBuffer` for threading. COOP/COEP headers are still served for cross-origin isolation.
 
-Safari: limited `SharedArrayBuffer` support, uses fallback WASM build. Test iOS Safari separately.
+Safari: generally slower WASM execution than Chrome. Test iOS Safari separately for memory constraints.
 
 ## Profiling
 

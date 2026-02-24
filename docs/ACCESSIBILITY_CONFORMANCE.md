@@ -1,7 +1,7 @@
 # Accessibility Conformance Statement
 
 **Product**: OpenSCAD Assistive Forge  
-**Version**: 4.2.0  
+**Version**: 4.1.0  
 **Date**: 2026-02-02  
 **Standard**: WCAG 2.2 Level AA
 
