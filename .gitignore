@@ -38,3 +38,6 @@ localhost_*.report.html
 
 # Internal planning documents (not for public release)
 docs/planning/
+
+# Developer scratch / temp files
+_em_temp/
