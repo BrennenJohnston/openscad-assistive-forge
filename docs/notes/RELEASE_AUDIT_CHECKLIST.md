@@ -1,7 +1,7 @@
 # Release Audit Checklist
 
 Started: 2026-02-23
-Last updated: 2026-02-24 (Branch Contamination Re-verification)
+Last updated: 2026-02-24 (Plan close-out — audit complete)
 
 ## Status Key
 
@@ -381,7 +381,7 @@ Last updated: 2026-02-24 (Branch Contamination Re-verification)
 | [x] | THIRD_PARTY_NOTICES.md | 16 | Clean. GPL compliance instructions accurate. License texts correct. WASM build date matches download-wasm.js. |
 | [x] | AUTHORS | 16 | Clean. Simple single-author file. |
 | [E] | LICENSE | 16 | Restored GPL-3.0-or-later from commit 3a25128. CC0 was cross-contamination from example-manifest branch merge at 720d22f. |
-| [E] | audit-phases-18-32-report.md | 16 | Moved from project root to docs/notes/. Development planning artifact, not a production doc. |
+| [E] | audit-phases-18-32-report.md | 16 | Moved from project root to docs/notes/ (Session 16), then to docs/archive/ (plan close-out 2026-02-24). Development planning artifact, not a production doc. |
 
 ### Session 17 -- Developer and User Guides
 
