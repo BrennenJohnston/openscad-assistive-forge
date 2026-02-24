@@ -285,7 +285,7 @@ function translateError(rawError) {
  * Initialize OpenSCAD WASM
  * @param {string} baseUrl - Base URL for fetching assets (optional, defaults to current origin)
  */
-async function initWASM(baseUrl = '') {
+async function initWASM(baseUrl = '', cachedCapabilities = null) {
   try {
     // Start timing WASM initialization
     wasmInitStartTime = performance.now();
@@ -445,16 +445,24 @@ async function initWASM(baseUrl = '') {
     await mountFonts();
 
     // Check OpenSCAD capabilities (Manifold, fast-csg, etc.)
-    self.postMessage({
-      type: 'PROGRESS',
-      payload: {
-        requestId: 'init',
-        percent: 85,
-        message: 'Checking rendering capabilities...',
-      },
-    });
-
-    const detectedCapabilities = await checkCapabilities();
+    // When cachedCapabilities is provided (worker restart), skip callMain(['--help']).
+    // Calling callMain() twice in the same WASM process (once for --help, once for
+    // the actual render) corrupts Emscripten global state and degrades geometry output.
+    let detectedCapabilities;
+    if (cachedCapabilities) {
+      console.log('[Worker] Using cached capabilities — skipping callMain --help');
+      detectedCapabilities = cachedCapabilities;
+    } else {
+      self.postMessage({
+        type: 'PROGRESS',
+        payload: {
+          requestId: 'init',
+          percent: 85,
+          message: 'Checking rendering capabilities...',
+        },
+      });
+      detectedCapabilities = await checkCapabilities();
+    }
     openscadCapabilities = detectedCapabilities;
 
     // Calculate total WASM init duration
@@ -2081,6 +2089,13 @@ async function render(payload) {
     // Mount additional files if provided (for multi-file projects)
     // Mount additional files for multi-file project include/use resolution
     let mountResult = null;
+    const hasNoFiles = !files || Object.keys(files).length === 0;
+    if (hasNoFiles && /\binclude\s*</m.test(scadContent)) {
+      console.warn(
+        '[Worker] SCAD uses include<> but no companion files were provided. ' +
+          'Included files will not be found in the virtual filesystem.'
+      );
+    }
     if (files && Object.keys(files).length > 0) {
       // Clear any previously mounted files to ensure clean FS state
       clearMountedFiles();
@@ -2129,13 +2144,10 @@ async function render(payload) {
     const format = (outputFormat || 'stl').toLowerCase();
     const formatName = format.toUpperCase();
 
-    // For 2D formats (SVG/DXF), enforce laser-cut compatible parameters.
-    // Some keyguard models reject "first layer for SVG/DXF" when type_of_keyguard
-    // remains "3D-Printed", producing "not a 2D object" at runtime.
-    if (format === 'svg' || format === 'dxf') {
-      parameters.use_Laser_Cutting_best_practices = 'yes';
-      parameters.type_of_keyguard = 'Laser-Cut';
-    }
+    // 2D parameter resolution is handled by the caller (main.js) via
+    // resolve2DExportParameters(), which uses the parsed schema to set
+    // model-specific parameters (e.g. generate, type_of_keyguard) to their
+    // 2D-compatible values before this render call.
 
     // Track render timing
     let renderStartTime = 0;
@@ -2510,7 +2522,7 @@ self.onmessage = async (e) => {
 
   switch (type) {
     case 'INIT':
-      await initWASM(payload?.assetBaseUrl);
+      await initWASM(payload?.assetBaseUrl, payload?.cachedCapabilities || null);
       break;
 
     case 'PING':

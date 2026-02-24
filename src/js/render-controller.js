@@ -453,11 +453,15 @@ export class RenderController {
 
         // Send init message
         // Asset base URL is optional - worker will derive from self.location if not provided
+        // cachedCapabilities bypasses callMain(['--help']) in restarted workers,
+        // avoiding a second callMain() invocation before the actual render.
         const assetBaseUrl = options.assetBaseUrl;
+        const cachedCapabilities = options.cachedCapabilities;
         this.worker.postMessage({
           type: 'INIT',
           payload: {
             ...(assetBaseUrl ? { assetBaseUrl } : {}),
+            ...(cachedCapabilities ? { cachedCapabilities } : {}),
           },
         });
 
@@ -497,6 +501,8 @@ export class RenderController {
 
   /**
    * Restart the worker (workaround for OpenSCAD WASM state corruption between renders)
+   * Passes cached capabilities so the new worker skips callMain(['--help']),
+   * preventing a second callMain() invocation before the actual render.
    * @returns {Promise<void>}
    */
   async restart() {
@@ -507,7 +513,7 @@ export class RenderController {
     this.terminate(); // also stops health monitoring
     this.initPromise = null;
     this.ready = false;
-    await this.init();
+    await this.init({ cachedCapabilities: this.capabilities || null });
     // Resume health monitoring after reinit
     this.startHealthMonitoring();
   }
@@ -960,7 +966,14 @@ export class RenderController {
           console.log(
             '[RenderController] Proactive restart: WASM module was used by previous render'
           );
-          await this.restart();
+          try {
+            await this.restart();
+          } catch (restartErr) {
+            console.error(
+              '[RenderController] Worker restart failed — attempting render with existing worker:',
+              restartErr
+            );
+          }
           this._moduleUsed = false;
         }
 

@@ -372,6 +372,40 @@ test.describe('Multi-Preset JSON Import/Export', () => {
   });
 });
 
+test.describe('Parameter Switching Stability', () => {
+  test.describe.configure({ timeout: 150_000 });
+
+  test('should not show rendering errors after multiple parameter changes', async ({ page }) => {
+    test.skip(isCI, 'WASM rendering is slow/unreliable in CI');
+
+    await page.goto('/');
+
+    const zipPath = await createKeyguardZipFixture();
+    await uploadFile(page, zipPath);
+
+    // Wait for parameters to be available
+    await expect(page.locator('.param-control').first()).toBeVisible({ timeout: 20000 });
+
+    // Change a numeric parameter a few times to trigger multiple worker restarts
+    const rowsParam = page.locator('input[data-param="number_of_rows"], input[name="number_of_rows"]');
+    if (await rowsParam.isVisible({ timeout: 3000 }).catch(() => false)) {
+      for (const val of ['2', '3', '4']) {
+        await rowsParam.fill(val);
+        await rowsParam.dispatchEvent('change');
+        await page.waitForTimeout(500);
+      }
+    }
+
+    // There should be no blocking error alerts on the page
+    const errorAlerts = await page.locator('[role="alert"].error, .alert-error').count();
+    expect(errorAlerts).toBe(0);
+
+    // Console should not have WASM corruption errors
+    const pageText = await page.textContent('body');
+    expect(pageText).not.toContain('WASM module crashed');
+  });
+});
+
 test.describe('Console Output Exposure', () => {
   test.skip('should display echo output from OpenSCAD', async ({ page }) => {
     test.skip(isCI, 'WASM rendering is slow/unreliable in CI');
