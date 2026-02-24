@@ -2973,6 +2973,7 @@ async function initApp() {
   let hasUserAcceptedDownload = !isFirstVisit();
   let pendingWasmInit = false;
   let pendingDraft = null; // Draft to restore after first-visit modal is dismissed
+  const firstVisitReadyResolvers = [];
 
   const setFirstVisitBlocking = (blocked) => {
     firstVisitBlocking = blocked;
@@ -2987,6 +2988,15 @@ async function initApp() {
       }
     }
     document.body.classList.toggle('first-visit-blocking', blocked);
+  };
+
+  const waitForFirstVisitAcceptance = () => {
+    if (!firstVisitBlocking && hasUserAcceptedDownload) {
+      return Promise.resolve();
+    }
+    return new Promise((resolve) => {
+      firstVisitReadyResolvers.push(resolve);
+    });
   };
 
   // First-visit modal check
@@ -3013,6 +3023,13 @@ async function initApp() {
     markFirstVisitComplete();
     closeModal(firstVisitModal);
     setFirstVisitBlocking(false);
+    if (firstVisitReadyResolvers.length > 0) {
+      const resolvers = firstVisitReadyResolvers.splice(0);
+      resolvers.forEach((resolve) => resolve());
+      // #region agent log
+      fetch('http://127.0.0.1:7246/ingest/8fdfe3b9-f33d-48f1-99f8-e81d685f1617',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'1a4c54'},body:JSON.stringify({sessionId:'1a4c54',runId:'first-visit-release',hypothesisId:'H6',location:'main.js:3020',message:'Released deferred first-visit waiters',data:{releasedCount:resolvers.length},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+    }
     if (pendingWasmInit) {
       pendingWasmInit = false;
       await ensureWasmInitialized();
@@ -11267,6 +11284,16 @@ if (rounded) {
   if (manifestParam && !exampleParam) {
     console.log(`[DeepLink] Loading project from manifest: ${manifestParam}`);
     updateStatus('Loading project from manifest...');
+    const preManifestUIState = {
+      welcomeVisible: !welcomeScreen.classList.contains('hidden'),
+      mainVisible: !mainInterface.classList.contains('hidden'),
+      hadUploadedFile: !!stateManager.getState()?.uploadedFile,
+      appInert: !!document.getElementById('app')?.inert,
+      firstVisitBlocking,
+    };
+    // #region agent log
+    fetch('http://127.0.0.1:7246/ingest/8fdfe3b9-f33d-48f1-99f8-e81d685f1617',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'1a4c54'},body:JSON.stringify({sessionId:'1a4c54',runId:'ui-state-pre',hypothesisId:'H1',location:'main.js:11270',message:'Manifest load pre-UI state',data:{manifestParam,preManifestUIState},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
 
     // Skip the welcome screen immediately when loading from a manifest
     const shouldSkipWelcome =
@@ -11281,6 +11308,16 @@ if (rounded) {
 
     setTimeout(async () => {
       try {
+        if (firstVisitBlocking || !hasUserAcceptedDownload) {
+          // #region agent log
+          fetch('http://127.0.0.1:7246/ingest/8fdfe3b9-f33d-48f1-99f8-e81d685f1617',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'1a4c54'},body:JSON.stringify({sessionId:'1a4c54',runId:'manifest-wait-consent',hypothesisId:'H6',location:'main.js:11300',message:'Manifest load waiting for first-visit acceptance',data:{firstVisitBlocking,hasUserAcceptedDownload},timestamp:Date.now()})}).catch(()=>{});
+          // #endregion
+          await waitForFirstVisitAcceptance();
+          // #region agent log
+          fetch('http://127.0.0.1:7246/ingest/8fdfe3b9-f33d-48f1-99f8-e81d685f1617',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'1a4c54'},body:JSON.stringify({sessionId:'1a4c54',runId:'manifest-wait-consent',hypothesisId:'H6',location:'main.js:11306',message:'Manifest load resumed after first-visit acceptance',data:{firstVisitBlocking,hasUserAcceptedDownload},timestamp:Date.now()})}).catch(()=>{});
+          // #endregion
+        }
+
         const result = await loadManifest(manifestParam, {
           onProgress: ({ message }) => updateStatus(message),
         });
@@ -11434,10 +11471,18 @@ if (rounded) {
         }
       } catch (error) {
         console.error('[DeepLink] Manifest load failed:', error);
+        // #region agent log
+        fetch('http://127.0.0.1:7246/ingest/8fdfe3b9-f33d-48f1-99f8-e81d685f1617',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'1a4c54'},body:JSON.stringify({sessionId:'1a4c54',runId:'ui-state-fail-before',hypothesisId:'H2',location:'main.js:11436',message:'Manifest load failed before UI fallback',data:{errorCode:error?.code||null,errorName:error?.name||null,mainVisible:!mainInterface.classList.contains('hidden'),welcomeVisible:!welcomeScreen.classList.contains('hidden'),savedProjectsCount:document.getElementById('savedProjectsList')?.children?.length||0,savedEmptyHidden:document.getElementById('savedProjectsEmpty')?.classList?.contains('hidden')??null,appInert:!!document.getElementById('app')?.inert,firstVisitBlocking},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
 
         let friendlyMsg;
         if (error instanceof ManifestError) {
           switch (error.code) {
+            case 'INVALID_URL':
+              friendlyMsg =
+                error.message +
+                ' Open the Manifest Sharing Guide for step-by-step instructions.';
+              break;
             case 'CORS_ERROR':
               friendlyMsg =
                 "Couldn't reach the file server. The manifest or its files may not be publicly " +
@@ -11465,9 +11510,22 @@ if (rounded) {
           'error'
         );
 
+        // Clean up URL so the user isn't stuck in a reload loop
+        initUrlParams.delete('manifest');
+        initUrlParams.delete('preset');
+        initUrlParams.delete('skipWelcome');
+        initUrlParams.delete('skipwelcome');
+        const failCleanUrl = initUrlParams.toString()
+          ? `${window.location.pathname}?${initUrlParams}`
+          : window.location.pathname;
+        history.replaceState(null, '', failCleanUrl);
+
         // Show welcome screen again on failure so the user isn't stuck
         welcomeScreen.classList.remove('hidden');
         mainInterface.classList.add('hidden');
+        // #region agent log
+        fetch('http://127.0.0.1:7246/ingest/8fdfe3b9-f33d-48f1-99f8-e81d685f1617',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'1a4c54'},body:JSON.stringify({sessionId:'1a4c54',runId:'ui-state-fail-after',hypothesisId:'H3',location:'main.js:11486',message:'Manifest load failed after UI fallback',data:{mainVisible:!mainInterface.classList.contains('hidden'),welcomeVisible:!welcomeScreen.classList.contains('hidden'),savedProjectsCount:document.getElementById('savedProjectsList')?.children?.length||0,savedEmptyHidden:document.getElementById('savedProjectsEmpty')?.classList?.contains('hidden')??null,fileInputDisabled:document.getElementById('fileInput')?.disabled??null,uploadZoneHidden:document.getElementById('uploadZone')?.classList?.contains('hidden')??null,appInert:!!document.getElementById('app')?.inert,firstVisitBlocking},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
       }
     }, 500);
   }

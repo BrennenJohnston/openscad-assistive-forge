@@ -48,7 +48,6 @@ When adding new scripts:
 1. Use ES modules (`.js` with shebang `#!/usr/bin/env node`)
 2. Add an npm script in `package.json`
 3. Document here
-4. Use `chalk` for colored output (already installed)
-5. Test on Windows and Unix
+4. Test on Windows and Unix
 
 See `docs/TROUBLESHOOTING.md` for common issues.

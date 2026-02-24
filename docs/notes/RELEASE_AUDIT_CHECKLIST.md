@@ -1,7 +1,7 @@
 # Release Audit Checklist
 
 Started: 2026-02-23
-Last updated: 2026-02-23 (Session 13)
+Last updated: 2026-02-23 (Session 14)
 
 ## Status Key
 
@@ -294,34 +294,34 @@ Last updated: 2026-02-23 (Session 13)
 
 | Status | File | Session | Bloat Findings | Notes |
 |--------|------|---------|----------------|-------|
-| [ ] | scripts/bloat-scanner.js | 14 | - | - |
-| [ ] | scripts/check-bundle-budget.js | 14 | - | - |
-| [ ] | scripts/download-wasm.js | 14 | - | - |
-| [ ] | scripts/generate-icons.js | 14 | - | - |
-| [ ] | scripts/import-check.js | 14 | - | - |
-| [ ] | scripts/run-e2e-safe.js | 14 | - | - |
-| [ ] | scripts/setup-libraries.js | 14 | - | - |
-| [ ] | scripts/check_features_guide.py | 14 | - | - |
-| [ ] | scripts/find_features_panels.py | 14 | - | - |
-| [ ] | scripts/fix_presets_panel.py | 14 | - | - |
-| [ ] | scripts/insert_grid_html.py | 14 | - | - |
-| [ ] | scripts/phase8_analyze.py | 14 | - | - |
-| [ ] | scripts/phase8_transform.py | 14 | - | - |
-| [ ] | scripts/phase9_analyze.py | 14 | - | - |
-| [ ] | scripts/phase9_transform.py | 14 | - | - |
-| [ ] | scripts/update_features_guide.py | 14 | - | - |
-| [ ] | scripts/verify_changes.py | 14 | - | - |
-| [ ] | scripts/README.md | 14 | - | - |
-| [ ] | vite.config.js | 14 | - | - |
-| [ ] | eslint.config.js | 14 | - | - |
-| [ ] | pixi.toml | 14 | - | - |
-| [ ] | wrangler.toml | 14 | - | - |
-| [ ] | lighthouserc.json | 14 | - | - |
-| [ ] | lighthouse-accessibility.json | 14 | - | - |
-| [ ] | .prettierrc.json | 14 | - | - |
-| [ ] | .markdownlint.json | 14 | - | - |
-| [ ] | .markdownlint-cli2.jsonc | 14 | - | - |
-| [ ] | package.json | 14 | - | - |
+| [x] | scripts/bloat-scanner.js | 14 | 3 warnings (intentional) | Clean. 3 bloat-scan self-warnings are detection pattern strings in comments — intentional. Well-structured scanner with CODE_EXTENSIONS/DOC_EXTENSIONS dispatch. |
+| [x] | scripts/check-bundle-budget.js | 14 | 0 blocking, 0 warnings | Clean. Emoji in console output are CI status indicators — acceptable. JSDoc on all functions appropriate for a utility script. |
+| [x] | scripts/download-wasm.js | 14 | 0 blocking, 0 warnings | Clean. `FONTS_ARCHIVE_SHA256 = null` is a documented known gap — handled gracefully. Custom tar extractor is well-commented. |
+| [x] | scripts/generate-icons.js | 14 | 0 blocking, 0 warnings | Clean. Emoji in console output are status indicators — acceptable. Generates SVG placeholder icons for PWA. |
+| [x] | scripts/import-check.js | 14 | 0 blocking, 0 warnings | Clean. Well-structured hallucinated-import detector with comment-stripping, builtin module list, and relative/package import resolution. |
+| [x] | scripts/run-e2e-safe.js | 14 | 0 blocking, 0 warnings | Clean. Windows-aware Playwright wrapper with global timeout, idle watchdog, graceful SIGTERM + force-kill fallback. |
+| [x] | scripts/setup-libraries.js | 14 | 0 blocking, 0 warnings | Clean. Pin-aware git clone/update for MCAD/BOSL2/NopSCADlib/dotSCAD. All 4 libraries have `pin: null` with TODO comments — known gap, not dead code. |
+| [D] | scripts/check_features_guide.py | 14 | - | Dead one-shot migration script. Checks for feature guide text strings in index.html — already applied. Not registered in package.json or pixi.toml. Flag for deletion. |
+| [D] | scripts/find_features_panels.py | 14 | - | Dead one-shot migration script. Finds features panel IDs in index.html — already applied. Not registered anywhere. Flag for deletion. |
+| [D] | scripts/fix_presets_panel.py | 14 | - | Dead one-shot migration script. Injects Sort/Import Modes sections into features guide — already applied. Not registered anywhere. Flag for deletion. |
+| [D] | scripts/insert_grid_html.py | 14 | - | Dead one-shot migration script. Inserts grid-size controls into index.html — already applied. Not registered anywhere. Flag for deletion. |
+| [D] | scripts/phase8_analyze.py | 14 | - | Dead one-shot migration script. Phase 8 analysis of index.html DOM structure — already applied. Not registered anywhere. Flag for deletion. |
+| [D] | scripts/phase8_transform.py | 14 | - | Dead one-shot migration script. Phase 8 HTML transformation (customizer-header-row) — already applied. Not registered anywhere. Flag for deletion. |
+| [D] | scripts/phase9_analyze.py | 14 | - | Dead one-shot migration script. Phase 9 analysis of preset-content DOM — already applied. Not registered anywhere. Flag for deletion. |
+| [D] | scripts/phase9_transform.py | 14 | - | Dead one-shot migration script. Phase 9 HTML transformation (preset panel reorder) — already applied. Not registered anywhere. Flag for deletion. |
+| [D] | scripts/update_features_guide.py | 14 | - | Dead one-shot migration script. Updates features guide modal content in index.html — already applied. Not registered anywhere. Flag for deletion. |
+| [D] | scripts/verify_changes.py | 14 | - | Dead one-shot migration script. Verifies sprint implementation changes — already applied. Not registered anywhere. Flag for deletion. |
+| [E] | scripts/README.md | 14 | 0 blocking, 0 warnings | Removed stale "Use chalk for colored output (already installed)" instruction — no script in scripts/ imports chalk. |
+| [E] | vite.config.js | 14 | 0 blocking, 0 warnings | Removed stale comment on `optimizeDeps.exclude` ("If we vendor WASM" — WASM is now vendored). All other config clean: COOP/COEP headers, ES module worker, three/ajv manual chunks, SW cache version injection plugin. |
+| [x] | eslint.config.js | 14 | 0 blocking, 0 warnings | Clean. Security rules (no-eval, no-implied-eval), eqeqeq, prefer-const. scripts/cli/tests get no-console:off override. |
+| [x] | pixi.toml | 14 | 0 blocking, 0 warnings | Clean. All tasks match package.json scripts. ci feature environment correctly defined. |
+| [x] | wrangler.toml | 14 | 0 blocking, 0 warnings | Clean. Minimal 2-field config (name + pages_build_output_dir). |
+| [x] | lighthouserc.json | 14 | 0 blocking, 0 warnings | Clean. Accessibility threshold at error (0.9), performance/best-practices/SEO at warn. Appropriate desktop preset with mild throttling. |
+| [S] | lighthouse-accessibility.json | 14 | - | Generated Lighthouse run result artifact (119KB JSON). Not a source file — skipped. |
+| [x] | .prettierrc.json | 14 | 0 blocking, 0 warnings | Clean. Standard 4-option config. |
+| [x] | .markdownlint.json | 14 | 0 blocking, 0 warnings | Clean. Many rules disabled — appropriate for a project with varied doc styles. |
+| [x] | .markdownlint-cli2.jsonc | 14 | 0 blocking, 0 warnings | Clean. Correct ignores for generated/vendor dirs. |
+| [x] | package.json | 14 | 0 blocking, 0 warnings | Clean. All scripts map to real files. `overrides.minimatch` is a security patch. Dependencies are current. |
 
 ---
 
@@ -621,6 +621,16 @@ Last updated: 2026-02-23 (Session 13)
 - Bloat scan: 0 blocking, 0 warnings (before and after)
 - Tests pass: yes (1370/1370)
 - Summary: CLI command files had narrating comments throughout their handler functions — removed ~38 total across 6 files. `bin/openscad-forge.js` is clean. `cli/commands/manifest.js` is the best-written CLI file (well-structured with value-adding section dividers). `cli/commands/test.js` is a dead command — it exists but is never registered in the CLI entry point; noted but not removed per API boundary rule. All 48 template files (angular/preact/react/svelte/vue) are clean starter code with no bloat. This session completes Phase 4 Part 1. Next: Session 14 (Build Scripts and Config) after PAUSE-8 human review break.
+
+### Session 14 — 2026-02-23
+
+- Files reviewed: 28 (7 JS scripts + 10 Python scripts + scripts/README.md + vite.config.js + eslint.config.js + pixi.toml + wrangler.toml + lighthouserc.json + lighthouse-accessibility.json + .prettierrc.json + .markdownlint.json + .markdownlint-cli2.jsonc + package.json)
+- Files edited: 2 (`scripts/README.md`, `vite.config.js`)
+- Files flagged [D] for deletion: 10 (all Python scripts in scripts/)
+- Files flagged [S] as generated: 1 (`lighthouse-accessibility.json`)
+- Bloat scan: 3 warnings (before and after — all intentional self-references in bloat-scanner.js)
+- Tests pass: yes (1370/1370)
+- Summary: Build scripts and config are clean and well-structured. Key findings: (1) All 10 Python scripts in scripts/ are dead one-shot migration scripts from development sprints (phases 8/9) — they transformed index.html and have already been applied; none are registered in package.json or pixi.toml; flagged [D] for human deletion decision. (2) `scripts/README.md` had a stale "Use chalk for colored output" instruction — no script in scripts/ imports chalk; removed. (3) `vite.config.js` had a stale comment on `optimizeDeps.exclude` ("If we vendor WASM" — WASM is now vendored); removed. (4) `lighthouse-accessibility.json` is a 119KB generated Lighthouse run result artifact, not a source file — marked [S]. All config files (eslint, pixi, wrangler, lighthouse, prettier, markdownlint, package.json) are clean. This session completes Phase 4. Next: PAUSE-8 human review break before Session 15 (Public Assets and Data).
 
 ### Session 12 — 2026-02-23
 

@@ -518,7 +518,6 @@ test.describe('Error Translation (COGA)', () => {
     
     // Inject and test the error translator module
     const testResult = await page.evaluate(async () => {
-      // Import the module dynamically
       try {
         const module = await import('/src/js/error-translator.js')
         
