@@ -19,6 +19,7 @@
  */
 
 import { getSharedBridge } from './pyodide-bridge.js';
+import { generateSuggestions, renderSuggestions } from './smart-suggestions.js';
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -45,6 +46,20 @@ const FEATURE_TYPES = [
 // Map stage keys from worker progress messages to list items
 const STAGE_KEYS = ['init', 'stage0', 'stage1', 'stage2', 'stage3', 'stage4', 'stage6'];
 
+// File quality tiers by extension
+const FILE_QUALITY = {
+  step: { tier: 'best', label: 'STEP — rich geometry, best for conversion' },
+  stp:  { tier: 'best', label: 'STEP — rich geometry, best for conversion' },
+  iges: { tier: 'good', label: 'IGES — good geometry (legacy B-rep format)' },
+  igs:  { tier: 'good', label: 'IGES — good geometry (legacy B-rep format)' },
+  '3mf': { tier: 'good', label: '3MF — mesh with metadata (better than STL)' },
+  amf:  { tier: 'good', label: 'AMF — mesh with metadata (better than STL)' },
+  stl:  { tier: 'ok',   label: 'STL — triangulated mesh (minimal information)' },
+  obj:  { tier: 'ok',   label: 'OBJ — mesh with optional materials' },
+  dxf:  { tier: 'ok',   label: 'DXF — 2D profiles' },
+  svg:  { tier: 'ok',   label: 'SVG — 2D vector paths' },
+};
+
 // ── State ──────────────────────────────────────────────────────────────────
 
 let _step = 'upload';
@@ -52,6 +67,7 @@ let _files = []; // [{ name: string, data: Uint8Array }]
 let _projectForm = null; // raw dict from Python _to_dict()
 let _generatedScad = null;
 let _onScadLoaded = null;
+let _intentData = null; // collected from intent questionnaire
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -132,13 +148,31 @@ function renderFileList(files) {
     size.className = 'cad-file-size';
     size.textContent = formatBytes(f.data.byteLength);
 
-    li.appendChild(icon);
-    li.appendChild(name);
-    li.appendChild(size);
+    // Quality badge
+    const ext = f.name.split('.').pop()?.toLowerCase() ?? '';
+    const quality = FILE_QUALITY[ext];
+    if (quality) {
+      const badge = document.createElement('span');
+      badge.className = `cad-file-badge cad-file-badge--${quality.tier}`;
+      badge.textContent = quality.tier === 'best' ? 'Best' : quality.tier === 'good' ? 'Good' : 'OK';
+      badge.title = quality.label;
+      li.appendChild(icon);
+      li.appendChild(name);
+      li.appendChild(size);
+      li.appendChild(badge);
+    } else {
+      li.appendChild(icon);
+      li.appendChild(name);
+      li.appendChild(size);
+    }
+
     list.appendChild(li);
   }
 
   list.classList.toggle('hidden', files.length === 0);
+
+  // Update per-file validation feedback
+  validateFileTypes(files);
 }
 
 function getFileIcon(name) {
@@ -146,7 +180,37 @@ function getFileIcon(name) {
   if (ext === 'stl') return '▲';
   if (ext === 'obj') return '◆';
   if (ext === 'dxf') return '◻';
+  if (ext === 'step' || ext === 'stp') return '⬡';
+  if (ext === 'iges' || ext === 'igs') return '⬢';
+  if (ext === '3mf' || ext === 'amf') return '◈';
+  if (ext === 'svg') return '⬟';
   return '📄';
+}
+
+function validateFileTypes(files) {
+  const feedback = el('cadFileValidationFeedback');
+  if (!feedback) return;
+
+  if (files.length === 0) {
+    feedback.classList.add('hidden');
+    return;
+  }
+
+  const msgs = [];
+  for (const f of files) {
+    const ext = f.name.split('.').pop()?.toLowerCase() ?? '';
+    const quality = FILE_QUALITY[ext];
+    if (quality) {
+      msgs.push(`${f.name}: ${quality.label}`);
+    }
+  }
+
+  if (msgs.length > 0) {
+    feedback.innerHTML = msgs.map((m) => `<div class="cad-validation-msg">${escHtml(m)}</div>`).join('');
+    feedback.classList.remove('hidden');
+  } else {
+    feedback.classList.add('hidden');
+  }
 }
 
 function formatBytes(bytes) {
@@ -288,6 +352,36 @@ function renderFeatureCards(form) {
     const card = buildFeatureCard(feat, idx);
     container.appendChild(card);
   });
+
+  // Delegated event listener for parameter table inputs
+  container.addEventListener('input', (e) => {
+    const row = e.target.closest('.cad-param-row');
+    if (!row) return;
+    const featIdx = parseInt(row.dataset.featIdx, 10);
+    const specIdx = parseInt(row.dataset.specIdx, 10);
+    const field = e.target.dataset.field;
+    if (!_projectForm?.features?.[featIdx]?.parameter_specs?.[specIdx]) return;
+
+    const spec = _projectForm.features[featIdx].parameter_specs[specIdx];
+    const numVal = parseFloat(e.target.value);
+    if (field === 'value') spec.value = isNaN(numVal) ? e.target.value : numVal;
+    else if (field === 'min') spec.min_val = isNaN(numVal) ? null : numVal;
+    else if (field === 'step') spec.step = isNaN(numVal) ? null : numVal;
+    else if (field === 'max') spec.max_val = isNaN(numVal) ? null : numVal;
+    else if (field === 'locked') spec.locked = e.target.checked;
+  });
+
+  container.addEventListener('change', (e) => {
+    const row = e.target.closest('.cad-param-row');
+    if (!row) return;
+    const featIdx = parseInt(row.dataset.featIdx, 10);
+    const specIdx = parseInt(row.dataset.specIdx, 10);
+    const field = e.target.dataset.field;
+    if (!_projectForm?.features?.[featIdx]?.parameter_specs?.[specIdx]) return;
+
+    const spec = _projectForm.features[featIdx].parameter_specs[specIdx];
+    if (field === 'locked') spec.locked = e.target.checked;
+  });
 }
 
 function buildFeatureCard(feat, idx) {
@@ -295,12 +389,15 @@ function buildFeatureCard(feat, idx) {
   card.className = 'cad-review-card cad-feature-card';
   card.dataset.featureIdx = idx;
 
-  const params = feat.params ?? {};
-  const paramsText = Object.entries(params)
-    .map(([k, v]) => `${k}: ${typeof v === 'number' ? v.toFixed(2) : v}`)
-    .join(', ');
-
   const enabled = feat.enabled_by_default !== false;
+
+  // Ensure parameter_specs exist; auto-generate from params if needed
+  if (!feat.parameter_specs || feat.parameter_specs.length === 0) {
+    feat.parameter_specs = autoParamSpecs(feat);
+    if (_projectForm?.features?.[idx]) {
+      _projectForm.features[idx].parameter_specs = feat.parameter_specs;
+    }
+  }
 
   card.innerHTML = `
     <div class="cad-card-header">
@@ -311,7 +408,6 @@ function buildFeatureCard(feat, idx) {
           id="feat-name-${idx}"
           class="cad-text-input cad-card-name-input"
           value="${escHtml(feat.name ?? '')}"
-          data-field="name"
           aria-label="Feature name"
         />
       </div>
@@ -330,7 +426,7 @@ function buildFeatureCard(feat, idx) {
     <div class="cad-card-body">
       <div class="cad-card-field">
         <label class="cad-card-label" for="feat-type-${idx}">Type</label>
-        <select id="feat-type-${idx}" class="cad-select" data-field="feature_type" aria-label="Feature type">
+        <select id="feat-type-${idx}" class="cad-select" aria-label="Feature type">
           ${FEATURE_TYPES.map(
             (t) => `<option value="${t}" ${t === feat.feature_type ? 'selected' : ''}>${t.replace(/_/g, ' ')}</option>`
           ).join('')}
@@ -340,15 +436,8 @@ function buildFeatureCard(feat, idx) {
         <span class="cad-card-label">Detected from</span>
         <span class="cad-card-value">${escHtml(feat.detected_from ?? '—')}</span>
       </div>
-      ${
-        paramsText
-          ? `<div class="cad-card-field">
-               <span class="cad-card-label">Parameters</span>
-               <span class="cad-card-value cad-card-params">${escHtml(paramsText)}</span>
-             </div>`
-          : ''
-      }
     </div>
+    ${feat.parameter_specs.length > 0 ? buildParamTable(feat.parameter_specs, idx) : ''}
   `;
 
   // Sync edits back to form dict
@@ -359,13 +448,12 @@ function buildFeatureCard(feat, idx) {
   });
   card.querySelector(`#feat-type-${idx}`).addEventListener('change', (e) => {
     if (_projectForm?.features?.[idx]) {
-      _projectForm.features[idx].type = e.target.value;
+      _projectForm.features[idx].feature_type = e.target.value;
     }
   });
   card.querySelector(`#feat-enable-${idx}`).addEventListener('change', (e) => {
     if (_projectForm?.features?.[idx]) {
       _projectForm.features[idx].enabled_by_default = e.target.checked;
-      // Mark as confirmed only if enabled
       _projectForm.features[idx].confirmed = e.target.checked;
     }
   });
@@ -376,6 +464,159 @@ function buildFeatureCard(feat, idx) {
   }
 
   return card;
+}
+
+/**
+ * Build an editable parameter table for a feature card.
+ *
+ * @param {object[]} specs - array of ParameterSpec dicts
+ * @param {number} featIdx - feature index in _projectForm
+ * @returns {string} HTML string
+ */
+function buildParamTable(specs, featIdx) {
+  const rows = specs.map((spec, j) => {
+    const val   = spec.value  ?? '';
+    const min   = spec.min   ?? spec.min_val ?? '';
+    const step  = spec.step  ?? '';
+    const max   = spec.max   ?? spec.max_val ?? '';
+    const locked = spec.locked ? 'checked' : '';
+    return `
+      <tr class="cad-param-row" data-feat-idx="${featIdx}" data-spec-idx="${j}">
+        <td class="cad-param-name">
+          <label class="sr-only" for="spec-${featIdx}-${j}-val">${escHtml(spec.name)}</label>
+          <span class="cad-param-name-text">${escHtml(spec.name)}</span>
+        </td>
+        <td>
+          <label class="sr-only" for="spec-${featIdx}-${j}-val">Value</label>
+          <input id="spec-${featIdx}-${j}-val" type="number" class="cad-param-input" data-field="value"
+            value="${escHtml(String(val))}" step="any" aria-label="${escHtml(spec.name)} value" />
+        </td>
+        <td>
+          <label class="sr-only" for="spec-${featIdx}-${j}-min">Min</label>
+          <input id="spec-${featIdx}-${j}-min" type="number" class="cad-param-input" data-field="min"
+            value="${escHtml(String(min))}" step="any" aria-label="${escHtml(spec.name)} minimum" />
+        </td>
+        <td>
+          <label class="sr-only" for="spec-${featIdx}-${j}-step">Step</label>
+          <input id="spec-${featIdx}-${j}-step" type="number" class="cad-param-input" data-field="step"
+            value="${escHtml(String(step))}" step="any" aria-label="${escHtml(spec.name)} step" />
+        </td>
+        <td>
+          <label class="sr-only" for="spec-${featIdx}-${j}-max">Max</label>
+          <input id="spec-${featIdx}-${j}-max" type="number" class="cad-param-input" data-field="max"
+            value="${escHtml(String(max))}" step="any" aria-label="${escHtml(spec.name)} maximum" />
+        </td>
+        <td class="cad-param-lock-cell">
+          <label class="cad-param-lock" for="spec-${featIdx}-${j}-lock"
+            title="Lock this parameter (suppresses Customizer range annotation)">
+            <input id="spec-${featIdx}-${j}-lock" type="checkbox" class="cad-param-lock-input"
+              data-field="locked" ${locked}
+              aria-label="Lock parameter ${escHtml(spec.name)}" />
+            <span class="cad-param-lock-icon" aria-hidden="true">🔒</span>
+          </label>
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  return `
+    <div class="cad-param-table-wrap">
+      <table class="cad-param-table" aria-label="Parameter ranges">
+        <thead>
+          <tr>
+            <th scope="col">Parameter</th>
+            <th scope="col">Value</th>
+            <th scope="col">Min</th>
+            <th scope="col">Step</th>
+            <th scope="col">Max</th>
+            <th scope="col">Lock</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+/**
+ * Auto-generate ParameterSpec dicts from a feature's detected params.
+ * Mirrors the Python _auto_param_specs logic on the JS side.
+ *
+ * @param {object} feat  - feature dict
+ * @returns {object[]}   - array of ParameterSpec-like objects
+ */
+function autoParamSpecs(feat) {
+  const specs = [];
+  const p = feat.params ?? {};
+  const ftype = feat.feature_type ?? '';
+  const safeName = (feat.name ?? ftype).toLowerCase().replace(/[^a-z0-9_]/g, '_');
+
+  if (ftype === 'circular_hole') {
+    const d = p.diameter ?? 10;
+    specs.push({
+      name: `${safeName}_diameter`,
+      value: round2(d),
+      type: 'number',
+      min: 1.0,
+      step: 0.5,
+      max: round2(d * 2),
+      description: `Diameter of ${feat.name ?? feat.feature_type}`,
+      locked: false,
+    });
+  } else if (ftype === 'rectangular_slot') {
+    const w = p.width ?? 10;
+    const h = p.height ?? 10;
+    specs.push({
+      name: `${safeName}_width`,
+      value: round2(w),
+      type: 'number',
+      min: 1.0,
+      step: 0.5,
+      max: round2(w * 2),
+      description: `Width of ${feat.name ?? feat.feature_type}`,
+      locked: false,
+    });
+    specs.push({
+      name: `${safeName}_height`,
+      value: round2(h),
+      type: 'number',
+      min: 1.0,
+      step: 0.5,
+      max: round2(h * 2),
+      description: `Height of ${feat.name ?? feat.feature_type}`,
+      locked: false,
+    });
+  } else if (ftype === 'fillet') {
+    const r = p.radius ?? 1.0;
+    specs.push({
+      name: `${safeName}_radius`,
+      value: round2(r),
+      type: 'number',
+      min: 0.5,
+      step: 0.5,
+      max: round2(Math.max(r * 3, 5.0)),
+      description: `Radius of ${feat.name ?? feat.feature_type}`,
+      locked: false,
+    });
+  } else if (ftype === 'chamfer') {
+    const s = p.size ?? 1.0;
+    specs.push({
+      name: `${safeName}_size`,
+      value: round2(s),
+      type: 'number',
+      min: 0.1,
+      step: 0.1,
+      max: round2(Math.max(s * 3, 3.0)),
+      description: `Size of ${feat.name ?? feat.feature_type}`,
+      locked: false,
+    });
+  }
+
+  return specs;
+}
+
+function round2(v) {
+  return Math.round(v * 100) / 100;
 }
 
 // ── Analysis orchestration ─────────────────────────────────────────────────
@@ -421,7 +662,7 @@ async function runAnalysis() {
     currentStage = 'stage0';
     setProgressStageState('stage0', 'running');
 
-    const form = await bridge.analyze(_files, projectName, onProgress);
+    const form = await bridge.analyze(_files, projectName, onProgress, _intentData);
 
     // Mark remaining stages as done
     STAGE_KEYS.slice(1).forEach((key) => setProgressStageState(key, 'done'));
@@ -429,6 +670,11 @@ async function runAnalysis() {
     _projectForm = form;
     renderComponentCards(form);
     renderFeatureCards(form);
+
+    // Phase 4C: render smart suggestions
+    const suggestions = generateSuggestions(form);
+    renderSuggestions(suggestions, 'cadSuggestionsContainer');
+
     setStepActive('components');
     announce('Analysis complete. Please review the detected components.');
 
@@ -450,11 +696,15 @@ async function runGenerate() {
   const generateBtn = el('cadGenerateBtn');
   const downloadScadBtn = el('cadDownloadScadBtn');
   const downloadYamlBtn = el('cadDownloadYamlBtn');
+  const validateBtn = el('cadValidateBtn');
+  const validateResult = el('cadValidateResult');
 
   generateProgress?.classList.remove('hidden');
   generateError?.classList.add('hidden');
+  validateResult?.classList.add('hidden');
   downloadScadBtn?.classList.add('hidden');
   downloadYamlBtn?.classList.add('hidden');
+  validateBtn?.classList.add('hidden');
   if (generateBtn) generateBtn.disabled = true;
 
   announce('Generating parametric OpenSCAD code…');
@@ -469,6 +719,7 @@ async function runGenerate() {
     if (generateBtn) generateBtn.disabled = false;
     downloadScadBtn?.classList.remove('hidden');
     downloadYamlBtn?.classList.remove('hidden');
+    validateBtn?.classList.remove('hidden');
 
     const filename =
       (el('cadOutputFilename')?.value.trim() || _projectForm?.project?.name || 'output') + '.scad';
@@ -488,6 +739,53 @@ async function runGenerate() {
     generateError?.classList.remove('hidden');
     announce(`Generation failed: ${err.message}`);
     console.error('[CadConverterPanel] Generate error:', err);
+  }
+}
+
+/**
+ * Phase 4D: Validate the generated SCAD by sending it through the existing
+ * OpenSCAD WASM renderer and reporting the outcome.
+ */
+async function validateScad() {
+  const validateResult = el('cadValidateResult');
+  const validateBtn = el('cadValidateBtn');
+
+  if (!_generatedScad || !validateResult) return;
+
+  validateResult.className = 'cad-validate-result cad-validate-result--pending';
+  validateResult.textContent = 'Validating…';
+  validateResult.classList.remove('hidden');
+  if (validateBtn) validateBtn.disabled = true;
+  announce('Validating generated SCAD code…');
+
+  try {
+    // Use the existing OpenSCAD WASM renderer already present in this app.
+    // The renderer module exposes renderScad(code) → { ok, error }
+    const rendererModule = await import('./openscad-renderer.js').catch(() => null);
+    if (!rendererModule?.renderScad) {
+      throw new Error(
+        'OpenSCAD WASM renderer not available in this build. '
+        + 'Download the .scad file and validate locally with OpenSCAD.'
+      );
+    }
+
+    const result = await rendererModule.renderScad(_generatedScad);
+
+    if (result.ok) {
+      validateResult.className = 'cad-validate-result cad-validate-result--pass';
+      validateResult.textContent = '✓ SCAD compiled successfully — geometry is valid.';
+      announce('Validation passed. SCAD is valid.');
+    } else {
+      validateResult.className = 'cad-validate-result cad-validate-result--fail';
+      validateResult.textContent = `✗ Compilation error: ${result.error ?? 'unknown error'}`;
+      announce(`Validation failed: ${result.error}`);
+    }
+  } catch (err) {
+    validateResult.className = 'cad-validate-result cad-validate-result--warn';
+    validateResult.textContent = `⚠ Could not validate: ${err.message ?? String(err)}`;
+    announce('Validation could not complete.');
+  } finally {
+    if (validateBtn) validateBtn.disabled = false;
   }
 }
 
@@ -511,6 +809,31 @@ function downloadText(content, filename, mimeType = 'text/plain') {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+// ── Intent data collection ─────────────────────────────────────────────────
+
+/**
+ * Collect intent questionnaire data from the cadStep-intent DOM.
+ *
+ * @returns {{ object_category, manufacturing_method, adjustable_dimensions, target_use, accessibility_needs }}
+ */
+function collectIntentData() {
+  const radio = (name) => {
+    const checked = document.querySelector(`input[name="${name}"]:checked`);
+    return checked?.value ?? null;
+  };
+  const checks = (name) =>
+    Array.from(document.querySelectorAll(`input[name="${name}"]:checked`))
+      .map((i) => i.value);
+
+  return {
+    object_category: radio('intentCategory') ?? 'custom',
+    manufacturing_method: radio('intentMfg') ?? 'fdm',
+    adjustable_dimensions: checks('intentDims').length > 0 ? checks('intentDims') : ['all'],
+    target_use: el('intentTargetUse')?.value.trim() ?? '',
+    accessibility_needs: checks('intentA11y').filter((v) => v !== 'none'),
+  };
 }
 
 // ── Public API ─────────────────────────────────────────────────────────────
@@ -567,25 +890,37 @@ export function initCadConverterPanel(onScadLoaded) {
     setupDropZone(wizardUploadZone, (files) => handleFilesSelected(files));
   }
 
-  el('cadAnalyzeBtn')?.addEventListener('click', async () => {
+  el('cadAnalyzeBtn')?.addEventListener('click', () => {
     if (_files.length === 0) return;
+    setStepActive('intent');
+    // Focus first field in intent step
+    setTimeout(() => {
+      const firstRadio = document.querySelector('#cadStep-intent input[type="radio"]');
+      firstRadio?.focus();
+    }, 50);
+  });
+
+  // ── Step 2: Intent questionnaire ──────────────────────────────────────
+  el('cadIntentBackBtn')?.addEventListener('click', () => setStepActive('upload'));
+  el('cadIntentNextBtn')?.addEventListener('click', async () => {
+    _intentData = collectIntentData();
     await runAnalysis();
   });
 
-  // ── Step 2: Analyzing – retry ─────────────────────────────────────────
+  // ── Step 3: Analyzing – retry ─────────────────────────────────────────
   el('cadProgressRetryBtn')?.addEventListener('click', async () => {
     if (_files.length > 0) await runAnalysis();
     else setStepActive('upload');
   });
 
-  // ── Step 3: Components ────────────────────────────────────────────────
-  el('cadComponentsBackBtn')?.addEventListener('click', () => setStepActive('upload'));
+  // ── Step 4: Components ────────────────────────────────────────────────
+  el('cadComponentsBackBtn')?.addEventListener('click', () => setStepActive('intent'));
   el('cadComponentsNextBtn')?.addEventListener('click', () => {
     setStepActive('features');
     announce('Showing feature review. Enable or disable detected features.');
   });
 
-  // ── Step 4: Features ──────────────────────────────────────────────────
+  // ── Step 5: Features ──────────────────────────────────────────────────
   el('cadFeaturesBackBtn')?.addEventListener('click', () => setStepActive('components'));
   el('cadFeaturesNextBtn')?.addEventListener('click', () => {
     setStepActive('generate');
@@ -597,9 +932,10 @@ export function initCadConverterPanel(onScadLoaded) {
     announce('Showing generate step. Click Generate to produce the .scad file.');
   });
 
-  // ── Step 5: Generate ──────────────────────────────────────────────────
+  // ── Step 6: Generate ──────────────────────────────────────────────────
   el('cadGenerateBackBtn')?.addEventListener('click', () => setStepActive('features'));
   el('cadGenerateBtn')?.addEventListener('click', () => runGenerate());
+  el('cadValidateBtn')?.addEventListener('click', () => validateScad());
 
   el('cadDownloadScadBtn')?.addEventListener('click', () => {
     if (!_generatedScad) return;
@@ -649,6 +985,7 @@ export function hideWizard() {
   _files = [];
   _projectForm = null;
   _generatedScad = null;
+  _intentData = null;
   setStepActive('upload');
 }
 

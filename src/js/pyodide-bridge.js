@@ -53,10 +53,11 @@ export class PyodideBridge {
    * @param {Array<{name: string, data: Uint8Array}>} files  - Uploaded file buffers
    * @param {string} projectName                             - Project name for the form
    * @param {function(string,string):void} [onProgress]      - Called with (stage, message)
+   * @param {object} [intent]                                - User intent from questionnaire
    * @returns {Promise<object>} ProjectForm as a plain JS object
    */
-  analyze(files, projectName, onProgress) {
-    return this._call('analyze', { files, projectName }, onProgress);
+  analyze(files, projectName, onProgress, intent = null) {
+    return this._call('analyze', { files, projectName, intent }, onProgress);
   }
 
   /**

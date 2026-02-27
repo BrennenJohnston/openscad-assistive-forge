@@ -27,7 +27,7 @@ const PYODIDE_VERSION = '0.29.3';
 const PYODIDE_BASE_URL = `https://cdn.jsdelivr.net/pyodide/v${PYODIDE_VERSION}/full/`;
 
 // Packages to install via micropip (numpy/scipy/pyyaml are pre-built in Pyodide)
-const MICROPIP_PACKAGES = ['trimesh', 'ezdxf', 'solidpython2'];
+const MICROPIP_PACKAGES = ['trimesh', 'ezdxf', 'solidpython2', 'svgpathtools'];
 
 // Virtual filesystem mount point for uploaded files
 const VFS_INPUT_DIR = '/input';
@@ -74,7 +74,8 @@ from forge_cad.analyzer.variant_diff import VariantDiffer
 from forge_cad.analyzer.topology import TopologyClassifier
 from forge_cad.analyzer.feature_detect import FeatureDetector
 from forge_cad.analyzer.boundary_detect import BoundaryDetector
-from forge_cad.forms.project_form import ProjectForm, ComponentEntry, FeatureEntry, FileEntry
+from forge_cad.analyzer.archetype_detect import ArchetypeDetector
+from forge_cad.forms.project_form import ProjectForm, ComponentEntry, FeatureEntry, FileEntry, IntentData
 from forge_cad.generator.scad_emitter import ScadEmitter
 import json
 `);
@@ -146,7 +147,7 @@ function mountInputFiles(files) {
 
 // ── Analysis pipeline ──────────────────────────────────────────────────────
 
-async function runAnalysis(files, projectName) {
+async function runAnalysis(files, projectName, intent) {
   mountInputFiles(files);
 
   const sendProgress = (stage, message) => {
@@ -154,6 +155,15 @@ async function runAnalysis(files, projectName) {
   };
 
   sendProgress('stage0', 'Loading and scanning files…');
+
+  // Serialise intent for Python
+  const intentJson = JSON.stringify(intent || {
+    object_category: 'custom',
+    manufacturing_method: 'fdm',
+    adjustable_dimensions: ['all'],
+    target_use: '',
+    accessibility_needs: [],
+  });
 
   const formJson = await pyodide.runPythonAsync(`
 import json
@@ -164,10 +174,20 @@ from forge_cad.analyzer.variant_diff import VariantDiffer
 from forge_cad.analyzer.topology import TopologyClassifier
 from forge_cad.analyzer.feature_detect import FeatureDetector
 from forge_cad.analyzer.boundary_detect import BoundaryDetector
-from forge_cad.forms.project_form import ProjectForm, ComponentEntry, FeatureEntry, FileEntry
+from forge_cad.analyzer.archetype_detect import ArchetypeDetector
+from forge_cad.forms.project_form import ProjectForm, IntentData
 
 source_dir = Path('${VFS_INPUT_DIR}')
 project_name = ${JSON.stringify(projectName)}
+
+intent_raw = json.loads(${JSON.stringify(intentJson)})
+intent = IntentData(
+    object_category=intent_raw.get('object_category', 'custom'),
+    manufacturing_method=intent_raw.get('manufacturing_method', 'fdm'),
+    adjustable_dimensions=intent_raw.get('adjustable_dimensions', ['all']),
+    target_use=intent_raw.get('target_use', ''),
+    accessibility_needs=intent_raw.get('accessibility_needs', []),
+)
 
 # Stage 0 – Load
 loader = FileLoader(source_dir)
@@ -189,6 +209,10 @@ components = classifier.classify()
 detector = FeatureDetector(meshes, z_profiles, variant_diffs)
 features = detector.detect()
 
+# Stage 5 – Archetype detection
+archetype_det = ArchetypeDetector()
+archetype = archetype_det.detect(meshes, z_profiles, intent)
+
 # Stage 6 – Boundary detect
 boundary_det = BoundaryDetector(meshes, components)
 boundaries = boundary_det.detect()
@@ -204,6 +228,8 @@ form = ProjectForm.from_analysis(
     features=features,
     boundaries=boundaries,
 )
+form.archetype = archetype
+form.intent = intent
 
 # Serialise to dict then JSON
 json.dumps(form._to_dict())
@@ -260,8 +286,8 @@ self.onmessage = async (event) => {
       if (!isInitialised) {
         throw new Error('Worker not initialised. Call init first.');
       }
-      const { files, projectName } = event.data;
-      const form = await runAnalysis(files, projectName || 'untitled');
+      const { files, projectName, intent } = event.data;
+      const form = await runAnalysis(files, projectName || 'untitled', intent);
       postMessage({ type: 'analyze_complete', form, id });
 
     } else if (action === 'generate') {

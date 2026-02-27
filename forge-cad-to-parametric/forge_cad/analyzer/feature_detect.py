@@ -43,10 +43,13 @@ class FeatureDetector:
         meshes: list[LoadedMesh],
         z_profiles: dict,
         variant_diffs: dict,
+        brep_face_metadata: Optional[list[dict]] = None,
     ) -> None:
         self.meshes = {m.name: m for m in meshes if m.file_type != "dxf"}
         self.z_profiles = z_profiles
         self.variant_diffs = variant_diffs
+        # Optional B-rep face type data from occt-import-js (Phase 3D)
+        self.brep_face_metadata = brep_face_metadata or []
         self._feature_counter: dict[str, int] = {}
 
     def detect(self) -> list[DetectedFeature]:
@@ -70,6 +73,13 @@ class FeatureDetector:
 
         # Enrich with variant diff data (volume-derived features)
         features.extend(self._features_from_variant_diffs())
+
+        # Fillet / chamfer detection via edge dihedral angles (Phase 3A)
+        features.extend(self._detect_fillets_chamfers(body_mesh))
+
+        # Enrich from B-rep face metadata if provided (Phase 3D)
+        if self.brep_face_metadata:
+            features.extend(self._features_from_brep(self.brep_face_metadata))
 
         # Deduplicate similar features
         features = self._deduplicate(features)
@@ -273,6 +283,111 @@ class FeatureDetector:
             stride = max(1, len(path) // 20)
             return path[::stride]
 
+    def _detect_fillets_chamfers(self, mesh: LoadedMesh) -> list[DetectedFeature]:
+        """Detect fillets and chamfers via edge dihedral angle analysis (Phase 3A).
+
+        For each edge shared by exactly 2 faces:
+        - angle < 10°  : tangent (skip)
+        - 10–80°       : chamfer candidate
+        - chain of small angle transitions along connected edges → fillet
+        """
+        features: list[DetectedFeature] = []
+        try:
+            import numpy as np
+
+            tm = mesh.mesh
+            if not hasattr(tm, "face_adjacency"):
+                return features
+
+            adjacency = np.asarray(tm.face_adjacency)       # shape (E, 2) face index pairs
+            normals = np.asarray(tm.face_normals)            # shape (F, 3)
+
+            fillet_edges: list[int] = []
+            chamfer_edges: list[int] = []
+
+            for i, (f0, f1) in enumerate(adjacency):
+                n0 = normals[f0]
+                n1 = normals[f1]
+                cos_a = float(np.clip(np.dot(n0, n1), -1.0, 1.0))
+                angle_deg = math.degrees(math.acos(abs(cos_a)))
+
+                if 10.0 <= angle_deg <= 80.0:
+                    chamfer_edges.append(i)
+                elif angle_deg < 10.0:
+                    fillet_edges.append(i)
+
+            if fillet_edges:
+                # Estimate average fillet radius from curvature proxy
+                radius = _estimate_fillet_radius(tm, fillet_edges)
+                self._feature_counter["fillet"] = self._feature_counter.get("fillet", 0) + 1
+                features.append(DetectedFeature(
+                    name="",
+                    feature_type="fillet",
+                    detected_from=f"edge_dihedral_{mesh.name}",
+                    params={
+                        "radius": round(radius, 3),
+                        "edge_count": len(fillet_edges),
+                    },
+                ))
+
+            if chamfer_edges:
+                size = _estimate_chamfer_size(tm, chamfer_edges)
+                self._feature_counter["chamfer"] = self._feature_counter.get("chamfer", 0) + 1
+                features.append(DetectedFeature(
+                    name="",
+                    feature_type="chamfer",
+                    detected_from=f"edge_dihedral_{mesh.name}",
+                    params={
+                        "size": round(size, 3),
+                        "edge_count": len(chamfer_edges),
+                    },
+                ))
+
+        except Exception:  # noqa: BLE001
+            pass
+
+        return features
+
+    def _features_from_brep(self, metadata: list[dict]) -> list[DetectedFeature]:
+        """Enrich features from B-rep face type data (Phase 3D).
+
+        Each metadata entry has:
+          face_type: "planar" | "cylindrical" | "conical" | "toroidal" | "spherical"
+          radius:    float (for cylindrical/toroidal/spherical)
+          area:      float
+        """
+        features: list[DetectedFeature] = []
+        for face in metadata:
+            face_type = face.get("face_type", "")
+            radius = face.get("radius", 0.0)
+            area = face.get("area", 0.0)
+
+            if face_type == "cylindrical" and radius > 0 and area >= MIN_FEATURE_AREA:
+                self._feature_counter["circular_hole"] = (
+                    self._feature_counter.get("circular_hole", 0) + 1
+                )
+                features.append(DetectedFeature(
+                    name="",
+                    feature_type="circular_hole",
+                    detected_from="brep_face",
+                    params={
+                        "diameter": round(radius * 2, 3),
+                        "center_x": round(face.get("center_x", 0.0), 3),
+                        "center_y": round(face.get("center_y", 0.0), 3),
+                        "z_level": round(face.get("z_min", 0.0), 3),
+                    },
+                ))
+            elif face_type == "toroidal" and radius > 0:
+                self._feature_counter["fillet"] = self._feature_counter.get("fillet", 0) + 1
+                features.append(DetectedFeature(
+                    name="",
+                    feature_type="fillet",
+                    detected_from="brep_face",
+                    params={"radius": round(radius, 3), "edge_count": 1},
+                ))
+
+        return features
+
     def _deduplicate(self, features: list[DetectedFeature]) -> list[DetectedFeature]:
         """Remove features that are very close duplicates (same type, similar location)."""
         seen: list[DetectedFeature] = []
@@ -294,6 +409,59 @@ class FeatureDetector:
                     ):
                         is_dup = True
                         break
+                elif f.feature_type in {"fillet", "chamfer"}:
+                    # Keep only the first fillet/chamfer detection per mesh
+                    if s.detected_from == f.detected_from:
+                        is_dup = True
+                        break
             if not is_dup:
                 seen.append(f)
         return seen
+
+
+# ── Module-level helpers ────────────────────────────────────────────────────
+
+
+def _estimate_fillet_radius(mesh: object, edge_indices: list[int]) -> float:
+    """Estimate average fillet radius from curvature proxy on smooth edges."""
+    try:
+        import numpy as np
+
+        adjacency = np.asarray(mesh.face_adjacency)
+        normals = np.asarray(mesh.face_normals)
+        radii = []
+        for i in edge_indices[:20]:  # sample first 20 for speed
+            f0, f1 = adjacency[i]
+            n0, n1 = normals[f0], normals[f1]
+            cos_a = float(np.clip(np.dot(n0, n1), -1.0, 1.0))
+            angle = math.acos(abs(cos_a))
+            if angle > 1e-6:
+                # Very rough: r ≈ edge_length / (2 * sin(angle/2))
+                edge_verts = mesh.face_adjacency_edges
+                if hasattr(edge_verts, "__len__") and i < len(edge_verts):
+                    verts = np.asarray(mesh.vertices)
+                    v0, v1 = edge_verts[i]
+                    edge_len = float(np.linalg.norm(verts[v0] - verts[v1]))
+                    if edge_len > 0:
+                        r = edge_len / (2.0 * math.sin(angle / 2.0))
+                        radii.append(r)
+        return float(np.median(radii)) if radii else 1.0
+    except Exception:  # noqa: BLE001
+        return 1.0
+
+
+def _estimate_chamfer_size(mesh: object, edge_indices: list[int]) -> float:
+    """Estimate average chamfer size (width of chamfer face) from edge geometry."""
+    try:
+        import numpy as np
+
+        edge_verts = mesh.face_adjacency_edges
+        verts = np.asarray(mesh.vertices)
+        lengths = []
+        for i in edge_indices[:20]:
+            if i < len(edge_verts):
+                v0, v1 = edge_verts[i]
+                lengths.append(float(np.linalg.norm(verts[v0] - verts[v1])))
+        return float(np.median(lengths)) if lengths else 1.0
+    except Exception:  # noqa: BLE001
+        return 1.0

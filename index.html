@@ -1101,20 +1101,24 @@
                     <span class="cad-step-num" aria-hidden="true">1</span>
                     <span class="cad-step-label">Upload</span>
                   </li>
-                  <li class="cad-step" data-step="analyzing">
+                  <li class="cad-step" data-step="intent">
                     <span class="cad-step-num" aria-hidden="true">2</span>
+                    <span class="cad-step-label">Intent</span>
+                  </li>
+                  <li class="cad-step" data-step="analyzing">
+                    <span class="cad-step-num" aria-hidden="true">3</span>
                     <span class="cad-step-label">Analyze</span>
                   </li>
                   <li class="cad-step" data-step="components">
-                    <span class="cad-step-num" aria-hidden="true">3</span>
+                    <span class="cad-step-num" aria-hidden="true">4</span>
                     <span class="cad-step-label">Components</span>
                   </li>
                   <li class="cad-step" data-step="features">
-                    <span class="cad-step-num" aria-hidden="true">4</span>
+                    <span class="cad-step-num" aria-hidden="true">5</span>
                     <span class="cad-step-label">Features</span>
                   </li>
                   <li class="cad-step" data-step="generate">
-                    <span class="cad-step-num" aria-hidden="true">5</span>
+                    <span class="cad-step-num" aria-hidden="true">6</span>
                     <span class="cad-step-label">Generate</span>
                   </li>
                 </ol>
@@ -1143,8 +1147,8 @@
             <div class="cad-step-content">
               <h3 class="cad-step-heading">Upload CAD Files</h3>
               <p class="cad-step-description">
-                Select the STL, OBJ, or DXF files to convert. You can upload
-                multiple files for multi-component models.
+                Select one or more CAD files to convert. STEP/STP gives the
+                richest parametric output; STL/OBJ also work.
               </p>
               <label
                 class="upload-zone upload-zone--cad upload-zone--wizard"
@@ -1166,15 +1170,51 @@
                   <polyline points="17 8 12 3 7 8"></polyline>
                   <line x1="12" y1="3" x2="12" y2="15"></line>
                 </svg>
-                <span class="upload-text">Drop STL / OBJ / DXF here or click to browse</span>
+                <span class="upload-text">Drop CAD files here or click to browse</span>
                 <input
                   type="file"
                   id="cadWizardFileInput"
-                  accept=".stl,.obj,.dxf"
+                  accept=".stl,.obj,.dxf,.step,.stp,.iges,.igs,.3mf,.amf,.svg"
                   multiple
                   class="file-input"
                 />
               </label>
+              <!-- Per-file quality feedback (populated by JS) -->
+              <div
+                id="cadFileValidationFeedback"
+                class="cad-file-validation hidden"
+                aria-live="polite"
+              ></div>
+              <!-- Format guide -->
+              <details class="cad-format-guide">
+                <summary class="cad-format-guide-summary">Supported formats &amp; quality tiers</summary>
+                <dl class="cad-format-guide-list">
+                  <div class="cad-format-entry cad-format-best">
+                    <dt>STEP / STP</dt>
+                    <dd>Rich geometry + topology. Best for parametric conversion.</dd>
+                  </div>
+                  <div class="cad-format-entry cad-format-good">
+                    <dt>IGES / IGS</dt>
+                    <dd>Legacy B-rep format. Good geometry, older standard.</dd>
+                  </div>
+                  <div class="cad-format-entry cad-format-good">
+                    <dt>3MF / AMF</dt>
+                    <dd>XML-based mesh with metadata. Better than STL.</dd>
+                  </div>
+                  <div class="cad-format-entry cad-format-ok">
+                    <dt>STL / OBJ</dt>
+                    <dd>Triangulated mesh only. Least geometric information.</dd>
+                  </div>
+                  <div class="cad-format-entry cad-format-ok">
+                    <dt>DXF</dt>
+                    <dd>2D profiles. Great as supplementary input.</dd>
+                  </div>
+                  <div class="cad-format-entry cad-format-ok">
+                    <dt>SVG</dt>
+                    <dd>2D vector paths. Good for flat or laser-cut designs.</dd>
+                  </div>
+                </dl>
+              </details>
               <!-- File list (populated by JS) -->
               <ul
                 class="cad-file-list hidden"
@@ -1207,7 +1247,90 @@
             </div>
           </div>
 
-          <!-- ── Step 2: Analyzing (progress) ──────────────────────────── -->
+          <!-- ── Step 2: Intent Questionnaire ──────────────────────────── -->
+          <div class="cad-wizard-step-panel hidden" id="cadStep-intent">
+            <div class="cad-step-content">
+              <h3 class="cad-step-heading">Tell Us About Your Part</h3>
+              <p class="cad-step-description">
+                Optional context that guides the analysis. All fields have safe
+                defaults — skip anything that doesn't apply.
+              </p>
+
+              <!-- Object category -->
+              <fieldset class="cad-intent-group">
+                <legend id="intent-cat-legend" class="cad-intent-legend">Object category</legend>
+                <div class="cad-intent-radios" role="radiogroup" aria-labelledby="intent-cat-legend">
+                  <label class="cad-intent-radio"><input type="radio" name="intentCategory" value="flat_plate" /> Flat plate / panel</label>
+                  <label class="cad-intent-radio"><input type="radio" name="intentCategory" value="box_enclosure" /> Enclosure / box</label>
+                  <label class="cad-intent-radio"><input type="radio" name="intentCategory" value="handle" /> Handle / grip</label>
+                  <label class="cad-intent-radio"><input type="radio" name="intentCategory" value="rotational" /> Cylindrical / rotational</label>
+                  <label class="cad-intent-radio"><input type="radio" name="intentCategory" value="bracket" /> Bracket / mount</label>
+                  <label class="cad-intent-radio"><input type="radio" name="intentCategory" value="organic" /> Organic / sculpted</label>
+                  <label class="cad-intent-radio"><input type="radio" name="intentCategory" value="custom" checked /> Other / let analyzer decide</label>
+                </div>
+              </fieldset>
+
+              <!-- Manufacturing method -->
+              <fieldset class="cad-intent-group">
+                <legend id="intent-mfg-legend" class="cad-intent-legend">Manufacturing method</legend>
+                <div class="cad-intent-radios" role="radiogroup" aria-labelledby="intent-mfg-legend">
+                  <label class="cad-intent-radio"><input type="radio" name="intentMfg" value="fdm" checked /> FDM (fused deposition)</label>
+                  <label class="cad-intent-radio"><input type="radio" name="intentMfg" value="sla" /> SLA / resin</label>
+                  <label class="cad-intent-radio"><input type="radio" name="intentMfg" value="cnc" /> CNC machining</label>
+                  <label class="cad-intent-radio"><input type="radio" name="intentMfg" value="laser_cut" /> Laser cutting</label>
+                  <label class="cad-intent-radio"><input type="radio" name="intentMfg" value="unknown" /> Unknown / skip</label>
+                </div>
+              </fieldset>
+
+              <!-- Adjustable dimensions -->
+              <fieldset class="cad-intent-group">
+                <legend class="cad-intent-legend">Which dimensions should be adjustable?</legend>
+                <div class="cad-intent-checks">
+                  <label class="cad-intent-check"><input type="checkbox" name="intentDims" value="width" /> Width</label>
+                  <label class="cad-intent-check"><input type="checkbox" name="intentDims" value="height" /> Height</label>
+                  <label class="cad-intent-check"><input type="checkbox" name="intentDims" value="depth" /> Depth</label>
+                  <label class="cad-intent-check"><input type="checkbox" name="intentDims" value="hole_sizes" /> Hole sizes</label>
+                  <label class="cad-intent-check"><input type="checkbox" name="intentDims" value="wall_thickness" /> Wall thickness</label>
+                  <label class="cad-intent-check"><input type="checkbox" name="intentDims" value="fillet_radii" /> Fillet radii</label>
+                  <label class="cad-intent-check"><input type="checkbox" name="intentDims" value="all" checked /> All (let analyzer decide)</label>
+                </div>
+              </fieldset>
+
+              <!-- Target use -->
+              <div class="cad-field-group">
+                <label class="cad-field-label" for="intentTargetUse">Target use <span class="cad-field-optional">(optional)</span></label>
+                <input
+                  type="text"
+                  id="intentTargetUse"
+                  class="cad-text-input"
+                  placeholder="e.g. mounting bracket for tablet, grip aid for cutlery"
+                  maxlength="80"
+                />
+              </div>
+
+              <!-- Accessibility needs -->
+              <fieldset class="cad-intent-group">
+                <legend class="cad-intent-legend">Accessibility considerations <span class="cad-field-optional">(optional)</span></legend>
+                <div class="cad-intent-checks">
+                  <label class="cad-intent-check"><input type="checkbox" name="intentA11y" value="reduced_grip" /> Reduced grip strength</label>
+                  <label class="cad-intent-check"><input type="checkbox" name="intentA11y" value="limited_hand_size" /> Limited hand size range</label>
+                  <label class="cad-intent-check"><input type="checkbox" name="intentA11y" value="visual_impairment" /> Visual impairment</label>
+                  <label class="cad-intent-check"><input type="checkbox" name="intentA11y" value="none" checked /> None / skip</label>
+                </div>
+              </fieldset>
+
+              <div class="cad-step-actions">
+                <button type="button" class="btn btn-secondary" id="cadIntentBackBtn">
+                  ← Back
+                </button>
+                <button type="button" class="btn btn-primary" id="cadIntentNextBtn">
+                  Analyze Files →
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── Step 3: Analyzing (progress) ──────────────────────────── -->
           <div class="cad-wizard-step-panel hidden" id="cadStep-analyzing">
             <div class="cad-step-content">
               <h3 class="cad-step-heading">Analyzing…</h3>
@@ -1264,7 +1387,7 @@
             </div>
           </div>
 
-          <!-- ── Step 3: Review Components ──────────────────────────────── -->
+          <!-- ── Step 4: Review Components ──────────────────────────────── -->
           <div class="cad-wizard-step-panel hidden" id="cadStep-components">
             <div class="cad-step-content">
               <h3 class="cad-step-heading">Review Components</h3>
@@ -1272,6 +1395,12 @@
                 The analyzer detected the following components. Review the role
                 assigned to each and correct any mistakes before generating code.
               </p>
+              <!-- Smart suggestions (Phase 4C, populated by JS after analysis) -->
+              <div
+                class="cad-suggestions-container hidden"
+                id="cadSuggestionsContainer"
+                aria-label="Suggestions from the analyzer"
+              ></div>
               <!-- Analysis summary -->
               <dl class="cad-summary" id="cadComponentsSummary"></dl>
               <!-- Component cards (populated by JS) -->
@@ -1287,7 +1416,7 @@
             </div>
           </div>
 
-          <!-- ── Step 4: Review Features ────────────────────────────────── -->
+          <!-- ── Step 5: Review Features ────────────────────────────────── -->
           <div class="cad-wizard-step-panel hidden" id="cadStep-features">
             <div class="cad-step-content">
               <h3 class="cad-step-heading">Review Features</h3>
@@ -1316,7 +1445,7 @@
             </div>
           </div>
 
-          <!-- ── Step 5: Generate ───────────────────────────────────────── -->
+          <!-- ── Step 6: Generate ───────────────────────────────────────── -->
           <div class="cad-wizard-step-panel hidden" id="cadStep-generate">
             <div class="cad-step-content">
               <h3 class="cad-step-heading">Generate Parametric Code</h3>
@@ -1358,9 +1487,23 @@
                 <strong>Error:</strong>
                 <span id="cadGenerateErrorText"></span>
               </div>
+              <!-- Phase 4D: Validation result -->
+              <div
+                class="cad-validate-result hidden"
+                id="cadValidateResult"
+                aria-live="polite"
+              ></div>
               <div class="cad-step-actions">
                 <button type="button" class="btn btn-secondary" id="cadGenerateBackBtn">
                   ← Back
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-outline hidden"
+                  id="cadValidateBtn"
+                  aria-label="Validate generated SCAD code"
+                >
+                  Validate SCAD
                 </button>
                 <button type="button" class="btn btn-primary" id="cadGenerateBtn">
                   Generate &amp; Load into Editor

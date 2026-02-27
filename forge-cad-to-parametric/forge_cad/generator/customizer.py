@@ -61,6 +61,9 @@ class CustomizerAnnotator:
 
     @staticmethod
     def _format_annotation(spec: ParameterSpec) -> str:
+        # Locked parameters are emitted as plain variables without Customizer annotations
+        if getattr(spec, "locked", False):
+            return ""
         if spec.param_type == "number" and spec.min_val is not None and spec.max_val is not None:
             if spec.step is not None:
                 return f"[{spec.min_val}:{spec.step}:{spec.max_val}] "

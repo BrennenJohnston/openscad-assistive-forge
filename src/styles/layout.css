@@ -4799,6 +4799,311 @@ details summary:focus,
   }
 }
 
+/* ── Phase 1A: File quality badges ───────────────────────────────────── */
+
+.cad-file-badge {
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 0.1rem 0.45rem;
+  border-radius: 9999px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.cad-file-badge--best { background: var(--color-success, #22c55e); color: #fff; }
+.cad-file-badge--good { background: var(--color-info, #3b82f6); color: #fff; }
+.cad-file-badge--ok   { background: var(--color-muted, #94a3b8); color: #fff; }
+
+.cad-file-validation {
+  margin-top: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.cad-validation-msg {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary, #64748b);
+  padding: 0.2rem 0.4rem;
+  background: var(--color-surface-raised, #f8fafc);
+  border-radius: 4px;
+}
+
+/* ── Phase 1A: Format guide ────────────────────────────────────────────── */
+
+.cad-format-guide {
+  margin-top: 1rem;
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.cad-format-guide-summary {
+  padding: 0.6rem 0.8rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 500;
+  background: var(--color-surface-raised, #f8fafc);
+  user-select: none;
+  list-style: none;
+}
+
+.cad-format-guide-summary::marker,
+.cad-format-guide-summary::-webkit-details-marker { display: none; }
+
+.cad-format-guide-summary::before {
+  content: '▶ ';
+  font-size: 0.7rem;
+  color: var(--color-text-secondary, #64748b);
+}
+
+details.cad-format-guide[open] .cad-format-guide-summary::before { content: '▼ '; }
+
+.cad-format-guide-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+  margin: 0;
+}
+
+.cad-format-entry {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.45rem 0.8rem;
+  border-top: 1px solid var(--color-border, #e2e8f0);
+}
+
+.cad-format-entry dt {
+  font-weight: 600;
+  font-size: 0.8rem;
+  min-width: 5rem;
+  flex-shrink: 0;
+}
+
+.cad-format-entry dd {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary, #64748b);
+  margin: 0;
+}
+
+.cad-format-best { background: color-mix(in srgb, #22c55e 10%, transparent); }
+.cad-format-good { background: color-mix(in srgb, #3b82f6 8%,  transparent); }
+.cad-format-ok   { background: transparent; }
+
+/* ── Phase 1B: Intent questionnaire ───────────────────────────────────── */
+
+.cad-intent-group {
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.cad-intent-legend {
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 0 0.3rem;
+  color: var(--color-text, #1e293b);
+}
+
+.cad-intent-radios,
+.cad-intent-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
+  margin-top: 0.5rem;
+}
+
+.cad-intent-radio,
+.cad-intent-check {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.cad-intent-radio input,
+.cad-intent-check input {
+  accent-color: var(--color-primary, #2563eb);
+  width: 1rem;
+  height: 1rem;
+  cursor: pointer;
+}
+
+.cad-field-optional {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--color-text-secondary, #64748b);
+  margin-left: 0.3rem;
+}
+
+/* ── Phase 1C: Parameter table ─────────────────────────────────────────── */
+
+.cad-param-table-wrap {
+  margin-top: 0.75rem;
+  overflow-x: auto;
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 6px;
+}
+
+.cad-param-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.cad-param-table th {
+  background: var(--color-surface-raised, #f8fafc);
+  padding: 0.35rem 0.5rem;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary, #64748b);
+  border-bottom: 1px solid var(--color-border, #e2e8f0);
+  white-space: nowrap;
+}
+
+.cad-param-row td {
+  padding: 0.3rem 0.4rem;
+  border-bottom: 1px solid var(--color-border, #e2e8f0);
+  vertical-align: middle;
+}
+
+.cad-param-row:last-child td { border-bottom: none; }
+
+.cad-param-name-text {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.78rem;
+  color: var(--color-text, #1e293b);
+  white-space: nowrap;
+}
+
+.cad-param-input {
+  width: 4.5rem;
+  padding: 0.2rem 0.35rem;
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 4px;
+  font-size: 0.8rem;
+  background: var(--color-input-bg, #fff);
+  color: var(--color-text, #1e293b);
+  transition: border-color 0.15s;
+}
+
+.cad-param-input:focus {
+  outline: none;
+  border-color: var(--color-primary, #2563eb);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary, #2563eb) 20%, transparent);
+}
+
+.cad-param-lock-cell { text-align: center; }
+
+.cad-param-lock {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.cad-param-lock-input {
+  width: 0;
+  height: 0;
+  opacity: 0;
+  position: absolute;
+}
+
+.cad-param-lock-icon {
+  font-size: 1rem;
+  opacity: 0.3;
+  transition: opacity 0.15s;
+}
+
+.cad-param-lock:has(.cad-param-lock-input:checked) .cad-param-lock-icon {
+  opacity: 1;
+}
+
+.cad-param-lock:focus-within .cad-param-lock-icon {
+  outline: 2px solid var(--color-primary, #2563eb);
+  border-radius: 2px;
+}
+
+/* ── Phase 4C: Smart suggestions ──────────────────────────────────────── */
+
+.cad-suggestions-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.cad-suggestion {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: 6px;
+  border-left: 3px solid transparent;
+  font-size: 0.85rem;
+  transition: opacity 0.2s;
+}
+
+.cad-suggestion--info    { background: color-mix(in srgb, #3b82f6 8%, transparent); border-left-color: #3b82f6; }
+.cad-suggestion--tip     { background: color-mix(in srgb, #22c55e 8%, transparent); border-left-color: #22c55e; }
+.cad-suggestion--warning { background: color-mix(in srgb, #f59e0b 8%, transparent); border-left-color: #f59e0b; }
+.cad-suggestion--dismissed { opacity: 0; pointer-events: none; }
+
+.cad-suggestion-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.cad-suggestion-icon { font-size: 1rem; flex-shrink: 0; }
+
+.cad-suggestion-title {
+  flex: 1;
+  font-size: 0.85rem;
+}
+
+.cad-suggestion-dismiss {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-secondary, #64748b);
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0 0.2rem;
+  margin-left: auto;
+  border-radius: 3px;
+  transition: background 0.15s;
+}
+
+.cad-suggestion-dismiss:hover { background: color-mix(in srgb, currentColor 15%, transparent); }
+
+.cad-suggestion-body {
+  margin: 0;
+  color: var(--color-text-secondary, #64748b);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+/* ── Phase 4D: Validate result ─────────────────────────────────────────── */
+
+.cad-validate-result {
+  margin-top: 0.75rem;
+  padding: 0.6rem 0.85rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.cad-validate-result--pending { background: var(--color-surface-raised, #f8fafc); color: var(--color-text-secondary, #64748b); }
+.cad-validate-result--pass    { background: color-mix(in srgb, #22c55e 12%, transparent); color: #15803d; border: 1px solid #22c55e; }
+.cad-validate-result--fail    { background: color-mix(in srgb, #ef4444 10%, transparent); color: #b91c1c; border: 1px solid #ef4444; }
+.cad-validate-result--warn    { background: color-mix(in srgb, #f59e0b 10%, transparent); color: #b45309; border: 1px solid #f59e0b; }
+
 /* ── Responsive adjustments ───────────────────────────────────────────── */
 
 @media (max-width: 640px) {
