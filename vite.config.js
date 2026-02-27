@@ -126,6 +126,11 @@ export default defineConfig({
     outDir: 'dist',
     sourcemap: true,
     rollupOptions: {
+      // openscad-renderer.js is an optional runtime module (WASM renderer shim)
+      // that may or may not be present in the build. Marking it external keeps
+      // the dynamic import in the output so the browser-side .catch(() => null)
+      // fallback handles its absence at runtime instead of failing at build time.
+      external: (id) => id.includes('openscad-renderer'),
       output: {
         manualChunks: {
           'three': ['three'],
