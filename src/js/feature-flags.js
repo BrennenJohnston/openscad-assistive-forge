@@ -127,6 +127,17 @@ export const FLAGS = {
     userConfigurable: true,
     killSwitch: false,
   },
+  cad_to_parametric: {
+    id: 'cad_to_parametric',
+    name: 'CAD-to-Parametric Converter',
+    description:
+      'Convert STL/OBJ/DXF CAD exports into parametric OpenSCAD files via in-browser Python (Pyodide). ' +
+      'Requires ~20MB one-time download.',
+    default: true,
+    rollout: 100,
+    userConfigurable: true,
+    killSwitch: false,
+  },
 };
 
 // Storage key for user preferences

@@ -150,6 +150,11 @@ import {
   onUnitChange,
   onScaleChange,
 } from './js/unit-sync.js';
+import {
+  initCadConverterPanel,
+  openWizardWithFiles,
+  hideWizard,
+} from './js/cad-converter-panel.js';
 
 // Storage keys using standardized naming convention
 const STORAGE_KEY_AUTO_PREVIEW_ENABLED = getAppPrefKey('auto-preview-enabled');
@@ -2871,6 +2876,23 @@ async function initApp() {
         }
       });
     }
+  }
+
+  // CAD-to-Parametric converter — gated behind feature flag
+  if (_isEnabled('cad_to_parametric')) {
+    // Show the entry point card on the welcome screen
+    const cadConverterEntry = document.getElementById('cadConverterEntry');
+    if (cadConverterEntry) cadConverterEntry.classList.remove('hidden');
+
+    // Callback: when the user finishes the wizard and clicks "Generate & Load",
+    // load the generated .scad into the forge editor exactly like a regular upload.
+    function onConverterScadLoaded(scadCode, filename) {
+      hideWizard();
+      const file = new File([scadCode], filename, { type: 'text/plain' });
+      handleFile(file, scadCode, null, null, 'user');
+    }
+
+    initCadConverterPanel(onConverterScadLoaded);
   }
 
   /**

@@ -22,7 +22,7 @@
 #   that fetch external forge-manifest.json and project files from author-hosted repos.
 #   media.githubusercontent.com is required for Git LFS-tracked bundles (LFS pointer redirect).
 /*
-  Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' data: https://raw.githubusercontent.com https://media.githubusercontent.com https://*.github.io https://*.gitlab.io https://*.pages.dev; worker-src 'self' blob:; child-src 'self' blob:; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests
+  Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' data: blob: https://raw.githubusercontent.com https://media.githubusercontent.com https://*.github.io https://*.gitlab.io https://*.pages.dev https://cdn.jsdelivr.net https://files.pythonhosted.org https://pypi.org; worker-src 'self' blob:; child-src 'self' blob:; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests
 
 # Cache static assets aggressively
 /assets/*

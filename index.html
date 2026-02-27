@@ -993,6 +993,55 @@
                 </button>
               </div>
             </section>
+            <!-- CAD-to-Parametric Converter Entry Point (hidden until feature flag enables it) -->
+            <section
+              class="cad-converter-entry hidden"
+              id="cadConverterEntry"
+              aria-labelledby="cad-converter-entry-heading"
+            >
+              <h3 id="cad-converter-entry-heading">Convert CAD to Parametric</h3>
+              <p>
+                Upload an STL, OBJ, or DXF file to auto-generate a parametric
+                OpenSCAD model with Customizer annotations.
+              </p>
+              <div class="cad-converter-entry-actions">
+                <label
+                  class="upload-zone upload-zone--cad"
+                  id="cadUploadZone"
+                  for="cadFileInput"
+                  tabindex="0"
+                >
+                  <svg
+                    class="upload-icon"
+                    width="48"
+                    height="48"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    aria-hidden="true"
+                  >
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="17 8 12 3 7 8"></polyline>
+                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                  </svg>
+                  <span class="upload-text">Drop STL / OBJ / DXF here or click to browse</span>
+                  <input
+                    type="file"
+                    id="cadFileInput"
+                    accept=".stl,.obj,.dxf"
+                    multiple
+                    class="file-input"
+                    aria-describedby="cad-converter-entry-heading"
+                  />
+                </label>
+              </div>
+              <p class="cad-converter-note">
+                <strong>First use:</strong> Downloads Pyodide (~20 MB) once and caches it.
+                All processing happens locally in your browser.
+              </p>
+            </section>
+
             <!-- Storage Panel -->
             <section class="storage-panel" aria-labelledby="storage-heading">
               <h3 id="storage-heading">Storage Usage</h3>
@@ -1027,6 +1076,317 @@
           </div>
         </div>
         <span id="fileInfoSummary" class="sr-only" aria-live="polite"></span>
+
+        <!-- ═══════════════════════════════════════════════════════════════
+             CAD-to-Parametric Converter Wizard Panel
+             Hidden by default; activated by feature flag + user action.
+             ═══════════════════════════════════════════════════════════════ -->
+        <div
+          class="cad-converter-panel hidden"
+          id="cadConverterPanel"
+          role="region"
+          aria-label="CAD-to-Parametric Converter"
+        >
+          <!-- Wizard header -->
+          <div class="cad-converter-header">
+            <div class="cad-converter-header-title">
+              <h2 class="cad-converter-title">Convert CAD to Parametric</h2>
+              <!-- Step breadcrumbs -->
+              <nav
+                class="cad-wizard-steps"
+                aria-label="Converter steps"
+              >
+                <ol class="cad-step-list">
+                  <li class="cad-step active" data-step="upload" aria-current="step">
+                    <span class="cad-step-num" aria-hidden="true">1</span>
+                    <span class="cad-step-label">Upload</span>
+                  </li>
+                  <li class="cad-step" data-step="analyzing">
+                    <span class="cad-step-num" aria-hidden="true">2</span>
+                    <span class="cad-step-label">Analyze</span>
+                  </li>
+                  <li class="cad-step" data-step="components">
+                    <span class="cad-step-num" aria-hidden="true">3</span>
+                    <span class="cad-step-label">Components</span>
+                  </li>
+                  <li class="cad-step" data-step="features">
+                    <span class="cad-step-num" aria-hidden="true">4</span>
+                    <span class="cad-step-label">Features</span>
+                  </li>
+                  <li class="cad-step" data-step="generate">
+                    <span class="cad-step-num" aria-hidden="true">5</span>
+                    <span class="cad-step-label">Generate</span>
+                  </li>
+                </ol>
+              </nav>
+            </div>
+            <button
+              type="button"
+              class="btn btn-sm btn-secondary cad-converter-back-btn"
+              id="cadConverterBackBtn"
+              aria-label="Exit converter and return to welcome screen"
+            >
+              ← Back
+            </button>
+          </div>
+
+          <!-- Live status for screen readers -->
+          <div
+            id="cadConverterStatus"
+            class="sr-only"
+            aria-live="polite"
+            aria-atomic="true"
+          ></div>
+
+          <!-- ── Step 1: Upload ─────────────────────────────────────────── -->
+          <div class="cad-wizard-step-panel" id="cadStep-upload">
+            <div class="cad-step-content">
+              <h3 class="cad-step-heading">Upload CAD Files</h3>
+              <p class="cad-step-description">
+                Select the STL, OBJ, or DXF files to convert. You can upload
+                multiple files for multi-component models.
+              </p>
+              <label
+                class="upload-zone upload-zone--cad upload-zone--wizard"
+                id="cadWizardUploadZone"
+                for="cadWizardFileInput"
+                tabindex="0"
+              >
+                <svg
+                  class="upload-icon"
+                  width="48"
+                  height="48"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  aria-hidden="true"
+                >
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="17 8 12 3 7 8"></polyline>
+                  <line x1="12" y1="3" x2="12" y2="15"></line>
+                </svg>
+                <span class="upload-text">Drop STL / OBJ / DXF here or click to browse</span>
+                <input
+                  type="file"
+                  id="cadWizardFileInput"
+                  accept=".stl,.obj,.dxf"
+                  multiple
+                  class="file-input"
+                />
+              </label>
+              <!-- File list (populated by JS) -->
+              <ul
+                class="cad-file-list hidden"
+                id="cadFileList"
+                aria-label="Selected CAD files"
+              ></ul>
+              <!-- Project name -->
+              <div class="cad-field-group" id="cadProjectNameGroup" hidden>
+                <label class="cad-field-label" for="cadProjectName">
+                  Project name
+                </label>
+                <input
+                  type="text"
+                  id="cadProjectName"
+                  class="cad-text-input"
+                  placeholder="my-part"
+                  maxlength="80"
+                />
+              </div>
+              <div class="cad-step-actions">
+                <button
+                  type="button"
+                  class="btn btn-primary"
+                  id="cadAnalyzeBtn"
+                  disabled
+                >
+                  Analyze Files
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── Step 2: Analyzing (progress) ──────────────────────────── -->
+          <div class="cad-wizard-step-panel hidden" id="cadStep-analyzing">
+            <div class="cad-step-content">
+              <h3 class="cad-step-heading">Analyzing…</h3>
+              <p class="cad-step-description" id="cadAnalyzingDesc">
+                Setting up the Python environment. This may take up to 30 seconds on
+                the first run while Pyodide is downloaded and cached.
+              </p>
+              <!-- Stage progress list -->
+              <ol class="cad-progress-list" aria-label="Analysis stages" id="cadProgressList">
+                <li class="cad-progress-item" data-stage="init">
+                  <span class="cad-progress-icon" aria-hidden="true"></span>
+                  <span class="cad-progress-label">Load Pyodide &amp; install packages</span>
+                </li>
+                <li class="cad-progress-item" data-stage="stage0">
+                  <span class="cad-progress-icon" aria-hidden="true"></span>
+                  <span class="cad-progress-label">Stage 0 — File loading</span>
+                </li>
+                <li class="cad-progress-item" data-stage="stage1">
+                  <span class="cad-progress-icon" aria-hidden="true"></span>
+                  <span class="cad-progress-label">Stage 1 — Z-profile extraction</span>
+                </li>
+                <li class="cad-progress-item" data-stage="stage2">
+                  <span class="cad-progress-icon" aria-hidden="true"></span>
+                  <span class="cad-progress-label">Stage 2 — Variant differencing</span>
+                </li>
+                <li class="cad-progress-item" data-stage="stage3">
+                  <span class="cad-progress-icon" aria-hidden="true"></span>
+                  <span class="cad-progress-label">Stage 3 — Topology classification</span>
+                </li>
+                <li class="cad-progress-item" data-stage="stage4">
+                  <span class="cad-progress-icon" aria-hidden="true"></span>
+                  <span class="cad-progress-label">Stage 4 — Feature detection</span>
+                </li>
+                <li class="cad-progress-item" data-stage="stage6">
+                  <span class="cad-progress-icon" aria-hidden="true"></span>
+                  <span class="cad-progress-label">Stage 6 — Boundary detection</span>
+                </li>
+              </ol>
+              <div
+                class="cad-progress-error hidden"
+                id="cadProgressError"
+                role="alert"
+              >
+                <strong>Error:</strong>
+                <span id="cadProgressErrorText"></span>
+                <button
+                  type="button"
+                  class="btn btn-sm btn-secondary"
+                  id="cadProgressRetryBtn"
+                >
+                  Try Again
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── Step 3: Review Components ──────────────────────────────── -->
+          <div class="cad-wizard-step-panel hidden" id="cadStep-components">
+            <div class="cad-step-content">
+              <h3 class="cad-step-heading">Review Components</h3>
+              <p class="cad-step-description">
+                The analyzer detected the following components. Review the role
+                assigned to each and correct any mistakes before generating code.
+              </p>
+              <!-- Analysis summary -->
+              <dl class="cad-summary" id="cadComponentsSummary"></dl>
+              <!-- Component cards (populated by JS) -->
+              <div class="cad-card-list" id="cadComponentCards" aria-label="Detected components"></div>
+              <div class="cad-step-actions">
+                <button type="button" class="btn btn-secondary" id="cadComponentsBackBtn">
+                  ← Back
+                </button>
+                <button type="button" class="btn btn-primary" id="cadComponentsNextBtn">
+                  Next: Review Features →
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── Step 4: Review Features ────────────────────────────────── -->
+          <div class="cad-wizard-step-panel hidden" id="cadStep-features">
+            <div class="cad-step-content">
+              <h3 class="cad-step-heading">Review Features</h3>
+              <p class="cad-step-description">
+                The analyzer detected the following geometric features. Enable the
+                ones you want parametrically controlled in the generated code.
+              </p>
+              <div
+                class="cad-no-features-msg hidden"
+                id="cadNoFeaturesMsg"
+                role="status"
+              >
+                No geometric features were detected in this model. Click Generate to
+                proceed with component-only output.
+              </div>
+              <!-- Feature cards (populated by JS) -->
+              <div class="cad-card-list" id="cadFeatureCards" aria-label="Detected features"></div>
+              <div class="cad-step-actions">
+                <button type="button" class="btn btn-secondary" id="cadFeaturesBackBtn">
+                  ← Back
+                </button>
+                <button type="button" class="btn btn-primary" id="cadFeaturesNextBtn">
+                  Next: Generate →
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── Step 5: Generate ───────────────────────────────────────── -->
+          <div class="cad-wizard-step-panel hidden" id="cadStep-generate">
+            <div class="cad-step-content">
+              <h3 class="cad-step-heading">Generate Parametric Code</h3>
+              <p class="cad-step-description">
+                Ready to generate the parametric OpenSCAD file. The generated code
+                will be loaded into the editor and rendered automatically.
+              </p>
+              <div class="cad-generate-options">
+                <div class="cad-field-group">
+                  <label class="cad-field-label" for="cadOutputFilename">
+                    Output filename
+                  </label>
+                  <div class="cad-filename-input-row">
+                    <input
+                      type="text"
+                      id="cadOutputFilename"
+                      class="cad-text-input"
+                      placeholder="output.scad"
+                    />
+                    <span class="cad-filename-ext">.scad</span>
+                  </div>
+                </div>
+              </div>
+              <!-- Generate progress/result -->
+              <div
+                class="cad-generate-progress hidden"
+                id="cadGenerateProgress"
+                role="status"
+                aria-live="polite"
+              >
+                <span class="cad-spinner" aria-hidden="true"></span>
+                Generating…
+              </div>
+              <div
+                class="cad-generate-error hidden"
+                id="cadGenerateError"
+                role="alert"
+              >
+                <strong>Error:</strong>
+                <span id="cadGenerateErrorText"></span>
+              </div>
+              <div class="cad-step-actions">
+                <button type="button" class="btn btn-secondary" id="cadGenerateBackBtn">
+                  ← Back
+                </button>
+                <button type="button" class="btn btn-primary" id="cadGenerateBtn">
+                  Generate &amp; Load into Editor
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-outline hidden"
+                  id="cadDownloadYamlBtn"
+                  aria-label="Download project.yaml"
+                >
+                  Download project.yaml
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-outline hidden"
+                  id="cadDownloadScadBtn"
+                  aria-label="Download generated .scad file"
+                >
+                  Download .scad
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- end #cadConverterPanel -->
+
         <div class="main-interface hidden" id="mainInterface">
           <div
             class="param-panel"

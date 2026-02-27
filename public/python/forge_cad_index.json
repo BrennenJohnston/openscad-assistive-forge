@@ -1,0 +1,28 @@
+{
+  "files": [
+    "forge_cad/analyzer/boundary_detect.py",
+    "forge_cad/analyzer/feature_detect.py",
+    "forge_cad/analyzer/loader.py",
+    "forge_cad/analyzer/topology.py",
+    "forge_cad/analyzer/variant_diff.py",
+    "forge_cad/analyzer/z_profile.py",
+    "forge_cad/analyzer/__init__.py",
+    "forge_cad/forms/project_form.py",
+    "forge_cad/forms/templates/__init__.py",
+    "forge_cad/forms/__init__.py",
+    "forge_cad/generator/customizer.py",
+    "forge_cad/generator/module_builder.py",
+    "forge_cad/generator/scad_emitter.py",
+    "forge_cad/generator/templates/scad_header.py",
+    "forge_cad/generator/templates/__init__.py",
+    "forge_cad/generator/__init__.py",
+    "forge_cad/pipeline.py",
+    "forge_cad/utils/coord_systems.py",
+    "forge_cad/utils/eps_helper.py",
+    "forge_cad/utils/__init__.py",
+    "forge_cad/validator/manifold_check.py",
+    "forge_cad/validator/mesh_compare.py",
+    "forge_cad/validator/__init__.py",
+    "forge_cad/__init__.py"
+  ]
+}
