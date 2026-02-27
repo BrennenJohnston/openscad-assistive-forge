@@ -18,7 +18,6 @@ Generates parametric .scad files from a confirmed ProjectForm following the
 
 from __future__ import annotations
 
-import textwrap
 from pathlib import Path
 from typing import Optional
 
@@ -33,7 +32,6 @@ from forge_cad.forms.project_form import (
 from forge_cad.generator.customizer import CustomizerAnnotator
 from forge_cad.generator.module_builder import ModuleBuilder
 from forge_cad.generator.templates.scad_header import render_header
-from forge_cad.utils.eps_helper import eps_expand_polygon
 
 
 class ScadEmitter:
@@ -90,7 +88,7 @@ class ScadEmitter:
             thickness = round(body.z_max - body.z_min, 3)
             lines.append(
                 f"\nbody_thickness = {thickness}; "
-                f"// [1:30:0.5] Total body thickness (Z height mm)"
+                f"// [1:0.5:30] Total body thickness (Z height mm)"
             )
 
         return "\n".join(lines)
@@ -107,7 +105,7 @@ class ScadEmitter:
             param_name = f"{_safe_name(comp.name)}_thickness"
             line = (
                 f"{param_name} = {thickness}; "
-                f"// [0.5:{round(comp.z_max + 5, 1)}:0.5] "
+                f"// [0.5:0.5:{round(comp.z_max + 5, 1)}] "
                 f"Thickness of {comp.human_name or comp.name} (mm)"
             )
             parts.append(section + line)
@@ -154,9 +152,9 @@ class ScadEmitter:
         body = self._get_body_component()
         if body:
             lines.append(
-                f"// body_z_min and body_z_max are computed from body_thickness:\n"
-                f"body_z_min = 0;\n"
-                f"body_z_max = body_thickness;\n"
+                "// body_z_min and body_z_max are computed from body_thickness:\n"
+                "body_z_min = 0;\n"
+                "body_z_max = body_thickness;\n"
             )
 
         for comp in self.form.components:
@@ -194,17 +192,11 @@ class ScadEmitter:
                  "// 3D EXTRUSION MODULES\n"
                  "// ════════════════════════════════════════════════════\n"]
 
-        body = self._get_body_component()
-        body_z_min = body.z_min if body else 0.0
-        body_z_max = body.z_max if body else 8.0
-
         for comp in self.form.components:
             if comp.role in {"variant"} or comp.name.startswith("_deleted_"):
                 continue
 
             safe = _safe_name(comp.name)
-            # Use parametric variable names instead of literal values
-            z_min_expr = "0"
             z_max_expr = f"{safe}_thickness" if comp.role == "pocket_fill" else "body_thickness"
 
             vertices = self._get_component_vertices(comp)
@@ -261,7 +253,6 @@ class ScadEmitter:
         if ftype == "circular_hole":
             cx = p.get("center_x", 0.0)
             cy = p.get("center_y", 0.0)
-            diameter = p.get("diameter", 10.0)
             r_param = f"{safe_name}_diameter / 2"
             return (
                 f"module {safe_name}_3d() {{\n"
@@ -275,8 +266,6 @@ class ScadEmitter:
             x_max = p.get("x_max", 5.0)
             y_min = p.get("y_min", -5.0)
             y_max = p.get("y_max", 5.0)
-            w = x_max - x_min
-            h = y_max - y_min
             cx = (x_min + x_max) / 2
             cy = (y_min + y_max) / 2
             return (
@@ -293,6 +282,36 @@ class ScadEmitter:
                 return self.builder.polygon_feature_module(
                     safe_name, vertices, body_z_min, body_z_max
                 )
+
+        if ftype == "notch":
+            x_min = p.get("x_min", -5.0)
+            y_min = p.get("y_min", -5.0)
+            return (
+                f"module {safe_name}_3d() {{\n"
+                f"    // Notch: open-ended rectangular cutout along one edge\n"
+                f"    translate([{x_min}, {y_min}, -eps])\n"
+                f"    cube([{safe_name}_width + 2*eps, {safe_name}_depth + 2*eps, "
+                f"body_thickness + 2*eps]);\n"
+                f"}}\n"
+            )
+
+        if ftype == "t_slot":
+            cx = p.get("center_x", 0.0)
+            cy = p.get("center_y", 0.0)
+            return (
+                f"module {safe_name}_3d() {{\n"
+                f"    // T-slot: narrow slot + wider head cavity\n"
+                f"    translate([{cx}, {cy}, -eps]) {{\n"
+                f"        // Narrow slot\n"
+                f"        cube([{safe_name}_slot_width, {safe_name}_slot_depth, "
+                f"body_thickness + 2*eps], center=true);\n"
+                f"        // Head cavity\n"
+                f"        translate([0, 0, body_thickness/2])\n"
+                f"        cube([{safe_name}_head_width, {safe_name}_head_depth, "
+                f"body_thickness/2 + eps], center=true);\n"
+                f"    }}\n"
+                f"}}\n"
+            )
 
         return f"// TODO: implement {safe_name}_3d() for feature type '{ftype}'\n"
 
@@ -407,7 +426,7 @@ class ScadEmitter:
         """Extract 2D vertices for a component from its source mesh."""
         try:
             import trimesh
-            from forge_cad.analyzer.loader import FileLoader
+
 
             source_path = Path(comp.source_file)
             if not source_path.exists():

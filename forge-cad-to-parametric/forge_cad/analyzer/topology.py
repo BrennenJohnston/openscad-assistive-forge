@@ -87,8 +87,8 @@ class TopologyClassifier:
 
         return components
 
-    @staticmethod
     def _classify_role(
+        self,
         name: str,
         z_min: float,
         z_max: float,
@@ -105,6 +105,13 @@ class TopologyClassifier:
         if auto_role == "variant_removed":
             notes.append("filename suggests removed/variant → skipping as variant")
             return "variant", notes
+
+        # Consult variant_diffs: if this component appears as a subtracted
+        # variant, classify it as subtractive.
+        variant_role = self._role_from_variant_diffs(name)
+        if variant_role == "subtracted":
+            notes.append("variant differencing indicates material was subtracted → subtractive")
+            return "subtractive", notes
 
         # Z-range subset rule: if this component is entirely within the body Z-range
         # AND it is shorter than the body, it is recessed (pocket_fill), not additive.
@@ -130,7 +137,20 @@ class TopologyClassifier:
         notes.append("could not auto-classify; needs manual review")
         return "unknown", notes
 
+    def _role_from_variant_diffs(self, name: str) -> str | None:
+        """Check if variant_diffs indicate a boolean role for this component."""
+        pairs = self.variant_diffs.get("pairs", [])
+        for pair in pairs:
+            if pair.get("variant") == name or pair.get("base") == name:
+                rel = pair.get("relationship", "")
+                if rel in {"subtracted", "holes_removed"}:
+                    return "subtracted"
+        return None
+
     @staticmethod
     def _sort_key(c: ClassifiedComponent) -> tuple:
-        order = {"base_solid": 0, "pocket_fill": 1, "additive": 2, "subtractive": 3, "variant": 4, "unknown": 5}
+        order = {
+            "base_solid": 0, "pocket_fill": 1, "additive": 2,
+            "subtractive": 3, "variant": 4, "unknown": 5,
+        }
         return (order.get(c.role, 99), c.z_max)

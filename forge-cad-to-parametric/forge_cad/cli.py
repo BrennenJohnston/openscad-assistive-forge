@@ -142,8 +142,8 @@ def generate(project_dir: str, output: str | None) -> None:
 
     PROJECT_DIR must contain a project.yaml that has been reviewed.
     """
-    from forge_cad.generator.scad_emitter import ScadEmitter
     from forge_cad.forms.project_form import ProjectForm
+    from forge_cad.generator.scad_emitter import ScadEmitter
 
     project_path = Path(project_dir)
     _require_yaml(project_path)
@@ -185,8 +185,8 @@ def validate(project_dir: str, openscad: str, tolerance: float) -> None:
     PROJECT_DIR must contain a project.yaml and a generated .scad file.
     Requires OpenSCAD to be installed and accessible.
     """
-    from forge_cad.validator.mesh_compare import MeshComparator
     from forge_cad.forms.project_form import ProjectForm
+    from forge_cad.validator.mesh_compare import MeshComparator
 
     project_path = Path(project_dir)
     _require_yaml(project_path)
@@ -206,6 +206,21 @@ def validate(project_dir: str, openscad: str, tolerance: float) -> None:
     report = comparator.compare()
 
     _print_validation_report(report, tolerance)
+
+    # Manifold check on the generated STL
+    if report.generated_stl and report.generated_stl.exists():
+        from forge_cad.validator.manifold_check import check_manifold
+
+        manifold = check_manifold(report.generated_stl)
+        if manifold.is_valid:
+            console.print("[green]✓[/green] Manifold check passed (watertight, consistent winding)")
+        else:
+            notes = "; ".join(manifold.notes) if manifold.notes else "see details above"
+            console.print(f"[yellow]⚠[/yellow] Manifold issues: {notes}")
+            if manifold.open_edges > 0:
+                console.print(f"  Open edges: {manifold.open_edges}")
+            if manifold.degenerate_faces > 0:
+                console.print(f"  Degenerate faces: {manifold.degenerate_faces}")
 
     if report.max_deviation > tolerance:
         console.print(
@@ -227,8 +242,9 @@ def status(project_dir: str) -> None:
 
     PROJECT_DIR must contain a project.yaml.
     """
-    from forge_cad.forms.project_form import ProjectForm
     from rich.table import Table
+
+    from forge_cad.forms.project_form import ProjectForm
 
     project_path = Path(project_dir)
     _require_yaml(project_path)

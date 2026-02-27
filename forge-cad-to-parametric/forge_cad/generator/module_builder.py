@@ -9,10 +9,7 @@ following the 2D-first architecture from the Plug Puller v4 reference:
 
 from __future__ import annotations
 
-import textwrap
-from typing import Optional
-
-import numpy as np
+import re
 
 from forge_cad.forms.project_form import ComponentEntry, FeatureEntry
 
@@ -59,7 +56,10 @@ class ModuleBuilder:
         """Emit a full-body-height pocket cutter 3D module."""
         thickness = body_z_max - body_z_min
         eps = self.eps
-        translate = f"translate([0, 0, {body_z_min - eps}])" if body_z_min != 0.0 else f"translate([0, 0, {-eps}])"
+        if body_z_min != 0.0:
+            translate = f"translate([0, 0, {body_z_min - eps}])"
+        else:
+            translate = f"translate([0, 0, {-eps}])"
         return (
             f"module {name}_pocket_3d() {{\n"
             f"    {translate}\n"
@@ -118,7 +118,8 @@ class ModuleBuilder:
         return (
             f"module {name}_3d() {{\n"
             f"    translate([0, 0, {translate_z}])\n"
-            f"    cube([{width + 2 * eps}, {height + 2 * eps}, {thickness}], center={center_str});\n"
+            f"    cube([{width + 2 * eps}, {height + 2 * eps}, "
+            f"{thickness}], center={center_str});\n"
             f"}}\n"
         )
 
@@ -153,17 +154,13 @@ class ModuleBuilder:
         """Emit the final assembly module combining all components with boolean ops."""
         lines = [f"module {name}() {{"]
 
-        # Build pocket-and-fill CSG:
-        # 1. Start with base solid
-        # 2. Subtract pocket cutters
-        # 3. Union with pocket fills
-        # 4. Subtract all feature holes
-
         base_solids = [c for c in components if c.role == "base_solid"]
         pocket_fills = [c for c in components if c.role == "pocket_fill"]
         additive = [c for c in components if c.role == "additive"]
         subtractives = [c for c in components if c.role == "subtractive"]
-        confirmed_features = [f for f in features if f.confirmed and not f.name.startswith("_deleted_")]
+        confirmed_features = [
+            f for f in features if f.confirmed and not f.name.startswith("_deleted_")
+        ]
 
         if not base_solids:
             lines.append("    // No base solid found; assembly is empty")
@@ -172,54 +169,48 @@ class ModuleBuilder:
 
         indent = "    "
 
-        # Subtraction of feature holes from (base + fills)
         if confirmed_features or subtractives or pocket_fills:
             lines.append(f"{indent}difference() {{")
             inner_indent = indent * 2
 
-            # Union of base + pocket fills
             if pocket_fills or additive:
                 lines.append(f"{inner_indent}union() {{")
                 deep_indent = indent * 3
 
-                # Base with pocket cutouts
                 if pocket_fills:
                     lines.append(f"{deep_indent}difference() {{")
                     for bs in base_solids:
-                        lines.append(f"{deep_indent}    {bs.name}_3d();")
+                        lines.append(f"{deep_indent}    {_safe_name(bs.name)}_3d();")
                     for pf in pocket_fills:
-                        lines.append(f"{deep_indent}    {pf.name}_pocket_3d();")
+                        lines.append(f"{deep_indent}    {_safe_name(pf.name)}_pocket_3d();")
                     lines.append(f"{deep_indent}}}")
                 else:
                     for bs in base_solids:
-                        lines.append(f"{deep_indent}{bs.name}_3d();")
+                        lines.append(f"{deep_indent}{_safe_name(bs.name)}_3d();")
 
-                # Add pocket fills
                 for pf in pocket_fills:
-                    lines.append(f"{deep_indent}{pf.name}_3d();")
+                    lines.append(f"{deep_indent}{_safe_name(pf.name)}_3d();")
 
-                # Add additive components
                 for ad in additive:
-                    lines.append(f"{deep_indent}{ad.name}_3d();")
+                    lines.append(f"{deep_indent}{_safe_name(ad.name)}_3d();")
 
                 lines.append(f"{inner_indent}}}")
             else:
                 for bs in base_solids:
-                    lines.append(f"{inner_indent}{bs.name}_3d();")
+                    lines.append(f"{inner_indent}{_safe_name(bs.name)}_3d();")
 
-            # Subtract features
             for feat in confirmed_features:
-                toggle = feat.toggle_name or f"enable_{feat.name}"
+                toggle = feat.toggle_name or f"enable_{_safe_name(feat.name)}"
                 lines.append(f"{inner_indent}if ({toggle})")
-                lines.append(f"{inner_indent}    {feat.name}_3d();")
+                lines.append(f"{inner_indent}    {_safe_name(feat.name)}_3d();")
 
             for sub in subtractives:
-                lines.append(f"{inner_indent}{sub.name}_3d();")
+                lines.append(f"{inner_indent}{_safe_name(sub.name)}_3d();")
 
             lines.append(f"{indent}}}")
         else:
             for bs in base_solids:
-                lines.append(f"{indent}{bs.name}_3d();")
+                lines.append(f"{indent}{_safe_name(bs.name)}_3d();")
 
         lines.append("}\n")
         return "\n".join(lines)
@@ -228,3 +219,14 @@ class ModuleBuilder:
     def _format_points(vertices: list[list[float]]) -> str:
         pts = ", ".join(f"[{v[0]}, {v[1]}]" for v in vertices)
         return f"[{pts}]"
+
+
+def _safe_name(name: str) -> str:
+    """Convert a display name to a valid OpenSCAD identifier."""
+    safe = re.sub(r"[^a-zA-Z0-9_]", "_", name.strip())
+    safe = re.sub(r"_+", "_", safe).strip("_").lower()
+    if not safe:
+        return "component"
+    if safe[0].isdigit():
+        safe = "c_" + safe
+    return safe

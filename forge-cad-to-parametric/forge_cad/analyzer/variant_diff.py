@@ -61,6 +61,7 @@ class VariantDiffer:
                     "relationship": p.relationship,
                     "volume_diff": round(p.volume_diff, 4),
                     "volume_diff_pct": round(p.volume_diff_pct, 2),
+                    "bbox_diff": p.bbox_diff.tolist() if p.bbox_diff is not None else None,
                 }
                 for p in result.pairs
             ],
@@ -132,7 +133,7 @@ class VariantDiffer:
     def _compute_volume_diffs(
         self, pairs: list[VariantPair]
     ) -> dict[str, float]:
-        """Compute volume differences for each pair."""
+        """Compute volume and bounding box differences for each pair."""
         feature_volumes: dict[str, float] = {}
 
         for pair in pairs:
@@ -149,6 +150,12 @@ class VariantDiffer:
                 pair.volume_diff = base_vol - variant_vol
                 if base_vol > 0:
                     pair.volume_diff_pct = 100.0 * abs(pair.volume_diff) / base_vol
+
+                # Bounding box differencing (per-axis extent differences)
+                if base_mesh.bounding_box is not None and variant_mesh.bounding_box is not None:
+                    base_extents = base_mesh.bounding_box[1] - base_mesh.bounding_box[0]
+                    var_extents = variant_mesh.bounding_box[1] - variant_mesh.bounding_box[0]
+                    pair.bbox_diff = base_extents - var_extents
 
                 if pair.relationship in {"subtracted", "holes_removed"}:
                     key = f"{pair.base_name}_vs_{pair.variant_name}"

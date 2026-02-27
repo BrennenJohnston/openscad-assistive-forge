@@ -87,7 +87,6 @@ class ZProfileExtractor:
     def _profile_one(self, mesh: LoadedMesh) -> ZProfile:
         """Extract the Z-profile of a single mesh."""
         try:
-            import trimesh
 
             tm = mesh.mesh
             if not hasattr(tm, "vertices"):
@@ -152,8 +151,12 @@ class ZProfileExtractor:
             if not clustered or abs(level - clustered[-1]) > Z_CLUSTER_TOLERANCE:
                 clustered.append(round(level, 3))
 
-        # Always include z_min and z_max
-        result = sorted({round(z_min, 3), round(z_max, 3)} | set(clustered))
+        # Ensure z_min and z_max are represented, then re-cluster the merged set
+        raw = sorted({round(z_min, 3), round(z_max, 3)} | set(clustered))
+        result: list[float] = []
+        for level in raw:
+            if not result or abs(level - result[-1]) > Z_CLUSTER_TOLERANCE:
+                result.append(level)
         return result
 
     def _cluster_levels(self, profiles: dict[str, ZProfile]) -> list[float]:

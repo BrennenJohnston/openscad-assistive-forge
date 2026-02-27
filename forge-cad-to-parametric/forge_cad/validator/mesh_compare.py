@@ -6,13 +6,12 @@ volume, surface area, and bounding box against source meshes.
 
 from __future__ import annotations
 
+import os
 import subprocess
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
-
-import numpy as np
 
 from forge_cad.forms.project_form import ProjectForm
 
@@ -88,7 +87,9 @@ class MeshComparator:
 
     def _render_to_stl(self, report: ValidationReport) -> Optional[Path]:
         """Call OpenSCAD CLI to render the .scad to a temporary STL."""
-        tmp_stl = Path(tempfile.mktemp(suffix=".stl"))
+        fd, tmp_name = tempfile.mkstemp(suffix=".stl")
+        os.close(fd)
+        tmp_stl = Path(tmp_name)
         cmd = [
             self.openscad_exe,
             "-o", str(tmp_stl),
@@ -123,7 +124,7 @@ class MeshComparator:
         """Load the full-assembly source mesh for comparison."""
         try:
             import trimesh
-            from forge_cad.analyzer.loader import LoadedMesh
+
 
             source_dir = Path(self.form.source_dir)
             for file_entry in self.form.files:

@@ -7,17 +7,17 @@ from pathlib import Path
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
-from forge_cad.analyzer.loader import FileLoader, LoadedMesh
-from forge_cad.analyzer.z_profile import ZProfileExtractor
-from forge_cad.analyzer.variant_diff import VariantDiffer
-from forge_cad.analyzer.topology import TopologyClassifier
-from forge_cad.analyzer.feature_detect import FeatureDetector
 from forge_cad.analyzer.boundary_detect import BoundaryDetector
+from forge_cad.analyzer.feature_detect import FeatureDetector
+from forge_cad.analyzer.loader import FileLoader, LoadedMesh
+from forge_cad.analyzer.topology import TopologyClassifier
+from forge_cad.analyzer.variant_diff import VariantDiffer
+from forge_cad.analyzer.z_profile import ZProfileExtractor
 from forge_cad.forms.project_form import (
-    ProjectForm,
-    FileEntry,
     ComponentEntry,
     FeatureEntry,
+    FileEntry,
+    ProjectForm,
 )
 
 console = Console()

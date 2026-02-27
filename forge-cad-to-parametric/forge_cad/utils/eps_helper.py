@@ -9,8 +9,6 @@ Reference: Plug Puller v4 reference, Section 4.4 - Pocket Expansion.
 
 from __future__ import annotations
 
-from typing import Optional
-
 import numpy as np
 
 DEFAULT_EPS = 0.01  # mm
@@ -87,8 +85,11 @@ def eps_shrink_polygon(
 
 
 def _outward_normal_2d(edge: np.ndarray) -> np.ndarray:
-    """Return the unit outward normal of a 2D edge vector (rotated 90° CCW)."""
-    normal = np.array([-edge[1], edge[0]], dtype=float)
+    """Return the unit outward normal of a 2D edge vector.
+
+    Uses 90° CW rotation, which gives the outward normal for a CCW polygon.
+    """
+    normal = np.array([edge[1], -edge[0]], dtype=float)
     length = np.linalg.norm(normal)
     if length < 1e-10:
         return np.array([0.0, 1.0])

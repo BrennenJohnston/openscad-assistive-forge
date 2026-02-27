@@ -19,7 +19,10 @@ _ROLE_PATTERNS: list[tuple[re.Pattern, str]] = [
     (re.compile(r"no.holes", re.IGNORECASE), "variant_no_holes"),
     (re.compile(r"layer\s*1|plate.*1|layer1", re.IGNORECASE), "isolated_component"),
     (re.compile(r"layer\s*2|plate.*2|layer2", re.IGNORECASE), "isolated_component"),
-    (re.compile(r"clean.overview|full.general|full.assembly|complete", re.IGNORECASE), "full_assembly"),
+    (
+        re.compile(r"clean.overview|full.general|full.assembly|complete", re.IGNORECASE),
+        "full_assembly",
+    ),
     (re.compile(r"except|only", re.IGNORECASE), "variant_feature"),
 ]
 
@@ -101,8 +104,7 @@ class FileLoader:
 
         # Normalise scene to single mesh
         if hasattr(mesh, "dump"):
-            meshes = mesh.dump(concatenate=True)
-            mesh = meshes if not hasattr(meshes, "vertices") else meshes
+            mesh = mesh.dump(concatenate=True)
 
         auto_role = self._detect_role(path)
 
@@ -172,7 +174,6 @@ class FileLoader:
         )
 
     def _entity_to_profile(self, entity: object, source_path: Path) -> Optional[DxfProfile]:
-        import ezdxf
 
         layer = getattr(entity, "dxf", None)
         layer_name = layer.layer if layer else "0"

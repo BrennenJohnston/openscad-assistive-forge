@@ -30,7 +30,10 @@ class CustomizerAnnotator:
         annotation = self._format_annotation(spec)
         line = f"{spec.name} = {value_str};"
         if annotation or spec.description:
-            comment = f" // {annotation}{spec.description}" if annotation else f" // {spec.description}"
+            if annotation:
+                comment = f" // {annotation}{spec.description}"
+            else:
+                comment = f" // {spec.description}"
             line += comment
         return line
 
@@ -60,7 +63,7 @@ class CustomizerAnnotator:
     def _format_annotation(spec: ParameterSpec) -> str:
         if spec.param_type == "number" and spec.min_val is not None and spec.max_val is not None:
             if spec.step is not None:
-                return f"[{spec.min_val}:{spec.max_val}:{spec.step}] "
+                return f"[{spec.min_val}:{spec.step}:{spec.max_val}] "
             return f"[{spec.min_val}:{spec.max_val}] "
         if spec.param_type == "dropdown" and spec.options:
             opts = ", ".join(f'"{o}"' for o in spec.options)

@@ -2,20 +2,15 @@
 
 from __future__ import annotations
 
-import re
-
-import pytest
-
 from forge_cad.forms.project_form import (
     ComponentEntry,
     FeatureEntry,
     ParameterSpec,
     ProjectForm,
 )
-from forge_cad.generator.scad_emitter import ScadEmitter, _safe_name
 from forge_cad.generator.customizer import CustomizerAnnotator
+from forge_cad.generator.scad_emitter import ScadEmitter, _safe_name
 from forge_cad.utils.eps_helper import eps_expand_polygon, pocket_cutter_vertices
-
 
 # ── _safe_name ────────────────────────────────────────────────────────────────
 
@@ -51,7 +46,7 @@ def test_parameter_line_number():
     )
     line = annotator.parameter_line(spec)
     assert "body_thickness = 8;" in line
-    assert "[2.0:20.0:0.5]" in line
+    assert "[2.0:0.5:20.0]" in line
     assert "Body thickness" in line
 
 

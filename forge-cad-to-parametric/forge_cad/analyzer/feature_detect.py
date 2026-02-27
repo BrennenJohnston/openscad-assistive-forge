@@ -58,7 +58,6 @@ class FeatureDetector:
         body_mesh = self.meshes.get(body_candidate) if body_candidate else None
 
         if body_mesh is None and self.meshes:
-            # Use the mesh with the largest volume as the body
             body_mesh = max(self.meshes.values(), key=lambda m: m.volume)
 
         if body_mesh is None:
@@ -68,6 +67,9 @@ class FeatureDetector:
         for z in all_z_levels:
             new_features = self._analyse_cross_section(body_mesh, z)
             features.extend(new_features)
+
+        # Enrich with variant diff data (volume-derived features)
+        features.extend(self._features_from_variant_diffs())
 
         # Deduplicate similar features
         features = self._deduplicate(features)
@@ -79,13 +81,41 @@ class FeatureDetector:
 
         return features
 
+    def _features_from_variant_diffs(self) -> list[DetectedFeature]:
+        """Derive feature hints from variant differencing results."""
+        features: list[DetectedFeature] = []
+        pairs = self.variant_diffs.get("pairs", [])
+
+        for pair in pairs:
+            relationship = pair.get("relationship", "")
+            vol_diff = pair.get("volume_diff", 0.0)
+            if relationship in {"subtracted", "holes_removed"} and abs(vol_diff) > 0:
+                features.append(
+                    DetectedFeature(
+                        name="",
+                        feature_type=(
+                            "circular_hole"
+                            if relationship == "holes_removed"
+                            else "polygon"
+                        ),
+                        detected_from=(
+                            f"variant_diff:"
+                            f"{pair.get('base', '')}→{pair.get('variant', '')}"
+                        ),
+                        params={
+                            "volume_diff": round(abs(vol_diff), 3),
+                            "relationship": relationship,
+                        },
+                    )
+                )
+        return features
+
     def _analyse_cross_section(
         self, mesh: LoadedMesh, z: float
     ) -> list[DetectedFeature]:
         """Take a cross-section at Z and detect features in the diff cross-section."""
         features: list[DetectedFeature] = []
         try:
-            import trimesh
 
             tm = mesh.mesh
             if not hasattr(tm, "section"):

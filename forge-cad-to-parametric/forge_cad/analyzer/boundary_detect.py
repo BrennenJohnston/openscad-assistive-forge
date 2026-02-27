@@ -6,9 +6,7 @@ that need eps expansion to prevent CGAL manifold artifacts.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-
-import numpy as np
+from dataclasses import dataclass
 
 from forge_cad.analyzer.loader import LoadedMesh
 from forge_cad.analyzer.topology import ClassifiedComponent
@@ -80,12 +78,16 @@ class BoundaryDetector:
         b_bounds = mesh_b.bounding_box
 
         if a_bounds is None or b_bounds is None:
-            # Fall back to Z-range comparison
             return self._compare_z_ranges(ca, cb)
+
+        # eps is needed when coincident faces are involved in boolean operations
+        # (pocket_fill/subtractive paired with base_solid)
+        eps_roles = {"pocket_fill", "subtractive", "base_solid"}
+        roles = {ca.role, cb.role}
+        needs_eps = bool(roles & eps_roles)
 
         axis_labels = ["X", "Y", "Z"]
         for axis_idx, axis_label in enumerate(axis_labels):
-            # Check if max of A coincides with min of B
             if abs(a_bounds[1][axis_idx] - b_bounds[0][axis_idx]) < COINCIDENCE_TOLERANCE:
                 results.append(
                     CoincidentBoundary(
@@ -93,7 +95,7 @@ class BoundaryDetector:
                         component_b=cb.name,
                         axis=axis_label,
                         value=a_bounds[1][axis_idx],
-                        needs_eps=True,
+                        needs_eps=needs_eps,
                         description=(
                             f"{ca.name} {axis_label}-max ({a_bounds[1][axis_idx]:.3f}) "
                             f"coincides with {cb.name} {axis_label}-min"
@@ -101,7 +103,6 @@ class BoundaryDetector:
                     )
                 )
 
-            # Check if min of A coincides with max of B
             if abs(a_bounds[0][axis_idx] - b_bounds[1][axis_idx]) < COINCIDENCE_TOLERANCE:
                 results.append(
                     CoincidentBoundary(
@@ -109,7 +110,7 @@ class BoundaryDetector:
                         component_b=cb.name,
                         axis=axis_label,
                         value=a_bounds[0][axis_idx],
-                        needs_eps=True,
+                        needs_eps=needs_eps,
                         description=(
                             f"{ca.name} {axis_label}-min ({a_bounds[0][axis_idx]:.3f}) "
                             f"coincides with {cb.name} {axis_label}-max"
@@ -133,7 +134,10 @@ class BoundaryDetector:
                     axis="Z",
                     value=ca.z_min,
                     needs_eps=True,
-                    description=f"Shared Z=0 bottom face between {ca.name} and {cb.name}",
+                    description=(
+                        f"Shared Z={ca.z_min:.3f} bottom face "
+                        f"between {ca.name} and {cb.name}"
+                    ),
                 )
             )
 

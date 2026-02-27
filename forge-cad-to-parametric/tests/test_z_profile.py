@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from forge_cad.analyzer.z_profile import ZProfileExtractor, Z_CLUSTER_TOLERANCE
+from forge_cad.analyzer.z_profile import Z_CLUSTER_TOLERANCE, ZProfileExtractor
 
 
 class FakeMesh:
@@ -59,8 +59,8 @@ def test_staircase_z_levels():
     result = extractor.extract()
 
     levels = result["all_levels"]
-    assert any(abs(l - 0.0) < Z_CLUSTER_TOLERANCE for l in levels), f"Missing 0.0 in {levels}"
-    assert any(abs(l - 8.0) < Z_CLUSTER_TOLERANCE for l in levels), f"Missing 8.0 in {levels}"
+    assert any(abs(lv - 0.0) < Z_CLUSTER_TOLERANCE for lv in levels), f"Missing 0.0 in {levels}"
+    assert any(abs(lv - 8.0) < Z_CLUSTER_TOLERANCE for lv in levels), f"Missing 8.0 in {levels}"
 
 
 def test_body_candidate_is_tallest():
@@ -83,7 +83,7 @@ def test_cluster_merges_nearby_levels():
 
     levels = result["all_levels"]
     # 2.99 and 3.01 should be merged into one level around 3.0
-    near_three = [l for l in levels if 2.5 < l < 3.5]
+    near_three = [lv for lv in levels if 2.5 < lv < 3.5]
     assert len(near_three) <= 2, f"Expected merged level near 3.0, got {near_three}"
 
 

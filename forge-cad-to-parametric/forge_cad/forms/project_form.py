@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
 
@@ -85,6 +85,54 @@ class ProjectForm:
     eps: float = 0.01
     review_complete: bool = False
     notes: str = ""
+
+    @classmethod
+    def from_analysis(
+        cls,
+        name: str,
+        source_dir: str,
+        output_file: str,
+        loaded_meshes: list,
+        z_profile_result: dict,
+        components: list,
+        features: list,
+        boundaries: list,
+    ) -> "ProjectForm":
+        """Build a ProjectForm from analysis pipeline outputs."""
+        form = cls(
+            name=name,
+            source_dir=source_dir,
+            output_file=output_file,
+            z_levels=z_profile_result.get("all_levels", []),
+            boundaries=boundaries,
+        )
+        for mesh in loaded_meshes:
+            form.files.append(FileEntry(
+                path=str(mesh.path),
+                file_type=mesh.file_type,
+                role=mesh.auto_role,
+                z_min=mesh.z_min,
+                z_max=mesh.z_max,
+                vertex_count=mesh.vertex_count,
+            ))
+        for comp in components:
+            form.components.append(ComponentEntry(
+                name=comp.name,
+                role=comp.role,
+                z_min=comp.z_min,
+                z_max=comp.z_max,
+                source_file=comp.source_file,
+                notes=comp.notes,
+                csg_order=comp.csg_order,
+            ))
+        for feat in features:
+            form.features.append(FeatureEntry(
+                name=feat.name,
+                feature_type=feat.feature_type,
+                detected_from=feat.detected_from,
+                params=feat.params,
+            ))
+        return form
 
     def save(self, path: Path) -> None:
         """Serialise to YAML."""
