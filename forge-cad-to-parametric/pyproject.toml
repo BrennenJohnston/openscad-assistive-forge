@@ -1,0 +1,71 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "forge-cad-to-parametric"
+version = "0.1.0"
+description = "CLI tool to convert CAD exports (STL/OBJ/STEP/DXF) to parametric OpenSCAD with Customizer annotations compatible with openscad-assistive-forge"
+readme = "README.md"
+license = { text = "GPL-3.0-or-later" }
+requires-python = ">=3.10"
+authors = [
+    { name = "openscad-assistive-forge contributors" }
+]
+keywords = ["openscad", "cad", "parametric", "assistive-technology", "3d-printing"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Healthcare Industry",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Utilities",
+]
+
+dependencies = [
+    "trimesh>=4.0.0",
+    "numpy>=1.24.0",
+    "scipy>=1.11.0",
+    "ezdxf>=1.1.0",
+    "solidpython2>=1.1.2",
+    "click>=8.1.0",
+    "rich>=13.0.0",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+step = [
+    "cadquery>=2.4.0",
+]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "ruff>=0.1.0",
+]
+
+[project.scripts]
+forge-cad = "forge_cad.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/BrennenJohnston/openscad-assistive-forge"
+Repository = "https://github.com/BrennenJohnston/openscad-assistive-forge"
+Issues = "https://github.com/BrennenJohnston/openscad-assistive-forge/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["forge_cad"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--tb=short"

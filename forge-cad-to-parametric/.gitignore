@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.venv/
+venv/
+env/
+.env
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Type checking
+.mypy_cache/
+.ruff_cache/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project state (user-specific project directories)
+# But keep the fixture README
+tests/fixtures/plug_puller/*.obj
+tests/fixtures/plug_puller/*.stl
+tests/fixtures/plug_puller/*.step
+tests/fixtures/plug_puller/*.dxf
+tests/fixtures/*/project.yaml
+
+# Generated outputs (temporary)
+*.tmp.stl
+_em_temp/
