@@ -277,6 +277,63 @@ describe('ModeManager', () => {
     });
   });
 
+  describe('isExpertMode', () => {
+    it('should return false when in standard mode', () => {
+      expect(modeManager.isExpertMode()).toBe(false);
+    });
+
+    it('should return true after switching to expert mode', () => {
+      modeManager.switchMode('expert');
+
+      expect(modeManager.isExpertMode()).toBe(true);
+    });
+
+    it('should return false after switching back to standard mode', () => {
+      modeManager.switchMode('expert');
+      modeManager.switchMode('standard');
+
+      expect(modeManager.isExpertMode()).toBe(false);
+    });
+  });
+
+  describe('setEditorInstance / getEditorInstance', () => {
+    it('should return null before any editor is registered', () => {
+      expect(modeManager.getEditorInstance()).toBeNull();
+    });
+
+    it('should store and return the editor instance', () => {
+      const fakeEditor = { getValue: () => '', setValue: () => {} };
+      modeManager.setEditorInstance(fakeEditor);
+
+      expect(modeManager.getEditorInstance()).toBe(fakeEditor);
+    });
+
+    it('should clear the editor instance when null is passed', () => {
+      const fakeEditor = { getValue: () => '' };
+      modeManager.setEditorInstance(fakeEditor);
+      modeManager.setEditorInstance(null);
+
+      expect(modeManager.getEditorInstance()).toBeNull();
+    });
+
+    it('should clear the editor instance when undefined is passed', () => {
+      const fakeEditor = { getValue: () => '' };
+      modeManager.setEditorInstance(fakeEditor);
+      modeManager.setEditorInstance(undefined);
+
+      expect(modeManager.getEditorInstance()).toBeNull();
+    });
+
+    it('should replace a previous instance with a new one', () => {
+      const editor1 = { id: 1 };
+      const editor2 = { id: 2 };
+      modeManager.setEditorInstance(editor1);
+      modeManager.setEditorInstance(editor2);
+
+      expect(modeManager.getEditorInstance()).toBe(editor2);
+    });
+  });
+
   describe('singleton', () => {
     it('should return same instance with getModeManager', () => {
       const instance1 = getModeManager();

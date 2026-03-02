@@ -64,6 +64,9 @@ export class ModeManager {
     /** @type {EditorStateManager|null} */
     this.stateManager = null;
 
+    /** @type {Object|null} Active MonacoEditor or TextareaEditor instance */
+    this._editorInstance = null;
+
     // Load saved preferences
     this._loadPreferences();
   }
@@ -74,6 +77,33 @@ export class ModeManager {
    */
   setStateManager(stateManager) {
     this.stateManager = stateManager;
+  }
+
+  /**
+   * Register the active editor instance so menu builders and keyboard
+   * handlers can reach it without coupling to the Expert Mode init block.
+   * Pass null when leaving Expert Mode.
+   * @param {import('./monaco-editor.js').MonacoEditor | import('./textarea-editor.js').TextareaEditor | null} editor
+   */
+  setEditorInstance(editor) {
+    this._editorInstance = editor ?? null;
+  }
+
+  /**
+   * Return the currently active editor instance, or null when no editor is
+   * live (Standard Mode, or Expert Mode not yet initialised).
+   * @returns {import('./monaco-editor.js').MonacoEditor | import('./textarea-editor.js').TextareaEditor | null}
+   */
+  getEditorInstance() {
+    return this._editorInstance ?? null;
+  }
+
+  /**
+   * Return true when the app is in Expert Mode.
+   * @returns {boolean}
+   */
+  isExpertMode() {
+    return this.currentMode === 'expert';
   }
 
   /**

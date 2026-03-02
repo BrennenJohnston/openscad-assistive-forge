@@ -248,23 +248,27 @@ export const DEFAULT_SHORTCUTS = {
   find: {
     key: 'f',
     ctrl: true,
+    global: true,
     description: 'Find in editor',
   },
   findNext: {
     key: 'g',
     ctrl: true,
+    global: true,
     description: 'Find next match',
   },
   findPrevious: {
     key: 'g',
     ctrl: true,
     shift: true,
+    global: true,
     description: 'Find previous match',
   },
   findReplace: {
     key: 'f',
     ctrl: true,
     alt: true,
+    global: true,
     description: 'Find and replace in editor',
   },
 

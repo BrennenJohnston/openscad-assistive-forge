@@ -646,6 +646,27 @@ export class MonacoEditor {
   }
 
   /**
+   * Look up a built-in Monaco editor action by its registered ID.
+   * Returns null when the editor is not yet initialised or the action is
+   * unknown (mirrors the TextareaEditor shim so callers can branch on null).
+   * @param {string} actionId - Monaco action ID (e.g. 'actions.find')
+   * @returns {import('monaco-editor').editor.IEditorAction | null}
+   */
+  getAction(actionId) {
+    return this.editor?.getAction(actionId) ?? null;
+  }
+
+  /**
+   * Programmatically trigger a Monaco command or keyboard handler.
+   * @param {string} source - Caller description (e.g. 'keyboard')
+   * @param {string} handlerId - Command/handler ID
+   * @param {*} payload - Optional payload
+   */
+  trigger(source, handlerId, payload) {
+    this.editor?.trigger(source, handlerId, payload);
+  }
+
+  /**
    * Dispose of the editor
    */
   dispose() {

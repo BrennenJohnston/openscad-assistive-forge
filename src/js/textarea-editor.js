@@ -707,6 +707,49 @@ export class TextareaEditor {
   }
 
   /**
+   * TextareaEditor does not implement Monaco actions.
+   * Always returns null so callers can branch and use the clipboard/DOM
+   * fallbacks instead.
+   * @returns {null}
+   */
+  getAction(_actionId) {
+    return null;
+  }
+
+  /**
+   * No-op shim matching the MonacoEditor.trigger() signature.
+   * TextareaEditor has no equivalent command dispatcher.
+   */
+  trigger(_source, _handlerId, _payload) {
+    // intentional no-op — textarea uses native browser editing
+  }
+
+  /**
+   * Expose comment toggle publicly so Edit menu handlers can call it
+   * without reaching into private methods.
+   */
+  toggleComment() {
+    this._toggleComment();
+  }
+
+  /**
+   * Execute a named clipboard or editing command on the underlying textarea.
+   * Uses the legacy document.execCommand API (deprecated but universally
+   * supported) because the Clipboard API requires an async user-gesture flow
+   * that menu click handlers cannot satisfy for paste.
+   *
+   * @param {'cut' | 'copy' | 'paste'} command
+   */
+  execEditCommand(command) {
+    if (!this.textarea) return;
+    this.textarea.focus();
+    // execCommand is deprecated but remains the only synchronous path for
+    // Cut/Copy/Paste inside menu click handlers where Clipboard API
+    // read permissions are unavailable.
+    document.execCommand(command);
+  }
+
+  /**
    * Dispose of the editor
    */
   dispose() {

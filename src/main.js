@@ -3525,7 +3525,35 @@ async function initApp() {
     const canUndo = stateManager.canUndo();
     const canRedo = stateManager.canRedo();
 
-    const editorOnly = { disabled: true, tooltip: 'Requires Code Editor' };
+    const _mm = getModeManager();
+    const inExpertMode = _mm?.isExpertMode() ?? false;
+    const editor = inExpertMode ? (_mm?.getEditorInstance() ?? null) : null;
+    const canEdit = inExpertMode && editor !== null;
+
+    const editorOnlyTooltip = 'Available in Expert Mode with Code Editor';
+
+    /**
+     * Build a handler that tries a Monaco action first, then falls back to a
+     * TextareaEditor-specific operation (or null for no-op).
+     * @param {string} monacoActionId
+     * @param {string|null} monacoTriggerId - alternative via trigger() when getAction returns null
+     * @param {Function|null} textareaFallback
+     */
+    function editorHandler(monacoActionId, monacoTriggerId, textareaFallback) {
+      if (!canEdit) return undefined;
+      return () => {
+        const action = monacoActionId ? editor.getAction(monacoActionId) : null;
+        if (action) {
+          action.run();
+          return;
+        }
+        if (monacoTriggerId) {
+          editor.trigger('menu', monacoTriggerId, null);
+          return;
+        }
+        textareaFallback?.();
+      };
+    }
 
     return [
       {
@@ -3543,18 +3571,83 @@ async function initApp() {
         handler: () => performRedo(),
       },
       { type: 'separator' },
-      { type: 'action', label: 'Cut', ...editorOnly },
-      { type: 'action', label: 'Copy', ...editorOnly },
-      { type: 'action', label: 'Paste', ...editorOnly },
+      {
+        type: 'action',
+        label: 'Cut',
+        disabled: !canEdit,
+        tooltip: canEdit ? undefined : editorOnlyTooltip,
+        handler: editorHandler(
+          null,
+          'editor.action.clipboardCutAction',
+          () => editor.execEditCommand?.('cut')
+        ),
+      },
+      {
+        type: 'action',
+        label: 'Copy',
+        disabled: !canEdit,
+        tooltip: canEdit ? undefined : editorOnlyTooltip,
+        handler: editorHandler(
+          null,
+          'editor.action.clipboardCopyAction',
+          () => editor.execEditCommand?.('copy')
+        ),
+      },
+      {
+        type: 'action',
+        label: 'Paste',
+        disabled: !canEdit,
+        tooltip: canEdit ? undefined : editorOnlyTooltip,
+        handler: editorHandler(
+          null,
+          'editor.action.clipboardPasteAction',
+          () => editor.execEditCommand?.('paste')
+        ),
+      },
       { type: 'separator' },
-      { type: 'action', label: 'Indent', ...editorOnly },
-      { type: 'action', label: 'Unindent', ...editorOnly },
-      { type: 'action', label: 'Comment', ...editorOnly },
-      { type: 'action', label: 'Uncomment', ...editorOnly },
-      { type: 'action', label: 'Convert Tabs to Spaces', ...editorOnly },
-      { type: 'separator' },
-      { type: 'action', label: 'Show Next Tab', ...editorOnly },
-      { type: 'action', label: 'Show Previous Tab', ...editorOnly },
+      {
+        type: 'action',
+        label: 'Indent',
+        disabled: !canEdit,
+        tooltip: canEdit ? undefined : editorOnlyTooltip,
+        handler: editorHandler('editor.action.indentLines', null, null),
+      },
+      {
+        type: 'action',
+        label: 'Unindent',
+        disabled: !canEdit,
+        tooltip: canEdit ? undefined : editorOnlyTooltip,
+        handler: editorHandler('editor.action.outdentLines', null, null),
+      },
+      {
+        type: 'action',
+        label: 'Comment',
+        disabled: !canEdit,
+        tooltip: canEdit ? undefined : editorOnlyTooltip,
+        handler: editorHandler(
+          'editor.action.commentLine',
+          null,
+          () => editor.toggleComment?.()
+        ),
+      },
+      {
+        type: 'action',
+        label: 'Uncomment',
+        disabled: !canEdit,
+        tooltip: canEdit ? undefined : editorOnlyTooltip,
+        handler: editorHandler(
+          'editor.action.commentLine',
+          null,
+          () => editor.toggleComment?.()
+        ),
+      },
+      {
+        type: 'action',
+        label: 'Convert Tabs to Spaces',
+        disabled: !canEdit,
+        tooltip: canEdit ? undefined : editorOnlyTooltip,
+        handler: editorHandler('editor.action.indentationToSpaces', null, null),
+      },
       { type: 'separator' },
       {
         type: 'action',
@@ -3593,11 +3686,56 @@ async function initApp() {
         handler: () => editActionsController.copyFov(),
       },
       { type: 'separator' },
-      { type: 'action', label: 'Find\u2026', ...editorOnly },
-      { type: 'action', label: 'Find and Replace\u2026', ...editorOnly },
-      { type: 'action', label: 'Find Next', ...editorOnly },
-      { type: 'action', label: 'Find Previous', ...editorOnly },
-      { type: 'action', label: 'Use Selection for Find', ...editorOnly },
+      {
+        type: 'action',
+        label: 'Find\u2026',
+        shortcutAction: 'find',
+        disabled: !canEdit,
+        tooltip: canEdit
+          ? undefined
+          : 'Available in Expert Mode with Code Editor',
+        handler: editorHandler(
+          'actions.find',
+          null,
+          () => editor.focus?.() // focus textarea so user can press Ctrl+F
+        ),
+      },
+      {
+        type: 'action',
+        label: 'Find and Replace\u2026',
+        shortcutAction: 'findReplace',
+        disabled: !canEdit,
+        tooltip: canEdit ? undefined : editorOnlyTooltip,
+        handler: editorHandler(
+          'editor.action.startFindReplaceAction',
+          null,
+          null
+        ),
+      },
+      {
+        type: 'action',
+        label: 'Find Next',
+        shortcutAction: 'findNext',
+        disabled: !canEdit,
+        tooltip: canEdit ? undefined : editorOnlyTooltip,
+        handler: editorHandler(
+          'editor.action.nextMatchFindAction',
+          null,
+          null
+        ),
+      },
+      {
+        type: 'action',
+        label: 'Find Previous',
+        shortcutAction: 'findPrevious',
+        disabled: !canEdit,
+        tooltip: canEdit ? undefined : editorOnlyTooltip,
+        handler: editorHandler(
+          'editor.action.previousMatchFindAction',
+          null,
+          null
+        ),
+      },
       { type: 'separator' },
       {
         type: 'action',
@@ -12124,6 +12262,9 @@ if (rounded) {
           const code = currentEditor.getValue();
           editorStateManager.setSource(code, { markDirty: false });
         }
+
+        // Editor instance is no longer active
+        modeManager.setEditorInstance(null);
       }
     }
 
@@ -12171,6 +12312,10 @@ if (rounded) {
       if (editorStateManager.setTextareaElement && currentEditor.textarea) {
         editorStateManager.setTextareaElement(currentEditor.textarea);
       }
+
+      // Expose editor instance so Edit menu handlers and keyboard shortcuts
+      // can reach it without querying the DOM.
+      modeManager.setEditorInstance(currentEditor);
     }
 
     /**
