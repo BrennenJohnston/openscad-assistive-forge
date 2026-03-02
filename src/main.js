@@ -3419,7 +3419,7 @@ async function initApp() {
         type: 'action',
         label: 'Recent File',
         disabled: true,
-        tooltip: 'Coming soon',
+        tooltip: 'Previously opened files appear in the Recent Files submenu below',
       },
       { type: 'submenu', label: 'Recent Files', items: recentItems },
       { type: 'separator' },
@@ -3427,7 +3427,7 @@ async function initApp() {
         type: 'submenu',
         label: 'Examples',
         disabled: true,
-        tooltip: 'Coming soon',
+        tooltip: 'Example files are available in the Features Guide \u2014 use Help \u2192 Features Guide to browse them',
       },
       {
         type: 'action',
@@ -3442,13 +3442,13 @@ async function initApp() {
         type: 'action',
         label: 'New Window',
         disabled: true,
-        tooltip: 'Coming soon — single-window web app',
+        tooltip: 'Not available \u2014 this is a single-page web app; open a new browser tab instead',
       },
       {
         type: 'action',
         label: 'Open in New Window',
         disabled: true,
-        tooltip: 'Coming soon — single-window web app',
+        tooltip: 'Not available \u2014 this is a single-page web app; open a new browser tab instead',
       },
       {
         type: 'action',
@@ -3488,14 +3488,14 @@ async function initApp() {
         type: 'action',
         label: 'Show Library Folder',
         disabled: true,
-        tooltip: 'Coming soon',
+        tooltip: 'Libraries are managed in-browser \u2014 use the Libraries panel (Window menu) to add or remove libraries',
       },
       { type: 'separator' },
       {
         type: 'action',
         label: 'Quit',
         disabled: true,
-        tooltip: 'Coming soon — use browser tab close',
+        tooltip: 'Not available in browser \u2014 close the browser tab to exit',
       },
     ];
   });
@@ -3681,8 +3681,18 @@ async function initApp() {
       {
         type: 'action',
         label: 'Reload and Preview',
-        disabled: true,
-        tooltip: 'Coming soon',
+        enabled: hasFile,
+        tooltip: hasFile ? undefined : 'Open a file first',
+        handler: () => {
+          fileActionsController.onReload();
+          setTimeout(() => {
+            if (autoPreviewController) {
+              autoPreviewController.onParameterChange(
+                stateManager.getState().parameters
+              );
+            }
+          }, 200);
+        },
       },
       {
         type: 'action',
@@ -3723,7 +3733,7 @@ async function initApp() {
         type: 'action',
         label: '3D Print',
         disabled: true,
-        tooltip: 'Coming soon',
+        tooltip: 'Not available in browser \u2014 export the model as STL and open it in your slicer application (e.g. PrusaSlicer, Cura)',
       },
       { type: 'separator' },
       {
@@ -3746,13 +3756,13 @@ async function initApp() {
         type: 'action',
         label: 'Display CSG Tree\u2026',
         disabled: true,
-        tooltip: 'Coming soon \u2014 requires custom WASM build',
+        tooltip: 'Requires desktop OpenSCAD \u2014 CSG introspection is not available in the browser build',
       },
       {
         type: 'action',
         label: 'Display CSG Products\u2026',
         disabled: true,
-        tooltip: 'Coming soon \u2014 requires custom WASM build',
+        tooltip: 'Requires desktop OpenSCAD \u2014 CSG introspection is not available in the browser build',
       },
       {
         type: 'action',
@@ -3800,28 +3810,28 @@ async function initApp() {
         label: 'Preview',
         group: 'displayMode',
         disabled: true,
-        tooltip: 'Coming soon',
+        tooltip: 'Requires desktop OpenSCAD \u2014 the browser build renders in standard mode only',
       },
       {
         type: 'radio',
         label: 'Surfaces',
         group: 'displayMode',
         disabled: true,
-        tooltip: 'Coming soon',
+        tooltip: 'Requires desktop OpenSCAD \u2014 the browser build renders in standard mode only',
       },
       {
         type: 'radio',
         label: 'Wireframe',
         group: 'displayMode',
         disabled: true,
-        tooltip: 'Coming soon',
+        tooltip: 'Requires desktop OpenSCAD \u2014 the browser build renders in standard mode only',
       },
       {
         type: 'radio',
         label: 'Thrown Together',
         group: 'displayMode',
         disabled: true,
-        tooltip: 'Coming soon',
+        tooltip: 'Requires desktop OpenSCAD \u2014 the browser build renders in standard mode only',
       },
       { type: 'separator' },
       // -- Display Toggles --
@@ -3843,7 +3853,7 @@ async function initApp() {
         type: 'toggle',
         label: 'Show Scale Markers',
         disabled: true,
-        tooltip: 'Coming soon',
+        tooltip: 'Not yet implemented \u2014 planned for a future release',
       },
       {
         type: 'toggle',
@@ -3898,8 +3908,15 @@ async function initApp() {
       {
         type: 'action',
         label: 'Center',
-        disabled: true,
-        tooltip: 'Coming soon',
+        shortcutAction: 'viewCenter',
+        enabled: hasRender,
+        tooltip: hasRender ? undefined : 'Render a model first',
+        handler: () => {
+          if (previewManager) {
+            previewManager.resetCamera();
+            announceCameraAction('View centered');
+          }
+        },
       },
       {
         type: 'action',
@@ -3981,13 +3998,13 @@ async function initApp() {
         type: 'toggle',
         label: 'Hide Editor toolbar',
         disabled: true,
-        tooltip: 'Coming soon',
+        tooltip: 'Not yet implemented \u2014 panels can be shown or hidden via the Window menu',
       },
       {
         type: 'toggle',
         label: 'Hide 3D View toolbar',
         disabled: true,
-        tooltip: 'Coming soon',
+        tooltip: 'Not yet implemented \u2014 panels can be shown or hidden via the Window menu',
       },
     ];
   });
@@ -4027,20 +4044,20 @@ async function initApp() {
         type: 'action',
         label: 'Next Window',
         disabled: true,
-        tooltip: 'Coming soon \u2014 single-window web app',
+        tooltip: 'Not available \u2014 this is a single-page web app; use browser tabs for multiple windows',
       },
       {
         type: 'action',
         label: 'Previous Window',
         disabled: true,
-        tooltip: 'Coming soon \u2014 single-window web app',
+        tooltip: 'Not available \u2014 this is a single-page web app; use browser tabs for multiple windows',
       },
       { type: 'separator' },
       {
         type: 'submenu',
         label: 'Jump To\u2026',
         disabled: true,
-        tooltip: 'Coming soon',
+        tooltip: 'Not available \u2014 multi-window navigation is not supported in the browser',
       },
       { type: 'separator' },
       // -- Desktop-parity panel toggles --
@@ -4066,7 +4083,7 @@ async function initApp() {
         type: 'action',
         label: 'Font List',
         disabled: true,
-        tooltip: 'Coming soon',
+        tooltip: 'Not available in browser \u2014 see openscad.org/documentation.html for font information',
       },
       {
         type: 'action',
@@ -4150,7 +4167,7 @@ async function initApp() {
         type: 'action',
         label: 'Font List',
         disabled: true,
-        tooltip: 'Coming soon',
+        tooltip: 'Not available in browser \u2014 see openscad.org/documentation.html for font information',
       },
       { type: 'separator' },
       {

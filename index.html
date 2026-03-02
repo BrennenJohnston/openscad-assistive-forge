@@ -1223,6 +1223,12 @@
                   <span class="console-title forge-disclosure-title"
                     >Console Output</span
                   >
+                  <button
+                    class="panel-help-btn"
+                    type="button"
+                    aria-label="About Console Output: shows raw OpenSCAD output including echo() messages, compile info, and timing"
+                    title="Console Output shows raw OpenSCAD output including echo() messages, compile info, and timing. Use this to see what your SCAD code is echoing."
+                  >?</button>
                   <span
                     id="console-badge"
                     class="console-badge hidden"
@@ -1321,6 +1327,12 @@
                   <span class="error-log-title forge-disclosure-title"
                     >Error Log</span
                   >
+                  <button
+                    class="panel-help-btn"
+                    type="button"
+                    aria-label="About Error Log: shows structured errors and warnings with file and line navigation"
+                    title="Error Log shows structured errors and warnings from OpenSCAD with file/line navigation. Click a line number to jump to the error in the code editor."
+                  >?</button>
                   <span
                     id="error-log-badge"
                     class="error-log-badge hidden"
@@ -2600,18 +2612,22 @@
                 <div
                   class="format-2d-guidance hidden"
                   id="format2dGuidance"
-                  role="alert"
+                  role="note"
                   aria-live="polite"
+                  aria-label="2D export workflow guidance"
                 >
-                  <p class="guidance-title">📐 2D Export Guidance</p>
-                  <p class="guidance-text">
-                    For laser cutting, ensure your model uses
-                    <code>projection()</code> or set the
-                    <code>generate</code> parameter to
-                    <strong>"first layer for SVG/DXF file"</strong>.
-                  </p>
+                  <p class="guidance-title">&#x1F4D0; 2D Export Workflow</p>
+                  <ol class="guidance-steps">
+                    <li>
+                      Set the <code>generate</code> parameter to an SVG-compatible
+                      mode (e.g. <strong>"first layer for SVG/DXF file"</strong>)
+                    </li>
+                    <li>Click <strong>Generate</strong> to compile the 2D output</li>
+                    <li>Click <strong>Download</strong> to save the SVG or DXF file</li>
+                    <li>Open the file in your laser cutter software (e.g. LightBurn, LaserGRBL, Inkscape)</li>
+                  </ol>
                   <details class="guidance-details">
-                    <summary>More info for laser-cut keyguard users</summary>
+                    <summary>Keyguard-specific tips</summary>
                     <ul>
                       <li>
                         Set <code>type_of_keyguard</code> to
@@ -2621,7 +2637,14 @@
                         Set <code>generate</code> to
                         <strong>"first layer for SVG/DXF file"</strong>
                       </li>
-                      <li>Not all 3D models support 2D export</li>
+                      <li>
+                        SVG output is a flat 2D projection &#x2014; not all 3D
+                        models support 2D export
+                      </li>
+                      <li>
+                        Units in the SVG are in millimetres; verify scaling in
+                        your laser cutter software before cutting
+                      </li>
                     </ul>
                   </details>
                 </div>
