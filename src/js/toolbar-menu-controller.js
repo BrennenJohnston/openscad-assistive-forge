@@ -502,12 +502,20 @@ export class ToolbarMenuController {
     const isDisabled = item.enabled === false || item.disabled === true;
 
     if (isDisabled) {
-      // Render as a plain disabled button when the submenu itself is coming soon
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'menu-item-btn';
       btn.setAttribute('aria-disabled', 'true');
-      if (item.tooltip) btn.setAttribute('title', item.tooltip);
+      if (item.tooltip) {
+        btn.setAttribute('title', item.tooltip);
+        const tipId = `menu-tip-${this._nextId()}`;
+        const tipSpan = document.createElement('span');
+        tipSpan.id = tipId;
+        tipSpan.className = 'sr-only';
+        tipSpan.textContent = item.tooltip;
+        btn.appendChild(tipSpan);
+        btn.setAttribute('aria-describedby', tipId);
+      }
 
       const labelSpan = document.createElement('span');
       labelSpan.className = 'menu-item-label';

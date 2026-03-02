@@ -2213,6 +2213,53 @@ summary:focus-visible,
   width: 5rem;
 }
 
+/* Grid color picker: [label] [color swatch] [Reset button] */
+.grid-color-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-xs) 0;
+  flex-basis: 100%;
+}
+
+.grid-color-label {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  min-width: 5rem;
+}
+
+.grid-color-picker {
+  width: 2rem;
+  height: 2rem;
+  padding: 2px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-raised);
+  cursor: pointer;
+}
+
+.grid-color-picker:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: var(--focus-ring);
+}
+
+:root[data-high-contrast='true'] .grid-color-picker {
+  border-width: 2px;
+}
+
+@media (forced-colors: active) {
+  .grid-color-picker {
+    border: 1px solid ButtonText;
+    forced-color-adjust: none;
+  }
+
+  .grid-color-picker:focus {
+    border-color: Highlight;
+    outline: 2px solid Highlight;
+  }
+}
+
 /* Compact grid size row: [Preset select] [W × H inputs] on one line */
 .grid-size-compact-row {
   display: flex;
@@ -4471,6 +4518,24 @@ select:focus-visible {
   line-height: 1.5;
 }
 
+.format-2d-guidance .guidance-steps {
+  color: var(--color-text-secondary);
+  margin: 0 0 var(--space-sm) var(--space-md);
+  padding: 0;
+  line-height: 1.6;
+}
+
+.format-2d-guidance .guidance-steps li {
+  margin-bottom: var(--space-xs);
+}
+
+.format-2d-guidance .guidance-steps code {
+  background: var(--color-bg-tertiary, var(--color-bg-primary));
+  padding: 0.125em 0.375em;
+  border-radius: var(--border-radius-xs);
+  font-size: 0.9em;
+}
+
 .format-2d-guidance .guidance-text code {
   background: var(--color-bg-tertiary, var(--color-bg-primary));
   padding: 0.125em 0.375em;
@@ -5318,6 +5383,40 @@ body.first-visit-blocking #app {
 
 .console-title {
   flex: 1;
+}
+
+/* Help icon button inside panel summary rows */
+.panel-help-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25em;
+  height: 1.25em;
+  padding: 0;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  line-height: 1;
+  cursor: default;
+  opacity: 0.6;
+  flex-shrink: 0;
+}
+
+.panel-help-btn:focus-visible {
+  outline: 2px solid var(--color-focus-ring, Highlight);
+  outline-offset: 2px;
+  opacity: 1;
+}
+
+@media (forced-colors: active) {
+  .panel-help-btn {
+    forced-color-adjust: auto;
+    border-color: ButtonText;
+    color: ButtonText;
+  }
 }
 
 .console-badge {
@@ -7754,6 +7853,65 @@ body.first-visit-blocking #app {
 /* =========================================
    LOD (Level of Detail) Warning
    ========================================= */
+
+/* Color parameter legend (shown when SCAD has multiple color() params) */
+.color-legend {
+  position: absolute;
+  bottom: var(--space-sm);
+  left: var(--space-sm);
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  padding: var(--space-xs) var(--space-sm);
+  font-size: var(--font-size-xs);
+  z-index: 50;
+  max-width: 220px;
+  pointer-events: none;
+  opacity: 0.92;
+}
+
+.color-legend-title {
+  display: block;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: var(--space-xs);
+}
+
+.color-legend-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 1px 0;
+}
+
+.color-legend-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  border: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.color-legend-label {
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (forced-colors: active) {
+  .color-legend {
+    border: 1px solid ButtonText;
+    background: Canvas;
+    color: CanvasText;
+  }
+  .color-legend-swatch {
+    forced-color-adjust: none;
+  }
+}
 
 .lod-warning {
   position: absolute;

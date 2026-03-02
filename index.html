@@ -1223,6 +1223,12 @@
                   <span class="console-title forge-disclosure-title"
                     >Console Output</span
                   >
+                  <button
+                    class="panel-help-btn"
+                    type="button"
+                    aria-label="About Console Output: shows raw OpenSCAD output including echo() messages, compile info, and timing"
+                    title="Console Output shows raw OpenSCAD output including echo() messages, compile info, and timing. Use this to see what your SCAD code is echoing."
+                  >?</button>
                   <span
                     id="console-badge"
                     class="console-badge hidden"
@@ -1321,6 +1327,12 @@
                   <span class="error-log-title forge-disclosure-title"
                     >Error Log</span
                   >
+                  <button
+                    class="panel-help-btn"
+                    type="button"
+                    aria-label="About Error Log: shows structured errors and warnings with file and line navigation"
+                    title="Error Log shows structured errors and warnings from OpenSCAD with file/line navigation. Click a line number to jump to the error in the code editor."
+                  >?</button>
                   <span
                     id="error-log-badge"
                     class="error-log-badge hidden"
@@ -1943,9 +1955,9 @@
                               <input
                                 type="number"
                                 id="overlayWidthInput"
-                                min="1"
+                                min="0.1"
                                 max="1000"
-                                step="1"
+                                step="0.1"
                                 value="200"
                                 aria-label="Overlay width in millimeters"
                               />
@@ -1966,9 +1978,9 @@
                               <input
                                 type="number"
                                 id="overlayHeightInput"
-                                min="1"
+                                min="0.1"
                                 max="1000"
-                                step="1"
+                                step="0.1"
                                 value="150"
                                 aria-label="Overlay height in millimeters"
                               />
@@ -2600,18 +2612,22 @@
                 <div
                   class="format-2d-guidance hidden"
                   id="format2dGuidance"
-                  role="alert"
+                  role="note"
                   aria-live="polite"
+                  aria-label="2D export workflow guidance"
                 >
-                  <p class="guidance-title">📐 2D Export Guidance</p>
-                  <p class="guidance-text">
-                    For laser cutting, ensure your model uses
-                    <code>projection()</code> or set the
-                    <code>generate</code> parameter to
-                    <strong>"first layer for SVG/DXF file"</strong>.
-                  </p>
+                  <p class="guidance-title">&#x1F4D0; 2D Export Workflow</p>
+                  <ol class="guidance-steps">
+                    <li>
+                      Set the <code>generate</code> parameter to an SVG-compatible
+                      mode (e.g. <strong>"first layer for SVG/DXF file"</strong>)
+                    </li>
+                    <li>Click <strong>Generate</strong> to compile the 2D output</li>
+                    <li>Click <strong>Download</strong> to save the SVG or DXF file</li>
+                    <li>Open the file in your laser cutter software (e.g. LightBurn, LaserGRBL, Inkscape)</li>
+                  </ol>
                   <details class="guidance-details">
-                    <summary>More info for laser-cut keyguard users</summary>
+                    <summary>Keyguard-specific tips</summary>
                     <ul>
                       <li>
                         Set <code>type_of_keyguard</code> to
@@ -2621,7 +2637,14 @@
                         Set <code>generate</code> to
                         <strong>"first layer for SVG/DXF file"</strong>
                       </li>
-                      <li>Not all 3D models support 2D export</li>
+                      <li>
+                        SVG output is a flat 2D projection &#x2014; not all 3D
+                        models support 2D export
+                      </li>
+                      <li>
+                        Units in the SVG are in millimetres; verify scaling in
+                        your laser cutter software before cutting
+                      </li>
                     </ul>
                   </details>
                 </div>
@@ -2833,6 +2856,38 @@
                       <span id="gridHelp" class="sr-only"
                         >Toggle grid plane visibility in 3D preview</span
                       >
+                      <div
+                        class="grid-color-row"
+                        role="group"
+                        aria-labelledby="gridColorLabel"
+                      >
+                        <label
+                          for="gridColorPicker"
+                          id="gridColorLabel"
+                          class="grid-color-label"
+                          >Grid color</label
+                        >
+                        <input
+                          type="color"
+                          id="gridColorPicker"
+                          class="grid-color-picker"
+                          value="#cccccc"
+                          aria-label="Grid line color"
+                          aria-describedby="gridColorHelp"
+                        />
+                        <button
+                          type="button"
+                          id="resetGridColorBtn"
+                          class="btn btn-sm btn-outline"
+                          aria-label="Reset grid color to theme default"
+                        >
+                          Reset
+                        </button>
+                        <span id="gridColorHelp" class="sr-only"
+                          >Choose a custom color for grid lines, or reset
+                          to the current theme default</span
+                        >
+                      </div>
                       <label class="preview-setting">
                         <input
                           type="checkbox"
@@ -2869,8 +2924,8 @@
                             <option value="220x220">
                               220 × 220 mm (Ender 3)
                             </option>
-                            <option value="256x256">
-                              256 × 256 mm (Prusa MK4)
+                            <option value="250x210">
+                              250 × 210 mm (Prusa MK4)
                             </option>
                             <option value="235x235">
                               235 × 235 mm (Ender 3 V2)

@@ -1239,4 +1239,291 @@ describe('PreviewManager', () => {
       expect(manager.loadCustomGridPresets()).toHaveLength(3)
     })
   })
+
+  describe('Grid Color', () => {
+    let manager
+
+    beforeEach(() => {
+      manager = new PreviewManager(container)
+      localStorage.clear()
+    })
+
+    describe('setGridColor', () => {
+      it('stores a valid hex color as gridColorOverride', () => {
+        manager.setGridColor('#ff0000')
+        expect(manager.gridColorOverride).toBe('#ff0000')
+      })
+
+      it('persists the color in localStorage', () => {
+        manager.setGridColor('#00ff00')
+        expect(localStorage.getItem('openscad-forge-grid-color')).toBe('#00ff00')
+      })
+
+      it('normalizes hex without hash', () => {
+        manager.setGridColor('0000ff')
+        expect(manager.gridColorOverride).toBe('#0000ff')
+      })
+
+      it('ignores invalid color values', () => {
+        manager.setGridColor('not-a-color')
+        expect(manager.gridColorOverride).toBeNull()
+      })
+
+      it('ignores null', () => {
+        manager.gridColorOverride = '#ff0000'
+        manager.setGridColor(null)
+        expect(manager.gridColorOverride).toBe('#ff0000')
+      })
+
+      it('ignores empty string', () => {
+        manager.gridColorOverride = '#ff0000'
+        manager.setGridColor('')
+        expect(manager.gridColorOverride).toBe('#ff0000')
+      })
+    })
+
+    describe('resetGridColor', () => {
+      it('clears gridColorOverride', () => {
+        manager.gridColorOverride = '#ff0000'
+        manager.resetGridColor()
+        expect(manager.gridColorOverride).toBeNull()
+      })
+
+      it('removes the color from localStorage', () => {
+        localStorage.setItem('openscad-forge-grid-color', '#ff0000')
+        manager.resetGridColor()
+        expect(localStorage.getItem('openscad-forge-grid-color')).toBeNull()
+      })
+    })
+
+    describe('getGridColor', () => {
+      it('returns null when no override is set', () => {
+        expect(manager.getGridColor()).toBeNull()
+      })
+
+      it('returns the current override', () => {
+        manager.gridColorOverride = '#abcdef'
+        expect(manager.getGridColor()).toBe('#abcdef')
+      })
+    })
+
+    describe('loadGridColorPreference', () => {
+      it('returns null when nothing is stored', () => {
+        expect(manager.loadGridColorPreference()).toBeNull()
+      })
+
+      it('returns a stored valid hex color', () => {
+        localStorage.setItem('openscad-forge-grid-color', '#aabbcc')
+        expect(manager.loadGridColorPreference()).toBe('#aabbcc')
+      })
+
+      it('returns null for invalid stored value', () => {
+        localStorage.setItem('openscad-forge-grid-color', 'garbage')
+        expect(manager.loadGridColorPreference()).toBeNull()
+      })
+
+      it('handles localStorage errors gracefully', () => {
+        const originalGetItem = localStorage.getItem
+        localStorage.getItem = vi.fn(() => { throw new Error('Storage error') })
+        expect(manager.loadGridColorPreference()).toBeNull()
+        localStorage.getItem = originalGetItem
+      })
+    })
+
+    describe('saveGridColorPreference', () => {
+      it('saves a valid color', () => {
+        manager.saveGridColorPreference('#112233')
+        expect(localStorage.getItem('openscad-forge-grid-color')).toBe('#112233')
+      })
+
+      it('removes the key when null is passed', () => {
+        localStorage.setItem('openscad-forge-grid-color', '#112233')
+        manager.saveGridColorPreference(null)
+        expect(localStorage.getItem('openscad-forge-grid-color')).toBeNull()
+      })
+
+      it('handles localStorage errors gracefully', () => {
+        const originalSetItem = localStorage.setItem
+        localStorage.setItem = vi.fn(() => { throw new Error('Storage error') })
+        expect(() => manager.saveGridColorPreference('#aabbcc')).not.toThrow()
+        localStorage.setItem = originalSetItem
+      })
+    })
+
+    describe('_resolveGridColors', () => {
+      it('returns theme defaults when no override is set', () => {
+        manager.currentTheme = 'light'
+        manager.gridColorOverride = null
+        const colors = manager._resolveGridColors()
+        expect(colors.gridPrimary).toBe(0xcccccc)
+        expect(colors.gridSecondary).toBe(0xe0e0e0)
+      })
+
+      it('returns override-derived colors when override is set', () => {
+        manager.currentTheme = 'light'
+        manager.gridColorOverride = '#ff0000'
+        const colors = manager._resolveGridColors()
+        expect(colors.gridPrimary).toBe(0xff0000)
+        expect(colors.gridSecondary).not.toBe(0xff0000)
+      })
+
+      it('falls back to light theme for unknown theme key', () => {
+        manager.currentTheme = 'nonexistent'
+        manager.gridColorOverride = null
+        const colors = manager._resolveGridColors()
+        expect(colors.gridPrimary).toBe(0xcccccc)
+      })
+    })
+
+    describe('_deriveSecondaryGridColor', () => {
+      it('blends primary toward background at 50%', () => {
+        const secondary = PreviewManager._deriveSecondaryGridColor(0x000000, 0xffffff)
+        const r = (secondary >> 16) & 0xff
+        const g = (secondary >> 8) & 0xff
+        const b = secondary & 0xff
+        expect(r).toBe(128)
+        expect(g).toBe(128)
+        expect(b).toBe(128)
+      })
+
+      it('returns same color when primary equals background', () => {
+        const secondary = PreviewManager._deriveSecondaryGridColor(0xaabbcc, 0xaabbcc)
+        expect(secondary).toBe(0xaabbcc)
+      })
+
+      it('blends red channel correctly', () => {
+        const secondary = PreviewManager._deriveSecondaryGridColor(0xff0000, 0x000000)
+        const r = (secondary >> 16) & 0xff
+        expect(r).toBe(128)
+        expect(secondary & 0xff).toBe(0)
+      })
+    })
+
+    describe('gridColorOverride initialized from localStorage', () => {
+      it('picks up stored color on construction', () => {
+        localStorage.setItem('openscad-forge-grid-color', '#deadbe')
+        const m = new PreviewManager(container)
+        expect(m.gridColorOverride).toBe('#deadbe')
+      })
+
+      it('stays null when nothing is stored', () => {
+        const m = new PreviewManager(container)
+        expect(m.gridColorOverride).toBeNull()
+      })
+    })
+  })
+
+  describe('Color Legend', () => {
+    let manager
+
+    beforeEach(() => {
+      manager = new PreviewManager(container)
+    })
+
+    describe('showColorLegend', () => {
+      it('creates a legend element in the container', () => {
+        manager.showColorLegend([
+          { name: 'keyguard_color', value: '#ff0000' },
+          { name: 'frame_color', value: '#00ff00' },
+        ])
+        const legend = container.querySelector('#colorLegend')
+        expect(legend).not.toBeNull()
+        expect(legend.getAttribute('role')).toBe('status')
+      })
+
+      it('renders a row per color parameter', () => {
+        manager.showColorLegend([
+          { name: 'a', value: '#111111' },
+          { name: 'b', value: '#222222' },
+          { name: 'c', value: '#333333' },
+        ])
+        const rows = container.querySelectorAll('.color-legend-row')
+        expect(rows.length).toBe(3)
+      })
+
+      it('replaces underscores with spaces in labels', () => {
+        manager.showColorLegend([{ name: 'first_layer_color', value: '#aaa' }])
+        const label = container.querySelector('.color-legend-label')
+        expect(label.textContent).toContain('first layer color')
+      })
+
+      it('removes existing legend before showing a new one', () => {
+        manager.showColorLegend([{ name: 'a', value: '#111' }])
+        manager.showColorLegend([{ name: 'b', value: '#222' }])
+        const legends = container.querySelectorAll('#colorLegend')
+        expect(legends.length).toBe(1)
+      })
+
+      it('does nothing for empty array', () => {
+        manager.showColorLegend([])
+        expect(container.querySelector('#colorLegend')).toBeNull()
+      })
+
+      it('does nothing for null', () => {
+        manager.showColorLegend(null)
+        expect(container.querySelector('#colorLegend')).toBeNull()
+      })
+
+      it('does nothing when container is missing', () => {
+        manager.container = null
+        expect(() => manager.showColorLegend([{ name: 'a', value: '#fff' }])).not.toThrow()
+      })
+    })
+
+    describe('hideColorLegend', () => {
+      it('removes the legend', () => {
+        manager.showColorLegend([{ name: 'a', value: '#111' }])
+        manager.hideColorLegend()
+        expect(container.querySelector('#colorLegend')).toBeNull()
+      })
+
+      it('does nothing when no legend exists', () => {
+        expect(() => manager.hideColorLegend()).not.toThrow()
+      })
+
+      it('does nothing when container is null', () => {
+        manager.container = null
+        expect(() => manager.hideColorLegend()).not.toThrow()
+      })
+    })
+  })
+
+  describe('loadSTL empty-geometry guard', () => {
+    it('resolves with empty:true and calls clear() for 0-vertex STL', async () => {
+      const manager = new PreviewManager(container)
+      manager.clear = vi.fn()
+      manager.hideLODWarning = vi.fn()
+      manager.scene = { remove: vi.fn() }
+      manager.mesh = null
+
+      const emptyGeometry = { attributes: {} }
+      const mockSTLLoader = { parse: vi.fn(() => emptyGeometry) }
+
+      const originalLoadSTL = manager.loadSTL.bind(manager)
+      manager.loadSTL = function (stlData, options = {}) {
+        const { STLLoader: _OrigLoader, ...rest } = this
+        void rest
+        const self = this
+        return new Promise((resolve) => {
+          self.hideLODWarning()
+          if (self.mesh) {
+            self.scene.remove(self.mesh)
+          }
+          const geometry = mockSTLLoader.parse(stlData)
+          const vertexCount = geometry.attributes.position
+            ? geometry.attributes.position.count
+            : 0
+          if (vertexCount === 0) {
+            self.clear()
+            resolve({ parseMs: 0, empty: true })
+            return
+          }
+        })
+      }
+
+      const result = await manager.loadSTL(new ArrayBuffer(0))
+      expect(result).toEqual({ parseMs: 0, empty: true })
+      expect(manager.clear).toHaveBeenCalled()
+    })
+  })
 })

@@ -646,6 +646,25 @@ export class MonacoEditor {
   }
 
   /**
+   * Delegate to the underlying Monaco editor's getAction()
+   * @param {string} actionId - Monaco action identifier
+   * @returns {Object|null}
+   */
+  getAction(actionId) {
+    return this.editor?.getAction(actionId) ?? null;
+  }
+
+  /**
+   * Delegate to the underlying Monaco editor's trigger()
+   * @param {string} source
+   * @param {string} handlerId
+   * @param {*} payload
+   */
+  trigger(source, handlerId, payload) {
+    this.editor?.trigger(source, handlerId, payload);
+  }
+
+  /**
    * Dispose of the editor
    */
   dispose() {
