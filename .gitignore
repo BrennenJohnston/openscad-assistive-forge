@@ -41,3 +41,6 @@ docs/planning/
 
 # Developer scratch / temp files
 _em_temp/
+
+# CAD-to-parametric sub-project (lives on feat/cad-to-parametric only)
+forge-cad-to-parametric/
