@@ -1,19 +1,14 @@
 """OpenSCAD code emitter.
 
-Generates parametric .scad files from a confirmed ProjectForm following the
-2D-first, pocket-and-fill architecture from the Plug Puller v4 reference:
+Generates parametric .scad files from a confirmed ProjectForm using an
+archetype-aware strategy pattern.
 
-  1. File header with Customizer usage instructions
-  2. /* [Render Mode] */ section with render_mode dropdown
-  3. /* [Global Parameters] */ section with body dimensions, eps, $fn
-  4. Per-component parameter sections
-  5. Per-feature parameter sections (with enable_X toggles)
-  6. Derived values block
-  7. 2D profile modules
-  8. 3D extrusion modules
-  9. Feature modules
- 10. Assembly module
- 11. Render dispatcher (if/else on render_mode)
+Shared sections (header, render mode, params, features) are emitted here.
+Geometry sections (2D modules, 3D modules, assembly) delegate to the
+archetype strategy returned by ``get_strategy(form.archetype)``.
+
+Available archetypes: flat_plate, rotational, shell, box_enclosure,
+assembly, organic.
 """
 
 from __future__ import annotations
@@ -31,6 +26,7 @@ from forge_cad.forms.project_form import (
 )
 from forge_cad.generator.customizer import CustomizerAnnotator
 from forge_cad.generator.module_builder import ModuleBuilder
+from forge_cad.generator.strategies import get_strategy
 from forge_cad.generator.templates.scad_header import render_header
 
 
@@ -43,9 +39,16 @@ class ScadEmitter:
         self.form = form
         self.annotator = CustomizerAnnotator(eps=form.eps)
         self.builder = ModuleBuilder(eps=form.eps)
+        self.strategy = get_strategy(getattr(form, "archetype", "flat_plate"))
 
     def emit(self) -> str:
         """Build and return the complete .scad file as a string."""
+        # Pre-populate component vertex cache so strategies can access it
+        for comp in self.form.components:
+            if not comp.name.startswith("_deleted_"):
+                comp._cached_vertices = self._get_component_vertices(comp)  # type: ignore[attr-defined]
+                comp._bbox = comp.bounding_box if hasattr(comp, "bounding_box") else None  # type: ignore[attr-defined]
+
         sections: list[str] = []
 
         sections.append(render_header(self.form.name, self.form.source_dir))
@@ -54,10 +57,11 @@ class ScadEmitter:
         sections.append(self._emit_component_param_sections())
         sections.append(self._emit_feature_param_sections())
         sections.append(self._emit_derived_values())
-        sections.append(self._emit_2d_modules())
-        sections.append(self._emit_3d_modules())
+        # Geometry sections delegate to the archetype strategy
+        sections.append(self.strategy.emit_2d_modules(self.form, self.builder, _safe_name))
+        sections.append(self.strategy.emit_3d_modules(self.form, self.builder, _safe_name))
         sections.append(self._emit_feature_modules())
-        sections.append(self._emit_assembly_module())
+        sections.append(self.strategy.emit_assembly(self.form, self.builder, _safe_name))
         sections.append(self._emit_render_dispatcher())
 
         return "\n".join(s for s in sections if s)
@@ -168,55 +172,6 @@ class ScadEmitter:
 
         return "\n".join(lines)
 
-    def _emit_2d_modules(self) -> str:
-        parts = ["\n// ════════════════════════════════════════════════════\n"
-                 "// 2D PROFILE MODULES\n"
-                 "// ════════════════════════════════════════════════════\n"]
-
-        for comp in self.form.components:
-            if comp.role in {"variant"} or comp.name.startswith("_deleted_"):
-                continue
-
-            vertices = self._get_component_vertices(comp)
-            if vertices:
-                parts.append(self.builder.body_2d_module(_safe_name(comp.name), vertices))
-                if comp.role == "pocket_fill":
-                    parts.append(
-                        self.builder.pocket_2d_module(_safe_name(comp.name), vertices)
-                    )
-
-        return "\n".join(parts)
-
-    def _emit_3d_modules(self) -> str:
-        parts = ["\n// ════════════════════════════════════════════════════\n"
-                 "// 3D EXTRUSION MODULES\n"
-                 "// ════════════════════════════════════════════════════\n"]
-
-        for comp in self.form.components:
-            if comp.role in {"variant"} or comp.name.startswith("_deleted_"):
-                continue
-
-            safe = _safe_name(comp.name)
-            z_max_expr = f"{safe}_thickness" if comp.role == "pocket_fill" else "body_thickness"
-
-            vertices = self._get_component_vertices(comp)
-            if vertices:
-                parts.append(
-                    f"module {safe}_3d() {{\n"
-                    f"    linear_extrude(height={z_max_expr})\n"
-                    f"        {safe}_2d();\n"
-                    f"}}\n"
-                )
-                if comp.role == "pocket_fill":
-                    parts.append(
-                        f"module {safe}_pocket_3d() {{\n"
-                        f"    translate([0, 0, -eps])\n"
-                        f"    linear_extrude(height=body_thickness + 2*eps)\n"
-                        f"        {safe}_pocket_2d();\n"
-                        f"}}\n"
-                    )
-
-        return "\n".join(parts)
 
     def _emit_feature_modules(self) -> str:
         parts = ["\n// ════════════════════════════════════════════════════\n"
@@ -315,28 +270,6 @@ class ScadEmitter:
 
         return f"// TODO: implement {safe_name}_3d() for feature type '{ftype}'\n"
 
-    def _emit_assembly_module(self) -> str:
-        parts = ["\n// ════════════════════════════════════════════════════\n"
-                 "// ASSEMBLY\n"
-                 "// ════════════════════════════════════════════════════\n"]
-
-        active_components = [
-            c for c in self.form.components
-            if c.role not in {"variant"} and not c.name.startswith("_deleted_")
-        ]
-        active_features = [
-            f for f in self.form.features
-            if f.confirmed and not f.name.startswith("_deleted_")
-        ]
-
-        parts.append(
-            self.builder.assembly_module(
-                _safe_name(self.form.name),
-                active_components,
-                active_features,
-            )
-        )
-        return "\n".join(parts)
 
     def _emit_render_dispatcher(self) -> str:
         assembly_name = _safe_name(self.form.name)

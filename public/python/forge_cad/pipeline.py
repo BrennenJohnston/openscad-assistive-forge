@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Optional
 
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
+from forge_cad.analyzer.archetype_detect import ArchetypeDetector
 from forge_cad.analyzer.boundary_detect import BoundaryDetector
 from forge_cad.analyzer.feature_detect import FeatureDetector
 from forge_cad.analyzer.loader import FileLoader, LoadedMesh
@@ -17,6 +19,7 @@ from forge_cad.forms.project_form import (
     ComponentEntry,
     FeatureEntry,
     FileEntry,
+    IntentData,
     ProjectForm,
 )
 
@@ -32,11 +35,13 @@ class Pipeline:
         source_dir: Path,
         name: str,
         output_file: str,
+        intent: Optional[IntentData] = None,
     ) -> None:
         self.project_dir = project_dir
         self.source_dir = source_dir
         self.name = name
         self.output_file = output_file
+        self.intent = intent or IntentData()
 
     def run_init(self) -> ProjectForm:
         """Run all analysis stages and write project.yaml."""
@@ -68,12 +73,16 @@ class Pipeline:
             detector = FeatureDetector(meshes, z_profiles, variant_diffs)
             features = detector.detect()
 
+            progress.update(task, description="Stage 5: Detecting archetype...")
+            archetype_det = ArchetypeDetector()
+            archetype = archetype_det.detect(meshes, z_profiles, self.intent)
+
             progress.update(task, description="Stage 6: Detecting boundaries...")
             boundary_det = BoundaryDetector(meshes, components)
             boundaries = boundary_det.detect()
 
             progress.update(task, description="Writing project.yaml...")
-            form = self._build_form(meshes, z_profiles, components, features, boundaries)
+            form = self._build_form(meshes, z_profiles, components, features, boundaries, archetype)
             form.save(self.project_dir / "project.yaml")
 
         self._print_summary(form)
@@ -86,6 +95,7 @@ class Pipeline:
         components: list,
         features: list,
         boundaries: list,
+        archetype: str = "flat_plate",
     ) -> ProjectForm:
         file_entries = [
             FileEntry(
@@ -131,6 +141,8 @@ class Pipeline:
             features=feature_entries,
             boundaries=boundaries,
             z_levels=z_profiles.get("all_levels", []),
+            archetype=archetype,
+            intent=self.intent,
         )
 
     def _print_summary(self, form: ProjectForm) -> None:

@@ -10,6 +10,17 @@ import yaml
 
 
 @dataclass
+class IntentData:
+    """User-supplied intent captured in the pre-analysis questionnaire."""
+
+    object_category: str = "custom"
+    manufacturing_method: str = "fdm"
+    adjustable_dimensions: list[str] = field(default_factory=lambda: ["all"])
+    target_use: str = ""
+    accessibility_needs: list[str] = field(default_factory=list)
+
+
+@dataclass
 class FileEntry:
     """One detected CAD file."""
 
@@ -52,6 +63,7 @@ class ParameterSpec:
     description: str = ""
     section: str = "Parameters"
     confirmed: bool = False
+    locked: bool = False  # When True, suppress Customizer range annotation
 
 
 @dataclass
@@ -85,6 +97,8 @@ class ProjectForm:
     eps: float = 0.01
     review_complete: bool = False
     notes: str = ""
+    archetype: str = "flat_plate"
+    intent: IntentData = field(default_factory=IntentData)
 
     @classmethod
     def from_analysis(
@@ -97,6 +111,8 @@ class ProjectForm:
         components: list,
         features: list,
         boundaries: list,
+        intent: Optional["IntentData"] = None,
+        archetype: str = "flat_plate",
     ) -> "ProjectForm":
         """Build a ProjectForm from analysis pipeline outputs."""
         form = cls(
@@ -105,6 +121,8 @@ class ProjectForm:
             output_file=output_file,
             z_levels=z_profile_result.get("all_levels", []),
             boundaries=boundaries,
+            archetype=archetype,
+            intent=intent if intent is not None else IntentData(),
         )
         for mesh in loaded_meshes:
             form.files.append(FileEntry(
@@ -157,6 +175,14 @@ class ProjectForm:
                 "eps": self.eps,
                 "review_complete": self.review_complete,
                 "notes": self.notes,
+                "archetype": self.archetype,
+            },
+            "intent": {
+                "object_category": self.intent.object_category,
+                "manufacturing_method": self.intent.manufacturing_method,
+                "adjustable_dimensions": self.intent.adjustable_dimensions,
+                "target_use": self.intent.target_use,
+                "accessibility_needs": self.intent.accessibility_needs,
             },
             "z_levels": self.z_levels,
             "files_detected": [self._file_entry_to_dict(f) for f in self.files],
@@ -169,6 +195,7 @@ class ProjectForm:
     @classmethod
     def _from_dict(cls, data: dict) -> "ProjectForm":
         proj = data.get("project", {})
+        intent_data = data.get("intent", {})
         form = cls(
             name=proj.get("name", ""),
             source_dir=proj.get("source_dir", ""),
@@ -178,6 +205,14 @@ class ProjectForm:
             notes=proj.get("notes", ""),
             z_levels=data.get("z_levels", []),
             boundaries=data.get("boundaries", []),
+            archetype=proj.get("archetype", "flat_plate"),
+            intent=IntentData(
+                object_category=intent_data.get("object_category", "custom"),
+                manufacturing_method=intent_data.get("manufacturing_method", "fdm"),
+                adjustable_dimensions=intent_data.get("adjustable_dimensions", ["all"]),
+                target_use=intent_data.get("target_use", ""),
+                accessibility_needs=intent_data.get("accessibility_needs", []),
+            ),
         )
 
         form.files = [
@@ -293,6 +328,7 @@ class ProjectForm:
             "description": p.description,
             "section": p.section,
             "confirmed": p.confirmed,
+            "locked": p.locked,
         }
         if p.min_val is not None:
             d["min"] = p.min_val
@@ -317,4 +353,5 @@ class ProjectForm:
             description=d.get("description", ""),
             section=d.get("section", "Parameters"),
             confirmed=d.get("confirmed", False),
+            locked=d.get("locked", False),
         )
