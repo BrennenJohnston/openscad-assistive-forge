@@ -8,12 +8,25 @@
  * - Light theme: Amber phosphor (DOS P3 monitor)
  */
 
+/* Iosevka Term — SIL Open Font License 1.1
+ * Source: https://github.com/be5invis/Iosevka (v34.2.1)
+ * Only loaded when the mono variant is active (font-family referenced
+ * exclusively under [data-ui-variant='mono'] custom properties).
+ */
+@font-face {
+  font-family: 'Iosevka Term';
+  src: url('/fonts/iosevka-term-regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root[data-ui-variant='mono'] {
   /* Base mono settings - shared across color variants */
 
-  /* Force monospace everywhere */
-  --font-family-base: ui-monospace, 'Courier New', Courier, monospace;
-  --font-family-mono: ui-monospace, 'Courier New', Courier, monospace;
+  /* Prefer self-hosted Iosevka Term; system monospace stack as fallback */
+  --font-family-base: 'Iosevka Term', ui-monospace, 'Courier New', Courier, monospace;
+  --font-family-mono: 'Iosevka Term', ui-monospace, 'Courier New', Courier, monospace;
 
   /* Flatten shadows and borders */
   --shadow-sm: none;
