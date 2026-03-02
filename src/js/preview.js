@@ -950,6 +950,19 @@ export class PreviewManager {
           triangleCount
         );
 
+        if (triangleCount === 0) {
+          geometry.dispose();
+          this.clear();
+          console.warn('[Preview] STL contains no geometry (0 triangles); clearing display.');
+          const emptyError = new Error(
+            'EMPTY_GEOMETRY: The model produced no geometry. ' +
+            'Check that your parameters produce at least one solid object.'
+          );
+          emptyError.code = 'EMPTY_GEOMETRY';
+          reject(emptyError);
+          return;
+        }
+
         // Store vertex count for LOD info
         this.lastVertexCount = vertexCount;
         this.lastTriangleCount = triangleCount;

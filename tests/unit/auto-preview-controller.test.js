@@ -487,6 +487,57 @@ describe('AutoPreviewController', () => {
     })
   })
 
+  describe('isNonPreviewableParameters', () => {
+    it('returns true for "Customizer Settings"', () => {
+      expect(AutoPreviewController.isNonPreviewableParameters({ generate: 'Customizer Settings' })).toBe(true)
+    })
+
+    it('returns true for "customizer settings" (lowercase)', () => {
+      expect(AutoPreviewController.isNonPreviewableParameters({ generate: 'customizer settings' })).toBe(true)
+    })
+
+    it('returns true for "SVG"', () => {
+      expect(AutoPreviewController.isNonPreviewableParameters({ generate: 'SVG' })).toBe(true)
+    })
+
+    it('returns true for "DXF"', () => {
+      expect(AutoPreviewController.isNonPreviewableParameters({ generate: 'DXF' })).toBe(true)
+    })
+
+    it('returns true for "First Layer"', () => {
+      expect(AutoPreviewController.isNonPreviewableParameters({ generate: 'First Layer' })).toBe(true)
+    })
+
+    it('returns false for "3D Printed"', () => {
+      expect(AutoPreviewController.isNonPreviewableParameters({ generate: '3D Printed' })).toBe(false)
+    })
+
+    it('returns false for null parameters', () => {
+      expect(AutoPreviewController.isNonPreviewableParameters(null)).toBe(false)
+    })
+
+    it('returns false for undefined parameters', () => {
+      expect(AutoPreviewController.isNonPreviewableParameters(undefined)).toBe(false)
+    })
+
+    it('returns false for empty string generate value', () => {
+      expect(AutoPreviewController.isNonPreviewableParameters({ generate: '' })).toBe(false)
+    })
+
+    it('returns false when generate is not a string', () => {
+      expect(AutoPreviewController.isNonPreviewableParameters({ generate: 42 })).toBe(false)
+    })
+
+    it('returns false when generate key is absent', () => {
+      expect(AutoPreviewController.isNonPreviewableParameters({ width: 10 })).toBe(false)
+    })
+
+    it('is2DOnlyParameters delegates to isNonPreviewableParameters (backwards compat)', () => {
+      expect(AutoPreviewController.is2DOnlyParameters({ generate: 'SVG' })).toBe(true)
+      expect(AutoPreviewController.is2DOnlyParameters({ generate: '3D Printed' })).toBe(false)
+    })
+  })
+
   describe('Cancel Pending', () => {
     it('clears debounce timer', () => {
       vi.useFakeTimers()

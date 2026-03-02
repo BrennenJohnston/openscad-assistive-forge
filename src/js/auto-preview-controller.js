@@ -504,22 +504,34 @@ export class AutoPreviewController {
   }
 
   /**
-   * Detect whether the current parameters will produce 2D-only geometry.
-   * When true, an STL preview render would fail with "not a 3D object" and
-   * corrupt the WASM module — so we skip it entirely.
+   * Detect whether the current parameters will not produce previewable 3D geometry.
+   * Returns false for normal 3D modes and true for 2D-only modes, non-geometry
+   * modes (Customizer Settings), or empty/whitespace generate values.
+   * When true, an STL preview render would fail or corrupt the WASM module —
+   * so we skip it entirely and show an appropriate message instead.
    * @param {Object} parameters - Current parameter values
    * @returns {boolean}
    */
-  static is2DOnlyParameters(parameters) {
+  static isNonPreviewableParameters(parameters) {
     if (!parameters) return false;
     const gen = parameters.generate;
     if (typeof gen !== 'string') return false;
-    const lower = gen.toLowerCase();
+    const lower = gen.trim().toLowerCase();
+    if (lower === '') return false;
     return (
       lower.includes('svg') ||
       lower.includes('dxf') ||
-      lower.includes('first layer')
+      lower.includes('first layer') ||
+      lower.includes('customizer')
     );
+  }
+
+  /**
+   * @deprecated Use isNonPreviewableParameters instead.
+   * Kept for backwards compatibility with any external callers.
+   */
+  static is2DOnlyParameters(parameters) {
+    return AutoPreviewController.isNonPreviewableParameters(parameters);
   }
 
   /**
@@ -531,17 +543,22 @@ export class AutoPreviewController {
     // Skip STL preview for known 2D-only parameter combinations.
     // These always produce 2D geometry that cannot be exported to STL,
     // and the failed render corrupts the WASM module for subsequent calls.
-    if (AutoPreviewController.is2DOnlyParameters(parameters)) {
+    if (AutoPreviewController.isNonPreviewableParameters(parameters)) {
+      const gen = (parameters.generate || '').trim().toLowerCase();
+      const isCustomizer = gen.includes('customizer');
       console.log(
-        '[AutoPreview] Skipping STL preview for 2D-only generate mode:',
+        '[AutoPreview] Skipping STL preview for non-previewable generate mode:',
         parameters.generate
       );
-      const error = new Error(
-        'MODEL_IS_2D: Your model produces 2D geometry which cannot be displayed in the 3D viewer. ' +
+      const errorMessage = isCustomizer
+        ? 'NO_GEOMETRY_MODE: The current generate setting does not produce geometry. ' +
+          'The 3D preview is not available in this mode. ' +
+          'Adjust the \'generate\' parameter to a 3D output type to see a preview.'
+        : 'MODEL_IS_2D: Your model produces 2D geometry which cannot be displayed in the 3D viewer. ' +
           'To export: select SVG or DXF output format. ' +
-          'To preview in 3D: adjust your model parameters to produce 3D geometry.'
-      );
-      error.code = 'MODEL_IS_2D';
+          'To preview in 3D: adjust your model parameters to produce 3D geometry.';
+      const error = new Error(errorMessage);
+      error.code = isCustomizer ? 'NO_GEOMETRY_MODE' : 'MODEL_IS_2D';
       this.setState(PREVIEW_STATE.ERROR, { error: error.message });
       this.onError(error, 'preview');
       return;
