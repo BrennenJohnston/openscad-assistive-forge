@@ -539,4 +539,51 @@ describe('AutoPreviewController', () => {
       expect(result).toBeNull()
     })
   })
+
+  describe('isNonPreviewableParameters', () => {
+    it('returns true for "Customizer Settings"', () => {
+      expect(AutoPreviewController.isNonPreviewableParameters({ generate: 'Customizer Settings' })).toBe(true)
+    })
+
+    it('returns true for "customizer settings" (case-insensitive)', () => {
+      expect(AutoPreviewController.isNonPreviewableParameters({ generate: 'customizer settings' })).toBe(true)
+    })
+
+    it('returns true for SVG generate modes', () => {
+      expect(AutoPreviewController.isNonPreviewableParameters({ generate: 'SVG' })).toBe(true)
+      expect(AutoPreviewController.isNonPreviewableParameters({ generate: 'svg export' })).toBe(true)
+    })
+
+    it('returns true for DXF generate modes', () => {
+      expect(AutoPreviewController.isNonPreviewableParameters({ generate: 'DXF' })).toBe(true)
+    })
+
+    it('returns true for "First Layer" generate modes', () => {
+      expect(AutoPreviewController.isNonPreviewableParameters({ generate: 'First Layer' })).toBe(true)
+      expect(AutoPreviewController.isNonPreviewableParameters({ generate: 'first layer height' })).toBe(true)
+    })
+
+    it('returns true for empty string generate', () => {
+      expect(AutoPreviewController.isNonPreviewableParameters({ generate: '' })).toBe(true)
+    })
+
+    it('returns true for whitespace-only generate', () => {
+      expect(AutoPreviewController.isNonPreviewableParameters({ generate: '   ' })).toBe(true)
+    })
+
+    it('returns false for 3D generate modes', () => {
+      expect(AutoPreviewController.isNonPreviewableParameters({ generate: '3D Printed' })).toBe(false)
+      expect(AutoPreviewController.isNonPreviewableParameters({ generate: 'STL' })).toBe(false)
+    })
+
+    it('returns false for null/undefined parameters', () => {
+      expect(AutoPreviewController.isNonPreviewableParameters(null)).toBe(false)
+      expect(AutoPreviewController.isNonPreviewableParameters(undefined)).toBe(false)
+    })
+
+    it('returns false when generate is not a string', () => {
+      expect(AutoPreviewController.isNonPreviewableParameters({ generate: 42 })).toBe(false)
+      expect(AutoPreviewController.isNonPreviewableParameters({})).toBe(false)
+    })
+  })
 })

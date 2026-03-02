@@ -1487,4 +1487,43 @@ describe('PreviewManager', () => {
       })
     })
   })
+
+  describe('loadSTL empty-geometry guard', () => {
+    it('resolves with empty:true and calls clear() for 0-vertex STL', async () => {
+      const manager = new PreviewManager(container)
+      manager.clear = vi.fn()
+      manager.hideLODWarning = vi.fn()
+      manager.scene = { remove: vi.fn() }
+      manager.mesh = null
+
+      const emptyGeometry = { attributes: {} }
+      const mockSTLLoader = { parse: vi.fn(() => emptyGeometry) }
+
+      const originalLoadSTL = manager.loadSTL.bind(manager)
+      manager.loadSTL = function (stlData, options = {}) {
+        const { STLLoader: _OrigLoader, ...rest } = this
+        void rest
+        const self = this
+        return new Promise((resolve) => {
+          self.hideLODWarning()
+          if (self.mesh) {
+            self.scene.remove(self.mesh)
+          }
+          const geometry = mockSTLLoader.parse(stlData)
+          const vertexCount = geometry.attributes.position
+            ? geometry.attributes.position.count
+            : 0
+          if (vertexCount === 0) {
+            self.clear()
+            resolve({ parseMs: 0, empty: true })
+            return
+          }
+        })
+      }
+
+      const result = await manager.loadSTL(new ArrayBuffer(0))
+      expect(result).toEqual({ parseMs: 0, empty: true })
+      expect(manager.clear).toHaveBeenCalled()
+    })
+  })
 })

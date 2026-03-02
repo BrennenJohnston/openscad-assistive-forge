@@ -163,6 +163,8 @@ const STORAGE_KEY_OVERLAY_OPACITY = getAppPrefKey('overlay-opacity');
 const STORAGE_KEY_OVERLAY_SOURCE = getAppPrefKey('overlay-source');
 const STORAGE_KEY_OVERLAY_SVG_COLOR = getAppPrefKey('overlay-svg-color');
 const STORAGE_KEY_OVERLAY_AUTO_COLOR = getAppPrefKey('overlay-auto-color');
+const STORAGE_KEY_OVERLAY_WIDTH = getAppPrefKey('overlay-width');
+const STORAGE_KEY_OVERLAY_HEIGHT = getAppPrefKey('overlay-height');
 const STORAGE_KEY_AUTO_ROTATE = getAppPrefKey('auto-rotate');
 const STORAGE_KEY_ROTATE_SPEED = getAppPrefKey('rotate-speed');
 const STORAGE_KEY_MODEL_COLOR = getAppPrefKey('model-color');
@@ -3426,8 +3428,13 @@ async function initApp() {
       {
         type: 'submenu',
         label: 'Examples',
-        disabled: true,
-        tooltip: 'Example files are available in the Features Guide \u2014 use Help \u2192 Features Guide to browse them',
+        items: Object.entries(EXAMPLE_DEFINITIONS)
+          .filter(([key]) => key !== 'keyguard')
+          .map(([key, def]) => ({
+            type: 'action',
+            label: def.description || def.name,
+            handler: () => loadExampleByKey(key),
+          })),
       },
       {
         type: 'action',
@@ -3438,18 +3445,6 @@ async function initApp() {
         handler: () => fileActionsController.onReload(),
       },
       { type: 'separator' },
-      {
-        type: 'action',
-        label: 'New Window',
-        disabled: true,
-        tooltip: 'Not available \u2014 this is a single-page web app; open a new browser tab instead',
-      },
-      {
-        type: 'action',
-        label: 'Open in New Window',
-        disabled: true,
-        tooltip: 'Not available \u2014 this is a single-page web app; open a new browser tab instead',
-      },
       {
         type: 'action',
         label: 'Close',
@@ -3490,13 +3485,6 @@ async function initApp() {
         disabled: true,
         tooltip: 'Libraries are managed in-browser \u2014 use the Libraries panel (Window menu) to add or remove libraries',
       },
-      { type: 'separator' },
-      {
-        type: 'action',
-        label: 'Quit',
-        disabled: true,
-        tooltip: 'Not available in browser \u2014 close the browser tab to exit',
-      },
     ];
   });
 
@@ -3531,7 +3519,26 @@ async function initApp() {
     const canUndo = stateManager.canUndo();
     const canRedo = stateManager.canRedo();
 
-    const editorOnly = { disabled: true, tooltip: 'Requires Code Editor' };
+    const modeManager = getModeManager();
+    const editor = modeManager?.getEditorInstance?.();
+    const expertMode = modeManager?.isExpertMode?.();
+    const canEdit = expertMode && editor;
+    const editorTip = 'Available in Expert Mode with Code Editor';
+
+    function editorAction(label, monacoActionId) {
+      return {
+        type: 'action',
+        label,
+        disabled: !canEdit,
+        tooltip: canEdit ? undefined : editorTip,
+        handler: canEdit
+          ? () => {
+              const action = editor.getAction(monacoActionId);
+              if (action) action.run();
+            }
+          : undefined,
+      };
+    }
 
     return [
       {
@@ -3549,21 +3556,33 @@ async function initApp() {
         handler: () => performRedo(),
       },
       { type: 'separator' },
-      { type: 'action', label: 'Cut', ...editorOnly },
-      { type: 'action', label: 'Copy', ...editorOnly },
-      { type: 'action', label: 'Paste', ...editorOnly },
+      {
+        type: 'action',
+        label: 'Cut',
+        disabled: !canEdit,
+        tooltip: canEdit ? undefined : editorTip,
+        handler: canEdit ? () => document.execCommand('cut') : undefined,
+      },
+      {
+        type: 'action',
+        label: 'Copy',
+        disabled: !canEdit,
+        tooltip: canEdit ? undefined : editorTip,
+        handler: canEdit ? () => document.execCommand('copy') : undefined,
+      },
+      {
+        type: 'action',
+        label: 'Paste',
+        disabled: !canEdit,
+        tooltip: canEdit ? undefined : editorTip,
+        handler: canEdit ? () => document.execCommand('paste') : undefined,
+      },
       { type: 'separator' },
-      { type: 'action', label: 'Indent', ...editorOnly },
-      { type: 'action', label: 'Unindent', ...editorOnly },
-      { type: 'action', label: 'Comment', ...editorOnly },
-      { type: 'action', label: 'Uncomment', ...editorOnly },
-      { type: 'action', label: 'Convert Tabs to Spaces', ...editorOnly },
-      { type: 'action', label: 'Toggle Bookmark', ...editorOnly },
-      { type: 'action', label: 'Jump to next bookmark', ...editorOnly },
-      { type: 'action', label: 'Jump to previous bookmark', ...editorOnly },
-      { type: 'separator' },
-      { type: 'action', label: 'Show Next Tab', ...editorOnly },
-      { type: 'action', label: 'Show Previous Tab', ...editorOnly },
+      editorAction('Indent', 'editor.action.indentLines'),
+      editorAction('Unindent', 'editor.action.outdentLines'),
+      editorAction('Comment', 'editor.action.commentLine'),
+      editorAction('Uncomment', 'editor.action.removeCommentLine'),
+      editorAction('Convert Tabs to Spaces', 'editor.action.indentationToSpaces'),
       { type: 'separator' },
       {
         type: 'action',
@@ -3602,11 +3621,16 @@ async function initApp() {
         handler: () => editActionsController.copyFov(),
       },
       { type: 'separator' },
-      { type: 'action', label: 'Find\u2026', ...editorOnly },
-      { type: 'action', label: 'Find and Replace\u2026', ...editorOnly },
-      { type: 'action', label: 'Find Next', ...editorOnly },
-      { type: 'action', label: 'Find Previous', ...editorOnly },
-      { type: 'action', label: 'Use Selection for Find', ...editorOnly },
+      editorAction('Find\u2026', 'actions.find'),
+      editorAction('Find and Replace\u2026', 'editor.action.startFindReplaceAction'),
+      editorAction('Find Next', 'editor.action.nextMatchFindAction'),
+      editorAction('Find Previous', 'editor.action.previousMatchFindAction'),
+      {
+        type: 'action',
+        label: 'Use Selection for Find',
+        disabled: !canEdit,
+        tooltip: canEdit ? undefined : editorTip,
+      },
       { type: 'separator' },
       {
         type: 'action',
@@ -3754,18 +3778,6 @@ async function initApp() {
       },
       {
         type: 'action',
-        label: 'Display CSG Tree\u2026',
-        disabled: true,
-        tooltip: 'Requires desktop OpenSCAD \u2014 CSG introspection is not available in the browser build',
-      },
-      {
-        type: 'action',
-        label: 'Display CSG Products\u2026',
-        disabled: true,
-        tooltip: 'Requires desktop OpenSCAD \u2014 CSG introspection is not available in the browser build',
-      },
-      {
-        type: 'action',
         label: 'Geometry Info',
         enabled: hasRender,
         tooltip: hasRender ? undefined : 'Render a model first',
@@ -3804,36 +3816,6 @@ async function initApp() {
     }
 
     return [
-      // -- Display Mode Radio Group (all disabled — requires custom WASM) --
-      {
-        type: 'radio',
-        label: 'Preview',
-        group: 'displayMode',
-        disabled: true,
-        tooltip: 'Requires desktop OpenSCAD \u2014 the browser build renders in standard mode only',
-      },
-      {
-        type: 'radio',
-        label: 'Surfaces',
-        group: 'displayMode',
-        disabled: true,
-        tooltip: 'Requires desktop OpenSCAD \u2014 the browser build renders in standard mode only',
-      },
-      {
-        type: 'radio',
-        label: 'Wireframe',
-        group: 'displayMode',
-        disabled: true,
-        tooltip: 'Requires desktop OpenSCAD \u2014 the browser build renders in standard mode only',
-      },
-      {
-        type: 'radio',
-        label: 'Thrown Together',
-        group: 'displayMode',
-        disabled: true,
-        tooltip: 'Requires desktop OpenSCAD \u2014 the browser build renders in standard mode only',
-      },
-      { type: 'separator' },
       // -- Display Toggles --
       {
         type: 'toggle',
@@ -3848,12 +3830,6 @@ async function initApp() {
         shortcutAction: 'toggleAxes',
         checked: displayOptionsController.get('axes'),
         handler: () => displayOptionsController.toggle('axes'),
-      },
-      {
-        type: 'toggle',
-        label: 'Show Scale Markers',
-        disabled: true,
-        tooltip: 'Not yet implemented \u2014 planned for a future release',
       },
       {
         type: 'toggle',
@@ -4040,26 +4016,6 @@ async function initApp() {
       ?.classList.contains('collapsed');
 
     return [
-      {
-        type: 'action',
-        label: 'Next Window',
-        disabled: true,
-        tooltip: 'Not available \u2014 this is a single-page web app; use browser tabs for multiple windows',
-      },
-      {
-        type: 'action',
-        label: 'Previous Window',
-        disabled: true,
-        tooltip: 'Not available \u2014 this is a single-page web app; use browser tabs for multiple windows',
-      },
-      { type: 'separator' },
-      {
-        type: 'submenu',
-        label: 'Jump To\u2026',
-        disabled: true,
-        tooltip: 'Not available \u2014 multi-window navigation is not supported in the browser',
-      },
-      { type: 'separator' },
       // -- Desktop-parity panel toggles --
       panelToggle('codeEditor', 'Editor', 'toggleCodeEditor'),
       panelToggle('consoleOutput', 'Console', 'toggleConsole'),
@@ -6051,11 +6007,11 @@ async function initApp() {
     }
 
     if (overlayWidthInput) {
-      overlayWidthInput.value = Math.round(config.width);
+      overlayWidthInput.value = parseFloat(config.width.toFixed(1));
     }
 
     if (overlayHeightInput) {
-      overlayHeightInput.value = Math.round(config.height);
+      overlayHeightInput.value = parseFloat(config.height.toFixed(1));
     }
 
     if (overlayOffsetXInput) {
@@ -6420,6 +6376,7 @@ async function initApp() {
       if (!isNaN(width) && previewManager) {
         previewManager.setOverlaySize({ width });
         updateOverlayUIFromConfig();
+        localStorage.setItem(STORAGE_KEY_OVERLAY_WIDTH, String(width));
       }
     });
   }
@@ -6431,6 +6388,7 @@ async function initApp() {
       if (!isNaN(height) && previewManager) {
         previewManager.setOverlaySize({ height });
         updateOverlayUIFromConfig();
+        localStorage.setItem(STORAGE_KEY_OVERLAY_HEIGHT, String(height));
       }
     });
   }
@@ -8924,6 +8882,25 @@ async function initApp() {
             if (overlayOpacityValue) {
               overlayOpacityValue.textContent = `${opacity}%`;
             }
+          }
+        }
+
+        // Restore overlay width/height from localStorage
+        const savedOverlayWidth = localStorage.getItem(STORAGE_KEY_OVERLAY_WIDTH);
+        const savedOverlayHeight = localStorage.getItem(STORAGE_KEY_OVERLAY_HEIGHT);
+        if (savedOverlayWidth || savedOverlayHeight) {
+          const sizeUpdate = {};
+          if (savedOverlayWidth) {
+            const w = parseFloat(savedOverlayWidth);
+            if (!isNaN(w) && w > 0) sizeUpdate.width = w;
+          }
+          if (savedOverlayHeight) {
+            const h = parseFloat(savedOverlayHeight);
+            if (!isNaN(h) && h > 0) sizeUpdate.height = h;
+          }
+          if (Object.keys(sizeUpdate).length > 0) {
+            previewManager.setOverlaySize(sizeUpdate);
+            updateOverlayUIFromConfig();
           }
         }
 
@@ -12286,6 +12263,9 @@ if (rounded) {
           const code = currentEditor.getValue();
           editorStateManager.setSource(code, { markDirty: false });
         }
+
+        // Clear editor instance so Edit menu items disable in Standard Mode
+        modeManager.setEditorInstance(null);
       }
     }
 
@@ -12333,6 +12313,9 @@ if (rounded) {
       if (editorStateManager.setTextareaElement && currentEditor.textarea) {
         editorStateManager.setTextareaElement(currentEditor.textarea);
       }
+
+      // Register editor instance with ModeManager for Edit menu wiring
+      modeManager.setEditorInstance(currentEditor);
     }
 
     /**

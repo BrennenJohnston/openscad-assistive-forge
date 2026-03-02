@@ -931,7 +931,9 @@ export class PreviewManager {
         const loader = new STLLoader();
         const geometry = loader.parse(stlData);
 
-        const vertexCount = geometry.attributes.position.count;
+        const vertexCount = geometry.attributes.position
+          ? geometry.attributes.position.count
+          : 0;
         const triangleCount = vertexCount / 3;
         const parseMs = Math.round(performance.now() - parseStartTime);
         console.log(
@@ -940,6 +942,13 @@ export class PreviewManager {
           'triangles:',
           triangleCount
         );
+
+        if (vertexCount === 0) {
+          console.warn('[Preview] Empty STL — no geometry produced');
+          this.clear();
+          resolve({ parseMs, empty: true });
+          return;
+        }
 
         // Store vertex count for LOD info
         this.lastVertexCount = vertexCount;

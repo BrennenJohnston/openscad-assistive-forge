@@ -277,6 +277,41 @@ describe('ModeManager', () => {
     });
   });
 
+  describe('isExpertMode', () => {
+    it('returns false in standard mode', () => {
+      expect(modeManager.isExpertMode()).toBe(false);
+    });
+
+    it('returns true in expert mode', () => {
+      modeManager.switchMode('expert');
+      expect(modeManager.isExpertMode()).toBe(true);
+    });
+
+    it('returns false after switching back to standard', () => {
+      modeManager.switchMode('expert');
+      modeManager.switchMode('standard');
+      expect(modeManager.isExpertMode()).toBe(false);
+    });
+  });
+
+  describe('editor instance', () => {
+    it('returns null when no editor is set', () => {
+      expect(modeManager.getEditorInstance()).toBeNull();
+    });
+
+    it('stores and retrieves an editor instance', () => {
+      const fakeEditor = { getValue: () => 'code' };
+      modeManager.setEditorInstance(fakeEditor);
+      expect(modeManager.getEditorInstance()).toBe(fakeEditor);
+    });
+
+    it('clears the editor instance when set to null', () => {
+      modeManager.setEditorInstance({ getValue: () => '' });
+      modeManager.setEditorInstance(null);
+      expect(modeManager.getEditorInstance()).toBeNull();
+    });
+  });
+
   describe('singleton', () => {
     it('should return same instance with getModeManager', () => {
       const instance1 = getModeManager();
