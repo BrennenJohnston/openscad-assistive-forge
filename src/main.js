@@ -39,6 +39,7 @@ import {
   COMPLEXITY_TIER,
 } from './js/quality-tiers.js';
 import { PreviewManager, getThreeModule } from './js/preview.js';
+import { normalizeHexColor } from './js/color-utils.js';
 import {
   AutoPreviewController,
   PREVIEW_STATE,
@@ -5417,6 +5418,48 @@ async function initApp() {
     });
   }
 
+  // Wire grid color picker
+  const gridColorPicker = document.getElementById('gridColorPicker');
+  const resetGridColorBtn = document.getElementById('resetGridColorBtn');
+
+  function syncGridColorPicker() {
+    if (!gridColorPicker || !previewManager) return;
+    const custom = previewManager.getGridColor();
+    if (custom) {
+      gridColorPicker.value = custom;
+    } else {
+      const themeKey = previewManager.currentTheme || 'light';
+      const PREVIEW_COLORS_MAP = {
+        light: '#cccccc',
+        dark: '#404040',
+        'light-hc': '#000000',
+        'dark-hc': '#ffffff',
+        mono: '#00ff00',
+        'mono-light': '#ffb000',
+      };
+      gridColorPicker.value = PREVIEW_COLORS_MAP[themeKey] || '#cccccc';
+    }
+  }
+
+  if (gridColorPicker) {
+    syncGridColorPicker();
+    gridColorPicker.addEventListener('input', () => {
+      if (previewManager) {
+        previewManager.setGridColor(gridColorPicker.value);
+      }
+    });
+  }
+
+  if (resetGridColorBtn) {
+    resetGridColorBtn.addEventListener('click', () => {
+      if (previewManager) {
+        previewManager.resetGridColor();
+        syncGridColorPicker();
+        updateStatus('Grid color reset to theme default');
+      }
+    });
+  }
+
   // Wire grid size preset selector, custom inputs, and user-saved custom presets
   const gridPresetSelect = document.getElementById('gridPresetSelect');
   const gridWidthInput = document.getElementById('gridWidthInput');
@@ -7242,6 +7285,24 @@ async function initApp() {
     }
   }
 
+  let _activeColorParamNames = [];
+
+  function _updateColorLegend(colorNames) {
+    if (colorNames !== undefined) _activeColorParamNames = colorNames || [];
+    if (!previewManager) return;
+    if (_activeColorParamNames.length < 2) {
+      previewManager.hideColorLegend();
+      return;
+    }
+    const state = stateManager.getState();
+    const params = state?.parameters || {};
+    const entries = _activeColorParamNames.map((name) => ({
+      name,
+      value: normalizeHexColor(params[name]) || '#888888',
+    }));
+    previewManager.showColorLegend(entries);
+  }
+
   // Update status
   function updateStatus(message, statusType = 'default') {
     // Update the drawer status area (hidden but kept for screen readers)
@@ -8599,6 +8660,8 @@ async function initApp() {
           }
           // Update button state when parameters change
           updatePrimaryActionButton();
+          // Refresh color legend swatches with new parameter values
+          _updateColorLegend();
           // Sync overlay with include_screenshot param
           syncOverlayWithScreenshotParam(values);
         }
@@ -8945,6 +9008,9 @@ async function initApp() {
             }
           }
 
+          // Sync grid color picker to show theme default when no custom color is set
+          syncGridColorPicker();
+
           // Update mono variant assets when theme changes (light=amber, dark=green)
           const root = document.documentElement;
           if (root.getAttribute('data-ui-variant') === 'mono') {
@@ -8967,6 +9033,9 @@ async function initApp() {
         autoPreviewController.setColorParamNames(colorParamNames);
         autoPreviewController.setParamTypes(paramTypes);
       }
+
+      // Show color parameter legend when multiple color params exist
+      _updateColorLegend(colorParamNames);
 
       // Set the SCAD content and project files for auto-preview
       if (autoPreviewController) {

@@ -2833,6 +2833,38 @@
                       <span id="gridHelp" class="sr-only"
                         >Toggle grid plane visibility in 3D preview</span
                       >
+                      <div
+                        class="grid-color-row"
+                        role="group"
+                        aria-labelledby="gridColorLabel"
+                      >
+                        <label
+                          for="gridColorPicker"
+                          id="gridColorLabel"
+                          class="grid-color-label"
+                          >Grid color</label
+                        >
+                        <input
+                          type="color"
+                          id="gridColorPicker"
+                          class="grid-color-picker"
+                          value="#cccccc"
+                          aria-label="Grid line color"
+                          aria-describedby="gridColorHelp"
+                        />
+                        <button
+                          type="button"
+                          id="resetGridColorBtn"
+                          class="btn btn-sm btn-outline"
+                          aria-label="Reset grid color to theme default"
+                        >
+                          Reset
+                        </button>
+                        <span id="gridColorHelp" class="sr-only"
+                          >Choose a custom color for grid lines, or reset
+                          to the current theme default</span
+                        >
+                      </div>
                       <label class="preview-setting">
                         <input
                           type="checkbox"

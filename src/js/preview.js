@@ -15,6 +15,7 @@ const STORAGE_KEY_MEASUREMENTS = getAppPrefKey('measurements');
 const STORAGE_KEY_GRID = getAppPrefKey('grid');
 const STORAGE_KEY_GRID_SIZE = getAppPrefKey('grid-size');
 const STORAGE_KEY_CUSTOM_GRID_PRESETS = getAppPrefKey('custom-grid-presets');
+const STORAGE_KEY_GRID_COLOR = getAppPrefKey('grid-color');
 const STORAGE_KEY_AUTO_BED = getAppPrefKey('auto-bed');
 const STORAGE_KEY_CAMERA_COLLAPSED = getAppPrefKey('camera-controls-collapsed');
 const STORAGE_KEY_CAMERA_POSITION = getAppPrefKey('camera-controls-position');
@@ -170,6 +171,9 @@ export class PreviewManager {
     // Grid size (mm) — configurable to match printer bed
     this.gridConfig = this.loadGridSizePreference();
 
+    // Custom grid color override (null = use theme default)
+    this.gridColorOverride = this.loadGridColorPreference();
+
     // Camera projection mode (perspective or orthographic)
     this.projectionMode = 'perspective';
     this.orthoCamera = null; // Lazy-created orthographic camera
@@ -295,7 +299,8 @@ export class PreviewManager {
 
     // Add grid helper on XY plane (OpenSCAD's ground plane)
     // GridHelper by default creates a grid on XZ plane (Y-up), so we rotate it for Z-up
-    this.gridHelper = this._createGridHelper(colors);
+    const gridColors = this._resolveGridColors();
+    this.gridHelper = this._createGridHelper(gridColors);
     // Rotate grid from XZ plane to XY plane (Z-up coordinate system)
     this.gridHelper.rotation.x = Math.PI / 2;
     // Apply saved grid visibility preference
@@ -464,23 +469,9 @@ export class PreviewManager {
     // Update scene background
     this.scene.background.setHex(colors.background);
 
-    // Update grid colors
+    // Update grid colors (custom override takes precedence over theme)
     if (this.gridHelper) {
-      this.scene.remove(this.gridHelper);
-      // Dispose old GridHelper to prevent memory leak
-      if (this.gridHelper.geometry) {
-        this.gridHelper.geometry.dispose();
-      }
-      if (this.gridHelper.material) {
-        this.gridHelper.material.dispose();
-      }
-      // Note: linewidth is ignored in WebGL, relying on color contrast instead
-      this.gridHelper = this._createGridHelper(colors);
-      // Rotate grid from XZ plane to XY plane (Z-up coordinate system)
-      this.gridHelper.rotation.x = Math.PI / 2;
-      // Preserve grid visibility preference when recreating grid
-      this.gridHelper.visible = this.gridEnabled;
-      this.scene.add(this.gridHelper);
+      this._rebuildGrid();
     }
 
     // Update model color if mesh exists
@@ -1148,6 +1139,59 @@ export class PreviewManager {
       isLarge: vertexCount > LOD_CONFIG.vertexWarningThreshold,
       isCritical: vertexCount > LOD_CONFIG.vertexCriticalThreshold,
     };
+  }
+
+  /**
+   * Show a color legend overlay when the SCAD model defines multiple color
+   * parameters. Gives the user visual confirmation of their color choices even
+   * though the 3D mesh is rendered in a single color (STL limitation).
+   *
+   * @param {Array<{name: string, value: string}>} colorParams - Color
+   *   parameter entries, each with a human-readable name and hex value.
+   */
+  showColorLegend(colorParams) {
+    this.hideColorLegend();
+    if (!this.container || !Array.isArray(colorParams) || colorParams.length === 0) return;
+
+    const panel = document.createElement('div');
+    panel.id = 'colorLegend';
+    panel.className = 'color-legend';
+    panel.setAttribute('role', 'status');
+    panel.setAttribute('aria-label', 'Model color parameters');
+
+    const heading = document.createElement('span');
+    heading.className = 'color-legend-title';
+    heading.textContent = 'Color parameters';
+    panel.appendChild(heading);
+
+    for (const { name, value } of colorParams) {
+      const row = document.createElement('div');
+      row.className = 'color-legend-row';
+
+      const swatch = document.createElement('span');
+      swatch.className = 'color-legend-swatch';
+      swatch.style.backgroundColor = value || '#888';
+      swatch.setAttribute('aria-hidden', 'true');
+
+      const label = document.createElement('span');
+      label.className = 'color-legend-label';
+      const displayName = name.replace(/_/g, ' ');
+      label.textContent = `${displayName}: ${value || '(none)'}`;
+
+      row.appendChild(swatch);
+      row.appendChild(label);
+      panel.appendChild(row);
+    }
+
+    this.container.appendChild(panel);
+  }
+
+  /**
+   * Remove the color legend overlay.
+   */
+  hideColorLegend() {
+    const existing = this.container?.querySelector('#colorLegend');
+    if (existing) existing.remove();
   }
 
   /**
@@ -1887,6 +1931,128 @@ export class PreviewManager {
   }
 
   /**
+   * Set a custom grid color, deriving the secondary color automatically.
+   * @param {string} hexColor - CSS hex color (e.g. '#ff0000')
+   */
+  setGridColor(hexColor) {
+    const hex = normalizeHexColor(hexColor);
+    if (!hex) return;
+
+    this.gridColorOverride = hex;
+    this.saveGridColorPreference(hex);
+    this._rebuildGrid();
+  }
+
+  /**
+   * Remove the custom grid color, reverting to the current theme default.
+   */
+  resetGridColor() {
+    this.gridColorOverride = null;
+    this.saveGridColorPreference(null);
+    this._rebuildGrid();
+  }
+
+  /**
+   * @returns {string|null} The current grid color override, or null for theme default.
+   */
+  getGridColor() {
+    return this.gridColorOverride;
+  }
+
+  /**
+   * Return the resolved grid colors (override or theme default).
+   * @returns {{ gridPrimary: number, gridSecondary: number }}
+   */
+  _resolveGridColors() {
+    if (this.gridColorOverride) {
+      const primary = parseInt(this.gridColorOverride.slice(1), 16);
+      const secondary = PreviewManager._deriveSecondaryGridColor(
+        primary,
+        PREVIEW_COLORS[this.currentTheme]?.background ??
+          PREVIEW_COLORS.light.background
+      );
+      return { gridPrimary: primary, gridSecondary: secondary };
+    }
+    const theme = PREVIEW_COLORS[this.currentTheme] || PREVIEW_COLORS.light;
+    return { gridPrimary: theme.gridPrimary, gridSecondary: theme.gridSecondary };
+  }
+
+  /**
+   * Blend the primary grid color 50% toward the scene background to
+   * produce a softer secondary grid line color.
+   * @param {number} primary - 0xRRGGBB primary grid color
+   * @param {number} background - 0xRRGGBB scene background color
+   * @returns {number} 0xRRGGBB secondary color
+   */
+  static _deriveSecondaryGridColor(primary, background) {
+    const blend = (a, b, t) => Math.round(a + (b - a) * t);
+    const pR = (primary >> 16) & 0xff;
+    const pG = (primary >> 8) & 0xff;
+    const pB = primary & 0xff;
+    const bR = (background >> 16) & 0xff;
+    const bG = (background >> 8) & 0xff;
+    const bB = background & 0xff;
+    const r = blend(pR, bR, 0.5);
+    const g = blend(pG, bG, 0.5);
+    const b = blend(pB, bB, 0.5);
+    return (r << 16) | (g << 8) | b;
+  }
+
+  /**
+   * Load persisted grid color preference.
+   * @returns {string|null}
+   */
+  loadGridColorPreference() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY_GRID_COLOR);
+      if (raw && /^#[0-9a-f]{6}$/i.test(raw)) return raw;
+    } catch (_) {
+      // fall through
+    }
+    return null;
+  }
+
+  /**
+   * Persist grid color preference.
+   * @param {string|null} hex
+   */
+  saveGridColorPreference(hex) {
+    try {
+      if (hex) {
+        localStorage.setItem(STORAGE_KEY_GRID_COLOR, hex);
+      } else {
+        localStorage.removeItem(STORAGE_KEY_GRID_COLOR);
+      }
+    } catch (error) {
+      console.warn('[Preview] Could not save grid color preference:', error);
+    }
+  }
+
+  /**
+   * Rebuild the grid using current config, color override, and theme.
+   * @private
+   */
+  _rebuildGrid() {
+    if (!this.scene || !this.gridHelper) return;
+
+    this.scene.remove(this.gridHelper);
+    if (this.gridHelper.geometry) this.gridHelper.geometry.dispose();
+    if (this.gridHelper.material) {
+      if (Array.isArray(this.gridHelper.material)) {
+        this.gridHelper.material.forEach((m) => m.dispose());
+      } else {
+        this.gridHelper.material.dispose();
+      }
+    }
+
+    const colors = this._resolveGridColors();
+    this.gridHelper = this._createGridHelper(colors);
+    this.gridHelper.rotation.x = Math.PI / 2;
+    this.gridHelper.visible = this.gridEnabled;
+    this.scene.add(this.gridHelper);
+  }
+
+  /**
    * Create a GridHelper using the current gridConfig dimensions.
    * Divisions are auto-calculated at 1 per 10mm for a clean appearance.
    * @param {Object} colors - Theme color object with gridPrimary/gridSecondary
@@ -1975,10 +2141,9 @@ export class PreviewManager {
       }
     }
 
-    // Recreate with new size using current theme colors
-    const themeKey = this.currentTheme || 'light';
-    const colors = PREVIEW_COLORS[themeKey] || PREVIEW_COLORS.light;
-    this.gridHelper = this._createGridHelper(colors);
+    // Recreate with new size using resolved colors (custom override or theme)
+    const gridColors = this._resolveGridColors();
+    this.gridHelper = this._createGridHelper(gridColors);
     this.gridHelper.rotation.x = Math.PI / 2;
     this.gridHelper.visible = this.gridEnabled;
     this.scene.add(this.gridHelper);
