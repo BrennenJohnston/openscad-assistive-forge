@@ -3439,18 +3439,6 @@ async function initApp() {
       { type: 'separator' },
       {
         type: 'action',
-        label: 'New Window',
-        disabled: true,
-        tooltip: 'Coming soon — single-window web app',
-      },
-      {
-        type: 'action',
-        label: 'Open in New Window',
-        disabled: true,
-        tooltip: 'Coming soon — single-window web app',
-      },
-      {
-        type: 'action',
         label: 'Close',
         handler: () => document.getElementById('clearFileBtn')?.click(),
       },
@@ -3486,15 +3474,22 @@ async function initApp() {
       {
         type: 'action',
         label: 'Show Library Folder',
-        disabled: true,
-        tooltip: 'Coming soon',
-      },
-      { type: 'separator' },
-      {
-        type: 'action',
-        label: 'Quit',
-        disabled: true,
-        tooltip: 'Coming soon — use browser tab close',
+        tooltip: 'Open the Libraries panel to manage in-browser libraries',
+        handler: () => {
+          const uiCtrl = getUIModeController();
+          if (uiCtrl) {
+            const hidden = new Set(
+              uiCtrl.getPreferencesForExport().hiddenPanelsInBasic
+            );
+            if (hidden.has('libraries')) uiCtrl.togglePanelVisibility('libraries');
+          }
+          const el = document.getElementById('libraryControls');
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            const focusable = el.querySelector('button, input, select, a');
+            if (focusable) focusable.focus();
+          }
+        },
       },
     ];
   });
@@ -3557,9 +3552,6 @@ async function initApp() {
       { type: 'action', label: 'Comment', ...editorOnly },
       { type: 'action', label: 'Uncomment', ...editorOnly },
       { type: 'action', label: 'Convert Tabs to Spaces', ...editorOnly },
-      { type: 'action', label: 'Toggle Bookmark', ...editorOnly },
-      { type: 'action', label: 'Jump to next bookmark', ...editorOnly },
-      { type: 'action', label: 'Jump to previous bookmark', ...editorOnly },
       { type: 'separator' },
       { type: 'action', label: 'Show Next Tab', ...editorOnly },
       { type: 'action', label: 'Show Previous Tab', ...editorOnly },
@@ -3743,18 +3735,6 @@ async function initApp() {
       },
       {
         type: 'action',
-        label: 'Display CSG Tree\u2026',
-        disabled: true,
-        tooltip: 'Coming soon \u2014 requires custom WASM build',
-      },
-      {
-        type: 'action',
-        label: 'Display CSG Products\u2026',
-        disabled: true,
-        tooltip: 'Coming soon \u2014 requires custom WASM build',
-      },
-      {
-        type: 'action',
         label: 'Geometry Info',
         enabled: hasRender,
         tooltip: hasRender ? undefined : 'Render a model first',
@@ -3793,36 +3773,6 @@ async function initApp() {
     }
 
     return [
-      // -- Display Mode Radio Group (all disabled — requires custom WASM) --
-      {
-        type: 'radio',
-        label: 'Preview',
-        group: 'displayMode',
-        disabled: true,
-        tooltip: 'Coming soon',
-      },
-      {
-        type: 'radio',
-        label: 'Surfaces',
-        group: 'displayMode',
-        disabled: true,
-        tooltip: 'Coming soon',
-      },
-      {
-        type: 'radio',
-        label: 'Wireframe',
-        group: 'displayMode',
-        disabled: true,
-        tooltip: 'Coming soon',
-      },
-      {
-        type: 'radio',
-        label: 'Thrown Together',
-        group: 'displayMode',
-        disabled: true,
-        tooltip: 'Coming soon',
-      },
-      { type: 'separator' },
       // -- Display Toggles --
       {
         type: 'toggle',
@@ -3837,12 +3787,6 @@ async function initApp() {
         shortcutAction: 'toggleAxes',
         checked: displayOptionsController.get('axes'),
         handler: () => displayOptionsController.toggle('axes'),
-      },
-      {
-        type: 'toggle',
-        label: 'Show Scale Markers',
-        disabled: true,
-        tooltip: 'Coming soon',
       },
       {
         type: 'toggle',
@@ -4022,26 +3966,6 @@ async function initApp() {
       ?.classList.contains('collapsed');
 
     return [
-      {
-        type: 'action',
-        label: 'Next Window',
-        disabled: true,
-        tooltip: 'Coming soon \u2014 single-window web app',
-      },
-      {
-        type: 'action',
-        label: 'Previous Window',
-        disabled: true,
-        tooltip: 'Coming soon \u2014 single-window web app',
-      },
-      { type: 'separator' },
-      {
-        type: 'submenu',
-        label: 'Jump To\u2026',
-        disabled: true,
-        tooltip: 'Coming soon',
-      },
-      { type: 'separator' },
       // -- Desktop-parity panel toggles --
       panelToggle('codeEditor', 'Editor', 'toggleCodeEditor'),
       panelToggle('consoleOutput', 'Console', 'toggleConsole'),
