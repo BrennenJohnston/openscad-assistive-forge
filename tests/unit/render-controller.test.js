@@ -607,6 +607,113 @@ describe('Capabilities caching across worker restarts', () => {
   })
 })
 
+describe('_hardCancelAndReinit capabilities caching', () => {
+  it('passes cachedCapabilities to init()', async () => {
+    const controller = new RenderController()
+    const caps = { hasManifold: true, hasFastCSG: true, hasLazyUnion: false, hasBinarySTL: true, version: '2024.12' }
+    controller.capabilities = caps
+
+    const initSpy = vi.fn().mockResolvedValue(undefined)
+    controller.init = initSpy
+    controller.worker = { terminate: vi.fn() }
+
+    await controller._hardCancelAndReinit()
+
+    expect(initSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ cachedCapabilities: caps })
+    )
+  })
+
+  it('passes null when no capabilities are cached', async () => {
+    const controller = new RenderController()
+    expect(controller.capabilities).toBeUndefined()
+
+    const initSpy = vi.fn().mockResolvedValue(undefined)
+    controller.init = initSpy
+    controller.worker = { terminate: vi.fn() }
+
+    await controller._hardCancelAndReinit()
+
+    expect(initSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ cachedCapabilities: null })
+    )
+  })
+
+  it('sets _moduleUsed to true after reinit', async () => {
+    const controller = new RenderController()
+    controller._moduleUsed = false
+
+    controller.init = vi.fn().mockResolvedValue(undefined)
+    controller.worker = { terminate: vi.fn() }
+
+    await controller._hardCancelAndReinit()
+
+    expect(controller._moduleUsed).toBe(true)
+  })
+})
+
+describe('Restart serialization', () => {
+  it('concurrent restart() calls only trigger one init()', async () => {
+    const controller = new RenderController()
+    let initCallCount = 0
+
+    controller.terminate = vi.fn()
+    controller.init = vi.fn().mockImplementation(() => {
+      initCallCount++
+      return Promise.resolve()
+    })
+    controller.startHealthMonitoring = vi.fn()
+
+    const p1 = controller.restart()
+    const p2 = controller.restart()
+
+    await Promise.all([p1, p2])
+
+    expect(initCallCount).toBe(1)
+  })
+
+  it('allows a new restart after the first completes', async () => {
+    const controller = new RenderController()
+    let initCallCount = 0
+
+    controller.terminate = vi.fn()
+    controller.init = vi.fn().mockImplementation(() => {
+      initCallCount++
+      return Promise.resolve()
+    })
+    controller.startHealthMonitoring = vi.fn()
+
+    await controller.restart()
+    expect(initCallCount).toBe(1)
+
+    await controller.restart()
+    expect(initCallCount).toBe(2)
+  })
+
+  it('N consecutive restart cycles always pass non-null cachedCapabilities after first detection', async () => {
+    const controller = new RenderController()
+    const caps = { hasManifold: true, hasFastCSG: false, hasLazyUnion: false, hasBinarySTL: true, version: '2024.12' }
+    controller.capabilities = caps
+
+    const initCalls = []
+    controller.terminate = vi.fn()
+    controller.init = vi.fn().mockImplementation((opts) => {
+      initCalls.push(opts)
+      return Promise.resolve()
+    })
+    controller.startHealthMonitoring = vi.fn()
+
+    for (let i = 0; i < 5; i++) {
+      await controller.restart()
+    }
+
+    expect(initCalls).toHaveLength(5)
+    for (const call of initCalls) {
+      expect(call.cachedCapabilities).toEqual(caps)
+    }
+  })
+})
+
 describe('Binary STL Detection', () => {
   it('detects binary STL by bytes per triangle', () => {
     // Binary STL: ~50 bytes per triangle (12 bytes normal + 36 bytes vertices + 2 attribute)

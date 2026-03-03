@@ -33,6 +33,20 @@ The article's exploration of 6-dimensional shape vectors, per-cell contrast enha
 
 ---
 
+## Fonts
+
+### Iosevka Term
+
+The mono UI variant uses Iosevka Term as its primary display font, self-hosted as a WOFF2 web font.
+
+- **Author**: Belleve Invis
+- **URL**: https://github.com/be5invis/Iosevka
+- **Version**: v34.2.1
+- **License**: SIL Open Font License 1.1 (OFL-1.1)
+- **Usage**: Self-hosted in `public/fonts/iosevka-term-regular.woff2`; applied only in the mono UI variant
+
+---
+
 ## Design Inspirations
 
 ### Retrosmart X11 Cursors

@@ -132,6 +132,9 @@ import {
   migrateStorageKeys,
   getAppPrefKey,
   getDrawerStateKey,
+  STORAGE_KEY_HFM_CONTRAST_SCALE,
+  STORAGE_KEY_HFM_FONT_SCALE,
+  STORAGE_KEY_HFM_PERSIST_FADE,
 } from './js/storage-keys.js';
 import {
   initImageMeasurement,
@@ -431,12 +434,15 @@ let _hfmContrastControls = null;
 const _HFM_FONT_SCALE_RANGE = { min: 0.5, max: 2.5, step: 0.05, default: 1 };
 let _hfmFontScale = _HFM_FONT_SCALE_RANGE.default;
 let _hfmFontScaleControls = null;
+const _HFM_PERSIST_FADE_RANGE = { min: 0, max: 1, step: 0.05, default: 0 };
+let _hfmPersistFade = _HFM_PERSIST_FADE_RANGE.default;
 const _HFM_ZOOM_EPSILON = 0.02;
 let _hfmZoomBaseline = null;
 let _hfmZoomListening = false;
 let _hfmZoomHandling = false;
 let _hfmPanAdjustEnabled = false;
 let _hfmPanToggleButtons = null; // { desktop: HTMLButtonElement|null, mobile: HTMLButtonElement|null }
+let _hfmMotionListener = null; // MediaQueryList change listener for prefers-reduced-motion
 
 function _syncHfmPanToggleUi() {
   const btns = [
@@ -447,21 +453,23 @@ function _syncHfmPanToggleUi() {
   // Format values with descriptive labels (Harri's technique terminology)
   // "Edge" = contrast exponent (controls edge sharpness/boundary definition)
   // "Size" = font scale (controls character size/effective resolution)
+  // "Glow" = persist fade (controls phosphor afterglow intensity)
   const edge = _formatHfmContrastValue(_hfmContrastScale);
   const size = _formatHfmFontScaleValue(_hfmFontScale);
+  const glow = _formatHfmPersistFadeValue(_hfmPersistFade);
 
   // Update pan toggle buttons if they exist
   btns.forEach((btn) => {
     btn.setAttribute('aria-pressed', _hfmPanAdjustEnabled ? 'true' : 'false');
     btn.classList.toggle('active', _hfmPanAdjustEnabled);
     btn.title = _hfmPanAdjustEnabled
-      ? `Alt adjust ON (Pan: Edge ${edge}, Size ${size})`
-      : `Alt adjust OFF (Pan controls). Current: Edge ${edge}, Size ${size}`;
+      ? `Alt adjust ON (Pan: Edge ${edge}, Size ${size}, Glow ${glow})`
+      : `Alt adjust OFF (Pan controls). Current: Edge ${edge}, Size ${size}, Glow ${glow}`;
     btn.setAttribute(
       'aria-label',
       _hfmPanAdjustEnabled
-        ? `Alt adjust on. Pan up/down changes edge sharpness (${edge}). Pan left/right changes character size (${size}).`
-        : `Alt adjust off. Pan controls. Current edge sharpness ${edge}, character size ${size}.`
+        ? `Alt adjust on. Pan up/down changes edge sharpness (${edge}). Pan left/right changes character size (${size}). Shift+up/down changes afterglow (${glow}).`
+        : `Alt adjust off. Pan controls. Current edge sharpness ${edge}, character size ${size}, afterglow ${glow}.`
     );
   });
 
@@ -492,20 +500,23 @@ function _updateHfmStatusBar() {
   // Format values
   // Contrast controls edge sharpness via exponent (Harri technique: higher = sharper edges)
   // Font scale controls character size/resolution (higher = larger chars, lower resolution)
+  // Persist fade controls phosphor afterglow intensity
   const edge = _formatHfmContrastValue(_hfmContrastScale);
   const size = _formatHfmFontScaleValue(_hfmFontScale);
+  const glow = _formatHfmPersistFadeValue(_hfmPersistFade);
 
   // Build the display string with descriptive labels aligned with Harri's ASCII research:
   // - Edge Sharpness (contrast exponent): controls boundary definition
   // - Char Size (font scale): controls effective ASCII resolution
+  // - Glow (persist fade): controls phosphor afterglow intensity
   // Include device calibration info when available
   let displayText;
   const deviceInfo = _hfmCalibratedDevice ? ` [${_hfmCalibratedDevice}]` : '';
 
   if (_hfmPanAdjustEnabled) {
-    displayText = `[ALT ADJUST]${deviceInfo} Edge: ${edge} (Up/Down) | Size: ${size} (Left/Right)`;
+    displayText = `[ALT ADJUST]${deviceInfo} Edge: ${edge} (Up/Down) | Size: ${size} (Left/Right) | Glow: ${glow} (Shift+Up/Down)`;
   } else {
-    displayText = `[ALT VIEW]${deviceInfo} Edge: ${edge} | Size: ${size}`;
+    displayText = `[ALT VIEW]${deviceInfo} Edge: ${edge} | Size: ${size} | Glow: ${glow}`;
   }
 
   altAdjustEl.textContent = displayText;
@@ -681,6 +692,30 @@ function _calibrateHfmSettings() {
 let _hfmCalibrated = false;
 let _hfmCalibratedDevice = ''; // Store detected device category for status display
 
+/**
+ * Clear saved HFM settings from localStorage and re-run auto-calibration so
+ * the user gets sensible defaults again.  Triggered by double-clicking the
+ * pan-adjust toggle button.
+ */
+function _resetHfmSettings() {
+  try {
+    localStorage.removeItem(STORAGE_KEY_HFM_CONTRAST_SCALE);
+    localStorage.removeItem(STORAGE_KEY_HFM_FONT_SCALE);
+    localStorage.removeItem(STORAGE_KEY_HFM_PERSIST_FADE);
+  } catch (_) {
+    // Storage unavailable — proceed anyway
+  }
+  _hfmCalibrated = false;
+  const calibrated = _calibrateHfmSettings();
+  _applyHfmContrastScale(calibrated.edgeScale);
+  _applyHfmFontScale(calibrated.sizeScale);
+  _hfmPersistFade = _HFM_PERSIST_FADE_RANGE.default;
+  _applyHfmPersistFade(_hfmPersistFade);
+  _hfmCalibratedDevice = calibrated.deviceCategory;
+  _hfmCalibrated = true;
+  console.log('[Alt View] Settings reset to auto-calibrated defaults:', calibrated);
+}
+
 function _formatHfmContrastValue(scale) {
   return `${Math.round(scale * 100)}%`;
 }
@@ -769,6 +804,17 @@ function _applyHfmContrastScale(scale, options = {}) {
   if (setBaseline && !_hfmZoomHandling) {
     _setHfmZoomBaseline();
   }
+
+  try {
+    localStorage.setItem(STORAGE_KEY_HFM_CONTRAST_SCALE, String(clamped));
+  } catch (error) {
+    if (error.name === 'QuotaExceededError') {
+      console.warn('[Alt View] localStorage quota exceeded — contrast scale not saved');
+    } else {
+      console.warn('[Alt View] Could not save contrast scale:', error);
+    }
+  }
+
   return clamped;
 }
 
@@ -791,6 +837,49 @@ function _applyHfmFontScale(scale, options = {}) {
   if (setBaseline && !_hfmZoomHandling) {
     _setHfmZoomBaseline();
   }
+
+  try {
+    localStorage.setItem(STORAGE_KEY_HFM_FONT_SCALE, String(clamped));
+  } catch (error) {
+    if (error.name === 'QuotaExceededError') {
+      console.warn('[Alt View] localStorage quota exceeded — font scale not saved');
+    } else {
+      console.warn('[Alt View] Could not save font scale:', error);
+    }
+  }
+
+  return clamped;
+}
+
+function _formatHfmPersistFadeValue(value) {
+  return `${Math.round(value * 100)}%`;
+}
+
+function _applyHfmPersistFade(value) {
+  const raw = Number(value);
+  const next = Number.isFinite(raw) ? raw : _HFM_PERSIST_FADE_RANGE.default;
+  const clamped = Math.max(
+    _HFM_PERSIST_FADE_RANGE.min,
+    Math.min(_HFM_PERSIST_FADE_RANGE.max, next)
+  );
+  _hfmPersistFade = clamped;
+
+  if (_hfmAltView?.setPersistFade) {
+    _hfmAltView.setPersistFade(clamped);
+  }
+
+  _syncHfmPanToggleUi();
+
+  try {
+    localStorage.setItem(STORAGE_KEY_HFM_PERSIST_FADE, String(clamped));
+  } catch (error) {
+    if (error.name === 'QuotaExceededError') {
+      console.warn('[Alt View] localStorage quota exceeded — persist fade not saved');
+    } else {
+      console.warn('[Alt View] Could not save persist fade:', error);
+    }
+  }
+
   return clamped;
 }
 
@@ -1491,8 +1580,16 @@ function _injectAltToggle() {
     if (!_hfmAltView || !_hfmEnabled) return;
     _setHfmPanAdjustEnabled(!_hfmPanAdjustEnabled);
   };
+  const handlePanToggleDblClick = (e) => {
+    // Double-click resets saved HFM settings to auto-calibrated defaults
+    if (!_hfmAltView || !_hfmEnabled) return;
+    e.preventDefault();
+    _resetHfmSettings();
+  };
   panToggleBtn.addEventListener('click', handlePanToggleClick);
+  panToggleBtn.addEventListener('dblclick', handlePanToggleDblClick);
   mobilePanToggleBtn.addEventListener('click', handlePanToggleClick);
+  mobilePanToggleBtn.addEventListener('dblclick', handlePanToggleDblClick);
 
   // Wire toggle click handler
   toggleBtn.addEventListener('click', async () => {
@@ -1580,19 +1677,78 @@ async function _enableAltViewWithPreview(toggleBtn) {
   _hfmAltView = await _hfmInitPromise;
   _hfmAltView.enable();
 
-  // Auto-calibrate on first launch based on user's viewing environment
-  // This provides optimal initial Edge (contrast) and Size (font) settings
-  // based on viewport size, DPI, device type, etc.
+  // Live prefers-reduced-motion listener — updates afterglow without disable/re-enable
+  const motionMql = window.matchMedia('(prefers-reduced-motion: reduce)');
+  _hfmMotionListener = (event) => {
+    _hfmAltView?.setReducedMotion(event.matches);
+    if (event.matches) {
+      _hfmPersistFade = 0;
+      _updateHfmStatusBar();
+    } else {
+      let savedFade = null;
+      try {
+        savedFade = localStorage.getItem(STORAGE_KEY_HFM_PERSIST_FADE);
+      } catch (_) { /* storage unavailable */ }
+      const parsed = savedFade !== null ? parseFloat(savedFade) : NaN;
+      const valid = Number.isFinite(parsed) &&
+        parsed >= _HFM_PERSIST_FADE_RANGE.min &&
+        parsed <= _HFM_PERSIST_FADE_RANGE.max;
+      _applyHfmPersistFade(valid ? parsed : _HFM_PERSIST_FADE_RANGE.default);
+    }
+  };
+  motionMql.addEventListener('change', _hfmMotionListener);
+
+  // Restore user's saved settings, falling back to auto-calibration for missing values
   if (!_hfmCalibrated) {
-    const calibrated = _calibrateHfmSettings();
-    _hfmContrastScale = calibrated.edgeScale;
-    _hfmFontScale = calibrated.sizeScale;
-    _hfmCalibratedDevice = calibrated.deviceCategory;
-    _hfmCalibrated = true;
+    let savedContrast = null;
+    let savedFont = null;
+    let savedPersistFade = null;
+    try {
+      savedContrast = localStorage.getItem(STORAGE_KEY_HFM_CONTRAST_SCALE);
+      savedFont = localStorage.getItem(STORAGE_KEY_HFM_FONT_SCALE);
+      savedPersistFade = localStorage.getItem(STORAGE_KEY_HFM_PERSIST_FADE);
+    } catch (_) {
+      // Private browsing or storage unavailable — use calibration
+    }
+
+    const parsedContrast = savedContrast !== null ? parseFloat(savedContrast) : NaN;
+    const parsedFont = savedFont !== null ? parseFloat(savedFont) : NaN;
+    const parsedPersistFade = savedPersistFade !== null ? parseFloat(savedPersistFade) : NaN;
+
+    const contrastValid =
+      Number.isFinite(parsedContrast) &&
+      parsedContrast >= _HFM_CONTRAST_RANGE.min &&
+      parsedContrast <= _HFM_CONTRAST_RANGE.max;
+    const fontValid =
+      Number.isFinite(parsedFont) &&
+      parsedFont >= _HFM_FONT_SCALE_RANGE.min &&
+      parsedFont <= _HFM_FONT_SCALE_RANGE.max;
+    const persistFadeValid =
+      Number.isFinite(parsedPersistFade) &&
+      parsedPersistFade >= _HFM_PERSIST_FADE_RANGE.min &&
+      parsedPersistFade <= _HFM_PERSIST_FADE_RANGE.max;
+
+    if (contrastValid && fontValid) {
+      // Full saved state: skip auto-calibration entirely
+      _hfmContrastScale = parsedContrast;
+      _hfmFontScale = parsedFont;
+      _hfmCalibratedDevice = '';
+      _hfmCalibrated = true;
+    } else {
+      // Auto-calibrate, then overlay any valid saved value
+      const calibrated = _calibrateHfmSettings();
+      _hfmContrastScale = contrastValid ? parsedContrast : calibrated.edgeScale;
+      _hfmFontScale = fontValid ? parsedFont : calibrated.sizeScale;
+      _hfmCalibratedDevice = calibrated.deviceCategory;
+      _hfmCalibrated = true;
+    }
+
+    _hfmPersistFade = persistFadeValid ? parsedPersistFade : _HFM_PERSIST_FADE_RANGE.default;
   }
 
   _applyHfmContrastScale(_hfmContrastScale);
   _applyHfmFontScale(_hfmFontScale);
+  _applyHfmPersistFade(_hfmPersistFade);
   _setHfmZoomBaseline();
   _enableHfmZoomTracking();
   _initHfmContrastControls().setEnabled(true);
@@ -1639,6 +1795,13 @@ async function _enableAltViewWithPreview(toggleBtn) {
 
 function _disableAltViewWithPreview(toggleBtn) {
   const root = document.documentElement;
+
+  // Remove prefers-reduced-motion listener
+  if (_hfmMotionListener) {
+    const motionMql = window.matchMedia('(prefers-reduced-motion: reduce)');
+    motionMql.removeEventListener('change', _hfmMotionListener);
+    _hfmMotionListener = null;
+  }
 
   // Disabling
   if (_hfmAltView) {
@@ -6954,6 +7117,9 @@ async function initApp() {
             if (typeof extra?.stats?.triangles === 'number') {
               autoPreviewHints.lastPreviewTriangles = extra.stats.triangles;
               adaptivePreviewMemo = { key: null, info: null };
+            }
+            if (_hfmEnabled && _hfmAltView?.clearPersistence) {
+              _hfmAltView.clearPersistence();
             }
           }
           updatePreviewStateUI(newState, extra);
@@ -12959,13 +13125,25 @@ if (rounded) {
     // Initialize camera panel controller (right-side drawer)
     cameraPanelController = initCameraPanelController({
       previewManager: null, // Will be set after preview manager is initialized
-      onPanControl: ({ direction }) => {
+      onPanControl: ({ direction, shiftKey }) => {
         const root = document.documentElement;
         const isMono = root.getAttribute('data-ui-variant') === 'mono';
         const canAdjust = _hfmEnabled && _hfmAltView && _hfmPanAdjustEnabled;
         if (!isMono) return false;
         if (!canAdjust) return false;
 
+        if (shiftKey && direction === 'up') {
+          const next = _applyHfmPersistFade(
+            _hfmPersistFade + _HFM_PERSIST_FADE_RANGE.step
+          );
+          return `Alt view afterglow: ${_formatHfmPersistFadeValue(next)}`;
+        }
+        if (shiftKey && direction === 'down') {
+          const next = _applyHfmPersistFade(
+            _hfmPersistFade - _HFM_PERSIST_FADE_RANGE.step
+          );
+          return `Alt view afterglow: ${_formatHfmPersistFadeValue(next)}`;
+        }
         if (direction === 'up') {
           const next = _applyHfmContrastScale(
             _hfmContrastScale + _HFM_CONTRAST_RANGE.step
@@ -13560,6 +13738,9 @@ if (rounded) {
       if (!autoPreviewController && previewManager && stlData) {
         try {
           await previewManager.loadSTL(stlData, { preserveCamera: false });
+          if (_hfmEnabled && _hfmAltView?.clearPersistence) {
+            _hfmAltView.clearPersistence();
+          }
         } catch (loadErr) {
           console.warn('[Generate] Failed to load STL into preview:', loadErr);
         }

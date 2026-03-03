@@ -301,6 +301,7 @@ export class RenderController {
     this.memoryUsage = null;
     this.onMemoryWarning = null;
     this._moduleUsed = false;
+    this._restartInProgress = null;
 
     // Worker health monitoring
     this._heartbeatId = 0;
@@ -506,16 +507,27 @@ export class RenderController {
    * @returns {Promise<void>}
    */
   async restart() {
-    this._workerCrashCount++;
-    console.warn(
-      `[RenderController] Worker restart #${this._workerCrashCount}`
-    );
-    this.terminate(); // also stops health monitoring
-    this.initPromise = null;
-    this.ready = false;
-    await this.init({ cachedCapabilities: this.capabilities || null });
-    // Resume health monitoring after reinit
-    this.startHealthMonitoring();
+    if (this._restartInProgress) {
+      return this._restartInProgress;
+    }
+
+    const doRestart = async () => {
+      this._workerCrashCount++;
+      console.warn(
+        `[RenderController] Worker restart #${this._workerCrashCount}`
+      );
+      this.terminate(); // also stops health monitoring
+      this.initPromise = null;
+      this.ready = false;
+      await this.init({ cachedCapabilities: this.capabilities || null });
+      // Resume health monitoring after reinit
+      this.startHealthMonitoring();
+    };
+
+    this._restartInProgress = doRestart().finally(() => {
+      this._restartInProgress = null;
+    });
+    return this._restartInProgress;
   }
 
   /**
@@ -1196,8 +1208,11 @@ export class RenderController {
    */
   async _hardCancelAndReinit() {
     this.terminate();
+    this.initPromise = null;
+    this.ready = false;
     try {
-      await this.init();
+      await this.init({ cachedCapabilities: this.capabilities || null });
+      this._moduleUsed = true;
     } catch (err) {
       console.error(
         '[RenderController] Failed to reinitialize worker after hard cancel:',
