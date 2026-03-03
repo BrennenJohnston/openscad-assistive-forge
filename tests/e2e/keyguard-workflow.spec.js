@@ -404,6 +404,78 @@ test.describe('Parameter Switching Stability', () => {
     const pageText = await page.textContent('body');
     expect(pageText).not.toContain('WASM module crashed');
   });
+
+  test('should produce non-degenerate geometry after preset switches', async ({ page }) => {
+    test.skip(isCI, 'WASM rendering is slow/unreliable in CI');
+
+    await page.goto('/');
+
+    const zipPath = await createKeyguardZipFixture();
+    await uploadFile(page, zipPath);
+
+    // Wait for parameters and initial preview to settle
+    await expect(page.locator('.param-control').first()).toBeVisible({ timeout: 20000 });
+
+    const presetSelect = page.locator('#presetSelect');
+    const hasPresets = await presetSelect.isVisible({ timeout: 5000 }).catch(() => false);
+
+    if (!hasPresets) {
+      test.skip();
+      return;
+    }
+
+    // Collect available preset options
+    const options = await presetSelect.locator('option').evaluateAll(
+      (els) => els.map((el) => ({ value: el.value, text: el.textContent })).filter((o) => o.value)
+    );
+
+    if (options.length < 2) {
+      test.skip();
+      return;
+    }
+
+    // Switch presets at least 5 times (cycle through available presets)
+    const switchCount = Math.max(5, options.length);
+    for (let i = 0; i < switchCount; i++) {
+      const opt = options[i % options.length];
+      await presetSelect.selectOption(opt.value);
+      // Allow time for auto-preview to render the new preset
+      await page.waitForTimeout(3000);
+    }
+
+    // Wait for final render to settle
+    await page.waitForTimeout(5000);
+
+    // Pixel histogram check: the preview canvas should have non-trivial content
+    const canvas = page.locator('#previewContainer canvas');
+    if (await canvas.isVisible({ timeout: 5000 }).catch(() => false)) {
+      const pixelStats = await canvas.evaluate((el) => {
+        const ctx = el.getContext('webgl2') || el.getContext('webgl');
+        if (!ctx) return { nonBlack: 0, total: 0 };
+        const w = el.width;
+        const h = el.height;
+        const pixels = new Uint8Array(w * h * 4);
+        ctx.readPixels(0, 0, w, h, ctx.RGBA, ctx.UNSIGNED_BYTE, pixels);
+        let nonBlack = 0;
+        for (let i = 0; i < pixels.length; i += 4) {
+          if (pixels[i] > 10 || pixels[i + 1] > 10 || pixels[i + 2] > 10) {
+            nonBlack++;
+          }
+        }
+        return { nonBlack, total: w * h };
+      });
+
+      // At least 1% of pixels should be non-black (model is visible, not degenerate)
+      if (pixelStats.total > 0) {
+        const pct = pixelStats.nonBlack / pixelStats.total;
+        expect(pct).toBeGreaterThan(0.01);
+      }
+    }
+
+    // No error alerts should be present
+    const errorAlerts = await page.locator('[role="alert"].error, .alert-error').count();
+    expect(errorAlerts).toBe(0);
+  });
 });
 
 test.describe('Console Output Exposure', () => {

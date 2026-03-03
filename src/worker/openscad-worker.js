@@ -38,6 +38,7 @@ let assetBaseUrl = ''; // Base URL for fetching assets (fonts, libraries, etc.)
 let wasmAssetLogShown = false;
 let openscadConsoleOutput = ''; // Accumulated console output from OpenSCAD
 let openscadCapabilities = null;
+let _callMainInvoked = false;
 
 function isAbsoluteUrl(value) {
   return /^[a-z]+:\/\//i.test(value);
@@ -620,6 +621,7 @@ async function checkCapabilities() {
     const consoleOutputBeforeHelp = openscadConsoleOutput.length;
 
     try {
+      _callMainInvoked = true;
       await module.callMain(['--help']);
     } catch (_error) {
       // --help might exit with non-zero, that's okay
@@ -1434,8 +1436,16 @@ async function renderWithCallMain(
     // Clear accumulated console output for this render
     openscadConsoleOutput = '';
 
+    if (_callMainInvoked) {
+      console.warn(
+        '[Worker] DEFENSE-IN-DEPTH: callMain already invoked in this module lifetime. ' +
+        'Geometry may be corrupted. The render controller should have restarted the worker.'
+      );
+    }
+
     // Execute OpenSCAD with fail-open retry logic
     try {
+      _callMainInvoked = true;
       const exitCode = await module.callMain(args);
 
       // Check exit code - non-zero means compilation failed.

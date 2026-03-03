@@ -42,16 +42,24 @@
   --color-bg-primary: #000000;
   --color-bg-secondary: #0a0a0a;
   --color-bg-tertiary: #121212;
+  --color-bg-elevated: #000000;
+  --color-bg-primary-rgb: 0, 0, 0;
 
   --color-text-primary: #00ff00;
   --color-text-secondary: #00cc00;
   --color-text-tertiary: #009900;
+  --color-text-muted: #009900;
 
   --color-accent: #00ff00;
+  --color-accent-hover: #33ff33;
   --color-accent-text: #000000;
+  --color-accent-subtle: #001a00;
+  --color-accent-fg: #00ff00;
   --color-on-accent: #000000;
 
   --color-border: #00ff00;
+  --color-border-light: #009900;
+  --color-border-hover: #00ff00;
   --color-hover-bg: #1a4d1a;
   --color-focus: #00ff00;
 
@@ -62,6 +70,14 @@
   --color-warning-bg: #001a00;
   --color-success: #00ff00;
   --color-success-bg: #001a00;
+
+  /* Phase 2: CRT visual effect variables — all reference --color-accent so
+   * they adapt automatically between green (dark) and amber (light) variants. */
+  --crt-glow-tight: 0 0 1px var(--color-accent);
+  --crt-glow-mid: 0 0 4px color-mix(in srgb, var(--color-accent) 40%, transparent);
+  --crt-glow-wide: 0 0 12px color-mix(in srgb, var(--color-accent) 18%, transparent);
+  --crt-scanline-color: rgba(0, 0, 0, 0.12);
+  --crt-vignette-color: rgba(0, 0, 0, 0.52);
 }
 
 /* ========================================
@@ -74,13 +90,19 @@
   --color-bg-primary: #000000;
   --color-bg-secondary: #0a0800;
   --color-bg-tertiary: #121000;
+  --color-bg-elevated: #000000;
+  --color-bg-primary-rgb: 0, 0, 0;
 
   --color-text-primary: #ffb000;
   --color-text-secondary: #cc8c00;
   --color-text-tertiary: #997200;
+  --color-text-muted: #997200;
 
   --color-accent: #ffb000;
+  --color-accent-hover: #ffc333;
   --color-accent-text: #000000;
+  --color-accent-subtle: #1a0800;
+  --color-accent-fg: #ffb000;
   --color-on-accent: #000000;
   --color-on-success: #000000;
   --color-on-warning: #000000;
@@ -89,6 +111,8 @@
   --color-text-on-primary: #000000;
 
   --color-border: #ffb000;
+  --color-border-light: #997200;
+  --color-border-hover: #ffb000;
   --color-hover-bg: #1a1000;
   --color-focus: #ffb000;
 
@@ -215,6 +239,38 @@
   :root[data-ui-variant='mono'],
   :root[data-ui-variant='mono'] body {
     cursor: auto;
+  }
+
+  /* Disable all CRT visual effects — forced-colors mode manages its own
+   * contrast and overlaying generated gradients or glow shadows would
+   * interfere with system-enforced palette. */
+  :root[data-ui-variant='mono'] body::after {
+    display: none;
+  }
+
+  :root[data-ui-variant='mono'] .preview-container::after {
+    display: none;
+  }
+
+  :root[data-ui-variant='mono'] .preview-container {
+    perspective: none;
+  }
+
+  :root[data-ui-variant='mono'] .preview-container canvas {
+    transform: none;
+  }
+
+  :root[data-ui-variant='mono'] .panel-header,
+  :root[data-ui-variant='mono'] .echo-drawer-label,
+  :root[data-ui-variant='mono'] .preview-status-bar,
+  :root[data-ui-variant='mono'] h1,
+  :root[data-ui-variant='mono'] h2,
+  :root[data-ui-variant='mono'] h3 {
+    text-shadow: none;
+  }
+
+  :root[data-ui-variant='mono'] .panel-header::before {
+    content: none;
   }
 }
 
@@ -497,7 +553,8 @@
     border-radius: 0 !important;
   }
 
-  /* Alt Pan Toggle in mobile drawer - ensure icon contrast */
+  /* Alt Pan Toggle in mobile drawer — !important overrides layout.css drawer styles.
+     See also: desktop .alt-pan-toggle block below (outside this media query). */
   :root[data-ui-variant='mono'] .alt-pan-toggle {
     background: var(--color-bg-tertiary) !important;
     border: 1px solid var(--color-accent) !important;
@@ -654,7 +711,13 @@
   scrollbar-color: var(--color-border) var(--color-bg-secondary);
 }
 
-/* Remove gradients and transitions */
+/* Remove gradients and transitions from all DOM elements.
+ *
+ * Scope note: The CSS universal selector (*) does NOT match pseudo-elements
+ * (::before / ::after). CRT effect pseudo-elements — body::after (scanlines)
+ * and .preview-container::after (vignette) — are therefore intentionally
+ * exempt from background-image: none and will render their gradients correctly.
+ */
 :root[data-ui-variant='mono'] * {
   transition-duration: 0s !important;
   background-image: none !important;
@@ -708,7 +771,8 @@
   background: var(--color-bg-primary);
 }
 
-/* Alt Pan adjust toggle button in Pan D-pad center (desktop) */
+/* Alt Pan adjust toggle button in Pan D-pad center (desktop).
+   See also: mobile drawer .alt-pan-toggle block inside @media (max-width: 767px) above. */
 :root[data-ui-variant='mono'] .alt-pan-toggle {
   background: var(--color-bg-tertiary);
   border: 1px solid var(--color-accent);
@@ -978,4 +1042,164 @@
   --shadow-sm: none;
   --shadow-md: none;
   --shadow-lg: none;
+}
+
+/* ========================================
+ * Phase 2: CRT Visual Effects
+ * Approaches cool-retro-term aesthetic through pure CSS.
+ *
+ * Performance notes:
+ *   - Scanline and vignette pseudo-elements use will-change: transform /
+ *     position: fixed to hint GPU compositing.
+ *   - text-shadow is limited to key UI text, not applied globally.
+ *   - All effects are gated behind prefers-reduced-motion and forced-colors.
+ * ======================================== */
+
+/* ----------------------------------------
+ * 4a. Phosphor Glow — layered text-shadow
+ *
+ * Three-stop spread: tight pixel-level bloom (2 px), mid halo (8 px),
+ * and wide corona (22 px). All reference --color-accent so the effect
+ * adapts automatically between green (dark) and amber (light) variants.
+ * Applied only to highly visible UI text to avoid battery / perf impact.
+ * ---------------------------------------- */
+:root[data-ui-variant='mono'] .panel-header,
+:root[data-ui-variant='mono'] .echo-drawer-label,
+:root[data-ui-variant='mono'] .preview-status-bar {
+  text-shadow: var(--crt-glow-tight), var(--crt-glow-mid), var(--crt-glow-wide);
+}
+
+/* Stronger glow on primary headings */
+:root[data-ui-variant='mono'] h1,
+:root[data-ui-variant='mono'] h2,
+:root[data-ui-variant='mono'] h3 {
+  text-shadow:
+    0 0 1px var(--color-accent),
+    0 0 5px color-mix(in srgb, var(--color-accent) 45%, transparent),
+    0 0 14px color-mix(in srgb, var(--color-accent) 20%, transparent);
+}
+
+/* ----------------------------------------
+ * 4b. Scanline Overlay
+ *
+ * body::after is a pseudo-element — NOT matched by the DOM-element-scoped
+ * rule `* { background-image: none !important }` — so the gradient
+ * renders unobstructed without any selector restructuring.
+ * Fixed position keeps scanlines viewport-locked regardless of scroll.
+ * ---------------------------------------- */
+:root[data-ui-variant='mono'] body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0px,
+    transparent 2px,
+    var(--crt-scanline-color) 2px,
+    var(--crt-scanline-color) 4px
+  );
+  will-change: transform;
+}
+
+/* ----------------------------------------
+ * 4c. Screen Curvature + Vignette
+ *
+ * Vignette: .preview-container::after — same pseudo-element exemption
+ * as scanlines; radial-gradient darkens edges to simulate CRT bloom falloff.
+ *
+ * Curvature: subtle scale(1.015) on the canvas creates the impression of
+ * slight barrel expansion without GLSL shaders. perspective on the container
+ * enables 3-D compositing context for child transforms.
+ * ---------------------------------------- */
+:root[data-ui-variant='mono'] .preview-container {
+  position: relative;
+  overflow: hidden;
+  perspective: 1200px;
+}
+
+:root[data-ui-variant='mono'] .preview-container::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+  background-image: radial-gradient(
+    ellipse at center,
+    transparent 48%,
+    var(--crt-vignette-color) 100%
+  );
+  will-change: transform;
+}
+
+:root[data-ui-variant='mono'] .preview-container canvas {
+  transform: scale(1.015);
+  transform-origin: center center;
+  will-change: transform;
+}
+
+/* ----------------------------------------
+ * 4e. Box-drawing character decorations on panel headers
+ *
+ * Prepends a terminal-style ╞═ glyph before panel header content.
+ * As a flex item (::before in a flex container becomes a flex child),
+ * it renders inline before the title text with flex-shrink: 0 so it
+ * is never squeezed out.
+ * ---------------------------------------- */
+:root[data-ui-variant='mono'] .panel-header::before {
+  content: '╞═ ';
+  font-family: var(--font-family-mono);
+  color: var(--color-text-tertiary);
+  font-size: 0.85em;
+  flex-shrink: 0;
+  opacity: 0.8;
+}
+
+/* ========================================
+ * Accessibility: Disable CRT Effects
+ * ======================================== */
+
+/* ----------------------------------------
+ * prefers-reduced-motion: reduce
+ *
+ * Disables ALL CRT effects that could cause visual stress:
+ *   - Scanline and vignette pseudo-elements are hidden
+ *   - Perspective transforms reset to none
+ *   - Phosphor text-shadow removed
+ *   - Box-drawing decorations suppressed
+ *
+ * Box-drawing characters are static text and technically not "motion",
+ * but they are part of the CRT aesthetic and are disabled here for
+ * consistency with a clean reduced-motion experience.
+ * ---------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  :root[data-ui-variant='mono'] body::after {
+    display: none;
+  }
+
+  :root[data-ui-variant='mono'] .preview-container::after {
+    display: none;
+  }
+
+  :root[data-ui-variant='mono'] .preview-container {
+    perspective: none;
+  }
+
+  :root[data-ui-variant='mono'] .preview-container canvas {
+    transform: none;
+  }
+
+  :root[data-ui-variant='mono'] .panel-header,
+  :root[data-ui-variant='mono'] .echo-drawer-label,
+  :root[data-ui-variant='mono'] .preview-status-bar,
+  :root[data-ui-variant='mono'] h1,
+  :root[data-ui-variant='mono'] h2,
+  :root[data-ui-variant='mono'] h3 {
+    text-shadow: none;
+  }
+
+  :root[data-ui-variant='mono'] .panel-header::before {
+    content: none;
+  }
 }

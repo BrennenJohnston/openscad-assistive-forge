@@ -130,10 +130,10 @@ export function initCameraPanelController(options = {}) {
      * - true: handled -> skip normal pan (no announcement)
      * - string: handled -> skip normal pan and announce this message
      */
-    const maybeHandlePanOverride = (direction, source) => {
+    const maybeHandlePanOverride = (direction, source, event) => {
       if (typeof options.onPanControl !== 'function') return false;
       try {
-        const result = options.onPanControl({ direction, source });
+        const result = options.onPanControl({ direction, source, shiftKey: !!event?.shiftKey });
         if (typeof result === 'string') {
           announceAction(result);
           return true;
@@ -185,8 +185,8 @@ export function initCameraPanelController(options = {}) {
       });
 
     // Desktop pan buttons
-    document.getElementById('cameraPanLeft')?.addEventListener('click', () => {
-      if (maybeHandlePanOverride('left', 'desktop')) return;
+    document.getElementById('cameraPanLeft')?.addEventListener('click', (e) => {
+      if (maybeHandlePanOverride('left', 'desktop', e)) return;
       const pm = getPM();
       if (pm?.panCamera) {
         pm.panCamera(-panSpeed, 0);
@@ -194,8 +194,8 @@ export function initCameraPanelController(options = {}) {
       }
     });
 
-    document.getElementById('cameraPanRight')?.addEventListener('click', () => {
-      if (maybeHandlePanOverride('right', 'desktop')) return;
+    document.getElementById('cameraPanRight')?.addEventListener('click', (e) => {
+      if (maybeHandlePanOverride('right', 'desktop', e)) return;
       const pm = getPM();
       if (pm?.panCamera) {
         pm.panCamera(panSpeed, 0);
@@ -203,8 +203,8 @@ export function initCameraPanelController(options = {}) {
       }
     });
 
-    document.getElementById('cameraPanUp')?.addEventListener('click', () => {
-      if (maybeHandlePanOverride('up', 'desktop')) return;
+    document.getElementById('cameraPanUp')?.addEventListener('click', (e) => {
+      if (maybeHandlePanOverride('up', 'desktop', e)) return;
       const pm = getPM();
       if (pm?.panCamera) {
         pm.panCamera(0, panSpeed);
@@ -212,8 +212,8 @@ export function initCameraPanelController(options = {}) {
       }
     });
 
-    document.getElementById('cameraPanDown')?.addEventListener('click', () => {
-      if (maybeHandlePanOverride('down', 'desktop')) return;
+    document.getElementById('cameraPanDown')?.addEventListener('click', (e) => {
+      if (maybeHandlePanOverride('down', 'desktop', e)) return;
       const pm = getPM();
       if (pm?.panCamera) {
         pm.panCamera(0, -panSpeed);
@@ -397,8 +397,8 @@ export function initCameraPanelController(options = {}) {
     // Mobile pan buttons
     document
       .getElementById('mobileCameraPanLeft')
-      ?.addEventListener('click', () => {
-        if (maybeHandlePanOverride('left', 'mobile')) return;
+      ?.addEventListener('click', (e) => {
+        if (maybeHandlePanOverride('left', 'mobile', e)) return;
         const pm = getPM();
         if (pm?.panCamera) {
           pm.panCamera(-panSpeed, 0);
@@ -408,8 +408,8 @@ export function initCameraPanelController(options = {}) {
 
     document
       .getElementById('mobileCameraPanRight')
-      ?.addEventListener('click', () => {
-        if (maybeHandlePanOverride('right', 'mobile')) return;
+      ?.addEventListener('click', (e) => {
+        if (maybeHandlePanOverride('right', 'mobile', e)) return;
         const pm = getPM();
         if (pm?.panCamera) {
           pm.panCamera(panSpeed, 0);
@@ -419,8 +419,8 @@ export function initCameraPanelController(options = {}) {
 
     document
       .getElementById('mobileCameraPanUp')
-      ?.addEventListener('click', () => {
-        if (maybeHandlePanOverride('up', 'mobile')) return;
+      ?.addEventListener('click', (e) => {
+        if (maybeHandlePanOverride('up', 'mobile', e)) return;
         const pm = getPM();
         if (pm?.panCamera) {
           pm.panCamera(0, panSpeed);
@@ -430,8 +430,8 @@ export function initCameraPanelController(options = {}) {
 
     document
       .getElementById('mobileCameraPanDown')
-      ?.addEventListener('click', () => {
-        if (maybeHandlePanOverride('down', 'mobile')) return;
+      ?.addEventListener('click', (e) => {
+        if (maybeHandlePanOverride('down', 'mobile', e)) return;
         const pm = getPM();
         if (pm?.panCamera) {
           pm.panCamera(0, -panSpeed);

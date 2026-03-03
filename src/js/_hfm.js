@@ -19,8 +19,10 @@ let isEnabled = false
 let canvasOpacity = null
 
 // Renderer state (module-level singleton)
-let _overlayEl = null   // HTMLCanvasElement (was <pre>; name kept for minimal diff)
-let _overlayCtx = null  // CanvasRenderingContext2D
+let _overlayEl = null      // HTMLCanvasElement (was <pre>; name kept for minimal diff)
+let _overlayCtx = null     // CanvasRenderingContext2D
+let _persistCanvas = null  // §4d: off-screen persistence canvas
+let _persistCtx = null     // §4d: 2D context for persistence canvas
 let _sampleCanvas = null
 let _sampleCtx = null
 let _lastFrameMs = 0
@@ -35,16 +37,35 @@ let _lookupCache = new Map()
 let _lut = null
 
 // Tuning knobs
-const _FRAME_INTERVAL_MS = 1000 / 15  // throttle text updates (still renders WebGL every frame)
+const _FRAME_INTERVAL_MS = 1000 / 30  // throttle text updates (still renders WebGL every frame)
 const _GLYPH_SCALE = 4                // higher = better shape vectors, slower init
-const _DEFAULT_CONTRAST_EXP = 1.8    // Harri-style per-cell contrast (>1 increases edge definition)
-const _DEFAULT_DIR_CONTRAST_EXP = 2.5 // directional contrast for edge emphasis
+const _DEFAULT_CONTRAST_EXP = 3.2    // Harri-style per-cell contrast (>1 increases edge definition)
+const _DEFAULT_DIR_CONTRAST_EXP = 5.0 // directional contrast for edge emphasis
 const _CACHE_RANGE = 11               // quantization buckets per dimension (11^6 ~= 1.77M keys)
 
 let _contrastScale = 1
 let _contrastExp = _DEFAULT_CONTRAST_EXP
 let _dirContrastExp = _DEFAULT_DIR_CONTRAST_EXP
 let _fontScale = 1
+
+// §4d: Phosphor afterglow / persistence (off by default; enable via setPersistFade())
+const _DEFAULT_PERSIST_FADE = 0
+let _persistFade = 0          // 0 = disabled; set to default after motion check
+let _reducedMotion = false    // mirrors prefers-reduced-motion at init time
+
+// §P4: Adaptive frame-rate governor
+const _MIN_INTERVAL_MS = 33   // ~30 fps (normal ceiling)
+const _MAX_INTERVAL_MS = 250  // ~4 fps (absolute floor)
+let _dynamicInterval = _FRAME_INTERVAL_MS
+let _consecutiveSlowFrames = 0
+let _afterglowAutoDisabled = false
+
+function _checkReducedMotion() {
+  return (
+    typeof window !== 'undefined' &&
+    window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+  )
+}
 
 function _relLum01(r, g, b) {
   // relative luminance (sRGB) in [0,1] (gamma ignored; good enough for this use)
@@ -200,10 +221,20 @@ function _applyDirectionalContrast(v, extSamples) {
 }
 
 function _buildCharModel({ fontFamily, fontSizePx, charW, charH }) {
-  // Build shape vectors for printable characters 32..126 (95 chars)
+  // Base: printable ASCII 32–126 (95 chars)
   const chars = []
   for (let code = 32; code <= 126; code++)
     chars.push(String.fromCharCode(code))
+
+  // §3: Extended Unicode ranges for improved edge/halftone matching.
+  // Block elements: U+2580–U+259F (32 chars) — ▀▄▌▐░▒▓█ and variants
+  for (let code = 0x2580; code <= 0x259F; code++)
+    chars.push(String.fromCharCode(code))
+
+  // Braille blank: U+2800 — single zero-density reference point
+  chars.push('\u2800')
+
+  // Total: 95 ASCII + 32 block elements + 1 Braille = 128 chars (fits Uint8Array)
 
   const cellW = Math.max(2, Math.ceil(charW * _GLYPH_SCALE))
   const cellH = Math.max(2, Math.ceil(charH * _GLYPH_SCALE))
@@ -359,9 +390,11 @@ function _applyCellContrast(v) {
 
 function _ensureOverlay(container) {
   if (_overlayEl) return
-  const { canvas, ctx } = createOverlay(container)
+  const { canvas, ctx, persistCanvas, persistCtx } = createOverlay(container)
   _overlayEl = canvas
   _overlayCtx = ctx
+  _persistCanvas = persistCanvas
+  _persistCtx = persistCtx
 }
 
 function _ensureSampler() {
@@ -387,15 +420,15 @@ function _computeInvertFromScene(scene) {
 /**
  * Compute the adaptive sample-canvas downscale factor.
  *
- * Targets approximately 4 sample pixels per character cell dimension, keeping
+ * Targets approximately 6 sample pixels per character cell dimension, keeping
  * the sample canvas between 5 % and 35 % of viewport resolution for performance.
  *
  * @param {number} charW - character cell width in viewport pixels
  * @returns {number} scale in (0, 1]
  */
 function _computeSampleScale(charW) {
-  const TARGET_SAMPLE_PX = 4  // sample pixels per char-cell dimension
-  return Math.max(0.05, Math.min(0.35, TARGET_SAMPLE_PX / Math.max(1, charW)))
+  const TARGET_SAMPLE_PX = 6  // sample pixels per char-cell dimension
+  return Math.max(0.05, Math.min(0.50, TARGET_SAMPLE_PX / Math.max(1, charW)))
 }
 
 function _renderFrame({
@@ -444,9 +477,9 @@ function _renderFrame({
 
   const jit = [
     [0, 0],
-    [0.35, 0.1],
-    [-0.25, -0.15],
-    [0.1, -0.3],
+    [0.25, -0.2],
+    [-0.25, 0.2],
+    [0.15, 0.25],
   ]
   const jr = Math.max(0.6, Math.min(cellW, cellH) * 0.08)
 
@@ -486,27 +519,18 @@ function _renderFrame({
         v[i] = _clamp01(sum / jit.length)
       }
 
-      // Sample external boundary points for edge detection
+      // Sample external boundary points for edge detection (single sample — sub-pixel
+      // precision is unnecessary for boundary detection at neighboring cells)
       for (let i = 0; i < extPts.length; i++) {
-        const px = baseX + extPts[i][0]
-        const py = baseY + extPts[i][1]
-
-        let sum = 0
-        let count = 0
-        for (let s = 0; s < jit.length; s++) {
-          // IMPORTANT: do NOT clamp before bounds-checking.
-          // Directional contrast relies on truly sampling outside the cell.
-          const sx = Math.round(px + jit[s][0] * jr)
-          const sy = Math.round(py + jit[s][1] * jr)
-          if (sx >= 0 && sx < sampleW && sy >= 0 && sy < sampleH) {
-            const pidx = (sy * sampleW + sx) * 4
-            const lum = _relLum01(imgData[pidx], imgData[pidx + 1], imgData[pidx + 2])
-            sum += invert ? 1 - lum : lum
-            count++
-          }
+        const sx = Math.round(baseX + extPts[i][0])
+        const sy = Math.round(baseY + extPts[i][1])
+        if (sx >= 0 && sx < sampleW && sy >= 0 && sy < sampleH) {
+          const pidx = (sy * sampleW + sx) * 4
+          const lum = _relLum01(imgData[pidx], imgData[pidx + 1], imgData[pidx + 2])
+          extSamples[i] = _clamp01(invert ? 1 - lum : lum)
+        } else {
+          extSamples[i] = 0
         }
-
-        extSamples[i] = count > 0 ? _clamp01(sum / count) : 0
       }
 
       _applyDirectionalContrast(v, extSamples)
@@ -518,7 +542,7 @@ function _renderFrame({
 
   // Sync overlay canvas dimensions to container
   if (_overlayEl.width !== width || _overlayEl.height !== height) {
-    resizeOverlay(_overlayEl, width, height)
+    resizeOverlay(_overlayEl, width, height, _persistCanvas)
   }
 
   // Per-cell phosphor colours derived from source image luminance
@@ -527,7 +551,10 @@ function _renderFrame({
   const colors = sampleColors(imgData, sampleW, cellW_sample, cellH_sample, cols, rows)
 
   const fontStr = `${fontSizePx}px ${fontFamily}`
-  paintFrame(_overlayCtx, chars, colors, cols, rows, charW, charH, fontStr)
+  paintFrame(
+    _overlayCtx, chars, colors, cols, rows, charW, charH, fontStr,
+    _persistCanvas, _persistCtx, _persistFade
+  )
 }
 
 /**
@@ -567,8 +594,20 @@ export async function initAltView(previewManager) {
 
   _recomputeFontForSize(container.clientWidth, container.clientHeight)
 
+  // §4d: Initialise reduced-motion state; afterglow off until first enable()
+  _reducedMotion = _checkReducedMotion()
+
   return {
     enable() {
+      // Re-check reduced-motion on every enable so media-query changes are respected
+      _reducedMotion = _checkReducedMotion()
+      _persistFade = _reducedMotion ? 0 : _DEFAULT_PERSIST_FADE
+
+      // Reset adaptive governor on each enable
+      _dynamicInterval = _FRAME_INTERVAL_MS
+      _consecutiveSlowFrames = 0
+      _afterglowAutoDisabled = false
+
       isEnabled = true
       _overlayEl.style.display = 'block'
       if (canvasOpacity === null) {
@@ -580,6 +619,10 @@ export async function initAltView(previewManager) {
       isEnabled = false
       _overlayEl.style.display = 'none'
       renderer.domElement.style.opacity = canvasOpacity ?? ''
+      // Clear persistence canvas so stale afterglow does not show on next enable
+      if (_persistCanvas && _persistCtx) {
+        _persistCtx.clearRect(0, 0, _persistCanvas.width, _persistCanvas.height)
+      }
     },
     toggle() {
       isEnabled ? this.disable() : this.enable()
@@ -591,13 +634,14 @@ export async function initAltView(previewManager) {
 
       if (!isEnabled) return
       const now = performance.now()
-      if (now - _lastFrameMs < _FRAME_INTERVAL_MS) return
+      if (now - _lastFrameMs < _dynamicInterval) return
       _lastFrameMs = now
 
       const w = container.clientWidth
       const h = container.clientHeight
       if (w <= 0 || h <= 0) return
 
+      const frameStart = performance.now()
       _renderFrame({
         renderer,
         scene,
@@ -608,6 +652,21 @@ export async function initAltView(previewManager) {
         charW: metrics.charW,
         charH: metrics.charH,
       })
+      const frameDuration = performance.now() - frameStart
+
+      // §P4: Adaptive frame-rate governor
+      if (frameDuration > _FRAME_INTERVAL_MS * 1.5) {
+        _dynamicInterval = Math.min(_MAX_INTERVAL_MS, _dynamicInterval * 2)
+        _consecutiveSlowFrames++
+        if (_consecutiveSlowFrames >= 3 && frameDuration > 150 && !_afterglowAutoDisabled) {
+          _afterglowAutoDisabled = true
+          _persistFade = 0
+          console.warn('[Alt View] Afterglow auto-disabled due to sustained low frame rate')
+        }
+      } else if (frameDuration < _FRAME_INTERVAL_MS * 0.75) {
+        _dynamicInterval = Math.max(_MIN_INTERVAL_MS, _dynamicInterval / 2)
+        _consecutiveSlowFrames = 0
+      }
     },
     resize(width, height) {
       _recomputeFontForSize(width, height)
@@ -634,6 +693,8 @@ export async function initAltView(previewManager) {
       _overlayEl?.remove()
       _overlayEl = null
       _overlayCtx = null
+      _persistCanvas = null
+      _persistCtx = null
       _sampleCanvas = null
       _sampleCtx = null
       _charModel = null
@@ -641,5 +702,39 @@ export async function initAltView(previewManager) {
       _lut = null
     },
     isEnabled: () => isEnabled,
+    getEffectiveFps() {
+      return Math.round(1000 / _dynamicInterval)
+    },
+
+    // §4d: Phosphor afterglow controls
+    setPersistFade(value) {
+      const clamped = Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0))
+      // Never enable fade when reduced-motion is active
+      _persistFade = _reducedMotion ? 0 : clamped
+      return _persistFade
+    },
+    getPersistFade() {
+      return _persistFade
+    },
+    /**
+     * Allow the caller to push the current prefers-reduced-motion state without
+     * re-initialising the whole view.  Immediately forces fade to 0 when true.
+     * @param {boolean} reduced
+     */
+    setReducedMotion(reduced) {
+      _reducedMotion = Boolean(reduced)
+      if (_reducedMotion) {
+        _persistFade = 0
+        // Clear any stale persistence content
+        if (_persistCanvas && _persistCtx) {
+          _persistCtx.clearRect(0, 0, _persistCanvas.width, _persistCanvas.height)
+        }
+      }
+    },
+    clearPersistence() {
+      if (_persistCanvas && _persistCtx) {
+        _persistCtx.clearRect(0, 0, _persistCanvas.width, _persistCanvas.height)
+      }
+    },
   }
 }
