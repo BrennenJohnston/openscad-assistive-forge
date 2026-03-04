@@ -224,10 +224,10 @@ test.describe('Bug 1: Console warnings for missing companion files', () => {
     await uploadZip(page, zipPath)
     await page.waitForTimeout(3000)
 
-    // The Console Output panel is a collapsible <details> element.
+    // The OpenSCAD Output panel is a collapsible <details> element.
     // First expand it by clicking the summary, then expand any inner
     // filter sections to make checkboxes visible.
-    const consoleSummary = page.locator('region:has-text("console output") summary, [aria-label*="console"] summary, #consolePanel summary, summary:has-text("Console Output")').first()
+    const consoleSummary = page.locator('[aria-label*="openscad output"] summary, [aria-label*="console"] summary, #consolePanel summary, summary:has-text("OpenSCAD Output"), summary:has-text("Console Output")').first()
     if (await consoleSummary.count() > 0) {
       await consoleSummary.click()
       await page.waitForTimeout(500)

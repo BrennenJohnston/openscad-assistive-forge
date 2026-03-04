@@ -1197,12 +1197,12 @@
               </button>
             </div>
             <div class="param-panel-body" id="paramPanelBody">
-              <!-- Console Output Panel -- Displays ECHO, WARNING, ERROR messages from OpenSCAD -->
+              <!-- OpenSCAD Output Panel -- Displays ECHO, WARNING, ERROR messages from OpenSCAD in chronological order -->
               <details
                 class="console-panel forge-disclosure"
                 id="consolePanel"
                 role="region"
-                aria-label="OpenSCAD console output"
+                aria-label="OpenSCAD output"
               >
                 <summary class="console-summary">
                   <svg
@@ -1221,13 +1221,13 @@
                     <line x1="12" y1="19" x2="20" y2="19"></line>
                   </svg>
                   <span class="console-title forge-disclosure-title"
-                    >Console Output</span
+                    >OpenSCAD Output</span
                   >
                   <button
                     class="panel-help-btn"
                     type="button"
-                    aria-label="About Console Output: shows raw OpenSCAD output including echo() messages, compile info, and timing"
-                    title="Console Output shows raw OpenSCAD output including echo() messages, compile info, and timing. Use this to see what your SCAD code is echoing."
+                    aria-label="About OpenSCAD Output: raw output from the OpenSCAD engine including ECHO statements, warnings, and errors in the order they occurred"
+                    title="OpenSCAD Output: raw output from the OpenSCAD engine, including ECHO statements, warnings, and errors in the order they occurred. Use this to see what your SCAD code is echoing."
                   >?</button>
                   <span
                     id="console-badge"
@@ -1290,20 +1290,20 @@
                     aria-relevant="additions"
                   >
                     <div class="console-empty">
-                      No console output yet. ECHO, WARNING, and ERROR messages
-                      will appear here.
+                      No output yet. ECHO, WARNING, and ERROR messages
+                      from the OpenSCAD engine will appear here.
                     </div>
                   </div>
                 </div>
               </details>
               <!-- File Actions Panel -->
               <!-- File Actions panel removed: all features now in File toolbar menu -->
-              <!-- Error Log Panel -->
+              <!-- Errors and Warnings Panel -->
               <details
                 class="error-log-panel forge-disclosure"
                 id="errorLogPanel"
                 role="region"
-                aria-label="Error log"
+                aria-label="Errors and warnings"
               >
                 <summary class="error-log-summary">
                   <svg
@@ -1325,13 +1325,13 @@
                     <line x1="12" y1="17" x2="12.01" y2="17"></line>
                   </svg>
                   <span class="error-log-title forge-disclosure-title"
-                    >Error Log</span
+                    >Errors and Warnings</span
                   >
                   <button
                     class="panel-help-btn"
                     type="button"
-                    aria-label="About Error Log: shows structured errors and warnings with file and line navigation"
-                    title="Error Log shows structured errors and warnings from OpenSCAD with file/line navigation. Click a line number to jump to the error in the code editor."
+                    aria-label="About Errors and Warnings: structured view of errors and warnings with file location. Click a row to jump to the relevant line."
+                    title="Errors and Warnings: structured view of errors and warnings with file location. Click a row to jump to the relevant line in the code editor."
                   >?</button>
                   <span
                     id="error-log-badge"
@@ -2155,6 +2155,14 @@
                       <line x1="9" y1="15" x2="15" y2="15"></line>
                     </svg>
                     <span class="forge-disclosure-title">Companion Files</span>
+                    <a
+                      href="docs/guides/CONCEPTUAL_MODEL.md#companion-files--extra-files-the-design-needs"
+                      class="panel-help-btn"
+                      target="_blank"
+                      rel="noopener"
+                      aria-label="About Companion Files: extra files that the SCAD design references"
+                      title="Companion Files are extra files (like openings.txt or SVG shapes) that the SCAD design needs to produce correct geometry."
+                    >?</a>
                     <span class="project-files-badge" id="projectFilesBadge"
                       >0</span
                     >
@@ -2385,6 +2393,14 @@
                     <line x1="16" y1="7" x2="16" y2="9"></line>
                   </svg>
                   <span class="forge-disclosure-title">Presets</span>
+                  <a
+                    href="docs/guides/CONCEPTUAL_MODEL.md#parameters--presets--the-configuration"
+                    class="panel-help-btn"
+                    target="_blank"
+                    rel="noopener"
+                    aria-label="About Presets: learn how presets, SCAD files, and companion files work together"
+                    title="Presets are saved configurations. Learn how they work with SCAD files and companion files."
+                  >?</a>
                 </summary>
                 <div class="preset-content">
                   <!-- Legacy: search input (hidden when searchable_combobox flag is on) -->
