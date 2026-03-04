@@ -1905,11 +1905,28 @@ function postProcessDXF(outputBuffer) {
   // without it, Illustrator falls back to text rendering (confirmed by @peterzieba in #4268).
   const out = [];
 
+  // Helper: round a coordinate to 6 decimal places to avoid floating-point noise
+  // in downstream tools (LibreCAD, Inkscape, etc.).  BUG-D fix.
+  function roundCoord(v) {
+    const n = parseFloat(v);
+    if (!Number.isFinite(n)) return v;
+    // Use toPrecision(10) then parseFloat to strip trailing zeros
+    return parseFloat(n.toFixed(6));
+  }
+
+  // Coordinate group codes that should be rounded (X/Y/Z for both start and end points)
+  const COORD_CODES = new Set(['10', '11', '12', '20', '21', '22', '30', '31', '32']);
+
   // Helper to emit a group code/value pair with proper DXF formatting
   // Group codes are right-justified in a 3-char field; values on the next line
   function emit(code, value) {
     out.push(String(code).padStart(3));
-    out.push(String(value));
+    const codeStr = String(code).trim();
+    if (COORD_CODES.has(codeStr) && typeof value === 'number') {
+      out.push(String(roundCoord(value)));
+    } else {
+      out.push(String(value));
+    }
   }
 
   // HEADER section -- minimal R12-compatible header
@@ -1946,6 +1963,17 @@ function postProcessDXF(outputBuffer) {
   emit(0, 'SECTION');
   emit(2, 'ENTITIES');
 
+  // BUG-D fix: deduplicate LINE segments to prevent doubled geometry.
+  // Some WASM DXF outputs contain identical LINE entities for coincident edges.
+  // We track line segments by a canonical key (min endpoint first for order-independence).
+  const seenLineKeys = new Set();
+  function makeLineKey(x1, y1, x2, y2) {
+    const r = roundCoord;
+    const a = `${r(x1)},${r(y1)}`;
+    const b = `${r(x2)},${r(y2)}`;
+    return a < b ? `${a}|${b}` : `${b}|${a}`;
+  }
+
   for (const entity of parsedEntities) {
     if (entity.type === 'LWPOLYLINE') {
       const verts = entity.vertices;
@@ -1955,12 +1983,36 @@ function postProcessDXF(outputBuffer) {
       for (let s = 0; s < segmentCount; s++) {
         const p1 = verts[s];
         const p2 = verts[(s + 1) % verts.length];
+        const key = makeLineKey(p1.x, p1.y, p2.x, p2.y);
+        if (seenLineKeys.has(key)) continue;
+        seenLineKeys.add(key);
         emit(0, 'LINE');
         emit(8, entity.layer);
         emit(10, p1.x);
         emit(20, p1.y);
         emit(11, p2.x);
         emit(21, p2.y);
+      }
+    } else if (entity.type === 'LINE') {
+      // Deduplicate passthrough LINE entities too
+      const rawPairs = entity.rawPairs || [];
+      let x1 = null, y1 = null, x2 = null, y2 = null, layer = '0';
+      for (const ep of rawPairs) {
+        if (ep.code === '8') layer = ep.value;
+        if (ep.code === '10') x1 = parseFloat(ep.value);
+        if (ep.code === '20') y1 = parseFloat(ep.value);
+        if (ep.code === '11') x2 = parseFloat(ep.value);
+        if (ep.code === '21') y2 = parseFloat(ep.value);
+      }
+      if (x1 !== null && y1 !== null && x2 !== null && y2 !== null) {
+        const key = makeLineKey(x1, y1, x2, y2);
+        if (seenLineKeys.has(key)) continue;
+        seenLineKeys.add(key);
+      }
+      emit(0, 'LINE');
+      for (const ep of rawPairs) {
+        if (ep.code === '100') continue;
+        emit(ep.code, ep.value);
       }
     } else {
       // Emit non-LWPOLYLINE entities as-is (skip subclass markers)

@@ -139,6 +139,58 @@ Export the STL and import it into your slicer (PrusaSlicer, Cura, etc.).
 
 Typical print time: 2-6 hours depending on size.
 
+### 9a. Export for laser cutting (SVG or DXF)
+
+Some keyguard projects support a **flat laser-cut version** as an alternative or
+complement to 3D printing. Laser-cut keyguards are typically cut from 3 mm acrylic
+or plywood using a CNC laser cutter.
+
+**Step-by-step SVG/DXF export workflow:**
+
+1. **Set output format** -- In the Output Format dropdown (below the parameter panel),
+   select **SVG** (for Inkscape / LightBurn) or **DXF** (for AutoCAD / LibreCAD).
+   The app will show a "2D Export Workflow" guidance panel automatically.
+
+2. **Check auto-adjusted parameters** -- When you select SVG or DXF, the app
+   shows which parameters will be automatically adjusted for 2D export. These
+   temporary changes apply only during Generate and do **not** permanently change
+   your saved values. Typical adjustments are:
+   - `generate` → "first layer for SVG/DXF file" (exports the flat cross-section)
+   - `type_of_keyguard` → "Laser-Cut" (removes 3D features like rail shoulders)
+   - `use_Laser_Cutting_best_practices` → "yes" (enables kerf compensation)
+
+3. **Click Generate** -- The app sends the adjusted parameters to OpenSCAD and
+   compiles the 2D output. This usually takes 10-30 seconds.
+
+4. **Click Download** -- Save the SVG or DXF file to your computer.
+
+5. **Verify in your laser software** -- Open the file in LightBurn, LaserGRBL,
+   Inkscape, or your cutter's native software. Check:
+   - The cut path covers the full keyguard outline and all openings
+   - Units are in millimetres (not pixels) — scale should be 1:1
+   - The bounding box matches your expected tablet screen dimensions
+
+6. **Cut and finish** -- Follow your material's recommended laser settings.
+   Acrylic typically needs slower passes at lower power than wood. Deburr edges
+   with sandpaper or a file after cutting.
+
+**Why the app adjusts parameters automatically:**
+
+The keyguard OpenSCAD model supports multiple output modes. The 3D version (STL)
+uses raised rails and rounded profiles that don't make sense in a flat 2D cut file.
+The app automatically switches to the 2D mode during export so you get the correct
+flat profile. You never have to remember which combination of settings is needed.
+
+**Troubleshooting SVG/DXF export:**
+
+| Problem | Solution |
+|---------|----------|
+| "Your model produces 2D geometry" warning during preview | This is normal — it means the model is already in 2D export mode. Click Generate to export the file. |
+| SVG file is empty or shows only a dot | Your generate value may be set to a 3D mode. Use the SVG/DXF auto-adjust (it sets the right value automatically). |
+| File opens in Inkscape but has no visible paths | Check that units in Inkscape's Document Properties are set to mm, and that the scale is 1.0 (not scaled to fit the page). |
+| DXF opens in LibreCAD but lines look doubled | This is the BUG-D fix release — duplicate lines are now removed in post-processing. |
+| DXF coordinates look wrong (very small or very large) | Verify the tablet model is selected correctly — the model uses physical mm dimensions. |
+
 ### 10. Test and iterate
 
 Try the printed keyguard with the client:

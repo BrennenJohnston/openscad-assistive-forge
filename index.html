@@ -2626,6 +2626,23 @@
                     <li>Click <strong>Download</strong> to save the SVG or DXF file</li>
                     <li>Open the file in your laser cutter software (e.g. LightBurn, LaserGRBL, Inkscape)</li>
                   </ol>
+                  <!-- Auto-adjustment notification: populated by main.js when
+                       resolve2DExportParameters() would change current params -->
+                  <div
+                    id="format2dAutoAdjust"
+                    class="format-2d-auto-adjust hidden"
+                    role="note"
+                    aria-live="polite"
+                  >
+                    <p class="auto-adjust-title">
+                      &#x2139;&#xFE0F; Parameters auto-adjusted for 2D export:
+                    </p>
+                    <ul id="format2dAutoAdjustList" class="auto-adjust-list"></ul>
+                    <p class="auto-adjust-note">
+                      These changes apply only during Generate — your current
+                      parameter values are not permanently modified.
+                    </p>
+                  </div>
                   <details class="guidance-details">
                     <summary>Keyguard-specific tips</summary>
                     <ul>

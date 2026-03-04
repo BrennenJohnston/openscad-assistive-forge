@@ -4526,6 +4526,32 @@ async function initApp() {
             announceImmediate(
               `${formatName} is a 2D format. See guidance below the format selector.`
             );
+
+            // UX-B: Show "What will be auto-adjusted" indicator
+            const state = stateManager.getState();
+            const autoAdjustDiv = document.getElementById('format2dAutoAdjust');
+            const autoAdjustList = document.getElementById('format2dAutoAdjustList');
+            if (autoAdjustDiv && autoAdjustList && state?.parameters && state?.schema) {
+              const resolved = resolve2DExportParameters(
+                state.parameters,
+                state.schema,
+                format
+              );
+              const adjustments = Object.entries(resolved).filter(
+                ([k, v]) => state.parameters[k] !== v
+              );
+              if (adjustments.length > 0) {
+                autoAdjustList.innerHTML = adjustments
+                  .map(
+                    ([k, v]) =>
+                      `<li><code>${k}</code>: currently <em>${String(state.parameters[k])}</em> → will use <strong>${String(v)}</strong></li>`
+                  )
+                  .join('');
+                autoAdjustDiv.classList.remove('hidden');
+              } else {
+                autoAdjustDiv.classList.add('hidden');
+              }
+            }
           } else {
             format2dGuidance.classList.add('hidden');
           }
