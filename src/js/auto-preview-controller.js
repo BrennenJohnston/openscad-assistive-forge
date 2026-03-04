@@ -5,6 +5,7 @@
 
 import { normalizeHexColor } from './color-utils.js';
 import { getAppPrefKey } from './storage-keys.js';
+import { isEnabled as isFlagEnabled } from './feature-flags.js';
 
 // Storage keys using standardized naming convention
 const STORAGE_KEY_PERF_METRICS = getAppPrefKey('perf-metrics');
@@ -442,9 +443,15 @@ export class AutoPreviewController {
         this.previewManager.setColorOverride(previewColor);
       }
       // Preserve camera position on subsequent loads (after initial preview)
-      const loadResult = await this.previewManager.loadSTL(cached.stl, {
-        preserveCamera: this.initialPreviewDone,
-      });
+      const cachedFormat = cached.format || 'stl';
+      const loadResult =
+        cachedFormat === 'off' && this.previewManager.loadOFF
+          ? await this.previewManager.loadOFF(cached.stl, {
+              preserveCamera: this.initialPreviewDone,
+            })
+          : await this.previewManager.loadSTL(cached.stl, {
+              preserveCamera: this.initialPreviewDone,
+            });
       this.previewParamHash = paramHash;
       this.previewCacheKey = cacheKey;
       // Mark initial preview as done after successful load
@@ -534,6 +541,27 @@ export class AutoPreviewController {
   }
 
   /**
+   * Detect whether a SCAD source file uses color() calls, which enables
+   * COFF (Color OFF) format output from OpenSCAD for per-face color passthrough.
+   *
+   * This is a conservative regex scan — false negatives are safe (fallback to STL),
+   * but false positives waste a slower text-format render with no benefit.
+   * The regex avoids comments and strings on a best-effort basis.
+   *
+   * @param {string} scadContent - OpenSCAD source code
+   * @returns {boolean} true if color() calls are likely present
+   */
+  static scadUsesColor(scadContent) {
+    if (!scadContent || typeof scadContent !== 'string') return false;
+    // Strip single-line // comments and block /* */ comments (approximate)
+    const stripped = scadContent
+      .replace(/\/\/[^\n]*/g, '')
+      .replace(/\/\*[\s\S]*?\*\//g, '');
+    // Match color( with optional whitespace, including named colors like color("red")
+    return /\bcolor\s*\(/.test(stripped);
+  }
+
+  /**
    * Render preview with reduced quality
    * @param {Object} parameters - Parameter values
    * @param {string} paramHash - Parameter hash
@@ -601,6 +629,15 @@ export class AutoPreviewController {
     }
 
     this.setState(PREVIEW_STATE.RENDERING);
+
+    // ENH-A: Use COFF (Color OFF) format when the flag is enabled and the
+    // SCAD source contains color() calls. Verified at runtime: if the WASM
+    // build does NOT emit per-face COFF data the parser falls back gracefully.
+    const useColorPassthrough =
+      isFlagEnabled('color_passthrough') &&
+      AutoPreviewController.scadUsesColor(this.currentScadContent);
+    const previewOutputFormat = useColorPassthrough ? 'off' : 'stl';
+
     let renderFailed = false;
     try {
       const startTime = Date.now();
@@ -609,6 +646,7 @@ export class AutoPreviewController {
         previewParameters,
         {
           ...(quality ? { quality } : {}),
+          outputFormat: previewOutputFormat,
           files: this.projectFiles,
           mainFile: this.mainFilePath,
           libraries: this.enabledLibraries,
@@ -646,9 +684,15 @@ export class AutoPreviewController {
         }
       }
       // Preserve camera position on subsequent loads (after initial preview)
-      const loadResult = await this.previewManager.loadSTL(result.stl, {
-        preserveCamera: this.initialPreviewDone,
-      });
+      const resultFormat = result.format || 'stl';
+      const loadResult =
+        resultFormat === 'off' && this.previewManager.loadOFF
+          ? await this.previewManager.loadOFF(result.stl, {
+              preserveCamera: this.initialPreviewDone,
+            })
+          : await this.previewManager.loadSTL(result.stl, {
+              preserveCamera: this.initialPreviewDone,
+            });
       // Mark initial preview as done after successful load
       this.initialPreviewDone = true;
 
@@ -669,7 +713,7 @@ export class AutoPreviewController {
         `[Preview Performance] ${qualityKey} | ` +
           `${timing.renderMs}ms | ` +
           `${result.stats?.triangles || 0} triangles | ` +
-          `${bytesPerTri < 80 ? 'Binary STL ✓' : bytesPerTri > 100 ? 'ASCII STL ⚠️' : 'Unknown'}`
+          `${resultFormat === 'off' ? (loadResult?.hasColors ? 'COFF ✓' : 'OFF (no color)') : bytesPerTri < 80 ? 'Binary STL ✓' : bytesPerTri > 100 ? 'ASCII STL ⚠️' : 'Unknown'}`
       );
 
       this.setState(PREVIEW_STATE.CURRENT, {
@@ -746,6 +790,7 @@ export class AutoPreviewController {
 
     this.previewCache.set(cacheKey, {
       stl: result.stl,
+      format: result.format || 'stl',
       stats: result.stats,
       durationMs,
       timing: result.timing || {},

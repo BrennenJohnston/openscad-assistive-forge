@@ -98,6 +98,18 @@ export const FLAGS = {
     userConfigurable: true,
     killSwitch: false,
   },
+  color_passthrough: {
+    id: 'color_passthrough',
+    name: 'Color Passthrough (COFF Preview)',
+    description:
+      'Render preview using COFF (Color OFF) format to display per-face colors from color() calls. ' +
+      'Requires the WASM build to emit COFF data — verify before enabling in production. ' +
+      'Falls back to STL automatically when no color() calls are detected.',
+    default: false,
+    rollout: 0,
+    userConfigurable: false,
+    killSwitch: true,
+  },
   basic_advanced_mode: {
     id: 'basic_advanced_mode',
     name: 'Basic/Advanced Mode',

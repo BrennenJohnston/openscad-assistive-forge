@@ -1022,6 +1022,192 @@ export class PreviewManager {
   }
 
   /**
+   * Load and display a model from OFF or COFF (Color OFF) text data.
+   *
+   * OFF format:
+   *   OFF
+   *   numVertices numFaces 0
+   *   x y z          ← one line per vertex
+   *   3 v0 v1 v2     ← per face: vertex count + indices
+   *
+   * COFF (Color OFF) — OpenSCAD color() passthrough:
+   *   COFF
+   *   numVertices numFaces 0
+   *   x y z
+   *   3 v0 v1 v2 r g b a   ← r/g/b/a are floats 0–1
+   *
+   * If no color data is present (plain OFF), the preview falls back to the
+   * standard theme/override color exactly like loadSTL().
+   *
+   * @param {ArrayBuffer|string} offData - OFF/COFF file content (text or ArrayBuffer)
+   * @param {Object} [options]
+   * @param {boolean} [options.preserveCamera=false]
+   * @returns {Promise<{parseMs: number, hasColors: boolean}>}
+   */
+  loadOFF(offData, options = {}) {
+    const { preserveCamera = false } = options;
+    return new Promise((resolve, reject) => {
+      try {
+        const parseStartTime = performance.now();
+
+        const text =
+          typeof offData === 'string'
+            ? offData
+            : new TextDecoder().decode(offData);
+
+        const lines = text
+          .split('\n')
+          .map((l) => l.trim())
+          .filter((l) => l.length > 0 && !l.startsWith('#'));
+
+        if (lines.length === 0) {
+          throw new Error('OFF data is empty');
+        }
+
+        const firstLine = lines[0].toUpperCase();
+        const isCOFF = firstLine === 'COFF';
+        if (firstLine !== 'OFF' && !isCOFF) {
+          throw new Error(`Not a valid OFF file (header: "${lines[0]}")`);
+        }
+
+        const [numVerts, numFaces] = lines[1].split(/\s+/).map(Number);
+        console.log(
+          `[Preview] Loading ${isCOFF ? 'COFF' : 'OFF'} — ${numVerts} verts, ${numFaces} faces`
+        );
+
+        // Parse vertices
+        const vertices = [];
+        for (let i = 0; i < numVerts; i++) {
+          const [x, y, z] = lines[2 + i].split(/\s+/).map(Number);
+          vertices.push(x, y, z);
+        }
+
+        // Parse faces + detect colors
+        const positions = [];
+        const colors = [];
+        let hasColors = false;
+
+        const faceStart = 2 + numVerts;
+        for (let i = 0; i < numFaces; i++) {
+          const parts = lines[faceStart + i].split(/\s+/).map(Number);
+          const n = parts[0]; // vertex count for this face
+          if (n < 3) continue;
+
+          // Fan-triangulate the face
+          const v0 = parts[1];
+          for (let t = 1; t < n - 1; t++) {
+            const va = parts[1 + t];
+            const vb = parts[1 + t + 1];
+            positions.push(
+              vertices[v0 * 3],
+              vertices[v0 * 3 + 1],
+              vertices[v0 * 3 + 2],
+              vertices[va * 3],
+              vertices[va * 3 + 1],
+              vertices[va * 3 + 2],
+              vertices[vb * 3],
+              vertices[vb * 3 + 1],
+              vertices[vb * 3 + 2]
+            );
+            if (isCOFF && parts.length >= n + 5) {
+              const r = parts[n + 1];
+              const g = parts[n + 2];
+              const b = parts[n + 3];
+              // Push same color for each of the 3 triangle vertices
+              colors.push(r, g, b, r, g, b, r, g, b);
+              hasColors = true;
+            }
+          }
+        }
+
+        if (positions.length === 0) {
+          console.warn('[Preview] OFF has no triangulated geometry');
+          this.clear();
+          resolve({ parseMs: Math.round(performance.now() - parseStartTime), hasColors: false });
+          return;
+        }
+
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute(
+          'position',
+          new THREE.Float32BufferAttribute(positions, 3)
+        );
+        if (hasColors && colors.length === positions.length) {
+          geometry.setAttribute(
+            'color',
+            new THREE.Float32BufferAttribute(colors, 3)
+          );
+        }
+        geometry.computeVertexNormals();
+        geometry.center();
+
+        if (this.autoBedEnabled) {
+          this.applyAutoBed(geometry);
+        }
+
+        if (this.mesh) {
+          this.scene.remove(this.mesh);
+          this.mesh.geometry.dispose();
+          this.mesh.material.dispose();
+          this.mesh = null;
+        }
+
+        const material = hasColors
+          ? new THREE.MeshPhongMaterial({
+              vertexColors: true,
+              specular: 0x111111,
+              shininess: 30,
+              flatShading: false,
+            })
+          : (() => {
+              const themeColors = PREVIEW_COLORS[this.currentTheme];
+              const themeHex = `#${themeColors.model.toString(16).padStart(6, '0')}`;
+              const appliedHex = this.colorOverride || themeHex;
+              return new THREE.MeshPhongMaterial({
+                color: parseInt(appliedHex.slice(1), 16),
+                specular: 0x111111,
+                shininess: 30,
+                flatShading: false,
+              });
+            })();
+
+        this.mesh = new THREE.Mesh(geometry, material);
+        this.scene.add(this.mesh);
+
+        const vertexCount = positions.length / 3;
+        const triangleCount = vertexCount / 3;
+        this.lastVertexCount = vertexCount;
+        this.lastTriangleCount = triangleCount;
+
+        if (!hasColors && this.colorOverride) {
+          this.applyColorToMesh();
+        }
+
+        this.rotationCenteringEnabled = false;
+        if (!preserveCamera) {
+          this.fitCameraToModel();
+        }
+        if (this._postLoadHook) {
+          this._postLoadHook();
+        }
+        if (this.measurementsEnabled) {
+          this.showMeasurements();
+        }
+        this.updateModelSummary();
+
+        const parseMs = Math.round(performance.now() - parseStartTime);
+        console.log(
+          `[Preview] OFF loaded in ${parseMs}ms — ${triangleCount} triangles, hasColors=${hasColors}`
+        );
+        resolve({ parseMs, hasColors });
+      } catch (error) {
+        console.error('[Preview] Failed to load OFF:', error);
+        reject(error);
+      }
+    });
+  }
+
+  /**
    * Show LOD (Level of Detail) warning for large models
    * @param {number} vertexCount - Number of vertices
    * @param {number} triangleCount - Number of triangles

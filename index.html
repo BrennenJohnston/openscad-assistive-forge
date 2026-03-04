@@ -1862,6 +1862,27 @@
                     Auto mode picks a visible color for the current
                     theme.</span
                   >
+                  <!-- Tablet device selector: auto-sizes overlay to screen dimensions (ENH-B) -->
+                  <div class="overlay-control overlay-tablet-control">
+                    <label
+                      class="overlay-control-label"
+                      for="overlayTabletSelect"
+                      id="overlayTabletLabel"
+                    >Auto-size to tablet</label>
+                    <select
+                      id="overlayTabletSelect"
+                      class="overlay-tablet-select"
+                      aria-labelledby="overlayTabletLabel"
+                      aria-describedby="overlayTabletHelp"
+                    >
+                      <option value="">-- Select device --</option>
+                    </select>
+                  </div>
+                  <span id="overlayTabletHelp" class="sr-only"
+                    >Select a tablet model to automatically set the overlay
+                    width and height to match the device screen dimensions
+                    in millimetres</span
+                  >
                   <!-- Overlay Dimensions Display (read-only) -->
                   <div
                     class="overlay-control overlay-dimensions-display"
@@ -3055,6 +3076,29 @@
                             aria-label="Delete selected custom grid preset"
                           >
                             Delete preset
+                          </button>
+                        </div>
+                        <!-- Grid color picker (ENH-C) -->
+                        <div class="grid-color-row" id="gridColorRow">
+                          <label
+                            for="gridColorPicker"
+                            class="grid-color-label"
+                          >Grid color</label>
+                          <input
+                            type="color"
+                            id="gridColorPicker"
+                            class="grid-color-input"
+                            aria-label="Grid line color"
+                            title="Change grid line color"
+                          />
+                          <button
+                            type="button"
+                            id="resetGridColorBtn"
+                            class="btn btn-sm btn-outline"
+                            aria-label="Reset grid color to theme default"
+                            title="Reset to theme default"
+                          >
+                            Reset
                           </button>
                         </div>
                       </div>

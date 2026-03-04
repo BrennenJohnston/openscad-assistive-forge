@@ -1,8 +1,8 @@
 # Color Passthrough: Research Findings
 
-**Date:** 2026-03-01
+**Date:** 2026-03-01 (updated 2026-03-03)
 **Related Issues:** #009 (Preserve color coding scheme), #011 (OpenSCAD color passthrough and `#` modifier transparency)
-**Status:** Research spike complete — full color passthrough deferred; fallback implemented.
+**Status:** Feature-flagged implementation complete — COFF verification pending runtime test.
 
 ---
 
@@ -87,30 +87,66 @@ This gives the stakeholder visual confirmation of their color choices without re
 
 ---
 
-## Future Work
+## Implementation Status (2026-03-03)
 
-If full color passthrough is desired:
+The full color passthrough pipeline is now implemented and gated behind the
+`color_passthrough` feature flag (`rollout: 0`, `killSwitch: true`).
 
-1. **Verify COFF output** from the WASM build using the testing procedure above.
-2. If COFF works, implement a `loadOFF(offData)` parser in `preview.js` that:
-   - Parses the COFF text format
-   - Creates a `THREE.BufferGeometry` with vertex colors (`Float32BufferAttribute` for color)
-   - Uses `MeshPhongMaterial({ vertexColors: true })`
-3. Switch the auto-preview pipeline to OFF when `color()` calls are detected in the SCAD source (regex scan or worker metadata).
-4. Fall back to STL when no colors are present (smaller, binary, faster to parse).
+### What was built
 
-### Complexity Estimate
+| Component | File | Description |
+|-----------|------|-------------|
+| Feature flag | `src/js/feature-flags.js` | `color_passthrough` flag, rollout=0, kill-switch enabled |
+| SCAD color detector | `src/js/auto-preview-controller.js` | `AutoPreviewController.scadUsesColor()` static method |
+| OFF/COFF parser | `src/js/preview.js` | `PreviewManager.loadOFF()` — parses COFF, builds vertex-colored geometry |
+| Pipeline routing | `src/js/auto-preview-controller.js` | Passes `outputFormat: 'off'` to render when flag+color detected; chooses `loadOFF` vs `loadSTL` based on `result.format` |
+| Cache support | `src/js/auto-preview-controller.js` | Cache entries now store `format` field; `loadCachedPreview` chooses correct loader |
 
-- OFF parser: ~100 lines
-- Pipeline switching logic: ~50 lines
-- Three.js vertex color material: straightforward
-- **Total:** 1–2 days of focused work, assuming COFF output is confirmed
+### Activation
+
+To enable in production once COFF is verified:
+
+```javascript
+// In feature-flags.js, change:
+color_passthrough: {
+  rollout: 0,      // → change to 100
+  killSwitch: true, // → change to false after bake-in
+}
+```
+
+Or test immediately via URL parameter:
+```
+?feature_color_passthrough=true
+```
+
+### Verification procedure
+
+Before increasing rollout, confirm COFF output from the WASM build:
+
+1. Open the app and load a SCAD file containing:
+   ```openscad
+   color("red")   translate([0,0,0]) cube(10);
+   color("blue")  translate([20,0,0]) cube(10);
+   color("green") translate([40,0,0]) cube(10);
+   ```
+2. Enable the flag via URL: `?feature_color_passthrough=true`
+3. Open DevTools → Application tab → check for `[Preview] COFF ✓` in the console log
+4. If you see `[Preview] OFF (no color)` instead, the WASM build strips color data — stop here
 
 ### Risks
 
 - Manifold backend may not propagate color metadata to the export stage.
 - Performance: OFF is a text format; for large models, parsing may be slower than binary STL.
 - Memory: vertex colors double the per-vertex data size.
+- The `scadUsesColor()` regex scan is approximate; may miss edge cases where `color` appears in variable names.
+
+---
+
+## Future Work
+
+1. **Verify COFF output** using the procedure above.
+2. If verified, increase `rollout` to 100 and remove `killSwitch` after bake-in.
+3. Consider automatic format selection based on `result.format` from the worker (rather than pre-flight regex scan), so detection is perfectly accurate.
 
 ---
 
