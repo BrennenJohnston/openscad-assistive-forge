@@ -116,7 +116,7 @@ color_passthrough: {
 
 Or test immediately via URL parameter:
 ```
-?feature_color_passthrough=true
+?flag_color_passthrough=true
 ```
 
 ### Verification procedure
@@ -129,7 +129,7 @@ Before increasing rollout, confirm COFF output from the WASM build:
    color("blue")  translate([20,0,0]) cube(10);
    color("green") translate([40,0,0]) cube(10);
    ```
-2. Enable the flag via URL: `?feature_color_passthrough=true`
+2. Enable the flag via URL: `?flag_color_passthrough=true`
 3. Open DevTools → Application tab → check for `[Preview] COFF ✓` in the console log
 4. If you see `[Preview] OFF (no color)` instead, the WASM build strips color data — stop here
 

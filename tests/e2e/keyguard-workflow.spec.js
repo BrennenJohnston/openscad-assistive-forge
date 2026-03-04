@@ -478,7 +478,7 @@ test.describe('Parameter Switching Stability', () => {
   });
 });
 
-test.describe('Console Output Exposure', () => {
+test.describe('OpenSCAD Output Exposure', () => {
   test.skip('should display echo output from OpenSCAD', async ({ page }) => {
     test.skip(isCI, 'WASM rendering is slow/unreliable in CI');
     

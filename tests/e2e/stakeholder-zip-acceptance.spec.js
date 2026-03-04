@@ -421,7 +421,7 @@ test.describe('Stakeholder Acceptance Tests - Ken\'s Keyguard ZIP', () => {
     await page.waitForTimeout(500)
   })
 
-  test('PHASE 8: Console Output - ECHO auto-expands panel (Item 4)', async ({ page }) => {
+  test('PHASE 8: OpenSCAD Output - ECHO auto-expands panel (Item 4)', async ({ page }) => {
     await uploadZipAndWait(page, diag)
 
     // After parsing, check if console panel exists

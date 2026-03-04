@@ -39,13 +39,13 @@ const HIDDEN_CLASS = 'ui-mode-hidden';
 const PANEL_REGISTRY = [
   {
     id: 'consoleOutput',
-    label: 'Console Output',
+    label: 'OpenSCAD Output',
     selector: '#consolePanel',
     defaultHiddenInBasic: true,
   },
   {
     id: 'errorLog',
-    label: 'Error Log',
+    label: 'Errors and Warnings',
     selector: '#errorLogPanel',
     defaultHiddenInBasic: true,
   },
