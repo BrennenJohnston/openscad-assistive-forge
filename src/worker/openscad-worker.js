@@ -1441,6 +1441,16 @@ async function renderWithCallMain(
         '[Worker] DEFENSE-IN-DEPTH: callMain already invoked in this module lifetime. ' +
         'Geometry may be corrupted. The render controller should have restarted the worker.'
       );
+      // BUG-A fix: abort the render rather than proceeding with corrupted WASM state.
+      // The needsRestart flag ensures the render controller restarts before retrying.
+      const doubleInvokeError = new Error(
+        'WASM_DOUBLE_INVOKE: The rendering engine was not restarted between renders. ' +
+        'This render has been cancelled to prevent corrupted geometry. ' +
+        'The engine will restart automatically before the next render.'
+      );
+      doubleInvokeError.code = 'WASM_DOUBLE_INVOKE';
+      doubleInvokeError.needsRestart = true;
+      throw doubleInvokeError;
     }
 
     // Execute OpenSCAD with fail-open retry logic
@@ -2108,9 +2118,19 @@ async function render(payload) {
           'Included files will not be found in the virtual filesystem.'
       );
     }
+
+    // Always clear previously mounted files before each render to prevent stale
+    // file residue across preset switches, even when no new files are provided.
+    // BUG-A fix: conditional cleanup only ran when files were provided, leaving
+    // old companion file aliases mounted across preset changes.
+    const _fsClearStart = Date.now();
+    clearMountedFiles();
+    const _fsClearMs = Date.now() - _fsClearStart;
+    if (_fsClearMs > 50) {
+      console.warn(`[Worker FS] clearMountedFiles took ${_fsClearMs}ms — unusually slow`);
+    }
+
     if (files && Object.keys(files).length > 0) {
-      // Clear any previously mounted files to ensure clean FS state
-      clearMountedFiles();
 
       // Convert files object to Map
       const filesMap = new Map(Object.entries(files));

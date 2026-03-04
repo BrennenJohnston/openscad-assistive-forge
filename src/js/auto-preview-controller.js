@@ -248,6 +248,15 @@ export class AutoPreviewController {
     this.projectFiles = projectFiles;
     this.mainFilePath = mainFilePath;
 
+    // BUG-A fix: companion file content changes affect geometry even when
+    // parameters stay the same (e.g., preset aliasing swaps openings files).
+    // Clear the preview cache so the next render dispatches to the worker
+    // with the updated file set rather than serving a stale cached result.
+    this.clearPreviewCache();
+    if (this.currentPreviewKey) {
+      this.setState(PREVIEW_STATE.STALE);
+    }
+
     if (projectFiles && projectFiles.size > 0) {
       console.log(
         `[AutoPreview] Multi-file project: ${projectFiles.size} files, main: ${mainFilePath}`
@@ -530,6 +539,16 @@ export class AutoPreviewController {
    * @param {string} paramHash - Parameter hash
    */
   async renderPreview(parameters, paramHash) {
+    // BUG-C audit: track every render entry for spontaneous-render diagnosis.
+    if (typeof window !== 'undefined') {
+      window.__renderAuditCount = (window.__renderAuditCount || 0) + 1;
+    }
+    console.debug(
+      '[Render Audit] renderPreview entry #' +
+        (typeof window !== 'undefined' ? window.__renderAuditCount : '?') +
+        ' generate=' + (parameters?.generate ?? 'n/a')
+    );
+
     if (AutoPreviewController.isNonPreviewableParameters(parameters)) {
       const gen = (parameters.generate || '').trim().toLowerCase();
       const isCustomizer = gen.includes('customizer');
@@ -537,6 +556,18 @@ export class AutoPreviewController {
         '[AutoPreview] Skipping STL preview for non-previewable generate mode:',
         parameters.generate
       );
+
+      // BUG-C fix: cancel any pending debounce timer so it cannot fire after
+      // this mode-switch and trigger an unexpected render.
+      if (this.debounceTimer) {
+        clearTimeout(this.debounceTimer);
+        this.debounceTimer = null;
+      }
+      // Also clear any pending parameters queued while a render was in progress.
+      this.pendingParameters = null;
+      this.pendingParamHash = null;
+      this.pendingPreviewKey = null;
+
       const message = isCustomizer
         ? 'The current generate setting does not produce geometry. ' +
           'The 3D preview is not available in this mode. ' +

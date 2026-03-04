@@ -970,6 +970,8 @@ export class RenderController {
         if (code === 'INTERNAL_ERROR') return true;
         if (typeof details === 'string' && /\b\d{6,}\b/.test(details))
           return true;
+        // BUG-A fix: double-invoke guard detected stale worker — retry after restart.
+        if (code === 'WASM_DOUBLE_INVOKE') return true;
         return false;
       };
 
@@ -982,9 +984,20 @@ export class RenderController {
             await this.restart();
           } catch (restartErr) {
             console.error(
-              '[RenderController] Worker restart failed — attempting render with existing worker:',
+              '[RenderController] Worker restart failed (first attempt) — retrying once:',
               restartErr
             );
+            // BUG-A fix: retry the restart once before falling back to the existing worker.
+            // The first attempt may fail if the worker is in a half-terminated state.
+            try {
+              await this.restart();
+              console.log('[RenderController] Worker restart succeeded on retry');
+            } catch (retryErr) {
+              console.error(
+                '[RenderController] Worker restart failed after retry — attempting render with existing worker:',
+                retryErr
+              );
+            }
           }
           this._moduleUsed = false;
         }
@@ -1108,6 +1121,9 @@ export class RenderController {
           throw err;
         }
         await this.restart();
+        // Reset _moduleUsed after explicit restart to prevent proactive restart
+        // from firing again inside renderOnce() (would cause a double restart).
+        this._moduleUsed = false;
         return await renderOnce();
       }
     };

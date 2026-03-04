@@ -5000,6 +5000,25 @@ async function initApp() {
     const details = error?.details || '';
     const detailsStr = String(details || '');
 
+    // BUG-B fix: handle NO_GEOMETRY — emitted by isNonPreviewableParameters() when
+    // generate=Customizer Settings (or similar non-previewable mode). The previous mesh
+    // must be cleared so the 3D canvas is empty, matching the expectation that
+    // "Customizer Settings" produces no visible geometry.
+    if (code === 'NO_GEOMETRY') {
+      if (previewManager) {
+        previewManager.clear();
+      }
+      updateStatus(
+        "No geometry in this mode. Adjust 'generate' to see a 3D preview.",
+        'success'
+      );
+      previewStateIndicator.className = 'preview-state-indicator state-current';
+      previewStateIndicator.textContent = '— No geometry (Customizer mode)';
+      previewContainer.classList.remove('preview-error');
+      previewContainer.classList.add('preview-current');
+      return true;
+    }
+
     // Handle 2D model case — applies to any project producing 2D output
     const is2DModel =
       code === 'MODEL_IS_2D' ||
@@ -5042,6 +5061,11 @@ async function initApp() {
       hasDependencyHint;
 
     if (!isEmpty) return false;
+
+    // Clear the 3D preview when geometry is empty so no stale mesh is shown.
+    if (previewManager) {
+      previewManager.clear();
+    }
 
     // Hide memory warning so the real root cause is not obscured
     const existingWarning = document.getElementById('memoryWarning');
