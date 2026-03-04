@@ -627,6 +627,11 @@ async function checkCapabilities() {
       // --help might exit with non-zero, that's okay
     }
 
+    // Reset the guard after the non-destructive --help probe.
+    // The guard exists to detect double *render* invocations that corrupt
+    // geometry; --help does not modify geometry state.
+    _callMainInvoked = false;
+
     module.print = originalPrint;
     module.printErr = originalPrintErr;
     // Some OpenSCAD WASM builds keep internal print callbacks and do not honor
