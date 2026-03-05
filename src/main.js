@@ -3517,7 +3517,10 @@ async function initApp() {
     const hasFile = Boolean(state.uploadedFile);
     const hasRender = Boolean(state.stl);
     // Full render = Generate button has been pressed and output matches current params
-    const hasFullRender = Boolean(
+    const stateOutputFormat = (state.outputFormat || '').toLowerCase();
+    const selectedFormat = (document.getElementById('outputFormat')?.value || 'stl').toLowerCase();
+    const hasNonSTLRender = hasRender && stateOutputFormat === selectedFormat && stateOutputFormat !== 'stl';
+    const hasFullRender = hasNonSTLRender || Boolean(
       autoPreviewController?.getCurrentFullSTL(state.parameters) &&
       !autoPreviewController?.needsFullRender(state.parameters)
     );
