@@ -13,7 +13,7 @@ import {
   locateParameterKey,
   setParameterValue as _setParameterValue,
 } from './js/ui-generator.js';
-import { stateManager, getShareableURL } from './js/state.js';
+import { stateManager } from './js/state.js';
 import {
   downloadSTL,
   downloadFile,

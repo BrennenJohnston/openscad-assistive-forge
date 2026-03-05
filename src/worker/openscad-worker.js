@@ -2001,9 +2001,9 @@ function postProcessDXF(outputBuffer) {
     } else if (entity.type === 'LINE') {
       // Deduplicate passthrough LINE entities too
       const rawPairs = entity.rawPairs || [];
-      let x1 = null, y1 = null, x2 = null, y2 = null, layer = '0';
+      let x1 = null, y1 = null, x2 = null, y2 = null, _layer = '0';
       for (const ep of rawPairs) {
-        if (ep.code === '8') layer = ep.value;
+        if (ep.code === '8') _layer = ep.value;
         if (ep.code === '10') x1 = parseFloat(ep.value);
         if (ep.code === '20') y1 = parseFloat(ep.value);
         if (ep.code === '11') x2 = parseFloat(ep.value);
