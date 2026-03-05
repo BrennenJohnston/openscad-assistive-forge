@@ -13795,7 +13795,8 @@ if (rounded) {
       // the STL into the 3D viewer. For the direct-render fallback path, we
       // must load it ourselves so the model is visible.
       const stlData = result.data || result.stl;
-      if (!autoPreviewController && previewManager && stlData) {
+      const is2DFormat = OUTPUT_FORMATS[outputFormat]?.is2D;
+      if (!autoPreviewController && previewManager && stlData && !is2DFormat) {
         try {
           await previewManager.loadSTL(stlData, { preserveCamera: false });
           if (_hfmEnabled && _hfmAltView?.clearPersistence) {
