@@ -1860,6 +1860,13 @@ function _exportFormatFromMenu(format) {
     alert('No rendered model to export. Run Render first.');
     return;
   }
+  const stateFormat = (state.outputFormat || 'stl').toLowerCase();
+  if (stateFormat !== format) {
+    alert(
+      `The current render is ${stateFormat.toUpperCase()}. To export as ${format.toUpperCase()}, change the output format and click Generate first.`
+    );
+    return;
+  }
   const filename = generateFilename(
     state.uploadedFile?.name || 'model',
     state.parameters || {},
