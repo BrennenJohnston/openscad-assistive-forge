@@ -9229,13 +9229,17 @@ async function initApp() {
       }
 
       // Move focus to the first parameter input after file load (WCAG 2.4.3 Focus Order)
-      // This tells screen reader users that parameters are now available to customize
+      // This tells screen reader users that parameters are now available to customize.
+      // preventScroll: true keeps the panel's scroll position at the top so the user
+      // sees the beginning of the parameter list when they first open the panel (mobile
+      // drawer is off-canvas; desktop panel may be collapsed — either way we must not
+      // advance the scroll position before the user has opened the panel).
       requestAnimationFrame(() => {
         const firstInput = parametersContainer?.querySelector(
           'input:not([type="hidden"]), select, textarea'
         );
         if (firstInput) {
-          firstInput.focus();
+          firstInput.focus({ preventScroll: true });
         }
       });
 
