@@ -146,6 +146,34 @@ const PREVIEW_COLORS = {
   },
 };
 
+/**
+ * Render-state-specific model colors, applied when no user override is set.
+ *
+ * Priority: colorOverride > renderStateColor > PREVIEW_COLORS[theme].model
+ *
+ * States:
+ *   'preview' — draft/auto-preview quality; warm amber to match OpenSCAD F5
+ *               preview mode visual convention (informational, not final)
+ *   'laser'   — laser-cut 3-D mode; orange-red per laser-cutting industry convention
+ *
+ * Mono/mono-light variants are intentionally absent so the theme palette is
+ * always respected in those high-specialisation display modes.
+ */
+const RENDER_STATE_COLORS = {
+  preview: {
+    light: 0xf59e0b,
+    dark: 0xfbbf24,
+    'light-hc': 0xb45309,
+    'dark-hc': 0xfde68a,
+  },
+  laser: {
+    light: 0xe74c3c,
+    dark: 0xff6b6b,
+    'light-hc': 0x991b1b,
+    'dark-hc': 0xfca5a5,
+  },
+};
+
 export class PreviewManager {
   constructor(container, options = {}) {
     this.container = container;
@@ -159,6 +187,7 @@ export class PreviewManager {
     this.currentTheme = options.theme || 'light';
     this.highContrast = options.highContrast || false;
     this.colorOverride = null;
+    this.renderState = null; // 'preview' | 'laser' | null (null = use theme default)
 
     // Measurements
     this.measurementsEnabled = this.loadMeasurementPreference();
@@ -476,9 +505,7 @@ export class PreviewManager {
 
     // Update model color if mesh exists
     if (this.mesh && this.mesh.material) {
-      const themeHex = `#${colors.model.toString(16).padStart(6, '0')}`;
-      const appliedHex = this.colorOverride || themeHex;
-      this.mesh.material.color.setHex(parseInt(appliedHex.slice(1), 16));
+      this.mesh.material.color.setHex(parseInt(this._resolveModelColor().slice(1), 16));
     }
 
     // Refresh measurements if they're visible
@@ -499,15 +526,50 @@ export class PreviewManager {
   }
 
   /**
-   * Apply the current color (override or theme default) to the mesh
-   * Safe to call even if mesh doesn't exist yet
+   * Set the current render state, which controls the fallback model color when
+   * no user color override is active.
+   *
+   * @param {'preview'|'laser'|null} state
+   *   'preview' — draft/auto-preview quality (amber)
+   *   'laser'   — laser-cut 3-D mode (orange-red)
+   *   null      — use the theme default blue
+   */
+  setRenderState(state) {
+    this.renderState = state ?? null;
+    this.applyColorToMesh();
+  }
+
+  /**
+   * Resolve the model color to apply, respecting the priority chain:
+   *   1. colorOverride (user manual pick or SCAD-derived)
+   *   2. renderState color (state-specific fallback)
+   *   3. PREVIEW_COLORS[theme].model (theme default)
+   *
+   * @returns {string} 6-digit hex color string with leading '#'
+   */
+  _resolveModelColor() {
+    if (this.colorOverride) return this.colorOverride;
+
+    if (this.renderState && RENDER_STATE_COLORS[this.renderState]) {
+      const stateMap = RENDER_STATE_COLORS[this.renderState];
+      const stateVal = stateMap[this.currentTheme];
+      if (stateVal !== undefined) {
+        return `#${stateVal.toString(16).padStart(6, '0')}`;
+      }
+    }
+
+    const themeColors = PREVIEW_COLORS[this.currentTheme] || PREVIEW_COLORS.light;
+    return `#${themeColors.model.toString(16).padStart(6, '0')}`;
+  }
+
+  /**
+   * Apply the current color (override, render-state, or theme default) to the mesh.
+   * Safe to call even if mesh doesn't exist yet.
    */
   applyColorToMesh() {
     if (!this.mesh?.material) return;
 
-    const colors = PREVIEW_COLORS[this.currentTheme] || PREVIEW_COLORS.light;
-    const themeHex = `#${colors.model.toString(16).padStart(6, '0')}`;
-    const appliedHex = this.colorOverride || themeHex;
+    const appliedHex = this._resolveModelColor();
     this.mesh.material.color.setHex(parseInt(appliedHex.slice(1), 16));
   }
 
@@ -972,12 +1034,9 @@ export class PreviewManager {
           this.applyAutoBed(geometry);
         }
 
-        // Create material with theme-aware color
-        const colors = PREVIEW_COLORS[this.currentTheme];
-        const themeHex = `#${colors.model.toString(16).padStart(6, '0')}`;
-        const appliedHex = this.colorOverride || themeHex;
+        // Create material using render-state-aware color resolution
         const material = new THREE.MeshPhongMaterial({
-          color: parseInt(appliedHex.slice(1), 16),
+          color: parseInt(this._resolveModelColor().slice(1), 16),
           specular: 0x111111,
           shininess: 30,
           flatShading: false,
@@ -1123,7 +1182,10 @@ export class PreviewManager {
         if (positions.length === 0) {
           console.warn('[Preview] OFF has no triangulated geometry');
           this.clear();
-          resolve({ parseMs: Math.round(performance.now() - parseStartTime), hasColors: false });
+          resolve({
+            parseMs: Math.round(performance.now() - parseStartTime),
+            hasColors: false,
+          });
           return;
         }
 
@@ -1159,17 +1221,12 @@ export class PreviewManager {
               shininess: 30,
               flatShading: false,
             })
-          : (() => {
-              const themeColors = PREVIEW_COLORS[this.currentTheme];
-              const themeHex = `#${themeColors.model.toString(16).padStart(6, '0')}`;
-              const appliedHex = this.colorOverride || themeHex;
-              return new THREE.MeshPhongMaterial({
-                color: parseInt(appliedHex.slice(1), 16),
-                specular: 0x111111,
-                shininess: 30,
-                flatShading: false,
-              });
-            })();
+          : new THREE.MeshPhongMaterial({
+              color: parseInt(this._resolveModelColor().slice(1), 16),
+              specular: 0x111111,
+              shininess: 30,
+              flatShading: false,
+            });
 
         this.mesh = new THREE.Mesh(geometry, material);
         this.scene.add(this.mesh);
@@ -1346,7 +1403,12 @@ export class PreviewManager {
    */
   showColorLegend(colorParams) {
     this.hideColorLegend();
-    if (!this.container || !Array.isArray(colorParams) || colorParams.length === 0) return;
+    if (
+      !this.container ||
+      !Array.isArray(colorParams) ||
+      colorParams.length === 0
+    )
+      return;
 
     const panel = document.createElement('div');
     panel.id = 'colorLegend';
@@ -2169,7 +2231,10 @@ export class PreviewManager {
       return { gridPrimary: primary, gridSecondary: secondary };
     }
     const theme = PREVIEW_COLORS[this.currentTheme] || PREVIEW_COLORS.light;
-    return { gridPrimary: theme.gridPrimary, gridSecondary: theme.gridSecondary };
+    return {
+      gridPrimary: theme.gridPrimary,
+      gridSecondary: theme.gridSecondary,
+    };
   }
 
   /**
