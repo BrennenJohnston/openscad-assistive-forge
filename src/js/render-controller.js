@@ -991,7 +991,9 @@ export class RenderController {
             // The first attempt may fail if the worker is in a half-terminated state.
             try {
               await this.restart();
-              console.log('[RenderController] Worker restart succeeded on retry');
+              console.log(
+                '[RenderController] Worker restart succeeded on retry'
+              );
             } catch (retryErr) {
               console.error(
                 '[RenderController] Worker restart failed after retry — attempting render with existing worker:',
@@ -1067,6 +1069,14 @@ export class RenderController {
               localStorage.getItem(STORAGE_KEY_LAZY_UNION) === 'true',
             useManifold,
           };
+
+          // Clear any stale cancel watchdog before posting the new render.
+          // A previous cancel() may have left a pending watchdog that would
+          // otherwise terminate this freshly-started worker after 200 ms.
+          if (this._cancelWatchdogHandle) {
+            clearTimeout(this._cancelWatchdogHandle);
+            this._cancelWatchdogHandle = null;
+          }
 
           this.worker.postMessage({
             type: 'RENDER',
@@ -1173,11 +1183,13 @@ export class RenderController {
    * WASM is executing.
    *
    * @param {Object} [options] - Cancel options
-   * @param {number} [options.gracePeriodMs=5000] - Time to wait before hard cancel
+   * @param {number} [options.gracePeriodMs=200] - Time to wait before hard cancel.
+   *   Kept short because callMain() blocks the worker event loop — the CANCEL message
+   *   cannot be processed during an active blocking render.
    * @param {boolean} [options.hard=false] - Force immediate hard cancel (skip soft attempt)
    */
   cancel(options = {}) {
-    const { gracePeriodMs = 5000, hard = false } = options;
+    const { gracePeriodMs = 200, hard = false } = options;
 
     if (!this.currentRequest) return;
 

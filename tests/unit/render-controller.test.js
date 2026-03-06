@@ -158,9 +158,11 @@ describe('RenderController', () => {
     expect(result.stl).toBeDefined()
   })
 
-  it('cancels the current render request', () => {
+  it('cancels the current render request (soft cancel path)', () => {
     const controller = new RenderController()
-    controller.worker = { postMessage: vi.fn() }
+    controller.worker = { postMessage: vi.fn(), terminate: vi.fn() }
+    // Prevent the 200 ms watchdog from calling _hardCancelAndReinit after the test ends.
+    controller._hardCancelAndReinit = vi.fn().mockResolvedValue(undefined)
     const reject = vi.fn()
     controller.currentRequest = { id: 'render-3', reject }
 
@@ -357,6 +359,68 @@ describe('RenderController', () => {
     controller.cancel()
     
     expect(controller.worker.postMessage).not.toHaveBeenCalled()
+  })
+
+  it('cancel watchdog hard-stops the worker within the shortened 200 ms grace period', () => {
+    vi.useFakeTimers()
+    try {
+      const controller = new RenderController()
+      controller.worker = { postMessage: vi.fn(), terminate: vi.fn() }
+      const hardCancelSpy = vi.spyOn(controller, '_hardCancelAndReinit').mockResolvedValue(undefined)
+      const reject = vi.fn()
+      controller.currentRequest = { id: 'render-hang', reject }
+
+      controller.cancel()
+
+      // Grace period is 200 ms; watchdog must not have fired yet
+      vi.advanceTimersByTime(199)
+      expect(hardCancelSpy).not.toHaveBeenCalled()
+
+      // After 200 ms the watchdog fires
+      vi.advanceTimersByTime(1)
+      expect(hardCancelSpy).toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('stale cancel watchdog is cleared before a new render starts', async () => {
+    vi.useFakeTimers()
+    try {
+      const controller = new RenderController()
+      controller.worker = { postMessage: vi.fn(), terminate: vi.fn() }
+      const hardCancelSpy = vi.spyOn(controller, '_hardCancelAndReinit').mockResolvedValue(undefined)
+      controller.ready = true
+
+      // Simulate an in-flight request and cancel it
+      const reject = vi.fn()
+      controller.currentRequest = { id: 'render-old', reject }
+      controller.cancel()
+      // Watchdog is now ticking (200 ms)
+
+      // Start a new render before the watchdog fires
+      const renderPromise = controller.render('cube(1);', {})
+      // Let the microtask queue (render queue chain) run
+      await Promise.resolve()
+      await Promise.resolve()
+
+      // Advance past the original watchdog deadline
+      vi.advanceTimersByTime(300)
+
+      // Resolve the new render so the promise settles cleanly
+      if (controller.currentRequest) {
+        controller.handleMessage({
+          type: 'COMPLETE',
+          payload: { requestId: controller.currentRequest.id, data: new ArrayBuffer(1), stats: { triangles: 1 } }
+        })
+      }
+      await renderPromise.catch(() => {})
+
+      // The watchdog must NOT have fired — hard cancel would break the new render
+      expect(hardCancelSpy).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('renderPreview uses PREVIEW quality by default', async () => {
