@@ -22,6 +22,7 @@ const LS_FOLDERS_KEY = 'openscad-saved-folders';
 const SCHEMA_VERSION = 2; // Project schema version
 const LS_MAX_PROJECT_FILES_BYTES = 2 * 1024 * 1024; // 2 MB -- beyond this, LS stringify OOMs the tab
 const MAX_IDB_RETRY = 2; // Maximum retries when an InvalidStateError indicates a stale connection
+const LARGE_FILES_BATCH_SIZE = 50; // File count threshold above which projectFiles are written to PROJECT_FILES_STORE in batches
 
 let db = null;
 let storageType = null; // 'indexeddb' or 'localstorage'
@@ -484,6 +485,87 @@ async function clearIndexedDB() {
 }
 
 /**
+ * Infer the IndexedDB file kind from the file path extension.
+ * @param {string} path
+ * @returns {string}
+ */
+function inferFileKind(path) {
+  const lower = path.toLowerCase();
+  if (lower.endsWith('.scad')) return 'scad';
+  if (lower.endsWith('.json')) return 'json';
+  if (
+    lower.endsWith('.png') ||
+    lower.endsWith('.jpg') ||
+    lower.endsWith('.jpeg') ||
+    lower.endsWith('.gif') ||
+    lower.endsWith('.webp') ||
+    lower.endsWith('.svg')
+  )
+    return 'image';
+  return 'binary';
+}
+
+/**
+ * Write a large projectFiles map to PROJECT_FILES_STORE in small batches.
+ *
+ * Each batch opens its own IndexedDB transaction so that a 200+ file import
+ * never holds one oversized transaction that risks a timeout or quota abort.
+ *
+ * @param {string} projectId
+ * @param {Object} filesObj - Plain object mapping `path → textContent`
+ * @returns {Promise<void>}
+ */
+async function saveProjectFilesInBatches(projectId, filesObj) {
+  const entries = Object.entries(filesObj);
+  for (let i = 0; i < entries.length; i += LARGE_FILES_BATCH_SIZE) {
+    const batch = entries.slice(i, i + LARGE_FILES_BATCH_SIZE);
+    await new Promise((resolve, reject) => {
+      try {
+        const transaction = db.transaction([PROJECT_FILES_STORE], 'readwrite');
+        const store = transaction.objectStore(PROJECT_FILES_STORE);
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => reject(transaction.error);
+        transaction.onabort = () =>
+          reject(transaction.error || new Error('Batch transaction aborted'));
+        for (const [path, content] of batch) {
+          store.put({
+            id: generateId('file'),
+            projectId,
+            path,
+            kind: inferFileKind(path),
+            textContent: typeof content === 'string' ? content : null,
+            assetId: null,
+            mimeType: null,
+            updatedAt: Date.now(),
+          });
+        }
+      } catch (error) {
+        db = null;
+        reject(error);
+      }
+    });
+  }
+}
+
+/**
+ * Reassemble the projectFiles map from PROJECT_FILES_STORE for a project that
+ * was saved with `largeFilesInStore: true`.
+ *
+ * @param {string} projectId
+ * @returns {Promise<Object>} path → textContent map
+ */
+async function loadProjectFilesFromStore(projectId) {
+  const files = await getProjectFiles(projectId);
+  const result = {};
+  for (const f of files) {
+    if (f.textContent !== null) {
+      result[f.path] = f.textContent;
+    }
+  }
+  return result;
+}
+
+/**
  * Get all saved projects from localStorage
  * @returns {Array}
  */
@@ -609,6 +691,25 @@ export async function saveProject({
 
     const now = Date.now();
 
+    // Normalise projectFiles to a plain object once so both the inline path
+    // and the batched path share the same representation.
+    const filesObj = projectFiles
+      ? projectFiles instanceof Map
+        ? Object.fromEntries(projectFiles)
+        : projectFiles
+      : null;
+    const fileCount = filesObj ? Object.keys(filesObj).length : 0;
+
+    // Use batched PROJECT_FILES_STORE writes for large imports (IndexedDB only).
+    // Storing hundreds of file contents as one serialised JSON string in a single
+    // transaction risks a browser transaction-timeout or quota abort.
+    const useBatchedStorage =
+      storageType === 'indexeddb' &&
+      db !== null &&
+      db.objectStoreNames &&
+      db.objectStoreNames.contains(PROJECT_FILES_STORE) &&
+      fileCount > LARGE_FILES_BATCH_SIZE;
+
     const project = {
       id: generateId('project'),
       schemaVersion: SCHEMA_VERSION,
@@ -617,13 +718,12 @@ export async function saveProject({
       kind,
       mainFilePath,
       content,
-      projectFiles: projectFiles
-        ? JSON.stringify(
-            projectFiles instanceof Map
-              ? Object.fromEntries(projectFiles)
-              : projectFiles
-          )
-        : null,
+      projectFiles: useBatchedStorage
+        ? null
+        : filesObj
+          ? JSON.stringify(filesObj)
+          : null,
+      ...(useBatchedStorage ? { largeFilesInStore: true } : {}),
       folderId: folderId, // v2: parent folder (null = root)
       overlayFiles: {}, // v2: overlay metadata
       presets: [], // v2: project-scoped presets metadata
@@ -647,6 +747,12 @@ export async function saveProject({
     if (storageType === 'indexeddb') {
       try {
         await saveToIndexedDB(project);
+        if (useBatchedStorage) {
+          await saveProjectFilesInBatches(project.id, filesObj);
+          console.log(
+            `[Saved Projects] Project files saved in ${Math.ceil(fileCount / LARGE_FILES_BATCH_SIZE)} batch(es) to PROJECT_FILES_STORE: ${project.name}`
+          );
+        }
         console.log(
           `[Saved Projects] Project saved to IndexedDB: ${project.name}`
         );
@@ -756,7 +862,9 @@ export async function getProject(id) {
       }
     }
 
-    if (
+    if (project && project.largeFilesInStore && storageType === 'indexeddb' && db) {
+      project.projectFiles = await loadProjectFilesFromStore(project.id);
+    } else if (
       project &&
       project.projectFiles &&
       typeof project.projectFiles === 'string'
