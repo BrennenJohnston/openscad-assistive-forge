@@ -496,18 +496,32 @@ export function buildPresetCompanionMap(files, parameterSets) {
     k.toLowerCase().endsWith('.svg')
   );
 
-  // Tokenise a preset name into meaningful lowercase substrings
+  // Tokenise a preset name into meaningful lowercase substrings.
+  // Single-digit numeric tokens (e.g. "7", "8", "9" from "iPad 7,8,9") are kept
+  // because they disambiguate tablet-version folder names from each other.
   function tokenise(name) {
     return name
       .toLowerCase()
       .split(/[\s\-_/,().]+/)
-      .filter((t) => t.length > 1);
+      .filter((t) => t.length > 1 || /^\d$/.test(t));
   }
 
-  // Count how many tokens from the preset name appear in a candidate path
+  // Count how many tokens from the preset name appear in a candidate path.
+  // Multi-char tokens use full-path substring matching (existing behaviour).
+  // Single-digit tokens use exact word-boundary matching within folder segments
+  // only, so token "7" does not falsely match a folder named "iPad 78".
   function scorePath(path, tokens) {
     const lower = path.toLowerCase();
-    return tokens.filter((t) => lower.includes(t)).length;
+    const folderWords = new Set(
+      lower
+        .split('/')
+        .slice(0, -1)
+        .flatMap((seg) => seg.split(/[\s,\-_().]+/))
+        .filter(Boolean)
+    );
+    return tokens.filter((t) =>
+      t.length > 1 ? lower.includes(t) : folderWords.has(t)
+    ).length;
   }
 
   // Prefer deeper (longer) paths when scores are tied.

@@ -674,6 +674,37 @@ describe('ZIP Handler', () => {
       // Single instance — not aliasable, no mapping needed
       expect(map.get('Preset A').openingsPath).toBeNull()
     })
+
+    it('should resolve tablet version digits in preset name to the correct folder', () => {
+      // Regression: single-digit tokens like '7','8','9' from 'iPad 7,8,9' were
+      // filtered by the length > 1 guard, causing 'Cases/iPad 7,8,9/...' and
+      // 'Cases/iPad 10/...' to tie on ('ipad','fintie','touchchat') → null.
+      const files = makeFiles([
+        ['main.scad', '// scad'],
+        ['Cases/iPad 7,8,9/Fintie/TouchChat/openings_and_additions.txt', 'ipad789 tc'],
+        ['Cases/iPad 10/Fintie/TouchChat/openings_and_additions.txt', 'ipad10 tc'],
+      ])
+      const parameterSets = { 'iPad 7,8,9 - Fintie - TouchChat': {} }
+      const map = buildPresetCompanionMap(files, parameterSets)
+      expect(map.get('iPad 7,8,9 - Fintie - TouchChat').openingsPath).toBe(
+        'Cases/iPad 7,8,9/Fintie/TouchChat/openings_and_additions.txt'
+      )
+    })
+
+    it('should not false-match a single-digit token against a folder with that digit embedded in a longer number', () => {
+      // Non-regression: token '7' must not match folder 'iPad 78'
+      // via substring — only exact word-boundary matches in folder segments count.
+      const files = makeFiles([
+        ['main.scad', '// scad'],
+        ['Cases/iPad 7/App/openings_and_additions.txt', 'ipad7'],
+        ['Cases/iPad 78/App/openings_and_additions.txt', 'ipad78'],
+      ])
+      const parameterSets = { 'iPad 7 - App': {} }
+      const map = buildPresetCompanionMap(files, parameterSets)
+      expect(map.get('iPad 7 - App').openingsPath).toBe(
+        'Cases/iPad 7/App/openings_and_additions.txt'
+      )
+    })
   })
 
   describe('applyCompanionAliases', () => {
