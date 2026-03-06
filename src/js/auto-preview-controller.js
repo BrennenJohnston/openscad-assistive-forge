@@ -21,6 +21,7 @@ export const PREVIEW_STATE = {
   RENDERING: 'rendering', // Preview render in progress
   STALE: 'stale', // Preview exists but from different params
   ERROR: 'error', // Last render failed
+  MODEL_IS_2D: 'model_is_2d', // 2D-only generate mode — informational, not an error
 };
 
 /**
@@ -77,6 +78,9 @@ export class AutoPreviewController {
 
     // Parameter type metadata (schema types for boolean vs string disambiguation)
     this.paramTypes = {};
+
+    // Generate enum entries for labeled-enum resolution in isNonPreviewableParameters
+    this.generateEnumEntries = [];
 
     // Color parameters for preview tinting
     this.colorParamNames = [];
@@ -193,6 +197,23 @@ export class AutoPreviewController {
    */
   setColorParamNames(names) {
     this.colorParamNames = Array.isArray(names) ? names.filter(Boolean) : [];
+  }
+
+  /**
+   * Set generate enum entries from the parsed schema.
+   * Required for labeled-enum support in isNonPreviewableParameters —
+   * when generate stores a numeric raw value (e.g. "1") the label
+   * (e.g. "first layer for SVG/DXF file") is used for keyword matching.
+   * @param {Array} entries - The generate parameter's enum array from the schema
+   */
+  setGenerateEnumEntries(entries) {
+    this.generateEnumEntries = Array.isArray(entries) ? entries : [];
+    console.debug(
+      '[AutoPreview] setGenerateEnumEntries: loaded',
+      this.generateEnumEntries.length,
+      'entries:',
+      this.generateEnumEntries
+    );
   }
 
   /**
@@ -523,21 +544,60 @@ export class AutoPreviewController {
    * Detect whether the current parameters produce output that cannot be
    * previewed as 3D geometry (2D-only formats, customizer-only modes, or
    * empty/whitespace generate values).
+   *
+   * For labeled enums (OpenSCAD `[0:label, 1:label]` syntax) the stored value
+   * is a numeric string (e.g. "1") rather than the label text. When
+   * `generateEnumEntries` is provided the raw value is mapped back to its
+   * label before keyword-checking so that numeric values like "1" that
+   * correspond to "first layer for SVG/DXF file" are correctly detected.
+   *
    * @param {Object} parameters - Current parameter values
+   * @param {Array} [generateEnumEntries] - Optional enum entries from schema
    * @returns {boolean}
    */
-  static isNonPreviewableParameters(parameters) {
+  static isNonPreviewableParameters(parameters, generateEnumEntries) {
     if (!parameters) return false;
     const gen = parameters.generate;
     if (typeof gen !== 'string') return false;
     const lower = gen.trim().toLowerCase();
     if (lower.length === 0) return true;
-    return (
+
+    // Resolve label for labeled enums when enum context is available
+    let label = lower;
+    if (Array.isArray(generateEnumEntries) && generateEnumEntries.length > 0) {
+      const match = generateEnumEntries.find(
+        (e) => typeof e === 'object' && String(e.value) === gen.trim()
+      );
+      if (match?.label) {
+        label = String(match.label).toLowerCase();
+      }
+    } else if (!Array.isArray(generateEnumEntries) || generateEnumEntries.length === 0) {
+      // Enum entries not yet set — log a warning so timing issues are traceable.
+      // If generate is a numeric string like "5" the label lookup will miss and
+      // a "Customizer Settings" mode might not be detected correctly.
+      console.warn(
+        '[AutoPreview] isNonPreviewableParameters: generateEnumEntries is empty or unset.',
+        'generate value:', gen,
+        '— numeric values will not resolve to their labels.'
+      );
+    }
+
+    const result =
       lower.includes('svg') ||
       lower.includes('dxf') ||
       lower.includes('first layer') ||
-      lower.includes('customizer')
+      lower.includes('customizer') ||
+      label.includes('svg') ||
+      label.includes('dxf') ||
+      label.includes('first layer') ||
+      label.includes('customizer');
+
+    console.debug(
+      '[AutoPreview] isNonPreviewableParameters:', { gen, lower, label, result,
+        enumEntriesCount: generateEnumEntries?.length ?? 0 }
     );
+
+    return result;
   }
 
   /**
@@ -574,10 +634,16 @@ export class AutoPreviewController {
     console.debug(
       '[Render Audit] renderPreview entry #' +
         (typeof window !== 'undefined' ? window.__renderAuditCount : '?') +
-        ' generate=' + (parameters?.generate ?? 'n/a')
+        ' generate=' +
+        (parameters?.generate ?? 'n/a')
     );
 
-    if (AutoPreviewController.isNonPreviewableParameters(parameters)) {
+    if (
+      AutoPreviewController.isNonPreviewableParameters(
+        parameters,
+        this.generateEnumEntries
+      )
+    ) {
       const gen = (parameters.generate || '').trim().toLowerCase();
       const isCustomizer = gen.includes('customizer');
       console.log(
@@ -605,7 +671,14 @@ export class AutoPreviewController {
           'To preview in 3D: adjust your model parameters to produce 3D geometry.';
       const error = new Error(message);
       error.code = isCustomizer ? 'NO_GEOMETRY' : 'MODEL_IS_2D';
-      this.setState(PREVIEW_STATE.ERROR, { error: error.message });
+      if (!isCustomizer) {
+        // 2D-only mode is informational — clear stale 3D geometry here so
+        // the controller is responsible for cleanup, not the onError handler.
+        this.previewManager?.clear?.();
+        this.setState(PREVIEW_STATE.MODEL_IS_2D, { code: 'MODEL_IS_2D' });
+      } else {
+        this.setState(PREVIEW_STATE.ERROR, { error: error.message });
+      }
       this.onError(error, 'preview');
       return;
     }
