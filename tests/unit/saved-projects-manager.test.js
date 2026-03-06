@@ -3,7 +3,7 @@
  * @license GPL-3.0-or-later
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   initSavedProjectsDB,
   listSavedProjects,
@@ -27,6 +27,183 @@ import {
   moveProject,
   getProjectsInFolder,
 } from '../../src/js/saved-projects-manager.js';
+
+// ============================================================================
+// IndexedDB InvalidStateError retry regression tests
+// These tests use a fresh module instance (vi.resetModules + dynamic import)
+// so that the module-level `db` / `storageType` variables start from a clean
+// state and we can inject a fake IndexedDB that simulates a stale connection.
+// ============================================================================
+
+describe('IndexedDB InvalidStateError recovery', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.resetModules();
+  });
+
+  it('retries getFromIndexedDB after InvalidStateError and returns data on reconnect', async () => {
+    vi.resetModules();
+
+    let openCallCount = 0;
+
+    // Stale database: transaction() throws InvalidStateError
+    const staleDb = {
+      onerror: null,
+      onversionchange: null,
+      objectStoreNames: { contains: () => true },
+      transaction: () => {
+        const err = new DOMException(
+          'The database connection is closing.',
+          'InvalidStateError'
+        );
+        throw err;
+      },
+      close: vi.fn(),
+    };
+
+    // Working database: transaction() returns a transaction that resolves getAll()
+    const makeWorkingDb = () => ({
+      onerror: null,
+      onversionchange: null,
+      objectStoreNames: { contains: () => true },
+      transaction: () => {
+        const req = { result: [], onsuccess: null, onerror: null };
+        const store = {
+          getAll: () => {
+            Promise.resolve().then(() => {
+              if (req.onsuccess) req.onsuccess();
+            });
+            return req;
+          },
+        };
+        return { onerror: null, objectStore: () => store };
+      },
+      close: vi.fn(),
+    });
+
+    // indexedDB.open() — first call returns stale db, second call returns working db
+    const mockOpen = vi.fn(() => {
+      openCallCount++;
+      const dbInstance = openCallCount === 1 ? staleDb : makeWorkingDb();
+      const req = {
+        result: dbInstance,
+        error: null,
+        onsuccess: null,
+        onerror: null,
+        onupgradeneeded: null,
+        onblocked: null,
+      };
+      Promise.resolve().then(() => {
+        if (req.onsuccess) req.onsuccess();
+      });
+      return req;
+    });
+
+    vi.stubGlobal('indexedDB', { open: mockOpen });
+
+    const { initSavedProjectsDB, listSavedProjects } = await import(
+      '../../src/js/saved-projects-manager.js'
+    );
+
+    // First open: connects with the stale db
+    await initSavedProjectsDB();
+    expect(openCallCount).toBe(1);
+
+    // listSavedProjects → getFromIndexedDB → InvalidStateError on stale db
+    // → reconnectDB() → second open → working db → retry succeeds
+    const projects = await listSavedProjects();
+
+    expect(Array.isArray(projects)).toBe(true);
+    expect(openCallCount).toBe(2);
+  });
+
+  it('retries saveToIndexedDB after InvalidStateError and saves on reconnect', async () => {
+    vi.resetModules();
+
+    let openCallCount = 0;
+
+    const staleDb = {
+      onerror: null,
+      onversionchange: null,
+      objectStoreNames: { contains: () => true },
+      transaction: () => {
+        const err = new DOMException(
+          'The database connection is closing.',
+          'InvalidStateError'
+        );
+        throw err;
+      },
+      close: vi.fn(),
+    };
+
+    const savedItems = [];
+    const makeWorkingDb = () => ({
+      onerror: null,
+      onversionchange: null,
+      objectStoreNames: { contains: () => true },
+      transaction: (storeNames, mode) => {
+        const putReq = { result: undefined, onsuccess: null, onerror: null };
+        const getReq = { result: savedItems, onsuccess: null, onerror: null };
+        const store = {
+          put: (item) => {
+            savedItems.push(item);
+            Promise.resolve().then(() => {
+              if (putReq.onsuccess) putReq.onsuccess();
+            });
+            return putReq;
+          },
+          getAll: () => {
+            Promise.resolve().then(() => {
+              if (getReq.onsuccess) getReq.onsuccess();
+            });
+            return getReq;
+          },
+        };
+        return { onerror: null, objectStore: () => store };
+      },
+      close: vi.fn(),
+    });
+
+    const mockOpen = vi.fn(() => {
+      openCallCount++;
+      const dbInstance = openCallCount === 1 ? staleDb : makeWorkingDb();
+      const req = {
+        result: dbInstance,
+        error: null,
+        onsuccess: null,
+        onerror: null,
+        onupgradeneeded: null,
+        onblocked: null,
+      };
+      Promise.resolve().then(() => {
+        if (req.onsuccess) req.onsuccess();
+      });
+      return req;
+    });
+
+    vi.stubGlobal('indexedDB', { open: mockOpen });
+
+    const { initSavedProjectsDB, saveProject } = await import(
+      '../../src/js/saved-projects-manager.js'
+    );
+
+    await initSavedProjectsDB();
+    expect(openCallCount).toBe(1);
+
+    // saveProject → saveToIndexedDB → InvalidStateError → reconnect → retry
+    const result = await saveProject({
+      name: 'Retry Test',
+      originalName: 'retry.scad',
+      kind: 'scad',
+      mainFilePath: 'retry.scad',
+      content: '// retry test',
+      notes: '',
+    });
+
+    expect(result.success).toBe(true);
+    expect(openCallCount).toBe(2);
+  });
+});
 
 // Mock IndexedDB
 const mockIndexedDB = {

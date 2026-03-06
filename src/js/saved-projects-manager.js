@@ -21,6 +21,7 @@ const LS_KEY = 'openscad-saved-projects';
 const LS_FOLDERS_KEY = 'openscad-saved-folders';
 const SCHEMA_VERSION = 2; // Project schema version
 const LS_MAX_PROJECT_FILES_BYTES = 2 * 1024 * 1024; // 2 MB -- beyond this, LS stringify OOMs the tab
+const MAX_IDB_RETRY = 2; // Maximum retries when an InvalidStateError indicates a stale connection
 
 let db = null;
 let storageType = null; // 'indexeddb' or 'localstorage'
@@ -93,6 +94,18 @@ async function ensureInitialized() {
   }
 
   console.warn('[Saved Projects] Re-initializing database connection');
+  await initSavedProjectsDB();
+}
+
+/**
+ * Reset a stale IndexedDB connection and re-initialize.
+ * Called when `db.transaction()` throws `InvalidStateError` (the connection is
+ * closing or was closed while `db` was still non-null).
+ * @returns {Promise<void>}
+ */
+async function reconnectDB() {
+  db = null;
+  initPromise = null;
   await initSavedProjectsDB();
 }
 
@@ -281,49 +294,64 @@ export async function initSavedProjectsDB() {
  * @returns {Promise<Array>}
  */
 async function getFromIndexedDB() {
-  // If db connection is lost, try to reconnect
-  if (!db) {
-    console.warn(
-      '[Saved Projects] IndexedDB connection lost, attempting reconnect'
-    );
-    await initSavedProjectsDB();
-
-    // If still no connection after reinit, return empty
+  for (let attempt = 0; attempt < MAX_IDB_RETRY; attempt++) {
+    // If db connection is lost, try to reconnect
     if (!db) {
-      console.warn('[Saved Projects] Could not reconnect to IndexedDB');
-      return [];
+      console.warn(
+        '[Saved Projects] IndexedDB connection lost, attempting reconnect'
+      );
+      await initSavedProjectsDB();
+
+      if (!db) {
+        console.warn('[Saved Projects] Could not reconnect to IndexedDB');
+        return [];
+      }
+    }
+
+    try {
+      return await new Promise((resolve, reject) => {
+        try {
+          const transaction = db.transaction([STORE_NAME], 'readonly');
+          const objectStore = transaction.objectStore(STORE_NAME);
+          const request = objectStore.getAll();
+
+          request.onsuccess = () => resolve(request.result || []);
+          request.onerror = () => {
+            console.error(
+              '[Saved Projects] Error reading from IndexedDB:',
+              request.error
+            );
+            reject(request.error);
+          };
+
+          transaction.onerror = () => {
+            console.error(
+              '[Saved Projects] Transaction error:',
+              transaction.error
+            );
+            reject(transaction.error);
+          };
+        } catch (error) {
+          console.error(
+            '[Saved Projects] Exception reading from IndexedDB:',
+            error
+          );
+          db = null;
+          reject(error);
+        }
+      });
+    } catch (error) {
+      if (error.name === 'InvalidStateError' && attempt < MAX_IDB_RETRY - 1) {
+        console.warn(
+          `[Saved Projects] InvalidStateError on read attempt ${attempt + 1}, reconnecting`
+        );
+        await reconnectDB();
+        continue;
+      }
+      throw error;
     }
   }
-
-  return new Promise((resolve, reject) => {
-    try {
-      const transaction = db.transaction([STORE_NAME], 'readonly');
-      const objectStore = transaction.objectStore(STORE_NAME);
-      const request = objectStore.getAll();
-
-      request.onsuccess = () => resolve(request.result || []);
-      request.onerror = () => {
-        console.error(
-          '[Saved Projects] Error reading from IndexedDB:',
-          request.error
-        );
-        reject(request.error);
-      };
-
-      transaction.onerror = () => {
-        console.error('[Saved Projects] Transaction error:', transaction.error);
-        reject(transaction.error);
-      };
-    } catch (error) {
-      console.error(
-        '[Saved Projects] Exception reading from IndexedDB:',
-        error
-      );
-      // Connection might be invalid, reset it
-      db = null;
-      reject(error);
-    }
-  });
+  return [];
 }
 
 /**
@@ -332,16 +360,34 @@ async function getFromIndexedDB() {
  * @returns {Promise<void>}
  */
 async function saveToIndexedDB(project) {
-  if (!db) throw new Error('IndexedDB not initialized');
+  for (let attempt = 0; attempt < MAX_IDB_RETRY; attempt++) {
+    if (!db) throw new Error('IndexedDB not initialized');
 
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction([STORE_NAME], 'readwrite');
-    const objectStore = transaction.objectStore(STORE_NAME);
-    const request = objectStore.put(project);
+    try {
+      return await new Promise((resolve, reject) => {
+        try {
+          const transaction = db.transaction([STORE_NAME], 'readwrite');
+          const objectStore = transaction.objectStore(STORE_NAME);
+          const request = objectStore.put(project);
 
-    request.onsuccess = () => resolve();
-    request.onerror = () => reject(request.error);
-  });
+          request.onsuccess = () => resolve();
+          request.onerror = () => reject(request.error);
+        } catch (error) {
+          db = null;
+          reject(error);
+        }
+      });
+    } catch (error) {
+      if (error.name === 'InvalidStateError' && attempt < MAX_IDB_RETRY - 1) {
+        console.warn(
+          `[Saved Projects] InvalidStateError on save attempt ${attempt + 1}, reconnecting`
+        );
+        await reconnectDB();
+        continue;
+      }
+      throw error;
+    }
+  }
 }
 
 /**
@@ -350,16 +396,34 @@ async function saveToIndexedDB(project) {
  * @returns {Promise<void>}
  */
 async function deleteFromIndexedDB(id) {
-  if (!db) throw new Error('IndexedDB not initialized');
+  for (let attempt = 0; attempt < MAX_IDB_RETRY; attempt++) {
+    if (!db) throw new Error('IndexedDB not initialized');
 
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction([STORE_NAME], 'readwrite');
-    const objectStore = transaction.objectStore(STORE_NAME);
-    const request = objectStore.delete(id);
+    try {
+      return await new Promise((resolve, reject) => {
+        try {
+          const transaction = db.transaction([STORE_NAME], 'readwrite');
+          const objectStore = transaction.objectStore(STORE_NAME);
+          const request = objectStore.delete(id);
 
-    request.onsuccess = () => resolve();
-    request.onerror = () => reject(request.error);
-  });
+          request.onsuccess = () => resolve();
+          request.onerror = () => reject(request.error);
+        } catch (error) {
+          db = null;
+          reject(error);
+        }
+      });
+    } catch (error) {
+      if (error.name === 'InvalidStateError' && attempt < MAX_IDB_RETRY - 1) {
+        console.warn(
+          `[Saved Projects] InvalidStateError on delete attempt ${attempt + 1}, reconnecting`
+        );
+        await reconnectDB();
+        continue;
+      }
+      throw error;
+    }
+  }
 }
 
 /**
@@ -372,31 +436,51 @@ async function clearIndexedDB() {
 
   const IDB_TIMEOUT = 5000; // 5 second timeout for IndexedDB operations
 
-  return new Promise((resolve, reject) => {
-    const timeoutId = setTimeout(() => {
-      console.warn('[Saved Projects] IndexedDB clear timed out');
-      reject(new Error('IndexedDB clear timeout'));
-    }, IDB_TIMEOUT);
+  for (let attempt = 0; attempt < MAX_IDB_RETRY; attempt++) {
+    if (!db) return;
 
-    const transaction = db.transaction([STORE_NAME], 'readwrite');
-    const objectStore = transaction.objectStore(STORE_NAME);
-    const request = objectStore.clear();
+    try {
+      return await new Promise((resolve, reject) => {
+        const timeoutId = setTimeout(() => {
+          console.warn('[Saved Projects] IndexedDB clear timed out');
+          reject(new Error('IndexedDB clear timeout'));
+        }, IDB_TIMEOUT);
 
-    request.onsuccess = () => {
-      clearTimeout(timeoutId);
-      resolve();
-    };
-    request.onerror = () => {
-      clearTimeout(timeoutId);
-      reject(request.error);
-    };
+        try {
+          const transaction = db.transaction([STORE_NAME], 'readwrite');
+          const objectStore = transaction.objectStore(STORE_NAME);
+          const request = objectStore.clear();
 
-    // Also handle transaction errors
-    transaction.onerror = () => {
-      clearTimeout(timeoutId);
-      reject(transaction.error);
-    };
-  });
+          request.onsuccess = () => {
+            clearTimeout(timeoutId);
+            resolve();
+          };
+          request.onerror = () => {
+            clearTimeout(timeoutId);
+            reject(request.error);
+          };
+
+          transaction.onerror = () => {
+            clearTimeout(timeoutId);
+            reject(transaction.error);
+          };
+        } catch (error) {
+          clearTimeout(timeoutId);
+          db = null;
+          reject(error);
+        }
+      });
+    } catch (error) {
+      if (error.name === 'InvalidStateError' && attempt < MAX_IDB_RETRY - 1) {
+        console.warn(
+          `[Saved Projects] InvalidStateError on clear attempt ${attempt + 1}, reconnecting`
+        );
+        await reconnectDB();
+        continue;
+      }
+      throw error;
+    }
+  }
 }
 
 /**
