@@ -61,7 +61,7 @@ import {
   formatMissingDependencies,
 } from './js/dependency-checker.js';
 import { getConsolePanel } from './js/console-panel.js';
-import { getErrorLogPanel } from './js/error-log-panel.js';
+import { getErrorLogPanel, initAddStructuredError } from './js/error-log-panel.js';
 import { themeManager, initThemeToggle } from './js/theme-manager.js';
 import {
   presetManager,
@@ -246,27 +246,60 @@ import Split from 'split.js';
 function resolve2DExportParameters(parameters, schema, format) {
   if (format !== 'svg' && format !== 'dxf') return parameters;
   const schemaParams = schema?.parameters;
-  if (!schemaParams) return parameters;
+  if (!schemaParams) {
+    console.warn(
+      '[resolve2D] No schema parameters available — cannot auto-adjust for 2D export'
+    );
+    return parameters;
+  }
 
   const resolved = { ...parameters };
+  let laserCutParamFound = false;
+
+  console.debug('[resolve2D] Resolving parameters for', format.toUpperCase(), 'export:', {
+    inputGenerate: parameters?.generate,
+    generateEnum: schemaParams.generate?.enum,
+  });
 
   for (const [name, pDef] of Object.entries(schemaParams)) {
     const enumValues = pDef.enum;
     if (!Array.isArray(enumValues) || enumValues.length === 0) continue;
 
     if (name === 'generate') {
-      // Find the enum option whose value contains 2D export keywords
+      // Find the enum option whose value or label contains 2D export keywords.
+      // Labeled enums store {value: "1", label: "first layer for SVG/DXF file"};
+      // checking only entry.value ("1") misses the match, so we also check the label.
       const twoDEntry = enumValues.find((entry) => {
         const v = String(
           typeof entry === 'object' ? entry.value : entry
         ).toLowerCase();
+        const l =
+          typeof entry === 'object' && entry.label
+            ? String(entry.label).toLowerCase()
+            : v;
         return (
-          v.includes('svg') || v.includes('dxf') || v.includes('first layer')
+          v.includes('svg') ||
+          v.includes('dxf') ||
+          v.includes('first layer') ||
+          l.includes('svg') ||
+          l.includes('dxf') ||
+          l.includes('first layer')
         );
       });
       if (twoDEntry !== undefined) {
-        resolved[name] =
+        const resolvedValue =
           typeof twoDEntry === 'object' ? twoDEntry.value : twoDEntry;
+        console.debug('[resolve2D] Found 2D generate entry:', {
+          entry: twoDEntry,
+          resolvedValue,
+        });
+        resolved[name] = resolvedValue;
+      } else {
+        console.warn(
+          '[resolve2D] No 2D-compatible entry found in generate enum. ' +
+            'Export may fail with MODEL_NOT_2D. Enum was:',
+          enumValues
+        );
       }
       continue;
     }
@@ -276,7 +309,11 @@ function resolve2DExportParameters(parameters, schema, format) {
         const v = String(
           typeof entry === 'object' ? entry.value : entry
         ).toLowerCase();
-        return v.includes('laser');
+        const l =
+          typeof entry === 'object' && entry.label
+            ? String(entry.label).toLowerCase()
+            : v;
+        return v.includes('laser') || l.includes('laser');
       });
       if (laserEntry !== undefined) {
         resolved[name] =
@@ -285,18 +322,38 @@ function resolve2DExportParameters(parameters, schema, format) {
       continue;
     }
 
-    if (name === 'use_Laser_Cutting_best_practices') {
+    if (/laser.*(cut|cutting).*(best|pract)/i.test(name)) {
+      laserCutParamFound = true;
       const yesEntry = enumValues.find((entry) => {
         const v = String(
           typeof entry === 'object' ? entry.value : entry
         ).toLowerCase();
-        return v === 'yes';
+        const l =
+          typeof entry === 'object' && entry.label
+            ? String(entry.label).toLowerCase()
+            : v;
+        return v === 'yes' || l === 'yes';
       });
       if (yesEntry !== undefined) {
         resolved[name] =
           typeof yesEntry === 'object' ? yesEntry.value : yesEntry;
       }
     }
+  }
+
+  if (!laserCutParamFound) {
+    console.warn(
+      '[resolve2D] WARNING: No laser-cutting-best-practices param was resolved. SVG/DXF export may fail.'
+    );
+  }
+
+  const adjustments = Object.entries(resolved).filter(
+    ([k, v]) => parameters[k] !== v
+  );
+  if (adjustments.length > 0) {
+    console.debug('[resolve2D] Auto-adjusted parameters for 2D export:', adjustments);
+  } else {
+    console.debug('[resolve2D] No parameter adjustments needed for 2D export');
   }
 
   return resolved;
@@ -713,7 +770,10 @@ function _resetHfmSettings() {
   _applyHfmPersistFade(_hfmPersistFade);
   _hfmCalibratedDevice = calibrated.deviceCategory;
   _hfmCalibrated = true;
-  console.log('[Alt View] Settings reset to auto-calibrated defaults:', calibrated);
+  console.log(
+    '[Alt View] Settings reset to auto-calibrated defaults:',
+    calibrated
+  );
 }
 
 function _formatHfmContrastValue(scale) {
@@ -809,7 +869,9 @@ function _applyHfmContrastScale(scale, options = {}) {
     localStorage.setItem(STORAGE_KEY_HFM_CONTRAST_SCALE, String(clamped));
   } catch (error) {
     if (error.name === 'QuotaExceededError') {
-      console.warn('[Alt View] localStorage quota exceeded — contrast scale not saved');
+      console.warn(
+        '[Alt View] localStorage quota exceeded — contrast scale not saved'
+      );
     } else {
       console.warn('[Alt View] Could not save contrast scale:', error);
     }
@@ -842,7 +904,9 @@ function _applyHfmFontScale(scale, options = {}) {
     localStorage.setItem(STORAGE_KEY_HFM_FONT_SCALE, String(clamped));
   } catch (error) {
     if (error.name === 'QuotaExceededError') {
-      console.warn('[Alt View] localStorage quota exceeded — font scale not saved');
+      console.warn(
+        '[Alt View] localStorage quota exceeded — font scale not saved'
+      );
     } else {
       console.warn('[Alt View] Could not save font scale:', error);
     }
@@ -874,7 +938,9 @@ function _applyHfmPersistFade(value) {
     localStorage.setItem(STORAGE_KEY_HFM_PERSIST_FADE, String(clamped));
   } catch (error) {
     if (error.name === 'QuotaExceededError') {
-      console.warn('[Alt View] localStorage quota exceeded — persist fade not saved');
+      console.warn(
+        '[Alt View] localStorage quota exceeded — persist fade not saved'
+      );
     } else {
       console.warn('[Alt View] Could not save persist fade:', error);
     }
@@ -1688,9 +1754,12 @@ async function _enableAltViewWithPreview(toggleBtn) {
       let savedFade = null;
       try {
         savedFade = localStorage.getItem(STORAGE_KEY_HFM_PERSIST_FADE);
-      } catch (_) { /* storage unavailable */ }
+      } catch (_) {
+        /* storage unavailable */
+      }
       const parsed = savedFade !== null ? parseFloat(savedFade) : NaN;
-      const valid = Number.isFinite(parsed) &&
+      const valid =
+        Number.isFinite(parsed) &&
         parsed >= _HFM_PERSIST_FADE_RANGE.min &&
         parsed <= _HFM_PERSIST_FADE_RANGE.max;
       _applyHfmPersistFade(valid ? parsed : _HFM_PERSIST_FADE_RANGE.default);
@@ -1711,9 +1780,11 @@ async function _enableAltViewWithPreview(toggleBtn) {
       // Private browsing or storage unavailable — use calibration
     }
 
-    const parsedContrast = savedContrast !== null ? parseFloat(savedContrast) : NaN;
+    const parsedContrast =
+      savedContrast !== null ? parseFloat(savedContrast) : NaN;
     const parsedFont = savedFont !== null ? parseFloat(savedFont) : NaN;
-    const parsedPersistFade = savedPersistFade !== null ? parseFloat(savedPersistFade) : NaN;
+    const parsedPersistFade =
+      savedPersistFade !== null ? parseFloat(savedPersistFade) : NaN;
 
     const contrastValid =
       Number.isFinite(parsedContrast) &&
@@ -1743,7 +1814,9 @@ async function _enableAltViewWithPreview(toggleBtn) {
       _hfmCalibrated = true;
     }
 
-    _hfmPersistFade = persistFadeValid ? parsedPersistFade : _HFM_PERSIST_FADE_RANGE.default;
+    _hfmPersistFade = persistFadeValid
+      ? parsedPersistFade
+      : _HFM_PERSIST_FADE_RANGE.default;
   }
 
   _applyHfmContrastScale(_hfmContrastScale);
@@ -3370,6 +3443,9 @@ async function initApp() {
           .map((p) => p.name);
         autoPreviewController.setColorParamNames(colorParamNames);
         autoPreviewController.setParamTypes(postInitState.paramTypes || {});
+        autoPreviewController.setGenerateEnumEntries(
+          postInitState.schema?.parameters?.generate?.enum || []
+        );
         autoPreviewController.setScadContent(
           postInitState.uploadedFile.content
         );
@@ -3525,12 +3601,19 @@ async function initApp() {
     const hasRender = Boolean(state.stl);
     // Full render = Generate button has been pressed and output matches current params
     const stateOutputFormat = (state.outputFormat || '').toLowerCase();
-    const selectedFormat = (document.getElementById('outputFormat')?.value || 'stl').toLowerCase();
-    const hasNonSTLRender = hasRender && stateOutputFormat === selectedFormat && stateOutputFormat !== 'stl';
-    const hasFullRender = hasNonSTLRender || Boolean(
-      autoPreviewController?.getCurrentFullSTL(state.parameters) &&
-      !autoPreviewController?.needsFullRender(state.parameters)
-    );
+    const selectedFormat = (
+      document.getElementById('outputFormat')?.value || 'stl'
+    ).toLowerCase();
+    const hasNonSTLRender =
+      hasRender &&
+      stateOutputFormat === selectedFormat &&
+      stateOutputFormat !== 'stl';
+    const hasFullRender =
+      hasNonSTLRender ||
+      Boolean(
+        autoPreviewController?.getCurrentFullSTL(state.parameters) &&
+        !autoPreviewController?.needsFullRender(state.parameters)
+      );
 
     // Recent Files submenu items (filenames only; actual re-open via onOpenRecent callback)
     const recentItems =
@@ -3594,7 +3677,8 @@ async function initApp() {
         type: 'action',
         label: 'Recent File',
         disabled: true,
-        tooltip: 'Previously opened files appear in the Recent Files submenu below',
+        tooltip:
+          'Previously opened files appear in the Recent Files submenu below',
       },
       { type: 'submenu', label: 'Recent Files', items: recentItems },
       { type: 'separator' },
@@ -3656,7 +3740,8 @@ async function initApp() {
         type: 'action',
         label: 'Show Library Folder',
         disabled: true,
-        tooltip: 'Libraries are managed in-browser \u2014 use the Libraries panel (Window menu) to add or remove libraries',
+        tooltip:
+          'Libraries are managed in-browser \u2014 use the Libraries panel (Window menu) to add or remove libraries',
       },
     ];
   });
@@ -3755,7 +3840,10 @@ async function initApp() {
       editorAction('Unindent', 'editor.action.outdentLines'),
       editorAction('Comment', 'editor.action.commentLine'),
       editorAction('Uncomment', 'editor.action.removeCommentLine'),
-      editorAction('Convert Tabs to Spaces', 'editor.action.indentationToSpaces'),
+      editorAction(
+        'Convert Tabs to Spaces',
+        'editor.action.indentationToSpaces'
+      ),
       { type: 'separator' },
       {
         type: 'action',
@@ -3795,7 +3883,10 @@ async function initApp() {
       },
       { type: 'separator' },
       editorAction('Find\u2026', 'actions.find'),
-      editorAction('Find and Replace\u2026', 'editor.action.startFindReplaceAction'),
+      editorAction(
+        'Find and Replace\u2026',
+        'editor.action.startFindReplaceAction'
+      ),
       editorAction('Find Next', 'editor.action.nextMatchFindAction'),
       editorAction('Find Previous', 'editor.action.previousMatchFindAction'),
       {
@@ -3930,7 +4021,8 @@ async function initApp() {
         type: 'action',
         label: '3D Print',
         disabled: true,
-        tooltip: 'Not available in browser \u2014 export the model as STL and open it in your slicer application (e.g. PrusaSlicer, Cura)',
+        tooltip:
+          'Not available in browser \u2014 export the model as STL and open it in your slicer application (e.g. PrusaSlicer, Cura)',
       },
       { type: 'separator' },
       {
@@ -4147,13 +4239,15 @@ async function initApp() {
         type: 'toggle',
         label: 'Hide Editor toolbar',
         disabled: true,
-        tooltip: 'Not yet implemented \u2014 panels can be shown or hidden via the Window menu',
+        tooltip:
+          'Not yet implemented \u2014 panels can be shown or hidden via the Window menu',
       },
       {
         type: 'toggle',
         label: 'Hide 3D View toolbar',
         disabled: true,
-        tooltip: 'Not yet implemented \u2014 panels can be shown or hidden via the Window menu',
+        tooltip:
+          'Not yet implemented \u2014 panels can be shown or hidden via the Window menu',
       },
     ];
   });
@@ -4212,7 +4306,8 @@ async function initApp() {
         type: 'action',
         label: 'Font List',
         disabled: true,
-        tooltip: 'Not available in browser \u2014 see openscad.org/documentation.html for font information',
+        tooltip:
+          'Not available in browser \u2014 see openscad.org/documentation.html for font information',
       },
       {
         type: 'action',
@@ -4296,7 +4391,8 @@ async function initApp() {
         type: 'action',
         label: 'Font List',
         disabled: true,
-        tooltip: 'Not available in browser \u2014 see openscad.org/documentation.html for font information',
+        tooltip:
+          'Not available in browser \u2014 see openscad.org/documentation.html for font information',
       },
       { type: 'separator' },
       {
@@ -4540,8 +4636,15 @@ async function initApp() {
             // UX-B: Show "What will be auto-adjusted" indicator
             const state = stateManager.getState();
             const autoAdjustDiv = document.getElementById('format2dAutoAdjust');
-            const autoAdjustList = document.getElementById('format2dAutoAdjustList');
-            if (autoAdjustDiv && autoAdjustList && state?.parameters && state?.schema) {
+            const autoAdjustList = document.getElementById(
+              'format2dAutoAdjustList'
+            );
+            if (
+              autoAdjustDiv &&
+              autoAdjustList &&
+              state?.parameters &&
+              state?.schema
+            ) {
               const resolved = resolve2DExportParameters(
                 state.parameters,
                 state.schema,
@@ -5064,6 +5167,9 @@ async function initApp() {
       /not a 3D object|2D object/i.test(detailsStr);
 
     if (is2DModel) {
+      if (previewManager) {
+        previewManager.clear();
+      }
       // Show guidance for 2D model — this is informational, not an error
       // Use 'success' not 'error' to avoid alarming red warnings on a correct workflow path
       updateStatus(
@@ -7449,12 +7555,40 @@ async function initApp() {
     const isLikelyBinary = bytesPerTri > 0 && bytesPerTri < 80;
     const isLikelyASCII = bytesPerTri > 100;
 
+    // Detect SVG/DXF by inspecting the first bytes of the output buffer
+    let detectedFormat = null;
+    const rawData = result.data || result.stl;
+    if (rawData && rawData.byteLength > 0) {
+      const header = new Uint8Array(
+        rawData,
+        0,
+        Math.min(16, rawData.byteLength)
+      );
+      const prefix = String.fromCharCode(...header).toLowerCase();
+      if (prefix.startsWith('<?xml') || prefix.startsWith('<svg')) {
+        detectedFormat = 'SVG';
+      } else if (
+        prefix.startsWith('0\nsection') ||
+        prefix.startsWith('0\r\nsection')
+      ) {
+        detectedFormat = 'DXF';
+      }
+    }
+
+    const formatLabel = detectedFormat
+      ? detectedFormat
+      : isLikelyBinary
+        ? 'Binary STL ✓'
+        : isLikelyASCII
+          ? 'ASCII STL ⚠️'
+          : 'Unknown';
+
     console.log(
       `[Render Stats] ` +
         `Time: ${timing.renderMs || 0}ms | ` +
         `Triangles: ${stats.triangles?.toLocaleString() || 0} | ` +
         `Size: ${(dataSize / 1024).toFixed(1)}KB | ` +
-        `Format: ${isLikelyBinary ? 'Binary STL ✓' : isLikelyASCII ? 'ASCII STL ⚠️' : 'Unknown'}`
+        `Format: ${formatLabel}`
     );
 
     // Warn if ASCII STL detected
@@ -9112,8 +9246,12 @@ async function initApp() {
         }
 
         // Restore overlay width/height from localStorage
-        const savedOverlayWidth = localStorage.getItem(STORAGE_KEY_OVERLAY_WIDTH);
-        const savedOverlayHeight = localStorage.getItem(STORAGE_KEY_OVERLAY_HEIGHT);
+        const savedOverlayWidth = localStorage.getItem(
+          STORAGE_KEY_OVERLAY_WIDTH
+        );
+        const savedOverlayHeight = localStorage.getItem(
+          STORAGE_KEY_OVERLAY_HEIGHT
+        );
         if (savedOverlayWidth || savedOverlayHeight) {
           const sizeUpdate = {};
           if (savedOverlayWidth) {
@@ -9252,6 +9390,9 @@ async function initApp() {
       if (autoPreviewController) {
         autoPreviewController.setColorParamNames(colorParamNames);
         autoPreviewController.setParamTypes(paramTypes);
+        autoPreviewController.setGenerateEnumEntries(
+          extracted.parameters?.generate?.enum || []
+        );
       }
 
       // Show color parameter legend when multiple color params exist
@@ -13841,6 +13982,9 @@ if (rounded) {
       });
     } catch (error) {
       console.error('Generation failed:', error);
+      if (typeof window.addStructuredError === 'function') {
+        window.addStructuredError(error?.message || 'Generation failed');
+      }
 
       // Extract OpenSCAD console output embedded in error.details and surface it
       // to the Console panel. This is how missing-include warnings reach the user.
@@ -13862,13 +14006,17 @@ if (rounded) {
         return;
       }
 
-      // Special-case: SVG/DXF export failures with "not a 2D object" or empty output.
-      // Guide the user to select the 2D-compatible 'generate' parameter value.
+      // Special-case: SVG/DXF export failures — 3D geometry produced when 2D is required.
+      // Guide the user to the specific 'generate' parameter that controls the output mode.
       const currentFormat = outputFormatSelect?.value || 'stl';
       if (currentFormat === 'svg' || currentFormat === 'dxf') {
         const msg = (error?.message || '').toLowerCase();
+        const detailsStr = String(error?.details || '');
         const is2DGeometryError =
+          error?.code === 'MODEL_NOT_2D' ||
           msg.includes('not a 2d') ||
+          msg.includes('3d geometry but svg') ||
+          msg.includes('3d geometry but dxf') ||
           msg.includes('no geometry') ||
           msg.includes('empty') ||
           msg.includes('missing') ||
@@ -13879,33 +14027,56 @@ if (rounded) {
           const currentState = stateManager.getState();
           const schemaParams = currentState.schema?.parameters || {};
           const generateParam = schemaParams.generate;
-          let guidance = '';
+
+          // Parse ECHO conflict from OpenSCAD console output embedded in error.details.
+          // The model emits ECHO: "'generate' is set to '3D Printed'" when in a 3D mode.
+          const echoMatch = detailsStr.match(/'generate'\s+is set to\s+'([^']+)'/i);
+          const currentGenerateValue = echoMatch ? echoMatch[1] : null;
+
+          // Locate the generate parameter in the UI for the "Take me to the setting" button.
+          const generateTargetKey = locateParameterKey('generate', {
+            labelHint: 'generate',
+          });
+
+          let twoDDisplayName = null;
           if (generateParam?.enum) {
+            // Check both value and label for 2D keywords (labeled enums use numeric values)
             const twoDOption = generateParam.enum.find((entry) => {
               const v = String(
                 typeof entry === 'object' ? entry.value : entry
               ).toLowerCase();
+              const l =
+                typeof entry === 'object' && entry.label
+                  ? String(entry.label).toLowerCase()
+                  : v;
               return (
                 v.includes('svg') ||
                 v.includes('dxf') ||
-                v.includes('first layer')
+                v.includes('first layer') ||
+                l.includes('svg') ||
+                l.includes('dxf') ||
+                l.includes('first layer')
               );
             });
             if (twoDOption) {
-              const val =
-                typeof twoDOption === 'object' ? twoDOption.value : twoDOption;
-              guidance = `\n\nTo export ${currentFormat.toUpperCase()}: set the "generate" parameter to "${val}" and try again.`;
+              twoDDisplayName =
+                typeof twoDOption === 'object' && twoDOption.label
+                  ? twoDOption.label
+                  : typeof twoDOption === 'object'
+                    ? twoDOption.value
+                    : twoDOption;
             }
           }
-          if (!guidance) {
-            guidance = `\n\nTo export ${currentFormat.toUpperCase()}: your model must produce 2D geometry. Look for a "generate" or mode parameter and select the 2D/laser-cut option.`;
-          }
+
           updateStatus(
             `Error: ${currentFormat.toUpperCase()} export requires 2D geometry`
           );
-          alert(
-            `${currentFormat.toUpperCase()} export failed — model did not produce 2D geometry.${guidance}`
-          );
+          showDependencyGuidanceModal({
+            label: 'generate',
+            current: currentGenerateValue,
+            suggested: twoDDisplayName,
+            targetKey: generateTargetKey,
+          });
           return;
         }
       }
@@ -16120,7 +16291,7 @@ if (rounded) {
         compatibility.missingParams.length > 0
       ) {
         console.info(
-          `[Preset] "${preset.name}": ${compatibility.applicableCount} params applied, ` +
+          `[Preset] "${preset.name}": ${compatibility.compatibleCount} params applied, ` +
             `${compatibility.extraParams.length} skipped (not in current file), ` +
             `${compatibility.missingParams.length} kept at defaults (not in preset)`
         );
@@ -16395,6 +16566,7 @@ if (rounded) {
 
   // Initialize ErrorLogPanel for structured error display
   const errorLogPanel = getErrorLogPanel();
+  initAddStructuredError();
 
   /**
    * Update console output display
@@ -16561,13 +16733,17 @@ if (rounded) {
       })
       .join('\n');
 
-    // Show the drawer expanded
+    // Show the drawer: always mark it visible so the badge/label appears,
+    // but only auto-expand (remove 'collapsed') when there are warnings or errors
     echoDrawer.classList.add('visible');
-    echoDrawer.classList.remove('collapsed');
+    if (warnCount > 0 || errorCount > 0) {
+      echoDrawer.classList.remove('collapsed');
+    }
 
     const toggleBtn = document.getElementById('echoDrawerToggle');
     if (toggleBtn) {
-      toggleBtn.setAttribute('aria-expanded', 'true');
+      const isExpanded = warnCount > 0 || errorCount > 0;
+      toggleBtn.setAttribute('aria-expanded', String(isExpanded));
     }
 
     // Build accessible announcement

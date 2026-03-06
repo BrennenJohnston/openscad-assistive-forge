@@ -88,6 +88,32 @@ describe('RenderController', () => {
     expect(controller.currentRequest).toBeNull()
   })
 
+  it('propagates MODEL_NOT_2D code and ECHO-bearing details for SVG/DXF conflict', () => {
+    const controller = new RenderController()
+    const reject = vi.fn()
+    controller.currentRequest = { id: 'render-not2d', reject }
+
+    const echoDetails =
+      "Error stack\n\n[OpenSCAD output]\nECHO: \"'generate' is set to '3D Printed'\"\nWARNING: Current top level object is not a 2D object"
+
+    controller.handleMessage({
+      type: 'ERROR',
+      payload: {
+        requestId: 'render-not2d',
+        code: 'MODEL_NOT_2D',
+        message: 'Your model produces 3D geometry but SVG/DXF export requires 2D output.',
+        details: echoDetails,
+      }
+    })
+
+    expect(reject).toHaveBeenCalled()
+    const err = reject.mock.calls[0][0]
+    expect(err.code).toBe('MODEL_NOT_2D')
+    expect(err.details).toContain('[OpenSCAD output]')
+    expect(err.details).toContain("'generate' is set to '3D Printed'")
+    expect(controller.currentRequest).toBeNull()
+  })
+
   it('rejects init promise on worker init error', () => {
     const controller = new RenderController()
     const readyReject = vi.fn()
