@@ -1,6 +1,6 @@
 # Prompt Library
 
-16 copy-and-paste prompts for common AI-assisted development scenarios. Each prompt
+17 copy-and-paste prompts for common AI-assisted development scenarios. Each prompt
 is a self-contained role definition that you paste into your AI tool before starting
 a task.
 
@@ -49,6 +49,7 @@ These prompts follow findings from the Prompt Programming Study (arXiv:2412.2054
 | 14 | `14-3d-print-at-device.md` | 3D-printed AT device design | Persona (AT engineer) |
 | 15 | `15-open-source-contribution.md` | Open source contribution | Persona (community contributor) |
 | 16 | `16-research-synthesis.md` | Research synthesis / source analysis | Persona (research analyst) |
+| 17 | `17-queue-executor.md` | Queue executor / single-phase session | Persona (debugging specialist) |
 
 ## Tips
 

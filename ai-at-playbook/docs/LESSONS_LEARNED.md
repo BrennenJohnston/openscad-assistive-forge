@@ -186,6 +186,38 @@ errors propagate into all derivative artifacts. A fabricated summary feeds a
 flawed synthesis feeds a wrong plan. Every layer of derivation from the
 corrupted source amplifies the error.
 
+### 8. Queue executor pattern (validated success)
+
+The queue executor workflow emerged as the highest-performing pattern in the
+project's development history. A 15-phase bugfix queue executed across
+session-isolated AI chats achieved 100% phase completion with zero scope
+escape incidents and zero context-fabrication errors.
+
+The pattern works by decomposing broad work (which completes at 6%) into
+narrow micro-phases (which complete at 50%), then enforcing session
+boundaries, re-read discipline, and validation gates between each phase.
+Three artifacts work together: a queue plan file (persistent state), a
+session executor prompt (8-step protocol), and persona prompts (one per
+phase from the prompt library).
+
+**Evidence:** `round_4+5_combined_bugfix` (15/15 phases validated).
+
+**Key structural elements:**
+- Frontmatter todos for machine-parseable progress tracking
+- "Do not widen into" scope fences on every phase
+- Three-gate checklist protocol (handoff, intake, completion)
+- Hard stop after each phase -- no continuation in the same chat
+- Human review pause every two validated phases
+- Deferred follow-on section for cross-cutting work
+
+**Why it works:** It addresses anti-patterns #1 (scope overload), #3 (feature
+completion drift), #5 (architectural plans without decomposition), and #7
+(context-boundary fabrication) simultaneously through structural constraints
+rather than relying on AI self-discipline.
+
+See [QUEUE_EXECUTOR_WORKFLOW.md](QUEUE_EXECUTOR_WORKFLOW.md) for the full
+methodology and templates.
+
 ## Course-correction strategies that worked
 
 ### 1. Validated re-plans
