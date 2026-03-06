@@ -61,7 +61,11 @@ import {
   formatMissingDependencies,
 } from './js/dependency-checker.js';
 import { getConsolePanel } from './js/console-panel.js';
-import { getErrorLogPanel, initAddStructuredError } from './js/error-log-panel.js';
+import {
+  getErrorLogPanel,
+  initAddStructuredError,
+  ERROR_LOG_TYPE,
+} from './js/error-log-panel.js';
 import { themeManager, initThemeToggle } from './js/theme-manager.js';
 import {
   presetManager,
@@ -8818,6 +8822,40 @@ async function initApp() {
     }
 
     console.log('File loaded:', fileName, fileContent.length, 'bytes');
+
+    // Single-file preflight: detect missing companion include/use/import files.
+    // The ZIP path already runs its own preflight above; only check here for
+    // bare .scad uploads where extractedFiles is null.
+    if (!extractedFiles) {
+      const singleFilePreflight = runPreflightCheck(
+        fileContent,
+        [fileName],
+        {
+          availableLibraries: new Set(
+            Object.keys(LIBRARY_DEFINITIONS).map((k) => k.toLowerCase())
+          ),
+        }
+      );
+      if (!singleFilePreflight.success) {
+        const allMissingFiles = [
+          ...singleFilePreflight.missing.includes,
+          ...singleFilePreflight.missing.uses,
+          ...singleFilePreflight.missing.imports,
+        ].join(', ');
+        console.warn(
+          '[Upload] Single-file upload references missing companion files:',
+          singleFilePreflight.missing
+        );
+        getErrorLogPanel().addEntry({
+          type: ERROR_LOG_TYPE.WARNING,
+          group: 'Import',
+          file: fileName,
+          line: null,
+          message: `Missing companion files: ${allMissingFiles} — upload the full project folder or ZIP to include all dependencies`,
+          timestamp: Date.now(),
+        });
+      }
+    }
 
     // Extract parameters
     updateStatus('Extracting parameters...');
