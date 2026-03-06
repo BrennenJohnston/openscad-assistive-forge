@@ -1083,6 +1083,17 @@ function buildDefineArgs(parameters, paramTypes = {}) {
       else if (/^#?[0-9A-Fa-f]{6}$/.test(value)) {
         const rgb = hexToRgb(value);
         formattedValue = `[${rgb[0]},${rgb[1]},${rgb[2]}]`;
+      }
+      // When the schema declares a numeric type, a string value resolved from a
+      // numeric enum (e.g. resolve2DExportParameters returning '1' for a
+      // generate param typed as integer) must be emitted unquoted so that
+      // OpenSCAD numeric comparisons (if (generate == 1)) evaluate correctly.
+      else if (
+        (paramTypes[key] === 'integer' || paramTypes[key] === 'number') &&
+        value.trim() !== '' &&
+        !isNaN(Number(value))
+      ) {
+        formattedValue = String(Number(value));
       } else {
         // ALL non-boolean strings (including "yes"/"no" dropdowns) stay as quoted strings
         const escaped = value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
@@ -1444,14 +1455,14 @@ async function renderWithCallMain(
     if (_callMainInvoked) {
       console.warn(
         '[Worker] DEFENSE-IN-DEPTH: callMain already invoked in this module lifetime. ' +
-        'Geometry may be corrupted. The render controller should have restarted the worker.'
+          'Geometry may be corrupted. The render controller should have restarted the worker.'
       );
       // BUG-A fix: abort the render rather than proceeding with corrupted WASM state.
       // The needsRestart flag ensures the render controller restarts before retrying.
       const doubleInvokeError = new Error(
         'WASM_DOUBLE_INVOKE: The rendering engine was not restarted between renders. ' +
-        'This render has been cancelled to prevent corrupted geometry. ' +
-        'The engine will restart automatically before the next render.'
+          'This render has been cancelled to prevent corrupted geometry. ' +
+          'The engine will restart automatically before the next render.'
       );
       doubleInvokeError.code = 'WASM_DOUBLE_INVOKE';
       doubleInvokeError.needsRestart = true;
@@ -1920,7 +1931,17 @@ function postProcessDXF(outputBuffer) {
   }
 
   // Coordinate group codes that should be rounded (X/Y/Z for both start and end points)
-  const COORD_CODES = new Set(['10', '11', '12', '20', '21', '22', '30', '31', '32']);
+  const COORD_CODES = new Set([
+    '10',
+    '11',
+    '12',
+    '20',
+    '21',
+    '22',
+    '30',
+    '31',
+    '32',
+  ]);
 
   // Helper to emit a group code/value pair with proper DXF formatting
   // Group codes are right-justified in a 3-char field; values on the next line
@@ -2001,7 +2022,11 @@ function postProcessDXF(outputBuffer) {
     } else if (entity.type === 'LINE') {
       // Deduplicate passthrough LINE entities too
       const rawPairs = entity.rawPairs || [];
-      let x1 = null, y1 = null, x2 = null, y2 = null, _layer = '0';
+      let x1 = null,
+        y1 = null,
+        x2 = null,
+        y2 = null,
+        _layer = '0';
       for (const ep of rawPairs) {
         if (ep.code === '8') _layer = ep.value;
         if (ep.code === '10') x1 = parseFloat(ep.value);
@@ -2184,11 +2209,12 @@ async function render(payload) {
     clearMountedFiles();
     const _fsClearMs = Date.now() - _fsClearStart;
     if (_fsClearMs > 50) {
-      console.warn(`[Worker FS] clearMountedFiles took ${_fsClearMs}ms — unusually slow`);
+      console.warn(
+        `[Worker FS] clearMountedFiles took ${_fsClearMs}ms — unusually slow`
+      );
     }
 
     if (files && Object.keys(files).length > 0) {
-
       // Convert files object to Map
       const filesMap = new Map(Object.entries(files));
 
@@ -2523,11 +2549,15 @@ async function render(payload) {
 
     // Signal that the WASM module needs a restart before the next render.
     // callMain with non-zero exit or a numeric abort corrupts module state.
+    // MODEL_NOT_2D is included: callMain ran (setting _callMainInvoked=true) even
+    // though OpenSCAD exited with code 1. Without a restart the next render hits
+    // WASM_DOUBLE_INVOKE because the worker-side guard sees _callMainInvoked=true.
     const needsRestart =
       error?.needsRestart === true ||
       typeof error === 'number' ||
       /^\d+$/.test(String(error)) ||
       code === 'INTERNAL_ERROR' ||
+      code === 'MODEL_NOT_2D' ||
       code === 'WASM_ABORT' ||
       code === 'WASM_UNREACHABLE' ||
       code === 'WASM_OOB';

@@ -1,17 +1,20 @@
 /**
- * Unit tests for resolve2DExportParameters (src/main.js).
+ * Unit tests for resolve2DExportParameters (src/main.js) and the
+ * buildDefineArgs numeric-coercion path (src/worker/openscad-worker.js).
  *
- * Because resolve2DExportParameters is not exported from main.js, we test its
- * logic here using an inlined copy. Keep this copy in sync with main.js if the
- * implementation changes.
+ * Because these functions are not exported from their respective modules, we
+ * test their logic here using inlined copies. Keep each copy in sync with its
+ * source if the implementation changes.
  *
  * @license GPL-3.0-or-later
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 
 // ─── Inlined testable copy of resolve2DExportParameters ─────────────────────
 // Mirrors src/main.js resolve2DExportParameters.
+// Phase 3 change: laser-cutting best-practices param matched by case-insensitive
+// regex instead of exact name equality.
 function resolve2DExportParameters(parameters, schema, format) {
   if (format !== 'svg' && format !== 'dxf') return parameters;
   const schemaParams = schema?.parameters;
@@ -28,8 +31,17 @@ function resolve2DExportParameters(parameters, schema, format) {
         const v = String(
           typeof entry === 'object' ? entry.value : entry
         ).toLowerCase();
+        const l =
+          typeof entry === 'object' && entry.label
+            ? String(entry.label).toLowerCase()
+            : v;
         return (
-          v.includes('svg') || v.includes('dxf') || v.includes('first layer')
+          v.includes('svg') ||
+          v.includes('dxf') ||
+          v.includes('first layer') ||
+          l.includes('svg') ||
+          l.includes('dxf') ||
+          l.includes('first layer')
         );
       });
       if (twoDEntry !== undefined) {
@@ -44,7 +56,11 @@ function resolve2DExportParameters(parameters, schema, format) {
         const v = String(
           typeof entry === 'object' ? entry.value : entry
         ).toLowerCase();
-        return v.includes('laser');
+        const l =
+          typeof entry === 'object' && entry.label
+            ? String(entry.label).toLowerCase()
+            : v;
+        return v.includes('laser') || l.includes('laser');
       });
       if (laserEntry !== undefined) {
         resolved[name] =
@@ -53,12 +69,18 @@ function resolve2DExportParameters(parameters, schema, format) {
       continue;
     }
 
-    if (name === 'use_Laser_Cutting_best_practices') {
+    // Case-insensitive partial match — resilient against minor naming variations
+    // (e.g. use_Laser_Cutting_best_practices, use_laser_cutting_best_practices)
+    if (/laser.*(cut|cutting).*(best|pract)/i.test(name)) {
       const yesEntry = enumValues.find((entry) => {
         const v = String(
           typeof entry === 'object' ? entry.value : entry
         ).toLowerCase();
-        return v === 'yes';
+        const l =
+          typeof entry === 'object' && entry.label
+            ? String(entry.label).toLowerCase()
+            : v;
+        return v === 'yes' || l === 'yes';
       });
       if (yesEntry !== undefined) {
         resolved[name] =
@@ -68,6 +90,13 @@ function resolve2DExportParameters(parameters, schema, format) {
   }
 
   return resolved;
+}
+
+// ─── Helper: does schema contain a laser-cut best-practices param? ──────────
+function schemaHasLaserCutParam(schemaParams) {
+  return Object.keys(schemaParams).some((name) =>
+    /laser.*(cut|cutting).*(best|pract)/i.test(name)
+  );
 }
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
@@ -148,6 +177,55 @@ describe('resolve2DExportParameters — generate enum resolution', () => {
     expect(result.generate).toBe('SVG Export');
   });
 
+  it('resolves labeled enum where value is numeric and label contains "first layer for SVG/DXF file"', () => {
+    // Exact format produced by OpenSCAD [0:3d printed keyguard, 1:first layer for SVG/DXF file]
+    const params = { generate: '0' };
+    const schema = {
+      parameters: {
+        generate: {
+          enum: [
+            { value: '0', label: '3d printed keyguard' },
+            { value: '1', label: 'first layer for SVG/DXF file' },
+          ],
+        },
+      },
+    };
+    const result = resolve2DExportParameters(params, schema, 'svg');
+    expect(result.generate).toBe('1');
+  });
+
+  it('resolves labeled enum where label contains "svg"', () => {
+    const params = { generate: '0' };
+    const schema = {
+      parameters: {
+        generate: {
+          enum: [
+            { value: '0', label: '3D Model' },
+            { value: '1', label: 'SVG output' },
+          ],
+        },
+      },
+    };
+    const result = resolve2DExportParameters(params, schema, 'svg');
+    expect(result.generate).toBe('1');
+  });
+
+  it('resolves labeled enum where label contains "dxf"', () => {
+    const params = { generate: '0' };
+    const schema = {
+      parameters: {
+        generate: {
+          enum: [
+            { value: '0', label: '3D print' },
+            { value: '2', label: 'DXF laser cut' },
+          ],
+        },
+      },
+    };
+    const result = resolve2DExportParameters(params, schema, 'dxf');
+    expect(result.generate).toBe('2');
+  });
+
   it('does not modify generate if no 2D entry exists', () => {
     const params = { generate: '3D Model' };
     const schema = {
@@ -171,10 +249,26 @@ describe('resolve2DExportParameters — type_of_keyguard resolution', () => {
     const result = resolve2DExportParameters(params, schema, 'svg');
     expect(result.type_of_keyguard).toBe('Laser Cut');
   });
+
+  it('selects laser entry via label for labeled enum type_of_keyguard', () => {
+    const params = { type_of_keyguard: '0' };
+    const schema = {
+      parameters: {
+        type_of_keyguard: {
+          enum: [
+            { value: '0', label: '3D printed keyguard' },
+            { value: '1', label: 'Laser cut keyguard' },
+          ],
+        },
+      },
+    };
+    const result = resolve2DExportParameters(params, schema, 'svg');
+    expect(result.type_of_keyguard).toBe('1');
+  });
 });
 
-describe('resolve2DExportParameters — use_Laser_Cutting_best_practices', () => {
-  it('selects "Yes" entry for laser cutting best practices', () => {
+describe('resolve2DExportParameters — use_Laser_Cutting_best_practices (case-insensitive regex)', () => {
+  it('selects "Yes" entry with exact canonical name', () => {
     const params = { use_Laser_Cutting_best_practices: 'No' };
     const schema = {
       parameters: {
@@ -183,6 +277,74 @@ describe('resolve2DExportParameters — use_Laser_Cutting_best_practices', () =>
     };
     const result = resolve2DExportParameters(params, schema, 'dxf');
     expect(result.use_Laser_Cutting_best_practices).toBe('Yes');
+  });
+
+  it('selects "yes" entry via label for labeled enum with canonical name', () => {
+    const params = { use_Laser_Cutting_best_practices: '0' };
+    const schema = {
+      parameters: {
+        use_Laser_Cutting_best_practices: {
+          enum: [
+            { value: '0', label: 'No' },
+            { value: '1', label: 'Yes' },
+          ],
+        },
+      },
+    };
+    const result = resolve2DExportParameters(params, schema, 'dxf');
+    expect(result.use_Laser_Cutting_best_practices).toBe('1');
+  });
+
+  it('matches lowercase variant use_laser_cutting_best_practices', () => {
+    const params = { use_laser_cutting_best_practices: 'no' };
+    const schema = {
+      parameters: {
+        use_laser_cutting_best_practices: { enum: ['no', 'yes'] },
+      },
+    };
+    const result = resolve2DExportParameters(params, schema, 'svg');
+    expect(result.use_laser_cutting_best_practices).toBe('yes');
+  });
+
+  it('matches mixed-case variant useLaserCuttingBestPractices', () => {
+    const params = { useLaserCuttingBestPractices: 'No' };
+    const schema = {
+      parameters: {
+        useLaserCuttingBestPractices: { enum: ['No', 'Yes'] },
+      },
+    };
+    const result = resolve2DExportParameters(params, schema, 'svg');
+    expect(result.useLaserCuttingBestPractices).toBe('Yes');
+  });
+});
+
+describe('schemaHasLaserCutParam — warning helper', () => {
+  it('returns true for use_Laser_Cutting_best_practices', () => {
+    expect(
+      schemaHasLaserCutParam({ use_Laser_Cutting_best_practices: {} })
+    ).toBe(true);
+  });
+
+  it('returns true for use_laser_cutting_best_practices (lowercase)', () => {
+    expect(
+      schemaHasLaserCutParam({ use_laser_cutting_best_practices: {} })
+    ).toBe(true);
+  });
+
+  it('returns true for useLaserCuttingBestPractices (camelCase)', () => {
+    expect(
+      schemaHasLaserCutParam({ useLaserCuttingBestPractices: {} })
+    ).toBe(true);
+  });
+
+  it('returns false when no laser-cutting param exists', () => {
+    expect(
+      schemaHasLaserCutParam({ generate: {}, type_of_keyguard: {} })
+    ).toBe(false);
+  });
+
+  it('returns false for an empty schema', () => {
+    expect(schemaHasLaserCutParam({})).toBe(false);
   });
 });
 
@@ -225,5 +387,116 @@ describe('resolve2DExportParameters — schema with no enum', () => {
     };
     const result = resolve2DExportParameters(params, schema, 'svg');
     expect(result.generate).toBe('3D');
+  });
+});
+
+// ─── Inlined testable copy of buildDefineArgs (src/worker/openscad-worker.js) ─
+// Mirrors the numeric-coercion path added in Phase 1 of the round-4+5 bugfix
+// queue. Keep in sync with openscad-worker.js buildDefineArgs if the
+// implementation changes.
+function buildDefineArgs(parameters, paramTypes = {}) {
+  if (!parameters || Object.keys(parameters).length === 0) return [];
+  const args = [];
+  for (const [key, value] of Object.entries(parameters)) {
+    if (value === null || value === undefined) continue;
+    let formattedValue;
+    if (typeof value === 'string') {
+      const lowerValue = value.toLowerCase();
+      const isBooleanParam = paramTypes[key] === 'boolean';
+      if (isBooleanParam && (lowerValue === 'true' || lowerValue === 'yes')) {
+        formattedValue = 'true';
+      } else if (isBooleanParam && (lowerValue === 'false' || lowerValue === 'no')) {
+        formattedValue = 'false';
+      } else if (/^#?[0-9A-Fa-f]{6}$/.test(value)) {
+        formattedValue = `"${value}"`;
+      } else if (
+        (paramTypes[key] === 'integer' || paramTypes[key] === 'number') &&
+        value.trim() !== '' &&
+        !isNaN(Number(value))
+      ) {
+        formattedValue = String(Number(value));
+      } else {
+        const escaped = value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+        formattedValue = `"${escaped}"`;
+      }
+    } else if (typeof value === 'number') {
+      formattedValue = String(value);
+    } else if (typeof value === 'boolean') {
+      formattedValue = value ? 'true' : 'false';
+    } else if (Array.isArray(value)) {
+      formattedValue = JSON.stringify(value);
+    } else {
+      formattedValue = JSON.stringify(value);
+    }
+    args.push('-D');
+    args.push(`${key}=${formattedValue}`);
+  }
+  return args;
+}
+
+// ─── buildDefineArgs: numeric-coercion tests ─────────────────────────────────
+
+describe('buildDefineArgs — numeric paramType coercion (Phase 1 regression)', () => {
+  it('emits unquoted integer when paramType is integer and value is a numeric string', () => {
+    const args = buildDefineArgs({ generate: '1' }, { generate: 'integer' });
+    expect(args).toContain('-D');
+    expect(args).toContain('generate=1');
+  });
+
+  it('emits unquoted number when paramType is number and value is a numeric string', () => {
+    const args = buildDefineArgs({ angle: '45' }, { angle: 'number' });
+    expect(args).toContain('angle=45');
+  });
+
+  it('still quotes string value when paramType is string, even if value looks numeric', () => {
+    const args = buildDefineArgs({ generate: '1' }, { generate: 'string' });
+    expect(args).toContain('generate="1"');
+  });
+
+  it('still quotes yes/no when paramType is string (not boolean)', () => {
+    const args = buildDefineArgs(
+      { use_Laser_Cutting_best_practices: 'Yes' },
+      { use_Laser_Cutting_best_practices: 'string' }
+    );
+    expect(args).toContain('use_Laser_Cutting_best_practices="Yes"');
+  });
+
+  it('emits true/false for boolean paramType with yes/no string values', () => {
+    const args = buildDefineArgs({ flag: 'yes' }, { flag: 'boolean' });
+    expect(args).toContain('flag=true');
+  });
+
+  it('end-to-end: resolve then build — numeric generate enum produces unquoted arg', () => {
+    const params = { generate: '0' };
+    const schema = {
+      parameters: {
+        generate: {
+          enum: [
+            { value: '0', label: '3d printed keyguard' },
+            { value: '1', label: 'first layer for SVG/DXF file' },
+          ],
+        },
+      },
+    };
+    const resolved = resolve2DExportParameters(params, schema, 'svg');
+    expect(resolved.generate).toBe('1');
+    const args = buildDefineArgs(resolved, { generate: 'integer' });
+    expect(args).toContain('generate=1');
+    expect(args).not.toContain('generate="1"');
+  });
+
+  it('end-to-end: resolve then build — string use_Laser_Cutting_best_practices stays quoted', () => {
+    const params = { use_Laser_Cutting_best_practices: 'No' };
+    const schema = {
+      parameters: {
+        use_Laser_Cutting_best_practices: { enum: ['No', 'Yes'] },
+      },
+    };
+    const resolved = resolve2DExportParameters(params, schema, 'dxf');
+    expect(resolved.use_Laser_Cutting_best_practices).toBe('Yes');
+    const args = buildDefineArgs(resolved, {
+      use_Laser_Cutting_best_practices: 'string',
+    });
+    expect(args).toContain('use_Laser_Cutting_best_practices="Yes"');
   });
 });
