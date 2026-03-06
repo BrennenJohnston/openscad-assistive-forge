@@ -129,7 +129,7 @@ export function initPreviewSettingsDrawer(options = {}) {
   const savedCollapsedState = loadCollapsedState();
 
   // Determine initial collapsed state
-  const shouldStartCollapsed = isMobile || savedCollapsedState === true;
+  const shouldStartCollapsed = isMobile || savedCollapsedState !== false;
 
   // Apply initial state directly
   if (shouldStartCollapsed) {
@@ -196,7 +196,12 @@ export function initPreviewSettingsDrawer(options = {}) {
       if (nowMobile && isExpanded) {
         collapse();
       } else if (!nowMobile && !isExpanded) {
-        expand();
+        // Only auto-expand if the user has not explicitly chosen to keep it collapsed.
+        // loadCollapsedState() returns true when the user saved a collapsed preference,
+        // null when no preference has been saved yet, and false when explicitly expanded.
+        if (loadCollapsedState() !== true) {
+          expand();
+        }
       }
     }, 150);
   });
