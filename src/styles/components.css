@@ -8939,7 +8939,11 @@ body.first-visit-blocking #app {
 
 .features-tab[aria-selected='true'] {
   color: var(--color-text-primary);
-  border-bottom-color: var(--color-accent);
+  /* Use --color-accent-fg (amber-11 in light mode) instead of --color-accent
+   * (yellow-9) so the indicator meets WCAG 3:1 non-text contrast on light
+   * backgrounds. Dark/HC themes already satisfy this through their own token
+   * overrides of --color-accent-fg. */
+  border-bottom-color: var(--color-accent-fg);
   font-weight: 600;
 }
 
@@ -9244,7 +9248,7 @@ body.first-visit-blocking #app {
   .modal-content.tutorial-target-highlight
   .features-tab[aria-selected='true'] {
   color: var(--color-text-primary);
-  border-bottom-color: var(--color-accent);
+  border-bottom-color: var(--color-accent-fg);
   background: color-mix(
     in srgb,
     var(--color-accent) 10%,

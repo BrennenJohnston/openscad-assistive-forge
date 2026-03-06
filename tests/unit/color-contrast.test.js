@@ -606,6 +606,123 @@ describe('Tutorial Button Contrast - CRITICAL ACCESSIBILITY FIX', () => {
   });
 });
 
+describe('Selected Tab Indicator - All Themes', () => {
+  /**
+   * Verifies the features-tab[aria-selected='true'] border-bottom indicator
+   * meets WCAG 1.4.11 non-text contrast (3:1 minimum).
+   *
+   * In light mode the indicator uses --color-accent-fg (amber-11, ~#AD5700)
+   * rather than --color-accent (yellow-9, #FFE629 ≈ 1.2:1 on white — fails).
+   * Dark and HC themes resolve --color-accent-fg to values that already pass.
+   */
+
+  describe('Light Mode Tab Indicator', () => {
+    // After fix: --color-accent-fg = var(--amber-11) in light mode
+    const indicatorColor = amber.amber11;
+    const tabBg = slate.slate1; // --color-bg-primary in light mode
+
+    it('selected tab indicator meets 3:1 non-text contrast in light mode', () => {
+      const ratio = getContrastRatio(indicatorColor, tabBg);
+      expect(ratio).toBeGreaterThanOrEqual(3.0);
+      expect(meetsNonTextContrast(ratio)).toBe(true);
+    });
+  });
+
+  describe('Dark Mode Tab Indicator', () => {
+    // --color-accent-fg = var(--yellow-9) in dark mode
+    const indicatorColor = yellow.yellow9;
+    const tabBg = slateDark.slate1; // --color-bg-primary in dark mode
+
+    it('selected tab indicator meets 3:1 non-text contrast in dark mode', () => {
+      const ratio = getContrastRatio(indicatorColor, tabBg);
+      expect(ratio).toBeGreaterThanOrEqual(3.0);
+      expect(meetsNonTextContrast(ratio)).toBe(true);
+    });
+  });
+
+  describe('High Contrast Light Mode Tab Indicator', () => {
+    // --color-accent-fg = #003d99 in HC light mode (same as --color-accent)
+    const indicatorColor = '#003d99';
+    const tabBg = '#ffffff'; // --color-bg-primary in HC light mode
+
+    it('selected tab indicator meets 7:1 in HC light mode', () => {
+      const ratio = getContrastRatio(indicatorColor, tabBg);
+      expect(ratio).toBeGreaterThanOrEqual(7.0);
+      expect(meetsWCAG_AAA(ratio)).toBe(true);
+    });
+  });
+
+  describe('High Contrast Dark Mode Tab Indicator', () => {
+    // --color-accent-fg = #66b3ff in HC dark mode (same as --color-accent)
+    const indicatorColor = '#66b3ff';
+    const tabBg = '#000000'; // --color-bg-primary in HC dark mode
+
+    it('selected tab indicator meets 7:1 in HC dark mode', () => {
+      const ratio = getContrastRatio(indicatorColor, tabBg);
+      expect(ratio).toBeGreaterThanOrEqual(7.0);
+      expect(meetsWCAG_AAA(ratio)).toBe(true);
+    });
+  });
+});
+
+describe('Pressed Button State - All Themes', () => {
+  /**
+   * Verifies icon/text contrast on the accent-background pressed state used by
+   * alt-view-toggle, alt-pan-toggle, auto-rotate-toggle, and mode-toggle-btn.
+   *
+   * Pressed state: background = --color-accent, color = --color-accent-text.
+   * WCAG 1.4.11 non-text contrast (3:1) required for icon indicators.
+   */
+
+  describe('Light Mode Pressed Button', () => {
+    // --color-accent = yellow-9, --color-accent-text = slate-12 in light mode
+    const iconColor = slate.slate12; // --color-accent-text in light
+    const buttonBg = yellow.yellow9; // --color-accent in light
+
+    it('pressed button icon meets 3:1 non-text contrast in light mode', () => {
+      const ratio = getContrastRatio(iconColor, buttonBg);
+      expect(ratio).toBeGreaterThanOrEqual(3.0);
+      expect(meetsNonTextContrast(ratio)).toBe(true);
+    });
+  });
+
+  describe('Dark Mode Pressed Button', () => {
+    // --color-accent = yellow-9, --color-accent-text = slate-1 (slateDark.slate1) in dark
+    const iconColor = slateDark.slate1; // --color-accent-text in dark mode
+    const buttonBg = yellow.yellow9;    // --color-accent in dark mode
+
+    it('pressed button icon meets 3:1 non-text contrast in dark mode', () => {
+      const ratio = getContrastRatio(iconColor, buttonBg);
+      expect(ratio).toBeGreaterThanOrEqual(3.0);
+      expect(meetsNonTextContrast(ratio)).toBe(true);
+    });
+  });
+
+  describe('High Contrast Light Mode Pressed Button', () => {
+    // HC light: --color-accent = #003d99, --color-accent-text = #ffffff
+    const iconColor = '#ffffff';
+    const buttonBg = '#003d99';
+
+    it('pressed button icon meets 7:1 in HC light mode', () => {
+      const ratio = getContrastRatio(iconColor, buttonBg);
+      expect(ratio).toBeGreaterThanOrEqual(7.0);
+      expect(meetsWCAG_AAA(ratio)).toBe(true);
+    });
+  });
+
+  describe('High Contrast Dark Mode Pressed Button', () => {
+    // HC dark: --color-accent = #66b3ff, --color-accent-text = #000000
+    const iconColor = '#000000';
+    const buttonBg = '#66b3ff';
+
+    it('pressed button icon meets 7:1 in HC dark mode', () => {
+      const ratio = getContrastRatio(iconColor, buttonBg);
+      expect(ratio).toBeGreaterThanOrEqual(7.0);
+      expect(meetsWCAG_AAA(ratio)).toBe(true);
+    });
+  });
+});
+
 describe('APCA Contrast (Future WCAG 3.0) - Informational', () => {
   /**
    * APCA (Accessible Perceptual Contrast Algorithm) is the proposed method
