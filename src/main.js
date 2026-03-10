@@ -44,6 +44,7 @@ import {
   AutoPreviewController,
   PREVIEW_STATE,
 } from './js/auto-preview-controller.js';
+import { resolve2DExportIntent } from './js/render-intent.js';
 import {
   extractZipFiles,
   validateZipFile,
@@ -51,6 +52,7 @@ import {
   resolveProjectFile,
   buildPresetCompanionMap,
   applyCompanionAliases,
+  getOverlaySvgTarget,
   buildNestedTree,
   getNodeAtPath,
   countFilesRecursive,
@@ -248,116 +250,17 @@ import Split from 'split.js';
  * @returns {Object} Parameter object with 2D-compatible overrides applied
  */
 function resolve2DExportParameters(parameters, schema, format) {
-  if (format !== 'svg' && format !== 'dxf') return parameters;
-  const schemaParams = schema?.parameters;
-  if (!schemaParams) {
-    console.warn(
-      '[resolve2D] No schema parameters available — cannot auto-adjust for 2D export'
+  const resolved = resolve2DExportIntent(parameters, schema, format);
+
+  if (resolved !== parameters) {
+    const adjustments = Object.entries(resolved).filter(
+      ([k, v]) => parameters[k] !== v
     );
-    return parameters;
-  }
-
-  const resolved = { ...parameters };
-  let laserCutParamFound = false;
-
-  console.debug('[resolve2D] Resolving parameters for', format.toUpperCase(), 'export:', {
-    inputGenerate: parameters?.generate,
-    generateEnum: schemaParams.generate?.enum,
-  });
-
-  for (const [name, pDef] of Object.entries(schemaParams)) {
-    const enumValues = pDef.enum;
-    if (!Array.isArray(enumValues) || enumValues.length === 0) continue;
-
-    if (name === 'generate') {
-      // Find the enum option whose value or label contains 2D export keywords.
-      // Labeled enums store {value: "1", label: "first layer for SVG/DXF file"};
-      // checking only entry.value ("1") misses the match, so we also check the label.
-      const twoDEntry = enumValues.find((entry) => {
-        const v = String(
-          typeof entry === 'object' ? entry.value : entry
-        ).toLowerCase();
-        const l =
-          typeof entry === 'object' && entry.label
-            ? String(entry.label).toLowerCase()
-            : v;
-        return (
-          v.includes('svg') ||
-          v.includes('dxf') ||
-          v.includes('first layer') ||
-          l.includes('svg') ||
-          l.includes('dxf') ||
-          l.includes('first layer')
-        );
-      });
-      if (twoDEntry !== undefined) {
-        const resolvedValue =
-          typeof twoDEntry === 'object' ? twoDEntry.value : twoDEntry;
-        console.debug('[resolve2D] Found 2D generate entry:', {
-          entry: twoDEntry,
-          resolvedValue,
-        });
-        resolved[name] = resolvedValue;
-      } else {
-        console.warn(
-          '[resolve2D] No 2D-compatible entry found in generate enum. ' +
-            'Export may fail with MODEL_NOT_2D. Enum was:',
-          enumValues
-        );
-      }
-      continue;
+    if (adjustments.length > 0) {
+      console.debug('[resolve2D] Auto-adjusted parameters for 2D export:', adjustments);
+    } else {
+      console.debug('[resolve2D] No parameter adjustments needed for 2D export');
     }
-
-    if (name === 'type_of_keyguard') {
-      const laserEntry = enumValues.find((entry) => {
-        const v = String(
-          typeof entry === 'object' ? entry.value : entry
-        ).toLowerCase();
-        const l =
-          typeof entry === 'object' && entry.label
-            ? String(entry.label).toLowerCase()
-            : v;
-        return v.includes('laser') || l.includes('laser');
-      });
-      if (laserEntry !== undefined) {
-        resolved[name] =
-          typeof laserEntry === 'object' ? laserEntry.value : laserEntry;
-      }
-      continue;
-    }
-
-    if (/laser.*(cut|cutting).*(best|pract)/i.test(name)) {
-      laserCutParamFound = true;
-      const yesEntry = enumValues.find((entry) => {
-        const v = String(
-          typeof entry === 'object' ? entry.value : entry
-        ).toLowerCase();
-        const l =
-          typeof entry === 'object' && entry.label
-            ? String(entry.label).toLowerCase()
-            : v;
-        return v === 'yes' || l === 'yes';
-      });
-      if (yesEntry !== undefined) {
-        resolved[name] =
-          typeof yesEntry === 'object' ? yesEntry.value : yesEntry;
-      }
-    }
-  }
-
-  if (!laserCutParamFound) {
-    console.warn(
-      '[resolve2D] WARNING: No laser-cutting-best-practices param was resolved. SVG/DXF export may fail.'
-    );
-  }
-
-  const adjustments = Object.entries(resolved).filter(
-    ([k, v]) => parameters[k] !== v
-  );
-  if (adjustments.length > 0) {
-    console.debug('[resolve2D] Auto-adjusted parameters for 2D export:', adjustments);
-  } else {
-    console.debug('[resolve2D] No parameter adjustments needed for 2D export');
   }
 
   return resolved;
@@ -2269,6 +2172,9 @@ async function initApp() {
   // Runtime mapping from preset name to companion file paths (built on ZIP load).
   // Stores path references only — content is resolved lazily on preset activation.
   let presetCompanionMap = null;
+  // Canonical project files snapshot used as the clean base when applying presets.
+  // This prevents alias-mounted companion files from one preset bleeding into the next.
+  let canonicalProjectFiles = null;
   let autoPreviewUserEnabled = true;
   let previewQuality = RENDER_QUALITY.PREVIEW;
 
@@ -2288,6 +2194,14 @@ async function initApp() {
     FILE_SIZE_LIMITS = validationModule.FILE_SIZE_LIMITS;
   } catch (e) {
     console.error('Failed to import validation constants:', e);
+  }
+
+  function cloneProjectFiles(files) {
+    return files ? new Map(files) : null;
+  }
+
+  function setCanonicalProjectFiles(files) {
+    canonicalProjectFiles = cloneProjectFiles(files);
   }
   let previewQualityMode = 'auto';
 
@@ -3447,9 +3361,7 @@ async function initApp() {
           .map((p) => p.name);
         autoPreviewController.setColorParamNames(colorParamNames);
         autoPreviewController.setParamTypes(postInitState.paramTypes || {});
-        autoPreviewController.setGenerateEnumEntries(
-          postInitState.schema?.parameters?.generate?.enum || []
-        );
+        autoPreviewController.setSchema(postInitState.schema || null);
         autoPreviewController.setScadContent(
           postInitState.uploadedFile.content
         );
@@ -8145,6 +8057,8 @@ async function initApp() {
     const projectFiles = state.projectFiles;
 
     if (shouldShow) {
+      // COMPATIBILITY FALLBACK — Phase 8 removal candidate:
+      // 'default.svg' when screenshot_file param exists but is empty/unset.
       const screenshotFile = parameters.screenshot_file || 'default.svg';
       const resolved = resolveProjectFile(projectFiles, screenshotFile);
       if (resolved) {
@@ -8200,19 +8114,29 @@ async function initApp() {
       return;
     }
 
-    // Look for screenshot_file variable in SCAD source (resolve via basename fallback)
+    // Look for file variables pointing to SVG/image overlay candidates.
+    // Prefers screenshot_file when available, then any file variable with
+    // an overlay-suitable extension.
     let screenshotFile = null;
     if (requiredFiles && requiredFiles.files) {
-      const screenshotVar = requiredFiles.files.find(
-        (f) => f.variableName === 'screenshot_file'
+      const OVERLAY_EXTS = ['.svg', '.png', '.jpg', '.jpeg', '.gif', '.webp'];
+      const overlayVars = requiredFiles.files.filter(
+        (f) =>
+          f.type === 'variable' &&
+          OVERLAY_EXTS.some((ext) => f.path.toLowerCase().endsWith(ext))
       );
-      if (screenshotVar) {
-        const resolved = resolveProjectFile(projectFiles, screenshotVar.path);
+      if (overlayVars.length > 0) {
+        const preferred =
+          overlayVars.find((v) => v.variableName === 'screenshot_file') ||
+          overlayVars[0];
+        const resolved = resolveProjectFile(projectFiles, preferred.path);
         if (resolved) screenshotFile = resolved.key;
       }
     }
 
-    // Fallback: resolve default.svg (handles root or single nested match)
+    // COMPATIBILITY FALLBACK — Phase 8 removal candidate.
+    // Try 'default.svg' for backward compatibility with keyguard projects
+    // that lack a manifest but use the known convention.
     if (!screenshotFile) {
       const resolved = resolveProjectFile(projectFiles, 'default.svg');
       if (resolved) screenshotFile = resolved.key;
@@ -8337,6 +8261,7 @@ async function initApp() {
         projectFiles,
         mainFilePath,
       });
+      setCanonicalProjectFiles(projectFiles);
 
       // Mirror image files to SharedImageStore so they appear in Image Measurement
       if (isImage) {
@@ -8406,6 +8331,7 @@ async function initApp() {
 
     // Update state
     stateManager.setState({ projectFiles });
+    setCanonicalProjectFiles(projectFiles);
 
     // Update UI
     const requiredFiles = uploadedFile
@@ -8489,6 +8415,7 @@ async function initApp() {
 
     // Update state
     stateManager.setState({ projectFiles });
+    setCanonicalProjectFiles(projectFiles);
 
     // Update UI
     const requiredFiles = state.uploadedFile
@@ -8914,6 +8841,7 @@ async function initApp() {
         complexityAnalysis: complexityAnalysis,
         adaptiveQualityConfig: adaptiveConfig,
       });
+      setCanonicalProjectFiles(projectFiles || null);
 
       // Clear undo/redo history on new file upload
       stateManager.clearHistory();
@@ -9160,12 +9088,37 @@ async function initApp() {
             const parameterSetsForMap = Object.fromEntries(
               importedPresets.map((p) => [p.name, p.parameters])
             );
+            // Extract aliasable companion targets from SCAD analysis so
+            // the companion map resolves all referenced basenames, not just
+            // hardcoded keyguard-specific filenames.
+            const scadRefs = detectRequiredCompanionFiles(fileContent);
+            const companionTargets = [
+              ...new Set(
+                (scadRefs?.files || [])
+                  .filter(
+                    (f) =>
+                      f.required &&
+                      (f.type === 'include' || f.type === 'import')
+                  )
+                  .map((f) => f.path.split('/').pop())
+              ),
+            ].filter((basename) => {
+              let count = 0;
+              for (const key of projectFiles.keys()) {
+                if (key.split('/').pop() === basename) count++;
+              }
+              return count > 1;
+            });
             presetCompanionMap = buildPresetCompanionMap(
               projectFiles,
-              parameterSetsForMap
+              parameterSetsForMap,
+              { companionTargets }
             );
             console.log(
-              `[ZIP] Built preset companion map for ${presetCompanionMap.size} presets`
+              `[ZIP] Built preset companion map for ${presetCompanionMap.size} presets` +
+                (companionTargets.length > 0
+                  ? ` (generic targets: ${companionTargets.join(', ')})`
+                  : ' (legacy path)')
             );
           }
         }
@@ -9432,9 +9385,7 @@ async function initApp() {
       if (autoPreviewController) {
         autoPreviewController.setColorParamNames(colorParamNames);
         autoPreviewController.setParamTypes(paramTypes);
-        autoPreviewController.setGenerateEnumEntries(
-          extracted.parameters?.generate?.enum || []
-        );
+        autoPreviewController.setSchema(extracted || null);
       }
 
       // Show color parameter legend when multiple color params exist
@@ -13212,11 +13163,13 @@ if (rounded) {
           projectFiles.set(mainPath, uf.content);
           mainFilePath = mainPath;
           stateManager.setState({ projectFiles, mainFilePath });
+          setCanonicalProjectFiles(projectFiles);
         }
 
         if (projectFiles) {
           projectFiles.set(`Screenshots/${record.name}`, record.dataUrl);
           stateManager.setState({ projectFiles });
+          setCanonicalProjectFiles(projectFiles);
 
           // Auto-save to IndexedDB so screenshots persist across sessions
           await autoSaveCompanionFiles();
@@ -13981,6 +13934,10 @@ if (rounded) {
       const is2DFormat = OUTPUT_FORMATS[outputFormat]?.is2D;
       if (!autoPreviewController && previewManager && stlData && !is2DFormat) {
         try {
+          // Full-quality direct render: clear any preview/laser tint
+          if (previewManager.setRenderState) {
+            previewManager.setRenderState(null);
+          }
           await previewManager.loadSTL(stlData, { preserveCamera: false });
           if (_hfmEnabled && _hfmAltView?.clearPersistence) {
             _hfmAltView.clearPersistence();
@@ -14069,11 +14026,10 @@ if (rounded) {
           const currentState = stateManager.getState();
           const schemaParams = currentState.schema?.parameters || {};
           const generateParam = schemaParams.generate;
+          const currentParams = currentState.parameters || {};
 
-          // Parse ECHO conflict from OpenSCAD console output embedded in error.details.
-          // The model emits ECHO: "'generate' is set to '3D Printed'" when in a 3D mode.
-          const echoMatch = detailsStr.match(/'generate'\s+is set to\s+'([^']+)'/i);
-          const currentGenerateValue = echoMatch ? echoMatch[1] : null;
+          // Determine the actual generate value from state (more reliable than echo parsing)
+          const actualGenerateValue = currentParams.generate ?? null;
 
           // Locate the generate parameter in the UI for the "Take me to the setting" button.
           const generateTargetKey = locateParameterKey('generate', {
@@ -14082,7 +14038,6 @@ if (rounded) {
 
           let twoDDisplayName = null;
           if (generateParam?.enum) {
-            // Check both value and label for 2D keywords (labeled enums use numeric values)
             const twoDOption = generateParam.enum.find((entry) => {
               const v = String(
                 typeof entry === 'object' ? entry.value : entry
@@ -14110,15 +14065,36 @@ if (rounded) {
             }
           }
 
+          // Check if generate is already set to a 2D-compatible value.
+          // If so, the issue is a rendering engine limitation, not a settings problem.
+          const actualLower = String(actualGenerateValue ?? '').toLowerCase();
+          const alreadySet2D =
+            actualLower.includes('svg') ||
+            actualLower.includes('dxf') ||
+            actualLower.includes('first layer');
+
           updateStatus(
             `Error: ${currentFormat.toUpperCase()} export requires 2D geometry`
           );
-          showDependencyGuidanceModal({
-            label: 'generate',
-            current: currentGenerateValue,
-            suggested: twoDDisplayName,
-            targetKey: generateTargetKey,
-          });
+
+          if (alreadySet2D) {
+            const friendlyError = translateError(error.message);
+            const userMessage =
+              `${currentFormat.toUpperCase()} Export Issue\n\n` +
+              `The "${actualGenerateValue}" setting is selected, but the rendering engine ` +
+              `could not produce 2D geometry. This can happen due to browser-based rendering ` +
+              `limitations with complex models.\n\n` +
+              `Try: Re-generate, or export the 3D model as STL and use desktop OpenSCAD ` +
+              `for SVG/DXF export.`;
+            alert(userMessage);
+          } else {
+            showDependencyGuidanceModal({
+              label: 'generate',
+              current: actualGenerateValue,
+              suggested: twoDDisplayName,
+              targetKey: generateTargetKey,
+            });
+          }
           return;
         }
       }
@@ -15186,11 +15162,16 @@ if (rounded) {
       mergedParams
     );
 
-    // Build updated projectFiles, starting from current state
+    // Build updated projectFiles from the canonical project snapshot rather than
+    // the currently aliased working set, so preset-specific companion files do
+    // not bleed into the next preset selection.
     const curState = stateManager.getState();
-    const newProjectFiles = curState.projectFiles
+    const currentProjectFilesForLog = curState.projectFiles
       ? new Map(curState.projectFiles)
       : new Map();
+    const newProjectFiles = canonicalProjectFiles
+      ? new Map(canonicalProjectFiles)
+      : currentProjectFilesForLog;
 
     // E2: Merge explicit preset.companionFiles (saved presets with embedded content)
     if (
@@ -15202,22 +15183,41 @@ if (rounded) {
       }
     }
 
-    // Alias-mount preset-specific companion files from the ZIP mapping.
     const companionMapping = presetCompanionMap?.get(preset.name);
+    const signatureFor = (content) =>
+      typeof content === 'string'
+        ? `${content.length}:${content.slice(0, 32)}`
+        : content == null
+          ? null
+          : `[${typeof content}]`;
+    // Alias-mount preset-specific companion files from the ZIP mapping.
     const aliasedFiles = applyCompanionAliases(
       newProjectFiles,
       companionMapping
     );
-    if (
-      companionMapping?.openingsPath &&
-      aliasedFiles.has('openings_and_additions.txt')
-    ) {
-      console.log(
-        `[Preset] Alias-mounted openings: ${companionMapping.openingsPath}`
-      );
-    }
-    if (companionMapping?.svgPath && aliasedFiles.has('default.svg')) {
-      console.log(`[Preset] Alias-mounted SVG: ${companionMapping.svgPath}`);
+    if (companionMapping?.aliases) {
+      for (const [target, source] of Object.entries(
+        companionMapping.aliases
+      )) {
+        if (aliasedFiles.has(target)) {
+          console.log(`[Preset] Alias-mounted: ${source} → ${target}`);
+        }
+      }
+    } else {
+      // COMPATIBILITY FALLBACK — legacy logging for {openingsPath, svgPath}
+      if (
+        companionMapping?.openingsPath &&
+        aliasedFiles.has('openings_and_additions.txt')
+      ) {
+        console.log(
+          `[Preset] Alias-mounted openings: ${companionMapping.openingsPath}`
+        );
+      }
+      if (companionMapping?.svgPath && aliasedFiles.has('default.svg')) {
+        console.log(
+          `[Preset] Alias-mounted SVG: ${companionMapping.svgPath}`
+        );
+      }
     }
 
     stateManager.setState({ projectFiles: aliasedFiles });
@@ -15233,15 +15233,16 @@ if (rounded) {
     updatePrimaryActionButton();
     updateProjectFilesUI();
 
-    // When the preset has a mapped SVG, force-select the aliased default.svg
-    // in the overlay dropdown. Without this, the dropdown retains the previous
+    // When the preset has a mapped SVG, force-select the aliased overlay
+    // in the dropdown. Without this, the dropdown retains the previous
     // preset's SVG path (which still exists in the Map) and autoSelectOverlaySource
     // returns early, leaving the overlay stale.
-    if (companionMapping?.svgPath && aliasedFiles.has('default.svg')) {
+    const svgTarget = getOverlaySvgTarget(companionMapping);
+    if (svgTarget && aliasedFiles.has(svgTarget)) {
       if (overlaySourceSelect) {
-        overlaySourceSelect.value = 'default.svg';
+        overlaySourceSelect.value = svgTarget;
       }
-      loadOverlayFromProjectFile('default.svg')
+      loadOverlayFromProjectFile(svgTarget)
         .then(() => {
           // SVG 96 DPI size applied; SCAD case-opening / screen dims override.
           autoApplyScreenDimensionsFromParams(mergedParams);

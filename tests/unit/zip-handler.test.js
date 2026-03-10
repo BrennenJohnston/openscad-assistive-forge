@@ -9,6 +9,8 @@ import {
   resolveProjectFile,
   buildPresetCompanionMap,
   applyCompanionAliases,
+  getOverlaySvgTarget,
+  findFirstOverlayAsset,
 } from '../../src/js/zip-handler.js'
 import JSZip from 'jszip'
 
@@ -831,6 +833,265 @@ describe('ZIP Handler', () => {
       const snapResult = applyCompanionAliases(files, snapMapping)
       expect(snapResult.get('openings_and_additions.txt')).toBe('at snap')
       expect(snapResult.get('default.svg')).toBe('<svg>at snap</svg>')
+    })
+  })
+
+  describe('applyCompanionAliases — generic aliases', () => {
+    it('should apply generic aliases from mapping.aliases', () => {
+      const files = new Map([
+        ['main.scad', '// scad'],
+        ['data/config.txt', 'preset data'],
+        ['assets/logo.svg', '<svg>logo</svg>'],
+      ])
+      const mapping = {
+        aliases: {
+          'config.txt': 'data/config.txt',
+          'logo.svg': 'assets/logo.svg',
+        },
+      }
+      const result = applyCompanionAliases(files, mapping)
+      expect(result.get('config.txt')).toBe('preset data')
+      expect(result.get('logo.svg')).toBe('<svg>logo</svg>')
+    })
+
+    it('should skip aliases when source path is missing', () => {
+      const files = new Map([['main.scad', '// scad']])
+      const mapping = {
+        aliases: { 'missing.txt': 'data/missing.txt' },
+      }
+      const result = applyCompanionAliases(files, mapping)
+      expect(result.has('missing.txt')).toBe(false)
+    })
+
+    it('should not mutate the original Map with generic aliases', () => {
+      const files = new Map([
+        ['main.scad', '// scad'],
+        ['nested/data.txt', 'original'],
+      ])
+      const mapping = { aliases: { 'data.txt': 'nested/data.txt' } }
+      applyCompanionAliases(files, mapping)
+      expect(files.has('data.txt')).toBe(false)
+    })
+
+    it('should prefer generic aliases over legacy format', () => {
+      const files = new Map([
+        ['main.scad', '// scad'],
+        ['nested/custom.txt', 'custom content'],
+        ['other/openings_and_additions.txt', 'should not be used'],
+      ])
+      const mapping = {
+        aliases: { 'custom.txt': 'nested/custom.txt' },
+        openingsPath: 'other/openings_and_additions.txt',
+      }
+      const result = applyCompanionAliases(files, mapping)
+      expect(result.get('custom.txt')).toBe('custom content')
+      expect(result.has('openings_and_additions.txt')).toBe(false)
+    })
+
+    it('should resolve a non-keyguard project without magic filenames', () => {
+      const files = new Map([
+        ['main.scad', 'include <settings.txt>\nimport("pattern.svg")'],
+        ['presets/A/settings.txt', 'preset A settings'],
+        ['presets/B/settings.txt', 'preset B settings'],
+        ['assets/A/pattern.svg', '<svg>A</svg>'],
+        ['assets/B/pattern.svg', '<svg>B</svg>'],
+      ])
+      const mapping = {
+        aliases: {
+          'settings.txt': 'presets/A/settings.txt',
+          'pattern.svg': 'assets/A/pattern.svg',
+        },
+        svgAliasTarget: 'pattern.svg',
+      }
+      const result = applyCompanionAliases(files, mapping)
+      expect(result.get('settings.txt')).toBe('preset A settings')
+      expect(result.get('pattern.svg')).toBe('<svg>A</svg>')
+      expect(result.has('default.svg')).toBe(false)
+      expect(result.has('openings_and_additions.txt')).toBe(false)
+    })
+  })
+
+  describe('buildPresetCompanionMap — generic companionTargets', () => {
+    function makeFiles(entries) {
+      return new Map(entries)
+    }
+
+    it('should resolve generic companion targets per preset', () => {
+      const files = makeFiles([
+        ['main.scad', '// scad'],
+        ['presets/Alpha/config.txt', 'alpha config'],
+        ['presets/Beta/config.txt', 'beta config'],
+      ])
+      const parameterSets = { 'Alpha Preset': {}, 'Beta Preset': {} }
+      const map = buildPresetCompanionMap(files, parameterSets, {
+        companionTargets: ['config.txt'],
+      })
+
+      const alpha = map.get('Alpha Preset')
+      expect(alpha.aliases).toBeDefined()
+      expect(alpha.aliases['config.txt']).toBe('presets/Alpha/config.txt')
+
+      const beta = map.get('Beta Preset')
+      expect(beta.aliases['config.txt']).toBe('presets/Beta/config.txt')
+    })
+
+    it('should resolve SVGs into aliases with basename key', () => {
+      const files = makeFiles([
+        ['main.scad', '// scad'],
+        ['presets/Alpha/config.txt', 'alpha config'],
+        ['presets/Beta/config.txt', 'beta config'],
+        ['assets/Alpha/diagram.svg', '<svg>A</svg>'],
+        ['assets/Beta/diagram.svg', '<svg>B</svg>'],
+      ])
+      const parameterSets = { 'Alpha Preset': {}, 'Beta Preset': {} }
+      const map = buildPresetCompanionMap(files, parameterSets, {
+        companionTargets: ['config.txt'],
+      })
+
+      const alpha = map.get('Alpha Preset')
+      expect(alpha.svgAliasTarget).toBe('diagram.svg')
+      expect(alpha.aliases['diagram.svg']).toBe('assets/Alpha/diagram.svg')
+    })
+
+    it('should use legacy path when companionTargets is empty', () => {
+      const files = makeFiles([
+        ['main.scad', '// scad'],
+        ['Cases/A/openings_and_additions.txt', 'a'],
+        ['Cases/B/openings_and_additions.txt', 'b'],
+      ])
+      const parameterSets = { 'Preset A': {} }
+      const map = buildPresetCompanionMap(files, parameterSets, {
+        companionTargets: [],
+      })
+      const result = map.get('Preset A')
+      expect(result.openingsPath).toBeDefined()
+      expect(result.aliases).toBeUndefined()
+    })
+
+    it('should use legacy path when options is omitted', () => {
+      const files = makeFiles([
+        ['main.scad', '// scad'],
+        ['Cases/A/openings_and_additions.txt', 'a'],
+        ['Cases/B/openings_and_additions.txt', 'b'],
+      ])
+      const parameterSets = { 'Preset A': {} }
+      const map = buildPresetCompanionMap(files, parameterSets)
+      const result = map.get('Preset A')
+      expect(result.openingsPath).toBeDefined()
+      expect(result.aliases).toBeUndefined()
+    })
+
+    it('should integrate generic map with applyCompanionAliases', () => {
+      const files = makeFiles([
+        ['main.scad', 'include <data.txt>'],
+        ['presets/Alpha/data.txt', 'alpha data'],
+        ['presets/Beta/data.txt', 'beta data'],
+        ['assets/diagram.svg', '<svg>shared</svg>'],
+      ])
+      const parameterSets = {
+        'Alpha Work': {},
+        'Beta Work': {},
+      }
+      const companionMap = buildPresetCompanionMap(files, parameterSets, {
+        companionTargets: ['data.txt'],
+      })
+
+      const alphaMapping = companionMap.get('Alpha Work')
+      const alphaResult = applyCompanionAliases(files, alphaMapping)
+      expect(alphaResult.get('data.txt')).toBe('alpha data')
+      expect(alphaResult.has('openings_and_additions.txt')).toBe(false)
+      expect(alphaResult.has('default.svg')).toBe(false)
+
+      const betaMapping = companionMap.get('Beta Work')
+      const betaResult = applyCompanionAliases(files, betaMapping)
+      expect(betaResult.get('data.txt')).toBe('beta data')
+    })
+  })
+
+  describe('getOverlaySvgTarget', () => {
+    it('should return svgAliasTarget from generic mapping', () => {
+      const mapping = {
+        aliases: { 'icon.svg': 'assets/icon.svg' },
+        svgAliasTarget: 'icon.svg',
+      }
+      expect(getOverlaySvgTarget(mapping)).toBe('icon.svg')
+    })
+
+    it('should find SVG key in aliases when svgAliasTarget is absent', () => {
+      const mapping = {
+        aliases: {
+          'data.txt': 'presets/data.txt',
+          'screen.svg': 'assets/screen.svg',
+        },
+      }
+      expect(getOverlaySvgTarget(mapping)).toBe('screen.svg')
+    })
+
+    it('should return default.svg for legacy mapping with svgPath', () => {
+      const mapping = { openingsPath: null, svgPath: 'SVG files/icon.svg' }
+      expect(getOverlaySvgTarget(mapping)).toBe('default.svg')
+    })
+
+    it('should return null for legacy mapping without svgPath', () => {
+      const mapping = { openingsPath: 'some/path.txt', svgPath: null }
+      expect(getOverlaySvgTarget(mapping)).toBeNull()
+    })
+
+    it('should return null for null mapping', () => {
+      expect(getOverlaySvgTarget(null)).toBeNull()
+    })
+
+    it('should return null when aliases has no SVG entries', () => {
+      const mapping = { aliases: { 'data.txt': 'presets/data.txt' } }
+      expect(getOverlaySvgTarget(mapping)).toBeNull()
+    })
+  })
+
+  describe('findFirstOverlayAsset', () => {
+    it('should prefer SVG files over raster images', () => {
+      const files = new Map([
+        ['main.scad', '// scad'],
+        ['photo.png', 'data:image/png;base64,...'],
+        ['diagram.svg', '<svg/>'],
+      ])
+      expect(findFirstOverlayAsset(files)).toBe('diagram.svg')
+    })
+
+    it('should fall back to raster images when no SVG exists', () => {
+      const files = new Map([
+        ['main.scad', '// scad'],
+        ['screenshot.png', 'data:image/png;base64,...'],
+      ])
+      expect(findFirstOverlayAsset(files)).toBe('screenshot.png')
+    })
+
+    it('should return null when no image assets exist', () => {
+      const files = new Map([
+        ['main.scad', '// scad'],
+        ['data.txt', 'text content'],
+      ])
+      expect(findFirstOverlayAsset(files)).toBeNull()
+    })
+
+    it('should return null for empty or null input', () => {
+      expect(findFirstOverlayAsset(null)).toBeNull()
+      expect(findFirstOverlayAsset(new Map())).toBeNull()
+    })
+
+    it('should handle case-insensitive extensions', () => {
+      const files = new Map([
+        ['main.scad', '// scad'],
+        ['IMAGE.PNG', 'data:image/png;base64,...'],
+      ])
+      expect(findFirstOverlayAsset(files)).toBe('IMAGE.PNG')
+    })
+
+    it('should find nested SVG files', () => {
+      const files = new Map([
+        ['main.scad', '// scad'],
+        ['assets/sub/logo.svg', '<svg/>'],
+      ])
+      expect(findFirstOverlayAsset(files)).toBe('assets/sub/logo.svg')
     })
   })
 })
