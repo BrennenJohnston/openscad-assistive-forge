@@ -3,9 +3,18 @@
  * @license GPL-3.0-or-later
  */
 
-import { normalizeHexColor } from './color-utils.js';
+import {
+  normalizeHexColor,
+  DEBUG_HIGHLIGHT_HEX,
+  DEBUG_HIGHLIGHT_OPACITY,
+} from './color-utils.js';
 import { getAppPrefKey } from './storage-keys.js';
 import { isEnabled as isFlagEnabled } from './feature-flags.js';
+import {
+  isNonPreviewable,
+  classifyRenderState,
+  RENDER_STATE,
+} from './render-intent.js';
 
 // Storage keys using standardized naming convention
 const STORAGE_KEY_PERF_METRICS = getAppPrefKey('perf-metrics');
@@ -79,8 +88,8 @@ export class AutoPreviewController {
     // Parameter type metadata (schema types for boolean vs string disambiguation)
     this.paramTypes = {};
 
-    // Generate enum entries for labeled-enum resolution in isNonPreviewableParameters
-    this.generateEnumEntries = [];
+    // Full parsed schema for render-intent classification
+    this.schema = null;
 
     // Color parameters for preview tinting
     this.colorParamNames = [];
@@ -200,20 +209,63 @@ export class AutoPreviewController {
   }
 
   /**
-   * Set generate enum entries from the parsed schema.
-   * Required for labeled-enum support in isNonPreviewableParameters —
-   * when generate stores a numeric raw value (e.g. "1") the label
-   * (e.g. "first layer for SVG/DXF file") is used for keyword matching.
-   * @param {Array} entries - The generate parameter's enum array from the schema
+   * Set the parsed schema for render-intent classification.
+   * The shared render-intent module uses the full schema to detect 2D export
+   * intent and non-previewable states across all enum parameters, not just
+   * "generate".
+   * @param {Object|null} schema - Parsed schema ({ parameters: { ... } })
    */
-  setGenerateEnumEntries(entries) {
-    this.generateEnumEntries = Array.isArray(entries) ? entries : [];
+  setSchema(schema) {
+    this.schema = schema || null;
     console.debug(
-      '[AutoPreview] setGenerateEnumEntries: loaded',
-      this.generateEnumEntries.length,
-      'entries:',
-      this.generateEnumEntries
+      '[AutoPreview] setSchema:',
+      this.schema
+        ? Object.keys(this.schema.parameters || {}).length + ' params'
+        : 'null'
     );
+  }
+
+  /**
+   * Detect the render state for model coloring based on parameters.
+   * Delegates to the shared render-intent classifier and maps the result
+   * to the legacy color-tinting values expected by the preview manager.
+   *
+   * Laser-cutting detection is a stakeholder backward-compat overlay;
+   * Phase 6 will generalize color handling.
+   *
+   * @param {Object} parameters
+   * @param {boolean} isFullQuality - true when this is a full-quality render
+   * @returns {'preview'|'laser'|null}
+   */
+  _detectRenderState(parameters, isFullQuality = false) {
+    const state = classifyRenderState(parameters, this.schema, {
+      isFullQuality,
+    });
+
+    if (state === RENDER_STATE.RENDER_3D) return null;
+
+    if (state === RENDER_STATE.PREVIEW) {
+      // Stakeholder backward-compat: detect laser-cutting mode for tinting
+      if (parameters) {
+        for (const key of Object.keys(parameters)) {
+          if (/laser.*(cut|cutting).*(best|pract)/i.test(key)) {
+            const val = parameters[key];
+            if (
+              val === true ||
+              val === 'yes' ||
+              val === 'Yes' ||
+              val === 1 ||
+              val === '1'
+            ) {
+              return 'laser';
+            }
+          }
+        }
+      }
+      return 'preview';
+    }
+
+    return null;
   }
 
   /**
@@ -234,9 +286,7 @@ export class AutoPreviewController {
       return null;
     }
 
-    const preferredKey = this.colorParamNames.includes('box_color')
-      ? 'box_color'
-      : this.colorParamNames[0];
+    const preferredKey = this.colorParamNames[0];
     const raw = parameters[preferredKey];
 
     // Use shared color normalization utility
@@ -463,6 +513,11 @@ export class AutoPreviewController {
       if (this.previewManager?.setColorOverride && previewColor !== null) {
         this.previewManager.setColorOverride(previewColor);
       }
+      // Set render state so the model color reflects preview/laser/full quality
+      const params = (() => { try { return JSON.parse(paramHash); } catch { return null; } })();
+      if (this.previewManager?.setRenderState) {
+        this.previewManager.setRenderState(this._detectRenderState(params));
+      }
       // Preserve camera position on subsequent loads (after initial preview)
       const cachedFormat = cached.format || 'stl';
       const loadResult =
@@ -545,59 +600,20 @@ export class AutoPreviewController {
    * previewed as 3D geometry (2D-only formats, customizer-only modes, or
    * empty/whitespace generate values).
    *
-   * For labeled enums (OpenSCAD `[0:label, 1:label]` syntax) the stored value
-   * is a numeric string (e.g. "1") rather than the label text. When
-   * `generateEnumEntries` is provided the raw value is mapped back to its
-   * label before keyword-checking so that numeric values like "1" that
-   * correspond to "first layer for SVG/DXF file" are correctly detected.
+   * Delegates to the shared render-intent module's `isNonPreviewable`.
+   * Accepts either a full schema object or, for backward compatibility,
+   * a generate enum entries array.
    *
    * @param {Object} parameters - Current parameter values
-   * @param {Array} [generateEnumEntries] - Optional enum entries from schema
+   * @param {Object|Array} [schemaOrEnumEntries] - Schema or generate enum entries
    * @returns {boolean}
    */
-  static isNonPreviewableParameters(parameters, generateEnumEntries) {
-    if (!parameters) return false;
-    const gen = parameters.generate;
-    if (typeof gen !== 'string') return false;
-    const lower = gen.trim().toLowerCase();
-    if (lower.length === 0) return true;
-
-    // Resolve label for labeled enums when enum context is available
-    let label = lower;
-    if (Array.isArray(generateEnumEntries) && generateEnumEntries.length > 0) {
-      const match = generateEnumEntries.find(
-        (e) => typeof e === 'object' && String(e.value) === gen.trim()
-      );
-      if (match?.label) {
-        label = String(match.label).toLowerCase();
-      }
-    } else if (!Array.isArray(generateEnumEntries) || generateEnumEntries.length === 0) {
-      // Enum entries not yet set — log a warning so timing issues are traceable.
-      // If generate is a numeric string like "5" the label lookup will miss and
-      // a "Customizer Settings" mode might not be detected correctly.
-      console.warn(
-        '[AutoPreview] isNonPreviewableParameters: generateEnumEntries is empty or unset.',
-        'generate value:', gen,
-        '— numeric values will not resolve to their labels.'
-      );
+  static isNonPreviewableParameters(parameters, schemaOrEnumEntries) {
+    let schema = schemaOrEnumEntries;
+    if (Array.isArray(schemaOrEnumEntries)) {
+      schema = { parameters: { generate: { enum: schemaOrEnumEntries } } };
     }
-
-    const result =
-      lower.includes('svg') ||
-      lower.includes('dxf') ||
-      lower.includes('first layer') ||
-      lower.includes('customizer') ||
-      label.includes('svg') ||
-      label.includes('dxf') ||
-      label.includes('first layer') ||
-      label.includes('customizer');
-
-    console.debug(
-      '[AutoPreview] isNonPreviewableParameters:', { gen, lower, label, result,
-        enumEntriesCount: generateEnumEntries?.length ?? 0 }
-    );
-
-    return result;
+    return isNonPreviewable(parameters, schema);
   }
 
   /**
@@ -622,6 +638,30 @@ export class AutoPreviewController {
   }
 
   /**
+   * Detect whether a SCAD source file uses the `#` debug modifier.
+   *
+   * Desktop OpenSCAD renders `#`-modified geometry with a fixed highlight
+   * color {255, 81, 81, 128} that OVERRIDES any user-defined color().
+   * In COFF export the face colors still carry the user color, so the
+   * preview layer must apply the override when this modifier is detected.
+   *
+   * The regex looks for `#` at the start of a statement (after newline,
+   * semicolon, or brace) followed by a geometry keyword or `{`.
+   *
+   * @param {string} scadContent - OpenSCAD source code
+   * @returns {boolean} true if `#` debug modifier is likely present
+   */
+  static scadUsesDebugModifier(scadContent) {
+    if (!scadContent || typeof scadContent !== 'string') return false;
+    const stripped = scadContent
+      .replace(/\/\/[^\n]*/g, '')
+      .replace(/\/\*[\s\S]*?\*\//g, '');
+    return /(?:^|[;\s{}])#\s*(?:color|cube|sphere|cylinder|translate|rotate|scale|union|difference|intersection|linear_extrude|rotate_extrude|hull|minkowski|polygon|circle|square|text|import|surface|resize|mirror|multmatrix|offset|projection|render|\{|\w+\s*\()/m.test(
+      stripped
+    );
+  }
+
+  /**
    * Render preview with reduced quality
    * @param {Object} parameters - Parameter values
    * @param {string} paramHash - Parameter hash
@@ -638,14 +678,9 @@ export class AutoPreviewController {
         (parameters?.generate ?? 'n/a')
     );
 
-    if (
-      AutoPreviewController.isNonPreviewableParameters(
-        parameters,
-        this.generateEnumEntries
-      )
-    ) {
-      const gen = (parameters.generate || '').trim().toLowerCase();
-      const isCustomizer = gen.includes('customizer');
+    if (isNonPreviewable(parameters, this.schema)) {
+      const currentState = classifyRenderState(parameters, this.schema);
+      const isCustomizer = currentState === RENDER_STATE.INFORMATIONAL;
       console.log(
         '[AutoPreview] Skipping STL preview for non-previewable generate mode:',
         parameters.generate
@@ -710,6 +745,9 @@ export class AutoPreviewController {
       isFlagEnabled('color_passthrough') &&
       AutoPreviewController.scadUsesColor(this.currentScadContent);
     const previewOutputFormat = useColorPassthrough ? 'off' : 'stl';
+    const hasDebugModifier =
+      useColorPassthrough &&
+      AutoPreviewController.scadUsesDebugModifier(this.currentScadContent);
 
     let renderFailed = false;
     try {
@@ -756,12 +794,22 @@ export class AutoPreviewController {
           this.previewManager.setColorOverride(previewColor);
         }
       }
+      // Set render state so the model color reflects preview/laser quality
+      if (this.previewManager?.setRenderState) {
+        this.previewManager.setRenderState(this._detectRenderState(parameters));
+      }
       // Preserve camera position on subsequent loads (after initial preview)
       const resultFormat = result.format || 'stl';
       const loadResult =
         resultFormat === 'off' && this.previewManager.loadOFF
           ? await this.previewManager.loadOFF(result.stl, {
               preserveCamera: this.initialPreviewDone,
+              debugHighlight: hasDebugModifier
+                ? {
+                    hex: DEBUG_HIGHLIGHT_HEX,
+                    opacity: DEBUG_HIGHLIGHT_OPACITY,
+                  }
+                : null,
             })
           : await this.previewManager.loadSTL(result.stl, {
               preserveCamera: this.initialPreviewDone,
@@ -786,7 +834,8 @@ export class AutoPreviewController {
         `[Preview Performance] ${qualityKey} | ` +
           `${timing.renderMs}ms | ` +
           `${result.stats?.triangles || 0} triangles | ` +
-          `${resultFormat === 'off' ? (loadResult?.hasColors ? 'COFF ✓' : 'OFF (no color)') : bytesPerTri < 80 ? 'Binary STL ✓' : bytesPerTri > 100 ? 'ASCII STL ⚠️' : 'Unknown'}`
+          `${resultFormat === 'off' ? (loadResult?.hasColors ? 'COFF ✓' : 'OFF (no color)') : bytesPerTri < 80 ? 'Binary STL ✓' : bytesPerTri > 100 ? 'ASCII STL ⚠️' : 'Unknown'}` +
+          `${hasDebugModifier ? ' [# debug highlight active]' : ''}`
       );
 
       this.setState(PREVIEW_STATE.CURRENT, {
@@ -949,6 +998,12 @@ export class AutoPreviewController {
         if (previewColor !== null) {
           this.previewManager.setColorOverride(previewColor);
         }
+      }
+      // Full quality render = theme default color (null clears preview/laser tint)
+      if (this.previewManager?.setRenderState) {
+        this.previewManager.setRenderState(
+          this._detectRenderState(parameters, true)
+        );
       }
       // Preserve camera position on subsequent loads (after initial preview)
       await this.previewManager.loadSTL(result.stl, {

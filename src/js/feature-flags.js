@@ -98,17 +98,21 @@ export const FLAGS = {
     userConfigurable: true,
     killSwitch: false,
   },
+  // Phase 6 (color parity): COFF format is the preferred path for 3D preview
+  // when SCAD source contains color() calls.  Falls back to STL automatically
+  // when no color() calls are detected.  Disable via kill-switch or URL
+  // (?flag_color_passthrough=false) if COFF output causes regressions.
   color_passthrough: {
     id: 'color_passthrough',
     name: 'Color Passthrough (COFF Preview)',
     description:
       'Render preview using COFF (Color OFF) format to display per-face colors from color() calls. ' +
-      'Requires the WASM build to emit COFF data — verify before enabling in production. ' +
-      'Falls back to STL automatically when no color() calls are detected.',
-    default: false,
-    rollout: 0,
-    userConfigurable: false,
-    killSwitch: true,
+      'Falls back to STL automatically when no color() calls are detected. ' +
+      'Disable via URL (?flag_color_passthrough=false) or the settings panel if issues occur.',
+    default: true,
+    rollout: 100,
+    userConfigurable: true,
+    killSwitch: false,
   },
   basic_advanced_mode: {
     id: 'basic_advanced_mode',

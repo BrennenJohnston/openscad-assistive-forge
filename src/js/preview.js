@@ -1101,10 +1101,15 @@ export class PreviewManager {
    * @param {ArrayBuffer|string} offData - OFF/COFF file content (text or ArrayBuffer)
    * @param {Object} [options]
    * @param {boolean} [options.preserveCamera=false]
+   * @param {Object|null} [options.debugHighlight=null] Desktop `#` modifier override.
+   *   When set, COFF face colors are replaced with the fixed highlight color
+   *   to match desktop OpenSCAD behavior: `{255,81,81,128}` overrides `color()`.
+   * @param {string} options.debugHighlight.hex  Highlight hex color (#RRGGBB)
+   * @param {number} options.debugHighlight.opacity Highlight opacity (0–1)
    * @returns {Promise<{parseMs: number, hasColors: boolean}>}
    */
   loadOFF(offData, options = {}) {
-    const { preserveCamera = false } = options;
+    const { preserveCamera = false, debugHighlight = null } = options;
     return new Promise((resolve, reject) => {
       try {
         const parseStartTime = performance.now();
@@ -1169,10 +1174,18 @@ export class PreviewManager {
               vertices[vb * 3 + 2]
             );
             if (isCOFF && parts.length >= n + 5) {
-              const r = parts[n + 1];
-              const g = parts[n + 2];
-              const b = parts[n + 3];
-              // Push same color for each of the 3 triangle vertices
+              let r, g, b;
+              if (debugHighlight) {
+                // `#` debug modifier: fixed highlight overrides user color()
+                const hx = debugHighlight.hex.replace('#', '');
+                r = parseInt(hx.substring(0, 2), 16) / 255;
+                g = parseInt(hx.substring(2, 4), 16) / 255;
+                b = parseInt(hx.substring(4, 6), 16) / 255;
+              } else {
+                r = parts[n + 1];
+                g = parts[n + 2];
+                b = parts[n + 3];
+              }
               colors.push(r, g, b, r, g, b, r, g, b);
               hasColors = true;
             }
@@ -1214,12 +1227,20 @@ export class PreviewManager {
           this.mesh = null;
         }
 
+        const useDebugTransparency = hasColors && debugHighlight?.opacity < 1;
         const material = hasColors
           ? new THREE.MeshPhongMaterial({
               vertexColors: true,
               specular: 0x111111,
               shininess: 30,
               flatShading: false,
+              ...(useDebugTransparency
+                ? {
+                    transparent: true,
+                    opacity: debugHighlight.opacity,
+                    depthWrite: false,
+                  }
+                : {}),
             })
           : new THREE.MeshPhongMaterial({
               color: parseInt(this._resolveModelColor().slice(1), 16),
