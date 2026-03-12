@@ -25,8 +25,10 @@
   /* Base mono settings - shared across color variants */
 
   /* Prefer self-hosted Iosevka Term; system monospace stack as fallback */
-  --font-family-base: 'Iosevka Term', ui-monospace, 'Courier New', Courier, monospace;
-  --font-family-mono: 'Iosevka Term', ui-monospace, 'Courier New', Courier, monospace;
+  --font-family-base:
+    'Iosevka Term', ui-monospace, 'Courier New', Courier, monospace;
+  --font-family-mono:
+    'Iosevka Term', ui-monospace, 'Courier New', Courier, monospace;
 
   /* Flatten shadows and borders */
   --shadow-sm: none;
@@ -74,8 +76,10 @@
   /* Phase 2: CRT visual effect variables — all reference --color-accent so
    * they adapt automatically between green (dark) and amber (light) variants. */
   --crt-glow-tight: 0 0 1px var(--color-accent);
-  --crt-glow-mid: 0 0 4px color-mix(in srgb, var(--color-accent) 40%, transparent);
-  --crt-glow-wide: 0 0 12px color-mix(in srgb, var(--color-accent) 18%, transparent);
+  --crt-glow-mid: 0 0 4px
+    color-mix(in srgb, var(--color-accent) 40%, transparent);
+  --crt-glow-wide: 0 0 12px
+    color-mix(in srgb, var(--color-accent) 18%, transparent);
   --crt-scanline-color: rgba(0, 0, 0, 0.12);
   --crt-vignette-color: rgba(0, 0, 0, 0.52);
 }
@@ -125,13 +129,7 @@
   --color-success-bg: #0a0800;
 }
 
-/* Keep amber theme text black on status overlays */
-:root[data-ui-variant='mono'][data-theme='light']
-  .preview-rendering-overlay
-  .rendering-text {
-  color: #000000;
-  text-shadow: none;
-}
+/* Rendering toast inherits --color-on-accent; no override needed for mono theme */
 
 /* Override component styles for flat, terminal aesthetic */
 :root[data-ui-variant='mono'] .app-header {

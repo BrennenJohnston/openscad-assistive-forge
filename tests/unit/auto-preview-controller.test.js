@@ -129,13 +129,13 @@ describe('AutoPreviewController', () => {
       expect(color).toBeNull()
     })
 
-    it('prefers box_color when available', () => {
+    it('uses first color param in declaration order (no box_color preference)', () => {
       controller.setColorParamNames(['other_color', 'box_color'])
       const color = controller.resolvePreviewColor({ use_colors: 'yes', box_color: 'ff0000', other_color: '00ff00' })
-      expect(color).toBe('#ff0000')
+      expect(color).toBe('#00ff00')
     })
 
-    it('falls back to first color param when box_color not configured', () => {
+    it('uses first color param when only one is configured', () => {
       controller.setColorParamNames(['other_color'])
       const color = controller.resolvePreviewColor({ use_colors: 'yes', other_color: '00ff00' })
       expect(color).toBe('#00ff00')
@@ -731,6 +731,95 @@ describe('AutoPreviewController', () => {
       await controller.renderPreview(params, paramHash)
 
       expect(controller.debounceTimer).toBeNull()
+    })
+  })
+
+  describe('Rendering State Indicator (S-011)', () => {
+    it('transitions through RENDERING during a successful preview render', async () => {
+      const onStateChange = vi.fn()
+      controller.onStateChange = onStateChange
+      const params = { width: 10 }
+      const paramHash = controller.hashParams(params)
+      controller.currentParamHash = paramHash
+      controller.currentPreviewKey = `${paramHash}|model`
+
+      await controller.renderPreview(params, paramHash)
+
+      const stateSequence = onStateChange.mock.calls.map(c => c[0])
+      expect(stateSequence).toContain(PREVIEW_STATE.RENDERING)
+      expect(stateSequence).toContain(PREVIEW_STATE.CURRENT)
+      const renderIdx = stateSequence.indexOf(PREVIEW_STATE.RENDERING)
+      const currentIdx = stateSequence.indexOf(PREVIEW_STATE.CURRENT)
+      expect(renderIdx).toBeLessThan(currentIdx)
+    })
+
+    it('transitions through RENDERING to ERROR on render failure', async () => {
+      renderController.renderPreview.mockRejectedValue(new Error('WASM crash'))
+      const onStateChange = vi.fn()
+      const onError = vi.fn()
+      controller.onStateChange = onStateChange
+      controller.onError = onError
+      const params = { width: 10 }
+      const paramHash = controller.hashParams(params)
+      controller.currentParamHash = paramHash
+      controller.currentPreviewKey = `${paramHash}|model`
+
+      await controller.renderPreview(params, paramHash)
+
+      const stateSequence = onStateChange.mock.calls.map(c => c[0])
+      expect(stateSequence).toContain(PREVIEW_STATE.RENDERING)
+      expect(stateSequence).toContain(PREVIEW_STATE.ERROR)
+      const renderIdx = stateSequence.indexOf(PREVIEW_STATE.RENDERING)
+      const errorIdx = stateSequence.indexOf(PREVIEW_STATE.ERROR)
+      expect(renderIdx).toBeLessThan(errorIdx)
+    })
+
+    it('passes previous state to onStateChange when entering RENDERING', async () => {
+      const onStateChange = vi.fn()
+      controller.onStateChange = onStateChange
+      controller.state = PREVIEW_STATE.PENDING
+      const params = { width: 10 }
+      const paramHash = controller.hashParams(params)
+      controller.currentParamHash = paramHash
+      controller.currentPreviewKey = `${paramHash}|model`
+
+      await controller.renderPreview(params, paramHash)
+
+      const renderingCall = onStateChange.mock.calls.find(c => c[0] === PREVIEW_STATE.RENDERING)
+      expect(renderingCall).toBeDefined()
+      expect(renderingCall[1]).toBe(PREVIEW_STATE.PENDING)
+    })
+
+    it('RENDERING state clears when render completes (state becomes CURRENT)', async () => {
+      const params = { width: 10 }
+      const paramHash = controller.hashParams(params)
+      controller.currentParamHash = paramHash
+      controller.currentPreviewKey = `${paramHash}|model`
+
+      await controller.renderPreview(params, paramHash)
+
+      expect(controller.state).toBe(PREVIEW_STATE.CURRENT)
+      expect(controller.state).not.toBe(PREVIEW_STATE.RENDERING)
+    })
+
+    it('debounced parameter change sets PENDING before RENDERING', async () => {
+      vi.useFakeTimers()
+      const onStateChange = vi.fn()
+      controller.onStateChange = onStateChange
+
+      renderController.renderPreview.mockImplementation(() =>
+        Promise.resolve({ stl: new ArrayBuffer(8), stats: { triangles: 10 } })
+      )
+
+      controller.onParameterChange({ width: 30 })
+      expect(controller.state).toBe(PREVIEW_STATE.PENDING)
+
+      await vi.advanceTimersByTimeAsync(controller.debounceMs + 50)
+
+      const stateSequence = onStateChange.mock.calls.map(c => c[0])
+      expect(stateSequence.indexOf(PREVIEW_STATE.PENDING)).toBeLessThan(
+        stateSequence.indexOf(PREVIEW_STATE.RENDERING)
+      )
     })
   })
 })

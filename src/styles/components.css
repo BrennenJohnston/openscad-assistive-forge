@@ -4021,6 +4021,17 @@ select:focus-visible {
 .preview-state-indicator.state-rendering {
   background-color: var(--color-accent);
   color: var(--color-on-accent);
+  animation: pulse-rendering 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-rendering {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.65;
+  }
 }
 
 /* State: Stale - preview outdated */
@@ -4089,41 +4100,45 @@ select:focus-visible {
   }
 }
 
-/* Rendering overlay */
+/* Rendering toast — compact non-blocking indicator above the status bar */
 .preview-rendering-overlay {
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.3);
-  display: flex;
-  flex-direction: column;
+  bottom: calc(var(--space-sm) + 28px);
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  background-color: var(--color-accent);
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-md);
+  border-radius: var(--border-radius-pill, 999px);
   z-index: 20;
   opacity: 0;
   pointer-events: none;
-  transition: opacity var(--motion-slow) ease;
+  transition:
+    opacity var(--motion-slow) ease,
+    transform var(--motion-slow) ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
 .preview-rendering-overlay.visible {
   opacity: 1;
-  pointer-events: auto;
+  transform: translateX(-50%) translateY(0);
 }
 
-.preview-rendering-overlay .spinner-large {
-  width: 48px;
-  height: 48px;
-  border-width: 4px;
+.preview-rendering-overlay .spinner {
+  width: 14px;
+  height: 14px;
+  border-width: 2px;
+  border-color: var(--color-on-accent);
+  border-top-color: transparent;
+  flex-shrink: 0;
 }
 
 .preview-rendering-overlay .rendering-text {
-  margin-top: var(--space-md);
-  color: white;
-  font-size: var(--font-size-base);
+  color: var(--color-on-accent);
+  font-size: var(--font-size-sm);
   font-weight: 500;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
 }
 
 /* Auto-preview toggle in settings */
@@ -4231,8 +4246,18 @@ select:focus-visible {
 /* Responsive adjustments */
 @media (prefers-reduced-motion: reduce) {
   .preview-state-indicator.state-pending,
+  .preview-state-indicator.state-rendering,
   .preview-container.preview-rendering {
     animation: none;
+  }
+
+  .preview-rendering-overlay {
+    transition: opacity var(--motion-slow) ease;
+    transform: translateX(-50%);
+  }
+
+  .preview-rendering-overlay.visible {
+    transform: translateX(-50%);
   }
 
   @keyframes pulse-pending {
@@ -11735,6 +11760,7 @@ body.tutorial-body-locked {
   /* Remove background-dependent visual effects */
   .spinner,
   .preview-state-indicator.state-pending,
+  .preview-state-indicator.state-rendering,
   .preview-container.preview-rendering {
     animation: none !important;
   }

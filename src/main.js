@@ -2175,6 +2175,11 @@ async function initApp() {
   // Canonical project files snapshot used as the clean base when applying presets.
   // This prevents alias-mounted companion files from one preset bleeding into the next.
   let canonicalProjectFiles = null;
+  // Preset tracking state — must be declared before handleFile (which calls
+  // forceClearPresetSelection) to avoid a TDZ error during draft restoration.
+  let isLoadingPreset = false;
+  let currentPresetSignature = null;
+  let isPresetDirty = false;
   let autoPreviewUserEnabled = true;
   let previewQuality = RENDER_QUALITY.PREVIEW;
 
@@ -5391,10 +5396,8 @@ async function initApp() {
   // Create rendering overlay
   const renderingOverlay = document.createElement('div');
   renderingOverlay.className = 'preview-rendering-overlay';
-  renderingOverlay.innerHTML = `
-    <div class="spinner spinner-large"></div>
-    <span class="rendering-text">Generating preview...</span>
-  `;
+  renderingOverlay.innerHTML =
+    '<div class="spinner"></div><span class="rendering-text">Generating preview\u2026</span>';
 
   // Track last generated parameters for comparison
   let lastGeneratedParamsHash = null;
@@ -14957,14 +14960,6 @@ if (rounded) {
 
   // Searchable combobox instance (non-null only when searchable_combobox flag is on)
   let _presetCombobox = null;
-
-  // Clear preset selection when parameters are manually changed
-  // Track if we're currently loading a preset (to avoid clearing during load)
-  let isLoadingPreset = false;
-  let currentPresetSignature = null;
-  // OpenSCAD behavior: preset stays selected even when parameters change.
-  // We track "dirty" state instead of clearing the selection.
-  let isPresetDirty = false;
 
   const stableStringify = (value) => {
     const seen = new WeakSet();
