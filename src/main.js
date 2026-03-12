@@ -5797,6 +5797,26 @@ async function initApp() {
     });
   }
 
+  // Wire grid opacity slider
+  const gridOpacityInput = document.getElementById('gridOpacityInput');
+  const gridOpacityValue = document.getElementById('gridOpacityValue');
+
+  function syncGridOpacitySlider() {
+    if (!gridOpacityInput || !previewManager) return;
+    const val = previewManager.getGridOpacity();
+    gridOpacityInput.value = String(val);
+    if (gridOpacityValue) gridOpacityValue.textContent = `${val}%`;
+  }
+
+  if (gridOpacityInput) {
+    syncGridOpacitySlider();
+    gridOpacityInput.addEventListener('input', () => {
+      const v = parseInt(gridOpacityInput.value, 10);
+      if (gridOpacityValue) gridOpacityValue.textContent = `${v}%`;
+      if (previewManager) previewManager.setGridOpacity(v);
+    });
+  }
+
   // Wire grid size preset selector, custom inputs, and user-saved custom presets
   const gridPresetSelect = document.getElementById('gridPresetSelect');
   const gridWidthInput = document.getElementById('gridWidthInput');
@@ -9336,6 +9356,9 @@ async function initApp() {
           if (gridWidthInput) gridWidthInput.value = savedGrid.widthMm;
           if (gridHeightInput) gridHeightInput.value = savedGrid.heightMm;
         }
+
+        // Sync grid opacity slider with saved preference
+        syncGridOpacitySlider();
 
         // Sync auto-bed toggle with saved preference
         if (autoBedToggle) {

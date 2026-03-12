@@ -1413,6 +1413,181 @@ describe('PreviewManager', () => {
     })
   })
 
+  describe('Grid Opacity', () => {
+    let manager
+
+    beforeEach(() => {
+      manager = new PreviewManager(container)
+      localStorage.clear()
+    })
+
+    describe('setGridOpacity', () => {
+      it('stores a valid opacity value', () => {
+        manager.setGridOpacity(50)
+        expect(manager.gridOpacity).toBe(50)
+      })
+
+      it('persists in localStorage', () => {
+        manager.setGridOpacity(75)
+        expect(localStorage.getItem('openscad-forge-grid-opacity')).toBe('75')
+      })
+
+      it('clamps below minimum to 10', () => {
+        manager.setGridOpacity(0)
+        expect(manager.gridOpacity).toBe(10)
+      })
+
+      it('clamps above maximum to 100', () => {
+        manager.setGridOpacity(150)
+        expect(manager.gridOpacity).toBe(100)
+      })
+
+      it('rounds fractional values', () => {
+        manager.setGridOpacity(55.7)
+        expect(manager.gridOpacity).toBe(56)
+      })
+
+      it('ignores NaN input', () => {
+        manager.gridOpacity = 80
+        manager.setGridOpacity('not-a-number')
+        expect(manager.gridOpacity).toBe(80)
+      })
+
+      it('accepts string-numeric input', () => {
+        manager.setGridOpacity('60')
+        expect(manager.gridOpacity).toBe(60)
+      })
+    })
+
+    describe('getGridOpacity', () => {
+      it('returns default 100 when no override', () => {
+        expect(manager.getGridOpacity()).toBe(100)
+      })
+
+      it('returns the current value', () => {
+        manager.gridOpacity = 40
+        expect(manager.getGridOpacity()).toBe(40)
+      })
+    })
+
+    describe('resetGridOpacity', () => {
+      it('resets to 100', () => {
+        manager.gridOpacity = 30
+        manager.resetGridOpacity()
+        expect(manager.gridOpacity).toBe(100)
+      })
+
+      it('removes from localStorage', () => {
+        localStorage.setItem('openscad-forge-grid-opacity', '50')
+        manager.resetGridOpacity()
+        expect(localStorage.getItem('openscad-forge-grid-opacity')).toBeNull()
+      })
+    })
+
+    describe('loadGridOpacityPreference', () => {
+      it('returns 100 when nothing stored', () => {
+        expect(manager.loadGridOpacityPreference()).toBe(100)
+      })
+
+      it('returns stored valid value', () => {
+        localStorage.setItem('openscad-forge-grid-opacity', '65')
+        expect(manager.loadGridOpacityPreference()).toBe(65)
+      })
+
+      it('returns 100 for out-of-range stored value', () => {
+        localStorage.setItem('openscad-forge-grid-opacity', '5')
+        expect(manager.loadGridOpacityPreference()).toBe(100)
+      })
+
+      it('returns 100 for non-numeric stored value', () => {
+        localStorage.setItem('openscad-forge-grid-opacity', 'abc')
+        expect(manager.loadGridOpacityPreference()).toBe(100)
+      })
+
+      it('handles localStorage errors gracefully', () => {
+        const originalGetItem = localStorage.getItem
+        localStorage.getItem = vi.fn(() => { throw new Error('Storage error') })
+        expect(manager.loadGridOpacityPreference()).toBe(100)
+        localStorage.getItem = originalGetItem
+      })
+    })
+
+    describe('saveGridOpacityPreference', () => {
+      it('saves a non-default value', () => {
+        manager.saveGridOpacityPreference(70)
+        expect(localStorage.getItem('openscad-forge-grid-opacity')).toBe('70')
+      })
+
+      it('removes key when null', () => {
+        localStorage.setItem('openscad-forge-grid-opacity', '50')
+        manager.saveGridOpacityPreference(null)
+        expect(localStorage.getItem('openscad-forge-grid-opacity')).toBeNull()
+      })
+
+      it('removes key when value is 100 (default)', () => {
+        manager.saveGridOpacityPreference(100)
+        expect(localStorage.getItem('openscad-forge-grid-opacity')).toBeNull()
+      })
+
+      it('handles localStorage errors gracefully', () => {
+        const originalSetItem = localStorage.setItem
+        localStorage.setItem = vi.fn(() => { throw new Error('Storage error') })
+        expect(() => manager.saveGridOpacityPreference(50)).not.toThrow()
+        localStorage.setItem = originalSetItem
+      })
+    })
+
+    describe('_applyGridOpacity', () => {
+      it('does nothing when gridHelper is null', () => {
+        manager.gridHelper = null
+        expect(() => manager._applyGridOpacity()).not.toThrow()
+      })
+
+      it('sets material opacity for single material', () => {
+        const mockMaterial = { transparent: false, opacity: 1 }
+        manager.gridHelper = { material: mockMaterial }
+        manager.gridOpacity = 50
+        manager._applyGridOpacity()
+        expect(mockMaterial.transparent).toBe(true)
+        expect(mockMaterial.opacity).toBe(0.5)
+      })
+
+      it('sets material opacity for array of materials', () => {
+        const mat1 = { transparent: false, opacity: 1 }
+        const mat2 = { transparent: false, opacity: 1 }
+        manager.gridHelper = { material: [mat1, mat2] }
+        manager.gridOpacity = 40
+        manager._applyGridOpacity()
+        expect(mat1.transparent).toBe(true)
+        expect(mat1.opacity).toBeCloseTo(0.4)
+        expect(mat2.transparent).toBe(true)
+        expect(mat2.opacity).toBeCloseTo(0.4)
+      })
+
+      it('sets transparent to false when opacity is 100', () => {
+        const mockMaterial = { transparent: true, opacity: 0.5 }
+        manager.gridHelper = { material: mockMaterial }
+        manager.gridOpacity = 100
+        manager._applyGridOpacity()
+        expect(mockMaterial.transparent).toBe(false)
+        expect(mockMaterial.opacity).toBe(1)
+      })
+    })
+
+    describe('gridOpacity initialized from localStorage', () => {
+      it('picks up stored opacity on construction', () => {
+        localStorage.setItem('openscad-forge-grid-opacity', '60')
+        const m = new PreviewManager(container)
+        expect(m.gridOpacity).toBe(60)
+      })
+
+      it('defaults to 100 when nothing stored', () => {
+        const m = new PreviewManager(container)
+        expect(m.gridOpacity).toBe(100)
+      })
+    })
+  })
+
   describe('Color Legend', () => {
     let manager
 

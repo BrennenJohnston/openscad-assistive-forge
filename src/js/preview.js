@@ -16,6 +16,7 @@ const STORAGE_KEY_GRID = getAppPrefKey('grid');
 const STORAGE_KEY_GRID_SIZE = getAppPrefKey('grid-size');
 const STORAGE_KEY_CUSTOM_GRID_PRESETS = getAppPrefKey('custom-grid-presets');
 const STORAGE_KEY_GRID_COLOR = getAppPrefKey('grid-color');
+const STORAGE_KEY_GRID_OPACITY = getAppPrefKey('grid-opacity');
 const STORAGE_KEY_AUTO_BED = getAppPrefKey('auto-bed');
 const STORAGE_KEY_CAMERA_COLLAPSED = getAppPrefKey('camera-controls-collapsed');
 const STORAGE_KEY_CAMERA_POSITION = getAppPrefKey('camera-controls-position');
@@ -180,6 +181,9 @@ export class PreviewManager {
     // Custom grid color override (null = use theme default)
     this.gridColorOverride = this.loadGridColorPreference();
 
+    // Grid line opacity (10–100, default 100 = fully opaque)
+    this.gridOpacity = this.loadGridOpacityPreference();
+
     // Camera projection mode (perspective or orthographic)
     this.projectionMode = 'perspective';
     this.orthoCamera = null; // Lazy-created orthographic camera
@@ -311,6 +315,7 @@ export class PreviewManager {
     this.gridHelper.rotation.x = Math.PI / 2;
     // Apply saved grid visibility preference
     this.gridHelper.visible = this.gridEnabled;
+    this._applyGridOpacity();
     this.scene.add(this.gridHelper);
 
     // Add orbit controls (OpenSCAD-style)
@@ -2365,6 +2370,86 @@ export class PreviewManager {
   }
 
   /**
+   * Set grid line opacity (10–100). Values outside the range are clamped.
+   * @param {number} percent - Opacity percentage
+   */
+  setGridOpacity(percent) {
+    const clamped = Math.max(10, Math.min(100, Math.round(Number(percent))));
+    if (Number.isNaN(clamped)) return;
+    this.gridOpacity = clamped;
+    this.saveGridOpacityPreference(clamped);
+    this._applyGridOpacity();
+  }
+
+  /**
+   * @returns {number} Current grid opacity (10–100).
+   */
+  getGridOpacity() {
+    return this.gridOpacity;
+  }
+
+  /**
+   * Reset grid opacity to 100% (fully opaque).
+   */
+  resetGridOpacity() {
+    this.gridOpacity = 100;
+    this.saveGridOpacityPreference(null);
+    this._applyGridOpacity();
+  }
+
+  /**
+   * Load persisted grid opacity preference.
+   * @returns {number} 10–100 (default 100)
+   */
+  loadGridOpacityPreference() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY_GRID_OPACITY);
+      if (raw !== null) {
+        const val = parseInt(raw, 10);
+        if (!Number.isNaN(val) && val >= 10 && val <= 100) return val;
+      }
+    } catch (_) {
+      // fall through
+    }
+    return 100;
+  }
+
+  /**
+   * Persist grid opacity preference.
+   * @param {number|null} value - null removes the key (revert to default 100)
+   */
+  saveGridOpacityPreference(value) {
+    try {
+      if (value !== null && value !== undefined && value !== 100) {
+        localStorage.setItem(STORAGE_KEY_GRID_OPACITY, String(value));
+      } else {
+        localStorage.removeItem(STORAGE_KEY_GRID_OPACITY);
+      }
+    } catch (error) {
+      console.warn('[Preview] Could not save grid opacity preference:', error);
+    }
+  }
+
+  /**
+   * Apply the current gridOpacity to the grid helper material.
+   * @private
+   */
+  _applyGridOpacity() {
+    if (!this.gridHelper) return;
+    const opacity = this.gridOpacity / 100;
+    const mat = this.gridHelper.material;
+    if (Array.isArray(mat)) {
+      mat.forEach((m) => {
+        m.transparent = opacity < 1;
+        m.opacity = opacity;
+      });
+    } else if (mat) {
+      mat.transparent = opacity < 1;
+      mat.opacity = opacity;
+    }
+  }
+
+  /**
    * Rebuild the grid using current config, color override, and theme.
    * @private
    */
@@ -2385,6 +2470,7 @@ export class PreviewManager {
     this.gridHelper = this._createGridHelper(colors);
     this.gridHelper.rotation.x = Math.PI / 2;
     this.gridHelper.visible = this.gridEnabled;
+    this._applyGridOpacity();
     this.scene.add(this.gridHelper);
   }
 
