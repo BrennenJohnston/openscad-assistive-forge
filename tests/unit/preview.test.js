@@ -1674,26 +1674,26 @@ describe('PreviewManager', () => {
     })
 
     describe('setRenderState', () => {
-      it('stores the preview render state', () => {
+      it('is a no-op and does not store render state', () => {
         manager.setRenderState('preview')
+        expect(manager.renderState).toBeNull()
+      })
+
+      it('is a no-op for laser state', () => {
+        manager.setRenderState('laser')
+        expect(manager.renderState).toBeNull()
+      })
+
+      it('is a no-op for null', () => {
+        manager.renderState = 'preview'
+        manager.setRenderState(null)
         expect(manager.renderState).toBe('preview')
       })
 
-      it('stores the laser render state', () => {
-        manager.setRenderState('laser')
-        expect(manager.renderState).toBe('laser')
-      })
-
-      it('accepts null to clear render state', () => {
-        manager.setRenderState('preview')
-        manager.setRenderState(null)
-        expect(manager.renderState).toBeNull()
-      })
-
-      it('accepts undefined and treats it as null', () => {
-        manager.setRenderState('preview')
+      it('is a no-op for undefined', () => {
+        manager.renderState = 'preview'
         manager.setRenderState(undefined)
-        expect(manager.renderState).toBeNull()
+        expect(manager.renderState).toBe('preview')
       })
     })
 
@@ -1703,54 +1703,54 @@ describe('PreviewManager', () => {
         expect(color).toBe('#2196f3')
       })
 
-      it('returns preview state color for light theme', () => {
+      it('returns theme default regardless of renderState (light, preview)', () => {
         manager.renderState = 'preview'
         const color = manager._resolveModelColor()
-        expect(color).toBe('#f59e0b')
+        expect(color).toBe('#2196f3')
       })
 
-      it('returns laser state color for light theme', () => {
+      it('returns theme default regardless of renderState (light, laser)', () => {
         manager.renderState = 'laser'
         const color = manager._resolveModelColor()
-        expect(color).toBe('#e74c3c')
+        expect(color).toBe('#2196f3')
       })
 
-      it('returns preview state color for dark theme', () => {
+      it('returns dark theme default regardless of renderState', () => {
         manager.currentTheme = 'dark'
         manager.renderState = 'preview'
         const color = manager._resolveModelColor()
-        expect(color).toBe('#fbbf24')
+        expect(color).toBe('#4d9fff')
       })
 
-      it('returns laser state color for dark theme', () => {
+      it('returns dark theme default for laser renderState', () => {
         manager.currentTheme = 'dark'
         manager.renderState = 'laser'
         const color = manager._resolveModelColor()
-        expect(color).toBe('#ff6b6b')
+        expect(color).toBe('#4d9fff')
       })
 
-      it('returns preview state color for light-hc theme', () => {
+      it('returns light-hc theme default regardless of renderState', () => {
         manager.currentTheme = 'light-hc'
         manager.renderState = 'preview'
         const color = manager._resolveModelColor()
-        expect(color).toBe('#b45309')
+        expect(color).toBe('#0052cc')
       })
 
-      it('returns laser state color for dark-hc theme', () => {
+      it('returns dark-hc theme default regardless of renderState', () => {
         manager.currentTheme = 'dark-hc'
         manager.renderState = 'laser'
         const color = manager._resolveModelColor()
-        expect(color).toBe('#fca5a5')
+        expect(color).toBe('#66b3ff')
       })
 
-      it('falls back to theme default for mono (no state color defined)', () => {
+      it('returns mono theme default regardless of renderState', () => {
         manager.currentTheme = 'mono'
         manager.renderState = 'preview'
         const color = manager._resolveModelColor()
         expect(color).toBe('#00ff00')
       })
 
-      it('falls back to theme default for mono-light (no state color defined)', () => {
+      it('returns mono-light theme default regardless of renderState', () => {
         manager.currentTheme = 'mono-light'
         manager.renderState = 'laser'
         const color = manager._resolveModelColor()
@@ -1778,42 +1778,48 @@ describe('PreviewManager', () => {
       })
     })
 
-    describe('preview, laser, and default colors are distinct', () => {
-      it('preview and laser colors differ in light theme', () => {
+    describe('renderState does not affect model color', () => {
+      it('all render states produce the same color (light theme)', () => {
+        const defaultColor = manager._resolveModelColor()
         manager.renderState = 'preview'
         const previewColor = manager._resolveModelColor()
         manager.renderState = 'laser'
         const laserColor = manager._resolveModelColor()
-        expect(previewColor).not.toBe(laserColor)
+        expect(defaultColor).toBe(previewColor)
+        expect(defaultColor).toBe(laserColor)
       })
 
-      it('preview and default colors differ in light theme', () => {
-        manager.renderState = 'preview'
-        const previewColor = manager._resolveModelColor()
-        manager.renderState = null
-        const defaultColor = manager._resolveModelColor()
-        expect(previewColor).not.toBe(defaultColor)
-      })
-
-      it('laser and default colors differ in light theme', () => {
-        manager.renderState = 'laser'
-        const laserColor = manager._resolveModelColor()
-        manager.renderState = null
-        const defaultColor = manager._resolveModelColor()
-        expect(laserColor).not.toBe(defaultColor)
-      })
-
-      it('all three states are distinct in dark theme', () => {
+      it('all render states produce the same color (dark theme)', () => {
         manager.currentTheme = 'dark'
+        const defaultColor = manager._resolveModelColor()
         manager.renderState = 'preview'
         const previewColor = manager._resolveModelColor()
         manager.renderState = 'laser'
         const laserColor = manager._resolveModelColor()
-        manager.renderState = null
+        expect(defaultColor).toBe(previewColor)
+        expect(defaultColor).toBe(laserColor)
+      })
+
+      it('colorOverride takes priority over theme for all states', () => {
+        manager.colorOverride = '#abcdef'
         const defaultColor = manager._resolveModelColor()
-        expect(previewColor).not.toBe(laserColor)
-        expect(previewColor).not.toBe(defaultColor)
-        expect(laserColor).not.toBe(defaultColor)
+        manager.renderState = 'preview'
+        const previewColor = manager._resolveModelColor()
+        manager.renderState = 'laser'
+        const laserColor = manager._resolveModelColor()
+        expect(defaultColor).toBe('#abcdef')
+        expect(previewColor).toBe('#abcdef')
+        expect(laserColor).toBe('#abcdef')
+      })
+
+      it('each theme has a distinct model color', () => {
+        const themes = ['light', 'dark', 'light-hc', 'dark-hc', 'mono', 'mono-light']
+        const colors = themes.map(t => {
+          manager.currentTheme = t
+          return manager._resolveModelColor()
+        })
+        const unique = new Set(colors)
+        expect(unique.size).toBe(themes.length)
       })
     })
   })

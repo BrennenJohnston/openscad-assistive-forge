@@ -550,18 +550,18 @@ describe('AutoPreviewController', () => {
       expect(AutoPreviewController.isNonPreviewableParameters({ generate: 'customizer settings' })).toBe(true)
     })
 
-    it('returns true for SVG generate modes', () => {
-      expect(AutoPreviewController.isNonPreviewableParameters({ generate: 'SVG' })).toBe(true)
-      expect(AutoPreviewController.isNonPreviewableParameters({ generate: 'svg export' })).toBe(true)
+    it('returns false for SVG generate modes (2D modes are previewable)', () => {
+      expect(AutoPreviewController.isNonPreviewableParameters({ generate: 'SVG' })).toBe(false)
+      expect(AutoPreviewController.isNonPreviewableParameters({ generate: 'svg export' })).toBe(false)
     })
 
-    it('returns true for DXF generate modes', () => {
-      expect(AutoPreviewController.isNonPreviewableParameters({ generate: 'DXF' })).toBe(true)
+    it('returns false for DXF generate modes (2D modes are previewable)', () => {
+      expect(AutoPreviewController.isNonPreviewableParameters({ generate: 'DXF' })).toBe(false)
     })
 
-    it('returns true for "First Layer" generate modes', () => {
-      expect(AutoPreviewController.isNonPreviewableParameters({ generate: 'First Layer' })).toBe(true)
-      expect(AutoPreviewController.isNonPreviewableParameters({ generate: 'first layer height' })).toBe(true)
+    it('returns false for "First Layer" generate modes (2D modes are previewable)', () => {
+      expect(AutoPreviewController.isNonPreviewableParameters({ generate: 'First Layer' })).toBe(false)
+      expect(AutoPreviewController.isNonPreviewableParameters({ generate: 'first layer height' })).toBe(false)
     })
 
     it('returns true for empty string generate', () => {
@@ -587,12 +587,12 @@ describe('AutoPreviewController', () => {
       expect(AutoPreviewController.isNonPreviewableParameters({})).toBe(false)
     })
 
-    it('returns true for labeled enum numeric value matching "first layer for SVG/DXF file"', () => {
+    it('returns false for labeled enum numeric value matching "first layer for SVG/DXF file" (2D modes are previewable)', () => {
       const enumEntries = [
         { value: '0', label: '3d printed keyguard' },
         { value: '1', label: 'first layer for SVG/DXF file' },
       ]
-      expect(AutoPreviewController.isNonPreviewableParameters({ generate: '1' }, enumEntries)).toBe(true)
+      expect(AutoPreviewController.isNonPreviewableParameters({ generate: '1' }, enumEntries)).toBe(false)
     })
 
     it('returns false for labeled enum numeric value matching a 3D label', () => {
@@ -603,12 +603,12 @@ describe('AutoPreviewController', () => {
       expect(AutoPreviewController.isNonPreviewableParameters({ generate: '0' }, enumEntries)).toBe(false)
     })
 
-    it('returns true for labeled enum numeric value whose label contains "svg"', () => {
+    it('returns false for labeled enum numeric value whose label contains "svg" (2D modes are previewable)', () => {
       const enumEntries = [
         { value: '0', label: '3D Model' },
         { value: '1', label: 'SVG output' },
       ]
-      expect(AutoPreviewController.isNonPreviewableParameters({ generate: '1' }, enumEntries)).toBe(true)
+      expect(AutoPreviewController.isNonPreviewableParameters({ generate: '1' }, enumEntries)).toBe(false)
     })
 
     it('returns true for labeled enum numeric value whose label contains "customizer"', () => {
@@ -633,8 +633,8 @@ describe('AutoPreviewController', () => {
     })
   })
 
-  describe('2D Model Informational State', () => {
-    it('sets MODEL_IS_2D state (not ERROR) when switching to SVG generate mode', async () => {
+  describe('2D Mode Handling', () => {
+    it('does NOT set MODEL_IS_2D for SVG generate mode (2D modes are previewable)', async () => {
       const onStateChange = vi.fn()
       const onError = vi.fn()
       controller.onStateChange = onStateChange
@@ -647,11 +647,11 @@ describe('AutoPreviewController', () => {
       await controller.renderPreview(params, paramHash)
 
       const stateChangeCalls = onStateChange.mock.calls.map(c => c[0])
-      expect(stateChangeCalls).toContain(PREVIEW_STATE.MODEL_IS_2D)
+      expect(stateChangeCalls).not.toContain(PREVIEW_STATE.MODEL_IS_2D)
       expect(stateChangeCalls).not.toContain(PREVIEW_STATE.ERROR)
     })
 
-    it('sets MODEL_IS_2D state for DXF generate mode', async () => {
+    it('does NOT set MODEL_IS_2D for DXF generate mode (2D modes are previewable)', async () => {
       const onStateChange = vi.fn()
       controller.onStateChange = onStateChange
       const params = { generate: 'DXF' }
@@ -662,21 +662,10 @@ describe('AutoPreviewController', () => {
       await controller.renderPreview(params, paramHash)
 
       const stateChangeCalls = onStateChange.mock.calls.map(c => c[0])
-      expect(stateChangeCalls).toContain(PREVIEW_STATE.MODEL_IS_2D)
+      expect(stateChangeCalls).not.toContain(PREVIEW_STATE.MODEL_IS_2D)
     })
 
-    it('calls previewManager.clear() to remove stale 3D geometry when switching to 2D mode', async () => {
-      const params = { generate: 'SVG' }
-      const paramHash = controller.hashParams(params)
-      controller.currentParamHash = paramHash
-      controller.currentPreviewKey = `${paramHash}|model`
-
-      await controller.renderPreview(params, paramHash)
-
-      expect(previewManager.clear).toHaveBeenCalled()
-    })
-
-    it('still calls onError with MODEL_IS_2D code for backward-compatibility with UI handlers', async () => {
+    it('does NOT call onError with MODEL_IS_2D for SVG generate mode', async () => {
       const onError = vi.fn()
       controller.onError = onError
       const params = { generate: 'SVG' }
@@ -686,10 +675,8 @@ describe('AutoPreviewController', () => {
 
       await controller.renderPreview(params, paramHash)
 
-      expect(onError).toHaveBeenCalledWith(
-        expect.objectContaining({ code: 'MODEL_IS_2D' }),
-        'preview'
-      )
+      const errorCodes = onError.mock.calls.map(c => c[0]?.code).filter(Boolean)
+      expect(errorCodes).not.toContain('MODEL_IS_2D')
     })
 
     it('uses ERROR state (not MODEL_IS_2D) for Customizer mode', async () => {
@@ -720,10 +707,10 @@ describe('AutoPreviewController', () => {
       expect(previewManager.clear).not.toHaveBeenCalled()
     })
 
-    it('clears the pending debounce timer when entering 2D mode', async () => {
+    it('clears the pending debounce timer for Customizer mode', async () => {
       vi.useFakeTimers()
       controller.debounceTimer = setTimeout(() => {}, 5000)
-      const params = { generate: 'SVG' }
+      const params = { generate: 'Customizer Settings' }
       const paramHash = controller.hashParams(params)
       controller.currentParamHash = paramHash
       controller.currentPreviewKey = `${paramHash}|model`

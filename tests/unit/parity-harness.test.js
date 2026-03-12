@@ -125,19 +125,19 @@ describe('Parity: resolve2DExportParameters — generic project schemas', () => 
 // ─── 2. Non-previewable detection for generic schemas ───────────────────────
 
 describe('Parity: isNonPreviewableParameters — generic project schemas', () => {
-  it('detects keyguard SVG generate mode as non-previewable (baseline)', () => {
+  it('returns false for keyguard SVG generate mode (2D modes are previewable)', () => {
     expect(
       isNonPreviewable({ generate: '1' }, KEYGUARD_SCHEMA)
-    ).toBe(true);
+    ).toBe(false);
   });
 
-  it('detects generic "output_mode=2d_engrave" as non-previewable (Phase 2/3 resolved)', () => {
+  it('returns false for generic "output_mode=2d_engrave" (2D modes are previewable)', () => {
     expect(
       isNonPreviewable(
         { output_mode: '2d_engrave' },
         GENERIC_2D_SCHEMA
       )
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it('does not flag generic "output_mode=3d" as non-previewable', () => {
@@ -279,16 +279,16 @@ describe('Parity: _detectRenderState — generic project handling', () => {
     });
   });
 
-  it('returns "preview" for generic params without laser-cutting keywords', () => {
-    expect(controller._detectRenderState(GENERIC_2D_PARAMS)).toBe('preview');
+  it('returns null for generic params (render state detection removed)', () => {
+    expect(controller._detectRenderState(GENERIC_2D_PARAMS)).toBeNull();
   });
 
-  it('returns "laser" when a laser-cutting param is active (baseline)', () => {
+  it('returns null even for laser-cutting params (render state detection removed)', () => {
     expect(
       controller._detectRenderState({
         use_Laser_Cutting_best_practices: 'Yes',
       })
-    ).toBe('laser');
+    ).toBeNull();
   });
 
   it('returns null for full quality renders', () => {

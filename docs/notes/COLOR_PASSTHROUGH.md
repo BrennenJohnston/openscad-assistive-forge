@@ -62,7 +62,7 @@ E2E probe confirms `hasColors=true` for multi-color SCAD files.
 
 **Implication:** There is no way to get the `#` transparency effect in exported OFF/STL/AMF files. This is a fundamental design decision in OpenSCAD, not a limitation of this app.
 
-**Current behavior:** When `#` is detected, the app applies a fixed `#ff5151` (pink) color override to all faces. A dual-render approach (normal COFF colors + semi-transparent pink overlay) is planned — see Phase 3 of the parity remediation plan.
+**Current behavior:** When `#` is detected, the app creates a dual-render: two meshes in a `THREE.Group` — the normal mesh with real COFF per-face colors (or theme default for plain OFF) and a semi-transparent `#ff5151` pink overlay at ~50% opacity. This matches desktop OpenSCAD's F5 preview behavior where `#`-marked geometry is rendered twice (normal + transparent pink). The `#` modifier alone (without `color()`) now routes to OFF format and triggers dual-render. Implemented in Phase 3 of the parity remediation plan.
 
 ---
 
@@ -121,7 +121,8 @@ color_passthrough: { ..., killSwitch: true }
 1. ~~**Verify COFF output**~~ — Done (2026-03-10). COFF confirmed working.
 2. ~~**Increase rollout to 100**~~ — Done (2026-03-10). Kill-switch disabled.
 3. Consider automatic format selection based on `result.format` from the worker (rather than pre-flight regex scan), so detection is perfectly accurate.
-4. Implement `#` debug modifier dual-render (normal COFF colors + pink overlay) — see parity remediation plan Phase 3.
+4. ~~**Implement `#` debug modifier dual-render**~~ — Done (Phase 3). Normal COFF colors + semi-transparent pink overlay in a `THREE.Group`.
+5. ~~**Final verification**~~ — Done (2026-03-12). 1982 tests pass, 0 failures. All 16 parity scenarios verified.
 
 ---
 
