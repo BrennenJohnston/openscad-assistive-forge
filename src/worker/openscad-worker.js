@@ -24,7 +24,7 @@
  */
 
 import { hexToRgb } from '../js/color-utils.js';
-import { resolveFileParams } from '../js/file-param-resolver.js';
+import { resolveFileParams, decodeDataUrl } from '../js/file-param-resolver.js';
 
 // Official WASM is loaded dynamically in initWASM() from /wasm/openscad-official/
 
@@ -791,11 +791,31 @@ async function mountFiles(files, options = {}) {
     const resolvedPath = baseDir ? `${baseDir}/${filePath}` : filePath;
 
     try {
-      FS.writeFile(resolvedPath, content);
-      mountedFiles.set(resolvedPath, content);
+      // S-013: Image companion files arrive as data-URL strings from the UI
+      // (e.g. "data:image/png;base64,..."). Emscripten FS.writeFile would
+      // store the literal text — not the binary image — making surface()
+      // and import() fail. Decode to Uint8Array so the WASM engine receives
+      // valid binary content.
+      let fsContent = content;
+      if (typeof content === 'string' && content.startsWith('data:')) {
+        try {
+          fsContent = decodeDataUrl(content);
+          console.log(
+            `[Worker FS] Decoded data URL for: ${resolvedPath} (${fsContent.byteLength} binary bytes)`
+          );
+        } catch (decodeErr) {
+          console.warn(
+            `[Worker FS] Failed to decode data URL for ${resolvedPath}, mounting as text:`,
+            decodeErr.message
+          );
+        }
+      }
+      FS.writeFile(resolvedPath, fsContent);
+      mountedFiles.set(resolvedPath, fsContent);
       resolvedPaths.set(filePath, resolvedPath);
+      const size = fsContent instanceof Uint8Array ? fsContent.byteLength : fsContent.length;
       console.log(
-        `[Worker FS] Mounted file: ${resolvedPath} (${content.length} bytes)`
+        `[Worker FS] Mounted file: ${resolvedPath} (${size} bytes)`
       );
     } catch (error) {
       console.error(`[Worker FS] Failed to mount file ${resolvedPath}:`, error);
