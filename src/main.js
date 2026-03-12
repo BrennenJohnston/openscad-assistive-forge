@@ -16599,12 +16599,12 @@ if (rounded) {
     return normalizedLines.join('\n');
   }
 
-  // Initialize ConsolePanel for ECHO/WARNING/ERROR display
-  const consolePanel = getConsolePanel();
-
-  // Initialize ErrorLogPanel for structured error display
+  // Initialize ErrorLogPanel first (renders into structured view tab)
   const errorLogPanel = getErrorLogPanel();
   initAddStructuredError();
+
+  // Initialize unified ConsolePanel with structured sub-panel
+  const consolePanel = getConsolePanel({ structuredPanel: errorLogPanel });
 
   /**
    * Update console output display
@@ -16617,7 +16617,6 @@ if (rounded) {
 
     if (!append) {
       consolePanel.clear();
-      errorLogPanel.clear();
     }
 
     if (!normalizedOutput || normalizedOutput.trim() === '') {
@@ -16644,11 +16643,8 @@ if (rounded) {
       renderConsoleOutput(normalizedOutput);
     }
 
-    // Feed the ConsolePanel with parsed console output
-    // This displays ECHO/WARNING/ERROR in the parameter panel
+    // Feed both panels with parsed console output
     consolePanel.addOutput(normalizedOutput);
-
-    // Feed the ErrorLogPanel with the same output for structured display
     errorLogPanel.addOutput(normalizedOutput);
 
     // Extract ECHO/WARNING/ERROR messages and display in preview drawer

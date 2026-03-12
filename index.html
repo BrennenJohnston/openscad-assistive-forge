@@ -1197,12 +1197,12 @@
               </button>
             </div>
             <div class="param-panel-body" id="paramPanelBody">
-              <!-- OpenSCAD Output Panel -- Displays ECHO, WARNING, ERROR messages from OpenSCAD in chronological order -->
+              <!-- Console Panel -- Unified OpenSCAD output (S-010 desktop parity) -->
               <details
                 class="console-panel forge-disclosure"
                 id="consolePanel"
                 role="region"
-                aria-label="OpenSCAD output"
+                aria-label="Console"
               >
                 <summary class="console-summary">
                   <svg
@@ -1221,13 +1221,13 @@
                     <line x1="12" y1="19" x2="20" y2="19"></line>
                   </svg>
                   <span class="console-title forge-disclosure-title"
-                    >OpenSCAD Output</span
+                    >Console</span
                   >
                   <button
                     class="panel-help-btn"
                     type="button"
-                    aria-label="About OpenSCAD Output: raw output from the OpenSCAD engine including ECHO statements, warnings, and errors in the order they occurred"
-                    title="OpenSCAD Output: raw output from the OpenSCAD engine, including ECHO statements, warnings, and errors in the order they occurred. Use this to see what your SCAD code is echoing."
+                    aria-label="Console: all output from the OpenSCAD engine. Log view shows messages chronologically. Structured view shows a sortable error table with click-to-line navigation."
+                    title="Console: all output from the OpenSCAD engine. Log view shows messages chronologically. Structured view shows a sortable error table with click-to-line navigation."
                   >?</button>
                   <span
                     id="console-badge"
@@ -1237,6 +1237,10 @@
                   >
                 </summary>
                 <div class="console-content">
+                  <div class="console-view-tabs" role="tablist" aria-label="Console view">
+                    <button role="tab" type="button" class="console-view-tab active" id="console-tab-log" aria-selected="true" aria-controls="console-view-log">Log</button>
+                    <button role="tab" type="button" class="console-view-tab" id="console-tab-structured" aria-selected="false" aria-controls="console-view-structured">Structured</button>
+                  </div>
                   <div class="console-controls">
                     <label class="console-filter">
                       <input type="checkbox" id="console-filter-echo" checked />
@@ -1253,6 +1257,18 @@
                         checked
                       />
                       <span>Errors</span>
+                    </label>
+                    <label class="console-filter">
+                      <input
+                        type="checkbox"
+                        id="console-filter-deprecated"
+                        checked
+                      />
+                      <span>Deprecated</span>
+                    </label>
+                    <label class="console-filter">
+                      <input type="checkbox" id="console-filter-trace" />
+                      <span>Trace</span>
                     </label>
                     <div class="console-actions">
                       <button
@@ -1281,127 +1297,37 @@
                       </button>
                     </div>
                   </div>
-                  <div
-                    id="console-output"
-                    class="console-output"
-                    role="log"
-                    aria-label="Console messages"
-                    aria-live="polite"
-                    aria-relevant="additions"
-                  >
-                    <div class="console-empty">
-                      No output yet. ECHO, WARNING, and ERROR messages
-                      from the OpenSCAD engine will appear here.
+                  <div id="console-view-log" class="console-view-panel" role="tabpanel" aria-labelledby="console-tab-log">
+                    <div
+                      id="console-output"
+                      class="console-output"
+                      role="log"
+                      aria-label="Console messages"
+                      aria-live="polite"
+                      aria-relevant="additions"
+                    >
+                      <div class="console-empty">
+                        No output yet. Messages from the OpenSCAD engine
+                        will appear here.
+                      </div>
+                    </div>
+                  </div>
+                  <div id="console-view-structured" class="console-view-panel" role="tabpanel" aria-labelledby="console-tab-structured" hidden>
+                    <div
+                      id="error-log-output"
+                      class="error-log-output"
+                      role="log"
+                      aria-label="Structured error log"
+                      aria-live="polite"
+                    >
+                      <div class="error-log-empty">
+                        No errors. Compile or render to check for issues.
+                      </div>
                     </div>
                   </div>
                 </div>
               </details>
-              <!-- File Actions Panel -->
               <!-- File Actions panel removed: all features now in File toolbar menu -->
-              <!-- Errors and Warnings Panel -->
-              <details
-                class="error-log-panel forge-disclosure"
-                id="errorLogPanel"
-                role="region"
-                aria-label="Errors and warnings"
-              >
-                <summary class="error-log-summary">
-                  <svg
-                    class="btn-icon-svg forge-disclosure-icon"
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    aria-hidden="true"
-                  >
-                    <path
-                      d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
-                    ></path>
-                    <line x1="12" y1="9" x2="12" y2="13"></line>
-                    <line x1="12" y1="17" x2="12.01" y2="17"></line>
-                  </svg>
-                  <span class="error-log-title forge-disclosure-title"
-                    >Errors and Warnings</span
-                  >
-                  <button
-                    class="panel-help-btn"
-                    type="button"
-                    aria-label="About Errors and Warnings: structured view of errors and warnings with file location. Click a row to jump to the relevant line."
-                    title="Errors and Warnings: structured view of errors and warnings with file location. Click a row to jump to the relevant line in the code editor."
-                  >?</button>
-                  <span
-                    id="error-log-badge"
-                    class="error-log-badge hidden"
-                    aria-hidden="true"
-                    >0</span
-                  >
-                </summary>
-                <div class="error-log-content">
-                  <div class="error-log-controls">
-                    <label class="error-log-filter">
-                      <input
-                        type="checkbox"
-                        id="error-log-filter-error"
-                        checked
-                      />
-                      <span>Errors</span>
-                    </label>
-                    <label class="error-log-filter">
-                      <input
-                        type="checkbox"
-                        id="error-log-filter-warn"
-                        checked
-                      />
-                      <span>Warnings</span>
-                    </label>
-                    <label class="error-log-filter">
-                      <input
-                        type="checkbox"
-                        id="error-log-filter-deprecated"
-                        checked
-                      />
-                      <span>Deprecated</span>
-                    </label>
-                    <label class="error-log-filter">
-                      <input type="checkbox" id="error-log-filter-trace" />
-                      <span>Trace</span>
-                    </label>
-                    <div class="error-log-actions">
-                      <button
-                        id="error-log-copy-btn"
-                        class="btn btn-sm btn-icon"
-                        aria-label="Copy error log to clipboard"
-                        title="Copy to clipboard"
-                      >
-                        📋
-                      </button>
-                      <button
-                        id="error-log-clear-btn"
-                        class="btn btn-sm btn-icon"
-                        aria-label="Clear error log"
-                        title="Clear"
-                      >
-                        🗑️
-                      </button>
-                    </div>
-                  </div>
-                  <div
-                    id="error-log-output"
-                    class="error-log-output"
-                    role="log"
-                    aria-label="Error log entries"
-                    aria-live="polite"
-                  >
-                    <div class="error-log-empty">
-                      No errors. Compile or render to check for issues.
-                    </div>
-                  </div>
-                </div>
-              </details>
               <!-- Image Measurement Tool -->
               <details
                 class="measure-details forge-disclosure"

@@ -5469,6 +5469,67 @@ body.first-visit-blocking #app {
   border-top: 1px solid var(--color-border);
 }
 
+/* View toggle tabs (Log / Structured) */
+.console-view-tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  overflow: hidden;
+}
+
+.console-view-tab {
+  flex: 1;
+  padding: var(--space-xs) var(--space-sm);
+  border: none;
+  background: var(--color-bg-primary);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.console-view-tab:not(:last-child) {
+  border-right: 1px solid var(--color-border);
+}
+
+.console-view-tab.active {
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+.console-view-tab:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus);
+  outline-offset: -2px;
+}
+
+.console-view-panel[hidden] {
+  display: none;
+}
+
+/* Click-to-line link in log view entries */
+.console-line-link {
+  background: none;
+  border: none;
+  color: var(--color-accent);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: inherit;
+  padding: 0 0.2em;
+  text-decoration: underline;
+}
+
+.console-line-link:hover {
+  color: var(--color-accent-fg);
+}
+
+.console-line-link:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus);
+  border-radius: 2px;
+}
+
 .console-controls {
   display: flex;
   flex-wrap: wrap;
@@ -5555,6 +5616,18 @@ body.first-visit-blocking #app {
   color: var(--color-text-secondary);
 }
 
+.console-entry--deprecated .console-type {
+  color: var(--color-info, #2196f3);
+}
+
+.console-entry--trace .console-type {
+  color: var(--color-text-tertiary);
+}
+
+.console-entry--deprecated {
+  background: var(--color-info-bg, rgba(33, 150, 243, 0.08));
+}
+
 .console-message {
   flex: 1;
   word-break: break-word;
@@ -5576,6 +5649,10 @@ body.first-visit-blocking #app {
 :root[data-high-contrast='true'] .console-entry--warning,
 :root[data-high-contrast='true'] .console-entry--error {
   border-left: 3px solid currentColor;
+}
+
+:root[data-high-contrast='true'] .console-view-tab.active {
+  outline: 2px solid currentColor;
 }
 
 /* Mobile responsiveness */

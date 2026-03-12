@@ -135,6 +135,15 @@ export class ErrorLogPanel {
     ) {
       type = ERROR_LOG_TYPE.ERROR;
       group = 'Geometry';
+    } else if (/\[OpenSCAD ERR\]/i.test(trimmed) && !/ECHO:/i.test(trimmed)) {
+      type = ERROR_LOG_TYPE.ERROR;
+      group = 'Runtime';
+    } else if (/MODEL_NOT_2D|MODEL_IS_2D|not a 2D object/i.test(trimmed)) {
+      type = ERROR_LOG_TYPE.ERROR;
+      group = 'Geometry';
+    } else if (/^Generation failed/i.test(trimmed)) {
+      type = ERROR_LOG_TYPE.ERROR;
+      group = 'General';
     }
 
     if (!type) return null;
@@ -209,6 +218,17 @@ export class ErrorLogPanel {
    */
   getCounts() {
     return { ...this.counts };
+  }
+
+  /**
+   * Set a single filter type externally (used by unified ConsolePanel).
+   * @param {string} type - One of ERROR_LOG_TYPE values
+   * @param {boolean} enabled
+   */
+  setFilter(type, enabled) {
+    if (this.filters[type] === undefined) return;
+    this.filters[type] = enabled;
+    this.render();
   }
 
   /**
@@ -524,4 +544,23 @@ export function getErrorLogPanel(options = {}) {
 export function resetErrorLogPanel() {
   if (instance) instance.clear();
   instance = null;
+}
+
+/**
+ * Expose a global entry point so the generate catch block in main.js can push
+ * structured errors directly into the panel without importing this module.
+ * Called after getErrorLogPanel() has created the singleton.
+ */
+export function initAddStructuredError() {
+  window.addStructuredError = (message) => {
+    const panel = getErrorLogPanel();
+    panel.addEntry({
+      type: ERROR_LOG_TYPE.ERROR,
+      group: 'General',
+      file: '',
+      line: null,
+      message: message,
+      timestamp: Date.now(),
+    });
+  };
 }
