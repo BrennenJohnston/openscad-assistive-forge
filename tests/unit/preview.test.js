@@ -1681,4 +1681,122 @@ describe('PreviewManager', () => {
       expect(manager.clear).toHaveBeenCalled()
     })
   })
+
+  describe('Dual-render helpers', () => {
+    it('_disposeMeshResources disposes a single Mesh', () => {
+      const manager = new PreviewManager(container)
+      const disposeMat = vi.fn()
+      const disposeGeo = vi.fn()
+      manager.mesh = {
+        isGroup: false,
+        geometry: { dispose: disposeGeo },
+        material: { dispose: disposeMat },
+      }
+      manager._disposeMeshResources()
+      expect(disposeGeo).toHaveBeenCalledOnce()
+      expect(disposeMat).toHaveBeenCalledOnce()
+    })
+
+    it('_disposeMeshResources disposes all children of a Group', () => {
+      const manager = new PreviewManager(container)
+      const child1Geo = { dispose: vi.fn() }
+      const child1Mat = { dispose: vi.fn() }
+      const child2Geo = { dispose: vi.fn() }
+      const child2Mat = { dispose: vi.fn() }
+      manager.mesh = {
+        isGroup: true,
+        children: [
+          { geometry: child1Geo, material: child1Mat },
+          { geometry: child2Geo, material: child2Mat },
+        ],
+      }
+      manager._disposeMeshResources()
+      expect(child1Geo.dispose).toHaveBeenCalledOnce()
+      expect(child1Mat.dispose).toHaveBeenCalledOnce()
+      expect(child2Geo.dispose).toHaveBeenCalledOnce()
+      expect(child2Mat.dispose).toHaveBeenCalledOnce()
+    })
+
+    it('_disposeMeshResources is safe on null mesh', () => {
+      const manager = new PreviewManager(container)
+      manager.mesh = null
+      expect(() => manager._disposeMeshResources()).not.toThrow()
+    })
+
+    it('_getPrimaryGeometry returns geometry from single Mesh', () => {
+      const manager = new PreviewManager(container)
+      const geo = { attributes: { position: { count: 36 } } }
+      manager.mesh = { isGroup: false, geometry: geo }
+      expect(manager._getPrimaryGeometry()).toBe(geo)
+    })
+
+    it('_getPrimaryGeometry returns first child geometry from Group', () => {
+      const manager = new PreviewManager(container)
+      const geo = { attributes: { position: { count: 36 } } }
+      manager.mesh = {
+        isGroup: true,
+        children: [
+          { geometry: geo },
+          { geometry: { attributes: { position: { count: 36 } } } },
+        ],
+      }
+      expect(manager._getPrimaryGeometry()).toBe(geo)
+    })
+
+    it('_getPrimaryGeometry returns null when mesh is null', () => {
+      const manager = new PreviewManager(container)
+      manager.mesh = null
+      expect(manager._getPrimaryGeometry()).toBeNull()
+    })
+
+    it('applyColorToMesh skips highlight overlay children in Groups', () => {
+      const manager = new PreviewManager(container)
+      const normalColor = { setHex: vi.fn() }
+      const highlightColor = { setHex: vi.fn() }
+      manager.mesh = {
+        isGroup: true,
+        children: [
+          {
+            material: { color: normalColor },
+            userData: {},
+          },
+          {
+            material: { color: highlightColor },
+            userData: { isHighlightOverlay: true },
+          },
+        ],
+      }
+      manager.applyColorToMesh()
+      expect(normalColor.setHex).toHaveBeenCalledOnce()
+      expect(highlightColor.setHex).not.toHaveBeenCalled()
+    })
+
+    it('setModelOpacity applies to all children of a Group', () => {
+      const manager = new PreviewManager(container)
+      const mat1 = {
+        transparent: false,
+        opacity: 1,
+        depthWrite: true,
+        needsUpdate: false,
+      }
+      const mat2 = {
+        transparent: false,
+        opacity: 1,
+        depthWrite: true,
+        needsUpdate: false,
+      }
+      manager.mesh = {
+        isGroup: true,
+        children: [
+          { material: mat1, renderOrder: 0 },
+          { material: mat2, renderOrder: 0 },
+        ],
+      }
+      manager.setModelOpacity(50)
+      expect(mat1.transparent).toBe(true)
+      expect(mat1.opacity).toBe(0.5)
+      expect(mat2.transparent).toBe(true)
+      expect(mat2.opacity).toBe(0.5)
+    })
+  })
 })

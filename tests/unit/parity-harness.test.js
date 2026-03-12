@@ -230,8 +230,8 @@ describe('Parity: # debug modifier highlight behavior', () => {
 
   it('# modifier overrides user-defined color() (Phase 6 gate)', () => {
     // Desktop: `# color("blue") cube()` renders as highlight red, NOT blue.
-    // scadUsesDebugModifier detects `#` in SCAD source; when active, COFF
-    // face colors are replaced with the fixed highlight in loadOFF.
+    // scadUsesDebugModifier detects `#` in SCAD source; when active, loadOFF
+    // creates a dual-render Group (normal mesh + pink overlay).
     expect(
       AutoPreviewController.scadUsesDebugModifier(
         '# color("blue") cube(10);'

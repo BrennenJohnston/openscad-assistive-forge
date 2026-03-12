@@ -146,33 +146,11 @@ const PREVIEW_COLORS = {
   },
 };
 
-/**
- * Render-state-specific model colors, applied when no user override is set.
- *
- * Priority: colorOverride > renderStateColor > PREVIEW_COLORS[theme].model
- *
- * States:
- *   'preview' — draft/auto-preview quality; warm amber to match OpenSCAD F5
- *               preview mode visual convention (informational, not final)
- *   'laser'   — laser-cut 3-D mode; orange-red per laser-cutting industry convention
- *
- * Mono/mono-light variants are intentionally absent so the theme palette is
- * always respected in those high-specialisation display modes.
- */
-const RENDER_STATE_COLORS = {
-  preview: {
-    light: 0xf59e0b,
-    dark: 0xfbbf24,
-    'light-hc': 0xb45309,
-    'dark-hc': 0xfde68a,
-  },
-  laser: {
-    light: 0xe74c3c,
-    dark: 0xff6b6b,
-    'light-hc': 0x991b1b,
-    'dark-hc': 0xfca5a5,
-  },
-};
+// RENDER_STATE_COLORS was removed: it applied fabricated amber/red tints
+// that do not correspond to any desktop OpenSCAD behavior. Desktop OpenSCAD
+// uses the same colorscheme colors for both F5 preview and F6 render — it
+// does NOT tint models differently based on render quality or laser mode.
+// Model color is now: colorOverride (SCAD-derived) > PREVIEW_COLORS[theme].model.
 
 export class PreviewManager {
   constructor(container, options = {}) {
@@ -187,7 +165,6 @@ export class PreviewManager {
     this.currentTheme = options.theme || 'light';
     this.highContrast = options.highContrast || false;
     this.colorOverride = null;
-    this.renderState = null; // 'preview' | 'laser' | null (null = use theme default)
 
     // Measurements
     this.measurementsEnabled = this.loadMeasurementPreference();
@@ -503,8 +480,8 @@ export class PreviewManager {
       this._rebuildGrid();
     }
 
-    // Update model color if mesh exists
-    if (this.mesh && this.mesh.material) {
+    // Update model color if mesh exists (skip Groups — dual-render manages its own colors)
+    if (this.mesh && !this.mesh.isGroup && this.mesh.material) {
       this.mesh.material.color.setHex(parseInt(this._resolveModelColor().slice(1), 16));
     }
 
@@ -526,51 +503,75 @@ export class PreviewManager {
   }
 
   /**
-   * Set the current render state, which controls the fallback model color when
-   * no user color override is active.
-   *
-   * @param {'preview'|'laser'|null} state
-   *   'preview' — draft/auto-preview quality (amber)
-   *   'laser'   — laser-cut 3-D mode (orange-red)
-   *   null      — use the theme default blue
+   * Set the current render state. Retained for API compatibility.
+   * Previously applied fabricated amber/red tints; now a no-op since
+   * model color is determined by COFF per-face data or the theme default.
+   * @param {'preview'|'laser'|null} _state
    */
-  setRenderState(state) {
-    this.renderState = state ?? null;
-    this.applyColorToMesh();
+  setRenderState(_state) {
   }
 
   /**
    * Resolve the model color to apply, respecting the priority chain:
    *   1. colorOverride (user manual pick or SCAD-derived)
-   *   2. renderState color (state-specific fallback)
-   *   3. PREVIEW_COLORS[theme].model (theme default)
+   *   2. PREVIEW_COLORS[theme].model (theme default)
    *
    * @returns {string} 6-digit hex color string with leading '#'
    */
   _resolveModelColor() {
     if (this.colorOverride) return this.colorOverride;
 
-    if (this.renderState && RENDER_STATE_COLORS[this.renderState]) {
-      const stateMap = RENDER_STATE_COLORS[this.renderState];
-      const stateVal = stateMap[this.currentTheme];
-      if (stateVal !== undefined) {
-        return `#${stateVal.toString(16).padStart(6, '0')}`;
-      }
-    }
-
     const themeColors = PREVIEW_COLORS[this.currentTheme] || PREVIEW_COLORS.light;
     return `#${themeColors.model.toString(16).padStart(6, '0')}`;
   }
 
   /**
-   * Apply the current color (override, render-state, or theme default) to the mesh.
+   * Apply the current color (override or theme default) to the mesh.
    * Safe to call even if mesh doesn't exist yet.
    */
   applyColorToMesh() {
-    if (!this.mesh?.material) return;
+    if (!this.mesh) return;
 
     const appliedHex = this._resolveModelColor();
-    this.mesh.material.color.setHex(parseInt(appliedHex.slice(1), 16));
+    const hex = parseInt(appliedHex.slice(1), 16);
+    if (this.mesh.isGroup) {
+      this.mesh.children.forEach((child) => {
+        if (child.material && !child.userData.isHighlightOverlay) {
+          child.material.color.setHex(hex);
+        }
+      });
+    } else if (this.mesh.material) {
+      this.mesh.material.color.setHex(hex);
+    }
+  }
+
+  /**
+   * Dispose geometry and material for this.mesh, handling both
+   * single Mesh and Group (dual-render) cases.
+   */
+  _disposeMeshResources() {
+    if (!this.mesh) return;
+    if (this.mesh.isGroup) {
+      this.mesh.children.forEach((child) => {
+        child.geometry?.dispose();
+        child.material?.dispose();
+      });
+    } else {
+      this.mesh.geometry?.dispose();
+      this.mesh.material?.dispose();
+    }
+  }
+
+  /**
+   * Return the BufferGeometry used for stats/dimensions.
+   * For a Group (dual-render) returns the first child's geometry.
+   */
+  _getPrimaryGeometry() {
+    if (!this.mesh) return null;
+    if (this.mesh.isGroup) {
+      return this.mesh.children[0]?.geometry ?? null;
+    }
+    return this.mesh.geometry ?? null;
   }
 
   animate() {
@@ -985,8 +986,7 @@ export class PreviewManager {
 
         if (this.mesh) {
           this.scene.remove(this.mesh);
-          this.mesh.geometry.dispose();
-          this.mesh.material.dispose();
+          this._disposeMeshResources();
           this.mesh = null;
         }
 
@@ -1129,12 +1129,27 @@ export class PreviewManager {
         }
 
         const firstLine = lines[0].toUpperCase();
-        const isCOFF = firstLine === 'COFF';
-        if (firstLine !== 'OFF' && !isCOFF) {
+        const isCOFF = firstLine.startsWith('COFF');
+        const isOFF = firstLine.startsWith('OFF');
+        if (!isOFF && !isCOFF) {
           throw new Error(`Not a valid OFF file (header: "${lines[0]}")`);
         }
 
-        const [numVerts, numFaces] = lines[1].split(/\s+/).map(Number);
+        // OFF/COFF format allows counts on the header line ("OFF 100 200 0")
+        // or on a separate second line. Detect which format we have.
+        const headerParts = lines[0].split(/\s+/);
+        let countLineIdx;
+        if (headerParts.length >= 3 && !isNaN(Number(headerParts[1]))) {
+          countLineIdx = 0;
+        } else {
+          countLineIdx = 1;
+        }
+        const countParts = countLineIdx === 0
+          ? headerParts.slice(1)
+          : lines[countLineIdx].split(/\s+/);
+        const numVerts = Number(countParts[0]);
+        const numFaces = Number(countParts[1]);
+        const dataStartLine = countLineIdx + 1;
         console.log(
           `[Preview] Loading ${isCOFF ? 'COFF' : 'OFF'} — ${numVerts} verts, ${numFaces} faces`
         );
@@ -1142,20 +1157,29 @@ export class PreviewManager {
         // Parse vertices
         const vertices = [];
         for (let i = 0; i < numVerts; i++) {
-          const [x, y, z] = lines[2 + i].split(/\s+/).map(Number);
+          const [x, y, z] = lines[dataStartLine + i].split(/\s+/).map(Number);
           vertices.push(x, y, z);
         }
 
-        // Parse faces + detect colors
+        // Parse faces + detect colors.
+        // OpenSCAD export_off.cc writes colors inline after face vertex indices
+        // with an "OFF" header (not "COFF"). Colors are integer 0-255 values.
+        // COFF files from other tools use float 0-1 values. We auto-detect.
         const positions = [];
         const colors = [];
         let hasColors = false;
+        let colorScale = 1;
+        let colorFormatDetected = false;
 
-        const faceStart = 2 + numVerts;
+        const faceStart = dataStartLine + numVerts;
         for (let i = 0; i < numFaces; i++) {
           const parts = lines[faceStart + i].split(/\s+/).map(Number);
           const n = parts[0]; // vertex count for this face
           if (n < 3) continue;
+
+          // RGB only — per-face alpha (parts[n+4]) intentionally not read;
+          // transparency is controlled via debugHighlight overlay material.
+          const hasInlineColor = parts.length >= n + 4;
 
           // Fan-triangulate the face
           const v0 = parts[1];
@@ -1173,19 +1197,15 @@ export class PreviewManager {
               vertices[vb * 3 + 1],
               vertices[vb * 3 + 2]
             );
-            if (isCOFF && parts.length >= n + 5) {
-              let r, g, b;
-              if (debugHighlight) {
-                // `#` debug modifier: fixed highlight overrides user color()
-                const hx = debugHighlight.hex.replace('#', '');
-                r = parseInt(hx.substring(0, 2), 16) / 255;
-                g = parseInt(hx.substring(2, 4), 16) / 255;
-                b = parseInt(hx.substring(4, 6), 16) / 255;
-              } else {
-                r = parts[n + 1];
-                g = parts[n + 2];
-                b = parts[n + 3];
+            if (hasInlineColor) {
+              if (!colorFormatDetected) {
+                const sample = Math.max(parts[n + 1], parts[n + 2], parts[n + 3]);
+                colorScale = sample > 1 ? 1 / 255 : 1;
+                colorFormatDetected = true;
               }
+              const r = parts[n + 1] * colorScale;
+              const g = parts[n + 2] * colorScale;
+              const b = parts[n + 3] * colorScale;
               colors.push(r, g, b, r, g, b, r, g, b);
               hasColors = true;
             }
@@ -1222,34 +1242,66 @@ export class PreviewManager {
 
         if (this.mesh) {
           this.scene.remove(this.mesh);
-          this.mesh.geometry.dispose();
-          this.mesh.material.dispose();
+          this._disposeMeshResources();
           this.mesh = null;
         }
 
-        const useDebugTransparency = hasColors && debugHighlight?.opacity < 1;
-        const material = hasColors
-          ? new THREE.MeshPhongMaterial({
-              vertexColors: true,
-              specular: 0x111111,
-              shininess: 30,
-              flatShading: false,
-              ...(useDebugTransparency
-                ? {
-                    transparent: true,
-                    opacity: debugHighlight.opacity,
-                    depthWrite: false,
-                  }
-                : {}),
-            })
-          : new THREE.MeshPhongMaterial({
-              color: parseInt(this._resolveModelColor().slice(1), 16),
-              specular: 0x111111,
-              shininess: 30,
-              flatShading: false,
-            });
+        if (debugHighlight) {
+          // Dual-render: normal mesh + semi-transparent highlight overlay.
+          // Desktop OpenSCAD F5 renders #-marked geometry at full color with
+          // a pink {255,81,81,128} overlay on top.
+          const normalMaterial = hasColors
+            ? new THREE.MeshPhongMaterial({
+                vertexColors: true,
+                specular: 0x111111,
+                shininess: 30,
+                flatShading: false,
+              })
+            : new THREE.MeshPhongMaterial({
+                color: parseInt(this._resolveModelColor().slice(1), 16),
+                specular: 0x111111,
+                shininess: 30,
+                flatShading: false,
+              });
 
-        this.mesh = new THREE.Mesh(geometry, material);
+          const highlightGeometry = geometry.clone();
+          const highlightMaterial = new THREE.MeshPhongMaterial({
+            color: parseInt(debugHighlight.hex.replace('#', ''), 16),
+            specular: 0x111111,
+            shininess: 30,
+            flatShading: false,
+            transparent: true,
+            opacity: debugHighlight.opacity,
+            depthWrite: false,
+          });
+
+          const normalMesh = new THREE.Mesh(geometry, normalMaterial);
+          const highlightMesh = new THREE.Mesh(
+            highlightGeometry,
+            highlightMaterial
+          );
+          highlightMesh.userData.isHighlightOverlay = true;
+          highlightMesh.renderOrder = 1;
+
+          this.mesh = new THREE.Group();
+          this.mesh.add(normalMesh);
+          this.mesh.add(highlightMesh);
+        } else {
+          const material = hasColors
+            ? new THREE.MeshPhongMaterial({
+                vertexColors: true,
+                specular: 0x111111,
+                shininess: 30,
+                flatShading: false,
+              })
+            : new THREE.MeshPhongMaterial({
+                color: parseInt(this._resolveModelColor().slice(1), 16),
+                specular: 0x111111,
+                shininess: 30,
+                flatShading: false,
+              });
+          this.mesh = new THREE.Mesh(geometry, material);
+        }
         this.scene.add(this.mesh);
 
         const vertexCount = positions.length / 3;
@@ -1833,9 +1885,12 @@ export class PreviewManager {
     const box = new THREE.Box3().setFromObject(this.mesh);
     const size = box.getSize(new THREE.Vector3());
     const volume = size.x * size.y * size.z;
-    const triangles = this.mesh.geometry.index
-      ? this.mesh.geometry.index.count / 3
-      : this.mesh.geometry.attributes.position.count / 3;
+    const geo = this._getPrimaryGeometry();
+    const triangles = geo
+      ? geo.index
+        ? geo.index.count / 3
+        : geo.attributes.position.count / 3
+      : 0;
 
     return {
       x: Math.round(size.x * 100) / 100, // Round to 2 decimal places
@@ -3604,8 +3659,7 @@ export class PreviewManager {
 
     if (this.mesh) {
       this.scene.remove(this.mesh);
-      this.mesh.geometry.dispose();
-      this.mesh.material.dispose();
+      this._disposeMeshResources();
       this.mesh = null;
     }
 
@@ -3652,8 +3706,7 @@ export class PreviewManager {
     }
 
     if (this.mesh) {
-      this.mesh.geometry.dispose();
-      this.mesh.material.dispose();
+      this._disposeMeshResources();
     }
 
     // Clean up reference overlay
@@ -3729,15 +3782,25 @@ export class PreviewManager {
   // --- Model Appearance Controls ---
 
   setModelOpacity(percent) {
-    if (!this.mesh?.material) return;
+    if (!this.mesh) return;
     const val = Math.max(10, Math.min(100, percent));
     const opacity = val / 100;
-    this.mesh.material.transparent = opacity < 1;
-    this.mesh.material.opacity = opacity;
-    // Keep depthWrite true to prevent model from disappearing behind grid/overlay
-    this.mesh.material.depthWrite = true;
-    if (opacity < 1) this.mesh.renderOrder = 1;
-    this.mesh.material.needsUpdate = true;
+
+    const applyOpacity = (mat, meshObj) => {
+      mat.transparent = opacity < 1;
+      mat.opacity = opacity;
+      mat.depthWrite = true;
+      if (opacity < 1) meshObj.renderOrder = 1;
+      mat.needsUpdate = true;
+    };
+
+    if (this.mesh.isGroup) {
+      this.mesh.children.forEach((child) => {
+        if (child.material) applyOpacity(child.material, child);
+      });
+    } else if (this.mesh.material) {
+      applyOpacity(this.mesh.material, this.mesh);
+    }
   }
 
   setBrightness(percent) {

@@ -230,41 +230,16 @@ export class AutoPreviewController {
    * Delegates to the shared render-intent classifier and maps the result
    * to the legacy color-tinting values expected by the preview manager.
    *
-   * Laser-cutting detection is a stakeholder backward-compat overlay;
-   * Phase 6 will generalize color handling.
+   * Now a no-op that always returns null: the fabricated 'preview'/'laser'
+   * tinting was removed because it does not correspond to any desktop
+   * OpenSCAD behavior. Model color comes from COFF per-face data or the
+   * theme default.
    *
    * @param {Object} parameters
-   * @param {boolean} isFullQuality - true when this is a full-quality render
-   * @returns {'preview'|'laser'|null}
+   * @param {boolean} isFullQuality
+   * @returns {null}
    */
   _detectRenderState(parameters, isFullQuality = false) {
-    const state = classifyRenderState(parameters, this.schema, {
-      isFullQuality,
-    });
-
-    if (state === RENDER_STATE.RENDER_3D) return null;
-
-    if (state === RENDER_STATE.PREVIEW) {
-      // Stakeholder backward-compat: detect laser-cutting mode for tinting
-      if (parameters) {
-        for (const key of Object.keys(parameters)) {
-          if (/laser.*(cut|cutting).*(best|pract)/i.test(key)) {
-            const val = parameters[key];
-            if (
-              val === true ||
-              val === 'yes' ||
-              val === 'Yes' ||
-              val === 1 ||
-              val === '1'
-            ) {
-              return 'laser';
-            }
-          }
-        }
-      }
-      return 'preview';
-    }
-
     return null;
   }
 
@@ -739,15 +714,16 @@ export class AutoPreviewController {
     this.setState(PREVIEW_STATE.RENDERING);
 
     // ENH-A: Use COFF (Color OFF) format when the flag is enabled and the
-    // SCAD source contains color() calls. Verified at runtime: if the WASM
-    // build does NOT emit per-face COFF data the parser falls back gracefully.
+    // SCAD source contains color() calls OR the # debug modifier. The #
+    // modifier needs OFF so the dual-render overlay can be applied even
+    // when color() is absent from the source.
+    const hasDebugModifier =
+      AutoPreviewController.scadUsesDebugModifier(this.currentScadContent);
     const useColorPassthrough =
       isFlagEnabled('color_passthrough') &&
-      AutoPreviewController.scadUsesColor(this.currentScadContent);
+      (AutoPreviewController.scadUsesColor(this.currentScadContent) ||
+        hasDebugModifier);
     const previewOutputFormat = useColorPassthrough ? 'off' : 'stl';
-    const hasDebugModifier =
-      useColorPassthrough &&
-      AutoPreviewController.scadUsesDebugModifier(this.currentScadContent);
 
     let renderFailed = false;
     try {
