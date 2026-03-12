@@ -24,6 +24,7 @@
  */
 
 import { hexToRgb } from '../js/color-utils.js';
+import { resolveFileParams } from '../js/file-param-resolver.js';
 
 // Official WASM is loaded dynamically in initWASM() from /wasm/openscad-official/
 
@@ -813,6 +814,41 @@ async function mountFiles(files, options = {}) {
 }
 
 /**
+ * Scan SCAD source for include/use directives and return desktop-format
+ * warnings for any referenced files that cannot be found.
+ *
+ * Desktop OpenSCAD emits "WARNING: Can't open include file ..." when a
+ * referenced companion file is missing. The WASM build silently ignores
+ * missing includes. This function generates equivalent synthetic warnings
+ * so the user sees actionable feedback in the console panel.
+ *
+ * @param {string} scadContent - Raw SCAD source code
+ * @param {(filename: string) => boolean} fileExistsFn - Returns true if the
+ *   referenced filename can be resolved in the virtual filesystem
+ * @returns {string[]} Array of desktop-format warning strings
+ */
+function generateMissingFileWarnings(scadContent, fileExistsFn) {
+  const warnings = [];
+  const seen = new Set();
+  const directiveRegex = /(?:include|use)\s*<([^>]+)>/g;
+  let match;
+
+  while ((match = directiveRegex.exec(scadContent)) !== null) {
+    const refFile = match[1].trim();
+    if (!refFile || seen.has(refFile)) continue;
+    seen.add(refFile);
+
+    if (!fileExistsFn(refFile)) {
+      warnings.push(
+        `WARNING: Can't open include file '${refFile}', import file '${refFile}'.`
+      );
+    }
+  }
+
+  return warnings;
+}
+
+/**
  * Clear all mounted files from virtual filesystem
  * Also cleans up the /work/ directory for design packages
  */
@@ -1329,8 +1365,11 @@ async function renderWithCallMain(
   const performanceFlags = [];
   if (supportsManifold && useManifold) {
     performanceFlags.push('--backend=Manifold');
+    // render-colors enables per-face RGBA in OFF export (COFF data).
+    // Older WASM builds gate this behind an experimental feature flag;
+    // newer builds (where it was promoted to always-on) silently accept it.
+    performanceFlags.push('--enable=render-colors');
   } else if (supportsManifold && !useManifold) {
-    // Explicitly use CGAL backend for stability
     performanceFlags.push('--backend=CGAL');
     console.log('[Worker] Using CGAL (stable) backend instead of Manifold');
   }
@@ -1371,15 +1410,9 @@ async function renderWithCallMain(
     // 2D export flag used later for guard checks and fallback handling.
     const is2DExport = format === 'svg' || format === 'dxf';
 
-    if (shouldWriteInput) {
-      module.FS.writeFile(inputFile, scadContent);
-      wroteTempInput = true;
-    }
+    let defineArgs;
 
-    // Build -D arguments
-    const defineArgs = buildDefineArgs(parameters, paramTypes);
-
-    // Path resolution for import()/use/include:
+    // Path resolution for import()/use/include — shared by BOTH 2D and 3D paths.
     // OpenSCAD WASM doesn't support the -I flag, so we use OPENSCADPATH env var.
     // Desktop OpenSCAD resolves relative imports next to the main SCAD file,
     // then searches OPENSCADPATH. We replicate this by:
@@ -1389,8 +1422,6 @@ async function renderWithCallMain(
     // See: openscad-playground#35 for the upstream path resolution bug.
     if (module.ENV) {
       const searchPaths = ['/libraries'];
-      // For multi-file projects mounted under /work/, add the work dir
-      // so that `include <file.txt>` resolves relative to the project root
       if (inputFile.startsWith(WORK_DIR + '/')) {
         const inputDir = inputFile.substring(0, inputFile.lastIndexOf('/'));
         if (inputDir && !searchPaths.includes(inputDir)) {
@@ -1402,6 +1433,16 @@ async function renderWithCallMain(
       }
       module.ENV.OPENSCADPATH = searchPaths.join(':');
     }
+
+    // For 2D exports (SVG/DXF), the SCAD file's own logic — driven by
+    // parameters like generate="first layer for SVG/DXF file" — is
+    // responsible for producing 2D geometry (via its own projection()
+    // calls).  We render directly to the target format; no wrapper needed.
+    if (shouldWriteInput) {
+      module.FS.writeFile(inputFile, scadContent);
+      wroteTempInput = true;
+    }
+    defineArgs = buildDefineArgs(parameters, paramTypes);
 
     // Pre-render guard: scan SCAD source for known-crashy functions
     // roof() and projection() trigger CGAL assertion failures in WASM (openscad-wasm#5, #6)
@@ -1452,6 +1493,28 @@ async function renderWithCallMain(
     // Clear accumulated console output for this render
     openscadConsoleOutput = '';
 
+    // S-012: Synthetic missing-file warnings. Scan for include/use directives
+    // and inject desktop-format warnings for files not found in the virtual FS.
+    const inputDir = inputFile.substring(0, inputFile.lastIndexOf('/'));
+    const fsSearchPaths = [inputDir, WORK_DIR, '/libraries'].filter(Boolean);
+    const missingFileWarnings = generateMissingFileWarnings(
+      scadContent,
+      (refFile) => {
+        for (const dir of fsSearchPaths) {
+          try {
+            if (module.FS.analyzePath(`${dir}/${refFile}`).exists) return true;
+          } catch (_e) { /* path may be invalid */ }
+        }
+        for (const key of mountedFiles.keys()) {
+          if (key === refFile || key.endsWith('/' + refFile)) return true;
+        }
+        return false;
+      }
+    );
+    if (missingFileWarnings.length > 0) {
+      openscadConsoleOutput = missingFileWarnings.join('\n') + '\n';
+    }
+
     if (_callMainInvoked) {
       console.warn(
         '[Worker] DEFENSE-IN-DEPTH: callMain already invoked in this module lifetime. ' +
@@ -1476,32 +1539,63 @@ async function renderWithCallMain(
 
       // Check exit code - non-zero means compilation failed.
       if (exitCode !== 0) {
-        // Check if this is a 3D-to-2D format mismatch (model produces 3D but exporting to SVG/DXF).
-        // OpenSCAD returns exit code 1 with "not a 2D object" — this is recoverable, not a module crash.
-        const is2DFormat = format === 'svg' || format === 'dxf';
         const modelIsNot2D =
           openscadConsoleOutput.includes(
             'Current top level object is not a 2D object'
           ) || openscadConsoleOutput.includes('not a 2D object');
 
-        if (is2DFormat && modelIsNot2D) {
-          throw new Error(
-            'MODEL_NOT_2D: Your model produces 3D geometry but SVG/DXF requires 2D output. ' +
-              'Ensure your model uses projection() or enable "use Laser Cutting best practices" to produce 2D geometry.'
-          );
-        }
+        // For 2D exports: if the model produces 3D geometry, fall back to
+        // a two-pass approach: render to STL, then project the STL to 2D.
+        if (is2DExport && modelIsNot2D) {
+          const stlFile = '/tmp/_2d_intermediate.stl';
 
-        // Any other non-zero exit corrupts the WASM module's internal state —
-        // signal the render controller to restart before the next render.
-        const err = new Error(
-          `OpenSCAD compilation failed with exit code ${exitCode}. Output: ${openscadConsoleOutput.substring(0, 500)}`
-        );
-        err.needsRestart = true;
-        throw err;
+          // Pass 1: render the same model to STL (3D output succeeds).
+          _callMainInvoked = false;
+          openscadConsoleOutput = '';
+          const stlArgs = [...performanceFlags, ...defineArgs, '-o', stlFile, inputFile];
+          _callMainInvoked = true;
+          const stlExit = await module.callMain(stlArgs);
+          if (stlExit !== 0) {
+            const err = new Error(
+              `2D fallback: STL render failed with exit code ${stlExit}. ` +
+              `Output: ${openscadConsoleOutput.substring(openscadConsoleOutput.length - 500)}`
+            );
+            err.needsRestart = true;
+            throw err;
+          }
+
+          // Pass 2: project the STL mesh to SVG/DXF.
+          const wrapperFile = '/tmp/_2d_projection_wrapper.scad';
+          module.FS.writeFile(wrapperFile,
+            `projection(cut=true) {\n  import("${stlFile}");\n}\n`
+          );
+          _callMainInvoked = false;
+          openscadConsoleOutput = '';
+          _callMainInvoked = true;
+          const projExit = await module.callMain(['-o', outputFile, wrapperFile]);
+          if (projExit !== 0) {
+            const err = new Error(
+              `2D projection failed with exit code ${projExit}. ` +
+              `Output: ${openscadConsoleOutput.substring(0, 500)}`
+            );
+            err.needsRestart = true;
+            throw err;
+          }
+          // Clean up temporaries
+          try { module.FS.unlink(stlFile); } catch (_e) {}
+          try { module.FS.unlink(wrapperFile); } catch (_e) {}
+          // Two-pass succeeded — skip to output reading
+        } else {
+          const err = new Error(
+            `OpenSCAD compilation failed with exit code ${exitCode}. ` +
+            `Output: ${openscadConsoleOutput.substring(0, 500)}`
+          );
+          err.needsRestart = true;
+          throw err;
+        }
       }
 
-      // Check for empty geometry - OpenSCAD returns exit code 0 but produces no output
-      // This happens when parameter combinations result in no geometry being generated
+      // Check for empty geometry
       if (
         openscadConsoleOutput.includes('Current top level object is empty') ||
         openscadConsoleOutput.includes('top-level object is empty')
@@ -1512,11 +1606,8 @@ async function renderWithCallMain(
       }
 
       // Check for 2D object exported to a 3D format (STL/OBJ/etc.)
-      // This happens when model produces 2D geometry but the render is trying
-      // to export to a 3D format — applies to any project using projection() or 2D primitives.
-      const is2DFormat = format === 'svg' || format === 'dxf';
       if (
-        !is2DFormat &&
+        !is2DExport &&
         (openscadConsoleOutput.includes(
           'Current top level object is not a 3D object'
         ) ||
@@ -1529,7 +1620,7 @@ async function renderWithCallMain(
         );
       }
 
-      // Check for "not supported" ECHO messages which indicate invalid configurations
+      // Check for "not supported" ECHO messages
       const notSupportedMatch = openscadConsoleOutput.match(
         /ECHO:.*is not supported/i
       );
@@ -1573,7 +1664,6 @@ async function renderWithCallMain(
     } catch (_e) {
       // Ignore cleanup errors
     }
-
     return outputData;
   } catch (error) {
     console.error(`[Worker] Render via callMain to ${format} failed:`, error);
@@ -2241,7 +2331,43 @@ async function render(payload) {
 
       console.log('[Worker] Files mounted under:', mountResult.workDir);
     }
-    console.log('[Worker] Rendering with parameters:', parameters);
+
+    // Mount uploaded [file] parameter bytes into the worker FS so that
+    // import() / include statements in the SCAD code can resolve them.
+    // Desktop OpenSCAD resolves relative to the source file directory.
+    const fileParamMountDir =
+      mountResult && mountResult.workDir ? mountResult.workDir : '/tmp';
+    const fileParamResult = resolveFileParams(parameters, fileParamMountDir);
+    let renderParameters = parameters;
+
+    if (fileParamResult.mountOperations.length > 0) {
+      const module = await ensureOpenSCADModule();
+      if (module && module.FS) {
+        try {
+          module.FS.mkdir(fileParamMountDir);
+        } catch (_e) {
+          /* may exist */
+        }
+
+        for (const op of fileParamResult.mountOperations) {
+          try {
+            module.FS.writeFile(op.mountPath, op.data);
+            mountedFiles.set(op.mountPath, op.data);
+            console.log(
+              `[Worker FS] Mounted file param "${op.paramName}": ${op.mountPath} (${op.data.byteLength} bytes)`
+            );
+          } catch (err) {
+            console.warn(
+              `[Worker FS] Failed to mount file param "${op.paramName}":`,
+              err.message
+            );
+          }
+        }
+      }
+      renderParameters = fileParamResult.resolvedParams;
+    }
+
+    console.log('[Worker] Rendering with parameters:', renderParameters);
 
     self.postMessage({
       type: 'PROGRESS',
@@ -2263,7 +2389,6 @@ async function render(payload) {
     // resolve2DExportParameters(), which uses the parsed schema to set
     // model-specific parameters (e.g. generate, type_of_keyguard) to their
     // 2D-compatible values before this render call.
-
     // Track render timing
     let renderStartTime = 0;
     let renderDurationMs = 0;
@@ -2317,7 +2442,7 @@ async function render(payload) {
 
       const outputData = await renderWithCallMain(
         scadContent,
-        parameters,
+        renderParameters,
         format,
         mainFileToUse,
         renderOptions,
@@ -2372,8 +2497,8 @@ async function render(payload) {
       } else if (resultFormat === 'obj') {
         triangleCount = (outputData.match(/^f /gm) || []).length;
       } else if (resultFormat === 'off') {
-        // OFF format has triangle count in header
-        const match = outputData.match(/^OFF\s+\d+\s+(\d+)/);
+        const match = outputData.match(/^C?OFF\s+\d+\s+(\d+)/m) ||
+          outputData.match(/^C?OFF\b[^\n]*\n\s*\d+\s+(\d+)/m);
         if (match) triangleCount = parseInt(match[1]);
       }
     } else if (outputData instanceof Uint8Array) {
@@ -2561,6 +2686,17 @@ async function render(payload) {
       code === 'WASM_ABORT' ||
       code === 'WASM_UNREACHABLE' ||
       code === 'WASM_OOB';
+    const consoleHighlights = (openscadConsoleOutput || '')
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(
+        (line) =>
+          line &&
+          /(generate|type|laser|svg|dxf|2d object|3d object|top level object)/i.test(
+            line
+          )
+      )
+      .slice(0, 12);
 
     self.postMessage({
       type: 'ERROR',
