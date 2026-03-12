@@ -4602,6 +4602,68 @@ select:focus-visible {
   font-size: 0.9em;
 }
 
+/* Entrance animation when guidance appears for the first time */
+.format-2d-guidance.guidance-enter {
+  animation: guidance-highlight 0.6s ease-out;
+}
+
+@keyframes guidance-highlight {
+  0% {
+    opacity: 0;
+    transform: translateY(-4px);
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 2px var(--color-accent);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(0);
+    box-shadow: 0 0 0 2px var(--color-accent);
+  }
+  100% {
+    box-shadow: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .format-2d-guidance.guidance-enter {
+    animation: none;
+  }
+}
+
+/* Auto-adjustment notification within 2D guidance */
+.format-2d-auto-adjust {
+  margin-top: var(--space-sm);
+  padding: var(--space-sm);
+  background: var(--color-bg-secondary, rgba(0, 0, 0, 0.03));
+  border-radius: var(--border-radius-xs);
+}
+
+.format-2d-auto-adjust.hidden {
+  display: none;
+}
+
+.format-2d-auto-adjust .auto-adjust-title {
+  font-weight: 600;
+  margin: 0 0 var(--space-xs) 0;
+}
+
+.format-2d-auto-adjust .auto-adjust-list {
+  margin: 0 0 var(--space-xs) var(--space-md);
+  padding: 0;
+  list-style: disc;
+}
+
+.format-2d-auto-adjust .auto-adjust-list li {
+  margin-bottom: var(--space-xs);
+}
+
+.format-2d-auto-adjust .auto-adjust-note {
+  margin: 0;
+  font-size: var(--font-size-xs, 0.75rem);
+  color: var(--color-text-tertiary, var(--color-text-secondary));
+  font-style: italic;
+}
+
 /* Preset Controls */
 .preset-controls {
   /* Card styling provided by .forge-disclosure */

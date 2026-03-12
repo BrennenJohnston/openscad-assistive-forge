@@ -34,6 +34,7 @@ export class FileActionsController {
    * @param {Function} [options.onSaveAs]     - () => void — show save-as prompt for new named copy
    * @param {Function} [options.onSaveAll]    - () => void — overwrite all files in current project
    * @param {Function} [options.onExportImage]- () => void — capture canvas as PNG
+   * @param {Function} [options.onExport2D]   - (format: 'svg'|'dxf') => Promise<void> — one-click 2D export
    * @param {Function} [options.onOpenRecent] - (entry: RecentFileEntry) => void
    */
   constructor(options = {}) {
@@ -43,6 +44,7 @@ export class FileActionsController {
     this.onSaveAs = options.onSaveAs || (() => {});
     this.onSaveAll = options.onSaveAll || (() => {});
     this.onExportImage = options.onExportImage || (() => {});
+    this.onExport2D = options.onExport2D || (() => {});
     this.onOpenRecent = options.onOpenRecent || (() => {});
 
     /** @type {RecentFileEntry[]} */

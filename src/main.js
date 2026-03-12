@@ -3468,6 +3468,90 @@ async function initApp() {
     }
   }
 
+  /**
+   * One-click 2D export (SVG / DXF).
+   *
+   * Mirrors desktop OpenSCAD's File > Export > Export as SVG/DXF:
+   * switches the output format, auto-adjusts parameters for 2D geometry,
+   * runs the full render, and downloads the result.
+   *
+   * @param {string} format - 'svg' or 'dxf'
+   */
+  async function _export2DOneClick(format) {
+    const state = stateManager.getState();
+    if (!state.uploadedFile) {
+      alert('Open a SCAD file first.');
+      return;
+    }
+    if (!renderController) {
+      alert('OpenSCAD engine not initialized.');
+      return;
+    }
+
+    const formatName = OUTPUT_FORMATS[format]?.name || format.toUpperCase();
+
+    const outputFormatSelect = document.getElementById('outputFormat');
+    if (outputFormatSelect) {
+      outputFormatSelect.value = format;
+      outputFormatSelect.dispatchEvent(new Event('change'));
+    }
+
+    getToolbarMenuController().closeAll();
+
+    const renderParameters = resolve2DExportParameters(
+      state.parameters,
+      state.schema,
+      format
+    );
+
+    updateStatus(`Generating ${formatName}\u2026`);
+
+    if (autoPreviewController) {
+      autoPreviewController.cancelPending();
+    }
+
+    try {
+      const libsForRender = getEnabledLibrariesForRender();
+      const startTime = Date.now();
+
+      const result = await renderController.renderFull(
+        state.uploadedFile.content,
+        renderParameters,
+        {
+          outputFormat: format,
+          paramTypes: state.paramTypes || {},
+          files: state.projectFiles,
+          mainFile: state.mainFilePath,
+          libraries: libsForRender,
+          onProgress: () => updateStatus(`Generating ${formatName}\u2026`),
+        }
+      );
+
+      const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+      const data = result.data || result.stl;
+
+      stateManager.setState({
+        stl: data,
+        outputFormat: result.format || format,
+        stlStats: result.stats,
+        lastRenderTime: duration,
+      });
+
+      const filename = generateFilename(
+        state.uploadedFile.name,
+        state.parameters,
+        format
+      );
+      downloadFile(data, filename, format);
+      updateStatus(`${formatName} exported (${duration}s): ${filename}`);
+      announceImmediate(`${formatName} file exported and downloaded.`);
+    } catch (error) {
+      console.error(`[Export2D] ${formatName} export failed:`, error);
+      updateStatus(`${formatName} export failed: ${error.message || error}`);
+      announceImmediate(`${formatName} export failed.`);
+    }
+  }
+
   // Initialize file actions controller (New, Reload, Save, Save As, Export Image, Recent)
   const fileActionsController = getFileActionsController({
     onNew: () => {
@@ -3512,6 +3596,7 @@ async function initApp() {
       link.click();
       document.body.removeChild(link);
     },
+    onExport2D: (format) => _export2DOneClick(format),
   });
   fileActionsController.init();
 
@@ -3546,13 +3631,34 @@ async function initApp() {
           }))
         : [{ type: 'action', label: 'No recent files', disabled: true }];
 
-    // Export submenu: info notice (when not fully rendered) + geometry/2D formats + Export as Image
+    // Export submenu: one-click 2D exports + re-download of current render + Export as Image
     const exportItems = [
+      // One-click 2D exports (auto-adjust params, render, download)
+      {
+        type: 'action',
+        label: 'Export as SVG\u2026',
+        enabled: hasFile,
+        tooltip: hasFile
+          ? 'One-click: auto-adjusts parameters, generates 2D geometry, and downloads SVG'
+          : 'Open a file first',
+        handler: () => fileActionsController.onExport2D('svg'),
+      },
+      {
+        type: 'action',
+        label: 'Export as DXF\u2026',
+        enabled: hasFile,
+        tooltip: hasFile
+          ? 'One-click: auto-adjusts parameters, generates 2D geometry, and downloads DXF'
+          : 'Open a file first',
+        handler: () => fileActionsController.onExport2D('dxf'),
+      },
+      { type: 'separator' },
+      // Re-download current render in its original format
       ...(!hasFullRender
         ? [
             {
               type: 'action',
-              label: 'ⓘ  Press Generate to enable file exports',
+              label: '\u24D8  Press Generate to enable file exports',
               disabled: true,
               tooltip:
                 'Use the Generate button to fully render the model, then file export options will become available.',
@@ -4549,7 +4655,17 @@ async function initApp() {
         // Show/hide 2D format guidance for SVG/DXF laser cutting workflows
         if (format2dGuidance) {
           if (formatDef.is2D) {
+            const wasHidden = format2dGuidance.classList.contains('hidden');
             format2dGuidance.classList.remove('hidden');
+            if (wasHidden) {
+              format2dGuidance.classList.remove('guidance-enter');
+              void format2dGuidance.offsetWidth; // reflow to restart animation
+              format2dGuidance.classList.add('guidance-enter');
+              format2dGuidance.scrollIntoView({
+                behavior: 'smooth',
+                block: 'nearest',
+              });
+            }
             announceImmediate(
               `${formatName} is a 2D format. See guidance below the format selector.`
             );
