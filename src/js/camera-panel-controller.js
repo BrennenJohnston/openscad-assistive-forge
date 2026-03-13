@@ -133,7 +133,11 @@ export function initCameraPanelController(options = {}) {
     const maybeHandlePanOverride = (direction, source, event) => {
       if (typeof options.onPanControl !== 'function') return false;
       try {
-        const result = options.onPanControl({ direction, source, shiftKey: !!event?.shiftKey });
+        const result = options.onPanControl({
+          direction,
+          source,
+          shiftKey: !!event?.shiftKey,
+        });
         if (typeof result === 'string') {
           announceAction(result);
           return true;
@@ -194,14 +198,16 @@ export function initCameraPanelController(options = {}) {
       }
     });
 
-    document.getElementById('cameraPanRight')?.addEventListener('click', (e) => {
-      if (maybeHandlePanOverride('right', 'desktop', e)) return;
-      const pm = getPM();
-      if (pm?.panCamera) {
-        pm.panCamera(panSpeed, 0);
-        announceAction('Pan right');
-      }
-    });
+    document
+      .getElementById('cameraPanRight')
+      ?.addEventListener('click', (e) => {
+        if (maybeHandlePanOverride('right', 'desktop', e)) return;
+        const pm = getPM();
+        if (pm?.panCamera) {
+          pm.panCamera(panSpeed, 0);
+          announceAction('Pan right');
+        }
+      });
 
     document.getElementById('cameraPanUp')?.addEventListener('click', (e) => {
       if (maybeHandlePanOverride('up', 'desktop', e)) return;

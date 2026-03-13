@@ -1,96 +1,17 @@
 /**
- * Unit tests for resolve2DExportParameters (src/main.js) and the
+ * Unit tests for resolve2DExportIntent (src/js/render-intent.js) and the
  * buildDefineArgs numeric-coercion path (src/worker/openscad-worker.js).
  *
- * Because these functions are not exported from their respective modules, we
- * test their logic here using inlined copies. Keep each copy in sync with its
- * source if the implementation changes.
+ * Phase 3: tests now import the shared render-intent module directly instead
+ * of maintaining inlined copies of the resolve logic.
  *
  * @license GPL-3.0-or-later
  */
 
 import { describe, it, expect, vi } from 'vitest';
+import { resolve2DExportIntent } from '../../src/js/render-intent.js';
 
-// ─── Inlined testable copy of resolve2DExportParameters ─────────────────────
-// Mirrors src/main.js resolve2DExportParameters.
-// Phase 3 change: laser-cutting best-practices param matched by case-insensitive
-// regex instead of exact name equality.
-function resolve2DExportParameters(parameters, schema, format) {
-  if (format !== 'svg' && format !== 'dxf') return parameters;
-  const schemaParams = schema?.parameters;
-  if (!schemaParams) return parameters;
-
-  const resolved = { ...parameters };
-
-  for (const [name, pDef] of Object.entries(schemaParams)) {
-    const enumValues = pDef.enum;
-    if (!Array.isArray(enumValues) || enumValues.length === 0) continue;
-
-    if (name === 'generate') {
-      const twoDEntry = enumValues.find((entry) => {
-        const v = String(
-          typeof entry === 'object' ? entry.value : entry
-        ).toLowerCase();
-        const l =
-          typeof entry === 'object' && entry.label
-            ? String(entry.label).toLowerCase()
-            : v;
-        return (
-          v.includes('svg') ||
-          v.includes('dxf') ||
-          v.includes('first layer') ||
-          l.includes('svg') ||
-          l.includes('dxf') ||
-          l.includes('first layer')
-        );
-      });
-      if (twoDEntry !== undefined) {
-        resolved[name] =
-          typeof twoDEntry === 'object' ? twoDEntry.value : twoDEntry;
-      }
-      continue;
-    }
-
-    if (name === 'type_of_keyguard') {
-      const laserEntry = enumValues.find((entry) => {
-        const v = String(
-          typeof entry === 'object' ? entry.value : entry
-        ).toLowerCase();
-        const l =
-          typeof entry === 'object' && entry.label
-            ? String(entry.label).toLowerCase()
-            : v;
-        return v.includes('laser') || l.includes('laser');
-      });
-      if (laserEntry !== undefined) {
-        resolved[name] =
-          typeof laserEntry === 'object' ? laserEntry.value : laserEntry;
-      }
-      continue;
-    }
-
-    // Case-insensitive partial match — resilient against minor naming variations
-    // (e.g. use_Laser_Cutting_best_practices, use_laser_cutting_best_practices)
-    if (/laser.*(cut|cutting).*(best|pract)/i.test(name)) {
-      const yesEntry = enumValues.find((entry) => {
-        const v = String(
-          typeof entry === 'object' ? entry.value : entry
-        ).toLowerCase();
-        const l =
-          typeof entry === 'object' && entry.label
-            ? String(entry.label).toLowerCase()
-            : v;
-        return v === 'yes' || l === 'yes';
-      });
-      if (yesEntry !== undefined) {
-        resolved[name] =
-          typeof yesEntry === 'object' ? yesEntry.value : yesEntry;
-      }
-    }
-  }
-
-  return resolved;
-}
+const resolve2DExportParameters = resolve2DExportIntent;
 
 // ─── Helper: does schema contain a laser-cut best-practices param? ──────────
 function schemaHasLaserCutParam(schemaParams) {

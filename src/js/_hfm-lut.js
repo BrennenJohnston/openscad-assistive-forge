@@ -6,8 +6,8 @@
 //
 // Key calculation matches _quantKey6() in _hfm.js exactly (base-RANGE encoding).
 
-const RANGE = 11 // quantization buckets per dimension — must match _CACHE_RANGE in _hfm.js
-const LUT_SIZE = RANGE ** 6 // 11^6 = 1,771,561 entries (~1.77 MB)
+const RANGE = 11; // quantization buckets per dimension — must match _CACHE_RANGE in _hfm.js
+const LUT_SIZE = RANGE ** 6; // 11^6 = 1,771,561 entries (~1.77 MB)
 
 /**
  * Compute the flat LUT index for a quantized 6D shape vector.
@@ -22,14 +22,14 @@ const LUT_SIZE = RANGE ** 6 // 11^6 = 1,771,561 entries (~1.77 MB)
  * @returns {number} integer in [0, LUT_SIZE)
  */
 export function lutKey(v0, v1, v2, v3, v4, v5) {
-  const r = RANGE
-  const q0 = Math.min(r - 1, Math.max(0, (v0 * r) | 0))
-  const q1 = Math.min(r - 1, Math.max(0, (v1 * r) | 0))
-  const q2 = Math.min(r - 1, Math.max(0, (v2 * r) | 0))
-  const q3 = Math.min(r - 1, Math.max(0, (v3 * r) | 0))
-  const q4 = Math.min(r - 1, Math.max(0, (v4 * r) | 0))
-  const q5 = Math.min(r - 1, Math.max(0, (v5 * r) | 0))
-  return (((((q0 * r + q1) * r + q2) * r + q3) * r + q4) * r + q5) | 0
+  const r = RANGE;
+  const q0 = Math.min(r - 1, Math.max(0, (v0 * r) | 0));
+  const q1 = Math.min(r - 1, Math.max(0, (v1 * r) | 0));
+  const q2 = Math.min(r - 1, Math.max(0, (v2 * r) | 0));
+  const q3 = Math.min(r - 1, Math.max(0, (v3 * r) | 0));
+  const q4 = Math.min(r - 1, Math.max(0, (v4 * r) | 0));
+  const q5 = Math.min(r - 1, Math.max(0, (v5 * r) | 0));
+  return (((((q0 * r + q1) * r + q2) * r + q3) * r + q4) * r + q5) | 0;
 }
 
 /**
@@ -41,24 +41,24 @@ export function lutKey(v0, v1, v2, v3, v4, v5) {
  * @returns {number} index into charModel.chars
  */
 function _findNearestIndex(v, charModel) {
-  const { vectors } = charModel
-  let best = 0
-  let bestD = Infinity
+  const { vectors } = charModel;
+  let best = 0;
+  let bestD = Infinity;
   for (let i = 0; i < vectors.length; i++) {
-    const cv = vectors[i]
-    const d0 = v[0] - cv[0]
-    const d1 = v[1] - cv[1]
-    const d2 = v[2] - cv[2]
-    const d3 = v[3] - cv[3]
-    const d4 = v[4] - cv[4]
-    const d5 = v[5] - cv[5]
-    const d = d0 * d0 + d1 * d1 + d2 * d2 + d3 * d3 + d4 * d4 + d5 * d5
+    const cv = vectors[i];
+    const d0 = v[0] - cv[0];
+    const d1 = v[1] - cv[1];
+    const d2 = v[2] - cv[2];
+    const d3 = v[3] - cv[3];
+    const d4 = v[4] - cv[4];
+    const d5 = v[5] - cv[5];
+    const d = d0 * d0 + d1 * d1 + d2 * d2 + d3 * d3 + d4 * d4 + d5 * d5;
     if (d < bestD) {
-      bestD = d
-      best = i
+      bestD = d;
+      best = i;
     }
   }
-  return best
+  return best;
 }
 
 /**
@@ -71,20 +71,20 @@ function _findNearestIndex(v, charModel) {
  * @returns {Uint8Array} lut where lut[key] = index into charModel.chars
  */
 export function buildLUT(charModel) {
-  const lut = new Uint8Array(LUT_SIZE)
-  const v = new Float32Array(6)
-  const r = RANGE
-  const r1 = r - 1
+  const lut = new Uint8Array(LUT_SIZE);
+  const v = new Float32Array(6);
+  const r = RANGE;
+  const r1 = r - 1;
 
   for (let key = 0; key < LUT_SIZE; key++) {
-    let k = key
+    let k = key;
     for (let d = 5; d >= 0; d--) {
-      v[d] = (k % r) / r1
-      k = (k / r) | 0
+      v[d] = (k % r) / r1;
+      k = (k / r) | 0;
     }
-    lut[key] = _findNearestIndex(v, charModel)
+    lut[key] = _findNearestIndex(v, charModel);
   }
-  return lut
+  return lut;
 }
 
 /**
@@ -98,45 +98,45 @@ export function buildLUT(charModel) {
  */
 export function buildLUTAsync(charModel, onProgress) {
   return new Promise((resolve) => {
-    const lut = new Uint8Array(LUT_SIZE)
-    const v = new Float32Array(6)
-    const r = RANGE
-    const r1 = r - 1
+    const lut = new Uint8Array(LUT_SIZE);
+    const v = new Float32Array(6);
+    const r = RANGE;
+    const r1 = r - 1;
 
     // ~200 K entries per chunk ≈ 25–50 ms per idle slice; 9 total yields
-    const CHUNK = 200_000
-    let cursor = 0
+    const CHUNK = 200_000;
+    let cursor = 0;
 
     function processChunk() {
-      const end = Math.min(LUT_SIZE, cursor + CHUNK)
+      const end = Math.min(LUT_SIZE, cursor + CHUNK);
       for (; cursor < end; cursor++) {
-        let k = cursor
+        let k = cursor;
         for (let d = 5; d >= 0; d--) {
-          v[d] = (k % r) / r1
-          k = (k / r) | 0
+          v[d] = (k % r) / r1;
+          k = (k / r) | 0;
         }
-        lut[cursor] = _findNearestIndex(v, charModel)
+        lut[cursor] = _findNearestIndex(v, charModel);
       }
 
-      if (onProgress) onProgress(cursor / LUT_SIZE)
+      if (onProgress) onProgress(cursor / LUT_SIZE);
 
       if (cursor < LUT_SIZE) {
-        schedule()
+        schedule();
       } else {
-        resolve(lut)
+        resolve(lut);
       }
     }
 
     function schedule() {
       if (typeof requestIdleCallback !== 'undefined') {
-        requestIdleCallback(processChunk, { timeout: 500 })
+        requestIdleCallback(processChunk, { timeout: 500 });
       } else {
-        setTimeout(processChunk, 0)
+        setTimeout(processChunk, 0);
       }
     }
 
-    schedule()
-  })
+    schedule();
+  });
 }
 
 /**
@@ -149,6 +149,6 @@ export function buildLUTAsync(charModel, onProgress) {
  * @returns {string} single character
  */
 export function lookupChar(lut, v, chars) {
-  const key = lutKey(v[0], v[1], v[2], v[3], v[4], v[5])
-  return chars[lut[key]]
+  const key = lutKey(v[0], v[1], v[2], v[3], v[4], v[5]);
+  return chars[lut[key]];
 }

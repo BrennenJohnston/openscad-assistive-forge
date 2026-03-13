@@ -271,7 +271,8 @@ export function getAppPrefKey(feature) {
  * localStorage key for the user's saved HFM contrast (edge) scale.
  * Value is a decimal string matching the _HFM_CONTRAST_RANGE in main.js.
  */
-export const STORAGE_KEY_HFM_CONTRAST_SCALE = 'openscad-forge-hfm-contrast-scale';
+export const STORAGE_KEY_HFM_CONTRAST_SCALE =
+  'openscad-forge-hfm-contrast-scale';
 
 /**
  * localStorage key for the user's saved HFM font scale.

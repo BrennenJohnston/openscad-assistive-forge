@@ -103,16 +103,16 @@ const ERROR_PATTERNS = [
 
   // Library errors
   {
-    pattern: /use\s+<([^>]+)>/i,
+    pattern: /use\s+(?:<([^>]+)>|"([^"]+)")/i,
     title: 'Library Required',
-    explanation: (match) => `This model needs the "${match[1]}" library.`,
+    explanation: (match) => `This model needs the "${match[1] || match[2]}" library.`,
     suggestion: 'Enable the required library in the 📚 Libraries panel.',
   },
   {
-    pattern: /include\s+<([^>]+)>/i,
+    pattern: /include\s+(?:<([^>]+)>|"([^"]+)")/i,
     title: 'Missing Include',
     explanation: (match) =>
-      `The model includes "${match[1]}" which wasn't found.`,
+      `The model includes "${match[1] || match[2]}" which wasn't found.`,
     suggestion:
       'This file might be from an external library. Check the Libraries panel.',
   },

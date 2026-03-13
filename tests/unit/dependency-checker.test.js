@@ -137,6 +137,42 @@ describe('checkDependencies', () => {
     expect(hasMissing).toBe(true);
     expect(missing.imports).toContain('logo.svg');
   });
+
+  it('does not report missing when file is provided via fileParamNames', () => {
+    const deps = { includes: [], uses: [], imports: ['overlay.svg'] };
+    const { hasMissing } = checkDependencies(deps, [], {
+      fileParamNames: ['overlay.svg'],
+    });
+    expect(hasMissing).toBe(false);
+  });
+
+  it('exempts file param names from include checks', () => {
+    const deps = { includes: ['data.txt'], uses: [], imports: [] };
+    const { hasMissing } = checkDependencies(deps, [], {
+      fileParamNames: ['data.txt'],
+    });
+    expect(hasMissing).toBe(false);
+  });
+
+  it('matches file param names case-insensitively', () => {
+    const deps = { includes: [], uses: [], imports: ['Logo.SVG'] };
+    const { hasMissing } = checkDependencies(deps, [], {
+      fileParamNames: ['logo.svg'],
+    });
+    expect(hasMissing).toBe(false);
+  });
+
+  it('combines uploaded files and file params for checks', () => {
+    const deps = {
+      includes: ['helper.scad'],
+      uses: [],
+      imports: ['overlay.svg'],
+    };
+    const { hasMissing } = checkDependencies(deps, ['helper.scad'], {
+      fileParamNames: ['overlay.svg'],
+    });
+    expect(hasMissing).toBe(false);
+  });
 });
 
 // ---------------------------------------------------------------------------

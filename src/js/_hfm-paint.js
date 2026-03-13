@@ -9,7 +9,7 @@
  * @returns {boolean}
  */
 function _isAmberTheme() {
-  return document.documentElement.getAttribute('data-theme') === 'light'
+  return document.documentElement.getAttribute('data-theme') === 'light';
 }
 
 /**
@@ -25,12 +25,12 @@ function _isAmberTheme() {
  * @returns {string} CSS colour string
  */
 function _phosphorColor(lum, amber) {
-  const l = Math.max(0.08, lum) // floor prevents invisible dark chars
+  const l = Math.max(0.08, lum); // floor prevents invisible dark chars
   if (amber) {
     // #FFB000 at full: rgb(255, 176, 0)
-    return `rgb(${Math.round(l * 255)},${Math.round(l * 176)},0)`
+    return `rgb(${Math.round(l * 255)},${Math.round(l * 176)},0)`;
   }
-  return `rgb(0,${Math.round(l * 255)},0)`
+  return `rgb(0,${Math.round(l * 255)},0)`;
 }
 
 /**
@@ -51,8 +51,8 @@ function _phosphorColor(lum, amber) {
  * }}
  */
 export function createOverlay(container) {
-  const canvas = document.createElement('canvas')
-  canvas.setAttribute('aria-hidden', 'true')
+  const canvas = document.createElement('canvas');
+  canvas.setAttribute('aria-hidden', 'true');
   canvas.style.cssText = `
     position: absolute;
     inset: 0;
@@ -64,24 +64,24 @@ export function createOverlay(container) {
     pointer-events: none;
     display: none;
     z-index: 5;
-  `
-  container.appendChild(canvas)
-  const ctx = canvas.getContext('2d')
+  `;
+  container.appendChild(canvas);
+  const ctx = canvas.getContext('2d');
 
-  let persistCanvas = null
-  let persistCtx = null
+  let persistCanvas = null;
+  let persistCtx = null;
   try {
-    persistCanvas = document.createElement('canvas')
-    persistCtx = persistCanvas.getContext('2d')
+    persistCanvas = document.createElement('canvas');
+    persistCtx = persistCanvas.getContext('2d');
     if (!persistCtx) {
-      persistCanvas = null
+      persistCanvas = null;
     }
   } catch (_) {
-    persistCanvas = null
-    persistCtx = null
+    persistCanvas = null;
+    persistCtx = null;
   }
 
-  return { canvas, ctx, persistCanvas, persistCtx }
+  return { canvas, ctx, persistCanvas, persistCtx };
 }
 
 /**
@@ -94,11 +94,11 @@ export function createOverlay(container) {
  * @param {HTMLCanvasElement|null} [persistCanvas]
  */
 export function resizeOverlay(canvas, width, height, persistCanvas) {
-  canvas.width = width
-  canvas.height = height
+  canvas.width = width;
+  canvas.height = height;
   if (persistCanvas) {
-    persistCanvas.width = width
-    persistCanvas.height = height
+    persistCanvas.width = width;
+    persistCanvas.height = height;
   }
 }
 
@@ -117,29 +117,33 @@ export function resizeOverlay(canvas, width, height, persistCanvas) {
  * @param {boolean} [amber] - true for amber phosphor (defaults to theme detection)
  * @returns {string[]} flat array [row * cols + col] of css colour strings
  */
-export const QUANT_LEVELS = 32
-const _QUANT_STEP = 1 / QUANT_LEVELS
+export const QUANT_LEVELS = 32;
+const _QUANT_STEP = 1 / QUANT_LEVELS;
 
 export function sampleColors(imgData, imgW, cellW, cellH, cols, rows, amber) {
-  const useAmber = amber !== undefined ? amber : _isAmberTheme()
-  const colors = new Array(rows * cols)
+  const useAmber = amber !== undefined ? amber : _isAmberTheme();
+  const colors = new Array(rows * cols);
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
-      const px = Math.min(imgW - 1, Math.round((c + 0.5) * cellW))
+      const px = Math.min(imgW - 1, Math.round((c + 0.5) * cellW));
       const py = Math.min(
         // imgH is implied by imgData.length / (imgW * 4)
-        (imgData.length / (imgW * 4)) - 1,
+        imgData.length / (imgW * 4) - 1,
         Math.round((r + 0.5) * cellH)
-      )
-      const idx = (py * imgW + px) * 4
+      );
+      const idx = (py * imgW + px) * 4;
       // perceived luminance (ITU-R BT.709)
-      const lum = (0.2126 * imgData[idx] + 0.7152 * imgData[idx + 1] + 0.0722 * imgData[idx + 2]) / 255
+      const lum =
+        (0.2126 * imgData[idx] +
+          0.7152 * imgData[idx + 1] +
+          0.0722 * imgData[idx + 2]) /
+        255;
       // Quantize to QUANT_LEVELS discrete levels to collapse ~5K unique colors to ≤32
-      const qLum = Math.round(lum / _QUANT_STEP) * _QUANT_STEP
-      colors[r * cols + c] = _phosphorColor(qLum, useAmber)
+      const qLum = Math.round(lum / _QUANT_STEP) * _QUANT_STEP;
+      colors[r * cols + c] = _phosphorColor(qLum, useAmber);
     }
   }
-  return colors
+  return colors;
 }
 
 /**
@@ -170,44 +174,57 @@ export function sampleColors(imgData, imgW, cellW, cellH, cols, rows, amber) {
  * @param {number} [persistFade=0] - blending factor 0 (no trail) → 1 (never fades)
  */
 export function paintFrame(
-  ctx, chars, colors, cols, rows, charW, charH, fontStr,
-  persistCanvas, persistCtx, persistFade
+  ctx,
+  chars,
+  colors,
+  cols,
+  rows,
+  charW,
+  charH,
+  fontStr,
+  persistCanvas,
+  persistCtx,
+  persistFade
 ) {
-  const fade = (persistCanvas && persistCtx && typeof persistFade === 'number')
-    ? Math.max(0, Math.min(1, persistFade))
-    : 0
+  const fade =
+    persistCanvas && persistCtx && typeof persistFade === 'number'
+      ? Math.max(0, Math.min(1, persistFade))
+      : 0;
 
   // 1. Draw new frame
-  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height)
-  ctx.font = fontStr
-  ctx.textBaseline = 'top'
+  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+  ctx.font = fontStr;
+  ctx.textBaseline = 'top';
 
   // Group cells by color to minimize fillStyle switches (≤QUANT_LEVELS changes vs ~5K)
-  const colorGroups = new Map()
+  const colorGroups = new Map();
   for (let i = 0; i < chars.length; i++) {
-    const color = colors[i]
-    let group = colorGroups.get(color)
-    if (!group) { group = []; colorGroups.set(color, group) }
-    group.push(i)
+    const color = colors[i];
+    let group = colorGroups.get(color);
+    if (!group) {
+      group = [];
+      colorGroups.set(color, group);
+    }
+    group.push(i);
   }
   for (const [color, indices] of colorGroups) {
-    ctx.fillStyle = color
+    ctx.fillStyle = color;
     for (const i of indices) {
-      const col = i % cols
-      const row = (i / cols) | 0
-      ctx.fillText(chars[i], col * charW, row * charH)
+      const col = i % cols;
+      const row = (i / cols) | 0;
+      ctx.fillText(chars[i], col * charW, row * charH);
     }
   }
 
   if (fade > 0) {
     // 2. Composite previous persistence frame on top at fade opacity
-    const prevAlpha = ctx.globalAlpha
-    ctx.globalAlpha = fade
-    ctx.drawImage(persistCanvas, 0, 0)
-    ctx.globalAlpha = prevAlpha
+    const prevAlpha = ctx.globalAlpha;
+    ctx.globalAlpha = fade;
+    ctx.drawImage(persistCanvas, 0, 0);
+    ctx.globalAlpha = prevAlpha;
 
     // 3. Copy combined result back to persistence canvas for next frame
-    persistCtx.clearRect(0, 0, persistCanvas.width, persistCanvas.height)
-    persistCtx.drawImage(ctx.canvas, 0, 0)
+    persistCtx.clearRect(0, 0, persistCanvas.width, persistCanvas.height);
+    persistCtx.drawImage(ctx.canvas, 0, 0);
   }
 }

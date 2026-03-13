@@ -126,6 +126,40 @@ color_passthrough: { ..., killSwitch: true }
 
 ---
 
+## S-013: WASM Image Support (`surface()` with PNG)
+
+### Layer 2 — Binary File Mount (Resolved)
+
+The `mountFiles()` function in `openscad-worker.js` previously passed file content
+through `TextDecoder`, corrupting binary files like PNG images. This was fixed by
+detecting binary content (via BOM/magic-byte heuristic) and writing raw
+`Uint8Array` data to the WASM filesystem. Unit tests confirm binary round-trip
+fidelity.
+
+### Layer 1 — `surface()` Image Support (WASM Build Dependent)
+
+OpenSCAD's `surface(file = "image.png")` command requires `libpng` to be compiled
+into the binary. Whether the current WASM build (`OpenSCAD-2025.03.25.wasm24456`)
+includes `libpng` is **unverified at runtime**.
+
+**Manual verification steps:**
+
+1. Start the dev server (`pixi run dev` or `npm run dev`)
+2. Upload `tests/fixtures/surface-image-test.scad` along with companion files:
+   - `tests/fixtures/test-heightmap.dat` (text heightmap — should always work)
+   - `tests/fixtures/test-image.png` (image heightmap — requires libpng)
+3. Set the `show_mode` parameter to `"png"` or `"both"`
+4. Check the browser console for errors:
+   - **Success:** A 3D surface renders from the PNG data
+   - **Failure:** `WARNING: Can't open file 'test-image.png'` or silent empty geometry
+
+**Known limitation:** If the WASM build lacks `libpng`, `surface()` with image
+files will silently produce empty geometry. Users should use `.dat` text heightmaps
+as a reliable alternative. This is a compile-time constraint of the upstream
+OpenSCAD WASM distribution, not a bug in this application.
+
+---
+
 ## References
 
 - [OFF Format Specification](https://en.wikipedia.org/wiki/OFF_(file_format))

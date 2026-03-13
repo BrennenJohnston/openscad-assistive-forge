@@ -39,14 +39,8 @@ const HIDDEN_CLASS = 'ui-mode-hidden';
 const PANEL_REGISTRY = [
   {
     id: 'consoleOutput',
-    label: 'OpenSCAD Output',
+    label: 'Console',
     selector: '#consolePanel',
-    defaultHiddenInBasic: true,
-  },
-  {
-    id: 'errorLog',
-    label: 'Errors and Warnings',
-    selector: '#errorLogPanel',
     defaultHiddenInBasic: true,
   },
   // fileActions panel removed — now in File toolbar menu
@@ -163,7 +157,7 @@ export class UIModeController {
    */
   constructor(options = {}) {
     /** @type {UIMode} */
-    this.currentMode = 'advanced';
+    this.currentMode = 'basic';
 
     /** @type {Function} */
     this.onModeChange = options.onModeChange || (() => {});

@@ -9,6 +9,13 @@ import { test, expect } from '@playwright/test'
 import path from 'path'
 import fs from 'node:fs'
 import { fileURLToPath } from 'url'
+import {
+  selectPreset,
+  expandPresetControls,
+  getSelectedPresetLabel,
+  getPresetOptions,
+  getSelectedPresetValue,
+} from './helpers/preset-helpers.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -100,17 +107,7 @@ async function uploadZipAndWait(page, diag) {
   }
 }
 
-/**
- * Expand the Presets <details> panel so #presetSelect etc. become visible.
- * On desktop the panel is collapsed by default.
- */
-async function expandPresetControls(page) {
-  await page.evaluate(() => {
-    const details = document.getElementById('presetControls')
-    if (details && !details.open) details.open = true
-  })
-  await page.waitForTimeout(300)
-}
+// expandPresetControls imported from ./helpers/preset-helpers.js
 
 test.describe('Stakeholder Acceptance Tests - Ken\'s Keyguard ZIP', () => {
   test.describe.configure({ timeout: 150_000 }) // WASM init may need ~120s
@@ -170,9 +167,7 @@ test.describe('Stakeholder Acceptance Tests - Ken\'s Keyguard ZIP', () => {
 
     // Verify JSON presets auto-imported (expand the Presets panel first)
     await expandPresetControls(page)
-    const presetSelect = page.locator('#presetSelect')
-    await presetSelect.waitFor({ state: 'visible', timeout: 5000 })
-    const options = await presetSelect.locator('option').allTextContents()
+    const options = await getPresetOptions(page)
     const nonPlaceholder = options.filter(o =>
       o.trim() !== '' &&
       !o.toLowerCase().includes('select') &&
@@ -189,11 +184,8 @@ test.describe('Stakeholder Acceptance Tests - Ken\'s Keyguard ZIP', () => {
     await uploadZipAndWait(page, diag)
     await expandPresetControls(page)
 
-    const presetSelect = page.locator('#presetSelect')
-    await presetSelect.waitFor({ state: 'visible', timeout: 5000 })
-
     // "design default values" is FIRST non-placeholder option
-    const options = await presetSelect.locator('option').allTextContents()
+    const options = await getPresetOptions(page)
     const nonEmpty = options.filter(o =>
       o.trim() !== '' &&
       !o.toLowerCase().includes('select') &&
@@ -202,18 +194,9 @@ test.describe('Stakeholder Acceptance Tests - Ken\'s Keyguard ZIP', () => {
     expect(nonEmpty[0].toLowerCase()).toContain('design default')
 
     // Select design defaults
-    const allOptions = await presetSelect.locator('option').all()
-    let designDefaultValue = null
-    for (const opt of allOptions) {
-      const text = await opt.textContent()
-      if (text.toLowerCase().includes('design default')) {
-        designDefaultValue = await opt.getAttribute('value')
-        break
-      }
-    }
-
-    if (designDefaultValue) {
-      await presetSelect.selectOption(designDefaultValue)
+    const designDefault = nonEmpty.find(o => o.toLowerCase().includes('design default'))
+    if (designDefault) {
+      await selectPreset(page, designDefault)
       await page.waitForTimeout(500)
 
       // Save and Delete buttons should be disabled/blocked
@@ -233,9 +216,6 @@ test.describe('Stakeholder Acceptance Tests - Ken\'s Keyguard ZIP', () => {
   test('PHASE 4: Preset Selection - partial loading preserves other params', async ({ page }) => {
     await uploadZipAndWait(page, diag)
     await expandPresetControls(page)
-
-    const presetSelect = page.locator('#presetSelect')
-    await presetSelect.waitFor({ state: 'visible', timeout: 5000 })
 
     // Capture initial parameter state (snapshot of first few values)
     const getParamSnapshot = async () => {
@@ -258,18 +238,13 @@ test.describe('Stakeholder Acceptance Tests - Ken\'s Keyguard ZIP', () => {
     console.log(`[Phase 4] Before preset load:`, JSON.stringify(beforeState).substring(0, 500))
 
     // Find and select a partial preset (the one with only 8 params)
-    const options = await presetSelect.locator('option').all()
-    let targetPresetValue = null
-    for (const opt of options) {
-      const text = await opt.textContent()
-      if (text.includes('LTROP') || text.includes('TouchChat')) {
-        targetPresetValue = await opt.getAttribute('value')
-        break
-      }
-    }
+    const allOptions = await getPresetOptions(page)
+    const targetPresetName = allOptions.find(text =>
+      text.includes('LTROP') || text.includes('TouchChat')
+    )
 
-    if (targetPresetValue) {
-      await presetSelect.selectOption(targetPresetValue)
+    if (targetPresetName) {
+      await selectPreset(page, targetPresetName)
       await page.waitForTimeout(500)
 
       // Accept any preset-compatibility warning ("Apply Anyway")
@@ -294,11 +269,11 @@ test.describe('Stakeholder Acceptance Tests - Ken\'s Keyguard ZIP', () => {
       console.log(`[Phase 4] Changed: ${changedCount}, Retained: ${retainedCount}`)
       // A partial preset only modifies a subset of params; the first 20 visible
       // params may not overlap with the preset's scope.  Verify at least that
-      // the parameter snapshot survived the load (retained > 0) and the dropdown
-      // value actually switched (confirming the preset was applied).
+      // the parameter snapshot survived the load (retained > 0) and the selection
+      // label confirms the preset was applied.
       expect(retainedCount).toBeGreaterThan(0)
-      const selectedValue = await presetSelect.inputValue()
-      expect(selectedValue).toBe(targetPresetValue)
+      const selectedLabel = await getSelectedPresetLabel(page)
+      expect(selectedLabel).toContain(targetPresetName)
     } else {
       console.log('[Phase 4] Partial preset not found in dropdown, skipping assertion')
     }
@@ -402,13 +377,13 @@ test.describe('Stakeholder Acceptance Tests - Ken\'s Keyguard ZIP', () => {
       expect(titleText).toContain('Import / Export')
     }
 
-    // Import Presets button visible
-    const importBtn = page.locator('button:has-text("Import Presets")')
+    // Import Designs button visible (terminology updated from "Presets" to "Designs")
+    const importBtn = page.locator('button:has-text("Import Designs")')
     const importVisible = await importBtn.isVisible().catch(() => false)
     console.log(`[Phase 7] Import button visible: ${importVisible}`)
 
-    // Export All Presets button visible
-    const exportBtn = page.locator('button:has-text("Export All Presets")')
+    // Export All Designs button visible
+    const exportBtn = page.locator('button:has-text("Export All Designs")')
     const exportVisible = await exportBtn.isVisible().catch(() => false)
     console.log(`[Phase 7] Export button visible: ${exportVisible}`)
 
@@ -473,26 +448,21 @@ test.describe('Stakeholder Acceptance Tests - Ken\'s Keyguard ZIP', () => {
     await expandPresetControls(page)
 
     // Step 1: Select a preset
-    const presetSelect = page.locator('#presetSelect')
-    await presetSelect.waitFor({ state: 'visible', timeout: 5000 })
+    const allOptions = await getPresetOptions(page)
+    let targetName = allOptions.find(text =>
+      text.includes('LTROP') || text.includes('TouchChat') || text.includes('Fintie')
+    )
 
-    const options = await presetSelect.locator('option').all()
-    let targetValue = null
-    for (const opt of options) {
-      const text = await opt.textContent()
-      if (text.includes('LTROP') || text.includes('TouchChat') || text.includes('Fintie')) {
-        targetValue = await opt.getAttribute('value')
-        break
-      }
+    if (!targetName) {
+      // Fallback: pick the third option (skip placeholder + design defaults)
+      const nonPlaceholder = allOptions.filter(o =>
+        o.trim() !== '' && !o.toLowerCase().includes('select') && !o.toLowerCase().includes('choose')
+      )
+      if (nonPlaceholder.length > 1) targetName = nonPlaceholder[1]
     }
 
-    if (!targetValue && options.length > 2) {
-      // Fallback: pick the second non-placeholder option
-      targetValue = await options[2].getAttribute('value')
-    }
-
-    if (targetValue) {
-      await presetSelect.selectOption(targetValue)
+    if (targetName) {
+      await selectPreset(page, targetName)
       await page.waitForTimeout(500)
       console.log('[Phase 10] Preset selected')
 

@@ -18,11 +18,11 @@ import { describe, it, expect } from 'vitest';
 function generateMissingFileWarnings(scadContent, fileExistsFn) {
   const warnings = [];
   const seen = new Set();
-  const directiveRegex = /(?:include|use)\s*<([^>]+)>/g;
+  const directiveRegex = /(?:include|use)\s*(?:<([^>]+)>|"([^"]+)")/g;
   let match;
 
   while ((match = directiveRegex.exec(scadContent)) !== null) {
-    const refFile = match[1].trim();
+    const refFile = (match[1] || match[2]).trim();
     if (!refFile || seen.has(refFile)) continue;
     seen.add(refFile);
 
@@ -183,6 +183,46 @@ describe('generateMissingFileWarnings — fileExistsFn integration pattern', () 
     const scad = 'use <MCAD/bearings.scad>';
     const warnings = generateMissingFileWarnings(scad, existsFn);
     expect(warnings).toEqual([]);
+  });
+});
+
+describe('generateMissingFileWarnings — quoted-path directives', () => {
+  const noFilesExist = () => false;
+
+  it('extracts include "file.scad" directive', () => {
+    const scad = 'include "helpers.scad"\ncube(10);';
+    const warnings = generateMissingFileWarnings(scad, noFilesExist);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("'helpers.scad'");
+  });
+
+  it('extracts use "file.scad" directive', () => {
+    const scad = 'use "MCAD/bearings.scad"\ncylinder(r=5, h=10);';
+    const warnings = generateMissingFileWarnings(scad, noFilesExist);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("'MCAD/bearings.scad'");
+  });
+
+  it('handles mixed angle-bracket and quoted-path directives', () => {
+    const scad = [
+      'include <config.txt>',
+      'use "lib/utils.scad"',
+      'include "openings.txt"',
+      'use <MCAD/gears.scad>',
+    ].join('\n');
+    const warnings = generateMissingFileWarnings(scad, noFilesExist);
+    expect(warnings).toHaveLength(4);
+    expect(warnings[0]).toContain("'config.txt'");
+    expect(warnings[1]).toContain("'lib/utils.scad'");
+    expect(warnings[2]).toContain("'openings.txt'");
+    expect(warnings[3]).toContain("'MCAD/gears.scad'");
+  });
+
+  it('handles quoted path with subdirectory', () => {
+    const scad = 'include "subdir/nested/data.txt"';
+    const warnings = generateMissingFileWarnings(scad, noFilesExist);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("'subdir/nested/data.txt'");
   });
 });
 

@@ -850,11 +850,11 @@ async function mountFiles(files, options = {}) {
 function generateMissingFileWarnings(scadContent, fileExistsFn) {
   const warnings = [];
   const seen = new Set();
-  const directiveRegex = /(?:include|use)\s*<([^>]+)>/g;
+  const directiveRegex = /(?:include|use)\s*(?:<([^>]+)>|"([^"]+)")/g;
   let match;
 
   while ((match = directiveRegex.exec(scadContent)) !== null) {
-    const refFile = match[1].trim();
+    const refFile = (match[1] || match[2]).trim();
     if (!refFile || seen.has(refFile)) continue;
     seen.add(refFile);
 

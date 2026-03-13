@@ -77,11 +77,11 @@ export function detectLibraries(scadContent) {
   const detected = new Set();
 
   // Match include/use statements
-  const includePattern = /(?:include|use)\s*<([^>]+)>/g;
+  const includePattern = /(?:include|use)\s*(?:<([^>]+)>|"([^"]+)")/g;
   let match;
 
   while ((match = includePattern.exec(scadContent)) !== null) {
-    const includePath = match[1];
+    const includePath = match[1] || match[2];
 
     // Check which library it belongs to
     for (const libId of Object.keys(LIBRARY_DEFINITIONS)) {

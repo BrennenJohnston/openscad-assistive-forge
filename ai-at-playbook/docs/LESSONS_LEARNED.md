@@ -218,6 +218,79 @@ rather than relying on AI self-discipline.
 See [QUEUE_EXECUTOR_WORKFLOW.md](QUEUE_EXECUTOR_WORKFLOW.md) for the full
 methodology and templates.
 
+### 9. Recycled build-plan execution prompt (validated success)
+
+A single, reusable prompt pasted into each fresh AI chat to execute exactly
+one phase of a multi-session build plan. Unlike the queue executor pattern
+(#8), which was designed for batched bugfix queues with persona rotation,
+this pattern targets structured remediation and build plans that carry their
+own operating rules, hallucination safeguards, checklists, and fallback
+gates inside a single authoritative plan document.
+
+The pattern works because the prompt is **recycled verbatim** across every
+phase session — only the plan file's internal state changes. The AI reads
+the plan, finds the next pending phase, executes the three-gate checklist
+protocol, implements, validates, updates the plan, commits, and stops. No
+human prompt engineering is needed between phases.
+
+**Evidence:** `parity_remediation_path_c` — all phases executed to
+completion using an identical prompt recycled across sessions. Zero scope
+escape incidents, zero prompt drift between phases.
+
+**Key structural elements of the successful prompt:**
+
+1. **Plan-first discipline** — "Read the plan file in full before doing
+   anything else." The plan is the single source of truth, not the prompt.
+2. **Phase identification from state** — The AI inspects frontmatter
+   `todos` to find the next `pending` phase. No human needs to say "do
+   phase 3."
+3. **Three-gate checklist execution** — Session-start, phase-intake, and
+   phase-completion checklists are all named in the prompt and defined in
+   the plan. The prompt enforces their execution order.
+4. **Operating rules by reference** — The prompt says "follow the operating
+   rules in the plan" rather than restating them. This keeps the prompt
+   short and the plan authoritative.
+5. **Hallucination safeguards by reference** — Same pattern: the prompt
+   references the plan's safeguards section rather than duplicating them.
+6. **Fallback gate awareness** — The prompt tells the AI to honor each
+   phase's documented fallback gate, enabling graceful degradation without
+   human intervention.
+7. **Environment context block** — Workspace path, OS, environment tool,
+   git authorship rules, frozen layers, and test baseline are stated once
+   in the prompt so the AI doesn't guess.
+8. **Hard stop enforcement** — "Do not begin the next phase. Do not suggest
+   continuing." Prevents session-boundary violations.
+9. **Success definition** — The prompt ends with an explicit "what success
+   looks like" paragraph so the AI can self-evaluate.
+
+**Reference prompt (verbatim from the validated run):**
+
+> You are implementing exactly one phase of a structured, multi-session
+> remediation plan. The full plan, including operating rules, hallucination
+> safeguards, checklists, phase specifications, file references, and
+> fallback gates, lives in a single authoritative document:
+> `[path to plan file]`
+>
+> Your instructions:
+> 1. Read the plan file in full before doing anything else.
+> 2. Identify the next pending phase from the `todos` frontmatter.
+> 3. Execute all three checklists in order (session-start, phase-intake,
+>    phase-completion).
+> 4. Follow the operating rules exactly.
+> 5. Respect the hallucination safeguards.
+> 6. Honor the phase's fallback gate.
+> 7. After validation passes: update the plan, commit, stop.
+
+**Why it works:** The prompt is a thin orchestration layer — it tells the
+AI *how to read and follow the plan*, not what to build. All specifics live
+in the plan file, which means the prompt never needs editing between
+phases. This eliminates prompt drift, reduces human effort per phase to
+"paste and go," and keeps the plan as the single source of truth.
+
+**Generic template:** See
+`templates/build-plan-executor-prompt.md` for a project-agnostic version
+that can be adapted for any multi-session build plan.
+
 ## Course-correction strategies that worked
 
 ### 1. Validated re-plans

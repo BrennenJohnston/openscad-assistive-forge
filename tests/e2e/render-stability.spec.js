@@ -14,6 +14,11 @@ import path from 'path';
 import fs from 'fs';
 import JSZip from 'jszip';
 import { fileURLToPath } from 'url';
+import {
+  selectPreset as selectPresetHelper,
+  selectPresetByValue,
+  getPresetOptions,
+} from './helpers/preset-helpers.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -115,17 +120,7 @@ async function waitForPreviewIdle(page, { timeout = 120_000 } = {}) {
   );
 }
 
-/**
- * Select a preset by name via the preset dropdown.
- */
-async function selectPreset(page, presetName) {
-  const presetSelect = page.locator('#presetSelect');
-  if (!(await presetSelect.isVisible())) return false;
-  const option = presetSelect.locator(`option:has-text("${presetName}")`);
-  if ((await option.count()) === 0) return false;
-  await presetSelect.selectOption({ label: presetName });
-  return true;
-}
+// selectPreset imported from ./helpers/preset-helpers.js as selectPresetHelper
 
 // ─── Test Suite 1: Preset Cycling ─────────────────────────────────────────────
 
@@ -136,25 +131,22 @@ test.describe('Render Stability — Preset Cycling (BUG-A baseline)', () => {
     await loadKeyguardDemo(page);
 
     // Get the list of available presets
-    const presetSelect = page.locator('#presetSelect');
-    const presetCount = await presetSelect.locator('option').count();
-    if (presetCount < 2) {
-      // Not enough presets to test cycling; skip gracefully
+    const allPresets = await getPresetOptions(page);
+    const nonEmpty = allPresets.filter(o => o.trim() !== '');
+    if (nonEmpty.length < 2) {
       test.skip();
       return;
     }
 
-    const numPresetsToTest = Math.min(presetCount, 5);
+    const numPresetsToTest = Math.min(nonEmpty.length, 5);
     const results = [];
 
     for (let i = 0; i < numPresetsToTest; i++) {
-      const option = presetSelect.locator('option').nth(i);
-      const presetValue = await option.getAttribute('value');
-      if (!presetValue || presetValue === '') continue;
+      const presetName = nonEmpty[i];
 
       // Select the preset
-      await presetSelect.selectOption({ index: i });
-      console.log(`[PresetCycle] Selecting preset ${i + 1}/${numPresetsToTest}: ${presetValue}`);
+      await selectPresetHelper(page, presetName);
+      console.log(`[PresetCycle] Selecting preset ${i + 1}/${numPresetsToTest}: ${presetName}`);
 
       // Wait for the render to complete or fail
       try {
@@ -166,8 +158,8 @@ test.describe('Render Stability — Preset Cycling (BUG-A baseline)', () => {
       // Record whether a mesh is present
       const meshPresent = await hasMesh(page);
       const stats = await getPreviewStats(page);
-      results.push({ preset: presetValue, meshPresent, triangles: stats?.triangles ?? null });
-      console.log(`[PresetCycle] Preset ${presetValue}: mesh=${meshPresent}, triangles=${stats?.triangles ?? 'unknown'}`);
+      results.push({ preset: presetName, meshPresent, triangles: stats?.triangles ?? null });
+      console.log(`[PresetCycle] Preset ${presetName}: mesh=${meshPresent}, triangles=${stats?.triangles ?? 'unknown'}`);
     }
 
     // Baseline assertion: at least SOME renders should have produced a mesh.

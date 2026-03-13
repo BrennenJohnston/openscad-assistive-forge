@@ -258,6 +258,16 @@ Track these to evaluate queue effectiveness:
 6. **Plan file drift** -- If the codebase changes between phases (e.g., a
    hotfix lands), re-audit affected phases before continuing.
 
+## Related: Build plan executor prompt
+
+For structured build/remediation plans that carry their own operating rules,
+hallucination safeguards, and fallback gates, see the build plan executor
+template at `templates/build-plan-executor-prompt.md`. That template is a
+sibling pattern validated in 2026-03 — it uses the same recycled-prompt
+discipline and plan-as-state-machine approach but is optimized for phased
+build plans rather than flat bugfix queues. See `docs/LESSONS_LEARNED.md`
+section #9 for the full case study.
+
 ### Project-specific configuration
 
 - **Plan file location:** `[CONFIGURE: e.g., .cursor/plans/]`

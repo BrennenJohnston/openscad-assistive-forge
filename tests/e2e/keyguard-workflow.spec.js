@@ -9,6 +9,11 @@ import path from 'path';
 import fs from 'fs';
 import JSZip from 'jszip';
 import { fileURLToPath } from 'url';
+import {
+  selectPreset,
+  selectPresetByValue,
+  getPresetOptions,
+} from './helpers/preset-helpers.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -416,29 +421,19 @@ test.describe('Parameter Switching Stability', () => {
     // Wait for parameters and initial preview to settle
     await expect(page.locator('.param-control').first()).toBeVisible({ timeout: 20000 });
 
-    const presetSelect = page.locator('#presetSelect');
-    const hasPresets = await presetSelect.isVisible({ timeout: 5000 }).catch(() => false);
+    const allPresets = await getPresetOptions(page);
+    const nonEmpty = allPresets.filter(o => o.trim() !== '');
 
-    if (!hasPresets) {
-      test.skip();
-      return;
-    }
-
-    // Collect available preset options
-    const options = await presetSelect.locator('option').evaluateAll(
-      (els) => els.map((el) => ({ value: el.value, text: el.textContent })).filter((o) => o.value)
-    );
-
-    if (options.length < 2) {
+    if (nonEmpty.length < 2) {
       test.skip();
       return;
     }
 
     // Switch presets at least 5 times (cycle through available presets)
-    const switchCount = Math.max(5, options.length);
+    const switchCount = Math.max(5, nonEmpty.length);
     for (let i = 0; i < switchCount; i++) {
-      const opt = options[i % options.length];
-      await presetSelect.selectOption(opt.value);
+      const presetName = nonEmpty[i % nonEmpty.length];
+      await selectPreset(page, presetName);
       // Allow time for auto-preview to render the new preset
       await page.waitForTimeout(3000);
     }

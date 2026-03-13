@@ -578,8 +578,9 @@ export function buildPresetCompanionMap(files, parameterSets, options = {}) {
 
       result.set(presetName, { aliases, svgAliasTarget });
     } else {
-      // COMPATIBILITY FALLBACK — Phase 8 removal candidate.
-      // Legacy path: resolve hardcoded openings_and_additions.txt + any SVG.
+      // LEGACY-ONLY COMPATIBILITY PATH:
+      // Keep keyguard-shaped fallback mapping for stakeholder archives that do
+      // not expose explicit companion metadata yet.
       let openingsPath = null;
       const openingsCandidates = aliasableBasenames.get(
         'openings_and_additions.txt'
@@ -621,7 +622,7 @@ export function buildPresetCompanionMap(files, parameterSets, options = {}) {
       (v) => v.openingsPath !== null
     ).length;
     console.log(
-      `[PresetCompanionMap] Mapped ${mappedCount}/${presetNames.length} presets to openings paths`
+      `[PresetCompanionMap] Mapped ${mappedCount}/${presetNames.length} presets via legacy openings fallback`
     );
   }
 
@@ -654,8 +655,8 @@ export function applyCompanionAliases(projectFiles, companionMapping) {
     return result;
   }
 
-  // COMPATIBILITY FALLBACK — Phase 8 removal candidate.
-  // Legacy keyguard-shaped mapping: copies preset-specific content to
+  // LEGACY-ONLY COMPATIBILITY PATH:
+  // Keyguard-shaped mapping copies preset-specific content to
   // hardcoded root-level keys "openings_and_additions.txt" / "default.svg".
   if (
     companionMapping.openingsPath &&
@@ -689,6 +690,7 @@ export function getOverlaySvgTarget(companionMapping) {
     }
     return null;
   }
+  // Legacy compatibility target for stakeholder keyguard packages.
   if (companionMapping.svgPath) return 'default.svg';
   return null;
 }
