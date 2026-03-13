@@ -1,0 +1,32 @@
+﻿{
+    "openscad_version":  "2021.01",
+    "backend":  "CGAL",
+    "scenario_id":  "laser-cut-keyguard",
+    "parameters":  {
+                       "generate":  "keyguard",
+                       "type_of_keyguard":  "Laser-Cut"
+                   },
+    "console":  {
+                    "echo_lines":  [
+                                       "ECHO:",
+                                       "ECHO:"
+                                   ],
+                    "warnings":  [
+                                     "WARNING: Viewall and autocenter disabled in favor of $vp*"
+                                 ],
+                    "errors":  [
+
+                               ]
+                },
+    "geometry":  {
+                     "type":  "3D",
+                     "vertices":  2690,
+                     "facets":  1531,
+                     "render_time_s":  13.882
+                 },
+    "face_colors":  "not_available_cgal_backend",
+    "exports":  {
+                    "off_bytes":  159793,
+                    "stl_bytes":  1001307
+                }
+}

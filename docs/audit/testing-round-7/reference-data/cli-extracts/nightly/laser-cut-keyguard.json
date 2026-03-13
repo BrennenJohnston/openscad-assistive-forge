@@ -1,0 +1,44 @@
+﻿{
+    "openscad_version":  "2026.01.03",
+    "backend":  "Manifold",
+    "scenario_id":  "laser-cut-keyguard",
+    "parameters":  {
+                       "generate":  "keyguard",
+                       "type_of_keyguard":  "Laser-Cut"
+                   },
+    "console":  {
+                    "echo_lines":  [
+                                       "ECHO:",
+                                       "ECHO:"
+                                   ],
+                    "warnings":  [
+                                     "WARNING: Viewall and autocenter disabled in favor of $vp*"
+                                 ],
+                    "errors":  [
+
+                               ]
+                },
+    "geometry":  {
+                     "type":  "3D",
+                     "vertices":  3288,
+                     "facets":  6636,
+                     "render_time_s":  0.086
+                 },
+    "face_colors":  [
+                        {
+                            "rgb":  [
+                                        240,
+                                        230,
+                                        140
+                                    ],
+                            "hex":  "#F0E68C",
+                            "css_name":  "Khaki",
+                            "face_count":  6636
+                        }
+                    ],
+    "exports":  {
+                    "off_bytes":  278425,
+                    "stl_bytes":  1912770,
+                    "png_path":  "cli-extracts/nightly/screenshots/laser-cut-keyguard.png"
+                }
+}
