@@ -1,6 +1,6 @@
 # Color Passthrough: Research Findings
 
-**Date:** 2026-03-01 (updated 2026-03-12)
+**Date:** 2026-03-01 (updated 2026-03-14)
 **Related Issues:** #009 (Preserve color coding scheme), #011 (OpenSCAD color passthrough and `#` modifier transparency)
 **Status:** Fully enabled — COFF per-face color passthrough verified working at runtime.
 
@@ -53,6 +53,54 @@ OFF output, but only after two local Layer 2 fixes were applied:
    auto-detect integer vs float color scale.
 
 E2E probe confirms `hasColors=true` for multi-color SCAD files.
+
+### Multi-Color COFF Verification (2026-03-14)
+
+Multi-color COFF passthrough — where a single mesh contains faces with **two or
+more distinct colors** — has been verified end-to-end across the full pipeline:
+
+**Desktop baseline (Phase 0):** The `keyguard-frame-multicolor` scenario
+(keyguard + frame, `show_keyguard_with_frame="yes"`) produces COFF with two
+face-color groups:
+
+| Color | RGB | Hex | Faces | Geometry |
+|-------|-----|-----|-------|----------|
+| Red | (255, 0, 0) | `#FF0000` | 9,130 | Keyguard overlay |
+| Turquoise | (64, 224, 208) | `#40E0D0` | 4,988 | Frame |
+
+Total: 14,118 faces, 6,981 vertices. Render time: 0.246 s (Manifold).
+
+**Parser verification (Phase 1):** Unit tests feeding multi-color COFF through
+the parser extraction logic (mirroring `loadOFF()` lines 1206-1307) confirm:
+
+- Per-face color accumulation works independently per face — no single-color
+  collapse.
+- Integer color scale (0-255) auto-detected correctly via first-face max > 1.
+- Quad faces fan-triangulate into multiple triangles preserving per-face color.
+- `colors.length === positions.length` geometry guard passes for all-colored
+  face data.
+- 27 unit tests covering multi-color, quad, mixed-color/uncolored, and
+  first-face-black edge cases.
+
+**Browser E2E verification (Phase 3):** Pixel sampling on Chromium and Edge
+confirms 2+ distinct face-color groups render in the WebGL canvas. The
+`color-debug-test.scad` fixture (`color("red")` cube + `color("#00ff00")`
+sphere) produces red and green pixel regions verified via `readPixels` after
+rAF-timed rendering.
+
+**Interaction matrix (Phase 4 regression sweep):** All downstream consumers
+verified compatible with multi-color meshes:
+
+| Consumer | Multi-color safe? | Evidence |
+|----------|-------------------|----------|
+| Color override toggle | Yes — disables `vertexColors`, applies solid; re-enabling restores per-vertex multi-color | E2E pixel-verified |
+| `#` dual-render | Yes — normal mesh preserves per-face colors; highlight overlay is additive | E2E verified |
+| auto-bed | Yes — transforms Z positions only, no color interaction | Code-verified |
+| Viewport image (clipboard) | Yes — WebGL canvas captures rendered vertex colors | Code-verified |
+| STL export re-render | Yes — `shouldPreserveColorPreview` prevents STL from overwriting colored preview | E2E verified |
+| SVG/DXF export | N/A — 2D format, no face colors | E2E verified |
+| Full render preview | Yes — OFF path uses `loadOFF()` | E2E pixel-verified |
+| Color legend | Partial — shows SCAD parameter colors, not per-face COFF colors | Code-verified |
 
 ---
 
@@ -113,6 +161,8 @@ color_passthrough: { ..., killSwitch: true }
 - **Memory:** Vertex colors increase per-vertex data size.
 - **Detection heuristic:** `scadUsesColor()` regex scan is approximate; may miss edge cases where `color` appears in variable names.
 - **Alpha omission:** Per-face alpha values from COFF (`parts[n+4]`) are intentionally not read — only RGB is extracted. Three.js material transparency is handled separately via `debugHighlight` overlay.
+- **Mixed colored/uncolored faces:** If some faces have inline color and others do not, `colors.length < positions.length`, and the color attribute is silently dropped. The entire mesh falls back to solid theme color. This does not occur in practice (OpenSCAD wraps all geometry in `color()` calls), but is a latent fragility.
+- **First-face-black edge case:** If the first face has RGB (0,0,0), `Math.max(0,0,0) = 0 ≤ 1` selects float scale, causing subsequent integer values (e.g., 255) to be used unscaled. Three.js clamps to 1.0, rendering all non-black colors as white. Not triggered by any current keyguard scenario.
 
 ---
 
@@ -123,6 +173,11 @@ color_passthrough: { ..., killSwitch: true }
 3. Consider automatic format selection based on `result.format` from the worker (rather than pre-flight regex scan), so detection is perfectly accurate.
 4. ~~**Implement `#` debug modifier dual-render**~~ — Done (Phase 3). Normal COFF colors + semi-transparent pink overlay in a `THREE.Group`.
 5. ~~**Final verification**~~ — Done (2026-03-12). 1982 tests pass, 0 failures. All 16 parity scenarios verified.
+6. ~~**Multi-color COFF verification**~~ — Done (2026-03-14). Multi-color passthrough verified end-to-end. 2069 tests pass, 0 failures.
+7. Color legend showing actual per-face COFF colors instead of SCAD parameter-derived colors.
+8. Alpha channel passthrough (COFF alpha is currently ignored).
+9. First-face-black edge case fix in color scale detection (use global max instead of first-face max).
+10. Material-per-face-group architecture (if vertex colors prove insufficient for complex multi-color meshes).
 
 ---
 

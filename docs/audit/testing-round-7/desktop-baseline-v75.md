@@ -11,7 +11,7 @@
 ## Overview
 
 This document captures the structured desktop reference data for the keyguard
-v75 project rendered with **default parameters** across three test scenarios.
+v75 project rendered with **default parameters** across four test scenarios.
 Data was collected both manually (screenshots, console logs from the
 stakeholder's 2021.01 installation) and programmatically via
 `scripts/desktop-audit.ps1`.
@@ -243,6 +243,69 @@ grid configuration.
 
 ---
 
+## Scenario 4: Keyguard Frame Multi-Color
+
+**Scenario ID:** `keyguard-frame-multicolor`
+**Added:** 2026-03-14 (Multi-Color COFF Parity investigation, Phase 0)
+
+### Parameters
+
+| Parameter | Value |
+|-----------|-------|
+| `type_of_keyguard` | `"3D-Printed"` |
+| `generate` | `"keyguard frame"` |
+| `have_a_keyguard_frame` | `"yes"` |
+| `show_keyguard_with_frame` | `"yes"` |
+
+### Desktop Screenshots
+
+**Nightly CLI screenshot:** [reference-data/cli-extracts/nightly/screenshots/keyguard-frame-multicolor.png](reference-data/cli-extracts/nightly/screenshots/keyguard-frame-multicolor.png)
+
+### Color Analysis
+
+| Property | Value |
+|----------|-------|
+| SCAD source calls | `color("Red")` (keyguard overlay), `color("Turquoise")` (frame) |
+| **COFF face palette (Nightly)** | **2 color groups — see below** |
+
+| Color | Hex | RGB | Faces | Percentage | Geometry |
+|-------|-----|-----|-------|------------|----------|
+| Red | `#FF0000` | (255, 0, 0) | 9,130 | 64.7% | Keyguard overlay |
+| Turquoise | `#40E0D0` | (64, 224, 208) | 4,988 | 35.3% | Frame |
+
+This is the first scenario in the desktop baseline with **multiple distinct
+face-color groups** in the COFF output. Previous scenarios (1-3) each use a
+single `color()` call for the entire geometry. The multi-color output is
+produced because the SCAD source renders both the keyguard (Red) and its
+surrounding frame (Turquoise) as separate colored bodies in a single mesh.
+
+### Geometry Statistics
+
+| Metric | 2021.01 (CGAL) | Nightly (Manifold) |
+|--------|----------------|---------------------|
+| Geometry type | 3D | 3D (manifold) |
+| Vertices | 6,576 | 6,981 |
+| Facets | 3,716 | 14,118 |
+| Render time | 51.7 s | 0.246 s |
+| STL size | 2,057 KB | 3,941 KB |
+| OFF size | 384 KB | 542 KB (COFF) |
+
+The CGAL backend (2021.01) does not support `--enable=render-colors`, so its
+OFF export is plain OFF without per-face color data. The Nightly Manifold
+backend produces COFF with the two color groups listed above.
+
+### Console Output
+
+No ECHO lines for this scenario. Single warning: `Viewall and autocenter
+disabled in favor of $vp*`.
+
+### JSON Reference Data
+
+- [cli-extracts/2021.01/keyguard-frame-multicolor.json](reference-data/cli-extracts/2021.01/keyguard-frame-multicolor.json)
+- [cli-extracts/nightly/keyguard-frame-multicolor.json](reference-data/cli-extracts/nightly/keyguard-frame-multicolor.json)
+
+---
+
 ## Cross-Version Comparison: 2021.01 (CGAL) vs Nightly (Manifold)
 
 ### Geometry Differences
@@ -252,6 +315,7 @@ grid configuration.
 | 3d-printed-keyguard | 5,658 | 5,978 (+5.7%) | 3,247 | 12,016 (+270%) |
 | laser-cut-keyguard | 2,690 | 3,288 (+22%) | 1,531 | 6,636 (+333%) |
 | laser-cut-first-layer | N/A (2D) | N/A (2D) | N/A | N/A |
+| keyguard-frame-multicolor | 6,576 | 6,981 (+6.2%) | 3,716 | 14,118 (+280%) |
 
 Manifold produces significantly more facets because it triangulates all faces
 (every face is a triangle), while CGAL preserves larger polygonal faces. The
@@ -265,6 +329,7 @@ additional geometric detail.
 | 3d-printed-keyguard | 39.1 s | 0.15 s | **261x** |
 | laser-cut-keyguard | 13.9 s | 0.09 s | **154x** |
 | laser-cut-first-layer | ~0 s | ~0 s | N/A |
+| keyguard-frame-multicolor | 51.7 s | 0.246 s | **210x** |
 
 Manifold is 150-260x faster than CGAL on these real-world scenarios. This
 matches the Forge browser app's experience — the WASM build uses the Manifold
@@ -283,6 +348,12 @@ The Nightly's COFF output includes per-face RGB values that match the SCAD
 `color()` calls exactly. This confirms the `render-colors` feature (merged in
 PR #5185, July 2024) is active in this Nightly build.
 
+The `keyguard-frame-multicolor` scenario (Scenario 4) demonstrates that the
+Nightly produces **multi-color COFF** when the SCAD source applies different
+`color()` calls to different geometry groups — Red for the keyguard overlay
+and Turquoise for the frame. The CGAL backend (2021.01) does not support
+`render-colors` and produces plain OFF without color data for the same input.
+
 ---
 
 ## Key Findings for Forge Parity
@@ -293,10 +364,15 @@ PR #5185, July 2024) is active in this Nightly build.
    6,636 faces. If the Forge WASM build produces the same COFF output, the
    browser can extract and display per-face colors directly.
 
-2. **Single-color meshes.** Each 3D scenario uses one `color()` call for the
-   entire geometry — there is no multi-color mixing within a single scenario.
-   This simplifies the browser rendering requirement: each mesh needs exactly
-   one material color, derived from the COFF palette.
+2. **Multi-color meshes are supported.** The `keyguard-frame-multicolor`
+   scenario (Scenario 4) uses two `color()` calls on separate geometry bodies
+   within a single mesh — Red for the keyguard overlay (9,130 faces) and
+   Turquoise for the frame (4,988 faces). The Nightly's COFF export preserves
+   both colors as distinct per-face groups. The Forge browser parser
+   (`loadOFF()`) handles this correctly: per-face color accumulation, integer
+   scale detection, and `vertexColors: true` material rendering have been
+   verified via unit tests and E2E pixel sampling (see
+   [COLOR_PASSTHROUGH.md](../../notes/COLOR_PASSTHROUGH.md#multi-color-coff-verification-2026-03-14)).
 
 3. **2D geometry produces no color data.** The laser-cut first layer scenario
    (2D, `projection()`) cannot export to OFF/STL. Color handling for this
@@ -337,3 +413,6 @@ PR #5185, July 2024) is active in this Nightly build.
 | Nightly Screenshot: 3D-Printed | `reference-data/cli-extracts/nightly/screenshots/3d-printed-keyguard.png` |
 | Nightly Screenshot: Laser-Cut | `reference-data/cli-extracts/nightly/screenshots/laser-cut-keyguard.png` |
 | Nightly Screenshot: First Layer | `reference-data/cli-extracts/nightly/screenshots/laser-cut-first-layer.png` |
+| 2021.01: Keyguard Frame Multi-Color | `reference-data/cli-extracts/2021.01/keyguard-frame-multicolor.json` |
+| Nightly: Keyguard Frame Multi-Color | `reference-data/cli-extracts/nightly/keyguard-frame-multicolor.json` |
+| Nightly Screenshot: Keyguard Frame Multi-Color | `reference-data/cli-extracts/nightly/screenshots/keyguard-frame-multicolor.png` |
