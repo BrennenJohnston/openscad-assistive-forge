@@ -457,7 +457,8 @@ test.describe('Parity — Grid Opacity Control (S-016)', () => {
     }
 
     await expect(slider).toBeVisible({ timeout: 10_000 });
-    await slider.fill('42');
+    // Use 40 (valid step=5 value within min=10, max=100)
+    await slider.fill('40');
     await slider.dispatchEvent('input');
     await page.waitForTimeout(500);
 
@@ -469,6 +470,6 @@ test.describe('Parity — Grid Opacity Control (S-016)', () => {
       return key ? localStorage.getItem(key) : null;
     });
 
-    expect(persistedValue).toBe('42');
+    expect(persistedValue).toBe('40');
   });
 });
