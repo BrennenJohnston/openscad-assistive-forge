@@ -167,6 +167,7 @@ export class PreviewManager {
     this.highContrast = options.highContrast || false;
     this.colorOverride = null;
     this.colorOverrideEnabled = false;
+    this.appearanceOverrideEnabled = false;
 
     // Measurements
     this.measurementsEnabled = this.loadMeasurementPreference();
@@ -255,8 +256,18 @@ export class PreviewManager {
     // Lazy load Three.js
     await loadThreeJS();
 
-    // Clear container
+    // Clear container (preserving/recreating #rendered2dPreview for 2D SVG display)
     this.container.innerHTML = '';
+
+    // Recreate the 2D SVG preview surface that init() just destroyed
+    if (!document.getElementById('rendered2dPreview')) {
+      const preview2d = document.createElement('div');
+      preview2d.id = 'rendered2dPreview';
+      preview2d.className = 'rendered-2d-preview hidden';
+      preview2d.setAttribute('role', 'img');
+      preview2d.setAttribute('aria-label', 'Rendered 2D SVG preview');
+      this.container.appendChild(preview2d);
+    }
 
     // Detect initial theme
     this.currentTheme = this.detectTheme();
@@ -3095,9 +3106,10 @@ export class PreviewManager {
    *
    * @param {string} svgContent - SVG markup
    * @param {string|null} [recolorHex=null] - CSS hex colour (e.g. '#ffffff')
+   * @param {{ targetCanvasSize?: number }} [opts] - Optional overrides
    * @returns {Promise<{texture: THREE.CanvasTexture, aspect: number, widthMm: number|null, heightMm: number|null}>}
    */
-  async svgTextToCanvasTexture(svgContent, recolorHex = null) {
+  async svgTextToCanvasTexture(svgContent, recolorHex = null, opts = {}) {
     const parser = new DOMParser();
     const svgDoc = parser.parseFromString(svgContent, 'image/svg+xml');
     const svgEl = svgDoc.querySelector('svg');
@@ -3147,11 +3159,22 @@ export class PreviewManager {
       heightMm = (vbH * 25.4) / OPENSCAD_DPI;
     }
 
-    // Determine canvas resolution (bounded to avoid memory spikes)
-    const maxDim = this.getMaxTextureResolution();
+    // Determine canvas resolution (bounded to avoid memory spikes).
+    // When targetCanvasSize is specified, scale the canvas so the longest
+    // edge reaches that size — producing crisp textures for SVG content
+    // that has small viewBox dimensions (e.g. 246×170 from OpenSCAD).
+    const maxDim = opts.targetCanvasSize || this.getMaxTextureResolution();
     let canvasWidth, canvasHeight;
 
-    if (intrinsicWidth >= intrinsicHeight) {
+    if (opts.targetCanvasSize) {
+      if (intrinsicWidth >= intrinsicHeight) {
+        canvasWidth = maxDim;
+        canvasHeight = maxDim / aspect;
+      } else {
+        canvasHeight = maxDim;
+        canvasWidth = maxDim * aspect;
+      }
+    } else if (intrinsicWidth >= intrinsicHeight) {
       canvasWidth = Math.min(intrinsicWidth, maxDim);
       canvasHeight = canvasWidth / aspect;
     } else {
@@ -3939,6 +3962,7 @@ export class PreviewManager {
   // --- Model Appearance Controls ---
 
   setModelOpacity(percent) {
+    if (!this.appearanceOverrideEnabled) return;
     if (!this.mesh) return;
     const val = Math.max(10, Math.min(100, percent));
     const opacity = val / 100;
@@ -3961,11 +3985,13 @@ export class PreviewManager {
   }
 
   setBrightness(percent) {
+    if (!this.appearanceOverrideEnabled) return;
     this._brightnessScale = percent / 100;
     this._applyLighting();
   }
 
   setContrast(percent) {
+    if (!this.appearanceOverrideEnabled) return;
     this._contrastFactor = percent / 100;
     this._applyLighting();
   }
@@ -3981,7 +4007,39 @@ export class PreviewManager {
     this.directionalLight2.intensity = this.baseLightIntensities.dir2 * bs * cf;
   }
 
+  setAppearanceOverrideEnabled(enabled) {
+    this.appearanceOverrideEnabled = enabled;
+    this._syncAppearance();
+  }
+
+  _syncAppearance() {
+    if (this.appearanceOverrideEnabled) {
+      return;
+    }
+    // Reset to defaults when disabled — bypass the guard in setModelOpacity
+    if (this.mesh) {
+      const applyOpacity = (mat, meshObj) => {
+        mat.transparent = false;
+        mat.opacity = 1;
+        mat.depthWrite = true;
+        meshObj.renderOrder = 0;
+        mat.needsUpdate = true;
+      };
+      if (this.mesh.isGroup) {
+        this.mesh.children.forEach((child) => {
+          if (child.material) applyOpacity(child.material, child);
+        });
+      } else if (this.mesh.material) {
+        applyOpacity(this.mesh.material, this.mesh);
+      }
+    }
+    this._brightnessScale = 1;
+    this._contrastFactor = 1;
+    this._applyLighting();
+  }
+
   resetAppearance() {
+    if (!this.appearanceOverrideEnabled) return;
     this.setModelOpacity(100);
     this._brightnessScale = 1;
     this._contrastFactor = 1;
@@ -3998,23 +4056,28 @@ export class PreviewManager {
    * Show a rendered 2D SVG preview, hiding the 3D canvas.
    *
    * The SVG is sanitized (scripts/event-handlers stripped) and inserted
-   * into the dedicated #rendered2dPreview element.  Desktop OpenSCAD
-   * renders laser-cut first-layer geometry with a DarkSeaGreen fill and
-   * red outlines; if the generated SVG carries only geometry (no fill/
-   * stroke), a preview-only stylesheet is injected to approximate the
-   * desktop appearance.
+   * into the dedicated #rendered2dPreview element.  When the SVG carries
+   * only bare geometry (no fill/stroke), a desktop-parity stylesheet is
+   * injected whose colors depend on the display mode:
+   *
+   *  - **draft** (F5-equivalent): muted sage green fill (#7A9F7A), no
+   *    prominent outlines — matches desktop OpenSCAD's F5 Preview for 2D.
+   *  - **rendered** (F6-equivalent): bright teal fill (#07D0A7) with red
+   *    outlines (#FF0603) — matches desktop OpenSCAD's F6 Render for 2D.
    *
    * @param {string} svgText - Raw SVG markup from the worker
+   * @param {{ mode?: 'draft'|'rendered' }} [options]
    */
-  show2DPreview(svgText) {
+  show2DPreview(svgText, options = {}) {
+    const mode = options.mode || 'draft';
     const previewEl = document.getElementById('rendered2dPreview');
     if (!previewEl) return;
+
 
     const sanitized = PreviewManager.sanitizeSVG(svgText);
 
     previewEl.innerHTML = sanitized;
 
-    // Inject preview-only styling if the SVG has no fills/strokes
     const svgEl = previewEl.querySelector('svg');
     if (svgEl) {
       svgEl.removeAttribute('width');
@@ -4025,17 +4088,82 @@ export class PreviewManager {
       svgEl.style.height = 'auto';
 
       if (PreviewManager.svgLacksVisualStyling(svgEl)) {
-        PreviewManager.injectDesktopParityStyling(svgEl);
+        PreviewManager.injectDesktopParityStyling(svgEl, mode);
       }
     }
 
     previewEl.classList.remove('hidden');
     this._set2DPreviewActive(true);
 
+    const summary = document.getElementById('previewModelSummary');
+    if (summary) {
+      summary.textContent =
+        mode === 'rendered'
+          ? 'Full-quality rendered 2D SVG preview is displayed.'
+          : 'Draft 2D SVG preview is displayed.';
+    }
+  }
+
+  /**
+   * Display a 2D SVG as a flat plane inside the Three.js 3D viewport.
+   *
+   * Instead of hiding the 3D canvas and showing a flat HTML overlay,
+   * this converts the SVG to a texture, creates a PlaneGeometry sized
+   * to the SVG's physical mm dimensions, and adds it to the scene as
+   * `this.mesh`.  The camera fits to the plane automatically and all
+   * orbit/zoom/pan controls remain active — matching how desktop
+   * OpenSCAD shows 2D geometry in its 3D viewport.
+   *
+   * @param {string} svgText - Raw (or pre-styled) SVG markup
+   * @param {{ mode?: 'draft'|'rendered' }} [options]
+   * @returns {Promise<void>}
+   */
+  async show2DPreviewAs3DPlane(svgText, options = {}) {
+    if (!this.scene || !this.renderer) return;
+
+    // Ensure any previous flat HTML 2D preview is dismissed
+    this.hide2DPreview();
+
+    // Remove existing 3D mesh
+    if (this.mesh) {
+      this.scene.remove(this.mesh);
+      this._disposeMeshResources();
+      this.mesh = null;
+    }
+
+    // Render SVG to a high-resolution canvas texture (4096px longest edge)
+    // while preserving the original SVG width/height attributes for correct
+    // mm dimension extraction. The PlaneGeometry is then sized in mm to
+    // guarantee 1:1 scale fidelity with the 3D mesh.
+    const { texture, widthMm, heightMm } =
+      await this.svgTextToCanvasTexture(svgText, null, { targetCanvasSize: 4096 });
+
+    const planeW = widthMm || 200;
+    const planeH = heightMm || 150;
+
+    const geometry = new THREE.PlaneGeometry(planeW, planeH);
+    const material = new THREE.MeshBasicMaterial({
+      map: texture,
+      transparent: true,
+      side: THREE.DoubleSide,
+      depthWrite: true,
+    });
+
+    this.mesh = new THREE.Mesh(geometry, material);
+    this.mesh.name = '2dPreviewPlane';
+    this.scene.add(this.mesh);
+
+    this.fitCameraToModel();
+    this.renderer.render(this.scene, this.getActiveCamera());
+
     // Update ARIA summary
     const summary = document.getElementById('previewModelSummary');
     if (summary) {
-      summary.textContent = 'Rendered 2D SVG preview is displayed.';
+      const mode = options.mode || 'draft';
+      summary.textContent =
+        mode === 'rendered'
+          ? 'Full-quality rendered 2D SVG preview displayed in 3D viewport.'
+          : 'Draft 2D SVG preview displayed in 3D viewport.';
     }
   }
 
@@ -4144,27 +4272,39 @@ export class PreviewManager {
 
   /**
    * Inject a preview-only <style> element that approximates desktop
-   * OpenSCAD's rendered 2D appearance: DarkSeaGreen fill with red
-   * outlines, matching the laser-cut first-layer display mode.
+   * OpenSCAD's 2D viewport appearance.  Colors are selected per mode:
+   *
+   *  - **draft** (F5 Preview): #7A9F7A sage green fill, subtle edges.
+   *  - **rendered** (F6 Render): #07D0A7 teal fill, #FF0603 red outlines.
+   *
+   * Reference: Testing Round 7 color-codes.json — desktop 2021.01 observations.
+   *
    * @param {SVGElement} svgEl
+   * @param {'draft'|'rendered'} [mode='draft']
    */
-  static injectDesktopParityStyling(svgEl) {
+  static injectDesktopParityStyling(svgEl, mode = 'draft') {
     const ns = 'http://www.w3.org/2000/svg';
     const existing = svgEl.querySelector('style[data-forge-preview]');
     if (existing) return;
+
+    const palette =
+      mode === 'rendered'
+        ? { fill: '#07D0A7', stroke: '#FF0603', strokeWidth: '0.5', fillOpacity: '1' }
+        : { fill: '#7A9F7A', stroke: '#7A9F7A', strokeWidth: '0.25', fillOpacity: '0.9' };
+
 
     const styleEl = document.createElementNS(ns, 'style');
     styleEl.setAttribute('data-forge-preview', 'true');
     styleEl.textContent = [
       'path, polygon, polyline, circle, ellipse, rect {',
-      '  fill: #8FBC8F;', // DarkSeaGreen — desktop OpenSCAD default
-      '  stroke: #CC0000;', // Red outline — desktop rendered 2D style
-      '  stroke-width: 0.5;',
-      '  fill-opacity: 0.85;',
+      `  fill: ${palette.fill};`,
+      `  stroke: ${palette.stroke};`,
+      `  stroke-width: ${palette.strokeWidth};`,
+      `  fill-opacity: ${palette.fillOpacity};`,
       '}',
       'line {',
-      '  stroke: #CC0000;',
-      '  stroke-width: 0.5;',
+      `  stroke: ${palette.stroke};`,
+      `  stroke-width: ${palette.strokeWidth};`,
       '}',
     ].join('\n');
     svgEl.insertBefore(styleEl, svgEl.firstChild);

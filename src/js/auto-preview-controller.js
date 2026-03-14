@@ -10,7 +10,7 @@ import {
 } from './color-utils.js';
 import { getAppPrefKey } from './storage-keys.js';
 import { isEnabled as isFlagEnabled } from './feature-flags.js';
-import { isNonPreviewable } from './render-intent.js';
+import { isNonPreviewable, is2DGenerateValue } from './render-intent.js';
 
 // Storage keys using standardized naming convention
 const STORAGE_KEY_PERF_METRICS = getAppPrefKey('perf-metrics');
@@ -968,14 +968,21 @@ export class AutoPreviewController {
       // Check if still relevant
       if (paramHash !== this.currentParamHash) return;
 
-      // MODEL_IS_2D: attempt draft SVG preview before falling through to error
+      // Attempt draft SVG preview for 2D generate modes.
+      // The WASM STL render can fail in multiple ways when the model is 2D:
+      //  - MODEL_IS_2D  (graceful detection)
+      //  - RENDER_FAILED (exit code 1 — common after preset changes)
+      //  - EMPTY_GEOMETRY
+      // Rather than matching only MODEL_IS_2D, also try when the generate
+      // parameter itself indicates a 2D output mode (svg/dxf/first layer).
       const errMsg = (error?.message || String(error)).toLowerCase();
-      if (
+      const is2DError =
         error?.code === 'MODEL_IS_2D' ||
         errMsg.includes('model_is_2d') ||
         errMsg.includes('not a 3d object') ||
-        errMsg.includes('top level object is a 2d')
-      ) {
+        errMsg.includes('top level object is a 2d');
+      const is2DGenerateMode = is2DGenerateValue(previewParameters?.generate);
+      if (is2DError || is2DGenerateMode) {
         const draft2DSuccess =
           await this.renderDraft2DPreview(previewParameters);
         if (draft2DSuccess) return;
@@ -1194,11 +1201,30 @@ export class AutoPreviewController {
         }
       );
       if (result?.stl || result?.data) {
-        const svgText =
+        let svgText =
           typeof result.stl === 'string'
             ? result.stl
             : new TextDecoder().decode(result.stl || result.data);
-        this.previewManager?.show2DPreview?.(svgText);
+
+        // Pre-inject F5-draft parity styling into SVG before show2DPreview.
+        // Desktop OpenSCAD F5 preview for 2D first-layer: #7A9F7A sage green.
+        // Ref: Testing Round 7 color-codes.json preview_colors for laser-cut-first-layer.
+        const draftStyle =
+          '<style data-forge-preview="true">' +
+          'path,polygon,polyline,circle,ellipse,rect{fill:#7A9F7A;stroke:#7A9F7A;stroke-width:0.25;fill-opacity:0.9}' +
+          'line{stroke:#7A9F7A;stroke-width:0.25}' +
+          '</style>';
+        svgText = svgText.replace(
+          /(<svg[^>]*>)/i,
+          '$1' + draftStyle
+        );
+
+        if (typeof this.previewManager?.show2DPreviewAs3DPlane === 'function') {
+          await this.previewManager.show2DPreviewAs3DPlane(svgText, { mode: 'draft' });
+        } else {
+          this.previewManager?.show2DPreview?.(svgText, { mode: 'draft' });
+        }
+
         this.setState(PREVIEW_STATE.CURRENT, {
           code: 'DRAFT_2D',
           stats: result.stats,
@@ -1219,13 +1245,23 @@ export class AutoPreviewController {
               libraries: this.enabledLibraries,
             }
           );
-          const svgText =
+          let svgText =
             typeof fallbackResult.stl === 'string'
               ? fallbackResult.stl
               : new TextDecoder().decode(
                   fallbackResult.stl || fallbackResult.data
                 );
-          this.previewManager?.show2DPreview?.(svgText);
+          const draftFallbackStyle =
+            '<style data-forge-preview="true">' +
+            'path,polygon,polyline,circle,ellipse,rect{fill:#7A9F7A;stroke:#7A9F7A;stroke-width:0.25;fill-opacity:0.9}' +
+            'line{stroke:#7A9F7A;stroke-width:0.25}' +
+            '</style>';
+          svgText = svgText.replace(/(<svg[^>]*>)/i, '$1' + draftFallbackStyle);
+          if (typeof this.previewManager?.show2DPreviewAs3DPlane === 'function') {
+            await this.previewManager.show2DPreviewAs3DPlane(svgText, { mode: 'draft' });
+          } else {
+            this.previewManager?.show2DPreview?.(svgText, { mode: 'draft' });
+          }
           this.setState(PREVIEW_STATE.CURRENT, {
             code: 'DRAFT_2D_FALLBACK',
             stats: fallbackResult.stats,

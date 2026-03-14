@@ -181,6 +181,7 @@ const STORAGE_KEY_MODEL_COLOR_ENABLED = getAppPrefKey('model-color-enabled');
 const STORAGE_KEY_MODEL_OPACITY = getAppPrefKey('model-opacity');
 const STORAGE_KEY_BRIGHTNESS = getAppPrefKey('brightness');
 const STORAGE_KEY_CONTRAST = getAppPrefKey('contrast');
+const STORAGE_KEY_MODEL_APPEARANCE_ENABLED = getAppPrefKey('model-appearance-enabled');
 const STORAGE_KEY_PARAM_PANEL_COLLAPSED = getDrawerStateKey('parameters');
 const STORAGE_KEY_LAYOUT_SIZES = getAppPrefKey('layout-sizes');
 import {
@@ -3575,9 +3576,21 @@ async function initApp() {
       // Show rendered 2D preview for SVG output
       if (resolvedFormat === 'svg' && previewManager) {
         try {
-          const svgText =
+          let svgText =
             typeof data === 'string' ? data : new TextDecoder().decode(data);
-          previewManager.show2DPreview(svgText);
+
+          const renderStyle =
+            '<style data-forge-preview="true">' +
+            'path,polygon,polyline,circle,ellipse,rect{fill:#07D0A7;stroke:#FF0603;stroke-width:0.5;fill-opacity:1}' +
+            'line{stroke:#FF0603;stroke-width:0.5}' +
+            '</style>';
+          svgText = svgText.replace(/(<svg[^>]*>)/i, '$1' + renderStyle);
+
+          if (typeof previewManager.show2DPreviewAs3DPlane === 'function') {
+            await previewManager.show2DPreviewAs3DPlane(svgText, { mode: 'rendered' });
+          } else {
+            previewManager.show2DPreview(svgText, { mode: 'rendered' });
+          }
         } catch (previewErr) {
           console.warn('[Export2D] Failed to show 2D preview:', previewErr);
         }
@@ -7118,11 +7131,15 @@ async function initApp() {
   const contrastInput = document.getElementById('contrastInput');
   const contrastValue = document.getElementById('contrastValue');
   const resetAppearanceBtn = document.getElementById('resetAppearanceBtn');
+  const modelAppearanceEnabled = document.getElementById('modelAppearanceEnabled');
+  const modelAppearanceSlidersWrapper = document.querySelector('.model-appearance-sliders');
 
   // Restore persisted values
   const savedOpacity = localStorage.getItem(STORAGE_KEY_MODEL_OPACITY);
   const savedBrightness = localStorage.getItem(STORAGE_KEY_BRIGHTNESS);
   const savedContrast = localStorage.getItem(STORAGE_KEY_CONTRAST);
+  const savedAppearanceEnabled =
+    localStorage.getItem(STORAGE_KEY_MODEL_APPEARANCE_ENABLED) === 'true';
   if (savedOpacity && modelOpacityInput) {
     modelOpacityInput.value = savedOpacity;
     if (modelOpacityValue) modelOpacityValue.textContent = `${savedOpacity}%`;
@@ -7136,6 +7153,12 @@ async function initApp() {
     if (contrastValue) contrastValue.textContent = `${savedContrast}%`;
   }
 
+  const updateAppearanceSlidersDisabledState = (enabled) => {
+    if (modelAppearanceSlidersWrapper) {
+      modelAppearanceSlidersWrapper.classList.toggle('disabled', !enabled);
+    }
+  };
+
   function applyAppearanceToPreview() {
     if (!previewManager) return;
     previewManager.setModelOpacity(
@@ -7145,12 +7168,42 @@ async function initApp() {
     previewManager.setContrast(parseInt(contrastInput?.value || '100', 10));
   }
 
+  const syncPreviewAppearanceOverride = () => {
+    if (!previewManager) return;
+
+    const enabled = modelAppearanceEnabled?.checked === true;
+
+    if (enabled) {
+      applyAppearanceToPreview();
+      previewManager.setAppearanceOverrideEnabled(true);
+    } else {
+      previewManager.setAppearanceOverrideEnabled(false);
+    }
+  };
+
+  if (modelAppearanceEnabled) {
+    modelAppearanceEnabled.checked = savedAppearanceEnabled;
+    updateAppearanceSlidersDisabledState(savedAppearanceEnabled);
+
+    modelAppearanceEnabled.addEventListener('change', () => {
+      const enabled = modelAppearanceEnabled.checked;
+      localStorage.setItem(
+        STORAGE_KEY_MODEL_APPEARANCE_ENABLED,
+        String(enabled)
+      );
+      updateAppearanceSlidersDisabledState(enabled);
+      syncPreviewAppearanceOverride();
+    });
+  }
+
   if (modelOpacityInput) {
     modelOpacityInput.addEventListener('input', () => {
       const v = modelOpacityInput.value;
       if (modelOpacityValue) modelOpacityValue.textContent = `${v}%`;
       localStorage.setItem(STORAGE_KEY_MODEL_OPACITY, v);
-      if (previewManager) previewManager.setModelOpacity(parseInt(v, 10));
+      if (previewManager && modelAppearanceEnabled?.checked) {
+        previewManager.setModelOpacity(parseInt(v, 10));
+      }
     });
   }
   if (brightnessInput) {
@@ -7158,7 +7211,9 @@ async function initApp() {
       const v = brightnessInput.value;
       if (brightnessValue) brightnessValue.textContent = `${v}%`;
       localStorage.setItem(STORAGE_KEY_BRIGHTNESS, v);
-      if (previewManager) previewManager.setBrightness(parseInt(v, 10));
+      if (previewManager && modelAppearanceEnabled?.checked) {
+        previewManager.setBrightness(parseInt(v, 10));
+      }
     });
   }
   if (contrastInput) {
@@ -7166,7 +7221,9 @@ async function initApp() {
       const v = contrastInput.value;
       if (contrastValue) contrastValue.textContent = `${v}%`;
       localStorage.setItem(STORAGE_KEY_CONTRAST, v);
-      if (previewManager) previewManager.setContrast(parseInt(v, 10));
+      if (previewManager && modelAppearanceEnabled?.checked) {
+        previewManager.setContrast(parseInt(v, 10));
+      }
     });
   }
   if (resetAppearanceBtn) {
@@ -7186,7 +7243,9 @@ async function initApp() {
       localStorage.removeItem(STORAGE_KEY_MODEL_OPACITY);
       localStorage.removeItem(STORAGE_KEY_BRIGHTNESS);
       localStorage.removeItem(STORAGE_KEY_CONTRAST);
-      if (previewManager) previewManager.resetAppearance();
+      if (previewManager && modelAppearanceEnabled?.checked) {
+        previewManager.resetAppearance();
+      }
     });
   }
 
@@ -9423,7 +9482,19 @@ async function initApp() {
         previewManager = new PreviewManager(previewContainer);
         await previewManager.init();
 
+        // Re-create #rendered2dPreview — init() clears container innerHTML,
+        // destroying the element that was defined in index.html.
+        if (!document.getElementById('rendered2dPreview')) {
+          const preview2d = document.createElement('div');
+          preview2d.id = 'rendered2dPreview';
+          preview2d.className = 'rendered-2d-preview hidden';
+          preview2d.setAttribute('role', 'img');
+          preview2d.setAttribute('aria-label', 'Rendered 2D SVG preview');
+          previewContainer.appendChild(preview2d);
+        }
+
         syncPreviewModelColorOverride();
+        syncPreviewAppearanceOverride();
 
         // Sync measurements toggle with saved preference
         if (measurementsToggle) {
@@ -9516,7 +9587,7 @@ async function initApp() {
         }
 
         // Apply persisted model appearance controls
-        applyAppearanceToPreview();
+        syncPreviewAppearanceOverride();
 
         // Initialize auto-rotate settings from localStorage
         // Only enable if user doesn't prefer reduced motion
@@ -9560,6 +9631,7 @@ async function initApp() {
         }
 
         syncPreviewModelColorOverride();
+        syncPreviewAppearanceOverride();
 
         // Listen for theme changes and update preview
         themeManager.addListener((theme, activeTheme, highContrast) => {
@@ -14206,11 +14278,24 @@ if (rounded) {
       const is2DFormat = OUTPUT_FORMATS[outputFormat]?.is2D;
       if (is2DFormat && resolvedFormat === 'svg' && previewManager) {
         try {
-          const svgText =
+          let svgText =
             typeof outputData === 'string'
               ? outputData
               : new TextDecoder().decode(outputData);
-          previewManager.show2DPreview(svgText);
+
+          // Pre-inject F6-render parity styling: #07D0A7 teal fill, #FF0603 red outlines.
+          const renderStyle =
+            '<style data-forge-preview="true">' +
+            'path,polygon,polyline,circle,ellipse,rect{fill:#07D0A7;stroke:#FF0603;stroke-width:0.5;fill-opacity:1}' +
+            'line{stroke:#FF0603;stroke-width:0.5}' +
+            '</style>';
+          svgText = svgText.replace(/(<svg[^>]*>)/i, '$1' + renderStyle);
+
+          if (typeof previewManager.show2DPreviewAs3DPlane === 'function') {
+            await previewManager.show2DPreviewAs3DPlane(svgText, { mode: 'rendered' });
+          } else {
+            previewManager.show2DPreview(svgText, { mode: 'rendered' });
+          }
         } catch (previewErr) {
           console.warn('[Generate] Failed to show 2D preview:', previewErr);
         }

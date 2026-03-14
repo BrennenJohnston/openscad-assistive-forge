@@ -255,3 +255,19 @@ export function classifyRenderState(parameters, schema, options = {}) {
   if (isFullQuality) return RENDER_STATE.RENDER_3D;
   return RENDER_STATE.PREVIEW;
 }
+
+/**
+ * Check whether a generate-parameter value indicates a 2D export mode
+ * (SVG, DXF, first-layer, etc.).
+ *
+ * Uses the same keyword list that the rest of this module relies on
+ * (`TWO_D_KEYWORDS`), so any future additions automatically propagate.
+ *
+ * @param {string} generateValue - Raw generate parameter value
+ * @returns {boolean}
+ */
+export function is2DGenerateValue(generateValue) {
+  if (!generateValue) return false;
+  const lower = String(generateValue).toLowerCase();
+  return has2DKeyword(lower, lower);
+}

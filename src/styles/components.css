@@ -2508,6 +2508,24 @@ summary:focus-visible,
   pointer-events: none;
 }
 
+.model-appearance-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-xs);
+}
+
+.model-appearance-toggle .toggle-label {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  user-select: none;
+}
+
+.model-appearance-sliders.disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
 .model-color-picker input[type='color'] {
   width: 44px;
   height: 32px;

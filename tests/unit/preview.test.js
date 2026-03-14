@@ -791,6 +791,185 @@ describe('PreviewManager', () => {
     })
   })
 
+  describe('Appearance Override Toggle', () => {
+    it('initializes with appearanceOverrideEnabled = false', () => {
+      const manager = new PreviewManager(container)
+      expect(manager.appearanceOverrideEnabled).toBe(false)
+    })
+
+    it('setAppearanceOverrideEnabled(true) does not reset appearance', () => {
+      const manager = new PreviewManager(container)
+      manager.mesh = {
+        material: {
+          transparent: true,
+          opacity: 0.5,
+          depthWrite: true,
+          needsUpdate: false,
+        },
+      }
+      manager.ambientLight = { intensity: 1 }
+      manager.directionalLight1 = { intensity: 1 }
+      manager.directionalLight2 = { intensity: 1 }
+      manager.baseLightIntensities = { ambient: 1, dir1: 1, dir2: 1 }
+      manager._brightnessScale = 1.5
+      manager._contrastFactor = 0.8
+
+      manager.setAppearanceOverrideEnabled(true)
+
+      expect(manager.appearanceOverrideEnabled).toBe(true)
+      expect(manager._brightnessScale).toBe(1.5)
+      expect(manager._contrastFactor).toBe(0.8)
+    })
+
+    it('setAppearanceOverrideEnabled(false) resets opacity/brightness/contrast to defaults', () => {
+      const manager = new PreviewManager(container)
+      manager.mesh = {
+        material: {
+          transparent: true,
+          opacity: 0.5,
+          depthWrite: true,
+          renderOrder: 1,
+          needsUpdate: false,
+        },
+      }
+      manager.ambientLight = { intensity: 1 }
+      manager.directionalLight1 = { intensity: 1 }
+      manager.directionalLight2 = { intensity: 1 }
+      manager.baseLightIntensities = { ambient: 1, dir1: 1, dir2: 1 }
+      manager._brightnessScale = 1.5
+      manager._contrastFactor = 0.8
+      manager.appearanceOverrideEnabled = true
+
+      manager.setAppearanceOverrideEnabled(false)
+
+      expect(manager.appearanceOverrideEnabled).toBe(false)
+      expect(manager._brightnessScale).toBe(1)
+      expect(manager._contrastFactor).toBe(1)
+      expect(manager.mesh.material.opacity).toBe(1)
+      expect(manager.mesh.material.transparent).toBe(false)
+    })
+
+    it('setModelOpacity is a no-op when override disabled', () => {
+      const manager = new PreviewManager(container)
+      manager.mesh = {
+        material: {
+          transparent: false,
+          opacity: 1,
+          depthWrite: true,
+          needsUpdate: false,
+        },
+      }
+      manager.appearanceOverrideEnabled = false
+
+      manager.setModelOpacity(50)
+
+      expect(manager.mesh.material.opacity).toBe(1)
+    })
+
+    it('setBrightness is a no-op when override disabled', () => {
+      const manager = new PreviewManager(container)
+      manager.ambientLight = { intensity: 1 }
+      manager.directionalLight1 = { intensity: 1 }
+      manager.directionalLight2 = { intensity: 1 }
+      manager.baseLightIntensities = { ambient: 1, dir1: 1, dir2: 1 }
+      manager._brightnessScale = 1
+      manager.appearanceOverrideEnabled = false
+
+      manager.setBrightness(150)
+
+      expect(manager._brightnessScale).toBe(1)
+    })
+
+    it('setContrast is a no-op when override disabled', () => {
+      const manager = new PreviewManager(container)
+      manager.ambientLight = { intensity: 1 }
+      manager.directionalLight1 = { intensity: 1 }
+      manager.directionalLight2 = { intensity: 1 }
+      manager.baseLightIntensities = { ambient: 1, dir1: 1, dir2: 1 }
+      manager._contrastFactor = 1
+      manager.appearanceOverrideEnabled = false
+
+      manager.setContrast(150)
+
+      expect(manager._contrastFactor).toBe(1)
+    })
+
+    it('resetAppearance is a no-op when override disabled', () => {
+      const manager = new PreviewManager(container)
+      manager.mesh = {
+        material: {
+          transparent: true,
+          opacity: 0.5,
+          depthWrite: true,
+          needsUpdate: false,
+        },
+      }
+      manager.ambientLight = { intensity: 1 }
+      manager.directionalLight1 = { intensity: 1 }
+      manager.directionalLight2 = { intensity: 1 }
+      manager.baseLightIntensities = { ambient: 1, dir1: 1, dir2: 1 }
+      manager._brightnessScale = 1.5
+      manager.appearanceOverrideEnabled = false
+
+      manager.resetAppearance()
+
+      expect(manager._brightnessScale).toBe(1.5)
+      expect(manager.mesh.material.opacity).toBe(0.5)
+    })
+
+    it('_syncAppearance is a no-op when no mesh exists (opacity reset skipped)', () => {
+      const manager = new PreviewManager(container)
+      manager.mesh = null
+      manager.ambientLight = { intensity: 1 }
+      manager.directionalLight1 = { intensity: 1 }
+      manager.directionalLight2 = { intensity: 1 }
+      manager.baseLightIntensities = { ambient: 1, dir1: 1, dir2: 1 }
+      manager._brightnessScale = 1.5
+      manager.appearanceOverrideEnabled = true
+
+      expect(() => manager.setAppearanceOverrideEnabled(false)).not.toThrow()
+      expect(manager._brightnessScale).toBe(1)
+    })
+
+    it('_syncAppearance handles group meshes when disabling', () => {
+      const manager = new PreviewManager(container)
+      const child1 = {
+        material: {
+          transparent: true,
+          opacity: 0.5,
+          depthWrite: true,
+          renderOrder: 1,
+          needsUpdate: false,
+        },
+      }
+      const child2 = {
+        material: {
+          transparent: true,
+          opacity: 0.7,
+          depthWrite: true,
+          renderOrder: 1,
+          needsUpdate: false,
+        },
+      }
+      manager.mesh = {
+        isGroup: true,
+        children: [child1, child2],
+      }
+      manager.ambientLight = { intensity: 1 }
+      manager.directionalLight1 = { intensity: 1 }
+      manager.directionalLight2 = { intensity: 1 }
+      manager.baseLightIntensities = { ambient: 1, dir1: 1, dir2: 1 }
+      manager.appearanceOverrideEnabled = true
+
+      manager.setAppearanceOverrideEnabled(false)
+
+      expect(child1.material.opacity).toBe(1)
+      expect(child1.material.transparent).toBe(false)
+      expect(child2.material.opacity).toBe(1)
+      expect(child2.material.transparent).toBe(false)
+    })
+  })
+
   describe('Theme Detection Edge Cases', () => {
     it('falls back to system preference for auto theme', () => {
       document.documentElement.removeAttribute('data-theme')
@@ -2336,6 +2515,7 @@ describe('PreviewManager', () => {
           { material: mat2, renderOrder: 0 },
         ],
       }
+      manager.appearanceOverrideEnabled = true
       manager.setModelOpacity(50)
       expect(mat1.transparent).toBe(true)
       expect(mat1.opacity).toBe(0.5)
