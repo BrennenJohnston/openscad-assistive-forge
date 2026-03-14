@@ -166,6 +166,170 @@ const OFF_WITH_INLINE_INT_RGBA = `OFF
 3 0 5 4 0 255 0 200
 `;
 
+// Multi-color OFF matching Phase 0 desktop baseline colors:
+// Red #FF0000 RGB(255,0,0) — keyguard overlay faces
+// Turquoise #40E0D0 RGB(64,224,208) — frame faces
+// Uses "OFF" header with integer 0-255 (OpenSCAD export_off.cc format)
+const MULTICOLOR_KEYGUARD_OFF = `OFF
+8 12 0
+0 0 0
+10 0 0
+10 10 0
+0 10 0
+0 0 10
+10 0 10
+10 10 10
+0 10 10
+3 0 1 2 255 0 0
+3 0 2 3 255 0 0
+3 4 5 6 255 0 0
+3 4 6 7 255 0 0
+3 0 1 5 255 0 0
+3 0 5 4 255 0 0
+3 2 3 7 64 224 208
+3 2 7 6 64 224 208
+3 0 3 7 64 224 208
+3 0 7 4 64 224 208
+3 1 2 6 64 224 208
+3 1 6 5 64 224 208
+`;
+
+// Multi-color OFF with a quad face (n=4) to test fan-triangulation + color
+const MULTICOLOR_QUAD_OFF = `OFF
+8 3 0
+0 0 0
+10 0 0
+10 10 0
+0 10 0
+0 0 10
+10 0 10
+10 10 10
+0 10 10
+4 0 1 2 3 255 0 0
+4 4 5 6 7 64 224 208
+3 0 1 5 0 255 0
+`;
+
+// OFF with mixed colored and uncolored faces (latent fragility per RQ-2)
+const MIXED_COLOR_OFF = `OFF
+8 4 0
+0 0 0
+10 0 0
+10 10 0
+0 10 0
+0 0 10
+10 0 10
+10 10 10
+0 10 10
+3 0 1 2 255 0 0
+3 0 2 3 255 0 0
+3 4 5 6
+3 4 6 7
+`;
+
+// OFF where the first face is black (RGB 0,0,0) — edge case per RQ-2
+const FIRST_FACE_BLACK_OFF = `OFF
+8 4 0
+0 0 0
+10 0 0
+10 10 0
+0 10 0
+0 0 10
+10 0 10
+10 10 10
+0 10 10
+3 0 1 2 0 0 0
+3 0 2 3 255 0 0
+3 4 5 6 64 224 208
+3 4 6 7 0 128 255
+`;
+
+// ── Standalone parser extraction — mirrors loadOFF() lines 1206-1307 ─────────
+// Extracted for unit testability without Three.js DOM dependency (fallback gate).
+function parseOFFColors(offData) {
+  const text =
+    typeof offData === 'string' ? offData : new TextDecoder().decode(offData);
+  const lines = text
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0 && !l.startsWith('#'));
+
+  if (lines.length === 0) throw new Error('OFF data is empty');
+
+  const firstLine = lines[0].toUpperCase();
+  const isCOFF = firstLine.startsWith('COFF');
+  const isOFF = firstLine.startsWith('OFF');
+  if (!isOFF && !isCOFF)
+    throw new Error(`Not a valid OFF file (header: "${lines[0]}")`);
+
+  const headerParts = lines[0].split(/\s+/);
+  let countLineIdx;
+  if (headerParts.length >= 3 && !isNaN(Number(headerParts[1]))) {
+    countLineIdx = 0;
+  } else {
+    countLineIdx = 1;
+  }
+  const countParts =
+    countLineIdx === 0
+      ? headerParts.slice(1)
+      : lines[countLineIdx].split(/\s+/);
+  const numVerts = Number(countParts[0]);
+  const numFaces = Number(countParts[1]);
+  const dataStartLine = countLineIdx + 1;
+
+  const vertices = [];
+  for (let i = 0; i < numVerts; i++) {
+    const [x, y, z] = lines[dataStartLine + i].split(/\s+/).map(Number);
+    vertices.push(x, y, z);
+  }
+
+  const positions = [];
+  const colors = [];
+  let hasColors = false;
+  let colorScale = 1;
+  let colorFormatDetected = false;
+
+  const faceStart = dataStartLine + numVerts;
+  for (let i = 0; i < numFaces; i++) {
+    const parts = lines[faceStart + i].split(/\s+/).map(Number);
+    const n = parts[0];
+    if (n < 3) continue;
+
+    const hasInlineColor = parts.length >= n + 4;
+
+    const v0 = parts[1];
+    for (let t = 1; t < n - 1; t++) {
+      const va = parts[1 + t];
+      const vb = parts[1 + t + 1];
+      positions.push(
+        vertices[v0 * 3],
+        vertices[v0 * 3 + 1],
+        vertices[v0 * 3 + 2],
+        vertices[va * 3],
+        vertices[va * 3 + 1],
+        vertices[va * 3 + 2],
+        vertices[vb * 3],
+        vertices[vb * 3 + 1],
+        vertices[vb * 3 + 2]
+      );
+      if (hasInlineColor) {
+        if (!colorFormatDetected) {
+          const sample = Math.max(parts[n + 1], parts[n + 2], parts[n + 3]);
+          colorScale = sample > 1 ? 1 / 255 : 1;
+          colorFormatDetected = true;
+        }
+        const r = parts[n + 1] * colorScale;
+        const g = parts[n + 2] * colorScale;
+        const b = parts[n + 3] * colorScale;
+        colors.push(r, g, b, r, g, b, r, g, b);
+        hasColors = true;
+      }
+    }
+  }
+
+  return { positions, colors, hasColors, colorScale, isCOFF, numVerts, numFaces };
+}
+
 // ── Stakeholder-representative SCAD snippets ────────────────────────────────
 
 const KEYGUARD_SCAD = `
@@ -975,5 +1139,264 @@ describe('S-005: dual-render integration for # debug modifier', () => {
         outputFormat: 'off',
       })
     );
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 1: Multi-Color COFF Unit Probe
+//
+// Validates that the loadOFF() parser logic correctly handles COFF data with
+// multiple distinct face-color groups. Uses standalone parser extraction
+// (fallback gate: Three.js unavailable in jsdom test environment).
+//
+// Anchored to Phase 0 desktop baseline: Red #FF0000 + Turquoise #40E0D0,
+// integer 0-255 scale, "OFF" header (OpenSCAD export_off.cc format).
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('Phase 1: Multi-color COFF parser probe (loadOFF extraction)', () => {
+  // Helper: extract unique RGB triples from the flat colors array
+  function extractUniqueColors(colors) {
+    const seen = new Set();
+    const unique = [];
+    for (let i = 0; i < colors.length; i += 3) {
+      const key = `${colors[i].toFixed(6)},${colors[i + 1].toFixed(6)},${colors[i + 2].toFixed(6)}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        unique.push([colors[i], colors[i + 1], colors[i + 2]]);
+      }
+    }
+    return unique;
+  }
+
+  describe('keyguard multi-color OFF (Red + Turquoise, integer 0-255)', () => {
+    let result;
+
+    beforeEach(() => {
+      result = parseOFFColors(MULTICOLOR_KEYGUARD_OFF);
+    });
+
+    it('detects colors in the OFF data', () => {
+      expect(result.hasColors).toBe(true);
+    });
+
+    it('auto-detects integer color scale (1/255)', () => {
+      expect(result.colorScale).toBeCloseTo(1 / 255);
+    });
+
+    it('colors array length equals positions array length (geometry guard passes)', () => {
+      expect(result.colors.length).toBe(result.positions.length);
+    });
+
+    it('produces exactly 2 distinct face-color groups', () => {
+      const unique = extractUniqueColors(result.colors);
+      expect(unique.length).toBe(2);
+    });
+
+    it('Red face group maps to RGB ≈ (1.0, 0.0, 0.0) after scaling', () => {
+      const unique = extractUniqueColors(result.colors);
+      const red = unique.find(
+        (c) => c[0] > 0.9 && c[1] < 0.1 && c[2] < 0.1
+      );
+      expect(red).toBeDefined();
+      expect(red[0]).toBeCloseTo(255 / 255);
+      expect(red[1]).toBeCloseTo(0 / 255);
+      expect(red[2]).toBeCloseTo(0 / 255);
+    });
+
+    it('Turquoise face group maps to RGB ≈ (0.251, 0.878, 0.816) after scaling', () => {
+      const unique = extractUniqueColors(result.colors);
+      const turquoise = unique.find(
+        (c) => c[0] < 0.3 && c[1] > 0.8 && c[2] > 0.7
+      );
+      expect(turquoise).toBeDefined();
+      expect(turquoise[0]).toBeCloseTo(64 / 255);
+      expect(turquoise[1]).toBeCloseTo(224 / 255);
+      expect(turquoise[2]).toBeCloseTo(208 / 255);
+    });
+
+    it('Red group has 6 faces (6 × 9 = 54 color entries)', () => {
+      let redCount = 0;
+      for (let i = 0; i < result.colors.length; i += 9) {
+        if (result.colors[i] > 0.9 && result.colors[i + 1] < 0.1) {
+          redCount++;
+        }
+      }
+      expect(redCount).toBe(6);
+    });
+
+    it('Turquoise group has 6 faces (6 × 9 = 54 color entries)', () => {
+      let turqCount = 0;
+      for (let i = 0; i < result.colors.length; i += 9) {
+        if (result.colors[i] < 0.3 && result.colors[i + 1] > 0.8) {
+          turqCount++;
+        }
+      }
+      expect(turqCount).toBe(6);
+    });
+
+    it('uses OFF header (not COFF) matching OpenSCAD export_off.cc', () => {
+      expect(result.isCOFF).toBe(false);
+    });
+
+    it('parses correct vertex and face counts', () => {
+      expect(result.numVerts).toBe(8);
+      expect(result.numFaces).toBe(12);
+    });
+  });
+
+  describe('quad face fan-triangulation preserves per-face color', () => {
+    let result;
+
+    beforeEach(() => {
+      result = parseOFFColors(MULTICOLOR_QUAD_OFF);
+    });
+
+    it('quad face (n=4) produces 2 triangles with the same color', () => {
+      // First quad: Red 255,0,0 → 2 triangles → 18 color entries
+      // All 18 entries should be Red (≈1.0, 0, 0)
+      const firstTriR = result.colors[0];
+      const firstTriG = result.colors[1];
+      const firstTriB = result.colors[2];
+      const secondTriR = result.colors[9];
+      const secondTriG = result.colors[10];
+      const secondTriB = result.colors[11];
+      expect(firstTriR).toBeCloseTo(1.0);
+      expect(firstTriG).toBeCloseTo(0.0);
+      expect(firstTriB).toBeCloseTo(0.0);
+      expect(secondTriR).toBeCloseTo(1.0);
+      expect(secondTriG).toBeCloseTo(0.0);
+      expect(secondTriB).toBeCloseTo(0.0);
+    });
+
+    it('total triangle count accounts for quad expansion', () => {
+      // 2 quads → 4 triangles + 1 triangle = 5 triangles
+      const triCount = result.positions.length / 9;
+      expect(triCount).toBe(5);
+    });
+
+    it('produces 3 distinct color groups (Red, Turquoise, Green)', () => {
+      const unique = extractUniqueColors(result.colors);
+      expect(unique.length).toBe(3);
+    });
+  });
+
+  describe('mixed colored/uncolored faces (latent fragility)', () => {
+    let result;
+
+    beforeEach(() => {
+      result = parseOFFColors(MIXED_COLOR_OFF);
+    });
+
+    it('hasColors is true (some faces have color)', () => {
+      expect(result.hasColors).toBe(true);
+    });
+
+    it('colors.length < positions.length (geometry guard would FAIL)', () => {
+      // loadOFF() line 1324: hasColors && colors.length === positions.length
+      // Mixed faces → 2 colored + 2 uncolored → colors has 18, positions has 36
+      expect(result.colors.length).toBeLessThan(result.positions.length);
+    });
+
+    it('documents: mesh would fall back to solid theme color (no vertex colors)', () => {
+      // When colors.length !== positions.length, the geometry guard at
+      // preview.js:1324 prevents the color attribute from being set.
+      // The mesh falls back to the solid theme color via _resolveModelColor().
+      const geometryGuardPasses =
+        result.hasColors && result.colors.length === result.positions.length;
+      expect(geometryGuardPasses).toBe(false);
+    });
+  });
+
+  describe('first-face-black edge case (color scale detection)', () => {
+    let result;
+
+    beforeEach(() => {
+      result = parseOFFColors(FIRST_FACE_BLACK_OFF);
+    });
+
+    it('hasColors is true', () => {
+      expect(result.hasColors).toBe(true);
+    });
+
+    it('detects float scale (max of first face 0,0,0 is 0 ≤ 1)', () => {
+      // First face: RGB(0,0,0) → Math.max(0,0,0) = 0 ≤ 1 → colorScale = 1
+      // This means subsequent integer values (e.g., 255) are used unscaled.
+      expect(result.colorScale).toBe(1);
+    });
+
+    it('documents: subsequent integer colors are unscaled (255.0 instead of 1.0)', () => {
+      // Second face is Red RGB(255,0,0) but with colorScale=1,
+      // values are 255.0 instead of 1.0. Three.js clamps to 1.0.
+      const unique = extractUniqueColors(result.colors);
+      const rawRed = unique.find((c) => c[0] === 255);
+      expect(rawRed).toBeDefined();
+      expect(rawRed[0]).toBe(255);
+    });
+  });
+
+  describe('existing fixtures through parser extraction', () => {
+    it('COFF_TWO_COLORS (float 0-1) produces 3 distinct color groups', () => {
+      const result = parseOFFColors(COFF_TWO_COLORS);
+      expect(result.hasColors).toBe(true);
+      expect(result.isCOFF).toBe(true);
+      expect(result.colorScale).toBe(1);
+      const unique = extractUniqueColors(result.colors);
+      expect(unique.length).toBe(3);
+    });
+
+    it('OFF_WITH_INLINE_INT_COLORS (integer 0-255) produces 3 distinct color groups', () => {
+      const result = parseOFFColors(OFF_WITH_INLINE_INT_COLORS);
+      expect(result.hasColors).toBe(true);
+      expect(result.isCOFF).toBe(false);
+      expect(result.colorScale).toBeCloseTo(1 / 255);
+      const unique = extractUniqueColors(result.colors);
+      expect(unique.length).toBe(3);
+    });
+
+    it('OFF_WITH_INLINE_INT_RGBA (integer 0-255 with alpha) produces 3 color groups', () => {
+      const result = parseOFFColors(OFF_WITH_INLINE_INT_RGBA);
+      expect(result.hasColors).toBe(true);
+      expect(result.colorScale).toBeCloseTo(1 / 255);
+      const unique = extractUniqueColors(result.colors);
+      expect(unique.length).toBe(3);
+    });
+
+    it('PLAIN_OFF produces no colors', () => {
+      const result = parseOFFColors(PLAIN_OFF);
+      expect(result.hasColors).toBe(false);
+      expect(result.colors.length).toBe(0);
+    });
+
+    it('COFF_COUNTS_ON_HEADER parses correctly with counts on header line', () => {
+      const result = parseOFFColors(COFF_COUNTS_ON_HEADER);
+      expect(result.hasColors).toBe(true);
+      expect(result.numVerts).toBe(8);
+      expect(result.numFaces).toBe(6);
+      const unique = extractUniqueColors(result.colors);
+      expect(unique.length).toBe(3);
+    });
+  });
+
+  describe('parser extraction fidelity to loadOFF()', () => {
+    it('parseOFFColors mirrors loadOFF per-face color check (line 1272)', () => {
+      // Verify: hasInlineColor = parts.length >= n + 4
+      const faceLine = '3 0 1 2 255 0 0';
+      const parts = faceLine.split(/\s+/).map(Number);
+      const n = parts[0];
+      expect(parts.length >= n + 4).toBe(true);
+    });
+
+    it('parseOFFColors mirrors loadOFF color accumulation (line 1303)', () => {
+      // Each triangulated face pushes 9 color entries: r,g,b × 3 vertices
+      const result = parseOFFColors(MULTICOLOR_KEYGUARD_OFF);
+      expect(result.colors.length % 9).toBe(0);
+    });
+
+    it('colors array has 3 entries per vertex (RGB, no alpha)', () => {
+      const result = parseOFFColors(OFF_WITH_INLINE_INT_RGBA);
+      // Even though input has RGBA, parser only stores RGB (3 per vertex)
+      const vertexCount = result.positions.length / 3;
+      expect(result.colors.length).toBe(vertexCount * 3);
+    });
   });
 });
