@@ -2537,6 +2537,20 @@ summary:focus-visible,
   pointer-events: none;
 }
 
+@media (max-width: 767px) {
+  .preview-settings {
+    grid-template-columns: 1fr;
+    gap: var(--space-sm);
+    padding: var(--space-sm);
+  }
+}
+
+@media (pointer: fine) and (min-width: 768px) {
+  .preview-settings {
+    gap: var(--space-sm);
+  }
+}
+
 .model-color-picker input[type='color'] {
   width: 44px;
   height: 32px;
