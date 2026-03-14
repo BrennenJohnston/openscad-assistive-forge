@@ -306,12 +306,11 @@ test.describe('Parity — Unified Console (S-010)', () => {
 
 test.describe('Parity — Rendering Indicator (S-011)', () => {
   test('preview state indicator element exists with expected state classes', async ({ page }) => {
-    await page.goto('/');
-    await page.waitForLoadState('domcontentloaded');
-    await page.waitForTimeout(1_000);
+    await page.goto('/?example=simple-box');
+    await page.locator('#mainInterface').waitFor({ state: 'visible', timeout: 40_000 });
 
     const indicator = page.locator('.preview-state-indicator');
-    await expect(indicator).toBeAttached();
+    await expect(indicator).toBeAttached({ timeout: 30_000 });
 
     const className = await indicator.getAttribute('class');
     const hasValidState = /state-(idle|pending|rendering|current|error|stale)/.test(
@@ -321,11 +320,11 @@ test.describe('Parity — Rendering Indicator (S-011)', () => {
   });
 
   test('rendering toast overlay exists in DOM', async ({ page }) => {
-    await page.goto('/');
-    await page.waitForLoadState('domcontentloaded');
+    await page.goto('/?example=simple-box');
+    await page.locator('#mainInterface').waitFor({ state: 'visible', timeout: 40_000 });
 
     const toast = page.locator('.preview-rendering-overlay');
-    await expect(toast).toBeAttached();
+    await expect(toast).toBeAttached({ timeout: 30_000 });
   });
 });
 
@@ -443,18 +442,21 @@ test.describe('Parity — Grid Opacity Control (S-016)', () => {
   });
 
   test('grid opacity value persists across page reload', async ({ page }) => {
-    await page.goto('/');
-    await page.waitForLoadState('domcontentloaded');
+    await page.goto('/?example=simple-box');
+    await page.locator('#mainInterface').waitFor({ state: 'visible', timeout: 40_000 });
 
     const slider = page.locator('#gridOpacityInput');
+    await expect(slider).toBeAttached({ timeout: 30_000 });
+
     if (!(await slider.isVisible().catch(() => false))) {
-      const cameraPanel = page.locator('details#cameraControls > summary');
-      if ((await cameraPanel.count()) > 0) {
-        await cameraPanel.click();
-        await page.waitForTimeout(300);
+      const drawerToggle = page.locator('#previewDrawerToggle');
+      if ((await drawerToggle.count()) > 0) {
+        await drawerToggle.click();
+        await page.waitForTimeout(500);
       }
     }
 
+    await expect(slider).toBeVisible({ timeout: 10_000 });
     await slider.fill('42');
     await slider.dispatchEvent('input');
     await page.waitForTimeout(500);

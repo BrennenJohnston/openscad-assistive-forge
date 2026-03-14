@@ -24,7 +24,7 @@ test.beforeEach(async ({ page }) => {
   })
 })
 
-test.describe('Accessibility Compliance (WCAG 2.1 AA)', () => {
+test.describe('Accessibility Compliance (WCAG 2.2 AA)', () => {
   test('should have no accessibility violations on landing page', async ({ page }) => {
     await page.goto('/')
     
@@ -33,7 +33,7 @@ test.describe('Accessibility Compliance (WCAG 2.1 AA)', () => {
     
     // Run accessibility scan
     const results = await new AxeBuilder({ page })
-      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
       .analyze()
     
     // Log violations for debugging
@@ -70,7 +70,7 @@ test.describe('Accessibility Compliance (WCAG 2.1 AA)', () => {
       
       // Run accessibility scan on parameter UI
       const results = await new AxeBuilder({ page })
-        .withTags(['wcag2a', 'wcag2aa'])
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
         .analyze()
       
       if (results.violations.length > 0) {
@@ -725,7 +725,7 @@ test.describe('Screen Reader Support', () => {
       
       // Wait for example to load - file info shows loaded file name and parameter count
       await page.waitForSelector('#fileInfo:has-text("parameters")', {
-        timeout: 15000
+        timeout: 30000
       })
       
       // Check that welcome screen is hidden
@@ -1218,7 +1218,7 @@ test.describe('Color System and Theme Accessibility', () => {
     
     // Run accessibility scan
     const results = await new AxeBuilder({ page })
-      .withTags(['wcag2a', 'wcag2aa'])
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
       .analyze();
     
     expect(results.violations).toEqual([]);
@@ -1238,7 +1238,7 @@ test.describe('Color System and Theme Accessibility', () => {
     
     // Run accessibility scan
     const results = await new AxeBuilder({ page })
-      .withTags(['wcag2a', 'wcag2aa'])
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
       .analyze();
     
     expect(results.violations).toEqual([]);
@@ -1259,7 +1259,7 @@ test.describe('Color System and Theme Accessibility', () => {
     
     // Run accessibility scan
     const results = await new AxeBuilder({ page })
-      .withTags(['wcag2a', 'wcag2aa', 'wcag2aaa'])
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'wcag2aaa'])
       .analyze();
     
     expect(results.violations).toEqual([]);
@@ -1280,7 +1280,7 @@ test.describe('Color System and Theme Accessibility', () => {
     
     // Run accessibility scan
     const results = await new AxeBuilder({ page })
-      .withTags(['wcag2a', 'wcag2aa', 'wcag2aaa'])
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'wcag2aaa'])
       .analyze();
     
     expect(results.violations).toEqual([]);
@@ -1385,7 +1385,7 @@ test.describe('Enhanced Contrast Preference (prefers-contrast)', () => {
     
     // Run accessibility scan
     const results = await new AxeBuilder({ page })
-      .withTags(['wcag2a', 'wcag2aa'])
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
       .analyze();
     
     expect(results.violations).toEqual([]);
@@ -1785,7 +1785,7 @@ test.describe('Drawer Accessibility', () => {
       await page.locator('#mobileDrawerToggle').click();
       
       const results = await new AxeBuilder({ page })
-        .withTags(['wcag2a', 'wcag2aa'])
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
         .analyze();
       
       expect(results.violations).toEqual([]);
@@ -1999,7 +1999,7 @@ test.describe('Tutorial CSS and Styling - Phase 6.4', () => {
 });
 
 test.describe('UI Mode Toggle & Disclosure Section Accessibility', () => {
-  test('UI mode toggle exists and defaults to Advanced mode', async ({ page }) => {
+  test('UI mode toggle exists and defaults to Basic mode', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI');
 
     await page.goto('/');
@@ -2022,22 +2022,16 @@ test.describe('UI Mode Toggle & Disclosure Section Accessibility', () => {
     await expect(uiModeToggle).toHaveCount(1);
     await expect(uiModeToggle).toBeVisible();
 
-    // Toggle must have role="switch" and correct initial ARIA state (Advanced = true)
+    // Toggle must have role="switch" and correct initial ARIA state (Basic = false)
     await expect(uiModeToggle).toHaveAttribute('role', 'switch');
-    await expect(uiModeToggle).toHaveAttribute('aria-checked', 'true');
+    await expect(uiModeToggle).toHaveAttribute('aria-checked', 'false');
 
     // Toggle must be keyboard-operable (focusable)
     await uiModeToggle.focus();
     await expect(uiModeToggle).toBeFocused();
-
-    // In Advanced mode, #advancedMenu must not have ui-mode-hidden class
-    const advancedMenu = page.locator('#advancedMenu');
-    if (await advancedMenu.count() > 0) {
-      await expect(advancedMenu).not.toHaveClass(/ui-mode-hidden/);
-    }
   });
 
-  test('UI mode toggle switches to Basic mode and hides correct panels', async ({ page }) => {
+  test('UI mode toggle switches to Advanced mode and shows all panels', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI');
 
     await page.goto('/');
@@ -2049,22 +2043,25 @@ test.describe('UI Mode Toggle & Disclosure Section Accessibility', () => {
 
     const uiModeToggle = page.locator('#uiModeToggle');
 
-    // Click to switch to Basic mode
-    await uiModeToggle.click();
+    // Default is Basic mode (aria-checked="false")
     await expect(uiModeToggle).toHaveAttribute('aria-checked', 'false');
 
-    // Parameter controls must remain visible in Basic mode
-    const paramControls = page.locator('.param-control');
-    const paramCount = await paramControls.count();
-    expect(paramCount).toBeGreaterThan(0);
-
-    // Click again to switch back to Advanced mode
+    // Click to switch to Advanced mode
     await uiModeToggle.click();
     await expect(uiModeToggle).toHaveAttribute('aria-checked', 'true');
 
     // In Advanced mode, no panels should have ui-mode-hidden class
     const hiddenPanels = await page.locator('.ui-mode-hidden').count();
     expect(hiddenPanels).toBe(0);
+
+    // Parameter controls must remain visible
+    const paramControls = page.locator('.param-control');
+    const paramCount = await paramControls.count();
+    expect(paramCount).toBeGreaterThan(0);
+
+    // Click again to switch back to Basic mode
+    await uiModeToggle.click();
+    await expect(uiModeToggle).toHaveAttribute('aria-checked', 'false');
   });
 
   test('all disclosure sections are keyboard-operable', async ({ page }) => {

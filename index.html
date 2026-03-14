@@ -477,11 +477,11 @@
               role="region"
               aria-labelledby="features-heading"
             >
-              <h3 id="features-heading">Discover Features</h3>
+              <h2 id="features-heading">Discover Features</h2>
               <div class="role-paths-grid">
                 <!-- Beginners Start Here (only visible tutorial for now) -->
                 <div class="role-path-card">
-                  <h4 class="role-path-title">Beginners Start Here</h4>
+                  <h3 class="role-path-title">Beginners Start Here</h3>
                   <p class="role-path-meta">Guided tour • about 3 minutes</p>
                   <p class="role-path-description">
                     Load a simple example, change a few parameters, and generate
@@ -514,7 +514,7 @@
                   </div>
                 </div>
                 <div class="role-path-card">
-                  <h4 class="role-path-title">Explore Features</h4>
+                  <h3 class="role-path-title">Explore Features</h3>
                   <p class="role-path-description">
                     Prefer to browse? Open Help for examples and deeper
                     guidance.
@@ -539,7 +539,7 @@
                 </div>
                 <!-- Other tutorials are temporarily hidden (we'll re-enable later) -->
                 <div class="role-path-card" hidden aria-hidden="true">
-                  <h4 class="role-path-title">Advanced Makers</h4>
+                  <h3 class="role-path-title">Advanced Makers</h3>
                   <p class="role-path-description">
                     Work with multi-file projects, libraries, and advanced
                     OpenSCAD features
@@ -568,7 +568,7 @@
                   </div>
                 </div>
                 <div class="role-path-card" hidden aria-hidden="true">
-                  <h4 class="role-path-title">Keyboard-Only Users</h4>
+                  <h3 class="role-path-title">Keyboard-Only Users</h3>
                   <p class="role-path-description">
                     Complete the full workflow without a mouse using predictable
                     keyboard controls
@@ -597,7 +597,7 @@
                   </div>
                 </div>
                 <div class="role-path-card" hidden aria-hidden="true">
-                  <h4 class="role-path-title">Low Vision Users</h4>
+                  <h3 class="role-path-title">Low Vision Users</h3>
                   <p class="role-path-description">
                     Use high contrast themes, large touch targets, and visible
                     focus indicators
@@ -627,7 +627,7 @@
                   </div>
                 </div>
                 <div class="role-path-card" hidden aria-hidden="true">
-                  <h4 class="role-path-title">Voice Input Users</h4>
+                  <h3 class="role-path-title">Voice Input Users</h3>
                   <p class="role-path-description">
                     Control the app with voice commands using stable, speakable
                     names
@@ -657,7 +657,7 @@
                   </div>
                 </div>
                 <div class="role-path-card" hidden aria-hidden="true">
-                  <h4 class="role-path-title">Screen Reader Users</h4>
+                  <h3 class="role-path-title">Screen Reader Users</h3>
                   <p class="role-path-description">
                     Customize models with clear status announcements and
                     keyboard-only workflow
@@ -2812,112 +2812,7 @@
                       <span>Preview Settings</span>
                     </div>
                     <div class="preview-settings">
-                      <!-- LEFT COLUMN: Model Appearance -->
-                      <section class="settings-col settings-col-appearance"
-                               aria-labelledby="modelAppearanceHeading">
-                        <h4 class="preview-settings-subheading" id="modelAppearanceHeading">
-                          Model Appearance
-                        </h4>
-                        <div class="model-appearance-controls">
-                          <label class="toggle-switch model-appearance-toggle">
-                            <input
-                              type="checkbox"
-                              id="modelAppearanceEnabled"
-                              aria-label="Enable custom model appearance override"
-                            />
-                            <span class="toggle-label">Override</span>
-                          </label>
-                        </div>
-                        <div class="model-appearance-sliders">
-                          <!-- Model Opacity -->
-                          <div class="preview-setting model-opacity-setting">
-                            <label for="modelOpacityInput" id="modelOpacityLabel"
-                              >Model opacity</label
-                            >
-                            <div class="slider-container">
-                              <input
-                                type="range"
-                                id="modelOpacityInput"
-                                min="10"
-                                max="100"
-                                step="5"
-                                value="100"
-                                aria-labelledby="modelOpacityLabel"
-                                aria-describedby="modelOpacityHelp"
-                              />
-                              <span class="slider-value" id="modelOpacityValue"
-                                >100%</span
-                              >
-                            </div>
-                          </div>
-                          <span id="modelOpacityHelp" class="sr-only"
-                            >Reduce model opacity to see the reference overlay image
-                            behind the 3D model. Useful for alignment.</span
-                          >
-                          <!-- Brightness -->
-                          <div class="preview-setting brightness-setting">
-                            <label for="brightnessInput" id="brightnessLabel"
-                              >Brightness</label
-                            >
-                            <div class="slider-container">
-                              <input
-                                type="range"
-                                id="brightnessInput"
-                                min="20"
-                                max="200"
-                                step="5"
-                                value="100"
-                                aria-labelledby="brightnessLabel"
-                                aria-describedby="brightnessHelp"
-                              />
-                              <span class="slider-value" id="brightnessValue"
-                                >100%</span
-                              >
-                            </div>
-                          </div>
-                          <span id="brightnessHelp" class="sr-only"
-                            >Adjust overall scene brightness from 20 to 200
-                            percent</span
-                          >
-                          <!-- Contrast -->
-                          <div class="preview-setting contrast-setting">
-                            <label for="contrastInput" id="contrastLabel"
-                              >Contrast</label
-                            >
-                            <div class="slider-container">
-                              <input
-                                type="range"
-                                id="contrastInput"
-                                min="20"
-                                max="200"
-                                step="5"
-                                value="100"
-                                aria-labelledby="contrastLabel"
-                                aria-describedby="contrastHelp"
-                              />
-                              <span class="slider-value" id="contrastValue"
-                                >100%</span
-                              >
-                            </div>
-                          </div>
-                          <span id="contrastHelp" class="sr-only"
-                            >Adjust lighting contrast from flat to dramatic, 20 to
-                            200 percent</span
-                          >
-                          <!-- Reset button -->
-                          <div class="preview-setting">
-                            <button
-                              type="button"
-                              id="resetAppearanceBtn"
-                              class="btn btn-sm btn-outline"
-                              aria-label="Reset model opacity, brightness, and contrast to defaults"
-                            >
-                              Reset appearance
-                            </button>
-                          </div>
-                        </div><!-- .model-appearance-sliders -->
-                      </section>
-                      <!-- RIGHT COLUMN: Preview Options -->
+                      <!-- LEFT COLUMN: Preview Options -->
                       <section class="settings-col settings-col-options"
                                aria-labelledby="previewOptionsHeading">
                         <h4 class="preview-settings-subheading" id="previewOptionsHeading">
@@ -3238,6 +3133,115 @@
                             <option value="high">High (smooth)</option>
                           </select>
                         </label>
+                      </section>
+                      <!-- RIGHT COLUMN: Model Appearance + Color + Utilities -->
+                      <section class="settings-col settings-col-appearance"
+                               aria-labelledby="modelAppearanceHeading">
+                        <h4 class="preview-settings-subheading" id="modelAppearanceHeading">
+                          Model Appearance
+                        </h4>
+                        <div class="model-appearance-controls">
+                          <label class="toggle-switch model-appearance-toggle">
+                            <input
+                              type="checkbox"
+                              id="modelAppearanceEnabled"
+                              aria-label="Enable custom model appearance override"
+                            />
+                            <span class="toggle-label">Override</span>
+                          </label>
+                        </div>
+                        <div class="model-appearance-sliders">
+                          <!-- Model Opacity -->
+                          <div class="preview-setting model-opacity-setting">
+                            <label for="modelOpacityInput" id="modelOpacityLabel"
+                              >Model opacity</label
+                            >
+                            <div class="slider-container">
+                              <input
+                                type="range"
+                                id="modelOpacityInput"
+                                min="10"
+                                max="100"
+                                step="5"
+                                value="100"
+                                aria-labelledby="modelOpacityLabel"
+                                aria-describedby="modelOpacityHelp"
+                              />
+                              <span class="slider-value" id="modelOpacityValue"
+                                >100%</span
+                              >
+                            </div>
+                          </div>
+                          <span id="modelOpacityHelp" class="sr-only"
+                            >Reduce model opacity to see the reference overlay image
+                            behind the 3D model. Useful for alignment.</span
+                          >
+                          <!-- Brightness -->
+                          <div class="preview-setting brightness-setting">
+                            <label for="brightnessInput" id="brightnessLabel"
+                              >Brightness</label
+                            >
+                            <div class="slider-container">
+                              <input
+                                type="range"
+                                id="brightnessInput"
+                                min="20"
+                                max="200"
+                                step="5"
+                                value="100"
+                                aria-labelledby="brightnessLabel"
+                                aria-describedby="brightnessHelp"
+                              />
+                              <span class="slider-value" id="brightnessValue"
+                                >100%</span
+                              >
+                            </div>
+                          </div>
+                          <span id="brightnessHelp" class="sr-only"
+                            >Adjust overall scene brightness from 20 to 200
+                            percent</span
+                          >
+                          <!-- Contrast -->
+                          <div class="preview-setting contrast-setting">
+                            <label for="contrastInput" id="contrastLabel"
+                              >Contrast</label
+                            >
+                            <div class="slider-container">
+                              <input
+                                type="range"
+                                id="contrastInput"
+                                min="20"
+                                max="200"
+                                step="5"
+                                value="100"
+                                aria-labelledby="contrastLabel"
+                                aria-describedby="contrastHelp"
+                              />
+                              <span class="slider-value" id="contrastValue"
+                                >100%</span
+                              >
+                            </div>
+                          </div>
+                          <span id="contrastHelp" class="sr-only"
+                            >Adjust lighting contrast from flat to dramatic, 20 to
+                            200 percent</span
+                          >
+                          <!-- Reset button -->
+                          <div class="preview-setting">
+                            <button
+                              type="button"
+                              id="resetAppearanceBtn"
+                              class="btn btn-sm btn-outline"
+                              aria-label="Reset model opacity, brightness, and contrast to defaults"
+                            >
+                              Reset appearance
+                            </button>
+                          </div>
+                        </div><!-- .model-appearance-sliders -->
+                        <div
+                          class="preview-setting-divider"
+                          aria-hidden="true"
+                        ></div>
                         <div class="preview-setting model-color-setting">
                           <span class="preview-setting-label">Model Color</span>
                           <div class="model-color-controls">
@@ -3267,6 +3271,10 @@
                             </div>
                           </div>
                         </div>
+                        <div
+                          class="preview-setting-divider"
+                          aria-hidden="true"
+                        ></div>
                         <div
                           class="preview-setting complexity-indicator"
                           id="complexityIndicator"

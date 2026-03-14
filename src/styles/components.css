@@ -9835,7 +9835,7 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
   box-sizing: border-box;
 }
 
-.features-overview h3 {
+.features-overview h2 {
   font-size: var(--font-size-xl);
   font-weight: 700;
   color: var(--color-text-primary);

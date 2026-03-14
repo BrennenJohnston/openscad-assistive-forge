@@ -16,8 +16,9 @@ export default defineConfig({
   
   // Global timeout to prevent hangs (per test: 60s, total: 8min in CI)
   // Edge suite with 1 worker + retries runs ~5min; 480s gives safe headroom
+  // Local: 30min to accommodate large test suites on Windows with 1 worker
   timeout: 60000,
-  globalTimeout: isCI ? 480000 : 600000,
+  globalTimeout: isCI ? 480000 : 1800000,
   
   // Prevent terminal hang issues
   outputDir: './test-results',

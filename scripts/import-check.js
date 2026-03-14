@@ -88,6 +88,15 @@ const SKIP_DIRS = new Set([
   "test-results",
 ]);
 
+const ASSET_EXTENSIONS = new Set([
+  ".stl", ".obj", ".off", ".3mf", ".dxf", ".svg", ".scad",
+  ".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".bmp",
+  ".wasm", ".bin", ".dat", ".ttf", ".woff", ".woff2", ".eot",
+  ".css", ".html", ".htm", ".xml", ".csv", ".txt",
+  ".mp3", ".wav", ".ogg", ".mp4", ".webm",
+  ".pdf", ".zip", ".gz", ".tar",
+]);
+
 function collectFiles(paths) {
   const files = [];
   for (const p of paths) {
@@ -291,6 +300,8 @@ function checkFile(filepath, projectRoot) {
 
   for (const specifier of imports) {
     if (isBuiltinModule(specifier)) continue;
+    const ext = extname(specifier).toLowerCase();
+    if (ext && ASSET_EXTENSIONS.has(ext)) continue;
     if (isRelativeImport(specifier)) {
       if (!resolveRelativeImport(specifier, filepath)) {
         unresolved.push(specifier);

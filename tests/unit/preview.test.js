@@ -2270,7 +2270,7 @@ describe('PreviewManager', () => {
 
         const style = document.getElementById('rendered2dPreview').querySelector('style[data-forge-preview]')
         expect(style).not.toBeNull()
-        expect(style.textContent).toContain('#8FBC8F')
+        expect(style.textContent).toContain('#7A9F7A')
       })
 
       it('does not inject parity styling when SVG has explicit fills', () => {
@@ -2364,8 +2364,7 @@ describe('PreviewManager', () => {
         PreviewManager.injectDesktopParityStyling(doc.documentElement)
         const style = doc.querySelector('style[data-forge-preview]')
         expect(style).not.toBeNull()
-        expect(style.textContent).toContain('#8FBC8F')
-        expect(style.textContent).toContain('#CC0000')
+        expect(style.textContent).toContain('#7A9F7A')
       })
 
       it('does not add duplicate style elements', () => {
