@@ -14087,6 +14087,8 @@ if (rounded) {
         autoPreviewController.cancelPending();
       }
 
+      updatePreviewStateUI(PREVIEW_STATE.RENDERING);
+
       // Show render time estimate for complex models
       const estimate = estimateRenderTime(
         state.uploadedFile.content,
@@ -14268,6 +14270,9 @@ if (rounded) {
       });
     } catch (error) {
       console.error('Generation failed:', error);
+      updatePreviewStateUI(PREVIEW_STATE.ERROR, {
+        error: error.message,
+      });
       if (typeof window.addStructuredError === 'function') {
         window.addStructuredError(error?.message || 'Generation failed');
       }

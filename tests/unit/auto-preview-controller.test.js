@@ -24,7 +24,8 @@ describe('AutoPreviewController', () => {
       loadSTL: vi.fn().mockResolvedValue(),
       setColorOverride: vi.fn(),
       colorOverrideEnabled: true,
-      clear: vi.fn()
+      clear: vi.fn(),
+      show2DPreview: vi.fn(),
     }
 
     controller = new AutoPreviewController(renderController, previewManager, {
@@ -705,11 +706,10 @@ describe('AutoPreviewController', () => {
       await controller.renderPreview(params, paramHash)
 
       const stateChangeCalls = onStateChange.mock.calls.map(c => c[0])
-      expect(stateChangeCalls).not.toContain(PREVIEW_STATE.MODEL_IS_2D)
       expect(stateChangeCalls).not.toContain(PREVIEW_STATE.ERROR)
     })
 
-    it('does NOT set MODEL_IS_2D for DXF generate mode (2D modes are previewable)', async () => {
+    it('does NOT set ERROR for DXF generate mode (2D modes are previewable)', async () => {
       const onStateChange = vi.fn()
       controller.onStateChange = onStateChange
       const params = { generate: 'DXF' }
@@ -720,7 +720,7 @@ describe('AutoPreviewController', () => {
       await controller.renderPreview(params, paramHash)
 
       const stateChangeCalls = onStateChange.mock.calls.map(c => c[0])
-      expect(stateChangeCalls).not.toContain(PREVIEW_STATE.MODEL_IS_2D)
+      expect(stateChangeCalls).not.toContain(PREVIEW_STATE.ERROR)
     })
 
     it('does NOT call onError with MODEL_IS_2D for SVG generate mode', async () => {
@@ -737,7 +737,7 @@ describe('AutoPreviewController', () => {
       expect(errorCodes).not.toContain('MODEL_IS_2D')
     })
 
-    it('uses ERROR state (not MODEL_IS_2D) for Customizer mode', async () => {
+    it('uses ERROR state for Customizer mode', async () => {
       const onStateChange = vi.fn()
       const onError = vi.fn()
       controller.onStateChange = onStateChange
@@ -751,7 +751,6 @@ describe('AutoPreviewController', () => {
 
       const stateChangeCalls = onStateChange.mock.calls.map(c => c[0])
       expect(stateChangeCalls).toContain(PREVIEW_STATE.ERROR)
-      expect(stateChangeCalls).not.toContain(PREVIEW_STATE.MODEL_IS_2D)
     })
 
     it('does NOT call previewManager.clear() for Customizer mode', async () => {
@@ -936,6 +935,95 @@ describe('AutoPreviewController', () => {
       controller.fullQualityFormat = 'svg'
       controller.dispose()
       expect(controller.fullQualityFormat).toBeNull()
+    })
+  })
+
+  describe('Draft 2D Preview Fallback', () => {
+    it('renderPreview() with MODEL_IS_2D error triggers renderDraft2DPreview()', async () => {
+      const model2DError = new Error('MODEL_IS_2D: not a 3D object')
+      model2DError.code = 'MODEL_IS_2D'
+      renderController.renderPreview.mockRejectedValueOnce(model2DError)
+      renderController.renderPreview.mockResolvedValueOnce({
+        stl: '<svg xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10"/></svg>',
+        stats: { triangles: 0 },
+      })
+
+      const params = { width: 10 }
+      const paramHash = controller.hashParams(params)
+      controller.currentParamHash = paramHash
+      controller.currentPreviewKey = `${paramHash}|model`
+
+      const draftSpy = vi.spyOn(controller, 'renderDraft2DPreview')
+
+      await controller.renderPreview(params, paramHash)
+
+      expect(draftSpy).toHaveBeenCalled()
+    })
+
+    it('successful SVG render calls show2DPreview() and sets state to CURRENT', async () => {
+      const model2DError = new Error('MODEL_IS_2D: not a 3D object')
+      model2DError.code = 'MODEL_IS_2D'
+      renderController.renderPreview.mockRejectedValueOnce(model2DError)
+      renderController.renderPreview.mockResolvedValueOnce({
+        stl: '<svg xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10"/></svg>',
+        stats: { triangles: 0 },
+      })
+
+      const onStateChange = vi.fn()
+      controller.onStateChange = onStateChange
+
+      const params = { width: 10 }
+      const paramHash = controller.hashParams(params)
+      controller.currentParamHash = paramHash
+      controller.currentPreviewKey = `${paramHash}|model`
+
+      await controller.renderPreview(params, paramHash)
+
+      expect(previewManager.show2DPreview).toHaveBeenCalled()
+      const stateChangeCalls = onStateChange.mock.calls.map(c => c[0])
+      expect(stateChangeCalls).toContain(PREVIEW_STATE.CURRENT)
+    })
+
+    it('failed SVG render falls through to ERROR state and calls onError', async () => {
+      const model2DError = new Error('MODEL_IS_2D: not a 3D object')
+      model2DError.code = 'MODEL_IS_2D'
+      renderController.renderPreview.mockRejectedValueOnce(model2DError)
+      renderController.renderPreview.mockRejectedValueOnce(new Error('SVG render failed'))
+
+      const onStateChange = vi.fn()
+      const onError = vi.fn()
+      controller.onStateChange = onStateChange
+      controller.onError = onError
+
+      const params = { width: 10 }
+      const paramHash = controller.hashParams(params)
+      controller.currentParamHash = paramHash
+      controller.currentPreviewKey = `${paramHash}|model`
+
+      await controller.renderPreview(params, paramHash)
+
+      const stateChangeCalls = onStateChange.mock.calls.map(c => c[0])
+      expect(stateChangeCalls).toContain(PREVIEW_STATE.ERROR)
+      expect(onError).toHaveBeenCalled()
+    })
+
+    it('renderPreview() with a non-MODEL_IS_2D error does NOT trigger draft 2D fallback', async () => {
+      renderController.renderPreview.mockRejectedValueOnce(new Error('WASM crash'))
+
+      const onError = vi.fn()
+      controller.onError = onError
+
+      const draftSpy = vi.spyOn(controller, 'renderDraft2DPreview')
+
+      const params = { width: 10 }
+      const paramHash = controller.hashParams(params)
+      controller.currentParamHash = paramHash
+      controller.currentPreviewKey = `${paramHash}|model`
+
+      await controller.renderPreview(params, paramHash)
+
+      expect(draftSpy).not.toHaveBeenCalled()
+      expect(onError).toHaveBeenCalled()
     })
   })
 })

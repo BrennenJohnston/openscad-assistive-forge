@@ -545,3 +545,77 @@ EOF
     expect(result).toContain('LINE');
   });
 });
+
+// ─── Test Suite: 2D/3D Preview Transitions ──────────────────────────────────
+
+test.describe('Render Stability — 2D/3D Preview Transitions', () => {
+  test('SVG panel is hidden and 3D canvas visible after switching from 2D to 3D mode', async ({ page }) => {
+    test.skip(isCI, 'WASM rendering is slow/unreliable in CI');
+
+    await loadKeyguardDemo(page);
+    await waitForPreviewIdle(page, { timeout: 90_000 });
+
+    // Find the generate parameter dropdown
+    const generateSelect = page.locator('select').filter({ has: page.locator('option') }).first();
+    const options = await generateSelect.locator('option').allTextContents();
+
+    // Look for a 2D option (SVG/DXF/first layer)
+    const svgOption = options.find(
+      (o) => /svg|dxf|first layer/i.test(o)
+    );
+    if (!svgOption) {
+      test.skip();
+      return;
+    }
+
+    // Switch to 2D mode
+    await generateSelect.selectOption({ label: svgOption });
+    await waitForPreviewIdle(page, { timeout: 90_000 });
+
+    // Now switch back to a 3D option
+    const threeDOption = options.find(
+      (o) => /3d|stl|printed/i.test(o)
+    );
+    if (!threeDOption) {
+      test.skip();
+      return;
+    }
+
+    await generateSelect.selectOption({ label: threeDOption });
+    await waitForPreviewIdle(page, { timeout: 90_000 });
+
+    // Assert: #rendered2dPreview should be hidden
+    const svgPanel = page.locator('#rendered2dPreview');
+    if (await svgPanel.count() > 0) {
+      await expect(svgPanel).toHaveClass(/hidden/);
+    }
+
+    // Assert: 3D canvas should be visible
+    const canvas = page.locator('#viewer canvas, .preview-container canvas');
+    if (await canvas.count() > 0) {
+      const display = await canvas.evaluate((el) => el.style.display);
+      expect(display).not.toBe('none');
+    }
+  });
+
+  test('SVG panel is hidden after loading a new file', async ({ page }) => {
+    test.skip(isCI, 'WASM rendering is slow/unreliable in CI');
+
+    await loadSimpleBoxExample(page);
+    await waitForPreviewIdle(page, { timeout: 90_000 });
+
+    // If a 2D preview was active (unlikely for simple-box, but tests the flow),
+    // loading a new file should clear it via clear() -> hide2DPreview()
+    const svgPanel = page.locator('#rendered2dPreview');
+    if (await svgPanel.count() > 0) {
+      await expect(svgPanel).toHaveClass(/hidden/);
+    }
+
+    // 3D canvas should be visible
+    const canvas = page.locator('#viewer canvas, .preview-container canvas');
+    if (await canvas.count() > 0) {
+      const display = await canvas.evaluate((el) => el.style.display);
+      expect(display).not.toBe('none');
+    }
+  });
+});

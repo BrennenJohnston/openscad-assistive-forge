@@ -10,11 +10,7 @@ import {
 } from './color-utils.js';
 import { getAppPrefKey } from './storage-keys.js';
 import { isEnabled as isFlagEnabled } from './feature-flags.js';
-import {
-  isNonPreviewable,
-  classifyRenderState,
-  RENDER_STATE,
-} from './render-intent.js';
+import { isNonPreviewable } from './render-intent.js';
 
 // Storage keys using standardized naming convention
 const STORAGE_KEY_PERF_METRICS = getAppPrefKey('perf-metrics');
@@ -30,7 +26,6 @@ export const PREVIEW_STATE = {
   RENDERING: 'rendering', // Preview render in progress
   STALE: 'stale', // Preview exists but from different params
   ERROR: 'error', // Last render failed
-  MODEL_IS_2D: 'model_is_2d', // 2D-only generate mode — informational, not an error
 };
 
 /**
@@ -799,8 +794,6 @@ export class AutoPreviewController {
    */
   async renderPreview(parameters, paramHash) {
     if (isNonPreviewable(parameters, this.schema)) {
-      const currentState = classifyRenderState(parameters, this.schema);
-      const isCustomizer = currentState === RENDER_STATE.INFORMATIONAL;
       console.log(
         '[AutoPreview] Skipping STL preview for non-previewable generate mode:',
         parameters.generate
@@ -817,23 +810,13 @@ export class AutoPreviewController {
       this.pendingParamHash = null;
       this.pendingPreviewKey = null;
 
-      const message = isCustomizer
-        ? 'The current generate setting does not produce geometry. ' +
-          'The 3D preview is not available in this mode. ' +
-          "Adjust the 'generate' parameter to a 3D output type to see a preview."
-        : 'MODEL_IS_2D: Your model produces 2D geometry which cannot be displayed in the 3D viewer. ' +
-          'To export: select SVG or DXF output format. ' +
-          'To preview in 3D: adjust your model parameters to produce 3D geometry.';
+      const message =
+        'The current generate setting does not produce geometry. ' +
+        'The 3D preview is not available in this mode. ' +
+        "Adjust the 'generate' parameter to a 3D output type to see a preview.";
       const error = new Error(message);
-      error.code = isCustomizer ? 'NO_GEOMETRY' : 'MODEL_IS_2D';
-      if (!isCustomizer) {
-        // 2D-only mode is informational — clear stale 3D geometry here so
-        // the controller is responsible for cleanup, not the onError handler.
-        this.previewManager?.clear?.();
-        this.setState(PREVIEW_STATE.MODEL_IS_2D, { code: 'MODEL_IS_2D' });
-      } else {
-        this.setState(PREVIEW_STATE.ERROR, { error: error.message });
-      }
+      error.code = 'NO_GEOMETRY';
+      this.setState(PREVIEW_STATE.ERROR, { error: error.message });
       this.onError(error, 'preview');
       return;
     }
@@ -984,6 +967,19 @@ export class AutoPreviewController {
 
       // Check if still relevant
       if (paramHash !== this.currentParamHash) return;
+
+      // MODEL_IS_2D: attempt draft SVG preview before falling through to error
+      const errMsg = (error?.message || String(error)).toLowerCase();
+      if (
+        error?.code === 'MODEL_IS_2D' ||
+        errMsg.includes('model_is_2d') ||
+        errMsg.includes('not a 3d object') ||
+        errMsg.includes('top level object is a 2d')
+      ) {
+        const draft2DSuccess =
+          await this.renderDraft2DPreview(previewParameters);
+        if (draft2DSuccess) return;
+      }
 
       this.setState(PREVIEW_STATE.ERROR, { error: error.message });
       this.onError(error, 'preview');
@@ -1175,6 +1171,72 @@ export class AutoPreviewController {
     }
 
     return result;
+  }
+
+  /**
+   * Attempt a draft-quality SVG render for 2D models.
+   * Called when renderPreview() catches a MODEL_IS_2D error from the WASM worker.
+   * @param {Object} parameters - Parameter values used for the original render
+   * @returns {Promise<boolean>} true if SVG preview was shown successfully
+   */
+  async renderDraft2DPreview(parameters) {
+    try {
+      const result = await this.renderController.renderPreview(
+        this.currentScadContent,
+        parameters,
+        {
+          outputFormat: 'svg',
+          files: this.projectFiles,
+          mainFile: this.mainFilePath,
+          libraries: this.enabledLibraries,
+          paramTypes: this.paramTypes,
+          quality: { name: 'draft', $fn: 16 },
+        }
+      );
+      if (result?.stl || result?.data) {
+        const svgText =
+          typeof result.stl === 'string'
+            ? result.stl
+            : new TextDecoder().decode(result.stl || result.data);
+        this.previewManager?.show2DPreview?.(svgText);
+        this.setState(PREVIEW_STATE.CURRENT, {
+          code: 'DRAFT_2D',
+          stats: result.stats,
+        });
+        return true;
+      }
+    } catch (svgError) {
+      const msg = (svgError?.message || '').toLowerCase();
+      if (svgError?.code === 'MODEL_NOT_2D' || msg.includes('not a 2d')) {
+        try {
+          const fallbackResult = await this.renderController.render2DFallback(
+            this.currentScadContent,
+            parameters,
+            {
+              outputFormat: 'svg',
+              files: this.projectFiles,
+              mainFile: this.mainFilePath,
+              libraries: this.enabledLibraries,
+            }
+          );
+          const svgText =
+            typeof fallbackResult.stl === 'string'
+              ? fallbackResult.stl
+              : new TextDecoder().decode(
+                  fallbackResult.stl || fallbackResult.data
+                );
+          this.previewManager?.show2DPreview?.(svgText);
+          this.setState(PREVIEW_STATE.CURRENT, {
+            code: 'DRAFT_2D_FALLBACK',
+            stats: fallbackResult.stats,
+          });
+          return true;
+        } catch {
+          /* fall through */
+        }
+      }
+    }
+    return false;
   }
 
   /**

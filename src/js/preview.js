@@ -1039,6 +1039,7 @@ export class PreviewManager {
    * @returns {Promise<{parseMs: number}>} Parse timing info
    */
   loadSTL(stlData, options = {}) {
+    this.hide2DPreview();
     const { preserveCamera = false } = options;
     return new Promise((resolve, reject) => {
       try {
@@ -1175,6 +1176,7 @@ export class PreviewManager {
    * @returns {Promise<{parseMs: number, hasColors: boolean}>}
    */
   loadOFF(offData, options = {}) {
+    this.hide2DPreview();
     const { preserveCamera = false, debugHighlight = null } = options;
     return new Promise((resolve, reject) => {
       try {
@@ -3804,6 +3806,7 @@ export class PreviewManager {
    * Clear the preview
    */
   clear() {
+    this.hide2DPreview();
     this.hideMeasurements();
     this.dimensions = null;
 

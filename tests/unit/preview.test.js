@@ -2343,4 +2343,83 @@ describe('PreviewManager', () => {
       expect(mat2.opacity).toBe(0.5)
     })
   })
+
+  describe('2D/3D Preview Transitions', () => {
+    let manager
+    let preview2d
+
+    beforeEach(() => {
+      manager = new PreviewManager(container)
+      preview2d = document.createElement('div')
+      preview2d.id = 'rendered2dPreview'
+      preview2d.classList.add('rendered-2d-preview', 'hidden')
+      document.body.appendChild(preview2d)
+    })
+
+    afterEach(() => {
+      document.getElementById('rendered2dPreview')?.remove()
+    })
+
+    it('clear() calls hide2DPreview() when 2D preview is active', () => {
+      manager.show2DPreview('<svg xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10"/></svg>')
+      expect(manager._is2DPreviewActive).toBe(true)
+
+      const spy = vi.spyOn(manager, 'hide2DPreview')
+      manager.scene = { remove: vi.fn() }
+      manager.renderer = { render: vi.fn() }
+      manager.camera = {}
+
+      manager.clear()
+
+      expect(spy).toHaveBeenCalled()
+      expect(manager._is2DPreviewActive).toBe(false)
+    })
+
+    it('clear() calls hide2DPreview() even when no 2D preview is active (idempotent)', () => {
+      expect(manager._is2DPreviewActive).toBeFalsy()
+
+      const spy = vi.spyOn(manager, 'hide2DPreview')
+      manager.scene = { remove: vi.fn() }
+      manager.renderer = { render: vi.fn() }
+      manager.camera = {}
+
+      manager.clear()
+
+      expect(spy).toHaveBeenCalled()
+    })
+
+    it('loadSTL() calls hide2DPreview() before processing', async () => {
+      manager.show2DPreview('<svg xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10"/></svg>')
+      const spy = vi.spyOn(manager, 'hide2DPreview')
+
+      await manager.loadSTL(new ArrayBuffer(0)).catch(() => {
+        // THREE.js not loaded — expected
+      })
+
+      expect(spy).toHaveBeenCalled()
+    })
+
+    it('loadOFF() calls hide2DPreview() before processing', async () => {
+      manager.show2DPreview('<svg xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10"/></svg>')
+      const spy = vi.spyOn(manager, 'hide2DPreview')
+
+      await manager.loadOFF('OFF\n0 0 0').catch(() => {
+        // THREE.js not loaded — expected
+      })
+
+      expect(spy).toHaveBeenCalled()
+    })
+
+    it('after clear(), _is2DPreviewActive is false', () => {
+      manager.show2DPreview('<svg xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10"/></svg>')
+      expect(manager._is2DPreviewActive).toBe(true)
+
+      manager.scene = { remove: vi.fn() }
+      manager.renderer = { render: vi.fn() }
+      manager.camera = {}
+      manager.clear()
+
+      expect(manager._is2DPreviewActive).toBe(false)
+    })
+  })
 })

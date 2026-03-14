@@ -27,10 +27,9 @@ There are two public methods on `AutoPreviewController` that trigger preview ren
 
 Before executing any `renderPreview()` call, `AutoPreviewController` checks `isNonPreviewableParameters(parameters)`. If it returns `true`, the render is **skipped** and an error is emitted with:
 
-- `code: 'NO_GEOMETRY'` for `generate` values containing `"customizer"`
-- `code: 'MODEL_IS_2D'` for `generate` values containing `"svg"`, `"dxf"`, or `"first layer"`
+- `code: 'NO_GEOMETRY'` for `generate` values containing `"customizer"` keywords
 
-The error is routed to the `onError` callback registered in `main.js` at line 7149, which calls `handleConfigDependencyError()`. **BUG-B:** The `NO_GEOMETRY` code is not handled there, so the previous mesh remains visible.
+`isNonPreviewable()` returns `true` only for generate values containing "customizer" keywords. 2D-producing modes (SVG, DXF, first layer) are classified as previewable and proceed to render; if the WASM worker returns `MODEL_IS_2D`, the catch block in `renderPreview()` triggers a draft SVG fallback via `renderDraft2DPreview()`.
 
 ---
 
