@@ -451,9 +451,10 @@ test.describe('Parity — Grid Opacity Control (S-016)', () => {
     await page.goto('/?example=simple-box');
     await page.locator('#mainInterface').waitFor({ state: 'visible', timeout: 40_000 });
 
-    // Wait for Three.js canvas — created during previewManager.init(); ensures
-    // previewManager is ready before we fire the input event on the slider.
-    await page.locator('#previewContainer canvas').waitFor({ state: 'attached', timeout: 40_000 });
+    // Wait for preview state indicator — appended immediately after
+    // previewManager.init() completes; works even when WebGL is unavailable
+    // (e.g. Firefox headless) since it doesn't depend on canvas creation.
+    await page.locator('.preview-state-indicator').waitFor({ state: 'attached', timeout: 40_000 });
 
     const slider = page.locator('#gridOpacityInput');
     await expect(slider).toBeAttached({ timeout: 30_000 });
