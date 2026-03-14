@@ -2401,7 +2401,7 @@ summary:focus-visible,
   font-size: var(--font-size-xs);
   color: var(--color-text-secondary);
   margin: 0;
-  padding-left: calc(18px + var(--space-xs)); /* Align with checkbox label */
+  padding-left: calc(48px + var(--space-sm));
   line-height: 1.4;
 }
 

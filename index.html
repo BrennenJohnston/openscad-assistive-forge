@@ -2812,26 +2812,26 @@
                       <span>Preview Settings</span>
                     </div>
                     <div class="preview-settings">
-                      <label class="preview-setting">
+                      <label class="toggle-switch">
                         <input
                           type="checkbox"
                           id="measurementsToggle"
                           aria-describedby="measurementsHelp"
                         />
-                        <span>Show measurements</span>
+                        <span class="toggle-label">Show measurements</span>
                       </label>
                       <span id="measurementsHelp" class="sr-only"
                         >Toggle dimension measurements and bounding box overlay
                         on 3D preview</span
                       >
-                      <label class="preview-setting">
+                      <label class="toggle-switch">
                         <input
                           type="checkbox"
                           id="gridToggle"
                           checked
                           aria-describedby="gridHelp"
                         />
-                        <span>Show grid</span>
+                        <span class="toggle-label">Show grid</span>
                       </label>
                       <span id="gridHelp" class="sr-only"
                         >Toggle grid plane visibility in 3D preview</span
@@ -2895,14 +2895,14 @@
                         >Adjust grid line visibility from 10 to 100
                         percent</span
                       >
-                      <label class="preview-setting">
+                      <label class="toggle-switch">
                         <input
                           type="checkbox"
                           id="autoBedToggle"
                           checked
                           aria-describedby="autoBedHelp"
                         />
-                        <span>Auto-bed (Z=0)</span>
+                        <span class="toggle-label">Auto-bed (Z=0)</span>
                       </label>
                       <span id="autoBedHelp" class="sr-only"
                         >Automatically place models on the build plate at Z
@@ -3032,14 +3032,14 @@
                           </button>
                         </div>
                       </div>
-                      <label class="preview-setting">
+                      <label class="toggle-switch">
                         <input
                           type="checkbox"
                           id="statusBarToggle"
                           checked
                           aria-describedby="statusBarHelp"
                         />
-                        <span>Show status bar</span>
+                        <span class="toggle-label">Show status bar</span>
                       </label>
                       <span id="statusBarHelp" class="sr-only"
                         >Toggle status and render info overlay on preview</span
@@ -3049,14 +3049,14 @@
                         class="preview-setting-divider"
                         aria-hidden="true"
                       ></div>
-                      <label class="preview-setting">
+                      <label class="toggle-switch">
                         <input
                           type="checkbox"
                           id="manifoldEngineToggle"
                           checked
                           aria-describedby="manifoldEngineHelp"
                         />
-                        <span>Fast engine (Manifold)</span>
+                        <span class="toggle-label">Fast engine (Manifold)</span>
                       </label>
                       <span id="manifoldEngineHelp" class="sr-only"
                         >Use Manifold geometry engine for faster rendering.
