@@ -191,7 +191,8 @@ export function isNonPreviewable(parameters, schema) {
     if (Array.isArray(genEnum)) {
       const match = genEnum.find(
         (e) =>
-          typeof e === 'object' && String(e.value) === parameters.generate.trim()
+          typeof e === 'object' &&
+          String(e.value) === parameters.generate.trim()
       );
       if (match?.label) label = String(match.label).toLowerCase();
     }
@@ -222,8 +223,7 @@ export function isNonPreviewable(parameters, schema) {
       if (directHit || labelHit) {
         const hasNormal = metas.some(
           (m) =>
-            !has2DKeyword(m.value, m.label) &&
-            !hasInfoKeyword(m.value, m.label)
+            !has2DKeyword(m.value, m.label) && !hasInfoKeyword(m.value, m.label)
         );
         if (hasNormal) return true;
       }

@@ -101,8 +101,9 @@ export class AutoPreviewController {
     // Used to determine if camera should be preserved on subsequent loads
     this.initialPreviewDone = false;
 
-    // Full quality STL for download (separate from preview)
+    // Full quality output for download (separate from preview)
     this.fullQualitySTL = null;
+    this.fullQualityFormat = null;
     this.fullQualityStats = null;
     this.fullQualityKey = null;
     // Console output from last full render (for echo() support)
@@ -236,10 +237,10 @@ export class AutoPreviewController {
    * theme default.
    *
    * @param {Object} parameters
-   * @param {boolean} isFullQuality
+   * @param {boolean} _isFullQuality
    * @returns {null}
    */
-  _detectRenderState(parameters, isFullQuality = false) {
+  _detectRenderState(parameters, _isFullQuality = false) {
     return null;
   }
 
@@ -484,12 +485,20 @@ export class AutoPreviewController {
       } catch (_error) {
         previewColor = null;
       }
-      // Only apply SCAD-derived color if one exists; don't clear user's manual color override
-      if (this.previewManager?.setColorOverride && previewColor !== null) {
+      if (
+        this.previewManager?.setColorOverride &&
+        this.previewManager.colorOverrideEnabled &&
+        previewColor !== null
+      ) {
         this.previewManager.setColorOverride(previewColor);
       }
-      // Set render state so the model color reflects preview/laser/full quality
-      const params = (() => { try { return JSON.parse(paramHash); } catch { return null; } })();
+      const params = (() => {
+        try {
+          return JSON.parse(paramHash);
+        } catch {
+          return null;
+        }
+      })();
       if (this.previewManager?.setRenderState) {
         this.previewManager.setRenderState(this._detectRenderState(params));
       }
@@ -613,6 +622,97 @@ export class AutoPreviewController {
   }
 
   /**
+   * Strip comments and string literals while preserving overall structure.
+   * This enables lightweight source scanning without false-positives from
+   * `#` inside comments/strings.
+   *
+   * @param {string} scadContent
+   * @returns {string}
+   */
+  static stripCommentsAndStrings(scadContent) {
+    if (!scadContent || typeof scadContent !== 'string') return '';
+
+    let result = '';
+    let inLineComment = false;
+    let inBlockComment = false;
+    let inString = false;
+    let stringQuote = '';
+    let escapeNext = false;
+
+    for (let i = 0; i < scadContent.length; i++) {
+      const ch = scadContent[i];
+      const next = scadContent[i + 1];
+
+      if (inLineComment) {
+        if (ch === '\n') {
+          inLineComment = false;
+          result += '\n';
+        } else {
+          result += ' ';
+        }
+        continue;
+      }
+
+      if (inBlockComment) {
+        if (ch === '*' && next === '/') {
+          inBlockComment = false;
+          result += '  ';
+          i += 1;
+        } else {
+          result += ch === '\n' ? '\n' : ' ';
+        }
+        continue;
+      }
+
+      if (inString) {
+        if (escapeNext) {
+          escapeNext = false;
+          result += ' ';
+          continue;
+        }
+        if (ch === '\\') {
+          escapeNext = true;
+          result += ' ';
+          continue;
+        }
+        if (ch === stringQuote) {
+          inString = false;
+          stringQuote = '';
+          result += ' ';
+          continue;
+        }
+        result += ch === '\n' ? '\n' : ' ';
+        continue;
+      }
+
+      if (ch === '/' && next === '/') {
+        inLineComment = true;
+        result += '  ';
+        i += 1;
+        continue;
+      }
+
+      if (ch === '/' && next === '*') {
+        inBlockComment = true;
+        result += '  ';
+        i += 1;
+        continue;
+      }
+
+      if (ch === '"' || ch === "'") {
+        inString = true;
+        stringQuote = ch;
+        result += ' ';
+        continue;
+      }
+
+      result += ch;
+    }
+
+    return result;
+  }
+
+  /**
    * Detect whether a SCAD source file uses the `#` debug modifier.
    *
    * Desktop OpenSCAD renders `#`-modified geometry with a fixed highlight
@@ -620,20 +720,76 @@ export class AutoPreviewController {
    * In COFF export the face colors still carry the user color, so the
    * preview layer must apply the override when this modifier is detected.
    *
-   * The regex looks for `#` at the start of a statement (after newline,
-   * semicolon, or brace) followed by a geometry keyword or `{`.
+   * This detector is intentionally conservative: it only looks for direct
+   * top-level `#` statements and ignores module bodies. Large projects can
+   * contain dormant helper-module debug paths (for example `if(id=="#")`),
+   * and treating those as active would incorrectly tint the entire preview.
    *
    * @param {string} scadContent - OpenSCAD source code
    * @returns {boolean} true if `#` debug modifier is likely present
    */
   static scadUsesDebugModifier(scadContent) {
     if (!scadContent || typeof scadContent !== 'string') return false;
-    const stripped = scadContent
-      .replace(/\/\/[^\n]*/g, '')
-      .replace(/\/\*[\s\S]*?\*\//g, '');
-    return /(?:^|[;\s{}])#\s*(?:color|cube|sphere|cylinder|translate|rotate|scale|union|difference|intersection|linear_extrude|rotate_extrude|hull|minkowski|polygon|circle|square|text|import|surface|resize|mirror|multmatrix|offset|projection|render|\{|\w+\s*\()/m.test(
-      stripped
-    );
+    const stripped = AutoPreviewController.stripCommentsAndStrings(scadContent);
+    const debugTargetPattern =
+      /^\s*(?:color|cube|sphere|cylinder|translate|rotate|scale|union|difference|intersection|linear_extrude|rotate_extrude|hull|minkowski|polygon|circle|square|text|import|surface|resize|mirror|multmatrix|offset|projection|render|\{|\w+\s*\()/;
+
+    let braceDepth = 0;
+    const moduleBraceDepths = [];
+    let pendingModuleDefinition = false;
+
+    for (let i = 0; i < stripped.length; i++) {
+      const ch = stripped[i];
+
+      if (
+        /[A-Za-z_]/.test(ch) &&
+        stripped.slice(i, i + 6) === 'module' &&
+        (i === 0 || !/[A-Za-z0-9_]/.test(stripped[i - 1])) &&
+        !/[A-Za-z0-9_]/.test(stripped[i + 6] || '')
+      ) {
+        pendingModuleDefinition = true;
+        i += 5;
+        continue;
+      }
+
+      if (ch === '{') {
+        braceDepth += 1;
+        if (pendingModuleDefinition) {
+          moduleBraceDepths.push(braceDepth);
+          pendingModuleDefinition = false;
+        }
+        continue;
+      }
+
+      if (ch === '}') {
+        if (moduleBraceDepths[moduleBraceDepths.length - 1] === braceDepth) {
+          moduleBraceDepths.pop();
+        }
+        braceDepth = Math.max(0, braceDepth - 1);
+        pendingModuleDefinition = false;
+        continue;
+      }
+
+      if (ch === ';') {
+        pendingModuleDefinition = false;
+      }
+
+      if (ch !== '#') continue;
+
+      const prev = i === 0 ? '' : stripped[i - 1];
+      const isStatementBoundary = i === 0 || /[;\s{}]/.test(prev);
+      const insideModuleDefinition = moduleBraceDepths.length > 0;
+
+      if (!isStatementBoundary || insideModuleDefinition) {
+        continue;
+      }
+
+      if (debugTargetPattern.test(stripped.slice(i + 1))) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   /**
@@ -642,17 +798,6 @@ export class AutoPreviewController {
    * @param {string} paramHash - Parameter hash
    */
   async renderPreview(parameters, paramHash) {
-    // BUG-C audit: track every render entry for spontaneous-render diagnosis.
-    if (typeof window !== 'undefined') {
-      window.__renderAuditCount = (window.__renderAuditCount || 0) + 1;
-    }
-    console.debug(
-      '[Render Audit] renderPreview entry #' +
-        (typeof window !== 'undefined' ? window.__renderAuditCount : '?') +
-        ' generate=' +
-        (parameters?.generate ?? 'n/a')
-    );
-
     if (isNonPreviewable(parameters, this.schema)) {
       const currentState = classifyRenderState(parameters, this.schema);
       const isCustomizer = currentState === RENDER_STATE.INFORMATIONAL;
@@ -717,8 +862,9 @@ export class AutoPreviewController {
     // SCAD source contains color() calls OR the # debug modifier. The #
     // modifier needs OFF so the dual-render overlay can be applied even
     // when color() is absent from the source.
-    const hasDebugModifier =
-      AutoPreviewController.scadUsesDebugModifier(this.currentScadContent);
+    const hasDebugModifier = AutoPreviewController.scadUsesDebugModifier(
+      this.currentScadContent
+    );
     const useColorPassthrough =
       isFlagEnabled('color_passthrough') &&
       (AutoPreviewController.scadUsesColor(this.currentScadContent) ||
@@ -763,8 +909,10 @@ export class AutoPreviewController {
       this.previewCacheKey = cacheKey;
 
       // Load into 3D preview
-      // Only apply SCAD-derived color if one exists; don't clear user's manual color override
-      if (this.previewManager?.setColorOverride) {
+      if (
+        this.previewManager?.setColorOverride &&
+        this.previewManager.colorOverrideEnabled
+      ) {
         const previewColor = this.resolvePreviewColor(parameters);
         if (previewColor !== null) {
           this.previewManager.setColorOverride(previewColor);
@@ -902,6 +1050,7 @@ export class AutoPreviewController {
     this.previewCacheKey = null;
     this.fullRenderParamHash = null;
     this.fullQualitySTL = null;
+    this.fullQualityFormat = null;
     this.fullQualityConsoleOutput = null;
     this.fullQualityStats = null;
     this.fullQualityKey = null;
@@ -960,6 +1109,7 @@ export class AutoPreviewController {
 
     // Store for reuse
     this.fullQualitySTL = result.stl;
+    this.fullQualityFormat = result.format || 'stl';
     this.fullQualityStats = result.stats;
     this.fullRenderParamHash = paramHash;
     this.fullQualityKey = qualityKey;
@@ -968,8 +1118,16 @@ export class AutoPreviewController {
 
     // Also update the preview with full quality result
     try {
-      // Only apply SCAD-derived color if one exists; don't clear user's manual color override
-      if (this.previewManager?.setColorOverride) {
+      const resultFormat = result.format || 'stl';
+      const currentPreviewHasColors = Boolean(
+        this.previewManager?._getPrimaryGeometry?.()?.attributes?.color
+      );
+      const shouldPreserveColorPreview =
+        resultFormat === 'stl' && currentPreviewHasColors;
+      if (
+        this.previewManager?.setColorOverride &&
+        this.previewManager.colorOverrideEnabled
+      ) {
         const previewColor = this.resolvePreviewColor(parameters);
         if (previewColor !== null) {
           this.previewManager.setColorOverride(previewColor);
@@ -981,14 +1139,28 @@ export class AutoPreviewController {
           this._detectRenderState(parameters, true)
         );
       }
-      // Preserve camera position on subsequent loads (after initial preview)
-      await this.previewManager.loadSTL(result.stl, {
-        preserveCamera: this.initialPreviewDone,
-      });
-      this.previewParamHash = paramHash;
-      this.previewCacheKey = cacheKey;
-      // Mark initial preview as done after successful load
-      this.initialPreviewDone = true;
+      if (shouldPreserveColorPreview) {
+        console.log(
+          '[AutoPreview] Preserving current color preview during STL generate'
+        );
+      } else if (resultFormat === 'off' && this.previewManager?.loadOFF) {
+        // Preserve camera position on subsequent loads (after initial preview)
+        await this.previewManager.loadOFF(result.stl, {
+          preserveCamera: this.initialPreviewDone,
+        });
+        this.previewParamHash = paramHash;
+        this.previewCacheKey = cacheKey;
+        this.initialPreviewDone = true;
+      } else if (this.previewManager?.loadSTL) {
+        // Preserve camera position on subsequent loads (after initial preview)
+        await this.previewManager.loadSTL(result.stl, {
+          preserveCamera: this.initialPreviewDone,
+        });
+        this.previewParamHash = paramHash;
+        this.previewCacheKey = cacheKey;
+        // Mark initial preview as done after successful load
+        this.initialPreviewDone = true;
+      }
       this.addToCache(cacheKey, result, null);
       this.setState(PREVIEW_STATE.CURRENT, {
         stats: result.stats,
@@ -1025,6 +1197,24 @@ export class AutoPreviewController {
     if (paramHash === this.fullRenderParamHash && this.fullQualitySTL) {
       return {
         stl: this.fullQualitySTL,
+        stats: this.fullQualityStats,
+      };
+    }
+    return null;
+  }
+
+  /**
+   * Format-agnostic accessor for the current full-quality output.
+   * Returns data, format, and stats for any generated output type.
+   * @param {Object} parameters - Current parameter values
+   * @returns {Object|null} { data, format, stats } or null
+   */
+  getCurrentFullOutput(parameters) {
+    const paramHash = this.hashParams(parameters);
+    if (paramHash === this.fullRenderParamHash && this.fullQualitySTL) {
+      return {
+        data: this.fullQualitySTL,
+        format: this.fullQualityFormat || 'stl',
         stats: this.fullQualityStats,
       };
     }
@@ -1093,6 +1283,7 @@ export class AutoPreviewController {
     this.pendingPreviewKey = null;
     this.clearCache();
     this.fullQualitySTL = null;
+    this.fullQualityFormat = null;
     this.fullQualityStats = null;
     this.fullQualityKey = null;
 

@@ -219,9 +219,7 @@ export class ConsolePanel {
     }
 
     const message =
-      type === CONSOLE_ENTRY_TYPE.ECHO
-        ? trimmed.substring(5).trim()
-        : trimmed;
+      type === CONSOLE_ENTRY_TYPE.ECHO ? trimmed.substring(5).trim() : trimmed;
 
     return {
       type,

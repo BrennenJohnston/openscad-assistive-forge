@@ -166,6 +166,7 @@ export class PreviewManager {
     this.currentTheme = options.theme || 'light';
     this.highContrast = options.highContrast || false;
     this.colorOverride = null;
+    this.colorOverrideEnabled = false;
 
     // Measurements
     this.measurementsEnabled = this.loadMeasurementPreference();
@@ -194,6 +195,9 @@ export class PreviewManager {
     // Rotation centering: temporarily center object at origin for better rotation
     this.autoBedOffset = 0; // Z offset applied by auto-bed
     this.rotationCenteringEnabled = false; // Whether rotation centering is active
+
+    // 2D preview mode (native SVG display vs Three.js 3D canvas)
+    this._is2DPreviewActive = false;
 
     // Render hooks for extensibility
     this._renderOverride = null;
@@ -485,9 +489,9 @@ export class PreviewManager {
       this._rebuildGrid();
     }
 
-    // Update model color if mesh exists (skip Groups — dual-render manages its own colors)
-    if (this.mesh && !this.mesh.isGroup && this.mesh.material) {
-      this.mesh.material.color.setHex(parseInt(this._resolveModelColor().slice(1), 16));
+    // Keep mesh materials aligned with the current override/theme rules.
+    if (this.mesh) {
+      this._syncColorOverride();
     }
 
     // Refresh measurements if they're visible
@@ -504,7 +508,60 @@ export class PreviewManager {
    */
   setColorOverride(hexColor) {
     this.colorOverride = normalizeHexColor(hexColor);
-    this.applyColorToMesh(); // Always call apply (it checks if mesh exists)
+    if (this.colorOverrideEnabled) {
+      this.applyColorToMesh();
+    }
+  }
+
+  /**
+   * Enable or disable the color override. When disabled, COFF per-face
+   * vertex colors display naturally; when enabled, the user's solid color
+   * is forced onto the mesh by turning off Three.js vertex coloring.
+   * @param {boolean} enabled
+   */
+  setColorOverrideEnabled(enabled) {
+    this.colorOverrideEnabled = enabled;
+    this._syncColorOverride();
+  }
+
+  /**
+   * Synchronise mesh material state with the current colorOverrideEnabled
+   * flag. Toggles vertex coloring on/off to switch between COFF per-face
+   * colors and a solid user-chosen color without re-rendering geometry.
+   */
+  _syncColorOverride() {
+    if (!this.mesh) return;
+
+    const applyToMaterial = (material, geometry) => {
+      if (this.colorOverrideEnabled && this.colorOverride) {
+        material.vertexColors = false;
+        material.color.setHex(parseInt(this.colorOverride.slice(1), 16));
+        material.needsUpdate = true;
+      } else {
+        const hasVertexColors = geometry?.attributes?.color != null;
+        if (hasVertexColors) {
+          material.vertexColors = true;
+          material.color.setHex(0xffffff);
+          material.needsUpdate = true;
+        } else {
+          material.vertexColors = false;
+          const themeColors =
+            PREVIEW_COLORS[this.currentTheme] || PREVIEW_COLORS.light;
+          material.color.setHex(themeColors.model);
+          material.needsUpdate = true;
+        }
+      }
+    };
+
+    if (this.mesh.isGroup) {
+      this.mesh.children.forEach((child) => {
+        if (child.material && !child.userData.isHighlightOverlay) {
+          applyToMaterial(child.material, child.geometry);
+        }
+      });
+    } else if (this.mesh.material) {
+      applyToMaterial(this.mesh.material, this.mesh.geometry);
+    }
   }
 
   /**
@@ -513,20 +570,21 @@ export class PreviewManager {
    * model color is determined by COFF per-face data or the theme default.
    * @param {'preview'|'laser'|null} _state
    */
-  setRenderState(_state) {
-  }
+  setRenderState(_state) {}
 
   /**
    * Resolve the model color to apply, respecting the priority chain:
-   *   1. colorOverride (user manual pick or SCAD-derived)
+   *   1. colorOverride (user manual pick or SCAD-derived) — only when enabled
    *   2. PREVIEW_COLORS[theme].model (theme default)
    *
    * @returns {string} 6-digit hex color string with leading '#'
    */
   _resolveModelColor() {
-    if (this.colorOverride) return this.colorOverride;
+    if (this.colorOverrideEnabled && this.colorOverride)
+      return this.colorOverride;
 
-    const themeColors = PREVIEW_COLORS[this.currentTheme] || PREVIEW_COLORS.light;
+    const themeColors =
+      PREVIEW_COLORS[this.currentTheme] || PREVIEW_COLORS.light;
     return `#${themeColors.model.toString(16).padStart(6, '0')}`;
   }
 
@@ -536,17 +594,22 @@ export class PreviewManager {
    */
   applyColorToMesh() {
     if (!this.mesh) return;
+    if (!this.colorOverrideEnabled) return;
 
     const appliedHex = this._resolveModelColor();
     const hex = parseInt(appliedHex.slice(1), 16);
     if (this.mesh.isGroup) {
       this.mesh.children.forEach((child) => {
         if (child.material && !child.userData.isHighlightOverlay) {
+          child.material.vertexColors = false;
           child.material.color.setHex(hex);
+          child.material.needsUpdate = true;
         }
       });
     } else if (this.mesh.material) {
+      this.mesh.material.vertexColors = false;
       this.mesh.material.color.setHex(hex);
+      this.mesh.material.needsUpdate = true;
     }
   }
 
@@ -1050,9 +1113,7 @@ export class PreviewManager {
         this.mesh = new THREE.Mesh(geometry, material);
         this.scene.add(this.mesh);
 
-        // Re-apply color override if one was set before mesh loaded
-        // This ensures color changes made before/during render are applied
-        if (this.colorOverride) {
+        if (this.colorOverrideEnabled && this.colorOverride) {
           this.applyColorToMesh();
         }
 
@@ -1149,9 +1210,10 @@ export class PreviewManager {
         } else {
           countLineIdx = 1;
         }
-        const countParts = countLineIdx === 0
-          ? headerParts.slice(1)
-          : lines[countLineIdx].split(/\s+/);
+        const countParts =
+          countLineIdx === 0
+            ? headerParts.slice(1)
+            : lines[countLineIdx].split(/\s+/);
         const numVerts = Number(countParts[0]);
         const numFaces = Number(countParts[1]);
         const dataStartLine = countLineIdx + 1;
@@ -1204,7 +1266,11 @@ export class PreviewManager {
             );
             if (hasInlineColor) {
               if (!colorFormatDetected) {
-                const sample = Math.max(parts[n + 1], parts[n + 2], parts[n + 3]);
+                const sample = Math.max(
+                  parts[n + 1],
+                  parts[n + 2],
+                  parts[n + 3]
+                );
                 colorScale = sample > 1 ? 1 / 255 : 1;
                 colorFormatDetected = true;
               }
@@ -1292,7 +1358,9 @@ export class PreviewManager {
           this.mesh.add(normalMesh);
           this.mesh.add(highlightMesh);
         } else {
-          const material = hasColors
+          const useVertexColors =
+            hasColors && !(this.colorOverrideEnabled && this.colorOverride);
+          const material = useVertexColors
             ? new THREE.MeshPhongMaterial({
                 vertexColors: true,
                 specular: 0x111111,
@@ -1314,7 +1382,7 @@ export class PreviewManager {
         this.lastVertexCount = vertexCount;
         this.lastTriangleCount = triangleCount;
 
-        if (!hasColors && this.colorOverride) {
+        if (!hasColors && this.colorOverrideEnabled && this.colorOverride) {
           this.applyColorToMesh();
         }
 
@@ -3915,5 +3983,187 @@ export class PreviewManager {
     this._brightnessScale = 1;
     this._contrastFactor = 1;
     this._applyLighting();
+  }
+
+  // ── Rendered 2D Preview ───────────────────────────────────────────────────
+  //
+  // Displays worker-produced SVG output in a native browser SVG surface
+  // inside the same preview container used by the 3D viewer.  This is
+  // distinct from the reference overlay which is a Three.js texture plane.
+
+  /**
+   * Show a rendered 2D SVG preview, hiding the 3D canvas.
+   *
+   * The SVG is sanitized (scripts/event-handlers stripped) and inserted
+   * into the dedicated #rendered2dPreview element.  Desktop OpenSCAD
+   * renders laser-cut first-layer geometry with a DarkSeaGreen fill and
+   * red outlines; if the generated SVG carries only geometry (no fill/
+   * stroke), a preview-only stylesheet is injected to approximate the
+   * desktop appearance.
+   *
+   * @param {string} svgText - Raw SVG markup from the worker
+   */
+  show2DPreview(svgText) {
+    const previewEl = document.getElementById('rendered2dPreview');
+    if (!previewEl) return;
+
+    const sanitized = PreviewManager.sanitizeSVG(svgText);
+
+    previewEl.innerHTML = sanitized;
+
+    // Inject preview-only styling if the SVG has no fills/strokes
+    const svgEl = previewEl.querySelector('svg');
+    if (svgEl) {
+      svgEl.removeAttribute('width');
+      svgEl.removeAttribute('height');
+      svgEl.style.maxWidth = '100%';
+      svgEl.style.maxHeight = '100%';
+      svgEl.style.width = 'auto';
+      svgEl.style.height = 'auto';
+
+      if (PreviewManager.svgLacksVisualStyling(svgEl)) {
+        PreviewManager.injectDesktopParityStyling(svgEl);
+      }
+    }
+
+    previewEl.classList.remove('hidden');
+    this._set2DPreviewActive(true);
+
+    // Update ARIA summary
+    const summary = document.getElementById('previewModelSummary');
+    if (summary) {
+      summary.textContent = 'Rendered 2D SVG preview is displayed.';
+    }
+  }
+
+  /**
+   * Hide the rendered 2D preview, restoring the 3D canvas.
+   */
+  hide2DPreview() {
+    const previewEl = document.getElementById('rendered2dPreview');
+    if (!previewEl) return;
+    previewEl.classList.add('hidden');
+    previewEl.innerHTML = '';
+    this._set2DPreviewActive(false);
+  }
+
+  /**
+   * Toggle visibility of 3D canvas vs 2D preview surface.
+   * @param {boolean} is2D
+   */
+  _set2DPreviewActive(is2D) {
+    this._is2DPreviewActive = is2D;
+
+    // Hide 3D canvas when 2D is active, show when 3D
+    if (this.renderer?.domElement) {
+      this.renderer.domElement.style.display = is2D ? 'none' : '';
+    }
+
+    // Hide placeholder when any content is active
+    const placeholder = this.container?.querySelector('.preview-placeholder');
+    if (placeholder) {
+      placeholder.style.display = is2D || this.mesh ? 'none' : '';
+    }
+
+    // Update container ARIA label
+    if (this.container) {
+      this.container.setAttribute(
+        'aria-label',
+        is2D ? 'Rendered 2D SVG preview' : '3D model preview and controls'
+      );
+    }
+  }
+
+  /**
+   * Sanitize SVG to prevent XSS — strips scripts, event handlers,
+   * and external references while preserving geometry and styling.
+   * @param {string} svgText
+   * @returns {string}
+   */
+  static sanitizeSVG(svgText) {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(svgText, 'image/svg+xml');
+    const svg = doc.documentElement;
+
+    // Remove <script> elements
+    for (const el of [...svg.querySelectorAll('script')]) {
+      el.remove();
+    }
+
+    // Remove event-handler attributes from all elements
+    const allEls = svg.querySelectorAll('*');
+    for (const el of allEls) {
+      for (const attr of [...el.attributes]) {
+        if (attr.name.startsWith('on')) {
+          el.removeAttribute(attr.name);
+        }
+        // Remove xlink:href to javascript:
+        if (attr.name === 'href' || attr.name === 'xlink:href') {
+          if (attr.value.trim().toLowerCase().startsWith('javascript:')) {
+            el.removeAttribute(attr.name);
+          }
+        }
+      }
+    }
+
+    return svg.outerHTML;
+  }
+
+  /**
+   * Detect whether an SVG element's geometry paths lack explicit
+   * fill/stroke styling (geometry-only export from OpenSCAD).
+   * @param {SVGElement} svgEl
+   * @returns {boolean}
+   */
+  static svgLacksVisualStyling(svgEl) {
+    const shapes = svgEl.querySelectorAll(
+      'path, polygon, polyline, line, circle, ellipse, rect'
+    );
+    if (shapes.length === 0) return false;
+
+    let unstyled = 0;
+    for (const shape of shapes) {
+      const fill = shape.getAttribute('fill');
+      const stroke = shape.getAttribute('stroke');
+      const style = shape.getAttribute('style') || '';
+      const hasFill = fill && fill !== 'none';
+      const hasStroke = stroke && stroke !== 'none';
+      const hasStyleFill =
+        style.includes('fill:') && !style.includes('fill:none');
+      const hasStyleStroke =
+        style.includes('stroke:') && !style.includes('stroke:none');
+      if (!hasFill && !hasStroke && !hasStyleFill && !hasStyleStroke) {
+        unstyled++;
+      }
+    }
+    return unstyled > shapes.length / 2;
+  }
+
+  /**
+   * Inject a preview-only <style> element that approximates desktop
+   * OpenSCAD's rendered 2D appearance: DarkSeaGreen fill with red
+   * outlines, matching the laser-cut first-layer display mode.
+   * @param {SVGElement} svgEl
+   */
+  static injectDesktopParityStyling(svgEl) {
+    const ns = 'http://www.w3.org/2000/svg';
+    const existing = svgEl.querySelector('style[data-forge-preview]');
+    if (existing) return;
+
+    const styleEl = document.createElementNS(ns, 'style');
+    styleEl.setAttribute('data-forge-preview', 'true');
+    styleEl.textContent = [
+      'path, polygon, polyline, circle, ellipse, rect {',
+      '  fill: #8FBC8F;', // DarkSeaGreen — desktop OpenSCAD default
+      '  stroke: #CC0000;', // Red outline — desktop rendered 2D style
+      '  stroke-width: 0.5;',
+      '  fill-opacity: 0.85;',
+      '}',
+      'line {',
+      '  stroke: #CC0000;',
+      '  stroke-width: 0.5;',
+      '}',
+    ].join('\n');
+    svgEl.insertBefore(styleEl, svgEl.firstChild);
   }
 }

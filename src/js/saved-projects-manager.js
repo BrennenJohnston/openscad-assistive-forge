@@ -862,7 +862,12 @@ export async function getProject(id) {
       }
     }
 
-    if (project && project.largeFilesInStore && storageType === 'indexeddb' && db) {
+    if (
+      project &&
+      project.largeFilesInStore &&
+      storageType === 'indexeddb' &&
+      db
+    ) {
       project.projectFiles = await loadProjectFilesFromStore(project.id);
     } else if (
       project &&

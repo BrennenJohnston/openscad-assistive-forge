@@ -374,6 +374,14 @@ describe('Parity: scadUsesDebugModifier — # detection', () => {
     ).toBe(false);
   });
 
+  it('does not treat module-internal dormant debug helpers as active', () => {
+    expect(
+      AutoPreviewController.scadUsesDebugModifier(
+        'module cut_opening(id) {\n  if (id == "#") {\n    # cube(10);\n  }\n}\ncolor("Turquoise") cube(20);'
+      )
+    ).toBe(false);
+  });
+
   it('returns false for empty/null input', () => {
     expect(AutoPreviewController.scadUsesDebugModifier('')).toBe(false);
     expect(AutoPreviewController.scadUsesDebugModifier(null)).toBe(false);

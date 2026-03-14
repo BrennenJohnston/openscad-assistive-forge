@@ -44,7 +44,7 @@ import {
   AutoPreviewController,
   PREVIEW_STATE,
 } from './js/auto-preview-controller.js';
-import { resolve2DExportIntent } from './js/render-intent.js';
+import { resolve2DExportIntent, isNonPreviewable } from './js/render-intent.js';
 import {
   extractZipFiles,
   validateZipFile,
@@ -177,6 +177,7 @@ const STORAGE_KEY_OVERLAY_HEIGHT = getAppPrefKey('overlay-height');
 const STORAGE_KEY_AUTO_ROTATE = getAppPrefKey('auto-rotate');
 const STORAGE_KEY_ROTATE_SPEED = getAppPrefKey('rotate-speed');
 const STORAGE_KEY_MODEL_COLOR = getAppPrefKey('model-color');
+const STORAGE_KEY_MODEL_COLOR_ENABLED = getAppPrefKey('model-color-enabled');
 const STORAGE_KEY_MODEL_OPACITY = getAppPrefKey('model-opacity');
 const STORAGE_KEY_BRIGHTNESS = getAppPrefKey('brightness');
 const STORAGE_KEY_CONTRAST = getAppPrefKey('contrast');
@@ -257,9 +258,14 @@ function resolve2DExportParameters(parameters, schema, format) {
       ([k, v]) => parameters[k] !== v
     );
     if (adjustments.length > 0) {
-      console.debug('[resolve2D] Auto-adjusted parameters for 2D export:', adjustments);
+      console.debug(
+        '[resolve2D] Auto-adjusted parameters for 2D export:',
+        adjustments
+      );
     } else {
-      console.debug('[resolve2D] No parameter adjustments needed for 2D export');
+      console.debug(
+        '[resolve2D] No parameter adjustments needed for 2D export'
+      );
     }
   }
 
@@ -1836,11 +1842,16 @@ function _disableAltViewWithPreview(toggleBtn) {
  */
 function _exportFormatFromMenu(format) {
   const state = stateManager.getState();
-  if (!state.stl) {
+  const outputData = state.generatedOutput?.data || state.stl;
+  if (!outputData) {
     alert('No rendered model to export. Run Render first.');
     return;
   }
-  const stateFormat = (state.outputFormat || 'stl').toLowerCase();
+  const stateFormat = (
+    state.generatedOutput?.format ||
+    state.outputFormat ||
+    'stl'
+  ).toLowerCase();
   if (stateFormat !== format) {
     alert(
       `The current render is ${stateFormat.toUpperCase()}. To export as ${format.toUpperCase()}, change the output format and click Generate first.`
@@ -1852,7 +1863,7 @@ function _exportFormatFromMenu(format) {
     state.parameters || {},
     format
   );
-  downloadFile(state.stl, filename, format);
+  downloadFile(outputData, filename, format);
 }
 
 /**
@@ -3514,28 +3525,63 @@ async function initApp() {
       const libsForRender = getEnabledLibrariesForRender();
       const startTime = Date.now();
 
-      const result = await renderController.renderFull(
-        state.uploadedFile.content,
-        renderParameters,
-        {
-          outputFormat: format,
-          paramTypes: state.paramTypes || {},
-          files: state.projectFiles,
-          mainFile: state.mainFilePath,
-          libraries: libsForRender,
-          onProgress: () => updateStatus(`Generating ${formatName}\u2026`),
+      const oneClickOpts = {
+        outputFormat: format,
+        paramTypes: state.paramTypes || {},
+        files: state.projectFiles,
+        mainFile: state.mainFilePath,
+        libraries: libsForRender,
+        onProgress: () => updateStatus(`Generating ${formatName}\u2026`),
+      };
+      let result;
+      try {
+        result = await renderController.renderFull(
+          state.uploadedFile.content,
+          renderParameters,
+          oneClickOpts
+        );
+      } catch (renderErr) {
+        if (renderErr.code === 'MODEL_NOT_2D') {
+          updateStatus(
+            `Model produces 3D geometry — projecting to ${formatName}...`
+          );
+          result = await renderController.render2DFallback(
+            state.uploadedFile.content,
+            renderParameters,
+            oneClickOpts
+          );
+        } else {
+          throw renderErr;
         }
-      );
+      }
 
       const duration = ((Date.now() - startTime) / 1000).toFixed(1);
       const data = result.data || result.stl;
+      const resolvedFormat = result.format || format;
 
       stateManager.setState({
+        generatedOutput: {
+          data,
+          format: resolvedFormat,
+          stats: result.stats,
+          paramsHash: hashParams(state.parameters),
+        },
         stl: data,
-        outputFormat: result.format || format,
+        outputFormat: resolvedFormat,
         stlStats: result.stats,
         lastRenderTime: duration,
       });
+
+      // Show rendered 2D preview for SVG output
+      if (resolvedFormat === 'svg' && previewManager) {
+        try {
+          const svgText =
+            typeof data === 'string' ? data : new TextDecoder().decode(data);
+          previewManager.show2DPreview(svgText);
+        } catch (previewErr) {
+          console.warn('[Export2D] Failed to show 2D preview:', previewErr);
+        }
+      }
 
       const filename = generateFilename(
         state.uploadedFile.name,
@@ -6970,33 +7016,80 @@ async function initApp() {
     }
   });
 
-  // Wire model color picker
+  // Wire model color picker and override toggle
   const modelColorPicker = document.getElementById('modelColorPicker');
   const modelColorReset = document.getElementById('modelColorReset');
+  const modelColorEnabled = document.getElementById('modelColorEnabled');
+  const modelColorPickerWrapper = modelColorPicker?.closest(
+    '.model-color-picker'
+  );
 
-  // Load saved model color from localStorage
+  // Load saved state
   const savedModelColor = localStorage.getItem(STORAGE_KEY_MODEL_COLOR);
+  const savedColorEnabled =
+    localStorage.getItem(STORAGE_KEY_MODEL_COLOR_ENABLED) === 'true';
+
   if (savedModelColor && modelColorPicker) {
     modelColorPicker.value = savedModelColor;
   }
 
-  // Debounce timer for color changes
+  const updatePickerDisabledState = (enabled) => {
+    if (modelColorPickerWrapper) {
+      modelColorPickerWrapper.classList.toggle('disabled', !enabled);
+    }
+  };
+
+  const getSelectedModelColor = () =>
+    modelColorPicker?.value ||
+    localStorage.getItem(STORAGE_KEY_MODEL_COLOR) ||
+    getThemeDefaultColor();
+
+  const syncPreviewModelColorOverride = () => {
+    if (!previewManager) return;
+
+    const enabled = modelColorEnabled?.checked === true;
+    const selectedColor = getSelectedModelColor();
+
+    if (enabled) {
+      previewManager.setColorOverride(selectedColor);
+      previewManager.setColorOverrideEnabled(true);
+    } else {
+      previewManager.setColorOverrideEnabled(false);
+      previewManager.setColorOverride(selectedColor);
+    }
+  };
+
+  if (modelColorEnabled) {
+    modelColorEnabled.checked = savedColorEnabled;
+    updatePickerDisabledState(savedColorEnabled);
+    if (previewManager) {
+      syncPreviewModelColorOverride();
+    }
+
+    modelColorEnabled.addEventListener('change', () => {
+      const enabled = modelColorEnabled.checked;
+      localStorage.setItem(STORAGE_KEY_MODEL_COLOR_ENABLED, String(enabled));
+      updatePickerDisabledState(enabled);
+      if (previewManager) {
+        syncPreviewModelColorOverride();
+      }
+      console.log(
+        `[App] Model color override ${enabled ? 'enabled' : 'disabled'}`
+      );
+    });
+  }
+
   let colorChangeTimeout;
 
   if (modelColorPicker) {
     modelColorPicker.addEventListener('input', () => {
       const color = modelColorPicker.value;
-
-      // Clear previous timeout
       clearTimeout(colorChangeTimeout);
 
-      // Debounce: wait 150ms before applying color
-      // This prevents rapid-fire updates while user drags the color picker
       colorChangeTimeout = setTimeout(() => {
-        if (previewManager) {
+        if (previewManager && modelColorEnabled?.checked) {
           previewManager.setColorOverride(color);
         }
-        // Save to localStorage
         localStorage.setItem(STORAGE_KEY_MODEL_COLOR, color);
         console.log(`[App] Model color changed to ${color}`);
       }, 150);
@@ -7008,9 +7101,7 @@ async function initApp() {
       if (previewManager) {
         previewManager.setColorOverride(null);
       }
-      // Reset picker to theme default and clear localStorage
       if (modelColorPicker) {
-        // Get the theme default color
         const themeDefault = getThemeDefaultColor();
         modelColorPicker.value = themeDefault;
       }
@@ -7415,11 +7506,13 @@ async function initApp() {
       state.outputFormat ||
       'stl'
     ).toLowerCase();
+
     const formatName =
       OUTPUT_FORMATS[selectedFormat]?.name || selectedFormat.toUpperCase();
     const isStlFormat = selectedFormat === 'stl';
 
-    // Check auto-preview controller state
+    // Check auto-preview controller state (works for any 3D format routed
+    // through the controller; 2D formats bypass it)
     const hasFullQualitySTL = autoPreviewController?.getCurrentFullSTL(
       state.parameters
     );
@@ -7427,8 +7520,13 @@ async function initApp() {
       !hasFullQualitySTL ||
       autoPreviewController?.needsFullRender(state.parameters);
 
+    const stateOutputFormat = (state.outputFormat || '').toLowerCase();
+    const hasMatchingOutput =
+      hasGeneratedFile &&
+      stateOutputFormat === selectedFormat &&
+      !paramsChanged;
+
     if (isStlFormat && hasFullQualitySTL && !needsFullRender) {
-      // Full quality STL is ready and matches current parameters - show Download
       primaryActionBtn.textContent = '📥 Download';
       primaryActionBtn.dataset.action = 'download';
       primaryActionBtn.classList.remove('btn-primary');
@@ -7437,10 +7535,18 @@ async function initApp() {
         'aria-label',
         `Download generated ${formatName} file (full quality)`
       );
-      // Hide fallback since primary button is download
       downloadFallbackLink.classList.add('hidden');
-    } else if (isStlFormat) {
-      // Need to generate (no full STL yet, or params changed)
+    } else if (hasMatchingOutput) {
+      primaryActionBtn.textContent = '📥 Download';
+      primaryActionBtn.dataset.action = 'download';
+      primaryActionBtn.classList.remove('btn-primary');
+      primaryActionBtn.classList.add('btn-success');
+      primaryActionBtn.setAttribute(
+        'aria-label',
+        `Download generated ${formatName} file`
+      );
+      downloadFallbackLink.classList.add('hidden');
+    } else {
       primaryActionBtn.textContent = 'Generate';
       primaryActionBtn.dataset.action = 'generate';
       primaryActionBtn.classList.remove('btn-success');
@@ -7450,38 +7556,11 @@ async function initApp() {
         `Generate ${formatName} file from current parameters`
       );
 
-      // Show fallback download link if STL exists but params changed
-      if (hasGeneratedFile && paramsChanged) {
+      if (isStlFormat && hasGeneratedFile && paramsChanged) {
         downloadFallbackLink.classList.remove('hidden');
       } else {
         downloadFallbackLink.classList.add('hidden');
       }
-    } else {
-      const stateOutputFormat = (state.outputFormat || '').toLowerCase();
-      const hasMatchingOutput =
-        hasGeneratedFile &&
-        stateOutputFormat === selectedFormat &&
-        !paramsChanged;
-      if (hasMatchingOutput) {
-        primaryActionBtn.textContent = '📥 Download';
-        primaryActionBtn.dataset.action = 'download';
-        primaryActionBtn.classList.remove('btn-primary');
-        primaryActionBtn.classList.add('btn-success');
-        primaryActionBtn.setAttribute(
-          'aria-label',
-          `Download generated ${formatName} file`
-        );
-      } else {
-        primaryActionBtn.textContent = 'Generate';
-        primaryActionBtn.dataset.action = 'generate';
-        primaryActionBtn.classList.remove('btn-success');
-        primaryActionBtn.classList.add('btn-primary');
-        primaryActionBtn.setAttribute(
-          'aria-label',
-          `Generate ${formatName} file from current parameters`
-        );
-      }
-      downloadFallbackLink.classList.add('hidden');
     }
   }
 
@@ -8893,15 +8972,11 @@ async function initApp() {
     // The ZIP path already runs its own preflight above; only check here for
     // bare .scad uploads where extractedFiles is null.
     if (!extractedFiles) {
-      const singleFilePreflight = runPreflightCheck(
-        fileContent,
-        [fileName],
-        {
-          availableLibraries: new Set(
-            Object.keys(LIBRARY_DEFINITIONS).map((k) => k.toLowerCase())
-          ),
-        }
-      );
+      const singleFilePreflight = runPreflightCheck(fileContent, [fileName], {
+        availableLibraries: new Set(
+          Object.keys(LIBRARY_DEFINITIONS).map((k) => k.toLowerCase())
+        ),
+      });
       if (!singleFilePreflight.success) {
         const allMissingFiles = [
           ...singleFilePreflight.missing.includes,
@@ -9007,6 +9082,14 @@ async function initApp() {
       if (source !== 'saved') {
         currentSavedProjectId = null;
       }
+
+      // Reset output format to STL for fresh project loads —
+      // dispatch change to update format info panel and 2D guidance.
+      if (outputFormatSelect && outputFormatSelect.value !== 'stl') {
+        outputFormatSelect.value = 'stl';
+        outputFormatSelect.dispatchEvent(new Event('change'));
+      }
+      stateManager.setState({ outputFormat: 'stl' });
 
       // Show main interface
       welcomeScreen.classList.add('hidden');
@@ -9340,6 +9423,8 @@ async function initApp() {
         previewManager = new PreviewManager(previewContainer);
         await previewManager.init();
 
+        syncPreviewModelColorOverride();
+
         // Sync measurements toggle with saved preference
         if (measurementsToggle) {
           measurementsToggle.checked = previewManager.measurementsEnabled;
@@ -9474,11 +9559,7 @@ async function initApp() {
           }
         }
 
-        // Apply saved model color if exists
-        const savedModelColor = localStorage.getItem(STORAGE_KEY_MODEL_COLOR);
-        if (savedModelColor) {
-          previewManager.setColorOverride(savedModelColor);
-        }
+        syncPreviewModelColorOverride();
 
         // Listen for theme changes and update preview
         themeManager.addListener((theme, activeTheme, highContrast) => {
@@ -9740,6 +9821,13 @@ async function initApp() {
           currentPresetId: null,
           currentPresetName: null,
         });
+
+        // Sync the dropdown element and fire change so the format info panel,
+        // 2D guidance, and button labels all reset to their STL defaults.
+        if (outputFormatSelect) {
+          outputFormatSelect.value = 'stl';
+          outputFormatSelect.dispatchEvent(new Event('change'));
+        }
 
         // Clear history
         stateManager.clearHistory();
@@ -13981,8 +14069,8 @@ if (rounded) {
 
     try {
       // Get selected output format
-      const outputFormat = outputFormatSelect?.value || 'stl';
-      const formatName =
+      let outputFormat = outputFormatSelect?.value || 'stl';
+      let formatName =
         OUTPUT_FORMATS[outputFormat]?.name || outputFormat.toUpperCase();
 
       primaryActionBtn.disabled = true;
@@ -14016,6 +14104,25 @@ if (rounded) {
 
       let result;
 
+      // Auto-detect 2D parameters with a 3D format and switch to SVG.
+      // When the user has e.g. generate="first layer for SVG/DXF file" but
+      // the format dropdown is still STL, rendering will fail with MODEL_IS_2D.
+      // Proactively switch to SVG so the render succeeds.
+      if (
+        !OUTPUT_FORMATS[outputFormat]?.is2D &&
+        typeof state.parameters?.generate === 'string' &&
+        /svg|dxf|2d|first layer/i.test(state.parameters.generate)
+      ) {
+        outputFormat = 'svg';
+        formatName = 'SVG';
+        if (outputFormatSelect) {
+          outputFormatSelect.value = 'svg';
+          outputFormatSelect.dispatchEvent(new Event('change'));
+        }
+        stateManager.setState({ outputFormat: 'svg' });
+        updateStatus('Generating SVG… (auto-switched from STL for 2D output)');
+      }
+
       // Use auto-preview controller for full render if available (STL only for now)
       if (autoPreviewController && outputFormat === 'stl') {
         result = await autoPreviewController.renderFull(state.parameters, {
@@ -14036,25 +14143,39 @@ if (rounded) {
           state.schema,
           outputFormat
         );
-        result = await renderController.renderFull(
-          state.uploadedFile.content,
-          renderParameters,
-          {
-            outputFormat,
-            paramTypes: state.paramTypes || {},
-            files: state.projectFiles,
-            mainFile: state.mainFilePath,
-            libraries: libsForRender,
-            ...(exportQualityPreset ? { quality: exportQualityPreset } : {}),
-            onProgress: (_percent, _message) => {
-              // Simplified status: no confusing percentages
-              const formatName =
-                OUTPUT_FORMATS[outputFormat]?.name ||
-                outputFormat.toUpperCase();
-              updateStatus(`Generating ${formatName}...`);
-            },
+        const renderOptions = {
+          outputFormat,
+          paramTypes: state.paramTypes || {},
+          files: state.projectFiles,
+          mainFile: state.mainFilePath,
+          libraries: libsForRender,
+          ...(exportQualityPreset ? { quality: exportQualityPreset } : {}),
+          onProgress: (_percent, _message) => {
+            const fn =
+              OUTPUT_FORMATS[outputFormat]?.name || outputFormat.toUpperCase();
+            updateStatus(`Generating ${fn}...`);
+          },
+        };
+        try {
+          result = await renderController.renderFull(
+            state.uploadedFile.content,
+            renderParameters,
+            renderOptions
+          );
+        } catch (renderErr) {
+          if (renderErr.code === 'MODEL_NOT_2D') {
+            updateStatus(
+              `Model produces 3D geometry — projecting to ${outputFormat.toUpperCase()}...`
+            );
+            result = await renderController.render2DFallback(
+              state.uploadedFile.content,
+              renderParameters,
+              renderOptions
+            );
+          } else {
+            throw renderErr;
           }
-        );
+        }
       }
 
       const duration = ((Date.now() - startTime) / 1000).toFixed(1);
@@ -14062,31 +14183,55 @@ if (rounded) {
       // Store the hash of parameters used for this generation
       lastGeneratedParamsHash = hashParams(state.parameters);
 
+      const outputData = result.data || result.stl;
+      const resolvedFormat = result.format || outputFormat;
       stateManager.setState({
-        stl: result.data || result.stl,
-        outputFormat: result.format || outputFormat,
+        generatedOutput: {
+          data: outputData,
+          format: resolvedFormat,
+          stats: result.stats,
+          paramsHash: lastGeneratedParamsHash,
+        },
+        stl: outputData,
+        outputFormat: resolvedFormat,
         stlStats: result.stats,
         lastRenderTime: duration,
       });
 
-      // When the auto-preview controller handled the render, it already loaded
-      // the STL into the 3D viewer. For the direct-render fallback path, we
-      // must load it ourselves so the model is visible.
-      const stlData = result.data || result.stl;
+      // Display the result in the preview panel.
+      // 2D formats (SVG) get a native rendered SVG viewer;
+      // 3D formats are loaded into the Three.js viewer.
       const is2DFormat = OUTPUT_FORMATS[outputFormat]?.is2D;
-      if (!autoPreviewController && previewManager && stlData && !is2DFormat) {
+      if (is2DFormat && resolvedFormat === 'svg' && previewManager) {
         try {
-          // Full-quality direct render: clear any preview/laser tint
+          const svgText =
+            typeof outputData === 'string'
+              ? outputData
+              : new TextDecoder().decode(outputData);
+          previewManager.show2DPreview(svgText);
+        } catch (previewErr) {
+          console.warn('[Generate] Failed to show 2D preview:', previewErr);
+        }
+      } else if (
+        !autoPreviewController &&
+        previewManager &&
+        outputData &&
+        !is2DFormat
+      ) {
+        try {
           if (previewManager.setRenderState) {
             previewManager.setRenderState(null);
           }
-          await previewManager.loadSTL(stlData, { preserveCamera: false });
+          previewManager.hide2DPreview();
+          await previewManager.loadSTL(outputData, { preserveCamera: false });
           if (_hfmEnabled && _hfmAltView?.clearPersistence) {
             _hfmAltView.clearPersistence();
           }
         } catch (loadErr) {
           console.warn('[Generate] Failed to load STL into preview:', loadErr);
         }
+      } else if (previewManager && !is2DFormat) {
+        previewManager.hide2DPreview();
       }
 
       // Store console output for the Console panel (echo/warning/error display)
@@ -14152,7 +14297,6 @@ if (rounded) {
       const currentFormat = outputFormatSelect?.value || 'stl';
       if (currentFormat === 'svg' || currentFormat === 'dxf') {
         const msg = (error?.message || '').toLowerCase();
-        const detailsStr = String(error?.details || '');
         const is2DGeometryError =
           error?.code === 'MODEL_NOT_2D' ||
           msg.includes('not a 2d') ||
@@ -14220,7 +14364,6 @@ if (rounded) {
           );
 
           if (alreadySet2D) {
-            const friendlyError = translateError(error.message);
             const userMessage =
               `${currentFormat.toUpperCase()} Export Issue\n\n` +
               `The "${actualGenerateValue}" setting is selected, but the rendering engine ` +
@@ -15318,21 +15461,13 @@ if (rounded) {
     }
 
     const companionMapping = presetCompanionMap?.get(preset.name);
-    const signatureFor = (content) =>
-      typeof content === 'string'
-        ? `${content.length}:${content.slice(0, 32)}`
-        : content == null
-          ? null
-          : `[${typeof content}]`;
     // Alias-mount preset-specific companion files from the ZIP mapping.
     const aliasedFiles = applyCompanionAliases(
       newProjectFiles,
       companionMapping
     );
     if (companionMapping?.aliases) {
-      for (const [target, source] of Object.entries(
-        companionMapping.aliases
-      )) {
+      for (const [target, source] of Object.entries(companionMapping.aliases)) {
         if (aliasedFiles.has(target)) {
           console.log(`[Preset] Alias-mounted: ${source} → ${target}`);
         }
@@ -15348,13 +15483,30 @@ if (rounded) {
         );
       }
       if (companionMapping?.svgPath && aliasedFiles.has('default.svg')) {
-        console.log(
-          `[Preset] Alias-mounted SVG: ${companionMapping.svgPath}`
-        );
+        console.log(`[Preset] Alias-mounted SVG: ${companionMapping.svgPath}`);
       }
     }
 
     stateManager.setState({ projectFiles: aliasedFiles });
+
+    // Reset output format to STL when loading a preset whose parameters
+    // produce 3D geometry.  Check both the dropdown AND the state because
+    // they can desync (e.g. dropdown shows STL but state still says SVG
+    // after a welcome-screen round-trip).
+    const _fmtSelect = document.getElementById('outputFormat');
+    const _stateNeedsReset =
+      (stateManager.getState().outputFormat || 'stl') !== 'stl';
+    if (_fmtSelect && (_fmtSelect.value !== 'stl' || _stateNeedsReset)) {
+      const is2DPreset =
+        isNonPreviewable(mergedParams, state.schema) ||
+        (typeof mergedParams.generate === 'string' &&
+          /svg|dxf|2d|first layer/i.test(mergedParams.generate));
+      if (!is2DPreset) {
+        _fmtSelect.value = 'stl';
+        _fmtSelect.dispatchEvent(new Event('change'));
+        stateManager.setState({ outputFormat: 'stl' });
+      }
+    }
 
     if (autoPreviewController) {
       autoPreviewController.setProjectFiles(
@@ -16431,6 +16583,20 @@ if (rounded) {
         },
         defaultParams
       );
+
+      // Reset output format to STL when loading design defaults (3D preset)
+      const _fmtSelectDefaults = document.getElementById('outputFormat');
+      if (_fmtSelectDefaults && _fmtSelectDefaults.value !== 'stl') {
+        const is2DDefaults =
+          isNonPreviewable(defaultParams, state.schema) ||
+          (typeof defaultParams.generate === 'string' &&
+            /svg|dxf|2d|first layer/i.test(defaultParams.generate));
+        if (!is2DDefaults) {
+          _fmtSelectDefaults.value = 'stl';
+          _fmtSelectDefaults.dispatchEvent(new Event('change'));
+          stateManager.setState({ outputFormat: 'stl' });
+        }
+      }
 
       if (autoPreviewController) {
         autoPreviewController.onParameterChange(defaultParams);

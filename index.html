@@ -3151,21 +3151,31 @@
                       </div>
                       <div class="preview-setting model-color-setting">
                         <span class="preview-setting-label">Model Color</span>
-                        <div class="model-color-picker">
-                          <input
-                            type="color"
-                            id="modelColorPicker"
-                            value="#2196F3"
-                            aria-label="Choose model display color"
-                          />
-                          <button
-                            id="modelColorReset"
-                            class="btn-icon"
-                            title="Reset to theme default"
-                            aria-label="Reset color to theme default"
-                          >
-                            ↺
-                          </button>
+                        <div class="model-color-controls">
+                          <label class="toggle-switch model-color-toggle">
+                            <input
+                              type="checkbox"
+                              id="modelColorEnabled"
+                              aria-label="Enable custom model color override"
+                            />
+                            <span class="toggle-label">Override</span>
+                          </label>
+                          <div class="model-color-picker">
+                            <input
+                              type="color"
+                              id="modelColorPicker"
+                              value="#2196F3"
+                              aria-label="Choose model display color"
+                            />
+                            <button
+                              id="modelColorReset"
+                              class="btn-icon"
+                              title="Reset to theme default"
+                              aria-label="Reset color to theme default"
+                            >
+                              ↺
+                            </button>
+                          </div>
                         </div>
                       </div>
                       <div
@@ -3305,15 +3315,22 @@
                   class="preview-container"
                   id="previewContainer"
                   role="group"
-                  aria-label="3D model preview and controls"
+                  aria-label="Model preview and controls"
                   aria-describedby="previewModelSummary"
                   tabindex="0"
                   data-tutorial-target="preview-container"
                 >
                   <!-- 3D preview or placeholder -->
                   <div class="preview-placeholder">
-                    <p>3D preview will appear here after generating STL</p>
+                    <p>Preview will appear here after generating output</p>
                   </div>
+                  <!-- Rendered 2D SVG preview surface (hidden until SVG output is generated) -->
+                  <div
+                    id="rendered2dPreview"
+                    class="rendered-2d-preview hidden"
+                    role="img"
+                    aria-label="Rendered 2D SVG preview"
+                  ></div>
                   <!-- Screen reader accessible model summary (WCAG 2.2 non-visual content) -->
                   <div
                     id="previewModelSummary"
@@ -3321,8 +3338,8 @@
                     aria-live="polite"
                     aria-atomic="true"
                   >
-                    No model loaded. Upload an OpenSCAD file and generate an STL
-                    to see the 3D preview.
+                    No model loaded. Upload an OpenSCAD file and generate output
+                    to see a preview.
                   </div>
                 </div>
                 <!-- Status bar overlay at bottom of preview -->

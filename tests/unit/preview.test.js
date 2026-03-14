@@ -93,11 +93,14 @@ describe('PreviewManager', () => {
   })
 
   describe('Color Override', () => {
-    it('applies color overrides when a mesh is present', () => {
+    it('applies color overrides when a mesh is present and override enabled', () => {
       const manager = new PreviewManager(container)
+      manager.colorOverrideEnabled = true
       manager.mesh = {
         material: {
-          color: { setHex: vi.fn() }
+          color: { setHex: vi.fn() },
+          vertexColors: false,
+          needsUpdate: false,
         }
       }
 
@@ -105,6 +108,23 @@ describe('PreviewManager', () => {
 
       expect(manager.colorOverride).toBe('#ff0000')
       expect(manager.mesh.material.color.setHex).toHaveBeenCalled()
+    })
+
+    it('stores override but does not apply when disabled', () => {
+      const manager = new PreviewManager(container)
+      manager.colorOverrideEnabled = false
+      manager.mesh = {
+        material: {
+          color: { setHex: vi.fn() },
+          vertexColors: false,
+          needsUpdate: false,
+        }
+      }
+
+      manager.setColorOverride('#ff0000')
+
+      expect(manager.colorOverride).toBe('#ff0000')
+      expect(manager.mesh.material.color.setHex).not.toHaveBeenCalled()
     })
 
     it('normalizes hex colors without hash', () => {
@@ -641,6 +661,133 @@ describe('PreviewManager', () => {
       manager.setColorOverride('#f00')
       
       expect(manager.colorOverride).toBeNull()
+    })
+  })
+
+  describe('Color Override Toggle', () => {
+    it('initializes with colorOverrideEnabled = false', () => {
+      const manager = new PreviewManager(container)
+      expect(manager.colorOverrideEnabled).toBe(false)
+    })
+
+    it('setColorOverrideEnabled(true) applies solid color to COFF mesh', () => {
+      const manager = new PreviewManager(container)
+      const colorAttr = { count: 100 }
+      manager.mesh = {
+        material: {
+          color: { setHex: vi.fn() },
+          vertexColors: true,
+          needsUpdate: false,
+        },
+        geometry: {
+          attributes: { color: colorAttr },
+        },
+      }
+      manager.colorOverride = '#ff0000'
+      manager.setColorOverrideEnabled(true)
+
+      expect(manager.mesh.material.vertexColors).toBe(false)
+      expect(manager.mesh.material.needsUpdate).toBe(true)
+      expect(manager.mesh.material.color.setHex).toHaveBeenCalledWith(0xff0000)
+    })
+
+    it('setColorOverrideEnabled(false) restores vertex colors on COFF mesh', () => {
+      const manager = new PreviewManager(container)
+      const colorAttr = { count: 100 }
+      manager.mesh = {
+        material: {
+          color: { setHex: vi.fn() },
+          vertexColors: false,
+          needsUpdate: false,
+        },
+        geometry: {
+          attributes: { color: colorAttr },
+        },
+      }
+      manager.colorOverride = '#ff0000'
+      manager.colorOverrideEnabled = true
+      manager.setColorOverrideEnabled(false)
+
+      expect(manager.mesh.material.vertexColors).toBe(true)
+      expect(manager.mesh.material.needsUpdate).toBe(true)
+    })
+
+    it('toggle OFF prevents setColorOverride from applying', () => {
+      const manager = new PreviewManager(container)
+      manager.colorOverrideEnabled = false
+      manager.mesh = {
+        material: {
+          color: { setHex: vi.fn() },
+          vertexColors: false,
+          needsUpdate: false,
+        },
+      }
+      manager.setColorOverride('#ff0000')
+
+      expect(manager.colorOverride).toBe('#ff0000')
+      expect(manager.mesh.material.color.setHex).not.toHaveBeenCalled()
+    })
+
+    it('toggle OFF on plain mesh falls back to theme default', () => {
+      const manager = new PreviewManager(container)
+      manager.currentTheme = 'light'
+      manager.mesh = {
+        material: {
+          color: { setHex: vi.fn() },
+          vertexColors: false,
+          needsUpdate: false,
+        },
+        geometry: {
+          attributes: {},
+        },
+      }
+      manager.colorOverride = '#ff0000'
+      manager.colorOverrideEnabled = true
+      manager.setColorOverrideEnabled(false)
+
+      expect(manager.mesh.material.vertexColors).toBe(false)
+      expect(manager.mesh.material.needsUpdate).toBe(true)
+      expect(manager.mesh.material.color.setHex).toHaveBeenCalled()
+    })
+
+    it('_syncColorOverride handles group meshes', () => {
+      const manager = new PreviewManager(container)
+      const child1 = {
+        material: {
+          color: { setHex: vi.fn() },
+          vertexColors: true,
+          needsUpdate: false,
+        },
+        geometry: {
+          attributes: { color: { count: 10 } },
+        },
+        userData: {},
+      }
+      const highlightChild = {
+        material: {
+          color: { setHex: vi.fn() },
+          vertexColors: false,
+          needsUpdate: false,
+        },
+        geometry: { attributes: {} },
+        userData: { isHighlightOverlay: true },
+      }
+      manager.mesh = {
+        isGroup: true,
+        children: [child1, highlightChild],
+      }
+      manager.colorOverride = '#00ff00'
+      manager.setColorOverrideEnabled(true)
+
+      expect(child1.material.vertexColors).toBe(false)
+      expect(child1.material.color.setHex).toHaveBeenCalledWith(0x00ff00)
+      expect(highlightChild.material.color.setHex).not.toHaveBeenCalled()
+    })
+
+    it('_syncColorOverride is a no-op when no mesh exists', () => {
+      const manager = new PreviewManager(container)
+      manager.mesh = null
+      expect(() => manager.setColorOverrideEnabled(true)).not.toThrow()
     })
   })
 
@@ -1757,18 +1904,27 @@ describe('PreviewManager', () => {
         expect(color).toBe('#ffb000')
       })
 
-      it('returns colorOverride regardless of render state', () => {
+      it('returns colorOverride when enabled regardless of render state', () => {
         manager.renderState = 'laser'
+        manager.colorOverrideEnabled = true
         manager.colorOverride = '#00ff00'
         const color = manager._resolveModelColor()
         expect(color).toBe('#00ff00')
       })
 
-      it('returns colorOverride regardless of render state (preview)', () => {
+      it('returns colorOverride when enabled regardless of render state (preview)', () => {
         manager.renderState = 'preview'
+        manager.colorOverrideEnabled = true
         manager.colorOverride = '#abcdef'
         const color = manager._resolveModelColor()
         expect(color).toBe('#abcdef')
+      })
+
+      it('returns theme default when override exists but is disabled', () => {
+        manager.colorOverride = '#abcdef'
+        manager.colorOverrideEnabled = false
+        const color = manager._resolveModelColor()
+        expect(color).toBe('#2196f3')
       })
 
       it('falls back to theme default for unknown render state', () => {
@@ -1800,8 +1956,9 @@ describe('PreviewManager', () => {
         expect(defaultColor).toBe(laserColor)
       })
 
-      it('colorOverride takes priority over theme for all states', () => {
+      it('colorOverride takes priority over theme for all states when enabled', () => {
         manager.colorOverride = '#abcdef'
+        manager.colorOverrideEnabled = true
         const defaultColor = manager._resolveModelColor()
         manager.renderState = 'preview'
         const previewColor = manager._resolveModelColor()
@@ -1860,6 +2017,210 @@ describe('PreviewManager', () => {
       const result = await manager.loadSTL(new ArrayBuffer(0))
       expect(result).toEqual({ parseMs: 0, empty: true })
       expect(manager.clear).toHaveBeenCalled()
+    })
+  })
+
+  describe('Rendered 2D Preview', () => {
+    let manager
+
+    beforeEach(() => {
+      manager = new PreviewManager(container)
+      // Simulate the #rendered2dPreview element from index.html
+      const preview2d = document.createElement('div')
+      preview2d.id = 'rendered2dPreview'
+      preview2d.classList.add('rendered-2d-preview', 'hidden')
+      document.body.appendChild(preview2d)
+
+      // Simulate #previewModelSummary
+      const summary = document.createElement('div')
+      summary.id = 'previewModelSummary'
+      document.body.appendChild(summary)
+    })
+
+    afterEach(() => {
+      document.getElementById('rendered2dPreview')?.remove()
+      document.getElementById('previewModelSummary')?.remove()
+    })
+
+    describe('show2DPreview', () => {
+      it('inserts sanitized SVG into the 2D preview element', () => {
+        const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M0 0 L100 100"/></svg>'
+        manager.show2DPreview(svg)
+
+        const el = document.getElementById('rendered2dPreview')
+        expect(el.classList.contains('hidden')).toBe(false)
+        expect(el.querySelector('svg')).not.toBeNull()
+        expect(el.querySelector('path')).not.toBeNull()
+      })
+
+      it('strips <script> elements from SVG', () => {
+        const svg = '<svg xmlns="http://www.w3.org/2000/svg"><script>alert("xss")</script><circle cx="50" cy="50" r="40"/></svg>'
+        manager.show2DPreview(svg)
+
+        const el = document.getElementById('rendered2dPreview')
+        expect(el.querySelector('script')).toBeNull()
+        expect(el.querySelector('circle')).not.toBeNull()
+      })
+
+      it('strips event-handler attributes', () => {
+        const svg = '<svg xmlns="http://www.w3.org/2000/svg"><rect onclick="alert(1)" width="100" height="100"/></svg>'
+        manager.show2DPreview(svg)
+
+        const rect = document.getElementById('rendered2dPreview').querySelector('rect')
+        expect(rect.getAttribute('onclick')).toBeNull()
+      })
+
+      it('updates ARIA summary for 2D content', () => {
+        const svg = '<svg xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10"/></svg>'
+        manager.show2DPreview(svg)
+
+        const summary = document.getElementById('previewModelSummary')
+        expect(summary.textContent).toContain('2D')
+      })
+
+      it('sets _is2DPreviewActive to true', () => {
+        const svg = '<svg xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10"/></svg>'
+        manager.show2DPreview(svg)
+
+        expect(manager._is2DPreviewActive).toBe(true)
+      })
+
+      it('injects desktop-parity styling for unstyled SVGs', () => {
+        const svg = '<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0 L100 100"/><polygon points="0,0 50,50 100,0"/></svg>'
+        manager.show2DPreview(svg)
+
+        const style = document.getElementById('rendered2dPreview').querySelector('style[data-forge-preview]')
+        expect(style).not.toBeNull()
+        expect(style.textContent).toContain('#8FBC8F')
+      })
+
+      it('does not inject parity styling when SVG has explicit fills', () => {
+        const svg = '<svg xmlns="http://www.w3.org/2000/svg"><rect fill="#ff0000" width="10" height="10"/></svg>'
+        manager.show2DPreview(svg)
+
+        const style = document.getElementById('rendered2dPreview').querySelector('style[data-forge-preview]')
+        expect(style).toBeNull()
+      })
+    })
+
+    describe('hide2DPreview', () => {
+      it('hides the 2D preview element and clears content', () => {
+        const svg = '<svg xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10"/></svg>'
+        manager.show2DPreview(svg)
+        manager.hide2DPreview()
+
+        const el = document.getElementById('rendered2dPreview')
+        expect(el.classList.contains('hidden')).toBe(true)
+        expect(el.innerHTML).toBe('')
+      })
+
+      it('sets _is2DPreviewActive to false', () => {
+        manager.show2DPreview('<svg xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10"/></svg>')
+        manager.hide2DPreview()
+
+        expect(manager._is2DPreviewActive).toBe(false)
+      })
+    })
+
+    describe('sanitizeSVG', () => {
+      it('removes script tags', () => {
+        const result = PreviewManager.sanitizeSVG(
+          '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script><rect width="10" height="10"/></svg>'
+        )
+        expect(result).not.toContain('<script')
+        expect(result).toContain('<rect')
+      })
+
+      it('removes event handler attributes', () => {
+        const result = PreviewManager.sanitizeSVG(
+          '<svg xmlns="http://www.w3.org/2000/svg"><rect onload="alert(1)" width="10" height="10"/></svg>'
+        )
+        expect(result).not.toContain('onload')
+      })
+
+      it('removes javascript: hrefs', () => {
+        const result = PreviewManager.sanitizeSVG(
+          '<svg xmlns="http://www.w3.org/2000/svg"><a href="javascript:alert(1)"><rect width="10" height="10"/></a></svg>'
+        )
+        expect(result).not.toContain('javascript:')
+      })
+    })
+
+    describe('svgLacksVisualStyling', () => {
+      it('returns true for geometry-only SVG', () => {
+        const parser = new DOMParser()
+        const doc = parser.parseFromString(
+          '<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0L10 10"/><polygon points="0,0 5,5 10,0"/></svg>',
+          'image/svg+xml'
+        )
+        expect(PreviewManager.svgLacksVisualStyling(doc.documentElement)).toBe(true)
+      })
+
+      it('returns false for styled SVG', () => {
+        const parser = new DOMParser()
+        const doc = parser.parseFromString(
+          '<svg xmlns="http://www.w3.org/2000/svg"><path fill="#ff0000" d="M0 0L10 10"/></svg>',
+          'image/svg+xml'
+        )
+        expect(PreviewManager.svgLacksVisualStyling(doc.documentElement)).toBe(false)
+      })
+
+      it('returns false for SVG with no shapes', () => {
+        const parser = new DOMParser()
+        const doc = parser.parseFromString(
+          '<svg xmlns="http://www.w3.org/2000/svg"><text>Hello</text></svg>',
+          'image/svg+xml'
+        )
+        expect(PreviewManager.svgLacksVisualStyling(doc.documentElement)).toBe(false)
+      })
+    })
+
+    describe('injectDesktopParityStyling', () => {
+      it('adds a style element with data-forge-preview attribute', () => {
+        const parser = new DOMParser()
+        const doc = parser.parseFromString(
+          '<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0L10 10"/></svg>',
+          'image/svg+xml'
+        )
+        PreviewManager.injectDesktopParityStyling(doc.documentElement)
+        const style = doc.querySelector('style[data-forge-preview]')
+        expect(style).not.toBeNull()
+        expect(style.textContent).toContain('#8FBC8F')
+        expect(style.textContent).toContain('#CC0000')
+      })
+
+      it('does not add duplicate style elements', () => {
+        const parser = new DOMParser()
+        const doc = parser.parseFromString(
+          '<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0L10 10"/></svg>',
+          'image/svg+xml'
+        )
+        PreviewManager.injectDesktopParityStyling(doc.documentElement)
+        PreviewManager.injectDesktopParityStyling(doc.documentElement)
+        const styles = doc.querySelectorAll('style[data-forge-preview]')
+        expect(styles.length).toBe(1)
+      })
+    })
+
+    describe('_set2DPreviewActive', () => {
+      it('hides 3D canvas when 2D is active', () => {
+        const mockCanvas = document.createElement('canvas')
+        manager.renderer = { domElement: mockCanvas }
+        
+        manager._set2DPreviewActive(true)
+        expect(mockCanvas.style.display).toBe('none')
+        
+        manager._set2DPreviewActive(false)
+        expect(mockCanvas.style.display).toBe('')
+      })
+
+      it('updates container ARIA label', () => {
+        manager._set2DPreviewActive(true)
+        expect(container.getAttribute('aria-label')).toBe('Rendered 2D SVG preview')
+        
+        manager._set2DPreviewActive(false)
+        expect(container.getAttribute('aria-label')).toBe('3D model preview and controls')
+      })
     })
   })
 
@@ -1932,17 +2293,19 @@ describe('PreviewManager', () => {
 
     it('applyColorToMesh skips highlight overlay children in Groups', () => {
       const manager = new PreviewManager(container)
+      manager.colorOverrideEnabled = true
+      manager.colorOverride = '#ff0000'
       const normalColor = { setHex: vi.fn() }
       const highlightColor = { setHex: vi.fn() }
       manager.mesh = {
         isGroup: true,
         children: [
           {
-            material: { color: normalColor },
+            material: { color: normalColor, vertexColors: false, needsUpdate: false },
             userData: {},
           },
           {
-            material: { color: highlightColor },
+            material: { color: highlightColor, vertexColors: false, needsUpdate: false },
             userData: { isHighlightOverlay: true },
           },
         ],

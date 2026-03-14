@@ -2485,10 +2485,27 @@ summary:focus-visible,
   margin-top: var(--space-xs);
 }
 
+.model-color-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.model-color-toggle .toggle-label {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  user-select: none;
+}
+
 .model-color-picker {
   display: inline-flex;
   align-items: center;
   gap: var(--space-xs);
+}
+
+.model-color-picker.disabled {
+  opacity: 0.4;
+  pointer-events: none;
 }
 
 .model-color-picker input[type='color'] {
@@ -5550,7 +5567,9 @@ body.first-visit-blocking #app {
   font-size: var(--font-size-sm);
   font-weight: 500;
   cursor: pointer;
-  transition: background-color 0.15s, color 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s;
 }
 
 .console-view-tab:not(:last-child) {

@@ -45,7 +45,12 @@ export function decodeDataUrl(dataUrl) {
   if (typeof dataUrl !== 'string') {
     if (dataUrl instanceof ArrayBuffer) return new Uint8Array(dataUrl);
     if (dataUrl instanceof Uint8Array) return dataUrl;
-    if (ArrayBuffer.isView(dataUrl)) return new Uint8Array(dataUrl.buffer, dataUrl.byteOffset, dataUrl.byteLength);
+    if (ArrayBuffer.isView(dataUrl))
+      return new Uint8Array(
+        dataUrl.buffer,
+        dataUrl.byteOffset,
+        dataUrl.byteLength
+      );
     throw new Error('Unsupported file parameter data type');
   }
 
@@ -110,7 +115,11 @@ export function sanitizeFileName(rawName) {
  */
 export function resolveFileParams(parameters, mountBaseDir) {
   if (!parameters || typeof parameters !== 'object') {
-    return { mountOperations: [], resolvedParams: parameters || {}, fileParamNames: [] };
+    return {
+      mountOperations: [],
+      resolvedParams: parameters || {},
+      fileParamNames: [],
+    };
   }
 
   const mountOperations = [];
@@ -127,7 +136,10 @@ export function resolveFileParams(parameters, mountBaseDir) {
         mountOperations.push({ paramName: key, fileName, mountPath, data });
         fileParamNames.push(fileName);
       } catch (err) {
-        console.warn(`[FileParamResolver] Failed to decode data for param "${key}":`, err.message);
+        console.warn(
+          `[FileParamResolver] Failed to decode data for param "${key}":`,
+          err.message
+        );
         resolvedParams[key] = fileName;
         continue;
       }

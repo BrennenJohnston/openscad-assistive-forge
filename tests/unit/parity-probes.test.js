@@ -588,6 +588,14 @@ describe('Probe 3: scadUsesDebugModifier() detection accuracy', () => {
     ).toBe(false);
   });
 
+  it('does NOT false-positive on module-internal debug helper branches', () => {
+    expect(
+      AutoPreviewController.scadUsesDebugModifier(
+        'module helper(id) {\n  if (id == "#") {\n    # translate([0,0,0]) cube(10);\n  }\n}\ncolor("Turquoise") cube(20);'
+      )
+    ).toBe(false);
+  });
+
   it('returns false for empty/null input', () => {
     expect(AutoPreviewController.scadUsesDebugModifier('')).toBe(false);
     expect(AutoPreviewController.scadUsesDebugModifier(null)).toBe(false);

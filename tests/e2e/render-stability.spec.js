@@ -1,10 +1,9 @@
 /**
  * Render stability E2E test suite — Phase 0.2 baseline
  *
- * Captures current behavior (pre-fix) as a regression safety net.
- * Tests are written to PASS against the current (potentially buggy) build
- * so that they remain the "before" baseline. Assertions that verify fixed
- * behaviour are clearly marked with TODO: POST-FIX.
+ * Post-remediation regression safety net.
+ * Verifies BUG-A/B/C/D fixes remain effective after parity remediation.
+ * Assertions upgraded from baseline (soft) to post-fix (hard) 2026-03-12.
  *
  * @license GPL-3.0-or-later
  */
@@ -57,38 +56,34 @@ async function loadSimpleBoxExample(page) {
 }
 
 /**
- * Read the current preview render stats from the page's global state.
+ * Read the current preview render stats from the visible stats text.
  * Returns { triangles, vertices } or null if no render has completed.
  */
 async function getPreviewStats(page) {
   return page.evaluate(() => {
-    // autoPreviewController is exposed on window in the app
-    const ctrl = window.autoPreviewController;
-    if (!ctrl) return null;
-    return ctrl.lastRenderStats || null;
+    const statsText = document.getElementById('stats')?.textContent || '';
+    const trianglesMatch = statsText.match(/Triangles:\s*([\d,]+)/i);
+    if (!trianglesMatch) return null;
+    return {
+      triangles: Number.parseInt(trianglesMatch[1].replace(/,/g, ''), 10),
+    };
   });
 }
 
 /**
- * Read the preview mesh existence from the page's previewManager.
- * Returns true if a mesh is currently loaded, false if the scene is empty.
+ * Detect whether the preview canvas currently contains rendered geometry.
  */
 async function hasMesh(page) {
   return page.evaluate(() => {
-    const pm = window.previewManager;
-    if (!pm) return null;
-    // previewManager.mesh is the Three.js mesh object; null when cleared
-    return pm.mesh !== null && pm.mesh !== undefined;
-  });
-}
-
-/**
- * Count the total number of RENDER messages posted to the worker since page load.
- * Used to verify that console interactions do NOT trigger renders.
- */
-async function getRenderCount(page) {
-  return page.evaluate(() => {
-    return window.__renderAuditCount || 0;
+    const canvas = document.querySelector('#viewer canvas, .preview-container canvas');
+    if (!canvas) return false;
+    const ctx = canvas.getContext('webgl2') || canvas.getContext('webgl');
+    if (!ctx) return false;
+    const pixels = new Uint8Array(4);
+    const x = Math.floor(canvas.width / 2);
+    const y = Math.floor(canvas.height / 2);
+    ctx.readPixels(x, y, 1, 1, ctx.RGBA, ctx.UNSIGNED_BYTE, pixels);
+    return pixels[3] > 0 && (pixels[0] + pixels[1] + pixels[2]) > 0;
   });
 }
 
@@ -124,7 +119,7 @@ async function waitForPreviewIdle(page, { timeout = 120_000 } = {}) {
 
 // ─── Test Suite 1: Preset Cycling ─────────────────────────────────────────────
 
-test.describe('Render Stability — Preset Cycling (BUG-A baseline)', () => {
+test.describe('Render Stability — Preset Cycling (BUG-A post-fix)', () => {
   test('should complete a render for each of the first 5 presets', async ({ page }) => {
     test.skip(isCI, 'WASM rendering is slow/unreliable in CI');
 
@@ -162,10 +157,8 @@ test.describe('Render Stability — Preset Cycling (BUG-A baseline)', () => {
       console.log(`[PresetCycle] Preset ${presetName}: mesh=${meshPresent}, triangles=${stats?.triangles ?? 'unknown'}`);
     }
 
-    // Baseline assertion: at least SOME renders should have produced a mesh.
-    // TODO: POST-FIX — all renders should produce a mesh (triangles > 0).
     const successfulRenders = results.filter((r) => r.meshPresent === true);
-    expect(successfulRenders.length).toBeGreaterThanOrEqual(1);
+    expect(successfulRenders.length).toBe(numPresetsToTest);
 
     // Log the full result set for debugging
     console.table(results);
@@ -186,20 +179,15 @@ test.describe('Render Stability — Preset Cycling (BUG-A baseline)', () => {
 
     console.log('[InitPreset] Indicator:', indicatorText, '| Class:', indicatorClass);
 
-    // Baseline: indicator should not be in permanent error state for a valid 3D model
     const isErrorState = indicatorClass?.includes('state-error') && !indicatorText?.includes('2D');
-    // Note: BUG-A may cause this to fail for some presets — we record it, not block on it
-    if (isErrorState) {
-      console.warn('[InitPreset] WARNING: Initial render produced error state — BUG-A may be active');
-    }
-
+    expect(isErrorState).toBe(false);
     expect(indicator).toBeVisible();
   });
 });
 
-// ─── Test Suite 2: Blank Display for Customizer Settings (BUG-B baseline) ─────
+// ─── Test Suite 2: Blank Display for Customizer Settings (BUG-B post-fix) ─────
 
-test.describe('Render Stability — Customizer Settings Mode (BUG-B baseline)', () => {
+test.describe('Render Stability — Customizer Settings Mode (BUG-B post-fix)', () => {
   test('should show informational state when generate = Customizer Settings', async ({ page }) => {
     test.skip(isCI, 'WASM rendering is slow/unreliable in CI');
 
@@ -251,19 +239,10 @@ test.describe('Render Stability — Customizer Settings Mode (BUG-B baseline)', 
     const meshPresent = await hasMesh(page);
     console.log('[BUG-B] Mesh present after customizer select:', meshPresent);
 
-    // Baseline: record current behavior without blocking
-    // TODO: POST-FIX — meshPresent should be FALSE (mesh should be cleared)
-    if (meshPresent) {
-      console.warn(
-        '[BUG-B] BUG CONFIRMED: mesh is still visible after switching to Customizer Settings'
-      );
-    } else {
-      console.log('[BUG-B] mesh correctly absent after switching to Customizer Settings');
-    }
+    expect(meshPresent).toBe(false);
 
-    // The state indicator must be visible and not blank
     expect(indicator).toBeVisible();
-    expect(indicatorText?.trim().length).toBeGreaterThan(0);
+    expect(indicatorText?.toLowerCase()).toContain('no geometry');
   });
 
   test('should allow mesh to reappear after switching back to 3D mode', async ({ page }) => {
@@ -309,17 +288,19 @@ test.describe('Render Stability — Customizer Settings Mode (BUG-B baseline)', 
     const meshPresent = await hasMesh(page);
     console.log('[BUG-B] Mesh present after switching back to 3D:', meshPresent);
 
-    // This should work regardless of BUG-B — switching back to 3D must re-trigger render
-    // (We don't hard-assert because BUG-A may also affect this)
+    expect(meshPresent).toBe(true);
     expect(page.locator('.preview-state-indicator')).toBeVisible();
   });
 });
 
-// ─── Test Suite 3: Console Panel — No Render Side Effects (BUG-C baseline) ────
+// ─── Test Suite 3: Console Panel — No Render Side Effects (BUG-C post-fix) ────
 
-test.describe('Render Stability — Console Panel Interactions (BUG-C baseline)', () => {
+test.describe('Render Stability — Console Panel Interactions (BUG-C post-fix)', () => {
   test('expanding and collapsing console panel must not trigger a render', async ({ page }) => {
     test.skip(isCI, 'WASM rendering is slow/unreliable in CI');
+
+    const consoleMessages = [];
+    page.on('console', (msg) => consoleMessages.push(msg.text()));
 
     await loadSimpleBoxExample(page);
 
@@ -327,8 +308,9 @@ test.describe('Render Stability — Console Panel Interactions (BUG-C baseline)'
     await waitForPreviewIdle(page, { timeout: 60_000 });
     await page.waitForTimeout(1000);
 
-    // Read current render count baseline
-    const renderCountBefore = await getRenderCount(page);
+    const renderCountBefore = consoleMessages.filter((message) =>
+      message.includes('[Preview Performance]')
+    ).length;
     console.log('[BUG-C] Render count before console interaction:', renderCountBefore);
 
     // Find and interact with the console panel
@@ -348,24 +330,25 @@ test.describe('Render Stability — Console Panel Interactions (BUG-C baseline)'
 
     // Try console badge / expand button
     const consoleBadge = page.locator('#console-badge, button[aria-controls="consoleDetails"]');
-    if ((await consoleBadge.count()) > 0) {
+    if ((await consoleBadge.count()) > 0 && (await consoleBadge.first().isVisible())) {
       await consoleBadge.first().click();
       await page.waitForTimeout(500);
     }
 
     // Verify no new renders were triggered
-    const renderCountAfter = await getRenderCount(page);
+    const renderCountAfter = consoleMessages.filter((message) =>
+      message.includes('[Preview Performance]')
+    ).length;
     console.log('[BUG-C] Render count after console interaction:', renderCountAfter);
 
-    // Baseline check: render count must not increase due to console interaction
-    // (render count may be 0 if the audit instrumentation is not yet in place — that's OK)
-    if (renderCountBefore !== null && renderCountAfter !== null) {
-      expect(renderCountAfter).toEqual(renderCountBefore);
-    }
+    expect(renderCountAfter).toEqual(renderCountBefore);
   });
 
   test('switching to Customizer Settings cancels pending preview debounce', async ({ page }) => {
     test.skip(isCI, 'WASM rendering is slow/unreliable in CI');
+
+    const consoleMessages = [];
+    page.on('console', (msg) => consoleMessages.push(msg.text()));
 
     await loadKeyguardDemo(page);
     await waitForPreviewIdle(page, { timeout: 90_000 });
@@ -383,6 +366,10 @@ test.describe('Render Stability — Console Panel Interactions (BUG-C baseline)'
       return;
     }
 
+    const renderCountBefore = consoleMessages.filter((message) =>
+      message.includes('[Preview Performance]')
+    ).length;
+
     // Rapidly switch to customizer mode
     await generateSelect.selectOption({ label: /customizer/i });
 
@@ -390,25 +377,24 @@ test.describe('Render Stability — Console Panel Interactions (BUG-C baseline)'
     await page.waitForTimeout(2000);
 
     // No new WASM render should have been dispatched (the debounce guard should cancel)
-    const renderCountAfter = await getRenderCount(page);
-    const renderCountBase = await page.evaluate(() => window.__renderAuditCount || 0);
-    console.log('[BUG-C] Render audit count after customizer switch:', renderCountAfter, renderCountBase);
+    const renderCountAfter = consoleMessages.filter((message) =>
+      message.includes('[Preview Performance]')
+    ).length;
+    console.log('[BUG-C] Preview performance log count before/after customizer switch:', renderCountBefore, renderCountAfter);
 
     // Preview state should be informational, not rendering
     const indicator = page.locator('.preview-state-indicator');
     const indicatorClass = await indicator.getAttribute('class');
     const isRendering = indicatorClass?.includes('state-rendering');
-    if (isRendering) {
-      console.warn('[BUG-C] BUG CONFIRMED: a WASM render was triggered after switching to Customizer Settings');
-    }
-    // Soft assertion — BUG-C may cause this to fail before the fix
+    expect(renderCountAfter).toEqual(renderCountBefore);
+    expect(isRendering).toBe(false);
     expect(indicator).toBeVisible();
   });
 });
 
 // ─── Test Suite 4: DXF Export (BUG-D baseline) ────────────────────────────────
 
-test.describe('Render Stability — DXF Export (BUG-D baseline)', () => {
+test.describe('Render Stability — DXF Export (BUG-D post-fix)', () => {
   test('should export a non-empty, parseable DXF file from keyguard', async ({ page }) => {
     test.skip(isCI, 'WASM rendering is slow/unreliable in CI');
 
@@ -484,8 +470,7 @@ test.describe('Render Stability — DXF Export (BUG-D baseline)', () => {
     const lwpolylineCount = (dxfContent.match(/^LWPOLYLINE$/gm) || []).length;
     console.log(`[BUG-D] LINE entities: ${lineCount}, LWPOLYLINE entities: ${lwpolylineCount}`);
 
-    // TODO: POST-FIX — lwpolylineCount should be 0 after postProcessDXF runs successfully
-    // Baseline: just verify the file is structurally valid
+    expect(lwpolylineCount).toBe(0);
 
     // Must not be a binary blob
     const nonPrintable = dxfContent.split('').filter(

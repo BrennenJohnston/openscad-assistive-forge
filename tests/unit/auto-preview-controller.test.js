@@ -23,6 +23,7 @@ describe('AutoPreviewController', () => {
     previewManager = {
       loadSTL: vi.fn().mockResolvedValue(),
       setColorOverride: vi.fn(),
+      colorOverrideEnabled: true,
       clear: vi.fn()
     }
 
@@ -541,6 +542,63 @@ describe('AutoPreviewController', () => {
     })
   })
 
+  describe('Full Render Preview Updates', () => {
+    it('preserves an existing color preview during STL generate', async () => {
+      const params = { width: 20 }
+      renderController.renderFull = vi.fn().mockResolvedValue({
+        stl: new ArrayBuffer(16),
+        stats: { triangles: 42 },
+        format: 'stl'
+      })
+      previewManager.loadOFF = vi.fn().mockResolvedValue()
+      previewManager.setRenderState = vi.fn()
+      previewManager.colorOverrideEnabled = false
+      previewManager._getPrimaryGeometry = vi.fn(() => ({
+        attributes: { color: {} }
+      }))
+
+      await controller.renderFull(params)
+
+      expect(renderController.renderFull).toHaveBeenCalledWith(
+        'cube(10);',
+        params,
+        expect.objectContaining({
+          files: undefined,
+          mainFile: undefined,
+          libraries: [],
+          paramTypes: {},
+          onProgress: expect.any(Function)
+        })
+      )
+      expect(previewManager.setRenderState).toHaveBeenCalled()
+      expect(previewManager.loadSTL).not.toHaveBeenCalled()
+      expect(previewManager.loadOFF).not.toHaveBeenCalled()
+      expect(controller.state).toBe(PREVIEW_STATE.CURRENT)
+    })
+
+    it('loads OFF data when full render returns OFF format', async () => {
+      const params = { width: 20 }
+      const offData = new ArrayBuffer(32)
+      renderController.renderFull = vi.fn().mockResolvedValue({
+        stl: offData,
+        stats: { triangles: 42 },
+        format: 'off'
+      })
+      previewManager.loadOFF = vi.fn().mockResolvedValue()
+      previewManager.setRenderState = vi.fn()
+      previewManager.colorOverrideEnabled = false
+      previewManager._getPrimaryGeometry = vi.fn(() => null)
+
+      await controller.renderFull(params)
+
+      expect(previewManager.loadOFF).toHaveBeenCalledWith(offData, {
+        preserveCamera: false
+      })
+      expect(previewManager.loadSTL).not.toHaveBeenCalled()
+      expect(controller.previewParamHash).toBe(controller.hashParams(params))
+    })
+  })
+
   describe('isNonPreviewableParameters', () => {
     it('returns true for "Customizer Settings"', () => {
       expect(AutoPreviewController.isNonPreviewableParameters({ generate: 'Customizer Settings' })).toBe(true)
@@ -807,6 +865,77 @@ describe('AutoPreviewController', () => {
       expect(stateSequence.indexOf(PREVIEW_STATE.PENDING)).toBeLessThan(
         stateSequence.indexOf(PREVIEW_STATE.RENDERING)
       )
+    })
+  })
+
+  describe('Format-agnostic output (getCurrentFullOutput)', () => {
+    it('returns null when no full render exists', () => {
+      const result = controller.getCurrentFullOutput({ width: 10 })
+      expect(result).toBeNull()
+    })
+
+    it('returns data, format, and stats for matching params', async () => {
+      renderController.renderFull = vi.fn().mockResolvedValue({
+        stl: new ArrayBuffer(32),
+        format: 'svg',
+        stats: { triangles: 0, size: 1234 },
+        consoleOutput: '',
+      })
+
+      const params = { width: 10 }
+      await controller.renderFull(params)
+
+      const output = controller.getCurrentFullOutput(params)
+      expect(output).not.toBeNull()
+      expect(output.format).toBe('svg')
+      expect(output.data).toBeInstanceOf(ArrayBuffer)
+      expect(output.stats.size).toBe(1234)
+    })
+
+    it('returns null for different params', async () => {
+      renderController.renderFull = vi.fn().mockResolvedValue({
+        stl: new ArrayBuffer(32),
+        format: 'stl',
+        stats: { triangles: 12, size: 800 },
+        consoleOutput: '',
+      })
+
+      await controller.renderFull({ width: 10 })
+      const output = controller.getCurrentFullOutput({ width: 20 })
+      expect(output).toBeNull()
+    })
+
+    it('tracks fullQualityFormat through renderFull', async () => {
+      renderController.renderFull = vi.fn().mockResolvedValue({
+        stl: new ArrayBuffer(32),
+        format: 'dxf',
+        stats: { triangles: 0, size: 567 },
+        consoleOutput: '',
+      })
+
+      await controller.renderFull({ width: 10 })
+      expect(controller.fullQualityFormat).toBe('dxf')
+    })
+
+    it('resets fullQualityFormat on clearCache', async () => {
+      renderController.renderFull = vi.fn().mockResolvedValue({
+        stl: new ArrayBuffer(32),
+        format: 'svg',
+        stats: { triangles: 0, size: 100 },
+        consoleOutput: '',
+      })
+
+      await controller.renderFull({ width: 10 })
+      expect(controller.fullQualityFormat).toBe('svg')
+
+      controller.clearCache()
+      expect(controller.fullQualityFormat).toBeNull()
+    })
+
+    it('resets fullQualityFormat on dispose', async () => {
+      controller.fullQualityFormat = 'svg'
+      controller.dispose()
+      expect(controller.fullQualityFormat).toBeNull()
     })
   })
 })

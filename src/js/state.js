@@ -559,8 +559,13 @@ const initialState = {
   rendering: false,
   renderProgress: 0,
   lastRenderTime: null,
+  // Format-agnostic generated output record.
+  // { data: ArrayBuffer|string, format: string, stats: Object, paramsHash: string }
+  generatedOutput: null,
+  // Legacy aliases — readers should prefer generatedOutput when non-null.
   stl: null,
   stlStats: null,
+  outputFormat: null,
   expandedGroups: [],
   error: null,
   // Comparison mode

@@ -105,7 +105,8 @@ const ERROR_PATTERNS = [
   {
     pattern: /use\s+(?:<([^>]+)>|"([^"]+)")/i,
     title: 'Library Required',
-    explanation: (match) => `This model needs the "${match[1] || match[2]}" library.`,
+    explanation: (match) =>
+      `This model needs the "${match[1] || match[2]}" library.`,
     suggestion: 'Enable the required library in the 📚 Libraries panel.',
   },
   {

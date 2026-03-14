@@ -644,7 +644,10 @@ export function applyCompanionAliases(projectFiles, companionMapping) {
   const result = new Map(projectFiles);
   if (!companionMapping) return result;
 
-  if (companionMapping.aliases && typeof companionMapping.aliases === 'object') {
+  if (
+    companionMapping.aliases &&
+    typeof companionMapping.aliases === 'object'
+  ) {
     for (const [aliasTarget, sourcePath] of Object.entries(
       companionMapping.aliases
     )) {

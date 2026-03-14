@@ -951,6 +951,10 @@ export class RenderController {
         const code = err?.code;
         const details = err?.details;
 
+        // MODEL_NOT_2D is handled by the caller via a two-pass fallback;
+        // normal retry would just hit the same error.
+        if (code === 'MODEL_NOT_2D') return false;
+
         // Don't retry CGAL geometry errors - these are real compilation failures
         if (msg.includes('CGAL error') || msg.includes('assertion violation')) {
           return false;
@@ -1170,6 +1174,96 @@ export class RenderController {
       ...options,
       quality: options.quality || RENDER_QUALITY.FULL,
     });
+  }
+
+  /**
+   * Two-pass 2D fallback for MODEL_NOT_2D errors.
+   *
+   * The model's "first layer" mode produces a thin 3D slice (by design —
+   * desktop OpenSCAD applies projection() internally during export).
+   * When certain preset parameter combinations cause this internal
+   * projection to fail in WASM, the direct SVG/DXF render returns
+   * MODEL_NOT_2D.
+   *
+   * Fallback strategy:
+   *   Pass 1 — Remove the 2D-producing `generate` value so the model
+   *            falls back to its default 3D mode. Render the full
+   *            3D keyguard mesh to STL on a fresh worker.
+   *   Pass 2 — Compile `projection(cut=true) { import("mesh.stl"); }`
+   *            to the target 2D format on another fresh worker.
+   *
+   * Each pass uses a fresh WASM module (proactive restart in renderOnce)
+   * to avoid the callMain-reuse corruption bug.
+   *
+   * @param {string} scadContent - OpenSCAD source code
+   * @param {Object} parameters - Parameter overrides
+   * @param {Object} options - Original render options (outputFormat must be svg/dxf)
+   * @returns {Promise<Object>} Render result with 2D data
+   */
+  async render2DFallback(scadContent, parameters = {}, options = {}) {
+    const targetFormat = options.outputFormat || 'svg';
+    const TWO_D_RE = /svg|dxf|2d|first layer/i;
+
+    console.log(
+      `[RenderController] 2D fallback: STL (3D default) → projection → ${targetFormat}`
+    );
+
+    if (options.onProgress) {
+      options.onProgress(
+        -1,
+        'Model produces 3D geometry — rendering 3D mesh then projecting to 2D...'
+      );
+    }
+
+    // Pass 1: render full 3D model to STL.
+    // Remove the `generate` parameter when it selects a 2D-export mode
+    // so the model falls back to its default 3D output path (e.g.
+    // generate="keyguard" instead of "first layer for SVG/DXF file").
+    // Only target `generate` — other parameters that happen to contain
+    // "svg" (like screenshot_file="default.svg") must not be removed.
+    const stlParams = { ...parameters };
+    if (
+      typeof stlParams.generate === 'string' &&
+      TWO_D_RE.test(stlParams.generate)
+    ) {
+      delete stlParams.generate;
+    }
+
+    const stlResult = await this.renderFull(scadContent, stlParams, {
+      ...options,
+      outputFormat: 'stl',
+    });
+
+    // Pass 2: project the 3D mesh to the target 2D format.
+    // mountFiles() only places files under /work/ when files.size > 1.
+    // Include the wrapper SCAD alongside the STL so both land in /work/,
+    // then use mainFile so the worker picks the mounted wrapper directly.
+    const wrapperName = '_projection_wrapper.scad';
+    const wrapperScad =
+      'projection(cut=true) {\n  import("_fallback_mesh.stl");\n}\n';
+    const rawStl = stlResult.data || stlResult.stl;
+    const stlData =
+      rawStl instanceof Uint8Array
+        ? rawStl
+        : rawStl instanceof ArrayBuffer
+          ? new Uint8Array(rawStl)
+          : rawStl;
+    const projFiles = new Map([
+      ['_fallback_mesh.stl', stlData],
+      [wrapperName, new TextEncoder().encode(wrapperScad)],
+    ]);
+
+    return this.renderFull(
+      wrapperScad,
+      {},
+      {
+        outputFormat: targetFormat,
+        files: projFiles,
+        mainFile: wrapperName,
+        onProgress: options.onProgress,
+        timeoutMs: options.timeoutMs || 60000,
+      }
+    );
   }
 
   /**

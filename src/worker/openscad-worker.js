@@ -601,6 +601,7 @@ async function checkCapabilities() {
     hasManifold: false,
     hasFastCSG: false,
     hasLazyUnion: false,
+    hasRenderColorsFlag: false,
     hasBinarySTL: false,
     version: 'unknown',
     checkedAt: Date.now(),
@@ -659,6 +660,9 @@ async function checkCapabilities() {
     const hasLazyUnionFlag =
       /--enable\s+arg.*lazy-union/i.test(helpText) ||
       helpText.includes('lazy-union');
+    const hasRenderColorsFlag =
+      /--enable[^\n]*render-colors/i.test(helpText) ||
+      helpText.includes('render-colors');
     const hasBinarySTLFlag =
       helpText.includes('export-format') || helpText.includes('binstl');
 
@@ -671,6 +675,10 @@ async function checkCapabilities() {
 
     // lazy-union is still an --enable flag
     capabilities.hasLazyUnion = hasLazyUnionFlag;
+
+    // Some builds expose render-colors as an experimental flag; newer builds
+    // emit COFF without the flag, so only pass it when help advertises it.
+    capabilities.hasRenderColorsFlag = hasRenderColorsFlag;
 
     // Check for export-format option (binary STL support)
     capabilities.hasBinarySTL = hasBinarySTLFlag;
@@ -813,10 +821,11 @@ async function mountFiles(files, options = {}) {
       FS.writeFile(resolvedPath, fsContent);
       mountedFiles.set(resolvedPath, fsContent);
       resolvedPaths.set(filePath, resolvedPath);
-      const size = fsContent instanceof Uint8Array ? fsContent.byteLength : fsContent.length;
-      console.log(
-        `[Worker FS] Mounted file: ${resolvedPath} (${size} bytes)`
-      );
+      const size =
+        fsContent instanceof Uint8Array
+          ? fsContent.byteLength
+          : fsContent.length;
+      console.log(`[Worker FS] Mounted file: ${resolvedPath} (${size} bytes)`);
     } catch (error) {
       console.error(`[Worker FS] Failed to mount file ${resolvedPath}:`, error);
       throw new Error(`Failed to mount file: ${filePath}`);
@@ -1374,6 +1383,7 @@ async function renderWithCallMain(
   const capabilities = openscadCapabilities || {};
   const supportsManifold = Boolean(capabilities.hasManifold);
   const supportsLazyUnion = Boolean(capabilities.hasLazyUnion);
+  const supportsRenderColorsFlag = Boolean(capabilities.hasRenderColorsFlag);
   const supportsBinarySTL = Boolean(capabilities.hasBinarySTL);
   const enableLazyUnion =
     Boolean(renderOptions?.enableLazyUnion) && supportsLazyUnion;
@@ -1385,10 +1395,11 @@ async function renderWithCallMain(
   const performanceFlags = [];
   if (supportsManifold && useManifold) {
     performanceFlags.push('--backend=Manifold');
-    // render-colors enables per-face RGBA in OFF export (COFF data).
-    // Older WASM builds gate this behind an experimental feature flag;
-    // newer builds (where it was promoted to always-on) silently accept it.
-    performanceFlags.push('--enable=render-colors');
+    if (format === 'off' && supportsRenderColorsFlag) {
+      // render-colors enables per-face RGBA in OFF export (COFF data) on
+      // builds that still advertise the experimental flag.
+      performanceFlags.push('--enable=render-colors');
+    }
   } else if (supportsManifold && !useManifold) {
     performanceFlags.push('--backend=CGAL');
     console.log('[Worker] Using CGAL (stable) backend instead of Manifold');
@@ -1430,8 +1441,6 @@ async function renderWithCallMain(
     // 2D export flag used later for guard checks and fallback handling.
     const is2DExport = format === 'svg' || format === 'dxf';
 
-    let defineArgs;
-
     // Path resolution for import()/use/include — shared by BOTH 2D and 3D paths.
     // OpenSCAD WASM doesn't support the -I flag, so we use OPENSCADPATH env var.
     // Desktop OpenSCAD resolves relative imports next to the main SCAD file,
@@ -1462,7 +1471,7 @@ async function renderWithCallMain(
       module.FS.writeFile(inputFile, scadContent);
       wroteTempInput = true;
     }
-    defineArgs = buildDefineArgs(parameters, paramTypes);
+    const defineArgs = buildDefineArgs(parameters, paramTypes);
 
     // Pre-render guard: scan SCAD source for known-crashy functions
     // roof() and projection() trigger CGAL assertion failures in WASM (openscad-wasm#5, #6)
@@ -1523,7 +1532,9 @@ async function renderWithCallMain(
         for (const dir of fsSearchPaths) {
           try {
             if (module.FS.analyzePath(`${dir}/${refFile}`).exists) return true;
-          } catch (_e) { /* path may be invalid */ }
+          } catch (_e) {
+            /* path may be invalid */
+          }
         }
         for (const key of mountedFiles.keys()) {
           if (key === refFile || key.endsWith('/' + refFile)) return true;
@@ -1564,51 +1575,25 @@ async function renderWithCallMain(
             'Current top level object is not a 2D object'
           ) || openscadConsoleOutput.includes('not a 2D object');
 
-        // For 2D exports: if the model produces 3D geometry, fall back to
-        // a two-pass approach: render to STL, then project the STL to 2D.
+        // For 2D exports where the model produces 3D geometry: signal the
+        // caller to perform the two-pass fallback (STL → projection) at the
+        // controller level, using fresh workers between passes.  Attempting
+        // the fallback inside the same worker crashes because callMain
+        // corrupts WASM state after a non-zero exit.
         if (is2DExport && modelIsNot2D) {
-          const stlFile = '/tmp/_2d_intermediate.stl';
-
-          // Pass 1: render the same model to STL (3D output succeeds).
-          _callMainInvoked = false;
-          openscadConsoleOutput = '';
-          const stlArgs = [...performanceFlags, ...defineArgs, '-o', stlFile, inputFile];
-          _callMainInvoked = true;
-          const stlExit = await module.callMain(stlArgs);
-          if (stlExit !== 0) {
-            const err = new Error(
-              `2D fallback: STL render failed with exit code ${stlExit}. ` +
-              `Output: ${openscadConsoleOutput.substring(openscadConsoleOutput.length - 500)}`
-            );
-            err.needsRestart = true;
-            throw err;
-          }
-
-          // Pass 2: project the STL mesh to SVG/DXF.
-          const wrapperFile = '/tmp/_2d_projection_wrapper.scad';
-          module.FS.writeFile(wrapperFile,
-            `projection(cut=true) {\n  import("${stlFile}");\n}\n`
+          const err = new Error(
+            'MODEL_NOT_2D: Your model produces 3D geometry. ' +
+              'The render controller will retry with a two-pass projection fallback.'
           );
-          _callMainInvoked = false;
-          openscadConsoleOutput = '';
-          _callMainInvoked = true;
-          const projExit = await module.callMain(['-o', outputFile, wrapperFile]);
-          if (projExit !== 0) {
-            const err = new Error(
-              `2D projection failed with exit code ${projExit}. ` +
-              `Output: ${openscadConsoleOutput.substring(0, 500)}`
-            );
-            err.needsRestart = true;
-            throw err;
-          }
-          // Clean up temporaries
-          try { module.FS.unlink(stlFile); } catch (_e) {}
-          try { module.FS.unlink(wrapperFile); } catch (_e) {}
-          // Two-pass succeeded — skip to output reading
-        } else {
+          err.code = 'MODEL_NOT_2D';
+          err.needsRestart = true;
+          throw err;
+        }
+
+        {
           const err = new Error(
             `OpenSCAD compilation failed with exit code ${exitCode}. ` +
-            `Output: ${openscadConsoleOutput.substring(0, 500)}`
+              `Output: ${openscadConsoleOutput.substring(0, 500)}`
           );
           err.needsRestart = true;
           throw err;
@@ -2517,7 +2502,8 @@ async function render(payload) {
       } else if (resultFormat === 'obj') {
         triangleCount = (outputData.match(/^f /gm) || []).length;
       } else if (resultFormat === 'off') {
-        const match = outputData.match(/^C?OFF\s+\d+\s+(\d+)/m) ||
+        const match =
+          outputData.match(/^C?OFF\s+\d+\s+(\d+)/m) ||
           outputData.match(/^C?OFF\b[^\n]*\n\s*\d+\s+(\d+)/m);
         if (match) triangleCount = parseInt(match[1]);
       }
@@ -2557,10 +2543,14 @@ async function render(payload) {
 
     // Post-process DXF to fix known OpenSCAD WASM compatibility issues
     // (upstream issue: github.com/openscad/openscad/issues/4268)
+    let dxfPostProcessed = false;
+    let dxfPostProcessError = null;
     if (resultFormat === 'dxf') {
       try {
         outputBuffer = postProcessDXF(outputBuffer);
+        dxfPostProcessed = true;
       } catch (dxfError) {
+        dxfPostProcessError = dxfError.message;
         console.warn(
           '[Worker] DXF post-processing failed, using raw output:',
           dxfError.message
@@ -2611,6 +2601,10 @@ async function render(payload) {
             wasmInitMs: wasmInitDurationMs,
           },
           consoleOutput: openscadConsoleOutput || '',
+          postProcessing:
+            resultFormat === 'dxf'
+              ? { dxfNormalized: dxfPostProcessed, error: dxfPostProcessError }
+              : undefined,
         },
       },
       [outputBuffer]
@@ -2706,17 +2700,6 @@ async function render(payload) {
       code === 'WASM_ABORT' ||
       code === 'WASM_UNREACHABLE' ||
       code === 'WASM_OOB';
-    const consoleHighlights = (openscadConsoleOutput || '')
-      .split('\n')
-      .map((line) => line.trim())
-      .filter(
-        (line) =>
-          line &&
-          /(generate|type|laser|svg|dxf|2d object|3d object|top level object)/i.test(
-            line
-          )
-      )
-      .slice(0, 12);
 
     self.postMessage({
       type: 'ERROR',
