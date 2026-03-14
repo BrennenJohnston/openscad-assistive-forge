@@ -2812,479 +2812,484 @@
                       <span>Preview Settings</span>
                     </div>
                     <div class="preview-settings">
-                      <label class="toggle-switch">
-                        <input
-                          type="checkbox"
-                          id="measurementsToggle"
-                          aria-describedby="measurementsHelp"
-                        />
-                        <span class="toggle-label">Show measurements</span>
-                      </label>
-                      <span id="measurementsHelp" class="sr-only"
-                        >Toggle dimension measurements and bounding box overlay
-                        on 3D preview</span
-                      >
-                      <label class="toggle-switch">
-                        <input
-                          type="checkbox"
-                          id="gridToggle"
-                          checked
-                          aria-describedby="gridHelp"
-                        />
-                        <span class="toggle-label">Show grid</span>
-                      </label>
-                      <span id="gridHelp" class="sr-only"
-                        >Toggle grid plane visibility in 3D preview</span
-                      >
-                      <div
-                        class="grid-color-row"
-                        role="group"
-                        aria-labelledby="gridColorLabel"
-                      >
-                        <label
-                          for="gridColorPicker"
-                          id="gridColorLabel"
-                          class="grid-color-label"
-                          >Grid color</label
-                        >
-                        <input
-                          type="color"
-                          id="gridColorPicker"
-                          class="grid-color-picker"
-                          value="#cccccc"
-                          aria-label="Grid line color"
-                          aria-describedby="gridColorHelp"
-                        />
-                        <button
-                          type="button"
-                          id="resetGridColorBtn"
-                          class="btn btn-sm btn-outline"
-                          aria-label="Reset grid color to theme default"
-                        >
-                          Reset
-                        </button>
-                        <span id="gridColorHelp" class="sr-only"
-                          >Choose a custom color for grid lines, or reset
-                          to the current theme default</span
-                        >
-                      </div>
-                      <!-- Grid Opacity -->
-                      <div class="preview-setting grid-opacity-setting">
-                        <label
-                          for="gridOpacityInput"
-                          id="gridOpacityLabel"
-                          >Grid opacity</label
-                        >
-                        <div class="slider-container">
-                          <input
-                            type="range"
-                            id="gridOpacityInput"
-                            min="10"
-                            max="100"
-                            step="5"
-                            value="100"
-                            aria-labelledby="gridOpacityLabel"
-                            aria-describedby="gridOpacityHelp"
-                          />
-                          <span class="slider-value" id="gridOpacityValue"
-                            >100%</span
-                          >
-                        </div>
-                      </div>
-                      <span id="gridOpacityHelp" class="sr-only"
-                        >Adjust grid line visibility from 10 to 100
-                        percent</span
-                      >
-                      <label class="toggle-switch">
-                        <input
-                          type="checkbox"
-                          id="autoBedToggle"
-                          checked
-                          aria-describedby="autoBedHelp"
-                        />
-                        <span class="toggle-label">Auto-bed (Z=0)</span>
-                      </label>
-                      <span id="autoBedHelp" class="sr-only"
-                        >Automatically place models on the build plate at Z
-                        equals zero</span
-                      >
-                      <div
-                        class="preview-setting-group"
-                        role="group"
-                        aria-labelledby="gridSizeLabel"
-                      >
-                        <span
-                          id="gridSizeLabel"
-                          class="preview-setting-group-label"
-                          >Grid size</span
-                        >
-                        <!-- Compact single-row: [Preset ▼] [W × H] (dims only shown for Custom) -->
-                        <div class="grid-size-compact-row">
-                          <label for="gridPresetSelect" class="sr-only"
-                            >Printer bed preset</label
-                          >
-                          <select
-                            id="gridPresetSelect"
-                            class="grid-preset-select"
-                            aria-label="Printer bed preset"
-                          >
-                            <option value="220x220">
-                              220 × 220 mm (Ender 3)
-                            </option>
-                            <option value="250x210">
-                              250 × 210 mm (Prusa MK4)
-                            </option>
-                            <option value="235x235">
-                              235 × 235 mm (Ender 3 V2)
-                            </option>
-                            <option value="300x300">
-                              300 × 300 mm (CR-10)
-                            </option>
-                            <option value="350x350">
-                              350 × 350 mm (Large format)
-                            </option>
-                            <option value="custom">Custom…</option>
-                          </select>
-                          <span
-                            class="grid-size-dims"
-                            id="gridSizeDims"
-                            hidden
-                          >
-                            <label for="gridWidthInput" class="sr-only"
-                              >Width mm</label
-                            >
-                            <input
-                              type="number"
-                              id="gridWidthInput"
-                              class="grid-dim-input"
-                              min="50"
-                              max="500"
-                              value="220"
-                              aria-describedby="gridSizeHelp"
-                              aria-label="Grid width in mm"
-                            />
-                            <span aria-hidden="true" class="grid-dim-separator"
-                              >×</span
-                            >
-                            <label for="gridHeightInput" class="sr-only"
-                              >Height mm</label
-                            >
-                            <input
-                              type="number"
-                              id="gridHeightInput"
-                              class="grid-dim-input"
-                              min="50"
-                              max="500"
-                              value="220"
-                              aria-label="Grid height in mm"
-                            />
-                          </span>
-                        </div>
-                        <span id="gridSizeHelp" class="sr-only"
-                          >Enter printer bed dimensions in millimetres to set
-                          the grid size</span
-                        >
-                        <!-- Save custom grid preset row (shown when Custom is selected) -->
-                        <div
-                          class="grid-preset-save-row"
-                          id="gridPresetSaveRow"
-                          hidden
-                        >
-                          <label for="gridPresetNameInput" class="sr-only"
-                            >Custom preset name</label
-                          >
-                          <input
-                            type="text"
-                            id="gridPresetNameInput"
-                            class="grid-preset-name-input"
-                            placeholder="Preset name…"
-                            maxlength="80"
-                            aria-describedby="gridPresetSaveError"
-                          />
-                          <button
-                            type="button"
-                            id="saveGridPresetBtn"
-                            class="btn btn-sm btn-primary"
-                            aria-label="Save custom grid size preset"
-                          >
-                            Save
-                          </button>
-                          <span
-                            id="gridPresetSaveError"
-                            class="grid-preset-error"
-                            role="alert"
-                            aria-live="polite"
-                          ></span>
-                        </div>
-                        <!-- Delete row (shown when a user-saved preset is selected) -->
-                        <div
-                          class="grid-preset-delete-row"
-                          id="gridPresetDeleteRow"
-                          hidden
-                        >
-                          <button
-                            type="button"
-                            id="deleteGridPresetBtn"
-                            class="btn btn-sm btn-outline btn-danger-outline"
-                            aria-label="Delete selected custom grid preset"
-                          >
-                            Delete preset
-                          </button>
-                        </div>
-                      </div>
-                      <label class="toggle-switch">
-                        <input
-                          type="checkbox"
-                          id="statusBarToggle"
-                          checked
-                          aria-describedby="statusBarHelp"
-                        />
-                        <span class="toggle-label">Show status bar</span>
-                      </label>
-                      <span id="statusBarHelp" class="sr-only"
-                        >Toggle status and render info overlay on preview</span
-                      >
-                      <!-- Engine Toggle (Manifold vs CGAL) -->
-                      <div
-                        class="preview-setting-divider"
-                        aria-hidden="true"
-                      ></div>
-                      <label class="toggle-switch">
-                        <input
-                          type="checkbox"
-                          id="manifoldEngineToggle"
-                          checked
-                          aria-describedby="manifoldEngineHelp"
-                        />
-                        <span class="toggle-label">Fast engine (Manifold)</span>
-                      </label>
-                      <span id="manifoldEngineHelp" class="sr-only"
-                        >Use Manifold geometry engine for faster rendering.
-                        Disable if you encounter issues with complex
-                        models.</span
-                      >
-                      <p class="preview-setting-hint" id="manifoldEngineHint">
-                        5-30× faster. Disable if models fail to render.
-                      </p>
-                      <div class="preview-setting rotation-speed-setting">
-                        <label
-                          class="preview-setting-label"
-                          for="rotationSpeedInput"
-                          id="rotationSpeedLabel"
-                          >Auto-rotate speed</label
-                        >
-                        <div class="slider-container">
-                          <input
-                            type="range"
-                            id="rotationSpeedInput"
-                            min="0.1"
-                            max="3"
-                            step="0.1"
-                            value="0.5"
-                            aria-labelledby="rotationSpeedLabel"
-                            aria-describedby="rotationSpeedHelp"
-                            aria-valuemin="0.1"
-                            aria-valuemax="3"
-                            aria-valuenow="0.5"
-                          />
-                          <span class="slider-value" id="rotationSpeedValue"
-                            >0.5°/s</span
-                          >
-                        </div>
-                      </div>
-                      <span id="rotationSpeedHelp" class="sr-only"
-                        >Set the speed of automatic model rotation when
-                        auto-rotate is enabled, from 0.1 to 3 degrees per
-                        second</span
-                      >
-                      <label class="preview-setting" for="previewQualitySelect">
-                        <span class="preview-setting-label"
-                          >Preview quality</span
-                        >
-                        <select
-                          id="previewQualitySelect"
-                          aria-label="Select preview quality"
-                        >
-                          <option value="auto">Auto (adaptive)</option>
-                          <option value="fidelity">Fidelity (slower)</option>
-                          <option value="balanced" selected>
-                            Balanced (~50%)
-                          </option>
-                          <option value="fast">Fast (lower resolution)</option>
-                        </select>
-                      </label>
-                      <label class="preview-setting" for="exportQualitySelect">
-                        <span class="preview-setting-label"
-                          >Export quality</span
-                        >
-                        <select
-                          id="exportQualitySelect"
-                          aria-label="Select export quality"
-                        >
-                          <option value="model" selected>Model default</option>
-                          <option value="low">Low (fast)</option>
-                          <option value="medium">Medium (balanced)</option>
-                          <option value="high">High (smooth)</option>
-                        </select>
-                      </label>
-                      <div class="preview-setting cache-tools">
-                        <span class="preview-setting-label">App cache</span>
-                        <button
-                          id="clearCacheBtn"
-                          class="btn btn-sm btn-outline"
-                          aria-label="Clear cached files and reload the app"
-                        >
-                          Clear cache &amp; reload
-                        </button>
-                      </div>
-                      <div
-                        class="preview-setting complexity-indicator"
-                        id="complexityIndicator"
-                        title="Detected model complexity tier"
-                      >
-                        <span class="preview-setting-label">Complexity:</span>
-                        <span
-                          id="complexityTierLabel"
-                          class="complexity-tier-label"
-                          >Analyzing...</span
-                        >
-                      </div>
-                      <div class="preview-setting model-color-setting">
-                        <span class="preview-setting-label">Model Color</span>
-                        <div class="model-color-controls">
-                          <label class="toggle-switch model-color-toggle">
+                      <!-- LEFT COLUMN: Model Appearance -->
+                      <section class="settings-col settings-col-appearance"
+                               aria-labelledby="modelAppearanceHeading">
+                        <h4 class="preview-settings-subheading" id="modelAppearanceHeading">
+                          Model Appearance
+                        </h4>
+                        <div class="model-appearance-controls">
+                          <label class="toggle-switch model-appearance-toggle">
                             <input
                               type="checkbox"
-                              id="modelColorEnabled"
-                              aria-label="Enable custom model color override"
+                              id="modelAppearanceEnabled"
+                              aria-label="Enable custom model appearance override"
                             />
                             <span class="toggle-label">Override</span>
                           </label>
-                          <div class="model-color-picker">
+                        </div>
+                        <div class="model-appearance-sliders">
+                          <!-- Model Opacity -->
+                          <div class="preview-setting model-opacity-setting">
+                            <label for="modelOpacityInput" id="modelOpacityLabel"
+                              >Model opacity</label
+                            >
+                            <div class="slider-container">
+                              <input
+                                type="range"
+                                id="modelOpacityInput"
+                                min="10"
+                                max="100"
+                                step="5"
+                                value="100"
+                                aria-labelledby="modelOpacityLabel"
+                                aria-describedby="modelOpacityHelp"
+                              />
+                              <span class="slider-value" id="modelOpacityValue"
+                                >100%</span
+                              >
+                            </div>
+                          </div>
+                          <span id="modelOpacityHelp" class="sr-only"
+                            >Reduce model opacity to see the reference overlay image
+                            behind the 3D model. Useful for alignment.</span
+                          >
+                          <!-- Brightness -->
+                          <div class="preview-setting brightness-setting">
+                            <label for="brightnessInput" id="brightnessLabel"
+                              >Brightness</label
+                            >
+                            <div class="slider-container">
+                              <input
+                                type="range"
+                                id="brightnessInput"
+                                min="20"
+                                max="200"
+                                step="5"
+                                value="100"
+                                aria-labelledby="brightnessLabel"
+                                aria-describedby="brightnessHelp"
+                              />
+                              <span class="slider-value" id="brightnessValue"
+                                >100%</span
+                              >
+                            </div>
+                          </div>
+                          <span id="brightnessHelp" class="sr-only"
+                            >Adjust overall scene brightness from 20 to 200
+                            percent</span
+                          >
+                          <!-- Contrast -->
+                          <div class="preview-setting contrast-setting">
+                            <label for="contrastInput" id="contrastLabel"
+                              >Contrast</label
+                            >
+                            <div class="slider-container">
+                              <input
+                                type="range"
+                                id="contrastInput"
+                                min="20"
+                                max="200"
+                                step="5"
+                                value="100"
+                                aria-labelledby="contrastLabel"
+                                aria-describedby="contrastHelp"
+                              />
+                              <span class="slider-value" id="contrastValue"
+                                >100%</span
+                              >
+                            </div>
+                          </div>
+                          <span id="contrastHelp" class="sr-only"
+                            >Adjust lighting contrast from flat to dramatic, 20 to
+                            200 percent</span
+                          >
+                          <!-- Reset button -->
+                          <div class="preview-setting">
+                            <button
+                              type="button"
+                              id="resetAppearanceBtn"
+                              class="btn btn-sm btn-outline"
+                              aria-label="Reset model opacity, brightness, and contrast to defaults"
+                            >
+                              Reset appearance
+                            </button>
+                          </div>
+                        </div><!-- .model-appearance-sliders -->
+                      </section>
+                      <!-- RIGHT COLUMN: Preview Options -->
+                      <section class="settings-col settings-col-options"
+                               aria-labelledby="previewOptionsHeading">
+                        <h4 class="preview-settings-subheading" id="previewOptionsHeading">
+                          Preview Options
+                        </h4>
+                        <label class="toggle-switch">
+                          <input
+                            type="checkbox"
+                            id="measurementsToggle"
+                            aria-describedby="measurementsHelp"
+                          />
+                          <span class="toggle-label">Show measurements</span>
+                        </label>
+                        <span id="measurementsHelp" class="sr-only"
+                          >Toggle dimension measurements and bounding box overlay
+                          on 3D preview</span
+                        >
+                        <label class="toggle-switch">
+                          <input
+                            type="checkbox"
+                            id="gridToggle"
+                            checked
+                            aria-describedby="gridHelp"
+                          />
+                          <span class="toggle-label">Show grid</span>
+                        </label>
+                        <span id="gridHelp" class="sr-only"
+                          >Toggle grid plane visibility in 3D preview</span
+                        >
+                        <div
+                          class="grid-color-row"
+                          role="group"
+                          aria-labelledby="gridColorLabel"
+                        >
+                          <label
+                            for="gridColorPicker"
+                            id="gridColorLabel"
+                            class="grid-color-label"
+                            >Grid color</label
+                          >
+                          <input
+                            type="color"
+                            id="gridColorPicker"
+                            class="grid-color-picker"
+                            value="#cccccc"
+                            aria-label="Grid line color"
+                            aria-describedby="gridColorHelp"
+                          />
+                          <button
+                            type="button"
+                            id="resetGridColorBtn"
+                            class="btn btn-sm btn-outline"
+                            aria-label="Reset grid color to theme default"
+                          >
+                            Reset
+                          </button>
+                          <span id="gridColorHelp" class="sr-only"
+                            >Choose a custom color for grid lines, or reset
+                            to the current theme default</span
+                          >
+                        </div>
+                        <!-- Grid Opacity -->
+                        <div class="preview-setting grid-opacity-setting">
+                          <label
+                            for="gridOpacityInput"
+                            id="gridOpacityLabel"
+                            >Grid opacity</label
+                          >
+                          <div class="slider-container">
                             <input
-                              type="color"
-                              id="modelColorPicker"
-                              value="#2196F3"
-                              aria-label="Choose model display color"
+                              type="range"
+                              id="gridOpacityInput"
+                              min="10"
+                              max="100"
+                              step="5"
+                              value="100"
+                              aria-labelledby="gridOpacityLabel"
+                              aria-describedby="gridOpacityHelp"
+                            />
+                            <span class="slider-value" id="gridOpacityValue"
+                              >100%</span
+                            >
+                          </div>
+                        </div>
+                        <span id="gridOpacityHelp" class="sr-only"
+                          >Adjust grid line visibility from 10 to 100
+                          percent</span
+                        >
+                        <label class="toggle-switch">
+                          <input
+                            type="checkbox"
+                            id="autoBedToggle"
+                            checked
+                            aria-describedby="autoBedHelp"
+                          />
+                          <span class="toggle-label">Auto-bed (Z=0)</span>
+                        </label>
+                        <span id="autoBedHelp" class="sr-only"
+                          >Automatically place models on the build plate at Z
+                          equals zero</span
+                        >
+                        <div
+                          class="preview-setting-group"
+                          role="group"
+                          aria-labelledby="gridSizeLabel"
+                        >
+                          <span
+                            id="gridSizeLabel"
+                            class="preview-setting-group-label"
+                            >Grid size</span
+                          >
+                          <!-- Compact single-row: [Preset ▼] [W × H] (dims only shown for Custom) -->
+                          <div class="grid-size-compact-row">
+                            <label for="gridPresetSelect" class="sr-only"
+                              >Printer bed preset</label
+                            >
+                            <select
+                              id="gridPresetSelect"
+                              class="grid-preset-select"
+                              aria-label="Printer bed preset"
+                            >
+                              <option value="220x220">
+                                220 × 220 mm (Ender 3)
+                              </option>
+                              <option value="250x210">
+                                250 × 210 mm (Prusa MK4)
+                              </option>
+                              <option value="235x235">
+                                235 × 235 mm (Ender 3 V2)
+                              </option>
+                              <option value="300x300">
+                                300 × 300 mm (CR-10)
+                              </option>
+                              <option value="350x350">
+                                350 × 350 mm (Large format)
+                              </option>
+                              <option value="custom">Custom…</option>
+                            </select>
+                            <span
+                              class="grid-size-dims"
+                              id="gridSizeDims"
+                              hidden
+                            >
+                              <label for="gridWidthInput" class="sr-only"
+                                >Width mm</label
+                              >
+                              <input
+                                type="number"
+                                id="gridWidthInput"
+                                class="grid-dim-input"
+                                min="50"
+                                max="500"
+                                value="220"
+                                aria-describedby="gridSizeHelp"
+                                aria-label="Grid width in mm"
+                              />
+                              <span aria-hidden="true" class="grid-dim-separator"
+                                >×</span
+                              >
+                              <label for="gridHeightInput" class="sr-only"
+                                >Height mm</label
+                              >
+                              <input
+                                type="number"
+                                id="gridHeightInput"
+                                class="grid-dim-input"
+                                min="50"
+                                max="500"
+                                value="220"
+                                aria-label="Grid height in mm"
+                              />
+                            </span>
+                          </div>
+                          <span id="gridSizeHelp" class="sr-only"
+                            >Enter printer bed dimensions in millimetres to set
+                            the grid size</span
+                          >
+                          <!-- Save custom grid preset row (shown when Custom is selected) -->
+                          <div
+                            class="grid-preset-save-row"
+                            id="gridPresetSaveRow"
+                            hidden
+                          >
+                            <label for="gridPresetNameInput" class="sr-only"
+                              >Custom preset name</label
+                            >
+                            <input
+                              type="text"
+                              id="gridPresetNameInput"
+                              class="grid-preset-name-input"
+                              placeholder="Preset name…"
+                              maxlength="80"
+                              aria-describedby="gridPresetSaveError"
                             />
                             <button
-                              id="modelColorReset"
-                              class="btn-icon"
-                              title="Reset to theme default"
-                              aria-label="Reset color to theme default"
+                              type="button"
+                              id="saveGridPresetBtn"
+                              class="btn btn-sm btn-primary"
+                              aria-label="Save custom grid size preset"
                             >
-                              ↺
+                              Save
+                            </button>
+                            <span
+                              id="gridPresetSaveError"
+                              class="grid-preset-error"
+                              role="alert"
+                              aria-live="polite"
+                            ></span>
+                          </div>
+                          <!-- Delete row (shown when a user-saved preset is selected) -->
+                          <div
+                            class="grid-preset-delete-row"
+                            id="gridPresetDeleteRow"
+                            hidden
+                          >
+                            <button
+                              type="button"
+                              id="deleteGridPresetBtn"
+                              class="btn btn-sm btn-outline btn-danger-outline"
+                              aria-label="Delete selected custom grid preset"
+                            >
+                              Delete preset
                             </button>
                           </div>
                         </div>
-                      </div>
-                      <div
-                        class="preview-setting-divider"
-                        aria-hidden="true"
-                      ></div>
-                      <span
-                        class="preview-settings-subheading"
-                        id="modelAppearanceHeading"
-                        >Model Appearance</span
-                      >
-                      <div class="model-appearance-controls">
-                        <label class="toggle-switch model-appearance-toggle">
+                        <label class="toggle-switch">
                           <input
                             type="checkbox"
-                            id="modelAppearanceEnabled"
-                            aria-label="Enable custom model appearance override"
+                            id="statusBarToggle"
+                            checked
+                            aria-describedby="statusBarHelp"
                           />
-                          <span class="toggle-label">Override</span>
+                          <span class="toggle-label">Show status bar</span>
                         </label>
-                      </div>
-                      <div class="model-appearance-sliders">
-                      <!-- Model Opacity -->
-                      <div class="preview-setting model-opacity-setting">
-                        <label for="modelOpacityInput" id="modelOpacityLabel"
-                          >Model opacity</label
+                        <span id="statusBarHelp" class="sr-only"
+                          >Toggle status and render info overlay on preview</span
                         >
-                        <div class="slider-container">
+                        <!-- Engine Toggle (Manifold vs CGAL) -->
+                        <div
+                          class="preview-setting-divider"
+                          aria-hidden="true"
+                        ></div>
+                        <label class="toggle-switch">
                           <input
-                            type="range"
-                            id="modelOpacityInput"
-                            min="10"
-                            max="100"
-                            step="5"
-                            value="100"
-                            aria-labelledby="modelOpacityLabel"
-                            aria-describedby="modelOpacityHelp"
+                            type="checkbox"
+                            id="manifoldEngineToggle"
+                            checked
+                            aria-describedby="manifoldEngineHelp"
                           />
-                          <span class="slider-value" id="modelOpacityValue"
-                            >100%</span
+                          <span class="toggle-label">Fast engine (Manifold)</span>
+                        </label>
+                        <span id="manifoldEngineHelp" class="sr-only"
+                          >Use Manifold geometry engine for faster rendering.
+                          Disable if you encounter issues with complex
+                          models.</span
+                        >
+                        <p class="preview-setting-hint" id="manifoldEngineHint">
+                          5-30× faster. Disable if models fail to render.
+                        </p>
+                        <div class="preview-setting rotation-speed-setting">
+                          <label
+                            class="preview-setting-label"
+                            for="rotationSpeedInput"
+                            id="rotationSpeedLabel"
+                            >Auto-rotate speed</label
+                          >
+                          <div class="slider-container">
+                            <input
+                              type="range"
+                              id="rotationSpeedInput"
+                              min="0.1"
+                              max="3"
+                              step="0.1"
+                              value="0.5"
+                              aria-labelledby="rotationSpeedLabel"
+                              aria-describedby="rotationSpeedHelp"
+                              aria-valuemin="0.1"
+                              aria-valuemax="3"
+                              aria-valuenow="0.5"
+                            />
+                            <span class="slider-value" id="rotationSpeedValue"
+                              >0.5°/s</span
+                            >
+                          </div>
+                        </div>
+                        <span id="rotationSpeedHelp" class="sr-only"
+                          >Set the speed of automatic model rotation when
+                          auto-rotate is enabled, from 0.1 to 3 degrees per
+                          second</span
+                        >
+                        <label class="preview-setting" for="previewQualitySelect">
+                          <span class="preview-setting-label"
+                            >Preview quality</span
+                          >
+                          <select
+                            id="previewQualitySelect"
+                            aria-label="Select preview quality"
+                          >
+                            <option value="auto">Auto (adaptive)</option>
+                            <option value="fidelity">Fidelity (slower)</option>
+                            <option value="balanced" selected>
+                              Balanced (~50%)
+                            </option>
+                            <option value="fast">Fast (lower resolution)</option>
+                          </select>
+                        </label>
+                        <label class="preview-setting" for="exportQualitySelect">
+                          <span class="preview-setting-label"
+                            >Export quality</span
+                          >
+                          <select
+                            id="exportQualitySelect"
+                            aria-label="Select export quality"
+                          >
+                            <option value="model" selected>Model default</option>
+                            <option value="low">Low (fast)</option>
+                            <option value="medium">Medium (balanced)</option>
+                            <option value="high">High (smooth)</option>
+                          </select>
+                        </label>
+                        <div class="preview-setting model-color-setting">
+                          <span class="preview-setting-label">Model Color</span>
+                          <div class="model-color-controls">
+                            <label class="toggle-switch model-color-toggle">
+                              <input
+                                type="checkbox"
+                                id="modelColorEnabled"
+                                aria-label="Enable custom model color override"
+                              />
+                              <span class="toggle-label">Override</span>
+                            </label>
+                            <div class="model-color-picker">
+                              <input
+                                type="color"
+                                id="modelColorPicker"
+                                value="#2196F3"
+                                aria-label="Choose model display color"
+                              />
+                              <button
+                                id="modelColorReset"
+                                class="btn-icon"
+                                title="Reset to theme default"
+                                aria-label="Reset color to theme default"
+                              >
+                                ↺
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                        <div
+                          class="preview-setting complexity-indicator"
+                          id="complexityIndicator"
+                          title="Detected model complexity tier"
+                        >
+                          <span class="preview-setting-label">Complexity:</span>
+                          <span
+                            id="complexityTierLabel"
+                            class="complexity-tier-label"
+                            >Analyzing...</span
                           >
                         </div>
-                      </div>
-                      <span id="modelOpacityHelp" class="sr-only"
-                        >Reduce model opacity to see the reference overlay image
-                        behind the 3D model. Useful for alignment.</span
-                      >
-                      <!-- Brightness -->
-                      <div class="preview-setting brightness-setting">
-                        <label for="brightnessInput" id="brightnessLabel"
-                          >Brightness</label
-                        >
-                        <div class="slider-container">
-                          <input
-                            type="range"
-                            id="brightnessInput"
-                            min="20"
-                            max="200"
-                            step="5"
-                            value="100"
-                            aria-labelledby="brightnessLabel"
-                            aria-describedby="brightnessHelp"
-                          />
-                          <span class="slider-value" id="brightnessValue"
-                            >100%</span
+                        <div class="preview-setting cache-tools">
+                          <span class="preview-setting-label">App cache</span>
+                          <button
+                            id="clearCacheBtn"
+                            class="btn btn-sm btn-outline"
+                            aria-label="Clear cached files and reload the app"
                           >
+                            Clear cache &amp; reload
+                          </button>
                         </div>
-                      </div>
-                      <span id="brightnessHelp" class="sr-only"
-                        >Adjust overall scene brightness from 20 to 200
-                        percent</span
-                      >
-                      <!-- Contrast -->
-                      <div class="preview-setting contrast-setting">
-                        <label for="contrastInput" id="contrastLabel"
-                          >Contrast</label
-                        >
-                        <div class="slider-container">
-                          <input
-                            type="range"
-                            id="contrastInput"
-                            min="20"
-                            max="200"
-                            step="5"
-                            value="100"
-                            aria-labelledby="contrastLabel"
-                            aria-describedby="contrastHelp"
-                          />
-                          <span class="slider-value" id="contrastValue"
-                            >100%</span
-                          >
-                        </div>
-                      </div>
-                      <span id="contrastHelp" class="sr-only"
-                        >Adjust lighting contrast from flat to dramatic, 20 to
-                        200 percent</span
-                      >
-                      <!-- Reset button -->
-                      <div class="preview-setting">
-                        <button
-                          type="button"
-                          id="resetAppearanceBtn"
-                          class="btn btn-sm btn-outline"
-                          aria-label="Reset model opacity, brightness, and contrast to defaults"
-                        >
-                          Reset appearance
-                        </button>
-                      </div>
-                      </div><!-- .model-appearance-sliders -->
+                      </section>
                     </div>
                   </div>
                   <div
