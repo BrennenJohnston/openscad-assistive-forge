@@ -56,6 +56,17 @@ $Scenarios = @(
         params     = @{ type_of_keyguard = "Laser-Cut"; generate = "first layer for SVG/DXF file" }
         geom_type  = "2D"
         svg_export = $true
+    },
+    @{
+        id         = "keyguard-frame-multicolor"
+        params     = @{
+            type_of_keyguard        = "3D-Printed"
+            generate                = "keyguard frame"
+            have_a_keyguard_frame   = "yes"
+            show_keyguard_with_frame = "yes"
+        }
+        geom_type  = "3D"
+        svg_export = $false
     }
 )
 
