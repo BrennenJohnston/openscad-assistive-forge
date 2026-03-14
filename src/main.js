@@ -9493,6 +9493,12 @@ async function initApp() {
           previewContainer.appendChild(preview2d);
         }
 
+        // Append preview state indicator and rendering overlay immediately
+        // after init so they are in the DOM before any async setup below.
+        previewContainer.style.position = 'relative';
+        previewContainer.appendChild(previewStateIndicator);
+        previewContainer.appendChild(renderingOverlay);
+
         syncPreviewModelColorOverride();
         syncPreviewAppearanceOverride();
 
@@ -9665,11 +9671,6 @@ async function initApp() {
             _setAssetsForVariant(true);
           }
         });
-
-        // Add preview state indicator and rendering overlay to container
-        previewContainer.style.position = 'relative';
-        previewContainer.appendChild(previewStateIndicator);
-        previewContainer.appendChild(renderingOverlay);
       }
 
       // Initialize or update AutoPreviewController

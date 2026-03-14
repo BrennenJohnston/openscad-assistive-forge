@@ -294,16 +294,26 @@ export class PreviewManager {
     // This mimics OpenSCAD's default "Diagonal" view orientation
     this.camera.position.set(150, -150, 100);
 
-    // Create renderer
-    this.renderer = new THREE.WebGLRenderer({ antialias: true });
-    this.renderer.setSize(width, height);
-    this.renderer.setPixelRatio(window.devicePixelRatio);
-    this.container.appendChild(this.renderer.domElement);
-    this.renderer.domElement.setAttribute('tabindex', '0');
-    this.renderer.domElement.setAttribute('aria-label', '3D preview canvas');
-    this.renderer.domElement.addEventListener('click', () => {
-      this.renderer.domElement.focus();
-    });
+    // Create renderer — WebGL may be unavailable in headless browsers.
+    // When that happens, geometry parsing (loadOFF / loadSTL) still works;
+    // only the visual canvas is disabled.
+    try {
+      this.renderer = new THREE.WebGLRenderer({ antialias: true });
+      this.renderer.setSize(width, height);
+      this.renderer.setPixelRatio(window.devicePixelRatio);
+      this.container.appendChild(this.renderer.domElement);
+      this.renderer.domElement.setAttribute('tabindex', '0');
+      this.renderer.domElement.setAttribute('aria-label', '3D preview canvas');
+      this.renderer.domElement.addEventListener('click', () => {
+        this.renderer.domElement.focus();
+      });
+    } catch (webglError) {
+      console.warn(
+        '[Preview] WebGL renderer unavailable — 3D canvas disabled:',
+        webglError.message
+      );
+      this.renderer = null;
+    }
 
     // Add lights (store references for potential theme updates)
     this.ambientLight = new THREE.AmbientLight(colors.ambientLight, 0.6);
@@ -333,20 +343,18 @@ export class PreviewManager {
     this._applyGridOpacity();
     this.scene.add(this.gridHelper);
 
-    // Add orbit controls (OpenSCAD-style)
-    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
-    this.controls.enableDamping = true;
-    this.controls.dampingFactor = 0.05;
-    // OpenSCAD pans in screen-space: the model follows the mouse regardless of
-    // camera angle.  With false the pan is constrained to the world horizontal
-    // plane, which breaks Top/Bottom views and feels wrong vs. desktop OpenSCAD.
-    this.controls.screenSpacePanning = true;
-    this.controls.minDistance = 10;
-    this.controls.maxDistance = 1000;
+    // Add orbit controls (OpenSCAD-style) — requires a renderer DOM element
+    if (this.renderer) {
+      this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+      this.controls.enableDamping = true;
+      this.controls.dampingFactor = 0.05;
+      this.controls.screenSpacePanning = true;
+      this.controls.minDistance = 10;
+      this.controls.maxDistance = 1000;
 
-    // WCAG 2.2 SC 2.5.7: Add keyboard controls for camera (non-drag alternatives)
-    this.setupKeyboardControls();
-    this.setupCameraControls();
+      this.setupKeyboardControls();
+      this.setupCameraControls();
+    }
 
     // Handle window resize with view preservation
     this.handleResize = () => {
@@ -379,7 +387,7 @@ export class PreviewManager {
         this.orthoCamera.updateProjectionMatrix();
       }
 
-      this.renderer.setSize(width, height);
+      if (this.renderer) this.renderer.setSize(width, height);
 
       // Adjust camera to maintain model's relative position when aspect changes significantly
       if (
@@ -429,8 +437,9 @@ export class PreviewManager {
     // Start animation loop
     this.animate();
 
+    const rendererStatus = this.renderer ? 'WebGL' : 'no-renderer (headless)';
     console.log(
-      `[Preview] Three.js scene initialized (theme: ${this.currentTheme})`
+      `[Preview] Three.js scene initialized (theme: ${this.currentTheme}, renderer: ${rendererStatus})`
     );
   }
 
@@ -655,7 +664,8 @@ export class PreviewManager {
 
   animate() {
     this.animationId = requestAnimationFrame(() => this.animate());
-    this.controls.update();
+    if (this.controls) this.controls.update();
+    if (!this.renderer) return;
     if (this._renderOverride) {
       this._renderOverride();
     } else {
@@ -686,7 +696,7 @@ export class PreviewManager {
       // Check if preview container or canvas has focus
       if (
         !this.container.contains(document.activeElement) &&
-        document.activeElement !== this.renderer.domElement
+        document.activeElement !== this.renderer?.domElement
       ) {
         return;
       }
@@ -1655,7 +1665,7 @@ export class PreviewManager {
     camera.lookAt(center);
 
     // Update controls target
-    this.controls.target.copy(center);
+    if (this.controls) this.controls.target.copy(center);
 
     // Update orthographic frustum to fit the model
     if (this.projectionMode === 'orthographic' && this.orthoCamera) {
@@ -1669,7 +1679,7 @@ export class PreviewManager {
       this.orthoCamera.updateProjectionMatrix();
     }
 
-    this.controls.update();
+    if (this.controls) this.controls.update();
 
     // Store initial aspect for resize tracking
     this._lastAspect = this.camera.aspect;
@@ -1750,7 +1760,7 @@ export class PreviewManager {
     camera.lookAt(center);
 
     // Update controls target
-    this.controls.target.copy(center);
+    if (this.controls) this.controls.target.copy(center);
 
     // Update orthographic frustum to fit the model at the new view
     if (this.projectionMode === 'orthographic' && this.orthoCamera) {
@@ -1764,7 +1774,7 @@ export class PreviewManager {
       this.orthoCamera.updateProjectionMatrix();
     }
 
-    this.controls.update();
+    if (this.controls) this.controls.update();
 
     // Announce to screen readers
     this.announceCameraAction(`${view.name} view`);
@@ -1782,6 +1792,8 @@ export class PreviewManager {
    * @returns {string} The new projection mode ('perspective' or 'orthographic')
    */
   toggleProjection() {
+    if (!this.controls) return this.projectionMode;
+
     const width = this.container.clientWidth;
     const height = this.container.clientHeight;
     const aspect = width / height;
@@ -2018,8 +2030,9 @@ export class PreviewManager {
    * @param {number} deltaUp - Up/down movement in screen space
    */
   panCamera(deltaRight, deltaUp) {
+    if (!this.controls) return;
+
     const camera = this.getActiveCamera();
-    // Extract camera's local right (column 0) and up (column 1) from world matrix
     const right = new THREE.Vector3().setFromMatrixColumn(
       camera.matrixWorld,
       0
@@ -3849,7 +3862,7 @@ export class PreviewManager {
       this.referenceOverlay.position.z = this.overlayConfig.zPosition;
     }
 
-    this.renderer.render(this.scene, this.getActiveCamera());
+    if (this.renderer) this.renderer.render(this.scene, this.getActiveCamera());
 
     // Update screen reader model summary (WCAG 2.2)
     this.updateModelSummary();
@@ -4154,7 +4167,7 @@ export class PreviewManager {
     this.scene.add(this.mesh);
 
     this.fitCameraToModel();
-    this.renderer.render(this.scene, this.getActiveCamera());
+    if (this.renderer) this.renderer.render(this.scene, this.getActiveCamera());
 
     // Update ARIA summary
     const summary = document.getElementById('previewModelSummary');
