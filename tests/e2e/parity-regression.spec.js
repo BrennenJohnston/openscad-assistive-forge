@@ -44,8 +44,14 @@ test.describe.configure({ timeout: 180_000 });
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
-    localStorage.clear();
-    localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+    // Only clear on the first navigation of this page context (not on reload).
+    // sessionStorage persists across reloads but resets per new browser context,
+    // so persistence tests that call page.reload() keep their localStorage intact.
+    if (!sessionStorage.getItem('__test_initialized')) {
+      localStorage.clear();
+      localStorage.setItem('openscad-forge-first-visit-seen', 'true');
+      sessionStorage.setItem('__test_initialized', 'true');
+    }
   });
 });
 
@@ -445,6 +451,10 @@ test.describe('Parity — Grid Opacity Control (S-016)', () => {
     await page.goto('/?example=simple-box');
     await page.locator('#mainInterface').waitFor({ state: 'visible', timeout: 40_000 });
 
+    // Wait for Three.js canvas — created during previewManager.init(); ensures
+    // previewManager is ready before we fire the input event on the slider.
+    await page.locator('#previewContainer canvas').waitFor({ state: 'attached', timeout: 40_000 });
+
     const slider = page.locator('#gridOpacityInput');
     await expect(slider).toBeAttached({ timeout: 30_000 });
 
@@ -460,7 +470,20 @@ test.describe('Parity — Grid Opacity Control (S-016)', () => {
     // Use 40 (valid step=5 value within min=10, max=100)
     await slider.fill('40');
     await slider.dispatchEvent('input');
-    await page.waitForTimeout(500);
+    // Wait for localStorage to be written (previewManager.saveGridOpacityPreference)
+    await page.waitForFunction(
+      () => Object.keys(localStorage).some(k => k.includes('grid-opacity')),
+      { timeout: 5_000 }
+    );
+
+    // Wait for WASM init to complete before reloading.
+    // Without this, the crash-detection logic fires on reload (wasm-init-started
+    // is set but wasm-init-completed is not), which redirects to ?recovery=true
+    // and clears localStorage before the test can read it back.
+    await page.waitForFunction(
+      () => localStorage.getItem('openscad-forge-wasm-init-completed') === 'true',
+      { timeout: 60_000 }
+    );
 
     await page.reload();
     await page.waitForLoadState('domcontentloaded');
