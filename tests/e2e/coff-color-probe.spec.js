@@ -1,12 +1,13 @@
 /**
  * COFF Color Probe — E2E Runtime Verification
  *
- * Verifies that the WASM binary emits per-face color data in OFF output
- * and that the parser detects it. This test uploads the color fixture,
- * captures console output, and asserts hasColors=true.
+ * Verifies that the WASM binary emits per-face color data in OFF output,
+ * that the parser detects it, and that multi-color rendering produces 2+
+ * distinct face-color groups. Also tests color override toggle behaviour
+ * with multi-color meshes.
  *
+ * Fixture: color-debug-test.scad — red cube + green sphere (2 color() calls)
  * Companion to: docs/audit/parity-probe-results.md
- * Plan: .cursor/plans/coff_upstream_investigation_5f4b8fa9.plan.md (Phase 5)
  *
  * @license GPL-3.0-or-later
  */
@@ -22,6 +23,84 @@ const COLOR_FIXTURE = path.resolve(
   __dirname, '..', 'fixtures', 'color-debug-test.scad'
 );
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+async function uploadColorFixture(page) {
+  await page.goto('/');
+  await page.waitForSelector('body[data-wasm-ready="true"]', {
+    state: 'attached',
+    timeout: 90_000,
+  });
+
+  const fileInput = page.locator('#fileInput');
+  await fileInput.waitFor({ state: 'attached', timeout: 10_000 });
+  await fileInput.setInputFiles(COLOR_FIXTURE);
+
+  try {
+    const notNowBtn = page.locator('#saveProjectNotNow');
+    await notNowBtn.waitFor({ state: 'visible', timeout: 5_000 });
+    await notNowBtn.click();
+  } catch { /* modal may not appear */ }
+
+  await page.waitForFunction(
+    () => {
+      const entries = window.__consoleCapture || [];
+      return entries.some(e => e.includes('[Preview Performance]'));
+    },
+    { timeout: 60_000 },
+  ).catch(() => { /* fallback: fixed wait */ });
+
+  await page.waitForTimeout(5_000);
+}
+
+/**
+ * Sample a grid of pixels from the WebGL canvas and classify by dominant
+ * colour channel. Reads inside a requestAnimationFrame callback so the
+ * draw buffer is valid even without preserveDrawingBuffer.
+ */
+async function sampleCanvasColorGroups(page) {
+  return page.evaluate(() => {
+    return new Promise((resolve) => {
+      requestAnimationFrame(() => {
+        const canvas = document.querySelector(
+          '#viewer canvas, .preview-container canvas',
+        );
+        if (!canvas) { resolve({ meshPixels: 0, groups: 0, labels: [] }); return; }
+        const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
+        if (!gl) { resolve({ meshPixels: 0, groups: 0, labels: [] }); return; }
+
+        const w = canvas.width;
+        const h = canvas.height;
+        const gridSize = 10;
+        const seen = new Set();
+        let meshPixels = 0;
+
+        for (let gx = 0; gx < gridSize; gx++) {
+          for (let gy = 0; gy < gridSize; gy++) {
+            const x = Math.floor((gx + 0.5) * w / gridSize);
+            const y = Math.floor((gy + 0.5) * h / gridSize);
+            const px = new Uint8Array(4);
+            gl.readPixels(x, y, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+            const [r, g, b, a] = px;
+
+            if (a < 10 || r + g + b < 30) continue;
+            if (Math.max(r, g, b) - Math.min(r, g, b) < 20) continue;
+
+            meshPixels++;
+            if (r >= g * 1.3 && r >= b * 1.3) seen.add('red');
+            else if (g >= r * 1.3 && g >= b * 1.3) seen.add('green');
+            else if (b >= r * 1.3 && b >= g * 1.3) seen.add('blue');
+          }
+        }
+
+        resolve({ meshPixels, groups: seen.size, labels: [...seen] });
+      });
+    });
+  });
+}
+
+// ─── Tests ────────────────────────────────────────────────────────────────────
+
 test.describe('COFF Color Probe', () => {
   test.describe.configure({ timeout: 120_000 });
 
@@ -32,92 +111,106 @@ test.describe('COFF Color Probe', () => {
     });
   });
 
-  test('WASM emits per-face colors in OFF output for color() models', async ({ page }) => {
+  test('WASM emits per-face colors with 2+ distinct face-color groups', async ({ page }) => {
     const consoleMessages = [];
     page.on('console', (msg) => consoleMessages.push(msg.text()));
 
-    await page.goto('/');
+    await uploadColorFixture(page);
 
-    await page.waitForSelector('body[data-wasm-ready="true"]', {
-      state: 'attached',
-      timeout: 90_000,
-    });
-
-    const fileInput = page.locator('#fileInput');
-    await fileInput.waitFor({ state: 'attached', timeout: 10_000 });
-    await fileInput.setInputFiles(COLOR_FIXTURE);
-
-    // Dismiss save-project modal if it appears
-    try {
-      const notNowBtn = page.locator('#saveProjectNotNow');
-      await notNowBtn.waitFor({ state: 'visible', timeout: 5_000 });
-      await notNowBtn.click();
-    } catch {
-      // Modal may not appear
-    }
-
-    // Wait for render to complete — look for the performance log line
-    await page.waitForFunction(
-      () => {
-        const entries = (window.__consoleCapture || []);
-        return entries.some(e => e.includes('[Preview Performance]'));
-      },
-      { timeout: 60_000 }
-    ).catch(() => {
-      // Fallback: wait a fixed amount if console capture isn't available
-    });
-
-    // Give extra time for console messages to propagate
-    await page.waitForTimeout(5_000);
-
-    const previewLoadLog = consoleMessages.find(m =>
-      m.includes('[Preview] OFF loaded') || m.includes('[Preview] Loading')
-    );
-    const perfLog = consoleMessages.find(m =>
-      m.includes('[Preview Performance]')
-    );
-
-    // Diagnostic: log what we captured
     const relevantLogs = consoleMessages.filter(m =>
-      m.includes('[Preview]') || m.includes('[Worker]')
+      m.includes('[Preview]') || m.includes('[Worker]') ||
+      m.includes('[Preview Performance]'),
     );
-
     console.log('=== COFF Probe Console Capture ===');
-    for (const log of relevantLogs) {
-      console.log(log);
-    }
+    for (const log of relevantLogs) console.log(log);
     console.log('=== End Capture ===');
 
-    // Assert that we got some rendering output
-    expect(previewLoadLog || perfLog).toBeTruthy();
+    const previewLoadLog = consoleMessages.find(m =>
+      m.includes('[Preview] OFF loaded') || m.includes('[Preview] Loading'),
+    );
+    const perfLog = consoleMessages.find(m =>
+      m.includes('[Preview Performance]'),
+    );
+    expect(previewLoadLog || perfLog, 'Render output must appear').toBeTruthy();
 
-    // The key assertion: check for color presence
-    const hasColorsTrue = consoleMessages.some(m =>
-      m.includes('hasColors=true')
-    );
-    const hasColorsFalse = consoleMessages.some(m =>
-      m.includes('hasColors=false')
-    );
-    const hasCoffCheck = consoleMessages.some(m =>
-      m.includes('COFF ✓')
-    );
+    // Console-log assertion: hasColors=true OR COFF ✓
+    const hasColorsTrue = consoleMessages.some(m => m.includes('hasColors=true'));
+    const hasCoffCheck = consoleMessages.some(m => m.includes('COFF ✓'));
 
-    if (hasColorsTrue || hasCoffCheck) {
-      console.log('RESULT: COFF WORKING — per-face colors detected');
-    } else if (hasColorsFalse) {
-      console.log('RESULT: COFF BLOCKED — no per-face colors in WASM output');
-      console.log(
-        'The WASM binary may not support render-colors, or the feature flag was not accepted.'
-      );
-    } else {
-      console.log('RESULT: INCONCLUSIVE — no hasColors log found');
+    expect(
+      hasColorsTrue || hasCoffCheck,
+      'WASM must emit per-face RGBA in OFF output (COFF)',
+    ).toBeTruthy();
+
+    // Pixel-based multi-color assertion (soft — fallback gate: console logs
+    // are authoritative if WebGL readPixels is unreliable without
+    // preserveDrawingBuffer).
+    const colorResult = await sampleCanvasColorGroups(page);
+    console.log('Multi-color pixel sample:', JSON.stringify(colorResult));
+
+    expect.soft(
+      colorResult.groups >= 2,
+      `Expected 2+ distinct face-color groups, got ${colorResult.groups}: ${JSON.stringify(colorResult)}`,
+    ).toBeTruthy();
+  });
+
+  test('color override toggle switches between multi-color and solid', async ({ page }) => {
+    const consoleMessages = [];
+    page.on('console', (msg) => consoleMessages.push(msg.text()));
+
+    await uploadColorFixture(page);
+
+    // Baseline: multi-color must be active
+    const hasColorsTrue = consoleMessages.some(m => m.includes('hasColors=true'));
+    expect(hasColorsTrue, 'Baseline: hasColors=true must appear').toBeTruthy();
+
+    const baselineColors = await sampleCanvasColorGroups(page);
+    console.log('Before override:', JSON.stringify(baselineColors));
+
+    // Open preview settings drawer if collapsed
+    const drawerToggle = page.locator('#previewDrawerToggle');
+    if ((await drawerToggle.count()) > 0) {
+      const expanded = await drawerToggle.getAttribute('aria-expanded');
+      if (expanded !== 'true') {
+        await drawerToggle.click();
+        await page.waitForTimeout(500);
+      }
     }
 
-    // Soft assertion: we expect colors to be present after the fix.
-    // If this fails, the WASM binary does not support render-colors.
+    const colorToggle = page.locator('#modelColorEnabled');
+    const colorPicker = page.locator('#modelColorPicker');
+    await expect(colorToggle).toBeAttached({ timeout: 5_000 });
+
+    // Set override to pure blue so the solid colour is clearly saturated
+    await colorPicker.evaluate((el) => {
+      el.value = '#0000ff';
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+
+    // Enable override — mesh should switch to solid blue
+    await colorToggle.check();
+    await colorToggle.dispatchEvent('change');
+    await page.waitForTimeout(1_500);
+
+    const overrideColors = await sampleCanvasColorGroups(page);
+    console.log('During override:', JSON.stringify(overrideColors));
+
     expect.soft(
-      hasColorsTrue || hasCoffCheck,
-      'Expected WASM to emit per-face colors in OFF output'
+      overrideColors.groups <= 1,
+      `Expected ≤1 colour group with override, got ${overrideColors.groups}: ${JSON.stringify(overrideColors)}`,
+    ).toBeTruthy();
+
+    // Disable override — multi-color should be restored
+    await colorToggle.uncheck();
+    await colorToggle.dispatchEvent('change');
+    await page.waitForTimeout(1_500);
+
+    const restoredColors = await sampleCanvasColorGroups(page);
+    console.log('After restore:', JSON.stringify(restoredColors));
+
+    expect.soft(
+      restoredColors.groups >= 2,
+      `Expected 2+ colour groups after restore, got ${restoredColors.groups}: ${JSON.stringify(restoredColors)}`,
     ).toBeTruthy();
   });
 });
