@@ -109,7 +109,7 @@ function _getFontMetrics(fontFamily, fontSizePx) {
   const ctx = c.getContext('2d');
   ctx.font = `${fontSizePx}px ${fontFamily}`;
   const m = ctx.measureText('M');
-  const w = Math.max(1, m.width || fontSizePx * 0.6);
+  const w = Math.max(1, Math.floor(m.width || fontSizePx * 0.6));
   const ascent =
     typeof m.actualBoundingBoxAscent === 'number'
       ? m.actualBoundingBoxAscent
@@ -118,7 +118,7 @@ function _getFontMetrics(fontFamily, fontSizePx) {
     typeof m.actualBoundingBoxDescent === 'number'
       ? m.actualBoundingBoxDescent
       : fontSizePx * 0.2;
-  const h = Math.max(1, ascent + descent);
+  const h = Math.max(1, Math.floor(ascent + descent));
   return { charW: w, charH: h, ascent, descent };
 }
 
@@ -401,6 +401,7 @@ function _ensureSampler() {
   if (_sampleCanvas) return;
   _sampleCanvas = document.createElement('canvas');
   _sampleCtx = _sampleCanvas.getContext('2d', { willReadFrequently: true });
+  _sampleCtx.imageSmoothingEnabled = false;
 }
 
 function _computeInvertFromScene(scene) {
@@ -587,7 +588,7 @@ function _renderFrame({
  * @returns {Object} API for controlling the alternate view
  */
 export async function initAltView(previewManager) {
-  const { renderer, scene, camera, container } = previewManager;
+  const { renderer, scene, container } = previewManager;
 
   _ensureOverlay(container);
 
@@ -662,7 +663,7 @@ export async function initAltView(previewManager) {
     },
     render() {
       // Always render the underlying scene so controls + animation stay correct.
-      renderer.render(scene, camera);
+      renderer.render(scene, previewManager.getActiveCamera());
 
       if (!isEnabled) return;
       const now = performance.now();

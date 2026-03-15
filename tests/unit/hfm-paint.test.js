@@ -83,6 +83,24 @@ describe('paintFrame', () => {
     expect(ctx.fillText).toHaveBeenCalledWith('A', 0, charH)
   })
 
+  it('truncates fractional charW/charH to integer pixel positions', () => {
+    const cols = 3
+    const rows = 2
+    const charW = 8.7
+    const charH = 15.3
+    const { chars, colors } = buildGrid(cols, rows)
+
+    paintFrame(ctx, chars, colors, cols, rows, charW, charH, '10px mono', null, null, 0)
+
+    // Every fillText call must receive integer x and y coordinates
+    for (const call of ctx.fillText.mock.calls) {
+      const [, x, y] = call
+      expect(x).toBe(Math.trunc(x))
+      expect(y).toBe(Math.trunc(y))
+    }
+    expect(ctx.fillText).toHaveBeenCalledTimes(cols * rows)
+  })
+
   it('composites persistence canvas when persistFade > 0', () => {
     const cols = 2
     const rows = 2

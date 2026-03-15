@@ -1301,7 +1301,7 @@
 }
 
 :root[data-ui-variant='mono'] .preview-container canvas {
-  transform: scale(1.015);
+  transform: scale(1);
   transform-origin: center center;
   will-change: transform;
 }

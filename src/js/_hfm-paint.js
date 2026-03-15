@@ -219,7 +219,7 @@ export function paintFrame(
     for (const i of indices) {
       const col = i % cols;
       const row = (i / cols) | 0;
-      ctx.fillText(chars[i], col * charW, row * charH);
+      ctx.fillText(chars[i], (col * charW) | 0, (row * charH) | 0);
     }
   }
 
