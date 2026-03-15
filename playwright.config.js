@@ -14,11 +14,12 @@ export default defineConfig({
   // Use list reporter in CI to prevent HTML reporter hangs, HTML locally
   reporter: isCI ? [['list'], ['html', { open: 'never' }]] : 'html',
   
-  // Global timeout to prevent hangs (per test: 60s, total: 8min in CI)
-  // Edge suite with 1 worker + retries runs ~5min; 480s gives safe headroom
+  // Global timeout to prevent hangs (per test: 60s, total suite: 10min in CI)
+  // Edge suite with 1 worker + retries runs ~7-8min; 600s gives safe headroom
+  // for the expanded COFF/color-passthrough test suite.
   // Local: 30min to accommodate large test suites on Windows with 1 worker
   timeout: 60000,
-  globalTimeout: isCI ? 480000 : 1800000,
+  globalTimeout: isCI ? 600000 : 1800000,
   
   // Prevent terminal hang issues
   outputDir: './test-results',

@@ -193,12 +193,17 @@ test.describe('Full Render Color Passthrough (Phase 2)', () => {
     console.log('[Phase2] Full render used OFF:', fullRenderUsedOff);
     console.log('[Phase2] hasColors=true count:', fullRenderHasColors.length);
 
-    // Primary assertion: multi-color must survive the Generate flow
-    // Use soft assertion for pixel sampling (fallback gate allows console-log only)
-    expect.soft(
-      fullRenderColorResult.groups >= 2,
-      `Expected 2+ distinct face-color groups after Generate, got ${fullRenderColorResult.groups}: ${JSON.stringify(fullRenderColorResult)}`,
-    ).toBeTruthy();
+    // Primary assertion: multi-color must survive the Generate flow.
+    // Pixel sampling requires WebGL — skip when context is unavailable
+    // (e.g. Firefox headless).  Console-log fallback below is authoritative.
+    if (fullRenderColorResult.meshPixels > 0) {
+      expect.soft(
+        fullRenderColorResult.groups >= 2,
+        `Expected 2+ distinct face-color groups after Generate, got ${fullRenderColorResult.groups}: ${JSON.stringify(fullRenderColorResult)}`,
+      ).toBeTruthy();
+    } else {
+      console.log('WebGL not available — skipping pixel assertion for full render');
+    }
 
     // Console-log fallback: at minimum, hasColors=true must appear at least
     // twice (once for draft, once for full render) OR the color passthrough
