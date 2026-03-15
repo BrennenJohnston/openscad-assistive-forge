@@ -184,9 +184,9 @@ test.describe('Stakeholder Acceptance Tests', () => {
     await page.waitForTimeout(1000)
     
     // Check for console panel
-    const consolePanel = page.locator('#consoleDetails')
+    const consolePanel = page.locator('#consolePanel')
     const consolePanelExists = await consolePanel.count() > 0
-    console.log('Console panel (#consoleDetails) found:', consolePanelExists)
+    console.log('Console panel (#consolePanel) found:', consolePanelExists)
     
     // Check for console badge
     const consoleBadge = page.locator('#console-badge')

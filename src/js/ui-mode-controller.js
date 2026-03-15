@@ -75,27 +75,9 @@ const PANEL_REGISTRY = [
     defaultHiddenInBasic: true,
   },
   {
-    id: 'gridSettings',
-    label: 'Grid Settings',
-    selector: '.preview-setting-group--grid',
-    defaultHiddenInBasic: true,
-  },
-  {
     id: 'companionFileManagement',
     label: 'Companion Files',
     selector: '#projectFilesControls',
-    defaultHiddenInBasic: true,
-  },
-  {
-    id: 'presetImportExport',
-    label: 'Preset Import/Export',
-    selector: '#exportParamsBtn',
-    defaultHiddenInBasic: true,
-  },
-  {
-    id: 'renderSettings',
-    label: 'Render Settings',
-    selector: '.preview-setting-group--quality',
     defaultHiddenInBasic: true,
   },
   // editTools panel removed — now in Edit toolbar menu

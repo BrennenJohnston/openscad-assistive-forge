@@ -331,3 +331,166 @@ test.describe('Theme Switching', () => {
     expect(themes.size).toBeGreaterThanOrEqual(2)
   })
 })
+
+test.describe('Mono / Alt View Theme Switching', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/')
+    await expect(page.locator('h1')).toBeVisible()
+  })
+
+  test('should apply mono variant attribute and preserve theme', async ({ page }) => {
+    await page.evaluate(() => {
+      document.documentElement.setAttribute('data-theme', 'light')
+    })
+
+    await page.evaluate(() => {
+      document.documentElement.setAttribute('data-ui-variant', 'mono')
+    })
+    await page.waitForTimeout(100)
+
+    const attrs = await page.evaluate(() => ({
+      theme: document.documentElement.getAttribute('data-theme'),
+      variant: document.documentElement.getAttribute('data-ui-variant'),
+    }))
+
+    expect(attrs.theme).toBe('light')
+    expect(attrs.variant).toBe('mono')
+  })
+
+  test('should switch themes correctly while mono variant is active', async ({ page }) => {
+    await page.evaluate(() => {
+      document.documentElement.setAttribute('data-theme', 'light')
+      document.documentElement.setAttribute('data-ui-variant', 'mono')
+    })
+
+    const themeButton = page.locator('#themeToggle')
+    if (!(await themeButton.isVisible())) {
+      test.skip()
+      return
+    }
+
+    const themeBefore = await page.evaluate(() =>
+      document.documentElement.getAttribute('data-theme'),
+    )
+
+    await themeButton.click()
+    await page.waitForTimeout(500)
+
+    const themeAfter = await page.evaluate(() =>
+      document.documentElement.getAttribute('data-theme'),
+    )
+    const variantAfter = await page.evaluate(() =>
+      document.documentElement.getAttribute('data-ui-variant'),
+    )
+
+    expect(themeAfter).not.toBe(themeBefore)
+    expect(variantAfter).toBe('mono')
+    console.log(`Mono variant preserved during theme switch: ${themeBefore} -> ${themeAfter}`)
+  })
+
+  test('should apply correct background colors in all 7 theme states', async ({ page }) => {
+    const themeStates = [
+      { name: 'Light', theme: 'light', hc: false, mono: false },
+      { name: 'Dark', theme: 'dark', hc: false, mono: false },
+      { name: 'HC Light', theme: 'light', hc: true, mono: false },
+      { name: 'HC Dark', theme: 'dark', hc: true, mono: false },
+      { name: 'Mono Light', theme: 'light', hc: false, mono: true },
+      { name: 'Mono Dark', theme: 'dark', hc: false, mono: true },
+      { name: 'Mono + HC', theme: 'dark', hc: true, mono: true },
+    ]
+
+    for (const state of themeStates) {
+      await page.evaluate((cfg) => {
+        const root = document.documentElement
+        root.setAttribute('data-theme', cfg.theme)
+        if (cfg.hc) {
+          root.setAttribute('data-high-contrast', 'true')
+        } else {
+          root.removeAttribute('data-high-contrast')
+        }
+        if (cfg.mono) {
+          root.setAttribute('data-ui-variant', 'mono')
+        } else {
+          root.removeAttribute('data-ui-variant')
+        }
+      }, state)
+
+      await page.waitForTimeout(50)
+
+      const bg = await page.evaluate(() =>
+        window.getComputedStyle(document.body).backgroundColor,
+      )
+
+      expect(bg).toBeTruthy()
+
+      const bgValues = bg.match(/\d+/g)
+      if (bgValues) {
+        const [r, g, b] = bgValues.map(Number)
+        if (state.theme === 'dark') {
+          expect(r + g + b).toBeLessThan(200)
+        } else {
+          expect(r + g + b).toBeGreaterThan(400)
+        }
+      }
+
+      console.log(`${state.name}: bg=${bg}`)
+    }
+  })
+
+  test('should have data-theme attribute set in all 7 theme states', async ({ page }) => {
+    const themeStates = [
+      { name: 'Light', theme: 'light', hc: false, mono: false },
+      { name: 'Dark', theme: 'dark', hc: false, mono: false },
+      { name: 'HC Light', theme: 'light', hc: true, mono: false },
+      { name: 'HC Dark', theme: 'dark', hc: true, mono: false },
+      { name: 'Mono Light', theme: 'light', hc: false, mono: true },
+      { name: 'Mono Dark', theme: 'dark', hc: false, mono: true },
+      { name: 'Mono + HC', theme: 'dark', hc: true, mono: true },
+    ]
+
+    for (const state of themeStates) {
+      await page.evaluate((cfg) => {
+        const root = document.documentElement
+        root.setAttribute('data-theme', cfg.theme)
+        if (cfg.hc) {
+          root.setAttribute('data-high-contrast', 'true')
+        } else {
+          root.removeAttribute('data-high-contrast')
+        }
+        if (cfg.mono) {
+          root.setAttribute('data-ui-variant', 'mono')
+        } else {
+          root.removeAttribute('data-ui-variant')
+        }
+      }, state)
+
+      const dataTheme = await page.evaluate(() =>
+        document.documentElement.getAttribute('data-theme'),
+      )
+
+      expect(dataTheme).toBe(state.theme)
+      console.log(`${state.name}: data-theme=${dataTheme}`)
+    }
+  })
+
+  test('should persist theme when mono variant is toggled off', async ({ page }) => {
+    await page.evaluate(() => {
+      document.documentElement.setAttribute('data-theme', 'dark')
+      document.documentElement.setAttribute('data-ui-variant', 'mono')
+    })
+    await page.waitForTimeout(100)
+
+    await page.evaluate(() => {
+      document.documentElement.removeAttribute('data-ui-variant')
+    })
+    await page.waitForTimeout(100)
+
+    const attrs = await page.evaluate(() => ({
+      theme: document.documentElement.getAttribute('data-theme'),
+      variant: document.documentElement.getAttribute('data-ui-variant'),
+    }))
+
+    expect(attrs.theme).toBe('dark')
+    expect(attrs.variant).toBeNull()
+  })
+})

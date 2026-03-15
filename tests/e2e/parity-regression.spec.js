@@ -303,7 +303,7 @@ test.describe('Parity — No Spontaneous Geometry (S-008)', () => {
     ).length;
 
     const consoleSummary = page.locator(
-      '#consoleDetails > summary, details#consoleDetails > summary',
+      '#consolePanel > summary, details#consolePanel > summary',
     );
     if ((await consoleSummary.count()) > 0) {
       await consoleSummary.click();

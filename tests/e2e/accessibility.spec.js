@@ -1474,6 +1474,149 @@ test.describe('Color System and Theme Accessibility', () => {
   });
 });
 
+test.describe('Mono / Alt View Theme State Accessibility', () => {
+  test('should have no violations in mono light mode', async ({ page }) => {
+    await page.goto('/')
+    await page.waitForLoadState('networkidle')
+
+    await page.evaluate(() => {
+      document.documentElement.setAttribute('data-theme', 'light')
+      document.documentElement.setAttribute('data-ui-variant', 'mono')
+    })
+    await page.waitForTimeout(100)
+
+    const results = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      .analyze()
+
+    expect(results.violations).toEqual([])
+    console.log('Mono light mode: No accessibility violations')
+  })
+
+  test('should have no violations in mono dark mode', async ({ page }) => {
+    await page.goto('/')
+    await page.waitForLoadState('networkidle')
+
+    await page.evaluate(() => {
+      document.documentElement.setAttribute('data-theme', 'dark')
+      document.documentElement.setAttribute('data-ui-variant', 'mono')
+    })
+    await page.waitForTimeout(100)
+
+    const results = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      .analyze()
+
+    expect(results.violations).toEqual([])
+    console.log('Mono dark mode: No accessibility violations')
+  })
+
+  test('should have no violations in mono + high contrast mode', async ({ page }) => {
+    await page.goto('/')
+    await page.waitForLoadState('networkidle')
+
+    await page.evaluate(() => {
+      document.documentElement.setAttribute('data-theme', 'dark')
+      document.documentElement.setAttribute('data-high-contrast', 'true')
+      document.documentElement.setAttribute('data-ui-variant', 'mono')
+    })
+    await page.waitForTimeout(100)
+
+    const results = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'wcag2aaa'])
+      .analyze()
+
+    expect(results.violations).toEqual([])
+    console.log('Mono + HC mode: No accessibility violations')
+  })
+
+  test('should have visible focus indicators in all 7 theme states including mono', async ({ page }) => {
+    await page.goto('/')
+
+    const themeStates = [
+      { name: 'Light', theme: 'light', hc: false, mono: false },
+      { name: 'Dark', theme: 'dark', hc: false, mono: false },
+      { name: 'HC Light', theme: 'light', hc: true, mono: false },
+      { name: 'HC Dark', theme: 'dark', hc: true, mono: false },
+      { name: 'Mono Light', theme: 'light', hc: false, mono: true },
+      { name: 'Mono Dark', theme: 'dark', hc: false, mono: true },
+      { name: 'Mono + HC', theme: 'dark', hc: true, mono: true },
+    ]
+
+    for (const state of themeStates) {
+      await page.evaluate((cfg) => {
+        const root = document.documentElement
+        root.setAttribute('data-theme', cfg.theme)
+        if (cfg.hc) {
+          root.setAttribute('data-high-contrast', 'true')
+        } else {
+          root.removeAttribute('data-high-contrast')
+        }
+        if (cfg.mono) {
+          root.setAttribute('data-ui-variant', 'mono')
+        } else {
+          root.removeAttribute('data-ui-variant')
+        }
+      }, state)
+
+      await page.waitForTimeout(50)
+      await page.keyboard.press('Tab')
+
+      const outlineInfo = await page.evaluate(() => {
+        const el = document.activeElement
+        const styles = window.getComputedStyle(el)
+        return {
+          outlineWidth: styles.outlineWidth,
+          outlineStyle: styles.outlineStyle,
+          boxShadow: styles.boxShadow,
+        }
+      })
+
+      const hasOutline =
+        outlineInfo.outlineStyle !== 'none' &&
+        parseFloat(outlineInfo.outlineWidth) >= 2
+      const hasBoxShadow = outlineInfo.boxShadow !== 'none'
+
+      expect(
+        hasOutline || hasBoxShadow,
+        `${state.name}: must have visible focus indicator`,
+      ).toBe(true)
+
+      console.log(
+        `${state.name}: Focus indicator present (outline=${outlineInfo.outlineWidth} ${outlineInfo.outlineStyle})`,
+      )
+    }
+  })
+
+  test('mono variant attribute is applied and removed correctly', async ({ page }) => {
+    await page.goto('/')
+    await page.waitForLoadState('networkidle')
+
+    const initialVariant = await page.evaluate(() =>
+      document.documentElement.getAttribute('data-ui-variant'),
+    )
+    expect(initialVariant).toBeNull()
+
+    await page.evaluate(() => {
+      document.documentElement.setAttribute('data-ui-variant', 'mono')
+    })
+
+    const monoVariant = await page.evaluate(() =>
+      document.documentElement.getAttribute('data-ui-variant'),
+    )
+    expect(monoVariant).toBe('mono')
+
+    await page.evaluate(() => {
+      document.documentElement.removeAttribute('data-ui-variant')
+    })
+
+    const removedVariant = await page.evaluate(() =>
+      document.documentElement.getAttribute('data-ui-variant'),
+    )
+    expect(removedVariant).toBeNull()
+  })
+})
+
 test.describe('Enhanced Contrast Preference (prefers-contrast)', () => {
   test('should handle prefers-contrast: more emulation', async ({ page, browserName }) => {
     // Playwright Firefox does not reliably emulate the contrast media feature

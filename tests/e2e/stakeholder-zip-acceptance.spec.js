@@ -400,7 +400,7 @@ test.describe('Stakeholder Acceptance Tests - Ken\'s Keyguard ZIP', () => {
     await uploadZipAndWait(page, diag)
 
     // After parsing, check if console panel exists
-    const consolePanel = page.locator('#consoleDetails, #consolePanel, .console-panel')
+    const consolePanel = page.locator('#consolePanel, .console-panel')
     const consolePanelExists = await consolePanel.count() > 0
     console.log(`[Phase 8] Console panel found: ${consolePanelExists}`)
 

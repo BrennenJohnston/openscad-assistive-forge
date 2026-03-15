@@ -314,13 +314,13 @@ test.describe('Render Stability — Console Panel Interactions (BUG-C post-fix)'
     console.log('[BUG-C] Render count before console interaction:', renderCountBefore);
 
     // Find and interact with the console panel
-    const consoleDetails = page.locator('#consoleDetails');
-    if (!(await consoleDetails.isVisible())) {
-      console.log('[BUG-C] Console panel not found by #consoleDetails, trying summary');
+    const consolePanel = page.locator('#consolePanel');
+    if (!(await consolePanel.isVisible())) {
+      console.log('[BUG-C] Console panel not found by #consolePanel, trying summary');
     }
 
     // Try to expand console panel via its summary element
-    const consoleSummary = page.locator('#consoleDetails > summary, details#consoleDetails > summary');
+    const consoleSummary = page.locator('#consolePanel > summary, details#consolePanel > summary');
     if ((await consoleSummary.count()) > 0) {
       await consoleSummary.click();
       await page.waitForTimeout(500);
@@ -329,7 +329,7 @@ test.describe('Render Stability — Console Panel Interactions (BUG-C post-fix)'
     }
 
     // Try console badge / expand button
-    const consoleBadge = page.locator('#console-badge, button[aria-controls="consoleDetails"]');
+    const consoleBadge = page.locator('#console-badge, button[aria-controls="consolePanel"]');
     if ((await consoleBadge.count()) > 0 && (await consoleBadge.first().isVisible())) {
       await consoleBadge.first().click();
       await page.waitForTimeout(500);
