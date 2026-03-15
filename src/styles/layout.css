@@ -1951,7 +1951,7 @@ body {
   min-height: 36px;
 }
 
-.camera-view-btn:hover {
+.btn.camera-view-btn:hover:not(:disabled) {
   background: var(--color-accent);
   color: var(--color-accent-text);
   border-color: var(--color-accent);
@@ -1990,7 +1990,7 @@ body {
     color var(--motion-fast);
 }
 
-.camera-btn:hover {
+.btn.camera-btn:hover:not(:disabled) {
   background: var(--color-accent);
   border-color: var(--color-accent);
   color: var(--color-accent-text);
@@ -2049,7 +2049,7 @@ body {
     color var(--motion-fast);
 }
 
-.camera-btn-wide:hover {
+.btn.camera-btn-wide:hover:not(:disabled) {
   background: var(--color-accent);
   border-color: var(--color-accent);
   color: var(--color-accent-text);
