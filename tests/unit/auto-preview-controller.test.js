@@ -1,4 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+
+vi.mock('../../src/js/feature-flags.js', () => ({
+  isEnabled: vi.fn(() => false),
+}));
+
+import { isEnabled as isFlagEnabled } from '../../src/js/feature-flags.js'
 import { AutoPreviewController, PREVIEW_STATE } from '../../src/js/auto-preview-controller.js'
 
 describe('AutoPreviewController', () => {
@@ -1024,6 +1030,120 @@ describe('AutoPreviewController', () => {
 
       expect(draftSpy).not.toHaveBeenCalled()
       expect(onError).toHaveBeenCalled()
+    })
+  })
+
+  describe('Full Render Color Passthrough (Phase 0)', () => {
+    beforeEach(() => {
+      renderController.renderFull = vi.fn().mockResolvedValue({
+        stl: new ArrayBuffer(32),
+        stats: { triangles: 42 },
+        format: 'stl',
+        consoleOutput: '',
+      })
+      previewManager.loadOFF = vi.fn().mockResolvedValue()
+      previewManager.loadSTL = vi.fn().mockResolvedValue()
+      previewManager.setRenderState = vi.fn()
+      previewManager.colorOverrideEnabled = false
+      previewManager._getPrimaryGeometry = vi.fn(() => null)
+    })
+
+    afterEach(() => {
+      isFlagEnabled.mockReset()
+    })
+
+    it('passes outputFormat "off" to renderController.renderFull() when color_passthrough is active and SCAD uses color()', async () => {
+      isFlagEnabled.mockImplementation((flag) => flag === 'color_passthrough')
+      controller.setScadContent('color("red") cube(10);')
+
+      await controller.renderFull({ width: 10 })
+
+      expect(renderController.renderFull).toHaveBeenCalledWith(
+        'color("red") cube(10);',
+        { width: 10 },
+        expect.objectContaining({
+          outputFormat: 'off',
+        })
+      )
+    })
+
+    it('does NOT pass outputFormat "off" when color_passthrough flag is disabled', async () => {
+      isFlagEnabled.mockReturnValue(false)
+      controller.setScadContent('color("red") cube(10);')
+
+      await controller.renderFull({ width: 10 })
+
+      const callOptions = renderController.renderFull.mock.calls[0][2]
+      expect(callOptions.outputFormat).toBeUndefined()
+    })
+
+    it('does NOT pass outputFormat "off" when SCAD has no color() calls', async () => {
+      isFlagEnabled.mockImplementation((flag) => flag === 'color_passthrough')
+      controller.setScadContent('cube(10);')
+
+      await controller.renderFull({ width: 10 })
+
+      const callOptions = renderController.renderFull.mock.calls[0][2]
+      expect(callOptions.outputFormat).toBeUndefined()
+    })
+
+    it('loads OFF preview (not STL) when full render returns format "off" due to color passthrough', async () => {
+      isFlagEnabled.mockImplementation((flag) => flag === 'color_passthrough')
+      controller.setScadContent('color("red") cube(10);')
+      renderController.renderFull.mockResolvedValue({
+        stl: new ArrayBuffer(64),
+        stats: { triangles: 42 },
+        format: 'off',
+        consoleOutput: '',
+      })
+
+      await controller.renderFull({ width: 10 })
+
+      expect(previewManager.loadOFF).toHaveBeenCalledWith(
+        expect.any(ArrayBuffer),
+        expect.objectContaining({ preserveCamera: false })
+      )
+      expect(previewManager.loadSTL).not.toHaveBeenCalled()
+    })
+
+    it('does NOT preserve color preview when full render returns OFF format', async () => {
+      isFlagEnabled.mockImplementation((flag) => flag === 'color_passthrough')
+      controller.setScadContent('color("red") cube(10);')
+      previewManager._getPrimaryGeometry = vi.fn(() => ({
+        attributes: { color: {} }
+      }))
+      renderController.renderFull.mockResolvedValue({
+        stl: new ArrayBuffer(64),
+        stats: { triangles: 42 },
+        format: 'off',
+        consoleOutput: '',
+      })
+
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+      await controller.renderFull({ width: 10 })
+
+      const preserveMessages = consoleSpy.mock.calls
+        .map(c => c[0])
+        .filter(msg => typeof msg === 'string' && msg.includes('Preserving current color preview'))
+      expect(preserveMessages).toHaveLength(0)
+      expect(previewManager.loadOFF).toHaveBeenCalled()
+
+      consoleSpy.mockRestore()
+    })
+
+    it('passes outputFormat "off" when SCAD uses # debug modifier and color_passthrough is active', async () => {
+      isFlagEnabled.mockImplementation((flag) => flag === 'color_passthrough')
+      controller.setScadContent('# cube(10);')
+
+      await controller.renderFull({ width: 10 })
+
+      expect(renderController.renderFull).toHaveBeenCalledWith(
+        '# cube(10);',
+        { width: 10 },
+        expect.objectContaining({
+          outputFormat: 'off',
+        })
+      )
     })
   })
 })
