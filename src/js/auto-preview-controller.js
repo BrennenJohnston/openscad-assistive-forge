@@ -617,6 +617,49 @@ export class AutoPreviewController {
   }
 
   /**
+   * Strip color() transformation calls from SCAD source, preserving child
+   * geometry. This simulates desktop F6 render behavior where color() is
+   * ignored and the engine applies CSG operation face colors instead.
+   *
+   * Handles: color("name"), color([r,g,b]), color([r,g,b,a]), color(c=..., alpha=...)
+   * Does NOT strip color() inside comments or string literals.
+   *
+   * @param {string} scadContent - OpenSCAD source code
+   * @returns {string} Source with color() calls removed
+   */
+  static stripColorCalls(scadContent) {
+    if (!scadContent || typeof scadContent !== 'string') return scadContent;
+    // Match `color` keyword boundary, optional whitespace, then balanced parens.
+    // We manually find the matching closing paren to handle nested brackets
+    // like color([1,0,0,0.5]) correctly.
+    let result = '';
+    const len = scadContent.length;
+    const colorPattern = /\bcolor\s*\(/g;
+
+    let lastIndex = 0;
+    colorPattern.lastIndex = 0;
+    let match;
+
+    while ((match = colorPattern.exec(scadContent)) !== null) {
+      const start = match.index;
+      // Find the matching close paren
+      let depth = 1;
+      let j = match.index + match[0].length;
+      while (j < len && depth > 0) {
+        if (scadContent[j] === '(') depth++;
+        else if (scadContent[j] === ')') depth--;
+        j++;
+      }
+      // Copy everything before this color() call, skip the call itself
+      result += scadContent.slice(lastIndex, start);
+      lastIndex = j;
+      colorPattern.lastIndex = j;
+    }
+    result += scadContent.slice(lastIndex);
+    return result;
+  }
+
+  /**
    * Strip comments and string literals while preserving overall structure.
    * This enables lightweight source scanning without false-positives from
    * `#` inside comments/strings.
@@ -1104,8 +1147,27 @@ export class AutoPreviewController {
       (AutoPreviewController.scadUsesColor(this.currentScadContent) ||
         hasDebugModifier);
 
+    // F6 parity: the desktop F6 render ignores color() calls and instead
+    // shows CSG operation face colors (yellow positive, green subtracted).
+    // The WASM Manifold backend applies user color() values by default,
+    // overriding CSG face coloring. Strip color() calls from the source
+    // so the engine falls back to CSG operation colors for the OFF preview.
+    const scadContentForRender = useColorPassthrough
+      ? AutoPreviewController.stripColorCalls(this.currentScadContent)
+      : this.currentScadContent;
+
+    // When stripping color() calls, the modified content must also replace
+    // the main file in the project files map. The worker mounts the files map
+    // to its virtual FS and uses the mounted file (not the scadContent param)
+    // when a mainFile path is provided.
+    let filesForRender = this.projectFiles;
+    if (useColorPassthrough && this.projectFiles && this.mainFilePath) {
+      filesForRender = new Map(this.projectFiles);
+      filesForRender.set(this.mainFilePath, scadContentForRender);
+    }
+
     const renderOptions = {
-      files: this.projectFiles,
+      files: filesForRender,
       mainFile: this.mainFilePath,
       libraries: this.enabledLibraries,
       paramTypes: this.paramTypes,
@@ -1118,15 +1180,13 @@ export class AutoPreviewController {
 
     // Perform full render (OFF when color passthrough active, STL otherwise)
     const result = await this.renderController.renderFull(
-      this.currentScadContent,
+      scadContentForRender,
       parameters,
       renderOptions
     );
 
     if (useColorPassthrough) {
-      console.log(
-        '[AutoPreview] Full render using OFF for color passthrough'
-      );
+      console.log('[AutoPreview] Full render using OFF for color passthrough');
     }
 
     // Store for reuse — when color passthrough produced OFF, the STL for
@@ -1260,13 +1320,12 @@ export class AutoPreviewController {
           'path,polygon,polyline,circle,ellipse,rect{fill:#7A9F7A;stroke:#7A9F7A;stroke-width:0.25;fill-opacity:0.9}' +
           'line{stroke:#7A9F7A;stroke-width:0.25}' +
           '</style>';
-        svgText = svgText.replace(
-          /(<svg[^>]*>)/i,
-          '$1' + draftStyle
-        );
+        svgText = svgText.replace(/(<svg[^>]*>)/i, '$1' + draftStyle);
 
         if (typeof this.previewManager?.show2DPreviewAs3DPlane === 'function') {
-          await this.previewManager.show2DPreviewAs3DPlane(svgText, { mode: 'draft' });
+          await this.previewManager.show2DPreviewAs3DPlane(svgText, {
+            mode: 'draft',
+          });
         } else {
           this.previewManager?.show2DPreview?.(svgText, { mode: 'draft' });
         }
@@ -1303,8 +1362,12 @@ export class AutoPreviewController {
             'line{stroke:#7A9F7A;stroke-width:0.25}' +
             '</style>';
           svgText = svgText.replace(/(<svg[^>]*>)/i, '$1' + draftFallbackStyle);
-          if (typeof this.previewManager?.show2DPreviewAs3DPlane === 'function') {
-            await this.previewManager.show2DPreviewAs3DPlane(svgText, { mode: 'draft' });
+          if (
+            typeof this.previewManager?.show2DPreviewAs3DPlane === 'function'
+          ) {
+            await this.previewManager.show2DPreviewAs3DPlane(svgText, {
+              mode: 'draft',
+            });
           } else {
             this.previewManager?.show2DPreview?.(svgText, { mode: 'draft' });
           }

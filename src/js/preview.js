@@ -24,7 +24,7 @@ const STORAGE_KEY_LOD_WARNING_DISMISSED = getAppPrefKey(
   'lod-warning-dismissed'
 );
 
-/** Default grid config — 220×220mm matches most common consumer printers (Ender 3) */
+/** Default grid config — 220×220mm matches popular mid-range FDM printers (Creality K1C, FlashForge Adventurer 5M Pro) */
 const DEFAULT_GRID_CONFIG = { widthMm: 220, heightMm: 220 };
 
 // Lazy-loaded Three.js modules - loaded on demand to reduce initial bundle size
@@ -64,6 +64,11 @@ async function loadThreeJS() {
       OrbitControls = controlsModule.OrbitControls;
       STLLoader = loaderModule.STLLoader;
       threeJsLoaded = true;
+
+      // Disable Three.js color management to match desktop OpenSCAD's
+      // non-linear-aware OpenGL pipeline. OpenSCAD passes sRGB colors
+      // directly through lighting without linearization or gamma correction.
+      THREE.ColorManagement.enabled = false;
 
       const loadTime = Math.round(performance.now() - startTime);
       console.log(`[Preview] Three.js loaded in ${loadTime}ms`);
@@ -299,6 +304,7 @@ export class PreviewManager {
     // only the visual canvas is disabled.
     try {
       this.renderer = new THREE.WebGLRenderer({ antialias: true });
+      this.renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
       this.renderer.setSize(width, height);
       this.renderer.setPixelRatio(window.devicePixelRatio);
       this.container.appendChild(this.renderer.domElement);
@@ -315,20 +321,46 @@ export class PreviewManager {
       this.renderer = null;
     }
 
-    // Add lights (store references for potential theme updates)
-    this.ambientLight = new THREE.AmbientLight(colors.ambientLight, 0.6);
+    // Lighting matched to desktop OpenSCAD's GLView::setupLight().
+    // OpenSCAD sets light positions AFTER the camera (modelview) transform,
+    // so they are in view space — they move with the camera like headlights.
+    // We replicate this by parenting directional lights to the camera.
+    //
+    // Three.js MeshPhongMaterial uses BRDF_Lambert which divides diffuse by π.
+    // OpenSCAD's OpenGL pipeline has no such divisor (simple color * NdotL).
+    // All intensities are scaled by π to cancel the BRDF divisor and match
+    // desktop brightness: ambient 0.2*π ≈ 0.628, directional 1.0*π ≈ 3.14.
+    const piAmbient = 0.2 * Math.PI;
+    const piDirectional = 1.0 * Math.PI;
+
+    this.ambientLight = new THREE.AmbientLight(colors.ambientLight, piAmbient);
     this.scene.add(this.ambientLight);
 
-    this.directionalLight1 = new THREE.DirectionalLight(0xffffff, 0.8);
-    this.directionalLight1.position.set(1, 1, 1);
-    this.scene.add(this.directionalLight1);
+    // Camera must be in the scene graph for child lights to render
+    this.scene.add(this.camera);
 
-    this.directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.4);
-    this.directionalLight2.position.set(-1, -1, -1);
-    this.scene.add(this.directionalLight2);
+    this.directionalLight1 = new THREE.DirectionalLight(
+      0xffffff,
+      piDirectional
+    );
+    this.directionalLight1.position.set(-1, 1, 1);
+    this.camera.add(this.directionalLight1);
+    this.camera.add(this.directionalLight1.target);
+
+    this.directionalLight2 = new THREE.DirectionalLight(
+      0xffffff,
+      piDirectional
+    );
+    this.directionalLight2.position.set(1, -1, 1);
+    this.camera.add(this.directionalLight2);
+    this.camera.add(this.directionalLight2.target);
 
     // Store base intensities for brightness/contrast controls
-    this.baseLightIntensities = { ambient: 0.6, dir1: 0.8, dir2: 0.4 };
+    this.baseLightIntensities = {
+      ambient: piAmbient,
+      dir1: piDirectional,
+      dir2: piDirectional,
+    };
     this._brightnessScale = 1;
     this._contrastFactor = 1;
 
@@ -1127,7 +1159,7 @@ export class PreviewManager {
         // Create material using render-state-aware color resolution
         const material = new THREE.MeshPhongMaterial({
           color: parseInt(this._resolveModelColor().slice(1), 16),
-          specular: 0x111111,
+          specular: 0x000000,
           shininess: 30,
           flatShading: false,
         });
@@ -1347,13 +1379,13 @@ export class PreviewManager {
           const normalMaterial = hasColors
             ? new THREE.MeshPhongMaterial({
                 vertexColors: true,
-                specular: 0x111111,
+                specular: 0x000000,
                 shininess: 30,
                 flatShading: false,
               })
             : new THREE.MeshPhongMaterial({
                 color: parseInt(this._resolveModelColor().slice(1), 16),
-                specular: 0x111111,
+                specular: 0x000000,
                 shininess: 30,
                 flatShading: false,
               });
@@ -1361,7 +1393,7 @@ export class PreviewManager {
           const highlightGeometry = geometry.clone();
           const highlightMaterial = new THREE.MeshPhongMaterial({
             color: parseInt(debugHighlight.hex.replace('#', ''), 16),
-            specular: 0x111111,
+            specular: 0x000000,
             shininess: 30,
             flatShading: false,
             transparent: true,
@@ -1386,13 +1418,13 @@ export class PreviewManager {
           const material = useVertexColors
             ? new THREE.MeshPhongMaterial({
                 vertexColors: true,
-                specular: 0x111111,
+                specular: 0x000000,
                 shininess: 30,
                 flatShading: false,
               })
             : new THREE.MeshPhongMaterial({
                 color: parseInt(this._resolveModelColor().slice(1), 16),
-                specular: 0x111111,
+                specular: 0x000000,
                 shininess: 30,
                 flatShading: false,
               });
@@ -4086,7 +4118,6 @@ export class PreviewManager {
     const previewEl = document.getElementById('rendered2dPreview');
     if (!previewEl) return;
 
-
     const sanitized = PreviewManager.sanitizeSVG(svgText);
 
     previewEl.innerHTML = sanitized;
@@ -4148,8 +4179,11 @@ export class PreviewManager {
     // while preserving the original SVG width/height attributes for correct
     // mm dimension extraction. The PlaneGeometry is then sized in mm to
     // guarantee 1:1 scale fidelity with the 3D mesh.
-    const { texture, widthMm, heightMm } =
-      await this.svgTextToCanvasTexture(svgText, null, { targetCanvasSize: 4096 });
+    const { texture, widthMm, heightMm } = await this.svgTextToCanvasTexture(
+      svgText,
+      null,
+      { targetCanvasSize: 4096 }
+    );
 
     const planeW = widthMm || 200;
     const planeH = heightMm || 150;
@@ -4302,9 +4336,18 @@ export class PreviewManager {
 
     const palette =
       mode === 'rendered'
-        ? { fill: '#07D0A7', stroke: '#FF0603', strokeWidth: '0.5', fillOpacity: '1' }
-        : { fill: '#7A9F7A', stroke: '#7A9F7A', strokeWidth: '0.25', fillOpacity: '0.9' };
-
+        ? {
+            fill: '#07D0A7',
+            stroke: '#FF0603',
+            strokeWidth: '0.5',
+            fillOpacity: '1',
+          }
+        : {
+            fill: '#7A9F7A',
+            stroke: '#7A9F7A',
+            strokeWidth: '0.25',
+            fillOpacity: '0.9',
+          };
 
     const styleEl = document.createElementNS(ns, 'style');
     styleEl.setAttribute('data-forge-preview', 'true');

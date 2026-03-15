@@ -1058,8 +1058,10 @@ describe('AutoPreviewController', () => {
 
       await controller.renderFull({ width: 10 })
 
+      // F6 parity: color() calls are stripped so the engine falls back to
+      // CSG operation face colors, matching desktop OpenSCAD F6 behavior.
       expect(renderController.renderFull).toHaveBeenCalledWith(
-        'color("red") cube(10);',
+        ' cube(10);',
         { width: 10 },
         expect.objectContaining({
           outputFormat: 'off',

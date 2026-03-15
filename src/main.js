@@ -181,7 +181,9 @@ const STORAGE_KEY_MODEL_COLOR_ENABLED = getAppPrefKey('model-color-enabled');
 const STORAGE_KEY_MODEL_OPACITY = getAppPrefKey('model-opacity');
 const STORAGE_KEY_BRIGHTNESS = getAppPrefKey('brightness');
 const STORAGE_KEY_CONTRAST = getAppPrefKey('contrast');
-const STORAGE_KEY_MODEL_APPEARANCE_ENABLED = getAppPrefKey('model-appearance-enabled');
+const STORAGE_KEY_MODEL_APPEARANCE_ENABLED = getAppPrefKey(
+  'model-appearance-enabled'
+);
 const STORAGE_KEY_PARAM_PANEL_COLLAPSED = getDrawerStateKey('parameters');
 const STORAGE_KEY_LAYOUT_SIZES = getAppPrefKey('layout-sizes');
 import {
@@ -3587,7 +3589,9 @@ async function initApp() {
           svgText = svgText.replace(/(<svg[^>]*>)/i, '$1' + renderStyle);
 
           if (typeof previewManager.show2DPreviewAs3DPlane === 'function') {
-            await previewManager.show2DPreviewAs3DPlane(svgText, { mode: 'rendered' });
+            await previewManager.show2DPreviewAs3DPlane(svgText, {
+              mode: 'rendered',
+            });
           } else {
             previewManager.show2DPreview(svgText, { mode: 'rendered' });
           }
@@ -7131,8 +7135,12 @@ async function initApp() {
   const contrastInput = document.getElementById('contrastInput');
   const contrastValue = document.getElementById('contrastValue');
   const resetAppearanceBtn = document.getElementById('resetAppearanceBtn');
-  const modelAppearanceEnabled = document.getElementById('modelAppearanceEnabled');
-  const modelAppearanceSlidersWrapper = document.querySelector('.model-appearance-sliders');
+  const modelAppearanceEnabled = document.getElementById(
+    'modelAppearanceEnabled'
+  );
+  const modelAppearanceSlidersWrapper = document.querySelector(
+    '.model-appearance-sliders'
+  );
 
   // Restore persisted values
   const savedOpacity = localStorage.getItem(STORAGE_KEY_MODEL_OPACITY);
@@ -14293,7 +14301,9 @@ if (rounded) {
           svgText = svgText.replace(/(<svg[^>]*>)/i, '$1' + renderStyle);
 
           if (typeof previewManager.show2DPreviewAs3DPlane === 'function') {
-            await previewManager.show2DPreviewAs3DPlane(svgText, { mode: 'rendered' });
+            await previewManager.show2DPreviewAs3DPlane(svgText, {
+              mode: 'rendered',
+            });
           } else {
             previewManager.show2DPreview(svgText, { mode: 'rendered' });
           }
