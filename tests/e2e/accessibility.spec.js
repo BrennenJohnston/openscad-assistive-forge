@@ -1334,6 +1334,116 @@ test.describe('Color System and Theme Accessibility', () => {
     }
   });
 
+  test('toggle switch off-state track and thumb are distinguishable in all 7 theme states', async ({ page }) => {
+    await page.goto('/')
+    await page.waitForLoadState('networkidle')
+
+    const themeStates = [
+      { name: 'Light', theme: 'light', hc: false, mono: false },
+      { name: 'Dark', theme: 'dark', hc: false, mono: false },
+      { name: 'HC Light', theme: 'light', hc: true, mono: false },
+      { name: 'HC Dark', theme: 'dark', hc: true, mono: false },
+      { name: 'Mono Light', theme: 'light', hc: false, mono: true },
+      { name: 'Mono Dark', theme: 'dark', hc: false, mono: true },
+      { name: 'Mono + HC', theme: 'dark', hc: true, mono: true },
+    ]
+
+    for (const state of themeStates) {
+      const result = await page.evaluate((cfg) => {
+        const root = document.documentElement
+        root.setAttribute('data-theme', cfg.theme)
+        if (cfg.hc) {
+          root.setAttribute('data-high-contrast', 'true')
+        } else {
+          root.removeAttribute('data-high-contrast')
+        }
+        if (cfg.mono) {
+          root.setAttribute('data-ui-variant', 'mono')
+        } else {
+          root.removeAttribute('data-ui-variant')
+        }
+
+        let wrapper = document.getElementById('_test-toggle-wrapper')
+        if (!wrapper) {
+          wrapper = document.createElement('label')
+          wrapper.id = '_test-toggle-wrapper'
+          wrapper.className = 'toggle-switch'
+          const input = document.createElement('input')
+          input.type = 'checkbox'
+          wrapper.appendChild(input)
+          document.body.appendChild(wrapper)
+        }
+        const input = wrapper.querySelector('input')
+        input.checked = false
+
+        const trackStyle = getComputedStyle(input)
+        const thumbStyle = getComputedStyle(input, '::before')
+
+        return {
+          trackBg: trackStyle.backgroundColor,
+          thumbBg: thumbStyle.backgroundColor,
+        }
+      }, state)
+
+      const parseRgb = (str) => {
+        const m = str.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/)
+        return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null
+      }
+
+      const trackRgb = parseRgb(result.trackBg)
+      const thumbRgb = parseRgb(result.thumbBg)
+
+      expect(trackRgb, `${state.name}: track bg parseable`).not.toBeNull()
+      expect(thumbRgb, `${state.name}: thumb bg parseable`).not.toBeNull()
+
+      if (trackRgb && thumbRgb) {
+        const diff =
+          Math.abs(trackRgb[0] - thumbRgb[0]) +
+          Math.abs(trackRgb[1] - thumbRgb[1]) +
+          Math.abs(trackRgb[2] - thumbRgb[2])
+        expect(
+          diff,
+          `${state.name}: track (${result.trackBg}) vs thumb (${result.thumbBg}) channel diff=${diff} must be ≥60`,
+        ).toBeGreaterThanOrEqual(60)
+      }
+
+      console.log(
+        `${state.name}: track=${result.trackBg}, thumb=${result.thumbBg}`,
+      )
+    }
+
+    await page.evaluate(() => {
+      const el = document.getElementById('_test-toggle-wrapper')
+      if (el) el.remove()
+    })
+  })
+
+  test('toggle switch is keyboard operable', async ({ page }) => {
+    await page.goto('/')
+    await page.waitForLoadState('networkidle')
+
+    const isOperable = await page.evaluate(() => {
+      const wrapper = document.createElement('label')
+      wrapper.className = 'toggle-switch'
+      wrapper.id = '_test-toggle-kb'
+      const input = document.createElement('input')
+      input.type = 'checkbox'
+      wrapper.appendChild(input)
+      document.body.appendChild(wrapper)
+
+      input.focus()
+      const isFocused = document.activeElement === input
+      input.click()
+      const isChecked = input.checked
+
+      wrapper.remove()
+      return { isFocused, isChecked }
+    })
+
+    expect(isOperable.isFocused).toBe(true)
+    expect(isOperable.isChecked).toBe(true)
+  })
+
   test('should use brand-neutral blue for focus indicators', async ({ page }) => {
     await page.goto('/')
     await page.waitForLoadState('networkidle')

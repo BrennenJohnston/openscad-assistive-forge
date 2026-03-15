@@ -3938,6 +3938,32 @@ select:focus-visible {
   transform: translateX(20px);
 }
 
+/* Dark mode: ensure off-state track contrasts with white thumb (≥3:1) */
+:root[data-theme='dark'] .toggle-switch input[type='checkbox'] {
+  background-color: var(--slate-6);
+}
+
+/* High Contrast: off-state track must strongly contrast with thumb */
+:root[data-high-contrast='true'] .toggle-switch input[type='checkbox'] {
+  background-color: var(--color-text-primary);
+  border: 2px solid var(--color-text-primary);
+}
+
+:root[data-high-contrast='true'] .toggle-switch input[type='checkbox']::before {
+  background-color: var(--color-bg-primary);
+  border: 2px solid var(--color-text-primary);
+}
+
+:root[data-high-contrast='true'] .toggle-switch input[type='checkbox']:checked {
+  background-color: var(--color-success);
+  border-color: var(--color-success);
+}
+
+:root[data-high-contrast='true'] .toggle-switch input[type='checkbox']:checked::before {
+  background-color: var(--color-on-success);
+  border-color: var(--color-on-success);
+}
+
 .toggle-label {
   font-weight: normal;
   color: var(--color-text-secondary);
