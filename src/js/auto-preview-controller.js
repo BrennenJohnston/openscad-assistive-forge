@@ -1094,32 +1094,51 @@ export class AutoPreviewController {
       };
     }
 
-    // Perform full render
+    // Use COFF (Color OFF) format for the preview when color passthrough is
+    // active, mirroring the same logic used in renderPreview() (lines 844-855).
+    const hasDebugModifier = AutoPreviewController.scadUsesDebugModifier(
+      this.currentScadContent
+    );
+    const useColorPassthrough =
+      isFlagEnabled('color_passthrough') &&
+      (AutoPreviewController.scadUsesColor(this.currentScadContent) ||
+        hasDebugModifier);
+
+    const renderOptions = {
+      files: this.projectFiles,
+      mainFile: this.mainFilePath,
+      libraries: this.enabledLibraries,
+      paramTypes: this.paramTypes,
+      ...(quality ? { quality } : {}),
+      ...(useColorPassthrough ? { outputFormat: 'off' } : {}),
+      onProgress: (percent, message) => {
+        this.onProgress(percent, message, 'full');
+      },
+    };
+
+    // Perform full render (OFF when color passthrough active, STL otherwise)
     const result = await this.renderController.renderFull(
       this.currentScadContent,
       parameters,
-      {
-        files: this.projectFiles,
-        mainFile: this.mainFilePath,
-        libraries: this.enabledLibraries,
-        paramTypes: this.paramTypes,
-        ...(quality ? { quality } : {}),
-        onProgress: (percent, message) => {
-          this.onProgress(percent, message, 'full');
-        },
-      }
+      renderOptions
     );
 
-    // Store for reuse
+    if (useColorPassthrough) {
+      console.log(
+        '[AutoPreview] Full render using OFF for color passthrough'
+      );
+    }
+
+    // Store for reuse — when color passthrough produced OFF, the STL for
+    // download will be populated by a second render below.
     this.fullQualitySTL = result.stl;
     this.fullQualityFormat = result.format || 'stl';
     this.fullQualityStats = result.stats;
     this.fullRenderParamHash = paramHash;
     this.fullQualityKey = qualityKey;
-    // Store console output for display in Console panel
     this.fullQualityConsoleOutput = result.consoleOutput || '';
 
-    // Also update the preview with full quality result
+    // Update the 3D preview with the full quality result
     try {
       const resultFormat = result.format || 'stl';
       const currentPreviewHasColors = Boolean(
@@ -1136,7 +1155,6 @@ export class AutoPreviewController {
           this.previewManager.setColorOverride(previewColor);
         }
       }
-      // Full quality render = theme default color (null clears preview/laser tint)
       if (this.previewManager?.setRenderState) {
         this.previewManager.setRenderState(
           this._detectRenderState(parameters, true)
@@ -1147,7 +1165,6 @@ export class AutoPreviewController {
           '[AutoPreview] Preserving current color preview during STL generate'
         );
       } else if (resultFormat === 'off' && this.previewManager?.loadOFF) {
-        // Preserve camera position on subsequent loads (after initial preview)
         await this.previewManager.loadOFF(result.stl, {
           preserveCamera: this.initialPreviewDone,
         });
@@ -1155,13 +1172,11 @@ export class AutoPreviewController {
         this.previewCacheKey = cacheKey;
         this.initialPreviewDone = true;
       } else if (this.previewManager?.loadSTL) {
-        // Preserve camera position on subsequent loads (after initial preview)
         await this.previewManager.loadSTL(result.stl, {
           preserveCamera: this.initialPreviewDone,
         });
         this.previewParamHash = paramHash;
         this.previewCacheKey = cacheKey;
-        // Mark initial preview as done after successful load
         this.initialPreviewDone = true;
       }
       this.addToCache(cacheKey, result, null);
@@ -1175,6 +1190,37 @@ export class AutoPreviewController {
         '[AutoPreview] Failed to update preview with full render:',
         error
       );
+    }
+
+    // When color passthrough rendered OFF for preview, perform a second STL
+    // render so getCurrentFullSTL() returns valid STL data for download.
+    if (useColorPassthrough && (result.format || 'stl') === 'off') {
+      try {
+        const stlResult = await this.renderController.renderFull(
+          this.currentScadContent,
+          parameters,
+          {
+            files: this.projectFiles,
+            mainFile: this.mainFilePath,
+            libraries: this.enabledLibraries,
+            paramTypes: this.paramTypes,
+            ...(quality ? { quality } : {}),
+            onProgress: (percent, message) => {
+              this.onProgress(percent, message, 'full');
+            },
+          }
+        );
+        this.fullQualitySTL = stlResult.stl;
+        this.fullQualityFormat = stlResult.format || 'stl';
+        this.fullQualityStats = stlResult.stats;
+        this.fullQualityConsoleOutput = stlResult.consoleOutput || '';
+        return stlResult;
+      } catch (stlError) {
+        console.warn(
+          '[AutoPreview] STL follow-up render failed; download may use OFF data:',
+          stlError
+        );
+      }
     }
 
     return result;
