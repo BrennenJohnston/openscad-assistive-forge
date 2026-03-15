@@ -1053,6 +1053,149 @@
 }
 
 /* ========================================
+ * Phase 4: Cross-app mono normalization
+ * Extends the bracketed-text pattern (L826–1004) to remaining
+ * non-conforming surfaces. Reverse-video (amber bg / black text)
+ * for selected/highlighted states. High-contrast exception:
+ * multicolor is acceptable in HC mode per stakeholder directive.
+ * ======================================== */
+
+/* --- Console action icons (emoji → bracketed-text) --- */
+:root[data-ui-variant='mono'] #console-copy-btn {
+  font-size: 0;
+}
+:root[data-ui-variant='mono'] #console-copy-btn::before {
+  content: '[COPY]';
+  font-size: var(--font-size-sm, 0.875rem);
+}
+
+:root[data-ui-variant='mono'] #console-download-btn {
+  font-size: 0;
+}
+:root[data-ui-variant='mono'] #console-download-btn::before {
+  content: '[DL]';
+  font-size: var(--font-size-sm, 0.875rem);
+}
+
+:root[data-ui-variant='mono'] #console-clear-btn {
+  font-size: 0;
+}
+:root[data-ui-variant='mono'] #console-clear-btn::before {
+  content: '[DEL]';
+  font-size: var(--font-size-sm, 0.875rem);
+}
+
+/* --- Image measurement browse button (emoji → bracketed-text) --- */
+:root[data-ui-variant='mono'] .measure-upload-btn {
+  font-size: 0;
+}
+:root[data-ui-variant='mono'] .measure-upload-btn::before {
+  content: '[UP] Browse';
+  font-size: var(--font-size-sm, 0.875rem);
+}
+
+/* Measurement expand button (emoji → bracketed-text) */
+:root[data-ui-variant='mono'] #measureExpandBtn {
+  font-size: 0;
+}
+:root[data-ui-variant='mono'] #measureExpandBtn::before {
+  content: '[MAX]';
+  font-size: var(--font-size-sm, 0.875rem);
+}
+
+/* --- Reference image section: upload button (emoji → bracketed-text) --- */
+:root[data-ui-variant='mono'] .overlay-upload-btn {
+  font-size: 0;
+}
+:root[data-ui-variant='mono'] .overlay-upload-btn::before {
+  content: '[UP] Upload';
+  font-size: var(--font-size-sm, 0.875rem);
+}
+
+/* --- Advanced menu: remaining emoji icon not yet covered --- */
+:root[data-ui-variant='mono'] #exportChangedBtn {
+  font-size: 0;
+}
+:root[data-ui-variant='mono'] #exportChangedBtn::before {
+  content: '[COPY] Export Changed Settings';
+  font-size: var(--font-size-sm, 0.875rem);
+}
+
+/* --- Floppy disk save icon in #previewStatusBar → mono-conforming --- */
+:root[data-ui-variant='mono'] .memory-icon {
+  font-size: 0;
+}
+:root[data-ui-variant='mono'] .memory-icon::before {
+  content: '[MEM]';
+  font-size: var(--font-size-xs, 0.75rem);
+  font-family: var(--font-family-mono);
+}
+
+/* --- Preset selection: reverse-video for selected/highlighted states --- */
+:root[data-ui-variant='mono'] .preset-combobox-option[aria-selected='true'],
+:root[data-ui-variant='mono'] .preset-combobox-option:hover {
+  background: var(--color-accent) !important;
+  color: var(--color-accent-text) !important;
+}
+
+:root[data-ui-variant='mono'] .preset-select option:checked {
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+}
+
+/* --- Parameter selection/adjustment: reverse-video for active states --- */
+:root[data-ui-variant='mono'] select option:checked {
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+}
+
+:root[data-ui-variant='mono'] select:focus option:checked {
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+}
+
+/* --- Complexity badges → mono amber/green --- */
+:root[data-ui-variant='mono'] .complexity-tier-label {
+  background-color: transparent;
+  color: var(--color-accent);
+  border: 1px solid var(--color-accent);
+  border-radius: 0;
+}
+
+:root[data-ui-variant='mono'] .complexity-tier-label.tier-beginner,
+:root[data-ui-variant='mono'] .complexity-tier-label.tier-standard,
+:root[data-ui-variant='mono'] .complexity-tier-label.tier-complex {
+  background-color: transparent;
+  color: var(--color-accent);
+}
+
+/* --- Library / companion / queue badges → mono --- */
+:root[data-ui-variant='mono'] .library-badge,
+:root[data-ui-variant='mono'] .project-files-badge,
+:root[data-ui-variant='mono'] .queue-badge,
+:root[data-ui-variant='mono'] .console-badge {
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+  border-radius: 0;
+}
+
+/* --- High-contrast exception: restore multicolor where specified --- */
+:root[data-ui-variant='mono'][data-high-contrast='true'] .complexity-tier-label.tier-beginner {
+  background-color: var(--color-success-bg);
+  color: var(--color-success-text);
+}
+
+:root[data-ui-variant='mono'][data-high-contrast='true'] .complexity-tier-label.tier-standard {
+  background-color: var(--color-info-bg);
+  color: var(--color-info-text);
+}
+
+:root[data-ui-variant='mono'][data-high-contrast='true'] .complexity-tier-label.tier-complex {
+  background-color: var(--color-warning-bg);
+  color: var(--color-warning-text);
+}
+
+/* ========================================
  * High Contrast Mode for Mono Variant
  * Enhances accessibility while preserving current color scheme
  * (green for dark theme, amber for light theme)
