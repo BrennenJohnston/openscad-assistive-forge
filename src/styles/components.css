@@ -3947,11 +3947,15 @@ select:focus-visible {
 :root[data-high-contrast='true'] .toggle-switch input[type='checkbox'] {
   background-color: var(--color-text-primary);
   border: 2px solid var(--color-text-primary);
+  box-sizing: border-box;
 }
 
 :root[data-high-contrast='true'] .toggle-switch input[type='checkbox']::before {
   background-color: var(--color-bg-primary);
   border: 2px solid var(--color-text-primary);
+  box-sizing: border-box;
+  width: 20px;
+  height: 20px;
 }
 
 :root[data-high-contrast='true'] .toggle-switch input[type='checkbox']:checked {
