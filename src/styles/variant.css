@@ -134,6 +134,7 @@
 /* Override component styles for flat, terminal aesthetic */
 :root[data-ui-variant='mono'] .app-header {
   background-color: var(--color-bg-primary);
+  color: var(--color-accent);
   border-bottom: 1px solid var(--color-border);
   box-shadow: none;
 }
