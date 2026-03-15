@@ -97,7 +97,7 @@ verified compatible with multi-color meshes:
 | `#` dual-render | Yes — normal mesh preserves per-face colors; highlight overlay is additive | E2E verified |
 | auto-bed | Yes — transforms Z positions only, no color interaction | Code-verified |
 | Viewport image (clipboard) | Yes — WebGL canvas captures rendered vertex colors | Code-verified |
-| STL export re-render | Yes — `shouldPreserveColorPreview` prevents STL from overwriting colored preview | E2E verified |
+| STL export re-render | Yes — full render now uses OFF for preview; separate STL render populates download. `shouldPreserveColorPreview` remains as a safety net for edge cases. | E2E verified |
 | SVG/DXF export | N/A — 2D format, no face colors | E2E verified |
 | Full render preview | Yes — OFF path uses `loadOFF()` | E2E pixel-verified |
 | Color legend | Partial — shows SCAD parameter colors, not per-face COFF colors | Code-verified |
@@ -126,7 +126,39 @@ This complements the per-face colors by giving the user a named reference for ea
 
 ---
 
-## Implementation Status (2026-03-12)
+## Full Render Color Passthrough (2026-03-15)
+
+Previously, the Generate button (full render) always requested STL from the WASM
+engine. Since STL carries no color data, the app used `shouldPreserveColorPreview`
+to keep the draft-quality colored mesh in the viewer instead of loading the
+full-quality STL result. This meant users saw draft-quality geometry after a full
+render.
+
+**Current behavior:** When `color_passthrough` is enabled and the SCAD source
+contains `color()` calls or `#` debug modifiers, `renderFull()` now passes
+`outputFormat: 'off'` to the worker. The worker renders with
+`--enable=render-colors`, producing COFF with per-face colors. The full-quality
+COFF is loaded into the 3D viewer via `loadOFF()`, replacing the draft preview
+with full-quality colored geometry.
+
+**Download path:** After the OFF render updates the preview, a second STL render
+runs to populate `fullQualitySTL` for download via `getCurrentFullSTL()`. This
+dual-render approach ensures the download file is always in the user-selected
+format (typically STL) while the preview shows full-quality multi-color geometry.
+
+**`shouldPreserveColorPreview` is no longer the primary mechanism.** It remains
+as a safety net for edge cases where the full render result is STL and the current
+preview has vertex colors (e.g., if color passthrough is disabled mid-render).
+
+**Verification (Phase 2 E2E):** The `full-render-color.spec.js` test confirms:
+- Draft preview shows 2+ color groups (red + green) via pixel sampling.
+- After Generate, full render preview still shows 2+ color groups.
+- Console logs confirm `hasColors=true` appears for both draft and full render.
+- Download file is valid binary STL (not OFF), with non-zero triangle count.
+
+---
+
+## Implementation Status (2026-03-15)
 
 Color passthrough is **fully enabled** (`rollout: 100`, `killSwitch: false`).
 
@@ -137,7 +169,8 @@ Color passthrough is **fully enabled** (`rollout: 100`, `killSwitch: false`).
 | Feature flag | `src/js/feature-flags.js` | `color_passthrough` flag, rollout=100, kill-switch disabled |
 | SCAD color detector | `src/js/auto-preview-controller.js` | `AutoPreviewController.scadUsesColor()` static method |
 | OFF/COFF parser | `src/js/preview.js` | `PreviewManager.loadOFF()` — parses OFF with inline colors, builds vertex-colored geometry |
-| Pipeline routing | `src/js/auto-preview-controller.js` | Passes `outputFormat: 'off'` to render when flag+color detected; chooses `loadOFF` vs `loadSTL` based on `result.format` |
+| Pipeline routing (preview) | `src/js/auto-preview-controller.js` | `renderPreview()` passes `outputFormat: 'off'` when flag+color detected; chooses `loadOFF` vs `loadSTL` based on `result.format` |
+| Pipeline routing (full render) | `src/js/auto-preview-controller.js` | `renderFull()` passes `outputFormat: 'off'` when flag+color detected; loads COFF via `loadOFF()` for preview, then runs a second STL render for download |
 | Cache support | `src/js/auto-preview-controller.js` | Cache entries now store `format` field; `loadCachedPreview` chooses correct loader |
 | Render-colors flag | `src/worker/openscad-worker.js` | Adds `--enable=render-colors` to CLI args for Manifold backend |
 | Inline color detect | `src/js/preview.js` | Detects inline colors by `parts.length` regardless of `OFF`/`COFF` header |
@@ -163,6 +196,7 @@ color_passthrough: { ..., killSwitch: true }
 - **Alpha omission:** Per-face alpha values from COFF (`parts[n+4]`) are intentionally not read — only RGB is extracted. Three.js material transparency is handled separately via `debugHighlight` overlay.
 - **Mixed colored/uncolored faces:** If some faces have inline color and others do not, `colors.length < positions.length`, and the color attribute is silently dropped. The entire mesh falls back to solid theme color. This does not occur in practice (OpenSCAD wraps all geometry in `color()` calls), but is a latent fragility.
 - **First-face-black edge case:** If the first face has RGB (0,0,0), `Math.max(0,0,0) = 0 ≤ 1` selects float scale, causing subsequent integer values (e.g., 255) to be used unscaled. Three.js clamps to 1.0, rendering all non-black colors as white. Not triggered by any current keyguard scenario.
+- **Full render dual-render cost:** When color passthrough is active, `renderFull()` performs two WASM renders — first OFF for the preview, then STL for download. This doubles the render time for the Generate button. A future optimization could derive STL client-side from the parsed OFF geometry.
 
 ---
 
@@ -174,10 +208,12 @@ color_passthrough: { ..., killSwitch: true }
 4. ~~**Implement `#` debug modifier dual-render**~~ — Done (Phase 3). Normal COFF colors + semi-transparent pink overlay in a `THREE.Group`.
 5. ~~**Final verification**~~ — Done (2026-03-12). 1982 tests pass, 0 failures. All 16 parity scenarios verified.
 6. ~~**Multi-color COFF verification**~~ — Done (2026-03-14). Multi-color passthrough verified end-to-end. 2069 tests pass, 0 failures.
-7. Color legend showing actual per-face COFF colors instead of SCAD parameter-derived colors.
-8. Alpha channel passthrough (COFF alpha is currently ignored).
-9. First-face-black edge case fix in color scale detection (use global max instead of first-face max).
-10. Material-per-face-group architecture (if vertex colors prove insufficient for complex multi-color meshes).
+7. ~~**Full render color passthrough**~~ — Done (2026-03-15). `renderFull()` now routes through OFF when color passthrough is active. Dual-render: OFF for preview, STL for download. 2075 unit tests pass, E2E verified.
+8. Color legend showing actual per-face COFF colors instead of SCAD parameter-derived colors.
+9. Alpha channel passthrough (COFF alpha is currently ignored).
+10. First-face-black edge case fix in color scale detection (use global max instead of first-face max).
+11. Material-per-face-group architecture (if vertex colors prove insufficient for complex multi-color meshes).
+12. Dual-format caching: cache both OFF and STL from a single WASM render to avoid the second STL render in the full render path.
 
 ---
 
