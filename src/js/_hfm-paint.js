@@ -6,10 +6,17 @@
 
 /**
  * Detect whether the current mono theme is the amber (light) variant.
+ *
+ * Phase 1 guarantees `data-theme` is always 'light' or 'dark' (never absent),
+ * but we fall back to the system color-scheme preference defensively in case
+ * the attribute is read before theme-manager initializes.
+ *
  * @returns {boolean}
  */
 function _isAmberTheme() {
-  return document.documentElement.getAttribute('data-theme') === 'light';
+  const attr = document.documentElement.getAttribute('data-theme');
+  if (attr === 'light' || attr === 'dark') return attr === 'light';
+  return !window.matchMedia('(prefers-color-scheme: dark)').matches;
 }
 
 /**

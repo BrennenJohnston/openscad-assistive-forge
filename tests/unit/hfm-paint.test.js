@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { paintFrame, resizeOverlay, QUANT_LEVELS } from '../../src/js/_hfm-paint.js'
+import { paintFrame, resizeOverlay, sampleColors, QUANT_LEVELS } from '../../src/js/_hfm-paint.js'
 
 function createMockCtx(canvasWidth = 100, canvasHeight = 80) {
   const canvas = { width: canvasWidth, height: canvasHeight }
@@ -263,5 +263,61 @@ describe('resizeOverlay', () => {
 
     expect(canvas.width).toBe(640)
     expect(canvas.height).toBe(480)
+  })
+})
+
+describe('sampleColors', () => {
+  function make1x1White() {
+    return new Uint8ClampedArray([255, 255, 255, 255])
+  }
+
+  it('returns green phosphor when amber param is explicitly false', () => {
+    const colors = sampleColors(make1x1White(), 1, 1, 1, 1, 1, false)
+    expect(colors).toHaveLength(1)
+    expect(colors[0]).toMatch(/^rgb\(0,\d+,0\)$/)
+  })
+
+  it('returns amber phosphor when amber param is explicitly true', () => {
+    const colors = sampleColors(make1x1White(), 1, 1, 1, 1, 1, true)
+    expect(colors).toHaveLength(1)
+    expect(colors[0]).toMatch(/^rgb\(\d+,\d+,0\)$/)
+    expect(colors[0]).not.toMatch(/^rgb\(0,/)
+  })
+
+  it('detects amber from data-theme="light" when amber param is omitted', () => {
+    document.documentElement.setAttribute('data-theme', 'light')
+    const colors = sampleColors(make1x1White(), 1, 1, 1, 1, 1)
+    expect(colors[0]).toMatch(/^rgb\(\d+,\d+,0\)$/)
+    expect(colors[0]).not.toMatch(/^rgb\(0,/)
+    document.documentElement.removeAttribute('data-theme')
+  })
+
+  it('detects green from data-theme="dark" when amber param is omitted', () => {
+    document.documentElement.setAttribute('data-theme', 'dark')
+    const colors = sampleColors(make1x1White(), 1, 1, 1, 1, 1)
+    expect(colors[0]).toMatch(/^rgb\(0,\d+,0\)$/)
+    document.documentElement.removeAttribute('data-theme')
+  })
+
+  it('falls back to system preference when data-theme is absent', () => {
+    document.documentElement.removeAttribute('data-theme')
+    const colors = sampleColors(make1x1White(), 1, 1, 1, 1, 1)
+    expect(colors).toHaveLength(1)
+    // In JSDOM, matchMedia defaults to not matching (prefers-color-scheme: dark)
+    // → system is light → amber
+    expect(colors[0]).toMatch(/^rgb\(\d+,\d+,0\)$/)
+  })
+
+  it('produces correct grid dimensions for multi-cell grids', () => {
+    const w = 4
+    const h = 3
+    const data = new Uint8ClampedArray(w * h * 4)
+    for (let i = 0; i < data.length; i += 4) {
+      data[i] = 128; data[i + 1] = 128; data[i + 2] = 128; data[i + 3] = 255
+    }
+    const cols = 2
+    const rows = 3
+    const colors = sampleColors(data, w, w / cols, h / rows, cols, rows, false)
+    expect(colors).toHaveLength(cols * rows)
   })
 })

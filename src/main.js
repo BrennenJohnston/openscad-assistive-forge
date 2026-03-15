@@ -1766,7 +1766,10 @@ async function _enableAltViewWithPreview(toggleBtn) {
 
   // Update preview colors to match the variant theme
   const newTheme = previewManager.detectTheme();
-  previewManager.updateTheme(newTheme, false);
+  previewManager.updateTheme(
+    newTheme,
+    root.getAttribute('data-high-contrast') === 'true'
+  );
 
   // Trigger resize to sync dimensions
   previewManager.handleResize?.();

@@ -381,28 +381,54 @@
   height: 20px;
 }
 
-/* Toggle switch (used in param controls) */
+/* Toggle switch → checkbox/checkmark in mono
+ * Collapses the pill/slider to a square checkbox matching the plain checkbox
+ * contract above (L326–366). The base ::before thumb is hidden and replaced
+ * with a ::after checkmark. */
 :root[data-ui-variant='mono'] .toggle-switch input[type='checkbox'] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
   border-radius: 0;
   border: 1px solid var(--color-border);
   background: var(--color-bg-secondary);
+  display: inline-grid;
+  place-content: center;
+  cursor: pointer;
+  transition: none;
 }
 
 :root[data-ui-variant='mono'] .toggle-switch input[type='checkbox']::before {
-  border-radius: 0;
-  border: 1px solid var(--color-border);
-  background: var(--color-accent);
+  content: none;
+}
+
+:root[data-ui-variant='mono'] .toggle-switch input[type='checkbox']::after {
+  content: '';
+  width: 0.4em;
+  height: 0.7em;
+  border-right: 0.14em solid var(--color-accent);
+  border-bottom: 0.14em solid var(--color-accent);
+  transform: rotate(45deg) scale(0);
+  transform-origin: center;
 }
 
 :root[data-ui-variant='mono'] .toggle-switch input[type='checkbox']:checked {
-  background: var(--color-accent);
-  border-color: var(--color-accent);
+  background: var(--color-bg-secondary);
+  border-color: var(--color-border);
 }
 
 :root[data-ui-variant='mono']
   .toggle-switch
-  input[type='checkbox']:checked::before {
-  background: var(--color-accent-text);
+  input[type='checkbox']:checked::after {
+  transform: rotate(45deg) scale(1);
+}
+
+:root[data-ui-variant='mono']
+  .toggle-switch
+  input[type='checkbox']:focus-visible {
+  outline: 1px solid var(--color-focus);
+  outline-offset: 2px;
 }
 
 :root[data-ui-variant='mono'] .toggle-switch input[type='checkbox']:disabled {
