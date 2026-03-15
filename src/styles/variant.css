@@ -702,6 +702,19 @@
   display: none !important;
 }
 
+/* Grid color controls are non-functional in mono variant — visible but disabled.
+   pointer-events: none blocks mouse activation of the color input and reset
+   button. CSS cannot prevent keyboard Tab focus; if full keyboard blocking is
+   needed, toggle the disabled attribute via JS when the variant changes. */
+:root[data-ui-variant='mono'] .grid-color-row {
+  opacity: var(--opacity-disabled);
+  cursor: not-allowed;
+}
+
+:root[data-ui-variant='mono'] .grid-color-row > * {
+  pointer-events: none;
+}
+
 /* Scrollbars */
 :root[data-ui-variant='mono'] ::-webkit-scrollbar {
   width: 8px;
