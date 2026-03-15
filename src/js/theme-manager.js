@@ -130,25 +130,21 @@ export class ThemeManager {
    */
   applyTheme(theme) {
     const root = document.documentElement;
+    const resolved = theme === THEMES.AUTO ? this._resolveSystemTheme() : theme;
 
-    if (theme === THEMES.AUTO) {
-      // Remove data-theme attribute to let system preference take over
-      root.removeAttribute('data-theme');
-    } else {
-      // Set explicit theme
-      root.setAttribute('data-theme', theme);
-    }
+    root.setAttribute('data-theme', resolved);
+    root.setAttribute('data-theme-setting', theme);
 
     this.currentTheme = theme;
     this.saveTheme(theme);
 
     // Ensure Radix scales match resolved theme (light/dark)
-    this.applyRadixScales(this.getActiveTheme());
+    this.applyRadixScales(resolved);
 
     // Notify listeners
     this.notifyListeners();
 
-    console.log(`[Theme] Applied: ${theme}`);
+    console.log(`[Theme] Applied: ${theme} (resolved: ${resolved})`);
   }
 
   /**
@@ -184,17 +180,34 @@ export class ThemeManager {
   }
 
   /**
+   * Resolve the system color-scheme preference to 'light' or 'dark'.
+   * @returns {string} 'light' or 'dark'
+   * @private
+   */
+  _resolveSystemTheme() {
+    return window.matchMedia('(prefers-color-scheme: dark)').matches
+      ? THEMES.DARK
+      : THEMES.LIGHT;
+  }
+
+  /**
    * Get the currently active theme (resolved)
    * @returns {string} 'light' or 'dark'
    */
   getActiveTheme() {
     if (this.currentTheme === THEMES.AUTO) {
-      // Check system preference
-      return window.matchMedia('(prefers-color-scheme: dark)').matches
-        ? THEMES.DARK
-        : THEMES.LIGHT;
+      return this._resolveSystemTheme();
     }
     return this.currentTheme;
+  }
+
+  /**
+   * Get the resolved theme directly from the document attribute.
+   * Always returns 'light' or 'dark' — never absent, never 'auto'.
+   * @returns {string} 'light' or 'dark'
+   */
+  getResolvedTheme() {
+    return document.documentElement.getAttribute('data-theme') || this.getActiveTheme();
   }
 
   /**
@@ -303,10 +316,12 @@ export class ThemeManager {
       .matchMedia('(prefers-color-scheme: dark)')
       .addEventListener('change', (e) => {
         if (this.currentTheme === THEMES.AUTO) {
+          const resolved = e.matches ? THEMES.DARK : THEMES.LIGHT;
           console.log(
-            `[Theme] System preference changed to ${e.matches ? 'dark' : 'light'}`
+            `[Theme] System preference changed to ${resolved}`
           );
-          this.applyRadixScales(this.getActiveTheme());
+          document.documentElement.setAttribute('data-theme', resolved);
+          this.applyRadixScales(resolved);
           this.notifyListeners();
         }
       });
