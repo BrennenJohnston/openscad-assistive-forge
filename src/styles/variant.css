@@ -68,10 +68,38 @@
   /* Error/Warning/Success in monochrome green (all use green tints) */
   --color-error: #00ff00;
   --color-error-bg: #001a00;
+  --color-error-hover: var(--color-accent-hover);
+  --color-error-text: var(--color-text-primary);
+  --color-on-error: var(--color-accent-text);
   --color-warning: #00ff00;
   --color-warning-bg: #001a00;
+  --color-warning-hover: var(--color-accent-hover);
+  --color-warning-text: var(--color-text-primary);
+  --color-on-warning: var(--color-accent-text);
   --color-success: #00ff00;
   --color-success-bg: #001a00;
+  --color-success-hover: var(--color-accent-hover);
+  --color-success-text: var(--color-text-primary);
+  --color-on-success: var(--color-accent-text);
+
+  /* Info tokens — prevent teal Radix bleedthrough */
+  --color-info: var(--color-accent);
+  --color-info-hover: var(--color-accent-hover);
+  --color-info-text: var(--color-text-primary);
+  --color-info-bg: var(--color-bg-secondary);
+  --color-on-info: var(--color-accent-text);
+
+  /* Input tokens — prevent gray Radix defaults */
+  --color-input-bg: var(--color-bg-secondary);
+  --color-input-border: var(--color-border);
+  --color-input-border-focus: var(--color-focus);
+
+  /* Skip link — prevent blue bleedthrough */
+  --color-skip-link-bg: var(--color-accent);
+  --color-skip-link-text: var(--color-accent-text);
+
+  /* Focus ring — prevent default blue ring in non-HC mono */
+  --focus-ring: 0 0 0 3px var(--color-focus);
 
   /* Phase 2: CRT visual effect variables — all reference --color-accent so
    * they adapt automatically between green (dark) and amber (light) variants. */
