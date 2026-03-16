@@ -76,10 +76,10 @@
   /* Phase 2: CRT visual effect variables — all reference --color-accent so
    * they adapt automatically between green (dark) and amber (light) variants. */
   --crt-glow-tight: 0 0 1px var(--color-accent);
-  --crt-glow-mid: 0 0 4px
-    color-mix(in srgb, var(--color-accent) 40%, transparent);
-  --crt-glow-wide: 0 0 12px
-    color-mix(in srgb, var(--color-accent) 18%, transparent);
+  --crt-glow-mid: 0 0 2px
+    color-mix(in srgb, var(--color-accent) 25%, transparent);
+  --crt-glow-wide: 0 0 6px
+    color-mix(in srgb, var(--color-accent) 10%, transparent);
   --crt-scanline-color: rgba(0, 0, 0, 0.12);
   --crt-vignette-color: rgba(0, 0, 0, 0.52);
 }
@@ -757,7 +757,28 @@
   background: var(--color-bg-secondary);
 }
 
-/* Firefox + any UA that supports it */
+/* Targeted WebKit overrides for scrollable panels — same cascade strategy
+   as the Firefox rules below: class-qualified selectors beat the hardcoded
+   rgba() values in layout.css dark-theme rules at equal specificity. */
+:root[data-ui-variant='mono'] .param-panel::-webkit-scrollbar-thumb,
+:root[data-ui-variant='mono'] .preview-content::-webkit-scrollbar-thumb,
+:root[data-ui-variant='mono'] .welcome-screen::-webkit-scrollbar-thumb {
+  background-color: var(--color-border);
+}
+
+:root[data-ui-variant='mono'] .param-panel::-webkit-scrollbar-thumb:hover,
+:root[data-ui-variant='mono'] .preview-content::-webkit-scrollbar-thumb:hover,
+:root[data-ui-variant='mono'] .welcome-screen::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-text-secondary);
+}
+
+/* Firefox + any UA that supports it.
+   Targeted rules override layout.css dark-theme hardcoded rgba() scrollbar
+   values (e.g. :root[data-theme='dark'] .param-panel) at equal specificity
+   because variant.css loads later in the cascade. */
+:root[data-ui-variant='mono'] .param-panel,
+:root[data-ui-variant='mono'] .preview-content,
+:root[data-ui-variant='mono'] .welcome-screen,
 :root[data-ui-variant='mono'] .camera-panel-body,
 :root[data-ui-variant='mono'] .features-panel,
 :root[data-ui-variant='mono'] .features-tabs,
@@ -1273,8 +1294,8 @@
 /* ----------------------------------------
  * 4a. Phosphor Glow — layered text-shadow
  *
- * Three-stop spread: tight pixel-level bloom (2 px), mid halo (8 px),
- * and wide corona (22 px). All reference --color-accent so the effect
+ * Three-stop spread: tight pixel-level bloom (1 px), mid halo (2 px),
+ * and wide corona (6 px). All reference --color-accent so the effect
  * adapts automatically between green (dark) and amber (light) variants.
  * Applied only to highly visible UI text to avoid battery / perf impact.
  * ---------------------------------------- */
@@ -1284,14 +1305,14 @@
   text-shadow: var(--crt-glow-tight), var(--crt-glow-mid), var(--crt-glow-wide);
 }
 
-/* Stronger glow on primary headings */
+/* Subtle emphasis glow on primary headings */
 :root[data-ui-variant='mono'] h1,
 :root[data-ui-variant='mono'] h2,
 :root[data-ui-variant='mono'] h3 {
   text-shadow:
     0 0 1px var(--color-accent),
-    0 0 5px color-mix(in srgb, var(--color-accent) 45%, transparent),
-    0 0 14px color-mix(in srgb, var(--color-accent) 20%, transparent);
+    0 0 3px color-mix(in srgb, var(--color-accent) 30%, transparent),
+    0 0 8px color-mix(in srgb, var(--color-accent) 12%, transparent);
 }
 
 /* ----------------------------------------
