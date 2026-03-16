@@ -317,10 +317,11 @@
   box-shadow: none;
 }
 
-/* Form controls (checkbox / switch / slider) */
+/* Form controls (checkbox / switch / slider / select) */
 :root[data-ui-variant='mono'] input[type='checkbox'],
 :root[data-ui-variant='mono'] input[type='radio'],
-:root[data-ui-variant='mono'] input[type='range'] {
+:root[data-ui-variant='mono'] input[type='range'],
+:root[data-ui-variant='mono'] select {
   accent-color: var(--color-accent);
 }
 
@@ -1182,6 +1183,23 @@
 :root[data-ui-variant='mono'] select:focus option:checked {
   background: var(--color-accent);
   color: var(--color-accent-text);
+}
+
+/*
+ * Native <select> option hover override.
+ * Firefox respects option:hover; Chrome/Edge ignore it (Blink renders its own
+ * highlight). accent-color on <select> influences Chrome's highlight color.
+ * Full visual control requires replacing <select> with a custom ARIA listbox
+ * (deferred — see plan's "Deferred follow-on work" item 2).
+ */
+:root[data-ui-variant='mono'] select option {
+  background: var(--color-bg-primary) !important;
+  color: var(--color-text-primary) !important;
+}
+
+:root[data-ui-variant='mono'] select option:hover {
+  background: var(--color-accent) !important;
+  color: var(--color-accent-text) !important;
 }
 
 /* --- Complexity badges → mono amber/green --- */
