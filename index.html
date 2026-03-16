@@ -125,7 +125,7 @@
               </svg>
               <span class="github-label">GitHub</span>
             </a>
-            <button
+            <button type="button"
               id="shortcutsToggle"
               class="btn btn-sm btn-secondary shortcuts-toggle"
               aria-label="Keyboard shortcuts"
@@ -154,7 +154,7 @@
               </svg>
               <span class="shortcuts-label">Keys</span>
             </button>
-            <button
+            <button type="button"
               id="contrastToggle"
               class="btn btn-sm btn-secondary contrast-toggle"
               aria-label="Toggle high contrast"
@@ -181,7 +181,7 @@
               </svg>
               <span class="contrast-label">HC</span>
             </button>
-            <button
+            <button type="button"
               id="themeToggle"
               class="btn btn-sm btn-secondary theme-toggle"
               aria-label="Toggle theme"
@@ -238,10 +238,10 @@
             >Update available. Refresh to get the latest version.</span
           >
           <div class="update-banner-actions">
-            <button id="updateBannerRefresh" class="btn btn-sm btn-primary">
+            <button type="button" id="updateBannerRefresh" class="btn btn-sm btn-primary">
               Refresh
             </button>
-            <button id="updateBannerDismiss" class="btn btn-sm btn-secondary">
+            <button type="button" id="updateBannerDismiss" class="btn btn-sm btn-secondary">
               Dismiss
             </button>
           </div>
@@ -339,42 +339,42 @@
             class="toolbar-menu-bar hidden"
             aria-label="Application menu"
           >
-            <button
+            <button type="button"
               class="toolbar-menu-btn btn"
               id="fileMenuBtn"
               aria-haspopup="dialog"
               aria-expanded="false"
             >
               File</button
-            ><button
+            ><button type="button"
               class="toolbar-menu-btn btn"
               id="editMenuBtn"
               aria-haspopup="dialog"
               aria-expanded="false"
             >
               Edit</button
-            ><button
+            ><button type="button"
               class="toolbar-menu-btn btn"
               id="designMenuBtn"
               aria-haspopup="dialog"
               aria-expanded="false"
             >
               Design</button
-            ><button
+            ><button type="button"
               class="toolbar-menu-btn btn"
               id="viewMenuBtn"
               aria-haspopup="dialog"
               aria-expanded="false"
             >
               View</button
-            ><button
+            ><button type="button"
               class="toolbar-menu-btn btn"
               id="windowMenuBtn"
               aria-haspopup="dialog"
               aria-expanded="false"
             >
               Window</button
-            ><button
+            ><button type="button"
               class="toolbar-menu-btn btn"
               id="helpMenuBtn"
               aria-haspopup="dialog"
@@ -384,7 +384,7 @@
             </button>
           </div>
           <div class="workflow-actions">
-            <button
+            <button type="button"
               id="uiModeToggle"
               class="ui-mode-toggle hidden"
               role="switch"
@@ -404,7 +404,7 @@
               >
               <span class="ui-mode-slider" aria-hidden="true"></span>
             </button>
-            <button
+            <button type="button"
               id="focusModeBtn"
               class="btn btn-sm btn-outline"
               aria-pressed="false"
@@ -426,7 +426,7 @@
               </svg>
               <span class="btn-text">Full Screen</span>
             </button>
-            <button
+            <button type="button"
               id="featuresGuideBtn"
               class="btn btn-sm btn-outline btn-with-icon"
               aria-label="Open features guide and examples"
@@ -457,7 +457,7 @@
               </svg>
               <span class="btn-text">Help</span>
             </button>
-            <button
+            <button type="button"
               id="clearFileBtn"
               class="btn btn-sm btn-outline"
               aria-label="Go back to welcome screen. Warning: unsaved changes will be lost"
@@ -496,7 +496,7 @@
                     </ul>
                   </details>
                   <div class="role-path-actions">
-                    <button
+                    <button type="button"
                       class="btn btn-primary btn-role-try"
                       data-example="simple-box"
                       data-role="beginners"
@@ -504,7 +504,7 @@
                     >
                       Start Tutorial
                     </button>
-                    <button
+                    <button type="button"
                       class="btn btn-link btn-role-learn"
                       data-feature-tab="workflow"
                       aria-label="Open Help: Workflow"
@@ -528,7 +528,7 @@
                     </ul>
                   </details>
                   <div class="role-path-actions">
-                    <button
+                    <button type="button"
                       class="btn btn-outline btn-role-learn"
                       data-feature-tab="libraries"
                       aria-label="Open Help: Libraries"
@@ -538,7 +538,7 @@
                   </div>
                 </div>
                 <!-- Other tutorials are temporarily hidden (we'll re-enable later) -->
-                <div class="role-path-card" hidden aria-hidden="true">
+                <div class="role-path-card" hidden>
                   <h3 class="role-path-title">Advanced Makers</h3>
                   <p class="role-path-description">
                     Work with multi-file projects, libraries, and advanced
@@ -550,7 +550,7 @@
                     <li>Export in multiple formats (STL, OBJ, 3MF)</li>
                   </ul>
                   <div class="role-path-actions">
-                    <button
+                    <button type="button"
                       class="btn btn-primary btn-role-try"
                       data-example="library-test"
                       data-role="makers"
@@ -558,7 +558,7 @@
                     >
                       Start Tutorial
                     </button>
-                    <button
+                    <button type="button"
                       class="btn btn-link btn-role-learn"
                       data-feature-tab="libraries"
                       aria-label="Open Features Guide: Libraries"
@@ -567,7 +567,7 @@
                     </button>
                   </div>
                 </div>
-                <div class="role-path-card" hidden aria-hidden="true">
+                <div class="role-path-card" hidden>
                   <h3 class="role-path-title">Keyboard-Only Users</h3>
                   <p class="role-path-description">
                     Complete the full workflow without a mouse using predictable
@@ -579,7 +579,7 @@
                     <li>Skip to main content (screen top)</li>
                   </ul>
                   <div class="role-path-actions">
-                    <button
+                    <button type="button"
                       class="btn btn-primary btn-role-try"
                       data-example="cylinder"
                       data-role="keyboard-only"
@@ -587,7 +587,7 @@
                     >
                       Start Tutorial
                     </button>
-                    <button
+                    <button type="button"
                       class="btn btn-link btn-role-learn"
                       data-doc="KEYGUARD_WORKFLOW_GUIDE"
                       aria-label="Learn about keyboard navigation"
@@ -596,7 +596,7 @@
                     </button>
                   </div>
                 </div>
-                <div class="role-path-card" hidden aria-hidden="true">
+                <div class="role-path-card" hidden>
                   <h3 class="role-path-title">Low Vision Users</h3>
                   <p class="role-path-description">
                     Use high contrast themes, large touch targets, and visible
@@ -608,7 +608,7 @@
                     <li>All buttons meet 44×44px touch target</li>
                   </ul>
                   <div class="role-path-actions">
-                    <button
+                    <button type="button"
                       class="btn btn-primary btn-role-try"
                       data-example="simple-box"
                       data-role="low-vision"
@@ -616,7 +616,7 @@
                     >
                       Start Tutorial
                     </button>
-                    <button
+                    <button type="button"
                       class="btn btn-link btn-role-learn"
                       data-doc="ACCESSIBILITY_GUIDE"
                       data-feature-tab="accessibility"
@@ -626,7 +626,7 @@
                     </button>
                   </div>
                 </div>
-                <div class="role-path-card" hidden aria-hidden="true">
+                <div class="role-path-card" hidden>
                   <h3 class="role-path-title">Voice Input Users</h3>
                   <p class="role-path-description">
                     Control the app with voice commands using stable, speakable
@@ -638,7 +638,7 @@
                     <li>All controls have unique, speakable names</li>
                   </ul>
                   <div class="role-path-actions">
-                    <button
+                    <button type="button"
                       class="btn btn-primary btn-role-try"
                       data-example="simple-box"
                       data-role="voice-input"
@@ -646,7 +646,7 @@
                     >
                       Start Tutorial
                     </button>
-                    <button
+                    <button type="button"
                       class="btn btn-link btn-role-learn"
                       data-doc="ACCESSIBILITY_GUIDE"
                       data-feature-tab="accessibility"
@@ -656,7 +656,7 @@
                     </button>
                   </div>
                 </div>
-                <div class="role-path-card" hidden aria-hidden="true">
+                <div class="role-path-card" hidden>
                   <h3 class="role-path-title">Screen Reader Users</h3>
                   <p class="role-path-description">
                     Customize models with clear status announcements and
@@ -668,7 +668,7 @@
                     <li>Plain-language error messages</li>
                   </ul>
                   <div class="role-path-actions">
-                    <button
+                    <button type="button"
                       class="btn btn-primary btn-role-try"
                       data-example="simple-box"
                       data-role="screen-reader"
@@ -676,7 +676,7 @@
                     >
                       Start Tutorial
                     </button>
-                    <button
+                    <button type="button"
                       class="btn btn-link btn-role-learn"
                       data-doc="ACCESSIBILITY_GUIDE"
                       data-feature-tab="accessibility"
@@ -1040,7 +1040,7 @@
               <div class="panel-header-title-row">
                 <h2 id="parameters-heading">Parameters</h2>
                 <!-- Mobile close button for drawer -->
-                <button
+                <button type="button"
                   id="drawerCloseBtn"
                   class="btn btn-sm btn-icon mobile-only drawer-close-btn forge-control"
                   aria-label="Close parameters panel"
@@ -1064,7 +1064,7 @@
               </div>
               <!-- Row 2: Action toolbar -->
               <div class="param-header-actions">
-                <button
+                <button type="button"
                   id="undoBtn"
                   class="btn btn-sm btn-icon"
                   aria-label="Undo last parameter change"
@@ -1086,7 +1086,7 @@
                     <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
                   </svg>
                 </button>
-                <button
+                <button type="button"
                   id="redoBtn"
                   class="btn btn-sm btn-icon"
                   aria-label="Redo last parameter change"
@@ -1108,7 +1108,7 @@
                     <path d="M20.49 15a9 9 0 1 1-2.13-9.36L23 10"></path>
                   </svg>
                 </button>
-                <button
+                <button type="button"
                   id="resetBtn"
                   class="btn btn-sm"
                   aria-label="Reset all parameters to default values"
@@ -1116,7 +1116,7 @@
                   Reset
                 </button>
                 <!-- Expert Mode toggle (M2) - hidden until feature flag enabled -->
-                <button
+                <button type="button"
                   id="expertModeToggle"
                   class="mode-toggle-btn hidden"
                   aria-pressed="false"
@@ -1127,7 +1127,7 @@
                   <span class="mode-icon" aria-hidden="true">{ }</span>
                   <span class="btn-text">Code</span>
                 </button>
-                <button
+                <button type="button"
                   id="collapseParamPanelBtn"
                   class="btn btn-sm btn-icon btn-collapse-panel forge-control"
                   aria-expanded="true"
@@ -1201,7 +1201,6 @@
               <details
                 class="console-panel forge-disclosure"
                 id="consolePanel"
-                role="region"
                 aria-label="Console"
               >
                 <summary class="console-summary">
@@ -1271,7 +1270,7 @@
                       <span>Trace</span>
                     </label>
                     <div class="console-actions">
-                      <button
+                      <button type="button"
                         id="console-copy-btn"
                         class="btn btn-sm btn-icon"
                         aria-label="Copy console output to clipboard"
@@ -1279,7 +1278,7 @@
                       >
                         📋
                       </button>
-                      <button
+                      <button type="button"
                         id="console-download-btn"
                         class="btn btn-sm btn-icon"
                         aria-label="Download console log"
@@ -1287,7 +1286,7 @@
                       >
                         ⬇️
                       </button>
-                      <button
+                      <button type="button"
                         id="console-clear-btn"
                         class="btn btn-sm btn-icon"
                         aria-label="Clear console"
@@ -1332,7 +1331,6 @@
               <details
                 class="measure-details forge-disclosure"
                 id="measureSection"
-                role="region"
                 aria-label="Image measurement tool"
               >
                 <summary class="measure-summary">
@@ -1646,7 +1644,6 @@
               <details
                 class="overlay-details forge-disclosure"
                 id="overlaySection"
-                role="region"
                 aria-label="Reference image controls"
               >
                 <summary class="overlay-summary">
@@ -1673,7 +1670,7 @@
                 </summary>
                 <div class="overlay-controls">
                   <div class="overlay-control overlay-upload-control">
-                    <label class="overlay-control-label"> Source image </label>
+                    <label class="overlay-control-label" for="overlaySourceSelect"> Source image </label>
                     <div class="overlay-source-row">
                       <select
                         id="overlaySourceSelect"
@@ -2037,7 +2034,7 @@
                       <!-- Library checkboxes will be dynamically generated here -->
                     </div>
                     <div class="library-footer">
-                      <button
+                      <button type="button"
                         id="libraryHelpBtn"
                         class="btn-link btn-link-with-icon"
                         aria-label="Learn more about libraries"
@@ -2229,14 +2226,14 @@
                 <div class="advanced-menu-content">
                   <!-- View SCAD Source -->
                   <div class="advanced-section">
-                    <button
+                    <button type="button"
                       id="viewSourceBtn"
                       class="btn btn-sm btn-outline advanced-btn"
                       aria-label="View OpenSCAD source code"
                     >
                       📄 View Source
                     </button>
-                    <button
+                    <button type="button"
                       id="copySourceBtn"
                       class="btn btn-sm btn-outline advanced-btn"
                       aria-label="Copy source code to clipboard"
@@ -2256,9 +2253,9 @@
                   </div>
                   <!-- Reset Tools -->
                   <div class="advanced-section">
-                    <h4 class="advanced-section-title">Reset Tools</h4>
+                    <h3 class="advanced-section-title">Reset Tools</h3>
                     <div class="reset-tools">
-                      <button
+                      <button type="button"
                         id="resetGroupBtn"
                         class="btn btn-sm btn-outline"
                         aria-label="Reset current group to defaults"
@@ -2274,7 +2271,7 @@
                       <select id="resetGroupSelect" class="reset-group-select">
                         <!-- Groups will be populated dynamically -->
                       </select>
-                      <button
+                      <button type="button"
                         id="confirmResetGroupBtn"
                         class="btn btn-sm btn-primary"
                       >
@@ -2284,7 +2281,7 @@
                   </div>
                   <!-- Raw Parameter JSON -->
                   <div class="advanced-section">
-                    <button
+                    <button type="button"
                       id="viewParamsJsonBtn"
                       class="btn btn-sm btn-outline advanced-btn"
                       aria-label="View current parameters as JSON"
@@ -2294,8 +2291,8 @@
                   </div>
                   <!-- Export Changed Settings (troubleshooting support) -->
                   <div class="advanced-section">
-                    <h4 class="advanced-section-title">Troubleshooting</h4>
-                    <button
+                    <h3 class="advanced-section-title">Troubleshooting</h3>
+                    <button type="button"
                       id="exportChangedBtn"
                       class="btn btn-sm btn-outline advanced-btn"
                       aria-label="Export only changed parameters for troubleshooting"
@@ -2317,7 +2314,6 @@
               <details
                 class="preset-controls forge-disclosure"
                 id="presetControls"
-                role="region"
                 aria-label="Parameter presets"
                 data-tutorial-target="preset-controls"
               >
@@ -2360,7 +2356,7 @@
                       class="preset-search-input"
                       placeholder="Search presets..."
                       aria-describedby="presetSearchStatus"
-                    /><button
+                    /><button type="button"
                       id="presetSearchClear"
                       class="btn-icon btn-icon-sm preset-search-clear"
                       aria-label="Clear search"
@@ -2421,7 +2417,7 @@
                       role="group"
                       aria-label="Preset management"
                     >
-                      <button
+                      <button type="button"
                         id="savePresetBtn"
                         class="btn btn-sm btn-icon"
                         aria-label="Save Preset — overwrites current preset"
@@ -2430,7 +2426,7 @@
                       >
                         💾
                       </button>
-                      <button
+                      <button type="button"
                         id="addPresetBtn"
                         class="btn btn-sm btn-icon"
                         aria-label="Add Preset"
@@ -2438,7 +2434,7 @@
                       >
                         +
                       </button>
-                      <button
+                      <button type="button"
                         id="deletePresetBtn"
                         class="btn btn-sm btn-icon btn-danger-icon"
                         aria-label="Delete current preset"
@@ -2448,7 +2444,7 @@
                         −
                       </button>
                     </div>
-                    <button
+                    <button type="button"
                       id="managePresetsBtn"
                       class="btn btn-sm btn-outline"
                       aria-label="Import and export presets"
@@ -2471,7 +2467,7 @@
                   <option value="inline">Inline Details</option>
                   <option value="hide" selected>Hide Details</option>
                   <option value="desc-only">Description Only</option></select
-                ><button
+                ><button type="button"
                   id="resetAllBtn"
                   class="btn btn-sm btn-outline"
                   aria-label="Reset all parameters to defaults"
@@ -2648,7 +2644,7 @@
                   ></span>
                 </span>
                 <div class="expert-mode-actions">
-                  <button
+                  <button type="button"
                     id="expertRunPreviewBtn"
                     class="btn btn-sm btn-primary"
                     aria-label="Run preview (F5)"
@@ -2656,7 +2652,7 @@
                   >
                     ▶ Preview
                   </button>
-                  <button
+                  <button type="button"
                     id="expertModeCloseBtn"
                     class="btn btn-sm btn-outline"
                     aria-label="Exit Expert Mode"
@@ -2684,7 +2680,7 @@
                 <div class="preview-drawer-header">
                   <div class="preview-drawer-header-left">
                     <!-- Parameters button FIRST (left position) -->
-                    <button
+                    <button type="button"
                       id="mobileDrawerToggle"
                       class="btn btn-sm btn-icon mobile-only"
                       aria-expanded="false"
@@ -2709,7 +2705,7 @@
                       <span class="btn-label">Params</span>
                     </button>
                     <!-- Preview Settings button SECOND (right of Parameters) -->
-                    <button
+                    <button type="button"
                       id="previewDrawerToggle"
                       class="btn btn-sm btn-icon btn-collapse-panel preview-drawer-toggle-btn forge-control"
                       aria-expanded="false"
@@ -2815,9 +2811,9 @@
                       <!-- LEFT COLUMN: Preview Options -->
                       <section class="settings-col settings-col-options"
                                aria-labelledby="previewOptionsHeading">
-                        <h4 class="preview-settings-subheading" id="previewOptionsHeading">
+                        <h3 class="preview-settings-subheading" id="previewOptionsHeading">
                           Preview Options
-                        </h4>
+                        </h3>
                         <label class="toggle-switch">
                           <input
                             type="checkbox"
@@ -3140,9 +3136,9 @@
                       <!-- RIGHT COLUMN: Model Appearance + Color + Utilities -->
                       <section class="settings-col settings-col-appearance"
                                aria-labelledby="modelAppearanceHeading">
-                        <h4 class="preview-settings-subheading" id="modelAppearanceHeading">
+                        <h3 class="preview-settings-subheading" id="modelAppearanceHeading">
                           Model Appearance
-                        </h4>
+                        </h3>
                         <div class="model-appearance-controls">
                           <label class="toggle-switch model-appearance-toggle">
                             <input
@@ -3263,7 +3259,7 @@
                                 value="#2196F3"
                                 aria-label="Choose model display color"
                               />
-                              <button
+                              <button type="button"
                                 id="modelColorReset"
                                 class="btn-icon"
                                 title="Reset to theme default"
@@ -3292,7 +3288,7 @@
                         </div>
                         <div class="preview-setting cache-tools">
                           <span class="preview-setting-label">App cache</span>
-                          <button
+                          <button type="button"
                             id="clearCacheBtn"
                             class="btn btn-sm btn-outline"
                             aria-label="Clear cached files and reload the app"
@@ -3477,7 +3473,7 @@
                   class="actions-drawer-header"
                   data-tutorial-target="actions-drawer-toggle"
                 >
-                  <button
+                  <button type="button"
                     id="actionsDrawerToggle"
                     class="btn btn-sm btn-icon btn-collapse-panel actions-drawer-toggle-btn forge-control"
                     aria-expanded="false"
@@ -3510,7 +3506,7 @@
                 </div>
                 <!-- Drawer body (expandable content) -->
                 <div class="actions-drawer-body" id="actionsDrawerBody">
-                  <button
+                  <button type="button"
                     id="addToComparisonBtn"
                     class="btn btn-sm btn-secondary actions-drawer-btn"
                     aria-label="Add current configuration to comparison"
@@ -3534,7 +3530,7 @@
                     class="actions-drawer-divider"
                     aria-hidden="true"
                   ></span>
-                  <button
+                  <button type="button"
                     id="addToQueueBtn"
                     class="btn btn-sm btn-secondary actions-drawer-btn"
                     aria-label="Add current configuration to render queue"
@@ -3555,7 +3551,7 @@
                     </svg>
                     <span class="btn-text">Add to Queue</span>
                   </button>
-                  <button
+                  <button type="button"
                     id="viewQueueBtn"
                     class="btn btn-sm btn-secondary actions-drawer-btn"
                     aria-label="View and manage render queue"
@@ -3577,7 +3573,7 @@
                     <span class="btn-text">Queue</span>
                     <span class="queue-badge" id="queueBadge">0</span>
                   </button>
-                  <button
+                  <button type="button"
                     id="exportParamsBtn"
                     class="btn btn-sm btn-secondary actions-drawer-btn"
                     aria-label="Download parameters as JSON file"
@@ -3600,7 +3596,7 @@
                     </svg>
                     <span class="btn-text">Export Params</span>
                   </button>
-                  <button
+                  <button type="button"
                     id="publishProjectBtn"
                     class="btn btn-sm btn-secondary actions-drawer-btn"
                     aria-label="Generate a shareable manifest for hosting this project externally"
@@ -3627,7 +3623,7 @@
                     class="actions-drawer-divider"
                     aria-hidden="true"
                   ></span>
-                  <button
+                  <button type="button"
                     id="viewConsoleBtn"
                     class="btn btn-sm btn-secondary actions-drawer-btn"
                     aria-label="View OpenSCAD console output including echo statements"
@@ -3662,7 +3658,7 @@
               </div>
               <!-- Primary actions (always visible, right side) -->
               <div class="actions-primary">
-                <button
+                <button type="button"
                   id="cancelRenderBtn"
                   class="btn btn-outline hidden"
                   aria-label="Cancel current render operation"
@@ -3681,7 +3677,7 @@
                   </svg>
                   <span>Cancel</span>
                 </button>
-                <button
+                <button type="button"
                   id="primaryActionBtn"
                   class="btn btn-primary btn-large"
                   aria-label="Generate output file from current parameters"
@@ -3721,7 +3717,7 @@
                 aria-label="Camera controls"
               >
                 <!-- Drawer toggle button -->
-                <button
+                <button type="button"
                   id="cameraDrawerToggle"
                   class="btn btn-sm camera-drawer-toggle-btn forge-control"
                   aria-expanded="false"
@@ -4147,7 +4143,7 @@
               </div>
               <!-- Row 2: Collapse button -->
               <div class="camera-header-actions">
-                <button
+                <button type="button"
                   id="cameraPanelToggle"
                   class="btn btn-sm btn-icon btn-collapse-panel forge-control"
                   aria-expanded="false"
@@ -4644,7 +4640,7 @@
       <div class="modal-content modal-large">
         <div class="modal-header">
           <h2 id="queueModalTitle">Render Queue</h2>
-          <button
+          <button type="button"
             class="modal-close"
             id="queueModalClose"
             aria-label="Close render queue"
@@ -4665,42 +4661,42 @@
         <div class="modal-body" id="queueModalBody">
           <!-- Queue controls -->
           <div class="queue-controls">
-            <button
+            <button type="button"
               id="processQueueBtn"
               class="btn btn-primary"
               aria-label="Process all queued jobs"
             >
               ▶️ Process Queue
             </button>
-            <button
+            <button type="button"
               id="stopQueueBtn"
               class="btn btn-outline hidden"
               aria-label="Stop processing queue"
             >
               ⏸️ Stop
             </button>
-            <button
+            <button type="button"
               id="clearCompletedBtn"
               class="btn btn-outline"
               aria-label="Clear completed jobs"
             >
               🗑️ Clear Completed
             </button>
-            <button
+            <button type="button"
               id="clearQueueBtn"
               class="btn btn-outline"
               aria-label="Clear all jobs"
             >
               🗑️ Clear All
             </button>
-            <button
+            <button type="button"
               id="exportQueueBtn"
               class="btn btn-outline"
               aria-label="Export queue as JSON"
             >
               💾 Export Queue
             </button>
-            <button
+            <button type="button"
               id="importQueueBtn"
               class="btn btn-outline"
               aria-label="Import queue from JSON"
@@ -4759,14 +4755,14 @@
         <div class="modal-header">
           <h2 id="sourceViewerTitle">OpenSCAD Source</h2>
           <div class="source-viewer-actions">
-            <button
+            <button type="button"
               class="btn btn-sm btn-outline"
               id="sourceViewerCopy"
               aria-label="Copy source code"
             >
               📋 Copy
             </button>
-            <button
+            <button type="button"
               class="modal-close"
               id="sourceViewerClose"
               aria-label="Close source viewer"
@@ -4813,14 +4809,14 @@
         <div class="modal-header">
           <h2 id="paramsJsonTitle">Current Parameters (JSON)</h2>
           <div class="params-json-actions">
-            <button
+            <button type="button"
               class="btn btn-sm btn-outline"
               id="paramsJsonCopy"
               aria-label="Copy parameters JSON"
             >
               📋 Copy
             </button>
-            <button
+            <button type="button"
               class="modal-close"
               id="paramsJsonClose"
               aria-label="Close parameters viewer"
@@ -4866,7 +4862,7 @@
       >
         <div class="modal-header">
           <h2 id="featuresGuideTitle">Features Guide</h2>
-          <button
+          <button type="button"
             class="modal-close"
             id="featuresGuideClose"
             aria-label="Close features guide"
@@ -4891,7 +4887,7 @@
             role="tablist"
             aria-label="Feature sections"
           >
-            <button
+            <button type="button"
               class="features-tab"
               role="tab"
               aria-selected="true"
@@ -4901,7 +4897,7 @@
             >
               Libraries
             </button>
-            <button
+            <button type="button"
               class="features-tab"
               role="tab"
               aria-selected="false"
@@ -4911,7 +4907,7 @@
             >
               Color Parameters
             </button>
-            <button
+            <button type="button"
               class="features-tab"
               role="tab"
               aria-selected="false"
@@ -4921,7 +4917,7 @@
             >
               Presets
             </button>
-            <button
+            <button type="button"
               class="features-tab"
               role="tab"
               aria-selected="false"
@@ -4931,7 +4927,7 @@
             >
               Advanced
             </button>
-            <button
+            <button type="button"
               class="features-tab"
               role="tab"
               aria-selected="false"
@@ -4941,7 +4937,7 @@
             >
               Workflow
             </button>
-            <button
+            <button type="button"
               class="features-tab"
               role="tab"
               aria-selected="false"
@@ -4951,7 +4947,7 @@
             >
               Accessibility
             </button>
-            <button
+            <button type="button"
               class="features-tab"
               role="tab"
               aria-selected="false"
@@ -5006,7 +5002,7 @@
               any library from the 📚 Libraries panel.
             </p>
             <div class="features-action">
-              <button
+              <button type="button"
                 class="btn btn-primary"
                 data-example="library-test"
                 data-feature-example="true"
@@ -5069,7 +5065,7 @@
               includes a working conversion helper.
             </p>
             <div class="features-action">
-              <button
+              <button type="button"
                 class="btn btn-primary"
                 data-example="colored-box"
                 data-feature-example="true"
@@ -5261,7 +5257,7 @@
               </li>
             </ul>
             <div class="features-action">
-              <button
+              <button type="button"
                 class="btn btn-primary"
                 data-example="multi-file-box"
                 data-feature-example="true"
@@ -5683,7 +5679,7 @@
       <div class="modal-content modal-medium">
         <div class="modal-header">
           <h2 id="textFileEditorTitle">Edit File</h2>
-          <button
+          <button type="button"
             class="modal-close"
             id="textFileEditorClose"
             aria-label="Close file editor"
@@ -5720,10 +5716,10 @@
           </p>
         </div>
         <div class="modal-footer">
-          <button id="textFileEditorCancel" class="btn btn-outline">
+          <button type="button" id="textFileEditorCancel" class="btn btn-outline">
             Cancel
           </button>
-          <button id="textFileEditorApply" class="btn btn-primary">
+          <button type="button" id="textFileEditorApply" class="btn btn-primary">
             Apply and Preview
           </button>
         </div>
@@ -5742,7 +5738,7 @@
       <div class="modal-content modal-small confirm-modal-content">
         <div class="modal-header">
           <h2 id="resetConfirmTitle">Reset All Parameters?</h2>
-          <button
+          <button type="button"
             class="modal-close"
             id="resetConfirmClose"
             aria-label="Cancel reset"
@@ -5770,10 +5766,10 @@
           </p>
         </div>
         <div class="modal-footer confirm-modal-footer">
-          <button id="resetConfirmCancel" class="btn btn-secondary">
+          <button type="button" id="resetConfirmCancel" class="btn btn-secondary">
             Cancel
           </button>
-          <button id="resetConfirmOk" class="btn btn-primary">Reset All</button>
+          <button type="button" id="resetConfirmOk" class="btn btn-primary">Reset All</button>
         </div>
       </div>
     </div>
@@ -5789,7 +5785,7 @@
       <div class="modal-content modal-large shortcuts-modal-content">
         <div class="modal-header">
           <h2 id="shortcutsModalTitle">Keyboard Shortcuts</h2>
-          <button
+          <button type="button"
             class="modal-close"
             id="shortcutsModalClose"
             aria-label="Close keyboard shortcuts"
@@ -5811,10 +5807,10 @@
           <!-- Content populated by JavaScript -->
         </div>
         <div class="modal-footer shortcuts-modal-footer">
-          <button id="shortcutsResetAll" class="btn btn-secondary">
+          <button type="button" id="shortcutsResetAll" class="btn btn-secondary">
             Reset All to Defaults
           </button>
-          <button id="shortcutsModalDone" class="btn btn-primary">Done</button>
+          <button type="button" id="shortcutsModalDone" class="btn btn-primary">Done</button>
         </div>
       </div>
     </div>
@@ -5830,7 +5826,7 @@
       <div class="modal-content modal-large modal-console">
         <div class="modal-header">
           <h2 id="consoleOutputTitle">OpenSCAD Console Output</h2>
-          <button
+          <button type="button"
             class="modal-close"
             id="consoleOutputClose"
             aria-label="Close console output"
@@ -5870,7 +5866,7 @@ No console output yet. Generate a model to see output.</pre
           </p>
         </div>
         <div class="modal-footer console-modal-footer">
-          <button id="consoleCopyBtn" class="btn btn-secondary">
+          <button type="button" id="consoleCopyBtn" class="btn btn-secondary">
             <svg
               class="btn-icon-svg"
               width="16"
@@ -5888,7 +5884,7 @@ No console output yet. Generate a model to see output.</pre
             </svg>
             Copy
           </button>
-          <button id="consoleDownloadBtn" class="btn btn-secondary">
+          <button type="button" id="consoleDownloadBtn" class="btn btn-secondary">
             <svg
               class="btn-icon-svg"
               width="16"
@@ -5905,8 +5901,8 @@ No console output yet. Generate a model to see output.</pre
             </svg>
             Download
           </button>
-          <button id="consoleClearBtn" class="btn btn-secondary">Clear</button>
-          <button id="consoleCloseBtn" class="btn btn-primary">Close</button>
+          <button type="button" id="consoleClearBtn" class="btn btn-secondary">Clear</button>
+          <button type="button" id="consoleCloseBtn" class="btn btn-primary">Close</button>
         </div>
       </div>
     </div>
@@ -6057,7 +6053,7 @@ No console output yet. Generate a model to see output.</pre
       <div class="modal-content modal-large">
         <div class="modal-header">
           <h2 id="publishModalTitle">Publish Project</h2>
-          <button
+          <button type="button"
             class="modal-close"
             id="publishModalClose"
             aria-label="Close publish dialog"
@@ -6089,7 +6085,7 @@ No console output yet. Generate a model to see output.</pre
               tabindex="0"
               aria-label="Generated manifest JSON"
             ></pre>
-            <button
+            <button type="button"
               id="copyManifestBtn"
               class="btn btn-sm btn-primary publish-copy-btn"
               aria-label="Copy manifest JSON to clipboard"
@@ -6147,7 +6143,7 @@ No console output yet. Generate a model to see output.</pre
                 readonly
                 aria-label="Shareable Forge link"
               />
-              <button
+              <button type="button"
                 id="copyShareLinkBtn"
                 class="btn btn-sm btn-primary"
                 aria-label="Copy shareable link to clipboard"
