@@ -221,20 +221,11 @@ function _applyDirectionalContrast(v, extSamples) {
 }
 
 function _buildCharModel({ fontFamily, fontSizePx, charW, charH }) {
-  // Base: printable ASCII 32–126 (95 chars)
+  // Printable ASCII 32–126 only (95 chars). Block elements and Braille
+  // were removed per stakeholder directive for ASCII-only glyph rendering.
   const chars = [];
   for (let code = 32; code <= 126; code++)
     chars.push(String.fromCharCode(code));
-
-  // §3: Extended Unicode ranges for improved edge/halftone matching.
-  // Block elements: U+2580–U+259F (32 chars) — ▀▄▌▐░▒▓█ and variants
-  for (let code = 0x2580; code <= 0x259f; code++)
-    chars.push(String.fromCharCode(code));
-
-  // Braille blank: U+2800 — single zero-density reference point
-  chars.push('\u2800');
-
-  // Total: 95 ASCII + 32 block elements + 1 Braille = 128 chars (fits Uint8Array)
 
   const cellW = Math.max(2, Math.ceil(charW * _GLYPH_SCALE));
   const cellH = Math.max(2, Math.ceil(charH * _GLYPH_SCALE));
