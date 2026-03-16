@@ -4939,6 +4939,9 @@ async function initApp() {
         console.error('Failed to initialize OpenSCAD WASM:', error);
         hideWasmLoadingIndicator(wasmLoadingOverlay);
         updateStatus('OpenSCAD engine failed to initialize');
+        _announceError(
+          'OpenSCAD engine failed to initialize. Some features may not work.'
+        );
         const details = error?.details ? ` Details: ${error.details}` : '';
         alert(
           'Failed to initialize OpenSCAD engine. Some features may not work. Error: ' +
@@ -7541,6 +7544,7 @@ async function initApp() {
 
             const friendly = translateError(error?.message || String(error));
             updateStatus(`Preview failed: ${friendly.title}`, 'error');
+            _announceError(`Preview failed: ${friendly.title}`);
           }
         },
       }
@@ -14497,6 +14501,9 @@ if (rounded) {
       // Use COGA-compliant friendly error translation
       const friendlyError = translateError(error.message);
       updateStatus(`Error: ${friendlyError.title}`);
+      _announceError(
+        `Error: ${friendlyError.title}. ${friendlyError.explanation}`
+      );
 
       // Show user-friendly error in alert (using translated message)
       const userMessage = `${friendlyError.title}\n\n${friendlyError.explanation}\n\nTry: ${friendlyError.suggestion}`;
