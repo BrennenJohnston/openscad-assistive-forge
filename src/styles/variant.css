@@ -1249,17 +1249,20 @@
 }
 
 /* --- High-contrast exception: restore multicolor where specified --- */
-:root[data-ui-variant='mono'][data-high-contrast='true'] .complexity-tier-label.tier-beginner {
+:root[data-ui-variant='mono'][data-high-contrast='true']
+  .complexity-tier-label.tier-beginner {
   background-color: var(--color-success-bg);
   color: var(--color-success-text);
 }
 
-:root[data-ui-variant='mono'][data-high-contrast='true'] .complexity-tier-label.tier-standard {
+:root[data-ui-variant='mono'][data-high-contrast='true']
+  .complexity-tier-label.tier-standard {
   background-color: var(--color-info-bg);
   color: var(--color-info-text);
 }
 
-:root[data-ui-variant='mono'][data-high-contrast='true'] .complexity-tier-label.tier-complex {
+:root[data-ui-variant='mono'][data-high-contrast='true']
+  .complexity-tier-label.tier-complex {
   background-color: var(--color-warning-bg);
   color: var(--color-warning-text);
 }

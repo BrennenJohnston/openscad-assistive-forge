@@ -207,7 +207,10 @@ export class ThemeManager {
    * @returns {string} 'light' or 'dark'
    */
   getResolvedTheme() {
-    return document.documentElement.getAttribute('data-theme') || this.getActiveTheme();
+    return (
+      document.documentElement.getAttribute('data-theme') ||
+      this.getActiveTheme()
+    );
   }
 
   /**
@@ -317,9 +320,7 @@ export class ThemeManager {
       .addEventListener('change', (e) => {
         if (this.currentTheme === THEMES.AUTO) {
           const resolved = e.matches ? THEMES.DARK : THEMES.LIGHT;
-          console.log(
-            `[Theme] System preference changed to ${resolved}`
-          );
+          console.log(`[Theme] System preference changed to ${resolved}`);
           document.documentElement.setAttribute('data-theme', resolved);
           this.applyRadixScales(resolved);
           this.notifyListeners();
