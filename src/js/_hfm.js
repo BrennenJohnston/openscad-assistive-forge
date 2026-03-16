@@ -459,9 +459,13 @@ function _renderFrame({
     _lookupCache = new Map();
     _lut = null;
     _lastSizeKey = sizeKey;
-    buildLUTAsync(_charModel).then((lut) => {
-      _lut = lut;
-    });
+    buildLUTAsync(_charModel)
+      .then((lut) => {
+        _lut = lut;
+      })
+      .catch((err) => {
+        console.error('LUT build failed:', err);
+      });
   }
 
   const pts = _getSixSamplePoints(cellW, cellH);

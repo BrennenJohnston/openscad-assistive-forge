@@ -4539,8 +4539,8 @@ async function initApp() {
     if (modelName) {
       // Primary path: persist uiPreferences into the IndexedDB project record
       if (currentSavedProjectId) {
-        updateProject({ id: currentSavedProjectId, uiPreferences: prefs }).then(
-          (result) => {
+        updateProject({ id: currentSavedProjectId, uiPreferences: prefs })
+          .then((result) => {
             if (result.success) {
               console.log(
                 `[App] UI preferences saved to project record: ${modelName}`
@@ -4551,8 +4551,10 @@ async function initApp() {
                 result.error
               );
             }
-          }
-        );
+          })
+          .catch((err) => {
+            console.error('[App] Project update failed:', err);
+          });
       }
 
       // Fallback path: keep the legacy localStorage key in sync for one release
@@ -4760,7 +4762,7 @@ async function initApp() {
                 autoAdjustList.innerHTML = adjustments
                   .map(
                     ([k, v]) =>
-                      `<li><code>${k}</code>: currently <em>${String(state.parameters[k])}</em> → will use <strong>${String(v)}</strong></li>`
+                      `<li><code>${escapeHtml(k)}</code>: currently <em>${escapeHtml(String(state.parameters[k]))}</em> → will use <strong>${escapeHtml(String(v))}</strong></li>`
                   )
                   .join('');
                 autoAdjustDiv.classList.remove('hidden');
@@ -6781,7 +6783,7 @@ async function initApp() {
         overlayTabletSelect.innerHTML = tabletDb
           .map(
             (t) =>
-              `<option value="${t.id}" data-w="${t.screenWidthMm ?? ''}" data-h="${t.screenHeightMm ?? ''}">${t.label}</option>`
+              `<option value="${escapeHtml(String(t.id))}" data-w="${escapeHtml(String(t.screenWidthMm ?? ''))}" data-h="${escapeHtml(String(t.screenHeightMm ?? ''))}">${escapeHtml(t.label)}</option>`
           )
           .join('');
       } catch (err) {
@@ -13462,46 +13464,50 @@ if (rounded) {
     const measureImageSelect = document.getElementById('measureImageSelect');
     if (measureFileInput) {
       measureFileInput.addEventListener('change', async (e) => {
-        const file = e.target.files?.[0];
-        if (!file || !file.type.startsWith('image/')) return;
-        const record = await SharedImageStore.addImage(file);
+        try {
+          const file = e.target.files?.[0];
+          if (!file || !file.type.startsWith('image/')) return;
+          const record = await SharedImageStore.addImage(file);
 
-        // Persist screenshot to projectFiles under Screenshots/ folder
-        const state = stateManager.getState();
-        let { projectFiles, mainFilePath, uploadedFile: uf } = state;
+          // Persist screenshot to projectFiles under Screenshots/ folder
+          const state = stateManager.getState();
+          let { projectFiles, mainFilePath, uploadedFile: uf } = state;
 
-        // Initialize projectFiles Map if needed (single-file → multi-file)
-        if (!projectFiles && uf) {
-          projectFiles = new Map();
-          const mainPath = mainFilePath || uf.name;
-          projectFiles.set(mainPath, uf.content);
-          mainFilePath = mainPath;
-          stateManager.setState({ projectFiles, mainFilePath });
-          setCanonicalProjectFiles(projectFiles);
-        }
-
-        if (projectFiles) {
-          projectFiles.set(`Screenshots/${record.name}`, record.dataUrl);
-          stateManager.setState({ projectFiles });
-          setCanonicalProjectFiles(projectFiles);
-
-          // Auto-save to IndexedDB so screenshots persist across sessions
-          await autoSaveCompanionFiles();
-        }
-
-        // Select the newly uploaded image in the dropdown
-        if (measureImageSelect) {
-          measureImageSelect.value = String(record.id);
-          if (measureImageSelect.value !== String(record.id)) {
-            setTimeout(() => {
-              if (measureImageSelect)
-                measureImageSelect.value = String(record.id);
-            }, 0);
+          // Initialize projectFiles Map if needed (single-file → multi-file)
+          if (!projectFiles && uf) {
+            projectFiles = new Map();
+            const mainPath = mainFilePath || uf.name;
+            projectFiles.set(mainPath, uf.content);
+            mainFilePath = mainPath;
+            stateManager.setState({ projectFiles, mainFilePath });
+            setCanonicalProjectFiles(projectFiles);
           }
-        }
 
-        // Update overlay dropdown with the new screenshot
-        updateOverlaySourceDropdown();
+          if (projectFiles) {
+            projectFiles.set(`Screenshots/${record.name}`, record.dataUrl);
+            stateManager.setState({ projectFiles });
+            setCanonicalProjectFiles(projectFiles);
+
+            // Auto-save to IndexedDB so screenshots persist across sessions
+            await autoSaveCompanionFiles();
+          }
+
+          // Select the newly uploaded image in the dropdown
+          if (measureImageSelect) {
+            measureImageSelect.value = String(record.id);
+            if (measureImageSelect.value !== String(record.id)) {
+              setTimeout(() => {
+                if (measureImageSelect)
+                  measureImageSelect.value = String(record.id);
+              }, 0);
+            }
+          }
+
+          // Update overlay dropdown with the new screenshot
+          updateOverlaySourceDropdown();
+        } catch (err) {
+          console.error('[App] Measurement image upload failed:', err);
+        }
       });
     }
     // Populate image recall dropdown when store changes
@@ -18024,9 +18030,13 @@ if (rounded) {
     }
   });
 
-  // Expert Mode toggle (Ctrl+E)
+  // Expert Mode toggle (Ctrl+E) -- only in Advanced UI mode per COGA principle
   keyboardConfig.on('toggleExpertMode', () => {
-    if (_isEnabled('expert_mode') && window._modeManager) {
+    if (
+      _isEnabled('expert_mode') &&
+      window._modeManager &&
+      getUIModeController()?.getMode() === 'advanced'
+    ) {
       window._modeManager.toggleMode();
     }
   });

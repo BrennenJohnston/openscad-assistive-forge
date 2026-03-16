@@ -4,6 +4,8 @@
  * @license GPL-3.0-or-later
  */
 
+import { escapeHtml } from './html-utils.js';
+
 /**
  * Storage key for keyboard shortcuts
  */
@@ -1137,7 +1139,7 @@ function endKeyCapture(success) {
  * @param {string} conflictDescription - Description of conflicting action
  */
 function showConflictWarning(button, conflictDescription) {
-  button.innerHTML = `<span class="key-conflict-warning">Already used by: ${conflictDescription}</span>`;
+  button.innerHTML = `<span class="key-conflict-warning">Already used by: ${escapeHtml(conflictDescription)}</span>`;
   button.classList.add('conflict');
 
   setTimeout(() => {
