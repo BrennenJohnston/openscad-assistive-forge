@@ -151,6 +151,7 @@
 :root[data-ui-variant='mono'] .btn:hover,
 :root[data-ui-variant='mono'] button:hover {
   background: var(--color-hover-bg);
+  border-color: var(--color-accent);
   box-shadow: none;
   transform: none;
 }
@@ -526,6 +527,21 @@
 
 :root[data-ui-variant='mono'][data-theme='light'] .modal-overlay {
   background: rgba(255, 176, 0, 0.1);
+}
+
+/* Tooltips — override to accent border/bg for mono terminal aesthetic */
+:root[data-ui-variant='mono'] .param-tooltip {
+  background: var(--color-bg-primary);
+  border-color: var(--color-accent);
+  box-shadow: none;
+}
+
+:root[data-ui-variant='mono'] .param-tooltip::before {
+  border-bottom-color: var(--color-accent);
+}
+
+:root[data-ui-variant='mono'] .param-tooltip::after {
+  border-bottom-color: var(--color-bg-primary);
 }
 
 /* Workflow progress */
