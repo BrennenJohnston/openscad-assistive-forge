@@ -111,7 +111,7 @@ export class AnimationController {
   }
 
   _stopInterval() {
-    if (this._intervalId != null) {
+    if (this._intervalId !== null) {
       clearInterval(this._intervalId);
       this._intervalId = null;
     }

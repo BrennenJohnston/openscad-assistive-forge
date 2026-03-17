@@ -428,7 +428,7 @@ export class ConsolePanel {
     const entryRole =
       entry.type === 'warning' || entry.type === 'error' ? 'alert' : 'listitem';
 
-    const hasLocation = entry.line != null && this.onNavigate;
+    const hasLocation = entry.line !== null && this.onNavigate;
     const lineLink = hasLocation
       ? ` <button type="button" class="console-line-link" data-file="${this.escapeHtml(entry.file || '')}" data-line="${entry.line}" aria-label="Go to line ${entry.line}">:${entry.line}</button>`
       : '';

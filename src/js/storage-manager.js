@@ -813,7 +813,7 @@ export async function exportProjectsBackup() {
       // Prefer uiPreferences from the project record (authoritative); fall back
       // to the legacy localStorage key for projects saved before this change.
       let uiPreferences = project.uiPreferences ?? null;
-      if (uiPreferences == null) {
+      if (uiPreferences === null) {
         try {
           const raw = localStorage.getItem(
             `openscad-forge-ui-prefs-${project.originalName}`
@@ -931,7 +931,7 @@ export async function exportSingleProject(projectId) {
     // Prefer uiPreferences from the project record (authoritative); fall back
     // to the legacy localStorage key for projects saved before this change.
     let uiPreferences = project.uiPreferences ?? null;
-    if (uiPreferences == null) {
+    if (uiPreferences === null) {
       try {
         const raw = localStorage.getItem(
           `openscad-forge-ui-prefs-${project.originalName}`

@@ -336,7 +336,7 @@ export function initSearchableCombobox({
   }
 
   function setValue(id) {
-    const found = id != null ? allOptions.find((o) => o.id === id) : null;
+    const found = id !== null ? allOptions.find((o) => o.id === id) : null;
     selectedId = found ? id : null;
     const label = getLabelForId(selectedId);
     input.value = label;

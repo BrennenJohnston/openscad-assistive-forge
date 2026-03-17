@@ -250,7 +250,7 @@ export class ErrorLogPanel {
     return this.entries
       .map((e) => {
         const ts = new Date(e.timestamp).toISOString();
-        const loc = e.line != null ? `${e.file || ''}:${e.line}` : e.file || '';
+        const loc = e.line !== null ? `${e.file || ''}:${e.line}` : e.file || '';
         return `[${ts}] [${e.type.toUpperCase()}] ${loc ? loc + ' — ' : ''}${e.message}`;
       })
       .join('\n');
@@ -352,7 +352,7 @@ export class ErrorLogPanel {
     this.lastAnnouncement = Date.now();
     this.pendingAnnouncement = null;
     const label = TYPE_LABELS[entry.type] || 'Issue';
-    const loc = entry.line != null ? ` at line ${entry.line}` : '';
+    const loc = entry.line !== null ? ` at line ${entry.line}` : '';
     const msg = `${label}${loc}: ${entry.message}`;
     if (entry.type === ERROR_LOG_TYPE.ERROR) {
       announceError(msg);
@@ -476,7 +476,7 @@ export class ErrorLogPanel {
 
     const lineCell = document.createElement('td');
     lineCell.className = 'error-log-cell--line';
-    if (entry.line != null && this.onNavigate) {
+    if (entry.line !== null && this.onNavigate) {
       const link = document.createElement('button');
       link.type = 'button';
       link.className = 'error-log-line-link';
@@ -487,7 +487,7 @@ export class ErrorLogPanel {
       );
       lineCell.appendChild(link);
     } else {
-      lineCell.textContent = entry.line != null ? String(entry.line) : '—';
+      lineCell.textContent = entry.line !== null ? String(entry.line) : '—';
     }
     row.appendChild(lineCell);
 
