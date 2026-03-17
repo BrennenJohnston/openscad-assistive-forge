@@ -4393,7 +4393,6 @@ async function initApp() {
           }
         },
       },
-      panelToggle('errorLog', 'Error-Log', 'toggleErrorLog'),
       { type: 'separator' },
       {
         type: 'action',
@@ -4421,9 +4420,6 @@ async function initApp() {
       panelToggle('companionFileManagement', 'Companion Files'),
       panelToggle('imageMeasurement', 'Image Measurement'),
       panelToggle('referenceOverlay', 'Reference Image'),
-      panelToggle('gridSettings', 'Grid Settings'),
-      panelToggle('renderSettings', 'Render Settings'),
-      panelToggle('presetImportExport', 'Preset Import/Export'),
     ];
   });
 
