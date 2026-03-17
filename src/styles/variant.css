@@ -335,6 +335,7 @@
   border: 1px solid var(--color-border);
   background: var(--color-bg-secondary);
   color: var(--color-text-primary);
+  -webkit-text-fill-color: var(--color-text-primary);
   box-shadow: none;
 }
 

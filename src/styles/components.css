@@ -3711,6 +3711,7 @@ body.high-contrast .param-tooltip {
   border-radius: var(--border-radius-sm);
   background-color: var(--color-bg-primary);
   color: var(--color-text-primary);
+  -webkit-text-fill-color: var(--color-text-primary);
   font-size: var(--font-size-base);
   font-variant-numeric: tabular-nums;
   text-align: right;
@@ -3770,6 +3771,7 @@ body.high-contrast .param-tooltip {
 /* Out-of-range value indicator for spinbox */
 .param-control.out-of-range .slider-spinbox {
   color: var(--color-warning);
+  -webkit-text-fill-color: var(--color-warning);
   font-weight: 600;
 }
 
@@ -3842,6 +3844,13 @@ input[type='number'] {
   border-radius: var(--border-radius-sm);
   background-color: var(--color-bg-primary);
   color: var(--color-text-primary);
+  /*
+   * Mobile WebKit/Blink may not repaint input text inside GPU-composited
+   * containers (e.g., transform-based off-canvas drawers).
+   * -webkit-text-fill-color forces explicit text color rendering, bypassing
+   * the compositing repaint issue.
+   */
+  -webkit-text-fill-color: var(--color-text-primary);
 }
 
 input[type='number']:focus {
@@ -3942,6 +3951,11 @@ select:focus-visible {
 /* Dark mode: ensure off-state track contrasts with white thumb (≥3:1) */
 :root[data-theme='dark'] .toggle-switch input[type='checkbox'] {
   background-color: var(--slate-6);
+}
+
+/* Dark mode: preserve explicit ON-state color (green track) */
+:root[data-theme='dark'] .toggle-switch input[type='checkbox']:checked {
+  background-color: var(--color-success);
 }
 
 /* High Contrast: off-state track must strongly contrast with thumb */
@@ -7769,6 +7783,7 @@ body.first-visit-blocking #app {
   min-height: 44px;
   background: var(--color-input-bg);
   color: var(--color-text-primary);
+  -webkit-text-fill-color: var(--color-text-primary);
 }
 
 .vector-input:focus {
@@ -8830,6 +8845,7 @@ body.first-visit-blocking #app {
 .param-control.out-of-range .slider-value,
 .param-control.out-of-range input[type='number'] {
   color: var(--color-warning);
+  -webkit-text-fill-color: var(--color-warning);
   font-weight: 600;
 }
 
@@ -12984,6 +13000,7 @@ body.tutorial-body-locked {
   border-radius: var(--border-radius-sm);
   background: var(--color-bg-primary);
   color: var(--color-text-primary);
+  -webkit-text-fill-color: var(--color-text-primary);
   font-size: var(--font-size-base);
   font-variant-numeric: tabular-nums;
 }
