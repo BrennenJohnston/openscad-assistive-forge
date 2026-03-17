@@ -7,33 +7,110 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Stakeholder Sanitization & Feature Generalization
+---
 
-Scrub of stakeholder-specific references, feature generalization,
-manifest sharing hardening, and ongoing containment protocols.
+## [4.2.0] - 2026-03-16
 
-### Changed
+### Accessibility, Security & Expert Mode Release
 
-- **Renamed example directories** - `volkswitch-keyguard` directories renamed to `keyguard-demo` (public/examples/) and `keyguard-minimal` (tests/fixtures/)
-- **Renamed test file** - `volkswitch-workflow.spec.js` renamed to `keyguard-workflow.spec.js`
-- **Generalized all code comments** - Replaced stakeholder-specific attribution comments with feature-descriptive language across 27 source, HTML, CSS, test, and documentation files
-- **Renamed EXAMPLE_DEFINITIONS keys** - `volkswitch-keyguard-demo` becomes `keyguard-demo`; all paths updated
-- **Updated deep-link URLs** - `?example=keyguard-demo` and `?load=keyguard` now serve the renamed example
-- **Updated test assertions** - All test files reference the renamed directories and generalized content
+Major release adding Expert Mode code editing, vector parameter support, intelligent memory management, desktop parity remediations, visual theme overhaul (Alt View mono variant), and security hardening. Targets WCAG 2.2 AA / Section 508 conformance.
 
 ### Added
 
-- **Manifest Sharing Guide rewrite** - Complete rewrite of `docs/guides/MANIFEST_SHARING_GUIDE.md` with step-by-step non-technical setup instructions, three fictional examples, and privacy notice
-- **Manifest Stability Contract** - New `docs/specs/MANIFEST_STABILITY_CONTRACT.md` documenting URL parameter stability, schema versioning, hosting platform support, and breaking change policy
-- **Manifest E2E test suite** - New `tests/e2e/manifest-loading.spec.js` with 20 test cases covering valid loading, error handling, URL parameter interactions, mobile viewport, and accessibility
-- **Deep-link alias tests** - New tests for `?load=keyguard-demo` and `?load=keyguard` aliases
-- **Known parity gaps** - Added Forge vs Desktop OpenSCAD comparison table to `docs/TESTING.md`
+- **Expert Mode** - Edit OpenSCAD code directly in the browser with real-time preview
+  - Monaco Editor with OpenSCAD syntax highlighting
+  - Accessible textarea fallback for full AT compatibility
+  - State preservation (cursor, scroll, selection) across mode switches
+  - Keyboard shortcut: `Ctrl+E` to toggle
+- **Vector parameter editor** - Visual editor for `[x,y,z]`-style parameters
+  - Individual controls per element with smart parsing
+  - Keyboard navigation between elements
+  - Screen reader support ("X coordinate, 1 of 3")
+- **Memory management** - Intelligent monitoring with graceful degradation
+  - Real-time usage tracking at 400MB / 800MB / 1200MB thresholds
+  - Auto-preview disabled at critical levels; safe recovery mode
+- **Desktop parity remediation** - 14 of 16 parity scenarios resolved
+  - COFF per-face color rendering via `--enable=render-colors` flag
+  - `#debug` modifier geometry overlay (pink THREE.Group)
+  - Console and Error Log unified panel with Log/Structured views
+  - File > Export As SVG/DXF with guidance animation
+  - Grid opacity slider with localStorage persistence
+  - Rendering toast indicator and pulsing badge
+  - Missing-file synthetic warnings in desktop console format
+- **Alt View mono variant** - Retro terminal aesthetic (green/amber phosphor, CRT effects)
+  - Scanlines, vignette, glow pulse effects (respects `prefers-reduced-motion`)
+  - High-contrast passthrough for forced-colors mode
+  - Custom cursor SVGs per variant
+- **Manifest sharing** - External manifest loading with URL stability contract
+  - Rewritten sharing guide with non-technical instructions
+  - `MANIFEST_STABILITY_CONTRACT.md` documenting URL parameter stability
+  - 20-case E2E test suite for manifest loading
+- **Lighting, color, and printer presets** - Desktop-parity camera and render presets
+- **Color passthrough** - Full render color passthrough via OFF format when active
+- **VPAT document** - Section 508 conformance documentation (59 criteria)
+- **Documentation suite** - Getting Started, Standard Mode, Expert Mode, Troubleshooting, Security Admin, Browser Support, and Known Issues guides
+- **Desktop-parity toolbar menus** - File, Edit, Design, View, Window, Help menus matching OpenSCAD desktop layout
+  - Full keyboard navigation with arrow keys and mnemonic shortcuts
+  - Design tools (flush caches, display AST, geometry info)
+  - Edit actions (copy camera values, error navigation, font size controls)
+- **UI Mode system** - Progressive complexity disclosure (Beginner / Advanced)
+  - Feature-flag gated UIModeController
+  - Advanced-only features hidden in Beginner mode
+- **Feature flags** - Runtime feature configuration (`expert_mode`, `vector_parameters`, `csp_reporting`, `searchable_presets`, `alt_view`)
+- **Folder import** - Direct project folder upload via `webkitdirectory` input
+- **Auto-rotate camera** - Animated 3D preview rotation with theme-aware controls
+- **Image measurement tool** - Reference overlay measurement with tab-unit inference
+- **Custom grid presets** - Save, name, and recall grid size configurations
+- **Customizer detail modes** - Adjustable parameter display density
+
+### Changed
+
+- **Renamed example directories** - `volkswitch-keyguard` → `keyguard-demo` / `keyguard-minimal`
+- **Generalized code comments** - Stakeholder-specific references replaced across 27 files
+- **Updated deep-link URLs** - `?example=keyguard-demo` and `?load=keyguard` aliases
 
 ### Security
 
-- **Updated SECURITY_ADMIN_GUIDE.md** - CSP documentation now matches actual deployed `connect-src` policy (includes GitHub/GitLab/Cloudflare origins for manifest support)
-- **Added privacy notice** - Documents IP exposure when users load externally-hosted manifests
-- **Verified SW isolation** - Confirmed service worker does not cache manifest-fetched cross-origin content
+- **Content Security Policy** - CSP headers in Report-Only mode with violation logging (`csp-reporter.js`)
+- **Supply chain security** - SBOM generation (CycloneDX), npm audit in CI, lockfile integrity checks
+- **Security Admin Guide** - Deployment hardening documentation with CSP policy details
+- **Privacy notice** - Documents IP exposure for externally-hosted manifest loading
+- **SW message validation** - Service worker isolation verified; no cross-origin cache
+- **escapeHtml hardening** - Extended to all remaining `innerHTML` insertion points
+
+### Fixed
+
+- Always set `data-theme` to resolved value even in auto mode
+- Toggle switch off-state contrast meets 3:1 in all themes
+- Alt View panel remediation (HC passthrough, amber detection, mono toggle)
+- Camera button icon visibility on hover
+- HC toggle knob geometry overflow
+- Edge E2E timeout and Firefox COFF probe failures
+- Sequential render overlap via `_callMainInvoked` guard
+- Heading hierarchy: 4 heading-level skips corrected for screen reader navigation
+- Added `type="button"` to ~75 buttons preventing unintended form submission
+- ARIA cleanup: removed redundant `aria-hidden`, added missing form labels
+- Mono variant: ~20 missing semantic token overrides causing color bleedthrough
+- Focus ring in mono variant uses theme accent color instead of default blue
+- Screen reader error announcements wired to render errors, WASM init, and memory emergencies
+- Non-functional Window menu panel toggles resolved
+- Unhandled promise rejections caught in fire-and-forget chains
+- Ctrl+E shortcut guarded against Expert Mode activation in Beginner mode
+- Nested-array URL parameters no longer silently dropped
+- WASM render cancel latency reduced from 5 s to 200 ms
+- SVG/DXF 3D-model conflict uses accessible guidance modal instead of `alert()`
+- Storage quota errors surfaced via status bar and screen reader announcement
+- Global `window.onerror` and `unhandledrejection` handlers for uncaught errors
+
+### Technical
+
+- 2093 unit tests passing (100%) — up 51% from v4.1.0 baseline (1383)
+- Coverage: 52% statements, 51% branches, 53% functions, 53% lines
+- E2E: 341 tests across 25 test files (Chromium, Edge, Firefox, WebKit)
+- Lighthouse: Performance 100, Accessibility 96, Best Practices 100, SEO 100
+- Bundle: Core 231.8KB/500KB gzipped, CSS 46.5KB/150KB, total 600.2KB/1MB
+- Build: 211 modules, 4.62s production build
+- Visual regression: 13 baselines (10 committed + 3 new)
 
 ---
 
@@ -829,6 +906,7 @@ Multi-variant comparison system for side-by-side parameter testing.
 - **v3.0.0 - v3.1.0** (2026-01-19 to 2026-01-20): Cloudflare deployment, UI/accessibility enhancements
 - **v4.0.0** (2026-01-22): Major stable release with full documentation
 - **v4.1.0** (2026-01-27): Security hardening, saved projects, documentation overhaul
+- **v4.2.0** (2026-03-16): Expert Mode, vector parameters, memory management, desktop parity, Alt View
 
 ## Version Scheme
 
