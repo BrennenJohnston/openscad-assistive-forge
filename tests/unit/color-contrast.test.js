@@ -723,6 +723,169 @@ describe('Pressed Button State - All Themes', () => {
   });
 });
 
+describe('Color Contrast - Mono Green Phosphor (Dark Theme)', () => {
+  /*
+   * Mono green variant: all UI elements rendered in green phosphor (#00ff00)
+   * on a pure black (#000000) background, simulating a classic terminal.
+   * Color values sourced from src/styles/variant.css :root[data-ui-variant='mono'].
+   */
+  const bg = '#000000';
+  const textPrimary = '#00ff00';
+  const textSecondary = '#00cc00';
+  const textTertiary = '#009900';
+  const accent = '#00ff00';
+  const accentHover = '#33ff33';
+  const accentText = '#000000';
+  const border = '#00ff00';
+  const borderLight = '#009900';
+  const focus = '#00ff00';
+
+  it('primary text (#00ff00) on black meets WCAG AA', () => {
+    const ratio = getContrastRatio(textPrimary, bg);
+    expect(ratio).toBeGreaterThanOrEqual(4.5);
+    expect(meetsWCAG_AA(ratio)).toBe(true);
+  });
+
+  it('primary text (#00ff00) on black meets WCAG AAA', () => {
+    const ratio = getContrastRatio(textPrimary, bg);
+    expect(ratio).toBeGreaterThanOrEqual(7.0);
+    expect(meetsWCAG_AAA(ratio)).toBe(true);
+  });
+
+  it('secondary text (#00cc00) on black meets WCAG AA', () => {
+    const ratio = getContrastRatio(textSecondary, bg);
+    expect(ratio).toBeGreaterThanOrEqual(4.5);
+    expect(meetsWCAG_AA(ratio)).toBe(true);
+  });
+
+  it('secondary text (#00cc00) on black meets WCAG AAA', () => {
+    const ratio = getContrastRatio(textSecondary, bg);
+    expect(ratio).toBeGreaterThanOrEqual(7.0);
+    expect(meetsWCAG_AAA(ratio)).toBe(true);
+  });
+
+  it('tertiary text (#009900) on black meets WCAG AA', () => {
+    const ratio = getContrastRatio(textTertiary, bg);
+    expect(ratio).toBeGreaterThanOrEqual(4.5);
+    expect(meetsWCAG_AA(ratio)).toBe(true);
+  });
+
+  // Tertiary (#009900) has ~5.6:1 ratio — passes AA but not AAA (7:1).
+  // This is acceptable: tertiary is used for muted/decorative text only.
+
+  it('accent text on accent background meets non-text contrast', () => {
+    const ratio = getContrastRatio(accentText, accent);
+    expect(ratio).toBeGreaterThanOrEqual(3.0);
+    expect(meetsNonTextContrast(ratio)).toBe(true);
+  });
+
+  it('accent hover on black meets non-text contrast', () => {
+    const ratio = getContrastRatio(accentHover, bg);
+    expect(ratio).toBeGreaterThanOrEqual(3.0);
+    expect(meetsNonTextContrast(ratio)).toBe(true);
+  });
+
+  it('border on black meets non-text contrast', () => {
+    const ratio = getContrastRatio(border, bg);
+    expect(ratio).toBeGreaterThanOrEqual(3.0);
+    expect(meetsNonTextContrast(ratio)).toBe(true);
+  });
+
+  it('border-light (#009900) on black meets non-text contrast', () => {
+    const ratio = getContrastRatio(borderLight, bg);
+    expect(ratio).toBeGreaterThanOrEqual(3.0);
+    expect(meetsNonTextContrast(ratio)).toBe(true);
+  });
+
+  it('focus indicator on black meets non-text contrast', () => {
+    const ratio = getContrastRatio(focus, bg);
+    expect(ratio).toBeGreaterThanOrEqual(3.0);
+    expect(meetsNonTextContrast(ratio)).toBe(true);
+  });
+});
+
+describe('Color Contrast - Mono Amber Phosphor (Light Theme)', () => {
+  /*
+   * Mono amber variant: all UI elements rendered in amber (#ffb000)
+   * on a pure black (#000000) background, simulating a DOS P3 monitor.
+   * Color values sourced from src/styles/variant.css
+   * :root[data-ui-variant='mono'][data-theme='light'].
+   */
+  const bg = '#000000';
+  const textPrimary = '#ffb000';
+  const textSecondary = '#cc8c00';
+  const textTertiary = '#997200';
+  const accent = '#ffb000';
+  const accentHover = '#ffc333';
+  const accentText = '#000000';
+  const border = '#ffb000';
+  const borderLight = '#997200';
+  const focus = '#ffb000';
+
+  it('primary text (#ffb000) on black meets WCAG AA', () => {
+    const ratio = getContrastRatio(textPrimary, bg);
+    expect(ratio).toBeGreaterThanOrEqual(4.5);
+    expect(meetsWCAG_AA(ratio)).toBe(true);
+  });
+
+  it('primary text (#ffb000) on black meets WCAG AAA', () => {
+    const ratio = getContrastRatio(textPrimary, bg);
+    expect(ratio).toBeGreaterThanOrEqual(7.0);
+    expect(meetsWCAG_AAA(ratio)).toBe(true);
+  });
+
+  it('secondary text (#cc8c00) on black meets WCAG AA', () => {
+    const ratio = getContrastRatio(textSecondary, bg);
+    expect(ratio).toBeGreaterThanOrEqual(4.5);
+    expect(meetsWCAG_AA(ratio)).toBe(true);
+  });
+
+  it('secondary text (#cc8c00) on black meets WCAG AAA', () => {
+    const ratio = getContrastRatio(textSecondary, bg);
+    expect(ratio).toBeGreaterThanOrEqual(7.0);
+    expect(meetsWCAG_AAA(ratio)).toBe(true);
+  });
+
+  it('tertiary text (#997200) on black meets WCAG AA', () => {
+    const ratio = getContrastRatio(textTertiary, bg);
+    expect(ratio).toBeGreaterThanOrEqual(4.5);
+    expect(meetsWCAG_AA(ratio)).toBe(true);
+  });
+
+  // Tertiary (#997200) has ~4.8:1 ratio — passes AA but not AAA (7:1).
+  // This is acceptable: tertiary is used for muted/decorative text only.
+
+  it('accent text on accent background meets non-text contrast', () => {
+    const ratio = getContrastRatio(accentText, accent);
+    expect(ratio).toBeGreaterThanOrEqual(3.0);
+    expect(meetsNonTextContrast(ratio)).toBe(true);
+  });
+
+  it('accent hover on black meets non-text contrast', () => {
+    const ratio = getContrastRatio(accentHover, bg);
+    expect(ratio).toBeGreaterThanOrEqual(3.0);
+    expect(meetsNonTextContrast(ratio)).toBe(true);
+  });
+
+  it('border on black meets non-text contrast', () => {
+    const ratio = getContrastRatio(border, bg);
+    expect(ratio).toBeGreaterThanOrEqual(3.0);
+    expect(meetsNonTextContrast(ratio)).toBe(true);
+  });
+
+  it('border-light (#997200) on black meets non-text contrast', () => {
+    const ratio = getContrastRatio(borderLight, bg);
+    expect(ratio).toBeGreaterThanOrEqual(3.0);
+    expect(meetsNonTextContrast(ratio)).toBe(true);
+  });
+
+  it('focus indicator on black meets non-text contrast', () => {
+    const ratio = getContrastRatio(focus, bg);
+    expect(ratio).toBeGreaterThanOrEqual(3.0);
+    expect(meetsNonTextContrast(ratio)).toBe(true);
+  });
+});
+
 describe('APCA Contrast (Future WCAG 3.0) - Informational', () => {
   /**
    * APCA (Accessible Perceptual Contrast Algorithm) is the proposed method
