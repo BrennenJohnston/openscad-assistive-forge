@@ -2401,7 +2401,7 @@ async function initApp() {
           });
 
           document.body.appendChild(modal);
-          modal.querySelector('button[data-action="force"]').focus();
+          modal.querySelector('button[data-action="force"]')?.focus();
         });
       }
 
@@ -7259,11 +7259,16 @@ async function initApp() {
       dimensionsDisplay.classList.remove('hidden');
 
       // Update values
-      document.getElementById('dimX').textContent = `${dimensions.x} mm`;
-      document.getElementById('dimY').textContent = `${dimensions.y} mm`;
-      document.getElementById('dimZ').textContent = `${dimensions.z} mm`;
-      document.getElementById('dimVolume').textContent =
-        `${dimensions.volume.toLocaleString()} mm³`;
+      const dimXEl = document.getElementById('dimX');
+      const dimYEl = document.getElementById('dimY');
+      const dimZEl = document.getElementById('dimZ');
+      const dimVolumeEl = document.getElementById('dimVolume');
+      if (dimXEl) dimXEl.textContent = `${dimensions.x} mm`;
+      if (dimYEl) dimYEl.textContent = `${dimensions.y} mm`;
+      if (dimZEl) dimZEl.textContent = `${dimensions.z} mm`;
+      if (dimVolumeEl)
+        dimVolumeEl.textContent =
+          `${dimensions.volume.toLocaleString()} mm³`;
     } else {
       // Hide dimensions panel
       dimensionsDisplay.classList.add('hidden');
@@ -15832,13 +15837,13 @@ if (rounded) {
 
     // Handle form submission
     const form = modal.querySelector('#savePresetForm');
-    form.addEventListener('submit', (e) => {
+    form?.addEventListener('submit', (e) => {
       e.preventDefault();
 
-      const name = modal.querySelector('#presetName').value.trim();
+      const name = modal.querySelector('#presetName')?.value.trim();
       const description = modal
         .querySelector('#presetDescription')
-        .value.trim();
+        ?.value.trim();
 
       if (!name) {
         alert('Please enter a preset name');

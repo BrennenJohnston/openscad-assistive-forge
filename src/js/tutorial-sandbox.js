@@ -2523,26 +2523,37 @@ async function showStep(stepIndex) {
 
   // Update content (use compact content if viewport is small/zoomed)
   const contentEl = tutorialOverlay.querySelector('#tutorial-panel-content');
-  contentEl.innerHTML = `
-    <h3 class="tutorial-step-title" id="tutorial-step-title">${step.title}</h3>
-    <div class="tutorial-step-content">${getStepContent(step)}</div>
-  `;
+  if (contentEl) {
+    contentEl.innerHTML = `
+      <h3 class="tutorial-step-title" id="tutorial-step-title">${step.title}</h3>
+      <div class="tutorial-step-content">${getStepContent(step)}</div>
+    `;
+  }
 
   // Update progress
-  tutorialOverlay.querySelector('#tutorial-step-current').textContent =
-    stepIndex + 1;
-  tutorialOverlay.querySelector('.tutorial-minimized-progress').textContent =
-    `${stepIndex + 1}/${activeTutorial.steps.length}`;
-  tutorialOverlay.querySelector('.tutorial-minimized-text').textContent =
-    step.autoMinimize ? 'Explore the modal' : 'Tutorial';
+  const stepCurrentEl = tutorialOverlay.querySelector('#tutorial-step-current');
+  if (stepCurrentEl) stepCurrentEl.textContent = stepIndex + 1;
+  const progressEl = tutorialOverlay.querySelector(
+    '.tutorial-minimized-progress'
+  );
+  if (progressEl)
+    progressEl.textContent =
+      `${stepIndex + 1}/${activeTutorial.steps.length}`;
+  const minimizedTextEl = tutorialOverlay.querySelector(
+    '.tutorial-minimized-text'
+  );
+  if (minimizedTextEl)
+    minimizedTextEl.textContent =
+      step.autoMinimize ? 'Explore the modal' : 'Tutorial';
 
   // Update buttons
   const backBtn = tutorialOverlay.querySelector('#tutorialBackBtn');
   const nextBtn = tutorialOverlay.querySelector('#tutorialNextBtn');
 
-  backBtn.disabled = stepIndex === 0;
-  nextBtn.textContent =
-    stepIndex === activeTutorial.steps.length - 1 ? 'Finish ✓' : 'Next →';
+  if (backBtn) backBtn.disabled = stepIndex === 0;
+  if (nextBtn)
+    nextBtn.textContent =
+      stepIndex === activeTutorial.steps.length - 1 ? 'Finish ✓' : 'Next →';
 
   // Setup completion gate
   setupCompletion(step);

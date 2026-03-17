@@ -321,11 +321,11 @@ export function showUpdateToast(container = document.body) {
   container.appendChild(toast);
 
   // Event handlers
-  document.getElementById('updateNowBtn').addEventListener('click', () => {
+  document.getElementById('updateNowBtn')?.addEventListener('click', () => {
     applyUpdate();
   });
 
-  document.getElementById('updateLaterBtn').addEventListener('click', () => {
+  document.getElementById('updateLaterBtn')?.addEventListener('click', () => {
     toast.remove();
   });
 
