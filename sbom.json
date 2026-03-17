@@ -82,8 +82,8 @@
     "component": {
       "type": "application",
       "name": "openscad-assistive-forge",
-      "version": "4.1.0",
-      "bom-ref": "openscad-assistive-forge@4.1.0",
+      "version": "4.2.0",
+      "bom-ref": "openscad-assistive-forge@4.2.0",
       "author": "Brennen Johnston",
       "description": "Accessibility-first web-based OpenSCAD customizer with client-side WASM rendering and developer toolchain",
       "licenses": [
