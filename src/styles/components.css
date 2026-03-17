@@ -3821,6 +3821,27 @@ body.high-contrast .param-tooltip {
   flex: 1;
 }
 
+/* Mobile: keep number fields readable when default hints are long.
+   Without wrapping, "(default: ...)" can consume the row and collapse
+   the number input to a few pixels. */
+@media (max-width: 767px) {
+  .number-input-container {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .number-input-container input[type='number'] {
+    flex: 1 1 120px;
+  }
+
+  .number-input-container .param-default-value {
+    order: 3;
+    flex-basis: 100%;
+    margin-left: 0;
+    margin-top: var(--space-xs);
+  }
+}
+
 /* Unit Label */
 .unit-label {
   font-size: var(--font-size-sm);

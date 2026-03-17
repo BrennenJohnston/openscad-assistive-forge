@@ -2164,7 +2164,8 @@ async function initApp() {
   // Listen for storage-quota-exceeded events dispatched by preset-manager
   // when localStorage is full, so the user gets visible + audible feedback.
   window.addEventListener('storage-quota-exceeded', (e) => {
-    const msg = e.detail?.message || 'Storage is full. Data could not be saved.';
+    const msg =
+      e.detail?.message || 'Storage is full. Data could not be saved.';
     updateStatus(msg, 'error');
     _announceError(msg);
   });
@@ -3765,10 +3766,10 @@ async function initApp() {
         type: 'submenu',
         label: 'Examples',
         items: Object.entries(EXAMPLE_DEFINITIONS).map(([key, def]) => ({
-            type: 'action',
-            label: def.description || def.name,
-            handler: () => loadExampleByKey(key),
-          })),
+          type: 'action',
+          label: def.description || def.name,
+          handler: () => loadExampleByKey(key),
+        })),
       },
       {
         type: 'action',
@@ -7267,8 +7268,7 @@ async function initApp() {
       if (dimYEl) dimYEl.textContent = `${dimensions.y} mm`;
       if (dimZEl) dimZEl.textContent = `${dimensions.z} mm`;
       if (dimVolumeEl)
-        dimVolumeEl.textContent =
-          `${dimensions.volume.toLocaleString()} mm³`;
+        dimVolumeEl.textContent = `${dimensions.volume.toLocaleString()} mm³`;
     } else {
       // Hide dimensions panel
       dimensionsDisplay.classList.add('hidden');
@@ -8714,6 +8714,9 @@ async function initApp() {
       requiredFiles?.files &&
       typeof window.updateConsoleOutput === 'function'
     ) {
+      const knownLibraryIdSet = new Set(
+        Object.keys(LIBRARY_DEFINITIONS).map((id) => id.toLowerCase())
+      );
       const projectBasenames = projectFiles
         ? new Set(
             Array.from(projectFiles.keys()).map((p) =>
@@ -8723,9 +8726,18 @@ async function initApp() {
         : new Set();
       const missing = requiredFiles.files.filter((f) => {
         if (!f.required) return false;
+        if (typeof f.path !== 'string' || f.path.trim() === '') return false;
+        const normalizedPath = f.path.trim().replace(/^\/+/, '');
+        const pathParts = normalizedPath.split('/');
+        const firstSegment = pathParts[0].toLowerCase();
+        const isLibraryReference =
+          pathParts.length > 1 && knownLibraryIdSet.has(firstSegment);
+        // Companion-file warnings should not include library include/use refs.
+        if (isLibraryReference) return false;
         if (!projectFiles) return true;
         if (projectFiles.has(f.path)) return false;
-        return !projectBasenames.has(f.path.split('/').pop().toLowerCase());
+        const baseName = pathParts[pathParts.length - 1].toLowerCase();
+        return !projectBasenames.has(baseName);
       });
       if (missing.length > 0) {
         const warnings = missing

@@ -17,22 +17,36 @@ add_lid = "yes"; // [yes, no] Add a lid
 add_feet = "yes"; // [yes, no] Add feet to bottom
 
 module colored_box() {
-    difference() {
-        // Outer box
-        if (use_colors == "yes") {
+    if (use_colors == "yes") {
+        // Color the full shell result so interior faces from difference()
+        // inherit box_color instead of CSG operation colors.
+        color(str("#", box_color))
+        difference() {
+            // Outer box
             color(str("#", box_color))
             cube([width, depth, height]);
-        } else {
-            cube([width, depth, height]);
+            
+            // Hollow interior
+            translate([wall_thickness, wall_thickness, wall_thickness])
+            cube([
+                width - 2 * wall_thickness, 
+                depth - 2 * wall_thickness, 
+                height
+            ]);
         }
-        
-        // Hollow interior
-        translate([wall_thickness, wall_thickness, wall_thickness])
-        cube([
-            width - 2 * wall_thickness, 
-            depth - 2 * wall_thickness, 
-            height
-        ]);
+    } else {
+        difference() {
+            // Outer box
+            cube([width, depth, height]);
+            
+            // Hollow interior
+            translate([wall_thickness, wall_thickness, wall_thickness])
+            cube([
+                width - 2 * wall_thickness, 
+                depth - 2 * wall_thickness, 
+                height
+            ]);
+        }
     }
     
     // Add feet if enabled

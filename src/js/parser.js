@@ -1057,8 +1057,21 @@ export function extractParameters(scadContent) {
     }
   }
 
-  // If no groups were found, create a default group
-  if (groups.length === 0) {
+  // Ensure the implicit "General" group exists whenever any parameter is
+  // assigned to it.  The previous check (`groups.length === 0`) missed the
+  // common case where ungrouped parameters appear *before* the first explicit
+  // `/* [Tab] */` header — the explicit group made `groups.length > 0` so the
+  // "General" entry was never created and those parameters were invisible.
+  const hasGeneralParams = Object.values(parameters).some(
+    (p) => p.group === 'General'
+  );
+  if (hasGeneralParams && !groups.find((g) => g.id === 'General')) {
+    groups.unshift({
+      id: 'General',
+      label: 'General',
+      order: -1,
+    });
+  } else if (groups.length === 0) {
     groups.push({
       id: 'General',
       label: 'General',

@@ -2537,14 +2537,14 @@ async function showStep(stepIndex) {
     '.tutorial-minimized-progress'
   );
   if (progressEl)
-    progressEl.textContent =
-      `${stepIndex + 1}/${activeTutorial.steps.length}`;
+    progressEl.textContent = `${stepIndex + 1}/${activeTutorial.steps.length}`;
   const minimizedTextEl = tutorialOverlay.querySelector(
     '.tutorial-minimized-text'
   );
   if (minimizedTextEl)
-    minimizedTextEl.textContent =
-      step.autoMinimize ? 'Explore the modal' : 'Tutorial';
+    minimizedTextEl.textContent = step.autoMinimize
+      ? 'Explore the modal'
+      : 'Tutorial';
 
   // Update buttons
   const backBtn = tutorialOverlay.querySelector('#tutorialBackBtn');

@@ -1289,9 +1289,10 @@ export class PreviewManager {
         // COFF files from other tools use float 0-1 values. We auto-detect.
         const positions = [];
         const colors = [];
+        const rawColors = [];
         let hasColors = false;
         let colorScale = 1;
-        let colorFormatDetected = false;
+        let rawColorMax = 0;
 
         const faceStart = dataStartLine + numVerts;
         for (let i = 0; i < numFaces; i++) {
@@ -1320,21 +1321,33 @@ export class PreviewManager {
               vertices[vb * 3 + 2]
             );
             if (hasInlineColor) {
-              if (!colorFormatDetected) {
-                const sample = Math.max(
-                  parts[n + 1],
-                  parts[n + 2],
-                  parts[n + 3]
-                );
-                colorScale = sample > 1 ? 1 / 255 : 1;
-                colorFormatDetected = true;
-              }
-              const r = parts[n + 1] * colorScale;
-              const g = parts[n + 2] * colorScale;
-              const b = parts[n + 3] * colorScale;
-              colors.push(r, g, b, r, g, b, r, g, b);
+              const rawR = parts[n + 1];
+              const rawG = parts[n + 2];
+              const rawB = parts[n + 3];
+              rawColorMax = Math.max(rawColorMax, rawR, rawG, rawB);
+              rawColors.push(
+                rawR,
+                rawG,
+                rawB,
+                rawR,
+                rawG,
+                rawB,
+                rawR,
+                rawG,
+                rawB
+              );
               hasColors = true;
             }
+          }
+        }
+        if (hasColors && rawColors.length > 0) {
+          // Use global max across all inline colors to avoid first-face-black misdetection.
+          colorScale = rawColorMax > 1 ? 1 / 255 : 1;
+          for (let i = 0; i < rawColors.length; i += 3) {
+            const r = rawColors[i] * colorScale;
+            const g = rawColors[i + 1] * colorScale;
+            const b = rawColors[i + 2] * colorScale;
+            colors.push(r, g, b);
           }
         }
 

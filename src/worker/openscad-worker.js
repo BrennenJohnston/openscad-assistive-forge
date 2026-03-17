@@ -1017,7 +1017,6 @@ async function mountLibraries(libraries) {
 
       if (manifest && Array.isArray(manifest.files)) {
         const files = manifest.files || [];
-        let failedSample = null;
 
         ensureDir(libRoot);
 
@@ -1045,15 +1044,12 @@ async function mountLibraries(libraries) {
 
               FS.writeFile(filePath, content);
               totalMounted++;
-            } else {
-              if (!failedSample) failedSample = file;
             }
           } catch (error) {
             console.warn(
               `[Worker FS] Failed to mount ${file} from ${lib.id}:`,
               error.message
             );
-            if (!failedSample) failedSample = file;
           }
         }
 
@@ -1106,12 +1102,49 @@ function serializeScadVector(arr) {
 }
 
 /**
+ * Detect how a color parameter is declared in the SCAD source.
+ * This allows runtime values from the UI to preserve expected literal style:
+ * - string defaults should remain strings (with/without leading #)
+ * - vector defaults should keep vector serialization
+ *
+ * @param {string} scadContent
+ * @param {string} key
+ * @returns {{style: 'string'|'vector'|'unknown', hasHashPrefix: boolean}}
+ */
+function detectColorParamLiteralStyle(scadContent, key) {
+  if (!scadContent || typeof scadContent !== 'string' || !key) {
+    return { style: 'unknown', hasHashPrefix: false };
+  }
+
+  const keyRe = escapeRegExp(key);
+  const assignmentRe = new RegExp(`^\\s*${keyRe}\\s*=\\s*([^;]+);`, 'm');
+  const match = scadContent.match(assignmentRe);
+  if (!match) {
+    return { style: 'unknown', hasHashPrefix: false };
+  }
+
+  const rhs = String(match[1] || '').trim();
+  if (rhs.startsWith('[')) {
+    return { style: 'vector', hasHashPrefix: false };
+  }
+
+  const quote = rhs[0];
+  if ((quote === '"' || quote === "'") && rhs.endsWith(quote)) {
+    const inner = rhs.slice(1, -1).trim();
+    return { style: 'string', hasHashPrefix: inner.startsWith('#') };
+  }
+
+  return { style: 'unknown', hasHashPrefix: false };
+}
+
+/**
  * Build -D command-line arguments from parameters
  * @param {Object} parameters - Parameter key-value pairs
  * @param {Object} paramTypes - Map of parameter names to their schema types (e.g. { expose_home_button: 'string', MW_version: 'boolean' })
+ * @param {string} scadContent - Source used to infer color literal style
  * @returns {Array<string>} Array of -D arguments
  */
-function buildDefineArgs(parameters, paramTypes = {}) {
+function buildDefineArgs(parameters, paramTypes = {}, scadContent = '') {
   if (!parameters || Object.keys(parameters).length === 0) {
     return [];
   }
@@ -1146,8 +1179,21 @@ function buildDefineArgs(parameters, paramTypes = {}) {
       }
       // Check if this is a color (hex string)
       else if (/^#?[0-9A-Fa-f]{6}$/.test(value)) {
-        const rgb = hexToRgb(value);
-        formattedValue = `[${rgb[0]},${rgb[1]},${rgb[2]}]`;
+        const colorStyle =
+          paramTypes[key] === 'color'
+            ? detectColorParamLiteralStyle(scadContent, key)
+            : { style: 'unknown', hasHashPrefix: false };
+
+        if (paramTypes[key] === 'color' && colorStyle.style === 'string') {
+          const normalizedHex = value.replace(/^#/, '').toUpperCase();
+          const literal = colorStyle.hasHashPrefix
+            ? `#${normalizedHex}`
+            : normalizedHex;
+          formattedValue = `"${literal}"`;
+        } else {
+          const rgb = hexToRgb(value);
+          formattedValue = `[${rgb[0]},${rgb[1]},${rgb[2]}]`;
+        }
       }
       // When the schema declares a numeric type, a string value resolved from a
       // numeric enum (e.g. resolve2DExportParameters returning '1' for a
@@ -1463,6 +1509,34 @@ async function renderWithCallMain(
       module.ENV.OPENSCADPATH = searchPaths.join(':');
     }
 
+    // Symlink workaround: OpenSCAD searches "directory of calling file" first.
+    // When main is /tmp/input.scad, it looks for MCAD/boxes.scad as /tmp/MCAD/boxes.scad
+    // before OPENSCADPATH. Create symlinks so that search succeeds.
+    const symlinkInputDir =
+      inputFile.substring(0, inputFile.lastIndexOf('/')) || '/tmp';
+    if (symlinkInputDir && mountedLibraries.size > 0) {
+      for (const libId of mountedLibraries) {
+        const libPath = `/libraries/${libId}`;
+        const symlinkPath = `${symlinkInputDir}/${libId}`;
+        try {
+          try {
+            module.FS.unlink(symlinkPath);
+          } catch (_e) {
+            /* path may not exist */
+          }
+          module.FS.symlink(libPath, symlinkPath);
+          console.log(
+            `[Worker FS] Symlinked ${symlinkPath} -> ${libPath} for include resolution`
+          );
+        } catch (e) {
+          console.warn(
+            `[Worker FS] Failed to symlink ${libId} for include resolution:`,
+            e.message
+          );
+        }
+      }
+    }
+
     // For 2D exports (SVG/DXF), the SCAD file's own logic — driven by
     // parameters like generate="first layer for SVG/DXF file" — is
     // responsible for producing 2D geometry (via its own projection()
@@ -1471,7 +1545,7 @@ async function renderWithCallMain(
       module.FS.writeFile(inputFile, scadContent);
       wroteTempInput = true;
     }
-    const defineArgs = buildDefineArgs(parameters, paramTypes);
+    const defineArgs = buildDefineArgs(parameters, paramTypes, scadContent);
 
     // Pre-render guard: scan SCAD source for known-crashy functions
     // roof() and projection() trigger CGAL assertion failures in WASM (openscad-wasm#5, #6)

@@ -250,7 +250,8 @@ export class ErrorLogPanel {
     return this.entries
       .map((e) => {
         const ts = new Date(e.timestamp).toISOString();
-        const loc = e.line !== null ? `${e.file || ''}:${e.line}` : e.file || '';
+        const loc =
+          e.line !== null ? `${e.file || ''}:${e.line}` : e.file || '';
         return `[${ts}] [${e.type.toUpperCase()}] ${loc ? loc + ' — ' : ''}${e.message}`;
       })
       .join('\n');

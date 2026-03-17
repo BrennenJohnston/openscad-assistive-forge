@@ -282,7 +282,10 @@ export class AutoPreviewController {
     this.initialPreviewDone = false;
 
     // Reset auto-color override so previous project's colors don't leak
-    if (this._autoColorEnabled && this.previewManager?.setColorOverrideEnabled) {
+    if (
+      this._autoColorEnabled &&
+      this.previewManager?.setColorOverrideEnabled
+    ) {
       this.previewManager.setColorOverrideEnabled(false);
       this.previewManager.setColorOverride(null);
       this._autoColorEnabled = false;
@@ -482,6 +485,7 @@ export class AutoPreviewController {
     if (!cached) return;
 
     try {
+      const cachedFormat = cached.format || 'stl';
       let previewColor = null;
       try {
         const params = JSON.parse(paramHash);
@@ -490,7 +494,12 @@ export class AutoPreviewController {
         previewColor = null;
       }
       if (this.previewManager?.setColorOverride) {
-        if (previewColor !== null) {
+        if (cachedFormat === 'off') {
+          // OFF/COFF carries model face colors; force-disable single-color override.
+          this.previewManager.setColorOverrideEnabled(false);
+          this.previewManager.setColorOverride(null);
+          this._autoColorEnabled = false;
+        } else if (previewColor !== null) {
           this.previewManager.setColorOverrideEnabled(true);
           this.previewManager.setColorOverride(previewColor);
           this._autoColorEnabled = true;
@@ -511,7 +520,6 @@ export class AutoPreviewController {
         this.previewManager.setRenderState(this._detectRenderState(params));
       }
       // Preserve camera position on subsequent loads (after initial preview)
-      const cachedFormat = cached.format || 'stl';
       const loadResult =
         cachedFormat === 'off' && this.previewManager.loadOFF
           ? await this.previewManager.loadOFF(cached.stl, {
@@ -946,18 +954,27 @@ export class AutoPreviewController {
       this.addToCache(cacheKey, result, durationMs);
       this.previewParamHash = paramHash;
       this.previewCacheKey = cacheKey;
+      const resultFormat = result.format || 'stl';
 
       // Load into 3D preview — auto-enable color override from SCAD params
       if (this.previewManager?.setColorOverride) {
-        const previewColor = this.resolvePreviewColor(parameters);
-        if (previewColor !== null) {
-          this.previewManager.setColorOverrideEnabled(true);
-          this.previewManager.setColorOverride(previewColor);
-          this._autoColorEnabled = true;
-        } else if (this._autoColorEnabled) {
+        let previewColor = null;
+        if (resultFormat === 'off') {
+          // OFF/COFF carries model face colors; force-disable single-color override.
           this.previewManager.setColorOverrideEnabled(false);
           this.previewManager.setColorOverride(null);
           this._autoColorEnabled = false;
+        } else {
+          previewColor = this.resolvePreviewColor(parameters);
+          if (previewColor !== null) {
+            this.previewManager.setColorOverrideEnabled(true);
+            this.previewManager.setColorOverride(previewColor);
+            this._autoColorEnabled = true;
+          } else if (this._autoColorEnabled) {
+            this.previewManager.setColorOverrideEnabled(false);
+            this.previewManager.setColorOverride(null);
+            this._autoColorEnabled = false;
+          }
         }
       }
       // Set render state so the model color reflects preview/laser quality
@@ -965,7 +982,6 @@ export class AutoPreviewController {
         this.previewManager.setRenderState(this._detectRenderState(parameters));
       }
       // Preserve camera position on subsequent loads (after initial preview)
-      const resultFormat = result.format || 'stl';
       const loadResult =
         resultFormat === 'off' && this.previewManager.loadOFF
           ? await this.previewManager.loadOFF(result.stl, {
@@ -1163,24 +1179,14 @@ export class AutoPreviewController {
       (AutoPreviewController.scadUsesColor(this.currentScadContent) ||
         hasDebugModifier);
 
-    // F6 parity: the desktop F6 render ignores color() calls and instead
-    // shows CSG operation face colors (yellow positive, green subtracted).
-    // The WASM Manifold backend applies user color() values by default,
-    // overriding CSG face coloring. Strip color() calls from the source
-    // so the engine falls back to CSG operation colors for the OFF preview.
-    const scadContentForRender = useColorPassthrough
-      ? AutoPreviewController.stripColorCalls(this.currentScadContent)
-      : this.currentScadContent;
+    // Manifold backend parity: the WASM Manifold backend preserves user
+    // color() calls in the rendered geometry (matching desktop Manifold F6).
+    // Previous versions stripped color() to emulate legacy CGAL F6 behavior
+    // (yellow positive / green subtracted CSG face colors), but the web app
+    // always uses Manifold, so we now pass the original source through.
+    const scadContentForRender = this.currentScadContent;
 
-    // When stripping color() calls, the modified content must also replace
-    // the main file in the project files map. The worker mounts the files map
-    // to its virtual FS and uses the mounted file (not the scadContent param)
-    // when a mainFile path is provided.
-    let filesForRender = this.projectFiles;
-    if (useColorPassthrough && this.projectFiles && this.mainFilePath) {
-      filesForRender = new Map(this.projectFiles);
-      filesForRender.set(this.mainFilePath, scadContentForRender);
-    }
+    const filesForRender = this.projectFiles;
 
     const renderOptions = {
       files: filesForRender,
@@ -1223,15 +1229,22 @@ export class AutoPreviewController {
       const shouldPreserveColorPreview =
         resultFormat === 'stl' && currentPreviewHasColors;
       if (this.previewManager?.setColorOverride) {
-        const previewColor = this.resolvePreviewColor(parameters);
-        if (previewColor !== null) {
-          this.previewManager.setColorOverrideEnabled(true);
-          this.previewManager.setColorOverride(previewColor);
-          this._autoColorEnabled = true;
-        } else if (this._autoColorEnabled) {
+        if (resultFormat === 'off') {
+          // OFF/COFF carries model face colors; force-disable single-color override.
           this.previewManager.setColorOverrideEnabled(false);
           this.previewManager.setColorOverride(null);
           this._autoColorEnabled = false;
+        } else {
+          const previewColor = this.resolvePreviewColor(parameters);
+          if (previewColor !== null) {
+            this.previewManager.setColorOverrideEnabled(true);
+            this.previewManager.setColorOverride(previewColor);
+            this._autoColorEnabled = true;
+          } else if (this._autoColorEnabled) {
+            this.previewManager.setColorOverrideEnabled(false);
+            this.previewManager.setColorOverride(null);
+            this._autoColorEnabled = false;
+          }
         }
       }
       if (this.previewManager?.setRenderState) {
