@@ -277,7 +277,7 @@ function resolve2DExportParameters(parameters, schema, format) {
 
 // Example definitions (used by welcome screen, Features Guide, and deep-linking)
 // Direct-launch URLs for external website integration
-// Usage: ?load=keyguard-demo or ?example=simple-box
+// Usage: ?example=simple-box or ?load=colored-box
 const EXAMPLE_DEFINITIONS = {
   'simple-box': {
     path: '/examples/simple-box/simple_box.scad',
@@ -299,22 +299,6 @@ const EXAMPLE_DEFINITIONS = {
     path: '/examples/multi-file-box.zip',
     name: 'multi-file-box.zip',
   },
-  // Keyguard Designer Demo (multi-file example with companion files)
-  // Usage: https://assistive-forge.example.com/?load=keyguard-demo
-  'keyguard-demo': {
-    path: '/examples/keyguard-demo/keyguard_demo.scad',
-    name: 'keyguard_demo.scad',
-    description: 'Keyguard Designer Demo (multi-file)',
-    author: 'Community',
-    // Additional files to load (multi-file design package)
-    additionalFiles: ['/examples/keyguard-demo/openings_and_additions.txt'],
-  },
-  // Short alias for keyguard demo example
-  keyguard: {
-    path: '/examples/keyguard-demo/keyguard_demo.scad',
-    name: 'keyguard_demo.scad',
-    additionalFiles: ['/examples/keyguard-demo/openings_and_additions.txt'],
-  },
   // Additional examples for deep-linking
   'cable-organizer': {
     path: '/examples/cable-organizer/cable_organizer.scad',
@@ -323,14 +307,6 @@ const EXAMPLE_DEFINITIONS = {
   'honeycomb-grid': {
     path: '/examples/honeycomb-grid/honeycomb_grid.scad',
     name: 'honeycomb_grid.scad',
-  },
-  'phone-stand': {
-    path: '/examples/phone-stand/phone_stand.scad',
-    name: 'phone_stand.scad',
-  },
-  'wall-hook': {
-    path: '/examples/wall-hook/wall_hook.scad',
-    name: 'wall_hook.scad',
   },
 };
 
@@ -3789,9 +3765,7 @@ async function initApp() {
       {
         type: 'submenu',
         label: 'Examples',
-        items: Object.entries(EXAMPLE_DEFINITIONS)
-          .filter(([key]) => key !== 'keyguard')
-          .map(([key, def]) => ({
+        items: Object.entries(EXAMPLE_DEFINITIONS).map(([key, def]) => ({
             type: 'action',
             label: def.description || def.name,
             handler: () => loadExampleByKey(key),
@@ -11914,7 +11888,7 @@ if (rounded) {
   // =========================================
   // Deep-linking: URL parameter support for external website integration
   // Allows external sites to link directly to Forge with a specific example loaded
-  // Usage: ?example=simple-box or ?load=keyguard-demo
+  // Usage: ?example=simple-box or ?load=colored-box
   // Note: ?load= is an alias for ?example= (for website embedding convenience)
   // =========================================
   const initUrlParams = new URLSearchParams(window.location.search);

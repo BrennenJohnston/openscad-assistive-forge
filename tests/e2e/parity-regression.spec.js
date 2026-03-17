@@ -6,7 +6,7 @@
  * maps to one or more scenario IDs (S-001 through S-016) from
  * docs/audit/scenario-matrix.md.
  *
- * Fixture: keyguard v75 (multi-preset, companion files, color() + # modifier)
+ * Fixture: keyguard-minimal (tests/fixtures/, multi-preset, companion files, color() + # modifier)
  * Reference: docs/audit/parity-remediation-validation-report.md
  *
  * @license GPL-3.0-or-later
@@ -90,9 +90,13 @@ async function uploadMultipleFiles(page, filePaths) {
   } catch { /* modal may not appear */ }
 }
 
-async function loadKeyguardDemo(page) {
-  await page.goto('/?example=keyguard-demo');
-  await page.locator('#mainInterface').waitFor({ state: 'visible', timeout: 40_000 });
+const KEYGUARD_FIXTURE = path.resolve(
+  __dirname, '..', 'fixtures', 'keyguard-minimal', 'keyguard_minimal.scad',
+);
+
+async function loadKeyguardFixture(page) {
+  await page.goto('/');
+  await uploadFile(page, KEYGUARD_FIXTURE);
   await page.waitForSelector('.param-control', { state: 'attached', timeout: 25_000 });
 }
 
@@ -220,7 +224,7 @@ test.describe('Parity — Debug Modifier Dual-Render (S-005)', () => {
     const consoleMessages = [];
     page.on('console', (msg) => consoleMessages.push(msg.text()));
 
-    await loadKeyguardDemo(page);
+    await loadKeyguardFixture(page);
     await waitForPreviewIdle(page, { timeout: 90_000 });
 
     const hasDebugHighlight = consoleMessages.some((message) =>
@@ -251,7 +255,7 @@ test.describe('Parity — Blank Display (S-007)', () => {
   test('viewport cleared when generate = Customizer Settings', async ({ page }) => {
     test.skip(isCI, 'WASM rendering is slow/unreliable in CI');
 
-    await loadKeyguardDemo(page);
+    await loadKeyguardFixture(page);
     await waitForPreviewIdle(page, { timeout: 90_000 });
 
     const generateParam = page
@@ -463,7 +467,7 @@ test.describe('Parity — Preset Cycling Stability (S-014)', () => {
   test('3+ sequential preset switches each produce geometry', async ({ page }) => {
     test.skip(isCI, 'WASM rendering is slow/unreliable in CI');
 
-    await loadKeyguardDemo(page);
+    await loadKeyguardFixture(page);
     await waitForPreviewIdle(page, { timeout: 90_000 });
     await expandPresetControls(page);
 

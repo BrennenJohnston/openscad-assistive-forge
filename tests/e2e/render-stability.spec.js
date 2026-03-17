@@ -37,11 +37,11 @@ test.beforeEach(async ({ page }) => {
 });
 
 /**
- * Navigate to the keyguard-demo example and wait for it to fully load.
- * This example ships with companion files and multiple presets.
+ * Navigate to the colored-box example and wait for it to fully load.
+ * Used as a parametric fixture for render stability tests.
  */
-async function loadKeyguardDemo(page) {
-  await page.goto('/?example=keyguard-demo');
+async function loadParametricExample(page) {
+  await page.goto('/?example=colored-box');
   await page.locator('#mainInterface').waitFor({ state: 'visible', timeout: 40_000 });
   await page.waitForSelector('.param-control', { state: 'attached', timeout: 25_000 });
 }
@@ -123,7 +123,7 @@ test.describe('Render Stability — Preset Cycling (BUG-A post-fix)', () => {
   test('should complete a render for each of the first 5 presets', async ({ page }) => {
     test.skip(isCI, 'WASM rendering is slow/unreliable in CI');
 
-    await loadKeyguardDemo(page);
+    await loadParametricExample(page);
 
     // Get the list of available presets
     const allPresets = await getPresetOptions(page);
@@ -167,7 +167,7 @@ test.describe('Render Stability — Preset Cycling (BUG-A post-fix)', () => {
   test('should produce a non-empty 3D canvas on initial preset load', async ({ page }) => {
     test.skip(isCI, 'WASM rendering is slow/unreliable in CI');
 
-    await loadKeyguardDemo(page);
+    await loadParametricExample(page);
 
     // Wait for initial render
     await waitForPreviewIdle(page, { timeout: 90_000 });
@@ -191,7 +191,7 @@ test.describe('Render Stability — Customizer Settings Mode (BUG-B post-fix)', 
   test('should show informational state when generate = Customizer Settings', async ({ page }) => {
     test.skip(isCI, 'WASM rendering is slow/unreliable in CI');
 
-    await loadKeyguardDemo(page);
+    await loadParametricExample(page);
 
     // Wait for initial render to complete
     await waitForPreviewIdle(page, { timeout: 90_000 });
@@ -248,7 +248,7 @@ test.describe('Render Stability — Customizer Settings Mode (BUG-B post-fix)', 
   test('should allow mesh to reappear after switching back to 3D mode', async ({ page }) => {
     test.skip(isCI, 'WASM rendering is slow/unreliable in CI');
 
-    await loadKeyguardDemo(page);
+    await loadParametricExample(page);
     await waitForPreviewIdle(page, { timeout: 90_000 });
 
     const generateParam = page.locator('.param-control').filter({ hasText: /^generate/i });
@@ -268,10 +268,10 @@ test.describe('Render Stability — Customizer Settings Mode (BUG-B post-fix)', 
     await generateSelect.selectOption({ label: /customizer/i });
     await page.waitForTimeout(1500);
 
-    // Switch back to 3D preview mode — try to find an option containing '3D' or 'keyguard'
+    // Switch back to 3D preview mode
     const threeDoption = generateSelect
       .locator('option')
-      .filter({ hasText: /3D|keyguard|preview/i })
+      .filter({ hasText: /3D|preview/i })
       .first();
     if ((await threeDoption.count()) === 0) {
       test.skip();
@@ -350,7 +350,7 @@ test.describe('Render Stability — Console Panel Interactions (BUG-C post-fix)'
     const consoleMessages = [];
     page.on('console', (msg) => consoleMessages.push(msg.text()));
 
-    await loadKeyguardDemo(page);
+    await loadParametricExample(page);
     await waitForPreviewIdle(page, { timeout: 90_000 });
 
     const generateParam = page.locator('.param-control').filter({ hasText: /^generate/i });
@@ -395,10 +395,10 @@ test.describe('Render Stability — Console Panel Interactions (BUG-C post-fix)'
 // ─── Test Suite 4: DXF Export (BUG-D baseline) ────────────────────────────────
 
 test.describe('Render Stability — DXF Export (BUG-D post-fix)', () => {
-  test('should export a non-empty, parseable DXF file from keyguard', async ({ page }) => {
+  test('should export a non-empty, parseable DXF file from parametric example', async ({ page }) => {
     test.skip(isCI, 'WASM rendering is slow/unreliable in CI');
 
-    await loadKeyguardDemo(page);
+    await loadParametricExample(page);
     await waitForPreviewIdle(page, { timeout: 90_000 });
 
     // Switch generate to a 2D export mode (first layer / laser cut)
@@ -552,7 +552,7 @@ test.describe('Render Stability — 2D/3D Preview Transitions', () => {
   test('SVG panel is hidden and 3D canvas visible after switching from 2D to 3D mode', async ({ page }) => {
     test.skip(isCI, 'WASM rendering is slow/unreliable in CI');
 
-    await loadKeyguardDemo(page);
+    await loadParametricExample(page);
     await waitForPreviewIdle(page, { timeout: 90_000 });
 
     // Find the generate parameter dropdown

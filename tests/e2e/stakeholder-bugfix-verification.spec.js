@@ -27,17 +27,6 @@ test.beforeEach(async ({ page }) => {
 })
 
 /**
- * Load keyguard-demo example via deep-link (includes companion file).
- * The example ships WITH openings_and_additions.txt, so it appears as present.
- */
-const loadKeyguardDemo = async (page) => {
-  await page.goto('/?example=keyguard-demo')
-  const mainInterface = page.locator('#mainInterface')
-  await mainInterface.waitFor({ state: 'visible', timeout: 30000 })
-  await page.waitForSelector('.param-control', { state: 'attached', timeout: 20000 })
-}
-
-/**
  * Load simple-box example (no companion files).
  */
 const loadSimpleBoxExample = async (page) => {
