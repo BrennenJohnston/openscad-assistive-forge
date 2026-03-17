@@ -638,6 +638,61 @@ export class AutoPreviewController {
   }
 
   /**
+   * Count distinct face colors in OFF/COFF data without full parsing.
+   * Used to detect monochrome output (single color wrapping all geometry)
+   * which indicates the author's color() calls don't provide useful
+   * differentiation and CSG operation face colors would be more informative.
+   *
+   * Returns early once 2 distinct colors are found (avoids scanning all faces).
+   *
+   * @param {ArrayBuffer|string} offData - OFF/COFF file content
+   * @returns {number} Number of unique face colors (0 = no colors, 1 = monochrome, 2+ = multi-color)
+   */
+  static countUniqueOFFColors(offData) {
+    if (!offData) return 0;
+    const text =
+      typeof offData === 'string' ? offData : new TextDecoder().decode(offData);
+
+    const lines = text
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0 && !l.startsWith('#'));
+
+    if (lines.length === 0) return 0;
+
+    const firstLine = lines[0].toUpperCase();
+    if (!firstLine.startsWith('OFF') && !firstLine.startsWith('COFF')) return 0;
+
+    const headerParts = lines[0].split(/\s+/);
+    let countLineIdx;
+    if (headerParts.length >= 3 && !isNaN(Number(headerParts[1]))) {
+      countLineIdx = 0;
+    } else {
+      countLineIdx = 1;
+    }
+    const countParts =
+      countLineIdx === 0
+        ? headerParts.slice(1)
+        : lines[countLineIdx].split(/\s+/);
+    const numVerts = Number(countParts[0]);
+    const numFaces = Number(countParts[1]);
+    const dataStartLine = countLineIdx + 1;
+    const faceStart = dataStartLine + numVerts;
+
+    const uniqueColors = new Set();
+    for (let i = 0; i < numFaces && faceStart + i < lines.length; i++) {
+      const parts = lines[faceStart + i].split(/\s+/).map(Number);
+      const n = parts[0];
+      if (parts.length >= n + 4) {
+        uniqueColors.add(`${parts[n + 1]},${parts[n + 2]},${parts[n + 3]}`);
+        if (uniqueColors.size >= 2) return 2;
+      }
+    }
+
+    return uniqueColors.size;
+  }
+
+  /**
    * Strip color() transformation calls from SCAD source, preserving child
    * geometry. This simulates desktop F6 render behavior where color() is
    * ignored and the engine applies CSG operation face colors instead.
@@ -950,11 +1005,63 @@ export class AutoPreviewController {
         return;
       }
 
+      // Monochrome fallback: if the OFF output has only 1 unique face color,
+      // the author's color() calls wrap all geometry in a single hue, which
+      // isn't visually useful. Re-render with color() calls stripped so the
+      // Manifold CSG engine assigns per-operation face colors instead.
+      let activeResult = result;
+      if ((result.format || 'stl') === 'off' && useColorPassthrough) {
+        const uniqueColors = AutoPreviewController.countUniqueOFFColors(
+          result.stl
+        );
+        if (uniqueColors === 1) {
+          console.log(
+            '[AutoPreview] Monochrome OFF detected (1 unique color) — ' +
+              're-rendering with stripped color() for CSG face colors'
+          );
+          const strippedSource = AutoPreviewController.stripColorCalls(
+            this.currentScadContent
+          );
+          let strippedFiles = this.projectFiles;
+          if (this.projectFiles && this.mainFilePath) {
+            strippedFiles = new Map(this.projectFiles);
+            strippedFiles.set(this.mainFilePath, strippedSource);
+          }
+          try {
+            const fallbackResult = await this.renderController.renderPreview(
+              strippedSource,
+              previewParameters,
+              {
+                ...(quality ? { quality } : {}),
+                outputFormat: 'off',
+                files: strippedFiles,
+                mainFile: this.mainFilePath,
+                libraries: this.enabledLibraries,
+                paramTypes: this.paramTypes,
+                onProgress: (percent, message) => {
+                  this.onProgress(percent, message, 'preview');
+                },
+              }
+            );
+            activeResult = fallbackResult;
+            console.log(
+              '[AutoPreview] Monochrome fallback render complete — ' +
+                `${AutoPreviewController.countUniqueOFFColors(fallbackResult.stl)} unique colors`
+            );
+          } catch (fallbackErr) {
+            console.warn(
+              '[AutoPreview] Monochrome fallback render failed, using original:',
+              fallbackErr.message
+            );
+          }
+        }
+      }
+
       // Cache the result
-      this.addToCache(cacheKey, result, durationMs);
+      this.addToCache(cacheKey, activeResult, durationMs);
       this.previewParamHash = paramHash;
       this.previewCacheKey = cacheKey;
-      const resultFormat = result.format || 'stl';
+      const resultFormat = activeResult.format || 'stl';
 
       // Load into 3D preview — auto-enable color override from SCAD params
       if (this.previewManager?.setColorOverride) {
@@ -984,7 +1091,7 @@ export class AutoPreviewController {
       // Preserve camera position on subsequent loads (after initial preview)
       const loadResult =
         resultFormat === 'off' && this.previewManager.loadOFF
-          ? await this.previewManager.loadOFF(result.stl, {
+          ? await this.previewManager.loadOFF(activeResult.stl, {
               preserveCamera: this.initialPreviewDone,
               debugHighlight: hasDebugModifier
                 ? {
@@ -993,7 +1100,7 @@ export class AutoPreviewController {
                   }
                 : null,
             })
-          : await this.previewManager.loadSTL(result.stl, {
+          : await this.previewManager.loadSTL(activeResult.stl, {
               preserveCamera: this.initialPreviewDone,
             });
       // Mark initial preview as done after successful load
@@ -1002,31 +1109,39 @@ export class AutoPreviewController {
       // Collect timing breakdown
       const timing = {
         totalMs: durationMs,
-        renderMs: result.timing?.renderMs || 0,
-        wasmInitMs: result.timing?.wasmInitMs || 0,
+        renderMs: activeResult.timing?.renderMs || 0,
+        wasmInitMs: activeResult.timing?.wasmInitMs || 0,
         parseMs: loadResult?.parseMs || 0,
       };
 
       // Log preview performance metrics
       const bytesPerTri =
-        result.stats?.triangles > 0
-          ? Math.round((result.stl?.byteLength || 0) / result.stats.triangles)
+        activeResult.stats?.triangles > 0
+          ? Math.round(
+              (activeResult.stl?.byteLength || 0) / activeResult.stats.triangles
+            )
           : 0;
       console.log(
         `[Preview Performance] ${qualityKey} | ` +
           `${timing.renderMs}ms | ` +
-          `${result.stats?.triangles || 0} triangles | ` +
+          `${activeResult.stats?.triangles || 0} triangles | ` +
           `${resultFormat === 'off' ? (loadResult?.hasColors ? 'COFF ✓' : 'OFF (no color)') : bytesPerTri < 80 ? 'Binary STL ✓' : bytesPerTri > 100 ? 'ASCII STL ⚠️' : 'Unknown'}` +
           `${hasDebugModifier ? ' [# debug highlight active]' : ''}`
       );
 
       this.setState(PREVIEW_STATE.CURRENT, {
-        stats: result.stats,
+        stats: activeResult.stats,
         renderDurationMs: durationMs,
         qualityKey,
         timing,
       });
-      this.onPreviewReady(result.stl, result.stats, false, durationMs, timing);
+      this.onPreviewReady(
+        activeResult.stl,
+        activeResult.stats,
+        false,
+        durationMs,
+        timing
+      );
     } catch (error) {
       renderFailed = true;
       console.error('[AutoPreview] Preview render failed:', error);
@@ -1179,13 +1294,7 @@ export class AutoPreviewController {
       (AutoPreviewController.scadUsesColor(this.currentScadContent) ||
         hasDebugModifier);
 
-    // Manifold backend parity: the WASM Manifold backend preserves user
-    // color() calls in the rendered geometry (matching desktop Manifold F6).
-    // Previous versions stripped color() to emulate legacy CGAL F6 behavior
-    // (yellow positive / green subtracted CSG face colors), but the web app
-    // always uses Manifold, so we now pass the original source through.
     const scadContentForRender = this.currentScadContent;
-
     const filesForRender = this.projectFiles;
 
     const renderOptions = {
@@ -1201,7 +1310,7 @@ export class AutoPreviewController {
     };
 
     // Perform full render (OFF when color passthrough active, STL otherwise)
-    const result = await this.renderController.renderFull(
+    let result = await this.renderController.renderFull(
       scadContentForRender,
       parameters,
       renderOptions
@@ -1209,6 +1318,54 @@ export class AutoPreviewController {
 
     if (useColorPassthrough) {
       console.log('[AutoPreview] Full render using OFF for color passthrough');
+    }
+
+    // Monochrome fallback: same logic as renderPreview() — if the OFF output
+    // has only 1 unique face color, strip color() and re-render for CSG colors.
+    if (
+      useColorPassthrough &&
+      (result.format || 'stl') === 'off' &&
+      AutoPreviewController.countUniqueOFFColors(result.stl) === 1
+    ) {
+      console.log(
+        '[AutoPreview] Full render monochrome OFF detected — ' +
+          're-rendering with stripped color() for CSG face colors'
+      );
+      const strippedSource = AutoPreviewController.stripColorCalls(
+        this.currentScadContent
+      );
+      let strippedFiles = this.projectFiles;
+      if (this.projectFiles && this.mainFilePath) {
+        strippedFiles = new Map(this.projectFiles);
+        strippedFiles.set(this.mainFilePath, strippedSource);
+      }
+      try {
+        const fallbackResult = await this.renderController.renderFull(
+          strippedSource,
+          parameters,
+          {
+            files: strippedFiles,
+            mainFile: this.mainFilePath,
+            libraries: this.enabledLibraries,
+            paramTypes: this.paramTypes,
+            ...(quality ? { quality } : {}),
+            outputFormat: 'off',
+            onProgress: (percent, message) => {
+              this.onProgress(percent, message, 'full');
+            },
+          }
+        );
+        result = fallbackResult;
+        console.log(
+          '[AutoPreview] Full render monochrome fallback complete — ' +
+            `${AutoPreviewController.countUniqueOFFColors(fallbackResult.stl)} unique colors`
+        );
+      } catch (fallbackErr) {
+        console.warn(
+          '[AutoPreview] Full render monochrome fallback failed, using original:',
+          fallbackErr.message
+        );
+      }
     }
 
     // Store for reuse — when color passthrough produced OFF, the STL for
