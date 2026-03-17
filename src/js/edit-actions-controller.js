@@ -182,7 +182,7 @@ export class EditActionsController {
     if (!panel) return;
 
     const entries = panel.getEntries(true);
-    const navigable = entries.filter((e) => e.line != null);
+    const navigable = entries.filter((e) => e.line !== null);
     if (navigable.length === 0) {
       announceImmediate('No errors with line numbers');
       return;
@@ -310,6 +310,6 @@ export function getEditActionsController(options = {}) {
 /**
  * Reset singleton (for testing).
  */
-export function resetEditActionsController() {
+function resetEditActionsController() {
   instance = null;
 }

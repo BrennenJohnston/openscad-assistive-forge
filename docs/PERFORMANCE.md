@@ -4,12 +4,12 @@ Notes on keeping the app fast.
 
 ## Bundle size
 
-Current bundle (v4.1.0):
-- `index.js` ~125KB gzipped (main), ~187KB gzipped (Three.js chunk)
+Current bundle (v4.2.0):
+- `index.js` ~231.8KB gzipped (main), ~187KB gzipped (Three.js chunk)
 - Three.js lazy-loaded via code splitting
 - OpenSCAD WASM vendored in `public/wasm/` (~2MB, loaded on first render)
 
-Lighthouse performance score: 85+
+Lighthouse performance score: 100
 
 To analyze the bundle:
 
@@ -72,6 +72,65 @@ Static assets are cached in the service worker for offline use:
 - Fonts and icons
 - Example models
 - WASM modules (after first load)
+
+## Memory monitoring
+
+The v4.2.0 memory monitoring system tracks WASM heap usage and implements graceful degradation to prevent browser crashes on complex models.
+
+### Three-tier threshold system
+
+| Level | Threshold | UI Indicator | Automatic Action |
+|-------|-----------|-------------|-----------------|
+| **Warning** | 400 MB | Yellow memory badge | None (informational) |
+| **Critical** | 800 MB | Red memory badge + warning banner | Auto-preview disabled |
+| **Emergency** | 1200 MB | Red pulsing badge + emergency banner | Render queue cleared, recovery mode offered |
+
+### MemoryState state machine
+
+```
+NORMAL → WARNING → CRITICAL → EMERGENCY
+  ↑         ↑         ↑
+  └─────────┴─────────┘  (recovery when heap drops below threshold)
+```
+
+States transition upward as memory grows and downward when usage drops below the current threshold. Each transition fires a callback (`onWarning`, `onCritical`, `onEmergency`, `onRecovery`) and dispatches a `memory-state-change` custom event on `document`.
+
+### How it works
+
+1. `MemoryMonitor` polls WASM heap size every 10 seconds as a background check.
+2. The worker also reports memory usage after each render via message passing.
+3. `evaluateState()` compares heap MB against thresholds and triggers state transitions.
+4. UI indicators (badge color, banner text) update via the `memory-state-change` event.
+
+### Recovery mode
+
+When entering emergency state, the user is offered actions:
+- **Reduce quality**: lower `$fn`/`$fa`/`$fs` to decrease geometry complexity
+- **Disable auto-preview**: stop automatic re-renders on parameter change
+- **Export work**: save current STL before reloading
+- **Reload safely**: reload with reduced resource usage
+
+### Testing thresholds
+
+To trigger memory warnings during development:
+1. Load `public/examples/benchmark_minkowski.scad` with high `$fn` values
+2. Watch the memory badge transition through warning → critical → emergency
+3. Verify auto-preview disables at the critical level
+4. Verify recovery mode activates at emergency
+
+### Configuration
+
+Thresholds are set in `src/js/memory-monitor.js` and can be adjusted via constructor options:
+
+```javascript
+new MemoryMonitor({
+  warningMB: 400,
+  criticalMB: 800,
+  emergencyMB: 1200,
+})
+```
+
+The memory monitoring feature is controlled by the `memory_monitoring` feature flag (enabled by default).
 
 ## Browser differences
 

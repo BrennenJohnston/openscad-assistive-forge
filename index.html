@@ -125,7 +125,7 @@
               </svg>
               <span class="github-label">GitHub</span>
             </a>
-            <button
+            <button type="button"
               id="shortcutsToggle"
               class="btn btn-sm btn-secondary shortcuts-toggle"
               aria-label="Keyboard shortcuts"
@@ -154,7 +154,7 @@
               </svg>
               <span class="shortcuts-label">Keys</span>
             </button>
-            <button
+            <button type="button"
               id="contrastToggle"
               class="btn btn-sm btn-secondary contrast-toggle"
               aria-label="Toggle high contrast"
@@ -181,7 +181,7 @@
               </svg>
               <span class="contrast-label">HC</span>
             </button>
-            <button
+            <button type="button"
               id="themeToggle"
               class="btn btn-sm btn-secondary theme-toggle"
               aria-label="Toggle theme"
@@ -238,10 +238,10 @@
             >Update available. Refresh to get the latest version.</span
           >
           <div class="update-banner-actions">
-            <button id="updateBannerRefresh" class="btn btn-sm btn-primary">
+            <button type="button" id="updateBannerRefresh" class="btn btn-sm btn-primary">
               Refresh
             </button>
-            <button id="updateBannerDismiss" class="btn btn-sm btn-secondary">
+            <button type="button" id="updateBannerDismiss" class="btn btn-sm btn-secondary">
               Dismiss
             </button>
           </div>
@@ -339,42 +339,42 @@
             class="toolbar-menu-bar hidden"
             aria-label="Application menu"
           >
-            <button
+            <button type="button"
               class="toolbar-menu-btn btn"
               id="fileMenuBtn"
               aria-haspopup="dialog"
               aria-expanded="false"
             >
               File</button
-            ><button
+            ><button type="button"
               class="toolbar-menu-btn btn"
               id="editMenuBtn"
               aria-haspopup="dialog"
               aria-expanded="false"
             >
               Edit</button
-            ><button
+            ><button type="button"
               class="toolbar-menu-btn btn"
               id="designMenuBtn"
               aria-haspopup="dialog"
               aria-expanded="false"
             >
               Design</button
-            ><button
+            ><button type="button"
               class="toolbar-menu-btn btn"
               id="viewMenuBtn"
               aria-haspopup="dialog"
               aria-expanded="false"
             >
               View</button
-            ><button
+            ><button type="button"
               class="toolbar-menu-btn btn"
               id="windowMenuBtn"
               aria-haspopup="dialog"
               aria-expanded="false"
             >
               Window</button
-            ><button
+            ><button type="button"
               class="toolbar-menu-btn btn"
               id="helpMenuBtn"
               aria-haspopup="dialog"
@@ -384,7 +384,7 @@
             </button>
           </div>
           <div class="workflow-actions">
-            <button
+            <button type="button"
               id="uiModeToggle"
               class="ui-mode-toggle hidden"
               role="switch"
@@ -404,7 +404,7 @@
               >
               <span class="ui-mode-slider" aria-hidden="true"></span>
             </button>
-            <button
+            <button type="button"
               id="focusModeBtn"
               class="btn btn-sm btn-outline"
               aria-pressed="false"
@@ -426,7 +426,7 @@
               </svg>
               <span class="btn-text">Full Screen</span>
             </button>
-            <button
+            <button type="button"
               id="featuresGuideBtn"
               class="btn btn-sm btn-outline btn-with-icon"
               aria-label="Open features guide and examples"
@@ -457,7 +457,7 @@
               </svg>
               <span class="btn-text">Help</span>
             </button>
-            <button
+            <button type="button"
               id="clearFileBtn"
               class="btn btn-sm btn-outline"
               aria-label="Go back to welcome screen. Warning: unsaved changes will be lost"
@@ -477,11 +477,11 @@
               role="region"
               aria-labelledby="features-heading"
             >
-              <h3 id="features-heading">Discover Features</h3>
+              <h2 id="features-heading">Discover Features</h2>
               <div class="role-paths-grid">
                 <!-- Beginners Start Here (only visible tutorial for now) -->
                 <div class="role-path-card">
-                  <h4 class="role-path-title">Beginners Start Here</h4>
+                  <h3 class="role-path-title">Beginners Start Here</h3>
                   <p class="role-path-meta">Guided tour • about 3 minutes</p>
                   <p class="role-path-description">
                     Load a simple example, change a few parameters, and generate
@@ -496,7 +496,7 @@
                     </ul>
                   </details>
                   <div class="role-path-actions">
-                    <button
+                    <button type="button"
                       class="btn btn-primary btn-role-try"
                       data-example="simple-box"
                       data-role="beginners"
@@ -504,7 +504,7 @@
                     >
                       Start Tutorial
                     </button>
-                    <button
+                    <button type="button"
                       class="btn btn-link btn-role-learn"
                       data-feature-tab="workflow"
                       aria-label="Open Help: Workflow"
@@ -514,7 +514,7 @@
                   </div>
                 </div>
                 <div class="role-path-card">
-                  <h4 class="role-path-title">Explore Features</h4>
+                  <h3 class="role-path-title">Explore Features</h3>
                   <p class="role-path-description">
                     Prefer to browse? Open Help for examples and deeper
                     guidance.
@@ -528,7 +528,7 @@
                     </ul>
                   </details>
                   <div class="role-path-actions">
-                    <button
+                    <button type="button"
                       class="btn btn-outline btn-role-learn"
                       data-feature-tab="libraries"
                       aria-label="Open Help: Libraries"
@@ -538,8 +538,8 @@
                   </div>
                 </div>
                 <!-- Other tutorials are temporarily hidden (we'll re-enable later) -->
-                <div class="role-path-card" hidden aria-hidden="true">
-                  <h4 class="role-path-title">Advanced Makers</h4>
+                <div class="role-path-card" hidden>
+                  <h3 class="role-path-title">Advanced Makers</h3>
                   <p class="role-path-description">
                     Work with multi-file projects, libraries, and advanced
                     OpenSCAD features
@@ -550,7 +550,7 @@
                     <li>Export in multiple formats (STL, OBJ, 3MF)</li>
                   </ul>
                   <div class="role-path-actions">
-                    <button
+                    <button type="button"
                       class="btn btn-primary btn-role-try"
                       data-example="library-test"
                       data-role="makers"
@@ -558,7 +558,7 @@
                     >
                       Start Tutorial
                     </button>
-                    <button
+                    <button type="button"
                       class="btn btn-link btn-role-learn"
                       data-feature-tab="libraries"
                       aria-label="Open Features Guide: Libraries"
@@ -567,8 +567,8 @@
                     </button>
                   </div>
                 </div>
-                <div class="role-path-card" hidden aria-hidden="true">
-                  <h4 class="role-path-title">Keyboard-Only Users</h4>
+                <div class="role-path-card" hidden>
+                  <h3 class="role-path-title">Keyboard-Only Users</h3>
                   <p class="role-path-description">
                     Complete the full workflow without a mouse using predictable
                     keyboard controls
@@ -579,7 +579,7 @@
                     <li>Skip to main content (screen top)</li>
                   </ul>
                   <div class="role-path-actions">
-                    <button
+                    <button type="button"
                       class="btn btn-primary btn-role-try"
                       data-example="cylinder"
                       data-role="keyboard-only"
@@ -587,7 +587,7 @@
                     >
                       Start Tutorial
                     </button>
-                    <button
+                    <button type="button"
                       class="btn btn-link btn-role-learn"
                       data-doc="KEYGUARD_WORKFLOW_GUIDE"
                       aria-label="Learn about keyboard navigation"
@@ -596,8 +596,8 @@
                     </button>
                   </div>
                 </div>
-                <div class="role-path-card" hidden aria-hidden="true">
-                  <h4 class="role-path-title">Low Vision Users</h4>
+                <div class="role-path-card" hidden>
+                  <h3 class="role-path-title">Low Vision Users</h3>
                   <p class="role-path-description">
                     Use high contrast themes, large touch targets, and visible
                     focus indicators
@@ -608,7 +608,7 @@
                     <li>All buttons meet 44×44px touch target</li>
                   </ul>
                   <div class="role-path-actions">
-                    <button
+                    <button type="button"
                       class="btn btn-primary btn-role-try"
                       data-example="simple-box"
                       data-role="low-vision"
@@ -616,7 +616,7 @@
                     >
                       Start Tutorial
                     </button>
-                    <button
+                    <button type="button"
                       class="btn btn-link btn-role-learn"
                       data-doc="ACCESSIBILITY_GUIDE"
                       data-feature-tab="accessibility"
@@ -626,8 +626,8 @@
                     </button>
                   </div>
                 </div>
-                <div class="role-path-card" hidden aria-hidden="true">
-                  <h4 class="role-path-title">Voice Input Users</h4>
+                <div class="role-path-card" hidden>
+                  <h3 class="role-path-title">Voice Input Users</h3>
                   <p class="role-path-description">
                     Control the app with voice commands using stable, speakable
                     names
@@ -638,7 +638,7 @@
                     <li>All controls have unique, speakable names</li>
                   </ul>
                   <div class="role-path-actions">
-                    <button
+                    <button type="button"
                       class="btn btn-primary btn-role-try"
                       data-example="simple-box"
                       data-role="voice-input"
@@ -646,7 +646,7 @@
                     >
                       Start Tutorial
                     </button>
-                    <button
+                    <button type="button"
                       class="btn btn-link btn-role-learn"
                       data-doc="ACCESSIBILITY_GUIDE"
                       data-feature-tab="accessibility"
@@ -656,8 +656,8 @@
                     </button>
                   </div>
                 </div>
-                <div class="role-path-card" hidden aria-hidden="true">
-                  <h4 class="role-path-title">Screen Reader Users</h4>
+                <div class="role-path-card" hidden>
+                  <h3 class="role-path-title">Screen Reader Users</h3>
                   <p class="role-path-description">
                     Customize models with clear status announcements and
                     keyboard-only workflow
@@ -668,7 +668,7 @@
                     <li>Plain-language error messages</li>
                   </ul>
                   <div class="role-path-actions">
-                    <button
+                    <button type="button"
                       class="btn btn-primary btn-role-try"
                       data-example="simple-box"
                       data-role="screen-reader"
@@ -676,7 +676,7 @@
                     >
                       Start Tutorial
                     </button>
-                    <button
+                    <button type="button"
                       class="btn btn-link btn-role-learn"
                       data-doc="ACCESSIBILITY_GUIDE"
                       data-feature-tab="accessibility"
@@ -1040,7 +1040,7 @@
               <div class="panel-header-title-row">
                 <h2 id="parameters-heading">Parameters</h2>
                 <!-- Mobile close button for drawer -->
-                <button
+                <button type="button"
                   id="drawerCloseBtn"
                   class="btn btn-sm btn-icon mobile-only drawer-close-btn forge-control"
                   aria-label="Close parameters panel"
@@ -1064,7 +1064,7 @@
               </div>
               <!-- Row 2: Action toolbar -->
               <div class="param-header-actions">
-                <button
+                <button type="button"
                   id="undoBtn"
                   class="btn btn-sm btn-icon"
                   aria-label="Undo last parameter change"
@@ -1086,7 +1086,7 @@
                     <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
                   </svg>
                 </button>
-                <button
+                <button type="button"
                   id="redoBtn"
                   class="btn btn-sm btn-icon"
                   aria-label="Redo last parameter change"
@@ -1108,7 +1108,7 @@
                     <path d="M20.49 15a9 9 0 1 1-2.13-9.36L23 10"></path>
                   </svg>
                 </button>
-                <button
+                <button type="button"
                   id="resetBtn"
                   class="btn btn-sm"
                   aria-label="Reset all parameters to default values"
@@ -1116,7 +1116,7 @@
                   Reset
                 </button>
                 <!-- Expert Mode toggle (M2) - hidden until feature flag enabled -->
-                <button
+                <button type="button"
                   id="expertModeToggle"
                   class="mode-toggle-btn hidden"
                   aria-pressed="false"
@@ -1127,7 +1127,7 @@
                   <span class="mode-icon" aria-hidden="true">{ }</span>
                   <span class="btn-text">Code</span>
                 </button>
-                <button
+                <button type="button"
                   id="collapseParamPanelBtn"
                   class="btn btn-sm btn-icon btn-collapse-panel forge-control"
                   aria-expanded="true"
@@ -1197,12 +1197,11 @@
               </button>
             </div>
             <div class="param-panel-body" id="paramPanelBody">
-              <!-- Console Output Panel -- Displays ECHO, WARNING, ERROR messages from OpenSCAD -->
+              <!-- Console Panel -- Unified OpenSCAD output (S-010 desktop parity) -->
               <details
                 class="console-panel forge-disclosure"
                 id="consolePanel"
-                role="region"
-                aria-label="OpenSCAD console output"
+                aria-label="Console"
               >
                 <summary class="console-summary">
                   <svg
@@ -1221,8 +1220,14 @@
                     <line x1="12" y1="19" x2="20" y2="19"></line>
                   </svg>
                   <span class="console-title forge-disclosure-title"
-                    >Console Output</span
+                    >Console</span
                   >
+                  <button
+                    class="panel-help-btn"
+                    type="button"
+                    aria-label="Console: all output from the OpenSCAD engine. Log view shows messages chronologically. Structured view shows a sortable error table with click-to-line navigation."
+                    title="Console: all output from the OpenSCAD engine. Log view shows messages chronologically. Structured view shows a sortable error table with click-to-line navigation."
+                  >?</button>
                   <span
                     id="console-badge"
                     class="console-badge hidden"
@@ -1231,6 +1236,10 @@
                   >
                 </summary>
                 <div class="console-content">
+                  <div class="console-view-tabs" role="tablist" aria-label="Console view">
+                    <button role="tab" type="button" class="console-view-tab active" id="console-tab-log" aria-selected="true" aria-controls="console-view-log">Log</button>
+                    <button role="tab" type="button" class="console-view-tab" id="console-tab-structured" aria-selected="false" aria-controls="console-view-structured">Structured</button>
+                  </div>
                   <div class="console-controls">
                     <label class="console-filter">
                       <input type="checkbox" id="console-filter-echo" checked />
@@ -1248,8 +1257,20 @@
                       />
                       <span>Errors</span>
                     </label>
+                    <label class="console-filter">
+                      <input
+                        type="checkbox"
+                        id="console-filter-deprecated"
+                        checked
+                      />
+                      <span>Deprecated</span>
+                    </label>
+                    <label class="console-filter">
+                      <input type="checkbox" id="console-filter-trace" />
+                      <span>Trace</span>
+                    </label>
                     <div class="console-actions">
-                      <button
+                      <button type="button"
                         id="console-copy-btn"
                         class="btn btn-sm btn-icon"
                         aria-label="Copy console output to clipboard"
@@ -1257,7 +1278,7 @@
                       >
                         📋
                       </button>
-                      <button
+                      <button type="button"
                         id="console-download-btn"
                         class="btn btn-sm btn-icon"
                         aria-label="Download console log"
@@ -1265,7 +1286,7 @@
                       >
                         ⬇️
                       </button>
-                      <button
+                      <button type="button"
                         id="console-clear-btn"
                         class="btn btn-sm btn-icon"
                         aria-label="Clear console"
@@ -1275,126 +1296,41 @@
                       </button>
                     </div>
                   </div>
-                  <div
-                    id="console-output"
-                    class="console-output"
-                    role="log"
-                    aria-label="Console messages"
-                    aria-live="polite"
-                    aria-relevant="additions"
-                  >
-                    <div class="console-empty">
-                      No console output yet. ECHO, WARNING, and ERROR messages
-                      will appear here.
+                  <div id="console-view-log" class="console-view-panel" role="tabpanel" aria-labelledby="console-tab-log">
+                    <div
+                      id="console-output"
+                      class="console-output"
+                      role="log"
+                      aria-label="Console messages"
+                      aria-live="polite"
+                      aria-relevant="additions"
+                    >
+                      <div class="console-empty">
+                        No output yet. Messages from the OpenSCAD engine
+                        will appear here.
+                      </div>
+                    </div>
+                  </div>
+                  <div id="console-view-structured" class="console-view-panel" role="tabpanel" aria-labelledby="console-tab-structured" hidden>
+                    <div
+                      id="error-log-output"
+                      class="error-log-output"
+                      role="log"
+                      aria-label="Structured error log"
+                      aria-live="polite"
+                    >
+                      <div class="error-log-empty">
+                        No errors. Compile or render to check for issues.
+                      </div>
                     </div>
                   </div>
                 </div>
               </details>
-              <!-- File Actions Panel -->
               <!-- File Actions panel removed: all features now in File toolbar menu -->
-              <!-- Error Log Panel -->
-              <details
-                class="error-log-panel forge-disclosure"
-                id="errorLogPanel"
-                role="region"
-                aria-label="Error log"
-              >
-                <summary class="error-log-summary">
-                  <svg
-                    class="btn-icon-svg forge-disclosure-icon"
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    aria-hidden="true"
-                  >
-                    <path
-                      d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
-                    ></path>
-                    <line x1="12" y1="9" x2="12" y2="13"></line>
-                    <line x1="12" y1="17" x2="12.01" y2="17"></line>
-                  </svg>
-                  <span class="error-log-title forge-disclosure-title"
-                    >Error Log</span
-                  >
-                  <span
-                    id="error-log-badge"
-                    class="error-log-badge hidden"
-                    aria-hidden="true"
-                    >0</span
-                  >
-                </summary>
-                <div class="error-log-content">
-                  <div class="error-log-controls">
-                    <label class="error-log-filter">
-                      <input
-                        type="checkbox"
-                        id="error-log-filter-error"
-                        checked
-                      />
-                      <span>Errors</span>
-                    </label>
-                    <label class="error-log-filter">
-                      <input
-                        type="checkbox"
-                        id="error-log-filter-warn"
-                        checked
-                      />
-                      <span>Warnings</span>
-                    </label>
-                    <label class="error-log-filter">
-                      <input
-                        type="checkbox"
-                        id="error-log-filter-deprecated"
-                        checked
-                      />
-                      <span>Deprecated</span>
-                    </label>
-                    <label class="error-log-filter">
-                      <input type="checkbox" id="error-log-filter-trace" />
-                      <span>Trace</span>
-                    </label>
-                    <div class="error-log-actions">
-                      <button
-                        id="error-log-copy-btn"
-                        class="btn btn-sm btn-icon"
-                        aria-label="Copy error log to clipboard"
-                        title="Copy to clipboard"
-                      >
-                        📋
-                      </button>
-                      <button
-                        id="error-log-clear-btn"
-                        class="btn btn-sm btn-icon"
-                        aria-label="Clear error log"
-                        title="Clear"
-                      >
-                        🗑️
-                      </button>
-                    </div>
-                  </div>
-                  <div
-                    id="error-log-output"
-                    class="error-log-output"
-                    role="log"
-                    aria-label="Error log entries"
-                    aria-live="polite"
-                  >
-                    <div class="error-log-empty">
-                      No errors. Compile or render to check for issues.
-                    </div>
-                  </div>
-                </div>
-              </details>
               <!-- Image Measurement Tool -->
               <details
                 class="measure-details forge-disclosure"
                 id="measureSection"
-                role="region"
                 aria-label="Image measurement tool"
               >
                 <summary class="measure-summary">
@@ -1708,7 +1644,6 @@
               <details
                 class="overlay-details forge-disclosure"
                 id="overlaySection"
-                role="region"
                 aria-label="Reference image controls"
               >
                 <summary class="overlay-summary">
@@ -1735,7 +1670,7 @@
                 </summary>
                 <div class="overlay-controls">
                   <div class="overlay-control overlay-upload-control">
-                    <label class="overlay-control-label"> Source image </label>
+                    <label class="overlay-control-label" for="overlaySourceSelect"> Source image </label>
                     <div class="overlay-source-row">
                       <select
                         id="overlaySourceSelect"
@@ -1850,6 +1785,27 @@
                     Auto mode picks a visible color for the current
                     theme.</span
                   >
+                  <!-- Tablet device selector: auto-sizes overlay to screen dimensions (ENH-B) -->
+                  <div class="overlay-control overlay-tablet-control">
+                    <label
+                      class="overlay-control-label"
+                      for="overlayTabletSelect"
+                      id="overlayTabletLabel"
+                    >Auto-size to tablet</label>
+                    <select
+                      id="overlayTabletSelect"
+                      class="overlay-tablet-select"
+                      aria-labelledby="overlayTabletLabel"
+                      aria-describedby="overlayTabletHelp"
+                    >
+                      <option value="">-- Select device --</option>
+                    </select>
+                  </div>
+                  <span id="overlayTabletHelp" class="sr-only"
+                    >Select a tablet model to automatically set the overlay
+                    width and height to match the device screen dimensions
+                    in millimetres</span
+                  >
                   <!-- Overlay Dimensions Display (read-only) -->
                   <div
                     class="overlay-control overlay-dimensions-display"
@@ -1943,9 +1899,9 @@
                               <input
                                 type="number"
                                 id="overlayWidthInput"
-                                min="1"
+                                min="0.1"
                                 max="1000"
-                                step="1"
+                                step="0.1"
                                 value="200"
                                 aria-label="Overlay width in millimeters"
                               />
@@ -1966,9 +1922,9 @@
                               <input
                                 type="number"
                                 id="overlayHeightInput"
-                                min="1"
+                                min="0.1"
                                 max="1000"
-                                step="1"
+                                step="0.1"
                                 value="150"
                                 aria-label="Overlay height in millimeters"
                               />
@@ -2078,7 +2034,7 @@
                       <!-- Library checkboxes will be dynamically generated here -->
                     </div>
                     <div class="library-footer">
-                      <button
+                      <button type="button"
                         id="libraryHelpBtn"
                         class="btn-link btn-link-with-icon"
                         aria-label="Learn more about libraries"
@@ -2143,6 +2099,14 @@
                       <line x1="9" y1="15" x2="15" y2="15"></line>
                     </svg>
                     <span class="forge-disclosure-title">Companion Files</span>
+                    <a
+                      href="docs/guides/CONCEPTUAL_MODEL.md#companion-files--extra-files-the-design-needs"
+                      class="panel-help-btn"
+                      target="_blank"
+                      rel="noopener"
+                      aria-label="About Companion Files: extra files that the SCAD design references"
+                      title="Companion Files are extra files (like openings.txt or SVG shapes) that the SCAD design needs to produce correct geometry."
+                    >?</a>
                     <span class="project-files-badge" id="projectFilesBadge"
                       >0</span
                     >
@@ -2262,14 +2226,14 @@
                 <div class="advanced-menu-content">
                   <!-- View SCAD Source -->
                   <div class="advanced-section">
-                    <button
+                    <button type="button"
                       id="viewSourceBtn"
                       class="btn btn-sm btn-outline advanced-btn"
                       aria-label="View OpenSCAD source code"
                     >
                       📄 View Source
                     </button>
-                    <button
+                    <button type="button"
                       id="copySourceBtn"
                       class="btn btn-sm btn-outline advanced-btn"
                       aria-label="Copy source code to clipboard"
@@ -2289,9 +2253,9 @@
                   </div>
                   <!-- Reset Tools -->
                   <div class="advanced-section">
-                    <h4 class="advanced-section-title">Reset Tools</h4>
+                    <h3 class="advanced-section-title">Reset Tools</h3>
                     <div class="reset-tools">
-                      <button
+                      <button type="button"
                         id="resetGroupBtn"
                         class="btn btn-sm btn-outline"
                         aria-label="Reset current group to defaults"
@@ -2307,7 +2271,7 @@
                       <select id="resetGroupSelect" class="reset-group-select">
                         <!-- Groups will be populated dynamically -->
                       </select>
-                      <button
+                      <button type="button"
                         id="confirmResetGroupBtn"
                         class="btn btn-sm btn-primary"
                       >
@@ -2317,7 +2281,7 @@
                   </div>
                   <!-- Raw Parameter JSON -->
                   <div class="advanced-section">
-                    <button
+                    <button type="button"
                       id="viewParamsJsonBtn"
                       class="btn btn-sm btn-outline advanced-btn"
                       aria-label="View current parameters as JSON"
@@ -2327,8 +2291,8 @@
                   </div>
                   <!-- Export Changed Settings (troubleshooting support) -->
                   <div class="advanced-section">
-                    <h4 class="advanced-section-title">Troubleshooting</h4>
-                    <button
+                    <h3 class="advanced-section-title">Troubleshooting</h3>
+                    <button type="button"
                       id="exportChangedBtn"
                       class="btn btn-sm btn-outline advanced-btn"
                       aria-label="Export only changed parameters for troubleshooting"
@@ -2350,7 +2314,6 @@
               <details
                 class="preset-controls forge-disclosure"
                 id="presetControls"
-                role="region"
                 aria-label="Parameter presets"
                 data-tutorial-target="preset-controls"
               >
@@ -2373,6 +2336,14 @@
                     <line x1="16" y1="7" x2="16" y2="9"></line>
                   </svg>
                   <span class="forge-disclosure-title">Presets</span>
+                  <a
+                    href="docs/guides/CONCEPTUAL_MODEL.md#parameters--presets--the-configuration"
+                    class="panel-help-btn"
+                    target="_blank"
+                    rel="noopener"
+                    aria-label="About Presets: learn how presets, SCAD files, and companion files work together"
+                    title="Presets are saved configurations. Learn how they work with SCAD files and companion files."
+                  >?</a>
                 </summary>
                 <div class="preset-content">
                   <!-- Legacy: search input (hidden when searchable_combobox flag is on) -->
@@ -2385,7 +2356,7 @@
                       class="preset-search-input"
                       placeholder="Search presets..."
                       aria-describedby="presetSearchStatus"
-                    /><button
+                    /><button type="button"
                       id="presetSearchClear"
                       class="btn-icon btn-icon-sm preset-search-clear"
                       aria-label="Clear search"
@@ -2446,7 +2417,7 @@
                       role="group"
                       aria-label="Preset management"
                     >
-                      <button
+                      <button type="button"
                         id="savePresetBtn"
                         class="btn btn-sm btn-icon"
                         aria-label="Save Preset — overwrites current preset"
@@ -2455,7 +2426,7 @@
                       >
                         💾
                       </button>
-                      <button
+                      <button type="button"
                         id="addPresetBtn"
                         class="btn btn-sm btn-icon"
                         aria-label="Add Preset"
@@ -2463,7 +2434,7 @@
                       >
                         +
                       </button>
-                      <button
+                      <button type="button"
                         id="deletePresetBtn"
                         class="btn btn-sm btn-icon btn-danger-icon"
                         aria-label="Delete current preset"
@@ -2473,7 +2444,7 @@
                         −
                       </button>
                     </div>
-                    <button
+                    <button type="button"
                       id="managePresetsBtn"
                       class="btn btn-sm btn-outline"
                       aria-label="Import and export presets"
@@ -2496,7 +2467,7 @@
                   <option value="inline">Inline Details</option>
                   <option value="hide" selected>Hide Details</option>
                   <option value="desc-only">Description Only</option></select
-                ><button
+                ><button type="button"
                   id="resetAllBtn"
                   class="btn btn-sm btn-outline"
                   aria-label="Reset all parameters to defaults"
@@ -2600,18 +2571,39 @@
                 <div
                   class="format-2d-guidance hidden"
                   id="format2dGuidance"
-                  role="alert"
+                  role="note"
                   aria-live="polite"
+                  aria-label="2D export workflow guidance"
                 >
-                  <p class="guidance-title">📐 2D Export Guidance</p>
-                  <p class="guidance-text">
-                    For laser cutting, ensure your model uses
-                    <code>projection()</code> or set the
-                    <code>generate</code> parameter to
-                    <strong>"first layer for SVG/DXF file"</strong>.
-                  </p>
+                  <p class="guidance-title">&#x1F4D0; 2D Export Workflow</p>
+                  <ol class="guidance-steps">
+                    <li>
+                      Set the <code>generate</code> parameter to an SVG-compatible
+                      mode (e.g. <strong>"first layer for SVG/DXF file"</strong>)
+                    </li>
+                    <li>Click <strong>Generate</strong> to compile the 2D output</li>
+                    <li>Click <strong>Download</strong> to save the SVG or DXF file</li>
+                    <li>Open the file in your laser cutter software (e.g. LightBurn, LaserGRBL, Inkscape)</li>
+                  </ol>
+                  <!-- Auto-adjustment notification: populated by main.js when
+                       resolve2DExportParameters() would change current params -->
+                  <div
+                    id="format2dAutoAdjust"
+                    class="format-2d-auto-adjust hidden"
+                    role="note"
+                    aria-live="polite"
+                  >
+                    <p class="auto-adjust-title">
+                      &#x2139;&#xFE0F; Parameters auto-adjusted for 2D export:
+                    </p>
+                    <ul id="format2dAutoAdjustList" class="auto-adjust-list"></ul>
+                    <p class="auto-adjust-note">
+                      These changes apply only during Generate — your current
+                      parameter values are not permanently modified.
+                    </p>
+                  </div>
                   <details class="guidance-details">
-                    <summary>More info for laser-cut keyguard users</summary>
+                    <summary>Keyguard-specific tips</summary>
                     <ul>
                       <li>
                         Set <code>type_of_keyguard</code> to
@@ -2621,7 +2613,14 @@
                         Set <code>generate</code> to
                         <strong>"first layer for SVG/DXF file"</strong>
                       </li>
-                      <li>Not all 3D models support 2D export</li>
+                      <li>
+                        SVG output is a flat 2D projection &#x2014; not all 3D
+                        models support 2D export
+                      </li>
+                      <li>
+                        Units in the SVG are in millimetres; verify scaling in
+                        your laser cutter software before cutting
+                      </li>
                     </ul>
                   </details>
                 </div>
@@ -2645,7 +2644,7 @@
                   ></span>
                 </span>
                 <div class="expert-mode-actions">
-                  <button
+                  <button type="button"
                     id="expertRunPreviewBtn"
                     class="btn btn-sm btn-primary"
                     aria-label="Run preview (F5)"
@@ -2653,7 +2652,7 @@
                   >
                     ▶ Preview
                   </button>
-                  <button
+                  <button type="button"
                     id="expertModeCloseBtn"
                     class="btn btn-sm btn-outline"
                     aria-label="Exit Expert Mode"
@@ -2681,7 +2680,7 @@
                 <div class="preview-drawer-header">
                   <div class="preview-drawer-header-left">
                     <!-- Parameters button FIRST (left position) -->
-                    <button
+                    <button type="button"
                       id="mobileDrawerToggle"
                       class="btn btn-sm btn-icon mobile-only"
                       aria-expanded="false"
@@ -2706,7 +2705,7 @@
                       <span class="btn-label">Params</span>
                     </button>
                     <!-- Preview Settings button SECOND (right of Parameters) -->
-                    <button
+                    <button type="button"
                       id="previewDrawerToggle"
                       class="btn btn-sm btn-icon btn-collapse-panel preview-drawer-toggle-btn forge-control"
                       aria-expanded="false"
@@ -2809,398 +2808,495 @@
                       <span>Preview Settings</span>
                     </div>
                     <div class="preview-settings">
-                      <label class="preview-setting">
-                        <input
-                          type="checkbox"
-                          id="measurementsToggle"
-                          aria-describedby="measurementsHelp"
-                        />
-                        <span>Show measurements</span>
-                      </label>
-                      <span id="measurementsHelp" class="sr-only"
-                        >Toggle dimension measurements and bounding box overlay
-                        on 3D preview</span
-                      >
-                      <label class="preview-setting">
-                        <input
-                          type="checkbox"
-                          id="gridToggle"
-                          checked
-                          aria-describedby="gridHelp"
-                        />
-                        <span>Show grid</span>
-                      </label>
-                      <span id="gridHelp" class="sr-only"
-                        >Toggle grid plane visibility in 3D preview</span
-                      >
-                      <label class="preview-setting">
-                        <input
-                          type="checkbox"
-                          id="autoBedToggle"
-                          checked
-                          aria-describedby="autoBedHelp"
-                        />
-                        <span>Auto-bed (Z=0)</span>
-                      </label>
-                      <span id="autoBedHelp" class="sr-only"
-                        >Automatically place models on the build plate at Z
-                        equals zero</span
-                      >
-                      <div
-                        class="preview-setting-group"
-                        role="group"
-                        aria-labelledby="gridSizeLabel"
-                      >
-                        <span
-                          id="gridSizeLabel"
-                          class="preview-setting-group-label"
-                          >Grid size</span
-                        >
-                        <!-- Compact single-row: [Preset ▼] [W × H] (dims only shown for Custom) -->
-                        <div class="grid-size-compact-row">
-                          <label for="gridPresetSelect" class="sr-only"
-                            >Printer bed preset</label
-                          >
-                          <select
-                            id="gridPresetSelect"
-                            class="grid-preset-select"
-                            aria-label="Printer bed preset"
-                          >
-                            <option value="220x220">
-                              220 × 220 mm (Ender 3)
-                            </option>
-                            <option value="256x256">
-                              256 × 256 mm (Prusa MK4)
-                            </option>
-                            <option value="235x235">
-                              235 × 235 mm (Ender 3 V2)
-                            </option>
-                            <option value="300x300">
-                              300 × 300 mm (CR-10)
-                            </option>
-                            <option value="350x350">
-                              350 × 350 mm (Large format)
-                            </option>
-                            <option value="custom">Custom…</option>
-                          </select>
-                          <span
-                            class="grid-size-dims"
-                            id="gridSizeDims"
-                            hidden
-                          >
-                            <label for="gridWidthInput" class="sr-only"
-                              >Width mm</label
-                            >
-                            <input
-                              type="number"
-                              id="gridWidthInput"
-                              class="grid-dim-input"
-                              min="50"
-                              max="500"
-                              value="220"
-                              aria-describedby="gridSizeHelp"
-                              aria-label="Grid width in mm"
-                            />
-                            <span aria-hidden="true" class="grid-dim-separator"
-                              >×</span
-                            >
-                            <label for="gridHeightInput" class="sr-only"
-                              >Height mm</label
-                            >
-                            <input
-                              type="number"
-                              id="gridHeightInput"
-                              class="grid-dim-input"
-                              min="50"
-                              max="500"
-                              value="220"
-                              aria-label="Grid height in mm"
-                            />
-                          </span>
-                        </div>
-                        <span id="gridSizeHelp" class="sr-only"
-                          >Enter printer bed dimensions in millimetres to set
-                          the grid size</span
-                        >
-                        <!-- Save custom grid preset row (shown when Custom is selected) -->
-                        <div
-                          class="grid-preset-save-row"
-                          id="gridPresetSaveRow"
-                          hidden
-                        >
-                          <label for="gridPresetNameInput" class="sr-only"
-                            >Custom preset name</label
-                          >
+                      <!-- LEFT COLUMN: Preview Options -->
+                      <section class="settings-col settings-col-options"
+                               aria-labelledby="previewOptionsHeading">
+                        <h3 class="preview-settings-subheading" id="previewOptionsHeading">
+                          Preview Options
+                        </h3>
+                        <label class="toggle-switch">
                           <input
-                            type="text"
-                            id="gridPresetNameInput"
-                            class="grid-preset-name-input"
-                            placeholder="Preset name…"
-                            maxlength="80"
-                            aria-describedby="gridPresetSaveError"
+                            type="checkbox"
+                            id="measurementsToggle"
+                            aria-describedby="measurementsHelp"
                           />
-                          <button
-                            type="button"
-                            id="saveGridPresetBtn"
-                            class="btn btn-sm btn-primary"
-                            aria-label="Save custom grid size preset"
-                          >
-                            Save
-                          </button>
-                          <span
-                            id="gridPresetSaveError"
-                            class="grid-preset-error"
-                            role="alert"
-                            aria-live="polite"
-                          ></span>
-                        </div>
-                        <!-- Delete row (shown when a user-saved preset is selected) -->
-                        <div
-                          class="grid-preset-delete-row"
-                          id="gridPresetDeleteRow"
-                          hidden
+                          <span class="toggle-label">Show measurements</span>
+                        </label>
+                        <span id="measurementsHelp" class="sr-only"
+                          >Toggle dimension measurements and bounding box overlay
+                          on 3D preview</span
                         >
-                          <button
-                            type="button"
-                            id="deleteGridPresetBtn"
-                            class="btn btn-sm btn-outline btn-danger-outline"
-                            aria-label="Delete selected custom grid preset"
-                          >
-                            Delete preset
-                          </button>
-                        </div>
-                      </div>
-                      <label class="preview-setting">
-                        <input
-                          type="checkbox"
-                          id="statusBarToggle"
-                          checked
-                          aria-describedby="statusBarHelp"
-                        />
-                        <span>Show status bar</span>
-                      </label>
-                      <span id="statusBarHelp" class="sr-only"
-                        >Toggle status and render info overlay on preview</span
-                      >
-                      <!-- Engine Toggle (Manifold vs CGAL) -->
-                      <div
-                        class="preview-setting-divider"
-                        aria-hidden="true"
-                      ></div>
-                      <label class="preview-setting">
-                        <input
-                          type="checkbox"
-                          id="manifoldEngineToggle"
-                          checked
-                          aria-describedby="manifoldEngineHelp"
-                        />
-                        <span>Fast engine (Manifold)</span>
-                      </label>
-                      <span id="manifoldEngineHelp" class="sr-only"
-                        >Use Manifold geometry engine for faster rendering.
-                        Disable if you encounter issues with complex
-                        models.</span
-                      >
-                      <p class="preview-setting-hint" id="manifoldEngineHint">
-                        5-30× faster. Disable if models fail to render.
-                      </p>
-                      <div class="preview-setting rotation-speed-setting">
-                        <label
-                          class="preview-setting-label"
-                          for="rotationSpeedInput"
-                          id="rotationSpeedLabel"
-                          >Auto-rotate speed</label
-                        >
-                        <div class="slider-container">
+                        <label class="toggle-switch">
                           <input
-                            type="range"
-                            id="rotationSpeedInput"
-                            min="0.1"
-                            max="3"
-                            step="0.1"
-                            value="0.5"
-                            aria-labelledby="rotationSpeedLabel"
-                            aria-describedby="rotationSpeedHelp"
-                            aria-valuemin="0.1"
-                            aria-valuemax="3"
-                            aria-valuenow="0.5"
+                            type="checkbox"
+                            id="gridToggle"
+                            checked
+                            aria-describedby="gridHelp"
                           />
-                          <span class="slider-value" id="rotationSpeedValue"
-                            >0.5°/s</span
+                          <span class="toggle-label">Show grid</span>
+                        </label>
+                        <span id="gridHelp" class="sr-only"
+                          >Toggle grid plane visibility in 3D preview</span
+                        >
+                        <div
+                          class="grid-color-row"
+                          role="group"
+                          aria-labelledby="gridColorLabel"
+                        >
+                          <label
+                            for="gridColorPicker"
+                            id="gridColorLabel"
+                            class="grid-color-label"
+                            >Grid color</label
                           >
-                        </div>
-                      </div>
-                      <span id="rotationSpeedHelp" class="sr-only"
-                        >Set the speed of automatic model rotation when
-                        auto-rotate is enabled, from 0.1 to 3 degrees per
-                        second</span
-                      >
-                      <label class="preview-setting" for="previewQualitySelect">
-                        <span class="preview-setting-label"
-                          >Preview quality</span
-                        >
-                        <select
-                          id="previewQualitySelect"
-                          aria-label="Select preview quality"
-                        >
-                          <option value="auto">Auto (adaptive)</option>
-                          <option value="fidelity">Fidelity (slower)</option>
-                          <option value="balanced" selected>
-                            Balanced (~50%)
-                          </option>
-                          <option value="fast">Fast (lower resolution)</option>
-                        </select>
-                      </label>
-                      <label class="preview-setting" for="exportQualitySelect">
-                        <span class="preview-setting-label"
-                          >Export quality</span
-                        >
-                        <select
-                          id="exportQualitySelect"
-                          aria-label="Select export quality"
-                        >
-                          <option value="model" selected>Model default</option>
-                          <option value="low">Low (fast)</option>
-                          <option value="medium">Medium (balanced)</option>
-                          <option value="high">High (smooth)</option>
-                        </select>
-                      </label>
-                      <div class="preview-setting cache-tools">
-                        <span class="preview-setting-label">App cache</span>
-                        <button
-                          id="clearCacheBtn"
-                          class="btn btn-sm btn-outline"
-                          aria-label="Clear cached files and reload the app"
-                        >
-                          Clear cache &amp; reload
-                        </button>
-                      </div>
-                      <div
-                        class="preview-setting complexity-indicator"
-                        id="complexityIndicator"
-                        title="Detected model complexity tier"
-                      >
-                        <span class="preview-setting-label">Complexity:</span>
-                        <span
-                          id="complexityTierLabel"
-                          class="complexity-tier-label"
-                          >Analyzing...</span
-                        >
-                      </div>
-                      <div class="preview-setting model-color-setting">
-                        <span class="preview-setting-label">Model Color</span>
-                        <div class="model-color-picker">
                           <input
                             type="color"
-                            id="modelColorPicker"
-                            value="#2196F3"
-                            aria-label="Choose model display color"
+                            id="gridColorPicker"
+                            class="grid-color-picker"
+                            value="#cccccc"
+                            aria-label="Grid line color"
+                            aria-describedby="gridColorHelp"
                           />
                           <button
-                            id="modelColorReset"
-                            class="btn-icon"
-                            title="Reset to theme default"
-                            aria-label="Reset color to theme default"
+                            type="button"
+                            id="resetGridColorBtn"
+                            class="btn btn-sm btn-outline"
+                            aria-label="Reset grid color to theme default"
                           >
-                            ↺
+                            Reset
+                          </button>
+                          <span id="gridColorHelp" class="sr-only"
+                            >Choose a custom color for grid lines, or reset
+                            to the current theme default</span
+                          >
+                        </div>
+                        <!-- Grid Opacity -->
+                        <div class="preview-setting grid-opacity-setting">
+                          <label
+                            for="gridOpacityInput"
+                            id="gridOpacityLabel"
+                            >Grid opacity</label
+                          >
+                          <div class="slider-container">
+                            <input
+                              type="range"
+                              id="gridOpacityInput"
+                              min="10"
+                              max="100"
+                              step="5"
+                              value="100"
+                              aria-labelledby="gridOpacityLabel"
+                              aria-describedby="gridOpacityHelp"
+                            />
+                            <span class="slider-value" id="gridOpacityValue"
+                              >100%</span
+                            >
+                          </div>
+                        </div>
+                        <span id="gridOpacityHelp" class="sr-only"
+                          >Adjust grid line visibility from 10 to 100
+                          percent</span
+                        >
+                        <label class="toggle-switch">
+                          <input
+                            type="checkbox"
+                            id="autoBedToggle"
+                            checked
+                            aria-describedby="autoBedHelp"
+                          />
+                          <span class="toggle-label">Auto-bed (Z=0)</span>
+                        </label>
+                        <span id="autoBedHelp" class="sr-only"
+                          >Automatically place models on the build plate at Z
+                          equals zero</span
+                        >
+                        <div
+                          class="preview-setting-group"
+                          role="group"
+                          aria-labelledby="gridSizeLabel"
+                        >
+                          <span
+                            id="gridSizeLabel"
+                            class="preview-setting-group-label"
+                            >Grid size</span
+                          >
+                          <!-- Compact single-row: [Preset ▼] [W × H] (dims only shown for Custom) -->
+                          <div class="grid-size-compact-row">
+                            <label for="gridPresetSelect" class="sr-only"
+                              >Printer bed preset</label
+                            >
+                            <select
+                              id="gridPresetSelect"
+                              class="grid-preset-select"
+                              aria-label="Printer bed preset"
+                            >
+                              <option value="220x220">
+                                220 × 220 mm (K1C / Adventurer 5M Pro)
+                              </option>
+                              <option value="225x225">
+                                225 × 225 mm (Neptune 4 Pro)
+                              </option>
+                              <option value="250x210">
+                                250 × 210 mm (Prusa MK4S)
+                              </option>
+                              <option value="250x250">
+                                250 × 250 mm (Kobra 3 Combo)
+                              </option>
+                              <option value="256x256">
+                                256 × 256 mm (Bambu Lab X1C / P1S / A1)
+                              </option>
+                              <option value="300x300">
+                                300 × 300 mm (K1 Max / SV06 Plus)
+                              </option>
+                              <option value="custom">Custom…</option>
+                            </select>
+                            <span
+                              class="grid-size-dims"
+                              id="gridSizeDims"
+                              hidden
+                            >
+                              <label for="gridWidthInput" class="sr-only"
+                                >Width mm</label
+                              >
+                              <input
+                                type="number"
+                                id="gridWidthInput"
+                                class="grid-dim-input"
+                                min="50"
+                                max="500"
+                                value="220"
+                                aria-describedby="gridSizeHelp"
+                                aria-label="Grid width in mm"
+                              />
+                              <span aria-hidden="true" class="grid-dim-separator"
+                                >×</span
+                              >
+                              <label for="gridHeightInput" class="sr-only"
+                                >Height mm</label
+                              >
+                              <input
+                                type="number"
+                                id="gridHeightInput"
+                                class="grid-dim-input"
+                                min="50"
+                                max="500"
+                                value="220"
+                                aria-label="Grid height in mm"
+                              />
+                            </span>
+                          </div>
+                          <span id="gridSizeHelp" class="sr-only"
+                            >Enter printer bed dimensions in millimetres to set
+                            the grid size</span
+                          >
+                          <!-- Save custom grid preset row (shown when Custom is selected) -->
+                          <div
+                            class="grid-preset-save-row"
+                            id="gridPresetSaveRow"
+                            hidden
+                          >
+                            <label for="gridPresetNameInput" class="sr-only"
+                              >Custom preset name</label
+                            >
+                            <input
+                              type="text"
+                              id="gridPresetNameInput"
+                              class="grid-preset-name-input"
+                              placeholder="Preset name…"
+                              maxlength="80"
+                              aria-describedby="gridPresetSaveError"
+                            />
+                            <button
+                              type="button"
+                              id="saveGridPresetBtn"
+                              class="btn btn-sm btn-primary"
+                              aria-label="Save custom grid size preset"
+                            >
+                              Save
+                            </button>
+                            <span
+                              id="gridPresetSaveError"
+                              class="grid-preset-error"
+                              role="alert"
+                              aria-live="polite"
+                            ></span>
+                          </div>
+                          <!-- Delete row (shown when a user-saved preset is selected) -->
+                          <div
+                            class="grid-preset-delete-row"
+                            id="gridPresetDeleteRow"
+                            hidden
+                          >
+                            <button
+                              type="button"
+                              id="deleteGridPresetBtn"
+                              class="btn btn-sm btn-outline btn-danger-outline"
+                              aria-label="Delete selected custom grid preset"
+                            >
+                              Delete preset
+                            </button>
+                          </div>
+                        </div>
+                        <label class="toggle-switch">
+                          <input
+                            type="checkbox"
+                            id="statusBarToggle"
+                            checked
+                            aria-describedby="statusBarHelp"
+                          />
+                          <span class="toggle-label">Show status bar</span>
+                        </label>
+                        <span id="statusBarHelp" class="sr-only"
+                          >Toggle status and render info overlay on preview</span
+                        >
+                        <!-- Engine Toggle (Manifold vs CGAL) -->
+                        <div
+                          class="preview-setting-divider"
+                          aria-hidden="true"
+                        ></div>
+                        <label class="toggle-switch">
+                          <input
+                            type="checkbox"
+                            id="manifoldEngineToggle"
+                            checked
+                            aria-describedby="manifoldEngineHelp"
+                          />
+                          <span class="toggle-label">Fast engine (Manifold)</span>
+                        </label>
+                        <span id="manifoldEngineHelp" class="sr-only"
+                          >Use Manifold geometry engine for faster rendering.
+                          Disable if you encounter issues with complex
+                          models.</span
+                        >
+                        <p class="preview-setting-hint" id="manifoldEngineHint">
+                          5-30× faster. Disable if models fail to render.
+                        </p>
+                        <div class="preview-setting rotation-speed-setting">
+                          <label
+                            class="preview-setting-label"
+                            for="rotationSpeedInput"
+                            id="rotationSpeedLabel"
+                            >Auto-rotate speed</label
+                          >
+                          <div class="slider-container">
+                            <input
+                              type="range"
+                              id="rotationSpeedInput"
+                              min="0.1"
+                              max="3"
+                              step="0.1"
+                              value="0.5"
+                              aria-labelledby="rotationSpeedLabel"
+                              aria-describedby="rotationSpeedHelp"
+                              aria-valuemin="0.1"
+                              aria-valuemax="3"
+                              aria-valuenow="0.5"
+                            />
+                            <span class="slider-value" id="rotationSpeedValue"
+                              >0.5°/s</span
+                            >
+                          </div>
+                        </div>
+                        <span id="rotationSpeedHelp" class="sr-only"
+                          >Set the speed of automatic model rotation when
+                          auto-rotate is enabled, from 0.1 to 3 degrees per
+                          second</span
+                        >
+                        <label class="preview-setting" for="previewQualitySelect">
+                          <span class="preview-setting-label"
+                            >Preview quality</span
+                          >
+                          <select
+                            id="previewQualitySelect"
+                            aria-label="Select preview quality"
+                          >
+                            <option value="auto">Auto (adaptive)</option>
+                            <option value="fidelity">Fidelity (slower)</option>
+                            <option value="balanced" selected>
+                              Balanced (~50%)
+                            </option>
+                            <option value="fast">Fast (lower resolution)</option>
+                          </select>
+                        </label>
+                        <label class="preview-setting" for="exportQualitySelect">
+                          <span class="preview-setting-label"
+                            >Export quality</span
+                          >
+                          <select
+                            id="exportQualitySelect"
+                            aria-label="Select export quality"
+                          >
+                            <option value="model" selected>Model default</option>
+                            <option value="low">Low (fast)</option>
+                            <option value="medium">Medium (balanced)</option>
+                            <option value="high">High (smooth)</option>
+                          </select>
+                        </label>
+                      </section>
+                      <!-- RIGHT COLUMN: Model Appearance + Color + Utilities -->
+                      <section class="settings-col settings-col-appearance"
+                               aria-labelledby="modelAppearanceHeading">
+                        <h3 class="preview-settings-subheading" id="modelAppearanceHeading">
+                          Model Appearance
+                        </h3>
+                        <div class="model-appearance-controls">
+                          <label class="toggle-switch model-appearance-toggle">
+                            <input
+                              type="checkbox"
+                              id="modelAppearanceEnabled"
+                              aria-label="Enable custom model appearance override"
+                            />
+                            <span class="toggle-label">Override</span>
+                          </label>
+                        </div>
+                        <div class="model-appearance-sliders">
+                          <!-- Model Opacity -->
+                          <div class="preview-setting model-opacity-setting">
+                            <label for="modelOpacityInput" id="modelOpacityLabel"
+                              >Model opacity</label
+                            >
+                            <div class="slider-container">
+                              <input
+                                type="range"
+                                id="modelOpacityInput"
+                                min="10"
+                                max="100"
+                                step="5"
+                                value="100"
+                                aria-labelledby="modelOpacityLabel"
+                                aria-describedby="modelOpacityHelp"
+                              />
+                              <span class="slider-value" id="modelOpacityValue"
+                                >100%</span
+                              >
+                            </div>
+                          </div>
+                          <span id="modelOpacityHelp" class="sr-only"
+                            >Reduce model opacity to see the reference overlay image
+                            behind the 3D model. Useful for alignment.</span
+                          >
+                          <!-- Brightness -->
+                          <div class="preview-setting brightness-setting">
+                            <label for="brightnessInput" id="brightnessLabel"
+                              >Brightness</label
+                            >
+                            <div class="slider-container">
+                              <input
+                                type="range"
+                                id="brightnessInput"
+                                min="20"
+                                max="200"
+                                step="5"
+                                value="100"
+                                aria-labelledby="brightnessLabel"
+                                aria-describedby="brightnessHelp"
+                              />
+                              <span class="slider-value" id="brightnessValue"
+                                >100%</span
+                              >
+                            </div>
+                          </div>
+                          <span id="brightnessHelp" class="sr-only"
+                            >Adjust overall scene brightness from 20 to 200
+                            percent</span
+                          >
+                          <!-- Contrast -->
+                          <div class="preview-setting contrast-setting">
+                            <label for="contrastInput" id="contrastLabel"
+                              >Contrast</label
+                            >
+                            <div class="slider-container">
+                              <input
+                                type="range"
+                                id="contrastInput"
+                                min="20"
+                                max="200"
+                                step="5"
+                                value="100"
+                                aria-labelledby="contrastLabel"
+                                aria-describedby="contrastHelp"
+                              />
+                              <span class="slider-value" id="contrastValue"
+                                >100%</span
+                              >
+                            </div>
+                          </div>
+                          <span id="contrastHelp" class="sr-only"
+                            >Adjust lighting contrast from flat to dramatic, 20 to
+                            200 percent</span
+                          >
+                          <!-- Reset button -->
+                          <div class="preview-setting">
+                            <button
+                              type="button"
+                              id="resetAppearanceBtn"
+                              class="btn btn-sm btn-outline"
+                              aria-label="Reset model opacity, brightness, and contrast to defaults"
+                            >
+                              Reset appearance
+                            </button>
+                          </div>
+                        </div><!-- .model-appearance-sliders -->
+                        <div
+                          class="preview-setting-divider"
+                          aria-hidden="true"
+                        ></div>
+                        <div class="preview-setting model-color-setting">
+                          <span class="preview-setting-label">Model Color</span>
+                          <div class="model-color-controls">
+                            <label class="toggle-switch model-color-toggle">
+                              <input
+                                type="checkbox"
+                                id="modelColorEnabled"
+                                aria-label="Enable custom model color override"
+                              />
+                              <span class="toggle-label">Override</span>
+                            </label>
+                            <div class="model-color-picker">
+                              <input
+                                type="color"
+                                id="modelColorPicker"
+                                value="#2196F3"
+                                aria-label="Choose model display color"
+                              />
+                              <button type="button"
+                                id="modelColorReset"
+                                class="btn-icon"
+                                title="Reset to theme default"
+                                aria-label="Reset color to theme default"
+                              >
+                                ↺
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                        <div
+                          class="preview-setting-divider"
+                          aria-hidden="true"
+                        ></div>
+                        <div
+                          class="preview-setting complexity-indicator"
+                          id="complexityIndicator"
+                          title="Detected model complexity tier"
+                        >
+                          <span class="preview-setting-label">Complexity:</span>
+                          <span
+                            id="complexityTierLabel"
+                            class="complexity-tier-label"
+                            >Analyzing...</span
+                          >
+                        </div>
+                        <div class="preview-setting cache-tools">
+                          <span class="preview-setting-label">App cache</span>
+                          <button type="button"
+                            id="clearCacheBtn"
+                            class="btn btn-sm btn-outline"
+                            aria-label="Clear cached files and reload the app"
+                          >
+                            Clear cache &amp; reload
                           </button>
                         </div>
-                      </div>
-                      <div
-                        class="preview-setting-divider"
-                        aria-hidden="true"
-                      ></div>
-                      <span
-                        class="preview-settings-subheading"
-                        id="modelAppearanceHeading"
-                        >Model Appearance</span
-                      >
-                      <!-- Model Opacity -->
-                      <div class="preview-setting model-opacity-setting">
-                        <label for="modelOpacityInput" id="modelOpacityLabel"
-                          >Model opacity</label
-                        >
-                        <div class="slider-container">
-                          <input
-                            type="range"
-                            id="modelOpacityInput"
-                            min="10"
-                            max="100"
-                            step="5"
-                            value="100"
-                            aria-labelledby="modelOpacityLabel"
-                            aria-describedby="modelOpacityHelp"
-                          />
-                          <span class="slider-value" id="modelOpacityValue"
-                            >100%</span
-                          >
-                        </div>
-                      </div>
-                      <span id="modelOpacityHelp" class="sr-only"
-                        >Reduce model opacity to see the reference overlay image
-                        behind the 3D model. Useful for alignment.</span
-                      >
-                      <!-- Brightness -->
-                      <div class="preview-setting brightness-setting">
-                        <label for="brightnessInput" id="brightnessLabel"
-                          >Brightness</label
-                        >
-                        <div class="slider-container">
-                          <input
-                            type="range"
-                            id="brightnessInput"
-                            min="20"
-                            max="200"
-                            step="5"
-                            value="100"
-                            aria-labelledby="brightnessLabel"
-                            aria-describedby="brightnessHelp"
-                          />
-                          <span class="slider-value" id="brightnessValue"
-                            >100%</span
-                          >
-                        </div>
-                      </div>
-                      <span id="brightnessHelp" class="sr-only"
-                        >Adjust overall scene brightness from 20 to 200
-                        percent</span
-                      >
-                      <!-- Contrast -->
-                      <div class="preview-setting contrast-setting">
-                        <label for="contrastInput" id="contrastLabel"
-                          >Contrast</label
-                        >
-                        <div class="slider-container">
-                          <input
-                            type="range"
-                            id="contrastInput"
-                            min="20"
-                            max="200"
-                            step="5"
-                            value="100"
-                            aria-labelledby="contrastLabel"
-                            aria-describedby="contrastHelp"
-                          />
-                          <span class="slider-value" id="contrastValue"
-                            >100%</span
-                          >
-                        </div>
-                      </div>
-                      <span id="contrastHelp" class="sr-only"
-                        >Adjust lighting contrast from flat to dramatic, 20 to
-                        200 percent</span
-                      >
-                      <!-- Reset button -->
-                      <div class="preview-setting">
-                        <button
-                          type="button"
-                          id="resetAppearanceBtn"
-                          class="btn btn-sm btn-outline"
-                          aria-label="Reset model opacity, brightness, and contrast to defaults"
-                        >
-                          Reset appearance
-                        </button>
-                      </div>
+                      </section>
                     </div>
                   </div>
                   <div
@@ -3243,15 +3339,22 @@
                   class="preview-container"
                   id="previewContainer"
                   role="group"
-                  aria-label="3D model preview and controls"
+                  aria-label="Model preview and controls"
                   aria-describedby="previewModelSummary"
                   tabindex="0"
                   data-tutorial-target="preview-container"
                 >
                   <!-- 3D preview or placeholder -->
                   <div class="preview-placeholder">
-                    <p>3D preview will appear here after generating STL</p>
+                    <p>Preview will appear here after generating output</p>
                   </div>
+                  <!-- Rendered 2D SVG preview surface (hidden until SVG output is generated) -->
+                  <div
+                    id="rendered2dPreview"
+                    class="rendered-2d-preview hidden"
+                    role="img"
+                    aria-label="Rendered 2D SVG preview"
+                  ></div>
                   <!-- Screen reader accessible model summary (WCAG 2.2 non-visual content) -->
                   <div
                     id="previewModelSummary"
@@ -3259,8 +3362,8 @@
                     aria-live="polite"
                     aria-atomic="true"
                   >
-                    No model loaded. Upload an OpenSCAD file and generate an STL
-                    to see the 3D preview.
+                    No model loaded. Upload an OpenSCAD file and generate output
+                    to see a preview.
                   </div>
                 </div>
                 <!-- Status bar overlay at bottom of preview -->
@@ -3370,7 +3473,7 @@
                   class="actions-drawer-header"
                   data-tutorial-target="actions-drawer-toggle"
                 >
-                  <button
+                  <button type="button"
                     id="actionsDrawerToggle"
                     class="btn btn-sm btn-icon btn-collapse-panel actions-drawer-toggle-btn forge-control"
                     aria-expanded="false"
@@ -3403,7 +3506,7 @@
                 </div>
                 <!-- Drawer body (expandable content) -->
                 <div class="actions-drawer-body" id="actionsDrawerBody">
-                  <button
+                  <button type="button"
                     id="addToComparisonBtn"
                     class="btn btn-sm btn-secondary actions-drawer-btn"
                     aria-label="Add current configuration to comparison"
@@ -3427,7 +3530,7 @@
                     class="actions-drawer-divider"
                     aria-hidden="true"
                   ></span>
-                  <button
+                  <button type="button"
                     id="addToQueueBtn"
                     class="btn btn-sm btn-secondary actions-drawer-btn"
                     aria-label="Add current configuration to render queue"
@@ -3448,7 +3551,7 @@
                     </svg>
                     <span class="btn-text">Add to Queue</span>
                   </button>
-                  <button
+                  <button type="button"
                     id="viewQueueBtn"
                     class="btn btn-sm btn-secondary actions-drawer-btn"
                     aria-label="View and manage render queue"
@@ -3470,7 +3573,7 @@
                     <span class="btn-text">Queue</span>
                     <span class="queue-badge" id="queueBadge">0</span>
                   </button>
-                  <button
+                  <button type="button"
                     id="exportParamsBtn"
                     class="btn btn-sm btn-secondary actions-drawer-btn"
                     aria-label="Download parameters as JSON file"
@@ -3493,7 +3596,7 @@
                     </svg>
                     <span class="btn-text">Export Params</span>
                   </button>
-                  <button
+                  <button type="button"
                     id="publishProjectBtn"
                     class="btn btn-sm btn-secondary actions-drawer-btn"
                     aria-label="Generate a shareable manifest for hosting this project externally"
@@ -3520,7 +3623,7 @@
                     class="actions-drawer-divider"
                     aria-hidden="true"
                   ></span>
-                  <button
+                  <button type="button"
                     id="viewConsoleBtn"
                     class="btn btn-sm btn-secondary actions-drawer-btn"
                     aria-label="View OpenSCAD console output including echo statements"
@@ -3555,7 +3658,7 @@
               </div>
               <!-- Primary actions (always visible, right side) -->
               <div class="actions-primary">
-                <button
+                <button type="button"
                   id="cancelRenderBtn"
                   class="btn btn-outline hidden"
                   aria-label="Cancel current render operation"
@@ -3574,7 +3677,7 @@
                   </svg>
                   <span>Cancel</span>
                 </button>
-                <button
+                <button type="button"
                   id="primaryActionBtn"
                   class="btn btn-primary btn-large"
                   aria-label="Generate output file from current parameters"
@@ -3614,7 +3717,7 @@
                 aria-label="Camera controls"
               >
                 <!-- Drawer toggle button -->
-                <button
+                <button type="button"
                   id="cameraDrawerToggle"
                   class="btn btn-sm camera-drawer-toggle-btn forge-control"
                   aria-expanded="false"
@@ -4040,7 +4143,7 @@
               </div>
               <!-- Row 2: Collapse button -->
               <div class="camera-header-actions">
-                <button
+                <button type="button"
                   id="cameraPanelToggle"
                   class="btn btn-sm btn-icon btn-collapse-panel forge-control"
                   aria-expanded="false"
@@ -4531,12 +4634,13 @@
       role="dialog"
       aria-labelledby="queueModalTitle"
       aria-modal="true"
+      aria-hidden="true"
     >
       <div class="modal-overlay" id="queueModalOverlay"></div>
       <div class="modal-content modal-large">
         <div class="modal-header">
           <h2 id="queueModalTitle">Render Queue</h2>
-          <button
+          <button type="button"
             class="modal-close"
             id="queueModalClose"
             aria-label="Close render queue"
@@ -4557,42 +4661,42 @@
         <div class="modal-body" id="queueModalBody">
           <!-- Queue controls -->
           <div class="queue-controls">
-            <button
+            <button type="button"
               id="processQueueBtn"
               class="btn btn-primary"
               aria-label="Process all queued jobs"
             >
               ▶️ Process Queue
             </button>
-            <button
+            <button type="button"
               id="stopQueueBtn"
               class="btn btn-outline hidden"
               aria-label="Stop processing queue"
             >
               ⏸️ Stop
             </button>
-            <button
+            <button type="button"
               id="clearCompletedBtn"
               class="btn btn-outline"
               aria-label="Clear completed jobs"
             >
               🗑️ Clear Completed
             </button>
-            <button
+            <button type="button"
               id="clearQueueBtn"
               class="btn btn-outline"
               aria-label="Clear all jobs"
             >
               🗑️ Clear All
             </button>
-            <button
+            <button type="button"
               id="exportQueueBtn"
               class="btn btn-outline"
               aria-label="Export queue as JSON"
             >
               💾 Export Queue
             </button>
-            <button
+            <button type="button"
               id="importQueueBtn"
               class="btn btn-outline"
               aria-label="Import queue from JSON"
@@ -4644,20 +4748,21 @@
       role="dialog"
       aria-labelledby="sourceViewerTitle"
       aria-modal="true"
+      aria-hidden="true"
     >
       <div class="modal-overlay" id="sourceViewerOverlay"></div>
       <div class="modal-content modal-large modal-source">
         <div class="modal-header">
           <h2 id="sourceViewerTitle">OpenSCAD Source</h2>
           <div class="source-viewer-actions">
-            <button
+            <button type="button"
               class="btn btn-sm btn-outline"
               id="sourceViewerCopy"
               aria-label="Copy source code"
             >
               📋 Copy
             </button>
-            <button
+            <button type="button"
               class="modal-close"
               id="sourceViewerClose"
               aria-label="Close source viewer"
@@ -4697,20 +4802,21 @@
       role="dialog"
       aria-labelledby="paramsJsonTitle"
       aria-modal="true"
+      aria-hidden="true"
     >
       <div class="modal-overlay" id="paramsJsonOverlay"></div>
       <div class="modal-content modal-medium">
         <div class="modal-header">
           <h2 id="paramsJsonTitle">Current Parameters (JSON)</h2>
           <div class="params-json-actions">
-            <button
+            <button type="button"
               class="btn btn-sm btn-outline"
               id="paramsJsonCopy"
               aria-label="Copy parameters JSON"
             >
               📋 Copy
             </button>
-            <button
+            <button type="button"
               class="modal-close"
               id="paramsJsonClose"
               aria-label="Close parameters viewer"
@@ -4747,6 +4853,7 @@
       role="dialog"
       aria-labelledby="featuresGuideTitle"
       aria-modal="true"
+      aria-hidden="true"
     >
       <div class="modal-overlay" id="featuresGuideOverlay"></div>
       <div
@@ -4755,7 +4862,7 @@
       >
         <div class="modal-header">
           <h2 id="featuresGuideTitle">Features Guide</h2>
-          <button
+          <button type="button"
             class="modal-close"
             id="featuresGuideClose"
             aria-label="Close features guide"
@@ -4780,7 +4887,7 @@
             role="tablist"
             aria-label="Feature sections"
           >
-            <button
+            <button type="button"
               class="features-tab"
               role="tab"
               aria-selected="true"
@@ -4790,7 +4897,7 @@
             >
               Libraries
             </button>
-            <button
+            <button type="button"
               class="features-tab"
               role="tab"
               aria-selected="false"
@@ -4800,7 +4907,7 @@
             >
               Color Parameters
             </button>
-            <button
+            <button type="button"
               class="features-tab"
               role="tab"
               aria-selected="false"
@@ -4810,7 +4917,7 @@
             >
               Presets
             </button>
-            <button
+            <button type="button"
               class="features-tab"
               role="tab"
               aria-selected="false"
@@ -4820,7 +4927,7 @@
             >
               Advanced
             </button>
-            <button
+            <button type="button"
               class="features-tab"
               role="tab"
               aria-selected="false"
@@ -4830,7 +4937,7 @@
             >
               Workflow
             </button>
-            <button
+            <button type="button"
               class="features-tab"
               role="tab"
               aria-selected="false"
@@ -4840,7 +4947,7 @@
             >
               Accessibility
             </button>
-            <button
+            <button type="button"
               class="features-tab"
               role="tab"
               aria-selected="false"
@@ -4895,7 +5002,7 @@
               any library from the 📚 Libraries panel.
             </p>
             <div class="features-action">
-              <button
+              <button type="button"
                 class="btn btn-primary"
                 data-example="library-test"
                 data-feature-example="true"
@@ -4958,7 +5065,7 @@
               includes a working conversion helper.
             </p>
             <div class="features-action">
-              <button
+              <button type="button"
                 class="btn btn-primary"
                 data-example="colored-box"
                 data-feature-example="true"
@@ -5150,7 +5257,7 @@
               </li>
             </ul>
             <div class="features-action">
-              <button
+              <button type="button"
                 class="btn btn-primary"
                 data-example="multi-file-box"
                 data-feature-example="true"
@@ -5572,7 +5679,7 @@
       <div class="modal-content modal-medium">
         <div class="modal-header">
           <h2 id="textFileEditorTitle">Edit File</h2>
-          <button
+          <button type="button"
             class="modal-close"
             id="textFileEditorClose"
             aria-label="Close file editor"
@@ -5609,10 +5716,10 @@
           </p>
         </div>
         <div class="modal-footer">
-          <button id="textFileEditorCancel" class="btn btn-outline">
+          <button type="button" id="textFileEditorCancel" class="btn btn-outline">
             Cancel
           </button>
-          <button id="textFileEditorApply" class="btn btn-primary">
+          <button type="button" id="textFileEditorApply" class="btn btn-primary">
             Apply and Preview
           </button>
         </div>
@@ -5625,12 +5732,13 @@
       role="dialog"
       aria-labelledby="resetConfirmTitle"
       aria-modal="true"
+      aria-hidden="true"
     >
       <div class="modal-overlay" id="resetConfirmOverlay"></div>
       <div class="modal-content modal-small confirm-modal-content">
         <div class="modal-header">
           <h2 id="resetConfirmTitle">Reset All Parameters?</h2>
-          <button
+          <button type="button"
             class="modal-close"
             id="resetConfirmClose"
             aria-label="Cancel reset"
@@ -5658,10 +5766,10 @@
           </p>
         </div>
         <div class="modal-footer confirm-modal-footer">
-          <button id="resetConfirmCancel" class="btn btn-secondary">
+          <button type="button" id="resetConfirmCancel" class="btn btn-secondary">
             Cancel
           </button>
-          <button id="resetConfirmOk" class="btn btn-primary">Reset All</button>
+          <button type="button" id="resetConfirmOk" class="btn btn-primary">Reset All</button>
         </div>
       </div>
     </div>
@@ -5677,7 +5785,7 @@
       <div class="modal-content modal-large shortcuts-modal-content">
         <div class="modal-header">
           <h2 id="shortcutsModalTitle">Keyboard Shortcuts</h2>
-          <button
+          <button type="button"
             class="modal-close"
             id="shortcutsModalClose"
             aria-label="Close keyboard shortcuts"
@@ -5699,10 +5807,10 @@
           <!-- Content populated by JavaScript -->
         </div>
         <div class="modal-footer shortcuts-modal-footer">
-          <button id="shortcutsResetAll" class="btn btn-secondary">
+          <button type="button" id="shortcutsResetAll" class="btn btn-secondary">
             Reset All to Defaults
           </button>
-          <button id="shortcutsModalDone" class="btn btn-primary">Done</button>
+          <button type="button" id="shortcutsModalDone" class="btn btn-primary">Done</button>
         </div>
       </div>
     </div>
@@ -5718,7 +5826,7 @@
       <div class="modal-content modal-large modal-console">
         <div class="modal-header">
           <h2 id="consoleOutputTitle">OpenSCAD Console Output</h2>
-          <button
+          <button type="button"
             class="modal-close"
             id="consoleOutputClose"
             aria-label="Close console output"
@@ -5758,7 +5866,7 @@ No console output yet. Generate a model to see output.</pre
           </p>
         </div>
         <div class="modal-footer console-modal-footer">
-          <button id="consoleCopyBtn" class="btn btn-secondary">
+          <button type="button" id="consoleCopyBtn" class="btn btn-secondary">
             <svg
               class="btn-icon-svg"
               width="16"
@@ -5776,7 +5884,7 @@ No console output yet. Generate a model to see output.</pre
             </svg>
             Copy
           </button>
-          <button id="consoleDownloadBtn" class="btn btn-secondary">
+          <button type="button" id="consoleDownloadBtn" class="btn btn-secondary">
             <svg
               class="btn-icon-svg"
               width="16"
@@ -5793,8 +5901,8 @@ No console output yet. Generate a model to see output.</pre
             </svg>
             Download
           </button>
-          <button id="consoleClearBtn" class="btn btn-secondary">Clear</button>
-          <button id="consoleCloseBtn" class="btn btn-primary">Close</button>
+          <button type="button" id="consoleClearBtn" class="btn btn-secondary">Clear</button>
+          <button type="button" id="consoleCloseBtn" class="btn btn-primary">Close</button>
         </div>
       </div>
     </div>
@@ -5806,6 +5914,7 @@ No console output yet. Generate a model to see output.</pre
       aria-labelledby="first-visit-title"
       aria-describedby="first-visit-description"
       aria-modal="true"
+      aria-hidden="true"
     >
       <div class="modal-overlay" id="firstVisitOverlay"></div>
       <div class="modal-content modal-medium">
@@ -5944,7 +6053,7 @@ No console output yet. Generate a model to see output.</pre
       <div class="modal-content modal-large">
         <div class="modal-header">
           <h2 id="publishModalTitle">Publish Project</h2>
-          <button
+          <button type="button"
             class="modal-close"
             id="publishModalClose"
             aria-label="Close publish dialog"
@@ -5976,7 +6085,7 @@ No console output yet. Generate a model to see output.</pre
               tabindex="0"
               aria-label="Generated manifest JSON"
             ></pre>
-            <button
+            <button type="button"
               id="copyManifestBtn"
               class="btn btn-sm btn-primary publish-copy-btn"
               aria-label="Copy manifest JSON to clipboard"
@@ -6034,7 +6143,7 @@ No console output yet. Generate a model to see output.</pre
                 readonly
                 aria-label="Shareable Forge link"
               />
-              <button
+              <button type="button"
                 id="copyShareLinkBtn"
                 class="btn btn-sm btn-primary"
                 aria-label="Copy shareable link to clipboard"

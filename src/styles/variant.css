@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Variant UI Theme Overrides
  * 
  * Applied when data-ui-variant="mono" is set on :root
@@ -8,12 +9,27 @@
  * - Light theme: Amber phosphor (DOS P3 monitor)
  */
 
+/* Iosevka Term — SIL Open Font License 1.1
+ * Source: https://github.com/be5invis/Iosevka (v34.2.1)
+ * Only loaded when the mono variant is active (font-family referenced
+ * exclusively under [data-ui-variant='mono'] custom properties).
+ */
+@font-face {
+  font-family: 'Iosevka Term';
+  src: url('/fonts/iosevka-term-regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root[data-ui-variant='mono'] {
   /* Base mono settings - shared across color variants */
 
-  /* Force monospace everywhere */
-  --font-family-base: ui-monospace, 'Courier New', Courier, monospace;
-  --font-family-mono: ui-monospace, 'Courier New', Courier, monospace;
+  /* Prefer self-hosted Iosevka Term; system monospace stack as fallback */
+  --font-family-base:
+    'Iosevka Term', ui-monospace, 'Courier New', Courier, monospace;
+  --font-family-mono:
+    'Iosevka Term', ui-monospace, 'Courier New', Courier, monospace;
 
   /* Flatten shadows and borders */
   --shadow-sm: none;
@@ -29,26 +45,72 @@
   --color-bg-primary: #000000;
   --color-bg-secondary: #0a0a0a;
   --color-bg-tertiary: #121212;
+  --color-bg-elevated: #000000;
+  --color-bg-primary-rgb: 0, 0, 0;
 
   --color-text-primary: #00ff00;
   --color-text-secondary: #00cc00;
   --color-text-tertiary: #009900;
+  --color-text-muted: #009900;
 
   --color-accent: #00ff00;
+  --color-accent-hover: #33ff33;
   --color-accent-text: #000000;
+  --color-accent-subtle: #001a00;
+  --color-accent-fg: #00ff00;
   --color-on-accent: #000000;
 
   --color-border: #00ff00;
+  --color-border-light: #009900;
+  --color-border-hover: #00ff00;
   --color-hover-bg: #1a4d1a;
   --color-focus: #00ff00;
 
   /* Error/Warning/Success in monochrome green (all use green tints) */
   --color-error: #00ff00;
   --color-error-bg: #001a00;
+  --color-error-hover: var(--color-accent-hover);
+  --color-error-text: var(--color-text-primary);
+  --color-on-error: var(--color-accent-text);
   --color-warning: #00ff00;
   --color-warning-bg: #001a00;
+  --color-warning-hover: var(--color-accent-hover);
+  --color-warning-text: var(--color-text-primary);
+  --color-on-warning: var(--color-accent-text);
   --color-success: #00ff00;
   --color-success-bg: #001a00;
+  --color-success-hover: var(--color-accent-hover);
+  --color-success-text: var(--color-text-primary);
+  --color-on-success: var(--color-accent-text);
+
+  /* Info tokens — prevent teal Radix bleedthrough */
+  --color-info: var(--color-accent);
+  --color-info-hover: var(--color-accent-hover);
+  --color-info-text: var(--color-text-primary);
+  --color-info-bg: var(--color-bg-secondary);
+  --color-on-info: var(--color-accent-text);
+
+  /* Input tokens — prevent gray Radix defaults */
+  --color-input-bg: var(--color-bg-secondary);
+  --color-input-border: var(--color-border);
+  --color-input-border-focus: var(--color-focus);
+
+  /* Skip link — prevent blue bleedthrough */
+  --color-skip-link-bg: var(--color-accent);
+  --color-skip-link-text: var(--color-accent-text);
+
+  /* Focus ring — prevent default blue ring in non-HC mono */
+  --focus-ring: 0 0 0 3px var(--color-focus);
+
+  /* Phase 2: CRT visual effect variables — all reference --color-accent so
+   * they adapt automatically between green (dark) and amber (light) variants. */
+  --crt-glow-tight: 0 0 1px var(--color-accent);
+  --crt-glow-mid: 0 0 2px
+    color-mix(in srgb, var(--color-accent) 25%, transparent);
+  --crt-glow-wide: 0 0 6px
+    color-mix(in srgb, var(--color-accent) 10%, transparent);
+  --crt-scanline-color: rgba(0, 0, 0, 0.12);
+  --crt-vignette-color: rgba(0, 0, 0, 0.52);
 }
 
 /* ========================================
@@ -61,13 +123,19 @@
   --color-bg-primary: #000000;
   --color-bg-secondary: #0a0800;
   --color-bg-tertiary: #121000;
+  --color-bg-elevated: #000000;
+  --color-bg-primary-rgb: 0, 0, 0;
 
   --color-text-primary: #ffb000;
   --color-text-secondary: #cc8c00;
   --color-text-tertiary: #997200;
+  --color-text-muted: #997200;
 
   --color-accent: #ffb000;
+  --color-accent-hover: #ffc333;
   --color-accent-text: #000000;
+  --color-accent-subtle: #1a0800;
+  --color-accent-fg: #ffb000;
   --color-on-accent: #000000;
   --color-on-success: #000000;
   --color-on-warning: #000000;
@@ -76,6 +144,8 @@
   --color-text-on-primary: #000000;
 
   --color-border: #ffb000;
+  --color-border-light: #997200;
+  --color-border-hover: #ffb000;
   --color-hover-bg: #1a1000;
   --color-focus: #ffb000;
 
@@ -88,17 +158,12 @@
   --color-success-bg: #0a0800;
 }
 
-/* Keep amber theme text black on status overlays */
-:root[data-ui-variant='mono'][data-theme='light']
-  .preview-rendering-overlay
-  .rendering-text {
-  color: #000000;
-  text-shadow: none;
-}
+/* Rendering toast inherits --color-on-accent; no override needed for mono theme */
 
 /* Override component styles for flat, terminal aesthetic */
 :root[data-ui-variant='mono'] .app-header {
   background-color: var(--color-bg-primary);
+  color: var(--color-accent);
   border-bottom: 1px solid var(--color-border);
   box-shadow: none;
 }
@@ -115,6 +180,7 @@
 :root[data-ui-variant='mono'] .btn:hover,
 :root[data-ui-variant='mono'] button:hover {
   background: var(--color-hover-bg);
+  border-color: var(--color-accent);
   box-shadow: none;
   transform: none;
 }
@@ -203,6 +269,38 @@
   :root[data-ui-variant='mono'] body {
     cursor: auto;
   }
+
+  /* Disable all CRT visual effects — forced-colors mode manages its own
+   * contrast and overlaying generated gradients or glow shadows would
+   * interfere with system-enforced palette. */
+  :root[data-ui-variant='mono'] body::after {
+    display: none;
+  }
+
+  :root[data-ui-variant='mono'] .preview-container::after {
+    display: none;
+  }
+
+  :root[data-ui-variant='mono'] .preview-container {
+    perspective: none;
+  }
+
+  :root[data-ui-variant='mono'] .preview-container canvas {
+    transform: none;
+  }
+
+  :root[data-ui-variant='mono'] .panel-header,
+  :root[data-ui-variant='mono'] .echo-drawer-label,
+  :root[data-ui-variant='mono'] .preview-status-bar,
+  :root[data-ui-variant='mono'] h1,
+  :root[data-ui-variant='mono'] h2,
+  :root[data-ui-variant='mono'] h3 {
+    text-shadow: none;
+  }
+
+  :root[data-ui-variant='mono'] .panel-header::before {
+    content: none;
+  }
 }
 
 /* Amber cursors for light theme */
@@ -237,6 +335,7 @@
   border: 1px solid var(--color-border);
   background: var(--color-bg-secondary);
   color: var(--color-text-primary);
+  -webkit-text-fill-color: var(--color-text-primary);
   box-shadow: none;
 }
 
@@ -248,10 +347,11 @@
   box-shadow: none;
 }
 
-/* Form controls (checkbox / switch / slider) */
+/* Form controls (checkbox / switch / slider / select) */
 :root[data-ui-variant='mono'] input[type='checkbox'],
 :root[data-ui-variant='mono'] input[type='radio'],
-:root[data-ui-variant='mono'] input[type='range'] {
+:root[data-ui-variant='mono'] input[type='range'],
+:root[data-ui-variant='mono'] select {
   accent-color: var(--color-accent);
 }
 
@@ -314,28 +414,54 @@
   height: 20px;
 }
 
-/* Toggle switch (used in param controls) */
+/* Toggle switch → checkbox/checkmark in mono
+ * Collapses the pill/slider to a square checkbox matching the plain checkbox
+ * contract above (L326–366). The base ::before thumb is hidden and replaced
+ * with a ::after checkmark. */
 :root[data-ui-variant='mono'] .toggle-switch input[type='checkbox'] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
   border-radius: 0;
   border: 1px solid var(--color-border);
   background: var(--color-bg-secondary);
+  display: inline-grid;
+  place-content: center;
+  cursor: pointer;
+  transition: none;
 }
 
 :root[data-ui-variant='mono'] .toggle-switch input[type='checkbox']::before {
-  border-radius: 0;
-  border: 1px solid var(--color-border);
-  background: var(--color-accent);
+  content: none;
+}
+
+:root[data-ui-variant='mono'] .toggle-switch input[type='checkbox']::after {
+  content: '';
+  width: 0.4em;
+  height: 0.7em;
+  border-right: 0.14em solid var(--color-accent);
+  border-bottom: 0.14em solid var(--color-accent);
+  transform: rotate(45deg) scale(0);
+  transform-origin: center;
 }
 
 :root[data-ui-variant='mono'] .toggle-switch input[type='checkbox']:checked {
-  background: var(--color-accent);
-  border-color: var(--color-accent);
+  background: var(--color-bg-secondary);
+  border-color: var(--color-border);
 }
 
 :root[data-ui-variant='mono']
   .toggle-switch
-  input[type='checkbox']:checked::before {
-  background: var(--color-accent-text);
+  input[type='checkbox']:checked::after {
+  transform: rotate(45deg) scale(1);
+}
+
+:root[data-ui-variant='mono']
+  .toggle-switch
+  input[type='checkbox']:focus-visible {
+  outline: 1px solid var(--color-focus);
+  outline-offset: 2px;
 }
 
 :root[data-ui-variant='mono'] .toggle-switch input[type='checkbox']:disabled {
@@ -434,6 +560,21 @@
   background: rgba(255, 176, 0, 0.1);
 }
 
+/* Tooltips — override to accent border/bg for mono terminal aesthetic */
+:root[data-ui-variant='mono'] .param-tooltip {
+  background: var(--color-bg-primary);
+  border-color: var(--color-accent);
+  box-shadow: none;
+}
+
+:root[data-ui-variant='mono'] .param-tooltip::before {
+  border-bottom-color: var(--color-accent);
+}
+
+:root[data-ui-variant='mono'] .param-tooltip::after {
+  border-bottom-color: var(--color-bg-primary);
+}
+
 /* Workflow progress */
 :root[data-ui-variant='mono'] .workflow-progress {
   background: var(--color-bg-secondary);
@@ -484,7 +625,8 @@
     border-radius: 0 !important;
   }
 
-  /* Alt Pan Toggle in mobile drawer - ensure icon contrast */
+  /* Alt Pan Toggle in mobile drawer — !important overrides layout.css drawer styles.
+     See also: desktop .alt-pan-toggle block below (outside this media query). */
   :root[data-ui-variant='mono'] .alt-pan-toggle {
     background: var(--color-bg-tertiary) !important;
     border: 1px solid var(--color-accent) !important;
@@ -530,17 +672,6 @@
   font-family: var(--font-family-mono);
   font-size: var(--font-size-xs);
   color: var(--color-text-secondary);
-}
-
-/* Highlight active adjustment mode */
-:root[data-ui-variant='mono'] .preview-status-alt-adjust .alt-adjust-active {
-  color: var(--color-accent);
-  font-weight: 500;
-}
-
-/* Dim inactive values */
-:root[data-ui-variant='mono'] .preview-status-alt-adjust .alt-adjust-label {
-  color: var(--color-text-tertiary);
 }
 
 /* ECHO drawer in mono variant */
@@ -607,6 +738,19 @@
   display: none !important;
 }
 
+/* Grid color controls are non-functional in mono variant — visible but disabled.
+   pointer-events: none blocks mouse activation of the color input and reset
+   button. CSS cannot prevent keyboard Tab focus; if full keyboard blocking is
+   needed, toggle the disabled attribute via JS when the variant changes. */
+:root[data-ui-variant='mono'] .grid-color-row {
+  opacity: var(--opacity-disabled);
+  cursor: not-allowed;
+}
+
+:root[data-ui-variant='mono'] .grid-color-row > * {
+  pointer-events: none;
+}
+
 /* Scrollbars */
 :root[data-ui-variant='mono'] ::-webkit-scrollbar {
   width: 8px;
@@ -632,7 +776,28 @@
   background: var(--color-bg-secondary);
 }
 
-/* Firefox + any UA that supports it */
+/* Targeted WebKit overrides for scrollable panels — same cascade strategy
+   as the Firefox rules below: class-qualified selectors beat the hardcoded
+   rgba() values in layout.css dark-theme rules at equal specificity. */
+:root[data-ui-variant='mono'] .param-panel::-webkit-scrollbar-thumb,
+:root[data-ui-variant='mono'] .preview-content::-webkit-scrollbar-thumb,
+:root[data-ui-variant='mono'] .welcome-screen::-webkit-scrollbar-thumb {
+  background-color: var(--color-border);
+}
+
+:root[data-ui-variant='mono'] .param-panel::-webkit-scrollbar-thumb:hover,
+:root[data-ui-variant='mono'] .preview-content::-webkit-scrollbar-thumb:hover,
+:root[data-ui-variant='mono'] .welcome-screen::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-text-secondary);
+}
+
+/* Firefox + any UA that supports it.
+   Targeted rules override layout.css dark-theme hardcoded rgba() scrollbar
+   values (e.g. :root[data-theme='dark'] .param-panel) at equal specificity
+   because variant.css loads later in the cascade. */
+:root[data-ui-variant='mono'] .param-panel,
+:root[data-ui-variant='mono'] .preview-content,
+:root[data-ui-variant='mono'] .welcome-screen,
 :root[data-ui-variant='mono'] .camera-panel-body,
 :root[data-ui-variant='mono'] .features-panel,
 :root[data-ui-variant='mono'] .features-tabs,
@@ -641,7 +806,13 @@
   scrollbar-color: var(--color-border) var(--color-bg-secondary);
 }
 
-/* Remove gradients and transitions */
+/* Remove gradients and transitions from all DOM elements.
+ *
+ * Scope note: The CSS universal selector (*) does NOT match pseudo-elements
+ * (::before / ::after). CRT effect pseudo-elements — body::after (scanlines)
+ * and .preview-container::after (vignette) — are therefore intentionally
+ * exempt from background-image: none and will render their gradients correctly.
+ */
 :root[data-ui-variant='mono'] * {
   transition-duration: 0s !important;
   background-image: none !important;
@@ -695,7 +866,8 @@
   background: var(--color-bg-primary);
 }
 
-/* Alt Pan adjust toggle button in Pan D-pad center (desktop) */
+/* Alt Pan adjust toggle button in Pan D-pad center (desktop).
+   See also: mobile drawer .alt-pan-toggle block inside @media (max-width: 767px) above. */
 :root[data-ui-variant='mono'] .alt-pan-toggle {
   background: var(--color-bg-tertiary);
   border: 1px solid var(--color-accent);
@@ -952,6 +1124,169 @@
 }
 
 /* ========================================
+ * Phase 4: Cross-app mono normalization
+ * Extends the bracketed-text pattern (L826–1004) to remaining
+ * non-conforming surfaces. Reverse-video (amber bg / black text)
+ * for selected/highlighted states. High-contrast exception:
+ * multicolor is acceptable in HC mode per stakeholder directive.
+ * ======================================== */
+
+/* --- Console action icons (emoji → bracketed-text) --- */
+:root[data-ui-variant='mono'] #console-copy-btn {
+  font-size: 0;
+}
+:root[data-ui-variant='mono'] #console-copy-btn::before {
+  content: '[COPY]';
+  font-size: var(--font-size-sm, 0.875rem);
+}
+
+:root[data-ui-variant='mono'] #console-download-btn {
+  font-size: 0;
+}
+:root[data-ui-variant='mono'] #console-download-btn::before {
+  content: '[DL]';
+  font-size: var(--font-size-sm, 0.875rem);
+}
+
+:root[data-ui-variant='mono'] #console-clear-btn {
+  font-size: 0;
+}
+:root[data-ui-variant='mono'] #console-clear-btn::before {
+  content: '[DEL]';
+  font-size: var(--font-size-sm, 0.875rem);
+}
+
+/* --- Image measurement browse button (emoji → bracketed-text) --- */
+:root[data-ui-variant='mono'] .measure-upload-btn {
+  font-size: 0;
+}
+:root[data-ui-variant='mono'] .measure-upload-btn::before {
+  content: '[UP] Browse';
+  font-size: var(--font-size-sm, 0.875rem);
+}
+
+/* Measurement expand button (emoji → bracketed-text) */
+:root[data-ui-variant='mono'] #measureExpandBtn {
+  font-size: 0;
+}
+:root[data-ui-variant='mono'] #measureExpandBtn::before {
+  content: '[MAX]';
+  font-size: var(--font-size-sm, 0.875rem);
+}
+
+/* --- Reference image section: upload button (emoji → bracketed-text) --- */
+:root[data-ui-variant='mono'] .overlay-upload-btn {
+  font-size: 0;
+}
+:root[data-ui-variant='mono'] .overlay-upload-btn::before {
+  content: '[UP] Upload';
+  font-size: var(--font-size-sm, 0.875rem);
+}
+
+/* --- Advanced menu: remaining emoji icon not yet covered --- */
+:root[data-ui-variant='mono'] #exportChangedBtn {
+  font-size: 0;
+}
+:root[data-ui-variant='mono'] #exportChangedBtn::before {
+  content: '[COPY] Export Changed Settings';
+  font-size: var(--font-size-sm, 0.875rem);
+}
+
+/* --- Floppy disk save icon in #previewStatusBar → mono-conforming --- */
+:root[data-ui-variant='mono'] .memory-icon {
+  font-size: 0;
+}
+:root[data-ui-variant='mono'] .memory-icon::before {
+  content: '[MEM]';
+  font-size: var(--font-size-xs, 0.75rem);
+  font-family: var(--font-family-mono);
+}
+
+/* --- Preset selection: reverse-video for selected/highlighted states --- */
+:root[data-ui-variant='mono'] .preset-combobox-option[aria-selected='true'],
+:root[data-ui-variant='mono'] .preset-combobox-option:hover {
+  background: var(--color-accent) !important;
+  color: var(--color-accent-text) !important;
+}
+
+:root[data-ui-variant='mono'] .preset-select option:checked {
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+}
+
+/* --- Parameter selection/adjustment: reverse-video for active states --- */
+:root[data-ui-variant='mono'] select option:checked {
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+}
+
+:root[data-ui-variant='mono'] select:focus option:checked {
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+}
+
+/*
+ * Native <select> option hover override.
+ * Firefox respects option:hover; Chrome/Edge ignore it (Blink renders its own
+ * highlight). accent-color on <select> influences Chrome's highlight color.
+ * Full visual control requires replacing <select> with a custom ARIA listbox
+ * (deferred — see plan's "Deferred follow-on work" item 2).
+ */
+:root[data-ui-variant='mono'] select option {
+  background: var(--color-bg-primary) !important;
+  color: var(--color-text-primary) !important;
+}
+
+:root[data-ui-variant='mono'] select option:hover {
+  background: var(--color-accent) !important;
+  color: var(--color-accent-text) !important;
+}
+
+/* --- Complexity badges → mono amber/green --- */
+:root[data-ui-variant='mono'] .complexity-tier-label {
+  background-color: transparent;
+  color: var(--color-accent);
+  border: 1px solid var(--color-accent);
+  border-radius: 0;
+}
+
+:root[data-ui-variant='mono'] .complexity-tier-label.tier-beginner,
+:root[data-ui-variant='mono'] .complexity-tier-label.tier-standard,
+:root[data-ui-variant='mono'] .complexity-tier-label.tier-complex {
+  background-color: transparent;
+  color: var(--color-accent);
+}
+
+/* --- Library / companion / queue badges → mono --- */
+:root[data-ui-variant='mono'] .library-badge,
+:root[data-ui-variant='mono'] .project-files-badge,
+:root[data-ui-variant='mono'] .queue-badge,
+:root[data-ui-variant='mono'] .console-badge {
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+  border-radius: 0;
+}
+
+/* --- High-contrast exception: restore multicolor where specified --- */
+:root[data-ui-variant='mono'][data-high-contrast='true']
+  .complexity-tier-label.tier-beginner {
+  background-color: var(--color-success-bg);
+  color: var(--color-success-text);
+}
+
+:root[data-ui-variant='mono'][data-high-contrast='true']
+  .complexity-tier-label.tier-standard {
+  background-color: var(--color-info-bg);
+  color: var(--color-info-text);
+}
+
+:root[data-ui-variant='mono'][data-high-contrast='true']
+  .complexity-tier-label.tier-complex {
+  background-color: var(--color-warning-bg);
+  color: var(--color-warning-text);
+}
+
+/* ========================================
  * High Contrast Mode for Mono Variant
  * Enhances accessibility while preserving current color scheme
  * (green for dark theme, amber for light theme)
@@ -965,4 +1300,164 @@
   --shadow-sm: none;
   --shadow-md: none;
   --shadow-lg: none;
+}
+
+/* ========================================
+ * Phase 2: CRT Visual Effects
+ * Approaches cool-retro-term aesthetic through pure CSS.
+ *
+ * Performance notes:
+ *   - Scanline and vignette pseudo-elements use will-change: transform /
+ *     position: fixed to hint GPU compositing.
+ *   - text-shadow is limited to key UI text, not applied globally.
+ *   - All effects are gated behind prefers-reduced-motion and forced-colors.
+ * ======================================== */
+
+/* ----------------------------------------
+ * 4a. Phosphor Glow — layered text-shadow
+ *
+ * Three-stop spread: tight pixel-level bloom (1 px), mid halo (2 px),
+ * and wide corona (6 px). All reference --color-accent so the effect
+ * adapts automatically between green (dark) and amber (light) variants.
+ * Applied only to highly visible UI text to avoid battery / perf impact.
+ * ---------------------------------------- */
+:root[data-ui-variant='mono'] .panel-header,
+:root[data-ui-variant='mono'] .echo-drawer-label,
+:root[data-ui-variant='mono'] .preview-status-bar {
+  text-shadow: var(--crt-glow-tight), var(--crt-glow-mid), var(--crt-glow-wide);
+}
+
+/* Subtle emphasis glow on primary headings */
+:root[data-ui-variant='mono'] h1,
+:root[data-ui-variant='mono'] h2,
+:root[data-ui-variant='mono'] h3 {
+  text-shadow:
+    0 0 1px var(--color-accent),
+    0 0 3px color-mix(in srgb, var(--color-accent) 30%, transparent),
+    0 0 8px color-mix(in srgb, var(--color-accent) 12%, transparent);
+}
+
+/* ----------------------------------------
+ * 4b. Scanline Overlay
+ *
+ * body::after is a pseudo-element — NOT matched by the DOM-element-scoped
+ * rule `* { background-image: none !important }` — so the gradient
+ * renders unobstructed without any selector restructuring.
+ * Fixed position keeps scanlines viewport-locked regardless of scroll.
+ * ---------------------------------------- */
+:root[data-ui-variant='mono'] body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0px,
+    transparent 2px,
+    var(--crt-scanline-color) 2px,
+    var(--crt-scanline-color) 4px
+  );
+  will-change: transform;
+}
+
+/* ----------------------------------------
+ * 4c. Screen Curvature + Vignette
+ *
+ * Vignette: .preview-container::after — same pseudo-element exemption
+ * as scanlines; radial-gradient darkens edges to simulate CRT bloom falloff.
+ *
+ * Curvature: subtle scale(1.015) on the canvas creates the impression of
+ * slight barrel expansion without GLSL shaders. perspective on the container
+ * enables 3-D compositing context for child transforms.
+ * ---------------------------------------- */
+:root[data-ui-variant='mono'] .preview-container {
+  position: relative;
+  overflow: hidden;
+  perspective: 1200px;
+}
+
+:root[data-ui-variant='mono'] .preview-container::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+  background-image: radial-gradient(
+    ellipse at center,
+    transparent 48%,
+    var(--crt-vignette-color) 100%
+  );
+  will-change: transform;
+}
+
+:root[data-ui-variant='mono'] .preview-container canvas {
+  transform: scale(1);
+  transform-origin: center center;
+  will-change: transform;
+}
+
+/* ----------------------------------------
+ * 4e. Box-drawing character decorations on panel headers
+ *
+ * Prepends a terminal-style ╞═ glyph before panel header content.
+ * As a flex item (::before in a flex container becomes a flex child),
+ * it renders inline before the title text with flex-shrink: 0 so it
+ * is never squeezed out.
+ * ---------------------------------------- */
+:root[data-ui-variant='mono'] .panel-header::before {
+  content: '╞═ ';
+  font-family: var(--font-family-mono);
+  color: var(--color-text-tertiary);
+  font-size: 0.85em;
+  flex-shrink: 0;
+  opacity: 0.8;
+}
+
+/* ========================================
+ * Accessibility: Disable CRT Effects
+ * ======================================== */
+
+/* ----------------------------------------
+ * prefers-reduced-motion: reduce
+ *
+ * Disables ALL CRT effects that could cause visual stress:
+ *   - Scanline and vignette pseudo-elements are hidden
+ *   - Perspective transforms reset to none
+ *   - Phosphor text-shadow removed
+ *   - Box-drawing decorations suppressed
+ *
+ * Box-drawing characters are static text and technically not "motion",
+ * but they are part of the CRT aesthetic and are disabled here for
+ * consistency with a clean reduced-motion experience.
+ * ---------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  :root[data-ui-variant='mono'] body::after {
+    display: none;
+  }
+
+  :root[data-ui-variant='mono'] .preview-container::after {
+    display: none;
+  }
+
+  :root[data-ui-variant='mono'] .preview-container {
+    perspective: none;
+  }
+
+  :root[data-ui-variant='mono'] .preview-container canvas {
+    transform: none;
+  }
+
+  :root[data-ui-variant='mono'] .panel-header,
+  :root[data-ui-variant='mono'] .echo-drawer-label,
+  :root[data-ui-variant='mono'] .preview-status-bar,
+  :root[data-ui-variant='mono'] h1,
+  :root[data-ui-variant='mono'] h2,
+  :root[data-ui-variant='mono'] h3 {
+    text-shadow: none;
+  }
+
+  :root[data-ui-variant='mono'] .panel-header::before {
+    content: none;
+  }
 }

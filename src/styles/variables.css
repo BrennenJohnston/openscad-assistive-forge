@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
 /* ============================================================================
    Design System - CSS Custom Properties
    ============================================================================
@@ -518,6 +519,10 @@
   textarea,
   .btn {
     border: 2px solid ButtonText !important;
+  }
+
+  input[type='number'] {
+    -webkit-text-fill-color: FieldText;
   }
 
   /* Focus indicators must use outline or border, not box-shadow */

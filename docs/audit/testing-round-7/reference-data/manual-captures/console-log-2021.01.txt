@@ -1,0 +1,245 @@
+OpenSCAD 2021.01
+https://www.openscad.org/
+
+Copyright (C) 2009-2021 The OpenSCAD Developers
+This program is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation; either version 2 of the License, or (at your option) any later version.
+
+Loaded design 'C:/Users/WATAP/Downloads/ready_to_print_designs/keyguard_v75.scad'.
+Compiling design (CSG Tree generation)...
+Compiling design (CSG Products generation)...
+Geometries in cache: 101
+Geometry cache size in bytes: 1049592
+CGAL Polyhedrons in cache: 0
+CGAL cache size in bytes: 0
+Compiling design (CSG Products normalization)...
+Normalized tree has 61 elements!
+Compile and preview finished.
+Total rendering time: 0:00:00.427
+ 
+Parsing design (AST generation)...
+Compiling design (CSG Tree generation)...
+ECHO: 
+ECHO: 
+Compiling design (CSG Products generation)...
+Geometries in cache: 123
+Geometry cache size in bytes: 1388896
+CGAL Polyhedrons in cache: 0
+CGAL cache size in bytes: 0
+Compiling design (CSG Products normalization)...
+Normalized tree has 28 elements!
+Compile and preview finished.
+Total rendering time: 0:00:00.428
+ 
+Parsing design (AST generation)...
+Compiling design (CSG Tree generation)...
+ECHO: 
+ECHO: 
+ECHO: "type of tablet: iPad 9th generation"
+ECHO: "use Laser Cutting best practices: yes"
+ECHO: "orientation: landscape"
+ECHO: "have a case? yes"
+ECHO: "height of opening in case: 170 mm."
+ECHO: "width of opening in case: 245 mm."
+ECHO: "case opening corner radius: 3 mm."
+ECHO: "number of columns: 4"
+ECHO: "number of rows: 3"
+ECHO: "vertical rail width: 26.948 mm."
+ECHO: "horizontal rail width: 26.948 mm."
+ECHO: "mounting method: No Mount"
+Compiling design (CSG Products generation)...
+Geometries in cache: 161
+Geometry cache size in bytes: 1561296
+CGAL Polyhedrons in cache: 0
+CGAL cache size in bytes: 0
+Compiling design (CSG Products normalization)...
+Normalized tree has 1 elements!
+Compile and preview finished.
+Total rendering time: 0:00:00.282
+ 
+Parsing design (AST generation)...
+Compiling design (CSG Tree generation)...
+ECHO: 
+ECHO: 
+ECHO: "************ First layer for SVG/DXF filee is not supported for a 3D-Printed keyguard ************"
+ECHO: 
+ECHO: 
+Compiling design (CSG Products generation)...
+Geometries in cache: 161
+Geometry cache size in bytes: 1561296
+CGAL Polyhedrons in cache: 0
+CGAL cache size in bytes: 0
+Compiling design (CSG Products normalization)...
+Normalized tree has 1 elements!
+Compile and preview finished.
+Total rendering time: 0:00:00.245
+ 
+Parsing design (AST generation)...
+Compiling design (CSG Tree generation)...
+Compiling design (CSG Products generation)...
+Geometries in cache: 161
+Geometry cache size in bytes: 1561296
+CGAL Polyhedrons in cache: 0
+CGAL cache size in bytes: 0
+Compiling design (CSG Products normalization)...
+Normalized tree has 61 elements!
+Compile and preview finished.
+Total rendering time: 0:00:00.289
+ 
+Parsing design (AST generation)...
+Compiling design (CSG Tree generation)...
+Compiling design (CSG Products generation)...
+Geometries in cache: 161
+Geometry cache size in bytes: 1561296
+CGAL Polyhedrons in cache: 0
+CGAL cache size in bytes: 0
+Compiling design (CSG Products normalization)...
+Normalized tree has 61 elements!
+Compile and preview finished.
+Total rendering time: 0:00:01.025
+ 
+Parsing design (AST generation)...
+Compiling design (CSG Tree generation)...
+Rendering Polygon Mesh using CGAL...
+Geometries in cache: 186
+Geometry cache size in bytes: 2184720
+CGAL Polyhedrons in cache: 50
+CGAL cache size in bytes: 95972480
+Total rendering time: 0:00:32.887
+   Top level object is a 3D object:
+   Simple:        yes
+   Vertices:     5658
+   Halfedges:   17800
+   Edges:        8900
+   Halffacets:   6494
+   Facets:       3247
+   Volumes:         2
+Rendering finished.
+STL export finished: C:/Users/WATAP/Downloads/keyguard_v75_Default_3D_Printed_Keyguard.stl
+ 
+Parsing design (AST generation)...
+Compiling design (CSG Tree generation)...
+ECHO: 
+ECHO: 
+Compiling design (CSG Products generation)...
+Geometries in cache: 186
+Geometry cache size in bytes: 2184720
+CGAL Polyhedrons in cache: 50
+CGAL cache size in bytes: 95972480
+Compiling design (CSG Products normalization)...
+Normalized tree has 28 elements!
+Compile and preview finished.
+Total rendering time: 0:00:00.257
+ 
+Parsing design (AST generation)...
+Compiling design (CSG Tree generation)...
+ECHO: 
+ECHO: 
+Compiling design (CSG Products generation)...
+Geometries in cache: 186
+Geometry cache size in bytes: 2184720
+CGAL Polyhedrons in cache: 50
+CGAL cache size in bytes: 95972480
+Compiling design (CSG Products normalization)...
+Normalized tree has 28 elements!
+Compile and preview finished.
+Total rendering time: 0:00:00.879
+ 
+Parsing design (AST generation)...
+Compiling design (CSG Tree generation)...
+ECHO: 
+ECHO: 
+Rendering Polygon Mesh using CGAL...
+Geometries in cache: 225
+Geometry cache size in bytes: 3158464
+CGAL Polyhedrons in cache: 39
+CGAL cache size in bytes: 103342320
+Total rendering time: 0:00:13.546
+   Top level object is a 3D object:
+   Simple:        yes
+   Vertices:     2690
+   Halfedges:    8436
+   Edges:        4218
+   Halffacets:   3062
+   Facets:       1531
+   Volumes:         2
+Rendering finished.
+STL export finished: C:/Users/WATAP/Downloads/keyguard_v75_Default_Laser_Cut_Keyguard.stl
+ 
+Parsing design (AST generation)...
+Compiling design (CSG Tree generation)...
+ECHO: 
+ECHO: 
+ECHO: "type of tablet: iPad 9th generation"
+ECHO: "use Laser Cutting best practices: yes"
+ECHO: "orientation: landscape"
+ECHO: "have a case? yes"
+ECHO: "height of opening in case: 170 mm."
+ECHO: "width of opening in case: 245 mm."
+ECHO: "case opening corner radius: 3 mm."
+ECHO: "number of columns: 4"
+ECHO: "number of rows: 3"
+ECHO: "vertical rail width: 26.948 mm."
+ECHO: "horizontal rail width: 26.948 mm."
+ECHO: "mounting method: No Mount"
+Compiling design (CSG Products generation)...
+Geometries in cache: 225
+Geometry cache size in bytes: 3158464
+CGAL Polyhedrons in cache: 39
+CGAL cache size in bytes: 103342320
+Compiling design (CSG Products normalization)...
+Normalized tree has 1 elements!
+Compile and preview finished.
+Total rendering time: 0:00:00.229
+ 
+Parsing design (AST generation)...
+Compiling design (CSG Tree generation)...
+ECHO: 
+ECHO: 
+ECHO: "type of tablet: iPad 9th generation"
+ECHO: "use Laser Cutting best practices: yes"
+ECHO: "orientation: landscape"
+ECHO: "have a case? yes"
+ECHO: "height of opening in case: 170 mm."
+ECHO: "width of opening in case: 245 mm."
+ECHO: "case opening corner radius: 3 mm."
+ECHO: "number of columns: 4"
+ECHO: "number of rows: 3"
+ECHO: "vertical rail width: 26.948 mm."
+ECHO: "horizontal rail width: 26.948 mm."
+ECHO: "mounting method: No Mount"
+Compiling design (CSG Products generation)...
+Geometries in cache: 225
+Geometry cache size in bytes: 3158464
+CGAL Polyhedrons in cache: 39
+CGAL cache size in bytes: 103342320
+Compiling design (CSG Products normalization)...
+Normalized tree has 1 elements!
+Compile and preview finished.
+Total rendering time: 0:00:00.842
+ 
+Parsing design (AST generation)...
+Compiling design (CSG Tree generation)...
+ECHO: 
+ECHO: 
+ECHO: "type of tablet: iPad 9th generation"
+ECHO: "use Laser Cutting best practices: yes"
+ECHO: "orientation: landscape"
+ECHO: "have a case? yes"
+ECHO: "height of opening in case: 170 mm."
+ECHO: "width of opening in case: 245 mm."
+ECHO: "case opening corner radius: 3 mm."
+ECHO: "number of columns: 4"
+ECHO: "number of rows: 3"
+ECHO: "vertical rail width: 26.948 mm."
+ECHO: "horizontal rail width: 26.948 mm."
+ECHO: "mounting method: No Mount"
+Rendering Polygon Mesh using CGAL...
+Geometries in cache: 226
+Geometry cache size in bytes: 3176144
+CGAL Polyhedrons in cache: 39
+CGAL cache size in bytes: 103342320
+Total rendering time: 0:00:00.792
+   Top level object is a 2D object:
+   Contours:       17
+Rendering finished.
+SVG export finished: C:/Users/WATAP/Downloads/ready_to_print_designs/keyguard_v75_Default_Laser_Cut_First_Layer_for_SVG_DXF_File.svg

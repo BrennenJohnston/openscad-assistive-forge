@@ -4,6 +4,7 @@
  */
 
 import { test, expect } from '@playwright/test'
+import { getPresetOptions } from './helpers/preset-helpers.js'
 
 const loadSimpleBoxExample = async (page) => {
   const exampleButton = page.locator(
@@ -125,20 +126,14 @@ test.describe('Stakeholder Acceptance Tests', () => {
     await page.waitForTimeout(1000)
     
     // Check preset dropdown
-    const presetSelect = page.locator('#presetSelect')
-    if (await presetSelect.isVisible()) {
-      const options = await presetSelect.locator('option').allTextContents()
-      console.log('Preset dropdown options:', options)
-      
-      // Check if "design default values" is the first option after placeholder
-      const firstRealOption = options.find(opt => !opt.includes('Select') && opt.trim() !== '')
-      console.log('First real option:', firstRealOption)
-      
-      expect(firstRealOption?.toLowerCase()).toContain('design default')
-      
-      // Take screenshot showing dropdown
-      await presetSelect.screenshot({ path: 'test-results/test4-design-defaults.png' })
-    }
+    const options = await getPresetOptions(page)
+    console.log('Preset dropdown options:', options)
+
+    // Check if "design default values" is the first option after placeholder
+    const firstRealOption = options.find(opt => !opt.includes('Select') && opt.trim() !== '')
+    console.log('First real option:', firstRealOption)
+
+    expect(firstRealOption?.toLowerCase()).toContain('design default')
   })
 
   test('TEST 5: Import / Export Modal (Item 12)', async ({ page }) => {
@@ -189,9 +184,9 @@ test.describe('Stakeholder Acceptance Tests', () => {
     await page.waitForTimeout(1000)
     
     // Check for console panel
-    const consolePanel = page.locator('#consoleDetails')
+    const consolePanel = page.locator('#consolePanel')
     const consolePanelExists = await consolePanel.count() > 0
-    console.log('Console panel (#consoleDetails) found:', consolePanelExists)
+    console.log('Console panel (#consolePanel) found:', consolePanelExists)
     
     // Check for console badge
     const consoleBadge = page.locator('#console-badge')

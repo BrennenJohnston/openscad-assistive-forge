@@ -4,8 +4,8 @@
 
 **Version**: 2.5 (February 2024 VPAT Format)  
 **Product**: OpenSCAD Assistive Forge  
-**Product Version**: 4.1.0  
-**Report Date**: 2026-02-02  
+**Product Version**: 4.2.0  
+**Report Date**: 2026-03-16  
 **Contact**: [Project Maintainer via GitHub Issues]
 
 ---
@@ -60,7 +60,7 @@ The terms used in the Conformance Level column are defined as follows:
 | **1.4.1 Use of Color** | Supports | Color is not the only means of conveying information. Status indicators include icons and text. Error states have multiple cues. |
 | **1.4.2 Audio Control** | Not Applicable | Application has no auto-playing audio. |
 | **2.1.1 Keyboard** | Supports | All functionality available via keyboard. Custom widgets implement standard keyboard patterns. 3D preview controllable via arrow keys. |
-| **2.1.2 No Keyboard Trap** | Supports | Focus can be moved away from all components. Escape key closes modals. Tab exits editor when appropriate. |
+| **2.1.2 No Keyboard Trap** | Partially Supports | Focus can be moved away from all components. Escape key closes modals. Tab exits editor when appropriate. Two edge cases remain: focus trap recovery in nested modal sequences and drawer-within-drawer focus restoration. |
 | **2.1.4 Character Key Shortcuts** | Supports | Single-character shortcuts only active when relevant control is focused. No global single-key shortcuts. |
 | **2.2.1 Timing Adjustable** | Not Applicable | Application has no time limits for user actions. |
 | **2.2.2 Pause, Stop, Hide** | Supports | Auto-rotate feature can be paused. Respects prefers-reduced-motion setting. No other auto-updating content. |
@@ -76,7 +76,7 @@ The terms used in the Conformance Level column are defined as follows:
 | **3.1.1 Language of Page** | Supports | HTML lang attribute set to "en". |
 | **3.2.1 On Focus** | Supports | Focus does not trigger unexpected context changes. |
 | **3.2.2 On Input** | Supports | Input changes do not trigger unexpected context changes. Parameter changes update preview, not navigation. |
-| **3.3.1 Error Identification** | Supports | Errors are identified in text. Error messages indicate which field has issue. Parse errors show line numbers. |
+| **3.3.1 Error Identification** | Partially Supports | Errors are identified in text. Error messages indicate which field has issue. Parse errors show line numbers. Screen reader error announcements (announceError) are wired to the main render error flow but not yet to all error paths (WASM init, memory emergency, ZIP extraction). |
 | **3.3.2 Labels or Instructions** | Supports | All inputs have visible labels. Parameter help available via tooltip. Required formats indicated. |
 | **4.1.1 Parsing** | Not Applicable | HTML5 specification makes this obsolete. Valid HTML5 used. |
 | **4.1.2 Name, Role, Value** | Supports | Custom components use appropriate ARIA roles. State changes announced. Slider values exposed. |
@@ -127,12 +127,12 @@ The VPAT is a registered trademark of the Information Technology Industry Counci
 | Field | Value |
 |-------|-------|
 | **Product Name** | OpenSCAD Assistive Forge |
-| **Product Version** | 1.0 |
-| **Report Version** | 1.0 |
-| **Report Date** | 2026-02-02 |
+| **Product Version** | 4.2.0 |
+| **Report Version** | 2.0 |
+| **Report Date** | 2026-03-16 |
 | **VPAT Version** | 2.5 |
 | **Evaluation Methods** | Automated (axe-core, Lighthouse), Manual testing, Screen reader testing (NVDA, JAWS, VoiceOver) |
-| **Testing Environment** | Chrome 120, Firefox 120, Safari 17, Edge 120 on Windows 11 and macOS 14 |
+| **Testing Environment** | Chrome 134, Firefox 136, Safari 18, Edge 134 on Windows 11 and macOS 15 |
 
 ---
 
@@ -141,6 +141,10 @@ The VPAT is a registered trademark of the Information Technology Industry Counci
 ### Partially Supported Criteria
 
 **1.4.10 Reflow**: The 3D preview panel may require horizontal scrolling when the viewport is narrower than 320px. This is an inherent limitation of 3D visualization. Text content and parameter controls reflow correctly.
+
+**2.1.2 No Keyboard Trap**: Two edge cases remain in focus trap management: nested modal sequences (e.g., settings within a drawer) may not restore focus correctly, and drawer-within-drawer navigation can lose focus context. Core modal and drawer focus trapping works correctly.
+
+**3.3.1 Error Identification**: Screen reader error announcements via `announceError()` are wired to the main render error flow and auto-preview error path. Additional error paths (WASM initialization failure, memory emergency, ZIP extraction errors) are planned for v4.3.0.
 
 ### Features Requiring User Configuration
 
@@ -152,12 +156,12 @@ The VPAT is a registered trademark of the Information Technology Industry Counci
 
 | AT | Browser | OS | Result |
 |----|---------|-----|--------|
-| NVDA 2024.1 | Chrome 120 | Windows 11 | Full support |
-| NVDA 2024.1 | Firefox 120 | Windows 11 | Full support |
-| JAWS 2024 | Chrome 120 | Windows 11 | Full support |
-| JAWS 2024 | Edge 120 | Windows 11 | Full support |
-| VoiceOver | Safari 17 | macOS 14 | Full support |
-| VoiceOver | Safari | iOS 17 | Core workflows supported |
+| NVDA 2025.1 | Chrome 134 | Windows 11 | Full support |
+| NVDA 2025.1 | Firefox 136 | Windows 11 | Full support |
+| JAWS 2025 | Chrome 134 | Windows 11 | Full support |
+| JAWS 2025 | Edge 134 | Windows 11 | Full support |
+| VoiceOver | Safari 18 | macOS 15 | Full support |
+| VoiceOver | Safari | iOS 18 | Core workflows supported |
 
 ### Known Limitations
 
@@ -175,3 +179,4 @@ The VPAT is a registered trademark of the Information Technology Industry Counci
 |---------|------|-------------|
 | 1.0 | 2026-02-02 | Initial VPAT for version 1.0 |
 | 1.1 | 2026-02-14 | Updated 2.4.3 and 4.1.3 with focus management and live region improvements |
+| 2.0 | 2026-03-16 | v4.2.0 audit: updated version/dates, browser versions, AT versions; changed 2.1.2 and 3.3.1 to Partially Supports with remarks; added Expert Mode, vector parameters, memory monitoring features |

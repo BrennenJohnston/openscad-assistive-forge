@@ -262,3 +262,26 @@ export function getDrawerSizeKey(drawerName, dimension) {
 export function getAppPrefKey(feature) {
   return `openscad-forge-${feature}`;
 }
+
+// ============================================================================
+// HFM (Alt View) persistent settings
+// ============================================================================
+
+/**
+ * localStorage key for the user's saved HFM contrast (edge) scale.
+ * Value is a decimal string matching the _HFM_CONTRAST_RANGE in main.js.
+ */
+export const STORAGE_KEY_HFM_CONTRAST_SCALE =
+  'openscad-forge-hfm-contrast-scale';
+
+/**
+ * localStorage key for the user's saved HFM font scale.
+ * Value is a decimal string matching the _HFM_FONT_SCALE_RANGE in main.js.
+ */
+export const STORAGE_KEY_HFM_FONT_SCALE = 'openscad-forge-hfm-font-scale';
+
+/**
+ * localStorage key for the user's saved HFM persist-fade (afterglow intensity).
+ * Value is a decimal string in [0, 1] matching _HFM_PERSIST_FADE_RANGE in main.js.
+ */
+export const STORAGE_KEY_HFM_PERSIST_FADE = 'openscad-forge-hfm-persist-fade';

@@ -301,7 +301,7 @@ single source of truth.
 
 ## 18. Prompt library
 
-Sixteen ready-to-use prompts for common development scenarios. Each uses one
+Seventeen ready-to-use prompts for common development scenarios. Each uses one
 dominant technique (per arXiv:2412.20545), stays under 500 words, and includes
 acceptance criteria and anti-patterns.
 
@@ -325,6 +325,7 @@ acceptance criteria and anti-patterns.
 | 14 | 3D-print AT device design | Persona |
 | 15 | Open source contribution | Persona |
 | 16 | Research synthesis | Persona |
+| 17 | Queue executor (single-phase session) | Persona |
 
 ---
 
@@ -438,7 +439,31 @@ Based on the empirical analysis, use this template when planning AI-assisted wor
 
 ---
 
-## 25. Lead developer choices needed
+## 25. Queue executor workflow
+
+A validated methodology for batched bug fixes and small-scoped tasks. Instead
+of a sprint plan (7% completion rate), decompose the work into micro-phases
+executed in session-isolated AI chats. Each phase is one focused change, one
+validation gate, one checklist update, then a hard stop.
+
+The workflow uses three artifacts: a **queue plan file** (persistent state with
+frontmatter todos and phase specs), a **session executor prompt** (meta-prompt
+that enforces the 8-step protocol), and **persona prompts** (one per phase,
+selected from the prompt library).
+
+Validated against 15 micro-phases in the origin project with zero scope escape
+incidents. Combines the completion rate of narrow-scope plans (50%) with the
+throughput of batch planning.
+
+**Full guide:** [QUEUE_EXECUTOR_WORKFLOW.md](QUEUE_EXECUTOR_WORKFLOW.md)
+
+**Template:** [queue-plan.md](../templates/queue-plan.md)
+
+**Session prompt:** [17-queue-executor.md](../prompts/17-queue-executor.md)
+
+---
+
+## 26. Lead developer choices needed
 
 Decisions that require the lead developer's input before they can be
 implemented. Organized by research question, each decision includes the

@@ -142,6 +142,67 @@ describe('Modal Manager', () => {
     expect(modal.classList.contains('hidden')).toBe(true)
   })
 
+  it('restores focus before setting aria-hidden=true on close', () => {
+    const trigger = document.createElement('button')
+    trigger.textContent = 'Open'
+    document.body.appendChild(trigger)
+    trigger.focus()
+
+    const modal = document.createElement('div')
+    modal.classList.add('hidden')
+    modal.setAttribute('aria-hidden', 'true')
+
+    const btn = document.createElement('button')
+    btn.textContent = 'Action'
+    makeVisible(btn)
+    modal.appendChild(btn)
+    document.body.appendChild(modal)
+
+    openModal(modal)
+
+    // Capture document.activeElement at the moment modal's aria-hidden is set to "true"
+    let activeFocusWhenAriaHiddenSet = undefined
+    const origSetAttribute = modal.setAttribute.bind(modal)
+    modal.setAttribute = (name, value) => {
+      if (name === 'aria-hidden' && value === 'true') {
+        activeFocusWhenAriaHiddenSet = document.activeElement
+      }
+      return origSetAttribute(name, value)
+    }
+
+    closeModal(modal)
+
+    // Focus must NOT be inside the modal when aria-hidden=true is applied
+    expect(activeFocusWhenAriaHiddenSet).toBeDefined()
+    expect(modal.contains(activeFocusWhenAriaHiddenSet)).toBe(false)
+    expect(document.activeElement).toBe(trigger)
+  })
+
+  it('modals rendered with aria-hidden=true are not reachable by screen readers before opening', () => {
+    // Verifies the expected initial HTML contract: static modals should carry
+    // aria-hidden="true" so their content is not announced before first open.
+    const modal = document.createElement('div')
+    modal.className = 'modal hidden'
+    modal.setAttribute('role', 'dialog')
+    modal.setAttribute('aria-modal', 'true')
+    modal.setAttribute('aria-hidden', 'true')
+
+    const btn = document.createElement('button')
+    btn.textContent = 'Inside'
+    makeVisible(btn)
+    modal.appendChild(btn)
+    document.body.appendChild(modal)
+
+    // Before opening: aria-hidden must be true
+    expect(modal.getAttribute('aria-hidden')).toBe('true')
+
+    openModal(modal)
+    expect(modal.getAttribute('aria-hidden')).toBe('false')
+
+    closeModal(modal)
+    expect(modal.getAttribute('aria-hidden')).toBe('true')
+  })
+
   it('initializes close handlers for static modals', () => {
     const featuresModal = document.createElement('div')
     featuresModal.id = 'featuresGuideModal'

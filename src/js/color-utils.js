@@ -5,6 +5,23 @@
  */
 
 /**
+ * Desktop OpenSCAD `#` debug-modifier highlight color.
+ * Source: openscad/src/glview/Renderer.cc — CGAL_HIGHLIGHT {255, 81, 81, 128}
+ *
+ * The `#` modifier OVERRIDES any user-defined `color()` call; it does not
+ * blend. SVG/DXF export ignores model colors entirely (fixed stroke/fill).
+ */
+export const DEBUG_HIGHLIGHT_COLOR = Object.freeze({
+  r: 255,
+  g: 81,
+  b: 81,
+  a: 128,
+});
+
+export const DEBUG_HIGHLIGHT_HEX = '#ff5151';
+export const DEBUG_HIGHLIGHT_OPACITY = 128 / 255;
+
+/**
  * Normalize a hex color value to standard format (#RRGGBB)
  * @param {string} value - Color value (with or without #)
  * @returns {string|null} Normalized hex color or null if invalid

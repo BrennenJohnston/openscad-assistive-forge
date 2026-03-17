@@ -3,8 +3,14 @@
  * @license GPL-3.0-or-later
  */
 
-import { normalizeHexColor } from './color-utils.js';
+import {
+  normalizeHexColor,
+  DEBUG_HIGHLIGHT_HEX,
+  DEBUG_HIGHLIGHT_OPACITY,
+} from './color-utils.js';
 import { getAppPrefKey } from './storage-keys.js';
+import { isEnabled as isFlagEnabled } from './feature-flags.js';
+import { isNonPreviewable, is2DGenerateValue } from './render-intent.js';
 
 // Storage keys using standardized naming convention
 const STORAGE_KEY_PERF_METRICS = getAppPrefKey('perf-metrics');
@@ -77,8 +83,12 @@ export class AutoPreviewController {
     // Parameter type metadata (schema types for boolean vs string disambiguation)
     this.paramTypes = {};
 
+    // Full parsed schema for render-intent classification
+    this.schema = null;
+
     // Color parameters for preview tinting
     this.colorParamNames = [];
+    this._autoColorEnabled = false;
 
     // Cache: paramHash -> { stl, stats, timestamp }
     this.previewCache = new Map();
@@ -87,8 +97,9 @@ export class AutoPreviewController {
     // Used to determine if camera should be preserved on subsequent loads
     this.initialPreviewDone = false;
 
-    // Full quality STL for download (separate from preview)
+    // Full quality output for download (separate from preview)
     this.fullQualitySTL = null;
+    this.fullQualityFormat = null;
     this.fullQualityStats = null;
     this.fullQualityKey = null;
     // Console output from last full render (for echo() support)
@@ -195,6 +206,41 @@ export class AutoPreviewController {
   }
 
   /**
+   * Set the parsed schema for render-intent classification.
+   * The shared render-intent module uses the full schema to detect 2D export
+   * intent and non-previewable states across all enum parameters, not just
+   * "generate".
+   * @param {Object|null} schema - Parsed schema ({ parameters: { ... } })
+   */
+  setSchema(schema) {
+    this.schema = schema || null;
+    console.debug(
+      '[AutoPreview] setSchema:',
+      this.schema
+        ? Object.keys(this.schema.parameters || {}).length + ' params'
+        : 'null'
+    );
+  }
+
+  /**
+   * Detect the render state for model coloring based on parameters.
+   * Delegates to the shared render-intent classifier and maps the result
+   * to the legacy color-tinting values expected by the preview manager.
+   *
+   * Now a no-op that always returns null: the fabricated 'preview'/'laser'
+   * tinting was removed because it does not correspond to any desktop
+   * OpenSCAD behavior. Model color comes from COFF per-face data or the
+   * theme default.
+   *
+   * @param {Object} parameters
+   * @param {boolean} _isFullQuality
+   * @returns {null}
+   */
+  _detectRenderState(parameters, _isFullQuality = false) {
+    return null;
+  }
+
+  /**
    * Resolve a preview color override from parameters
    * @param {Object} parameters
    * @returns {string|null} Hex color (#RRGGBB) or null
@@ -212,9 +258,7 @@ export class AutoPreviewController {
       return null;
     }
 
-    const preferredKey = this.colorParamNames.includes('box_color')
-      ? 'box_color'
-      : this.colorParamNames[0];
+    const preferredKey = this.colorParamNames[0];
     const raw = parameters[preferredKey];
 
     // Use shared color normalization utility
@@ -236,6 +280,17 @@ export class AutoPreviewController {
     this.pendingParamHash = null;
     // Reset initial preview flag - new file needs camera fit
     this.initialPreviewDone = false;
+
+    // Reset auto-color override so previous project's colors don't leak
+    if (
+      this._autoColorEnabled &&
+      this.previewManager?.setColorOverrideEnabled
+    ) {
+      this.previewManager.setColorOverrideEnabled(false);
+      this.previewManager.setColorOverride(null);
+      this._autoColorEnabled = false;
+    }
+
     this.setState(PREVIEW_STATE.IDLE);
   }
 
@@ -247,6 +302,15 @@ export class AutoPreviewController {
   setProjectFiles(projectFiles, mainFilePath) {
     this.projectFiles = projectFiles;
     this.mainFilePath = mainFilePath;
+
+    // BUG-A fix: companion file content changes affect geometry even when
+    // parameters stay the same (e.g., preset aliasing swaps openings files).
+    // Clear the preview cache so the next render dispatches to the worker
+    // with the updated file set rather than serving a stale cached result.
+    this.clearPreviewCache();
+    if (this.currentPreviewKey) {
+      this.setState(PREVIEW_STATE.STALE);
+    }
 
     if (projectFiles && projectFiles.size > 0) {
       console.log(
@@ -421,6 +485,7 @@ export class AutoPreviewController {
     if (!cached) return;
 
     try {
+      const cachedFormat = cached.format || 'stl';
       let previewColor = null;
       try {
         const params = JSON.parse(paramHash);
@@ -428,14 +493,41 @@ export class AutoPreviewController {
       } catch (_error) {
         previewColor = null;
       }
-      // Only apply SCAD-derived color if one exists; don't clear user's manual color override
-      if (this.previewManager?.setColorOverride && previewColor !== null) {
-        this.previewManager.setColorOverride(previewColor);
+      if (this.previewManager?.setColorOverride) {
+        if (cachedFormat === 'off') {
+          // OFF/COFF carries model face colors; force-disable single-color override.
+          this.previewManager.setColorOverrideEnabled(false);
+          this.previewManager.setColorOverride(null);
+          this._autoColorEnabled = false;
+        } else if (previewColor !== null) {
+          this.previewManager.setColorOverrideEnabled(true);
+          this.previewManager.setColorOverride(previewColor);
+          this._autoColorEnabled = true;
+        } else if (this._autoColorEnabled) {
+          this.previewManager.setColorOverrideEnabled(false);
+          this.previewManager.setColorOverride(null);
+          this._autoColorEnabled = false;
+        }
+      }
+      const params = (() => {
+        try {
+          return JSON.parse(paramHash);
+        } catch {
+          return null;
+        }
+      })();
+      if (this.previewManager?.setRenderState) {
+        this.previewManager.setRenderState(this._detectRenderState(params));
       }
       // Preserve camera position on subsequent loads (after initial preview)
-      const loadResult = await this.previewManager.loadSTL(cached.stl, {
-        preserveCamera: this.initialPreviewDone,
-      });
+      const loadResult =
+        cachedFormat === 'off' && this.previewManager.loadOFF
+          ? await this.previewManager.loadOFF(cached.stl, {
+              preserveCamera: this.initialPreviewDone,
+            })
+          : await this.previewManager.loadSTL(cached.stl, {
+              preserveCamera: this.initialPreviewDone,
+            });
       this.previewParamHash = paramHash;
       this.previewCacheKey = cacheKey;
       // Mark initial preview as done after successful load
@@ -504,22 +596,314 @@ export class AutoPreviewController {
   }
 
   /**
-   * Detect whether the current parameters will produce 2D-only geometry.
-   * When true, an STL preview render would fail with "not a 3D object" and
-   * corrupt the WASM module — so we skip it entirely.
+   * Detect whether the current parameters produce output that cannot be
+   * previewed as 3D geometry (2D-only formats, customizer-only modes, or
+   * empty/whitespace generate values).
+   *
+   * Delegates to the shared render-intent module's `isNonPreviewable`.
+   * Accepts either a full schema object or, for backward compatibility,
+   * a generate enum entries array.
+   *
    * @param {Object} parameters - Current parameter values
+   * @param {Object|Array} [schemaOrEnumEntries] - Schema or generate enum entries
    * @returns {boolean}
    */
-  static is2DOnlyParameters(parameters) {
-    if (!parameters) return false;
-    const gen = parameters.generate;
-    if (typeof gen !== 'string') return false;
-    const lower = gen.toLowerCase();
-    return (
-      lower.includes('svg') ||
-      lower.includes('dxf') ||
-      lower.includes('first layer')
-    );
+  static isNonPreviewableParameters(parameters, schemaOrEnumEntries) {
+    let schema = schemaOrEnumEntries;
+    if (Array.isArray(schemaOrEnumEntries)) {
+      schema = { parameters: { generate: { enum: schemaOrEnumEntries } } };
+    }
+    return isNonPreviewable(parameters, schema);
+  }
+
+  /**
+   * Detect whether a SCAD source file uses color() calls, which enables
+   * COFF (Color OFF) format output from OpenSCAD for per-face color passthrough.
+   *
+   * This is a conservative regex scan — false negatives are safe (fallback to STL),
+   * but false positives waste a slower text-format render with no benefit.
+   * The regex avoids comments and strings on a best-effort basis.
+   *
+   * @param {string} scadContent - OpenSCAD source code
+   * @returns {boolean} true if color() calls are likely present
+   */
+  static scadUsesColor(scadContent) {
+    if (!scadContent || typeof scadContent !== 'string') return false;
+    // Strip single-line // comments and block /* */ comments (approximate)
+    const stripped = scadContent
+      .replace(/\/\/[^\n]*/g, '')
+      .replace(/\/\*[\s\S]*?\*\//g, '');
+    // Match color( with optional whitespace, including named colors like color("red")
+    return /\bcolor\s*\(/.test(stripped);
+  }
+
+  /**
+   * Count distinct face colors in OFF/COFF data without full parsing.
+   * Used to detect monochrome output (single color wrapping all geometry)
+   * which indicates the author's color() calls don't provide useful
+   * differentiation and CSG operation face colors would be more informative.
+   *
+   * Returns early once 2 distinct colors are found (avoids scanning all faces).
+   *
+   * @param {ArrayBuffer|string} offData - OFF/COFF file content
+   * @returns {number} Number of unique face colors (0 = no colors, 1 = monochrome, 2+ = multi-color)
+   */
+  static countUniqueOFFColors(offData) {
+    if (!offData) return 0;
+    const text =
+      typeof offData === 'string' ? offData : new TextDecoder().decode(offData);
+
+    const lines = text
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0 && !l.startsWith('#'));
+
+    if (lines.length === 0) return 0;
+
+    const firstLine = lines[0].toUpperCase();
+    if (!firstLine.startsWith('OFF') && !firstLine.startsWith('COFF')) return 0;
+
+    const headerParts = lines[0].split(/\s+/);
+    let countLineIdx;
+    if (headerParts.length >= 3 && !isNaN(Number(headerParts[1]))) {
+      countLineIdx = 0;
+    } else {
+      countLineIdx = 1;
+    }
+    const countParts =
+      countLineIdx === 0
+        ? headerParts.slice(1)
+        : lines[countLineIdx].split(/\s+/);
+    const numVerts = Number(countParts[0]);
+    const numFaces = Number(countParts[1]);
+    const dataStartLine = countLineIdx + 1;
+    const faceStart = dataStartLine + numVerts;
+
+    const uniqueColors = new Set();
+    for (let i = 0; i < numFaces && faceStart + i < lines.length; i++) {
+      const parts = lines[faceStart + i].split(/\s+/).map(Number);
+      const n = parts[0];
+      if (parts.length >= n + 4) {
+        uniqueColors.add(`${parts[n + 1]},${parts[n + 2]},${parts[n + 3]}`);
+        if (uniqueColors.size >= 2) return 2;
+      }
+    }
+
+    return uniqueColors.size;
+  }
+
+  /**
+   * Strip color() transformation calls from SCAD source, preserving child
+   * geometry. This simulates desktop F6 render behavior where color() is
+   * ignored and the engine applies CSG operation face colors instead.
+   *
+   * Handles: color("name"), color([r,g,b]), color([r,g,b,a]), color(c=..., alpha=...)
+   * Does NOT strip color() inside comments or string literals.
+   *
+   * @param {string} scadContent - OpenSCAD source code
+   * @returns {string} Source with color() calls removed
+   */
+  static stripColorCalls(scadContent) {
+    if (!scadContent || typeof scadContent !== 'string') return scadContent;
+    // Match `color` keyword boundary, optional whitespace, then balanced parens.
+    // We manually find the matching closing paren to handle nested brackets
+    // like color([1,0,0,0.5]) correctly.
+    let result = '';
+    const len = scadContent.length;
+    const colorPattern = /\bcolor\s*\(/g;
+
+    let lastIndex = 0;
+    colorPattern.lastIndex = 0;
+    let match;
+
+    while ((match = colorPattern.exec(scadContent)) !== null) {
+      const start = match.index;
+      // Find the matching close paren
+      let depth = 1;
+      let j = match.index + match[0].length;
+      while (j < len && depth > 0) {
+        if (scadContent[j] === '(') depth++;
+        else if (scadContent[j] === ')') depth--;
+        j++;
+      }
+      // Copy everything before this color() call, skip the call itself
+      result += scadContent.slice(lastIndex, start);
+      lastIndex = j;
+      colorPattern.lastIndex = j;
+    }
+    result += scadContent.slice(lastIndex);
+    return result;
+  }
+
+  /**
+   * Strip comments and string literals while preserving overall structure.
+   * This enables lightweight source scanning without false-positives from
+   * `#` inside comments/strings.
+   *
+   * @param {string} scadContent
+   * @returns {string}
+   */
+  static stripCommentsAndStrings(scadContent) {
+    if (!scadContent || typeof scadContent !== 'string') return '';
+
+    let result = '';
+    let inLineComment = false;
+    let inBlockComment = false;
+    let inString = false;
+    let stringQuote = '';
+    let escapeNext = false;
+
+    for (let i = 0; i < scadContent.length; i++) {
+      const ch = scadContent[i];
+      const next = scadContent[i + 1];
+
+      if (inLineComment) {
+        if (ch === '\n') {
+          inLineComment = false;
+          result += '\n';
+        } else {
+          result += ' ';
+        }
+        continue;
+      }
+
+      if (inBlockComment) {
+        if (ch === '*' && next === '/') {
+          inBlockComment = false;
+          result += '  ';
+          i += 1;
+        } else {
+          result += ch === '\n' ? '\n' : ' ';
+        }
+        continue;
+      }
+
+      if (inString) {
+        if (escapeNext) {
+          escapeNext = false;
+          result += ' ';
+          continue;
+        }
+        if (ch === '\\') {
+          escapeNext = true;
+          result += ' ';
+          continue;
+        }
+        if (ch === stringQuote) {
+          inString = false;
+          stringQuote = '';
+          result += ' ';
+          continue;
+        }
+        result += ch === '\n' ? '\n' : ' ';
+        continue;
+      }
+
+      if (ch === '/' && next === '/') {
+        inLineComment = true;
+        result += '  ';
+        i += 1;
+        continue;
+      }
+
+      if (ch === '/' && next === '*') {
+        inBlockComment = true;
+        result += '  ';
+        i += 1;
+        continue;
+      }
+
+      if (ch === '"' || ch === "'") {
+        inString = true;
+        stringQuote = ch;
+        result += ' ';
+        continue;
+      }
+
+      result += ch;
+    }
+
+    return result;
+  }
+
+  /**
+   * Detect whether a SCAD source file uses the `#` debug modifier.
+   *
+   * Desktop OpenSCAD renders `#`-modified geometry with a fixed highlight
+   * color {255, 81, 81, 128} that OVERRIDES any user-defined color().
+   * In COFF export the face colors still carry the user color, so the
+   * preview layer must apply the override when this modifier is detected.
+   *
+   * This detector is intentionally conservative: it only looks for direct
+   * top-level `#` statements and ignores module bodies. Large projects can
+   * contain dormant helper-module debug paths (for example `if(id=="#")`),
+   * and treating those as active would incorrectly tint the entire preview.
+   *
+   * @param {string} scadContent - OpenSCAD source code
+   * @returns {boolean} true if `#` debug modifier is likely present
+   */
+  static scadUsesDebugModifier(scadContent) {
+    if (!scadContent || typeof scadContent !== 'string') return false;
+    const stripped = AutoPreviewController.stripCommentsAndStrings(scadContent);
+    const debugTargetPattern =
+      /^\s*(?:color|cube|sphere|cylinder|translate|rotate|scale|union|difference|intersection|linear_extrude|rotate_extrude|hull|minkowski|polygon|circle|square|text|import|surface|resize|mirror|multmatrix|offset|projection|render|\{|\w+\s*\()/;
+
+    let braceDepth = 0;
+    const moduleBraceDepths = [];
+    let pendingModuleDefinition = false;
+
+    for (let i = 0; i < stripped.length; i++) {
+      const ch = stripped[i];
+
+      if (
+        /[A-Za-z_]/.test(ch) &&
+        stripped.slice(i, i + 6) === 'module' &&
+        (i === 0 || !/[A-Za-z0-9_]/.test(stripped[i - 1])) &&
+        !/[A-Za-z0-9_]/.test(stripped[i + 6] || '')
+      ) {
+        pendingModuleDefinition = true;
+        i += 5;
+        continue;
+      }
+
+      if (ch === '{') {
+        braceDepth += 1;
+        if (pendingModuleDefinition) {
+          moduleBraceDepths.push(braceDepth);
+          pendingModuleDefinition = false;
+        }
+        continue;
+      }
+
+      if (ch === '}') {
+        if (moduleBraceDepths[moduleBraceDepths.length - 1] === braceDepth) {
+          moduleBraceDepths.pop();
+        }
+        braceDepth = Math.max(0, braceDepth - 1);
+        pendingModuleDefinition = false;
+        continue;
+      }
+
+      if (ch === ';') {
+        pendingModuleDefinition = false;
+      }
+
+      if (ch !== '#') continue;
+
+      const prev = i === 0 ? '' : stripped[i - 1];
+      const isStatementBoundary = i === 0 || /[;\s{}]/.test(prev);
+      const insideModuleDefinition = moduleBraceDepths.length > 0;
+
+      if (!isStatementBoundary || insideModuleDefinition) {
+        continue;
+      }
+
+      if (debugTargetPattern.test(stripped.slice(i + 1))) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   /**
@@ -528,20 +912,29 @@ export class AutoPreviewController {
    * @param {string} paramHash - Parameter hash
    */
   async renderPreview(parameters, paramHash) {
-    // Skip STL preview for known 2D-only parameter combinations.
-    // These always produce 2D geometry that cannot be exported to STL,
-    // and the failed render corrupts the WASM module for subsequent calls.
-    if (AutoPreviewController.is2DOnlyParameters(parameters)) {
+    if (isNonPreviewable(parameters, this.schema)) {
       console.log(
-        '[AutoPreview] Skipping STL preview for 2D-only generate mode:',
+        '[AutoPreview] Skipping STL preview for non-previewable generate mode:',
         parameters.generate
       );
-      const error = new Error(
-        'MODEL_IS_2D: Your model produces 2D geometry which cannot be displayed in the 3D viewer. ' +
-          'To export: select SVG or DXF output format. ' +
-          'To preview in 3D: adjust your model parameters to produce 3D geometry.'
-      );
-      error.code = 'MODEL_IS_2D';
+
+      // BUG-C fix: cancel any pending debounce timer so it cannot fire after
+      // this mode-switch and trigger an unexpected render.
+      if (this.debounceTimer) {
+        clearTimeout(this.debounceTimer);
+        this.debounceTimer = null;
+      }
+      // Also clear any pending parameters queued while a render was in progress.
+      this.pendingParameters = null;
+      this.pendingParamHash = null;
+      this.pendingPreviewKey = null;
+
+      const message =
+        'The current generate setting does not produce geometry. ' +
+        'The 3D preview is not available in this mode. ' +
+        "Adjust the 'generate' parameter to a 3D output type to see a preview.";
+      const error = new Error(message);
+      error.code = 'NO_GEOMETRY';
       this.setState(PREVIEW_STATE.ERROR, { error: error.message });
       this.onError(error, 'preview');
       return;
@@ -566,6 +959,20 @@ export class AutoPreviewController {
     }
 
     this.setState(PREVIEW_STATE.RENDERING);
+
+    // ENH-A: Use COFF (Color OFF) format when the flag is enabled and the
+    // SCAD source contains color() calls OR the # debug modifier. The #
+    // modifier needs OFF so the dual-render overlay can be applied even
+    // when color() is absent from the source.
+    const hasDebugModifier = AutoPreviewController.scadUsesDebugModifier(
+      this.currentScadContent
+    );
+    const useColorPassthrough =
+      isFlagEnabled('color_passthrough') &&
+      (AutoPreviewController.scadUsesColor(this.currentScadContent) ||
+        hasDebugModifier);
+    const previewOutputFormat = useColorPassthrough ? 'off' : 'stl';
+
     let renderFailed = false;
     try {
       const startTime = Date.now();
@@ -574,6 +981,7 @@ export class AutoPreviewController {
         previewParameters,
         {
           ...(quality ? { quality } : {}),
+          outputFormat: previewOutputFormat,
           files: this.projectFiles,
           mainFile: this.mainFilePath,
           libraries: this.enabledLibraries,
@@ -597,53 +1005,143 @@ export class AutoPreviewController {
         return;
       }
 
-      // Cache the result
-      this.addToCache(cacheKey, result, durationMs);
-      this.previewParamHash = paramHash;
-      this.previewCacheKey = cacheKey;
-
-      // Load into 3D preview
-      // Only apply SCAD-derived color if one exists; don't clear user's manual color override
-      if (this.previewManager?.setColorOverride) {
-        const previewColor = this.resolvePreviewColor(parameters);
-        if (previewColor !== null) {
-          this.previewManager.setColorOverride(previewColor);
+      // Monochrome fallback: if the OFF output has only 1 unique face color,
+      // the author's color() calls wrap all geometry in a single hue, which
+      // isn't visually useful. Re-render with color() calls stripped so the
+      // Manifold CSG engine assigns per-operation face colors instead.
+      let activeResult = result;
+      if ((result.format || 'stl') === 'off' && useColorPassthrough) {
+        const uniqueColors = AutoPreviewController.countUniqueOFFColors(
+          result.stl
+        );
+        if (uniqueColors === 1) {
+          console.log(
+            '[AutoPreview] Monochrome OFF detected (1 unique color) — ' +
+              're-rendering with stripped color() for CSG face colors'
+          );
+          const strippedSource = AutoPreviewController.stripColorCalls(
+            this.currentScadContent
+          );
+          let strippedFiles = this.projectFiles;
+          if (this.projectFiles && this.mainFilePath) {
+            strippedFiles = new Map(this.projectFiles);
+            strippedFiles.set(this.mainFilePath, strippedSource);
+          }
+          try {
+            const fallbackResult = await this.renderController.renderPreview(
+              strippedSource,
+              previewParameters,
+              {
+                ...(quality ? { quality } : {}),
+                outputFormat: 'off',
+                files: strippedFiles,
+                mainFile: this.mainFilePath,
+                libraries: this.enabledLibraries,
+                paramTypes: this.paramTypes,
+                onProgress: (percent, message) => {
+                  this.onProgress(percent, message, 'preview');
+                },
+              }
+            );
+            activeResult = fallbackResult;
+            console.log(
+              '[AutoPreview] Monochrome fallback render complete — ' +
+                `${AutoPreviewController.countUniqueOFFColors(fallbackResult.stl)} unique colors`
+            );
+          } catch (fallbackErr) {
+            console.warn(
+              '[AutoPreview] Monochrome fallback render failed, using original:',
+              fallbackErr.message
+            );
+          }
         }
       }
+
+      // Cache the result
+      this.addToCache(cacheKey, activeResult, durationMs);
+      this.previewParamHash = paramHash;
+      this.previewCacheKey = cacheKey;
+      const resultFormat = activeResult.format || 'stl';
+
+      // Load into 3D preview — auto-enable color override from SCAD params
+      if (this.previewManager?.setColorOverride) {
+        let previewColor = null;
+        if (resultFormat === 'off') {
+          // OFF/COFF carries model face colors; force-disable single-color override.
+          this.previewManager.setColorOverrideEnabled(false);
+          this.previewManager.setColorOverride(null);
+          this._autoColorEnabled = false;
+        } else {
+          previewColor = this.resolvePreviewColor(parameters);
+          if (previewColor !== null) {
+            this.previewManager.setColorOverrideEnabled(true);
+            this.previewManager.setColorOverride(previewColor);
+            this._autoColorEnabled = true;
+          } else if (this._autoColorEnabled) {
+            this.previewManager.setColorOverrideEnabled(false);
+            this.previewManager.setColorOverride(null);
+            this._autoColorEnabled = false;
+          }
+        }
+      }
+      // Set render state so the model color reflects preview/laser quality
+      if (this.previewManager?.setRenderState) {
+        this.previewManager.setRenderState(this._detectRenderState(parameters));
+      }
       // Preserve camera position on subsequent loads (after initial preview)
-      const loadResult = await this.previewManager.loadSTL(result.stl, {
-        preserveCamera: this.initialPreviewDone,
-      });
+      const loadResult =
+        resultFormat === 'off' && this.previewManager.loadOFF
+          ? await this.previewManager.loadOFF(activeResult.stl, {
+              preserveCamera: this.initialPreviewDone,
+              debugHighlight: hasDebugModifier
+                ? {
+                    hex: DEBUG_HIGHLIGHT_HEX,
+                    opacity: DEBUG_HIGHLIGHT_OPACITY,
+                  }
+                : null,
+            })
+          : await this.previewManager.loadSTL(activeResult.stl, {
+              preserveCamera: this.initialPreviewDone,
+            });
       // Mark initial preview as done after successful load
       this.initialPreviewDone = true;
 
       // Collect timing breakdown
       const timing = {
         totalMs: durationMs,
-        renderMs: result.timing?.renderMs || 0,
-        wasmInitMs: result.timing?.wasmInitMs || 0,
+        renderMs: activeResult.timing?.renderMs || 0,
+        wasmInitMs: activeResult.timing?.wasmInitMs || 0,
         parseMs: loadResult?.parseMs || 0,
       };
 
       // Log preview performance metrics
       const bytesPerTri =
-        result.stats?.triangles > 0
-          ? Math.round((result.stl?.byteLength || 0) / result.stats.triangles)
+        activeResult.stats?.triangles > 0
+          ? Math.round(
+              (activeResult.stl?.byteLength || 0) / activeResult.stats.triangles
+            )
           : 0;
       console.log(
         `[Preview Performance] ${qualityKey} | ` +
           `${timing.renderMs}ms | ` +
-          `${result.stats?.triangles || 0} triangles | ` +
-          `${bytesPerTri < 80 ? 'Binary STL ✓' : bytesPerTri > 100 ? 'ASCII STL ⚠️' : 'Unknown'}`
+          `${activeResult.stats?.triangles || 0} triangles | ` +
+          `${resultFormat === 'off' ? (loadResult?.hasColors ? 'COFF ✓' : 'OFF (no color)') : bytesPerTri < 80 ? 'Binary STL ✓' : bytesPerTri > 100 ? 'ASCII STL ⚠️' : 'Unknown'}` +
+          `${hasDebugModifier ? ' [# debug highlight active]' : ''}`
       );
 
       this.setState(PREVIEW_STATE.CURRENT, {
-        stats: result.stats,
+        stats: activeResult.stats,
         renderDurationMs: durationMs,
         qualityKey,
         timing,
       });
-      this.onPreviewReady(result.stl, result.stats, false, durationMs, timing);
+      this.onPreviewReady(
+        activeResult.stl,
+        activeResult.stats,
+        false,
+        durationMs,
+        timing
+      );
     } catch (error) {
       renderFailed = true;
       console.error('[AutoPreview] Preview render failed:', error);
@@ -659,6 +1157,26 @@ export class AutoPreviewController {
 
       // Check if still relevant
       if (paramHash !== this.currentParamHash) return;
+
+      // Attempt draft SVG preview for 2D generate modes.
+      // The WASM STL render can fail in multiple ways when the model is 2D:
+      //  - MODEL_IS_2D  (graceful detection)
+      //  - RENDER_FAILED (exit code 1 — common after preset changes)
+      //  - EMPTY_GEOMETRY
+      // Rather than matching only MODEL_IS_2D, also try when the generate
+      // parameter itself indicates a 2D output mode (svg/dxf/first layer).
+      const errMsg = (error?.message || String(error)).toLowerCase();
+      const is2DError =
+        error?.code === 'MODEL_IS_2D' ||
+        errMsg.includes('model_is_2d') ||
+        errMsg.includes('not a 3d object') ||
+        errMsg.includes('top level object is a 2d');
+      const is2DGenerateMode = is2DGenerateValue(previewParameters?.generate);
+      if (is2DError || is2DGenerateMode) {
+        const draft2DSuccess =
+          await this.renderDraft2DPreview(previewParameters);
+        if (draft2DSuccess) return;
+      }
 
       this.setState(PREVIEW_STATE.ERROR, { error: error.message });
       this.onError(error, 'preview');
@@ -711,6 +1229,7 @@ export class AutoPreviewController {
 
     this.previewCache.set(cacheKey, {
       stl: result.stl,
+      format: result.format || 'stl',
       stats: result.stats,
       durationMs,
       timing: result.timing || {},
@@ -724,6 +1243,7 @@ export class AutoPreviewController {
     this.previewCacheKey = null;
     this.fullRenderParamHash = null;
     this.fullQualitySTL = null;
+    this.fullQualityFormat = null;
     this.fullQualityConsoleOutput = null;
     this.fullQualityStats = null;
     this.fullQualityKey = null;
@@ -764,47 +1284,150 @@ export class AutoPreviewController {
       };
     }
 
-    // Perform full render
-    const result = await this.renderController.renderFull(
-      this.currentScadContent,
+    // Use COFF (Color OFF) format for the preview when color passthrough is
+    // active, mirroring the same logic used in renderPreview() (lines 844-855).
+    const hasDebugModifier = AutoPreviewController.scadUsesDebugModifier(
+      this.currentScadContent
+    );
+    const useColorPassthrough =
+      isFlagEnabled('color_passthrough') &&
+      (AutoPreviewController.scadUsesColor(this.currentScadContent) ||
+        hasDebugModifier);
+
+    const scadContentForRender = this.currentScadContent;
+    const filesForRender = this.projectFiles;
+
+    const renderOptions = {
+      files: filesForRender,
+      mainFile: this.mainFilePath,
+      libraries: this.enabledLibraries,
+      paramTypes: this.paramTypes,
+      ...(quality ? { quality } : {}),
+      ...(useColorPassthrough ? { outputFormat: 'off' } : {}),
+      onProgress: (percent, message) => {
+        this.onProgress(percent, message, 'full');
+      },
+    };
+
+    // Perform full render (OFF when color passthrough active, STL otherwise)
+    let result = await this.renderController.renderFull(
+      scadContentForRender,
       parameters,
-      {
-        files: this.projectFiles,
-        mainFile: this.mainFilePath,
-        libraries: this.enabledLibraries,
-        paramTypes: this.paramTypes,
-        ...(quality ? { quality } : {}),
-        onProgress: (percent, message) => {
-          this.onProgress(percent, message, 'full');
-        },
-      }
+      renderOptions
     );
 
-    // Store for reuse
+    if (useColorPassthrough) {
+      console.log('[AutoPreview] Full render using OFF for color passthrough');
+    }
+
+    // Monochrome fallback: same logic as renderPreview() — if the OFF output
+    // has only 1 unique face color, strip color() and re-render for CSG colors.
+    if (
+      useColorPassthrough &&
+      (result.format || 'stl') === 'off' &&
+      AutoPreviewController.countUniqueOFFColors(result.stl) === 1
+    ) {
+      console.log(
+        '[AutoPreview] Full render monochrome OFF detected — ' +
+          're-rendering with stripped color() for CSG face colors'
+      );
+      const strippedSource = AutoPreviewController.stripColorCalls(
+        this.currentScadContent
+      );
+      let strippedFiles = this.projectFiles;
+      if (this.projectFiles && this.mainFilePath) {
+        strippedFiles = new Map(this.projectFiles);
+        strippedFiles.set(this.mainFilePath, strippedSource);
+      }
+      try {
+        const fallbackResult = await this.renderController.renderFull(
+          strippedSource,
+          parameters,
+          {
+            files: strippedFiles,
+            mainFile: this.mainFilePath,
+            libraries: this.enabledLibraries,
+            paramTypes: this.paramTypes,
+            ...(quality ? { quality } : {}),
+            outputFormat: 'off',
+            onProgress: (percent, message) => {
+              this.onProgress(percent, message, 'full');
+            },
+          }
+        );
+        result = fallbackResult;
+        console.log(
+          '[AutoPreview] Full render monochrome fallback complete — ' +
+            `${AutoPreviewController.countUniqueOFFColors(fallbackResult.stl)} unique colors`
+        );
+      } catch (fallbackErr) {
+        console.warn(
+          '[AutoPreview] Full render monochrome fallback failed, using original:',
+          fallbackErr.message
+        );
+      }
+    }
+
+    // Store for reuse — when color passthrough produced OFF, the STL for
+    // download will be populated by a second render below.
     this.fullQualitySTL = result.stl;
+    this.fullQualityFormat = result.format || 'stl';
     this.fullQualityStats = result.stats;
     this.fullRenderParamHash = paramHash;
     this.fullQualityKey = qualityKey;
-    // Store console output for display in Console panel
     this.fullQualityConsoleOutput = result.consoleOutput || '';
 
-    // Also update the preview with full quality result
+    // Update the 3D preview with the full quality result
     try {
-      // Only apply SCAD-derived color if one exists; don't clear user's manual color override
+      const resultFormat = result.format || 'stl';
+      const currentPreviewHasColors = Boolean(
+        this.previewManager?._getPrimaryGeometry?.()?.attributes?.color
+      );
+      const shouldPreserveColorPreview =
+        resultFormat === 'stl' && currentPreviewHasColors;
       if (this.previewManager?.setColorOverride) {
-        const previewColor = this.resolvePreviewColor(parameters);
-        if (previewColor !== null) {
-          this.previewManager.setColorOverride(previewColor);
+        if (resultFormat === 'off') {
+          // OFF/COFF carries model face colors; force-disable single-color override.
+          this.previewManager.setColorOverrideEnabled(false);
+          this.previewManager.setColorOverride(null);
+          this._autoColorEnabled = false;
+        } else {
+          const previewColor = this.resolvePreviewColor(parameters);
+          if (previewColor !== null) {
+            this.previewManager.setColorOverrideEnabled(true);
+            this.previewManager.setColorOverride(previewColor);
+            this._autoColorEnabled = true;
+          } else if (this._autoColorEnabled) {
+            this.previewManager.setColorOverrideEnabled(false);
+            this.previewManager.setColorOverride(null);
+            this._autoColorEnabled = false;
+          }
         }
       }
-      // Preserve camera position on subsequent loads (after initial preview)
-      await this.previewManager.loadSTL(result.stl, {
-        preserveCamera: this.initialPreviewDone,
-      });
-      this.previewParamHash = paramHash;
-      this.previewCacheKey = cacheKey;
-      // Mark initial preview as done after successful load
-      this.initialPreviewDone = true;
+      if (this.previewManager?.setRenderState) {
+        this.previewManager.setRenderState(
+          this._detectRenderState(parameters, true)
+        );
+      }
+      if (shouldPreserveColorPreview) {
+        console.log(
+          '[AutoPreview] Preserving current color preview during STL generate'
+        );
+      } else if (resultFormat === 'off' && this.previewManager?.loadOFF) {
+        await this.previewManager.loadOFF(result.stl, {
+          preserveCamera: this.initialPreviewDone,
+        });
+        this.previewParamHash = paramHash;
+        this.previewCacheKey = cacheKey;
+        this.initialPreviewDone = true;
+      } else if (this.previewManager?.loadSTL) {
+        await this.previewManager.loadSTL(result.stl, {
+          preserveCamera: this.initialPreviewDone,
+        });
+        this.previewParamHash = paramHash;
+        this.previewCacheKey = cacheKey;
+        this.initialPreviewDone = true;
+      }
       this.addToCache(cacheKey, result, null);
       this.setState(PREVIEW_STATE.CURRENT, {
         stats: result.stats,
@@ -818,7 +1441,136 @@ export class AutoPreviewController {
       );
     }
 
+    // When color passthrough rendered OFF for preview, perform a second STL
+    // render so getCurrentFullSTL() returns valid STL data for download.
+    if (useColorPassthrough && (result.format || 'stl') === 'off') {
+      try {
+        const stlResult = await this.renderController.renderFull(
+          this.currentScadContent,
+          parameters,
+          {
+            files: this.projectFiles,
+            mainFile: this.mainFilePath,
+            libraries: this.enabledLibraries,
+            paramTypes: this.paramTypes,
+            ...(quality ? { quality } : {}),
+            onProgress: (percent, message) => {
+              this.onProgress(percent, message, 'full');
+            },
+          }
+        );
+        this.fullQualitySTL = stlResult.stl;
+        this.fullQualityFormat = stlResult.format || 'stl';
+        this.fullQualityStats = stlResult.stats;
+        this.fullQualityConsoleOutput = stlResult.consoleOutput || '';
+        return stlResult;
+      } catch (stlError) {
+        console.warn(
+          '[AutoPreview] STL follow-up render failed; download may use OFF data:',
+          stlError
+        );
+      }
+    }
+
     return result;
+  }
+
+  /**
+   * Attempt a draft-quality SVG render for 2D models.
+   * Called when renderPreview() catches a MODEL_IS_2D error from the WASM worker.
+   * @param {Object} parameters - Parameter values used for the original render
+   * @returns {Promise<boolean>} true if SVG preview was shown successfully
+   */
+  async renderDraft2DPreview(parameters) {
+    try {
+      const result = await this.renderController.renderPreview(
+        this.currentScadContent,
+        parameters,
+        {
+          outputFormat: 'svg',
+          files: this.projectFiles,
+          mainFile: this.mainFilePath,
+          libraries: this.enabledLibraries,
+          paramTypes: this.paramTypes,
+          quality: { name: 'draft', $fn: 16 },
+        }
+      );
+      if (result?.stl || result?.data) {
+        let svgText =
+          typeof result.stl === 'string'
+            ? result.stl
+            : new TextDecoder().decode(result.stl || result.data);
+
+        // Pre-inject F5-draft parity styling into SVG before show2DPreview.
+        // Desktop OpenSCAD F5 preview for 2D first-layer: #7A9F7A sage green.
+        // Ref: Testing Round 7 color-codes.json preview_colors for laser-cut-first-layer.
+        const draftStyle =
+          '<style data-forge-preview="true">' +
+          'path,polygon,polyline,circle,ellipse,rect{fill:#7A9F7A;stroke:#7A9F7A;stroke-width:0.25;fill-opacity:0.9}' +
+          'line{stroke:#7A9F7A;stroke-width:0.25}' +
+          '</style>';
+        svgText = svgText.replace(/(<svg[^>]*>)/i, '$1' + draftStyle);
+
+        if (typeof this.previewManager?.show2DPreviewAs3DPlane === 'function') {
+          await this.previewManager.show2DPreviewAs3DPlane(svgText, {
+            mode: 'draft',
+          });
+        } else {
+          this.previewManager?.show2DPreview?.(svgText, { mode: 'draft' });
+        }
+
+        this.setState(PREVIEW_STATE.CURRENT, {
+          code: 'DRAFT_2D',
+          stats: result.stats,
+        });
+        return true;
+      }
+    } catch (svgError) {
+      const msg = (svgError?.message || '').toLowerCase();
+      if (svgError?.code === 'MODEL_NOT_2D' || msg.includes('not a 2d')) {
+        try {
+          const fallbackResult = await this.renderController.render2DFallback(
+            this.currentScadContent,
+            parameters,
+            {
+              outputFormat: 'svg',
+              files: this.projectFiles,
+              mainFile: this.mainFilePath,
+              libraries: this.enabledLibraries,
+            }
+          );
+          let svgText =
+            typeof fallbackResult.stl === 'string'
+              ? fallbackResult.stl
+              : new TextDecoder().decode(
+                  fallbackResult.stl || fallbackResult.data
+                );
+          const draftFallbackStyle =
+            '<style data-forge-preview="true">' +
+            'path,polygon,polyline,circle,ellipse,rect{fill:#7A9F7A;stroke:#7A9F7A;stroke-width:0.25;fill-opacity:0.9}' +
+            'line{stroke:#7A9F7A;stroke-width:0.25}' +
+            '</style>';
+          svgText = svgText.replace(/(<svg[^>]*>)/i, '$1' + draftFallbackStyle);
+          if (
+            typeof this.previewManager?.show2DPreviewAs3DPlane === 'function'
+          ) {
+            await this.previewManager.show2DPreviewAs3DPlane(svgText, {
+              mode: 'draft',
+            });
+          } else {
+            this.previewManager?.show2DPreview?.(svgText, { mode: 'draft' });
+          }
+          this.setState(PREVIEW_STATE.CURRENT, {
+            code: 'DRAFT_2D_FALLBACK',
+            stats: fallbackResult.stats,
+          });
+          return true;
+        } catch {
+          /* fall through */
+        }
+      }
+    }
+    return false;
   }
 
   /**
@@ -841,6 +1593,24 @@ export class AutoPreviewController {
     if (paramHash === this.fullRenderParamHash && this.fullQualitySTL) {
       return {
         stl: this.fullQualitySTL,
+        stats: this.fullQualityStats,
+      };
+    }
+    return null;
+  }
+
+  /**
+   * Format-agnostic accessor for the current full-quality output.
+   * Returns data, format, and stats for any generated output type.
+   * @param {Object} parameters - Current parameter values
+   * @returns {Object|null} { data, format, stats } or null
+   */
+  getCurrentFullOutput(parameters) {
+    const paramHash = this.hashParams(parameters);
+    if (paramHash === this.fullRenderParamHash && this.fullQualitySTL) {
+      return {
+        data: this.fullQualitySTL,
+        format: this.fullQualityFormat || 'stl',
         stats: this.fullQualityStats,
       };
     }
@@ -909,6 +1679,7 @@ export class AutoPreviewController {
     this.pendingPreviewKey = null;
     this.clearCache();
     this.fullQualitySTL = null;
+    this.fullQualityFormat = null;
     this.fullQualityStats = null;
     this.fullQualityKey = null;
 
@@ -920,6 +1691,7 @@ export class AutoPreviewController {
     this.currentPreviewKey = null;
     this.fullRenderParamHash = null;
     this.scadVersion = 0;
+    this._autoColorEnabled = false;
     this.renderController = null;
     this.previewManager = null;
   }

@@ -15,6 +15,8 @@ const STORAGE_KEY_MEASUREMENTS = getAppPrefKey('measurements');
 const STORAGE_KEY_GRID = getAppPrefKey('grid');
 const STORAGE_KEY_GRID_SIZE = getAppPrefKey('grid-size');
 const STORAGE_KEY_CUSTOM_GRID_PRESETS = getAppPrefKey('custom-grid-presets');
+const STORAGE_KEY_GRID_COLOR = getAppPrefKey('grid-color');
+const STORAGE_KEY_GRID_OPACITY = getAppPrefKey('grid-opacity');
 const STORAGE_KEY_AUTO_BED = getAppPrefKey('auto-bed');
 const STORAGE_KEY_CAMERA_COLLAPSED = getAppPrefKey('camera-controls-collapsed');
 const STORAGE_KEY_CAMERA_POSITION = getAppPrefKey('camera-controls-position');
@@ -22,7 +24,7 @@ const STORAGE_KEY_LOD_WARNING_DISMISSED = getAppPrefKey(
   'lod-warning-dismissed'
 );
 
-/** Default grid config — 220×220mm matches most common consumer printers (Ender 3) */
+/** Default grid config — 220×220mm matches popular mid-range FDM printers (Creality K1C, FlashForge Adventurer 5M Pro) */
 const DEFAULT_GRID_CONFIG = { widthMm: 220, heightMm: 220 };
 
 // Lazy-loaded Three.js modules - loaded on demand to reduce initial bundle size
@@ -62,6 +64,11 @@ async function loadThreeJS() {
       OrbitControls = controlsModule.OrbitControls;
       STLLoader = loaderModule.STLLoader;
       threeJsLoaded = true;
+
+      // Disable Three.js color management to match desktop OpenSCAD's
+      // non-linear-aware OpenGL pipeline. OpenSCAD passes sRGB colors
+      // directly through lighting without linearization or gamma correction.
+      THREE.ColorManagement.enabled = false;
 
       const loadTime = Math.round(performance.now() - startTime);
       console.log(`[Preview] Three.js loaded in ${loadTime}ms`);
@@ -145,6 +152,12 @@ const PREVIEW_COLORS = {
   },
 };
 
+// RENDER_STATE_COLORS was removed: it applied fabricated amber/red tints
+// that do not correspond to any desktop OpenSCAD behavior. Desktop OpenSCAD
+// uses the same colorscheme colors for both F5 preview and F6 render — it
+// does NOT tint models differently based on render quality or laser mode.
+// Model color is now: colorOverride (SCAD-derived) > PREVIEW_COLORS[theme].model.
+
 export class PreviewManager {
   constructor(container, options = {}) {
     this.container = container;
@@ -158,6 +171,8 @@ export class PreviewManager {
     this.currentTheme = options.theme || 'light';
     this.highContrast = options.highContrast || false;
     this.colorOverride = null;
+    this.colorOverrideEnabled = false;
+    this.appearanceOverrideEnabled = false;
 
     // Measurements
     this.measurementsEnabled = this.loadMeasurementPreference();
@@ -170,6 +185,12 @@ export class PreviewManager {
     // Grid size (mm) — configurable to match printer bed
     this.gridConfig = this.loadGridSizePreference();
 
+    // Custom grid color override (null = use theme default)
+    this.gridColorOverride = this.loadGridColorPreference();
+
+    // Grid line opacity (10–100, default 100 = fully opaque)
+    this.gridOpacity = this.loadGridOpacityPreference();
+
     // Camera projection mode (perspective or orthographic)
     this.projectionMode = 'perspective';
     this.orthoCamera = null; // Lazy-created orthographic camera
@@ -180,6 +201,9 @@ export class PreviewManager {
     // Rotation centering: temporarily center object at origin for better rotation
     this.autoBedOffset = 0; // Z offset applied by auto-bed
     this.rotationCenteringEnabled = false; // Whether rotation centering is active
+
+    // 2D preview mode (native SVG display vs Three.js 3D canvas)
+    this._is2DPreviewActive = false;
 
     // Render hooks for extensibility
     this._renderOverride = null;
@@ -237,8 +261,18 @@ export class PreviewManager {
     // Lazy load Three.js
     await loadThreeJS();
 
-    // Clear container
+    // Clear container (preserving/recreating #rendered2dPreview for 2D SVG display)
     this.container.innerHTML = '';
+
+    // Recreate the 2D SVG preview surface that init() just destroyed
+    if (!document.getElementById('rendered2dPreview')) {
+      const preview2d = document.createElement('div');
+      preview2d.id = 'rendered2dPreview';
+      preview2d.className = 'rendered-2d-preview hidden';
+      preview2d.setAttribute('role', 'img');
+      preview2d.setAttribute('aria-label', 'Rendered 2D SVG preview');
+      this.container.appendChild(preview2d);
+    }
 
     // Detect initial theme
     this.currentTheme = this.detectTheme();
@@ -265,57 +299,94 @@ export class PreviewManager {
     // This mimics OpenSCAD's default "Diagonal" view orientation
     this.camera.position.set(150, -150, 100);
 
-    // Create renderer
-    this.renderer = new THREE.WebGLRenderer({ antialias: true });
-    this.renderer.setSize(width, height);
-    this.renderer.setPixelRatio(window.devicePixelRatio);
-    this.container.appendChild(this.renderer.domElement);
-    this.renderer.domElement.setAttribute('tabindex', '0');
-    this.renderer.domElement.setAttribute('aria-label', '3D preview canvas');
-    this.renderer.domElement.addEventListener('click', () => {
-      this.renderer.domElement.focus();
-    });
+    // Create renderer — WebGL may be unavailable in headless browsers.
+    // When that happens, geometry parsing (loadOFF / loadSTL) still works;
+    // only the visual canvas is disabled.
+    try {
+      this.renderer = new THREE.WebGLRenderer({ antialias: true });
+      this.renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
+      this.renderer.setSize(width, height);
+      this.renderer.setPixelRatio(window.devicePixelRatio);
+      this.container.appendChild(this.renderer.domElement);
+      this.renderer.domElement.setAttribute('tabindex', '0');
+      this.renderer.domElement.setAttribute('aria-label', '3D preview canvas');
+      this.renderer.domElement.addEventListener('click', () => {
+        this.renderer.domElement.focus();
+      });
+    } catch (webglError) {
+      console.warn(
+        '[Preview] WebGL renderer unavailable — 3D canvas disabled:',
+        webglError.message
+      );
+      this.renderer = null;
+    }
 
-    // Add lights (store references for potential theme updates)
-    this.ambientLight = new THREE.AmbientLight(colors.ambientLight, 0.6);
+    // Lighting matched to desktop OpenSCAD's GLView::setupLight().
+    // OpenSCAD sets light positions AFTER the camera (modelview) transform,
+    // so they are in view space — they move with the camera like headlights.
+    // We replicate this by parenting directional lights to the camera.
+    //
+    // Three.js MeshPhongMaterial uses BRDF_Lambert which divides diffuse by π.
+    // OpenSCAD's OpenGL pipeline has no such divisor (simple color * NdotL).
+    // All intensities are scaled by π to cancel the BRDF divisor and match
+    // desktop brightness: ambient 0.2*π ≈ 0.628, directional 1.0*π ≈ 3.14.
+    const piAmbient = 0.2 * Math.PI;
+    const piDirectional = 1.0 * Math.PI;
+
+    this.ambientLight = new THREE.AmbientLight(colors.ambientLight, piAmbient);
     this.scene.add(this.ambientLight);
 
-    this.directionalLight1 = new THREE.DirectionalLight(0xffffff, 0.8);
-    this.directionalLight1.position.set(1, 1, 1);
-    this.scene.add(this.directionalLight1);
+    // Camera must be in the scene graph for child lights to render
+    this.scene.add(this.camera);
 
-    this.directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.4);
-    this.directionalLight2.position.set(-1, -1, -1);
-    this.scene.add(this.directionalLight2);
+    this.directionalLight1 = new THREE.DirectionalLight(
+      0xffffff,
+      piDirectional
+    );
+    this.directionalLight1.position.set(-1, 1, 1);
+    this.camera.add(this.directionalLight1);
+    this.camera.add(this.directionalLight1.target);
+
+    this.directionalLight2 = new THREE.DirectionalLight(
+      0xffffff,
+      piDirectional
+    );
+    this.directionalLight2.position.set(1, -1, 1);
+    this.camera.add(this.directionalLight2);
+    this.camera.add(this.directionalLight2.target);
 
     // Store base intensities for brightness/contrast controls
-    this.baseLightIntensities = { ambient: 0.6, dir1: 0.8, dir2: 0.4 };
+    this.baseLightIntensities = {
+      ambient: piAmbient,
+      dir1: piDirectional,
+      dir2: piDirectional,
+    };
     this._brightnessScale = 1;
     this._contrastFactor = 1;
 
     // Add grid helper on XY plane (OpenSCAD's ground plane)
     // GridHelper by default creates a grid on XZ plane (Y-up), so we rotate it for Z-up
-    this.gridHelper = this._createGridHelper(colors);
+    const gridColors = this._resolveGridColors();
+    this.gridHelper = this._createGridHelper(gridColors);
     // Rotate grid from XZ plane to XY plane (Z-up coordinate system)
     this.gridHelper.rotation.x = Math.PI / 2;
     // Apply saved grid visibility preference
     this.gridHelper.visible = this.gridEnabled;
+    this._applyGridOpacity();
     this.scene.add(this.gridHelper);
 
-    // Add orbit controls (OpenSCAD-style)
-    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
-    this.controls.enableDamping = true;
-    this.controls.dampingFactor = 0.05;
-    // OpenSCAD pans in screen-space: the model follows the mouse regardless of
-    // camera angle.  With false the pan is constrained to the world horizontal
-    // plane, which breaks Top/Bottom views and feels wrong vs. desktop OpenSCAD.
-    this.controls.screenSpacePanning = true;
-    this.controls.minDistance = 10;
-    this.controls.maxDistance = 1000;
+    // Add orbit controls (OpenSCAD-style) — requires a renderer DOM element
+    if (this.renderer) {
+      this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+      this.controls.enableDamping = true;
+      this.controls.dampingFactor = 0.05;
+      this.controls.screenSpacePanning = true;
+      this.controls.minDistance = 10;
+      this.controls.maxDistance = 1000;
 
-    // WCAG 2.2 SC 2.5.7: Add keyboard controls for camera (non-drag alternatives)
-    this.setupKeyboardControls();
-    this.setupCameraControls();
+      this.setupKeyboardControls();
+      this.setupCameraControls();
+    }
 
     // Handle window resize with view preservation
     this.handleResize = () => {
@@ -348,7 +419,7 @@ export class PreviewManager {
         this.orthoCamera.updateProjectionMatrix();
       }
 
-      this.renderer.setSize(width, height);
+      if (this.renderer) this.renderer.setSize(width, height);
 
       // Adjust camera to maintain model's relative position when aspect changes significantly
       if (
@@ -398,8 +469,9 @@ export class PreviewManager {
     // Start animation loop
     this.animate();
 
+    const rendererStatus = this.renderer ? 'WebGL' : 'no-renderer (headless)';
     console.log(
-      `[Preview] Three.js scene initialized (theme: ${this.currentTheme})`
+      `[Preview] Three.js scene initialized (theme: ${this.currentTheme}, renderer: ${rendererStatus})`
     );
   }
 
@@ -464,30 +536,14 @@ export class PreviewManager {
     // Update scene background
     this.scene.background.setHex(colors.background);
 
-    // Update grid colors
+    // Update grid colors (custom override takes precedence over theme)
     if (this.gridHelper) {
-      this.scene.remove(this.gridHelper);
-      // Dispose old GridHelper to prevent memory leak
-      if (this.gridHelper.geometry) {
-        this.gridHelper.geometry.dispose();
-      }
-      if (this.gridHelper.material) {
-        this.gridHelper.material.dispose();
-      }
-      // Note: linewidth is ignored in WebGL, relying on color contrast instead
-      this.gridHelper = this._createGridHelper(colors);
-      // Rotate grid from XZ plane to XY plane (Z-up coordinate system)
-      this.gridHelper.rotation.x = Math.PI / 2;
-      // Preserve grid visibility preference when recreating grid
-      this.gridHelper.visible = this.gridEnabled;
-      this.scene.add(this.gridHelper);
+      this._rebuildGrid();
     }
 
-    // Update model color if mesh exists
-    if (this.mesh && this.mesh.material) {
-      const themeHex = `#${colors.model.toString(16).padStart(6, '0')}`;
-      const appliedHex = this.colorOverride || themeHex;
-      this.mesh.material.color.setHex(parseInt(appliedHex.slice(1), 16));
+    // Keep mesh materials aligned with the current override/theme rules.
+    if (this.mesh) {
+      this._syncColorOverride();
     }
 
     // Refresh measurements if they're visible
@@ -504,25 +560,144 @@ export class PreviewManager {
    */
   setColorOverride(hexColor) {
     this.colorOverride = normalizeHexColor(hexColor);
-    this.applyColorToMesh(); // Always call apply (it checks if mesh exists)
+    if (this.colorOverrideEnabled) {
+      this.applyColorToMesh();
+    }
   }
 
   /**
-   * Apply the current color (override or theme default) to the mesh
-   * Safe to call even if mesh doesn't exist yet
+   * Enable or disable the color override. When disabled, COFF per-face
+   * vertex colors display naturally; when enabled, the user's solid color
+   * is forced onto the mesh by turning off Three.js vertex coloring.
+   * @param {boolean} enabled
+   */
+  setColorOverrideEnabled(enabled) {
+    this.colorOverrideEnabled = enabled;
+    this._syncColorOverride();
+  }
+
+  /**
+   * Synchronise mesh material state with the current colorOverrideEnabled
+   * flag. Toggles vertex coloring on/off to switch between COFF per-face
+   * colors and a solid user-chosen color without re-rendering geometry.
+   */
+  _syncColorOverride() {
+    if (!this.mesh) return;
+
+    const applyToMaterial = (material, geometry) => {
+      if (this.colorOverrideEnabled && this.colorOverride) {
+        material.vertexColors = false;
+        material.color.setHex(parseInt(this.colorOverride.slice(1), 16));
+        material.needsUpdate = true;
+      } else {
+        const hasVertexColors = geometry?.attributes?.color != null;
+        if (hasVertexColors) {
+          material.vertexColors = true;
+          material.color.setHex(0xffffff);
+          material.needsUpdate = true;
+        } else {
+          material.vertexColors = false;
+          const themeColors =
+            PREVIEW_COLORS[this.currentTheme] || PREVIEW_COLORS.light;
+          material.color.setHex(themeColors.model);
+          material.needsUpdate = true;
+        }
+      }
+    };
+
+    if (this.mesh.isGroup) {
+      this.mesh.children.forEach((child) => {
+        if (child.material && !child.userData.isHighlightOverlay) {
+          applyToMaterial(child.material, child.geometry);
+        }
+      });
+    } else if (this.mesh.material) {
+      applyToMaterial(this.mesh.material, this.mesh.geometry);
+    }
+  }
+
+  /**
+   * Set the current render state. Retained for API compatibility.
+   * Previously applied fabricated amber/red tints; now a no-op since
+   * model color is determined by COFF per-face data or the theme default.
+   * @param {'preview'|'laser'|null} _state
+   */
+  setRenderState(_state) {}
+
+  /**
+   * Resolve the model color to apply, respecting the priority chain:
+   *   1. colorOverride (user manual pick or SCAD-derived) — only when enabled
+   *   2. PREVIEW_COLORS[theme].model (theme default)
+   *
+   * @returns {string} 6-digit hex color string with leading '#'
+   */
+  _resolveModelColor() {
+    if (this.colorOverrideEnabled && this.colorOverride)
+      return this.colorOverride;
+
+    const themeColors =
+      PREVIEW_COLORS[this.currentTheme] || PREVIEW_COLORS.light;
+    return `#${themeColors.model.toString(16).padStart(6, '0')}`;
+  }
+
+  /**
+   * Apply the current color (override or theme default) to the mesh.
+   * Safe to call even if mesh doesn't exist yet.
    */
   applyColorToMesh() {
-    if (!this.mesh?.material) return;
+    if (!this.mesh) return;
+    if (!this.colorOverrideEnabled) return;
 
-    const colors = PREVIEW_COLORS[this.currentTheme] || PREVIEW_COLORS.light;
-    const themeHex = `#${colors.model.toString(16).padStart(6, '0')}`;
-    const appliedHex = this.colorOverride || themeHex;
-    this.mesh.material.color.setHex(parseInt(appliedHex.slice(1), 16));
+    const appliedHex = this._resolveModelColor();
+    const hex = parseInt(appliedHex.slice(1), 16);
+    if (this.mesh.isGroup) {
+      this.mesh.children.forEach((child) => {
+        if (child.material && !child.userData.isHighlightOverlay) {
+          child.material.vertexColors = false;
+          child.material.color.setHex(hex);
+          child.material.needsUpdate = true;
+        }
+      });
+    } else if (this.mesh.material) {
+      this.mesh.material.vertexColors = false;
+      this.mesh.material.color.setHex(hex);
+      this.mesh.material.needsUpdate = true;
+    }
+  }
+
+  /**
+   * Dispose geometry and material for this.mesh, handling both
+   * single Mesh and Group (dual-render) cases.
+   */
+  _disposeMeshResources() {
+    if (!this.mesh) return;
+    if (this.mesh.isGroup) {
+      this.mesh.children.forEach((child) => {
+        child.geometry?.dispose();
+        child.material?.dispose();
+      });
+    } else {
+      this.mesh.geometry?.dispose();
+      this.mesh.material?.dispose();
+    }
+  }
+
+  /**
+   * Return the BufferGeometry used for stats/dimensions.
+   * For a Group (dual-render) returns the first child's geometry.
+   */
+  _getPrimaryGeometry() {
+    if (!this.mesh) return null;
+    if (this.mesh.isGroup) {
+      return this.mesh.children[0]?.geometry ?? null;
+    }
+    return this.mesh.geometry ?? null;
   }
 
   animate() {
     this.animationId = requestAnimationFrame(() => this.animate());
-    this.controls.update();
+    if (this.controls) this.controls.update();
+    if (!this.renderer) return;
     if (this._renderOverride) {
       this._renderOverride();
     } else {
@@ -553,7 +728,7 @@ export class PreviewManager {
       // Check if preview container or canvas has focus
       if (
         !this.container.contains(document.activeElement) &&
-        document.activeElement !== this.renderer.domElement
+        document.activeElement !== this.renderer?.domElement
       ) {
         return;
       }
@@ -917,6 +1092,7 @@ export class PreviewManager {
    * @returns {Promise<{parseMs: number}>} Parse timing info
    */
   loadSTL(stlData, options = {}) {
+    this.hide2DPreview();
     const { preserveCamera = false } = options;
     return new Promise((resolve, reject) => {
       try {
@@ -932,15 +1108,16 @@ export class PreviewManager {
 
         if (this.mesh) {
           this.scene.remove(this.mesh);
-          this.mesh.geometry.dispose();
-          this.mesh.material.dispose();
+          this._disposeMeshResources();
           this.mesh = null;
         }
 
         const loader = new STLLoader();
         const geometry = loader.parse(stlData);
 
-        const vertexCount = geometry.attributes.position.count;
+        const vertexCount = geometry.attributes.position
+          ? geometry.attributes.position.count
+          : 0;
         const triangleCount = vertexCount / 3;
         const parseMs = Math.round(performance.now() - parseStartTime);
         console.log(
@@ -949,6 +1126,13 @@ export class PreviewManager {
           'triangles:',
           triangleCount
         );
+
+        if (vertexCount === 0) {
+          console.warn('[Preview] Empty STL — no geometry produced');
+          this.clear();
+          resolve({ parseMs, empty: true });
+          return;
+        }
 
         // Store vertex count for LOD info
         this.lastVertexCount = vertexCount;
@@ -972,13 +1156,10 @@ export class PreviewManager {
           this.applyAutoBed(geometry);
         }
 
-        // Create material with theme-aware color
-        const colors = PREVIEW_COLORS[this.currentTheme];
-        const themeHex = `#${colors.model.toString(16).padStart(6, '0')}`;
-        const appliedHex = this.colorOverride || themeHex;
+        // Create material using render-state-aware color resolution
         const material = new THREE.MeshPhongMaterial({
-          color: parseInt(appliedHex.slice(1), 16),
-          specular: 0x111111,
+          color: parseInt(this._resolveModelColor().slice(1), 16),
+          specular: 0x000000,
           shininess: 30,
           flatShading: false,
         });
@@ -986,9 +1167,7 @@ export class PreviewManager {
         this.mesh = new THREE.Mesh(geometry, material);
         this.scene.add(this.mesh);
 
-        // Re-apply color override if one was set before mesh loaded
-        // This ensures color changes made before/during render are applied
-        if (this.colorOverride) {
+        if (this.colorOverrideEnabled && this.colorOverride) {
           this.applyColorToMesh();
         }
 
@@ -1016,6 +1195,284 @@ export class PreviewManager {
         resolve({ parseMs });
       } catch (error) {
         console.error('[Preview] Failed to load STL:', error);
+        reject(error);
+      }
+    });
+  }
+
+  /**
+   * Load and display a model from OFF or COFF (Color OFF) text data.
+   *
+   * OFF format:
+   *   OFF
+   *   numVertices numFaces 0
+   *   x y z          ← one line per vertex
+   *   3 v0 v1 v2     ← per face: vertex count + indices
+   *
+   * COFF (Color OFF) — OpenSCAD color() passthrough:
+   *   COFF
+   *   numVertices numFaces 0
+   *   x y z
+   *   3 v0 v1 v2 r g b a   ← r/g/b/a are floats 0–1
+   *
+   * If no color data is present (plain OFF), the preview falls back to the
+   * standard theme/override color exactly like loadSTL().
+   *
+   * @param {ArrayBuffer|string} offData - OFF/COFF file content (text or ArrayBuffer)
+   * @param {Object} [options]
+   * @param {boolean} [options.preserveCamera=false]
+   * @param {Object|null} [options.debugHighlight=null] Desktop `#` modifier override.
+   *   When set, COFF face colors are replaced with the fixed highlight color
+   *   to match desktop OpenSCAD behavior: `{255,81,81,128}` overrides `color()`.
+   * @param {string} options.debugHighlight.hex  Highlight hex color (#RRGGBB)
+   * @param {number} options.debugHighlight.opacity Highlight opacity (0–1)
+   * @returns {Promise<{parseMs: number, hasColors: boolean}>}
+   */
+  loadOFF(offData, options = {}) {
+    this.hide2DPreview();
+    const { preserveCamera = false, debugHighlight = null } = options;
+    return new Promise((resolve, reject) => {
+      try {
+        const parseStartTime = performance.now();
+
+        const text =
+          typeof offData === 'string'
+            ? offData
+            : new TextDecoder().decode(offData);
+
+        const lines = text
+          .split('\n')
+          .map((l) => l.trim())
+          .filter((l) => l.length > 0 && !l.startsWith('#'));
+
+        if (lines.length === 0) {
+          throw new Error('OFF data is empty');
+        }
+
+        const firstLine = lines[0].toUpperCase();
+        const isCOFF = firstLine.startsWith('COFF');
+        const isOFF = firstLine.startsWith('OFF');
+        if (!isOFF && !isCOFF) {
+          throw new Error(`Not a valid OFF file (header: "${lines[0]}")`);
+        }
+
+        // OFF/COFF format allows counts on the header line ("OFF 100 200 0")
+        // or on a separate second line. Detect which format we have.
+        const headerParts = lines[0].split(/\s+/);
+        let countLineIdx;
+        if (headerParts.length >= 3 && !isNaN(Number(headerParts[1]))) {
+          countLineIdx = 0;
+        } else {
+          countLineIdx = 1;
+        }
+        const countParts =
+          countLineIdx === 0
+            ? headerParts.slice(1)
+            : lines[countLineIdx].split(/\s+/);
+        const numVerts = Number(countParts[0]);
+        const numFaces = Number(countParts[1]);
+        const dataStartLine = countLineIdx + 1;
+        console.log(
+          `[Preview] Loading ${isCOFF ? 'COFF' : 'OFF'} — ${numVerts} verts, ${numFaces} faces`
+        );
+
+        // Parse vertices
+        const vertices = [];
+        for (let i = 0; i < numVerts; i++) {
+          const [x, y, z] = lines[dataStartLine + i].split(/\s+/).map(Number);
+          vertices.push(x, y, z);
+        }
+
+        // Parse faces + detect colors.
+        // OpenSCAD export_off.cc writes colors inline after face vertex indices
+        // with an "OFF" header (not "COFF"). Colors are integer 0-255 values.
+        // COFF files from other tools use float 0-1 values. We auto-detect.
+        const positions = [];
+        const colors = [];
+        const rawColors = [];
+        let hasColors = false;
+        let colorScale = 1;
+        let rawColorMax = 0;
+
+        const faceStart = dataStartLine + numVerts;
+        for (let i = 0; i < numFaces; i++) {
+          const parts = lines[faceStart + i].split(/\s+/).map(Number);
+          const n = parts[0]; // vertex count for this face
+          if (n < 3) continue;
+
+          // RGB only — per-face alpha (parts[n+4]) intentionally not read;
+          // transparency is controlled via debugHighlight overlay material.
+          const hasInlineColor = parts.length >= n + 4;
+
+          // Fan-triangulate the face
+          const v0 = parts[1];
+          for (let t = 1; t < n - 1; t++) {
+            const va = parts[1 + t];
+            const vb = parts[1 + t + 1];
+            positions.push(
+              vertices[v0 * 3],
+              vertices[v0 * 3 + 1],
+              vertices[v0 * 3 + 2],
+              vertices[va * 3],
+              vertices[va * 3 + 1],
+              vertices[va * 3 + 2],
+              vertices[vb * 3],
+              vertices[vb * 3 + 1],
+              vertices[vb * 3 + 2]
+            );
+            if (hasInlineColor) {
+              const rawR = parts[n + 1];
+              const rawG = parts[n + 2];
+              const rawB = parts[n + 3];
+              rawColorMax = Math.max(rawColorMax, rawR, rawG, rawB);
+              rawColors.push(
+                rawR,
+                rawG,
+                rawB,
+                rawR,
+                rawG,
+                rawB,
+                rawR,
+                rawG,
+                rawB
+              );
+              hasColors = true;
+            }
+          }
+        }
+        if (hasColors && rawColors.length > 0) {
+          // Use global max across all inline colors to avoid first-face-black misdetection.
+          colorScale = rawColorMax > 1 ? 1 / 255 : 1;
+          for (let i = 0; i < rawColors.length; i += 3) {
+            const r = rawColors[i] * colorScale;
+            const g = rawColors[i + 1] * colorScale;
+            const b = rawColors[i + 2] * colorScale;
+            colors.push(r, g, b);
+          }
+        }
+
+        if (positions.length === 0) {
+          console.warn('[Preview] OFF has no triangulated geometry');
+          this.clear();
+          resolve({
+            parseMs: Math.round(performance.now() - parseStartTime),
+            hasColors: false,
+          });
+          return;
+        }
+
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute(
+          'position',
+          new THREE.Float32BufferAttribute(positions, 3)
+        );
+        if (hasColors && colors.length === positions.length) {
+          geometry.setAttribute(
+            'color',
+            new THREE.Float32BufferAttribute(colors, 3)
+          );
+        }
+        geometry.computeVertexNormals();
+        geometry.center();
+
+        if (this.autoBedEnabled) {
+          this.applyAutoBed(geometry);
+        }
+
+        if (this.mesh) {
+          this.scene.remove(this.mesh);
+          this._disposeMeshResources();
+          this.mesh = null;
+        }
+
+        if (debugHighlight) {
+          // Dual-render: normal mesh + semi-transparent highlight overlay.
+          // Desktop OpenSCAD F5 renders #-marked geometry at full color with
+          // a pink {255,81,81,128} overlay on top.
+          const normalMaterial = hasColors
+            ? new THREE.MeshPhongMaterial({
+                vertexColors: true,
+                specular: 0x000000,
+                shininess: 30,
+                flatShading: false,
+              })
+            : new THREE.MeshPhongMaterial({
+                color: parseInt(this._resolveModelColor().slice(1), 16),
+                specular: 0x000000,
+                shininess: 30,
+                flatShading: false,
+              });
+
+          const highlightGeometry = geometry.clone();
+          const highlightMaterial = new THREE.MeshPhongMaterial({
+            color: parseInt(debugHighlight.hex.replace('#', ''), 16),
+            specular: 0x000000,
+            shininess: 30,
+            flatShading: false,
+            transparent: true,
+            opacity: debugHighlight.opacity,
+            depthWrite: false,
+          });
+
+          const normalMesh = new THREE.Mesh(geometry, normalMaterial);
+          const highlightMesh = new THREE.Mesh(
+            highlightGeometry,
+            highlightMaterial
+          );
+          highlightMesh.userData.isHighlightOverlay = true;
+          highlightMesh.renderOrder = 1;
+
+          this.mesh = new THREE.Group();
+          this.mesh.add(normalMesh);
+          this.mesh.add(highlightMesh);
+        } else {
+          const useVertexColors =
+            hasColors && !(this.colorOverrideEnabled && this.colorOverride);
+          const material = useVertexColors
+            ? new THREE.MeshPhongMaterial({
+                vertexColors: true,
+                specular: 0x000000,
+                shininess: 30,
+                flatShading: false,
+              })
+            : new THREE.MeshPhongMaterial({
+                color: parseInt(this._resolveModelColor().slice(1), 16),
+                specular: 0x000000,
+                shininess: 30,
+                flatShading: false,
+              });
+          this.mesh = new THREE.Mesh(geometry, material);
+        }
+        this.scene.add(this.mesh);
+
+        const vertexCount = positions.length / 3;
+        const triangleCount = vertexCount / 3;
+        this.lastVertexCount = vertexCount;
+        this.lastTriangleCount = triangleCount;
+
+        if (!hasColors && this.colorOverrideEnabled && this.colorOverride) {
+          this.applyColorToMesh();
+        }
+
+        this.rotationCenteringEnabled = false;
+        if (!preserveCamera) {
+          this.fitCameraToModel();
+        }
+        if (this._postLoadHook) {
+          this._postLoadHook();
+        }
+        if (this.measurementsEnabled) {
+          this.showMeasurements();
+        }
+        this.updateModelSummary();
+
+        const parseMs = Math.round(performance.now() - parseStartTime);
+        console.log(
+          `[Preview] OFF loaded in ${parseMs}ms — ${triangleCount} triangles, hasColors=${hasColors}`
+        );
+        resolve({ parseMs, hasColors });
+      } catch (error) {
+        console.error('[Preview] Failed to load OFF:', error);
         reject(error);
       }
     });
@@ -1151,6 +1608,64 @@ export class PreviewManager {
   }
 
   /**
+   * Show a color legend overlay when the SCAD model defines multiple color
+   * parameters. Gives the user visual confirmation of their color choices even
+   * though the 3D mesh is rendered in a single color (STL limitation).
+   *
+   * @param {Array<{name: string, value: string}>} colorParams - Color
+   *   parameter entries, each with a human-readable name and hex value.
+   */
+  showColorLegend(colorParams) {
+    this.hideColorLegend();
+    if (
+      !this.container ||
+      !Array.isArray(colorParams) ||
+      colorParams.length === 0
+    )
+      return;
+
+    const panel = document.createElement('div');
+    panel.id = 'colorLegend';
+    panel.className = 'color-legend';
+    panel.setAttribute('role', 'status');
+    panel.setAttribute('aria-label', 'Model color parameters');
+
+    const heading = document.createElement('span');
+    heading.className = 'color-legend-title';
+    heading.textContent = 'Color parameters';
+    panel.appendChild(heading);
+
+    for (const { name, value } of colorParams) {
+      const row = document.createElement('div');
+      row.className = 'color-legend-row';
+
+      const swatch = document.createElement('span');
+      swatch.className = 'color-legend-swatch';
+      swatch.style.backgroundColor = value || '#888';
+      swatch.setAttribute('aria-hidden', 'true');
+
+      const label = document.createElement('span');
+      label.className = 'color-legend-label';
+      const displayName = name.replace(/_/g, ' ');
+      label.textContent = `${displayName}: ${value || '(none)'}`;
+
+      row.appendChild(swatch);
+      row.appendChild(label);
+      panel.appendChild(row);
+    }
+
+    this.container.appendChild(panel);
+  }
+
+  /**
+   * Remove the color legend overlay.
+   */
+  hideColorLegend() {
+    const existing = this.container?.querySelector('#colorLegend');
+    if (existing) existing.remove();
+  }
+
+  /**
    * Fit camera to model bounds (Z-up coordinate system, OpenSCAD-style diagonal view)
    *
    * Matches OpenSCAD desktop's default $vpr = [55, 0, 25]:
@@ -1195,7 +1710,7 @@ export class PreviewManager {
     camera.lookAt(center);
 
     // Update controls target
-    this.controls.target.copy(center);
+    if (this.controls) this.controls.target.copy(center);
 
     // Update orthographic frustum to fit the model
     if (this.projectionMode === 'orthographic' && this.orthoCamera) {
@@ -1209,7 +1724,7 @@ export class PreviewManager {
       this.orthoCamera.updateProjectionMatrix();
     }
 
-    this.controls.update();
+    if (this.controls) this.controls.update();
 
     // Store initial aspect for resize tracking
     this._lastAspect = this.camera.aspect;
@@ -1290,7 +1805,7 @@ export class PreviewManager {
     camera.lookAt(center);
 
     // Update controls target
-    this.controls.target.copy(center);
+    if (this.controls) this.controls.target.copy(center);
 
     // Update orthographic frustum to fit the model at the new view
     if (this.projectionMode === 'orthographic' && this.orthoCamera) {
@@ -1304,7 +1819,7 @@ export class PreviewManager {
       this.orthoCamera.updateProjectionMatrix();
     }
 
-    this.controls.update();
+    if (this.controls) this.controls.update();
 
     // Announce to screen readers
     this.announceCameraAction(`${view.name} view`);
@@ -1322,6 +1837,8 @@ export class PreviewManager {
    * @returns {string} The new projection mode ('perspective' or 'orthographic')
    */
   toggleProjection() {
+    if (!this.controls) return this.projectionMode;
+
     const width = this.container.clientWidth;
     const height = this.container.clientHeight;
     const aspect = width / height;
@@ -1511,9 +2028,12 @@ export class PreviewManager {
     const box = new THREE.Box3().setFromObject(this.mesh);
     const size = box.getSize(new THREE.Vector3());
     const volume = size.x * size.y * size.z;
-    const triangles = this.mesh.geometry.index
-      ? this.mesh.geometry.index.count / 3
-      : this.mesh.geometry.attributes.position.count / 3;
+    const geo = this._getPrimaryGeometry();
+    const triangles = geo
+      ? geo.index
+        ? geo.index.count / 3
+        : geo.attributes.position.count / 3
+      : 0;
 
     return {
       x: Math.round(size.x * 100) / 100, // Round to 2 decimal places
@@ -1555,8 +2075,9 @@ export class PreviewManager {
    * @param {number} deltaUp - Up/down movement in screen space
    */
   panCamera(deltaRight, deltaUp) {
+    if (!this.controls) return;
+
     const camera = this.getActiveCamera();
-    // Extract camera's local right (column 0) and up (column 1) from world matrix
     const right = new THREE.Vector3().setFromMatrixColumn(
       camera.matrixWorld,
       0
@@ -1887,6 +2408,212 @@ export class PreviewManager {
   }
 
   /**
+   * Set a custom grid color, deriving the secondary color automatically.
+   * @param {string} hexColor - CSS hex color (e.g. '#ff0000')
+   */
+  setGridColor(hexColor) {
+    const hex = normalizeHexColor(hexColor);
+    if (!hex) return;
+
+    this.gridColorOverride = hex;
+    this.saveGridColorPreference(hex);
+    this._rebuildGrid();
+  }
+
+  /**
+   * Remove the custom grid color, reverting to the current theme default.
+   */
+  resetGridColor() {
+    this.gridColorOverride = null;
+    this.saveGridColorPreference(null);
+    this._rebuildGrid();
+  }
+
+  /**
+   * @returns {string|null} The current grid color override, or null for theme default.
+   */
+  getGridColor() {
+    return this.gridColorOverride;
+  }
+
+  /**
+   * Return the resolved grid colors (override or theme default).
+   * @returns {{ gridPrimary: number, gridSecondary: number }}
+   */
+  _resolveGridColors() {
+    if (this.gridColorOverride) {
+      const primary = parseInt(this.gridColorOverride.slice(1), 16);
+      const secondary = PreviewManager._deriveSecondaryGridColor(
+        primary,
+        PREVIEW_COLORS[this.currentTheme]?.background ??
+          PREVIEW_COLORS.light.background
+      );
+      return { gridPrimary: primary, gridSecondary: secondary };
+    }
+    const theme = PREVIEW_COLORS[this.currentTheme] || PREVIEW_COLORS.light;
+    return {
+      gridPrimary: theme.gridPrimary,
+      gridSecondary: theme.gridSecondary,
+    };
+  }
+
+  /**
+   * Blend the primary grid color 50% toward the scene background to
+   * produce a softer secondary grid line color.
+   * @param {number} primary - 0xRRGGBB primary grid color
+   * @param {number} background - 0xRRGGBB scene background color
+   * @returns {number} 0xRRGGBB secondary color
+   */
+  static _deriveSecondaryGridColor(primary, background) {
+    const blend = (a, b, t) => Math.round(a + (b - a) * t);
+    const pR = (primary >> 16) & 0xff;
+    const pG = (primary >> 8) & 0xff;
+    const pB = primary & 0xff;
+    const bR = (background >> 16) & 0xff;
+    const bG = (background >> 8) & 0xff;
+    const bB = background & 0xff;
+    const r = blend(pR, bR, 0.5);
+    const g = blend(pG, bG, 0.5);
+    const b = blend(pB, bB, 0.5);
+    return (r << 16) | (g << 8) | b;
+  }
+
+  /**
+   * Load persisted grid color preference.
+   * @returns {string|null}
+   */
+  loadGridColorPreference() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY_GRID_COLOR);
+      if (raw && /^#[0-9a-f]{6}$/i.test(raw)) return raw;
+    } catch (_) {
+      // fall through
+    }
+    return null;
+  }
+
+  /**
+   * Persist grid color preference.
+   * @param {string|null} hex
+   */
+  saveGridColorPreference(hex) {
+    try {
+      if (hex) {
+        localStorage.setItem(STORAGE_KEY_GRID_COLOR, hex);
+      } else {
+        localStorage.removeItem(STORAGE_KEY_GRID_COLOR);
+      }
+    } catch (error) {
+      console.warn('[Preview] Could not save grid color preference:', error);
+    }
+  }
+
+  /**
+   * Set grid line opacity (10–100). Values outside the range are clamped.
+   * @param {number} percent - Opacity percentage
+   */
+  setGridOpacity(percent) {
+    const clamped = Math.max(10, Math.min(100, Math.round(Number(percent))));
+    if (Number.isNaN(clamped)) return;
+    this.gridOpacity = clamped;
+    this.saveGridOpacityPreference(clamped);
+    this._applyGridOpacity();
+  }
+
+  /**
+   * @returns {number} Current grid opacity (10–100).
+   */
+  getGridOpacity() {
+    return this.gridOpacity;
+  }
+
+  /**
+   * Reset grid opacity to 100% (fully opaque).
+   */
+  resetGridOpacity() {
+    this.gridOpacity = 100;
+    this.saveGridOpacityPreference(null);
+    this._applyGridOpacity();
+  }
+
+  /**
+   * Load persisted grid opacity preference.
+   * @returns {number} 10–100 (default 100)
+   */
+  loadGridOpacityPreference() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY_GRID_OPACITY);
+      if (raw !== null) {
+        const val = parseInt(raw, 10);
+        if (!Number.isNaN(val) && val >= 10 && val <= 100) return val;
+      }
+    } catch (_) {
+      // fall through
+    }
+    return 100;
+  }
+
+  /**
+   * Persist grid opacity preference.
+   * @param {number|null} value - null removes the key (revert to default 100)
+   */
+  saveGridOpacityPreference(value) {
+    try {
+      if (value !== null && value !== undefined && value !== 100) {
+        localStorage.setItem(STORAGE_KEY_GRID_OPACITY, String(value));
+      } else {
+        localStorage.removeItem(STORAGE_KEY_GRID_OPACITY);
+      }
+    } catch (error) {
+      console.warn('[Preview] Could not save grid opacity preference:', error);
+    }
+  }
+
+  /**
+   * Apply the current gridOpacity to the grid helper material.
+   * @private
+   */
+  _applyGridOpacity() {
+    if (!this.gridHelper) return;
+    const opacity = this.gridOpacity / 100;
+    const mat = this.gridHelper.material;
+    if (Array.isArray(mat)) {
+      mat.forEach((m) => {
+        m.transparent = opacity < 1;
+        m.opacity = opacity;
+      });
+    } else if (mat) {
+      mat.transparent = opacity < 1;
+      mat.opacity = opacity;
+    }
+  }
+
+  /**
+   * Rebuild the grid using current config, color override, and theme.
+   * @private
+   */
+  _rebuildGrid() {
+    if (!this.scene || !this.gridHelper) return;
+
+    this.scene.remove(this.gridHelper);
+    if (this.gridHelper.geometry) this.gridHelper.geometry.dispose();
+    if (this.gridHelper.material) {
+      if (Array.isArray(this.gridHelper.material)) {
+        this.gridHelper.material.forEach((m) => m.dispose());
+      } else {
+        this.gridHelper.material.dispose();
+      }
+    }
+
+    const colors = this._resolveGridColors();
+    this.gridHelper = this._createGridHelper(colors);
+    this.gridHelper.rotation.x = Math.PI / 2;
+    this.gridHelper.visible = this.gridEnabled;
+    this._applyGridOpacity();
+    this.scene.add(this.gridHelper);
+  }
+
+  /**
    * Create a GridHelper using the current gridConfig dimensions.
    * Divisions are auto-calculated at 1 per 10mm for a clean appearance.
    * @param {Object} colors - Theme color object with gridPrimary/gridSecondary
@@ -1975,10 +2702,9 @@ export class PreviewManager {
       }
     }
 
-    // Recreate with new size using current theme colors
-    const themeKey = this.currentTheme || 'light';
-    const colors = PREVIEW_COLORS[themeKey] || PREVIEW_COLORS.light;
-    this.gridHelper = this._createGridHelper(colors);
+    // Recreate with new size using resolved colors (custom override or theme)
+    const gridColors = this._resolveGridColors();
+    this.gridHelper = this._createGridHelper(gridColors);
     this.gridHelper.rotation.x = Math.PI / 2;
     this.gridHelper.visible = this.gridEnabled;
     this.scene.add(this.gridHelper);
@@ -2438,9 +3164,10 @@ export class PreviewManager {
    *
    * @param {string} svgContent - SVG markup
    * @param {string|null} [recolorHex=null] - CSS hex colour (e.g. '#ffffff')
+   * @param {{ targetCanvasSize?: number }} [opts] - Optional overrides
    * @returns {Promise<{texture: THREE.CanvasTexture, aspect: number, widthMm: number|null, heightMm: number|null}>}
    */
-  async svgTextToCanvasTexture(svgContent, recolorHex = null) {
+  async svgTextToCanvasTexture(svgContent, recolorHex = null, opts = {}) {
     const parser = new DOMParser();
     const svgDoc = parser.parseFromString(svgContent, 'image/svg+xml');
     const svgEl = svgDoc.querySelector('svg');
@@ -2490,11 +3217,22 @@ export class PreviewManager {
       heightMm = (vbH * 25.4) / OPENSCAD_DPI;
     }
 
-    // Determine canvas resolution (bounded to avoid memory spikes)
-    const maxDim = this.getMaxTextureResolution();
+    // Determine canvas resolution (bounded to avoid memory spikes).
+    // When targetCanvasSize is specified, scale the canvas so the longest
+    // edge reaches that size — producing crisp textures for SVG content
+    // that has small viewBox dimensions (e.g. 246×170 from OpenSCAD).
+    const maxDim = opts.targetCanvasSize || this.getMaxTextureResolution();
     let canvasWidth, canvasHeight;
 
-    if (intrinsicWidth >= intrinsicHeight) {
+    if (opts.targetCanvasSize) {
+      if (intrinsicWidth >= intrinsicHeight) {
+        canvasWidth = maxDim;
+        canvasHeight = maxDim / aspect;
+      } else {
+        canvasHeight = maxDim;
+        canvasWidth = maxDim * aspect;
+      }
+    } else if (intrinsicWidth >= intrinsicHeight) {
       canvasWidth = Math.min(intrinsicWidth, maxDim);
       canvasHeight = canvasWidth / aspect;
     } else {
@@ -3149,6 +3887,7 @@ export class PreviewManager {
    * Clear the preview
    */
   clear() {
+    this.hide2DPreview();
     this.hideMeasurements();
     this.dimensions = null;
 
@@ -3158,8 +3897,7 @@ export class PreviewManager {
 
     if (this.mesh) {
       this.scene.remove(this.mesh);
-      this.mesh.geometry.dispose();
-      this.mesh.material.dispose();
+      this._disposeMeshResources();
       this.mesh = null;
     }
 
@@ -3169,7 +3907,7 @@ export class PreviewManager {
       this.referenceOverlay.position.z = this.overlayConfig.zPosition;
     }
 
-    this.renderer.render(this.scene, this.getActiveCamera());
+    if (this.renderer) this.renderer.render(this.scene, this.getActiveCamera());
 
     // Update screen reader model summary (WCAG 2.2)
     this.updateModelSummary();
@@ -3206,8 +3944,7 @@ export class PreviewManager {
     }
 
     if (this.mesh) {
-      this.mesh.geometry.dispose();
-      this.mesh.material.dispose();
+      this._disposeMeshResources();
     }
 
     // Clean up reference overlay
@@ -3283,23 +4020,36 @@ export class PreviewManager {
   // --- Model Appearance Controls ---
 
   setModelOpacity(percent) {
-    if (!this.mesh?.material) return;
+    if (!this.appearanceOverrideEnabled) return;
+    if (!this.mesh) return;
     const val = Math.max(10, Math.min(100, percent));
     const opacity = val / 100;
-    this.mesh.material.transparent = opacity < 1;
-    this.mesh.material.opacity = opacity;
-    // Keep depthWrite true to prevent model from disappearing behind grid/overlay
-    this.mesh.material.depthWrite = true;
-    if (opacity < 1) this.mesh.renderOrder = 1;
-    this.mesh.material.needsUpdate = true;
+
+    const applyOpacity = (mat, meshObj) => {
+      mat.transparent = opacity < 1;
+      mat.opacity = opacity;
+      mat.depthWrite = true;
+      if (opacity < 1) meshObj.renderOrder = 1;
+      mat.needsUpdate = true;
+    };
+
+    if (this.mesh.isGroup) {
+      this.mesh.children.forEach((child) => {
+        if (child.material) applyOpacity(child.material, child);
+      });
+    } else if (this.mesh.material) {
+      applyOpacity(this.mesh.material, this.mesh);
+    }
   }
 
   setBrightness(percent) {
+    if (!this.appearanceOverrideEnabled) return;
     this._brightnessScale = percent / 100;
     this._applyLighting();
   }
 
   setContrast(percent) {
+    if (!this.appearanceOverrideEnabled) return;
     this._contrastFactor = percent / 100;
     this._applyLighting();
   }
@@ -3315,10 +4065,317 @@ export class PreviewManager {
     this.directionalLight2.intensity = this.baseLightIntensities.dir2 * bs * cf;
   }
 
+  setAppearanceOverrideEnabled(enabled) {
+    this.appearanceOverrideEnabled = enabled;
+    this._syncAppearance();
+  }
+
+  _syncAppearance() {
+    if (this.appearanceOverrideEnabled) {
+      return;
+    }
+    // Reset to defaults when disabled — bypass the guard in setModelOpacity
+    if (this.mesh) {
+      const applyOpacity = (mat, meshObj) => {
+        mat.transparent = false;
+        mat.opacity = 1;
+        mat.depthWrite = true;
+        meshObj.renderOrder = 0;
+        mat.needsUpdate = true;
+      };
+      if (this.mesh.isGroup) {
+        this.mesh.children.forEach((child) => {
+          if (child.material) applyOpacity(child.material, child);
+        });
+      } else if (this.mesh.material) {
+        applyOpacity(this.mesh.material, this.mesh);
+      }
+    }
+    this._brightnessScale = 1;
+    this._contrastFactor = 1;
+    this._applyLighting();
+  }
+
   resetAppearance() {
+    if (!this.appearanceOverrideEnabled) return;
     this.setModelOpacity(100);
     this._brightnessScale = 1;
     this._contrastFactor = 1;
     this._applyLighting();
+  }
+
+  // ── Rendered 2D Preview ───────────────────────────────────────────────────
+  //
+  // Displays worker-produced SVG output in a native browser SVG surface
+  // inside the same preview container used by the 3D viewer.  This is
+  // distinct from the reference overlay which is a Three.js texture plane.
+
+  /**
+   * Show a rendered 2D SVG preview, hiding the 3D canvas.
+   *
+   * The SVG is sanitized (scripts/event-handlers stripped) and inserted
+   * into the dedicated #rendered2dPreview element.  When the SVG carries
+   * only bare geometry (no fill/stroke), a desktop-parity stylesheet is
+   * injected whose colors depend on the display mode:
+   *
+   *  - **draft** (F5-equivalent): muted sage green fill (#7A9F7A), no
+   *    prominent outlines — matches desktop OpenSCAD's F5 Preview for 2D.
+   *  - **rendered** (F6-equivalent): bright teal fill (#07D0A7) with red
+   *    outlines (#FF0603) — matches desktop OpenSCAD's F6 Render for 2D.
+   *
+   * @param {string} svgText - Raw SVG markup from the worker
+   * @param {{ mode?: 'draft'|'rendered' }} [options]
+   */
+  show2DPreview(svgText, options = {}) {
+    const mode = options.mode || 'draft';
+    const previewEl = document.getElementById('rendered2dPreview');
+    if (!previewEl) return;
+
+    const sanitized = PreviewManager.sanitizeSVG(svgText);
+
+    previewEl.innerHTML = sanitized;
+
+    const svgEl = previewEl.querySelector('svg');
+    if (svgEl) {
+      svgEl.removeAttribute('width');
+      svgEl.removeAttribute('height');
+      svgEl.style.maxWidth = '100%';
+      svgEl.style.maxHeight = '100%';
+      svgEl.style.width = 'auto';
+      svgEl.style.height = 'auto';
+
+      if (PreviewManager.svgLacksVisualStyling(svgEl)) {
+        PreviewManager.injectDesktopParityStyling(svgEl, mode);
+      }
+    }
+
+    previewEl.classList.remove('hidden');
+    this._set2DPreviewActive(true);
+
+    const summary = document.getElementById('previewModelSummary');
+    if (summary) {
+      summary.textContent =
+        mode === 'rendered'
+          ? 'Full-quality rendered 2D SVG preview is displayed.'
+          : 'Draft 2D SVG preview is displayed.';
+    }
+  }
+
+  /**
+   * Display a 2D SVG as a flat plane inside the Three.js 3D viewport.
+   *
+   * Instead of hiding the 3D canvas and showing a flat HTML overlay,
+   * this converts the SVG to a texture, creates a PlaneGeometry sized
+   * to the SVG's physical mm dimensions, and adds it to the scene as
+   * `this.mesh`.  The camera fits to the plane automatically and all
+   * orbit/zoom/pan controls remain active — matching how desktop
+   * OpenSCAD shows 2D geometry in its 3D viewport.
+   *
+   * @param {string} svgText - Raw (or pre-styled) SVG markup
+   * @param {{ mode?: 'draft'|'rendered' }} [options]
+   * @returns {Promise<void>}
+   */
+  async show2DPreviewAs3DPlane(svgText, options = {}) {
+    if (!this.scene || !this.renderer) return;
+
+    // Ensure any previous flat HTML 2D preview is dismissed
+    this.hide2DPreview();
+
+    // Remove existing 3D mesh
+    if (this.mesh) {
+      this.scene.remove(this.mesh);
+      this._disposeMeshResources();
+      this.mesh = null;
+    }
+
+    // Render SVG to a high-resolution canvas texture (4096px longest edge)
+    // while preserving the original SVG width/height attributes for correct
+    // mm dimension extraction. The PlaneGeometry is then sized in mm to
+    // guarantee 1:1 scale fidelity with the 3D mesh.
+    const { texture, widthMm, heightMm } = await this.svgTextToCanvasTexture(
+      svgText,
+      null,
+      { targetCanvasSize: 4096 }
+    );
+
+    const planeW = widthMm || 200;
+    const planeH = heightMm || 150;
+
+    const geometry = new THREE.PlaneGeometry(planeW, planeH);
+    const material = new THREE.MeshBasicMaterial({
+      map: texture,
+      transparent: true,
+      side: THREE.DoubleSide,
+      depthWrite: true,
+    });
+
+    this.mesh = new THREE.Mesh(geometry, material);
+    this.mesh.name = '2dPreviewPlane';
+    this.scene.add(this.mesh);
+
+    this.fitCameraToModel();
+    if (this.renderer) this.renderer.render(this.scene, this.getActiveCamera());
+
+    // Update ARIA summary
+    const summary = document.getElementById('previewModelSummary');
+    if (summary) {
+      const mode = options.mode || 'draft';
+      summary.textContent =
+        mode === 'rendered'
+          ? 'Full-quality rendered 2D SVG preview displayed in 3D viewport.'
+          : 'Draft 2D SVG preview displayed in 3D viewport.';
+    }
+  }
+
+  /**
+   * Hide the rendered 2D preview, restoring the 3D canvas.
+   */
+  hide2DPreview() {
+    const previewEl = document.getElementById('rendered2dPreview');
+    if (!previewEl) return;
+    previewEl.classList.add('hidden');
+    previewEl.innerHTML = '';
+    this._set2DPreviewActive(false);
+  }
+
+  /**
+   * Toggle visibility of 3D canvas vs 2D preview surface.
+   * @param {boolean} is2D
+   */
+  _set2DPreviewActive(is2D) {
+    this._is2DPreviewActive = is2D;
+
+    // Hide 3D canvas when 2D is active, show when 3D
+    if (this.renderer?.domElement) {
+      this.renderer.domElement.style.display = is2D ? 'none' : '';
+    }
+
+    // Hide placeholder when any content is active
+    const placeholder = this.container?.querySelector('.preview-placeholder');
+    if (placeholder) {
+      placeholder.style.display = is2D || this.mesh ? 'none' : '';
+    }
+
+    // Update container ARIA label
+    if (this.container) {
+      this.container.setAttribute(
+        'aria-label',
+        is2D ? 'Rendered 2D SVG preview' : '3D model preview and controls'
+      );
+    }
+  }
+
+  /**
+   * Sanitize SVG to prevent XSS — strips scripts, event handlers,
+   * and external references while preserving geometry and styling.
+   * @param {string} svgText
+   * @returns {string}
+   */
+  static sanitizeSVG(svgText) {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(svgText, 'image/svg+xml');
+    const svg = doc.documentElement;
+
+    // Remove <script> elements
+    for (const el of [...svg.querySelectorAll('script')]) {
+      el.remove();
+    }
+
+    // Remove event-handler attributes from all elements
+    const allEls = svg.querySelectorAll('*');
+    for (const el of allEls) {
+      for (const attr of [...el.attributes]) {
+        if (attr.name.startsWith('on')) {
+          el.removeAttribute(attr.name);
+        }
+        // Remove xlink:href to javascript:
+        if (attr.name === 'href' || attr.name === 'xlink:href') {
+          if (attr.value.trim().toLowerCase().startsWith('javascript:')) {
+            el.removeAttribute(attr.name);
+          }
+        }
+      }
+    }
+
+    return svg.outerHTML;
+  }
+
+  /**
+   * Detect whether an SVG element's geometry paths lack explicit
+   * fill/stroke styling (geometry-only export from OpenSCAD).
+   * @param {SVGElement} svgEl
+   * @returns {boolean}
+   */
+  static svgLacksVisualStyling(svgEl) {
+    const shapes = svgEl.querySelectorAll(
+      'path, polygon, polyline, line, circle, ellipse, rect'
+    );
+    if (shapes.length === 0) return false;
+
+    let unstyled = 0;
+    for (const shape of shapes) {
+      const fill = shape.getAttribute('fill');
+      const stroke = shape.getAttribute('stroke');
+      const style = shape.getAttribute('style') || '';
+      const hasFill = fill && fill !== 'none';
+      const hasStroke = stroke && stroke !== 'none';
+      const hasStyleFill =
+        style.includes('fill:') && !style.includes('fill:none');
+      const hasStyleStroke =
+        style.includes('stroke:') && !style.includes('stroke:none');
+      if (!hasFill && !hasStroke && !hasStyleFill && !hasStyleStroke) {
+        unstyled++;
+      }
+    }
+    return unstyled > shapes.length / 2;
+  }
+
+  /**
+   * Inject a preview-only <style> element that approximates desktop
+   * OpenSCAD's 2D viewport appearance.  Colors are selected per mode:
+   *
+   *  - **draft** (F5 Preview): #7A9F7A sage green fill, subtle edges.
+   *  - **rendered** (F6 Render): #07D0A7 teal fill, #FF0603 red outlines.
+   *
+   * Reference: Testing Round 7 color-codes.json — desktop 2021.01 observations.
+   *
+   * @param {SVGElement} svgEl
+   * @param {'draft'|'rendered'} [mode='draft']
+   */
+  static injectDesktopParityStyling(svgEl, mode = 'draft') {
+    const ns = 'http://www.w3.org/2000/svg';
+    const existing = svgEl.querySelector('style[data-forge-preview]');
+    if (existing) return;
+
+    const palette =
+      mode === 'rendered'
+        ? {
+            fill: '#07D0A7',
+            stroke: '#FF0603',
+            strokeWidth: '0.5',
+            fillOpacity: '1',
+          }
+        : {
+            fill: '#7A9F7A',
+            stroke: '#7A9F7A',
+            strokeWidth: '0.25',
+            fillOpacity: '0.9',
+          };
+
+    const styleEl = document.createElementNS(ns, 'style');
+    styleEl.setAttribute('data-forge-preview', 'true');
+    styleEl.textContent = [
+      'path, polygon, polyline, circle, ellipse, rect {',
+      `  fill: ${palette.fill};`,
+      `  stroke: ${palette.stroke};`,
+      `  stroke-width: ${palette.strokeWidth};`,
+      `  fill-opacity: ${palette.fillOpacity};`,
+      '}',
+      'line {',
+      `  stroke: ${palette.stroke};`,
+      `  stroke-width: ${palette.strokeWidth};`,
+      '}',
+    ].join('\n');
+    svgEl.insertBefore(styleEl, svgEl.firstChild);
   }
 }

@@ -10,6 +10,7 @@ describe('Theme Manager', () => {
     
     // Reset document attributes
     document.documentElement.removeAttribute('data-theme')
+    document.documentElement.removeAttribute('data-theme-setting')
     document.documentElement.removeAttribute('data-high-contrast')
     
     themeManager = new ThemeManager()
@@ -55,7 +56,7 @@ describe('Theme Manager', () => {
 
     it('should apply theme to document on initialization', () => {
       const attr = document.documentElement.getAttribute('data-theme')
-      // May be null, light, or dark depending on system preference
+      // May be null (constructor doesn't apply), light, or dark
       expect(attr === null || attr === 'light' || attr === 'dark').toBe(true)
     })
 
@@ -206,12 +207,14 @@ describe('Theme Manager', () => {
       expect(themeManager.currentTheme).toBe('dark')
     })
 
-    it('should remove data-theme attribute for auto theme', () => {
+    it('should set data-theme to resolved value for auto theme', () => {
       themeManager.applyTheme('dark')
       expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
       
       themeManager.applyTheme('auto')
-      expect(document.documentElement.getAttribute('data-theme')).toBeNull()
+      const resolved = document.documentElement.getAttribute('data-theme')
+      expect(resolved === 'light' || resolved === 'dark').toBe(true)
+      expect(document.documentElement.getAttribute('data-theme-setting')).toBe('auto')
     })
 
     it('should apply high contrast mode to document', () => {
@@ -355,6 +358,75 @@ describe('Theme Manager', () => {
     })
   })
 
+  describe('Resolved Theme', () => {
+    it('should always have data-theme set to light or dark after applyTheme auto', () => {
+      themeManager.applyTheme('auto')
+      const attr = document.documentElement.getAttribute('data-theme')
+      expect(attr === 'light' || attr === 'dark').toBe(true)
+    })
+
+    it('should always have data-theme set to light or dark after applyTheme light', () => {
+      themeManager.applyTheme('light')
+      expect(document.documentElement.getAttribute('data-theme')).toBe('light')
+    })
+
+    it('should always have data-theme set to light or dark after applyTheme dark', () => {
+      themeManager.applyTheme('dark')
+      expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
+    })
+
+    it('should set data-theme-setting to the raw user preference', () => {
+      themeManager.applyTheme('auto')
+      expect(document.documentElement.getAttribute('data-theme-setting')).toBe('auto')
+
+      themeManager.applyTheme('light')
+      expect(document.documentElement.getAttribute('data-theme-setting')).toBe('light')
+
+      themeManager.applyTheme('dark')
+      expect(document.documentElement.getAttribute('data-theme-setting')).toBe('dark')
+    })
+
+    it('getResolvedTheme should return light or dark, never auto or null', () => {
+      themeManager.applyTheme('auto')
+      const resolved = themeManager.getResolvedTheme()
+      expect(resolved === 'light' || resolved === 'dark').toBe(true)
+    })
+
+    it('getResolvedTheme should match data-theme attribute', () => {
+      themeManager.applyTheme('dark')
+      expect(themeManager.getResolvedTheme()).toBe('dark')
+
+      themeManager.applyTheme('light')
+      expect(themeManager.getResolvedTheme()).toBe('light')
+    })
+
+    it('should update data-theme when system preference changes in auto mode', () => {
+      const originalMatchMedia = window.matchMedia
+      let changeHandler
+
+      window.matchMedia = vi.fn().mockReturnValue({
+        matches: false,
+        addEventListener: (event, handler) => {
+          if (event === 'change') changeHandler = handler
+        },
+        removeEventListener: () => {},
+      })
+
+      themeManager.currentTheme = 'auto'
+      themeManager.init()
+
+      expect(changeHandler).toBeDefined()
+      changeHandler({ matches: true })
+
+      expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
+
+      changeHandler({ matches: false })
+      expect(document.documentElement.getAttribute('data-theme')).toBe('light')
+
+      window.matchMedia = originalMatchMedia
+    })
+  })
+
   describe('Cycle Theme Messages', () => {
     it('should return correct message for auto theme', () => {
       themeManager.currentTheme = 'dark'
@@ -382,6 +454,7 @@ describe('initThemeToggle', () => {
   beforeEach(() => {
     localStorage.clear()
     document.documentElement.removeAttribute('data-theme')
+    document.documentElement.removeAttribute('data-theme-setting')
     document.documentElement.removeAttribute('data-high-contrast')
     document.body.innerHTML = ''
     themeManager = new ThemeManager()

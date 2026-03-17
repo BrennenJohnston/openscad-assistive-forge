@@ -88,6 +88,32 @@ describe('RenderController', () => {
     expect(controller.currentRequest).toBeNull()
   })
 
+  it('propagates MODEL_NOT_2D code and ECHO-bearing details for SVG/DXF conflict', () => {
+    const controller = new RenderController()
+    const reject = vi.fn()
+    controller.currentRequest = { id: 'render-not2d', reject }
+
+    const echoDetails =
+      "Error stack\n\n[OpenSCAD output]\nECHO: \"'generate' is set to '3D Printed'\"\nWARNING: Current top level object is not a 2D object"
+
+    controller.handleMessage({
+      type: 'ERROR',
+      payload: {
+        requestId: 'render-not2d',
+        code: 'MODEL_NOT_2D',
+        message: 'Your model produces 3D geometry but SVG/DXF export requires 2D output.',
+        details: echoDetails,
+      }
+    })
+
+    expect(reject).toHaveBeenCalled()
+    const err = reject.mock.calls[0][0]
+    expect(err.code).toBe('MODEL_NOT_2D')
+    expect(err.details).toContain('[OpenSCAD output]')
+    expect(err.details).toContain("'generate' is set to '3D Printed'")
+    expect(controller.currentRequest).toBeNull()
+  })
+
   it('rejects init promise on worker init error', () => {
     const controller = new RenderController()
     const readyReject = vi.fn()
@@ -132,9 +158,11 @@ describe('RenderController', () => {
     expect(result.stl).toBeDefined()
   })
 
-  it('cancels the current render request', () => {
+  it('cancels the current render request (soft cancel path)', () => {
     const controller = new RenderController()
-    controller.worker = { postMessage: vi.fn() }
+    controller.worker = { postMessage: vi.fn(), terminate: vi.fn() }
+    // Prevent the 200 ms watchdog from calling _hardCancelAndReinit after the test ends.
+    controller._hardCancelAndReinit = vi.fn().mockResolvedValue(undefined)
     const reject = vi.fn()
     controller.currentRequest = { id: 'render-3', reject }
 
@@ -331,6 +359,68 @@ describe('RenderController', () => {
     controller.cancel()
     
     expect(controller.worker.postMessage).not.toHaveBeenCalled()
+  })
+
+  it('cancel watchdog hard-stops the worker within the shortened 200 ms grace period', () => {
+    vi.useFakeTimers()
+    try {
+      const controller = new RenderController()
+      controller.worker = { postMessage: vi.fn(), terminate: vi.fn() }
+      const hardCancelSpy = vi.spyOn(controller, '_hardCancelAndReinit').mockResolvedValue(undefined)
+      const reject = vi.fn()
+      controller.currentRequest = { id: 'render-hang', reject }
+
+      controller.cancel()
+
+      // Grace period is 200 ms; watchdog must not have fired yet
+      vi.advanceTimersByTime(199)
+      expect(hardCancelSpy).not.toHaveBeenCalled()
+
+      // After 200 ms the watchdog fires
+      vi.advanceTimersByTime(1)
+      expect(hardCancelSpy).toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('stale cancel watchdog is cleared before a new render starts', async () => {
+    vi.useFakeTimers()
+    try {
+      const controller = new RenderController()
+      controller.worker = { postMessage: vi.fn(), terminate: vi.fn() }
+      const hardCancelSpy = vi.spyOn(controller, '_hardCancelAndReinit').mockResolvedValue(undefined)
+      controller.ready = true
+
+      // Simulate an in-flight request and cancel it
+      const reject = vi.fn()
+      controller.currentRequest = { id: 'render-old', reject }
+      controller.cancel()
+      // Watchdog is now ticking (200 ms)
+
+      // Start a new render before the watchdog fires
+      const renderPromise = controller.render('cube(1);', {})
+      // Let the microtask queue (render queue chain) run
+      await Promise.resolve()
+      await Promise.resolve()
+
+      // Advance past the original watchdog deadline
+      vi.advanceTimersByTime(300)
+
+      // Resolve the new render so the promise settles cleanly
+      if (controller.currentRequest) {
+        controller.handleMessage({
+          type: 'COMPLETE',
+          payload: { requestId: controller.currentRequest.id, data: new ArrayBuffer(1), stats: { triangles: 1 } }
+        })
+      }
+      await renderPromise.catch(() => {})
+
+      // The watchdog must NOT have fired — hard cancel would break the new render
+      expect(hardCancelSpy).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('renderPreview uses PREVIEW quality by default', async () => {
@@ -604,6 +694,113 @@ describe('Capabilities caching across worker restarts', () => {
     expect(initSpy).toHaveBeenCalledWith(
       expect.objectContaining({ cachedCapabilities: null })
     )
+  })
+})
+
+describe('_hardCancelAndReinit capabilities caching', () => {
+  it('passes cachedCapabilities to init()', async () => {
+    const controller = new RenderController()
+    const caps = { hasManifold: true, hasFastCSG: true, hasLazyUnion: false, hasBinarySTL: true, version: '2024.12' }
+    controller.capabilities = caps
+
+    const initSpy = vi.fn().mockResolvedValue(undefined)
+    controller.init = initSpy
+    controller.worker = { terminate: vi.fn() }
+
+    await controller._hardCancelAndReinit()
+
+    expect(initSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ cachedCapabilities: caps })
+    )
+  })
+
+  it('passes null when no capabilities are cached', async () => {
+    const controller = new RenderController()
+    expect(controller.capabilities).toBeUndefined()
+
+    const initSpy = vi.fn().mockResolvedValue(undefined)
+    controller.init = initSpy
+    controller.worker = { terminate: vi.fn() }
+
+    await controller._hardCancelAndReinit()
+
+    expect(initSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ cachedCapabilities: null })
+    )
+  })
+
+  it('sets _moduleUsed to true after reinit', async () => {
+    const controller = new RenderController()
+    controller._moduleUsed = false
+
+    controller.init = vi.fn().mockResolvedValue(undefined)
+    controller.worker = { terminate: vi.fn() }
+
+    await controller._hardCancelAndReinit()
+
+    expect(controller._moduleUsed).toBe(true)
+  })
+})
+
+describe('Restart serialization', () => {
+  it('concurrent restart() calls only trigger one init()', async () => {
+    const controller = new RenderController()
+    let initCallCount = 0
+
+    controller.terminate = vi.fn()
+    controller.init = vi.fn().mockImplementation(() => {
+      initCallCount++
+      return Promise.resolve()
+    })
+    controller.startHealthMonitoring = vi.fn()
+
+    const p1 = controller.restart()
+    const p2 = controller.restart()
+
+    await Promise.all([p1, p2])
+
+    expect(initCallCount).toBe(1)
+  })
+
+  it('allows a new restart after the first completes', async () => {
+    const controller = new RenderController()
+    let initCallCount = 0
+
+    controller.terminate = vi.fn()
+    controller.init = vi.fn().mockImplementation(() => {
+      initCallCount++
+      return Promise.resolve()
+    })
+    controller.startHealthMonitoring = vi.fn()
+
+    await controller.restart()
+    expect(initCallCount).toBe(1)
+
+    await controller.restart()
+    expect(initCallCount).toBe(2)
+  })
+
+  it('N consecutive restart cycles always pass non-null cachedCapabilities after first detection', async () => {
+    const controller = new RenderController()
+    const caps = { hasManifold: true, hasFastCSG: false, hasLazyUnion: false, hasBinarySTL: true, version: '2024.12' }
+    controller.capabilities = caps
+
+    const initCalls = []
+    controller.terminate = vi.fn()
+    controller.init = vi.fn().mockImplementation((opts) => {
+      initCalls.push(opts)
+      return Promise.resolve()
+    })
+    controller.startHealthMonitoring = vi.fn()
+
+    for (let i = 0; i < 5; i++) {
+      await controller.restart()
+    }
+
+    expect(initCalls).toHaveLength(5)
+    for (const call of initCalls) {
+      expect(call.cachedCapabilities).toEqual(caps)
+    }
   })
 })
 

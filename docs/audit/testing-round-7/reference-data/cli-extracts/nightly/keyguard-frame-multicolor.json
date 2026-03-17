@@ -1,0 +1,55 @@
+﻿{
+    "openscad_version":  "2026.01.03",
+    "backend":  "Manifold",
+    "scenario_id":  "keyguard-frame-multicolor",
+    "parameters":  {
+                       "type_of_keyguard":  "3D-Printed",
+                       "generate":  "keyguard frame",
+                       "show_keyguard_with_frame":  "yes",
+                       "have_a_keyguard_frame":  "yes"
+                   },
+    "console":  {
+                    "echo_lines":  [
+
+                                   ],
+                    "warnings":  [
+                                     "WARNING: Viewall and autocenter disabled in favor of $vp*"
+                                 ],
+                    "errors":  [
+
+                               ]
+                },
+    "geometry":  {
+                     "type":  "3D",
+                     "vertices":  6981,
+                     "facets":  14118,
+                     "render_time_s":  0.246
+                 },
+    "face_colors":  [
+                        {
+                            "rgb":  [
+                                        255,
+                                        0,
+                                        0
+                                    ],
+                            "hex":  "#FF0000",
+                            "css_name":  "Red",
+                            "face_count":  9130
+                        },
+                        {
+                            "rgb":  [
+                                        64,
+                                        224,
+                                        208
+                                    ],
+                            "hex":  "#40E0D0",
+                            "css_name":  "Turquoise",
+                            "face_count":  4988
+                        }
+                    ],
+    "exports":  {
+                    "off_bytes":  541848,
+                    "stl_bytes":  3940675,
+                    "png_path":  "cli-extracts/nightly/screenshots/keyguard-frame-multicolor.png"
+                }
+}

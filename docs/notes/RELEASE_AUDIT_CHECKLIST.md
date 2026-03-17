@@ -458,7 +458,7 @@ Last updated: 2026-02-24 (Plan close-out — audit complete)
 | [x] | docs/TROUBLESHOOTING.md | 19 | Clean. Developer troubleshooting for Playwright hang, WASM worker failures, test issues. Accurate. |
 | [x] | docs/design-d1-preset-companion-files.md | 19 | Clean. Design doc clearly marked "Design approved, not yet implemented." |
 | [x] | docs/source-code-foundation-assessment.md | 19 | Clean. Decision doc for WASM integration approach. |
-| [x] | docs/testing-guide-stakeholder-bugs.md | 19 | Clean. Testing guide for stakeholder bug fix verification.
+| [x] | docs/testing-guide-stakeholder-bugs.md | 19 | Clean. Testing guide for stakeholder bug fix verification. |
 
 ---
 
@@ -615,7 +615,7 @@ Last updated: 2026-02-24 (Plan close-out — audit complete)
 - Files edited: 1 (`src/js/tutorial-sandbox.js`)
 - Bloat scan: 0 blocking, 0 warnings (before and after)
 - Tests pass: yes (1370/1370)
-- Summary: Utilities, features, and remaining modules are clean. Removed one dead import alias (`POLITENESS as _POLITENESS`) from `tutorial-sandbox.js` -- imported from announcer.js but never referenced in the file. All other files are clean: zip-handler.js has solid security (path-traversal guard) and heuristic preset companion mapping; error-translator.js implements COGA-aligned user-friendly error messages; _hfm.js is a well-documented ASCII art renderer using 6D shape vectors; _seq.js is a Konami code detector. Notable non-issues: empty catch in shared-image-store.js (intentional subscriber isolation), alert() in comparison-view.js (intentional fallback), handleMouseLeave empty body in image-measurement.js (intentional coordinate preservation), inline CSS in sw-manager.js showUpdateToast (intentional self-contained toast). This session completes Phase 1 (Core Application). Next: PAUSE-4 human review break before Session 9 (CSS).
+- Summary: Utilities, features, and remaining modules are clean. Removed one dead import alias (`POLITENESS as _POLITENESS`) from `tutorial-sandbox.js` -- imported from announcer.js but never referenced in the file. All other files are clean: zip-handler.js has solid security (path-traversal guard) and heuristic preset companion mapping; error-translator.js implements COGA-aligned user-friendly error messages; `_hfm.js` is a well-documented ASCII art renderer using 6D shape vectors; `_seq.js` is a Konami code detector. Notable non-issues: empty catch in shared-image-store.js (intentional subscriber isolation), alert() in comparison-view.js (intentional fallback), handleMouseLeave empty body in image-measurement.js (intentional coordinate preservation), inline CSS in sw-manager.js showUpdateToast (intentional self-contained toast). This session completes Phase 1 (Core Application). Next: PAUSE-4 human review break before Session 9 (CSS).
 
 ### Session 9 -- 2026-02-23
 
@@ -705,12 +705,12 @@ Last updated: 2026-02-24 (Plan close-out — audit complete)
 
 ### Session 15 -- 2026-02-23
 
-- Files reviewed: 29 (manifest.json, sw.js, _headers, _redirects, browserconfig.xml, libraries/README.md, data/tablets.json, icons/README.md, examples/benchmarks x5, cable-organizer, colored-box, honeycomb-grid, keyguard-demo x2, library-test, multi-file-box x3, parametric-cylinder, phone-stand, simple-box, wall-hook)
+- Files reviewed: 29 (manifest.json, sw.js, `_headers`, `_redirects`, browserconfig.xml, libraries/README.md, data/tablets.json, icons/README.md, examples/benchmarks x5, cable-organizer, colored-box, honeycomb-grid, keyguard-demo x2, library-test, multi-file-box x3, parametric-cylinder, phone-stand, simple-box, wall-hook)
 - Files edited: 6 (public/sw.js, public/examples/colored-box/colored_box.scad, public/examples/honeycomb-grid/honeycomb_grid.scad, public/examples/keyguard-demo/keyguard_demo.scad, public/examples/phone-stand/phone_stand.scad, public/icons/README.md)
 - Files skipped [S]: 3 (icons/*.png, icons/*.svg, favicon/)
 - Bloat scan: 0 blocking, 0 warnings (before and after)
 - Tests pass: yes (1383/1383)
-- Summary: Public assets are clean. Key findings: (1) sw.js had 4 narrating comments in cacheFirst/networkFirst -- removed; (2) colored_box.scad had broken color() calls using / 255 on a hex string param (OpenSCAD error) with a wrong "Convert RGB array" comment -- fixed to color(str("#", box_color)); (3) honeycomb_grid.scad had a dead frame() module (defined, never called) -- removed; (4) keyguard_demo.scad had a duplicate header comment -- removed; (5) phone_stand.scad had an empty cable-hole block in base_plate() that generated no geometry (translate with only a comment inside) -- removed; (6) icons/README.md incorrectly stated "The manifest also references screenshots in /screenshots/" but manifest.json has no screenshots field -- fixed. All JSON/config files (manifest.json, _headers, _redirects, browserconfig.xml, data/tablets.json) are clean. Benchmark SCAD files are clean. This session completes Phase 5 (Public Assets). Next: PAUSE-9 human review break before Session 16 (Root-Level Docs).
+- Summary: Public assets are clean. Key findings: (1) sw.js had 4 narrating comments in cacheFirst/networkFirst -- removed; (2) colored_box.scad had broken color() calls using / 255 on a hex string param (OpenSCAD error) with a wrong "Convert RGB array" comment -- fixed to color(str("#", box_color)); (3) honeycomb_grid.scad had a dead frame() module (defined, never called) -- removed; (4) keyguard_demo.scad had a duplicate header comment -- removed; (5) phone_stand.scad had an empty cable-hole block in base_plate() that generated no geometry (translate with only a comment inside) -- removed; (6) icons/README.md incorrectly stated "The manifest also references screenshots in /screenshots/" but manifest.json has no screenshots field -- fixed. All JSON/config files (manifest.json, `_headers`, `_redirects`, browserconfig.xml, data/tablets.json) are clean. Benchmark SCAD files are clean. This session completes Phase 5 (Public Assets). Next: PAUSE-9 human review break before Session 16 (Root-Level Docs).
 
 ### Branch Contamination Re-verification -- 2026-02-24
 
@@ -766,7 +766,7 @@ Last updated: 2026-02-24 (Plan close-out — audit complete)
 
 1. **AI Bloat**: The primary finding was ~200+ narrating comments scattered across source files -- comments that restated what the next line of code already said. These were systematically removed without logic changes.
 
-2. **Dead Code**: 14 dead code items were found and removed: unused variables (panelResults, _modeSnapshots, _originalContent, POLITENESS alias), never-called functions (_renderWithExport), never-read state (_shouldRetryWithoutFlags, _helpError, _lastHeartbeatId, _mountedCount/_failedCount), and dead modules (frame() in honeycomb_grid.scad, themeLink in scaffold.js).
+2. **Dead Code**: 14 dead code items were found and removed: unused variables (panelResults, `_modeSnapshots`, `_originalContent`, POLITENESS alias), never-called functions (`_renderWithExport`), never-read state (`_shouldRetryWithoutFlags`, `_helpError`, `_lastHeartbeatId`, `_mountedCount`/`_failedCount`), and dead modules (frame() in honeycomb_grid.scad, themeLink in scaffold.js).
 
 3. **CSS Token Bugs**: 5 undefined CSS custom property references were found in components.css and layout.css that silently fell back to empty values. All fixed.
 

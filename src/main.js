@@ -13,7 +13,7 @@ import {
   locateParameterKey,
   setParameterValue as _setParameterValue,
 } from './js/ui-generator.js';
-import { stateManager, getShareableURL } from './js/state.js';
+import { stateManager } from './js/state.js';
 import {
   downloadSTL,
   downloadFile,
@@ -39,10 +39,12 @@ import {
   COMPLEXITY_TIER,
 } from './js/quality-tiers.js';
 import { PreviewManager, getThreeModule } from './js/preview.js';
+import { normalizeHexColor } from './js/color-utils.js';
 import {
   AutoPreviewController,
   PREVIEW_STATE,
 } from './js/auto-preview-controller.js';
+import { resolve2DExportIntent, isNonPreviewable } from './js/render-intent.js';
 import {
   extractZipFiles,
   validateZipFile,
@@ -50,6 +52,7 @@ import {
   resolveProjectFile,
   buildPresetCompanionMap,
   applyCompanionAliases,
+  getOverlaySvgTarget,
   buildNestedTree,
   getNodeAtPath,
   countFilesRecursive,
@@ -60,7 +63,11 @@ import {
   formatMissingDependencies,
 } from './js/dependency-checker.js';
 import { getConsolePanel } from './js/console-panel.js';
-import { getErrorLogPanel } from './js/error-log-panel.js';
+import {
+  getErrorLogPanel,
+  initAddStructuredError,
+  ERROR_LOG_TYPE,
+} from './js/error-log-panel.js';
 import { themeManager, initThemeToggle } from './js/theme-manager.js';
 import {
   presetManager,
@@ -123,14 +130,14 @@ import {
   FLAGS as _FLAGS,
 } from './js/feature-flags.js';
 import { initSearchableCombobox } from './js/searchable-combobox.js';
-import {
-  initCSPReporter,
-  logViolationSummary as _logViolationSummary,
-} from './js/csp-reporter.js';
+import { initCSPReporter } from './js/csp-reporter.js';
 import {
   migrateStorageKeys,
   getAppPrefKey,
   getDrawerStateKey,
+  STORAGE_KEY_HFM_CONTRAST_SCALE,
+  STORAGE_KEY_HFM_FONT_SCALE,
+  STORAGE_KEY_HFM_PERSIST_FADE,
 } from './js/storage-keys.js';
 import {
   initImageMeasurement,
@@ -162,12 +169,18 @@ const STORAGE_KEY_OVERLAY_OPACITY = getAppPrefKey('overlay-opacity');
 const STORAGE_KEY_OVERLAY_SOURCE = getAppPrefKey('overlay-source');
 const STORAGE_KEY_OVERLAY_SVG_COLOR = getAppPrefKey('overlay-svg-color');
 const STORAGE_KEY_OVERLAY_AUTO_COLOR = getAppPrefKey('overlay-auto-color');
+const STORAGE_KEY_OVERLAY_WIDTH = getAppPrefKey('overlay-width');
+const STORAGE_KEY_OVERLAY_HEIGHT = getAppPrefKey('overlay-height');
 const STORAGE_KEY_AUTO_ROTATE = getAppPrefKey('auto-rotate');
 const STORAGE_KEY_ROTATE_SPEED = getAppPrefKey('rotate-speed');
 const STORAGE_KEY_MODEL_COLOR = getAppPrefKey('model-color');
+const STORAGE_KEY_MODEL_COLOR_ENABLED = getAppPrefKey('model-color-enabled');
 const STORAGE_KEY_MODEL_OPACITY = getAppPrefKey('model-opacity');
 const STORAGE_KEY_BRIGHTNESS = getAppPrefKey('brightness');
 const STORAGE_KEY_CONTRAST = getAppPrefKey('contrast');
+const STORAGE_KEY_MODEL_APPEARANCE_ENABLED = getAppPrefKey(
+  'model-appearance-enabled'
+);
 const STORAGE_KEY_PARAM_PANEL_COLLAPSED = getDrawerStateKey('parameters');
 const STORAGE_KEY_LAYOUT_SIZES = getAppPrefKey('layout-sizes');
 import {
@@ -238,58 +251,21 @@ import Split from 'split.js';
  * @returns {Object} Parameter object with 2D-compatible overrides applied
  */
 function resolve2DExportParameters(parameters, schema, format) {
-  if (format !== 'svg' && format !== 'dxf') return parameters;
-  const schemaParams = schema?.parameters;
-  if (!schemaParams) return parameters;
+  const resolved = resolve2DExportIntent(parameters, schema, format);
 
-  const resolved = { ...parameters };
-
-  for (const [name, pDef] of Object.entries(schemaParams)) {
-    const enumValues = pDef.enum;
-    if (!Array.isArray(enumValues) || enumValues.length === 0) continue;
-
-    if (name === 'generate') {
-      // Find the enum option whose value contains 2D export keywords
-      const twoDEntry = enumValues.find((entry) => {
-        const v = String(
-          typeof entry === 'object' ? entry.value : entry
-        ).toLowerCase();
-        return (
-          v.includes('svg') || v.includes('dxf') || v.includes('first layer')
-        );
-      });
-      if (twoDEntry !== undefined) {
-        resolved[name] =
-          typeof twoDEntry === 'object' ? twoDEntry.value : twoDEntry;
-      }
-      continue;
-    }
-
-    if (name === 'type_of_keyguard') {
-      const laserEntry = enumValues.find((entry) => {
-        const v = String(
-          typeof entry === 'object' ? entry.value : entry
-        ).toLowerCase();
-        return v.includes('laser');
-      });
-      if (laserEntry !== undefined) {
-        resolved[name] =
-          typeof laserEntry === 'object' ? laserEntry.value : laserEntry;
-      }
-      continue;
-    }
-
-    if (name === 'use_Laser_Cutting_best_practices') {
-      const yesEntry = enumValues.find((entry) => {
-        const v = String(
-          typeof entry === 'object' ? entry.value : entry
-        ).toLowerCase();
-        return v === 'yes';
-      });
-      if (yesEntry !== undefined) {
-        resolved[name] =
-          typeof yesEntry === 'object' ? yesEntry.value : yesEntry;
-      }
+  if (resolved !== parameters) {
+    const adjustments = Object.entries(resolved).filter(
+      ([k, v]) => parameters[k] !== v
+    );
+    if (adjustments.length > 0) {
+      console.debug(
+        '[resolve2D] Auto-adjusted parameters for 2D export:',
+        adjustments
+      );
+    } else {
+      console.debug(
+        '[resolve2D] No parameter adjustments needed for 2D export'
+      );
     }
   }
 
@@ -298,7 +274,7 @@ function resolve2DExportParameters(parameters, schema, format) {
 
 // Example definitions (used by welcome screen, Features Guide, and deep-linking)
 // Direct-launch URLs for external website integration
-// Usage: ?load=keyguard-demo or ?example=simple-box
+// Usage: ?example=simple-box or ?load=colored-box
 const EXAMPLE_DEFINITIONS = {
   'simple-box': {
     path: '/examples/simple-box/simple_box.scad',
@@ -320,22 +296,6 @@ const EXAMPLE_DEFINITIONS = {
     path: '/examples/multi-file-box.zip',
     name: 'multi-file-box.zip',
   },
-  // Keyguard Designer Demo (multi-file example with companion files)
-  // Usage: https://assistive-forge.example.com/?load=keyguard-demo
-  'keyguard-demo': {
-    path: '/examples/keyguard-demo/keyguard_demo.scad',
-    name: 'keyguard_demo.scad',
-    description: 'Keyguard Designer Demo (multi-file)',
-    author: 'Community',
-    // Additional files to load (multi-file design package)
-    additionalFiles: ['/examples/keyguard-demo/openings_and_additions.txt'],
-  },
-  // Short alias for keyguard demo example
-  keyguard: {
-    path: '/examples/keyguard-demo/keyguard_demo.scad',
-    name: 'keyguard_demo.scad',
-    additionalFiles: ['/examples/keyguard-demo/openings_and_additions.txt'],
-  },
   // Additional examples for deep-linking
   'cable-organizer': {
     path: '/examples/cable-organizer/cable_organizer.scad',
@@ -344,14 +304,6 @@ const EXAMPLE_DEFINITIONS = {
   'honeycomb-grid': {
     path: '/examples/honeycomb-grid/honeycomb_grid.scad',
     name: 'honeycomb_grid.scad',
-  },
-  'phone-stand': {
-    path: '/examples/phone-stand/phone_stand.scad',
-    name: 'phone_stand.scad',
-  },
-  'wall-hook': {
-    path: '/examples/wall-hook/wall_hook.scad',
-    name: 'wall_hook.scad',
   },
 };
 
@@ -428,12 +380,15 @@ let _hfmContrastControls = null;
 const _HFM_FONT_SCALE_RANGE = { min: 0.5, max: 2.5, step: 0.05, default: 1 };
 let _hfmFontScale = _HFM_FONT_SCALE_RANGE.default;
 let _hfmFontScaleControls = null;
+const _HFM_PERSIST_FADE_RANGE = { min: 0, max: 1, step: 0.05, default: 0 };
+let _hfmPersistFade = _HFM_PERSIST_FADE_RANGE.default;
 const _HFM_ZOOM_EPSILON = 0.02;
 let _hfmZoomBaseline = null;
 let _hfmZoomListening = false;
 let _hfmZoomHandling = false;
 let _hfmPanAdjustEnabled = false;
 let _hfmPanToggleButtons = null; // { desktop: HTMLButtonElement|null, mobile: HTMLButtonElement|null }
+let _hfmMotionListener = null; // MediaQueryList change listener for prefers-reduced-motion
 
 function _syncHfmPanToggleUi() {
   const btns = [
@@ -444,21 +399,23 @@ function _syncHfmPanToggleUi() {
   // Format values with descriptive labels (Harri's technique terminology)
   // "Edge" = contrast exponent (controls edge sharpness/boundary definition)
   // "Size" = font scale (controls character size/effective resolution)
+  // "Glow" = persist fade (controls phosphor afterglow intensity)
   const edge = _formatHfmContrastValue(_hfmContrastScale);
   const size = _formatHfmFontScaleValue(_hfmFontScale);
+  const glow = _formatHfmPersistFadeValue(_hfmPersistFade);
 
   // Update pan toggle buttons if they exist
   btns.forEach((btn) => {
     btn.setAttribute('aria-pressed', _hfmPanAdjustEnabled ? 'true' : 'false');
     btn.classList.toggle('active', _hfmPanAdjustEnabled);
     btn.title = _hfmPanAdjustEnabled
-      ? `Alt adjust ON (Pan: Edge ${edge}, Size ${size})`
-      : `Alt adjust OFF (Pan controls). Current: Edge ${edge}, Size ${size}`;
+      ? `Alt adjust ON (Pan: Edge ${edge}, Size ${size}, Glow ${glow})`
+      : `Alt adjust OFF (Pan controls). Current: Edge ${edge}, Size ${size}, Glow ${glow}`;
     btn.setAttribute(
       'aria-label',
       _hfmPanAdjustEnabled
-        ? `Alt adjust on. Pan up/down changes edge sharpness (${edge}). Pan left/right changes character size (${size}).`
-        : `Alt adjust off. Pan controls. Current edge sharpness ${edge}, character size ${size}.`
+        ? `Alt adjust on. Pan up/down changes edge sharpness (${edge}). Pan left/right changes character size (${size}). Shift+up/down changes afterglow (${glow}).`
+        : `Alt adjust off. Pan controls. Current edge sharpness ${edge}, character size ${size}, afterglow ${glow}.`
     );
   });
 
@@ -489,20 +446,23 @@ function _updateHfmStatusBar() {
   // Format values
   // Contrast controls edge sharpness via exponent (Harri technique: higher = sharper edges)
   // Font scale controls character size/resolution (higher = larger chars, lower resolution)
+  // Persist fade controls phosphor afterglow intensity
   const edge = _formatHfmContrastValue(_hfmContrastScale);
   const size = _formatHfmFontScaleValue(_hfmFontScale);
+  const glow = _formatHfmPersistFadeValue(_hfmPersistFade);
 
   // Build the display string with descriptive labels aligned with Harri's ASCII research:
   // - Edge Sharpness (contrast exponent): controls boundary definition
   // - Char Size (font scale): controls effective ASCII resolution
+  // - Glow (persist fade): controls phosphor afterglow intensity
   // Include device calibration info when available
   let displayText;
   const deviceInfo = _hfmCalibratedDevice ? ` [${_hfmCalibratedDevice}]` : '';
 
   if (_hfmPanAdjustEnabled) {
-    displayText = `[ALT ADJUST]${deviceInfo} Edge: ${edge} (Up/Down) | Size: ${size} (Left/Right)`;
+    displayText = `[ALT ADJUST]${deviceInfo} Edge: ${edge} (Up/Down) | Size: ${size} (Left/Right) | Glow: ${glow} (Shift+Up/Down)`;
   } else {
-    displayText = `[ALT VIEW]${deviceInfo} Edge: ${edge} | Size: ${size}`;
+    displayText = `[ALT VIEW]${deviceInfo} Edge: ${edge} | Size: ${size} | Glow: ${glow}`;
   }
 
   altAdjustEl.textContent = displayText;
@@ -678,6 +638,33 @@ function _calibrateHfmSettings() {
 let _hfmCalibrated = false;
 let _hfmCalibratedDevice = ''; // Store detected device category for status display
 
+/**
+ * Clear saved HFM settings from localStorage and re-run auto-calibration so
+ * the user gets sensible defaults again.  Triggered by double-clicking the
+ * pan-adjust toggle button.
+ */
+function _resetHfmSettings() {
+  try {
+    localStorage.removeItem(STORAGE_KEY_HFM_CONTRAST_SCALE);
+    localStorage.removeItem(STORAGE_KEY_HFM_FONT_SCALE);
+    localStorage.removeItem(STORAGE_KEY_HFM_PERSIST_FADE);
+  } catch (_) {
+    // Storage unavailable — proceed anyway
+  }
+  _hfmCalibrated = false;
+  const calibrated = _calibrateHfmSettings();
+  _applyHfmContrastScale(calibrated.edgeScale);
+  _applyHfmFontScale(calibrated.sizeScale);
+  _hfmPersistFade = _HFM_PERSIST_FADE_RANGE.default;
+  _applyHfmPersistFade(_hfmPersistFade);
+  _hfmCalibratedDevice = calibrated.deviceCategory;
+  _hfmCalibrated = true;
+  console.log(
+    '[Alt View] Settings reset to auto-calibrated defaults:',
+    calibrated
+  );
+}
+
 function _formatHfmContrastValue(scale) {
   return `${Math.round(scale * 100)}%`;
 }
@@ -766,6 +753,19 @@ function _applyHfmContrastScale(scale, options = {}) {
   if (setBaseline && !_hfmZoomHandling) {
     _setHfmZoomBaseline();
   }
+
+  try {
+    localStorage.setItem(STORAGE_KEY_HFM_CONTRAST_SCALE, String(clamped));
+  } catch (error) {
+    if (error.name === 'QuotaExceededError') {
+      console.warn(
+        '[Alt View] localStorage quota exceeded — contrast scale not saved'
+      );
+    } else {
+      console.warn('[Alt View] Could not save contrast scale:', error);
+    }
+  }
+
   return clamped;
 }
 
@@ -788,6 +788,53 @@ function _applyHfmFontScale(scale, options = {}) {
   if (setBaseline && !_hfmZoomHandling) {
     _setHfmZoomBaseline();
   }
+
+  try {
+    localStorage.setItem(STORAGE_KEY_HFM_FONT_SCALE, String(clamped));
+  } catch (error) {
+    if (error.name === 'QuotaExceededError') {
+      console.warn(
+        '[Alt View] localStorage quota exceeded — font scale not saved'
+      );
+    } else {
+      console.warn('[Alt View] Could not save font scale:', error);
+    }
+  }
+
+  return clamped;
+}
+
+function _formatHfmPersistFadeValue(value) {
+  return `${Math.round(value * 100)}%`;
+}
+
+function _applyHfmPersistFade(value) {
+  const raw = Number(value);
+  const next = Number.isFinite(raw) ? raw : _HFM_PERSIST_FADE_RANGE.default;
+  const clamped = Math.max(
+    _HFM_PERSIST_FADE_RANGE.min,
+    Math.min(_HFM_PERSIST_FADE_RANGE.max, next)
+  );
+  _hfmPersistFade = clamped;
+
+  if (_hfmAltView?.setPersistFade) {
+    _hfmAltView.setPersistFade(clamped);
+  }
+
+  _syncHfmPanToggleUi();
+
+  try {
+    localStorage.setItem(STORAGE_KEY_HFM_PERSIST_FADE, String(clamped));
+  } catch (error) {
+    if (error.name === 'QuotaExceededError') {
+      console.warn(
+        '[Alt View] localStorage quota exceeded — persist fade not saved'
+      );
+    } else {
+      console.warn('[Alt View] Could not save persist fade:', error);
+    }
+  }
+
   return clamped;
 }
 
@@ -1488,8 +1535,16 @@ function _injectAltToggle() {
     if (!_hfmAltView || !_hfmEnabled) return;
     _setHfmPanAdjustEnabled(!_hfmPanAdjustEnabled);
   };
+  const handlePanToggleDblClick = (e) => {
+    // Double-click resets saved HFM settings to auto-calibrated defaults
+    if (!_hfmAltView || !_hfmEnabled) return;
+    e.preventDefault();
+    _resetHfmSettings();
+  };
   panToggleBtn.addEventListener('click', handlePanToggleClick);
+  panToggleBtn.addEventListener('dblclick', handlePanToggleDblClick);
   mobilePanToggleBtn.addEventListener('click', handlePanToggleClick);
+  mobilePanToggleBtn.addEventListener('dblclick', handlePanToggleDblClick);
 
   // Wire toggle click handler
   toggleBtn.addEventListener('click', async () => {
@@ -1577,19 +1632,85 @@ async function _enableAltViewWithPreview(toggleBtn) {
   _hfmAltView = await _hfmInitPromise;
   _hfmAltView.enable();
 
-  // Auto-calibrate on first launch based on user's viewing environment
-  // This provides optimal initial Edge (contrast) and Size (font) settings
-  // based on viewport size, DPI, device type, etc.
+  // Live prefers-reduced-motion listener — updates afterglow without disable/re-enable
+  const motionMql = window.matchMedia('(prefers-reduced-motion: reduce)');
+  _hfmMotionListener = (event) => {
+    _hfmAltView?.setReducedMotion(event.matches);
+    if (event.matches) {
+      _hfmPersistFade = 0;
+      _updateHfmStatusBar();
+    } else {
+      let savedFade = null;
+      try {
+        savedFade = localStorage.getItem(STORAGE_KEY_HFM_PERSIST_FADE);
+      } catch (_) {
+        /* storage unavailable */
+      }
+      const parsed = savedFade !== null ? parseFloat(savedFade) : NaN;
+      const valid =
+        Number.isFinite(parsed) &&
+        parsed >= _HFM_PERSIST_FADE_RANGE.min &&
+        parsed <= _HFM_PERSIST_FADE_RANGE.max;
+      _applyHfmPersistFade(valid ? parsed : _HFM_PERSIST_FADE_RANGE.default);
+    }
+  };
+  motionMql.addEventListener('change', _hfmMotionListener);
+
+  // Restore user's saved settings, falling back to auto-calibration for missing values
   if (!_hfmCalibrated) {
-    const calibrated = _calibrateHfmSettings();
-    _hfmContrastScale = calibrated.edgeScale;
-    _hfmFontScale = calibrated.sizeScale;
-    _hfmCalibratedDevice = calibrated.deviceCategory;
-    _hfmCalibrated = true;
+    let savedContrast = null;
+    let savedFont = null;
+    let savedPersistFade = null;
+    try {
+      savedContrast = localStorage.getItem(STORAGE_KEY_HFM_CONTRAST_SCALE);
+      savedFont = localStorage.getItem(STORAGE_KEY_HFM_FONT_SCALE);
+      savedPersistFade = localStorage.getItem(STORAGE_KEY_HFM_PERSIST_FADE);
+    } catch (_) {
+      // Private browsing or storage unavailable — use calibration
+    }
+
+    const parsedContrast =
+      savedContrast !== null ? parseFloat(savedContrast) : NaN;
+    const parsedFont = savedFont !== null ? parseFloat(savedFont) : NaN;
+    const parsedPersistFade =
+      savedPersistFade !== null ? parseFloat(savedPersistFade) : NaN;
+
+    const contrastValid =
+      Number.isFinite(parsedContrast) &&
+      parsedContrast >= _HFM_CONTRAST_RANGE.min &&
+      parsedContrast <= _HFM_CONTRAST_RANGE.max;
+    const fontValid =
+      Number.isFinite(parsedFont) &&
+      parsedFont >= _HFM_FONT_SCALE_RANGE.min &&
+      parsedFont <= _HFM_FONT_SCALE_RANGE.max;
+    const persistFadeValid =
+      Number.isFinite(parsedPersistFade) &&
+      parsedPersistFade >= _HFM_PERSIST_FADE_RANGE.min &&
+      parsedPersistFade <= _HFM_PERSIST_FADE_RANGE.max;
+
+    if (contrastValid && fontValid) {
+      // Full saved state: skip auto-calibration entirely
+      _hfmContrastScale = parsedContrast;
+      _hfmFontScale = parsedFont;
+      _hfmCalibratedDevice = '';
+      _hfmCalibrated = true;
+    } else {
+      // Auto-calibrate, then overlay any valid saved value
+      const calibrated = _calibrateHfmSettings();
+      _hfmContrastScale = contrastValid ? parsedContrast : calibrated.edgeScale;
+      _hfmFontScale = fontValid ? parsedFont : calibrated.sizeScale;
+      _hfmCalibratedDevice = calibrated.deviceCategory;
+      _hfmCalibrated = true;
+    }
+
+    _hfmPersistFade = persistFadeValid
+      ? parsedPersistFade
+      : _HFM_PERSIST_FADE_RANGE.default;
   }
 
   _applyHfmContrastScale(_hfmContrastScale);
   _applyHfmFontScale(_hfmFontScale);
+  _applyHfmPersistFade(_hfmPersistFade);
   _setHfmZoomBaseline();
   _enableHfmZoomTracking();
   _initHfmContrastControls().setEnabled(true);
@@ -1602,10 +1723,12 @@ async function _enableAltViewWithPreview(toggleBtn) {
   }
 
   // Set up post-load hook to re-enable rotation centering when models are reloaded
+  // and refresh display overlays (edges, wireframe) so they match the new geometry.
   previewManager?.setPostLoadHook?.(() => {
     if (previewManager?.mesh && previewManager.enableRotationCentering) {
       previewManager.enableRotationCentering();
     }
+    getDisplayOptionsController().refreshOverlays();
   });
 
   previewManager.setRenderOverride(() => _hfmAltView.render());
@@ -1618,7 +1741,10 @@ async function _enableAltViewWithPreview(toggleBtn) {
 
   // Update preview colors to match the variant theme
   const newTheme = previewManager.detectTheme();
-  previewManager.updateTheme(newTheme, false);
+  previewManager.updateTheme(
+    newTheme,
+    root.getAttribute('data-high-contrast') === 'true'
+  );
 
   // Trigger resize to sync dimensions
   previewManager.handleResize?.();
@@ -1636,6 +1762,13 @@ async function _enableAltViewWithPreview(toggleBtn) {
 
 function _disableAltViewWithPreview(toggleBtn) {
   const root = document.documentElement;
+
+  // Remove prefers-reduced-motion listener
+  if (_hfmMotionListener) {
+    const motionMql = window.matchMedia('(prefers-reduced-motion: reduce)');
+    motionMql.removeEventListener('change', _hfmMotionListener);
+    _hfmMotionListener = null;
+  }
 
   // Disabling
   if (_hfmAltView) {
@@ -1690,8 +1823,20 @@ function _disableAltViewWithPreview(toggleBtn) {
  */
 function _exportFormatFromMenu(format) {
   const state = stateManager.getState();
-  if (!state.stl) {
+  const outputData = state.generatedOutput?.data || state.stl;
+  if (!outputData) {
     alert('No rendered model to export. Run Render first.');
+    return;
+  }
+  const stateFormat = (
+    state.generatedOutput?.format ||
+    state.outputFormat ||
+    'stl'
+  ).toLowerCase();
+  if (stateFormat !== format) {
+    alert(
+      `The current render is ${stateFormat.toUpperCase()}. To export as ${format.toUpperCase()}, change the output format and click Generate first.`
+    );
     return;
   }
   const filename = generateFilename(
@@ -1699,7 +1844,7 @@ function _exportFormatFromMenu(format) {
     state.parameters || {},
     format
   );
-  downloadFile(state.stl, filename, format);
+  downloadFile(outputData, filename, format);
 }
 
 /**
@@ -1922,6 +2067,9 @@ async function initApp() {
     onEmergency: (usage) => {
       console.log(`[Memory] Emergency state: ${usage.heapMB}MB`);
       updateMemoryUI('emergency', usage);
+      _announceError(
+        `Memory emergency: usage at ${usage.heapMB} megabytes. Auto-preview has been disabled.`
+      );
       // Disable auto-preview at emergency level
       if (typeof autoPreviewUserEnabled !== 'undefined') {
         autoPreviewUserEnabled = false;
@@ -2013,12 +2161,29 @@ async function initApp() {
       window.location.href = window.location.pathname + '?recovery=true';
     });
 
+  // Listen for storage-quota-exceeded events dispatched by preset-manager
+  // when localStorage is full, so the user gets visible + audible feedback.
+  window.addEventListener('storage-quota-exceeded', (e) => {
+    const msg =
+      e.detail?.message || 'Storage is full. Data could not be saved.';
+    updateStatus(msg, 'error');
+    _announceError(msg);
+  });
+
   let statusArea = null;
   let cameraPanelController = null; // Declared here, initialized later
   let autoPreviewEnabled = true;
   // Runtime mapping from preset name to companion file paths (built on ZIP load).
   // Stores path references only — content is resolved lazily on preset activation.
   let presetCompanionMap = null;
+  // Canonical project files snapshot used as the clean base when applying presets.
+  // This prevents alias-mounted companion files from one preset bleeding into the next.
+  let canonicalProjectFiles = null;
+  // Preset tracking state — must be declared before handleFile (which calls
+  // forceClearPresetSelection) to avoid a TDZ error during draft restoration.
+  let isLoadingPreset = false;
+  let currentPresetSignature = null;
+  let isPresetDirty = false;
   let autoPreviewUserEnabled = true;
   let previewQuality = RENDER_QUALITY.PREVIEW;
 
@@ -2038,6 +2203,14 @@ async function initApp() {
     FILE_SIZE_LIMITS = validationModule.FILE_SIZE_LIMITS;
   } catch (e) {
     console.error('Failed to import validation constants:', e);
+  }
+
+  function cloneProjectFiles(files) {
+    return files ? new Map(files) : null;
+  }
+
+  function setCanonicalProjectFiles(files) {
+    canonicalProjectFiles = cloneProjectFiles(files);
   }
   let previewQualityMode = 'auto';
 
@@ -2229,7 +2402,7 @@ async function initApp() {
           });
 
           document.body.appendChild(modal);
-          modal.querySelector('button[data-action="force"]').focus();
+          modal.querySelector('button[data-action="force"]')?.focus();
         });
       }
 
@@ -3197,6 +3370,7 @@ async function initApp() {
           .map((p) => p.name);
         autoPreviewController.setColorParamNames(colorParamNames);
         autoPreviewController.setParamTypes(postInitState.paramTypes || {});
+        autoPreviewController.setSchema(postInitState.schema || null);
         autoPreviewController.setScadContent(
           postInitState.uploadedFile.content
         );
@@ -3298,6 +3472,139 @@ async function initApp() {
     }
   }
 
+  /**
+   * One-click 2D export (SVG / DXF).
+   *
+   * Mirrors desktop OpenSCAD's File > Export > Export as SVG/DXF:
+   * switches the output format, auto-adjusts parameters for 2D geometry,
+   * runs the full render, and downloads the result.
+   *
+   * @param {string} format - 'svg' or 'dxf'
+   */
+  async function _export2DOneClick(format) {
+    const state = stateManager.getState();
+    if (!state.uploadedFile) {
+      alert('Open a SCAD file first.');
+      return;
+    }
+    if (!renderController) {
+      alert('OpenSCAD engine not initialized.');
+      return;
+    }
+
+    const formatName = OUTPUT_FORMATS[format]?.name || format.toUpperCase();
+
+    const outputFormatSelect = document.getElementById('outputFormat');
+    if (outputFormatSelect) {
+      outputFormatSelect.value = format;
+      outputFormatSelect.dispatchEvent(new Event('change'));
+    }
+
+    getToolbarMenuController().closeAll();
+
+    const renderParameters = resolve2DExportParameters(
+      state.parameters,
+      state.schema,
+      format
+    );
+
+    updateStatus(`Generating ${formatName}\u2026`);
+
+    if (autoPreviewController) {
+      autoPreviewController.cancelPending();
+    }
+
+    try {
+      const libsForRender = getEnabledLibrariesForRender();
+      const startTime = Date.now();
+
+      const oneClickOpts = {
+        outputFormat: format,
+        paramTypes: state.paramTypes || {},
+        files: state.projectFiles,
+        mainFile: state.mainFilePath,
+        libraries: libsForRender,
+        onProgress: () => updateStatus(`Generating ${formatName}\u2026`),
+      };
+      let result;
+      try {
+        result = await renderController.renderFull(
+          state.uploadedFile.content,
+          renderParameters,
+          oneClickOpts
+        );
+      } catch (renderErr) {
+        if (renderErr.code === 'MODEL_NOT_2D') {
+          updateStatus(
+            `Model produces 3D geometry — projecting to ${formatName}...`
+          );
+          result = await renderController.render2DFallback(
+            state.uploadedFile.content,
+            renderParameters,
+            oneClickOpts
+          );
+        } else {
+          throw renderErr;
+        }
+      }
+
+      const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+      const data = result.data || result.stl;
+      const resolvedFormat = result.format || format;
+
+      stateManager.setState({
+        generatedOutput: {
+          data,
+          format: resolvedFormat,
+          stats: result.stats,
+          paramsHash: hashParams(state.parameters),
+        },
+        stl: data,
+        outputFormat: resolvedFormat,
+        stlStats: result.stats,
+        lastRenderTime: duration,
+      });
+
+      // Show rendered 2D preview for SVG output
+      if (resolvedFormat === 'svg' && previewManager) {
+        try {
+          let svgText =
+            typeof data === 'string' ? data : new TextDecoder().decode(data);
+
+          const renderStyle =
+            '<style data-forge-preview="true">' +
+            'path,polygon,polyline,circle,ellipse,rect{fill:#07D0A7;stroke:#FF0603;stroke-width:0.5;fill-opacity:1}' +
+            'line{stroke:#FF0603;stroke-width:0.5}' +
+            '</style>';
+          svgText = svgText.replace(/(<svg[^>]*>)/i, '$1' + renderStyle);
+
+          if (typeof previewManager.show2DPreviewAs3DPlane === 'function') {
+            await previewManager.show2DPreviewAs3DPlane(svgText, {
+              mode: 'rendered',
+            });
+          } else {
+            previewManager.show2DPreview(svgText, { mode: 'rendered' });
+          }
+        } catch (previewErr) {
+          console.warn('[Export2D] Failed to show 2D preview:', previewErr);
+        }
+      }
+
+      const filename = generateFilename(
+        state.uploadedFile.name,
+        state.parameters,
+        format
+      );
+      downloadFile(data, filename, format);
+      updateStatus(`${formatName} exported (${duration}s): ${filename}`);
+      announceImmediate(`${formatName} file exported and downloaded.`);
+    } catch (error) {
+      console.error(`[Export2D] ${formatName} export failed:`, error);
+      updateStatus(`${formatName} export failed: ${error.message || error}`);
+      announceImmediate(`${formatName} export failed.`);
+    }
+  }
+
   // Initialize file actions controller (New, Reload, Save, Save As, Export Image, Recent)
   const fileActionsController = getFileActionsController({
     onNew: () => {
@@ -3342,6 +3649,7 @@ async function initApp() {
       link.click();
       document.body.removeChild(link);
     },
+    onExport2D: (format) => _export2DOneClick(format),
   });
   fileActionsController.init();
 
@@ -3351,10 +3659,20 @@ async function initApp() {
     const hasFile = Boolean(state.uploadedFile);
     const hasRender = Boolean(state.stl);
     // Full render = Generate button has been pressed and output matches current params
-    const hasFullRender = Boolean(
-      autoPreviewController?.getCurrentFullSTL(state.parameters) &&
-      !autoPreviewController?.needsFullRender(state.parameters)
-    );
+    const stateOutputFormat = (state.outputFormat || '').toLowerCase();
+    const selectedFormat = (
+      document.getElementById('outputFormat')?.value || 'stl'
+    ).toLowerCase();
+    const hasNonSTLRender =
+      hasRender &&
+      stateOutputFormat === selectedFormat &&
+      stateOutputFormat !== 'stl';
+    const hasFullRender =
+      hasNonSTLRender ||
+      Boolean(
+        autoPreviewController?.getCurrentFullSTL(state.parameters) &&
+        !autoPreviewController?.needsFullRender(state.parameters)
+      );
 
     // Recent Files submenu items (filenames only; actual re-open via onOpenRecent callback)
     const recentItems =
@@ -3366,13 +3684,34 @@ async function initApp() {
           }))
         : [{ type: 'action', label: 'No recent files', disabled: true }];
 
-    // Export submenu: info notice (when not fully rendered) + geometry/2D formats + Export as Image
+    // Export submenu: one-click 2D exports + re-download of current render + Export as Image
     const exportItems = [
+      // One-click 2D exports (auto-adjust params, render, download)
+      {
+        type: 'action',
+        label: 'Export as SVG\u2026',
+        enabled: hasFile,
+        tooltip: hasFile
+          ? 'One-click: auto-adjusts parameters, generates 2D geometry, and downloads SVG'
+          : 'Open a file first',
+        handler: () => fileActionsController.onExport2D('svg'),
+      },
+      {
+        type: 'action',
+        label: 'Export as DXF\u2026',
+        enabled: hasFile,
+        tooltip: hasFile
+          ? 'One-click: auto-adjusts parameters, generates 2D geometry, and downloads DXF'
+          : 'Open a file first',
+        handler: () => fileActionsController.onExport2D('dxf'),
+      },
+      { type: 'separator' },
+      // Re-download current render in its original format
       ...(!hasFullRender
         ? [
             {
               type: 'action',
-              label: 'ⓘ  Press Generate to enable file exports',
+              label: '\u24D8  Press Generate to enable file exports',
               disabled: true,
               tooltip:
                 'Use the Generate button to fully render the model, then file export options will become available.',
@@ -3418,15 +3757,19 @@ async function initApp() {
         type: 'action',
         label: 'Recent File',
         disabled: true,
-        tooltip: 'Coming soon',
+        tooltip:
+          'Previously opened files appear in the Recent Files submenu below',
       },
       { type: 'submenu', label: 'Recent Files', items: recentItems },
       { type: 'separator' },
       {
         type: 'submenu',
         label: 'Examples',
-        disabled: true,
-        tooltip: 'Coming soon',
+        items: Object.entries(EXAMPLE_DEFINITIONS).map(([key, def]) => ({
+          type: 'action',
+          label: def.description || def.name,
+          handler: () => loadExampleByKey(key),
+        })),
       },
       {
         type: 'action',
@@ -3437,18 +3780,6 @@ async function initApp() {
         handler: () => fileActionsController.onReload(),
       },
       { type: 'separator' },
-      {
-        type: 'action',
-        label: 'New Window',
-        disabled: true,
-        tooltip: 'Coming soon — single-window web app',
-      },
-      {
-        type: 'action',
-        label: 'Open in New Window',
-        disabled: true,
-        tooltip: 'Coming soon — single-window web app',
-      },
       {
         type: 'action',
         label: 'Close',
@@ -3487,14 +3818,8 @@ async function initApp() {
         type: 'action',
         label: 'Show Library Folder',
         disabled: true,
-        tooltip: 'Coming soon',
-      },
-      { type: 'separator' },
-      {
-        type: 'action',
-        label: 'Quit',
-        disabled: true,
-        tooltip: 'Coming soon — use browser tab close',
+        tooltip:
+          'Libraries are managed in-browser \u2014 use the Libraries panel (Window menu) to add or remove libraries',
       },
     ];
   });
@@ -3530,7 +3855,26 @@ async function initApp() {
     const canUndo = stateManager.canUndo();
     const canRedo = stateManager.canRedo();
 
-    const editorOnly = { disabled: true, tooltip: 'Requires Code Editor' };
+    const modeManager = getModeManager();
+    const editor = modeManager?.getEditorInstance?.();
+    const expertMode = modeManager?.isExpertMode?.();
+    const canEdit = expertMode && editor;
+    const editorTip = 'Available in Expert Mode with Code Editor';
+
+    function editorAction(label, monacoActionId) {
+      return {
+        type: 'action',
+        label,
+        disabled: !canEdit,
+        tooltip: canEdit ? undefined : editorTip,
+        handler: canEdit
+          ? () => {
+              const action = editor.getAction(monacoActionId);
+              if (action) action.run();
+            }
+          : undefined,
+      };
+    }
 
     return [
       {
@@ -3548,21 +3892,36 @@ async function initApp() {
         handler: () => performRedo(),
       },
       { type: 'separator' },
-      { type: 'action', label: 'Cut', ...editorOnly },
-      { type: 'action', label: 'Copy', ...editorOnly },
-      { type: 'action', label: 'Paste', ...editorOnly },
+      {
+        type: 'action',
+        label: 'Cut',
+        disabled: !canEdit,
+        tooltip: canEdit ? undefined : editorTip,
+        handler: canEdit ? () => document.execCommand('cut') : undefined,
+      },
+      {
+        type: 'action',
+        label: 'Copy',
+        disabled: !canEdit,
+        tooltip: canEdit ? undefined : editorTip,
+        handler: canEdit ? () => document.execCommand('copy') : undefined,
+      },
+      {
+        type: 'action',
+        label: 'Paste',
+        disabled: !canEdit,
+        tooltip: canEdit ? undefined : editorTip,
+        handler: canEdit ? () => document.execCommand('paste') : undefined,
+      },
       { type: 'separator' },
-      { type: 'action', label: 'Indent', ...editorOnly },
-      { type: 'action', label: 'Unindent', ...editorOnly },
-      { type: 'action', label: 'Comment', ...editorOnly },
-      { type: 'action', label: 'Uncomment', ...editorOnly },
-      { type: 'action', label: 'Convert Tabs to Spaces', ...editorOnly },
-      { type: 'action', label: 'Toggle Bookmark', ...editorOnly },
-      { type: 'action', label: 'Jump to next bookmark', ...editorOnly },
-      { type: 'action', label: 'Jump to previous bookmark', ...editorOnly },
-      { type: 'separator' },
-      { type: 'action', label: 'Show Next Tab', ...editorOnly },
-      { type: 'action', label: 'Show Previous Tab', ...editorOnly },
+      editorAction('Indent', 'editor.action.indentLines'),
+      editorAction('Unindent', 'editor.action.outdentLines'),
+      editorAction('Comment', 'editor.action.commentLine'),
+      editorAction('Uncomment', 'editor.action.removeCommentLine'),
+      editorAction(
+        'Convert Tabs to Spaces',
+        'editor.action.indentationToSpaces'
+      ),
       { type: 'separator' },
       {
         type: 'action',
@@ -3601,11 +3960,19 @@ async function initApp() {
         handler: () => editActionsController.copyFov(),
       },
       { type: 'separator' },
-      { type: 'action', label: 'Find\u2026', ...editorOnly },
-      { type: 'action', label: 'Find and Replace\u2026', ...editorOnly },
-      { type: 'action', label: 'Find Next', ...editorOnly },
-      { type: 'action', label: 'Find Previous', ...editorOnly },
-      { type: 'action', label: 'Use Selection for Find', ...editorOnly },
+      editorAction('Find\u2026', 'actions.find'),
+      editorAction(
+        'Find and Replace\u2026',
+        'editor.action.startFindReplaceAction'
+      ),
+      editorAction('Find Next', 'editor.action.nextMatchFindAction'),
+      editorAction('Find Previous', 'editor.action.previousMatchFindAction'),
+      {
+        type: 'action',
+        label: 'Use Selection for Find',
+        disabled: !canEdit,
+        tooltip: canEdit ? undefined : editorTip,
+      },
       { type: 'separator' },
       {
         type: 'action',
@@ -3662,26 +4029,28 @@ async function initApp() {
   getToolbarMenuController().registerMenuBuilder('design', () => {
     const state = stateManager.getState();
     const hasFile = Boolean(state.uploadedFile);
-    const hasRender = Boolean(state.stl);
-    const apToggle = document.getElementById('autoPreviewToggle');
-
     return [
       {
         type: 'toggle',
         label: 'Automatic Reload and Preview',
-        checked: apToggle?.checked ?? false,
-        handler: () => {
-          if (apToggle) {
-            apToggle.checked = !apToggle.checked;
-            apToggle.dispatchEvent(new Event('change'));
-          }
-        },
+        disabled: true,
+        tooltip: 'Planned for future release',
       },
       {
         type: 'action',
         label: 'Reload and Preview',
-        disabled: true,
-        tooltip: 'Coming soon',
+        enabled: hasFile,
+        tooltip: hasFile ? undefined : 'Open a file first',
+        handler: () => {
+          fileActionsController.onReload();
+          setTimeout(() => {
+            if (autoPreviewController) {
+              autoPreviewController.onParameterChange(
+                stateManager.getState().parameters
+              );
+            }
+          }, 200);
+        },
       },
       {
         type: 'action',
@@ -3722,16 +4091,15 @@ async function initApp() {
         type: 'action',
         label: '3D Print',
         disabled: true,
-        tooltip: 'Coming soon',
+        tooltip:
+          'Not available in browser \u2014 export the model as STL and open it in your slicer application (e.g. PrusaSlicer, Cura)',
       },
       { type: 'separator' },
       {
         type: 'action',
         label: 'Check Validity',
-        shortcutAction: 'checkValidity',
-        enabled: hasRender,
-        tooltip: hasRender ? undefined : 'Render a model first',
-        handler: () => designPanelController.checkValidity(),
+        disabled: true,
+        tooltip: 'Planned for future release',
       },
       {
         type: 'action',
@@ -3743,22 +4111,9 @@ async function initApp() {
       },
       {
         type: 'action',
-        label: 'Display CSG Tree\u2026',
-        disabled: true,
-        tooltip: 'Coming soon \u2014 requires custom WASM build',
-      },
-      {
-        type: 'action',
-        label: 'Display CSG Products\u2026',
-        disabled: true,
-        tooltip: 'Coming soon \u2014 requires custom WASM build',
-      },
-      {
-        type: 'action',
         label: 'Geometry Info',
-        enabled: hasRender,
-        tooltip: hasRender ? undefined : 'Render a model first',
-        handler: () => designPanelController.updateGeometryInfo(),
+        disabled: true,
+        tooltip: 'Planned for future release',
       },
       { type: 'separator' },
       {
@@ -3793,36 +4148,6 @@ async function initApp() {
     }
 
     return [
-      // -- Display Mode Radio Group (all disabled — requires custom WASM) --
-      {
-        type: 'radio',
-        label: 'Preview',
-        group: 'displayMode',
-        disabled: true,
-        tooltip: 'Coming soon',
-      },
-      {
-        type: 'radio',
-        label: 'Surfaces',
-        group: 'displayMode',
-        disabled: true,
-        tooltip: 'Coming soon',
-      },
-      {
-        type: 'radio',
-        label: 'Wireframe',
-        group: 'displayMode',
-        disabled: true,
-        tooltip: 'Coming soon',
-      },
-      {
-        type: 'radio',
-        label: 'Thrown Together',
-        group: 'displayMode',
-        disabled: true,
-        tooltip: 'Coming soon',
-      },
-      { type: 'separator' },
       // -- Display Toggles --
       {
         type: 'toggle',
@@ -3837,12 +4162,6 @@ async function initApp() {
         shortcutAction: 'toggleAxes',
         checked: displayOptionsController.get('axes'),
         handler: () => displayOptionsController.toggle('axes'),
-      },
-      {
-        type: 'toggle',
-        label: 'Show Scale Markers',
-        disabled: true,
-        tooltip: 'Coming soon',
       },
       {
         type: 'toggle',
@@ -3897,8 +4216,15 @@ async function initApp() {
       {
         type: 'action',
         label: 'Center',
-        disabled: true,
-        tooltip: 'Coming soon',
+        shortcutAction: 'viewCenter',
+        enabled: hasRender,
+        tooltip: hasRender ? undefined : 'Render a model first',
+        handler: () => {
+          if (previewManager) {
+            previewManager.resetCamera();
+            announceCameraAction('View centered');
+          }
+        },
       },
       {
         type: 'action',
@@ -3980,13 +4306,15 @@ async function initApp() {
         type: 'toggle',
         label: 'Hide Editor toolbar',
         disabled: true,
-        tooltip: 'Coming soon',
+        tooltip:
+          'Not yet implemented \u2014 panels can be shown or hidden via the Window menu',
       },
       {
         type: 'toggle',
         label: 'Hide 3D View toolbar',
         disabled: true,
-        tooltip: 'Coming soon',
+        tooltip:
+          'Not yet implemented \u2014 panels can be shown or hidden via the Window menu',
       },
     ];
   });
@@ -4017,55 +4345,24 @@ async function initApp() {
       };
     }
 
-    const sidebarOpen = !document
-      .querySelector('.sidebar')
-      ?.classList.contains('collapsed');
-
     return [
-      {
-        type: 'action',
-        label: 'Next Window',
-        disabled: true,
-        tooltip: 'Coming soon \u2014 single-window web app',
-      },
-      {
-        type: 'action',
-        label: 'Previous Window',
-        disabled: true,
-        tooltip: 'Coming soon \u2014 single-window web app',
-      },
-      { type: 'separator' },
-      {
-        type: 'submenu',
-        label: 'Jump To\u2026',
-        disabled: true,
-        tooltip: 'Coming soon',
-      },
-      { type: 'separator' },
       // -- Desktop-parity panel toggles --
       panelToggle('codeEditor', 'Editor', 'toggleCodeEditor'),
       panelToggle('consoleOutput', 'Console', 'toggleConsole'),
       {
         type: 'toggle',
         label: 'Customizer',
-        checked: sidebarOpen,
-        shortcutAction: 'toggleCustomizer',
-        handler: () => {
-          const sidebar = document.querySelector('.sidebar');
-          if (sidebar) {
-            sidebar.classList.toggle('collapsed');
-            const nowOpen = !sidebar.classList.contains('collapsed');
-            _announce(nowOpen ? 'Customizer shown' : 'Customizer hidden');
-          }
-        },
+        disabled: true,
+        tooltip:
+          'Planned for future release \u2014 use the collapse button on the parameters panel instead',
       },
-      panelToggle('errorLog', 'Error-Log', 'toggleErrorLog'),
       { type: 'separator' },
       {
         type: 'action',
         label: 'Font List',
         disabled: true,
-        tooltip: 'Coming soon',
+        tooltip:
+          'Not available in browser \u2014 see openscad.org/documentation.html for font information',
       },
       {
         type: 'action',
@@ -4086,9 +4383,6 @@ async function initApp() {
       panelToggle('companionFileManagement', 'Companion Files'),
       panelToggle('imageMeasurement', 'Image Measurement'),
       panelToggle('referenceOverlay', 'Reference Image'),
-      panelToggle('gridSettings', 'Grid Settings'),
-      panelToggle('renderSettings', 'Render Settings'),
-      panelToggle('presetImportExport', 'Preset Import/Export'),
     ];
   });
 
@@ -4106,10 +4400,7 @@ async function initApp() {
       {
         type: 'action',
         label: 'About',
-        handler: () => {
-          const modal = document.getElementById('featuresGuideModal');
-          if (modal) openModal(modal);
-        },
+        handler: () => _openFeaturesTab('tab-accessibility'),
       },
       {
         type: 'action',
@@ -4149,17 +4440,15 @@ async function initApp() {
         type: 'action',
         label: 'Font List',
         disabled: true,
-        tooltip: 'Coming soon',
+        tooltip:
+          'Not available in browser \u2014 see openscad.org/documentation.html for font information',
       },
       { type: 'separator' },
       {
         type: 'action',
         label: 'Features Guide',
         shortcutAction: 'showHelp',
-        handler: () => {
-          const modal = document.getElementById('featuresGuideModal');
-          if (modal) openModal(modal);
-        },
+        handler: () => _openFeaturesTab('tab-libraries'),
       },
       {
         type: 'action',
@@ -4203,8 +4492,8 @@ async function initApp() {
     if (modelName) {
       // Primary path: persist uiPreferences into the IndexedDB project record
       if (currentSavedProjectId) {
-        updateProject({ id: currentSavedProjectId, uiPreferences: prefs }).then(
-          (result) => {
+        updateProject({ id: currentSavedProjectId, uiPreferences: prefs })
+          .then((result) => {
             if (result.success) {
               console.log(
                 `[App] UI preferences saved to project record: ${modelName}`
@@ -4215,8 +4504,10 @@ async function initApp() {
                 result.error
               );
             }
-          }
-        );
+          })
+          .catch((err) => {
+            console.error('[App] Project update failed:', err);
+          });
       }
 
       // Fallback path: keep the legacy localStorage key in sync for one release
@@ -4385,10 +4676,53 @@ async function initApp() {
         // Show/hide 2D format guidance for SVG/DXF laser cutting workflows
         if (format2dGuidance) {
           if (formatDef.is2D) {
+            const wasHidden = format2dGuidance.classList.contains('hidden');
             format2dGuidance.classList.remove('hidden');
+            if (wasHidden) {
+              format2dGuidance.classList.remove('guidance-enter');
+              void format2dGuidance.offsetWidth; // reflow to restart animation
+              format2dGuidance.classList.add('guidance-enter');
+              format2dGuidance.scrollIntoView({
+                behavior: 'smooth',
+                block: 'nearest',
+              });
+            }
             announceImmediate(
               `${formatName} is a 2D format. See guidance below the format selector.`
             );
+
+            // UX-B: Show "What will be auto-adjusted" indicator
+            const state = stateManager.getState();
+            const autoAdjustDiv = document.getElementById('format2dAutoAdjust');
+            const autoAdjustList = document.getElementById(
+              'format2dAutoAdjustList'
+            );
+            if (
+              autoAdjustDiv &&
+              autoAdjustList &&
+              state?.parameters &&
+              state?.schema
+            ) {
+              const resolved = resolve2DExportParameters(
+                state.parameters,
+                state.schema,
+                format
+              );
+              const adjustments = Object.entries(resolved).filter(
+                ([k, v]) => state.parameters[k] !== v
+              );
+              if (adjustments.length > 0) {
+                autoAdjustList.innerHTML = adjustments
+                  .map(
+                    ([k, v]) =>
+                      `<li><code>${escapeHtml(k)}</code>: currently <em>${escapeHtml(String(state.parameters[k]))}</em> → will use <strong>${escapeHtml(String(v))}</strong></li>`
+                  )
+                  .join('');
+                autoAdjustDiv.classList.remove('hidden');
+              } else {
+                autoAdjustDiv.classList.add('hidden');
+              }
+            }
           } else {
             format2dGuidance.classList.add('hidden');
           }
@@ -4558,6 +4892,9 @@ async function initApp() {
         console.error('Failed to initialize OpenSCAD WASM:', error);
         hideWasmLoadingIndicator(wasmLoadingOverlay);
         updateStatus('OpenSCAD engine failed to initialize');
+        _announceError(
+          'OpenSCAD engine failed to initialize. Some features may not work.'
+        );
         const details = error?.details ? ` Details: ${error.details}` : '';
         alert(
           'Failed to initialize OpenSCAD engine. Some features may not work. Error: ' +
@@ -4863,6 +5200,25 @@ async function initApp() {
     const details = error?.details || '';
     const detailsStr = String(details || '');
 
+    // BUG-B fix: handle NO_GEOMETRY — emitted by isNonPreviewableParameters() when
+    // generate=Customizer Settings (or similar non-previewable mode). The previous mesh
+    // must be cleared so the 3D canvas is empty, matching the expectation that
+    // "Customizer Settings" produces no visible geometry.
+    if (code === 'NO_GEOMETRY') {
+      if (previewManager) {
+        previewManager.clear();
+      }
+      updateStatus(
+        "No geometry in this mode. Adjust 'generate' to see a 3D preview.",
+        'success'
+      );
+      previewStateIndicator.className = 'preview-state-indicator state-current';
+      previewStateIndicator.textContent = '— No geometry (Customizer mode)';
+      previewContainer.classList.remove('preview-error');
+      previewContainer.classList.add('preview-current');
+      return true;
+    }
+
     // Handle 2D model case — applies to any project producing 2D output
     const is2DModel =
       code === 'MODEL_IS_2D' ||
@@ -4872,6 +5228,9 @@ async function initApp() {
       /not a 3D object|2D object/i.test(detailsStr);
 
     if (is2DModel) {
+      if (previewManager) {
+        previewManager.clear();
+      }
       // Show guidance for 2D model — this is informational, not an error
       // Use 'success' not 'error' to avoid alarming red warnings on a correct workflow path
       updateStatus(
@@ -4905,6 +5264,11 @@ async function initApp() {
       hasDependencyHint;
 
     if (!isEmpty) return false;
+
+    // Clear the 3D preview when geometry is empty so no stale mesh is shown.
+    if (previewManager) {
+      previewManager.clear();
+    }
 
     // Hide memory warning so the real root cause is not obscured
     const existingWarning = document.getElementById('memoryWarning');
@@ -5172,10 +5536,8 @@ async function initApp() {
   // Create rendering overlay
   const renderingOverlay = document.createElement('div');
   renderingOverlay.className = 'preview-rendering-overlay';
-  renderingOverlay.innerHTML = `
-    <div class="spinner spinner-large"></div>
-    <span class="rendering-text">Generating preview...</span>
-  `;
+  renderingOverlay.innerHTML =
+    '<div class="spinner"></div><span class="rendering-text">Generating preview\u2026</span>';
 
   // Track last generated parameters for comparison
   let lastGeneratedParamsHash = null;
@@ -5414,6 +5776,68 @@ async function initApp() {
         previewManager.toggleGrid(enabled);
       }
       console.log(`[App] Grid ${enabled ? 'enabled' : 'disabled'}`);
+    });
+  }
+
+  // Wire grid color picker
+  const gridColorPicker = document.getElementById('gridColorPicker');
+  const resetGridColorBtn = document.getElementById('resetGridColorBtn');
+
+  function syncGridColorPicker() {
+    if (!gridColorPicker || !previewManager) return;
+    const custom = previewManager.getGridColor();
+    if (custom) {
+      gridColorPicker.value = custom;
+    } else {
+      const themeKey = previewManager.currentTheme || 'light';
+      const PREVIEW_COLORS_MAP = {
+        light: '#cccccc',
+        dark: '#404040',
+        'light-hc': '#000000',
+        'dark-hc': '#ffffff',
+        mono: '#00ff00',
+        'mono-light': '#ffb000',
+      };
+      gridColorPicker.value = PREVIEW_COLORS_MAP[themeKey] || '#cccccc';
+    }
+  }
+
+  if (gridColorPicker) {
+    syncGridColorPicker();
+    gridColorPicker.addEventListener('input', () => {
+      if (previewManager) {
+        previewManager.setGridColor(gridColorPicker.value);
+      }
+    });
+  }
+
+  if (resetGridColorBtn) {
+    resetGridColorBtn.addEventListener('click', () => {
+      if (previewManager) {
+        previewManager.resetGridColor();
+        syncGridColorPicker();
+        updateStatus('Grid color reset to theme default');
+      }
+    });
+  }
+
+  // Wire grid opacity slider
+  const gridOpacityInput = document.getElementById('gridOpacityInput');
+  const gridOpacityValue = document.getElementById('gridOpacityValue');
+
+  function syncGridOpacitySlider() {
+    if (!gridOpacityInput || !previewManager) return;
+    const val = previewManager.getGridOpacity();
+    gridOpacityInput.value = String(val);
+    if (gridOpacityValue) gridOpacityValue.textContent = `${val}%`;
+  }
+
+  if (gridOpacityInput) {
+    syncGridOpacitySlider();
+    gridOpacityInput.addEventListener('input', () => {
+      const v = parseInt(gridOpacityInput.value, 10);
+      if (gridOpacityValue) gridOpacityValue.textContent = `${v}%`;
+      if (previewManager) previewManager.setGridOpacity(v);
     });
   }
 
@@ -5991,11 +6415,11 @@ async function initApp() {
     }
 
     if (overlayWidthInput) {
-      overlayWidthInput.value = Math.round(config.width);
+      overlayWidthInput.value = parseFloat(config.width.toFixed(1));
     }
 
     if (overlayHeightInput) {
-      overlayHeightInput.value = Math.round(config.height);
+      overlayHeightInput.value = parseFloat(config.height.toFixed(1));
     }
 
     if (overlayOffsetXInput) {
@@ -6315,7 +6739,7 @@ async function initApp() {
         overlayTabletSelect.innerHTML = tabletDb
           .map(
             (t) =>
-              `<option value="${t.id}" data-w="${t.screenWidthMm ?? ''}" data-h="${t.screenHeightMm ?? ''}">${t.label}</option>`
+              `<option value="${escapeHtml(String(t.id))}" data-w="${escapeHtml(String(t.screenWidthMm ?? ''))}" data-h="${escapeHtml(String(t.screenHeightMm ?? ''))}">${escapeHtml(t.label)}</option>`
           )
           .join('');
       } catch (err) {
@@ -6360,6 +6784,7 @@ async function initApp() {
       if (!isNaN(width) && previewManager) {
         previewManager.setOverlaySize({ width });
         updateOverlayUIFromConfig();
+        localStorage.setItem(STORAGE_KEY_OVERLAY_WIDTH, String(width));
       }
     });
   }
@@ -6371,6 +6796,7 @@ async function initApp() {
       if (!isNaN(height) && previewManager) {
         previewManager.setOverlaySize({ height });
         updateOverlayUIFromConfig();
+        localStorage.setItem(STORAGE_KEY_OVERLAY_HEIGHT, String(height));
       }
     });
   }
@@ -6568,33 +6994,80 @@ async function initApp() {
     }
   });
 
-  // Wire model color picker
+  // Wire model color picker and override toggle
   const modelColorPicker = document.getElementById('modelColorPicker');
   const modelColorReset = document.getElementById('modelColorReset');
+  const modelColorEnabled = document.getElementById('modelColorEnabled');
+  const modelColorPickerWrapper = modelColorPicker?.closest(
+    '.model-color-picker'
+  );
 
-  // Load saved model color from localStorage
+  // Load saved state
   const savedModelColor = localStorage.getItem(STORAGE_KEY_MODEL_COLOR);
+  const savedColorEnabled =
+    localStorage.getItem(STORAGE_KEY_MODEL_COLOR_ENABLED) === 'true';
+
   if (savedModelColor && modelColorPicker) {
     modelColorPicker.value = savedModelColor;
   }
 
-  // Debounce timer for color changes
+  const updatePickerDisabledState = (enabled) => {
+    if (modelColorPickerWrapper) {
+      modelColorPickerWrapper.classList.toggle('disabled', !enabled);
+    }
+  };
+
+  const getSelectedModelColor = () =>
+    modelColorPicker?.value ||
+    localStorage.getItem(STORAGE_KEY_MODEL_COLOR) ||
+    getThemeDefaultColor();
+
+  const syncPreviewModelColorOverride = () => {
+    if (!previewManager) return;
+
+    const enabled = modelColorEnabled?.checked === true;
+    const selectedColor = getSelectedModelColor();
+
+    if (enabled) {
+      previewManager.setColorOverride(selectedColor);
+      previewManager.setColorOverrideEnabled(true);
+    } else {
+      previewManager.setColorOverrideEnabled(false);
+      previewManager.setColorOverride(selectedColor);
+    }
+  };
+
+  if (modelColorEnabled) {
+    modelColorEnabled.checked = savedColorEnabled;
+    updatePickerDisabledState(savedColorEnabled);
+    if (previewManager) {
+      syncPreviewModelColorOverride();
+    }
+
+    modelColorEnabled.addEventListener('change', () => {
+      const enabled = modelColorEnabled.checked;
+      localStorage.setItem(STORAGE_KEY_MODEL_COLOR_ENABLED, String(enabled));
+      updatePickerDisabledState(enabled);
+      if (previewManager) {
+        syncPreviewModelColorOverride();
+      }
+      console.log(
+        `[App] Model color override ${enabled ? 'enabled' : 'disabled'}`
+      );
+    });
+  }
+
   let colorChangeTimeout;
 
   if (modelColorPicker) {
     modelColorPicker.addEventListener('input', () => {
       const color = modelColorPicker.value;
-
-      // Clear previous timeout
       clearTimeout(colorChangeTimeout);
 
-      // Debounce: wait 150ms before applying color
-      // This prevents rapid-fire updates while user drags the color picker
       colorChangeTimeout = setTimeout(() => {
-        if (previewManager) {
+        if (previewManager && modelColorEnabled?.checked) {
           previewManager.setColorOverride(color);
         }
-        // Save to localStorage
         localStorage.setItem(STORAGE_KEY_MODEL_COLOR, color);
         console.log(`[App] Model color changed to ${color}`);
       }, 150);
@@ -6606,9 +7079,7 @@ async function initApp() {
       if (previewManager) {
         previewManager.setColorOverride(null);
       }
-      // Reset picker to theme default and clear localStorage
       if (modelColorPicker) {
-        // Get the theme default color
         const themeDefault = getThemeDefaultColor();
         modelColorPicker.value = themeDefault;
       }
@@ -6625,11 +7096,19 @@ async function initApp() {
   const contrastInput = document.getElementById('contrastInput');
   const contrastValue = document.getElementById('contrastValue');
   const resetAppearanceBtn = document.getElementById('resetAppearanceBtn');
+  const modelAppearanceEnabled = document.getElementById(
+    'modelAppearanceEnabled'
+  );
+  const modelAppearanceSlidersWrapper = document.querySelector(
+    '.model-appearance-sliders'
+  );
 
   // Restore persisted values
   const savedOpacity = localStorage.getItem(STORAGE_KEY_MODEL_OPACITY);
   const savedBrightness = localStorage.getItem(STORAGE_KEY_BRIGHTNESS);
   const savedContrast = localStorage.getItem(STORAGE_KEY_CONTRAST);
+  const savedAppearanceEnabled =
+    localStorage.getItem(STORAGE_KEY_MODEL_APPEARANCE_ENABLED) === 'true';
   if (savedOpacity && modelOpacityInput) {
     modelOpacityInput.value = savedOpacity;
     if (modelOpacityValue) modelOpacityValue.textContent = `${savedOpacity}%`;
@@ -6643,6 +7122,12 @@ async function initApp() {
     if (contrastValue) contrastValue.textContent = `${savedContrast}%`;
   }
 
+  const updateAppearanceSlidersDisabledState = (enabled) => {
+    if (modelAppearanceSlidersWrapper) {
+      modelAppearanceSlidersWrapper.classList.toggle('disabled', !enabled);
+    }
+  };
+
   function applyAppearanceToPreview() {
     if (!previewManager) return;
     previewManager.setModelOpacity(
@@ -6652,12 +7137,42 @@ async function initApp() {
     previewManager.setContrast(parseInt(contrastInput?.value || '100', 10));
   }
 
+  const syncPreviewAppearanceOverride = () => {
+    if (!previewManager) return;
+
+    const enabled = modelAppearanceEnabled?.checked === true;
+
+    if (enabled) {
+      applyAppearanceToPreview();
+      previewManager.setAppearanceOverrideEnabled(true);
+    } else {
+      previewManager.setAppearanceOverrideEnabled(false);
+    }
+  };
+
+  if (modelAppearanceEnabled) {
+    modelAppearanceEnabled.checked = savedAppearanceEnabled;
+    updateAppearanceSlidersDisabledState(savedAppearanceEnabled);
+
+    modelAppearanceEnabled.addEventListener('change', () => {
+      const enabled = modelAppearanceEnabled.checked;
+      localStorage.setItem(
+        STORAGE_KEY_MODEL_APPEARANCE_ENABLED,
+        String(enabled)
+      );
+      updateAppearanceSlidersDisabledState(enabled);
+      syncPreviewAppearanceOverride();
+    });
+  }
+
   if (modelOpacityInput) {
     modelOpacityInput.addEventListener('input', () => {
       const v = modelOpacityInput.value;
       if (modelOpacityValue) modelOpacityValue.textContent = `${v}%`;
       localStorage.setItem(STORAGE_KEY_MODEL_OPACITY, v);
-      if (previewManager) previewManager.setModelOpacity(parseInt(v, 10));
+      if (previewManager && modelAppearanceEnabled?.checked) {
+        previewManager.setModelOpacity(parseInt(v, 10));
+      }
     });
   }
   if (brightnessInput) {
@@ -6665,7 +7180,9 @@ async function initApp() {
       const v = brightnessInput.value;
       if (brightnessValue) brightnessValue.textContent = `${v}%`;
       localStorage.setItem(STORAGE_KEY_BRIGHTNESS, v);
-      if (previewManager) previewManager.setBrightness(parseInt(v, 10));
+      if (previewManager && modelAppearanceEnabled?.checked) {
+        previewManager.setBrightness(parseInt(v, 10));
+      }
     });
   }
   if (contrastInput) {
@@ -6673,7 +7190,9 @@ async function initApp() {
       const v = contrastInput.value;
       if (contrastValue) contrastValue.textContent = `${v}%`;
       localStorage.setItem(STORAGE_KEY_CONTRAST, v);
-      if (previewManager) previewManager.setContrast(parseInt(v, 10));
+      if (previewManager && modelAppearanceEnabled?.checked) {
+        previewManager.setContrast(parseInt(v, 10));
+      }
     });
   }
   if (resetAppearanceBtn) {
@@ -6693,7 +7212,9 @@ async function initApp() {
       localStorage.removeItem(STORAGE_KEY_MODEL_OPACITY);
       localStorage.removeItem(STORAGE_KEY_BRIGHTNESS);
       localStorage.removeItem(STORAGE_KEY_CONTRAST);
-      if (previewManager) previewManager.resetAppearance();
+      if (previewManager && modelAppearanceEnabled?.checked) {
+        previewManager.resetAppearance();
+      }
     });
   }
 
@@ -6739,11 +7260,15 @@ async function initApp() {
       dimensionsDisplay.classList.remove('hidden');
 
       // Update values
-      document.getElementById('dimX').textContent = `${dimensions.x} mm`;
-      document.getElementById('dimY').textContent = `${dimensions.y} mm`;
-      document.getElementById('dimZ').textContent = `${dimensions.z} mm`;
-      document.getElementById('dimVolume').textContent =
-        `${dimensions.volume.toLocaleString()} mm³`;
+      const dimXEl = document.getElementById('dimX');
+      const dimYEl = document.getElementById('dimY');
+      const dimZEl = document.getElementById('dimZ');
+      const dimVolumeEl = document.getElementById('dimVolume');
+      if (dimXEl) dimXEl.textContent = `${dimensions.x} mm`;
+      if (dimYEl) dimYEl.textContent = `${dimensions.y} mm`;
+      if (dimZEl) dimZEl.textContent = `${dimensions.z} mm`;
+      if (dimVolumeEl)
+        dimVolumeEl.textContent = `${dimensions.volume.toLocaleString()} mm³`;
     } else {
       // Hide dimensions panel
       dimensionsDisplay.classList.add('hidden');
@@ -6937,6 +7462,9 @@ async function initApp() {
               autoPreviewHints.lastPreviewTriangles = extra.stats.triangles;
               adaptivePreviewMemo = { key: null, info: null };
             }
+            if (_hfmEnabled && _hfmAltView?.clearPersistence) {
+              _hfmAltView.clearPersistence();
+            }
           }
           updatePreviewStateUI(newState, extra);
         },
@@ -6973,6 +7501,7 @@ async function initApp() {
 
             const friendly = translateError(error?.message || String(error));
             updateStatus(`Preview failed: ${friendly.title}`, 'error');
+            _announceError(`Preview failed: ${friendly.title}`);
           }
         },
       }
@@ -7010,11 +7539,13 @@ async function initApp() {
       state.outputFormat ||
       'stl'
     ).toLowerCase();
+
     const formatName =
       OUTPUT_FORMATS[selectedFormat]?.name || selectedFormat.toUpperCase();
     const isStlFormat = selectedFormat === 'stl';
 
-    // Check auto-preview controller state
+    // Check auto-preview controller state (works for any 3D format routed
+    // through the controller; 2D formats bypass it)
     const hasFullQualitySTL = autoPreviewController?.getCurrentFullSTL(
       state.parameters
     );
@@ -7022,8 +7553,13 @@ async function initApp() {
       !hasFullQualitySTL ||
       autoPreviewController?.needsFullRender(state.parameters);
 
+    const stateOutputFormat = (state.outputFormat || '').toLowerCase();
+    const hasMatchingOutput =
+      hasGeneratedFile &&
+      stateOutputFormat === selectedFormat &&
+      !paramsChanged;
+
     if (isStlFormat && hasFullQualitySTL && !needsFullRender) {
-      // Full quality STL is ready and matches current parameters - show Download
       primaryActionBtn.textContent = '📥 Download';
       primaryActionBtn.dataset.action = 'download';
       primaryActionBtn.classList.remove('btn-primary');
@@ -7032,10 +7568,18 @@ async function initApp() {
         'aria-label',
         `Download generated ${formatName} file (full quality)`
       );
-      // Hide fallback since primary button is download
       downloadFallbackLink.classList.add('hidden');
-    } else if (isStlFormat) {
-      // Need to generate (no full STL yet, or params changed)
+    } else if (hasMatchingOutput) {
+      primaryActionBtn.textContent = '📥 Download';
+      primaryActionBtn.dataset.action = 'download';
+      primaryActionBtn.classList.remove('btn-primary');
+      primaryActionBtn.classList.add('btn-success');
+      primaryActionBtn.setAttribute(
+        'aria-label',
+        `Download generated ${formatName} file`
+      );
+      downloadFallbackLink.classList.add('hidden');
+    } else {
       primaryActionBtn.textContent = 'Generate';
       primaryActionBtn.dataset.action = 'generate';
       primaryActionBtn.classList.remove('btn-success');
@@ -7045,38 +7589,11 @@ async function initApp() {
         `Generate ${formatName} file from current parameters`
       );
 
-      // Show fallback download link if STL exists but params changed
-      if (hasGeneratedFile && paramsChanged) {
+      if (isStlFormat && hasGeneratedFile && paramsChanged) {
         downloadFallbackLink.classList.remove('hidden');
       } else {
         downloadFallbackLink.classList.add('hidden');
       }
-    } else {
-      const stateOutputFormat = (state.outputFormat || '').toLowerCase();
-      const hasMatchingOutput =
-        hasGeneratedFile &&
-        stateOutputFormat === selectedFormat &&
-        !paramsChanged;
-      if (hasMatchingOutput) {
-        primaryActionBtn.textContent = '📥 Download';
-        primaryActionBtn.dataset.action = 'download';
-        primaryActionBtn.classList.remove('btn-primary');
-        primaryActionBtn.classList.add('btn-success');
-        primaryActionBtn.setAttribute(
-          'aria-label',
-          `Download generated ${formatName} file`
-        );
-      } else {
-        primaryActionBtn.textContent = 'Generate';
-        primaryActionBtn.dataset.action = 'generate';
-        primaryActionBtn.classList.remove('btn-success');
-        primaryActionBtn.classList.add('btn-primary');
-        primaryActionBtn.setAttribute(
-          'aria-label',
-          `Generate ${formatName} file from current parameters`
-        );
-      }
-      downloadFallbackLink.classList.add('hidden');
     }
   }
 
@@ -7205,12 +7722,40 @@ async function initApp() {
     const isLikelyBinary = bytesPerTri > 0 && bytesPerTri < 80;
     const isLikelyASCII = bytesPerTri > 100;
 
+    // Detect SVG/DXF by inspecting the first bytes of the output buffer
+    let detectedFormat = null;
+    const rawData = result.data || result.stl;
+    if (rawData && rawData.byteLength > 0) {
+      const header = new Uint8Array(
+        rawData,
+        0,
+        Math.min(16, rawData.byteLength)
+      );
+      const prefix = String.fromCharCode(...header).toLowerCase();
+      if (prefix.startsWith('<?xml') || prefix.startsWith('<svg')) {
+        detectedFormat = 'SVG';
+      } else if (
+        prefix.startsWith('0\nsection') ||
+        prefix.startsWith('0\r\nsection')
+      ) {
+        detectedFormat = 'DXF';
+      }
+    }
+
+    const formatLabel = detectedFormat
+      ? detectedFormat
+      : isLikelyBinary
+        ? 'Binary STL ✓'
+        : isLikelyASCII
+          ? 'ASCII STL ⚠️'
+          : 'Unknown';
+
     console.log(
       `[Render Stats] ` +
         `Time: ${timing.renderMs || 0}ms | ` +
         `Triangles: ${stats.triangles?.toLocaleString() || 0} | ` +
         `Size: ${(dataSize / 1024).toFixed(1)}KB | ` +
-        `Format: ${isLikelyBinary ? 'Binary STL ✓' : isLikelyASCII ? 'ASCII STL ⚠️' : 'Unknown'}`
+        `Format: ${formatLabel}`
     );
 
     // Warn if ASCII STL detected
@@ -7240,6 +7785,24 @@ async function initApp() {
       if (!capabilities.hasManifold) issues.push('Manifold not available');
       console.log(`[Performance] ⚠️ Suboptimal settings: ${issues.join(', ')}`);
     }
+  }
+
+  let _activeColorParamNames = [];
+
+  function _updateColorLegend(colorNames) {
+    if (colorNames !== undefined) _activeColorParamNames = colorNames || [];
+    if (!previewManager) return;
+    if (_activeColorParamNames.length < 2) {
+      previewManager.hideColorLegend();
+      return;
+    }
+    const state = stateManager.getState();
+    const params = state?.parameters || {};
+    const entries = _activeColorParamNames.map((name) => ({
+      name,
+      value: normalizeHexColor(params[name]) || '#888888',
+    }));
+    previewManager.showColorLegend(entries);
   }
 
   // Update status
@@ -7745,6 +8308,8 @@ async function initApp() {
     const projectFiles = state.projectFiles;
 
     if (shouldShow) {
+      // COMPATIBILITY FALLBACK — Phase 8 removal candidate:
+      // 'default.svg' when screenshot_file param exists but is empty/unset.
       const screenshotFile = parameters.screenshot_file || 'default.svg';
       const resolved = resolveProjectFile(projectFiles, screenshotFile);
       if (resolved) {
@@ -7800,19 +8365,29 @@ async function initApp() {
       return;
     }
 
-    // Look for screenshot_file variable in SCAD source (resolve via basename fallback)
+    // Look for file variables pointing to SVG/image overlay candidates.
+    // Prefers screenshot_file when available, then any file variable with
+    // an overlay-suitable extension.
     let screenshotFile = null;
     if (requiredFiles && requiredFiles.files) {
-      const screenshotVar = requiredFiles.files.find(
-        (f) => f.variableName === 'screenshot_file'
+      const OVERLAY_EXTS = ['.svg', '.png', '.jpg', '.jpeg', '.gif', '.webp'];
+      const overlayVars = requiredFiles.files.filter(
+        (f) =>
+          f.type === 'variable' &&
+          OVERLAY_EXTS.some((ext) => f.path.toLowerCase().endsWith(ext))
       );
-      if (screenshotVar) {
-        const resolved = resolveProjectFile(projectFiles, screenshotVar.path);
+      if (overlayVars.length > 0) {
+        const preferred =
+          overlayVars.find((v) => v.variableName === 'screenshot_file') ||
+          overlayVars[0];
+        const resolved = resolveProjectFile(projectFiles, preferred.path);
         if (resolved) screenshotFile = resolved.key;
       }
     }
 
-    // Fallback: resolve default.svg (handles root or single nested match)
+    // COMPATIBILITY FALLBACK — Phase 8 removal candidate.
+    // Try 'default.svg' for backward compatibility with keyguard projects
+    // that lack a manifest but use the known convention.
     if (!screenshotFile) {
       const resolved = resolveProjectFile(projectFiles, 'default.svg');
       if (resolved) screenshotFile = resolved.key;
@@ -7937,6 +8512,7 @@ async function initApp() {
         projectFiles,
         mainFilePath,
       });
+      setCanonicalProjectFiles(projectFiles);
 
       // Mirror image files to SharedImageStore so they appear in Image Measurement
       if (isImage) {
@@ -8006,6 +8582,7 @@ async function initApp() {
 
     // Update state
     stateManager.setState({ projectFiles });
+    setCanonicalProjectFiles(projectFiles);
 
     // Update UI
     const requiredFiles = uploadedFile
@@ -8089,6 +8666,7 @@ async function initApp() {
 
     // Update state
     stateManager.setState({ projectFiles });
+    setCanonicalProjectFiles(projectFiles);
 
     // Update UI
     const requiredFiles = state.uploadedFile
@@ -8136,6 +8714,9 @@ async function initApp() {
       requiredFiles?.files &&
       typeof window.updateConsoleOutput === 'function'
     ) {
+      const knownLibraryIdSet = new Set(
+        Object.keys(LIBRARY_DEFINITIONS).map((id) => id.toLowerCase())
+      );
       const projectBasenames = projectFiles
         ? new Set(
             Array.from(projectFiles.keys()).map((p) =>
@@ -8145,9 +8726,18 @@ async function initApp() {
         : new Set();
       const missing = requiredFiles.files.filter((f) => {
         if (!f.required) return false;
+        if (typeof f.path !== 'string' || f.path.trim() === '') return false;
+        const normalizedPath = f.path.trim().replace(/^\/+/, '');
+        const pathParts = normalizedPath.split('/');
+        const firstSegment = pathParts[0].toLowerCase();
+        const isLibraryReference =
+          pathParts.length > 1 && knownLibraryIdSet.has(firstSegment);
+        // Companion-file warnings should not include library include/use refs.
+        if (isLibraryReference) return false;
         if (!projectFiles) return true;
         if (projectFiles.has(f.path)) return false;
-        return !projectBasenames.has(f.path.split('/').pop().toLowerCase());
+        const baseName = pathParts[pathParts.length - 1].toLowerCase();
+        return !projectBasenames.has(baseName);
       });
       if (missing.length > 0) {
         const warnings = missing
@@ -8391,6 +8981,7 @@ async function initApp() {
           dismissOverlay();
           console.error('[ZIP] Extraction failed:', error);
           updateStatus('Failed to extract ZIP file');
+          _announceError('Failed to extract ZIP file');
           alert(error.message);
           return;
         }
@@ -8422,6 +9013,36 @@ async function initApp() {
     }
 
     console.log('File loaded:', fileName, fileContent.length, 'bytes');
+
+    // Single-file preflight: detect missing companion include/use/import files.
+    // The ZIP path already runs its own preflight above; only check here for
+    // bare .scad uploads where extractedFiles is null.
+    if (!extractedFiles) {
+      const singleFilePreflight = runPreflightCheck(fileContent, [fileName], {
+        availableLibraries: new Set(
+          Object.keys(LIBRARY_DEFINITIONS).map((k) => k.toLowerCase())
+        ),
+      });
+      if (!singleFilePreflight.success) {
+        const allMissingFiles = [
+          ...singleFilePreflight.missing.includes,
+          ...singleFilePreflight.missing.uses,
+          ...singleFilePreflight.missing.imports,
+        ].join(', ');
+        console.warn(
+          '[Upload] Single-file upload references missing companion files:',
+          singleFilePreflight.missing
+        );
+        getErrorLogPanel().addEntry({
+          type: ERROR_LOG_TYPE.WARNING,
+          group: 'Import',
+          file: fileName,
+          line: null,
+          message: `Missing companion files: ${allMissingFiles} — upload the full project folder or ZIP to include all dependencies`,
+          timestamp: Date.now(),
+        });
+      }
+    }
 
     // Extract parameters
     updateStatus('Extracting parameters...');
@@ -8480,6 +9101,7 @@ async function initApp() {
         complexityAnalysis: complexityAnalysis,
         adaptiveQualityConfig: adaptiveConfig,
       });
+      setCanonicalProjectFiles(projectFiles || null);
 
       // Clear undo/redo history on new file upload
       stateManager.clearHistory();
@@ -8507,9 +9129,38 @@ async function initApp() {
         currentSavedProjectId = null;
       }
 
+      // Reset output format to STL for fresh project loads —
+      // dispatch change to update format info panel and 2D guidance.
+      if (outputFormatSelect && outputFormatSelect.value !== 'stl') {
+        outputFormatSelect.value = 'stl';
+        outputFormatSelect.dispatchEvent(new Event('change'));
+      }
+      stateManager.setState({ outputFormat: 'stl' });
+
       // Show main interface
       welcomeScreen.classList.add('hidden');
       mainInterface.classList.remove('hidden');
+
+      // Layout reset: clear stale visual state from a previous project so the
+      // flex layout computes cleanly when mainInterface transitions from
+      // display:none back to flex.  Without this, the echo drawer can remain
+      // expanded with old warnings, scroll positions can be non-zero (from
+      // browser auto-scroll), and the Three.js canvas may retain stale
+      // dimensions — all of which combine to produce a blank region and an
+      // upward layout shift that hides the app header.
+      updatePreviewDrawer([]);
+      if (typeof window.clearConsoleState === 'function') {
+        window.clearConsoleState();
+      }
+      const appEl = document.getElementById('app');
+      if (appEl) appEl.scrollTop = 0;
+      const appMainEl = document.getElementById('main-content');
+      if (appMainEl) appMainEl.scrollTop = 0;
+      const previewContentEl = document.querySelector('.preview-content');
+      if (previewContentEl) previewContentEl.scrollTop = 0;
+      requestAnimationFrame(() => {
+        if (previewManager) previewManager.handleResize();
+      });
 
       // Update file info summary (used by E2E tests and screen readers)
       const fileInfoSummaryEl = document.getElementById('fileInfoSummary');
@@ -8599,6 +9250,8 @@ async function initApp() {
           }
           // Update button state when parameters change
           updatePrimaryActionButton();
+          // Refresh color legend swatches with new parameter values
+          _updateColorLegend();
           // Sync overlay with include_screenshot param
           syncOverlayWithScreenshotParam(values);
         }
@@ -8724,12 +9377,37 @@ async function initApp() {
             const parameterSetsForMap = Object.fromEntries(
               importedPresets.map((p) => [p.name, p.parameters])
             );
+            // Extract aliasable companion targets from SCAD analysis so
+            // the companion map resolves all referenced basenames, not just
+            // hardcoded keyguard-specific filenames.
+            const scadRefs = detectRequiredCompanionFiles(fileContent);
+            const companionTargets = [
+              ...new Set(
+                (scadRefs?.files || [])
+                  .filter(
+                    (f) =>
+                      f.required &&
+                      (f.type === 'include' || f.type === 'import')
+                  )
+                  .map((f) => f.path.split('/').pop())
+              ),
+            ].filter((basename) => {
+              let count = 0;
+              for (const key of projectFiles.keys()) {
+                if (key.split('/').pop() === basename) count++;
+              }
+              return count > 1;
+            });
             presetCompanionMap = buildPresetCompanionMap(
               projectFiles,
-              parameterSetsForMap
+              parameterSetsForMap,
+              { companionTargets }
             );
             console.log(
-              `[ZIP] Built preset companion map for ${presetCompanionMap.size} presets`
+              `[ZIP] Built preset companion map for ${presetCompanionMap.size} presets` +
+                (companionTargets.length > 0
+                  ? ` (generic targets: ${companionTargets.join(', ')})`
+                  : ' (legacy path)')
             );
           }
         }
@@ -8793,13 +9471,17 @@ async function initApp() {
       }
 
       // Move focus to the first parameter input after file load (WCAG 2.4.3 Focus Order)
-      // This tells screen reader users that parameters are now available to customize
+      // This tells screen reader users that parameters are now available to customize.
+      // preventScroll: true keeps the panel's scroll position at the top so the user
+      // sees the beginning of the parameter list when they first open the panel (mobile
+      // drawer is off-canvas; desktop panel may be collapsed — either way we must not
+      // advance the scroll position before the user has opened the panel).
       requestAnimationFrame(() => {
         const firstInput = parametersContainer?.querySelector(
           'input:not([type="hidden"]), select, textarea'
         );
         if (firstInput) {
-          firstInput.focus();
+          firstInput.focus({ preventScroll: true });
         }
       });
 
@@ -8807,6 +9489,26 @@ async function initApp() {
       if (!previewManager) {
         previewManager = new PreviewManager(previewContainer);
         await previewManager.init();
+
+        // Re-create #rendered2dPreview — init() clears container innerHTML,
+        // destroying the element that was defined in index.html.
+        if (!document.getElementById('rendered2dPreview')) {
+          const preview2d = document.createElement('div');
+          preview2d.id = 'rendered2dPreview';
+          preview2d.className = 'rendered-2d-preview hidden';
+          preview2d.setAttribute('role', 'img');
+          preview2d.setAttribute('aria-label', 'Rendered 2D SVG preview');
+          previewContainer.appendChild(preview2d);
+        }
+
+        // Append preview state indicator and rendering overlay immediately
+        // after init so they are in the DOM before any async setup below.
+        previewContainer.style.position = 'relative';
+        previewContainer.appendChild(previewStateIndicator);
+        previewContainer.appendChild(renderingOverlay);
+
+        syncPreviewModelColorOverride();
+        syncPreviewAppearanceOverride();
 
         // Sync measurements toggle with saved preference
         if (measurementsToggle) {
@@ -8824,6 +9526,9 @@ async function initApp() {
           if (gridWidthInput) gridWidthInput.value = savedGrid.widthMm;
           if (gridHeightInput) gridHeightInput.value = savedGrid.heightMm;
         }
+
+        // Sync grid opacity slider with saved preference
+        syncGridOpacitySlider();
 
         // Sync auto-bed toggle with saved preference
         if (autoBedToggle) {
@@ -8844,6 +9549,29 @@ async function initApp() {
             if (overlayOpacityValue) {
               overlayOpacityValue.textContent = `${opacity}%`;
             }
+          }
+        }
+
+        // Restore overlay width/height from localStorage
+        const savedOverlayWidth = localStorage.getItem(
+          STORAGE_KEY_OVERLAY_WIDTH
+        );
+        const savedOverlayHeight = localStorage.getItem(
+          STORAGE_KEY_OVERLAY_HEIGHT
+        );
+        if (savedOverlayWidth || savedOverlayHeight) {
+          const sizeUpdate = {};
+          if (savedOverlayWidth) {
+            const w = parseFloat(savedOverlayWidth);
+            if (!isNaN(w) && w > 0) sizeUpdate.width = w;
+          }
+          if (savedOverlayHeight) {
+            const h = parseFloat(savedOverlayHeight);
+            if (!isNaN(h) && h > 0) sizeUpdate.height = h;
+          }
+          if (Object.keys(sizeUpdate).length > 0) {
+            previewManager.setOverlaySize(sizeUpdate);
+            updateOverlayUIFromConfig();
           }
         }
 
@@ -8873,7 +9601,7 @@ async function initApp() {
         }
 
         // Apply persisted model appearance controls
-        applyAppearanceToPreview();
+        syncPreviewAppearanceOverride();
 
         // Initialize auto-rotate settings from localStorage
         // Only enable if user doesn't prefer reduced motion
@@ -8916,11 +9644,8 @@ async function initApp() {
           }
         }
 
-        // Apply saved model color if exists
-        const savedModelColor = localStorage.getItem(STORAGE_KEY_MODEL_COLOR);
-        if (savedModelColor) {
-          previewManager.setColorOverride(savedModelColor);
-        }
+        syncPreviewModelColorOverride();
+        syncPreviewAppearanceOverride();
 
         // Listen for theme changes and update preview
         themeManager.addListener((theme, activeTheme, highContrast) => {
@@ -8945,17 +9670,15 @@ async function initApp() {
             }
           }
 
+          // Sync grid color picker to show theme default when no custom color is set
+          syncGridColorPicker();
+
           // Update mono variant assets when theme changes (light=amber, dark=green)
           const root = document.documentElement;
           if (root.getAttribute('data-ui-variant') === 'mono') {
             _setAssetsForVariant(true);
           }
         });
-
-        // Add preview state indicator and rendering overlay to container
-        previewContainer.style.position = 'relative';
-        previewContainer.appendChild(previewStateIndicator);
-        previewContainer.appendChild(renderingOverlay);
       }
 
       // Initialize or update AutoPreviewController
@@ -8966,7 +9689,11 @@ async function initApp() {
       if (autoPreviewController) {
         autoPreviewController.setColorParamNames(colorParamNames);
         autoPreviewController.setParamTypes(paramTypes);
+        autoPreviewController.setSchema(extracted || null);
       }
+
+      // Show color parameter legend when multiple color params exist
+      _updateColorLegend(colorParamNames);
 
       // Set the SCAD content and project files for auto-preview
       if (autoPreviewController) {
@@ -9176,6 +9903,13 @@ async function initApp() {
           currentPresetName: null,
         });
 
+        // Sync the dropdown element and fire change so the format info panel,
+        // 2D guidance, and button labels all reset to their STL defaults.
+        if (outputFormatSelect) {
+          outputFormatSelect.value = 'stl';
+          outputFormatSelect.dispatchEvent(new Event('change'));
+        }
+
         // Clear history
         stateManager.clearHistory();
 
@@ -9229,6 +9963,13 @@ async function initApp() {
         if (overlaySourceSelect) overlaySourceSelect.value = '';
         updateOverlaySourceDropdown();
         updateOverlayStatus();
+
+        // Reset echo drawer so stale warnings don't persist into the
+        // next project load (prevents layout shift from expanded drawer).
+        updatePreviewDrawer([]);
+        if (typeof window.clearConsoleState === 'function') {
+          window.clearConsoleState();
+        }
 
         // Reset status
         updateStatus('Ready');
@@ -11135,7 +11876,7 @@ if (rounded) {
   // =========================================
   // Deep-linking: URL parameter support for external website integration
   // Allows external sites to link directly to Forge with a specific example loaded
-  // Usage: ?example=simple-box or ?load=keyguard-demo
+  // Usage: ?example=simple-box or ?load=colored-box
   // Note: ?load= is an alias for ?example= (for website embedding convenience)
   // =========================================
   const initUrlParams = new URLSearchParams(window.location.search);
@@ -12200,6 +12941,9 @@ if (rounded) {
           const code = currentEditor.getValue();
           editorStateManager.setSource(code, { markDirty: false });
         }
+
+        // Clear editor instance so Edit menu items disable in Standard Mode
+        modeManager.setEditorInstance(null);
       }
     }
 
@@ -12247,6 +12991,9 @@ if (rounded) {
       if (editorStateManager.setTextareaElement && currentEditor.textarea) {
         editorStateManager.setTextareaElement(currentEditor.textarea);
       }
+
+      // Register editor instance with ModeManager for Edit menu wiring
+      modeManager.setEditorInstance(currentEditor);
     }
 
     /**
@@ -12719,44 +13466,50 @@ if (rounded) {
     const measureImageSelect = document.getElementById('measureImageSelect');
     if (measureFileInput) {
       measureFileInput.addEventListener('change', async (e) => {
-        const file = e.target.files?.[0];
-        if (!file || !file.type.startsWith('image/')) return;
-        const record = await SharedImageStore.addImage(file);
+        try {
+          const file = e.target.files?.[0];
+          if (!file || !file.type.startsWith('image/')) return;
+          const record = await SharedImageStore.addImage(file);
 
-        // Persist screenshot to projectFiles under Screenshots/ folder
-        const state = stateManager.getState();
-        let { projectFiles, mainFilePath, uploadedFile: uf } = state;
+          // Persist screenshot to projectFiles under Screenshots/ folder
+          const state = stateManager.getState();
+          let { projectFiles, mainFilePath, uploadedFile: uf } = state;
 
-        // Initialize projectFiles Map if needed (single-file → multi-file)
-        if (!projectFiles && uf) {
-          projectFiles = new Map();
-          const mainPath = mainFilePath || uf.name;
-          projectFiles.set(mainPath, uf.content);
-          mainFilePath = mainPath;
-          stateManager.setState({ projectFiles, mainFilePath });
-        }
-
-        if (projectFiles) {
-          projectFiles.set(`Screenshots/${record.name}`, record.dataUrl);
-          stateManager.setState({ projectFiles });
-
-          // Auto-save to IndexedDB so screenshots persist across sessions
-          await autoSaveCompanionFiles();
-        }
-
-        // Select the newly uploaded image in the dropdown
-        if (measureImageSelect) {
-          measureImageSelect.value = String(record.id);
-          if (measureImageSelect.value !== String(record.id)) {
-            setTimeout(() => {
-              if (measureImageSelect)
-                measureImageSelect.value = String(record.id);
-            }, 0);
+          // Initialize projectFiles Map if needed (single-file → multi-file)
+          if (!projectFiles && uf) {
+            projectFiles = new Map();
+            const mainPath = mainFilePath || uf.name;
+            projectFiles.set(mainPath, uf.content);
+            mainFilePath = mainPath;
+            stateManager.setState({ projectFiles, mainFilePath });
+            setCanonicalProjectFiles(projectFiles);
           }
-        }
 
-        // Update overlay dropdown with the new screenshot
-        updateOverlaySourceDropdown();
+          if (projectFiles) {
+            projectFiles.set(`Screenshots/${record.name}`, record.dataUrl);
+            stateManager.setState({ projectFiles });
+            setCanonicalProjectFiles(projectFiles);
+
+            // Auto-save to IndexedDB so screenshots persist across sessions
+            await autoSaveCompanionFiles();
+          }
+
+          // Select the newly uploaded image in the dropdown
+          if (measureImageSelect) {
+            measureImageSelect.value = String(record.id);
+            if (measureImageSelect.value !== String(record.id)) {
+              setTimeout(() => {
+                if (measureImageSelect)
+                  measureImageSelect.value = String(record.id);
+              }, 0);
+            }
+          }
+
+          // Update overlay dropdown with the new screenshot
+          updateOverlaySourceDropdown();
+        } catch (err) {
+          console.error('[App] Measurement image upload failed:', err);
+        }
       });
     }
     // Populate image recall dropdown when store changes
@@ -12890,13 +13643,25 @@ if (rounded) {
     // Initialize camera panel controller (right-side drawer)
     cameraPanelController = initCameraPanelController({
       previewManager: null, // Will be set after preview manager is initialized
-      onPanControl: ({ direction }) => {
+      onPanControl: ({ direction, shiftKey }) => {
         const root = document.documentElement;
         const isMono = root.getAttribute('data-ui-variant') === 'mono';
         const canAdjust = _hfmEnabled && _hfmAltView && _hfmPanAdjustEnabled;
         if (!isMono) return false;
         if (!canAdjust) return false;
 
+        if (shiftKey && direction === 'up') {
+          const next = _applyHfmPersistFade(
+            _hfmPersistFade + _HFM_PERSIST_FADE_RANGE.step
+          );
+          return `Alt view afterglow: ${_formatHfmPersistFadeValue(next)}`;
+        }
+        if (shiftKey && direction === 'down') {
+          const next = _applyHfmPersistFade(
+            _hfmPersistFade - _HFM_PERSIST_FADE_RANGE.step
+          );
+          return `Alt view afterglow: ${_formatHfmPersistFadeValue(next)}`;
+        }
         if (direction === 'up') {
           const next = _applyHfmContrastScale(
             _hfmContrastScale + _HFM_CONTRAST_RANGE.step
@@ -13396,8 +14161,8 @@ if (rounded) {
 
     try {
       // Get selected output format
-      const outputFormat = outputFormatSelect?.value || 'stl';
-      const formatName =
+      let outputFormat = outputFormatSelect?.value || 'stl';
+      let formatName =
         OUTPUT_FORMATS[outputFormat]?.name || outputFormat.toUpperCase();
 
       primaryActionBtn.disabled = true;
@@ -13413,6 +14178,8 @@ if (rounded) {
       if (autoPreviewController) {
         autoPreviewController.cancelPending();
       }
+
+      updatePreviewStateUI(PREVIEW_STATE.RENDERING);
 
       // Show render time estimate for complex models
       const estimate = estimateRenderTime(
@@ -13430,6 +14197,25 @@ if (rounded) {
       const startTime = Date.now();
 
       let result;
+
+      // Auto-detect 2D parameters with a 3D format and switch to SVG.
+      // When the user has e.g. generate="first layer for SVG/DXF file" but
+      // the format dropdown is still STL, rendering will fail with MODEL_IS_2D.
+      // Proactively switch to SVG so the render succeeds.
+      if (
+        !OUTPUT_FORMATS[outputFormat]?.is2D &&
+        typeof state.parameters?.generate === 'string' &&
+        /svg|dxf|2d|first layer/i.test(state.parameters.generate)
+      ) {
+        outputFormat = 'svg';
+        formatName = 'SVG';
+        if (outputFormatSelect) {
+          outputFormatSelect.value = 'svg';
+          outputFormatSelect.dispatchEvent(new Event('change'));
+        }
+        stateManager.setState({ outputFormat: 'svg' });
+        updateStatus('Generating SVG… (auto-switched from STL for 2D output)');
+      }
 
       // Use auto-preview controller for full render if available (STL only for now)
       if (autoPreviewController && outputFormat === 'stl') {
@@ -13451,25 +14237,39 @@ if (rounded) {
           state.schema,
           outputFormat
         );
-        result = await renderController.renderFull(
-          state.uploadedFile.content,
-          renderParameters,
-          {
-            outputFormat,
-            paramTypes: state.paramTypes || {},
-            files: state.projectFiles,
-            mainFile: state.mainFilePath,
-            libraries: libsForRender,
-            ...(exportQualityPreset ? { quality: exportQualityPreset } : {}),
-            onProgress: (_percent, _message) => {
-              // Simplified status: no confusing percentages
-              const formatName =
-                OUTPUT_FORMATS[outputFormat]?.name ||
-                outputFormat.toUpperCase();
-              updateStatus(`Generating ${formatName}...`);
-            },
+        const renderOptions = {
+          outputFormat,
+          paramTypes: state.paramTypes || {},
+          files: state.projectFiles,
+          mainFile: state.mainFilePath,
+          libraries: libsForRender,
+          ...(exportQualityPreset ? { quality: exportQualityPreset } : {}),
+          onProgress: (_percent, _message) => {
+            const fn =
+              OUTPUT_FORMATS[outputFormat]?.name || outputFormat.toUpperCase();
+            updateStatus(`Generating ${fn}...`);
+          },
+        };
+        try {
+          result = await renderController.renderFull(
+            state.uploadedFile.content,
+            renderParameters,
+            renderOptions
+          );
+        } catch (renderErr) {
+          if (renderErr.code === 'MODEL_NOT_2D') {
+            updateStatus(
+              `Model produces 3D geometry — projecting to ${outputFormat.toUpperCase()}...`
+            );
+            result = await renderController.render2DFallback(
+              state.uploadedFile.content,
+              renderParameters,
+              renderOptions
+            );
+          } else {
+            throw renderErr;
           }
-        );
+        }
       }
 
       const duration = ((Date.now() - startTime) / 1000).toFixed(1);
@@ -13477,23 +14277,70 @@ if (rounded) {
       // Store the hash of parameters used for this generation
       lastGeneratedParamsHash = hashParams(state.parameters);
 
+      const outputData = result.data || result.stl;
+      const resolvedFormat = result.format || outputFormat;
       stateManager.setState({
-        stl: result.data || result.stl,
-        outputFormat: result.format || outputFormat,
+        generatedOutput: {
+          data: outputData,
+          format: resolvedFormat,
+          stats: result.stats,
+          paramsHash: lastGeneratedParamsHash,
+        },
+        stl: outputData,
+        outputFormat: resolvedFormat,
         stlStats: result.stats,
         lastRenderTime: duration,
       });
 
-      // When the auto-preview controller handled the render, it already loaded
-      // the STL into the 3D viewer. For the direct-render fallback path, we
-      // must load it ourselves so the model is visible.
-      const stlData = result.data || result.stl;
-      if (!autoPreviewController && previewManager && stlData) {
+      // Display the result in the preview panel.
+      // 2D formats (SVG) get a native rendered SVG viewer;
+      // 3D formats are loaded into the Three.js viewer.
+      const is2DFormat = OUTPUT_FORMATS[outputFormat]?.is2D;
+      if (is2DFormat && resolvedFormat === 'svg' && previewManager) {
         try {
-          await previewManager.loadSTL(stlData, { preserveCamera: false });
+          let svgText =
+            typeof outputData === 'string'
+              ? outputData
+              : new TextDecoder().decode(outputData);
+
+          // Pre-inject F6-render parity styling: #07D0A7 teal fill, #FF0603 red outlines.
+          const renderStyle =
+            '<style data-forge-preview="true">' +
+            'path,polygon,polyline,circle,ellipse,rect{fill:#07D0A7;stroke:#FF0603;stroke-width:0.5;fill-opacity:1}' +
+            'line{stroke:#FF0603;stroke-width:0.5}' +
+            '</style>';
+          svgText = svgText.replace(/(<svg[^>]*>)/i, '$1' + renderStyle);
+
+          if (typeof previewManager.show2DPreviewAs3DPlane === 'function') {
+            await previewManager.show2DPreviewAs3DPlane(svgText, {
+              mode: 'rendered',
+            });
+          } else {
+            previewManager.show2DPreview(svgText, { mode: 'rendered' });
+          }
+        } catch (previewErr) {
+          console.warn('[Generate] Failed to show 2D preview:', previewErr);
+        }
+      } else if (
+        !autoPreviewController &&
+        previewManager &&
+        outputData &&
+        !is2DFormat
+      ) {
+        try {
+          if (previewManager.setRenderState) {
+            previewManager.setRenderState(null);
+          }
+          previewManager.hide2DPreview();
+          await previewManager.loadSTL(outputData, { preserveCamera: false });
+          if (_hfmEnabled && _hfmAltView?.clearPersistence) {
+            _hfmAltView.clearPersistence();
+          }
         } catch (loadErr) {
           console.warn('[Generate] Failed to load STL into preview:', loadErr);
         }
+      } else if (previewManager && !is2DFormat) {
+        previewManager.hide2DPreview();
       }
 
       // Store console output for the Console panel (echo/warning/error display)
@@ -13530,6 +14377,12 @@ if (rounded) {
       });
     } catch (error) {
       console.error('Generation failed:', error);
+      updatePreviewStateUI(PREVIEW_STATE.ERROR, {
+        error: error.message,
+      });
+      if (typeof window.addStructuredError === 'function') {
+        window.addStructuredError(error?.message || 'Generation failed');
+      }
 
       // Extract OpenSCAD console output embedded in error.details and surface it
       // to the Console panel. This is how missing-include warnings reach the user.
@@ -13551,13 +14404,16 @@ if (rounded) {
         return;
       }
 
-      // Special-case: SVG/DXF export failures with "not a 2D object" or empty output.
-      // Guide the user to select the 2D-compatible 'generate' parameter value.
+      // Special-case: SVG/DXF export failures — 3D geometry produced when 2D is required.
+      // Guide the user to the specific 'generate' parameter that controls the output mode.
       const currentFormat = outputFormatSelect?.value || 'stl';
       if (currentFormat === 'svg' || currentFormat === 'dxf') {
         const msg = (error?.message || '').toLowerCase();
         const is2DGeometryError =
+          error?.code === 'MODEL_NOT_2D' ||
           msg.includes('not a 2d') ||
+          msg.includes('3d geometry but svg') ||
+          msg.includes('3d geometry but dxf') ||
           msg.includes('no geometry') ||
           msg.includes('empty') ||
           msg.includes('missing') ||
@@ -13568,33 +14424,74 @@ if (rounded) {
           const currentState = stateManager.getState();
           const schemaParams = currentState.schema?.parameters || {};
           const generateParam = schemaParams.generate;
-          let guidance = '';
+          const currentParams = currentState.parameters || {};
+
+          // Determine the actual generate value from state (more reliable than echo parsing)
+          const actualGenerateValue = currentParams.generate ?? null;
+
+          // Locate the generate parameter in the UI for the "Take me to the setting" button.
+          const generateTargetKey = locateParameterKey('generate', {
+            labelHint: 'generate',
+          });
+
+          let twoDDisplayName = null;
           if (generateParam?.enum) {
             const twoDOption = generateParam.enum.find((entry) => {
               const v = String(
                 typeof entry === 'object' ? entry.value : entry
               ).toLowerCase();
+              const l =
+                typeof entry === 'object' && entry.label
+                  ? String(entry.label).toLowerCase()
+                  : v;
               return (
                 v.includes('svg') ||
                 v.includes('dxf') ||
-                v.includes('first layer')
+                v.includes('first layer') ||
+                l.includes('svg') ||
+                l.includes('dxf') ||
+                l.includes('first layer')
               );
             });
             if (twoDOption) {
-              const val =
-                typeof twoDOption === 'object' ? twoDOption.value : twoDOption;
-              guidance = `\n\nTo export ${currentFormat.toUpperCase()}: set the "generate" parameter to "${val}" and try again.`;
+              twoDDisplayName =
+                typeof twoDOption === 'object' && twoDOption.label
+                  ? twoDOption.label
+                  : typeof twoDOption === 'object'
+                    ? twoDOption.value
+                    : twoDOption;
             }
           }
-          if (!guidance) {
-            guidance = `\n\nTo export ${currentFormat.toUpperCase()}: your model must produce 2D geometry. Look for a "generate" or mode parameter and select the 2D/laser-cut option.`;
-          }
+
+          // Check if generate is already set to a 2D-compatible value.
+          // If so, the issue is a rendering engine limitation, not a settings problem.
+          const actualLower = String(actualGenerateValue ?? '').toLowerCase();
+          const alreadySet2D =
+            actualLower.includes('svg') ||
+            actualLower.includes('dxf') ||
+            actualLower.includes('first layer');
+
           updateStatus(
             `Error: ${currentFormat.toUpperCase()} export requires 2D geometry`
           );
-          alert(
-            `${currentFormat.toUpperCase()} export failed — model did not produce 2D geometry.${guidance}`
-          );
+
+          if (alreadySet2D) {
+            const userMessage =
+              `${currentFormat.toUpperCase()} Export Issue\n\n` +
+              `The "${actualGenerateValue}" setting is selected, but the rendering engine ` +
+              `could not produce 2D geometry. This can happen due to browser-based rendering ` +
+              `limitations with complex models.\n\n` +
+              `Try: Re-generate, or export the 3D model as STL and use desktop OpenSCAD ` +
+              `for SVG/DXF export.`;
+            alert(userMessage);
+          } else {
+            showDependencyGuidanceModal({
+              label: 'generate',
+              current: actualGenerateValue,
+              suggested: twoDDisplayName,
+              targetKey: generateTargetKey,
+            });
+          }
           return;
         }
       }
@@ -13602,6 +14499,9 @@ if (rounded) {
       // Use COGA-compliant friendly error translation
       const friendlyError = translateError(error.message);
       updateStatus(`Error: ${friendlyError.title}`);
+      _announceError(
+        `Error: ${friendlyError.title}. ${friendlyError.explanation}`
+      );
 
       // Show user-friendly error in alert (using translated message)
       const userMessage = `${friendlyError.title}\n\n${friendlyError.explanation}\n\nTry: ${friendlyError.suggestion}`;
@@ -14458,14 +15358,6 @@ if (rounded) {
   // Searchable combobox instance (non-null only when searchable_combobox flag is on)
   let _presetCombobox = null;
 
-  // Clear preset selection when parameters are manually changed
-  // Track if we're currently loading a preset (to avoid clearing during load)
-  let isLoadingPreset = false;
-  let currentPresetSignature = null;
-  // OpenSCAD behavior: preset stays selected even when parameters change.
-  // We track "dirty" state instead of clearing the selection.
-  let isPresetDirty = false;
-
   const stableStringify = (value) => {
     const seen = new WeakSet();
     const normalize = (val) => {
@@ -14662,11 +15554,16 @@ if (rounded) {
       mergedParams
     );
 
-    // Build updated projectFiles, starting from current state
+    // Build updated projectFiles from the canonical project snapshot rather than
+    // the currently aliased working set, so preset-specific companion files do
+    // not bleed into the next preset selection.
     const curState = stateManager.getState();
-    const newProjectFiles = curState.projectFiles
+    const currentProjectFilesForLog = curState.projectFiles
       ? new Map(curState.projectFiles)
       : new Map();
+    const newProjectFiles = canonicalProjectFiles
+      ? new Map(canonicalProjectFiles)
+      : currentProjectFilesForLog;
 
     // E2: Merge explicit preset.companionFiles (saved presets with embedded content)
     if (
@@ -14678,25 +15575,53 @@ if (rounded) {
       }
     }
 
-    // Alias-mount preset-specific companion files from the ZIP mapping.
     const companionMapping = presetCompanionMap?.get(preset.name);
+    // Alias-mount preset-specific companion files from the ZIP mapping.
     const aliasedFiles = applyCompanionAliases(
       newProjectFiles,
       companionMapping
     );
-    if (
-      companionMapping?.openingsPath &&
-      aliasedFiles.has('openings_and_additions.txt')
-    ) {
-      console.log(
-        `[Preset] Alias-mounted openings: ${companionMapping.openingsPath}`
-      );
-    }
-    if (companionMapping?.svgPath && aliasedFiles.has('default.svg')) {
-      console.log(`[Preset] Alias-mounted SVG: ${companionMapping.svgPath}`);
+    if (companionMapping?.aliases) {
+      for (const [target, source] of Object.entries(companionMapping.aliases)) {
+        if (aliasedFiles.has(target)) {
+          console.log(`[Preset] Alias-mounted: ${source} → ${target}`);
+        }
+      }
+    } else {
+      // COMPATIBILITY FALLBACK — legacy logging for {openingsPath, svgPath}
+      if (
+        companionMapping?.openingsPath &&
+        aliasedFiles.has('openings_and_additions.txt')
+      ) {
+        console.log(
+          `[Preset] Alias-mounted openings: ${companionMapping.openingsPath}`
+        );
+      }
+      if (companionMapping?.svgPath && aliasedFiles.has('default.svg')) {
+        console.log(`[Preset] Alias-mounted SVG: ${companionMapping.svgPath}`);
+      }
     }
 
     stateManager.setState({ projectFiles: aliasedFiles });
+
+    // Reset output format to STL when loading a preset whose parameters
+    // produce 3D geometry.  Check both the dropdown AND the state because
+    // they can desync (e.g. dropdown shows STL but state still says SVG
+    // after a welcome-screen round-trip).
+    const _fmtSelect = document.getElementById('outputFormat');
+    const _stateNeedsReset =
+      (stateManager.getState().outputFormat || 'stl') !== 'stl';
+    if (_fmtSelect && (_fmtSelect.value !== 'stl' || _stateNeedsReset)) {
+      const is2DPreset =
+        isNonPreviewable(mergedParams, state.schema) ||
+        (typeof mergedParams.generate === 'string' &&
+          /svg|dxf|2d|first layer/i.test(mergedParams.generate));
+      if (!is2DPreset) {
+        _fmtSelect.value = 'stl';
+        _fmtSelect.dispatchEvent(new Event('change'));
+        stateManager.setState({ outputFormat: 'stl' });
+      }
+    }
 
     if (autoPreviewController) {
       autoPreviewController.setProjectFiles(
@@ -14709,15 +15634,16 @@ if (rounded) {
     updatePrimaryActionButton();
     updateProjectFilesUI();
 
-    // When the preset has a mapped SVG, force-select the aliased default.svg
-    // in the overlay dropdown. Without this, the dropdown retains the previous
+    // When the preset has a mapped SVG, force-select the aliased overlay
+    // in the dropdown. Without this, the dropdown retains the previous
     // preset's SVG path (which still exists in the Map) and autoSelectOverlaySource
     // returns early, leaving the overlay stale.
-    if (companionMapping?.svgPath && aliasedFiles.has('default.svg')) {
+    const svgTarget = getOverlaySvgTarget(companionMapping);
+    if (svgTarget && aliasedFiles.has(svgTarget)) {
       if (overlaySourceSelect) {
-        overlaySourceSelect.value = 'default.svg';
+        overlaySourceSelect.value = svgTarget;
       }
-      loadOverlayFromProjectFile('default.svg')
+      loadOverlayFromProjectFile(svgTarget)
         .then(() => {
           // SVG 96 DPI size applied; SCAD case-opening / screen dims override.
           autoApplyScreenDimensionsFromParams(mergedParams);
@@ -14923,13 +15849,13 @@ if (rounded) {
 
     // Handle form submission
     const form = modal.querySelector('#savePresetForm');
-    form.addEventListener('submit', (e) => {
+    form?.addEventListener('submit', (e) => {
       e.preventDefault();
 
-      const name = modal.querySelector('#presetName').value.trim();
+      const name = modal.querySelector('#presetName')?.value.trim();
       const description = modal
         .querySelector('#presetDescription')
-        .value.trim();
+        ?.value.trim();
 
       if (!name) {
         alert('Please enter a preset name');
@@ -15773,6 +16699,20 @@ if (rounded) {
         defaultParams
       );
 
+      // Reset output format to STL when loading design defaults (3D preset)
+      const _fmtSelectDefaults = document.getElementById('outputFormat');
+      if (_fmtSelectDefaults && _fmtSelectDefaults.value !== 'stl') {
+        const is2DDefaults =
+          isNonPreviewable(defaultParams, state.schema) ||
+          (typeof defaultParams.generate === 'string' &&
+            /svg|dxf|2d|first layer/i.test(defaultParams.generate));
+        if (!is2DDefaults) {
+          _fmtSelectDefaults.value = 'stl';
+          _fmtSelectDefaults.dispatchEvent(new Event('change'));
+          stateManager.setState({ outputFormat: 'stl' });
+        }
+      }
+
       if (autoPreviewController) {
         autoPreviewController.onParameterChange(defaultParams);
       }
@@ -15809,7 +16749,7 @@ if (rounded) {
         compatibility.missingParams.length > 0
       ) {
         console.info(
-          `[Preset] "${preset.name}": ${compatibility.applicableCount} params applied, ` +
+          `[Preset] "${preset.name}": ${compatibility.compatibleCount} params applied, ` +
             `${compatibility.extraParams.length} skipped (not in current file), ` +
             `${compatibility.missingParams.length} kept at defaults (not in preset)`
         );
@@ -16079,11 +17019,12 @@ if (rounded) {
     return normalizedLines.join('\n');
   }
 
-  // Initialize ConsolePanel for ECHO/WARNING/ERROR display
-  const consolePanel = getConsolePanel();
-
-  // Initialize ErrorLogPanel for structured error display
+  // Initialize ErrorLogPanel first (renders into structured view tab)
   const errorLogPanel = getErrorLogPanel();
+  initAddStructuredError();
+
+  // Initialize unified ConsolePanel with structured sub-panel
+  const consolePanel = getConsolePanel({ structuredPanel: errorLogPanel });
 
   /**
    * Update console output display
@@ -16096,7 +17037,6 @@ if (rounded) {
 
     if (!append) {
       consolePanel.clear();
-      errorLogPanel.clear();
     }
 
     if (!normalizedOutput || normalizedOutput.trim() === '') {
@@ -16123,11 +17063,8 @@ if (rounded) {
       renderConsoleOutput(normalizedOutput);
     }
 
-    // Feed the ConsolePanel with parsed console output
-    // This displays ECHO/WARNING/ERROR in the parameter panel
+    // Feed both panels with parsed console output
     consolePanel.addOutput(normalizedOutput);
-
-    // Feed the ErrorLogPanel with the same output for structured display
     errorLogPanel.addOutput(normalizedOutput);
 
     // Extract ECHO/WARNING/ERROR messages and display in preview drawer
@@ -16250,13 +17187,17 @@ if (rounded) {
       })
       .join('\n');
 
-    // Show the drawer expanded
+    // Show the drawer: always mark it visible so the badge/label appears,
+    // but only auto-expand (remove 'collapsed') when there are warnings or errors
     echoDrawer.classList.add('visible');
-    echoDrawer.classList.remove('collapsed');
+    if (warnCount > 0 || errorCount > 0) {
+      echoDrawer.classList.remove('collapsed');
+    }
 
     const toggleBtn = document.getElementById('echoDrawerToggle');
     if (toggleBtn) {
-      toggleBtn.setAttribute('aria-expanded', 'true');
+      const isExpanded = warnCount > 0 || errorCount > 0;
+      toggleBtn.setAttribute('aria-expanded', String(isExpanded));
     }
 
     // Build accessible announcement
@@ -16423,16 +17364,30 @@ if (rounded) {
 
   // Clear console
   consoleClearBtn?.addEventListener('click', () => {
+    clearConsoleState();
+    announceImmediate('Console output cleared');
+  });
+
+  /**
+   * Reset all console/warning display state to a clean slate.
+   * Called on project switch and by the manual clear button.
+   */
+  function clearConsoleState() {
     lastConsoleOutput = '';
     if (consoleBadge) {
       consoleBadge.classList.add('hidden');
     }
     renderConsoleOutput('');
-    announceImmediate('Console output cleared');
-  });
+    consolePanel.clear();
+    const consolePanelDetails = document.getElementById('consolePanel');
+    if (consolePanelDetails) {
+      consolePanelDetails.open = false;
+    }
+  }
 
   // Make updateConsoleOutput available globally for the render result handler
   window.updateConsoleOutput = updateConsoleOutput;
+  window.clearConsoleState = clearConsoleState;
 
   // Unlock Limits Toggle
   const unlockLimitsToggle = document.getElementById('unlockLimitsToggle');
@@ -17094,9 +18049,13 @@ if (rounded) {
     }
   });
 
-  // Expert Mode toggle (Ctrl+E)
+  // Expert Mode toggle (Ctrl+E) -- only in Advanced UI mode per COGA principle
   keyboardConfig.on('toggleExpertMode', () => {
-    if (_isEnabled('expert_mode') && window._modeManager) {
+    if (
+      _isEnabled('expert_mode') &&
+      window._modeManager &&
+      getUIModeController()?.getMode() === 'advanced'
+    ) {
       window._modeManager.toggleMode();
     }
   });
@@ -17364,6 +18323,18 @@ if (typeof window !== 'undefined') {
   window.themeManager = themeManager;
   window.libraryManager = libraryManager;
 }
+
+// Global error handlers — catch uncaught exceptions and unhandled promise
+// rejections so screen reader users receive audible feedback.
+window.onerror = (message) => {
+  console.error('[Global]', message);
+  _announceError('An unexpected error occurred.');
+};
+
+window.addEventListener('unhandledrejection', (event) => {
+  console.error('[Global] Unhandled promise rejection:', event.reason);
+  _announceError('An unexpected error occurred.');
+});
 
 // Start the app
 initApp();

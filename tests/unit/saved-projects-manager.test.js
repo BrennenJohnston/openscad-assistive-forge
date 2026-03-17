@@ -3,7 +3,7 @@
  * @license GPL-3.0-or-later
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   initSavedProjectsDB,
   listSavedProjects,
@@ -27,6 +27,396 @@ import {
   moveProject,
   getProjectsInFolder,
 } from '../../src/js/saved-projects-manager.js';
+
+// ============================================================================
+// IndexedDB InvalidStateError retry regression tests
+// These tests use a fresh module instance (vi.resetModules + dynamic import)
+// so that the module-level `db` / `storageType` variables start from a clean
+// state and we can inject a fake IndexedDB that simulates a stale connection.
+// ============================================================================
+
+describe('IndexedDB InvalidStateError recovery', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.resetModules();
+  });
+
+  it('retries getFromIndexedDB after InvalidStateError and returns data on reconnect', async () => {
+    vi.resetModules();
+
+    let openCallCount = 0;
+
+    // Stale database: transaction() throws InvalidStateError
+    const staleDb = {
+      onerror: null,
+      onversionchange: null,
+      objectStoreNames: { contains: () => true },
+      transaction: () => {
+        const err = new DOMException(
+          'The database connection is closing.',
+          'InvalidStateError'
+        );
+        throw err;
+      },
+      close: vi.fn(),
+    };
+
+    // Working database: transaction() returns a transaction that resolves getAll()
+    const makeWorkingDb = () => ({
+      onerror: null,
+      onversionchange: null,
+      objectStoreNames: { contains: () => true },
+      transaction: () => {
+        const req = { result: [], onsuccess: null, onerror: null };
+        const store = {
+          getAll: () => {
+            Promise.resolve().then(() => {
+              if (req.onsuccess) req.onsuccess();
+            });
+            return req;
+          },
+        };
+        return { onerror: null, objectStore: () => store };
+      },
+      close: vi.fn(),
+    });
+
+    // indexedDB.open() — first call returns stale db, second call returns working db
+    const mockOpen = vi.fn(() => {
+      openCallCount++;
+      const dbInstance = openCallCount === 1 ? staleDb : makeWorkingDb();
+      const req = {
+        result: dbInstance,
+        error: null,
+        onsuccess: null,
+        onerror: null,
+        onupgradeneeded: null,
+        onblocked: null,
+      };
+      Promise.resolve().then(() => {
+        if (req.onsuccess) req.onsuccess();
+      });
+      return req;
+    });
+
+    vi.stubGlobal('indexedDB', { open: mockOpen });
+
+    const { initSavedProjectsDB, listSavedProjects } = await import(
+      '../../src/js/saved-projects-manager.js'
+    );
+
+    // First open: connects with the stale db
+    await initSavedProjectsDB();
+    expect(openCallCount).toBe(1);
+
+    // listSavedProjects → getFromIndexedDB → InvalidStateError on stale db
+    // → reconnectDB() → second open → working db → retry succeeds
+    const projects = await listSavedProjects();
+
+    expect(Array.isArray(projects)).toBe(true);
+    expect(openCallCount).toBe(2);
+  });
+
+  it('retries saveToIndexedDB after InvalidStateError and saves on reconnect', async () => {
+    vi.resetModules();
+
+    let openCallCount = 0;
+
+    const staleDb = {
+      onerror: null,
+      onversionchange: null,
+      objectStoreNames: { contains: () => true },
+      transaction: () => {
+        const err = new DOMException(
+          'The database connection is closing.',
+          'InvalidStateError'
+        );
+        throw err;
+      },
+      close: vi.fn(),
+    };
+
+    const savedItems = [];
+    const makeWorkingDb = () => ({
+      onerror: null,
+      onversionchange: null,
+      objectStoreNames: { contains: () => true },
+      transaction: (storeNames, mode) => {
+        const putReq = { result: undefined, onsuccess: null, onerror: null };
+        const getReq = { result: savedItems, onsuccess: null, onerror: null };
+        const store = {
+          put: (item) => {
+            savedItems.push(item);
+            Promise.resolve().then(() => {
+              if (putReq.onsuccess) putReq.onsuccess();
+            });
+            return putReq;
+          },
+          getAll: () => {
+            Promise.resolve().then(() => {
+              if (getReq.onsuccess) getReq.onsuccess();
+            });
+            return getReq;
+          },
+        };
+        return { onerror: null, objectStore: () => store };
+      },
+      close: vi.fn(),
+    });
+
+    const mockOpen = vi.fn(() => {
+      openCallCount++;
+      const dbInstance = openCallCount === 1 ? staleDb : makeWorkingDb();
+      const req = {
+        result: dbInstance,
+        error: null,
+        onsuccess: null,
+        onerror: null,
+        onupgradeneeded: null,
+        onblocked: null,
+      };
+      Promise.resolve().then(() => {
+        if (req.onsuccess) req.onsuccess();
+      });
+      return req;
+    });
+
+    vi.stubGlobal('indexedDB', { open: mockOpen });
+
+    const { initSavedProjectsDB, saveProject } = await import(
+      '../../src/js/saved-projects-manager.js'
+    );
+
+    await initSavedProjectsDB();
+    expect(openCallCount).toBe(1);
+
+    // saveProject → saveToIndexedDB → InvalidStateError → reconnect → retry
+    const result = await saveProject({
+      name: 'Retry Test',
+      originalName: 'retry.scad',
+      kind: 'scad',
+      mainFilePath: 'retry.scad',
+      content: '// retry test',
+      notes: '',
+    });
+
+    expect(result.success).toBe(true);
+    expect(openCallCount).toBe(2);
+  });
+});
+
+// ============================================================================
+// Large import batching regression tests
+// Verify that projects with > LARGE_FILES_BATCH_SIZE files are written to
+// PROJECT_FILES_STORE in batches and correctly reassembled by getProject().
+// ============================================================================
+
+describe('Large import batching', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.resetModules();
+  });
+
+  /**
+   * Build a minimal IDB mock that records writes to the named stores.
+   * `storeWrites` is mutated in-place so the caller can inspect it.
+   */
+  function makeBatchingDb(storeWrites) {
+    const storeData = {
+      projects: new Map(),
+      projectFiles: new Map(),
+    };
+
+    return {
+      onerror: null,
+      onversionchange: null,
+      objectStoreNames: {
+        contains: (name) =>
+          ['projects', 'folders', 'projectFiles', 'assets'].includes(name),
+      },
+      transaction: (storeNames) => {
+        const storeName = Array.isArray(storeNames) ? storeNames[0] : storeNames;
+        const putReq = { result: undefined, onsuccess: null, onerror: null };
+
+        const store = {
+          put: (item) => {
+            storeData[storeName]?.set(item.id, item);
+            storeWrites[storeName] = (storeWrites[storeName] || []);
+            storeWrites[storeName].push(item);
+            Promise.resolve().then(() => {
+              if (putReq.onsuccess) putReq.onsuccess();
+            });
+            return putReq;
+          },
+          getAll: () => {
+            const getAllReq = {
+              result: [...(storeData[storeName]?.values() ?? [])],
+              onsuccess: null,
+              onerror: null,
+            };
+            Promise.resolve().then(() => {
+              if (getAllReq.onsuccess) getAllReq.onsuccess();
+            });
+            return getAllReq;
+          },
+          index: (_name) => ({
+            getAll: (projectId) => {
+              const filtered = [...(storeData.projectFiles?.values() ?? [])].filter(
+                (f) => f.projectId === projectId
+              );
+              const indexReq = { result: filtered, onsuccess: null, onerror: null };
+              Promise.resolve().then(() => {
+                if (indexReq.onsuccess) indexReq.onsuccess();
+              });
+              return indexReq;
+            },
+          }),
+        };
+
+        const tx = {
+          onerror: null,
+          oncomplete: null,
+          onabort: null,
+          objectStore: () => store,
+        };
+        Promise.resolve().then(() => {
+          if (tx.oncomplete) tx.oncomplete();
+        });
+        return tx;
+      },
+      close: vi.fn(),
+    };
+  }
+
+  it('routes large imports through PROJECT_FILES_STORE and reassembles on getProject', async () => {
+    vi.resetModules();
+
+    const storeWrites = {};
+    const mockOpen = vi.fn(() => {
+      const req = {
+        result: makeBatchingDb(storeWrites),
+        error: null,
+        onsuccess: null,
+        onerror: null,
+        onupgradeneeded: null,
+        onblocked: null,
+      };
+      Promise.resolve().then(() => {
+        if (req.onsuccess) req.onsuccess();
+      });
+      return req;
+    });
+    vi.stubGlobal('indexedDB', { open: mockOpen });
+
+    const { initSavedProjectsDB, saveProject, getProject } = await import(
+      '../../src/js/saved-projects-manager.js'
+    );
+    await initSavedProjectsDB();
+
+    // Build a file map that exceeds the batch threshold (50)
+    const largeFilesMap = {};
+    for (let i = 0; i < 75; i++) {
+      largeFilesMap[`file-${i}.scad`] = `// File ${i} content`;
+    }
+
+    const result = await saveProject({
+      name: 'Large Import',
+      originalName: 'large.zip',
+      kind: 'zip',
+      mainFilePath: 'main.scad',
+      content: '// main',
+      projectFiles: largeFilesMap,
+      notes: '',
+    });
+
+    expect(result.success).toBe(true);
+
+    // Project record must have projectFiles = null + largeFilesInStore = true
+    const savedRecord = (storeWrites.projects || []).find(
+      (p) => p.id === result.id
+    );
+    expect(savedRecord).toBeDefined();
+    expect(savedRecord.projectFiles).toBeNull();
+    expect(savedRecord.largeFilesInStore).toBe(true);
+
+    // All 75 file entries must be in PROJECT_FILES_STORE
+    const writtenFiles = (storeWrites.projectFiles || []).filter(
+      (f) => f.projectId === result.id
+    );
+    expect(writtenFiles).toHaveLength(75);
+
+    // getProject must reassemble the full map from the store
+    const project = await getProject(result.id);
+    expect(project).not.toBeNull();
+    expect(project.projectFiles).toBeDefined();
+    expect(Object.keys(project.projectFiles)).toHaveLength(75);
+    expect(project.projectFiles['file-0.scad']).toBe('// File 0 content');
+    expect(project.projectFiles['file-74.scad']).toBe('// File 74 content');
+  });
+
+  it('does NOT batch when projectFiles count is at or below threshold', async () => {
+    vi.resetModules();
+
+    const storeWrites = {};
+    const mockOpen = vi.fn(() => {
+      const req = {
+        result: makeBatchingDb(storeWrites),
+        error: null,
+        onsuccess: null,
+        onerror: null,
+        onupgradeneeded: null,
+        onblocked: null,
+      };
+      Promise.resolve().then(() => {
+        if (req.onsuccess) req.onsuccess();
+      });
+      return req;
+    });
+    vi.stubGlobal('indexedDB', { open: mockOpen });
+
+    const { initSavedProjectsDB, saveProject, getProject } = await import(
+      '../../src/js/saved-projects-manager.js'
+    );
+    await initSavedProjectsDB();
+
+    // Exactly 10 files — well below the 50-file threshold
+    const smallFilesMap = {};
+    for (let i = 0; i < 10; i++) {
+      smallFilesMap[`file-${i}.scad`] = `// File ${i}`;
+    }
+
+    const result = await saveProject({
+      name: 'Small Import',
+      originalName: 'small.zip',
+      kind: 'zip',
+      mainFilePath: 'main.scad',
+      content: '// main',
+      projectFiles: smallFilesMap,
+      notes: '',
+    });
+
+    expect(result.success).toBe(true);
+
+    // Project record must use inline serialised projectFiles — no largeFilesInStore
+    const savedRecord = (storeWrites.projects || []).find(
+      (p) => p.id === result.id
+    );
+    expect(savedRecord).toBeDefined();
+    expect(savedRecord.largeFilesInStore).toBeFalsy();
+    expect(typeof savedRecord.projectFiles).toBe('string');
+    expect(savedRecord.projectFiles).not.toBeNull();
+
+    // No files should be written to PROJECT_FILES_STORE
+    const writtenFiles = (storeWrites.projectFiles || []).filter(
+      (f) => f.projectId === result.id
+    );
+    expect(writtenFiles).toHaveLength(0);
+
+    // getProject still parses the inline JSON correctly
+    const project = await getProject(result.id);
+    expect(Object.keys(project.projectFiles)).toHaveLength(10);
+  });
+});
 
 // Mock IndexedDB
 const mockIndexedDB = {

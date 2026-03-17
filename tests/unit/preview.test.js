@@ -93,11 +93,14 @@ describe('PreviewManager', () => {
   })
 
   describe('Color Override', () => {
-    it('applies color overrides when a mesh is present', () => {
+    it('applies color overrides when a mesh is present and override enabled', () => {
       const manager = new PreviewManager(container)
+      manager.colorOverrideEnabled = true
       manager.mesh = {
         material: {
-          color: { setHex: vi.fn() }
+          color: { setHex: vi.fn() },
+          vertexColors: false,
+          needsUpdate: false,
         }
       }
 
@@ -105,6 +108,23 @@ describe('PreviewManager', () => {
 
       expect(manager.colorOverride).toBe('#ff0000')
       expect(manager.mesh.material.color.setHex).toHaveBeenCalled()
+    })
+
+    it('stores override but does not apply when disabled', () => {
+      const manager = new PreviewManager(container)
+      manager.colorOverrideEnabled = false
+      manager.mesh = {
+        material: {
+          color: { setHex: vi.fn() },
+          vertexColors: false,
+          needsUpdate: false,
+        }
+      }
+
+      manager.setColorOverride('#ff0000')
+
+      expect(manager.colorOverride).toBe('#ff0000')
+      expect(manager.mesh.material.color.setHex).not.toHaveBeenCalled()
     })
 
     it('normalizes hex colors without hash', () => {
@@ -641,6 +661,312 @@ describe('PreviewManager', () => {
       manager.setColorOverride('#f00')
       
       expect(manager.colorOverride).toBeNull()
+    })
+  })
+
+  describe('Color Override Toggle', () => {
+    it('initializes with colorOverrideEnabled = false', () => {
+      const manager = new PreviewManager(container)
+      expect(manager.colorOverrideEnabled).toBe(false)
+    })
+
+    it('setColorOverrideEnabled(true) applies solid color to COFF mesh', () => {
+      const manager = new PreviewManager(container)
+      const colorAttr = { count: 100 }
+      manager.mesh = {
+        material: {
+          color: { setHex: vi.fn() },
+          vertexColors: true,
+          needsUpdate: false,
+        },
+        geometry: {
+          attributes: { color: colorAttr },
+        },
+      }
+      manager.colorOverride = '#ff0000'
+      manager.setColorOverrideEnabled(true)
+
+      expect(manager.mesh.material.vertexColors).toBe(false)
+      expect(manager.mesh.material.needsUpdate).toBe(true)
+      expect(manager.mesh.material.color.setHex).toHaveBeenCalledWith(0xff0000)
+    })
+
+    it('setColorOverrideEnabled(false) restores vertex colors on COFF mesh', () => {
+      const manager = new PreviewManager(container)
+      const colorAttr = { count: 100 }
+      manager.mesh = {
+        material: {
+          color: { setHex: vi.fn() },
+          vertexColors: false,
+          needsUpdate: false,
+        },
+        geometry: {
+          attributes: { color: colorAttr },
+        },
+      }
+      manager.colorOverride = '#ff0000'
+      manager.colorOverrideEnabled = true
+      manager.setColorOverrideEnabled(false)
+
+      expect(manager.mesh.material.vertexColors).toBe(true)
+      expect(manager.mesh.material.needsUpdate).toBe(true)
+    })
+
+    it('toggle OFF prevents setColorOverride from applying', () => {
+      const manager = new PreviewManager(container)
+      manager.colorOverrideEnabled = false
+      manager.mesh = {
+        material: {
+          color: { setHex: vi.fn() },
+          vertexColors: false,
+          needsUpdate: false,
+        },
+      }
+      manager.setColorOverride('#ff0000')
+
+      expect(manager.colorOverride).toBe('#ff0000')
+      expect(manager.mesh.material.color.setHex).not.toHaveBeenCalled()
+    })
+
+    it('toggle OFF on plain mesh falls back to theme default', () => {
+      const manager = new PreviewManager(container)
+      manager.currentTheme = 'light'
+      manager.mesh = {
+        material: {
+          color: { setHex: vi.fn() },
+          vertexColors: false,
+          needsUpdate: false,
+        },
+        geometry: {
+          attributes: {},
+        },
+      }
+      manager.colorOverride = '#ff0000'
+      manager.colorOverrideEnabled = true
+      manager.setColorOverrideEnabled(false)
+
+      expect(manager.mesh.material.vertexColors).toBe(false)
+      expect(manager.mesh.material.needsUpdate).toBe(true)
+      expect(manager.mesh.material.color.setHex).toHaveBeenCalled()
+    })
+
+    it('_syncColorOverride handles group meshes', () => {
+      const manager = new PreviewManager(container)
+      const child1 = {
+        material: {
+          color: { setHex: vi.fn() },
+          vertexColors: true,
+          needsUpdate: false,
+        },
+        geometry: {
+          attributes: { color: { count: 10 } },
+        },
+        userData: {},
+      }
+      const highlightChild = {
+        material: {
+          color: { setHex: vi.fn() },
+          vertexColors: false,
+          needsUpdate: false,
+        },
+        geometry: { attributes: {} },
+        userData: { isHighlightOverlay: true },
+      }
+      manager.mesh = {
+        isGroup: true,
+        children: [child1, highlightChild],
+      }
+      manager.colorOverride = '#00ff00'
+      manager.setColorOverrideEnabled(true)
+
+      expect(child1.material.vertexColors).toBe(false)
+      expect(child1.material.color.setHex).toHaveBeenCalledWith(0x00ff00)
+      expect(highlightChild.material.color.setHex).not.toHaveBeenCalled()
+    })
+
+    it('_syncColorOverride is a no-op when no mesh exists', () => {
+      const manager = new PreviewManager(container)
+      manager.mesh = null
+      expect(() => manager.setColorOverrideEnabled(true)).not.toThrow()
+    })
+  })
+
+  describe('Appearance Override Toggle', () => {
+    it('initializes with appearanceOverrideEnabled = false', () => {
+      const manager = new PreviewManager(container)
+      expect(manager.appearanceOverrideEnabled).toBe(false)
+    })
+
+    it('setAppearanceOverrideEnabled(true) does not reset appearance', () => {
+      const manager = new PreviewManager(container)
+      manager.mesh = {
+        material: {
+          transparent: true,
+          opacity: 0.5,
+          depthWrite: true,
+          needsUpdate: false,
+        },
+      }
+      manager.ambientLight = { intensity: 1 }
+      manager.directionalLight1 = { intensity: 1 }
+      manager.directionalLight2 = { intensity: 1 }
+      manager.baseLightIntensities = { ambient: 1, dir1: 1, dir2: 1 }
+      manager._brightnessScale = 1.5
+      manager._contrastFactor = 0.8
+
+      manager.setAppearanceOverrideEnabled(true)
+
+      expect(manager.appearanceOverrideEnabled).toBe(true)
+      expect(manager._brightnessScale).toBe(1.5)
+      expect(manager._contrastFactor).toBe(0.8)
+    })
+
+    it('setAppearanceOverrideEnabled(false) resets opacity/brightness/contrast to defaults', () => {
+      const manager = new PreviewManager(container)
+      manager.mesh = {
+        material: {
+          transparent: true,
+          opacity: 0.5,
+          depthWrite: true,
+          renderOrder: 1,
+          needsUpdate: false,
+        },
+      }
+      manager.ambientLight = { intensity: 1 }
+      manager.directionalLight1 = { intensity: 1 }
+      manager.directionalLight2 = { intensity: 1 }
+      manager.baseLightIntensities = { ambient: 1, dir1: 1, dir2: 1 }
+      manager._brightnessScale = 1.5
+      manager._contrastFactor = 0.8
+      manager.appearanceOverrideEnabled = true
+
+      manager.setAppearanceOverrideEnabled(false)
+
+      expect(manager.appearanceOverrideEnabled).toBe(false)
+      expect(manager._brightnessScale).toBe(1)
+      expect(manager._contrastFactor).toBe(1)
+      expect(manager.mesh.material.opacity).toBe(1)
+      expect(manager.mesh.material.transparent).toBe(false)
+    })
+
+    it('setModelOpacity is a no-op when override disabled', () => {
+      const manager = new PreviewManager(container)
+      manager.mesh = {
+        material: {
+          transparent: false,
+          opacity: 1,
+          depthWrite: true,
+          needsUpdate: false,
+        },
+      }
+      manager.appearanceOverrideEnabled = false
+
+      manager.setModelOpacity(50)
+
+      expect(manager.mesh.material.opacity).toBe(1)
+    })
+
+    it('setBrightness is a no-op when override disabled', () => {
+      const manager = new PreviewManager(container)
+      manager.ambientLight = { intensity: 1 }
+      manager.directionalLight1 = { intensity: 1 }
+      manager.directionalLight2 = { intensity: 1 }
+      manager.baseLightIntensities = { ambient: 1, dir1: 1, dir2: 1 }
+      manager._brightnessScale = 1
+      manager.appearanceOverrideEnabled = false
+
+      manager.setBrightness(150)
+
+      expect(manager._brightnessScale).toBe(1)
+    })
+
+    it('setContrast is a no-op when override disabled', () => {
+      const manager = new PreviewManager(container)
+      manager.ambientLight = { intensity: 1 }
+      manager.directionalLight1 = { intensity: 1 }
+      manager.directionalLight2 = { intensity: 1 }
+      manager.baseLightIntensities = { ambient: 1, dir1: 1, dir2: 1 }
+      manager._contrastFactor = 1
+      manager.appearanceOverrideEnabled = false
+
+      manager.setContrast(150)
+
+      expect(manager._contrastFactor).toBe(1)
+    })
+
+    it('resetAppearance is a no-op when override disabled', () => {
+      const manager = new PreviewManager(container)
+      manager.mesh = {
+        material: {
+          transparent: true,
+          opacity: 0.5,
+          depthWrite: true,
+          needsUpdate: false,
+        },
+      }
+      manager.ambientLight = { intensity: 1 }
+      manager.directionalLight1 = { intensity: 1 }
+      manager.directionalLight2 = { intensity: 1 }
+      manager.baseLightIntensities = { ambient: 1, dir1: 1, dir2: 1 }
+      manager._brightnessScale = 1.5
+      manager.appearanceOverrideEnabled = false
+
+      manager.resetAppearance()
+
+      expect(manager._brightnessScale).toBe(1.5)
+      expect(manager.mesh.material.opacity).toBe(0.5)
+    })
+
+    it('_syncAppearance is a no-op when no mesh exists (opacity reset skipped)', () => {
+      const manager = new PreviewManager(container)
+      manager.mesh = null
+      manager.ambientLight = { intensity: 1 }
+      manager.directionalLight1 = { intensity: 1 }
+      manager.directionalLight2 = { intensity: 1 }
+      manager.baseLightIntensities = { ambient: 1, dir1: 1, dir2: 1 }
+      manager._brightnessScale = 1.5
+      manager.appearanceOverrideEnabled = true
+
+      expect(() => manager.setAppearanceOverrideEnabled(false)).not.toThrow()
+      expect(manager._brightnessScale).toBe(1)
+    })
+
+    it('_syncAppearance handles group meshes when disabling', () => {
+      const manager = new PreviewManager(container)
+      const child1 = {
+        material: {
+          transparent: true,
+          opacity: 0.5,
+          depthWrite: true,
+          renderOrder: 1,
+          needsUpdate: false,
+        },
+      }
+      const child2 = {
+        material: {
+          transparent: true,
+          opacity: 0.7,
+          depthWrite: true,
+          renderOrder: 1,
+          needsUpdate: false,
+        },
+      }
+      manager.mesh = {
+        isGroup: true,
+        children: [child1, child2],
+      }
+      manager.ambientLight = { intensity: 1 }
+      manager.directionalLight1 = { intensity: 1 }
+      manager.directionalLight2 = { intensity: 1 }
+      manager.baseLightIntensities = { ambient: 1, dir1: 1, dir2: 1 }
+      manager.appearanceOverrideEnabled = true
+
+      manager.setAppearanceOverrideEnabled(false)
+
+      expect(child1.material.opacity).toBe(1)
+      expect(child1.material.transparent).toBe(false)
+      expect(child2.material.opacity).toBe(1)
+      expect(child2.material.transparent).toBe(false)
     })
   })
 
@@ -1237,6 +1563,1042 @@ describe('PreviewManager', () => {
       manager.saveCustomGridPreset('B', 200, 200)
       manager.saveCustomGridPreset('C', 300, 300)
       expect(manager.loadCustomGridPresets()).toHaveLength(3)
+    })
+  })
+
+  describe('Grid Color', () => {
+    let manager
+
+    beforeEach(() => {
+      manager = new PreviewManager(container)
+      localStorage.clear()
+    })
+
+    describe('setGridColor', () => {
+      it('stores a valid hex color as gridColorOverride', () => {
+        manager.setGridColor('#ff0000')
+        expect(manager.gridColorOverride).toBe('#ff0000')
+      })
+
+      it('persists the color in localStorage', () => {
+        manager.setGridColor('#00ff00')
+        expect(localStorage.getItem('openscad-forge-grid-color')).toBe('#00ff00')
+      })
+
+      it('normalizes hex without hash', () => {
+        manager.setGridColor('0000ff')
+        expect(manager.gridColorOverride).toBe('#0000ff')
+      })
+
+      it('ignores invalid color values', () => {
+        manager.setGridColor('not-a-color')
+        expect(manager.gridColorOverride).toBeNull()
+      })
+
+      it('ignores null', () => {
+        manager.gridColorOverride = '#ff0000'
+        manager.setGridColor(null)
+        expect(manager.gridColorOverride).toBe('#ff0000')
+      })
+
+      it('ignores empty string', () => {
+        manager.gridColorOverride = '#ff0000'
+        manager.setGridColor('')
+        expect(manager.gridColorOverride).toBe('#ff0000')
+      })
+    })
+
+    describe('resetGridColor', () => {
+      it('clears gridColorOverride', () => {
+        manager.gridColorOverride = '#ff0000'
+        manager.resetGridColor()
+        expect(manager.gridColorOverride).toBeNull()
+      })
+
+      it('removes the color from localStorage', () => {
+        localStorage.setItem('openscad-forge-grid-color', '#ff0000')
+        manager.resetGridColor()
+        expect(localStorage.getItem('openscad-forge-grid-color')).toBeNull()
+      })
+    })
+
+    describe('getGridColor', () => {
+      it('returns null when no override is set', () => {
+        expect(manager.getGridColor()).toBeNull()
+      })
+
+      it('returns the current override', () => {
+        manager.gridColorOverride = '#abcdef'
+        expect(manager.getGridColor()).toBe('#abcdef')
+      })
+    })
+
+    describe('loadGridColorPreference', () => {
+      it('returns null when nothing is stored', () => {
+        expect(manager.loadGridColorPreference()).toBeNull()
+      })
+
+      it('returns a stored valid hex color', () => {
+        localStorage.setItem('openscad-forge-grid-color', '#aabbcc')
+        expect(manager.loadGridColorPreference()).toBe('#aabbcc')
+      })
+
+      it('returns null for invalid stored value', () => {
+        localStorage.setItem('openscad-forge-grid-color', 'garbage')
+        expect(manager.loadGridColorPreference()).toBeNull()
+      })
+
+      it('handles localStorage errors gracefully', () => {
+        const originalGetItem = localStorage.getItem
+        localStorage.getItem = vi.fn(() => { throw new Error('Storage error') })
+        expect(manager.loadGridColorPreference()).toBeNull()
+        localStorage.getItem = originalGetItem
+      })
+    })
+
+    describe('saveGridColorPreference', () => {
+      it('saves a valid color', () => {
+        manager.saveGridColorPreference('#112233')
+        expect(localStorage.getItem('openscad-forge-grid-color')).toBe('#112233')
+      })
+
+      it('removes the key when null is passed', () => {
+        localStorage.setItem('openscad-forge-grid-color', '#112233')
+        manager.saveGridColorPreference(null)
+        expect(localStorage.getItem('openscad-forge-grid-color')).toBeNull()
+      })
+
+      it('handles localStorage errors gracefully', () => {
+        const originalSetItem = localStorage.setItem
+        localStorage.setItem = vi.fn(() => { throw new Error('Storage error') })
+        expect(() => manager.saveGridColorPreference('#aabbcc')).not.toThrow()
+        localStorage.setItem = originalSetItem
+      })
+    })
+
+    describe('_resolveGridColors', () => {
+      it('returns theme defaults when no override is set', () => {
+        manager.currentTheme = 'light'
+        manager.gridColorOverride = null
+        const colors = manager._resolveGridColors()
+        expect(colors.gridPrimary).toBe(0xcccccc)
+        expect(colors.gridSecondary).toBe(0xe0e0e0)
+      })
+
+      it('returns override-derived colors when override is set', () => {
+        manager.currentTheme = 'light'
+        manager.gridColorOverride = '#ff0000'
+        const colors = manager._resolveGridColors()
+        expect(colors.gridPrimary).toBe(0xff0000)
+        expect(colors.gridSecondary).not.toBe(0xff0000)
+      })
+
+      it('falls back to light theme for unknown theme key', () => {
+        manager.currentTheme = 'nonexistent'
+        manager.gridColorOverride = null
+        const colors = manager._resolveGridColors()
+        expect(colors.gridPrimary).toBe(0xcccccc)
+      })
+    })
+
+    describe('_deriveSecondaryGridColor', () => {
+      it('blends primary toward background at 50%', () => {
+        const secondary = PreviewManager._deriveSecondaryGridColor(0x000000, 0xffffff)
+        const r = (secondary >> 16) & 0xff
+        const g = (secondary >> 8) & 0xff
+        const b = secondary & 0xff
+        expect(r).toBe(128)
+        expect(g).toBe(128)
+        expect(b).toBe(128)
+      })
+
+      it('returns same color when primary equals background', () => {
+        const secondary = PreviewManager._deriveSecondaryGridColor(0xaabbcc, 0xaabbcc)
+        expect(secondary).toBe(0xaabbcc)
+      })
+
+      it('blends red channel correctly', () => {
+        const secondary = PreviewManager._deriveSecondaryGridColor(0xff0000, 0x000000)
+        const r = (secondary >> 16) & 0xff
+        expect(r).toBe(128)
+        expect(secondary & 0xff).toBe(0)
+      })
+    })
+
+    describe('gridColorOverride initialized from localStorage', () => {
+      it('picks up stored color on construction', () => {
+        localStorage.setItem('openscad-forge-grid-color', '#deadbe')
+        const m = new PreviewManager(container)
+        expect(m.gridColorOverride).toBe('#deadbe')
+      })
+
+      it('stays null when nothing is stored', () => {
+        const m = new PreviewManager(container)
+        expect(m.gridColorOverride).toBeNull()
+      })
+    })
+  })
+
+  describe('Grid Opacity', () => {
+    let manager
+
+    beforeEach(() => {
+      manager = new PreviewManager(container)
+      localStorage.clear()
+    })
+
+    describe('setGridOpacity', () => {
+      it('stores a valid opacity value', () => {
+        manager.setGridOpacity(50)
+        expect(manager.gridOpacity).toBe(50)
+      })
+
+      it('persists in localStorage', () => {
+        manager.setGridOpacity(75)
+        expect(localStorage.getItem('openscad-forge-grid-opacity')).toBe('75')
+      })
+
+      it('clamps below minimum to 10', () => {
+        manager.setGridOpacity(0)
+        expect(manager.gridOpacity).toBe(10)
+      })
+
+      it('clamps above maximum to 100', () => {
+        manager.setGridOpacity(150)
+        expect(manager.gridOpacity).toBe(100)
+      })
+
+      it('rounds fractional values', () => {
+        manager.setGridOpacity(55.7)
+        expect(manager.gridOpacity).toBe(56)
+      })
+
+      it('ignores NaN input', () => {
+        manager.gridOpacity = 80
+        manager.setGridOpacity('not-a-number')
+        expect(manager.gridOpacity).toBe(80)
+      })
+
+      it('accepts string-numeric input', () => {
+        manager.setGridOpacity('60')
+        expect(manager.gridOpacity).toBe(60)
+      })
+    })
+
+    describe('getGridOpacity', () => {
+      it('returns default 100 when no override', () => {
+        expect(manager.getGridOpacity()).toBe(100)
+      })
+
+      it('returns the current value', () => {
+        manager.gridOpacity = 40
+        expect(manager.getGridOpacity()).toBe(40)
+      })
+    })
+
+    describe('resetGridOpacity', () => {
+      it('resets to 100', () => {
+        manager.gridOpacity = 30
+        manager.resetGridOpacity()
+        expect(manager.gridOpacity).toBe(100)
+      })
+
+      it('removes from localStorage', () => {
+        localStorage.setItem('openscad-forge-grid-opacity', '50')
+        manager.resetGridOpacity()
+        expect(localStorage.getItem('openscad-forge-grid-opacity')).toBeNull()
+      })
+    })
+
+    describe('loadGridOpacityPreference', () => {
+      it('returns 100 when nothing stored', () => {
+        expect(manager.loadGridOpacityPreference()).toBe(100)
+      })
+
+      it('returns stored valid value', () => {
+        localStorage.setItem('openscad-forge-grid-opacity', '65')
+        expect(manager.loadGridOpacityPreference()).toBe(65)
+      })
+
+      it('returns 100 for out-of-range stored value', () => {
+        localStorage.setItem('openscad-forge-grid-opacity', '5')
+        expect(manager.loadGridOpacityPreference()).toBe(100)
+      })
+
+      it('returns 100 for non-numeric stored value', () => {
+        localStorage.setItem('openscad-forge-grid-opacity', 'abc')
+        expect(manager.loadGridOpacityPreference()).toBe(100)
+      })
+
+      it('handles localStorage errors gracefully', () => {
+        const originalGetItem = localStorage.getItem
+        localStorage.getItem = vi.fn(() => { throw new Error('Storage error') })
+        expect(manager.loadGridOpacityPreference()).toBe(100)
+        localStorage.getItem = originalGetItem
+      })
+    })
+
+    describe('saveGridOpacityPreference', () => {
+      it('saves a non-default value', () => {
+        manager.saveGridOpacityPreference(70)
+        expect(localStorage.getItem('openscad-forge-grid-opacity')).toBe('70')
+      })
+
+      it('removes key when null', () => {
+        localStorage.setItem('openscad-forge-grid-opacity', '50')
+        manager.saveGridOpacityPreference(null)
+        expect(localStorage.getItem('openscad-forge-grid-opacity')).toBeNull()
+      })
+
+      it('removes key when value is 100 (default)', () => {
+        manager.saveGridOpacityPreference(100)
+        expect(localStorage.getItem('openscad-forge-grid-opacity')).toBeNull()
+      })
+
+      it('handles localStorage errors gracefully', () => {
+        const originalSetItem = localStorage.setItem
+        localStorage.setItem = vi.fn(() => { throw new Error('Storage error') })
+        expect(() => manager.saveGridOpacityPreference(50)).not.toThrow()
+        localStorage.setItem = originalSetItem
+      })
+    })
+
+    describe('_applyGridOpacity', () => {
+      it('does nothing when gridHelper is null', () => {
+        manager.gridHelper = null
+        expect(() => manager._applyGridOpacity()).not.toThrow()
+      })
+
+      it('sets material opacity for single material', () => {
+        const mockMaterial = { transparent: false, opacity: 1 }
+        manager.gridHelper = { material: mockMaterial }
+        manager.gridOpacity = 50
+        manager._applyGridOpacity()
+        expect(mockMaterial.transparent).toBe(true)
+        expect(mockMaterial.opacity).toBe(0.5)
+      })
+
+      it('sets material opacity for array of materials', () => {
+        const mat1 = { transparent: false, opacity: 1 }
+        const mat2 = { transparent: false, opacity: 1 }
+        manager.gridHelper = { material: [mat1, mat2] }
+        manager.gridOpacity = 40
+        manager._applyGridOpacity()
+        expect(mat1.transparent).toBe(true)
+        expect(mat1.opacity).toBeCloseTo(0.4)
+        expect(mat2.transparent).toBe(true)
+        expect(mat2.opacity).toBeCloseTo(0.4)
+      })
+
+      it('sets transparent to false when opacity is 100', () => {
+        const mockMaterial = { transparent: true, opacity: 0.5 }
+        manager.gridHelper = { material: mockMaterial }
+        manager.gridOpacity = 100
+        manager._applyGridOpacity()
+        expect(mockMaterial.transparent).toBe(false)
+        expect(mockMaterial.opacity).toBe(1)
+      })
+    })
+
+    describe('gridOpacity initialized from localStorage', () => {
+      it('picks up stored opacity on construction', () => {
+        localStorage.setItem('openscad-forge-grid-opacity', '60')
+        const m = new PreviewManager(container)
+        expect(m.gridOpacity).toBe(60)
+      })
+
+      it('defaults to 100 when nothing stored', () => {
+        const m = new PreviewManager(container)
+        expect(m.gridOpacity).toBe(100)
+      })
+    })
+  })
+
+  describe('Color Legend', () => {
+    let manager
+
+    beforeEach(() => {
+      manager = new PreviewManager(container)
+    })
+
+    describe('showColorLegend', () => {
+      it('creates a legend element in the container', () => {
+        manager.showColorLegend([
+          { name: 'keyguard_color', value: '#ff0000' },
+          { name: 'frame_color', value: '#00ff00' },
+        ])
+        const legend = container.querySelector('#colorLegend')
+        expect(legend).not.toBeNull()
+        expect(legend.getAttribute('role')).toBe('status')
+      })
+
+      it('renders a row per color parameter', () => {
+        manager.showColorLegend([
+          { name: 'a', value: '#111111' },
+          { name: 'b', value: '#222222' },
+          { name: 'c', value: '#333333' },
+        ])
+        const rows = container.querySelectorAll('.color-legend-row')
+        expect(rows.length).toBe(3)
+      })
+
+      it('replaces underscores with spaces in labels', () => {
+        manager.showColorLegend([{ name: 'first_layer_color', value: '#aaa' }])
+        const label = container.querySelector('.color-legend-label')
+        expect(label.textContent).toContain('first layer color')
+      })
+
+      it('removes existing legend before showing a new one', () => {
+        manager.showColorLegend([{ name: 'a', value: '#111' }])
+        manager.showColorLegend([{ name: 'b', value: '#222' }])
+        const legends = container.querySelectorAll('#colorLegend')
+        expect(legends.length).toBe(1)
+      })
+
+      it('does nothing for empty array', () => {
+        manager.showColorLegend([])
+        expect(container.querySelector('#colorLegend')).toBeNull()
+      })
+
+      it('does nothing for null', () => {
+        manager.showColorLegend(null)
+        expect(container.querySelector('#colorLegend')).toBeNull()
+      })
+
+      it('does nothing when container is missing', () => {
+        manager.container = null
+        expect(() => manager.showColorLegend([{ name: 'a', value: '#fff' }])).not.toThrow()
+      })
+    })
+
+    describe('hideColorLegend', () => {
+      it('removes the legend', () => {
+        manager.showColorLegend([{ name: 'a', value: '#111' }])
+        manager.hideColorLegend()
+        expect(container.querySelector('#colorLegend')).toBeNull()
+      })
+
+      it('does nothing when no legend exists', () => {
+        expect(() => manager.hideColorLegend()).not.toThrow()
+      })
+
+      it('does nothing when container is null', () => {
+        manager.container = null
+        expect(() => manager.hideColorLegend()).not.toThrow()
+      })
+    })
+  })
+
+  describe('Render State Color', () => {
+    let manager
+
+    beforeEach(() => {
+      manager = new PreviewManager(container)
+      manager.currentTheme = 'light'
+      manager.colorOverride = null
+      manager.renderState = null
+    })
+
+    describe('setRenderState', () => {
+      it('is a no-op and does not store render state', () => {
+        manager.setRenderState('preview')
+        expect(manager.renderState).toBeNull()
+      })
+
+      it('is a no-op for laser state', () => {
+        manager.setRenderState('laser')
+        expect(manager.renderState).toBeNull()
+      })
+
+      it('is a no-op for null', () => {
+        manager.renderState = 'preview'
+        manager.setRenderState(null)
+        expect(manager.renderState).toBe('preview')
+      })
+
+      it('is a no-op for undefined', () => {
+        manager.renderState = 'preview'
+        manager.setRenderState(undefined)
+        expect(manager.renderState).toBe('preview')
+      })
+    })
+
+    describe('_resolveModelColor', () => {
+      it('returns theme default when no state and no override (light)', () => {
+        const color = manager._resolveModelColor()
+        expect(color).toBe('#2196f3')
+      })
+
+      it('returns theme default regardless of renderState (light, preview)', () => {
+        manager.renderState = 'preview'
+        const color = manager._resolveModelColor()
+        expect(color).toBe('#2196f3')
+      })
+
+      it('returns theme default regardless of renderState (light, laser)', () => {
+        manager.renderState = 'laser'
+        const color = manager._resolveModelColor()
+        expect(color).toBe('#2196f3')
+      })
+
+      it('returns dark theme default regardless of renderState', () => {
+        manager.currentTheme = 'dark'
+        manager.renderState = 'preview'
+        const color = manager._resolveModelColor()
+        expect(color).toBe('#4d9fff')
+      })
+
+      it('returns dark theme default for laser renderState', () => {
+        manager.currentTheme = 'dark'
+        manager.renderState = 'laser'
+        const color = manager._resolveModelColor()
+        expect(color).toBe('#4d9fff')
+      })
+
+      it('returns light-hc theme default regardless of renderState', () => {
+        manager.currentTheme = 'light-hc'
+        manager.renderState = 'preview'
+        const color = manager._resolveModelColor()
+        expect(color).toBe('#0052cc')
+      })
+
+      it('returns dark-hc theme default regardless of renderState', () => {
+        manager.currentTheme = 'dark-hc'
+        manager.renderState = 'laser'
+        const color = manager._resolveModelColor()
+        expect(color).toBe('#66b3ff')
+      })
+
+      it('returns mono theme default regardless of renderState', () => {
+        manager.currentTheme = 'mono'
+        manager.renderState = 'preview'
+        const color = manager._resolveModelColor()
+        expect(color).toBe('#00ff00')
+      })
+
+      it('returns mono-light theme default regardless of renderState', () => {
+        manager.currentTheme = 'mono-light'
+        manager.renderState = 'laser'
+        const color = manager._resolveModelColor()
+        expect(color).toBe('#ffb000')
+      })
+
+      it('returns colorOverride when enabled regardless of render state', () => {
+        manager.renderState = 'laser'
+        manager.colorOverrideEnabled = true
+        manager.colorOverride = '#00ff00'
+        const color = manager._resolveModelColor()
+        expect(color).toBe('#00ff00')
+      })
+
+      it('returns colorOverride when enabled regardless of render state (preview)', () => {
+        manager.renderState = 'preview'
+        manager.colorOverrideEnabled = true
+        manager.colorOverride = '#abcdef'
+        const color = manager._resolveModelColor()
+        expect(color).toBe('#abcdef')
+      })
+
+      it('returns theme default when override exists but is disabled', () => {
+        manager.colorOverride = '#abcdef'
+        manager.colorOverrideEnabled = false
+        const color = manager._resolveModelColor()
+        expect(color).toBe('#2196f3')
+      })
+
+      it('falls back to theme default for unknown render state', () => {
+        manager.renderState = 'unknown_state'
+        const color = manager._resolveModelColor()
+        expect(color).toBe('#2196f3')
+      })
+    })
+
+    describe('renderState does not affect model color', () => {
+      it('all render states produce the same color (light theme)', () => {
+        const defaultColor = manager._resolveModelColor()
+        manager.renderState = 'preview'
+        const previewColor = manager._resolveModelColor()
+        manager.renderState = 'laser'
+        const laserColor = manager._resolveModelColor()
+        expect(defaultColor).toBe(previewColor)
+        expect(defaultColor).toBe(laserColor)
+      })
+
+      it('all render states produce the same color (dark theme)', () => {
+        manager.currentTheme = 'dark'
+        const defaultColor = manager._resolveModelColor()
+        manager.renderState = 'preview'
+        const previewColor = manager._resolveModelColor()
+        manager.renderState = 'laser'
+        const laserColor = manager._resolveModelColor()
+        expect(defaultColor).toBe(previewColor)
+        expect(defaultColor).toBe(laserColor)
+      })
+
+      it('colorOverride takes priority over theme for all states when enabled', () => {
+        manager.colorOverride = '#abcdef'
+        manager.colorOverrideEnabled = true
+        const defaultColor = manager._resolveModelColor()
+        manager.renderState = 'preview'
+        const previewColor = manager._resolveModelColor()
+        manager.renderState = 'laser'
+        const laserColor = manager._resolveModelColor()
+        expect(defaultColor).toBe('#abcdef')
+        expect(previewColor).toBe('#abcdef')
+        expect(laserColor).toBe('#abcdef')
+      })
+
+      it('each theme has a distinct model color', () => {
+        const themes = ['light', 'dark', 'light-hc', 'dark-hc', 'mono', 'mono-light']
+        const colors = themes.map(t => {
+          manager.currentTheme = t
+          return manager._resolveModelColor()
+        })
+        const unique = new Set(colors)
+        expect(unique.size).toBe(themes.length)
+      })
+    })
+  })
+
+  describe('loadSTL empty-geometry guard', () => {
+    it('resolves with empty:true and calls clear() for 0-vertex STL', async () => {
+      const manager = new PreviewManager(container)
+      manager.clear = vi.fn()
+      manager.hideLODWarning = vi.fn()
+      manager.scene = { remove: vi.fn() }
+      manager.mesh = null
+
+      const emptyGeometry = { attributes: {} }
+      const mockSTLLoader = { parse: vi.fn(() => emptyGeometry) }
+
+      const originalLoadSTL = manager.loadSTL.bind(manager)
+      manager.loadSTL = function (stlData, options = {}) {
+        const { STLLoader: _OrigLoader, ...rest } = this
+        void rest
+        const self = this
+        return new Promise((resolve) => {
+          self.hideLODWarning()
+          if (self.mesh) {
+            self.scene.remove(self.mesh)
+          }
+          const geometry = mockSTLLoader.parse(stlData)
+          const vertexCount = geometry.attributes.position
+            ? geometry.attributes.position.count
+            : 0
+          if (vertexCount === 0) {
+            self.clear()
+            resolve({ parseMs: 0, empty: true })
+            return
+          }
+        })
+      }
+
+      const result = await manager.loadSTL(new ArrayBuffer(0))
+      expect(result).toEqual({ parseMs: 0, empty: true })
+      expect(manager.clear).toHaveBeenCalled()
+    })
+  })
+
+  describe('Rendered 2D Preview', () => {
+    let manager
+
+    beforeEach(() => {
+      manager = new PreviewManager(container)
+      // Simulate the #rendered2dPreview element from index.html
+      const preview2d = document.createElement('div')
+      preview2d.id = 'rendered2dPreview'
+      preview2d.classList.add('rendered-2d-preview', 'hidden')
+      document.body.appendChild(preview2d)
+
+      // Simulate #previewModelSummary
+      const summary = document.createElement('div')
+      summary.id = 'previewModelSummary'
+      document.body.appendChild(summary)
+    })
+
+    afterEach(() => {
+      document.getElementById('rendered2dPreview')?.remove()
+      document.getElementById('previewModelSummary')?.remove()
+    })
+
+    describe('show2DPreview', () => {
+      it('inserts sanitized SVG into the 2D preview element', () => {
+        const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M0 0 L100 100"/></svg>'
+        manager.show2DPreview(svg)
+
+        const el = document.getElementById('rendered2dPreview')
+        expect(el.classList.contains('hidden')).toBe(false)
+        expect(el.querySelector('svg')).not.toBeNull()
+        expect(el.querySelector('path')).not.toBeNull()
+      })
+
+      it('strips <script> elements from SVG', () => {
+        const svg = '<svg xmlns="http://www.w3.org/2000/svg"><script>alert("xss")</script><circle cx="50" cy="50" r="40"/></svg>'
+        manager.show2DPreview(svg)
+
+        const el = document.getElementById('rendered2dPreview')
+        expect(el.querySelector('script')).toBeNull()
+        expect(el.querySelector('circle')).not.toBeNull()
+      })
+
+      it('strips event-handler attributes', () => {
+        const svg = '<svg xmlns="http://www.w3.org/2000/svg"><rect onclick="alert(1)" width="100" height="100"/></svg>'
+        manager.show2DPreview(svg)
+
+        const rect = document.getElementById('rendered2dPreview').querySelector('rect')
+        expect(rect.getAttribute('onclick')).toBeNull()
+      })
+
+      it('updates ARIA summary for 2D content', () => {
+        const svg = '<svg xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10"/></svg>'
+        manager.show2DPreview(svg)
+
+        const summary = document.getElementById('previewModelSummary')
+        expect(summary.textContent).toContain('2D')
+      })
+
+      it('sets _is2DPreviewActive to true', () => {
+        const svg = '<svg xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10"/></svg>'
+        manager.show2DPreview(svg)
+
+        expect(manager._is2DPreviewActive).toBe(true)
+      })
+
+      it('injects desktop-parity styling for unstyled SVGs', () => {
+        const svg = '<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0 L100 100"/><polygon points="0,0 50,50 100,0"/></svg>'
+        manager.show2DPreview(svg)
+
+        const style = document.getElementById('rendered2dPreview').querySelector('style[data-forge-preview]')
+        expect(style).not.toBeNull()
+        expect(style.textContent).toContain('#7A9F7A')
+      })
+
+      it('does not inject parity styling when SVG has explicit fills', () => {
+        const svg = '<svg xmlns="http://www.w3.org/2000/svg"><rect fill="#ff0000" width="10" height="10"/></svg>'
+        manager.show2DPreview(svg)
+
+        const style = document.getElementById('rendered2dPreview').querySelector('style[data-forge-preview]')
+        expect(style).toBeNull()
+      })
+    })
+
+    describe('hide2DPreview', () => {
+      it('hides the 2D preview element and clears content', () => {
+        const svg = '<svg xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10"/></svg>'
+        manager.show2DPreview(svg)
+        manager.hide2DPreview()
+
+        const el = document.getElementById('rendered2dPreview')
+        expect(el.classList.contains('hidden')).toBe(true)
+        expect(el.innerHTML).toBe('')
+      })
+
+      it('sets _is2DPreviewActive to false', () => {
+        manager.show2DPreview('<svg xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10"/></svg>')
+        manager.hide2DPreview()
+
+        expect(manager._is2DPreviewActive).toBe(false)
+      })
+    })
+
+    describe('sanitizeSVG', () => {
+      it('removes script tags', () => {
+        const result = PreviewManager.sanitizeSVG(
+          '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script><rect width="10" height="10"/></svg>'
+        )
+        expect(result).not.toContain('<script')
+        expect(result).toContain('<rect')
+      })
+
+      it('removes event handler attributes', () => {
+        const result = PreviewManager.sanitizeSVG(
+          '<svg xmlns="http://www.w3.org/2000/svg"><rect onload="alert(1)" width="10" height="10"/></svg>'
+        )
+        expect(result).not.toContain('onload')
+      })
+
+      it('removes javascript: hrefs', () => {
+        const result = PreviewManager.sanitizeSVG(
+          '<svg xmlns="http://www.w3.org/2000/svg"><a href="javascript:alert(1)"><rect width="10" height="10"/></a></svg>'
+        )
+        expect(result).not.toContain('javascript:')
+      })
+    })
+
+    describe('svgLacksVisualStyling', () => {
+      it('returns true for geometry-only SVG', () => {
+        const parser = new DOMParser()
+        const doc = parser.parseFromString(
+          '<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0L10 10"/><polygon points="0,0 5,5 10,0"/></svg>',
+          'image/svg+xml'
+        )
+        expect(PreviewManager.svgLacksVisualStyling(doc.documentElement)).toBe(true)
+      })
+
+      it('returns false for styled SVG', () => {
+        const parser = new DOMParser()
+        const doc = parser.parseFromString(
+          '<svg xmlns="http://www.w3.org/2000/svg"><path fill="#ff0000" d="M0 0L10 10"/></svg>',
+          'image/svg+xml'
+        )
+        expect(PreviewManager.svgLacksVisualStyling(doc.documentElement)).toBe(false)
+      })
+
+      it('returns false for SVG with no shapes', () => {
+        const parser = new DOMParser()
+        const doc = parser.parseFromString(
+          '<svg xmlns="http://www.w3.org/2000/svg"><text>Hello</text></svg>',
+          'image/svg+xml'
+        )
+        expect(PreviewManager.svgLacksVisualStyling(doc.documentElement)).toBe(false)
+      })
+    })
+
+    describe('injectDesktopParityStyling', () => {
+      it('adds a style element with data-forge-preview attribute', () => {
+        const parser = new DOMParser()
+        const doc = parser.parseFromString(
+          '<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0L10 10"/></svg>',
+          'image/svg+xml'
+        )
+        PreviewManager.injectDesktopParityStyling(doc.documentElement)
+        const style = doc.querySelector('style[data-forge-preview]')
+        expect(style).not.toBeNull()
+        expect(style.textContent).toContain('#7A9F7A')
+      })
+
+      it('does not add duplicate style elements', () => {
+        const parser = new DOMParser()
+        const doc = parser.parseFromString(
+          '<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0L10 10"/></svg>',
+          'image/svg+xml'
+        )
+        PreviewManager.injectDesktopParityStyling(doc.documentElement)
+        PreviewManager.injectDesktopParityStyling(doc.documentElement)
+        const styles = doc.querySelectorAll('style[data-forge-preview]')
+        expect(styles.length).toBe(1)
+      })
+    })
+
+    describe('_set2DPreviewActive', () => {
+      it('hides 3D canvas when 2D is active', () => {
+        const mockCanvas = document.createElement('canvas')
+        manager.renderer = { domElement: mockCanvas }
+        
+        manager._set2DPreviewActive(true)
+        expect(mockCanvas.style.display).toBe('none')
+        
+        manager._set2DPreviewActive(false)
+        expect(mockCanvas.style.display).toBe('')
+      })
+
+      it('updates container ARIA label', () => {
+        manager._set2DPreviewActive(true)
+        expect(container.getAttribute('aria-label')).toBe('Rendered 2D SVG preview')
+        
+        manager._set2DPreviewActive(false)
+        expect(container.getAttribute('aria-label')).toBe('3D model preview and controls')
+      })
+    })
+  })
+
+  describe('Dual-render helpers', () => {
+    it('_disposeMeshResources disposes a single Mesh', () => {
+      const manager = new PreviewManager(container)
+      const disposeMat = vi.fn()
+      const disposeGeo = vi.fn()
+      manager.mesh = {
+        isGroup: false,
+        geometry: { dispose: disposeGeo },
+        material: { dispose: disposeMat },
+      }
+      manager._disposeMeshResources()
+      expect(disposeGeo).toHaveBeenCalledOnce()
+      expect(disposeMat).toHaveBeenCalledOnce()
+    })
+
+    it('_disposeMeshResources disposes all children of a Group', () => {
+      const manager = new PreviewManager(container)
+      const child1Geo = { dispose: vi.fn() }
+      const child1Mat = { dispose: vi.fn() }
+      const child2Geo = { dispose: vi.fn() }
+      const child2Mat = { dispose: vi.fn() }
+      manager.mesh = {
+        isGroup: true,
+        children: [
+          { geometry: child1Geo, material: child1Mat },
+          { geometry: child2Geo, material: child2Mat },
+        ],
+      }
+      manager._disposeMeshResources()
+      expect(child1Geo.dispose).toHaveBeenCalledOnce()
+      expect(child1Mat.dispose).toHaveBeenCalledOnce()
+      expect(child2Geo.dispose).toHaveBeenCalledOnce()
+      expect(child2Mat.dispose).toHaveBeenCalledOnce()
+    })
+
+    it('_disposeMeshResources is safe on null mesh', () => {
+      const manager = new PreviewManager(container)
+      manager.mesh = null
+      expect(() => manager._disposeMeshResources()).not.toThrow()
+    })
+
+    it('_getPrimaryGeometry returns geometry from single Mesh', () => {
+      const manager = new PreviewManager(container)
+      const geo = { attributes: { position: { count: 36 } } }
+      manager.mesh = { isGroup: false, geometry: geo }
+      expect(manager._getPrimaryGeometry()).toBe(geo)
+    })
+
+    it('_getPrimaryGeometry returns first child geometry from Group', () => {
+      const manager = new PreviewManager(container)
+      const geo = { attributes: { position: { count: 36 } } }
+      manager.mesh = {
+        isGroup: true,
+        children: [
+          { geometry: geo },
+          { geometry: { attributes: { position: { count: 36 } } } },
+        ],
+      }
+      expect(manager._getPrimaryGeometry()).toBe(geo)
+    })
+
+    it('_getPrimaryGeometry returns null when mesh is null', () => {
+      const manager = new PreviewManager(container)
+      manager.mesh = null
+      expect(manager._getPrimaryGeometry()).toBeNull()
+    })
+
+    it('applyColorToMesh skips highlight overlay children in Groups', () => {
+      const manager = new PreviewManager(container)
+      manager.colorOverrideEnabled = true
+      manager.colorOverride = '#ff0000'
+      const normalColor = { setHex: vi.fn() }
+      const highlightColor = { setHex: vi.fn() }
+      manager.mesh = {
+        isGroup: true,
+        children: [
+          {
+            material: { color: normalColor, vertexColors: false, needsUpdate: false },
+            userData: {},
+          },
+          {
+            material: { color: highlightColor, vertexColors: false, needsUpdate: false },
+            userData: { isHighlightOverlay: true },
+          },
+        ],
+      }
+      manager.applyColorToMesh()
+      expect(normalColor.setHex).toHaveBeenCalledOnce()
+      expect(highlightColor.setHex).not.toHaveBeenCalled()
+    })
+
+    it('setModelOpacity applies to all children of a Group', () => {
+      const manager = new PreviewManager(container)
+      const mat1 = {
+        transparent: false,
+        opacity: 1,
+        depthWrite: true,
+        needsUpdate: false,
+      }
+      const mat2 = {
+        transparent: false,
+        opacity: 1,
+        depthWrite: true,
+        needsUpdate: false,
+      }
+      manager.mesh = {
+        isGroup: true,
+        children: [
+          { material: mat1, renderOrder: 0 },
+          { material: mat2, renderOrder: 0 },
+        ],
+      }
+      manager.appearanceOverrideEnabled = true
+      manager.setModelOpacity(50)
+      expect(mat1.transparent).toBe(true)
+      expect(mat1.opacity).toBe(0.5)
+      expect(mat2.transparent).toBe(true)
+      expect(mat2.opacity).toBe(0.5)
+    })
+  })
+
+  describe('2D/3D Preview Transitions', () => {
+    let manager
+    let preview2d
+
+    beforeEach(() => {
+      manager = new PreviewManager(container)
+      preview2d = document.createElement('div')
+      preview2d.id = 'rendered2dPreview'
+      preview2d.classList.add('rendered-2d-preview', 'hidden')
+      document.body.appendChild(preview2d)
+    })
+
+    afterEach(() => {
+      document.getElementById('rendered2dPreview')?.remove()
+    })
+
+    it('clear() calls hide2DPreview() when 2D preview is active', () => {
+      manager.show2DPreview('<svg xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10"/></svg>')
+      expect(manager._is2DPreviewActive).toBe(true)
+
+      const spy = vi.spyOn(manager, 'hide2DPreview')
+      manager.scene = { remove: vi.fn() }
+      manager.renderer = { render: vi.fn() }
+      manager.camera = {}
+
+      manager.clear()
+
+      expect(spy).toHaveBeenCalled()
+      expect(manager._is2DPreviewActive).toBe(false)
+    })
+
+    it('clear() calls hide2DPreview() even when no 2D preview is active (idempotent)', () => {
+      expect(manager._is2DPreviewActive).toBeFalsy()
+
+      const spy = vi.spyOn(manager, 'hide2DPreview')
+      manager.scene = { remove: vi.fn() }
+      manager.renderer = { render: vi.fn() }
+      manager.camera = {}
+
+      manager.clear()
+
+      expect(spy).toHaveBeenCalled()
+    })
+
+    it('loadSTL() calls hide2DPreview() before processing', async () => {
+      manager.show2DPreview('<svg xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10"/></svg>')
+      const spy = vi.spyOn(manager, 'hide2DPreview')
+
+      await manager.loadSTL(new ArrayBuffer(0)).catch(() => {
+        // THREE.js not loaded — expected
+      })
+
+      expect(spy).toHaveBeenCalled()
+    })
+
+    it('loadOFF() calls hide2DPreview() before processing', async () => {
+      manager.show2DPreview('<svg xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10"/></svg>')
+      const spy = vi.spyOn(manager, 'hide2DPreview')
+
+      await manager.loadOFF('OFF\n0 0 0').catch(() => {
+        // THREE.js not loaded — expected
+      })
+
+      expect(spy).toHaveBeenCalled()
+    })
+
+    it('after clear(), _is2DPreviewActive is false', () => {
+      manager.show2DPreview('<svg xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10"/></svg>')
+      expect(manager._is2DPreviewActive).toBe(true)
+
+      manager.scene = { remove: vi.fn() }
+      manager.renderer = { render: vi.fn() }
+      manager.camera = {}
+      manager.clear()
+
+      expect(manager._is2DPreviewActive).toBe(false)
     })
   })
 })

@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Component Styles */
 
 /* Skip Link (Accessibility) */
@@ -2103,13 +2104,33 @@ summary:focus-visible,
 }
 
 .preview-settings {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-sm);
-  align-items: center;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--space-md);
   padding: var(--space-md);
   padding-top: var(--space-sm);
+  align-items: start;
+}
+
+.settings-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  min-width: 0;
+}
+
+.preview-settings .toggle-label {
+  font-size: var(--font-size-sm);
+}
+
+.settings-col .preview-setting label[for] {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-2xs);
+}
+
+.settings-col .slider-container {
+  width: 100%;
 }
 
 .preview-setting {
@@ -2121,7 +2142,6 @@ summary:focus-visible,
 }
 
 .preview-setting.cache-tools {
-  flex-basis: 100%;
   justify-content: space-between;
 }
 
@@ -2155,14 +2175,9 @@ summary:focus-visible,
   padding: 0 var(--space-sm);
 }
 
-.preview-settings input[type='checkbox'] {
-  width: 18px;
-  height: 18px;
-}
-
 /* Preview settings divider (used before engine toggle) */
 .preview-setting-divider {
-  flex-basis: 100%;
+  width: 100%;
   height: 1px;
   background-color: var(--color-border);
   margin: var(--space-xs) 0;
@@ -2170,7 +2185,6 @@ summary:focus-visible,
 
 /* Grid size setting group */
 .preview-setting-group {
-  flex-basis: 100%;
   display: flex;
   flex-direction: column;
   gap: var(--space-xs);
@@ -2211,6 +2225,53 @@ summary:focus-visible,
 
 .preview-setting-inline input[type='number'] {
   width: 5rem;
+}
+
+/* Grid color picker: [label] [color swatch] [Reset button] */
+.grid-color-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-xs) 0;
+  flex-basis: 100%;
+}
+
+.grid-color-label {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  min-width: 5rem;
+}
+
+.grid-color-picker {
+  width: 2rem;
+  height: 2rem;
+  padding: 2px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-raised);
+  cursor: pointer;
+}
+
+.grid-color-picker:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: var(--focus-ring);
+}
+
+:root[data-high-contrast='true'] .grid-color-picker {
+  border-width: 2px;
+}
+
+@media (forced-colors: active) {
+  .grid-color-picker {
+    border: 1px solid ButtonText;
+    forced-color-adjust: none;
+  }
+
+  .grid-color-picker:focus {
+    border-color: Highlight;
+    outline: 2px solid Highlight;
+  }
 }
 
 /* Compact grid size row: [Preset select] [W × H inputs] on one line */
@@ -2354,7 +2415,7 @@ summary:focus-visible,
   font-size: var(--font-size-xs);
   color: var(--color-text-secondary);
   margin: 0;
-  padding-left: calc(18px + var(--space-xs)); /* Align with checkbox label */
+  padding-left: calc(48px + var(--space-sm));
   line-height: 1.4;
 }
 
@@ -2365,7 +2426,6 @@ summary:focus-visible,
 
 /* Rotation speed slider setting - full width layout within preview settings */
 .preview-setting.rotation-speed-setting {
-  flex-basis: 100%;
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -2432,16 +2492,64 @@ summary:focus-visible,
 
 /* Model Color Picker */
 .model-color-setting {
-  flex-basis: 100%;
   padding-top: var(--space-sm);
   border-top: 1px solid var(--color-border);
   margin-top: var(--space-xs);
+}
+
+.model-color-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.model-color-toggle .toggle-label {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  user-select: none;
 }
 
 .model-color-picker {
   display: inline-flex;
   align-items: center;
   gap: var(--space-xs);
+}
+
+.model-color-picker.disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.model-appearance-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-xs);
+}
+
+.model-appearance-toggle .toggle-label {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  user-select: none;
+}
+
+.model-appearance-sliders.disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+@media (max-width: 767px) {
+  .preview-settings {
+    grid-template-columns: 1fr;
+    gap: var(--space-sm);
+    padding: var(--space-sm);
+  }
+}
+
+@media (pointer: fine) and (min-width: 768px) {
+  .preview-settings {
+    gap: var(--space-sm);
+  }
 }
 
 .model-color-picker input[type='color'] {
@@ -3603,6 +3711,7 @@ body.high-contrast .param-tooltip {
   border-radius: var(--border-radius-sm);
   background-color: var(--color-bg-primary);
   color: var(--color-text-primary);
+  -webkit-text-fill-color: var(--color-text-primary);
   font-size: var(--font-size-base);
   font-variant-numeric: tabular-nums;
   text-align: right;
@@ -3662,6 +3771,7 @@ body.high-contrast .param-tooltip {
 /* Out-of-range value indicator for spinbox */
 .param-control.out-of-range .slider-spinbox {
   color: var(--color-warning);
+  -webkit-text-fill-color: var(--color-warning);
   font-weight: 600;
 }
 
@@ -3711,6 +3821,27 @@ body.high-contrast .param-tooltip {
   flex: 1;
 }
 
+/* Mobile: keep number fields readable when default hints are long.
+   Without wrapping, "(default: ...)" can consume the row and collapse
+   the number input to a few pixels. */
+@media (max-width: 767px) {
+  .number-input-container {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .number-input-container input[type='number'] {
+    flex: 1 1 120px;
+  }
+
+  .number-input-container .param-default-value {
+    order: 3;
+    flex-basis: 100%;
+    margin-left: 0;
+    margin-top: var(--space-xs);
+  }
+}
+
 /* Unit Label */
 .unit-label {
   font-size: var(--font-size-sm);
@@ -3734,6 +3865,13 @@ input[type='number'] {
   border-radius: var(--border-radius-sm);
   background-color: var(--color-bg-primary);
   color: var(--color-text-primary);
+  /*
+   * Mobile WebKit/Blink may not repaint input text inside GPU-composited
+   * containers (e.g., transform-based off-canvas drawers).
+   * -webkit-text-fill-color forces explicit text color rendering, bypassing
+   * the compositing repaint issue.
+   */
+  -webkit-text-fill-color: var(--color-text-primary);
 }
 
 input[type='number']:focus {
@@ -3831,6 +3969,43 @@ select:focus-visible {
   transform: translateX(20px);
 }
 
+/* Dark mode: ensure off-state track contrasts with white thumb (≥3:1) */
+:root[data-theme='dark'] .toggle-switch input[type='checkbox'] {
+  background-color: var(--slate-6);
+}
+
+/* Dark mode: preserve explicit ON-state color (green track) */
+:root[data-theme='dark'] .toggle-switch input[type='checkbox']:checked {
+  background-color: var(--color-success);
+}
+
+/* High Contrast: off-state track must strongly contrast with thumb */
+:root[data-high-contrast='true'] .toggle-switch input[type='checkbox'] {
+  background-color: var(--color-text-primary);
+  border: 2px solid var(--color-text-primary);
+  box-sizing: border-box;
+}
+
+:root[data-high-contrast='true'] .toggle-switch input[type='checkbox']::before {
+  background-color: var(--color-bg-primary);
+  border: 2px solid var(--color-text-primary);
+  box-sizing: border-box;
+  width: 20px;
+  height: 20px;
+}
+
+:root[data-high-contrast='true'] .toggle-switch input[type='checkbox']:checked {
+  background-color: var(--color-success);
+  border-color: var(--color-success);
+}
+
+:root[data-high-contrast='true']
+  .toggle-switch
+  input[type='checkbox']:checked::before {
+  background-color: var(--color-on-success);
+  border-color: var(--color-on-success);
+}
+
 .toggle-label {
   font-weight: normal;
   color: var(--color-text-secondary);
@@ -3888,7 +4063,10 @@ select:focus-visible {
   background: rgba(12, 12, 12, 0.75);
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
-  color: var(--color-text-primary, #fff);
+  /* Fixed white text: this is a dark surface regardless of the active theme.
+     var(--color-text-primary) follows the theme and becomes near-black in
+     light mode, causing ≈1:1 contrast on this dark backdrop. */
+  color: #ffffff;
   gap: var(--space-md, 12px);
   animation: fadeInOverlay 0.15s ease-out;
 }
@@ -3905,8 +4083,11 @@ select:focus-visible {
 .processing-overlay .processing-spinner {
   width: 48px;
   height: 48px;
-  border: 4px solid var(--color-bg-secondary, #333);
-  border-top-color: var(--color-accent, #f4c400);
+  /* Fixed colors for the always-dark overlay surface. Theme-derived
+     --color-bg-secondary (light in light mode) and --color-accent
+     (#003d99 in HC-light) both fail contrast on this backdrop. */
+  border: 4px solid rgba(255, 255, 255, 0.2);
+  border-top-color: #f4c400;
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -3919,9 +4100,39 @@ select:focus-visible {
 
 .processing-overlay .processing-hint {
   font-size: 0.85rem;
-  opacity: 0.7;
+  /* Use an explicit rgba instead of opacity so contrast is calculable.
+     0.85 alpha white on worst-case composited bg (#494949 when overlay
+     sits on a white page) yields ≈4.5:1, meeting WCAG AA for small text. */
+  color: rgba(255, 255, 255, 0.85);
   text-align: center;
   max-width: 340px;
+}
+
+/* High Contrast Mode for Processing Overlay */
+[data-high-contrast='true'] .processing-overlay .processing-spinner {
+  border-width: 5px;
+  border-color: rgba(255, 255, 255, 0.3);
+  border-top-color: #ffffff;
+}
+
+/* Forced Colors (Windows High Contrast) for Processing Overlay */
+@media (forced-colors: active) {
+  .processing-overlay {
+    background: Canvas;
+    color: CanvasText;
+    border: 2px solid CanvasText;
+    forced-color-adjust: none;
+  }
+
+  .processing-overlay .processing-spinner {
+    border-color: GrayText;
+    border-top-color: Highlight;
+    forced-color-adjust: auto;
+  }
+
+  .processing-overlay .processing-hint {
+    color: GrayText;
+  }
 }
 
 /* ========================================
@@ -3974,6 +4185,17 @@ select:focus-visible {
 .preview-state-indicator.state-rendering {
   background-color: var(--color-accent);
   color: var(--color-on-accent);
+  animation: pulse-rendering 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-rendering {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.65;
+  }
 }
 
 /* State: Stale - preview outdated */
@@ -4042,41 +4264,45 @@ select:focus-visible {
   }
 }
 
-/* Rendering overlay */
+/* Rendering toast — compact non-blocking indicator above the status bar */
 .preview-rendering-overlay {
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.3);
-  display: flex;
-  flex-direction: column;
+  bottom: calc(var(--space-sm) + 28px);
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  background-color: var(--color-accent);
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-md);
+  border-radius: var(--border-radius-pill, 999px);
   z-index: 20;
   opacity: 0;
   pointer-events: none;
-  transition: opacity var(--motion-slow) ease;
+  transition:
+    opacity var(--motion-slow) ease,
+    transform var(--motion-slow) ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
 .preview-rendering-overlay.visible {
   opacity: 1;
-  pointer-events: auto;
+  transform: translateX(-50%) translateY(0);
 }
 
-.preview-rendering-overlay .spinner-large {
-  width: 48px;
-  height: 48px;
-  border-width: 4px;
+.preview-rendering-overlay .spinner {
+  width: 14px;
+  height: 14px;
+  border-width: 2px;
+  border-color: var(--color-on-accent);
+  border-top-color: transparent;
+  flex-shrink: 0;
 }
 
 .preview-rendering-overlay .rendering-text {
-  margin-top: var(--space-md);
-  color: white;
-  font-size: var(--font-size-base);
+  color: var(--color-on-accent);
+  font-size: var(--font-size-sm);
   font-weight: 500;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
 }
 
 /* Auto-preview toggle in settings */
@@ -4184,8 +4410,18 @@ select:focus-visible {
 /* Responsive adjustments */
 @media (prefers-reduced-motion: reduce) {
   .preview-state-indicator.state-pending,
+  .preview-state-indicator.state-rendering,
   .preview-container.preview-rendering {
     animation: none;
+  }
+
+  .preview-rendering-overlay {
+    transition: opacity var(--motion-slow) ease;
+    transform: translateX(-50%);
+  }
+
+  .preview-rendering-overlay.visible {
+    transform: translateX(-50%);
   }
 
   @keyframes pulse-pending {
@@ -4471,6 +4707,24 @@ select:focus-visible {
   line-height: 1.5;
 }
 
+.format-2d-guidance .guidance-steps {
+  color: var(--color-text-secondary);
+  margin: 0 0 var(--space-sm) var(--space-md);
+  padding: 0;
+  line-height: 1.6;
+}
+
+.format-2d-guidance .guidance-steps li {
+  margin-bottom: var(--space-xs);
+}
+
+.format-2d-guidance .guidance-steps code {
+  background: var(--color-bg-tertiary, var(--color-bg-primary));
+  padding: 0.125em 0.375em;
+  border-radius: var(--border-radius-xs);
+  font-size: 0.9em;
+}
+
 .format-2d-guidance .guidance-text code {
   background: var(--color-bg-tertiary, var(--color-bg-primary));
   padding: 0.125em 0.375em;
@@ -4510,6 +4764,68 @@ select:focus-visible {
   border-radius: var(--border-radius-xs);
   font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
   font-size: 0.9em;
+}
+
+/* Entrance animation when guidance appears for the first time */
+.format-2d-guidance.guidance-enter {
+  animation: guidance-highlight 0.6s ease-out;
+}
+
+@keyframes guidance-highlight {
+  0% {
+    opacity: 0;
+    transform: translateY(-4px);
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 2px var(--color-accent);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(0);
+    box-shadow: 0 0 0 2px var(--color-accent);
+  }
+  100% {
+    box-shadow: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .format-2d-guidance.guidance-enter {
+    animation: none;
+  }
+}
+
+/* Auto-adjustment notification within 2D guidance */
+.format-2d-auto-adjust {
+  margin-top: var(--space-sm);
+  padding: var(--space-sm);
+  background: var(--color-bg-secondary, rgba(0, 0, 0, 0.03));
+  border-radius: var(--border-radius-xs);
+}
+
+.format-2d-auto-adjust.hidden {
+  display: none;
+}
+
+.format-2d-auto-adjust .auto-adjust-title {
+  font-weight: 600;
+  margin: 0 0 var(--space-xs) 0;
+}
+
+.format-2d-auto-adjust .auto-adjust-list {
+  margin: 0 0 var(--space-xs) var(--space-md);
+  padding: 0;
+  list-style: disc;
+}
+
+.format-2d-auto-adjust .auto-adjust-list li {
+  margin-bottom: var(--space-xs);
+}
+
+.format-2d-auto-adjust .auto-adjust-note {
+  margin: 0;
+  font-size: var(--font-size-xs, 0.75rem);
+  color: var(--color-text-tertiary, var(--color-text-secondary));
+  font-style: italic;
 }
 
 /* Preset Controls */
@@ -5320,6 +5636,40 @@ body.first-visit-blocking #app {
   flex: 1;
 }
 
+/* Help icon button inside panel summary rows */
+.panel-help-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25em;
+  height: 1.25em;
+  padding: 0;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  line-height: 1;
+  cursor: default;
+  opacity: 0.6;
+  flex-shrink: 0;
+}
+
+.panel-help-btn:focus-visible {
+  outline: 2px solid var(--color-focus-ring, Highlight);
+  outline-offset: 2px;
+  opacity: 1;
+}
+
+@media (forced-colors: active) {
+  .panel-help-btn {
+    forced-color-adjust: auto;
+    border-color: ButtonText;
+    color: ButtonText;
+  }
+}
+
 .console-badge {
   background: var(--color-accent);
   color: var(--color-on-accent);
@@ -5343,6 +5693,69 @@ body.first-visit-blocking #app {
 .console-content {
   padding: var(--space-sm);
   border-top: 1px solid var(--color-border);
+}
+
+/* View toggle tabs (Log / Structured) */
+.console-view-tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  overflow: hidden;
+}
+
+.console-view-tab {
+  flex: 1;
+  padding: var(--space-xs) var(--space-sm);
+  border: none;
+  background: var(--color-bg-primary);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background-color 0.15s,
+    color 0.15s;
+}
+
+.console-view-tab:not(:last-child) {
+  border-right: 1px solid var(--color-border);
+}
+
+.console-view-tab.active {
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+.console-view-tab:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus);
+  outline-offset: -2px;
+}
+
+.console-view-panel[hidden] {
+  display: none;
+}
+
+/* Click-to-line link in log view entries */
+.console-line-link {
+  background: none;
+  border: none;
+  color: var(--color-accent);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: inherit;
+  padding: 0 0.2em;
+  text-decoration: underline;
+}
+
+.console-line-link:hover {
+  color: var(--color-accent-fg);
+}
+
+.console-line-link:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus);
+  border-radius: 2px;
 }
 
 .console-controls {
@@ -5431,6 +5844,18 @@ body.first-visit-blocking #app {
   color: var(--color-text-secondary);
 }
 
+.console-entry--deprecated .console-type {
+  color: var(--color-info, #2196f3);
+}
+
+.console-entry--trace .console-type {
+  color: var(--color-text-tertiary);
+}
+
+.console-entry--deprecated {
+  background: var(--color-info-bg, rgba(33, 150, 243, 0.08));
+}
+
 .console-message {
   flex: 1;
   word-break: break-word;
@@ -5452,6 +5877,10 @@ body.first-visit-blocking #app {
 :root[data-high-contrast='true'] .console-entry--warning,
 :root[data-high-contrast='true'] .console-entry--error {
   border-left: 3px solid currentColor;
+}
+
+:root[data-high-contrast='true'] .console-view-tab.active {
+  outline: 2px solid currentColor;
 }
 
 /* Mobile responsiveness */
@@ -7375,6 +7804,7 @@ body.first-visit-blocking #app {
   min-height: 44px;
   background: var(--color-input-bg);
   color: var(--color-text-primary);
+  -webkit-text-fill-color: var(--color-text-primary);
 }
 
 .vector-input:focus {
@@ -7754,6 +8184,65 @@ body.first-visit-blocking #app {
 /* =========================================
    LOD (Level of Detail) Warning
    ========================================= */
+
+/* Color parameter legend (shown when SCAD has multiple color() params) */
+.color-legend {
+  position: absolute;
+  bottom: var(--space-xl);
+  left: var(--space-sm);
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  padding: var(--space-xs) var(--space-sm);
+  font-size: var(--font-size-xs);
+  z-index: 50;
+  max-width: 220px;
+  pointer-events: none;
+  opacity: 0.92;
+}
+
+.color-legend-title {
+  display: block;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: var(--space-xs);
+}
+
+.color-legend-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 1px 0;
+}
+
+.color-legend-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  border: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.color-legend-label {
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (forced-colors: active) {
+  .color-legend {
+    border: 1px solid ButtonText;
+    background: Canvas;
+    color: CanvasText;
+  }
+  .color-legend-swatch {
+    forced-color-adjust: none;
+  }
+}
 
 .lod-warning {
   position: absolute;
@@ -8377,6 +8866,7 @@ body.first-visit-blocking #app {
 .param-control.out-of-range .slider-value,
 .param-control.out-of-range input[type='number'] {
   color: var(--color-warning);
+  -webkit-text-fill-color: var(--color-warning);
   font-weight: 600;
 }
 
@@ -8695,7 +9185,9 @@ body.first-visit-blocking #app {
 
 .wasm-loading-hint {
   font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
+  /* Use --color-text-secondary (slate-11, ≥4.5:1 on slate-1) instead of
+     --color-text-muted (slate-10, ~3:1) to meet WCAG AA for this font size. */
+  color: var(--color-text-secondary);
   margin: 0;
 }
 
@@ -8781,7 +9273,11 @@ body.first-visit-blocking #app {
 
 .features-tab[aria-selected='true'] {
   color: var(--color-text-primary);
-  border-bottom-color: var(--color-accent);
+  /* Use --color-accent-fg (amber-11 in light mode) instead of --color-accent
+   * (yellow-9) so the indicator meets WCAG 3:1 non-text contrast on light
+   * backgrounds. Dark/HC themes already satisfy this through their own token
+   * overrides of --color-accent-fg. */
+  border-bottom-color: var(--color-accent-fg);
   font-weight: 600;
 }
 
@@ -9086,7 +9582,7 @@ body.first-visit-blocking #app {
   .modal-content.tutorial-target-highlight
   .features-tab[aria-selected='true'] {
   color: var(--color-text-primary);
-  border-bottom-color: var(--color-accent);
+  border-bottom-color: var(--color-accent-fg);
   background: color-mix(
     in srgb,
     var(--color-accent) 10%,
@@ -9447,7 +9943,7 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
   box-sizing: border-box;
 }
 
-.features-overview h3 {
+.features-overview h2 {
   font-size: var(--font-size-xl);
   font-weight: 700;
   color: var(--color-text-primary);
@@ -11573,6 +12069,7 @@ body.tutorial-body-locked {
   /* Remove background-dependent visual effects */
   .spinner,
   .preview-state-indicator.state-pending,
+  .preview-state-indicator.state-rendering,
   .preview-container.preview-rendering {
     animation: none !important;
   }
@@ -12385,13 +12882,6 @@ body.tutorial-body-locked {
   color: #b5cea8;
 }
 
-/* Monaco Editor container */
-.monaco-editor-container {
-  flex: 1;
-  min-height: 300px;
-  position: relative;
-}
-
 /* Expert Mode layout - side by side with preview */
 .expert-layout {
   display: grid;
@@ -12531,6 +13021,7 @@ body.tutorial-body-locked {
   border-radius: var(--border-radius-sm);
   background: var(--color-bg-primary);
   color: var(--color-text-primary);
+  -webkit-text-fill-color: var(--color-text-primary);
   font-size: var(--font-size-base);
   font-variant-numeric: tabular-nums;
 }

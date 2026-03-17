@@ -39,14 +39,8 @@ const HIDDEN_CLASS = 'ui-mode-hidden';
 const PANEL_REGISTRY = [
   {
     id: 'consoleOutput',
-    label: 'Console Output',
+    label: 'Console',
     selector: '#consolePanel',
-    defaultHiddenInBasic: true,
-  },
-  {
-    id: 'errorLog',
-    label: 'Error Log',
-    selector: '#errorLogPanel',
     defaultHiddenInBasic: true,
   },
   // fileActions panel removed — now in File toolbar menu
@@ -81,27 +75,9 @@ const PANEL_REGISTRY = [
     defaultHiddenInBasic: true,
   },
   {
-    id: 'gridSettings',
-    label: 'Grid Settings',
-    selector: '.preview-setting-group--grid',
-    defaultHiddenInBasic: true,
-  },
-  {
     id: 'companionFileManagement',
     label: 'Companion Files',
     selector: '#projectFilesControls',
-    defaultHiddenInBasic: true,
-  },
-  {
-    id: 'presetImportExport',
-    label: 'Preset Import/Export',
-    selector: '#exportParamsBtn',
-    defaultHiddenInBasic: true,
-  },
-  {
-    id: 'renderSettings',
-    label: 'Render Settings',
-    selector: '.preview-setting-group--quality',
     defaultHiddenInBasic: true,
   },
   // editTools panel removed — now in Edit toolbar menu
@@ -163,7 +139,7 @@ export class UIModeController {
    */
   constructor(options = {}) {
     /** @type {UIMode} */
-    this.currentMode = 'advanced';
+    this.currentMode = 'basic';
 
     /** @type {Function} */
     this.onModeChange = options.onModeChange || (() => {});
@@ -829,6 +805,6 @@ export function getUIModeController(options = {}) {
 /**
  * Reset UIModeController singleton (for testing)
  */
-export function resetUIModeController() {
+function resetUIModeController() {
   instance = null;
 }

@@ -1,0 +1,57 @@
+{
+  "generated": "2026-03-17T03:50:51.692Z",
+  "libraries": {
+    "MCAD": {
+      "available": true,
+      "name": "MCAD",
+      "license": "LGPL-2.1",
+      "description": "Mechanical CAD library",
+      "repository": "https://github.com/openscad/MCAD.git",
+      "branch": "master",
+      "pin": null,
+      "pinned": false,
+      "commit": "bd0a7ba3f042bfbced5ca1894b236cea08904e26",
+      "date": "2021-10-25",
+      "downloaded": "2026-03-17T03:50:41.715Z"
+    },
+    "BOSL2": {
+      "available": true,
+      "name": "BOSL2",
+      "license": "BSD-2-Clause",
+      "description": "Belfry OpenSCAD Library v2",
+      "repository": "https://github.com/BelfrySCAD/BOSL2.git",
+      "branch": "master",
+      "pin": null,
+      "pinned": false,
+      "commit": "9defca51f048127fbfe7cecf852736551fd59405",
+      "date": "2026-03-16",
+      "downloaded": "2026-03-17T03:50:45.174Z"
+    },
+    "NopSCADlib": {
+      "available": true,
+      "name": "NopSCADlib",
+      "license": "GPL-3.0",
+      "description": "Parts library for 3D printers",
+      "repository": "https://github.com/nophead/NopSCADlib.git",
+      "branch": "master",
+      "pin": null,
+      "pinned": false,
+      "commit": "c9baa0ed0faa23e849141c3d8c6728545d6af910",
+      "date": "2025-10-08",
+      "downloaded": "2026-03-17T03:50:49.425Z"
+    },
+    "dotSCAD": {
+      "available": true,
+      "name": "dotSCAD",
+      "license": "LGPL-3.0",
+      "description": "Artistic patterns library",
+      "repository": "https://github.com/JustinSDK/dotSCAD.git",
+      "branch": "master",
+      "pin": null,
+      "pinned": false,
+      "commit": "bb33edfd75cba0edbb7971606a077b9c69d0b7d2",
+      "date": "2022-10-11",
+      "downloaded": "2026-03-17T03:50:51.691Z"
+    }
+  }
+}

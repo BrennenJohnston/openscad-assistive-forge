@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Layout Styles */
 body {
   font-family: var(--font-family-base);
@@ -1951,7 +1952,7 @@ body {
   min-height: 36px;
 }
 
-.camera-view-btn:hover {
+.btn.camera-view-btn:hover:not(:disabled) {
   background: var(--color-accent);
   color: var(--color-accent-text);
   border-color: var(--color-accent);
@@ -1990,7 +1991,7 @@ body {
     color var(--motion-fast);
 }
 
-.camera-btn:hover {
+.btn.camera-btn:hover:not(:disabled) {
   background: var(--color-accent);
   border-color: var(--color-accent);
   color: var(--color-accent-text);
@@ -2049,7 +2050,7 @@ body {
     color var(--motion-fast);
 }
 
-.camera-btn-wide:hover {
+.btn.camera-btn-wide:hover:not(:disabled) {
   background: var(--color-accent);
   border-color: var(--color-accent);
   color: var(--color-accent-text);
@@ -2445,6 +2446,33 @@ details summary:focus,
   text-align: center;
   color: var(--color-text-secondary);
   padding: var(--space-xl);
+}
+
+/* Rendered 2D SVG preview surface */
+.rendered-2d-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+  background-color: var(--color-bg-primary);
+  padding: var(--space-md);
+  box-sizing: border-box;
+  overflow: auto;
+}
+
+.rendered-2d-preview svg {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+}
+
+.rendered-2d-preview.hidden {
+  display: none;
 }
 
 /* Status area in drawer - now visually hidden, kept for screen readers */

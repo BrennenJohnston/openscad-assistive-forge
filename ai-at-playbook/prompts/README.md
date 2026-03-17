@@ -1,6 +1,6 @@
 # Prompt Library
 
-16 copy-and-paste prompts for common AI-assisted development scenarios. Each prompt
+17 copy-and-paste prompts for common AI-assisted development scenarios. Each prompt
 is a self-contained role definition that you paste into your AI tool before starting
 a task.
 
@@ -49,6 +49,30 @@ These prompts follow findings from the Prompt Programming Study (arXiv:2412.2054
 | 14 | `14-3d-print-at-device.md` | 3D-printed AT device design | Persona (AT engineer) |
 | 15 | `15-open-source-contribution.md` | Open source contribution | Persona (community contributor) |
 | 16 | `16-research-synthesis.md` | Research synthesis / source analysis | Persona (research analyst) |
+| 17 | `17-queue-executor.md` | Queue executor / single-phase session | Persona (debugging specialist) |
+
+## Executor templates
+
+These templates are not persona prompts — they are **session orchestration
+prompts** that you paste into each fresh chat to drive multi-phase execution.
+
+| Template | Location | Use case |
+| --- | --- | --- |
+| Queue executor (prompt 17) | `17-queue-executor.md` | Batched bugfix queues with persona rotation |
+| Build plan executor | `templates/build-plan-executor-prompt.md` | Structured build/remediation plans with operating rules, hallucination safeguards, and fallback gates |
+
+Both templates are recycled verbatim across phases — only the plan file's
+internal state changes between sessions. The build plan executor was validated
+against a multi-phase parity remediation plan (2026-03) with 100% phase
+completion. See `docs/LESSONS_LEARNED.md` section #9 for the full case study.
+
+**When to use which:**
+
+- **Queue executor** — your plan is a flat list of similar, independent fixes
+  and each phase benefits from a different persona prompt from the library.
+- **Build plan executor** — your plan carries its own operating rules,
+  safeguards, and fallback gates, and phases are steps in a structured
+  remediation or build sequence rather than independent fixes.
 
 ## Tips
 

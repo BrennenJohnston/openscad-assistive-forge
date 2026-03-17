@@ -707,6 +707,14 @@ export class TextareaEditor {
   }
 
   /**
+   * Shim for Monaco-compatible getAction() — textarea has no actions.
+   * @returns {null}
+   */
+  getAction() {
+    return null;
+  }
+
+  /**
    * Dispose of the editor
    */
   dispose() {

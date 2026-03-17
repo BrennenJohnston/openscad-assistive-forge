@@ -73,6 +73,43 @@ Path Count: ~N elements
 ViewBox: "X Y W H"
 ```
 
+## Procedure (Generic Project Example)
+
+Use this when validating a non-keyguard ZIP project with imported assets.
+
+### Step G1: Prepare Files
+
+1. Select a non-keyguard project containing a main `.scad` plus companion assets.
+2. Keep companion filenames project-native (for example `pattern.svg`, `settings.txt`) instead of renaming to `default.svg` or `openings_and_additions.txt`.
+3. Confirm the main file references companions through relative include/import paths.
+
+### Step G2: Open In Desktop OpenSCAD
+
+1. Open the main `.scad` file.
+2. Verify there are no "Cannot open file" errors in the console.
+3. Open Customizer (View > Customizer) if the project exposes parameters.
+
+### Step G3: Configure For 2D Export
+
+1. Select the project's own 2D export mode parameter (if available).
+2. If the project does not expose a mode toggle, use a fixture that directly produces 2D geometry (for example `square()` or `projection(cut=true)` output path).
+
+### Step G4: Render And Export
+
+1. Press F5 (Preview) and then F6 (Render).
+2. Export SVG via File > Export > Export as SVG...
+3. If the project supports DXF, export DXF as well for parity comparison.
+
+### Step G5: Record Generic Golden Output
+
+Capture:
+
+- project name and date
+- OpenSCAD version
+- selected parameter values for the 2D path
+- companion filenames used by the project
+- SVG/DXF size, geometry presence, and viewBox dimensions
+
 ## Comparing Forge Output to Golden Reference
 
 When validating Forge SVG export:

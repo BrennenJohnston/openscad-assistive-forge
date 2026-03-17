@@ -606,6 +606,286 @@ describe('Tutorial Button Contrast - CRITICAL ACCESSIBILITY FIX', () => {
   });
 });
 
+describe('Selected Tab Indicator - All Themes', () => {
+  /**
+   * Verifies the features-tab[aria-selected='true'] border-bottom indicator
+   * meets WCAG 1.4.11 non-text contrast (3:1 minimum).
+   *
+   * In light mode the indicator uses --color-accent-fg (amber-11, ~#AD5700)
+   * rather than --color-accent (yellow-9, #FFE629 ≈ 1.2:1 on white — fails).
+   * Dark and HC themes resolve --color-accent-fg to values that already pass.
+   */
+
+  describe('Light Mode Tab Indicator', () => {
+    // After fix: --color-accent-fg = var(--amber-11) in light mode
+    const indicatorColor = amber.amber11;
+    const tabBg = slate.slate1; // --color-bg-primary in light mode
+
+    it('selected tab indicator meets 3:1 non-text contrast in light mode', () => {
+      const ratio = getContrastRatio(indicatorColor, tabBg);
+      expect(ratio).toBeGreaterThanOrEqual(3.0);
+      expect(meetsNonTextContrast(ratio)).toBe(true);
+    });
+  });
+
+  describe('Dark Mode Tab Indicator', () => {
+    // --color-accent-fg = var(--yellow-9) in dark mode
+    const indicatorColor = yellow.yellow9;
+    const tabBg = slateDark.slate1; // --color-bg-primary in dark mode
+
+    it('selected tab indicator meets 3:1 non-text contrast in dark mode', () => {
+      const ratio = getContrastRatio(indicatorColor, tabBg);
+      expect(ratio).toBeGreaterThanOrEqual(3.0);
+      expect(meetsNonTextContrast(ratio)).toBe(true);
+    });
+  });
+
+  describe('High Contrast Light Mode Tab Indicator', () => {
+    // --color-accent-fg = #003d99 in HC light mode (same as --color-accent)
+    const indicatorColor = '#003d99';
+    const tabBg = '#ffffff'; // --color-bg-primary in HC light mode
+
+    it('selected tab indicator meets 7:1 in HC light mode', () => {
+      const ratio = getContrastRatio(indicatorColor, tabBg);
+      expect(ratio).toBeGreaterThanOrEqual(7.0);
+      expect(meetsWCAG_AAA(ratio)).toBe(true);
+    });
+  });
+
+  describe('High Contrast Dark Mode Tab Indicator', () => {
+    // --color-accent-fg = #66b3ff in HC dark mode (same as --color-accent)
+    const indicatorColor = '#66b3ff';
+    const tabBg = '#000000'; // --color-bg-primary in HC dark mode
+
+    it('selected tab indicator meets 7:1 in HC dark mode', () => {
+      const ratio = getContrastRatio(indicatorColor, tabBg);
+      expect(ratio).toBeGreaterThanOrEqual(7.0);
+      expect(meetsWCAG_AAA(ratio)).toBe(true);
+    });
+  });
+});
+
+describe('Pressed Button State - All Themes', () => {
+  /**
+   * Verifies icon/text contrast on the accent-background pressed state used by
+   * alt-view-toggle, alt-pan-toggle, auto-rotate-toggle, and mode-toggle-btn.
+   *
+   * Pressed state: background = --color-accent, color = --color-accent-text.
+   * WCAG 1.4.11 non-text contrast (3:1) required for icon indicators.
+   */
+
+  describe('Light Mode Pressed Button', () => {
+    // --color-accent = yellow-9, --color-accent-text = slate-12 in light mode
+    const iconColor = slate.slate12; // --color-accent-text in light
+    const buttonBg = yellow.yellow9; // --color-accent in light
+
+    it('pressed button icon meets 3:1 non-text contrast in light mode', () => {
+      const ratio = getContrastRatio(iconColor, buttonBg);
+      expect(ratio).toBeGreaterThanOrEqual(3.0);
+      expect(meetsNonTextContrast(ratio)).toBe(true);
+    });
+  });
+
+  describe('Dark Mode Pressed Button', () => {
+    // --color-accent = yellow-9, --color-accent-text = slate-1 (slateDark.slate1) in dark
+    const iconColor = slateDark.slate1; // --color-accent-text in dark mode
+    const buttonBg = yellow.yellow9;    // --color-accent in dark mode
+
+    it('pressed button icon meets 3:1 non-text contrast in dark mode', () => {
+      const ratio = getContrastRatio(iconColor, buttonBg);
+      expect(ratio).toBeGreaterThanOrEqual(3.0);
+      expect(meetsNonTextContrast(ratio)).toBe(true);
+    });
+  });
+
+  describe('High Contrast Light Mode Pressed Button', () => {
+    // HC light: --color-accent = #003d99, --color-accent-text = #ffffff
+    const iconColor = '#ffffff';
+    const buttonBg = '#003d99';
+
+    it('pressed button icon meets 7:1 in HC light mode', () => {
+      const ratio = getContrastRatio(iconColor, buttonBg);
+      expect(ratio).toBeGreaterThanOrEqual(7.0);
+      expect(meetsWCAG_AAA(ratio)).toBe(true);
+    });
+  });
+
+  describe('High Contrast Dark Mode Pressed Button', () => {
+    // HC dark: --color-accent = #66b3ff, --color-accent-text = #000000
+    const iconColor = '#000000';
+    const buttonBg = '#66b3ff';
+
+    it('pressed button icon meets 7:1 in HC dark mode', () => {
+      const ratio = getContrastRatio(iconColor, buttonBg);
+      expect(ratio).toBeGreaterThanOrEqual(7.0);
+      expect(meetsWCAG_AAA(ratio)).toBe(true);
+    });
+  });
+});
+
+describe('Color Contrast - Mono Green Phosphor (Dark Theme)', () => {
+  /*
+   * Mono green variant: all UI elements rendered in green phosphor (#00ff00)
+   * on a pure black (#000000) background, simulating a classic terminal.
+   * Color values sourced from src/styles/variant.css :root[data-ui-variant='mono'].
+   */
+  const bg = '#000000';
+  const textPrimary = '#00ff00';
+  const textSecondary = '#00cc00';
+  const textTertiary = '#009900';
+  const accent = '#00ff00';
+  const accentHover = '#33ff33';
+  const accentText = '#000000';
+  const border = '#00ff00';
+  const borderLight = '#009900';
+  const focus = '#00ff00';
+
+  it('primary text (#00ff00) on black meets WCAG AA', () => {
+    const ratio = getContrastRatio(textPrimary, bg);
+    expect(ratio).toBeGreaterThanOrEqual(4.5);
+    expect(meetsWCAG_AA(ratio)).toBe(true);
+  });
+
+  it('primary text (#00ff00) on black meets WCAG AAA', () => {
+    const ratio = getContrastRatio(textPrimary, bg);
+    expect(ratio).toBeGreaterThanOrEqual(7.0);
+    expect(meetsWCAG_AAA(ratio)).toBe(true);
+  });
+
+  it('secondary text (#00cc00) on black meets WCAG AA', () => {
+    const ratio = getContrastRatio(textSecondary, bg);
+    expect(ratio).toBeGreaterThanOrEqual(4.5);
+    expect(meetsWCAG_AA(ratio)).toBe(true);
+  });
+
+  it('secondary text (#00cc00) on black meets WCAG AAA', () => {
+    const ratio = getContrastRatio(textSecondary, bg);
+    expect(ratio).toBeGreaterThanOrEqual(7.0);
+    expect(meetsWCAG_AAA(ratio)).toBe(true);
+  });
+
+  it('tertiary text (#009900) on black meets WCAG AA', () => {
+    const ratio = getContrastRatio(textTertiary, bg);
+    expect(ratio).toBeGreaterThanOrEqual(4.5);
+    expect(meetsWCAG_AA(ratio)).toBe(true);
+  });
+
+  // Tertiary (#009900) has ~5.6:1 ratio — passes AA but not AAA (7:1).
+  // This is acceptable: tertiary is used for muted/decorative text only.
+
+  it('accent text on accent background meets non-text contrast', () => {
+    const ratio = getContrastRatio(accentText, accent);
+    expect(ratio).toBeGreaterThanOrEqual(3.0);
+    expect(meetsNonTextContrast(ratio)).toBe(true);
+  });
+
+  it('accent hover on black meets non-text contrast', () => {
+    const ratio = getContrastRatio(accentHover, bg);
+    expect(ratio).toBeGreaterThanOrEqual(3.0);
+    expect(meetsNonTextContrast(ratio)).toBe(true);
+  });
+
+  it('border on black meets non-text contrast', () => {
+    const ratio = getContrastRatio(border, bg);
+    expect(ratio).toBeGreaterThanOrEqual(3.0);
+    expect(meetsNonTextContrast(ratio)).toBe(true);
+  });
+
+  it('border-light (#009900) on black meets non-text contrast', () => {
+    const ratio = getContrastRatio(borderLight, bg);
+    expect(ratio).toBeGreaterThanOrEqual(3.0);
+    expect(meetsNonTextContrast(ratio)).toBe(true);
+  });
+
+  it('focus indicator on black meets non-text contrast', () => {
+    const ratio = getContrastRatio(focus, bg);
+    expect(ratio).toBeGreaterThanOrEqual(3.0);
+    expect(meetsNonTextContrast(ratio)).toBe(true);
+  });
+});
+
+describe('Color Contrast - Mono Amber Phosphor (Light Theme)', () => {
+  /*
+   * Mono amber variant: all UI elements rendered in amber (#ffb000)
+   * on a pure black (#000000) background, simulating a DOS P3 monitor.
+   * Color values sourced from src/styles/variant.css
+   * :root[data-ui-variant='mono'][data-theme='light'].
+   */
+  const bg = '#000000';
+  const textPrimary = '#ffb000';
+  const textSecondary = '#cc8c00';
+  const textTertiary = '#997200';
+  const accent = '#ffb000';
+  const accentHover = '#ffc333';
+  const accentText = '#000000';
+  const border = '#ffb000';
+  const borderLight = '#997200';
+  const focus = '#ffb000';
+
+  it('primary text (#ffb000) on black meets WCAG AA', () => {
+    const ratio = getContrastRatio(textPrimary, bg);
+    expect(ratio).toBeGreaterThanOrEqual(4.5);
+    expect(meetsWCAG_AA(ratio)).toBe(true);
+  });
+
+  it('primary text (#ffb000) on black meets WCAG AAA', () => {
+    const ratio = getContrastRatio(textPrimary, bg);
+    expect(ratio).toBeGreaterThanOrEqual(7.0);
+    expect(meetsWCAG_AAA(ratio)).toBe(true);
+  });
+
+  it('secondary text (#cc8c00) on black meets WCAG AA', () => {
+    const ratio = getContrastRatio(textSecondary, bg);
+    expect(ratio).toBeGreaterThanOrEqual(4.5);
+    expect(meetsWCAG_AA(ratio)).toBe(true);
+  });
+
+  it('secondary text (#cc8c00) on black meets WCAG AAA', () => {
+    const ratio = getContrastRatio(textSecondary, bg);
+    expect(ratio).toBeGreaterThanOrEqual(7.0);
+    expect(meetsWCAG_AAA(ratio)).toBe(true);
+  });
+
+  it('tertiary text (#997200) on black meets WCAG AA', () => {
+    const ratio = getContrastRatio(textTertiary, bg);
+    expect(ratio).toBeGreaterThanOrEqual(4.5);
+    expect(meetsWCAG_AA(ratio)).toBe(true);
+  });
+
+  // Tertiary (#997200) has ~4.8:1 ratio — passes AA but not AAA (7:1).
+  // This is acceptable: tertiary is used for muted/decorative text only.
+
+  it('accent text on accent background meets non-text contrast', () => {
+    const ratio = getContrastRatio(accentText, accent);
+    expect(ratio).toBeGreaterThanOrEqual(3.0);
+    expect(meetsNonTextContrast(ratio)).toBe(true);
+  });
+
+  it('accent hover on black meets non-text contrast', () => {
+    const ratio = getContrastRatio(accentHover, bg);
+    expect(ratio).toBeGreaterThanOrEqual(3.0);
+    expect(meetsNonTextContrast(ratio)).toBe(true);
+  });
+
+  it('border on black meets non-text contrast', () => {
+    const ratio = getContrastRatio(border, bg);
+    expect(ratio).toBeGreaterThanOrEqual(3.0);
+    expect(meetsNonTextContrast(ratio)).toBe(true);
+  });
+
+  it('border-light (#997200) on black meets non-text contrast', () => {
+    const ratio = getContrastRatio(borderLight, bg);
+    expect(ratio).toBeGreaterThanOrEqual(3.0);
+    expect(meetsNonTextContrast(ratio)).toBe(true);
+  });
+
+  it('focus indicator on black meets non-text contrast', () => {
+    const ratio = getContrastRatio(focus, bg);
+    expect(ratio).toBeGreaterThanOrEqual(3.0);
+    expect(meetsNonTextContrast(ratio)).toBe(true);
+  });
+});
+
 describe('APCA Contrast (Future WCAG 3.0) - Informational', () => {
   /**
    * APCA (Accessible Perceptual Contrast Algorithm) is the proposed method

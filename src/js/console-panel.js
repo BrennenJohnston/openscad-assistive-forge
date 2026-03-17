@@ -1,5 +1,9 @@
 /**
- * Console Panel - Display OpenSCAD echo/warning/error messages
+ * Console Panel - Unified OpenSCAD output display (S-010 desktop parity)
+ *
+ * Single panel with two views:
+ *   - Log: chronological ECHO/WARNING/ERROR/DEPRECATED/TRACE messages
+ *   - Structured: sortable error table (delegated to ErrorLogPanel)
  *
  * Programs use echo() to communicate with users; these messages must be visible.
  * @license GPL-3.0-or-later
@@ -15,15 +19,19 @@ export const CONSOLE_ENTRY_TYPE = {
   WARNING: 'warning',
   ERROR: 'error',
   INFO: 'info',
+  DEPRECATED: 'deprecated',
+  TRACE: 'trace',
 };
 
 /**
- * ConsolePanel manages the OpenSCAD console output UI
+ * ConsolePanel manages the unified OpenSCAD console output UI.
  * Implements:
- * - ECHO, WARNING, ERROR message parsing
+ * - ECHO, WARNING, ERROR, DEPRECATED, TRACE message parsing
  * - Filtering by message type
+ * - Log/Structured view toggle
  * - Copy/download functionality
  * - Rate-limited screen reader announcements
+ * - Coordination with ErrorLogPanel (structured sub-view)
  */
 export class ConsolePanel {
   constructor(options = {}) {
@@ -37,23 +45,35 @@ export class ConsolePanel {
       warning: true,
       error: true,
       info: false,
+      deprecated: true,
+      trace: false,
     };
 
-    // Rate limiting for screen reader announcements
     this.lastAnnouncement = 0;
     this.announcementDebounce = options.announcementDebounce || 500;
     this.pendingAnnouncement = null;
 
-    // Counters for badge
     this.counts = {
       echo: 0,
       warning: 0,
       error: 0,
       info: 0,
+      deprecated: 0,
+      trace: 0,
     };
+
+    /** @type {import('./error-log-panel.js').ErrorLogPanel|null} */
+    this.structuredPanel = options.structuredPanel || null;
+
+    /** @type {Function|null} (file, line) => void */
+    this.onNavigate = options.onNavigate || null;
+
+    /** @type {'log'|'structured'} */
+    this.activeView = 'log';
 
     if (this.container) {
       this.initFilters();
+      this._initViewTabs();
     }
   }
 
@@ -65,6 +85,8 @@ export class ConsolePanel {
       echo: 'console-filter-echo',
       warning: 'console-filter-warn',
       error: 'console-filter-error',
+      deprecated: 'console-filter-deprecated',
+      trace: 'console-filter-trace',
     };
 
     for (const [type, id] of Object.entries(filterIds)) {
@@ -74,26 +96,74 @@ export class ConsolePanel {
         checkbox.addEventListener('change', (e) => {
           this.filters[type] = e.target.checked;
           this.render();
+          this._syncStructuredFilters(type, e.target.checked);
         });
       }
     }
 
-    // Copy button
     const copyBtn = document.getElementById('console-copy-btn');
     if (copyBtn) {
       copyBtn.addEventListener('click', () => this.copyToClipboard());
     }
 
-    // Download button
     const downloadBtn = document.getElementById('console-download-btn');
     if (downloadBtn) {
       downloadBtn.addEventListener('click', () => this.downloadLog());
     }
 
-    // Clear button
     const clearBtn = document.getElementById('console-clear-btn');
     if (clearBtn) {
       clearBtn.addEventListener('click', () => this.clear());
+    }
+  }
+
+  /**
+   * Initialize the Log/Structured view toggle tabs
+   */
+  _initViewTabs() {
+    const logTab = document.getElementById('console-tab-log');
+    const structuredTab = document.getElementById('console-tab-structured');
+    const logPanel = document.getElementById('console-view-log');
+    const structuredPanel = document.getElementById('console-view-structured');
+
+    if (!logTab || !structuredTab) return;
+
+    logTab.addEventListener('click', () => {
+      this.activeView = 'log';
+      logTab.classList.add('active');
+      logTab.setAttribute('aria-selected', 'true');
+      structuredTab.classList.remove('active');
+      structuredTab.setAttribute('aria-selected', 'false');
+      if (logPanel) logPanel.hidden = false;
+      if (structuredPanel) structuredPanel.hidden = true;
+    });
+
+    structuredTab.addEventListener('click', () => {
+      this.activeView = 'structured';
+      structuredTab.classList.add('active');
+      structuredTab.setAttribute('aria-selected', 'true');
+      logTab.classList.remove('active');
+      logTab.setAttribute('aria-selected', 'false');
+      if (structuredPanel) structuredPanel.hidden = false;
+      if (logPanel) logPanel.hidden = true;
+    });
+  }
+
+  /**
+   * Propagate a filter change to the structured sub-panel.
+   * Maps ConsolePanel filter names to ErrorLogPanel filter names.
+   */
+  _syncStructuredFilters(type, enabled) {
+    if (!this.structuredPanel) return;
+    const mapping = {
+      warning: 'warning',
+      error: 'error',
+      deprecated: 'deprecated',
+      trace: 'trace',
+    };
+    const errorLogType = mapping[type];
+    if (errorLogType && this.structuredPanel.setFilter) {
+      this.structuredPanel.setFilter(errorLogType, enabled);
     }
   }
 
@@ -108,48 +178,57 @@ export class ConsolePanel {
     const trimmed = line.trim();
     if (!trimmed) return null;
 
-    // ECHO: messages (primary user-facing communication channel)
+    let type = null;
+    let file = '';
+    let lineNum = null;
+
     if (trimmed.startsWith('ECHO:')) {
-      return {
-        type: CONSOLE_ENTRY_TYPE.ECHO,
-        message: trimmed.substring(5).trim(),
-        raw: trimmed,
-        timestamp: Date.now(),
-      };
+      type = CONSOLE_ENTRY_TYPE.ECHO;
+    } else if (trimmed.includes('WARNING:') || trimmed.includes('Warning:')) {
+      type = CONSOLE_ENTRY_TYPE.WARNING;
+    } else if (trimmed.includes('ERROR:') || trimmed.includes('Error:')) {
+      type = CONSOLE_ENTRY_TYPE.ERROR;
+    } else if (/\bDEPRECATED:/i.test(trimmed)) {
+      type = CONSOLE_ENTRY_TYPE.DEPRECATED;
+    } else if (/\bTRACE:/i.test(trimmed)) {
+      type = CONSOLE_ENTRY_TYPE.TRACE;
+    } else if (trimmed.includes('Compiling') || trimmed.includes('Rendering')) {
+      type = CONSOLE_ENTRY_TYPE.INFO;
     }
 
-    // WARNING: messages
-    if (trimmed.includes('WARNING:') || trimmed.includes('Warning:')) {
-      return {
-        type: CONSOLE_ENTRY_TYPE.WARNING,
-        message: trimmed,
-        raw: trimmed,
-        timestamp: Date.now(),
-      };
+    if (!type) return null;
+
+    // Extract file:line for navigable entries
+    if (
+      type === CONSOLE_ENTRY_TYPE.WARNING ||
+      type === CONSOLE_ENTRY_TYPE.ERROR ||
+      type === CONSOLE_ENTRY_TYPE.DEPRECATED
+    ) {
+      const fileLineMatch =
+        trimmed.match(/([\w.\-/\\]+\.scad)['"]?\s*,?\s*line\s+(\d+)/i) ||
+        trimmed.match(/([\w.\-/\\]+\.scad):(\d+)/i);
+      if (fileLineMatch) {
+        file = fileLineMatch[1];
+        lineNum = parseInt(fileLineMatch[2], 10);
+      } else {
+        const lineOnlyMatch = trimmed.match(/\bline\s+(\d+)\b/i);
+        if (lineOnlyMatch) {
+          lineNum = parseInt(lineOnlyMatch[1], 10);
+        }
+      }
     }
 
-    // ERROR: messages
-    if (trimmed.includes('ERROR:') || trimmed.includes('Error:')) {
-      return {
-        type: CONSOLE_ENTRY_TYPE.ERROR,
-        message: trimmed,
-        raw: trimmed,
-        timestamp: Date.now(),
-      };
-    }
+    const message =
+      type === CONSOLE_ENTRY_TYPE.ECHO ? trimmed.substring(5).trim() : trimmed;
 
-    // Compile/render time info (useful context)
-    if (trimmed.includes('Compiling') || trimmed.includes('Rendering')) {
-      return {
-        type: CONSOLE_ENTRY_TYPE.INFO,
-        message: trimmed,
-        raw: trimmed,
-        timestamp: Date.now(),
-      };
-    }
-
-    // Filter out internal noise by default
-    return null;
+    return {
+      type,
+      message,
+      raw: trimmed,
+      file,
+      line: lineNum,
+      timestamp: Date.now(),
+    };
   }
 
   /**
@@ -161,20 +240,18 @@ export class ConsolePanel {
 
     const lines = output.split('\n');
     let hasNewEntries = false;
-    let hasEchoOrImportant = false;
+    let hasWarningOrError = false;
 
     for (const line of lines) {
       const entry = this.parseLine(line);
       if (entry) {
         this.addEntry(entry);
         hasNewEntries = true;
-        // Track ECHO, WARNING, and ERROR messages for auto-expand
         if (
-          entry.type === CONSOLE_ENTRY_TYPE.ECHO ||
           entry.type === CONSOLE_ENTRY_TYPE.WARNING ||
           entry.type === CONSOLE_ENTRY_TYPE.ERROR
         ) {
-          hasEchoOrImportant = true;
+          hasWarningOrError = true;
         }
       }
     }
@@ -183,23 +260,20 @@ export class ConsolePanel {
       this.render();
     }
 
-    // Auto-expand console when ECHO/WARNING/ERROR messages arrive
-    // SCAD authors use echo() to communicate with end-users -- these must be visible
-    if (hasEchoOrImportant) {
+    if (hasWarningOrError) {
       this.autoExpandPanel();
     }
   }
 
   /**
    * Auto-expand the console <details> panel when important messages arrive
-   * Sets the open attribute so the console becomes visible without user action
    */
   autoExpandPanel() {
     const consolePanel = document.getElementById('consolePanel');
     if (consolePanel && !consolePanel.open) {
       consolePanel.open = true;
       console.log(
-        '[ConsolePanel] Auto-expanded: ECHO/WARNING/ERROR message detected'
+        '[ConsolePanel] Auto-expanded: WARNING or ERROR message detected'
       );
     }
   }
@@ -212,39 +286,37 @@ export class ConsolePanel {
     if (!entry) return;
 
     this.entries.push(entry);
-    this.counts[entry.type]++;
-
-    // Enforce max entries limit
-    if (this.entries.length > this.maxEntries) {
-      const removed = this.entries.shift();
-      this.counts[removed.type]--;
+    if (this.counts[entry.type] !== undefined) {
+      this.counts[entry.type]++;
     }
 
-    // Update badge
-    this.updateBadge();
+    if (this.entries.length > this.maxEntries) {
+      const removed = this.entries.shift();
+      if (this.counts[removed.type] !== undefined) {
+        this.counts[removed.type]--;
+      }
+    }
 
-    // Announce important messages to screen readers
+    this.updateBadge();
     this.announceIfImportant(entry);
   }
 
   /**
-   * Update the unread badge count
+   * Update the unified badge count (warnings + errors + deprecated)
    */
   updateBadge() {
     if (!this.badge) return;
 
-    const warningErrorCount = this.counts.warning + this.counts.error;
-    // Include ECHO messages in badge count (user communication channel)
-    const importantCount = warningErrorCount + this.counts.echo;
+    const issueCount =
+      this.counts.warning + this.counts.error + this.counts.deprecated;
+    const importantCount = issueCount + this.counts.echo;
     const totalCount = this.entries.length;
 
-    if (warningErrorCount > 0) {
-      // Warnings/errors get special styling
+    if (issueCount > 0) {
       this.badge.textContent = importantCount;
       this.badge.classList.add('has-warnings');
       this.badge.classList.remove('hidden');
     } else if (importantCount > 0) {
-      // ECHO-only messages still show badge (but without warning styling)
       this.badge.textContent = importantCount;
       this.badge.classList.remove('has-warnings');
       this.badge.classList.remove('hidden');
@@ -262,8 +334,6 @@ export class ConsolePanel {
    * @param {Object} entry - Console entry
    */
   announceIfImportant(entry) {
-    // Announce ECHO, warnings, and errors to screen readers
-    // SCAD authors use echo() to communicate important info to users
     if (
       entry.type !== CONSOLE_ENTRY_TYPE.ECHO &&
       entry.type !== CONSOLE_ENTRY_TYPE.WARNING &&
@@ -274,7 +344,6 @@ export class ConsolePanel {
 
     const now = Date.now();
     if (now - this.lastAnnouncement < this.announcementDebounce) {
-      // Debounce - queue this announcement
       if (this.pendingAnnouncement) {
         clearTimeout(this.pendingAnnouncement);
       }
@@ -288,8 +357,7 @@ export class ConsolePanel {
   }
 
   /**
-   * Actually perform the screen reader announcement.
-   * Uses shared announcer.js utility with assertive region for errors/warnings.
+   * Perform the screen reader announcement.
    * @param {Object} entry - Console entry
    */
   doAnnounce(entry) {
@@ -302,21 +370,19 @@ export class ConsolePanel {
     } else if (entry.type === CONSOLE_ENTRY_TYPE.ERROR) {
       typeLabel = 'Error';
     } else {
-      typeLabel = 'Message'; // ECHO messages
+      typeLabel = 'Message';
     }
     const message = `${typeLabel}: ${entry.message}`;
 
-    // Errors use assertive region for immediate attention
     if (entry.type === CONSOLE_ENTRY_TYPE.ERROR) {
       announceError(message);
     } else {
-      // Warnings and ECHO use polite announcement
       announceImmediate(message);
     }
   }
 
   /**
-   * Render all entries to the container
+   * Render all entries to the container (Log view)
    */
   render() {
     if (!this.container) return;
@@ -332,7 +398,6 @@ export class ConsolePanel {
       return;
     }
 
-    // Build HTML for visible entries
     const entriesHtml = visibleEntries
       .map((entry) => this.renderEntry(entry))
       .join('');
@@ -360,15 +425,19 @@ export class ConsolePanel {
 
     const safeMessage = this.escapeHtml(entry.message);
 
-    // WARNING and ERROR entries get role="alert" for screen reader announcement (WCAG 4.1.3)
     const entryRole =
       entry.type === 'warning' || entry.type === 'error' ? 'alert' : 'listitem';
+
+    const hasLocation = entry.line !== null && this.onNavigate;
+    const lineLink = hasLocation
+      ? ` <button type="button" class="console-line-link" data-file="${this.escapeHtml(entry.file || '')}" data-line="${entry.line}" aria-label="Go to line ${entry.line}">:${entry.line}</button>`
+      : '';
 
     return `
       <div class="console-entry ${typeClass}" role="${entryRole}">
         <time class="console-timestamp" datetime="${time.toISOString()}">${timeStr}</time>
         <span class="console-type" aria-hidden="true">${typeLabel}</span>
-        <span class="console-message">${safeMessage}</span>
+        <span class="console-message">${safeMessage}${lineLink}</span>
       </div>
     `;
   }
@@ -385,20 +454,33 @@ export class ConsolePanel {
   }
 
   /**
-   * Clear all entries
+   * Clear all entries and the structured sub-panel
    */
   clear() {
     this.entries = [];
-    this.counts = { echo: 0, warning: 0, error: 0, info: 0 };
+    this.counts = {
+      echo: 0,
+      warning: 0,
+      error: 0,
+      info: 0,
+      deprecated: 0,
+      trace: 0,
+    };
     this.updateBadge();
     this.render();
+    if (this.structuredPanel) {
+      this.structuredPanel.clear();
+    }
   }
 
   /**
-   * Export log as plain text
+   * Export log as plain text (from active view)
    * @returns {string} Log text
    */
   exportLog() {
+    if (this.activeView === 'structured' && this.structuredPanel) {
+      return this.structuredPanel.exportLog();
+    }
     return this.entries
       .map((e) => {
         const time = new Date(e.timestamp).toISOString();
@@ -429,7 +511,6 @@ export class ConsolePanel {
         }, 1500);
       }
     } catch (_error) {
-      // Fallback for older browsers
       const textarea = document.createElement('textarea');
       textarea.value = text;
       document.body.appendChild(textarea);
@@ -477,7 +558,6 @@ export class ConsolePanel {
   }
 }
 
-// Singleton instance for app-wide use
 let consolePanelInstance = null;
 
 /**

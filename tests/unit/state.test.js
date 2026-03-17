@@ -622,6 +622,40 @@ describe('State Management', () => {
       const loaded = await state.loadFromURL()
       expect(loaded).toBeNull()
     })
+
+    it('should load nested-array parameters from URL hash (ISSUE-006)', async () => {
+      const tabletPositions = [[0, 0], [100, 200], [50, 150]]
+      const params = { tabletPositions }
+      window.location.hash = `#v=1&params=${encodeURIComponent(JSON.stringify(params))}`
+
+      const loaded = await state.loadFromURL()
+
+      expect(loaded).not.toBeNull()
+      expect(loaded.tabletPositions).toEqual(tabletPositions)
+    })
+
+    it('should load mixed scalar and nested-array parameters from URL hash', async () => {
+      const tabletPositions = [[0, 0], [100, 200]]
+      const params = { width: 100, shape: 'round', tabletPositions }
+      window.location.hash = `#v=1&params=${encodeURIComponent(JSON.stringify(params))}`
+
+      const loaded = await state.loadFromURL()
+
+      expect(loaded).not.toBeNull()
+      expect(loaded.tabletPositions).toEqual(tabletPositions)
+      expect(loaded.shape).toBe('round')
+    })
+
+    it('should load flat array parameters from URL hash', async () => {
+      const sizes = [10, 20, 30]
+      const params = { sizes }
+      window.location.hash = `#v=1&params=${encodeURIComponent(JSON.stringify(params))}`
+
+      const loaded = await state.loadFromURL()
+
+      expect(loaded).not.toBeNull()
+      expect(loaded.sizes).toEqual(sizes)
+    })
   })
 
   describe('performURLSync', () => {

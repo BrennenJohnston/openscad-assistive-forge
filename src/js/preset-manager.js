@@ -247,7 +247,7 @@ export function dismissMigrationOffer() {
 /**
  * Reset migration flag (for testing or re-offering migration)
  */
-export function resetMigrationFlag() {
+function resetMigrationFlag() {
   try {
     localStorage.removeItem(STORAGE_KEYS.migrationFlag);
     console.log('[PresetManager] Migration flag reset');

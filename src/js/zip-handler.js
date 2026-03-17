@@ -468,7 +468,7 @@ export function resolveProjectFile(projectFiles, filename) {
  * @param {Object} parameterSets - OpenSCAD parameterSets object { "preset name": {...} }
  * @returns {Map<string, { openingsPath: string|null, svgPath: string|null }>}
  */
-export function buildPresetCompanionMap(files, parameterSets) {
+export function buildPresetCompanionMap(files, parameterSets, options = {}) {
   const result = new Map();
   if (!files || !parameterSets) return result;
 
@@ -476,6 +476,10 @@ export function buildPresetCompanionMap(files, parameterSets) {
     (n) => n !== 'design default values'
   );
   if (presetNames.length === 0) return result;
+
+  const { companionTargets } = options;
+  const useGenericPath =
+    Array.isArray(companionTargets) && companionTargets.length > 0;
 
   // Group all file paths by basename
   const byBasename = new Map();
@@ -496,18 +500,32 @@ export function buildPresetCompanionMap(files, parameterSets) {
     k.toLowerCase().endsWith('.svg')
   );
 
-  // Tokenise a preset name into meaningful lowercase substrings
+  // Tokenise a preset name into meaningful lowercase substrings.
+  // Single-digit numeric tokens (e.g. "7", "8", "9" from "iPad 7,8,9") are kept
+  // because they disambiguate tablet-version folder names from each other.
   function tokenise(name) {
     return name
       .toLowerCase()
       .split(/[\s\-_/,().]+/)
-      .filter((t) => t.length > 1);
+      .filter((t) => t.length > 1 || /^\d$/.test(t));
   }
 
-  // Count how many tokens from the preset name appear in a candidate path
+  // Count how many tokens from the preset name appear in a candidate path.
+  // Multi-char tokens use full-path substring matching (existing behaviour).
+  // Single-digit tokens use exact word-boundary matching within folder segments
+  // only, so token "7" does not falsely match a folder named "iPad 78".
   function scorePath(path, tokens) {
     const lower = path.toLowerCase();
-    return tokens.filter((t) => lower.includes(t)).length;
+    const folderWords = new Set(
+      lower
+        .split('/')
+        .slice(0, -1)
+        .flatMap((seg) => seg.split(/[\s,\-_().]+/))
+        .filter(Boolean)
+    );
+    return tokens.filter((t) =>
+      t.length > 1 ? lower.includes(t) : folderWords.has(t)
+    ).length;
   }
 
   // Prefer deeper (longer) paths when scores are tied.
@@ -527,40 +545,86 @@ export function buildPresetCompanionMap(files, parameterSets) {
   for (const presetName of presetNames) {
     const tokens = tokenise(presetName);
 
-    let openingsPath = null;
-    const openingsCandidates = aliasableBasenames.get(
-      'openings_and_additions.txt'
-    );
-    if (openingsCandidates) {
-      openingsPath = pickBest(openingsCandidates, tokens);
-      if (!openingsPath) {
-        console.warn(
-          `[PresetCompanionMap] Cannot unambiguously resolve openings path for preset: "${presetName}"`
-        );
-      }
-    }
+    if (useGenericPath) {
+      const aliases = {};
 
-    let svgPath = null;
-    if (svgPaths.length === 1) {
-      svgPath = svgPaths[0];
-    } else if (svgPaths.length > 1) {
-      svgPath = pickBest(svgPaths, tokens);
-      if (!svgPath) {
-        console.warn(
-          `[PresetCompanionMap] Cannot unambiguously resolve SVG path for preset: "${presetName}"`
-        );
+      for (const target of companionTargets) {
+        const candidates = aliasableBasenames.get(target);
+        if (candidates) {
+          const best = pickBest(candidates, tokens);
+          if (best) {
+            aliases[target] = best;
+          } else {
+            console.warn(
+              `[PresetCompanionMap] Cannot unambiguously resolve "${target}" for preset: "${presetName}"`
+            );
+          }
+        }
       }
-    }
 
-    result.set(presetName, { openingsPath, svgPath });
+      let svgAliasTarget = null;
+      if (svgPaths.length === 1) {
+        const basename = svgPaths[0].split('/').pop();
+        aliases[basename] = svgPaths[0];
+        svgAliasTarget = basename;
+      } else if (svgPaths.length > 1) {
+        const best = pickBest(svgPaths, tokens);
+        if (best) {
+          const basename = best.split('/').pop();
+          aliases[basename] = best;
+          svgAliasTarget = basename;
+        }
+      }
+
+      result.set(presetName, { aliases, svgAliasTarget });
+    } else {
+      // LEGACY-ONLY COMPATIBILITY PATH:
+      // Keep keyguard-shaped fallback mapping for stakeholder archives that do
+      // not expose explicit companion metadata yet.
+      let openingsPath = null;
+      const openingsCandidates = aliasableBasenames.get(
+        'openings_and_additions.txt'
+      );
+      if (openingsCandidates) {
+        openingsPath = pickBest(openingsCandidates, tokens);
+        if (!openingsPath) {
+          console.warn(
+            `[PresetCompanionMap] Cannot unambiguously resolve openings path for preset: "${presetName}"`
+          );
+        }
+      }
+
+      let svgPath = null;
+      if (svgPaths.length === 1) {
+        svgPath = svgPaths[0];
+      } else if (svgPaths.length > 1) {
+        svgPath = pickBest(svgPaths, tokens);
+        if (!svgPath) {
+          console.warn(
+            `[PresetCompanionMap] Cannot unambiguously resolve SVG path for preset: "${presetName}"`
+          );
+        }
+      }
+
+      result.set(presetName, { openingsPath, svgPath });
+    }
   }
 
-  const mappedCount = Array.from(result.values()).filter(
-    (v) => v.openingsPath !== null
-  ).length;
-  console.log(
-    `[PresetCompanionMap] Mapped ${mappedCount}/${presetNames.length} presets to openings paths`
-  );
+  if (useGenericPath) {
+    const mappedCount = Array.from(result.values()).filter(
+      (v) => Object.keys(v.aliases || {}).length > 0
+    ).length;
+    console.log(
+      `[PresetCompanionMap] Mapped ${mappedCount}/${presetNames.length} presets to companion aliases`
+    );
+  } else {
+    const mappedCount = Array.from(result.values()).filter(
+      (v) => v.openingsPath !== null
+    ).length;
+    console.log(
+      `[PresetCompanionMap] Mapped ${mappedCount}/${presetNames.length} presets via legacy openings fallback`
+    );
+  }
 
   return result;
 }
@@ -581,6 +645,23 @@ export function applyCompanionAliases(projectFiles, companionMapping) {
   if (!companionMapping) return result;
 
   if (
+    companionMapping.aliases &&
+    typeof companionMapping.aliases === 'object'
+  ) {
+    for (const [aliasTarget, sourcePath] of Object.entries(
+      companionMapping.aliases
+    )) {
+      if (sourcePath && result.has(sourcePath)) {
+        result.set(aliasTarget, result.get(sourcePath));
+      }
+    }
+    return result;
+  }
+
+  // LEGACY-ONLY COMPATIBILITY PATH:
+  // Keyguard-shaped mapping copies preset-specific content to
+  // hardcoded root-level keys "openings_and_additions.txt" / "default.svg".
+  if (
     companionMapping.openingsPath &&
     result.has(companionMapping.openingsPath)
   ) {
@@ -594,6 +675,46 @@ export function applyCompanionAliases(projectFiles, companionMapping) {
   }
 
   return result;
+}
+
+/**
+ * Extract the SVG overlay alias target from a companion mapping.
+ * Works with both generic (Phase 5+) and legacy mapping formats.
+ *
+ * @param {{ aliases?: Object, svgAliasTarget?: string|null, svgPath?: string|null }|null} companionMapping
+ * @returns {string|null} The file key to use for loading the overlay SVG
+ */
+export function getOverlaySvgTarget(companionMapping) {
+  if (!companionMapping) return null;
+  if (companionMapping.aliases) {
+    if (companionMapping.svgAliasTarget) return companionMapping.svgAliasTarget;
+    for (const key of Object.keys(companionMapping.aliases)) {
+      if (key.toLowerCase().endsWith('.svg')) return key;
+    }
+    return null;
+  }
+  // Legacy compatibility target for stakeholder keyguard packages.
+  if (companionMapping.svgPath) return 'default.svg';
+  return null;
+}
+
+/**
+ * Find the first overlay-suitable asset (SVG or image) in a project files Map.
+ * Prefers SVG files over raster images.
+ *
+ * @param {Map<string, string>} projectFiles
+ * @returns {string|null} File key of the first overlay-suitable asset
+ */
+export function findFirstOverlayAsset(projectFiles) {
+  if (!projectFiles || projectFiles.size === 0) return null;
+  const IMAGE_EXTS = ['.png', '.jpg', '.jpeg', '.gif', '.webp'];
+  for (const key of projectFiles.keys()) {
+    if (key.toLowerCase().endsWith('.svg')) return key;
+  }
+  for (const key of projectFiles.keys()) {
+    if (IMAGE_EXTS.some((ext) => key.toLowerCase().endsWith(ext))) return key;
+  }
+  return null;
 }
 
 /**

@@ -56,6 +56,7 @@ export function extractDependencies(scadContent) {
  * @param {string[]} uploadedFilenames - Names of uploaded files
  * @param {Object} options - Check options
  * @param {Set<string>} [options.availableLibraries] - Libraries loaded in app
+ * @param {string[]} [options.fileParamNames] - Filenames from mounted [file] parameters
  * @returns {Object} Missing files report
  */
 export function checkDependencies(
@@ -63,12 +64,13 @@ export function checkDependencies(
   uploadedFilenames,
   options = {}
 ) {
-  const { availableLibraries = new Set() } = options;
+  const { availableLibraries = new Set(), fileParamNames = [] } = options;
 
-  // Create case-insensitive lookup of uploaded files
-  const uploadedLower = new Set(uploadedFilenames.map((f) => f.toLowerCase()));
+  // Combine uploaded files and mounted file-param names into one lookup
+  const allAvailableFiles = [...uploadedFilenames, ...fileParamNames];
+  const uploadedLower = new Set(allAvailableFiles.map((f) => f.toLowerCase()));
   const uploadedBasenames = new Set(
-    uploadedFilenames.map((f) => {
+    allAvailableFiles.map((f) => {
       const parts = f.split('/');
       return parts[parts.length - 1].toLowerCase();
     })

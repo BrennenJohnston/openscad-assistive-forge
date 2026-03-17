@@ -1,0 +1,33 @@
+﻿{
+    "openscad_version":  "2021.01",
+    "backend":  "CGAL",
+    "scenario_id":  "keyguard-frame-multicolor",
+    "parameters":  {
+                       "type_of_keyguard":  "3D-Printed",
+                       "generate":  "keyguard frame",
+                       "show_keyguard_with_frame":  "yes",
+                       "have_a_keyguard_frame":  "yes"
+                   },
+    "console":  {
+                    "echo_lines":  [
+
+                                   ],
+                    "warnings":  [
+                                     "WARNING: Viewall and autocenter disabled in favor of $vp*"
+                                 ],
+                    "errors":  [
+
+                               ]
+                },
+    "geometry":  {
+                     "type":  "3D",
+                     "vertices":  6576,
+                     "facets":  3716,
+                     "render_time_s":  51.743
+                 },
+    "face_colors":  "not_available_cgal_backend",
+    "exports":  {
+                    "off_bytes":  383975,
+                    "stl_bytes":  2056473
+                }
+}

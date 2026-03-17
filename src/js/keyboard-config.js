@@ -4,6 +4,8 @@
  * @license GPL-3.0-or-later
  */
 
+import { escapeHtml } from './html-utils.js';
+
 /**
  * Storage key for keyboard shortcuts
  */
@@ -185,7 +187,7 @@ export const DEFAULT_SHORTCUTS = {
     description: 'Reload file',
   },
   exportImage: {
-    key: 'i',
+    key: 'e',
     ctrl: true,
     shift: true,
     description: 'Export preview as image',
@@ -239,11 +241,13 @@ export const DEFAULT_SHORTCUTS = {
     key: '=',
     ctrl: true,
     description: 'Increase editor font size',
+    editorOnly: true,
   },
   decreaseFontSize: {
     key: '-',
     ctrl: true,
     description: 'Decrease editor font size',
+    editorOnly: true,
   },
   find: {
     key: 'f',
@@ -563,12 +567,17 @@ export function detectPlatform() {
 /**
  * Keyboard configuration manager
  */
-class KeyboardConfig {
+export class KeyboardConfig {
   constructor() {
     this.shortcuts = { ...DEFAULT_SHORTCUTS };
     this.handlers = {};
     this.enabled = true;
     this.listeners = [];
+    // CSS selector used to detect whether focus is inside the code editor.
+    // Shortcuts marked editorOnly only fire when the focused element matches
+    // this selector or is a descendant of it, so that Ctrl+= / Ctrl+- do not
+    // steal browser zoom when the editor does not have focus.
+    this._editorSelector = '.cm-editor';
 
     // Bind event handler
     this._handleKeydown = this._handleKeydown.bind(this);
@@ -585,6 +594,10 @@ class KeyboardConfig {
     // Apply any overrides from options
     if (options.shortcuts) {
       this.shortcuts = { ...this.shortcuts, ...options.shortcuts };
+    }
+
+    if (options.editorSelector) {
+      this._editorSelector = options.editorSelector;
     }
 
     // Attach global listener
@@ -689,9 +702,11 @@ class KeyboardConfig {
       return;
     }
 
+    const def = DEFAULT_SHORTCUTS[action];
     this.shortcuts[action] = {
+      ...(def.editorOnly ? { editorOnly: true } : {}),
       ...shortcut,
-      description: DEFAULT_SHORTCUTS[action].description,
+      description: def.description,
     };
 
     this.save();
@@ -793,7 +808,9 @@ class KeyboardConfig {
       const customized = {};
       for (const [action, shortcut] of Object.entries(this.shortcuts)) {
         if (this.isCustomized(action)) {
-          const { description: _desc, ...rest } = shortcut;
+          // Exclude behavioral flags (description, editorOnly) — they are
+          // always re-applied from DEFAULT_SHORTCUTS on load.
+          const { description: _desc, editorOnly: _eo, ...rest } = shortcut;
           customized[action] = rest;
         }
       }
@@ -812,10 +829,12 @@ class KeyboardConfig {
       if (saved) {
         const customized = JSON.parse(saved);
         for (const [action, shortcut] of Object.entries(customized)) {
-          if (DEFAULT_SHORTCUTS[action]) {
+          const def = DEFAULT_SHORTCUTS[action];
+          if (def) {
             this.shortcuts[action] = {
+              ...(def.editorOnly ? { editorOnly: true } : {}),
               ...shortcut,
-              description: DEFAULT_SHORTCUTS[action].description,
+              description: def.description,
             };
           }
         }
@@ -832,7 +851,6 @@ class KeyboardConfig {
   _handleKeydown(event) {
     if (!this.enabled) return;
 
-    // Skip if in input field (unless it's a global shortcut)
     const target = event.target;
     const isInputField =
       target.tagName === 'INPUT' ||
@@ -840,12 +858,20 @@ class KeyboardConfig {
       target.tagName === 'SELECT' ||
       target.isContentEditable;
 
+    // True when focus is inside the code editor (e.g. CodeMirror).
+    // editorOnly shortcuts only fire here; when focus is elsewhere we skip
+    // without calling preventDefault so browser zoom remains functional.
+    const isInCodeEditor = Boolean(target.closest?.(this._editorSelector));
+
     // Find matching shortcut
     for (const [action, shortcut] of Object.entries(this.shortcuts)) {
       if (matchesShortcut(shortcut, event)) {
-        // Skip non-global shortcuts in input fields
-        if (isInputField && !shortcut.global) {
-          // Allow Escape in input fields
+        if (shortcut.editorOnly) {
+          // Only fire when focus is inside the code editor.
+          // Skipping without preventDefault lets the browser handle the event.
+          if (!isInCodeEditor) continue;
+        } else if (isInputField && !shortcut.global) {
+          // Skip non-global shortcuts in regular input fields (allow Escape).
           if (event.key !== 'Escape') continue;
         }
 
@@ -1113,7 +1139,7 @@ function endKeyCapture(success) {
  * @param {string} conflictDescription - Description of conflicting action
  */
 function showConflictWarning(button, conflictDescription) {
-  button.innerHTML = `<span class="key-conflict-warning">Already used by: ${conflictDescription}</span>`;
+  button.innerHTML = `<span class="key-conflict-warning">Already used by: ${escapeHtml(conflictDescription)}</span>`;
   button.classList.add('conflict');
 
   setTimeout(() => {

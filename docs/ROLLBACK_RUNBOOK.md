@@ -1,7 +1,7 @@
 # Rollback Runbook
 
-**Version**: 4.1.0  
-**Last Updated**: 2026-02-24
+**Version**: 4.2.0  
+**Last Updated**: 2026-03-16
 
 This runbook provides step-by-step procedures for rolling back OpenSCAD Assistive Forge in production.
 

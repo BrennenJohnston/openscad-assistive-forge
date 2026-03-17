@@ -1,0 +1,50 @@
+﻿{
+    "openscad_version":  "2026.01.03",
+    "backend":  "Manifold",
+    "scenario_id":  "laser-cut-first-layer",
+    "parameters":  {
+                       "generate":  "first layer for SVG/DXF file",
+                       "type_of_keyguard":  "Laser-Cut"
+                   },
+    "console":  {
+                    "echo_lines":  [
+                                       "ECHO:",
+                                       "ECHO:",
+                                       "ECHO: \"type of tablet: iPad 9th generation\"",
+                                       "ECHO: \"orientation: landscape\"",
+                                       "ECHO: \"have a case? yes\"",
+                                       "ECHO: \"case opening corner radius: 3 mm.\"",
+                                       "ECHO: \"width of opening in case: 245 mm.\"",
+                                       "ECHO: \"number of columns: 4\"",
+                                       "ECHO: \"number of rows: 3\"",
+                                       "ECHO: \"vertical rail width: 26.948 mm.\"",
+                                       "ECHO: \"height of opening in case: 170 mm.\"",
+                                       "ECHO: \"horizontal rail width: 26.948 mm.\"",
+                                       "ECHO: \"mounting method: No Mount\"",
+                                       "ECHO: \"use Laser Cutting best practices: yes\""
+                                   ],
+                    "warnings":  [
+                                     "WARNING: Viewall and autocenter disabled in favor of $vp*"
+                                 ],
+                    "errors":  [
+
+                               ]
+                },
+    "geometry":  {
+                     "type":  "2D",
+                     "vertices":  null,
+                     "facets":  null,
+                     "render_time_s":  null
+                 },
+    "face_colors":  "off_export_failed",
+    "exports":  {
+                    "off_bytes":  0,
+                    "stl_bytes":  0,
+                    "png_path":  "cli-extracts/nightly/screenshots/laser-cut-first-layer.png",
+                    "svg":  {
+                                "viewBox":  "-123 -86 246 172",
+                                "file_size_bytes":  20518,
+                                "path_count":  1
+                            }
+                }
+}

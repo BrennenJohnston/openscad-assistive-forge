@@ -493,17 +493,32 @@ async function deserializeURLParams() {
     const json = decodeURIComponent(encoded);
     const params = JSON.parse(json);
 
-    // Validate params with Ajv
+    // Validate params with Ajv.
+    // The schema only accepts scalar (string) values, so array-valued parameters
+    // (e.g. nested tablet position data: [[x,y], ...]) must be partitioned out
+    // before validation and merged back in afterward.
+    // Tech-debt: widen urlParamValueSchema in validation-schemas.js to accept
+    // array types natively so this split is no longer needed.
+    const arrayParams = {};
+    const scalarParams = {};
+    for (const [k, v] of Object.entries(params)) {
+      if (Array.isArray(v)) {
+        arrayParams[k] = v;
+      } else {
+        scalarParams[k] = v;
+      }
+    }
+
     const { validateUrlParams } = await import('./validation-schemas.js');
-    const validation = validateUrlParams(params);
+    const validation = validateUrlParams(scalarParams);
 
     if (!validation.valid) {
       console.warn('[URL Params] Validation failed:', validation.errors);
-      // Return sanitized params (invalid ones removed)
-      return validation.sanitized;
+      // Return sanitized scalars merged with array params.
+      return { ...validation.sanitized, ...arrayParams };
     }
 
-    return params;
+    return { ...scalarParams, ...arrayParams };
   } catch (error) {
     console.error('Failed to deserialize URL params:', error);
     return null;
@@ -515,7 +530,7 @@ async function deserializeURLParams() {
  * @param {Object} params - Parameters object
  * @returns {string} Full URL with parameters
  */
-export function getShareableURL(params) {
+function getShareableURL(params) {
   const hash = serializeURLParams(params);
   return `${window.location.origin}${window.location.pathname}${hash}`;
 }
@@ -544,8 +559,13 @@ const initialState = {
   rendering: false,
   renderProgress: 0,
   lastRenderTime: null,
+  // Format-agnostic generated output record.
+  // { data: ArrayBuffer|string, format: string, stats: Object, paramsHash: string }
+  generatedOutput: null,
+  // Legacy aliases — readers should prefer generatedOutput when non-null.
   stl: null,
   stlStats: null,
+  outputFormat: null,
   expandedGroups: [],
   error: null,
   // Comparison mode

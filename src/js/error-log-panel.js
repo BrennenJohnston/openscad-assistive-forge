@@ -135,6 +135,15 @@ export class ErrorLogPanel {
     ) {
       type = ERROR_LOG_TYPE.ERROR;
       group = 'Geometry';
+    } else if (/\[OpenSCAD ERR\]/i.test(trimmed) && !/ECHO:/i.test(trimmed)) {
+      type = ERROR_LOG_TYPE.ERROR;
+      group = 'Runtime';
+    } else if (/MODEL_NOT_2D|MODEL_IS_2D|not a 2D object/i.test(trimmed)) {
+      type = ERROR_LOG_TYPE.ERROR;
+      group = 'Geometry';
+    } else if (/^Generation failed/i.test(trimmed)) {
+      type = ERROR_LOG_TYPE.ERROR;
+      group = 'General';
     }
 
     if (!type) return null;
@@ -212,6 +221,17 @@ export class ErrorLogPanel {
   }
 
   /**
+   * Set a single filter type externally (used by unified ConsolePanel).
+   * @param {string} type - One of ERROR_LOG_TYPE values
+   * @param {boolean} enabled
+   */
+  setFilter(type, enabled) {
+    if (this.filters[type] === undefined) return;
+    this.filters[type] = enabled;
+    this.render();
+  }
+
+  /**
    * Whether any errors or warnings exist.
    * @returns {boolean}
    */
@@ -230,7 +250,8 @@ export class ErrorLogPanel {
     return this.entries
       .map((e) => {
         const ts = new Date(e.timestamp).toISOString();
-        const loc = e.line != null ? `${e.file || ''}:${e.line}` : e.file || '';
+        const loc =
+          e.line !== null ? `${e.file || ''}:${e.line}` : e.file || '';
         return `[${ts}] [${e.type.toUpperCase()}] ${loc ? loc + ' — ' : ''}${e.message}`;
       })
       .join('\n');
@@ -332,7 +353,7 @@ export class ErrorLogPanel {
     this.lastAnnouncement = Date.now();
     this.pendingAnnouncement = null;
     const label = TYPE_LABELS[entry.type] || 'Issue';
-    const loc = entry.line != null ? ` at line ${entry.line}` : '';
+    const loc = entry.line !== null ? ` at line ${entry.line}` : '';
     const msg = `${label}${loc}: ${entry.message}`;
     if (entry.type === ERROR_LOG_TYPE.ERROR) {
       announceError(msg);
@@ -456,7 +477,7 @@ export class ErrorLogPanel {
 
     const lineCell = document.createElement('td');
     lineCell.className = 'error-log-cell--line';
-    if (entry.line != null && this.onNavigate) {
+    if (entry.line !== null && this.onNavigate) {
       const link = document.createElement('button');
       link.type = 'button';
       link.className = 'error-log-line-link';
@@ -467,7 +488,7 @@ export class ErrorLogPanel {
       );
       lineCell.appendChild(link);
     } else {
-      lineCell.textContent = entry.line != null ? String(entry.line) : '—';
+      lineCell.textContent = entry.line !== null ? String(entry.line) : '—';
     }
     row.appendChild(lineCell);
 
@@ -524,4 +545,23 @@ export function getErrorLogPanel(options = {}) {
 export function resetErrorLogPanel() {
   if (instance) instance.clear();
   instance = null;
+}
+
+/**
+ * Expose a global entry point so the generate catch block in main.js can push
+ * structured errors directly into the panel without importing this module.
+ * Called after getErrorLogPanel() has created the singleton.
+ */
+export function initAddStructuredError() {
+  window.addStructuredError = (message) => {
+    const panel = getErrorLogPanel();
+    panel.addEntry({
+      type: ERROR_LOG_TYPE.ERROR,
+      group: 'General',
+      file: '',
+      line: null,
+      message: message,
+      timestamp: Date.now(),
+    });
+  };
 }

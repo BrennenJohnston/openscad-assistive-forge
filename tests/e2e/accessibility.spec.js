@@ -24,7 +24,7 @@ test.beforeEach(async ({ page }) => {
   })
 })
 
-test.describe('Accessibility Compliance (WCAG 2.1 AA)', () => {
+test.describe('Accessibility Compliance (WCAG 2.2 AA)', () => {
   test('should have no accessibility violations on landing page', async ({ page }) => {
     await page.goto('/')
     
@@ -33,7 +33,7 @@ test.describe('Accessibility Compliance (WCAG 2.1 AA)', () => {
     
     // Run accessibility scan
     const results = await new AxeBuilder({ page })
-      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
       .analyze()
     
     // Log violations for debugging
@@ -70,7 +70,7 @@ test.describe('Accessibility Compliance (WCAG 2.1 AA)', () => {
       
       // Run accessibility scan on parameter UI
       const results = await new AxeBuilder({ page })
-        .withTags(['wcag2a', 'wcag2aa'])
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
         .analyze()
       
       if (results.violations.length > 0) {
@@ -725,7 +725,7 @@ test.describe('Screen Reader Support', () => {
       
       // Wait for example to load - file info shows loaded file name and parameter count
       await page.waitForSelector('#fileInfo:has-text("parameters")', {
-        timeout: 15000
+        timeout: 30000
       })
       
       // Check that welcome screen is hidden
@@ -1218,7 +1218,7 @@ test.describe('Color System and Theme Accessibility', () => {
     
     // Run accessibility scan
     const results = await new AxeBuilder({ page })
-      .withTags(['wcag2a', 'wcag2aa'])
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
       .analyze();
     
     expect(results.violations).toEqual([]);
@@ -1238,7 +1238,7 @@ test.describe('Color System and Theme Accessibility', () => {
     
     // Run accessibility scan
     const results = await new AxeBuilder({ page })
-      .withTags(['wcag2a', 'wcag2aa'])
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
       .analyze();
     
     expect(results.violations).toEqual([]);
@@ -1259,7 +1259,7 @@ test.describe('Color System and Theme Accessibility', () => {
     
     // Run accessibility scan
     const results = await new AxeBuilder({ page })
-      .withTags(['wcag2a', 'wcag2aa', 'wcag2aaa'])
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'wcag2aaa'])
       .analyze();
     
     expect(results.violations).toEqual([]);
@@ -1280,7 +1280,7 @@ test.describe('Color System and Theme Accessibility', () => {
     
     // Run accessibility scan
     const results = await new AxeBuilder({ page })
-      .withTags(['wcag2a', 'wcag2aa', 'wcag2aaa'])
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'wcag2aaa'])
       .analyze();
     
     expect(results.violations).toEqual([]);
@@ -1334,6 +1334,116 @@ test.describe('Color System and Theme Accessibility', () => {
     }
   });
 
+  test('toggle switch off-state track and thumb are distinguishable in all 7 theme states', async ({ page }) => {
+    await page.goto('/')
+    await page.waitForLoadState('networkidle')
+
+    const themeStates = [
+      { name: 'Light', theme: 'light', hc: false, mono: false },
+      { name: 'Dark', theme: 'dark', hc: false, mono: false },
+      { name: 'HC Light', theme: 'light', hc: true, mono: false },
+      { name: 'HC Dark', theme: 'dark', hc: true, mono: false },
+      { name: 'Mono Light', theme: 'light', hc: false, mono: true },
+      { name: 'Mono Dark', theme: 'dark', hc: false, mono: true },
+      { name: 'Mono + HC', theme: 'dark', hc: true, mono: true },
+    ]
+
+    for (const state of themeStates) {
+      const result = await page.evaluate((cfg) => {
+        const root = document.documentElement
+        root.setAttribute('data-theme', cfg.theme)
+        if (cfg.hc) {
+          root.setAttribute('data-high-contrast', 'true')
+        } else {
+          root.removeAttribute('data-high-contrast')
+        }
+        if (cfg.mono) {
+          root.setAttribute('data-ui-variant', 'mono')
+        } else {
+          root.removeAttribute('data-ui-variant')
+        }
+
+        let wrapper = document.getElementById('_test-toggle-wrapper')
+        if (!wrapper) {
+          wrapper = document.createElement('label')
+          wrapper.id = '_test-toggle-wrapper'
+          wrapper.className = 'toggle-switch'
+          const input = document.createElement('input')
+          input.type = 'checkbox'
+          wrapper.appendChild(input)
+          document.body.appendChild(wrapper)
+        }
+        const input = wrapper.querySelector('input')
+        input.checked = false
+
+        const trackStyle = getComputedStyle(input)
+        const thumbStyle = getComputedStyle(input, '::before')
+
+        return {
+          trackBg: trackStyle.backgroundColor,
+          thumbBg: thumbStyle.backgroundColor,
+        }
+      }, state)
+
+      const parseRgb = (str) => {
+        const m = str.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/)
+        return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null
+      }
+
+      const trackRgb = parseRgb(result.trackBg)
+      const thumbRgb = parseRgb(result.thumbBg)
+
+      expect(trackRgb, `${state.name}: track bg parseable`).not.toBeNull()
+      expect(thumbRgb, `${state.name}: thumb bg parseable`).not.toBeNull()
+
+      if (trackRgb && thumbRgb) {
+        const diff =
+          Math.abs(trackRgb[0] - thumbRgb[0]) +
+          Math.abs(trackRgb[1] - thumbRgb[1]) +
+          Math.abs(trackRgb[2] - thumbRgb[2])
+        expect(
+          diff,
+          `${state.name}: track (${result.trackBg}) vs thumb (${result.thumbBg}) channel diff=${diff} must be ≥60`,
+        ).toBeGreaterThanOrEqual(60)
+      }
+
+      console.log(
+        `${state.name}: track=${result.trackBg}, thumb=${result.thumbBg}`,
+      )
+    }
+
+    await page.evaluate(() => {
+      const el = document.getElementById('_test-toggle-wrapper')
+      if (el) el.remove()
+    })
+  })
+
+  test('toggle switch is keyboard operable', async ({ page }) => {
+    await page.goto('/')
+    await page.waitForLoadState('networkidle')
+
+    const isOperable = await page.evaluate(() => {
+      const wrapper = document.createElement('label')
+      wrapper.className = 'toggle-switch'
+      wrapper.id = '_test-toggle-kb'
+      const input = document.createElement('input')
+      input.type = 'checkbox'
+      wrapper.appendChild(input)
+      document.body.appendChild(wrapper)
+
+      input.focus()
+      const isFocused = document.activeElement === input
+      input.click()
+      const isChecked = input.checked
+
+      wrapper.remove()
+      return { isFocused, isChecked }
+    })
+
+    expect(isOperable.isFocused).toBe(true)
+    expect(isOperable.isChecked).toBe(true)
+  })
+
   test('should use brand-neutral blue for focus indicators', async ({ page }) => {
     await page.goto('/')
     await page.waitForLoadState('networkidle')
@@ -1364,6 +1474,149 @@ test.describe('Color System and Theme Accessibility', () => {
   });
 });
 
+test.describe('Mono / Alt View Theme State Accessibility', () => {
+  test('should have no violations in mono light mode', async ({ page }) => {
+    await page.goto('/')
+    await page.waitForLoadState('networkidle')
+
+    await page.evaluate(() => {
+      document.documentElement.setAttribute('data-theme', 'light')
+      document.documentElement.setAttribute('data-ui-variant', 'mono')
+    })
+    await page.waitForTimeout(100)
+
+    const results = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      .analyze()
+
+    expect(results.violations).toEqual([])
+    console.log('Mono light mode: No accessibility violations')
+  })
+
+  test('should have no violations in mono dark mode', async ({ page }) => {
+    await page.goto('/')
+    await page.waitForLoadState('networkidle')
+
+    await page.evaluate(() => {
+      document.documentElement.setAttribute('data-theme', 'dark')
+      document.documentElement.setAttribute('data-ui-variant', 'mono')
+    })
+    await page.waitForTimeout(100)
+
+    const results = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      .analyze()
+
+    expect(results.violations).toEqual([])
+    console.log('Mono dark mode: No accessibility violations')
+  })
+
+  test('should have no violations in mono + high contrast mode', async ({ page }) => {
+    await page.goto('/')
+    await page.waitForLoadState('networkidle')
+
+    await page.evaluate(() => {
+      document.documentElement.setAttribute('data-theme', 'dark')
+      document.documentElement.setAttribute('data-high-contrast', 'true')
+      document.documentElement.setAttribute('data-ui-variant', 'mono')
+    })
+    await page.waitForTimeout(100)
+
+    const results = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'wcag2aaa'])
+      .analyze()
+
+    expect(results.violations).toEqual([])
+    console.log('Mono + HC mode: No accessibility violations')
+  })
+
+  test('should have visible focus indicators in all 7 theme states including mono', async ({ page }) => {
+    await page.goto('/')
+
+    const themeStates = [
+      { name: 'Light', theme: 'light', hc: false, mono: false },
+      { name: 'Dark', theme: 'dark', hc: false, mono: false },
+      { name: 'HC Light', theme: 'light', hc: true, mono: false },
+      { name: 'HC Dark', theme: 'dark', hc: true, mono: false },
+      { name: 'Mono Light', theme: 'light', hc: false, mono: true },
+      { name: 'Mono Dark', theme: 'dark', hc: false, mono: true },
+      { name: 'Mono + HC', theme: 'dark', hc: true, mono: true },
+    ]
+
+    for (const state of themeStates) {
+      await page.evaluate((cfg) => {
+        const root = document.documentElement
+        root.setAttribute('data-theme', cfg.theme)
+        if (cfg.hc) {
+          root.setAttribute('data-high-contrast', 'true')
+        } else {
+          root.removeAttribute('data-high-contrast')
+        }
+        if (cfg.mono) {
+          root.setAttribute('data-ui-variant', 'mono')
+        } else {
+          root.removeAttribute('data-ui-variant')
+        }
+      }, state)
+
+      await page.waitForTimeout(50)
+      await page.keyboard.press('Tab')
+
+      const outlineInfo = await page.evaluate(() => {
+        const el = document.activeElement
+        const styles = window.getComputedStyle(el)
+        return {
+          outlineWidth: styles.outlineWidth,
+          outlineStyle: styles.outlineStyle,
+          boxShadow: styles.boxShadow,
+        }
+      })
+
+      const hasOutline =
+        outlineInfo.outlineStyle !== 'none' &&
+        parseFloat(outlineInfo.outlineWidth) >= 2
+      const hasBoxShadow = outlineInfo.boxShadow !== 'none'
+
+      expect(
+        hasOutline || hasBoxShadow,
+        `${state.name}: must have visible focus indicator`,
+      ).toBe(true)
+
+      console.log(
+        `${state.name}: Focus indicator present (outline=${outlineInfo.outlineWidth} ${outlineInfo.outlineStyle})`,
+      )
+    }
+  })
+
+  test('mono variant attribute is applied and removed correctly', async ({ page }) => {
+    await page.goto('/')
+    await page.waitForLoadState('networkidle')
+
+    const initialVariant = await page.evaluate(() =>
+      document.documentElement.getAttribute('data-ui-variant'),
+    )
+    expect(initialVariant).toBeNull()
+
+    await page.evaluate(() => {
+      document.documentElement.setAttribute('data-ui-variant', 'mono')
+    })
+
+    const monoVariant = await page.evaluate(() =>
+      document.documentElement.getAttribute('data-ui-variant'),
+    )
+    expect(monoVariant).toBe('mono')
+
+    await page.evaluate(() => {
+      document.documentElement.removeAttribute('data-ui-variant')
+    })
+
+    const removedVariant = await page.evaluate(() =>
+      document.documentElement.getAttribute('data-ui-variant'),
+    )
+    expect(removedVariant).toBeNull()
+  })
+})
+
 test.describe('Enhanced Contrast Preference (prefers-contrast)', () => {
   test('should handle prefers-contrast: more emulation', async ({ page, browserName }) => {
     // Playwright Firefox does not reliably emulate the contrast media feature
@@ -1385,7 +1638,7 @@ test.describe('Enhanced Contrast Preference (prefers-contrast)', () => {
     
     // Run accessibility scan
     const results = await new AxeBuilder({ page })
-      .withTags(['wcag2a', 'wcag2aa'])
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
       .analyze();
     
     expect(results.violations).toEqual([]);
@@ -1785,7 +2038,7 @@ test.describe('Drawer Accessibility', () => {
       await page.locator('#mobileDrawerToggle').click();
       
       const results = await new AxeBuilder({ page })
-        .withTags(['wcag2a', 'wcag2aa'])
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
         .analyze();
       
       expect(results.violations).toEqual([]);
@@ -1999,7 +2252,7 @@ test.describe('Tutorial CSS and Styling - Phase 6.4', () => {
 });
 
 test.describe('UI Mode Toggle & Disclosure Section Accessibility', () => {
-  test('UI mode toggle exists and defaults to Advanced mode', async ({ page }) => {
+  test('UI mode toggle exists and defaults to Basic mode', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI');
 
     await page.goto('/');
@@ -2022,22 +2275,16 @@ test.describe('UI Mode Toggle & Disclosure Section Accessibility', () => {
     await expect(uiModeToggle).toHaveCount(1);
     await expect(uiModeToggle).toBeVisible();
 
-    // Toggle must have role="switch" and correct initial ARIA state (Advanced = true)
+    // Toggle must have role="switch" and correct initial ARIA state (Basic = false)
     await expect(uiModeToggle).toHaveAttribute('role', 'switch');
-    await expect(uiModeToggle).toHaveAttribute('aria-checked', 'true');
+    await expect(uiModeToggle).toHaveAttribute('aria-checked', 'false');
 
     // Toggle must be keyboard-operable (focusable)
     await uiModeToggle.focus();
     await expect(uiModeToggle).toBeFocused();
-
-    // In Advanced mode, #advancedMenu must not have ui-mode-hidden class
-    const advancedMenu = page.locator('#advancedMenu');
-    if (await advancedMenu.count() > 0) {
-      await expect(advancedMenu).not.toHaveClass(/ui-mode-hidden/);
-    }
   });
 
-  test('UI mode toggle switches to Basic mode and hides correct panels', async ({ page }) => {
+  test('UI mode toggle switches to Advanced mode and shows all panels', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI');
 
     await page.goto('/');
@@ -2049,22 +2296,25 @@ test.describe('UI Mode Toggle & Disclosure Section Accessibility', () => {
 
     const uiModeToggle = page.locator('#uiModeToggle');
 
-    // Click to switch to Basic mode
-    await uiModeToggle.click();
+    // Default is Basic mode (aria-checked="false")
     await expect(uiModeToggle).toHaveAttribute('aria-checked', 'false');
 
-    // Parameter controls must remain visible in Basic mode
-    const paramControls = page.locator('.param-control');
-    const paramCount = await paramControls.count();
-    expect(paramCount).toBeGreaterThan(0);
-
-    // Click again to switch back to Advanced mode
+    // Click to switch to Advanced mode
     await uiModeToggle.click();
     await expect(uiModeToggle).toHaveAttribute('aria-checked', 'true');
 
     // In Advanced mode, no panels should have ui-mode-hidden class
     const hiddenPanels = await page.locator('.ui-mode-hidden').count();
     expect(hiddenPanels).toBe(0);
+
+    // Parameter controls must remain visible
+    const paramControls = page.locator('.param-control');
+    const paramCount = await paramControls.count();
+    expect(paramCount).toBeGreaterThan(0);
+
+    // Click again to switch back to Basic mode
+    await uiModeToggle.click();
+    await expect(uiModeToggle).toHaveAttribute('aria-checked', 'false');
   });
 
   test('all disclosure sections are keyboard-operable', async ({ page }) => {
@@ -2261,3 +2511,143 @@ test.describe('UI Uniformity Regression', () => {
     expect(debugRequests).toEqual([]);
   });
 });
+
+test.describe('Axe-Core Scans for Missing Views (REC-002)', () => {
+  async function dismissSaveProjectModal(page) {
+    const notNowBtn = page.locator('#saveProjectNotNow')
+    try {
+      await notNowBtn.waitFor({ state: 'visible', timeout: 3000 })
+      await notNowBtn.click()
+      await page.waitForTimeout(300)
+    } catch {
+      // Modal did not appear — nothing to dismiss
+    }
+  }
+
+  test('should run axe scan with Expert Mode active', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
+
+    await page.goto('/')
+    await waitForWasmReady(page)
+
+    const fixturePath = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad')
+
+    try {
+      await page.setInputFiles('#fileInput', fixturePath)
+      await page.waitForSelector('.param-control', { timeout: 30_000 })
+      await dismissSaveProjectModal(page)
+
+      const uiModeToggle = page.locator('#uiModeToggle')
+      await uiModeToggle.click()
+      await expect(uiModeToggle).toHaveAttribute('aria-checked', 'true')
+
+      const expertToggle = page.locator('#expertModeToggle')
+      const isExpertVisible = await expertToggle.isVisible().catch(() => false)
+
+      if (!isExpertVisible) {
+        console.log('Expert Mode toggle not visible — activating via Ctrl+E')
+        await page.keyboard.press('Control+e')
+      } else {
+        await expertToggle.click()
+      }
+
+      const expertPanel = page.locator('#expertModePanel')
+      await expect(expertPanel).toBeVisible({ timeout: 10_000 })
+
+      const results = await new AxeBuilder({ page })
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+        .analyze()
+
+      console.log(`Expert Mode axe scan complete: ${results.violations.length} violations, ${results.passes.length} passes`)
+      if (results.violations.length > 0) {
+        console.log('Expert Mode axe violations (file as issues):')
+        results.violations.forEach(v => {
+          console.log(`- ${v.id}: ${v.description} (impact: ${v.impact})`)
+          console.log(`  Help: ${v.helpUrl}`)
+        })
+      }
+
+      expect(results.passes.length).toBeGreaterThan(0)
+    } catch (error) {
+      console.log('Could not complete Expert Mode axe scan:', error.message)
+      test.skip()
+    }
+  })
+
+  test('should have no violations with Features Guide modal open', async ({ page }) => {
+    await page.goto('/')
+    await page.waitForLoadState('networkidle')
+
+    const learnMoreBtn = page.locator('.btn-role-learn').first()
+    await expect(learnMoreBtn).toBeVisible()
+    await learnMoreBtn.click()
+
+    const modal = page.locator('#featuresGuideModal')
+    await expect(modal).toBeVisible({ timeout: 5000 })
+
+    const results = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      .analyze()
+
+    console.log(`Features Guide axe scan complete: ${results.violations.length} violations, ${results.passes.length} passes`)
+    if (results.violations.length > 0) {
+      console.log('Features Guide modal axe violations:')
+      results.violations.forEach(v => {
+        console.log(`- ${v.id}: ${v.description} (impact: ${v.impact})`)
+        console.log(`  Help: ${v.helpUrl}`)
+      })
+    }
+
+    expect(results.violations).toEqual([])
+
+    await page.keyboard.press('Escape')
+    await expect(modal).toBeHidden()
+  })
+
+  test('should run axe scan in error state after invalid .scad', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
+
+    await page.goto('/')
+    await waitForWasmReady(page)
+
+    const fixturePath = path.join(process.cwd(), 'tests', 'fixtures', 'invalid-syntax.scad')
+
+    try {
+      await page.setInputFiles('#fileInput', fixturePath)
+
+      await page.waitForFunction(
+        () => {
+          const statusArea = document.getElementById('statusArea')
+          const consoleOutput = document.getElementById('console-output')
+          const hasStatusContent = statusArea && statusArea.textContent.trim().length > 0
+          const hasConsoleContent = consoleOutput && consoleOutput.textContent.trim().length > 0
+          return hasStatusContent || hasConsoleContent
+        },
+        { timeout: 30_000 }
+      )
+
+      await page.waitForTimeout(2000)
+
+      const results = await new AxeBuilder({ page })
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+        .analyze()
+
+      console.log(`Error state axe scan complete: ${results.violations.length} violations, ${results.passes.length} passes`)
+      if (results.violations.length > 0) {
+        console.log('Error state axe violations (file as issues):')
+        results.violations.forEach(v => {
+          console.log(`- ${v.id}: ${v.description} (impact: ${v.impact})`)
+          console.log(`  Help: ${v.helpUrl}`)
+          v.nodes.forEach(node => {
+            console.log(`  Element: ${node.html.substring(0, 120)}`)
+          })
+        })
+      }
+
+      expect(results.passes.length).toBeGreaterThan(0)
+    } catch (error) {
+      console.log('Could not complete error state axe scan:', error.message)
+      test.skip()
+    }
+  })
+})

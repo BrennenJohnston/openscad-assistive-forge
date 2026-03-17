@@ -4,6 +4,11 @@
  */
 
 import { test, expect } from '@playwright/test'
+import {
+  selectPreset,
+  getSelectedPresetLabel,
+  getPresetOptions,
+} from './helpers/preset-helpers.js'
 
 // Skip WASM-dependent tests in CI - WASM initialization is slow/unreliable
 const isCI = !!process.env.CI
@@ -96,18 +101,13 @@ test.describe('Preset Workflow', () => {
       const successIndicator = page.locator('[role="status"]:has-text("Saved"), [role="alert"]:has-text("Saved"), .success-message')
       
       // Success indicator might appear and disappear, so we check if preset appears in list
-      const presetSelect = page.locator('select#presetSelect, select[aria-label*="preset"]')
-      if (await presetSelect.isVisible()) {
-        const options = await presetSelect.locator('option').allTextContents()
-        const hasSavedPreset = options.some(opt => opt.includes('My Test Preset'))
-        expect(hasSavedPreset).toBe(true)
-        
-        // OpenSCAD Customizer behavior: newly saved preset should be auto-selected
-        // This enables the save button to update the preset immediately after creation
-        const selectedValue = await presetSelect.inputValue()
-        const selectedOption = await presetSelect.locator('option:checked').textContent()
-        expect(selectedOption).toContain('My Test Preset')
-      }
+      const options = await getPresetOptions(page)
+      const hasSavedPreset = options.some(opt => opt.includes('My Test Preset'))
+      expect(hasSavedPreset).toBe(true)
+
+      // OpenSCAD Customizer behavior: newly saved preset should be auto-selected
+      const selectedLabel = await getSelectedPresetLabel(page)
+      expect(selectedLabel).toContain('My Test Preset')
     }
   })
 
@@ -132,8 +132,10 @@ test.describe('Preset Workflow', () => {
 
     await addPresetBtn.click()
 
-    // Fill in preset name in modal
-    const nameInput = page.locator('#presetName, input[placeholder*="preset"]').first()
+    // Fill in preset name in modal (scope to modal to avoid matching combobox search)
+    const modal1 = page.locator('.preset-modal')
+    await modal1.waitFor({ state: 'visible', timeout: 5000 })
+    const nameInput = modal1.locator('#presetName, input[placeholder*="preset"]').first()
     if (await nameInput.isVisible()) {
       await nameInput.fill('Auto-Select Test Preset')
       
@@ -147,17 +149,14 @@ test.describe('Preset Workflow', () => {
 
       // Verify the newly saved preset is automatically selected in the dropdown
       // This matches OpenSCAD Customizer behavior where "+" creates and selects the preset
-      const presetSelect = page.locator('select#presetSelect')
-      if (await presetSelect.isVisible()) {
-        const selectedOption = await presetSelect.locator('option:checked').textContent()
-        expect(selectedOption).toContain('Auto-Select Test Preset')
-        
-        // The Save Preset button should now be enabled (can update this preset)
-        const savePresetBtn = page.locator('#savePresetBtn')
-        if (await savePresetBtn.isVisible()) {
-          const isDisabled = await savePresetBtn.isDisabled()
-          expect(isDisabled).toBe(false)
-        }
+      const selectedLabel = await getSelectedPresetLabel(page)
+      expect(selectedLabel).toContain('Auto-Select Test Preset')
+
+      // The Save Preset button should now be enabled (can update this preset)
+      const savePresetBtn = page.locator('#savePresetBtn')
+      if (await savePresetBtn.isVisible()) {
+        const isDisabled = await savePresetBtn.isDisabled()
+        expect(isDisabled).toBe(false)
       }
     }
   })
@@ -183,7 +182,9 @@ test.describe('Preset Workflow', () => {
 
     await addPresetBtn.click()
 
-    const nameInput = page.locator('#presetName, input[placeholder*="preset"]').first()
+    const modal2 = page.locator('.preset-modal')
+    await modal2.waitFor({ state: 'visible', timeout: 5000 })
+    const nameInput = modal2.locator('#presetName, input[placeholder*="preset"]').first()
     if (await nameInput.isVisible()) {
       await nameInput.fill('Persistence Test Preset')
       const confirmButton = page.locator('button[type="submit"]:has-text("Save")').first()
@@ -193,27 +194,24 @@ test.describe('Preset Workflow', () => {
     }
 
     // Now select the preset from the dropdown
-    const presetSelect = page.locator('select#presetSelect')
-    if (!(await presetSelect.isVisible())) {
+    const selected = await selectPreset(page, 'Persistence Test Preset')
+    if (!selected) {
       test.skip()
       return
     }
-
-    // Select the preset
-    await presetSelect.selectOption({ label: 'Persistence Test Preset' })
     await page.waitForTimeout(1000)
 
     // Verify the preset is selected
-    let selectedOption = await presetSelect.locator('option:checked').textContent()
-    expect(selectedOption).toContain('Persistence Test Preset')
+    let selectedLabel = await getSelectedPresetLabel(page)
+    expect(selectedLabel).toContain('Persistence Test Preset')
 
     // Wait a bit more to ensure any async operations complete
     await page.waitForTimeout(1000)
 
     // Verify the preset is STILL selected (not reset to "Select Preset")
-    selectedOption = await presetSelect.locator('option:checked').textContent()
-    expect(selectedOption).toContain('Persistence Test Preset')
-    expect(selectedOption).not.toContain('Select Preset')
+    selectedLabel = await getSelectedPresetLabel(page)
+    expect(selectedLabel).toContain('Persistence Test Preset')
+    expect(selectedLabel).not.toContain('Select Preset')
   })
 
   test('should load a saved preset', async ({ page }) => {
@@ -266,19 +264,13 @@ test.describe('Preset Workflow', () => {
     expect(await firstSlider.inputValue()).toBe(initialValue)
 
     // Load the saved preset
-    const presetSelect = page.locator('select#presetSelect')
-    if (await presetSelect.isVisible()) {
-      // Get all options and find the one matching our preset
-      const options = await presetSelect.locator('option').allTextContents()
-      const matchingOption = options.find(opt => opt.includes('Load Test Preset'))
-      if (matchingOption) {
-        await presetSelect.selectOption({ label: matchingOption })
-        await page.waitForTimeout(500)
+    const selected = await selectPreset(page, 'Load Test Preset')
+    if (selected) {
+      await page.waitForTimeout(500)
 
-        // Verify parameter value restored
-        const restoredValue = await firstSlider.inputValue()
-        expect(restoredValue).toBe(newValue)
-      }
+      // Verify parameter value restored
+      const restoredValue = await firstSlider.inputValue()
+      expect(restoredValue).toBe(newValue)
     }
   })
 
@@ -404,21 +396,11 @@ test.describe('Preset Workflow', () => {
     }
 
     // Select the preset
-    const presetSelect = page.locator('select#presetSelect')
-    if (!(await presetSelect.isVisible())) {
+    const selected = await selectPreset(page, 'Delete Test')
+    if (!selected) {
       test.skip()
       return
     }
-
-    // Get all options and find the one matching our preset
-    const options = await presetSelect.locator('option').allTextContents()
-    const matchingOption = options.find(opt => opt.includes('Delete Test'))
-    if (!matchingOption) {
-      test.skip()
-      return
-    }
-
-    await presetSelect.selectOption({ label: matchingOption })
     await page.waitForTimeout(300)
 
     // Find and click delete button
@@ -439,7 +421,7 @@ test.describe('Preset Workflow', () => {
     await page.waitForTimeout(500)
 
     // Verify preset is removed
-    const remainingOptions = await presetSelect.locator('option').allTextContents()
+    const remainingOptions = await getPresetOptions(page)
     const stillExists = remainingOptions.some(opt => opt.includes('Delete Test'))
     expect(stillExists).toBe(false)
   })
@@ -455,15 +437,9 @@ test.describe('Preset Workflow', () => {
       return
     }
 
-    // Check for preset select dropdown
-    const presetSelect = page.locator('select#presetSelect, select[aria-label*="preset"]')
-    if (!(await presetSelect.isVisible())) {
-      test.skip()
-      return
-    }
-
-    // Count initial options (should have at least "Select preset" or similar)
-    const initialCount = await presetSelect.locator('option').count()
+    // Count initial options
+    const initialOptions = await getPresetOptions(page)
+    const initialCount = initialOptions.length
     expect(initialCount).toBeGreaterThanOrEqual(1)
 
     // Save a preset
@@ -479,8 +455,8 @@ test.describe('Preset Workflow', () => {
         await page.waitForTimeout(500)
 
         // Verify count increased
-        const newCount = await presetSelect.locator('option').count()
-        expect(newCount).toBeGreaterThan(initialCount)
+        const newOptions = await getPresetOptions(page)
+        expect(newOptions.length).toBeGreaterThan(initialCount)
       }
     }
   })
@@ -513,13 +489,10 @@ test.describe('Preset Workflow', () => {
       await page.waitForTimeout(500)
 
       // Verify it was saved (should either work or show validation error)
-      const presetSelect = page.locator('select#presetSelect')
-      if (await presetSelect.isVisible()) {
-        const options = await presetSelect.locator('option').allTextContents()
-        // Either preset exists with cleaned name, or validation prevented save
-        // Both behaviors are acceptable
-        expect(options.length).toBeGreaterThanOrEqual(1)
-      }
+      const options = await getPresetOptions(page)
+      // Either preset exists with cleaned name, or validation prevented save
+      // Both behaviors are acceptable
+      expect(options.length).toBeGreaterThanOrEqual(1)
     }
   })
 
@@ -562,8 +535,8 @@ test.describe('Preset Workflow', () => {
     await modal.waitFor({ state: 'visible', timeout: 5000 })
     console.log('Modal appeared')
 
-    // Try multiple selectors for the name input
-    const nameInput = page.locator('#presetName, input[placeholder*="preset"], input[placeholder*="Preset"]').first()
+    // Scope to modal to avoid matching combobox search input
+    const nameInput = modal.locator('#presetName, input[placeholder*="preset"], input[placeholder*="Preset"]').first()
     await nameInput.waitFor({ state: 'visible', timeout: 5000 })
     console.log('Name input found')
     
@@ -624,13 +597,10 @@ test.describe('Preset Workflow', () => {
     console.log('localStorage after reload:', storageAfterReload)
 
     // Verify preset still exists
-    const presetSelect = page.locator('select#presetSelect')
-    if (await presetSelect.isVisible()) {
-      const options = await presetSelect.locator('option').allTextContents()
-      console.log('Available preset options after reload:', options)
-      const persistedPreset = options.some(opt => opt.includes('Persistence Test'))
-      expect(persistedPreset).toBe(true)
-    }
+    const options = await getPresetOptions(page)
+    console.log('Available preset options after reload:', options)
+    const persistedPreset = options.some(opt => opt.includes('Persistence Test'))
+    expect(persistedPreset).toBe(true)
   })
 })
 
@@ -713,7 +683,9 @@ test.describe('Preset Workflow — Searchable Combobox variant', () => {
 
     for (const name of ['Alpha Preset', 'Beta Preset']) {
       await addBtn.click()
-      const nameInput = page.locator('#presetName, input[placeholder*="preset"]').first()
+      const addModal = page.locator('.preset-modal')
+      await addModal.waitFor({ state: 'visible', timeout: 5000 })
+      const nameInput = addModal.locator('#presetName, input[placeholder*="preset"]').first()
       await nameInput.waitFor({ state: 'visible', timeout: 5000 })
       await nameInput.fill(name)
       await page.locator('button[type="submit"]:has-text("Save")').first().click()
@@ -813,7 +785,9 @@ test.describe('Preset Workflow — Searchable Combobox variant', () => {
     }
 
     await addBtn.click()
-    const nameInput = page.locator('#presetName, input[placeholder*="preset"]').first()
+    const clickModal = page.locator('.preset-modal')
+    await clickModal.waitFor({ state: 'visible', timeout: 5000 })
+    const nameInput = clickModal.locator('#presetName, input[placeholder*="preset"]').first()
     await nameInput.waitFor({ state: 'visible', timeout: 5000 })
     await nameInput.fill('Click Select Test')
     await page.locator('button[type="submit"]:has-text("Save")').first().click()
@@ -845,5 +819,112 @@ test.describe('Preset Workflow — Searchable Combobox variant', () => {
     // Combobox should close and show the selected label
     await expect(comboboxInput).toHaveValue('Click Select Test')
     await expect(listbox).toBeHidden()
+  })
+
+  test('combobox selection syncs to the hidden native select', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
+
+    try {
+      await loadSimpleBoxExample(page)
+    } catch {
+      test.skip()
+      return
+    }
+
+    // Save a preset so there's something to select
+    const addBtn = page.locator('#addPresetBtn, button[aria-label*="Add preset"]')
+    if (!(await addBtn.isVisible({ timeout: 5000 }).catch(() => false))) {
+      test.skip()
+      return
+    }
+
+    await addBtn.click()
+    const syncModal = page.locator('.preset-modal')
+    await syncModal.waitFor({ state: 'visible', timeout: 5000 })
+    const nameInput = syncModal.locator('#presetName, input[placeholder*="preset"]').first()
+    await nameInput.waitFor({ state: 'visible', timeout: 5000 })
+    await nameInput.fill('Sync Test Preset')
+    await page.locator('button[type="submit"]:has-text("Save")').first().click()
+    await page.waitForSelector('.preset-modal', { state: 'detached', timeout: 5000 })
+    await page.waitForTimeout(300)
+
+    // Select via the combobox
+    const comboboxInput = page.locator('#presetComboboxContainer .preset-combobox-input')
+    if (!(await comboboxInput.isVisible().catch(() => false))) {
+      test.skip()
+      return
+    }
+
+    await comboboxInput.click()
+    const listbox = page.locator('#presetComboboxContainer .preset-combobox-list')
+    await expect(listbox).toBeVisible()
+
+    const targetOption = listbox.locator(
+      '.preset-combobox-option:not(.preset-combobox-empty)',
+      { hasText: 'Sync Test Preset' }
+    )
+    await targetOption.click()
+
+    // The hidden native select should have synced its value
+    const nativeSelect = page.locator('select#presetSelect')
+    const nativeValue = await nativeSelect.inputValue()
+    expect(nativeValue).toBeTruthy()
+    expect(nativeValue).not.toBe('')
+  })
+
+  test('shared selectPreset() helper works with combobox widget', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
+
+    try {
+      await loadSimpleBoxExample(page)
+    } catch {
+      test.skip()
+      return
+    }
+
+    // The shared helper should auto-detect the combobox and select "design default values"
+    const options = await getPresetOptions(page)
+    const designDefault = options.find(o => o.toLowerCase().includes('design default'))
+    if (!designDefault) {
+      test.skip()
+      return
+    }
+
+    const result = await selectPreset(page, designDefault)
+    expect(result).toBe(true)
+
+    const label = await getSelectedPresetLabel(page)
+    expect(label?.toLowerCase()).toContain('design default')
+  })
+
+  test('combobox selects a preset via keyboard Enter', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
+
+    try {
+      await loadSimpleBoxExample(page)
+    } catch {
+      test.skip()
+      return
+    }
+
+    const comboboxInput = page.locator('#presetComboboxContainer .preset-combobox-input')
+    if (!(await comboboxInput.isVisible({ timeout: 5000 }).catch(() => false))) {
+      test.skip()
+      return
+    }
+
+    // Open the combobox and navigate with Arrow Down + Enter
+    await comboboxInput.click()
+
+    const listbox = page.locator('#presetComboboxContainer .preset-combobox-list')
+    await expect(listbox).toBeVisible()
+
+    await comboboxInput.press('ArrowDown')
+    await comboboxInput.press('Enter')
+
+    // The listbox should close and a selection should be made
+    await expect(listbox).toBeHidden()
+    const selectedLabel = await comboboxInput.inputValue()
+    expect(selectedLabel.length).toBeGreaterThan(0)
   })
 })

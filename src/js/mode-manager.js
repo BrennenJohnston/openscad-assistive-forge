@@ -85,6 +85,30 @@ export class ModeManager {
   }
 
   /**
+   * Check if the current mode is Expert Mode
+   * @returns {boolean}
+   */
+  isExpertMode() {
+    return this.currentMode === 'expert';
+  }
+
+  /**
+   * Store a reference to the active editor instance (MonacoEditor or TextareaEditor)
+   * @param {Object|null} editor
+   */
+  setEditorInstance(editor) {
+    this._editorInstance = editor;
+  }
+
+  /**
+   * Retrieve the active editor instance
+   * @returns {Object|null}
+   */
+  getEditorInstance() {
+    return this._editorInstance || null;
+  }
+
+  /**
    * Get current mode
    * @returns {EditorMode}
    */

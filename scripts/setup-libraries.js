@@ -10,6 +10,7 @@ import fs from 'fs';
 import path from 'path';
 import https from 'https';
 import { exec } from 'child_process';
+import { fileURLToPath } from 'url';
 import { promisify } from 'util';
 
 const execAsync = promisify(exec);
@@ -173,6 +174,50 @@ async function setupLibrary(libConfig) {
 }
 
 /**
+ * Recursively collect .scad file paths relative to a root directory.
+ * @param {string} dir - Absolute directory path to scan
+ * @param {string} [prefix=''] - Relative path prefix for recursion
+ * @returns {string[]} Sorted array of relative .scad file paths
+ */
+function collectScadFiles(dir, prefix = '') {
+  const files = [];
+  let entries;
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch (_err) {
+    return files;
+  }
+  for (const entry of entries) {
+    if (entry.name.startsWith('.') || entry.name === 'manifest.json') continue;
+    const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) {
+      files.push(...collectScadFiles(path.join(dir, entry.name), relative));
+    } else if (entry.name.endsWith('.scad')) {
+      files.push(relative);
+    }
+  }
+  return files.sort();
+}
+
+/**
+ * Generate a per-library manifest.json containing the files array that the
+ * web worker's mountLibraries() expects.  Without this file the worker skips
+ * the library with "No manifest found … skipping".
+ */
+function generatePerLibraryManifest(libName) {
+  const libPath = path.join(LIBRARIES_DIR, libName);
+  if (!fs.existsSync(libPath)) return null;
+
+  const files = collectScadFiles(libPath);
+  const manifest = { name: libName, files, generated: new Date().toISOString() };
+
+  const manifestPath = path.join(libPath, 'manifest.json');
+  fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+  console.log(`  ✓ Per-library manifest: ${libName} (${files.length} .scad files)`);
+  return manifest;
+}
+
+/**
  * Generate library manifest
  */
 function generateManifest() {
@@ -198,6 +243,8 @@ function generateManifest() {
         description: LIBRARIES[libName].description,
       };
     }
+
+    generatePerLibraryManifest(libName);
   }
   
   const manifestPath = path.join(LIBRARIES_DIR, 'manifest.json');
@@ -275,12 +322,13 @@ async function main() {
   console.log('  3. Use them in your .scad files with include/use statements');
 }
 
-// Run if called directly
-if (import.meta.url === `file://${process.argv[1]}`) {
+// Run if called directly (cross-platform: normalize both sides)
+const __filename = fileURLToPath(import.meta.url);
+if (path.resolve(process.argv[1]) === __filename) {
   main().catch(error => {
     console.error('Fatal error:', error);
     process.exit(1);
   });
 }
 
-export { setupLibrary, generateManifest };
+export { setupLibrary, generateManifest, collectScadFiles, generatePerLibraryManifest };

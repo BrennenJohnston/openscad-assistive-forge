@@ -24,6 +24,7 @@
  */
 
 import { hexToRgb } from '../js/color-utils.js';
+import { resolveFileParams, decodeDataUrl } from '../js/file-param-resolver.js';
 
 // Official WASM is loaded dynamically in initWASM() from /wasm/openscad-official/
 
@@ -38,6 +39,7 @@ let assetBaseUrl = ''; // Base URL for fetching assets (fonts, libraries, etc.)
 let wasmAssetLogShown = false;
 let openscadConsoleOutput = ''; // Accumulated console output from OpenSCAD
 let openscadCapabilities = null;
+let _callMainInvoked = false;
 
 function isAbsoluteUrl(value) {
   return /^[a-z]+:\/\//i.test(value);
@@ -599,6 +601,7 @@ async function checkCapabilities() {
     hasManifold: false,
     hasFastCSG: false,
     hasLazyUnion: false,
+    hasRenderColorsFlag: false,
     hasBinarySTL: false,
     version: 'unknown',
     checkedAt: Date.now(),
@@ -620,10 +623,16 @@ async function checkCapabilities() {
     const consoleOutputBeforeHelp = openscadConsoleOutput.length;
 
     try {
+      _callMainInvoked = true;
       await module.callMain(['--help']);
     } catch (_error) {
       // --help might exit with non-zero, that's okay
     }
+
+    // Reset the guard after the non-destructive --help probe.
+    // The guard exists to detect double *render* invocations that corrupt
+    // geometry; --help does not modify geometry state.
+    _callMainInvoked = false;
 
     module.print = originalPrint;
     module.printErr = originalPrintErr;
@@ -651,6 +660,9 @@ async function checkCapabilities() {
     const hasLazyUnionFlag =
       /--enable\s+arg.*lazy-union/i.test(helpText) ||
       helpText.includes('lazy-union');
+    const hasRenderColorsFlag =
+      /--enable[^\n]*render-colors/i.test(helpText) ||
+      helpText.includes('render-colors');
     const hasBinarySTLFlag =
       helpText.includes('export-format') || helpText.includes('binstl');
 
@@ -663,6 +675,10 @@ async function checkCapabilities() {
 
     // lazy-union is still an --enable flag
     capabilities.hasLazyUnion = hasLazyUnionFlag;
+
+    // Some builds expose render-colors as an experimental flag; newer builds
+    // emit COFF without the flag, so only pass it when help advertises it.
+    capabilities.hasRenderColorsFlag = hasRenderColorsFlag;
 
     // Check for export-format option (binary STL support)
     capabilities.hasBinarySTL = hasBinarySTLFlag;
@@ -783,12 +799,33 @@ async function mountFiles(files, options = {}) {
     const resolvedPath = baseDir ? `${baseDir}/${filePath}` : filePath;
 
     try {
-      FS.writeFile(resolvedPath, content);
-      mountedFiles.set(resolvedPath, content);
+      // S-013: Image companion files arrive as data-URL strings from the UI
+      // (e.g. "data:image/png;base64,..."). Emscripten FS.writeFile would
+      // store the literal text — not the binary image — making surface()
+      // and import() fail. Decode to Uint8Array so the WASM engine receives
+      // valid binary content.
+      let fsContent = content;
+      if (typeof content === 'string' && content.startsWith('data:')) {
+        try {
+          fsContent = decodeDataUrl(content);
+          console.log(
+            `[Worker FS] Decoded data URL for: ${resolvedPath} (${fsContent.byteLength} binary bytes)`
+          );
+        } catch (decodeErr) {
+          console.warn(
+            `[Worker FS] Failed to decode data URL for ${resolvedPath}, mounting as text:`,
+            decodeErr.message
+          );
+        }
+      }
+      FS.writeFile(resolvedPath, fsContent);
+      mountedFiles.set(resolvedPath, fsContent);
       resolvedPaths.set(filePath, resolvedPath);
-      console.log(
-        `[Worker FS] Mounted file: ${resolvedPath} (${content.length} bytes)`
-      );
+      const size =
+        fsContent instanceof Uint8Array
+          ? fsContent.byteLength
+          : fsContent.length;
+      console.log(`[Worker FS] Mounted file: ${resolvedPath} (${size} bytes)`);
     } catch (error) {
       console.error(`[Worker FS] Failed to mount file ${resolvedPath}:`, error);
       throw new Error(`Failed to mount file: ${filePath}`);
@@ -803,6 +840,41 @@ async function mountFiles(files, options = {}) {
     workDir: baseDir,
     files: resolvedPaths,
   };
+}
+
+/**
+ * Scan SCAD source for include/use directives and return desktop-format
+ * warnings for any referenced files that cannot be found.
+ *
+ * Desktop OpenSCAD emits "WARNING: Can't open include file ..." when a
+ * referenced companion file is missing. The WASM build silently ignores
+ * missing includes. This function generates equivalent synthetic warnings
+ * so the user sees actionable feedback in the console panel.
+ *
+ * @param {string} scadContent - Raw SCAD source code
+ * @param {(filename: string) => boolean} fileExistsFn - Returns true if the
+ *   referenced filename can be resolved in the virtual filesystem
+ * @returns {string[]} Array of desktop-format warning strings
+ */
+function generateMissingFileWarnings(scadContent, fileExistsFn) {
+  const warnings = [];
+  const seen = new Set();
+  const directiveRegex = /(?:include|use)\s*(?:<([^>]+)>|"([^"]+)")/g;
+  let match;
+
+  while ((match = directiveRegex.exec(scadContent)) !== null) {
+    const refFile = (match[1] || match[2]).trim();
+    if (!refFile || seen.has(refFile)) continue;
+    seen.add(refFile);
+
+    if (!fileExistsFn(refFile)) {
+      warnings.push(
+        `WARNING: Can't open include file '${refFile}', import file '${refFile}'.`
+      );
+    }
+  }
+
+  return warnings;
 }
 
 /**
@@ -945,7 +1017,6 @@ async function mountLibraries(libraries) {
 
       if (manifest && Array.isArray(manifest.files)) {
         const files = manifest.files || [];
-        let failedSample = null;
 
         ensureDir(libRoot);
 
@@ -973,15 +1044,12 @@ async function mountLibraries(libraries) {
 
               FS.writeFile(filePath, content);
               totalMounted++;
-            } else {
-              if (!failedSample) failedSample = file;
             }
           } catch (error) {
             console.warn(
               `[Worker FS] Failed to mount ${file} from ${lib.id}:`,
               error.message
             );
-            if (!failedSample) failedSample = file;
           }
         }
 
@@ -1034,12 +1102,49 @@ function serializeScadVector(arr) {
 }
 
 /**
+ * Detect how a color parameter is declared in the SCAD source.
+ * This allows runtime values from the UI to preserve expected literal style:
+ * - string defaults should remain strings (with/without leading #)
+ * - vector defaults should keep vector serialization
+ *
+ * @param {string} scadContent
+ * @param {string} key
+ * @returns {{style: 'string'|'vector'|'unknown', hasHashPrefix: boolean}}
+ */
+function detectColorParamLiteralStyle(scadContent, key) {
+  if (!scadContent || typeof scadContent !== 'string' || !key) {
+    return { style: 'unknown', hasHashPrefix: false };
+  }
+
+  const keyRe = escapeRegExp(key);
+  const assignmentRe = new RegExp(`^\\s*${keyRe}\\s*=\\s*([^;]+);`, 'm');
+  const match = scadContent.match(assignmentRe);
+  if (!match) {
+    return { style: 'unknown', hasHashPrefix: false };
+  }
+
+  const rhs = String(match[1] || '').trim();
+  if (rhs.startsWith('[')) {
+    return { style: 'vector', hasHashPrefix: false };
+  }
+
+  const quote = rhs[0];
+  if ((quote === '"' || quote === "'") && rhs.endsWith(quote)) {
+    const inner = rhs.slice(1, -1).trim();
+    return { style: 'string', hasHashPrefix: inner.startsWith('#') };
+  }
+
+  return { style: 'unknown', hasHashPrefix: false };
+}
+
+/**
  * Build -D command-line arguments from parameters
  * @param {Object} parameters - Parameter key-value pairs
  * @param {Object} paramTypes - Map of parameter names to their schema types (e.g. { expose_home_button: 'string', MW_version: 'boolean' })
+ * @param {string} scadContent - Source used to infer color literal style
  * @returns {Array<string>} Array of -D arguments
  */
-function buildDefineArgs(parameters, paramTypes = {}) {
+function buildDefineArgs(parameters, paramTypes = {}, scadContent = '') {
   if (!parameters || Object.keys(parameters).length === 0) {
     return [];
   }
@@ -1074,8 +1179,32 @@ function buildDefineArgs(parameters, paramTypes = {}) {
       }
       // Check if this is a color (hex string)
       else if (/^#?[0-9A-Fa-f]{6}$/.test(value)) {
-        const rgb = hexToRgb(value);
-        formattedValue = `[${rgb[0]},${rgb[1]},${rgb[2]}]`;
+        const colorStyle =
+          paramTypes[key] === 'color'
+            ? detectColorParamLiteralStyle(scadContent, key)
+            : { style: 'unknown', hasHashPrefix: false };
+
+        if (paramTypes[key] === 'color' && colorStyle.style === 'string') {
+          const normalizedHex = value.replace(/^#/, '').toUpperCase();
+          const literal = colorStyle.hasHashPrefix
+            ? `#${normalizedHex}`
+            : normalizedHex;
+          formattedValue = `"${literal}"`;
+        } else {
+          const rgb = hexToRgb(value);
+          formattedValue = `[${rgb[0]},${rgb[1]},${rgb[2]}]`;
+        }
+      }
+      // When the schema declares a numeric type, a string value resolved from a
+      // numeric enum (e.g. resolve2DExportParameters returning '1' for a
+      // generate param typed as integer) must be emitted unquoted so that
+      // OpenSCAD numeric comparisons (if (generate == 1)) evaluate correctly.
+      else if (
+        (paramTypes[key] === 'integer' || paramTypes[key] === 'number') &&
+        value.trim() !== '' &&
+        !isNaN(Number(value))
+      ) {
+        formattedValue = String(Number(value));
       } else {
         // ALL non-boolean strings (including "yes"/"no" dropdowns) stay as quoted strings
         const escaped = value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
@@ -1300,6 +1429,7 @@ async function renderWithCallMain(
   const capabilities = openscadCapabilities || {};
   const supportsManifold = Boolean(capabilities.hasManifold);
   const supportsLazyUnion = Boolean(capabilities.hasLazyUnion);
+  const supportsRenderColorsFlag = Boolean(capabilities.hasRenderColorsFlag);
   const supportsBinarySTL = Boolean(capabilities.hasBinarySTL);
   const enableLazyUnion =
     Boolean(renderOptions?.enableLazyUnion) && supportsLazyUnion;
@@ -1311,8 +1441,12 @@ async function renderWithCallMain(
   const performanceFlags = [];
   if (supportsManifold && useManifold) {
     performanceFlags.push('--backend=Manifold');
+    if (format === 'off' && supportsRenderColorsFlag) {
+      // render-colors enables per-face RGBA in OFF export (COFF data) on
+      // builds that still advertise the experimental flag.
+      performanceFlags.push('--enable=render-colors');
+    }
   } else if (supportsManifold && !useManifold) {
-    // Explicitly use CGAL backend for stability
     performanceFlags.push('--backend=CGAL');
     console.log('[Worker] Using CGAL (stable) backend instead of Manifold');
   }
@@ -1353,15 +1487,7 @@ async function renderWithCallMain(
     // 2D export flag used later for guard checks and fallback handling.
     const is2DExport = format === 'svg' || format === 'dxf';
 
-    if (shouldWriteInput) {
-      module.FS.writeFile(inputFile, scadContent);
-      wroteTempInput = true;
-    }
-
-    // Build -D arguments
-    const defineArgs = buildDefineArgs(parameters, paramTypes);
-
-    // Path resolution for import()/use/include:
+    // Path resolution for import()/use/include — shared by BOTH 2D and 3D paths.
     // OpenSCAD WASM doesn't support the -I flag, so we use OPENSCADPATH env var.
     // Desktop OpenSCAD resolves relative imports next to the main SCAD file,
     // then searches OPENSCADPATH. We replicate this by:
@@ -1371,8 +1497,6 @@ async function renderWithCallMain(
     // See: openscad-playground#35 for the upstream path resolution bug.
     if (module.ENV) {
       const searchPaths = ['/libraries'];
-      // For multi-file projects mounted under /work/, add the work dir
-      // so that `include <file.txt>` resolves relative to the project root
       if (inputFile.startsWith(WORK_DIR + '/')) {
         const inputDir = inputFile.substring(0, inputFile.lastIndexOf('/'));
         if (inputDir && !searchPaths.includes(inputDir)) {
@@ -1384,6 +1508,44 @@ async function renderWithCallMain(
       }
       module.ENV.OPENSCADPATH = searchPaths.join(':');
     }
+
+    // Symlink workaround: OpenSCAD searches "directory of calling file" first.
+    // When main is /tmp/input.scad, it looks for MCAD/boxes.scad as /tmp/MCAD/boxes.scad
+    // before OPENSCADPATH. Create symlinks so that search succeeds.
+    const symlinkInputDir =
+      inputFile.substring(0, inputFile.lastIndexOf('/')) || '/tmp';
+    if (symlinkInputDir && mountedLibraries.size > 0) {
+      for (const libId of mountedLibraries) {
+        const libPath = `/libraries/${libId}`;
+        const symlinkPath = `${symlinkInputDir}/${libId}`;
+        try {
+          try {
+            module.FS.unlink(symlinkPath);
+          } catch (_e) {
+            /* path may not exist */
+          }
+          module.FS.symlink(libPath, symlinkPath);
+          console.log(
+            `[Worker FS] Symlinked ${symlinkPath} -> ${libPath} for include resolution`
+          );
+        } catch (e) {
+          console.warn(
+            `[Worker FS] Failed to symlink ${libId} for include resolution:`,
+            e.message
+          );
+        }
+      }
+    }
+
+    // For 2D exports (SVG/DXF), the SCAD file's own logic — driven by
+    // parameters like generate="first layer for SVG/DXF file" — is
+    // responsible for producing 2D geometry (via its own projection()
+    // calls).  We render directly to the target format; no wrapper needed.
+    if (shouldWriteInput) {
+      module.FS.writeFile(inputFile, scadContent);
+      wroteTempInput = true;
+    }
+    const defineArgs = buildDefineArgs(parameters, paramTypes, scadContent);
 
     // Pre-render guard: scan SCAD source for known-crashy functions
     // roof() and projection() trigger CGAL assertion failures in WASM (openscad-wasm#5, #6)
@@ -1434,38 +1596,85 @@ async function renderWithCallMain(
     // Clear accumulated console output for this render
     openscadConsoleOutput = '';
 
+    // S-012: Synthetic missing-file warnings. Scan for include/use directives
+    // and inject desktop-format warnings for files not found in the virtual FS.
+    const inputDir = inputFile.substring(0, inputFile.lastIndexOf('/'));
+    const fsSearchPaths = [inputDir, WORK_DIR, '/libraries'].filter(Boolean);
+    const missingFileWarnings = generateMissingFileWarnings(
+      scadContent,
+      (refFile) => {
+        for (const dir of fsSearchPaths) {
+          try {
+            if (module.FS.analyzePath(`${dir}/${refFile}`).exists) return true;
+          } catch (_e) {
+            /* path may be invalid */
+          }
+        }
+        for (const key of mountedFiles.keys()) {
+          if (key === refFile || key.endsWith('/' + refFile)) return true;
+        }
+        return false;
+      }
+    );
+    if (missingFileWarnings.length > 0) {
+      openscadConsoleOutput = missingFileWarnings.join('\n') + '\n';
+    }
+
+    if (_callMainInvoked) {
+      console.warn(
+        '[Worker] DEFENSE-IN-DEPTH: callMain already invoked in this module lifetime. ' +
+          'Geometry may be corrupted. The render controller should have restarted the worker.'
+      );
+      // BUG-A fix: abort the render rather than proceeding with corrupted WASM state.
+      // The needsRestart flag ensures the render controller restarts before retrying.
+      const doubleInvokeError = new Error(
+        'WASM_DOUBLE_INVOKE: The rendering engine was not restarted between renders. ' +
+          'This render has been cancelled to prevent corrupted geometry. ' +
+          'The engine will restart automatically before the next render.'
+      );
+      doubleInvokeError.code = 'WASM_DOUBLE_INVOKE';
+      doubleInvokeError.needsRestart = true;
+      throw doubleInvokeError;
+    }
+
     // Execute OpenSCAD with fail-open retry logic
     try {
+      _callMainInvoked = true;
       const exitCode = await module.callMain(args);
 
       // Check exit code - non-zero means compilation failed.
       if (exitCode !== 0) {
-        // Check if this is a 3D-to-2D format mismatch (model produces 3D but exporting to SVG/DXF).
-        // OpenSCAD returns exit code 1 with "not a 2D object" — this is recoverable, not a module crash.
-        const is2DFormat = format === 'svg' || format === 'dxf';
         const modelIsNot2D =
           openscadConsoleOutput.includes(
             'Current top level object is not a 2D object'
           ) || openscadConsoleOutput.includes('not a 2D object');
 
-        if (is2DFormat && modelIsNot2D) {
-          throw new Error(
-            'MODEL_NOT_2D: Your model produces 3D geometry but SVG/DXF requires 2D output. ' +
-              'Ensure your model uses projection() or enable "use Laser Cutting best practices" to produce 2D geometry.'
+        // For 2D exports where the model produces 3D geometry: signal the
+        // caller to perform the two-pass fallback (STL → projection) at the
+        // controller level, using fresh workers between passes.  Attempting
+        // the fallback inside the same worker crashes because callMain
+        // corrupts WASM state after a non-zero exit.
+        if (is2DExport && modelIsNot2D) {
+          const err = new Error(
+            'MODEL_NOT_2D: Your model produces 3D geometry. ' +
+              'The render controller will retry with a two-pass projection fallback.'
           );
+          err.code = 'MODEL_NOT_2D';
+          err.needsRestart = true;
+          throw err;
         }
 
-        // Any other non-zero exit corrupts the WASM module's internal state —
-        // signal the render controller to restart before the next render.
-        const err = new Error(
-          `OpenSCAD compilation failed with exit code ${exitCode}. Output: ${openscadConsoleOutput.substring(0, 500)}`
-        );
-        err.needsRestart = true;
-        throw err;
+        {
+          const err = new Error(
+            `OpenSCAD compilation failed with exit code ${exitCode}. ` +
+              `Output: ${openscadConsoleOutput.substring(0, 500)}`
+          );
+          err.needsRestart = true;
+          throw err;
+        }
       }
 
-      // Check for empty geometry - OpenSCAD returns exit code 0 but produces no output
-      // This happens when parameter combinations result in no geometry being generated
+      // Check for empty geometry
       if (
         openscadConsoleOutput.includes('Current top level object is empty') ||
         openscadConsoleOutput.includes('top-level object is empty')
@@ -1476,11 +1685,8 @@ async function renderWithCallMain(
       }
 
       // Check for 2D object exported to a 3D format (STL/OBJ/etc.)
-      // This happens when model produces 2D geometry but the render is trying
-      // to export to a 3D format — applies to any project using projection() or 2D primitives.
-      const is2DFormat = format === 'svg' || format === 'dxf';
       if (
-        !is2DFormat &&
+        !is2DExport &&
         (openscadConsoleOutput.includes(
           'Current top level object is not a 3D object'
         ) ||
@@ -1493,7 +1699,7 @@ async function renderWithCallMain(
         );
       }
 
-      // Check for "not supported" ECHO messages which indicate invalid configurations
+      // Check for "not supported" ECHO messages
       const notSupportedMatch = openscadConsoleOutput.match(
         /ECHO:.*is not supported/i
       );
@@ -1537,7 +1743,6 @@ async function renderWithCallMain(
     } catch (_e) {
       // Ignore cleanup errors
     }
-
     return outputData;
   } catch (error) {
     console.error(`[Worker] Render via callMain to ${format} failed:`, error);
@@ -1885,11 +2090,38 @@ function postProcessDXF(outputBuffer) {
   // without it, Illustrator falls back to text rendering (confirmed by @peterzieba in #4268).
   const out = [];
 
+  // Helper: round a coordinate to 6 decimal places to avoid floating-point noise
+  // in downstream tools (LibreCAD, Inkscape, etc.).  BUG-D fix.
+  function roundCoord(v) {
+    const n = parseFloat(v);
+    if (!Number.isFinite(n)) return v;
+    // Use toPrecision(10) then parseFloat to strip trailing zeros
+    return parseFloat(n.toFixed(6));
+  }
+
+  // Coordinate group codes that should be rounded (X/Y/Z for both start and end points)
+  const COORD_CODES = new Set([
+    '10',
+    '11',
+    '12',
+    '20',
+    '21',
+    '22',
+    '30',
+    '31',
+    '32',
+  ]);
+
   // Helper to emit a group code/value pair with proper DXF formatting
   // Group codes are right-justified in a 3-char field; values on the next line
   function emit(code, value) {
     out.push(String(code).padStart(3));
-    out.push(String(value));
+    const codeStr = String(code).trim();
+    if (COORD_CODES.has(codeStr) && typeof value === 'number') {
+      out.push(String(roundCoord(value)));
+    } else {
+      out.push(String(value));
+    }
   }
 
   // HEADER section -- minimal R12-compatible header
@@ -1926,6 +2158,17 @@ function postProcessDXF(outputBuffer) {
   emit(0, 'SECTION');
   emit(2, 'ENTITIES');
 
+  // BUG-D fix: deduplicate LINE segments to prevent doubled geometry.
+  // Some WASM DXF outputs contain identical LINE entities for coincident edges.
+  // We track line segments by a canonical key (min endpoint first for order-independence).
+  const seenLineKeys = new Set();
+  function makeLineKey(x1, y1, x2, y2) {
+    const r = roundCoord;
+    const a = `${r(x1)},${r(y1)}`;
+    const b = `${r(x2)},${r(y2)}`;
+    return a < b ? `${a}|${b}` : `${b}|${a}`;
+  }
+
   for (const entity of parsedEntities) {
     if (entity.type === 'LWPOLYLINE') {
       const verts = entity.vertices;
@@ -1935,12 +2178,40 @@ function postProcessDXF(outputBuffer) {
       for (let s = 0; s < segmentCount; s++) {
         const p1 = verts[s];
         const p2 = verts[(s + 1) % verts.length];
+        const key = makeLineKey(p1.x, p1.y, p2.x, p2.y);
+        if (seenLineKeys.has(key)) continue;
+        seenLineKeys.add(key);
         emit(0, 'LINE');
         emit(8, entity.layer);
         emit(10, p1.x);
         emit(20, p1.y);
         emit(11, p2.x);
         emit(21, p2.y);
+      }
+    } else if (entity.type === 'LINE') {
+      // Deduplicate passthrough LINE entities too
+      const rawPairs = entity.rawPairs || [];
+      let x1 = null,
+        y1 = null,
+        x2 = null,
+        y2 = null,
+        _layer = '0';
+      for (const ep of rawPairs) {
+        if (ep.code === '8') _layer = ep.value;
+        if (ep.code === '10') x1 = parseFloat(ep.value);
+        if (ep.code === '20') y1 = parseFloat(ep.value);
+        if (ep.code === '11') x2 = parseFloat(ep.value);
+        if (ep.code === '21') y2 = parseFloat(ep.value);
+      }
+      if (x1 !== null && y1 !== null && x2 !== null && y2 !== null) {
+        const key = makeLineKey(x1, y1, x2, y2);
+        if (seenLineKeys.has(key)) continue;
+        seenLineKeys.add(key);
+      }
+      emit(0, 'LINE');
+      for (const ep of rawPairs) {
+        if (ep.code === '100') continue;
+        emit(ep.code, ep.value);
       }
     } else {
       // Emit non-LWPOLYLINE entities as-is (skip subclass markers)
@@ -2098,10 +2369,21 @@ async function render(payload) {
           'Included files will not be found in the virtual filesystem.'
       );
     }
-    if (files && Object.keys(files).length > 0) {
-      // Clear any previously mounted files to ensure clean FS state
-      clearMountedFiles();
 
+    // Always clear previously mounted files before each render to prevent stale
+    // file residue across preset switches, even when no new files are provided.
+    // BUG-A fix: conditional cleanup only ran when files were provided, leaving
+    // old companion file aliases mounted across preset changes.
+    const _fsClearStart = Date.now();
+    clearMountedFiles();
+    const _fsClearMs = Date.now() - _fsClearStart;
+    if (_fsClearMs > 50) {
+      console.warn(
+        `[Worker FS] clearMountedFiles took ${_fsClearMs}ms — unusually slow`
+      );
+    }
+
+    if (files && Object.keys(files).length > 0) {
       // Convert files object to Map
       const filesMap = new Map(Object.entries(files));
 
@@ -2128,7 +2410,43 @@ async function render(payload) {
 
       console.log('[Worker] Files mounted under:', mountResult.workDir);
     }
-    console.log('[Worker] Rendering with parameters:', parameters);
+
+    // Mount uploaded [file] parameter bytes into the worker FS so that
+    // import() / include statements in the SCAD code can resolve them.
+    // Desktop OpenSCAD resolves relative to the source file directory.
+    const fileParamMountDir =
+      mountResult && mountResult.workDir ? mountResult.workDir : '/tmp';
+    const fileParamResult = resolveFileParams(parameters, fileParamMountDir);
+    let renderParameters = parameters;
+
+    if (fileParamResult.mountOperations.length > 0) {
+      const module = await ensureOpenSCADModule();
+      if (module && module.FS) {
+        try {
+          module.FS.mkdir(fileParamMountDir);
+        } catch (_e) {
+          /* may exist */
+        }
+
+        for (const op of fileParamResult.mountOperations) {
+          try {
+            module.FS.writeFile(op.mountPath, op.data);
+            mountedFiles.set(op.mountPath, op.data);
+            console.log(
+              `[Worker FS] Mounted file param "${op.paramName}": ${op.mountPath} (${op.data.byteLength} bytes)`
+            );
+          } catch (err) {
+            console.warn(
+              `[Worker FS] Failed to mount file param "${op.paramName}":`,
+              err.message
+            );
+          }
+        }
+      }
+      renderParameters = fileParamResult.resolvedParams;
+    }
+
+    console.log('[Worker] Rendering with parameters:', renderParameters);
 
     self.postMessage({
       type: 'PROGRESS',
@@ -2150,7 +2468,6 @@ async function render(payload) {
     // resolve2DExportParameters(), which uses the parsed schema to set
     // model-specific parameters (e.g. generate, type_of_keyguard) to their
     // 2D-compatible values before this render call.
-
     // Track render timing
     let renderStartTime = 0;
     let renderDurationMs = 0;
@@ -2204,7 +2521,7 @@ async function render(payload) {
 
       const outputData = await renderWithCallMain(
         scadContent,
-        parameters,
+        renderParameters,
         format,
         mainFileToUse,
         renderOptions,
@@ -2259,8 +2576,9 @@ async function render(payload) {
       } else if (resultFormat === 'obj') {
         triangleCount = (outputData.match(/^f /gm) || []).length;
       } else if (resultFormat === 'off') {
-        // OFF format has triangle count in header
-        const match = outputData.match(/^OFF\s+\d+\s+(\d+)/);
+        const match =
+          outputData.match(/^C?OFF\s+\d+\s+(\d+)/m) ||
+          outputData.match(/^C?OFF\b[^\n]*\n\s*\d+\s+(\d+)/m);
         if (match) triangleCount = parseInt(match[1]);
       }
     } else if (outputData instanceof Uint8Array) {
@@ -2299,10 +2617,14 @@ async function render(payload) {
 
     // Post-process DXF to fix known OpenSCAD WASM compatibility issues
     // (upstream issue: github.com/openscad/openscad/issues/4268)
+    let dxfPostProcessed = false;
+    let dxfPostProcessError = null;
     if (resultFormat === 'dxf') {
       try {
         outputBuffer = postProcessDXF(outputBuffer);
+        dxfPostProcessed = true;
       } catch (dxfError) {
+        dxfPostProcessError = dxfError.message;
         console.warn(
           '[Worker] DXF post-processing failed, using raw output:',
           dxfError.message
@@ -2353,6 +2675,10 @@ async function render(payload) {
             wasmInitMs: wasmInitDurationMs,
           },
           consoleOutput: openscadConsoleOutput || '',
+          postProcessing:
+            resultFormat === 'dxf'
+              ? { dxfNormalized: dxfPostProcessed, error: dxfPostProcessError }
+              : undefined,
         },
       },
       [outputBuffer]
@@ -2436,11 +2762,15 @@ async function render(payload) {
 
     // Signal that the WASM module needs a restart before the next render.
     // callMain with non-zero exit or a numeric abort corrupts module state.
+    // MODEL_NOT_2D is included: callMain ran (setting _callMainInvoked=true) even
+    // though OpenSCAD exited with code 1. Without a restart the next render hits
+    // WASM_DOUBLE_INVOKE because the worker-side guard sees _callMainInvoked=true.
     const needsRestart =
       error?.needsRestart === true ||
       typeof error === 'number' ||
       /^\d+$/.test(String(error)) ||
       code === 'INTERNAL_ERROR' ||
+      code === 'MODEL_NOT_2D' ||
       code === 'WASM_ABORT' ||
       code === 'WASM_UNREACHABLE' ||
       code === 'WASM_OOB';
