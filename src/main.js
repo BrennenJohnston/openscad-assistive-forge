@@ -9187,6 +9187,9 @@ async function initApp() {
       // dimensions — all of which combine to produce a blank region and an
       // upward layout shift that hides the app header.
       updatePreviewDrawer([]);
+      if (typeof window.clearConsoleState === 'function') {
+        window.clearConsoleState();
+      }
       const appEl = document.getElementById('app');
       if (appEl) appEl.scrollTop = 0;
       const appMainEl = document.getElementById('main-content');
@@ -10002,6 +10005,9 @@ async function initApp() {
         // Reset echo drawer so stale warnings don't persist into the
         // next project load (prevents layout shift from expanded drawer).
         updatePreviewDrawer([]);
+        if (typeof window.clearConsoleState === 'function') {
+          window.clearConsoleState();
+        }
 
         // Reset status
         updateStatus('Ready');
@@ -17396,16 +17402,30 @@ if (rounded) {
 
   // Clear console
   consoleClearBtn?.addEventListener('click', () => {
+    clearConsoleState();
+    announceImmediate('Console output cleared');
+  });
+
+  /**
+   * Reset all console/warning display state to a clean slate.
+   * Called on project switch and by the manual clear button.
+   */
+  function clearConsoleState() {
     lastConsoleOutput = '';
     if (consoleBadge) {
       consoleBadge.classList.add('hidden');
     }
     renderConsoleOutput('');
-    announceImmediate('Console output cleared');
-  });
+    consolePanel.clear();
+    const consolePanelDetails = document.getElementById('consolePanel');
+    if (consolePanelDetails) {
+      consolePanelDetails.open = false;
+    }
+  }
 
   // Make updateConsoleOutput available globally for the render result handler
   window.updateConsoleOutput = updateConsoleOutput;
+  window.clearConsoleState = clearConsoleState;
 
   // Unlock Limits Toggle
   const unlockLimitsToggle = document.getElementById('unlockLimitsToggle');
