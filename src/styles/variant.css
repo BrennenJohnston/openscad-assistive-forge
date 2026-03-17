@@ -673,17 +673,6 @@
   color: var(--color-text-secondary);
 }
 
-/* Highlight active adjustment mode */
-:root[data-ui-variant='mono'] .preview-status-alt-adjust .alt-adjust-active {
-  color: var(--color-accent);
-  font-weight: 500;
-}
-
-/* Dim inactive values */
-:root[data-ui-variant='mono'] .preview-status-alt-adjust .alt-adjust-label {
-  color: var(--color-text-tertiary);
-}
-
 /* ECHO drawer in mono variant */
 :root[data-ui-variant='mono'] .echo-drawer {
   background: var(--color-bg-primary);

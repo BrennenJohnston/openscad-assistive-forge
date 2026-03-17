@@ -12845,13 +12845,6 @@ body.tutorial-body-locked {
   color: #b5cea8;
 }
 
-/* Monaco Editor container */
-.monaco-editor-container {
-  flex: 1;
-  min-height: 300px;
-  position: relative;
-}
-
 /* Expert Mode layout - side by side with preview */
 .expert-layout {
   display: grid;
