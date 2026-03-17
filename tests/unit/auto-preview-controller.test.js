@@ -1122,10 +1122,10 @@ describe('AutoPreviewController', () => {
 
       await controller.renderFull({ width: 10 })
 
-      // F6 parity: color() calls are stripped so the engine falls back to
-      // CSG operation face colors, matching desktop OpenSCAD F6 behavior.
+      // Manifold backend preserves user color() calls in rendered geometry,
+      // so the original source is passed through (no stripping).
       expect(renderController.renderFull).toHaveBeenCalledWith(
-        ' cube(10);',
+        'color("red") cube(10);',
         { width: 10 },
         expect.objectContaining({
           outputFormat: 'off',

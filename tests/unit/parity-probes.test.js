@@ -1040,6 +1040,7 @@ describe('S-005: dual-render integration for # debug modifier', () => {
       loadSTL: vi.fn().mockResolvedValue(),
       loadOFF: vi.fn().mockResolvedValue({ hasColors: false }),
       setColorOverride: vi.fn(),
+      setColorOverrideEnabled: vi.fn(),
       setRenderState: vi.fn(),
       clear: vi.fn(),
     };
