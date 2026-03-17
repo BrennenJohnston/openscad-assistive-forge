@@ -530,7 +530,7 @@ async function deserializeURLParams() {
  * @param {Object} params - Parameters object
  * @returns {string} Full URL with parameters
  */
-export function getShareableURL(params) {
+function getShareableURL(params) {
   const hash = serializeURLParams(params);
   return `${window.location.origin}${window.location.pathname}${hash}`;
 }

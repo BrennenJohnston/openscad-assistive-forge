@@ -89,7 +89,7 @@ function saveLevel(level) {
  * @param {Object} [options]
  * @param {boolean} [options.skipAnnouncement] - Skip screen reader announcement
  */
-export function setDetailLevel(level, options = {}) {
+function setDetailLevel(level, options = {}) {
   if (!VALID_LEVELS.includes(level)) return;
 
   currentLevel = level;
@@ -112,7 +112,7 @@ export function setDetailLevel(level, options = {}) {
  * Get the current detail level.
  * @returns {DetailLevel}
  */
-export function getDetailLevel() {
+function getDetailLevel() {
   return currentLevel;
 }
 

@@ -249,7 +249,7 @@ let loadingPromise = null;
  * Load Monaco Editor lazily
  * @returns {Promise<void>}
  */
-export async function loadMonaco() {
+async function loadMonaco() {
   if (monacoLoaded) {
     return Promise.resolve();
   }
@@ -397,14 +397,14 @@ function registerOpenSCADLanguage() {
  * Check if Monaco is loaded
  * @returns {boolean}
  */
-export function isMonacoLoaded() {
+function isMonacoLoaded() {
   return monacoLoaded;
 }
 
 /**
  * MonacoEditor wrapper class
  */
-export class MonacoEditor {
+class MonacoEditor {
   /**
    * @param {Object} options
    * @param {HTMLElement} options.container - Container element
@@ -679,7 +679,7 @@ export class MonacoEditor {
  * Verify Monaco works under CSP
  * @returns {Promise<boolean>}
  */
-export async function verifyMonacoCSP() {
+async function verifyMonacoCSP() {
   console.log('[MonacoEditor] Verifying CSP compatibility...');
 
   try {

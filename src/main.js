@@ -130,10 +130,7 @@ import {
   FLAGS as _FLAGS,
 } from './js/feature-flags.js';
 import { initSearchableCombobox } from './js/searchable-combobox.js';
-import {
-  initCSPReporter,
-  logViolationSummary as _logViolationSummary,
-} from './js/csp-reporter.js';
+import { initCSPReporter } from './js/csp-reporter.js';
 import {
   migrateStorageKeys,
   getAppPrefKey,

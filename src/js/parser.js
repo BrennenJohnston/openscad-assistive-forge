@@ -215,21 +215,6 @@ function parseVectorValue(content) {
 }
 
 /**
- * Serialize a vector back to OpenSCAD format
- * @param {Array} values - Vector values array
- * @returns {string} OpenSCAD vector string
- */
-export function serializeVector(values) {
-  const parts = values.map((v) => {
-    if (Array.isArray(v)) {
-      return serializeVector(v);
-    }
-    return String(v);
-  });
-  return `[${parts.join(', ')}]`;
-}
-
-/**
  * Safe vector parsing with fallback to raw mode
  * @param {string} vectorStr - Full vector string including brackets
  * @returns {Object} Parsed vector or raw fallback

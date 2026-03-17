@@ -121,7 +121,7 @@ describe('SCAD Source', () => {
  * @param {string} webapp - Webapp directory path
  * @param {Object} options - Command options
  */
-export async function testCommand(webapp, options) {
+async function testCommand(webapp, options) {
   try {
     console.log(chalk.blue('🧪 OpenSCAD Forge - Test Runner'));
     

@@ -310,6 +310,6 @@ export function getEditActionsController(options = {}) {
 /**
  * Reset singleton (for testing).
  */
-export function resetEditActionsController() {
+function resetEditActionsController() {
   instance = null;
 }

@@ -805,6 +805,6 @@ export function getUIModeController(options = {}) {
 /**
  * Reset UIModeController singleton (for testing)
  */
-export function resetUIModeController() {
+function resetUIModeController() {
   instance = null;
 }

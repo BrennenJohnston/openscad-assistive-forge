@@ -3612,7 +3612,7 @@ export function closeTutorial(completed = false) {
  * @note Currently not used internally, but exported as part of the public API
  *       for potential external use or future features
  */
-export function isTutorialActive() {
+function isTutorialActive() {
   return !!activeTutorial;
 }
 
@@ -3623,7 +3623,7 @@ export function isTutorialActive() {
  * @note Currently not used internally, but exported as part of the public API
  *       for potential external use or future features
  */
-export function getCurrentTutorialId() {
+function getCurrentTutorialId() {
   return activeTutorial ? activeTutorial.id : null;
 }
 

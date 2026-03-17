@@ -86,7 +86,7 @@ export function initCSPReporter() {
  * Get all logged violations
  * @returns {CSPViolation[]} Array of violations
  */
-export function getViolations() {
+function getViolations() {
   return [...violationLog];
 }
 
@@ -94,7 +94,7 @@ export function getViolations() {
  * Get violation count by directive
  * @returns {Object} Map of directive -> count
  */
-export function getViolationStats() {
+function getViolationStats() {
   const stats = {};
   for (const v of violationLog) {
     stats[v.directive] = (stats[v.directive] || 0) + 1;
@@ -105,7 +105,7 @@ export function getViolationStats() {
 /**
  * Clear violation log
  */
-export function clearViolations() {
+function clearViolations() {
   violationLog.length = 0;
 }
 
@@ -113,7 +113,7 @@ export function clearViolations() {
  * Check if any violations have occurred
  * @returns {boolean}
  */
-export function hasViolations() {
+function hasViolations() {
   return violationLog.length > 0;
 }
 
@@ -134,8 +134,7 @@ export function logViolationSummary() {
   console.groupEnd();
 }
 
-// Export for testing
-export const _internal = {
+const _internal = {
   violationLog,
   handleViolation,
   MAX_LOG_SIZE,
