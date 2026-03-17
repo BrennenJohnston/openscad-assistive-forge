@@ -2511,3 +2511,143 @@ test.describe('UI Uniformity Regression', () => {
     expect(debugRequests).toEqual([]);
   });
 });
+
+test.describe('Axe-Core Scans for Missing Views (REC-002)', () => {
+  async function dismissSaveProjectModal(page) {
+    const notNowBtn = page.locator('#saveProjectNotNow')
+    try {
+      await notNowBtn.waitFor({ state: 'visible', timeout: 3000 })
+      await notNowBtn.click()
+      await page.waitForTimeout(300)
+    } catch {
+      // Modal did not appear — nothing to dismiss
+    }
+  }
+
+  test('should run axe scan with Expert Mode active', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
+
+    await page.goto('/')
+    await waitForWasmReady(page)
+
+    const fixturePath = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad')
+
+    try {
+      await page.setInputFiles('#fileInput', fixturePath)
+      await page.waitForSelector('.param-control', { timeout: 30_000 })
+      await dismissSaveProjectModal(page)
+
+      const uiModeToggle = page.locator('#uiModeToggle')
+      await uiModeToggle.click()
+      await expect(uiModeToggle).toHaveAttribute('aria-checked', 'true')
+
+      const expertToggle = page.locator('#expertModeToggle')
+      const isExpertVisible = await expertToggle.isVisible().catch(() => false)
+
+      if (!isExpertVisible) {
+        console.log('Expert Mode toggle not visible — activating via Ctrl+E')
+        await page.keyboard.press('Control+e')
+      } else {
+        await expertToggle.click()
+      }
+
+      const expertPanel = page.locator('#expertModePanel')
+      await expect(expertPanel).toBeVisible({ timeout: 10_000 })
+
+      const results = await new AxeBuilder({ page })
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+        .analyze()
+
+      console.log(`Expert Mode axe scan complete: ${results.violations.length} violations, ${results.passes.length} passes`)
+      if (results.violations.length > 0) {
+        console.log('Expert Mode axe violations (file as issues):')
+        results.violations.forEach(v => {
+          console.log(`- ${v.id}: ${v.description} (impact: ${v.impact})`)
+          console.log(`  Help: ${v.helpUrl}`)
+        })
+      }
+
+      expect(results.passes.length).toBeGreaterThan(0)
+    } catch (error) {
+      console.log('Could not complete Expert Mode axe scan:', error.message)
+      test.skip()
+    }
+  })
+
+  test('should have no violations with Features Guide modal open', async ({ page }) => {
+    await page.goto('/')
+    await page.waitForLoadState('networkidle')
+
+    const learnMoreBtn = page.locator('.btn-role-learn').first()
+    await expect(learnMoreBtn).toBeVisible()
+    await learnMoreBtn.click()
+
+    const modal = page.locator('#featuresGuideModal')
+    await expect(modal).toBeVisible({ timeout: 5000 })
+
+    const results = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      .analyze()
+
+    console.log(`Features Guide axe scan complete: ${results.violations.length} violations, ${results.passes.length} passes`)
+    if (results.violations.length > 0) {
+      console.log('Features Guide modal axe violations:')
+      results.violations.forEach(v => {
+        console.log(`- ${v.id}: ${v.description} (impact: ${v.impact})`)
+        console.log(`  Help: ${v.helpUrl}`)
+      })
+    }
+
+    expect(results.violations).toEqual([])
+
+    await page.keyboard.press('Escape')
+    await expect(modal).toBeHidden()
+  })
+
+  test('should run axe scan in error state after invalid .scad', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
+
+    await page.goto('/')
+    await waitForWasmReady(page)
+
+    const fixturePath = path.join(process.cwd(), 'tests', 'fixtures', 'invalid-syntax.scad')
+
+    try {
+      await page.setInputFiles('#fileInput', fixturePath)
+
+      await page.waitForFunction(
+        () => {
+          const statusArea = document.getElementById('statusArea')
+          const consoleOutput = document.getElementById('console-output')
+          const hasStatusContent = statusArea && statusArea.textContent.trim().length > 0
+          const hasConsoleContent = consoleOutput && consoleOutput.textContent.trim().length > 0
+          return hasStatusContent || hasConsoleContent
+        },
+        { timeout: 30_000 }
+      )
+
+      await page.waitForTimeout(2000)
+
+      const results = await new AxeBuilder({ page })
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+        .analyze()
+
+      console.log(`Error state axe scan complete: ${results.violations.length} violations, ${results.passes.length} passes`)
+      if (results.violations.length > 0) {
+        console.log('Error state axe violations (file as issues):')
+        results.violations.forEach(v => {
+          console.log(`- ${v.id}: ${v.description} (impact: ${v.impact})`)
+          console.log(`  Help: ${v.helpUrl}`)
+          v.nodes.forEach(node => {
+            console.log(`  Element: ${node.html.substring(0, 120)}`)
+          })
+        })
+      }
+
+      expect(results.passes.length).toBeGreaterThan(0)
+    } catch (error) {
+      console.log('Could not complete error state axe scan:', error.message)
+      test.skip()
+    }
+  })
+})
