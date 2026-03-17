@@ -9,6 +9,7 @@
  * Based on best practices from Shepherd.js, Driver.js, and modern onboarding UX.
  *
  * @module tutorial-sandbox
+ * @license GPL-3.0-or-later
  */
 
 import { createFocusTrap } from './focus-trap.js';

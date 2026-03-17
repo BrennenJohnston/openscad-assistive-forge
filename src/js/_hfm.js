@@ -1,3 +1,6 @@
+/**
+ * @license GPL-3.0-or-later
+ */
 // Alternate rendering module (generic naming)
 //
 // Shape-vector character rendering technique inspired by external research

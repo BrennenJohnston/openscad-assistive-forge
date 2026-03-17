@@ -1,3 +1,6 @@
+/**
+ * @license GPL-3.0-or-later
+ */
 // Input sequence detector module
 const PATTERN = [
   'UP',

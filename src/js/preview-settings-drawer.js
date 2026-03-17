@@ -3,6 +3,7 @@
  * Overlay drawer for preview settings that sits on top of the STL preview.
  * When collapsed, only the toggle button is visible. When expanded, content overlays the preview.
  * The drawer auto-sizes to fit content and scrolls if needed.
+ * @license GPL-3.0-or-later
  */
 
 import { getDrawerStateKey } from './storage-keys.js';

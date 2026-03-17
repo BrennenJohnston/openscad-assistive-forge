@@ -7,6 +7,7 @@
  * STATE CONVENTION: Additive close — `collapsed` class = closed.
  * This is the opposite of the Parameters drawer which uses
  * additive open (`drawer-open` class = open). See UI_STANDARDS.md.
+ * @license GPL-3.0-or-later
  */
 
 import { announceImmediate } from './announcer.js';

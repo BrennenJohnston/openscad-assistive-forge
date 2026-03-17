@@ -1,3 +1,6 @@
+/**
+ * @license GPL-3.0-or-later
+ */
 // Canvas-based character painter module
 //
 // Replaces the <pre> textContent overlay with a <canvas> element so each

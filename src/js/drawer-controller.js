@@ -6,6 +6,7 @@
  * STATE CONVENTION: Additive open — `drawer-open` class = open.
  * This is the opposite of Actions/Camera/Echo drawers which use
  * additive close (`collapsed` class = closed). See UI_STANDARDS.md.
+ * @license GPL-3.0-or-later
  */
 
 import { createDocumentFocusTrap } from './focus-trap.js';

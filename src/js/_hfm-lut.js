@@ -1,3 +1,6 @@
+/**
+ * @license GPL-3.0-or-later
+ */
 // Character shape-vector lookup table (LUT) module
 //
 // Precomputed flat Uint8Array mapping every quantized 6D shape vector to the
