@@ -2092,6 +2092,9 @@ async function initApp() {
     onEmergency: (usage) => {
       console.log(`[Memory] Emergency state: ${usage.heapMB}MB`);
       updateMemoryUI('emergency', usage);
+      _announceError(
+        `Memory emergency: usage at ${usage.heapMB} megabytes. Auto-preview has been disabled.`
+      );
       // Disable auto-preview at emergency level
       if (typeof autoPreviewUserEnabled !== 'undefined') {
         autoPreviewUserEnabled = false;
@@ -2182,6 +2185,14 @@ async function initApp() {
       // Reload in recovery mode
       window.location.href = window.location.pathname + '?recovery=true';
     });
+
+  // Listen for storage-quota-exceeded events dispatched by preset-manager
+  // when localStorage is full, so the user gets visible + audible feedback.
+  window.addEventListener('storage-quota-exceeded', (e) => {
+    const msg = e.detail?.message || 'Storage is full. Data could not be saved.';
+    updateStatus(msg, 'error');
+    _announceError(msg);
+  });
 
   let statusArea = null;
   let cameraPanelController = null; // Declared here, initialized later
@@ -9008,6 +9019,7 @@ async function initApp() {
           dismissOverlay();
           console.error('[ZIP] Extraction failed:', error);
           updateStatus('Failed to extract ZIP file');
+          _announceError('Failed to extract ZIP file');
           alert(error.message);
           return;
         }
@@ -18307,6 +18319,18 @@ if (typeof window !== 'undefined') {
   window.themeManager = themeManager;
   window.libraryManager = libraryManager;
 }
+
+// Global error handlers — catch uncaught exceptions and unhandled promise
+// rejections so screen reader users receive audible feedback.
+window.onerror = (message) => {
+  console.error('[Global]', message);
+  _announceError('An unexpected error occurred.');
+};
+
+window.addEventListener('unhandledrejection', (event) => {
+  console.error('[Global] Unhandled promise rejection:', event.reason);
+  _announceError('An unexpected error occurred.');
+});
 
 // Start the app
 initApp();
