@@ -4029,20 +4029,12 @@ async function initApp() {
   getToolbarMenuController().registerMenuBuilder('design', () => {
     const state = stateManager.getState();
     const hasFile = Boolean(state.uploadedFile);
-    const hasRender = Boolean(state.stl);
-    const apToggle = document.getElementById('autoPreviewToggle');
-
     return [
       {
         type: 'toggle',
         label: 'Automatic Reload and Preview',
-        checked: apToggle?.checked ?? false,
-        handler: () => {
-          if (apToggle) {
-            apToggle.checked = !apToggle.checked;
-            apToggle.dispatchEvent(new Event('change'));
-          }
-        },
+        disabled: true,
+        tooltip: 'Planned for future release',
       },
       {
         type: 'action',
@@ -4106,10 +4098,8 @@ async function initApp() {
       {
         type: 'action',
         label: 'Check Validity',
-        shortcutAction: 'checkValidity',
-        enabled: hasRender,
-        tooltip: hasRender ? undefined : 'Render a model first',
-        handler: () => designPanelController.checkValidity(),
+        disabled: true,
+        tooltip: 'Planned for future release',
       },
       {
         type: 'action',
@@ -4122,9 +4112,8 @@ async function initApp() {
       {
         type: 'action',
         label: 'Geometry Info',
-        enabled: hasRender,
-        tooltip: hasRender ? undefined : 'Render a model first',
-        handler: () => designPanelController.updateGeometryInfo(),
+        disabled: true,
+        tooltip: 'Planned for future release',
       },
       { type: 'separator' },
       {
@@ -4356,10 +4345,6 @@ async function initApp() {
       };
     }
 
-    const sidebarOpen = !document
-      .querySelector('.sidebar')
-      ?.classList.contains('collapsed');
-
     return [
       // -- Desktop-parity panel toggles --
       panelToggle('codeEditor', 'Editor', 'toggleCodeEditor'),
@@ -4367,16 +4352,9 @@ async function initApp() {
       {
         type: 'toggle',
         label: 'Customizer',
-        checked: sidebarOpen,
-        shortcutAction: 'toggleCustomizer',
-        handler: () => {
-          const sidebar = document.querySelector('.sidebar');
-          if (sidebar) {
-            sidebar.classList.toggle('collapsed');
-            const nowOpen = !sidebar.classList.contains('collapsed');
-            _announce(nowOpen ? 'Customizer shown' : 'Customizer hidden');
-          }
-        },
+        disabled: true,
+        tooltip:
+          'Planned for future release \u2014 use the collapse button on the parameters panel instead',
       },
       { type: 'separator' },
       {
