@@ -4402,10 +4402,7 @@ async function initApp() {
       {
         type: 'action',
         label: 'About',
-        handler: () => {
-          const modal = document.getElementById('featuresGuideModal');
-          if (modal) openModal(modal);
-        },
+        handler: () => _openFeaturesTab('tab-accessibility'),
       },
       {
         type: 'action',
@@ -4453,10 +4450,7 @@ async function initApp() {
         type: 'action',
         label: 'Features Guide',
         shortcutAction: 'showHelp',
-        handler: () => {
-          const modal = document.getElementById('featuresGuideModal');
-          if (modal) openModal(modal);
-        },
+        handler: () => _openFeaturesTab('tab-libraries'),
       },
       {
         type: 'action',
