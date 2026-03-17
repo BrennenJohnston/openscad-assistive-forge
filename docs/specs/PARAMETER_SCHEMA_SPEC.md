@@ -222,6 +222,83 @@ label_text = "Hello";  // Text to engrave
 - Text input field
 - Optional maxLength constraint if detected
 
+### Vector / Array Parameters
+
+**OpenSCAD Source:**
+```scad
+offset = [10, 20, 0];     // Position offset
+size = [50, 30.5, 10];    // [1:0.5:100]
+```
+
+**Schema Representation:**
+```json
+{
+  "offset": {
+    "type": "array",
+    "format": "vector",
+    "default": [10, 20, 0],
+    "x-dimension": 3,
+    "x-components": [
+      { "label": "X", "type": "number" },
+      { "label": "Y", "type": "number" },
+      { "label": "Z", "type": "number" }
+    ],
+    "items": {
+      "type": "number"
+    },
+    "minItems": 3,
+    "maxItems": 3,
+    "x-forge-group": "dimensions",
+    "x-forge-order": 0,
+    "x-forge-render-as": "vector"
+  },
+  "size": {
+    "type": "array",
+    "format": "vector",
+    "default": [50, 30.5, 10],
+    "x-dimension": 3,
+    "x-components": [
+      { "label": "X", "type": "number" },
+      { "label": "Y", "type": "number" },
+      { "label": "Z", "type": "number" }
+    ],
+    "items": {
+      "type": "number",
+      "minimum": 1,
+      "maximum": 100,
+      "multipleOf": 0.5
+    },
+    "minItems": 3,
+    "maxItems": 3,
+    "x-forge-group": "dimensions",
+    "x-forge-order": 1,
+    "x-forge-render-as": "vector"
+  }
+}
+```
+
+**Parsing behavior:**
+
+- Literal vectors (`[x, y, z]`) are parsed into individual numeric components for visual editing.
+- Expression vectors (`[width/2, height, fn()]`) cannot be decomposed; they fall back to raw text input mode with a `format: "expression"` hint.
+- Nested vectors (`[[1,0],[0,1]]`) are detected but rendered as raw text input (nested editing is not supported in v4.2.0).
+
+**Dimension labels:**
+
+| Dimension | Default Labels |
+|-----------|---------------|
+| 2 | X, Y |
+| 3 | X, Y, Z |
+| 4 | X, Y, Z, W |
+| Other | Element 1, Element 2, ... |
+
+**UI Rendering:**
+
+- Individual numeric input for each vector element (X, Y, Z, W)
+- Tab navigation between elements
+- Screen reader announces element position ("X coordinate, 1 of 3")
+- `x-forge-render-as: "vector"` hints at the multi-input rendering
+
 ---
 
 ## Groups
@@ -539,6 +616,11 @@ When comparing OpenSCAD ↔ Web:
 ---
 
 ## Changelog
+
+### 1.1.0-draft (2026-03-16)
+- Added Vector / Array Parameters section for `[x, y, z]` type support
+- Documented `x-dimension`, `x-components`, `x-forge-render-as: "vector"` extensions
+- Documented parsing behavior for literal, expression, and nested vectors
 
 ### 1.0.0-draft (2026-01-12)
 - Initial draft specification

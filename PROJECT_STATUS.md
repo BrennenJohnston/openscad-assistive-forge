@@ -1,8 +1,8 @@
 # Project status
 
 **Project**: OpenSCAD Assistive Forge  
-**Current version**: 4.1.0  
-**Last updated**: 2026-02-24  
+**Current version**: 4.2.0  
+**Last updated**: 2026-03-16  
 
 This is a single-maintainer project. This file is here so I don’t have to answer “is it abandoned?” and “what’s next?” in every issue thread.
 

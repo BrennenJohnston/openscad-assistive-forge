@@ -2,7 +2,7 @@
 
 Things we know about but haven't fixed yet, along with workarounds you can use in the meantime. If you hit something not listed here, please [open an issue](https://github.com/BrennenJohnston/openscad-assistive-forge/issues).
 
-**Last updated**: 2026-03-13
+**Last updated**: 2026-03-16
 
 ---
 
@@ -122,7 +122,21 @@ Things we know about but haven't fixed yet, along with workarounds you can use i
 
 ---
 
-#### KI-008: E2E Tests Need Combobox-Aware Preset Selectors
+#### KI-008: Firefox and WebKit E2E Suites Non-Blocking in CI
+
+**Status**: Acknowledged (by design for v4.2.0)  
+**Affected**: CI pipeline — Firefox and WebKit E2E test jobs  
+**Severity**: Medium
+
+**Description**: The Firefox and WebKit E2E test jobs in `.github/workflows/test.yml` run with `continue-on-error: true`, meaning failures do not block the CI pipeline. Most failures (~80%) are infrastructure-related — timeouts caused by single-worker execution and WASM initialization overhead — not application bugs. Firefox has 2 additional browser-specific test skips for contrast and color-scheme emulation not supported by Playwright.
+
+**Decision for v4.2.0**: Keep `continue-on-error: true`. Removing it without resolving the infrastructure issues would make CI unreliable. Core browser testing (Chromium + Edge) remains blocking.
+
+**Plan for v4.3.0**: Resolve infrastructure issues (parallel workers, WASM caching, timeout tuning), then remove `continue-on-error` per the M3 exit criteria in the workflow comments.
+
+---
+
+#### KI-009: E2E Tests Need Combobox-Aware Preset Selectors
 
 **Status**: Workaround applied (flag disabled in test)
 **Affected**: E2E test suite
@@ -136,7 +150,7 @@ Things we know about but haven't fixed yet, along with workarounds you can use i
 
 ---
 
-#### KI-009: S-013 Surface Image Support — WASM Layer Unverified
+#### KI-010: S-013 Surface Image Support — WASM Layer Unverified
 
 **Status**: Layer 2 fix applied; Layer 1 requires manual runtime verification
 **Affected**: `surface()` function with PNG/JPEG companion files
@@ -153,7 +167,7 @@ Things we know about but haven't fixed yet, along with workarounds you can use i
 
 ---
 
-#### KI-010: Missing-File Warnings — Quoted `include`/`use` Paths Not Detected
+#### KI-011: Missing-File Warnings — Quoted `include`/`use` Paths Not Detected
 
 **Status**: Working as implemented; edge case noted
 **Affected**: `generateMissingFileWarnings()` in `file-param-resolver.js`
@@ -265,4 +279,4 @@ Create a [new GitHub issue](https://github.com/openscad/openscad-assistive-forge
 
 ## Contact
 
-For urgent issues affecting accessibility or security, please follow the contact procedures in [SECURITY.md](./SECURITY.md).
+For urgent issues affecting accessibility or security, please follow the contact procedures in [SECURITY.md](../SECURITY.md).

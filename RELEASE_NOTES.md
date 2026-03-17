@@ -1,6 +1,6 @@
 # Release Notes
 
-## v4.2.0 (unreleased)
+## v4.2.0 (2026-03-16)
 
 A big update focused on accessibility, security, and reliability. This brings the app up to WCAG 2.2 AA / Section 508 conformance.
 
@@ -37,7 +37,7 @@ Intelligent memory monitoring with graceful degradation prevents crashes on comp
 
 ### Security Enhancements
 
-- **Content Security Policy**: Enforced CSP headers protecting against XSS and injection attacks
+- **Content Security Policy**: Content Security Policy headers in Report-Only mode with comprehensive directives covering script-src, style-src, connect-src, frame-ancestors, and object-src. Enforcement roadmap for v4.3.0
 - **CSP Reporting**: Violation monitoring with privacy-preserving logging
 - **Supply Chain Security**: SBOM generation, npm audit in CI, lockfile integrity checks
 - **Security Documentation**: Administrator guide for deployment hardening
@@ -52,7 +52,7 @@ Intelligent memory monitoring with graceful degradation prevents crashes on comp
 
 ### Performance & Reliability
 
-- **Bundle Budgets**: Enforced size limits in CI (153KB/500KB core bundle)
+- **Bundle Budgets**: Enforced size limits in CI (231.8KB/500KB core bundle)
 - **Visual Regression Tests**: Automated screenshot comparison
 - **Cross-Browser CI**: Chrome, Edge, Firefox, and Safari testing
 - **Performance Baselines**: Documented SLOs for cold start and render times
@@ -69,7 +69,7 @@ Intelligent memory monitoring with graceful degradation prevents crashes on comp
 
 ### Technical Details
 
-- **Unit Tests**: 1383 tests passing (100%)
+- **Unit Tests**: 2093 tests passing (100%)
 - **E2E Tests**: Cross-browser automation suite
 - **Lighthouse Accessibility**: 96% score
 - **Security Vulnerabilities**: 0 high/critical
@@ -95,6 +95,8 @@ New features are controlled by feature flags:
 | `expert_mode` | enabled | Expert Mode code editing |
 | `monaco_editor` | enabled | Monaco vs textarea default |
 | `memory_monitoring` | enabled | Memory usage tracking |
+| `vector_parameters` | enabled | Vector/array parameter inputs |
+| `csp_reporting` | enabled | CSP violation logging to console |
 
 ---
 
