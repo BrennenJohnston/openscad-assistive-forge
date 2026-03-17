@@ -5,10 +5,18 @@
 
 import { test, expect } from '@playwright/test'
 
-// Dismiss first-visit modal so it doesn't block UI interactions
+// Dismiss first-visit modal and seed an explicit theme preference on first
+// load so the theme cycle (auto→light→dark→auto) always produces a visible
+// data-theme change. Without this, "auto" resolves to "light" on CI and the
+// first toggle click (auto→light) keeps data-theme="light". The conditional
+// guard preserves persistence tests that rely on the saved preference surviving
+// a reload.
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem('openscad-forge-first-visit-seen', 'true')
+    if (!localStorage.getItem('openscad-forge-theme')) {
+      localStorage.setItem('openscad-forge-theme', 'light')
+    }
   })
 })
 
@@ -426,7 +434,9 @@ test.describe('Mono / Alt View Theme Switching', () => {
       const bgValues = bg.match(/\d+/g)
       if (bgValues) {
         const [r, g, b] = bgValues.map(Number)
-        if (state.theme === 'dark') {
+        if (state.theme === 'dark' || state.mono) {
+          // Mono variant uses --color-bg-primary: #000000 (retro terminal)
+          // regardless of light/dark setting; only accent colors change.
           expect(r + g + b).toBeLessThan(200)
         } else {
           expect(r + g + b).toBeGreaterThan(400)
