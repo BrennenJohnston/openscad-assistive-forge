@@ -29,7 +29,8 @@ describe('AutoPreviewController', () => {
     previewManager = {
       loadSTL: vi.fn().mockResolvedValue(),
       setColorOverride: vi.fn(),
-      colorOverrideEnabled: true,
+      setColorOverrideEnabled: vi.fn((v) => { previewManager.colorOverrideEnabled = v; }),
+      colorOverrideEnabled: false,
       clear: vi.fn(),
       show2DPreview: vi.fn(),
     }
@@ -165,6 +166,69 @@ describe('AutoPreviewController', () => {
       controller.setColorParamNames(['box_color'])
       const color = controller.resolvePreviewColor({ use_colors: 'yes', box_color: 123 })
       expect(color).toBeNull()
+    })
+  })
+
+  describe('Auto Color Override Pipeline', () => {
+    it('auto-enables color override when resolvePreviewColor returns non-null on cached load', async () => {
+      controller.setColorParamNames(['box_color'])
+      const params = { use_colors: 'yes', box_color: 'FF6B35' }
+      const hash = controller.hashParams(params)
+      const qualityKey = 'model'
+      const cacheKey = `${hash}|${qualityKey}`
+      controller.previewCache.set(cacheKey, { stl: new ArrayBuffer(4), stats: { triangles: 5 }, timestamp: Date.now() })
+
+      await controller.loadCachedPreview(hash, cacheKey, qualityKey)
+
+      expect(previewManager.setColorOverrideEnabled).toHaveBeenCalledWith(true)
+      expect(previewManager.setColorOverride).toHaveBeenCalledWith('#FF6B35')
+      expect(controller._autoColorEnabled).toBe(true)
+    })
+
+    it('auto-disables color override when resolvePreviewColor returns null and auto was enabled', async () => {
+      controller.setColorParamNames([])
+      controller._autoColorEnabled = true
+      const params = { width: 20 }
+      const hash = controller.hashParams(params)
+      const qualityKey = 'model'
+      const cacheKey = `${hash}|${qualityKey}`
+      controller.previewCache.set(cacheKey, { stl: new ArrayBuffer(4), stats: { triangles: 5 }, timestamp: Date.now() })
+
+      await controller.loadCachedPreview(hash, cacheKey, qualityKey)
+
+      expect(previewManager.setColorOverrideEnabled).toHaveBeenCalledWith(false)
+      expect(previewManager.setColorOverride).toHaveBeenCalledWith(null)
+      expect(controller._autoColorEnabled).toBe(false)
+    })
+
+    it('does not disable color override when auto was not enabled and no color params', async () => {
+      controller.setColorParamNames([])
+      controller._autoColorEnabled = false
+      const params = { width: 20 }
+      const hash = controller.hashParams(params)
+      const qualityKey = 'model'
+      const cacheKey = `${hash}|${qualityKey}`
+      controller.previewCache.set(cacheKey, { stl: new ArrayBuffer(4), stats: { triangles: 5 }, timestamp: Date.now() })
+
+      await controller.loadCachedPreview(hash, cacheKey, qualityKey)
+
+      expect(previewManager.setColorOverrideEnabled).not.toHaveBeenCalled()
+    })
+
+    it('resets auto-color on setScadContent when auto was enabled', () => {
+      controller._autoColorEnabled = true
+      controller.setScadContent('cube(20);')
+
+      expect(previewManager.setColorOverrideEnabled).toHaveBeenCalledWith(false)
+      expect(previewManager.setColorOverride).toHaveBeenCalledWith(null)
+      expect(controller._autoColorEnabled).toBe(false)
+    })
+
+    it('does not reset color override on setScadContent when auto was not enabled', () => {
+      controller._autoColorEnabled = false
+      controller.setScadContent('cube(20);')
+
+      expect(previewManager.setColorOverrideEnabled).not.toHaveBeenCalled()
     })
   })
 

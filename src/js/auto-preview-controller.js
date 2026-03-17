@@ -88,6 +88,7 @@ export class AutoPreviewController {
 
     // Color parameters for preview tinting
     this.colorParamNames = [];
+    this._autoColorEnabled = false;
 
     // Cache: paramHash -> { stl, stats, timestamp }
     this.previewCache = new Map();
@@ -279,6 +280,14 @@ export class AutoPreviewController {
     this.pendingParamHash = null;
     // Reset initial preview flag - new file needs camera fit
     this.initialPreviewDone = false;
+
+    // Reset auto-color override so previous project's colors don't leak
+    if (this._autoColorEnabled && this.previewManager?.setColorOverrideEnabled) {
+      this.previewManager.setColorOverrideEnabled(false);
+      this.previewManager.setColorOverride(null);
+      this._autoColorEnabled = false;
+    }
+
     this.setState(PREVIEW_STATE.IDLE);
   }
 
@@ -480,12 +489,16 @@ export class AutoPreviewController {
       } catch (_error) {
         previewColor = null;
       }
-      if (
-        this.previewManager?.setColorOverride &&
-        this.previewManager.colorOverrideEnabled &&
-        previewColor !== null
-      ) {
-        this.previewManager.setColorOverride(previewColor);
+      if (this.previewManager?.setColorOverride) {
+        if (previewColor !== null) {
+          this.previewManager.setColorOverrideEnabled(true);
+          this.previewManager.setColorOverride(previewColor);
+          this._autoColorEnabled = true;
+        } else if (this._autoColorEnabled) {
+          this.previewManager.setColorOverrideEnabled(false);
+          this.previewManager.setColorOverride(null);
+          this._autoColorEnabled = false;
+        }
       }
       const params = (() => {
         try {
@@ -934,14 +947,17 @@ export class AutoPreviewController {
       this.previewParamHash = paramHash;
       this.previewCacheKey = cacheKey;
 
-      // Load into 3D preview
-      if (
-        this.previewManager?.setColorOverride &&
-        this.previewManager.colorOverrideEnabled
-      ) {
+      // Load into 3D preview — auto-enable color override from SCAD params
+      if (this.previewManager?.setColorOverride) {
         const previewColor = this.resolvePreviewColor(parameters);
         if (previewColor !== null) {
+          this.previewManager.setColorOverrideEnabled(true);
           this.previewManager.setColorOverride(previewColor);
+          this._autoColorEnabled = true;
+        } else if (this._autoColorEnabled) {
+          this.previewManager.setColorOverrideEnabled(false);
+          this.previewManager.setColorOverride(null);
+          this._autoColorEnabled = false;
         }
       }
       // Set render state so the model color reflects preview/laser quality
@@ -1206,13 +1222,16 @@ export class AutoPreviewController {
       );
       const shouldPreserveColorPreview =
         resultFormat === 'stl' && currentPreviewHasColors;
-      if (
-        this.previewManager?.setColorOverride &&
-        this.previewManager.colorOverrideEnabled
-      ) {
+      if (this.previewManager?.setColorOverride) {
         const previewColor = this.resolvePreviewColor(parameters);
         if (previewColor !== null) {
+          this.previewManager.setColorOverrideEnabled(true);
           this.previewManager.setColorOverride(previewColor);
+          this._autoColorEnabled = true;
+        } else if (this._autoColorEnabled) {
+          this.previewManager.setColorOverrideEnabled(false);
+          this.previewManager.setColorOverride(null);
+          this._autoColorEnabled = false;
         }
       }
       if (this.previewManager?.setRenderState) {
@@ -1502,6 +1521,7 @@ export class AutoPreviewController {
     this.currentPreviewKey = null;
     this.fullRenderParamHash = null;
     this.scadVersion = 0;
+    this._autoColorEnabled = false;
     this.renderController = null;
     this.previewManager = null;
   }
