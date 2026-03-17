@@ -9179,6 +9179,24 @@ async function initApp() {
       welcomeScreen.classList.add('hidden');
       mainInterface.classList.remove('hidden');
 
+      // Layout reset: clear stale visual state from a previous project so the
+      // flex layout computes cleanly when mainInterface transitions from
+      // display:none back to flex.  Without this, the echo drawer can remain
+      // expanded with old warnings, scroll positions can be non-zero (from
+      // browser auto-scroll), and the Three.js canvas may retain stale
+      // dimensions — all of which combine to produce a blank region and an
+      // upward layout shift that hides the app header.
+      updatePreviewDrawer([]);
+      const appEl = document.getElementById('app');
+      if (appEl) appEl.scrollTop = 0;
+      const appMainEl = document.getElementById('main-content');
+      if (appMainEl) appMainEl.scrollTop = 0;
+      const previewContentEl = document.querySelector('.preview-content');
+      if (previewContentEl) previewContentEl.scrollTop = 0;
+      requestAnimationFrame(() => {
+        if (previewManager) previewManager.handleResize();
+      });
+
       // Update file info summary (used by E2E tests and screen readers)
       const fileInfoSummaryEl = document.getElementById('fileInfoSummary');
       if (fileInfoSummaryEl && fileName) {
@@ -9980,6 +9998,10 @@ async function initApp() {
         if (overlaySourceSelect) overlaySourceSelect.value = '';
         updateOverlaySourceDropdown();
         updateOverlayStatus();
+
+        // Reset echo drawer so stale warnings don't persist into the
+        // next project load (prevents layout shift from expanded drawer).
+        updatePreviewDrawer([]);
 
         // Reset status
         updateStatus('Ready');
