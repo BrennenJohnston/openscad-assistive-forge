@@ -8152,7 +8152,7 @@ body.first-visit-blocking #app {
 /* Color parameter legend (shown when SCAD has multiple color() params) */
 .color-legend {
   position: absolute;
-  bottom: var(--space-sm);
+  bottom: var(--space-xl);
   left: var(--space-sm);
   background: var(--color-bg-elevated);
   border: 1px solid var(--color-border);
