@@ -1726,10 +1726,12 @@ async function _enableAltViewWithPreview(toggleBtn) {
   }
 
   // Set up post-load hook to re-enable rotation centering when models are reloaded
+  // and refresh display overlays (edges, wireframe) so they match the new geometry.
   previewManager?.setPostLoadHook?.(() => {
     if (previewManager?.mesh && previewManager.enableRotationCentering) {
       previewManager.enableRotationCentering();
     }
+    getDisplayOptionsController().refreshOverlays();
   });
 
   previewManager.setRenderOverride(() => _hfmAltView.render());
