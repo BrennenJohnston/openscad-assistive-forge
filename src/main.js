@@ -305,6 +305,11 @@ const EXAMPLE_DEFINITIONS = {
     path: '/examples/honeycomb-grid/honeycomb_grid.scad',
     name: 'honeycomb_grid.scad',
   },
+  'logo-plate': {
+    path: '/examples/logo-plate/logo_plate.scad',
+    name: 'logo_plate.scad',
+    description: 'Logo Plate (SVG Import)',
+  },
 };
 
 // Feature detection

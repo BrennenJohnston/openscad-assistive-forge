@@ -1,0 +1,18 @@
+{
+  "name": "Logo Plate (SVG Import)",
+  "description": "A parametric plate with an engraved logo loaded from an SVG file. Upload your own SVG or use the bundled sample.",
+  "version": "1.0.0",
+  "author": "OpenSCAD Assistive Forge contributors",
+  "license": "CC0-1.0",
+  "main": "logo_plate.scad",
+  "files": [
+    "logo_plate.scad",
+    "sample-logo.svg"
+  ],
+  "tags": ["svg", "import", "engraving", "plate", "logo"],
+  "inspired_by": {
+    "name": "Nasif Zaman",
+    "github": "Znasif",
+    "reference": "https://github.com/Znasif/openscad-assistive-forge"
+  }
+}

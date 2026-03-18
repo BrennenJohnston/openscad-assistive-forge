@@ -143,6 +143,16 @@ export const FLAGS = {
     userConfigurable: true,
     killSwitch: false,
   },
+  image_import: {
+    id: 'image_import',
+    name: 'Image Import (SVG)',
+    description:
+      'Enable SVG file import for engraving and 2D geometry in parametric models via the existing file parameter pipeline',
+    default: true,
+    rollout: 100,
+    userConfigurable: true,
+    killSwitch: false,
+  },
 };
 
 // Storage key for user preferences

@@ -60,6 +60,22 @@ Cursor icons are adapted from the **Retrosmart X11 Cursors** project by mdomlop.
 
 ---
 
+## Image Import and Charm Maker — Proof-of-Concept and UX Design
+
+The image-to-OpenSCAD import feature and the charm/plate builder tool were
+inspired by a proof-of-concept built by **Nasif Zaman**
+([@Znasif](https://github.com/Znasif)).
+
+- **Reference**: https://github.com/Znasif/openscad-assistive-forge
+- **Commits**: Jan 29-31, 2026 (4 commits on fork)
+- **Contribution**: Demonstrated PNG-to-SCAD geometry pipeline, designed
+  the logo-plate example concept, validated the client-side image
+  processing approach, established the upload + invert + depth UX pattern
+- **Named tool**: The "Nasif's Charm Maker" tool in the application is
+  named in his honor (Phase 3)
+
+---
+
 ## Special Thanks
 
 - The OpenSCAD community for creating and maintaining an accessible parametric CAD tool
