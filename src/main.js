@@ -164,15 +164,7 @@ const STORAGE_KEY_PREVIEW_QUALITY = getAppPrefKey('preview-quality-mode');
 const STORAGE_KEY_RECOVERY_SOURCE = getAppPrefKey('recovery-source');
 const STORAGE_KEY_RECOVERY_TIMESTAMP = getAppPrefKey('recovery-timestamp');
 const STORAGE_KEY_STATUS_BAR = getAppPrefKey('status-bar');
-const STORAGE_KEY_OVERLAY_ENABLED = getAppPrefKey('overlay-enabled');
-const STORAGE_KEY_OVERLAY_OPACITY = getAppPrefKey('overlay-opacity');
-const STORAGE_KEY_OVERLAY_SOURCE = getAppPrefKey('overlay-source');
-const STORAGE_KEY_OVERLAY_SVG_COLOR = getAppPrefKey('overlay-svg-color');
-const STORAGE_KEY_OVERLAY_AUTO_COLOR = getAppPrefKey('overlay-auto-color');
-const STORAGE_KEY_OVERLAY_WIDTH = getAppPrefKey('overlay-width');
-const STORAGE_KEY_OVERLAY_HEIGHT = getAppPrefKey('overlay-height');
-const STORAGE_KEY_AUTO_ROTATE = getAppPrefKey('auto-rotate');
-const STORAGE_KEY_ROTATE_SPEED = getAppPrefKey('rotate-speed');
+// Overlay, grid, and auto-rotate storage keys moved to overlay-grid-controller.js
 const STORAGE_KEY_MODEL_COLOR = getAppPrefKey('model-color');
 const STORAGE_KEY_MODEL_COLOR_ENABLED = getAppPrefKey('model-color-enabled');
 const STORAGE_KEY_MODEL_OPACITY = getAppPrefKey('model-opacity');
@@ -197,11 +189,12 @@ import { getUIModeController } from './js/ui-mode-controller.js';
 // Toolbar Menu Controller - File|Edit|Design|View|Window|Help menu bar
 import { getToolbarMenuController } from './js/toolbar-menu-controller.js';
 import { initParamDetailController } from './js/param-detail-controller.js';
+import { initOverlayGridController } from './js/overlay-grid-controller.js';
 import { getFileActionsController } from './js/file-actions-controller.js';
 import { getEditActionsController } from './js/edit-actions-controller.js';
 import { getDesignPanelController } from './js/design-panel-controller.js';
 import { getDisplayOptionsController } from './js/display-options-controller.js';
-// Animation controller import preserved for future development — see ./js/animation-controller.js
+// Animation controller import preserved for future development â€” see ./js/animation-controller.js
 // import { getAnimationController } from './js/animation-controller.js';
 import { getEditorStateManager } from './js/editor-state-manager.js';
 import { TextareaEditor } from './js/textarea-editor.js';
@@ -369,7 +362,7 @@ let _hfmEnabled = false;
 let _hfmPendingEnable = false;
 // Edge sharpness range: controls contrast exponent (Harri technique)
 // Base exponents: Global=1.8, Directional=2.5
-// Effective range: scale 0.5→exp ~0.9 (off), scale 4.0→exp ~7.2 (very sharp)
+// Effective range: scale 0.5â†’exp ~0.9 (off), scale 4.0â†’exp ~7.2 (very sharp)
 // Research shows useful range is exponent 1-8 before artifacts appear
 const _HFM_CONTRAST_RANGE = { min: 0.5, max: 4.0, step: 0.05, default: 1 };
 let _hfmContrastScale = _HFM_CONTRAST_RANGE.default;
@@ -649,7 +642,7 @@ function _resetHfmSettings() {
     localStorage.removeItem(STORAGE_KEY_HFM_FONT_SCALE);
     localStorage.removeItem(STORAGE_KEY_HFM_PERSIST_FADE);
   } catch (_) {
-    // Storage unavailable — proceed anyway
+    // Storage unavailable â€” proceed anyway
   }
   _hfmCalibrated = false;
   const calibrated = _calibrateHfmSettings();
@@ -759,7 +752,7 @@ function _applyHfmContrastScale(scale, options = {}) {
   } catch (error) {
     if (error.name === 'QuotaExceededError') {
       console.warn(
-        '[Alt View] localStorage quota exceeded — contrast scale not saved'
+        '[Alt View] localStorage quota exceeded â€” contrast scale not saved'
       );
     } else {
       console.warn('[Alt View] Could not save contrast scale:', error);
@@ -794,7 +787,7 @@ function _applyHfmFontScale(scale, options = {}) {
   } catch (error) {
     if (error.name === 'QuotaExceededError') {
       console.warn(
-        '[Alt View] localStorage quota exceeded — font scale not saved'
+        '[Alt View] localStorage quota exceeded â€” font scale not saved'
       );
     } else {
       console.warn('[Alt View] Could not save font scale:', error);
@@ -828,7 +821,7 @@ function _applyHfmPersistFade(value) {
   } catch (error) {
     if (error.name === 'QuotaExceededError') {
       console.warn(
-        '[Alt View] localStorage quota exceeded — persist fade not saved'
+        '[Alt View] localStorage quota exceeded â€” persist fade not saved'
       );
     } else {
       console.warn('[Alt View] Could not save persist fade:', error);
@@ -1247,7 +1240,7 @@ function showMissingDependenciesDialog(missing, packageName) {
       <div class="preset-modal-content missing-deps-content">
         <div class="preset-modal-header">
           <h3 id="missingDepsTitle" class="preset-modal-title">
-            ⚠️ Missing Files Detected
+            âš ï¸ Missing Files Detected
           </h3>
         </div>
         <div class="missing-deps-body">
@@ -1276,7 +1269,7 @@ function showMissingDependenciesDialog(missing, packageName) {
             Continue Anyway
           </button>
           <button type="button" class="btn btn-primary" data-action="add-files">
-            Add Missing Files…
+            Add Missing Filesâ€¦
           </button>
         </div>
       </div>
@@ -1320,8 +1313,8 @@ function showMissingDependenciesDialog(missing, packageName) {
       const allResolved = resolvedCount === allMissing.length;
 
       if (allResolved) {
-        // All files resolved — transform the dialog to a success state
-        titleEl.textContent = '✅ All Files Added';
+        // All files resolved â€” transform the dialog to a success state
+        titleEl.textContent = 'âœ… All Files Added';
         hintEl.textContent =
           'All missing files have been provided. You can now load the project.';
         hintEl.style.borderLeftColor = 'var(--color-success, #38a169)';
@@ -1332,10 +1325,10 @@ function showMissingDependenciesDialog(missing, packageName) {
         continueBtn.textContent = 'Load Project';
         continueBtn.className = 'btn btn-success';
         addFilesBtn.className = 'btn btn-secondary';
-        addFilesBtn.textContent = 'Add More Files…';
+        addFilesBtn.textContent = 'Add More Filesâ€¦';
         continueBtn.focus();
       } else {
-        // Partial resolution — keep "Add Files" primary but update hint
+        // Partial resolution â€” keep "Add Files" primary but update hint
         const remaining = allMissing.length - resolvedCount;
         hintEl.textContent = `${resolvedCount} of ${allMissing.length} resolved. ${remaining} file${remaining > 1 ? 's' : ''} still missing.`;
 
@@ -1343,7 +1336,7 @@ function showMissingDependenciesDialog(missing, packageName) {
         continueBtn.textContent = 'Continue Anyway';
         continueBtn.className = 'btn btn-secondary';
         addFilesBtn.className = 'btn btn-primary';
-        addFilesBtn.textContent = 'Add Missing Files…';
+        addFilesBtn.textContent = 'Add Missing Filesâ€¦';
       }
     };
 
@@ -1632,7 +1625,7 @@ async function _enableAltViewWithPreview(toggleBtn) {
   _hfmAltView = await _hfmInitPromise;
   _hfmAltView.enable();
 
-  // Live prefers-reduced-motion listener — updates afterglow without disable/re-enable
+  // Live prefers-reduced-motion listener â€” updates afterglow without disable/re-enable
   const motionMql = window.matchMedia('(prefers-reduced-motion: reduce)');
   _hfmMotionListener = (event) => {
     _hfmAltView?.setReducedMotion(event.matches);
@@ -1666,7 +1659,7 @@ async function _enableAltViewWithPreview(toggleBtn) {
       savedFont = localStorage.getItem(STORAGE_KEY_HFM_FONT_SCALE);
       savedPersistFade = localStorage.getItem(STORAGE_KEY_HFM_PERSIST_FADE);
     } catch (_) {
-      // Private browsing or storage unavailable — use calibration
+      // Private browsing or storage unavailable â€” use calibration
     }
 
     const parsedContrast =
@@ -1869,7 +1862,7 @@ function _applyToolbarModeVisibility(mode) {
 
   if (!mainInterfaceVisible) {
     // Welcome screen / no file loaded: hide toolbar and entire workflow-progress
-    // container (including its action buttons — Back/Help/etc. are irrelevant here).
+    // container (including its action buttons â€” Back/Help/etc. are irrelevant here).
     controller.hide();
     hideWorkflowProgress();
     return;
@@ -1940,7 +1933,7 @@ async function initApp() {
 
   if (wasmCrashDetected && !isRecoveryMode) {
     console.warn(
-      '[Recovery] Detected unclean WASM shutdown — offering recovery mode'
+      '[Recovery] Detected unclean WASM shutdown â€” offering recovery mode'
     );
     // Clear the flags so we don't loop
     localStorage.removeItem('openscad-forge-wasm-init-started');
@@ -1956,7 +1949,7 @@ async function initApp() {
     // Apply conservative settings per B.5.4 Recovery Mode Specification:
     // - Auto-preview OFF (no automatic renders)
     // - Quality set to fast (minimum quality settings)
-    // - Monaco disabled (use textarea only — less memory overhead)
+    // - Monaco disabled (use textarea only â€” less memory overhead)
     localStorage.setItem(STORAGE_KEY_AUTO_PREVIEW_ENABLED, 'false');
     localStorage.setItem(STORAGE_KEY_PREVIEW_QUALITY, 'fast');
     // Disable Monaco in recovery mode to reduce memory footprint.
@@ -2174,12 +2167,12 @@ async function initApp() {
   let cameraPanelController = null; // Declared here, initialized later
   let autoPreviewEnabled = true;
   // Runtime mapping from preset name to companion file paths (built on ZIP load).
-  // Stores path references only — content is resolved lazily on preset activation.
+  // Stores path references only â€” content is resolved lazily on preset activation.
   let presetCompanionMap = null;
   // Canonical project files snapshot used as the clean base when applying presets.
   // This prevents alias-mounted companion files from one preset bleeding into the next.
   let canonicalProjectFiles = null;
-  // Preset tracking state — must be declared before handleFile (which calls
+  // Preset tracking state â€” must be declared before handleFile (which calls
   // forceClearPresetSelection) to avoid a TDZ error during draft restoration.
   let isLoadingPreset = false;
   let currentPresetSignature = null;
@@ -2505,7 +2498,7 @@ async function initApp() {
     const statusArea = document.getElementById('statusArea');
     if (statusArea) {
       const originalText = statusArea.textContent;
-      statusArea.textContent = '✅ App installed! You can now use it offline.';
+      statusArea.textContent = 'âœ… App installed! You can now use it offline.';
       setTimeout(() => {
         statusArea.textContent = originalText;
       }, 5000);
@@ -2663,7 +2656,7 @@ async function initApp() {
 
           <div class="preset-modal-body">
             <div class="cache-clear-warning">
-              <span class="cache-clear-warning-icon" aria-hidden="true">⚠️</span>
+              <span class="cache-clear-warning-icon" aria-hidden="true">âš ï¸</span>
               <div class="cache-clear-warning-text">
                 <strong>Warning:</strong> This will delete all saved projects and cached app data by default.
                 Check the box below if you want to keep your saved projects.
@@ -2696,7 +2689,7 @@ async function initApp() {
                   <div class="cache-clear-option-label">
                     Keep my Saved Projects
                     <span class="preservation-indicator danger" id="preserveIndicator">
-                      <span aria-hidden="true">⚠️</span> Will be deleted
+                      <span aria-hidden="true">âš ï¸</span> Will be deleted
                     </span>
                   </div>
                   <div class="cache-clear-option-desc">
@@ -2710,7 +2703,7 @@ async function initApp() {
               hasProjects
                 ? `
               <div class="cache-clear-backup-prompt">
-                <span>💾</span>
+                <span>ðŸ’¾</span>
                 <span>Export a backup before clearing?</span>
                 <button type="button" class="btn btn-sm btn-outline" id="exportBeforeClearBtn">
                   Export Backup
@@ -2741,13 +2734,13 @@ async function initApp() {
           preserveOption.classList.add('preservation-on');
           preserveIndicator.className = 'preservation-indicator safe';
           preserveIndicator.innerHTML =
-            '<span aria-hidden="true">✓</span> Will be kept';
+            '<span aria-hidden="true">âœ“</span> Will be kept';
         } else {
           preserveOption.classList.remove('preservation-on');
           preserveOption.classList.add('preservation-off');
           preserveIndicator.className = 'preservation-indicator danger';
           preserveIndicator.innerHTML =
-            '<span aria-hidden="true">⚠️</span> Will be deleted';
+            '<span aria-hidden="true">âš ï¸</span> Will be deleted';
         }
       });
 
@@ -2976,7 +2969,7 @@ async function initApp() {
     });
   }
 
-  // Folder import — gated behind feature flag and webkitdirectory feature detection
+  // Folder import â€” gated behind feature flag and webkitdirectory feature detection
   if (
     _isEnabled('folder_import') &&
     'webkitdirectory' in document.createElement('input')
@@ -2994,7 +2987,7 @@ async function initApp() {
           try {
             const dirHandle = await window.showDirectoryPicker();
             dismissOverlay = showProcessingOverlay(
-              `Reading folder "${dirHandle.name}"…`,
+              `Reading folder "${dirHandle.name}"â€¦`,
               'Scanning files and subfolders. Please do not close or refresh the page.'
             );
             const files = [];
@@ -3075,11 +3068,11 @@ async function initApp() {
     let dismissOverlay = () => {};
 
     dismissOverlay = showProcessingOverlay(
-      `Processing ${fileArr.length} files from folder…`,
+      `Processing ${fileArr.length} files from folderâ€¦`,
       'Analyzing project structure. Please do not close or refresh the page.'
     );
 
-    // Size guards — generous limits for real-world multi-folder projects
+    // Size guards â€” generous limits for real-world multi-folder projects
     const MAX_FILES = 500;
     const MAX_BYTES = 100 * 1024 * 1024; // 100 MB
     const WARN_FILES = 200;
@@ -3107,7 +3100,7 @@ async function initApp() {
 
     if (fileArr.length > WARN_FILES) {
       console.warn(
-        `[FolderImport] ${fileArr.length} files selected — large project folder.`
+        `[FolderImport] ${fileArr.length} files selected â€” large project folder.`
       );
     }
 
@@ -3151,7 +3144,7 @@ async function initApp() {
 
     const totalMB = (totalBytes / (1024 * 1024)).toFixed(1);
     dismissOverlay = showProcessingOverlay(
-      `Importing folder "${rootDir}" (${fileArr.length} files, ${totalMB} MB)…`,
+      `Importing folder "${rootDir}" (${fileArr.length} files, ${totalMB} MB)â€¦`,
       'This may take a moment for large projects. Please do not close or refresh the page.'
     );
 
@@ -3253,23 +3246,23 @@ async function initApp() {
     }
   });
 
-  // ═══════════════════════════════════════════════════════════════════════
-  // FIRST-VISIT GATE — Critical Initialization Barrier
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // FIRST-VISIT GATE â€” Critical Initialization Barrier
   //
   // On the very first visit the app shows a blocking disclosure modal that
   // the user must accept before any downloads (WASM, manifest files, etc.)
   // can begin. Several subsystems depend on this gate:
   //
-  //   ┌──────────────────────────────────────────────────────────────────┐
-  //   │  Z-INDEX STACK (highest on top)                                 │
-  //   │                                                                 │
-  //   │  z: 10000  Processing overlay  (.processing-overlay)            │
-  //   │  z: 10000  Tutorial panel      (--z-index-tutorial-panel)       │
-  //   │  z:  9999  Skip-link / Tutorial spotlight                       │
-  //   │  z:  1000  Modals              (--z-index-modal)                │
-  //   │  z:   950  Modal backdrop      (--z-index-modal-backdrop)       │
-  //   │  z:   900  Drawers             (--z-index-drawer)               │
-  //   └──────────────────────────────────────────────────────────────────┘
+  //   â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+  //   â”‚  Z-INDEX STACK (highest on top)                                 â”‚
+  //   â”‚                                                                 â”‚
+  //   â”‚  z: 10000  Processing overlay  (.processing-overlay)            â”‚
+  //   â”‚  z: 10000  Tutorial panel      (--z-index-tutorial-panel)       â”‚
+  //   â”‚  z:  9999  Skip-link / Tutorial spotlight                       â”‚
+  //   â”‚  z:  1000  Modals              (--z-index-modal)                â”‚
+  //   â”‚  z:   950  Modal backdrop      (--z-index-modal-backdrop)       â”‚
+  //   â”‚  z:   900  Drawers             (--z-index-drawer)               â”‚
+  //   â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
   //
   // INVARIANT: The processing overlay (z: 10000) MUST NEVER be shown while
   // the first-visit modal (z: 1000) is open. Because the overlay sits
@@ -3284,9 +3277,9 @@ async function initApp() {
   //   - Save-copy modal             (showManifestSaveCopyModal)
   //
   // See also: the per-step lifecycle comments in the manifest deep-link
-  // handler below for the exact required ordering of overlay → download →
-  // process → dismiss → save-copy.
-  // ═══════════════════════════════════════════════════════════════════════
+  // handler below for the exact required ordering of overlay â†’ download â†’
+  // process â†’ dismiss â†’ save-copy.
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   const appRoot = document.getElementById('app');
   let firstVisitBlocking = false;
   let hasUserAcceptedDownload = !isFirstVisit();
@@ -3536,7 +3529,7 @@ async function initApp() {
       } catch (renderErr) {
         if (renderErr.code === 'MODEL_NOT_2D') {
           updateStatus(
-            `Model produces 3D geometry — projecting to ${formatName}...`
+            `Model produces 3D geometry â€” projecting to ${formatName}...`
           );
           result = await renderController.render2DFallback(
             state.uploadedFile.content,
@@ -3653,7 +3646,7 @@ async function initApp() {
   });
   fileActionsController.init();
 
-  // ── Toolbar: File menu ──────────────────────────────────────────────────
+  // â”€â”€ Toolbar: File menu â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   getToolbarMenuController().registerMenuBuilder('file', () => {
     const state = stateManager.getState();
     const hasFile = Boolean(state.uploadedFile);
@@ -3848,7 +3841,7 @@ async function initApp() {
   });
   editActionsController.init();
 
-  // ── Toolbar: Edit menu ──────────────────────────────────────────────────
+  // â”€â”€ Toolbar: Edit menu â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   getToolbarMenuController().registerMenuBuilder('edit', () => {
     const state = stateManager.getState();
     const hasFile = Boolean(state.uploadedFile);
@@ -4025,7 +4018,7 @@ async function initApp() {
   });
   designPanelController.init();
 
-  // ── Toolbar: Design menu ─────────────────────────────────────────────────
+  // â”€â”€ Toolbar: Design menu â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   getToolbarMenuController().registerMenuBuilder('design', () => {
     const state = stateManager.getState();
     const hasFile = Boolean(state.uploadedFile);
@@ -4132,7 +4125,7 @@ async function initApp() {
   });
   displayOptionsController.init();
 
-  // ── Toolbar: View menu ───────────────────────────────────────────────────
+  // â”€â”€ Toolbar: View menu â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   getToolbarMenuController().registerMenuBuilder('view', () => {
     const state = stateManager.getState();
     const hasRender = Boolean(state.stl);
@@ -4319,7 +4312,7 @@ async function initApp() {
     ];
   });
 
-  // ── Toolbar: Window menu ─────────────────────────────────────────────────
+  // â”€â”€ Toolbar: Window menu â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   getToolbarMenuController().registerMenuBuilder('window', () => {
     const uiCtrl = getUIModeController();
     const hidden = new Set(
@@ -4378,7 +4371,7 @@ async function initApp() {
       },
       { type: 'separator' },
       // -- Web-only panel toggles --
-      // fileActions, editTools, designTools, displayOptions removed — now in toolbar menus
+      // fileActions, editTools, designTools, displayOptions removed â€” now in toolbar menus
       panelToggle('libraries', 'Libraries'),
       panelToggle('companionFileManagement', 'Companion Files'),
       panelToggle('imageMeasurement', 'Image Measurement'),
@@ -4386,7 +4379,7 @@ async function initApp() {
     ];
   });
 
-  // ── Toolbar: Help menu ───────────────────────────────────────────────────
+  // â”€â”€ Toolbar: Help menu â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   getToolbarMenuController().registerMenuBuilder('help', () => {
     function _openFeaturesTab(tabId) {
       const modal = document.getElementById('featuresGuideModal');
@@ -4480,7 +4473,7 @@ async function initApp() {
     ];
   });
 
-  // Animation controller ($t) initialization removed from UI wiring — see animation-controller.js for future re-integration
+  // Animation controller ($t) initialization removed from UI wiring â€” see animation-controller.js for future re-integration
 
   // Listen for "Save to Project" events from UI preferences panel
   document.addEventListener('ui-mode-save-to-project', (e) => {
@@ -4520,7 +4513,7 @@ async function initApp() {
       } catch (error) {
         if (error.name === 'QuotaExceededError') {
           console.warn(
-            '[App] localStorage quota exceeded — UI prefs not saved'
+            '[App] localStorage quota exceeded â€” UI prefs not saved'
           );
         } else {
           console.warn('[App] Could not save UI preferences:', error);
@@ -4666,7 +4659,7 @@ async function initApp() {
             `Generate ${formatName} file from current parameters`
           );
         } else {
-          primaryActionBtn.textContent = `📥 Download ${formatName}`;
+          primaryActionBtn.textContent = `ðŸ“¥ Download ${formatName}`;
           primaryActionBtn.setAttribute(
             'aria-label',
             `Download generated ${formatName} file`
@@ -4715,7 +4708,7 @@ async function initApp() {
                 autoAdjustList.innerHTML = adjustments
                   .map(
                     ([k, v]) =>
-                      `<li><code>${escapeHtml(k)}</code>: currently <em>${escapeHtml(String(state.parameters[k]))}</em> → will use <strong>${escapeHtml(String(v))}</strong></li>`
+                      `<li><code>${escapeHtml(k)}</code>: currently <em>${escapeHtml(String(state.parameters[k]))}</em> â†’ will use <strong>${escapeHtml(String(v))}</strong></li>`
                   )
                   .join('');
                 autoAdjustDiv.classList.remove('hidden');
@@ -4877,7 +4870,7 @@ async function initApp() {
         hideWasmLoadingIndicator(wasmLoadingOverlay);
         wasmInitialized = true;
 
-        // Clear crash detection flag — WASM init succeeded
+        // Clear crash detection flag â€” WASM init succeeded
         localStorage.setItem('openscad-forge-wasm-init-completed', 'true');
 
         // Start worker health monitoring
@@ -5014,13 +5007,13 @@ async function initApp() {
     warning.setAttribute('role', 'alert');
     warning.innerHTML = `
       <div class="memory-warning-content">
-        <span class="memory-warning-icon">⚠️</span>
+        <span class="memory-warning-icon">âš ï¸</span>
         <div class="memory-warning-text">
           <strong>High Memory Usage</strong>
           <p>Memory: ${memoryInfo.usedMB}MB / ${memoryInfo.limitMB}MB (${memoryInfo.percent}%)</p>
           <p class="memory-warning-hint">
-            This warning is about the OpenSCAD engine’s allocated memory (it may stay high until the engine is restarted).
-            If you also see an error like “produces no geometry”, fix that first—memory may not be the cause.
+            This warning is about the OpenSCAD engineâ€™s allocated memory (it may stay high until the engine is restarted).
+            If you also see an error like â€œproduces no geometryâ€, fix that firstâ€”memory may not be the cause.
           </p>
           <div class="memory-warning-actions" role="group" aria-label="Memory warning actions">
             <button type="button" class="btn btn-sm btn-outline" data-action="preview-fast">
@@ -5037,7 +5030,7 @@ async function initApp() {
             </button>
           </div>
         </div>
-        <button class="btn btn-sm btn-outline memory-warning-dismiss" aria-label="Dismiss warning">×</button>
+        <button class="btn btn-sm btn-outline memory-warning-dismiss" aria-label="Dismiss warning">Ã—</button>
       </div>
     `;
 
@@ -5088,7 +5081,7 @@ async function initApp() {
         }
         if (!found) {
           updateStatus(
-            'Try searching parameters for “$fn”, “smoothness”, “resolution”, or “quality”.',
+            'Try searching parameters for â€œ$fnâ€, â€œsmoothnessâ€, â€œresolutionâ€, or â€œqualityâ€.',
             'info'
           );
         }
@@ -5118,7 +5111,7 @@ async function initApp() {
   }
 
   /**
-   * Provide actionable guidance for configuration-dependent “no geometry” errors.
+   * Provide actionable guidance for configuration-dependent â€œno geometryâ€ errors.
    * Returns true if it handled the error.
    */
   function updateMemoryIndicator(memoryInfo) {
@@ -5200,7 +5193,7 @@ async function initApp() {
     const details = error?.details || '';
     const detailsStr = String(details || '');
 
-    // BUG-B fix: handle NO_GEOMETRY — emitted by isNonPreviewableParameters() when
+    // BUG-B fix: handle NO_GEOMETRY â€” emitted by isNonPreviewableParameters() when
     // generate=Customizer Settings (or similar non-previewable mode). The previous mesh
     // must be cleared so the 3D canvas is empty, matching the expectation that
     // "Customizer Settings" produces no visible geometry.
@@ -5213,13 +5206,13 @@ async function initApp() {
         'success'
       );
       previewStateIndicator.className = 'preview-state-indicator state-current';
-      previewStateIndicator.textContent = '— No geometry (Customizer mode)';
+      previewStateIndicator.textContent = 'â€” No geometry (Customizer mode)';
       previewContainer.classList.remove('preview-error');
       previewContainer.classList.add('preview-current');
       return true;
     }
 
-    // Handle 2D model case — applies to any project producing 2D output
+    // Handle 2D model case â€” applies to any project producing 2D output
     const is2DModel =
       code === 'MODEL_IS_2D' ||
       /MODEL_IS_2D|not a 3D object|Top level object is a 2D object/i.test(
@@ -5231,7 +5224,7 @@ async function initApp() {
       if (previewManager) {
         previewManager.clear();
       }
-      // Show guidance for 2D model — this is informational, not an error
+      // Show guidance for 2D model â€” this is informational, not an error
       // Use 'success' not 'error' to avoid alarming red warnings on a correct workflow path
       updateStatus(
         'Your model produces 2D geometry. Select SVG or DXF output format to export.',
@@ -5241,11 +5234,11 @@ async function initApp() {
       // Override the preview state badge: auto-preview-controller already set it to ERROR
       // before this handler fired. Replace with a non-alarming "2D Model" indicator.
       previewStateIndicator.className = 'preview-state-indicator state-current';
-      previewStateIndicator.textContent = '✓ 2D Model — use SVG/DXF';
+      previewStateIndicator.textContent = 'âœ“ 2D Model â€” use SVG/DXF';
       previewContainer.classList.remove('preview-error');
       previewContainer.classList.add('preview-current');
 
-      // Dismiss any memory warning that may have been triggered by the failed 2D→STL render.
+      // Dismiss any memory warning that may have been triggered by the failed 2Dâ†’STL render.
       // The high memory is a side effect of the expected 2D path, not a real memory issue.
       const memWarning = document.getElementById('memoryWarning');
       if (memWarning) memWarning.remove();
@@ -5297,7 +5290,7 @@ async function initApp() {
       matches.length > 0 ? matches[0] : { label: null, current: null };
     let targetKey = null;
 
-    // Prefer a match we can actually find in the UI (prevents “wrong toggle” guidance).
+    // Prefer a match we can actually find in the UI (prevents â€œwrong toggleâ€ guidance).
     for (const candidate of matches) {
       if (!candidate.label) continue;
       const keyGuess = candidate.label
@@ -5326,10 +5319,10 @@ async function initApp() {
       ? suggested
         ? `Change it to "${suggested}" and try again.`
         : `Change that option (toggle it) and try again.`
-      : 'Look for a required option (often “enable/show/include/has…”) and try again.';
+      : 'Look for a required option (often â€œenable/show/include/hasâ€¦â€) and try again.';
 
     const findHint = label
-      ? `Tip: use the “Search parameters” box and type "${label}".`
+      ? `Tip: use the â€œSearch parametersâ€ box and type "${label}".`
       : '';
 
     updateStatus(`${headline} ${nextStep} ${findHint}`.trim(), 'error');
@@ -5352,7 +5345,7 @@ async function initApp() {
    */
   function showDependencyGuidanceModal(info) {
     if (isAnyModalOpen()) {
-      console.log('[DependencyGuidance] Suppressed — another modal is active');
+      console.log('[DependencyGuidance] Suppressed â€” another modal is active');
       return;
     }
 
@@ -5462,7 +5455,7 @@ async function initApp() {
 
     let message = `Estimated render time: ~${estimate.seconds}s`;
     if (estimate.warning) {
-      message += ` ⚠️ ${estimate.warning}`;
+      message += ` âš ï¸ ${estimate.warning}`;
     }
     updateStatus(message);
   }
@@ -5494,38 +5487,9 @@ async function initApp() {
   const dimensionsDisplay = document.getElementById('dimensionsDisplay');
   // Note: outputFormatSelect and formatInfo already declared above
 
-  // Reference overlay controls
+  // Reference overlay controls (remaining refs used by syncOverlayWithScreenshotParam etc.)
   const overlaySourceSelect = document.getElementById('overlaySourceSelect');
   const overlayToggle = document.getElementById('overlayToggle');
-  const overlayOpacityInput = document.getElementById('overlayOpacityInput');
-  const overlayOpacityValue = document.getElementById('overlayOpacityValue');
-  const overlayColorInput = document.getElementById('overlayColorInput');
-  const overlayAutoColorToggle = document.getElementById(
-    'overlayAutoColorToggle'
-  );
-  const overlayFitModelBtn = document.getElementById('overlayFitModelBtn');
-  const overlayCenterBtn = document.getElementById('overlayCenterBtn');
-  const overlayWidthInput = document.getElementById('overlayWidthInput');
-  const overlayHeightInput = document.getElementById('overlayHeightInput');
-  const overlayAspectLockBtn = document.getElementById('overlayAspectLockBtn');
-  const overlayOffsetXInput = document.getElementById('overlayOffsetXInput');
-  const overlayOffsetYInput = document.getElementById('overlayOffsetYInput');
-  const overlayRotationInput = document.getElementById('overlayRotationInput');
-  const overlayRotationValue = document.getElementById('overlayRotationValue');
-  const overlayStatus = document.getElementById('overlayStatus');
-  const overlayFileInput = document.getElementById('overlayFileInput');
-  const overlayManualOverrideToggle = document.getElementById(
-    'overlayManualOverrideToggle'
-  );
-  const overlayCalibrationFieldset = document.getElementById(
-    'overlayCalibrationFieldset'
-  );
-  const overlayDimensionsValue = document.getElementById(
-    'overlayDimensionsValue'
-  );
-  const overlayMeasurementsToggle = document.getElementById(
-    'overlayMeasurementsToggle'
-  );
 
   // Create preview state indicator element
   const previewStateIndicator = document.createElement('div');
@@ -5779,232 +5743,11 @@ async function initApp() {
     });
   }
 
-  // Wire grid color picker
-  const gridColorPicker = document.getElementById('gridColorPicker');
-  const resetGridColorBtn = document.getElementById('resetGridColorBtn');
-
-  function syncGridColorPicker() {
-    if (!gridColorPicker || !previewManager) return;
-    const custom = previewManager.getGridColor();
-    if (custom) {
-      gridColorPicker.value = custom;
-    } else {
-      const themeKey = previewManager.currentTheme || 'light';
-      const PREVIEW_COLORS_MAP = {
-        light: '#cccccc',
-        dark: '#404040',
-        'light-hc': '#000000',
-        'dark-hc': '#ffffff',
-        mono: '#00ff00',
-        'mono-light': '#ffb000',
-      };
-      gridColorPicker.value = PREVIEW_COLORS_MAP[themeKey] || '#cccccc';
-    }
-  }
-
-  if (gridColorPicker) {
-    syncGridColorPicker();
-    gridColorPicker.addEventListener('input', () => {
-      if (previewManager) {
-        previewManager.setGridColor(gridColorPicker.value);
-      }
-    });
-  }
-
-  if (resetGridColorBtn) {
-    resetGridColorBtn.addEventListener('click', () => {
-      if (previewManager) {
-        previewManager.resetGridColor();
-        syncGridColorPicker();
-        updateStatus('Grid color reset to theme default');
-      }
-    });
-  }
-
-  // Wire grid opacity slider
-  const gridOpacityInput = document.getElementById('gridOpacityInput');
-  const gridOpacityValue = document.getElementById('gridOpacityValue');
-
-  function syncGridOpacitySlider() {
-    if (!gridOpacityInput || !previewManager) return;
-    const val = previewManager.getGridOpacity();
-    gridOpacityInput.value = String(val);
-    if (gridOpacityValue) gridOpacityValue.textContent = `${val}%`;
-  }
-
-  if (gridOpacityInput) {
-    syncGridOpacitySlider();
-    gridOpacityInput.addEventListener('input', () => {
-      const v = parseInt(gridOpacityInput.value, 10);
-      if (gridOpacityValue) gridOpacityValue.textContent = `${v}%`;
-      if (previewManager) previewManager.setGridOpacity(v);
-    });
-  }
-
-  // Wire grid size preset selector, custom inputs, and user-saved custom presets
-  const gridPresetSelect = document.getElementById('gridPresetSelect');
-  const gridWidthInput = document.getElementById('gridWidthInput');
-  const gridHeightInput = document.getElementById('gridHeightInput');
-  const gridPresetSaveRow = document.getElementById('gridPresetSaveRow');
-  const gridPresetNameInput = document.getElementById('gridPresetNameInput');
-  const saveGridPresetBtn = document.getElementById('saveGridPresetBtn');
-  const gridPresetSaveError = document.getElementById('gridPresetSaveError');
-  const gridPresetDeleteRow = document.getElementById('gridPresetDeleteRow');
-  const deleteGridPresetBtn = document.getElementById('deleteGridPresetBtn');
-  const gridSizeDims = document.getElementById('gridSizeDims');
-
-  function applyGridSize(widthMm, heightMm) {
-    if (!previewManager) return;
-    previewManager.setGridSize(widthMm, heightMm);
-    if (gridWidthInput) gridWidthInput.value = widthMm;
-    if (gridHeightInput) gridHeightInput.value = heightMm;
-    updateStatus(`Grid size updated to ${widthMm} × ${heightMm} mm`);
-  }
-
-  // Prefix for user-preset option values to distinguish from built-ins
-  const USER_GRID_PREFIX = 'user:';
-
-  function _populateCustomGridPresets() {
-    if (!gridPresetSelect || !previewManager) return;
-
-    // Remove any existing user optgroup
-    const existing = gridPresetSelect.querySelector(
-      'optgroup[data-user-presets]'
-    );
-    if (existing) existing.remove();
-
-    const userPresets = previewManager.loadCustomGridPresets();
-    if (userPresets.length === 0) return;
-
-    const group = document.createElement('optgroup');
-    group.label = 'My presets';
-    group.setAttribute('data-user-presets', 'true');
-
-    for (const p of userPresets) {
-      const opt = document.createElement('option');
-      opt.value = `${USER_GRID_PREFIX}${p.name}`;
-      opt.textContent = `${p.name} (${p.widthMm}×${p.heightMm} mm)`;
-      group.appendChild(opt);
-    }
-
-    // Insert before "Custom..." option
-    const customOpt = gridPresetSelect.querySelector('option[value="custom"]');
-    if (customOpt) {
-      gridPresetSelect.insertBefore(group, customOpt);
-    } else {
-      gridPresetSelect.appendChild(group);
-    }
-  }
-
-  function _updateGridPresetActionRows() {
-    if (!gridPresetSelect) return;
-    const val = gridPresetSelect.value;
-    const isCustom = val === 'custom';
-    const isUserPreset = val.startsWith(USER_GRID_PREFIX);
-
-    if (gridSizeDims) gridSizeDims.hidden = !isCustom;
-    if (gridPresetSaveRow) gridPresetSaveRow.hidden = !isCustom;
-    if (gridPresetDeleteRow) gridPresetDeleteRow.hidden = !isUserPreset;
-    if (gridPresetSaveError) gridPresetSaveError.textContent = '';
-  }
-
-  if (gridPresetSelect) {
-    // Populate initial values from saved preference
-    if (previewManager) {
-      const saved = previewManager.getGridSize();
-      if (gridWidthInput) gridWidthInput.value = saved.widthMm;
-      if (gridHeightInput) gridHeightInput.value = saved.heightMm;
-    }
-
-    _populateCustomGridPresets();
-
-    gridPresetSelect.addEventListener('change', () => {
-      const val = gridPresetSelect.value;
-      if (val === 'custom') {
-        _updateGridPresetActionRows();
-        return;
-      }
-      if (val.startsWith(USER_GRID_PREFIX) && previewManager) {
-        const name = val.slice(USER_GRID_PREFIX.length);
-        const presets = previewManager.loadCustomGridPresets();
-        const found = presets.find((p) => p.name === name);
-        if (found) applyGridSize(found.widthMm, found.heightMm);
-        _updateGridPresetActionRows();
-        return;
-      }
-      const [w, h] = val.split('x').map(Number);
-      if (w && h) applyGridSize(w, h);
-      _updateGridPresetActionRows();
-    });
-  }
-
-  if (gridWidthInput) {
-    gridWidthInput.addEventListener('change', () => {
-      const w = parseInt(gridWidthInput.value, 10);
-      const h = parseInt(gridHeightInput?.value || '220', 10);
-      if (!isNaN(w) && !isNaN(h)) {
-        if (gridPresetSelect) gridPresetSelect.value = 'custom';
-        applyGridSize(w, h);
-        _updateGridPresetActionRows();
-      }
-    });
-  }
-
-  if (gridHeightInput) {
-    gridHeightInput.addEventListener('change', () => {
-      const w = parseInt(gridWidthInput?.value || '220', 10);
-      const h = parseInt(gridHeightInput.value, 10);
-      if (!isNaN(w) && !isNaN(h)) {
-        if (gridPresetSelect) gridPresetSelect.value = 'custom';
-        applyGridSize(w, h);
-        _updateGridPresetActionRows();
-      }
-    });
-  }
-
-  if (saveGridPresetBtn) {
-    saveGridPresetBtn.addEventListener('click', () => {
-      if (!previewManager) {
-        if (gridPresetSaveError)
-          gridPresetSaveError.textContent =
-            'Preview not ready yet. Please load a model first.';
-        return;
-      }
-      const name = gridPresetNameInput?.value || '';
-      const w = parseInt(gridWidthInput?.value || '0', 10);
-      const h = parseInt(gridHeightInput?.value || '0', 10);
-      const result = previewManager.saveCustomGridPreset(name, w, h);
-      if (!result.success) {
-        if (gridPresetSaveError) gridPresetSaveError.textContent = result.error;
-        return;
-      }
-      if (gridPresetSaveError) gridPresetSaveError.textContent = '';
-      if (gridPresetNameInput) gridPresetNameInput.value = '';
-      _populateCustomGridPresets();
-      // Select the newly saved preset
-      const newValue = `${USER_GRID_PREFIX}${name.trim()}`;
-      if (gridPresetSelect) {
-        gridPresetSelect.value = newValue;
-      }
-      _updateGridPresetActionRows();
-      updateStatus(`Custom grid preset "${name.trim()}" saved`);
-    });
-  }
-
-  if (deleteGridPresetBtn) {
-    deleteGridPresetBtn.addEventListener('click', () => {
-      if (!previewManager) return;
-      const val = gridPresetSelect?.value || '';
-      if (!val.startsWith(USER_GRID_PREFIX)) return;
-      const name = val.slice(USER_GRID_PREFIX.length);
-      if (!confirm(`Delete custom grid preset "${name}"?`)) return;
-      previewManager.deleteCustomGridPreset(name);
-      _populateCustomGridPresets();
-      if (gridPresetSelect) gridPresetSelect.value = 'custom';
-      _updateGridPresetActionRows();
-      updateStatus(`Custom grid preset "${name}" deleted`);
-    });
-  }
+  // Initialize overlay/grid/auto-rotate controller (extracted module)
+  const overlayGridCtrl = initOverlayGridController({
+    getPreviewManager: () => previewManager,
+    updateStatus,
+  });
 
   // Wire auto-bed toggle
   if (autoBedToggle) {
@@ -6066,7 +5809,7 @@ async function initApp() {
     // Update hint text based on initial state
     if (manifoldEngineHint) {
       manifoldEngineHint.textContent = manifoldEnabled
-        ? '5-30× faster. Disable if models fail to render.'
+        ? '5-30Ã— faster. Disable if models fail to render.'
         : 'Using stable engine. Enable for faster rendering.';
     }
 
@@ -6080,7 +5823,7 @@ async function initApp() {
       // Update hint text
       if (manifoldEngineHint) {
         manifoldEngineHint.textContent = enabled
-          ? '5-30× faster. Disable if models fail to render.'
+          ? '5-30Ã— faster. Disable if models fail to render.'
           : 'Using stable engine. Enable for faster rendering.';
       }
 
@@ -6106,893 +5849,6 @@ async function initApp() {
     });
   }
 
-  // ============================================================================
-  // Reference Overlay Controls
-  // (Storage keys defined at module level using standardized naming convention)
-  // ============================================================================
-
-  /**
-   * Update the overlay source dropdown with available project files
-   */
-  function updateOverlaySourceDropdown() {
-    if (!overlaySourceSelect) return;
-
-    // Preserve current selection across rebuild
-    const previousVal = overlaySourceSelect.value;
-
-    const state = stateManager.getState();
-    const projectFiles = state.projectFiles;
-
-    // Clear and rebuild dropdown
-    overlaySourceSelect.innerHTML =
-      '<option value="">-- Select file --</option>';
-
-    if (!projectFiles || projectFiles.size === 0) {
-      overlaySourceSelect.disabled = true;
-    } else {
-      overlaySourceSelect.disabled = false;
-
-      // Filter for image files (SVG, PNG, JPG)
-      const imageExtensions = ['svg', 'png', 'jpg', 'jpeg'];
-      const imageFiles = Array.from(projectFiles.keys())
-        .filter((path) => {
-          const ext = path.split('.').pop()?.toLowerCase();
-          return imageExtensions.includes(ext);
-        })
-        .sort();
-
-      if (imageFiles.length === 0) {
-        const option = document.createElement('option');
-        option.value = '';
-        option.textContent = '-- No image files --';
-        option.disabled = true;
-        overlaySourceSelect.appendChild(option);
-      } else {
-        imageFiles.forEach((path) => {
-          const option = document.createElement('option');
-          option.value = path;
-          option.textContent = path;
-          overlaySourceSelect.appendChild(option);
-        });
-      }
-    }
-
-    // Re-add shared screenshot entries from the image store
-    const imgs = SharedImageStore.getImages();
-    for (const [, rec] of imgs) {
-      const opt = document.createElement('option');
-      opt.value = `screenshot:${rec.name}`;
-      opt.textContent = `\uD83D\uDCF7 ${rec.name}`;
-      opt.dataset.shared = '1';
-      overlaySourceSelect.appendChild(opt);
-    }
-
-    // Restore selection if the option still exists
-    if (previousVal) {
-      overlaySourceSelect.value = previousVal;
-    }
-  }
-
-  // Track uploaded overlay files (not part of project files)
-  const uploadedOverlayFiles = new Map();
-
-  /**
-   * Load overlay from selected project file or uploaded file
-   * @param {string} fileName - Name of the file to load
-   */
-  async function loadOverlayFromProjectFile(fileName) {
-    if (!previewManager || !fileName) {
-      if (previewManager) {
-        await previewManager.setReferenceOverlaySource({
-          kind: null,
-          name: null,
-          dataUrlOrText: null,
-        });
-      }
-      updateOverlayStatus();
-      return;
-    }
-
-    // Check uploaded overlay files first
-    if (uploadedOverlayFiles.has(fileName)) {
-      await loadOverlayFromUploadedFile(fileName);
-      return;
-    }
-
-    const state = stateManager.getState();
-    const projectFiles = state.projectFiles;
-
-    if (!projectFiles || !projectFiles.has(fileName)) {
-      console.warn(`[App] Overlay file not found: ${fileName}`);
-      return;
-    }
-
-    const content = projectFiles.get(fileName);
-    const ext = fileName.split('.').pop()?.toLowerCase();
-
-    try {
-      if (ext === 'svg') {
-        await previewManager.setReferenceOverlaySource({
-          kind: 'svg',
-          name: fileName,
-          dataUrlOrText: content,
-        });
-      } else {
-        // PNG/JPG - content should be a data URL or we need to convert
-        // If it's already a data URL, use it directly
-        // If it's raw binary, convert to data URL
-        let dataUrl = content;
-        if (!content.startsWith('data:')) {
-          // Assume it's a Blob URL or needs conversion
-          const mimeType = ext === 'png' ? 'image/png' : 'image/jpeg';
-          const blob = new Blob([content], { type: mimeType });
-          dataUrl = await new Promise((resolve) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result);
-            reader.readAsDataURL(blob);
-          });
-        }
-        await previewManager.setReferenceOverlaySource({
-          kind: 'raster',
-          name: fileName,
-          dataUrlOrText: dataUrl,
-        });
-      }
-
-      // Update UI to reflect loaded overlay
-      updateOverlayUIFromConfig();
-      localStorage.setItem(STORAGE_KEY_OVERLAY_SOURCE, fileName);
-      console.log(`[App] Overlay loaded: ${fileName}`);
-    } catch (error) {
-      console.error('[App] Failed to load overlay:', error);
-      updateStatus(`Failed to load overlay: ${error.message}`, 'error');
-    }
-  }
-
-  /**
-   * Apply persisted hidden-group state to a rendered parameter container
-   * and wire up the group-hide event + show-all link.
-   * @param {HTMLElement} container - The parametersContainer element
-   * @param {string} modelName - Current model name (used as storage key)
-   */
-  function applyHiddenGroups(container, modelName) {
-    if (!container || !modelName) return;
-
-    const HIDDEN_KEY = `openscad-forge-hidden-groups-${modelName}`;
-
-    function loadHidden() {
-      try {
-        return new Set(JSON.parse(localStorage.getItem(HIDDEN_KEY) || '[]'));
-      } catch {
-        return new Set();
-      }
-    }
-
-    function saveHidden(set) {
-      try {
-        localStorage.setItem(HIDDEN_KEY, JSON.stringify([...set]));
-      } catch (_) {
-        /* storage full */
-      }
-    }
-
-    function refreshShowAll() {
-      const existing = container.querySelector('.param-groups-show-all');
-      const hiddenGroups = container.querySelectorAll('.param-group[hidden]');
-      const count = hiddenGroups.length;
-      if (count === 0) {
-        existing?.remove();
-        return;
-      }
-      if (!existing) {
-        const link = document.createElement('button');
-        link.className = 'param-groups-show-all btn btn-sm btn-outline';
-        link.type = 'button';
-        link.setAttribute('aria-live', 'polite');
-        container.appendChild(link);
-        link.addEventListener('click', () => {
-          container.querySelectorAll('.param-group[hidden]').forEach((el) => {
-            el.removeAttribute('hidden');
-            const btn = el.querySelector('.param-group-hide-btn');
-            if (btn) btn.setAttribute('aria-pressed', 'false');
-          });
-          saveHidden(new Set());
-          refreshShowAll();
-          announceImmediate('All parameter groups shown');
-        });
-      }
-      container.querySelector('.param-groups-show-all').textContent =
-        `${count} group${count !== 1 ? 's' : ''} hidden — Show all`;
-    }
-
-    // Apply saved hidden groups
-    const hidden = loadHidden();
-    container
-      .querySelectorAll('.param-group[data-group-id]')
-      .forEach((details) => {
-        if (hidden.has(details.dataset.groupId)) {
-          details.setAttribute('hidden', '');
-          const btn = details.querySelector('.param-group-hide-btn');
-          if (btn) btn.setAttribute('aria-pressed', 'true');
-        }
-      });
-    refreshShowAll();
-
-    // Listen for hide events from group hide buttons
-    container.addEventListener('group-hide', (e) => {
-      const { groupId, groupLabel } = e.detail;
-      const groupEl = container.querySelector(
-        `.param-group[data-group-id="${groupId}"]`
-      );
-      if (!groupEl) return;
-      groupEl.setAttribute('hidden', '');
-      const btn = groupEl.querySelector('.param-group-hide-btn');
-      if (btn) btn.setAttribute('aria-pressed', 'true');
-      const hiddenSet = loadHidden();
-      hiddenSet.add(groupId);
-      saveHidden(hiddenSet);
-      refreshShowAll();
-      announceImmediate(`${groupLabel} group hidden`);
-    });
-  }
-
-  /**
-   * C1: Auto-size the reference overlay from SCAD parameters.
-   *
-   * Priority order (first match wins):
-   *   1. Explicit `screen_width_mm` + `screen_height_mm` parameters
-   *   2. Keyguard case opening: `width_of_opening_in_case` + `height_of_opening_in_case`
-   *      (these represent the visible screen area the SVG screenshot covers)
-   *
-   * The `orientation` parameter ("landscape"/"portrait") swaps width/height when
-   * the case-opening dimensions are in portrait but the SVG is landscape or vice-versa.
-   *
-   * @param {Object} paramValues - Current parameter values
-   */
-  function autoApplyScreenDimensionsFromParams(paramValues) {
-    if (!previewManager || !paramValues) return;
-
-    // Priority 1: explicit screen dimensions
-    const sw = parseFloat(paramValues['screen_width_mm']);
-    const sh = parseFloat(paramValues['screen_height_mm']);
-    if (!isNaN(sw) && !isNaN(sh) && sw > 0 && sh > 0) {
-      previewManager.fitOverlayToScreenDimensions(sw, sh);
-      console.log(
-        `[App] Overlay auto-sized from screen_width/height_mm: ${sw} × ${sh} mm`
-      );
-      return;
-    }
-
-    // Priority 2: keyguard case opening dimensions (physical screen area)
-    let cw = parseFloat(paramValues['width_of_opening_in_case']);
-    let ch = parseFloat(paramValues['height_of_opening_in_case']);
-    if (!isNaN(cw) && !isNaN(ch) && cw > 0 && ch > 0) {
-      const orientation = (paramValues['orientation'] || '').toLowerCase();
-      if (orientation === 'landscape' && ch > cw) {
-        [cw, ch] = [ch, cw];
-      } else if (orientation === 'portrait' && cw > ch) {
-        [cw, ch] = [ch, cw];
-      }
-      previewManager.fitOverlayToScreenDimensions(cw, ch);
-      console.log(
-        `[App] Overlay auto-sized from case opening: ${cw} × ${ch} mm (${orientation || 'default'})`
-      );
-      return;
-    }
-  }
-
-  /**
-   * Update overlay status indicator
-   */
-  function updateOverlayStatus() {
-    if (!overlayStatus) return;
-
-    const config = previewManager?.getOverlayConfig();
-    const isEnabled = config?.enabled && config?.sourceFileName;
-
-    overlayStatus.textContent = isEnabled ? 'On' : 'Off';
-    overlayStatus.classList.toggle('active', isEnabled);
-  }
-
-  /**
-   * Update overlay UI controls from the current config
-   */
-  function updateOverlayUIFromConfig() {
-    if (!previewManager) return;
-
-    const config = previewManager.getOverlayConfig();
-
-    if (overlayToggle) {
-      overlayToggle.checked = config.enabled;
-    }
-
-    if (overlayOpacityInput) {
-      const opacityPercent = Math.round(config.opacity * 100);
-      overlayOpacityInput.value = opacityPercent;
-      if (overlayOpacityValue) {
-        overlayOpacityValue.textContent = `${opacityPercent}%`;
-      }
-    }
-
-    if (overlayWidthInput) {
-      overlayWidthInput.value = parseFloat(config.width.toFixed(1));
-    }
-
-    if (overlayHeightInput) {
-      overlayHeightInput.value = parseFloat(config.height.toFixed(1));
-    }
-
-    if (overlayOffsetXInput) {
-      overlayOffsetXInput.value = Math.round(config.offsetX);
-    }
-
-    if (overlayOffsetYInput) {
-      overlayOffsetYInput.value = Math.round(config.offsetY);
-    }
-
-    if (overlayRotationInput) {
-      overlayRotationInput.value = Math.round(config.rotationDeg);
-      if (overlayRotationValue) {
-        overlayRotationValue.textContent = `${Math.round(config.rotationDeg)}°`;
-      }
-    }
-
-    if (overlayAspectLockBtn) {
-      overlayAspectLockBtn.setAttribute(
-        'aria-pressed',
-        config.lockAspect ? 'true' : 'false'
-      );
-    }
-
-    if (overlaySourceSelect && config.sourceFileName) {
-      overlaySourceSelect.value = config.sourceFileName;
-    }
-
-    // Update dimensions display
-    if (overlayDimensionsValue) {
-      const w = Math.round(config.width);
-      const h = Math.round(config.height);
-      overlayDimensionsValue.textContent = `${w} × ${h} mm`;
-    }
-
-    updateOverlayStatus();
-  }
-
-  // Wire overlay source select
-  if (overlaySourceSelect) {
-    overlaySourceSelect.addEventListener('change', async () => {
-      const fileName = overlaySourceSelect.value;
-      // Handle shared screenshot images (uploaded via Image Measurement tool)
-      if (fileName.startsWith('screenshot:')) {
-        const imageName = fileName.slice('screenshot:'.length);
-        const rec = SharedImageStore.getImageByName(imageName);
-        if (rec && previewManager) {
-          try {
-            await previewManager.setReferenceOverlaySource({
-              kind: 'raster',
-              name: imageName,
-              dataUrlOrText: rec.dataUrl,
-            });
-            if (!overlayToggle?.checked) {
-              overlayToggle.checked = true;
-              previewManager.setOverlayEnabled(true);
-            }
-            updateOverlayUIFromConfig();
-            // updateOverlayUIFromConfig sets dropdown to config.sourceFileName
-            // ("Test.png") but the option value is "screenshot:Test.png" --
-            // restore the prefixed value so the dropdown shows the filename.
-            overlaySourceSelect.value = fileName;
-            localStorage.setItem(STORAGE_KEY_OVERLAY_SOURCE, fileName);
-            console.log(`[App] Screenshot overlay loaded: ${imageName}`);
-          } catch (error) {
-            console.error('[App] Failed to load screenshot overlay:', error);
-          }
-        }
-        return;
-      }
-
-      await loadOverlayFromProjectFile(fileName);
-    });
-  }
-
-  // Wire overlay file upload input
-  if (overlayFileInput) {
-    overlayFileInput.addEventListener('change', async (e) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-
-      const fileName = file.name;
-      const ext = fileName.split('.').pop()?.toLowerCase();
-      const isSvg = ext === 'svg' || file.type === 'image/svg+xml';
-
-      try {
-        let content;
-        if (isSvg) {
-          // Read SVG as text
-          content = await file.text();
-        } else {
-          // Read raster as data URL
-          content = await new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result);
-            reader.onerror = () => reject(new Error('Failed to read file'));
-            reader.readAsDataURL(file);
-          });
-        }
-
-        // Store in uploaded overlay files map
-        uploadedOverlayFiles.set(fileName, { content, isSvg });
-
-        // Add to dropdown if not already there
-        if (overlaySourceSelect) {
-          let optionExists = false;
-          for (const opt of overlaySourceSelect.options) {
-            if (opt.value === fileName) {
-              optionExists = true;
-              break;
-            }
-          }
-          if (!optionExists) {
-            const option = document.createElement('option');
-            option.value = fileName;
-            option.textContent = `📤 ${fileName}`;
-            overlaySourceSelect.appendChild(option);
-          }
-          overlaySourceSelect.value = fileName;
-        }
-
-        // Load the overlay
-        await loadOverlayFromUploadedFile(fileName);
-
-        updateStatus(`Overlay image loaded: ${fileName}`);
-      } catch (error) {
-        console.error('[App] Failed to load overlay file:', error);
-        updateStatus(`Failed to load overlay: ${error.message}`, 'error');
-      }
-
-      // Reset input so same file can be re-uploaded
-      overlayFileInput.value = '';
-    });
-  }
-
-  /**
-   * Load overlay from an uploaded file (not from project files)
-   * @param {string} fileName - Name of the uploaded file
-   */
-  async function loadOverlayFromUploadedFile(fileName) {
-    if (!previewManager || !fileName) return;
-
-    const uploadedFile = uploadedOverlayFiles.get(fileName);
-    if (!uploadedFile) {
-      // Try loading from project files as fallback
-      await loadOverlayFromProjectFile(fileName);
-      return;
-    }
-
-    const { content, isSvg } = uploadedFile;
-
-    try {
-      await previewManager.setReferenceOverlaySource({
-        kind: isSvg ? 'svg' : 'raster',
-        name: fileName,
-        dataUrlOrText: content,
-      });
-
-      // Auto-enable overlay when file is uploaded
-      if (!overlayToggle?.checked) {
-        overlayToggle.checked = true;
-        previewManager.setOverlayEnabled(true);
-      }
-
-      updateOverlayUIFromConfig();
-      localStorage.setItem(STORAGE_KEY_OVERLAY_SOURCE, fileName);
-      console.log(`[App] Overlay loaded from upload: ${fileName}`);
-    } catch (error) {
-      console.error('[App] Failed to load overlay:', error);
-      throw error;
-    }
-  }
-
-  // Wire overlay toggle
-  if (overlayToggle) {
-    overlayToggle.addEventListener('change', () => {
-      const enabled = overlayToggle.checked;
-      if (previewManager) {
-        previewManager.setOverlayEnabled(enabled);
-        updateOverlayStatus();
-        localStorage.setItem(
-          STORAGE_KEY_OVERLAY_ENABLED,
-          enabled ? 'true' : 'false'
-        );
-      }
-      console.log(
-        `[App] Reference overlay ${enabled ? 'enabled' : 'disabled'}`
-      );
-    });
-  }
-
-  // Wire overlay measurements toggle
-  if (overlayMeasurementsToggle) {
-    overlayMeasurementsToggle.addEventListener('change', () => {
-      const enabled = overlayMeasurementsToggle.checked;
-      if (previewManager) {
-        previewManager.toggleOverlayMeasurements(enabled);
-      }
-      console.log(
-        `[App] Overlay measurements ${enabled ? 'enabled' : 'disabled'}`
-      );
-    });
-  }
-
-  // Wire overlay opacity slider
-  if (overlayOpacityInput) {
-    overlayOpacityInput.addEventListener('input', () => {
-      const opacityPercent = parseInt(overlayOpacityInput.value, 10);
-      if (overlayOpacityValue) {
-        overlayOpacityValue.textContent = `${opacityPercent}%`;
-      }
-      if (previewManager) {
-        previewManager.setOverlayOpacity(opacityPercent / 100);
-        localStorage.setItem(
-          STORAGE_KEY_OVERLAY_OPACITY,
-          opacityPercent.toString()
-        );
-      }
-    });
-  }
-
-  // SVG overlay color — auto-adapts to theme so dark SVGs stay visible on dark backgrounds
-  function getThemeAwareSvgColor() {
-    const root = document.documentElement;
-    const explicit = root.getAttribute('data-theme');
-    const prefersDark = window.matchMedia?.(
-      '(prefers-color-scheme: dark)'
-    )?.matches;
-    const isDark = explicit === 'dark' || (!explicit && prefersDark);
-    return isDark ? '#ffffff' : '#000000';
-  }
-
-  function applyOverlaySvgColor() {
-    const autoColor = overlayAutoColorToggle?.checked ?? true;
-    const color = autoColor
-      ? getThemeAwareSvgColor()
-      : overlayColorInput?.value || '#000000';
-    if (overlayColorInput && autoColor) {
-      overlayColorInput.value = color;
-    }
-    if (previewManager) {
-      previewManager.setOverlaySvgColor(color);
-    }
-    localStorage.setItem(STORAGE_KEY_OVERLAY_SVG_COLOR, color);
-    localStorage.setItem(
-      STORAGE_KEY_OVERLAY_AUTO_COLOR,
-      autoColor ? 'true' : 'false'
-    );
-  }
-
-  if (overlayColorInput) {
-    overlayColorInput.addEventListener('input', () => {
-      if (overlayAutoColorToggle) {
-        overlayAutoColorToggle.checked = false;
-        overlayColorInput.classList.remove('overlay-color-auto');
-      }
-      applyOverlaySvgColor();
-    });
-  }
-
-  if (overlayAutoColorToggle) {
-    overlayAutoColorToggle.addEventListener('change', () => {
-      if (overlayColorInput) {
-        overlayColorInput.classList.toggle(
-          'overlay-color-auto',
-          overlayAutoColorToggle.checked
-        );
-      }
-      applyOverlaySvgColor();
-    });
-  }
-
-  // Re-apply SVG color when theme changes
-  const themeObserver = new MutationObserver(() => {
-    if (overlayAutoColorToggle?.checked) {
-      applyOverlaySvgColor();
-    }
-  });
-  themeObserver.observe(document.documentElement, {
-    attributes: true,
-    attributeFilter: ['data-theme', 'data-high-contrast'],
-  });
-
-  // Wire manual calibration override toggle
-  if (overlayManualOverrideToggle && overlayCalibrationFieldset) {
-    overlayManualOverrideToggle.addEventListener('change', () => {
-      const enabled = overlayManualOverrideToggle.checked;
-      overlayCalibrationFieldset.disabled = !enabled;
-      console.log(
-        `[App] Overlay manual calibration ${enabled ? 'enabled' : 'disabled'}`
-      );
-    });
-  }
-
-  // Wire fit to model button
-  if (overlayFitModelBtn) {
-    overlayFitModelBtn.addEventListener('click', () => {
-      if (previewManager) {
-        previewManager.fitOverlayToModelXY();
-        updateOverlayUIFromConfig();
-      }
-    });
-  }
-
-  // Wire tablet device selector for overlay auto-sizing (C1: hybrid approach)
-  const overlayTabletSelect = document.getElementById('overlayTabletSelect');
-  if (overlayTabletSelect) {
-    // Lazy-load the tablet database on first interaction
-    let tabletDb = null;
-    async function loadTabletDb() {
-      if (tabletDb) return tabletDb;
-      try {
-        const resp = await fetch('/data/tablets.json');
-        const data = await resp.json();
-        tabletDb = data.tablets || [];
-        // Populate options
-        overlayTabletSelect.innerHTML = tabletDb
-          .map(
-            (t) =>
-              `<option value="${escapeHtml(String(t.id))}" data-w="${escapeHtml(String(t.screenWidthMm ?? ''))}" data-h="${escapeHtml(String(t.screenHeightMm ?? ''))}">${escapeHtml(t.label)}</option>`
-          )
-          .join('');
-      } catch (err) {
-        console.warn('[App] Could not load tablet database:', err);
-        tabletDb = [];
-      }
-      return tabletDb;
-    }
-
-    overlayTabletSelect.addEventListener('focus', () => loadTabletDb());
-    overlayTabletSelect.addEventListener('change', async () => {
-      await loadTabletDb();
-      const opt = overlayTabletSelect.selectedOptions[0];
-      if (!opt) return;
-      const w = parseFloat(opt.dataset.w);
-      const h = parseFloat(opt.dataset.h);
-      if (!isNaN(w) && !isNaN(h) && previewManager) {
-        previewManager.fitOverlayToScreenDimensions(w, h);
-        updateOverlayUIFromConfig();
-        updateStatus(`Overlay sized to ${opt.text}: ${w} × ${h} mm`);
-      }
-    });
-  }
-
-  // Auto-detect screen_width_mm / screen_height_mm SCAD parameters for overlay sizing
-  // Called when parameters are rendered — see autoApplyScreenDimensionsFromParams()
-
-  // Wire center button
-  if (overlayCenterBtn) {
-    overlayCenterBtn.addEventListener('click', () => {
-      if (previewManager) {
-        previewManager.setOverlayTransform({ offsetX: 0, offsetY: 0 });
-        updateOverlayUIFromConfig();
-      }
-    });
-  }
-
-  // Wire width input
-  if (overlayWidthInput) {
-    overlayWidthInput.addEventListener('change', () => {
-      const width = parseFloat(overlayWidthInput.value);
-      if (!isNaN(width) && previewManager) {
-        previewManager.setOverlaySize({ width });
-        updateOverlayUIFromConfig();
-        localStorage.setItem(STORAGE_KEY_OVERLAY_WIDTH, String(width));
-      }
-    });
-  }
-
-  // Wire height input
-  if (overlayHeightInput) {
-    overlayHeightInput.addEventListener('change', () => {
-      const height = parseFloat(overlayHeightInput.value);
-      if (!isNaN(height) && previewManager) {
-        previewManager.setOverlaySize({ height });
-        updateOverlayUIFromConfig();
-        localStorage.setItem(STORAGE_KEY_OVERLAY_HEIGHT, String(height));
-      }
-    });
-  }
-
-  // Wire aspect lock button
-  if (overlayAspectLockBtn) {
-    overlayAspectLockBtn.addEventListener('click', () => {
-      const isCurrentlyLocked =
-        overlayAspectLockBtn.getAttribute('aria-pressed') === 'true';
-      const newLocked = !isCurrentlyLocked;
-      overlayAspectLockBtn.setAttribute(
-        'aria-pressed',
-        newLocked ? 'true' : 'false'
-      );
-      if (previewManager) {
-        previewManager.setOverlayAspectLock(newLocked);
-      }
-    });
-  }
-
-  // Wire offset X input
-  if (overlayOffsetXInput) {
-    overlayOffsetXInput.addEventListener('change', () => {
-      const offsetX = parseFloat(overlayOffsetXInput.value);
-      if (!isNaN(offsetX) && previewManager) {
-        previewManager.setOverlayTransform({ offsetX });
-      }
-    });
-  }
-
-  // Wire offset Y input
-  if (overlayOffsetYInput) {
-    overlayOffsetYInput.addEventListener('change', () => {
-      const offsetY = parseFloat(overlayOffsetYInput.value);
-      if (!isNaN(offsetY) && previewManager) {
-        previewManager.setOverlayTransform({ offsetY });
-      }
-    });
-  }
-
-  // Wire rotation slider
-  if (overlayRotationInput) {
-    overlayRotationInput.addEventListener('input', () => {
-      const rotationDeg = parseInt(overlayRotationInput.value, 10);
-      if (overlayRotationValue) {
-        overlayRotationValue.textContent = `${rotationDeg}°`;
-      }
-      if (previewManager) {
-        previewManager.setOverlayTransform({ rotationDeg });
-      }
-    });
-  }
-
-  // Wire auto-rotate toggle buttons (desktop and mobile)
-  const autoRotateToggle = document.getElementById('autoRotateToggle');
-  const mobileAutoRotateToggle = document.getElementById(
-    'mobileAutoRotateToggle'
-  );
-  const rotationSpeedInput = document.getElementById('rotationSpeedInput');
-
-  // (Storage keys for auto-rotate defined at module level using standardized naming)
-
-  // Check for prefers-reduced-motion preference
-  const prefersReducedMotion = window.matchMedia(
-    '(prefers-reduced-motion: reduce)'
-  );
-
-  /**
-   * Sync all auto-rotate toggle buttons to the same state
-   * @param {boolean} enabled - Whether auto-rotate is enabled
-   */
-  function syncAutoRotateToggles(enabled) {
-    const toggles = [autoRotateToggle, mobileAutoRotateToggle];
-    toggles.forEach((toggle) => {
-      if (toggle) {
-        toggle.setAttribute('aria-pressed', enabled ? 'true' : 'false');
-        toggle.classList.toggle('active', enabled);
-      }
-    });
-  }
-
-  /**
-   * Toggle auto-rotation state
-   * @param {boolean} enabled - Whether to enable auto-rotation
-   */
-  function setAutoRotation(enabled) {
-    // Respect prefers-reduced-motion - don't enable if user prefers reduced motion
-    if (enabled && prefersReducedMotion.matches) {
-      console.log('[App] Auto-rotate blocked: user prefers reduced motion');
-      // Announce to screen reader
-      announceImmediate(
-        'Auto-rotation is disabled because you prefer reduced motion'
-      );
-      return;
-    }
-
-    if (previewManager) {
-      previewManager.setAutoRotate(enabled);
-    }
-    syncAutoRotateToggles(enabled);
-    localStorage.setItem(STORAGE_KEY_AUTO_ROTATE, enabled ? 'true' : 'false');
-
-    // Announce to screen reader
-    announceImmediate(`Auto-rotation ${enabled ? 'enabled' : 'disabled'}`);
-
-    console.log(`[App] Auto-rotate ${enabled ? 'enabled' : 'disabled'}`);
-  }
-
-  // Load saved auto-rotate preferences
-  const savedRotateSpeed = localStorage.getItem(STORAGE_KEY_ROTATE_SPEED);
-
-  // Get the rotation speed value display element
-  const rotationSpeedValue = document.getElementById('rotationSpeedValue');
-
-  /**
-   * Update the rotation speed slider visual state
-   * @param {number} speed - Current speed value
-   */
-  function updateRotationSpeedDisplay(speed) {
-    // Update value display
-    if (rotationSpeedValue) {
-      rotationSpeedValue.textContent = `${speed.toFixed(1)}°/s`;
-    }
-
-    // Update aria-valuenow for screen readers
-    if (rotationSpeedInput) {
-      rotationSpeedInput.setAttribute('aria-valuenow', speed.toFixed(1));
-    }
-  }
-
-  // Initialize rotation speed from saved preference
-  if (savedRotateSpeed && rotationSpeedInput) {
-    const speed = parseFloat(savedRotateSpeed);
-    if (!isNaN(speed) && speed >= 0.1 && speed <= 3) {
-      rotationSpeedInput.value = speed;
-      updateRotationSpeedDisplay(speed);
-    } else {
-      // Default to 0.5 if invalid
-      updateRotationSpeedDisplay(0.5);
-    }
-  } else if (rotationSpeedInput) {
-    // Initialize display with default value
-    updateRotationSpeedDisplay(0.5);
-  }
-
-  // Wire desktop auto-rotate toggle
-  if (autoRotateToggle) {
-    autoRotateToggle.addEventListener('click', () => {
-      const currentState =
-        autoRotateToggle.getAttribute('aria-pressed') === 'true';
-      setAutoRotation(!currentState);
-    });
-  }
-
-  // Wire mobile auto-rotate toggle
-  if (mobileAutoRotateToggle) {
-    mobileAutoRotateToggle.addEventListener('click', () => {
-      const currentState =
-        mobileAutoRotateToggle.getAttribute('aria-pressed') === 'true';
-      setAutoRotation(!currentState);
-    });
-  }
-
-  // Wire rotation speed slider - use 'input' for real-time feedback
-  if (rotationSpeedInput) {
-    rotationSpeedInput.addEventListener('input', () => {
-      let speed = parseFloat(rotationSpeedInput.value);
-      // Clamp to valid range
-      speed = Math.max(0.1, Math.min(3, speed));
-
-      // Update visual display
-      updateRotationSpeedDisplay(speed);
-
-      if (previewManager) {
-        previewManager.setAutoRotateSpeed(speed);
-      }
-    });
-
-    // Save to localStorage on change (when user releases slider)
-    rotationSpeedInput.addEventListener('change', () => {
-      const speed = parseFloat(rotationSpeedInput.value);
-      localStorage.setItem(STORAGE_KEY_ROTATE_SPEED, speed.toString());
-      console.log(`[App] Auto-rotate speed set to ${speed.toFixed(1)} deg/s`);
-    });
-  }
-
-  // Listen for prefers-reduced-motion changes
-  prefersReducedMotion.addEventListener('change', (e) => {
-    if (e.matches && previewManager?.isAutoRotateEnabled()) {
-      // User switched to preferring reduced motion, disable auto-rotate
-      setAutoRotation(false);
-      console.log(
-        '[App] Auto-rotate disabled: user now prefers reduced motion'
-      );
-    }
-  });
 
   // Wire model color picker and override toggle
   const modelColorPicker = document.getElementById('modelColorPicker');
@@ -7268,7 +6124,7 @@ async function initApp() {
       if (dimYEl) dimYEl.textContent = `${dimensions.y} mm`;
       if (dimZEl) dimZEl.textContent = `${dimensions.z} mm`;
       if (dimVolumeEl)
-        dimVolumeEl.textContent = `${dimensions.volume.toLocaleString()} mm³`;
+        dimVolumeEl.textContent = `${dimensions.volume.toLocaleString()} mmÂ³`;
     } else {
       // Hide dimensions panel
       dimensionsDisplay.classList.add('hidden');
@@ -7295,12 +6151,12 @@ async function initApp() {
     const stateMessages = {
       [PREVIEW_STATE.IDLE]: 'No preview',
       [PREVIEW_STATE.CURRENT]: extra.cached
-        ? '✓ Preview (cached)'
-        : '✓ Preview ready',
-      [PREVIEW_STATE.PENDING]: '⏳ Changes pending...',
-      [PREVIEW_STATE.RENDERING]: '⟳ Generating...',
-      [PREVIEW_STATE.STALE]: '⚠ Preview outdated',
-      [PREVIEW_STATE.ERROR]: '✗ Preview failed',
+        ? 'âœ“ Preview (cached)'
+        : 'âœ“ Preview ready',
+      [PREVIEW_STATE.PENDING]: 'â³ Changes pending...',
+      [PREVIEW_STATE.RENDERING]: 'âŸ³ Generating...',
+      [PREVIEW_STATE.STALE]: 'âš  Preview outdated',
+      [PREVIEW_STATE.ERROR]: 'âœ— Preview failed',
     };
     previewStateIndicator.textContent = stateMessages[state] || state;
 
@@ -7560,7 +6416,7 @@ async function initApp() {
       !paramsChanged;
 
     if (isStlFormat && hasFullQualitySTL && !needsFullRender) {
-      primaryActionBtn.textContent = '📥 Download';
+      primaryActionBtn.textContent = 'ðŸ“¥ Download';
       primaryActionBtn.dataset.action = 'download';
       primaryActionBtn.classList.remove('btn-primary');
       primaryActionBtn.classList.add('btn-success');
@@ -7570,7 +6426,7 @@ async function initApp() {
       );
       downloadFallbackLink.classList.add('hidden');
     } else if (hasMatchingOutput) {
-      primaryActionBtn.textContent = '📥 Download';
+      primaryActionBtn.textContent = 'ðŸ“¥ Download';
       primaryActionBtn.dataset.action = 'download';
       primaryActionBtn.classList.remove('btn-primary');
       primaryActionBtn.classList.add('btn-success');
@@ -7745,9 +6601,9 @@ async function initApp() {
     const formatLabel = detectedFormat
       ? detectedFormat
       : isLikelyBinary
-        ? 'Binary STL ✓'
+        ? 'Binary STL âœ“'
         : isLikelyASCII
-          ? 'ASCII STL ⚠️'
+          ? 'ASCII STL âš ï¸'
           : 'Unknown';
 
     console.log(
@@ -7777,13 +6633,13 @@ async function initApp() {
     // Log overall performance status
     if (isLikelyBinary && capabilities.hasManifold) {
       console.log(
-        '[Performance] ✓ Optimal settings: Binary STL + Manifold enabled'
+        '[Performance] âœ“ Optimal settings: Binary STL + Manifold enabled'
       );
     } else if (!isLikelyBinary || !capabilities.hasManifold) {
       const issues = [];
       if (!isLikelyBinary) issues.push('Binary STL not active');
       if (!capabilities.hasManifold) issues.push('Manifold not available');
-      console.log(`[Performance] ⚠️ Suboptimal settings: ${issues.join(', ')}`);
+      console.log(`[Performance] âš ï¸ Suboptimal settings: ${issues.join(', ')}`);
     }
   }
 
@@ -8169,7 +7025,7 @@ async function initApp() {
         ? `<nav class="file-nav-breadcrumbs" aria-label="Folder navigation">
             <ol class="file-nav-breadcrumb-list">
               <li class="file-nav-breadcrumb-item">
-                <button class="file-nav-breadcrumb-btn file-nav-breadcrumb-home" data-depth="0" aria-label="Navigate to root">🏠</button>
+                <button class="file-nav-breadcrumb-btn file-nav-breadcrumb-home" data-depth="0" aria-label="Navigate to root">ðŸ </button>
               </li>
               ${crumbItems.join('')}
             </ol>
@@ -8186,10 +7042,10 @@ async function initApp() {
         <div class="project-file-item file-nav-folder-row" role="button" tabindex="0"
              data-folder-enter="${escapeHtml(folderName)}"
              aria-label="Open folder ${escapeHtml(folderName)}, ${count} file${count !== 1 ? 's' : ''}">
-          <span class="project-file-icon" aria-hidden="true">📁</span>
+          <span class="project-file-icon" aria-hidden="true">ðŸ“</span>
           <span class="project-file-name">${escapeHtml(folderName)}</span>
           <span class="project-file-size file-nav-folder-count">${count} file${count !== 1 ? 's' : ''}</span>
-          <span class="file-nav-folder-chevron" aria-hidden="true">›</span>
+          <span class="file-nav-folder-chevron" aria-hidden="true">â€º</span>
         </div>`;
     });
 
@@ -8203,7 +7059,7 @@ async function initApp() {
       const size =
         typeof content === 'string'
           ? formatFileSize(new Blob([content]).size)
-          : '—';
+          : 'â€”';
       const ext = name.split('.').pop().toLowerCase();
       const isEditable = ['txt', 'csv', 'json', 'scad'].includes(ext);
       const icon = getFileIcon(ext);
@@ -8213,10 +7069,10 @@ async function initApp() {
         : '';
       const editBtn =
         isEditable && !isMain
-          ? `<button class="project-file-btn" data-action="edit" data-path="${escapeHtml(path)}" aria-label="Edit ${escapeHtml(name)}">✏️</button>`
+          ? `<button class="project-file-btn" data-action="edit" data-path="${escapeHtml(path)}" aria-label="Edit ${escapeHtml(name)}">âœï¸</button>`
           : '';
       const removeBtn = !isMain
-        ? `<button class="project-file-btn btn-danger" data-action="remove" data-path="${escapeHtml(path)}" aria-label="Remove ${escapeHtml(name)}">✕</button>`
+        ? `<button class="project-file-btn btn-danger" data-action="remove" data-path="${escapeHtml(path)}" aria-label="Remove ${escapeHtml(name)}">âœ•</button>`
         : '';
 
       const itemClass = isMain
@@ -8285,7 +7141,7 @@ async function initApp() {
     });
 
     // Update overlay source dropdown with available image files
-    updateOverlaySourceDropdown();
+    overlayGridCtrl.updateOverlaySourceDropdown();
 
     // Auto-select overlay source based on screenshot_file variable detection
     autoSelectOverlaySource(requiredFiles);
@@ -8308,20 +7164,20 @@ async function initApp() {
     const projectFiles = state.projectFiles;
 
     if (shouldShow) {
-      // COMPATIBILITY FALLBACK — Phase 8 removal candidate:
+      // COMPATIBILITY FALLBACK â€” Phase 8 removal candidate:
       // 'default.svg' when screenshot_file param exists but is empty/unset.
       const screenshotFile = parameters.screenshot_file || 'default.svg';
       const resolved = resolveProjectFile(projectFiles, screenshotFile);
       if (resolved) {
         if (overlaySourceSelect) overlaySourceSelect.value = resolved.key;
-        loadOverlayFromProjectFile(resolved.key)
+        overlayGridCtrl.loadOverlayFromProjectFile(resolved.key)
           .then(() => {
             // SVG 96 DPI size applied; SCAD case-opening / screen dims override.
-            autoApplyScreenDimensionsFromParams(parameters);
+            overlayGridCtrl.autoApplyScreenDimensionsFromParams(parameters);
             overlayToggle.checked = true;
             previewManager.setOverlayEnabled(true);
-            updateOverlayUIFromConfig();
-            updateOverlayStatus?.();
+            overlayGridCtrl.updateOverlayUIFromConfig();
+            overlayGridCtrl.updateOverlayStatus?.();
           })
           .catch((err) => {
             console.warn(
@@ -8332,13 +7188,13 @@ async function initApp() {
       } else {
         console.warn(
           `[App] syncOverlayWithScreenshotParam: "${screenshotFile}" not found ` +
-            'or ambiguous in projectFiles — overlay not displayed.'
+            'or ambiguous in projectFiles â€” overlay not displayed.'
         );
       }
     } else {
       overlayToggle.checked = false;
       previewManager.setOverlayEnabled(false);
-      updateOverlayStatus?.();
+      overlayGridCtrl.updateOverlayStatus?.();
     }
   }
 
@@ -8358,7 +7214,7 @@ async function initApp() {
     if (currentSource && projectFiles.has(currentSource)) return;
 
     // Check for saved preference first
-    const savedSource = localStorage.getItem(STORAGE_KEY_OVERLAY_SOURCE);
+    const savedSource = localStorage.getItem(getAppPrefKey('overlay-source'));
     if (savedSource && projectFiles.has(savedSource)) {
       overlaySourceSelect.value = savedSource;
       // Don't auto-load, just select it in the dropdown
@@ -8385,7 +7241,7 @@ async function initApp() {
       }
     }
 
-    // COMPATIBILITY FALLBACK — Phase 8 removal candidate.
+    // COMPATIBILITY FALLBACK â€” Phase 8 removal candidate.
     // Try 'default.svg' for backward compatibility with keyguard projects
     // that lack a manifest but use the known convention.
     if (!screenshotFile) {
@@ -8399,16 +7255,16 @@ async function initApp() {
       overlaySourceSelect.value = screenshotFile;
       console.log(`[App] Auto-selected overlay source: ${screenshotFile}`);
       // Load the overlay image into the preview and enable the toggle
-      loadOverlayFromProjectFile(screenshotFile)
+      overlayGridCtrl.loadOverlayFromProjectFile(screenshotFile)
         .then(() => {
           // SVG 96 DPI size applied; SCAD case-opening / screen dims override.
           const currentParams = stateManager.getState().parameters;
-          autoApplyScreenDimensionsFromParams(currentParams);
+          overlayGridCtrl.autoApplyScreenDimensionsFromParams(currentParams);
           if (overlayToggle && !overlayToggle.checked) {
             overlayToggle.checked = true;
             previewManager?.setOverlayEnabled(true);
-            updateOverlayUIFromConfig();
-            updateOverlayStatus?.();
+            overlayGridCtrl.updateOverlayUIFromConfig();
+            overlayGridCtrl.updateOverlayStatus?.();
             console.log(
               '[App] Overlay auto-enabled for screenshot companion file'
             );
@@ -8427,17 +7283,17 @@ async function initApp() {
    */
   function getFileIcon(ext) {
     const icons = {
-      scad: '📐',
-      txt: '📝',
-      csv: '📊',
-      json: '📋',
-      svg: '🎨',
-      stl: '🧊',
-      png: '🖼️',
-      jpg: '🖼️',
-      jpeg: '🖼️',
+      scad: 'ðŸ“',
+      txt: 'ðŸ“',
+      csv: 'ðŸ“Š',
+      json: 'ðŸ“‹',
+      svg: 'ðŸŽ¨',
+      stl: 'ðŸ§Š',
+      png: 'ðŸ–¼ï¸',
+      jpg: 'ðŸ–¼ï¸',
+      jpeg: 'ðŸ–¼ï¸',
     };
-    return icons[ext] || '📎';
+    return icons[ext] || 'ðŸ“Ž';
   }
 
   /**
@@ -8887,7 +7743,7 @@ async function initApp() {
         try {
           const fileSizeMB = (file.size / (1024 * 1024)).toFixed(1);
           dismissOverlay = showProcessingOverlay(
-            `Opening project (${fileSizeMB} MB)…`,
+            `Opening project (${fileSizeMB} MB)â€¦`,
             'This may take a moment for large files. Please do not close or refresh the page.'
           );
           updateStatus('Extracting ZIP file...');
@@ -8950,7 +7806,7 @@ async function initApp() {
 
             // Re-show overlay while we finish loading
             dismissOverlay = showProcessingOverlay(
-              `Opening project…`,
+              `Opening projectâ€¦`,
               result.action === 'add-files'
                 ? 'Loading with added files.'
                 : 'Continuing with available files.'
@@ -9038,7 +7894,7 @@ async function initApp() {
           group: 'Import',
           file: fileName,
           line: null,
-          message: `Missing companion files: ${allMissingFiles} — upload the full project folder or ZIP to include all dependencies`,
+          message: `Missing companion files: ${allMissingFiles} â€” upload the full project folder or ZIP to include all dependencies`,
           timestamp: Date.now(),
         });
       }
@@ -9129,7 +7985,7 @@ async function initApp() {
         currentSavedProjectId = null;
       }
 
-      // Reset output format to STL for fresh project loads —
+      // Reset output format to STL for fresh project loads â€”
       // dispatch change to update format info panel and 2D guidance.
       if (outputFormatSelect && outputFormatSelect.value !== 'stl') {
         outputFormatSelect.value = 'stl';
@@ -9146,7 +8002,7 @@ async function initApp() {
       // display:none back to flex.  Without this, the echo drawer can remain
       // expanded with old warnings, scroll positions can be non-zero (from
       // browser auto-scroll), and the Three.js canvas may retain stale
-      // dimensions — all of which combine to produce a blank region and an
+      // dimensions â€” all of which combine to produce a blank region and an
       // upward layout shift that hides the app header.
       updatePreviewDrawer([]);
       if (typeof window.clearConsoleState === 'function') {
@@ -9178,7 +8034,7 @@ async function initApp() {
         const detection = detectIncludeUse(fileContent);
         if (detection.hasIncludes || detection.hasUse) {
           const fileList = detection.files.join(', ');
-          includeUseWarning = `\n⚠️ Note: This file references external files (${fileList}). For multi-file projects, upload a ZIP containing all files.`;
+          includeUseWarning = `\nâš ï¸ Note: This file references external files (${fileList}). For multi-file projects, upload a ZIP containing all files.`;
           console.warn(
             '[Upload] Single-file upload with include/use detected:',
             detection.files
@@ -9287,10 +8143,10 @@ async function initApp() {
       fileActionsController.trackOpen(fileName);
 
       // Apply hidden groups from saved preference and set up hide/show-all behavior
-      applyHiddenGroups(parametersContainer, extracted?.modelName || fileName);
+      overlayGridCtrl.applyHiddenGroups(parametersContainer, extracted?.modelName || fileName);
 
       // C1: Auto-size overlay from SCAD parameters (screen dims or case opening)
-      autoApplyScreenDimensionsFromParams(currentValues);
+      overlayGridCtrl.autoApplyScreenDimensionsFromParams(currentValues);
 
       // Auto-import JSON presets from ZIP companion files (Item 14: desktop parity)
       // After state is set with schema + defaults, scan projectFiles for .json preset files
@@ -9369,7 +8225,7 @@ async function initApp() {
           );
           updatePresetDropdown();
 
-          // Build preset→companion-file path mapping for alias mounting on preset load.
+          // Build presetâ†’companion-file path mapping for alias mounting on preset load.
           // Uses the imported preset names to match against nested file paths in the ZIP.
           const importedPresets =
             presetManager.getPresetsForModel(originalFileName);
@@ -9474,7 +8330,7 @@ async function initApp() {
       // This tells screen reader users that parameters are now available to customize.
       // preventScroll: true keeps the panel's scroll position at the top so the user
       // sees the beginning of the parameter list when they first open the panel (mobile
-      // drawer is off-canvas; desktop panel may be collapsed — either way we must not
+      // drawer is off-canvas; desktop panel may be collapsed â€” either way we must not
       // advance the scroll position before the user has opened the panel).
       requestAnimationFrame(() => {
         const firstInput = parametersContainer?.querySelector(
@@ -9490,7 +8346,7 @@ async function initApp() {
         previewManager = new PreviewManager(previewContainer);
         await previewManager.init();
 
-        // Re-create #rendered2dPreview — init() clears container innerHTML,
+        // Re-create #rendered2dPreview â€” init() clears container innerHTML,
         // destroying the element that was defined in index.html.
         if (!document.getElementById('rendered2dPreview')) {
           const preview2d = document.createElement('div');
@@ -9520,111 +8376,16 @@ async function initApp() {
           gridToggle.checked = previewManager.gridEnabled;
         }
 
-        // Sync grid size inputs with saved preference
-        {
-          const savedGrid = previewManager.getGridSize();
-          if (gridWidthInput) gridWidthInput.value = savedGrid.widthMm;
-          if (gridHeightInput) gridHeightInput.value = savedGrid.heightMm;
-        }
-
-        // Sync grid opacity slider with saved preference
-        syncGridOpacitySlider();
+        // Restore grid, overlay, and auto-rotate settings from saved preferences
+        overlayGridCtrl.connectPreviewManager(previewManager);
 
         // Sync auto-bed toggle with saved preference
         if (autoBedToggle) {
           autoBedToggle.checked = previewManager.autoBedEnabled;
         }
 
-        // Initialize overlay settings from localStorage
-        const savedOverlayOpacity = localStorage.getItem(
-          STORAGE_KEY_OVERLAY_OPACITY
-        );
-        if (savedOverlayOpacity) {
-          const opacity = parseInt(savedOverlayOpacity, 10);
-          if (!isNaN(opacity) && opacity >= 0 && opacity <= 100) {
-            previewManager.setOverlayOpacity(opacity / 100);
-            if (overlayOpacityInput) {
-              overlayOpacityInput.value = opacity;
-            }
-            if (overlayOpacityValue) {
-              overlayOpacityValue.textContent = `${opacity}%`;
-            }
-          }
-        }
-
-        // Restore overlay width/height from localStorage
-        const savedOverlayWidth = localStorage.getItem(
-          STORAGE_KEY_OVERLAY_WIDTH
-        );
-        const savedOverlayHeight = localStorage.getItem(
-          STORAGE_KEY_OVERLAY_HEIGHT
-        );
-        if (savedOverlayWidth || savedOverlayHeight) {
-          const sizeUpdate = {};
-          if (savedOverlayWidth) {
-            const w = parseFloat(savedOverlayWidth);
-            if (!isNaN(w) && w > 0) sizeUpdate.width = w;
-          }
-          if (savedOverlayHeight) {
-            const h = parseFloat(savedOverlayHeight);
-            if (!isNaN(h) && h > 0) sizeUpdate.height = h;
-          }
-          if (Object.keys(sizeUpdate).length > 0) {
-            previewManager.setOverlaySize(sizeUpdate);
-            updateOverlayUIFromConfig();
-          }
-        }
-
-        // Initialize overlay SVG color from localStorage or auto-detect
-        const savedAutoColor = localStorage.getItem(
-          STORAGE_KEY_OVERLAY_AUTO_COLOR
-        );
-        const isAutoColor = savedAutoColor !== 'false';
-        if (overlayAutoColorToggle) {
-          overlayAutoColorToggle.checked = isAutoColor;
-        }
-        if (overlayColorInput) {
-          overlayColorInput.classList.toggle('overlay-color-auto', isAutoColor);
-        }
-        if (isAutoColor) {
-          const themeColor = getThemeAwareSvgColor();
-          if (overlayColorInput) overlayColorInput.value = themeColor;
-          previewManager.overlayConfig.svgColor = themeColor;
-        } else {
-          const savedColor = localStorage.getItem(
-            STORAGE_KEY_OVERLAY_SVG_COLOR
-          );
-          if (savedColor && overlayColorInput) {
-            overlayColorInput.value = savedColor;
-          }
-          previewManager.overlayConfig.svgColor = savedColor || '#000000';
-        }
-
         // Apply persisted model appearance controls
         syncPreviewAppearanceOverride();
-
-        // Initialize auto-rotate settings from localStorage
-        // Only enable if user doesn't prefer reduced motion
-        const savedAutoRotatePref = localStorage.getItem(
-          STORAGE_KEY_AUTO_ROTATE
-        );
-        const savedRotateSpeedPref = localStorage.getItem(
-          STORAGE_KEY_ROTATE_SPEED
-        );
-
-        // Apply saved rotation speed first
-        if (savedRotateSpeedPref) {
-          const speed = parseFloat(savedRotateSpeedPref);
-          if (!isNaN(speed) && speed >= 0.1 && speed <= 3) {
-            previewManager.setAutoRotateSpeed(speed);
-          }
-        }
-
-        // Apply saved auto-rotate state (respecting reduced motion preference)
-        if (savedAutoRotatePref === 'true' && !prefersReducedMotion.matches) {
-          previewManager.setAutoRotate(true);
-          syncAutoRotateToggles(true);
-        }
 
         // Update camera panel controller with preview manager reference
         if (cameraPanelController) {
@@ -9671,7 +8432,7 @@ async function initApp() {
           }
 
           // Sync grid color picker to show theme default when no custom color is set
-          syncGridColorPicker();
+          overlayGridCtrl.syncGridColorPicker();
 
           // Update mono variant assets when theme changes (light=amber, dark=green)
           const root = document.documentElement;
@@ -9961,8 +8722,8 @@ async function initApp() {
         // Reset overlay UI controls so the previous project's state doesn't linger
         if (overlayToggle) overlayToggle.checked = false;
         if (overlaySourceSelect) overlaySourceSelect.value = '';
-        updateOverlaySourceDropdown();
-        updateOverlayStatus();
+        overlayGridCtrl.updateOverlaySourceDropdown();
+        overlayGridCtrl.updateOverlayStatus();
 
         // Reset echo drawer so stale warnings don't persist into the
         // next project load (prevents layout shift from expanded drawer).
@@ -10660,13 +9421,13 @@ if (rounded) {
       return;
     }
 
-    // currentFiles is a plain object (path → content) kept in sync with DB
+    // currentFiles is a plain object (path â†’ content) kept in sync with DB
     let currentFiles =
       typeof project.projectFiles === 'string'
         ? JSON.parse(project.projectFiles)
         : { ...project.projectFiles };
 
-    // Navigation path local to this modal closure — cleaned up when modal closes
+    // Navigation path local to this modal closure â€” cleaned up when modal closes
     let fmCurrentPath = [];
 
     const modal = document.createElement('div');
@@ -10727,7 +9488,7 @@ if (rounded) {
     };
 
     // ------------------------------------------------------------------ //
-    // renderFmView — re-renders breadcrumbs + tree without closing modal  //
+    // renderFmView â€” re-renders breadcrumbs + tree without closing modal  //
     // ------------------------------------------------------------------ //
     function renderFmView() {
       const fileMap = new Map(Object.entries(currentFiles));
@@ -10758,7 +9519,7 @@ if (rounded) {
           <nav class="file-nav-breadcrumbs file-nav-breadcrumbs--modal" aria-label="Folder navigation">
             <ol class="file-nav-breadcrumb-list">
               <li class="file-nav-breadcrumb-item">
-                <button class="file-nav-breadcrumb-btn file-nav-breadcrumb-home" data-depth="0" aria-label="Navigate to root">🏠 Root</button>
+                <button class="file-nav-breadcrumb-btn file-nav-breadcrumb-home" data-depth="0" aria-label="Navigate to root">ðŸ  Root</button>
               </li>
               ${crumbItems.join('')}
             </ol>
@@ -10812,7 +9573,7 @@ if (rounded) {
                   <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
                 </svg>
               </button>
-              <span class="file-nav-folder-chevron" aria-hidden="true">›</span>
+              <span class="file-nav-folder-chevron" aria-hidden="true">â€º</span>
             </div>
           </div>`;
         })
@@ -11199,7 +9960,7 @@ if (rounded) {
       });
     }
 
-    // New folder button — creates folder inside currently viewed folder
+    // New folder button â€” creates folder inside currently viewed folder
     const addFolderBtn = modal.querySelector('#addFolderToProjectBtn');
     if (addFolderBtn) {
       addFolderBtn.addEventListener('click', async () => {
@@ -11308,7 +10069,7 @@ if (rounded) {
         if (!confirmed) return;
       }
 
-      dismissOverlay = showProcessingOverlay(`Loading "${project.name}"…`, {
+      dismissOverlay = showProcessingOverlay(`Loading "${project.name}"â€¦`, {
         hint: 'Large projects may take a moment to open.',
       });
 
@@ -11423,7 +10184,7 @@ if (rounded) {
           </div>
           <div id="saveProjectDuplicateWarning" style="display:none; margin-top: var(--space-md); padding: var(--space-sm) var(--space-md); border-radius: var(--radius-sm); background: color-mix(in srgb, var(--color-warning, #f59e0b) 15%, transparent); border: 1px solid var(--color-warning, #f59e0b);">
             <p style="margin: 0 0 var(--space-sm); font-weight: 600; color: var(--color-text-primary);">
-              ⚠ A project named &ldquo;<span id="saveProjectDuplicateName"></span>&rdquo; already exists.
+              âš  A project named &ldquo;<span id="saveProjectDuplicateName"></span>&rdquo; already exists.
             </p>
             <p style="margin: 0; color: var(--color-text-secondary); font-size: var(--text-sm);">
               Do you want to overwrite it, or save this as a new copy?
@@ -11527,7 +10288,7 @@ if (rounded) {
       modal.remove();
     }
 
-    // Handle save — shows inline duplicate confirmation when needed
+    // Handle save â€” shows inline duplicate confirmation when needed
     saveBtn.addEventListener('click', async () => {
       if (!checkbox.checked) return;
 
@@ -11536,7 +10297,7 @@ if (rounded) {
       const duplicate = existingProjects.find((p) => p.name === projectName);
 
       if (duplicate) {
-        // Show inline confirmation — no native dialog
+        // Show inline confirmation â€” no native dialog
         duplicateNameSpan.textContent = projectName;
         duplicateWarning.style.display = 'block';
 
@@ -12247,8 +11008,8 @@ if (rounded) {
       mainInterface.classList.remove('hidden');
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // MANIFEST DEEP-LINK LIFECYCLE — ORDER OF OPERATIONS
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // MANIFEST DEEP-LINK LIFECYCLE â€” ORDER OF OPERATIONS
     //
     // The steps below MUST execute in this exact order. Reordering them
     // causes hard-to-diagnose bugs (e.g. the processing overlay covering
@@ -12277,11 +11038,11 @@ if (rounded) {
     //
     // ERROR PATH: If any step after the overlay is shown throws, the
     // catch block dismisses the overlay to prevent it from getting stuck.
-    // ─────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     setTimeout(async () => {
       let dismissOverlay = null;
       try {
-        // Step 1 — GATE: first-visit acceptance must complete before we
+        // Step 1 â€” GATE: first-visit acceptance must complete before we
         // show any overlay or start any network requests. The first-visit
         // modal sits at z-index 1000; the processing overlay at z-index
         // 10000. Showing the overlay first would bury the modal and trap
@@ -12291,7 +11052,7 @@ if (rounded) {
           await waitForFirstVisitAcceptance();
         }
 
-        // Step 2 — OVERLAY: safe to show now that no blocking modal is open
+        // Step 2 â€” OVERLAY: safe to show now that no blocking modal is open
         dismissOverlay = showProcessingOverlay(
           'Loading project from manifest...',
           {
@@ -12299,7 +11060,7 @@ if (rounded) {
           }
         );
 
-        // Step 3 — DOWNLOAD
+        // Step 3 â€” DOWNLOAD
         const result = await loadManifest(manifestParam, {
           onProgress: ({ message }) => {
             updateStatus(message);
@@ -12319,7 +11080,7 @@ if (rounded) {
         );
         announceImmediate(`Loading project: ${projectName}`);
 
-        // Step 4 — PROCESS: parse and load the project into the editor
+        // Step 4 â€” PROCESS: parse and load the project into the editor
         await handleFile(
           null,
           mainContent,
@@ -12329,7 +11090,7 @@ if (rounded) {
           projectName
         );
 
-        // Step 5 — DISMISS OVERLAY before showing the save-copy modal
+        // Step 5 â€” DISMISS OVERLAY before showing the save-copy modal
         if (dismissOverlay) dismissOverlay();
 
         // Store manifest origin in state for provenance tracking
@@ -12413,7 +11174,7 @@ if (rounded) {
               }
               updatePrimaryActionButton();
 
-              updateStatus(`Loaded: ${projectName} — preset: ${match.name}`);
+              updateStatus(`Loaded: ${projectName} â€” preset: ${match.name}`);
               announceImmediate(
                 `${projectName} loaded with preset ${match.name}`
               );
@@ -12452,7 +11213,7 @@ if (rounded) {
 
         console.log(`[DeepLink] Manifest load complete: ${projectName}`);
 
-        // Step 6 — SAVE-COPY MODAL: prompt user to save a local copy
+        // Step 6 â€” SAVE-COPY MODAL: prompt user to save a local copy
         const saveCopyChoice = await showManifestSaveCopyModal(
           projectName,
           manifest.author
@@ -12665,7 +11426,7 @@ if (rounded) {
     }
   }
 
-  // Undo/Redo buttons in Parameters header — delegates to shared logic
+  // Undo/Redo buttons in Parameters header â€” delegates to shared logic
   const undoBtn = document.getElementById('undoBtn');
   const redoBtn = document.getElementById('redoBtn');
 
@@ -13475,7 +12236,7 @@ if (rounded) {
           const state = stateManager.getState();
           let { projectFiles, mainFilePath, uploadedFile: uf } = state;
 
-          // Initialize projectFiles Map if needed (single-file → multi-file)
+          // Initialize projectFiles Map if needed (single-file â†’ multi-file)
           if (!projectFiles && uf) {
             projectFiles = new Map();
             const mainPath = mainFilePath || uf.name;
@@ -13506,7 +12267,7 @@ if (rounded) {
           }
 
           // Update overlay dropdown with the new screenshot
-          updateOverlaySourceDropdown();
+          overlayGridCtrl.updateOverlaySourceDropdown();
         } catch (err) {
           console.error('[App] Measurement image upload failed:', err);
         }
@@ -14166,7 +12927,7 @@ if (rounded) {
         OUTPUT_FORMATS[outputFormat]?.name || outputFormat.toUpperCase();
 
       primaryActionBtn.disabled = true;
-      primaryActionBtn.textContent = `⏳ Generating ${formatName}...`;
+      primaryActionBtn.textContent = `â³ Generating ${formatName}...`;
 
       // Show cancel button
       cancelRenderBtn.classList.remove('hidden');
@@ -14214,7 +12975,7 @@ if (rounded) {
           outputFormatSelect.dispatchEvent(new Event('change'));
         }
         stateManager.setState({ outputFormat: 'svg' });
-        updateStatus('Generating SVG… (auto-switched from STL for 2D output)');
+        updateStatus('Generating SVGâ€¦ (auto-switched from STL for 2D output)');
       }
 
       // Use auto-preview controller for full render if available (STL only for now)
@@ -14259,7 +13020,7 @@ if (rounded) {
         } catch (renderErr) {
           if (renderErr.code === 'MODEL_NOT_2D') {
             updateStatus(
-              `Model produces 3D geometry — projecting to ${outputFormat.toUpperCase()}...`
+              `Model produces 3D geometry â€” projecting to ${outputFormat.toUpperCase()}...`
             );
             result = await renderController.render2DFallback(
               state.uploadedFile.content,
@@ -14404,7 +13165,7 @@ if (rounded) {
         return;
       }
 
-      // Special-case: SVG/DXF export failures — 3D geometry produced when 2D is required.
+      // Special-case: SVG/DXF export failures â€” 3D geometry produced when 2D is required.
       // Guide the user to the specific 'generate' parameter that controls the output mode.
       const currentFormat = outputFormatSelect?.value || 'stl';
       if (currentFormat === 'svg' || currentFormat === 'dxf') {
@@ -14858,12 +13619,12 @@ if (rounded) {
 
     const stateIcon =
       {
-        queued: '⏳',
-        rendering: '⚙️',
-        complete: '✅',
-        error: '❌',
-        cancelled: '⏹️',
-      }[job.state] || '❓';
+        queued: 'â³',
+        rendering: 'âš™ï¸',
+        complete: 'âœ…',
+        error: 'âŒ',
+        cancelled: 'â¹ï¸',
+      }[job.state] || 'â“';
 
     const formatName =
       OUTPUT_FORMATS[job.outputFormat]?.name || job.outputFormat.toUpperCase();
@@ -14881,10 +13642,10 @@ if (rounded) {
         ${job.result?.stats?.triangles ? `<div class="queue-item-stats">${job.result.stats.triangles.toLocaleString()} triangles</div>` : ''}
       </div>
       <div class="queue-item-actions">
-        ${job.state === 'complete' ? `<button class="btn btn-sm btn-primary" data-action="download" data-job-id="${job.id}" aria-label="Download ${job.name}">📥 Download</button>` : ''}
-        ${job.state === 'queued' ? `<button class="btn btn-sm btn-outline" data-action="edit" data-job-id="${job.id}" aria-label="Edit ${job.name} parameters">✏️ Edit</button>` : ''}
-        ${job.state === 'queued' ? `<button class="btn btn-sm btn-outline" data-action="cancel" data-job-id="${job.id}" aria-label="Cancel ${job.name}">⏹️ Cancel</button>` : ''}
-        ${job.state !== 'rendering' ? `<button class="btn btn-sm btn-outline" data-action="remove" data-job-id="${job.id}" aria-label="Remove ${job.name}">🗑️ Remove</button>` : ''}
+        ${job.state === 'complete' ? `<button class="btn btn-sm btn-primary" data-action="download" data-job-id="${job.id}" aria-label="Download ${job.name}">ðŸ“¥ Download</button>` : ''}
+        ${job.state === 'queued' ? `<button class="btn btn-sm btn-outline" data-action="edit" data-job-id="${job.id}" aria-label="Edit ${job.name} parameters">âœï¸ Edit</button>` : ''}
+        ${job.state === 'queued' ? `<button class="btn btn-sm btn-outline" data-action="cancel" data-job-id="${job.id}" aria-label="Cancel ${job.name}">â¹ï¸ Cancel</button>` : ''}
+        ${job.state !== 'rendering' ? `<button class="btn btn-sm btn-outline" data-action="remove" data-job-id="${job.id}" aria-label="Remove ${job.name}">ðŸ—‘ï¸ Remove</button>` : ''}
       </div>
     `;
 
@@ -15584,11 +14345,11 @@ if (rounded) {
     if (companionMapping?.aliases) {
       for (const [target, source] of Object.entries(companionMapping.aliases)) {
         if (aliasedFiles.has(target)) {
-          console.log(`[Preset] Alias-mounted: ${source} → ${target}`);
+          console.log(`[Preset] Alias-mounted: ${source} â†’ ${target}`);
         }
       }
     } else {
-      // COMPATIBILITY FALLBACK — legacy logging for {openingsPath, svgPath}
+      // COMPATIBILITY FALLBACK â€” legacy logging for {openingsPath, svgPath}
       if (
         companionMapping?.openingsPath &&
         aliasedFiles.has('openings_and_additions.txt')
@@ -15643,11 +14404,11 @@ if (rounded) {
       if (overlaySourceSelect) {
         overlaySourceSelect.value = svgTarget;
       }
-      loadOverlayFromProjectFile(svgTarget)
+      overlayGridCtrl.loadOverlayFromProjectFile(svgTarget)
         .then(() => {
           // SVG 96 DPI size applied; SCAD case-opening / screen dims override.
-          autoApplyScreenDimensionsFromParams(mergedParams);
-          updateOverlayUIFromConfig();
+          overlayGridCtrl.autoApplyScreenDimensionsFromParams(mergedParams);
+          overlayGridCtrl.updateOverlayUIFromConfig();
         })
         .catch((err) => {
           console.warn('[Preset] Failed to load preset SVG overlay:', err);
@@ -15862,7 +14623,7 @@ if (rounded) {
         return;
       }
 
-      // Auto-rename duplicates: "test1" → "test1 (1)" → "test1 (2)" etc.
+      // Auto-rename duplicates: "test1" â†’ "test1 (1)" â†’ "test1 (2)" etc.
       const existingPresets = presetManager.getPresetsForModel(
         state.uploadedFile.name
       );
@@ -15969,7 +14730,7 @@ if (rounded) {
     if (result.imported > 0 || result.skipped > 0) {
       let message = `Imported ${result.imported} design${result.imported !== 1 ? 's' : ''}`;
       if (result.skipped > 0) {
-        message += ` (${result.skipped} skipped — duplicate names)`;
+        message += ` (${result.skipped} skipped â€” duplicate names)`;
       }
       if (result.errors?.length > 0) {
         message += `\n\nErrors:\n${result.errors.join('\n')}`;
@@ -16032,7 +14793,7 @@ if (rounded) {
             <div class="preset-item-info">
               <h4 class="preset-item-name">${preset.name}</h4>
               <p class="preset-item-meta">
-                ${preset.description || 'No description'} • 
+                ${preset.description || 'No description'} â€¢ 
                 Created ${formatDate(preset.created)}
               </p>
             </div>
@@ -16060,10 +14821,10 @@ if (rounded) {
         </div>
         <div class="preset-import-export-actions" style="display:flex;gap:12px;padding:16px;border-bottom:1px solid var(--border-color, #e0e0e0);">
           <button class="btn btn-primary" data-action="import" style="flex:1;padding:12px;font-size:1em;">
-            📂 Import Designs
+            ðŸ“‚ Import Designs
           </button>
           <button class="btn btn-primary" data-action="export-all" style="flex:1;padding:12px;font-size:1em;">
-            💾 Export All Designs
+            ðŸ’¾ Export All Designs
           </button>
         </div>
         ${
@@ -16076,8 +14837,8 @@ if (rounded) {
           <div class="preset-list-toolbar">
             <label class="preset-sort-label" for="presetSortSelect">Sort</label>
             <select id="presetSortSelect" class="preset-sort-select" aria-label="Sort presets by">
-              <option value="name-asc"${currentSortOrder === 'name-asc' ? ' selected' : ''}>Name (A–Z)</option>
-              <option value="name-desc"${currentSortOrder === 'name-desc' ? ' selected' : ''}>Name (Z–A)</option>
+              <option value="name-asc"${currentSortOrder === 'name-asc' ? ' selected' : ''}>Name (Aâ€“Z)</option>
+              <option value="name-desc"${currentSortOrder === 'name-desc' ? ' selected' : ''}>Name (Zâ€“A)</option>
               <option value="date-created"${currentSortOrder === 'date-created' ? ' selected' : ''}>Date created (newest)</option>
               <option value="date-modified"${currentSortOrder === 'date-modified' ? ' selected' : ''}>Date modified (newest)</option>
             </select>
@@ -16115,7 +14876,7 @@ if (rounded) {
             <div class="preset-item-info">
               <h4 class="preset-item-name">${preset.name}</h4>
               <p class="preset-item-meta">
-                ${preset.description || 'No description'} •
+                ${preset.description || 'No description'} â€¢
                 Created ${formatDate(preset.created)}
               </p>
             </div>
@@ -16239,12 +15000,12 @@ if (rounded) {
                 <input type="radio" name="importMode" value="copies" />
                 <span class="import-mode-label">
                   <strong>Import as copies</strong>
-                  <span class="import-mode-desc">Import all designs; rename duplicates with (2), (3)… suffixes</span>
+                  <span class="import-mode-desc">Import all designs; rename duplicates with (2), (3)â€¦ suffixes</span>
                 </span>
               </label>
             </fieldset>
             <div class="import-mode-actions">
-              <button type="submit" value="ok" class="btn btn-primary">Choose files…</button>
+              <button type="submit" value="ok" class="btn btn-primary">Choose filesâ€¦</button>
               <button type="submit" value="cancel" class="btn btn-outline">Cancel</button>
             </div>
           </form>`;
@@ -16337,8 +15098,8 @@ if (rounded) {
             }
 
             // Map UI modes to importAndMergePresets conflictStrategy
-            // merge → 'keep' (skip duplicates by name)
-            // copies → 'rename' (append (2), (3) suffix)
+            // merge â†’ 'keep' (skip duplicates by name)
+            // copies â†’ 'rename' (append (2), (3) suffix)
             const conflictStrategy =
               importMode === 'copies' ? 'rename' : 'keep';
 
@@ -16450,9 +15211,9 @@ if (rounded) {
       setCurrentPresetSelection(savedPreset);
 
       // Brief visual feedback on button
-      savePresetBtn.textContent = '✓';
+      savePresetBtn.textContent = 'âœ“';
       setTimeout(() => {
-        savePresetBtn.textContent = '💾';
+        savePresetBtn.textContent = 'ðŸ’¾';
       }, 1500);
     } catch (error) {
       updateStatus(`Failed to save preset: ${error.message}`, 'error');
@@ -16488,7 +15249,7 @@ if (rounded) {
       return;
     }
 
-    // Show warning modal — deletion is irreversible
+    // Show warning modal â€” deletion is irreversible
     const confirmed = await showConfirmDialog(
       `Are you sure you want to delete the preset "<strong>${preset.name}</strong>"?<br><br>This action <strong>cannot be undone</strong>.`,
       'Delete Preset',
@@ -16528,7 +15289,7 @@ if (rounded) {
       try {
         localStorage.setItem(PRESET_SORT_KEY, presetDropdownSort.value);
       } catch (_) {
-        /* localStorage overflow — continue with in-memory value */
+        /* localStorage overflow â€” continue with in-memory value */
       }
       updatePresetDropdown();
       const label =
@@ -16599,7 +15360,7 @@ if (rounded) {
 
       _presetCombobox = initSearchableCombobox({
         container: comboContainer,
-        placeholder: 'Search presets…',
+        placeholder: 'Search presetsâ€¦',
         inputId: 'presetComboboxInput',
         disabled: true,
       });
@@ -16788,7 +15549,7 @@ if (rounded) {
       if (compatibility.extraParams.length > 0) {
         issueHtml += `
           <div class="preset-compat-section">
-            <h4>⚠️ Obsolete parameters (${compatibility.extraParams.length})</h4>
+            <h4>âš ï¸ Obsolete parameters (${compatibility.extraParams.length})</h4>
             <p>These preset parameters don't exist in the current file (may have been removed or renamed):</p>
             <ul class="preset-compat-list">
               ${compatibility.extraParams.map((p) => `<li><code>${escapeHtml(p)}</code></li>`).join('')}
@@ -16800,7 +15561,7 @@ if (rounded) {
       if (compatibility.missingParams.length > 0) {
         issueHtml += `
           <div class="preset-compat-section">
-            <h4>ℹ️ New parameters (${compatibility.missingParams.length})</h4>
+            <h4>â„¹ï¸ New parameters (${compatibility.missingParams.length})</h4>
             <p>These file parameters aren't in the preset (will use defaults):</p>
             <ul class="preset-compat-list">
               ${compatibility.missingParams
@@ -16919,9 +15680,9 @@ if (rounded) {
     const lineCount = state.uploadedFile.content.split('\n').length;
     const charCount = state.uploadedFile.content.length;
     sourceViewerInfo.innerHTML = `
-      <span>📄 ${state.uploadedFile.name}</span>
-      <span>📏 ${lineCount.toLocaleString()} lines</span>
-      <span>📊 ${charCount.toLocaleString()} characters</span>
+      <span>ðŸ“„ ${state.uploadedFile.name}</span>
+      <span>ðŸ“ ${lineCount.toLocaleString()} lines</span>
+      <span>ðŸ“Š ${charCount.toLocaleString()} characters</span>
     `;
 
     setTimeout(() => sourceViewerContent.focus(), 100);
@@ -16936,10 +15697,10 @@ if (rounded) {
 
     try {
       await navigator.clipboard.writeText(state.uploadedFile.content);
-      copySourceBtn.textContent = '✅ Copied!';
+      copySourceBtn.textContent = 'âœ… Copied!';
       updateStatus('Source code copied to clipboard');
       setTimeout(() => {
-        copySourceBtn.textContent = '📋 Copy Source';
+        copySourceBtn.textContent = 'ðŸ“‹ Copy Source';
       }, 2000);
     } catch (error) {
       console.error('Failed to copy source:', error);
@@ -16949,9 +15710,9 @@ if (rounded) {
       textarea.select();
       document.execCommand('copy');
       document.body.removeChild(textarea);
-      copySourceBtn.textContent = '✅ Copied!';
+      copySourceBtn.textContent = 'âœ… Copied!';
       setTimeout(() => {
-        copySourceBtn.textContent = '📋 Copy Source';
+        copySourceBtn.textContent = 'ðŸ“‹ Copy Source';
       }, 2000);
     }
   });
@@ -16967,9 +15728,9 @@ if (rounded) {
   sourceViewerCopy?.addEventListener('click', async () => {
     try {
       await navigator.clipboard.writeText(sourceViewerContent.value);
-      sourceViewerCopy.textContent = '✅ Copied!';
+      sourceViewerCopy.textContent = 'âœ… Copied!';
       setTimeout(() => {
-        sourceViewerCopy.textContent = '📋 Copy';
+        sourceViewerCopy.textContent = 'ðŸ“‹ Copy';
       }, 2000);
     } catch (error) {
       console.error('Failed to copy:', error);
@@ -17312,7 +16073,7 @@ if (rounded) {
 
     try {
       await navigator.clipboard.writeText(lastConsoleOutput);
-      consoleCopyBtn.textContent = '✅ Copied!';
+      consoleCopyBtn.textContent = 'âœ… Copied!';
       announceImmediate('Console output copied to clipboard');
       setTimeout(() => {
         consoleCopyBtn.innerHTML = `
@@ -17397,7 +16158,7 @@ if (rounded) {
 
     if (unlocked) {
       updateStatus(
-        '⚠️ Parameter limits unlocked - values outside normal range allowed'
+        'âš ï¸ Parameter limits unlocked - values outside normal range allowed'
       );
     } else {
       updateStatus('Parameter limits restored to defaults');
@@ -17517,10 +16278,10 @@ if (rounded) {
   paramsJsonCopy?.addEventListener('click', async () => {
     try {
       await navigator.clipboard.writeText(paramsJsonContent.value);
-      paramsJsonCopy.textContent = '✅ Copied!';
+      paramsJsonCopy.textContent = 'âœ… Copied!';
       updateStatus('Parameters JSON copied to clipboard');
       setTimeout(() => {
-        paramsJsonCopy.textContent = '📋 Copy';
+        paramsJsonCopy.textContent = 'ðŸ“‹ Copy';
       }, 2000);
     } catch (error) {
       console.error('Failed to copy:', error);
@@ -18324,7 +17085,7 @@ if (typeof window !== 'undefined') {
   window.libraryManager = libraryManager;
 }
 
-// Global error handlers — catch uncaught exceptions and unhandled promise
+// Global error handlers â€” catch uncaught exceptions and unhandled promise
 // rejections so screen reader users receive audible feedback.
 window.onerror = (message) => {
   console.error('[Global]', message);
