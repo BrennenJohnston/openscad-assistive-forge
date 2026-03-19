@@ -32,12 +32,10 @@ import {
   isValidServiceWorkerMessage,
 } from './js/html-utils.js';
 import {
-  analyzeComplexity,
-  getAdaptiveQualityConfig,
   getQualityPreset,
   COMPLEXITY_TIER,
 } from './js/quality-tiers.js';
-import { PreviewManager, getThreeModule } from './js/preview.js';
+import { getThreeModule } from './js/preview.js';
 import { normalizeHexColor } from './js/color-utils.js';
 import {
   AutoPreviewController,
@@ -45,23 +43,14 @@ import {
 } from './js/auto-preview-controller.js';
 import { resolve2DExportIntent, isNonPreviewable } from './js/render-intent.js';
 import {
-  extractZipFiles,
-  validateZipFile,
-  getZipStats,
-  buildPresetCompanionMap,
   applyCompanionAliases,
   getOverlaySvgTarget,
 } from './js/zip-handler.js';
 import { loadManifest, ManifestError } from './js/manifest-loader.js';
-import {
-  runPreflightCheck,
-  formatMissingDependencies,
-} from './js/dependency-checker.js';
 import { getConsolePanel } from './js/console-panel.js';
 import {
   getErrorLogPanel,
   initAddStructuredError,
-  ERROR_LOG_TYPE,
 } from './js/error-log-panel.js';
 import { themeManager, initThemeToggle } from './js/theme-manager.js';
 import {
@@ -99,10 +88,9 @@ import {
   exportProjectsBackup,
   exportSingleProject,
   importProjectsBackup,
-  importProjectFromFiles,
 } from './js/storage-manager.js';
 // showWorkflowProgress / hideWorkflowProgress moved to hfm-controller.js (applyToolbarModeVisibility)
-import { startTutorial, closeTutorial } from './js/tutorial-sandbox.js';
+import { startTutorial } from './js/tutorial-sandbox.js';
 import { initDrawerController } from './js/drawer-controller.js';
 import { initPreviewSettingsDrawer } from './js/preview-settings-drawer.js';
 import { initCameraPanelController } from './js/camera-panel-controller.js';
@@ -122,11 +110,7 @@ import {
   FLAGS as _FLAGS,
 } from './js/feature-flags.js';
 import { initSearchableCombobox } from './js/searchable-combobox.js';
-import {
-  initCompanionFilesController,
-  detectIncludeUse,
-  detectRequiredCompanionFiles,
-} from './js/companion-files-controller.js';
+import { initCompanionFilesController } from './js/companion-files-controller.js';
 import { initCSPReporter } from './js/csp-reporter.js';
 import {
   migrateStorageKeys,
@@ -193,16 +177,17 @@ import { getDisplayOptionsController } from './js/display-options-controller.js'
 // import { getAnimationController } from './js/animation-controller.js';
 import { getEditorStateManager } from './js/editor-state-manager.js';
 import { TextareaEditor } from './js/textarea-editor.js';
-import {
-  showConfirmDialog,
-  showMissingDependenciesDialog,
-} from './js/dialogs.js';
+import { showConfirmDialog } from './js/dialogs.js';
 import {
   initHfmController,
-  sanitizeUrlParams,
   exportFormatFromMenu,
   applyToolbarModeVisibility,
 } from './js/hfm-controller.js';
+import {
+  EXAMPLE_DEFINITIONS,
+  showProcessingOverlay,
+  initFileHandler,
+} from './js/file-handler.js';
 import {
   initMemoryMonitor,
   getMemoryMonitor as _getMemoryMonitor,
@@ -256,40 +241,7 @@ function resolve2DExportParameters(parameters, schema, format) {
   return resolved;
 }
 
-// Example definitions (used by welcome screen, Features Guide, and deep-linking)
-// Direct-launch URLs for external website integration
-// Usage: ?example=simple-box or ?load=colored-box
-const EXAMPLE_DEFINITIONS = {
-  'simple-box': {
-    path: '/examples/simple-box/simple_box.scad',
-    name: 'simple_box.scad',
-  },
-  cylinder: {
-    path: '/examples/parametric-cylinder/parametric_cylinder.scad',
-    name: 'parametric_cylinder.scad',
-  },
-  'library-test': {
-    path: '/examples/library-test/library_test.scad',
-    name: 'library_test.scad',
-  },
-  'colored-box': {
-    path: '/examples/colored-box/colored_box.scad',
-    name: 'colored_box.scad',
-  },
-  'multi-file-box': {
-    path: '/examples/multi-file-box.zip',
-    name: 'multi-file-box.zip',
-  },
-  // Additional examples for deep-linking
-  'cable-organizer': {
-    path: '/examples/cable-organizer/cable_organizer.scad',
-    name: 'cable_organizer.scad',
-  },
-  'honeycomb-grid': {
-    path: '/examples/honeycomb-grid/honeycomb_grid.scad',
-    name: 'honeycomb_grid.scad',
-  },
-};
+// EXAMPLE_DEFINITIONS moved to file-handler.js
 
 // Feature detection
 function checkBrowserSupport() {
@@ -632,12 +584,17 @@ async function initApp() {
 
   // CRITICAL: Import validation constants early to avoid TDZ in handleFile()
   let FILE_SIZE_LIMITS = null;
+  let validateFileUpload = null;
   try {
     const validationModule = await import('./js/validation-constants.js');
     FILE_SIZE_LIMITS = validationModule.FILE_SIZE_LIMITS;
   } catch (e) {
     console.error('Failed to import validation constants:', e);
   }
+
+  // File handler controller -- declared early so wrappers can reference it;
+  // assigned after all const deps are available (see initFileHandler call below).
+  let fileHandler; // eslint-disable-line prefer-const
 
   function cloneProjectFiles(files) {
     return files ? new Map(files) : null;
@@ -970,7 +927,7 @@ async function initApp() {
   const savedProjectsUI = initSavedProjectsUI({
     showConfirmDialog,
     showProcessingOverlay,
-    handleFile,
+    handleFile: (...args) => fileHandler.handleFile(...args),
     updateStatus,
     updateCompanionSaveButton: (...args) => companionFilesCtrl.updateCompanionSaveButton(...args),
     downloadSingleProject,
@@ -1445,7 +1402,7 @@ async function initApp() {
             );
             const files = [];
             try {
-              await _collectFilesFromDir(dirHandle, dirHandle.name, files);
+              await fileHandler.collectFilesFromDir(dirHandle, dirHandle.name, files);
             } catch (collectErr) {
               dismissOverlay();
               alert(`Error reading folder contents: ${collectErr.message}`);
@@ -1459,7 +1416,7 @@ async function initApp() {
               return;
             }
             dismissOverlay();
-            await handleFolderImport(files);
+            await fileHandler.handleFolderImport(files);
           } catch (err) {
             dismissOverlay();
             if (err.name === 'AbortError') {
@@ -1483,7 +1440,7 @@ async function initApp() {
             updateStatus('No files in selected folder');
             return;
           }
-          await handleFolderImport(files);
+          await fileHandler.handleFolderImport(files);
           importFolderInput.value = '';
         } catch (err) {
           alert(`Folder import error: ${err.message}`);
@@ -1492,188 +1449,11 @@ async function initApp() {
     }
   }
 
-  /**
-   * Recursively collect files from a FileSystemDirectoryHandle.
-   * Attaches webkitRelativePath to each File for compatibility with handleFolderImport.
-   */
-  async function _collectFilesFromDir(dirHandle, basePath, out) {
-    for await (const entry of dirHandle.values()) {
-      if (entry.kind === 'file') {
-        const file = await entry.getFile();
-        const relPath = `${basePath}/${entry.name}`;
-        Object.defineProperty(file, 'webkitRelativePath', {
-          value: relPath,
-          writable: false,
-        });
-        out.push(file);
-      } else if (entry.kind === 'directory') {
-        await _collectFilesFromDir(entry, `${basePath}/${entry.name}`, out);
-      }
-    }
-  }
+  // _collectFilesFromDir moved to file-handler.js
 
-  /**
-   * Handle a folder selection from the webkitdirectory input or showDirectoryPicker.
-   * @param {FileList|File[]} files - FileList or array of Files with webkitRelativePath
-   */
-  async function handleFolderImport(files) {
-    const fileArr = Array.from(files);
-    let dismissOverlay = () => {};
+  // handleFolderImport moved to file-handler.js
 
-    dismissOverlay = showProcessingOverlay(
-      `Processing ${fileArr.length} files from folderâ€¦`,
-      'Analyzing project structure. Please do not close or refresh the page.'
-    );
-
-    // Size guards â€” generous limits for real-world multi-folder projects
-    const MAX_FILES = 500;
-    const MAX_BYTES = 100 * 1024 * 1024; // 100 MB
-    const WARN_FILES = 200;
-
-    const totalBytes = fileArr.reduce((sum, f) => sum + f.size, 0);
-
-    if (fileArr.length > MAX_FILES) {
-      dismissOverlay();
-      alert(
-        `The selected folder contains ${fileArr.length} files (limit: ${MAX_FILES}). ` +
-          `Please select a smaller project folder.`
-      );
-      return;
-    }
-
-    if (totalBytes > MAX_BYTES) {
-      dismissOverlay();
-      const mb = (totalBytes / 1024 / 1024).toFixed(1);
-      alert(
-        `The selected folder is ${mb} MB (limit: 100 MB). ` +
-          `Please select a smaller project folder.`
-      );
-      return;
-    }
-
-    if (fileArr.length > WARN_FILES) {
-      console.warn(
-        `[FolderImport] ${fileArr.length} files selected â€” large project folder.`
-      );
-    }
-
-    // Find the root directory name (all files share the same first path segment)
-    const rootDir = fileArr[0]?.webkitRelativePath?.split('/')[0] || '';
-
-    // Detect .scad files in the root
-    const scadInRoot = fileArr.filter((f) => {
-      const rel = f.webkitRelativePath || f.name;
-      const parts = rel.split('/');
-      return parts.length === 2 && parts[1].endsWith('.scad');
-    });
-
-    const scadAnywhere = fileArr.filter((f) =>
-      (f.webkitRelativePath || f.name).endsWith('.scad')
-    );
-
-    let mainFilePath = null;
-
-    if (scadInRoot.length === 1) {
-      mainFilePath = scadInRoot[0].webkitRelativePath;
-    } else if (scadInRoot.length > 1) {
-      dismissOverlay();
-      mainFilePath = await _promptScadSelection(
-        scadInRoot.map((f) => f.webkitRelativePath),
-        'Multiple .scad files found in the folder root. Select the main file:'
-      );
-    } else if (scadAnywhere.length > 0) {
-      dismissOverlay();
-      mainFilePath = await _promptScadSelection(
-        scadAnywhere.map((f) => f.webkitRelativePath),
-        'No .scad files found in the folder root. Select the main file:'
-      );
-    } else {
-      dismissOverlay();
-      alert('No OpenSCAD (.scad) files found in the selected folder.');
-      return;
-    }
-
-    if (!mainFilePath) return;
-
-    const totalMB = (totalBytes / (1024 * 1024)).toFixed(1);
-    dismissOverlay = showProcessingOverlay(
-      `Importing folder "${rootDir}" (${fileArr.length} files, ${totalMB} MB)â€¦`,
-      'This may take a moment for large projects. Please do not close or refresh the page.'
-    );
-
-    try {
-      const result = await importProjectFromFiles(files, mainFilePath);
-
-      dismissOverlay();
-
-      if (result.success) {
-        updateStatus(`Folder imported: ${rootDir || mainFilePath}`);
-        await savedProjectsUI.renderSavedProjectsList();
-        // Auto-load the imported project (matches .zip behaviour)
-        if (result.id) {
-          await savedProjectsUI.loadSavedProject(result.id);
-        }
-      } else {
-        alert(`Folder import failed: ${result.error}`);
-      }
-    } catch (err) {
-      dismissOverlay();
-      alert(`Folder import failed: ${err.message}`);
-    }
-  }
-
-  /**
-   * Show a modal prompting the user to select one .scad file from a list.
-   * @param {string[]} paths - webkitRelativePath values to choose from
-   * @param {string} prompt - Heading text
-   * @returns {Promise<string|null>} Selected path, or null if cancelled
-   */
-  async function _promptScadSelection(paths, prompt) {
-    return new Promise((resolve) => {
-      const dialog = document.createElement('dialog');
-      dialog.className = 'folder-scad-select-dialog';
-      dialog.setAttribute('aria-labelledby', 'scadSelectTitle');
-
-      const optionsHtml = paths
-        .map(
-          (p, i) =>
-            `<label class="import-mode-option">
-              <input type="radio" name="scadFile" value="${p}"${i === 0 ? ' checked' : ''} />
-              <span>${p.split('/').pop()}</span>
-            </label>`
-        )
-        .join('');
-
-      dialog.innerHTML = `
-        <form method="dialog" class="import-mode-form">
-          <h3 id="scadSelectTitle" class="import-mode-title">${prompt}</h3>
-          <fieldset class="import-mode-fieldset">
-            <legend class="import-mode-legend">Select main .scad file</legend>
-            ${optionsHtml}
-          </fieldset>
-          <div class="import-mode-actions">
-            <button type="submit" value="ok" class="btn btn-primary">Import</button>
-            <button type="submit" value="cancel" class="btn btn-outline">Cancel</button>
-          </div>
-        </form>`;
-
-      document.body.appendChild(dialog);
-      dialog.showModal();
-
-      dialog.addEventListener(
-        'close',
-        () => {
-          const returnValue = dialog.returnValue;
-          const selected =
-            dialog.querySelector('input[name="scadFile"]:checked')?.value ||
-            null;
-          document.body.removeChild(dialog);
-          resolve(returnValue === 'ok' ? selected : null);
-        },
-        { once: true }
-      );
-    });
-  }
+  // _promptScadSelection moved to file-handler.js
 
   let storageUpdateTimeout = null;
   const scheduleStorageUpdate = (delayMs = 2500) => {
@@ -1855,8 +1635,7 @@ async function initApp() {
 
       if (shouldRestore) {
         console.log('Restoring deferred draft...');
-        // handleFile will be available since it's defined later but hoisted
-        handleFile(
+        fileHandler.handleFile(
           { name: draftToRestore.fileName },
           draftToRestore.fileContent,
           null,
@@ -2068,7 +1847,7 @@ async function initApp() {
     onReload: () => {
       const state = stateManager.getState();
       if (state.uploadedFile) {
-        handleFile(
+        fileHandler.handleFile(
           null,
           state.uploadedFile.content,
           state.projectFiles || null,
@@ -2220,7 +1999,7 @@ async function initApp() {
         items: Object.entries(EXAMPLE_DEFINITIONS).map(([key, def]) => ({
           type: 'action',
           label: def.description || def.name,
-          handler: () => loadExampleByKey(key),
+          handler: () => fileHandler.loadExampleByKey(key),
         })),
       },
       {
@@ -4921,7 +4700,43 @@ async function initApp() {
   }
 
   // Import shared validation schemas (FILE_SIZE_LIMITS is now imported at top of initApp() to avoid TDZ)
-  const { validateFileUpload } = await import('./js/validation-schemas.js');
+  ({ validateFileUpload } = await import('./js/validation-schemas.js'));
+
+  // Initialize file handler controller (extracted from main.js)
+  fileHandler = initFileHandler({
+    getPreviewManager: () => previewManager,
+    setPreviewManager: (pm) => { previewManager = pm; },
+    getAutoPreviewController: () => autoPreviewController,
+    getAutoPreviewEnabled: () => autoPreviewEnabled,
+    setCurrentSavedProjectId: (id) => { currentSavedProjectId = id; },
+    setPresetCompanionMap: (map) => { presetCompanionMap = map; },
+    getFileSizeLimits: () => FILE_SIZE_LIMITS,
+    getValidateFileUpload: () => validateFileUpload,
+    getCameraPanelController: () => cameraPanelController,
+    getOverlayGridCtrl: () => overlayGridCtrl,
+    getCompanionFilesCtrl: () => companionFilesCtrl,
+    getHfmCtrl: () => hfmCtrl,
+    getSavedProjectsUI: () => savedProjectsUI,
+    getFileActionsController: () => fileActionsController,
+    getLibraryManager: () => libraryManager,
+    getPreviewContainer: () => previewContainer,
+    getPreviewStateIndicator: () => previewStateIndicator,
+    getRenderingOverlay: () => renderingOverlay,
+    updateStatus,
+    updatePreviewDrawer,
+    updatePrimaryActionButton,
+    updateColorLegend: _updateColorLegend,
+    updatePreviewStateUI,
+    clearPresetSelection,
+    forceClearPresetSelection,
+    updatePresetDropdown,
+    syncPreviewModelColorOverride,
+    syncPreviewAppearanceOverride,
+    initAutoPreviewController,
+    setCanonicalProjectFiles,
+    renderLibraryUI,
+    getEnabledLibrariesForRender,
+  });
 
   // Check for saved draft - but only if first-visit modal is not blocking
   // If first-visit is blocking, defer draft restoration until user accepts
@@ -4949,7 +4764,7 @@ async function initApp() {
       if (shouldRestore) {
         console.log('Restoring draft...');
         // Treat draft as uploaded file
-        handleFile(
+        fileHandler.handleFile(
           { name: draft.fileName },
           draft.fileContent,
           null,
@@ -5008,7 +4823,7 @@ async function initApp() {
       );
 
       // Process the embedded content using handleFile
-      handleFile({ name: fileName }, scadContent, null, null, 'example');
+      fileHandler.handleFile({ name: fileName }, scadContent, null, null, 'example');
 
       return true;
     } catch (e) {
@@ -5196,937 +5011,15 @@ async function initApp() {
   // editProjectFile, applyTextFileEditorChanges, updateProjectFilesUI)
   // moved to companion-files-controller.js
 
-  /**
-   * Show a full-screen processing overlay for long operations.
-   *
-   * IMPORTANT: This overlay renders at z-index 10000, which is ABOVE all
-   * modals (z-index 1000). Callers MUST ensure no blocking modal (especially
-   * the first-visit disclosure) is open when invoking this function, or the
-   * modal's buttons will be unreachable. Always await
-   * waitForFirstVisitAcceptance() before calling this.
-   *
-   * @param {string} message - Primary message
-   * @param {Object} [opts]
-   * @param {string} [opts.hint] - Secondary hint text
-   * @param {number} [opts.delayMs=0] - Delay before showing (0 = immediate)
-   * @returns {Function} dismiss callback (safe to call multiple times)
-   */
-  function showProcessingOverlay(message, opts = {}) {
-    const { hint = 'Please do not close or refresh the page.', delayMs = 0 } =
-      typeof opts === 'string' ? { hint: opts } : opts;
-    let dismissed = false;
-    let timerId = null;
+  // showProcessingOverlay moved to file-handler.js
 
-    const show = () => {
-      if (dismissed) return;
-      let overlay = document.getElementById('processingOverlay');
-      if (!overlay) {
-        overlay = document.createElement('div');
-        overlay.id = 'processingOverlay';
-        overlay.className = 'processing-overlay';
-        overlay.setAttribute('role', 'alert');
-        overlay.setAttribute('aria-live', 'assertive');
-        overlay.innerHTML = `
-          <div class="processing-spinner"></div>
-          <div class="processing-message"></div>
-          <div class="processing-hint"></div>
-        `;
-        document.body.appendChild(overlay);
-      }
-      overlay.querySelector('.processing-message').textContent = message;
-      overlay.querySelector('.processing-hint').textContent = hint;
-    };
-
-    if (delayMs > 0) {
-      timerId = setTimeout(show, delayMs);
-    } else {
-      show();
-    }
-
-    return () => {
-      dismissed = true;
-      if (timerId) clearTimeout(timerId);
-      const el = document.getElementById('processingOverlay');
-      if (el) el.remove();
-    };
-  }
-
-  // Handle file upload (supports both .scad and .zip files)
-  async function handleFile(
-    file,
-    content = null,
-    extractedFiles = null,
-    mainFilePathArg = null,
-    source = 'user', // 'user' | 'example' | 'saved' - track upload source
-    originalFileNameArg = null // Original file name (e.g., ZIP name) for multi-file projects
-  ) {
-    if (!file && !content) return;
-
-    const rawFileName =
-      typeof file?.name === 'string' && file.name.trim().length > 0
-        ? file.name
-        : '';
-    let fileName = rawFileName || 'example.scad';
-    let fileContent = content;
-    let projectFiles = extractedFiles; // Map of additional files for multi-file projects
-    let mainFilePath = mainFilePathArg; // Path to main file in multi-file project (passed from ZIP extraction)
-    // For ZIP files, preserve the original ZIP filename for display/save purposes
-    const originalFileName = originalFileNameArg || fileName;
-
-    if (file) {
-      const fileNameLower = fileName.toLowerCase();
-      // Only validate file metadata for actual File objects (user uploads)
-      // Skip validation when content is already provided (example loading path)
-      const isZip = fileNameLower.endsWith('.zip');
-      const isScad = fileNameLower.endsWith('.scad');
-      const isActualFileUpload = !content && file instanceof File;
-
-      if (isActualFileUpload) {
-        if (!isZip && !isScad) {
-          alert('Please upload a .scad or .zip file');
-          return;
-        }
-
-        // Validate file metadata with Ajv before processing
-        const fileMeta = {
-          name: fileNameLower,
-          size: file.size,
-        };
-
-        const isValid = validateFileUpload(fileMeta);
-        if (!isValid) {
-          const fileSizeMB = (file.size / (1024 * 1024)).toFixed(1);
-          const isZipName = fileNameLower.endsWith('.zip');
-          const isScadName = fileNameLower.endsWith('.scad');
-          let userMsg;
-          if (isZipName) {
-            const limitMB = (FILE_SIZE_LIMITS.ZIP_FILE / (1024 * 1024)).toFixed(
-              0
-            );
-            userMsg = `ZIP file is too large (${fileSizeMB} MB). Maximum allowed size is ${limitMB} MB.`;
-          } else if (isScadName) {
-            const limitMB = (
-              FILE_SIZE_LIMITS.SCAD_FILE /
-              (1024 * 1024)
-            ).toFixed(0);
-            userMsg = `.scad file is too large (${fileSizeMB} MB). Maximum allowed size is ${limitMB} MB.`;
-          } else {
-            userMsg = 'Please upload a .scad or .zip file.';
-          }
-          alert(userMsg);
-          console.error(
-            '[File Upload] Validation failed:',
-            validateFileUpload.errors
-          );
-          return;
-        }
-      }
-
-      // Handle ZIP files - but SKIP if content is already provided (e.g., from saved project)
-      // When loading a saved ZIP project, content and extractedFiles are already available
-      if (isZip && !content && !extractedFiles) {
-        const validation = validateZipFile(file);
-        if (!validation.valid) {
-          alert(validation.error);
-          return;
-        }
-
-        let dismissOverlay = () => {};
-        try {
-          const fileSizeMB = (file.size / (1024 * 1024)).toFixed(1);
-          dismissOverlay = showProcessingOverlay(
-            `Opening project (${fileSizeMB} MB)â€¦`,
-            'This may take a moment for large files. Please do not close or refresh the page.'
-          );
-          updateStatus('Extracting ZIP file...');
-          const { files, mainFile } = await extractZipFiles(file);
-
-          // Get statistics
-          const stats = getZipStats(files);
-          console.log('[ZIP] Statistics:', stats);
-
-          // Get main file content
-          fileContent = files.get(mainFile);
-          fileName = mainFile;
-          mainFilePath = mainFile;
-
-          // Store all files except the main one (main is passed as scadContent)
-          projectFiles = new Map(files);
-          // Note: We keep the main file in projectFiles for include/use resolution
-
-          console.log(
-            `[ZIP] Loaded multi-file project: ${mainFile} (${stats.totalFiles} files)`
-          );
-
-          // Dependency preflight check: verify all include/use/import files are present
-          // Check if all include/use/import files are present in the ZIP
-          const uploadedFilenames = Array.from(files.keys());
-          const preflight = runPreflightCheck(fileContent, uploadedFilenames, {
-            availableLibraries: new Set(
-              Object.keys(LIBRARY_DEFINITIONS).map((k) => k.toLowerCase())
-            ),
-          });
-
-          if (!preflight.success) {
-            console.warn(
-              '[ZIP] Missing dependencies detected:',
-              preflight.missing
-            );
-            // Dismiss the processing overlay so the dialog is accessible
-            dismissOverlay();
-
-            const result = await showMissingDependenciesDialog(
-              preflight.missing,
-              file.name
-            );
-
-            if (result.action === 'cancel') {
-              updateStatus('Upload cancelled - missing dependencies');
-              return;
-            }
-
-            if (result.action === 'add-files' && result.addedFiles?.size > 0) {
-              for (const [name, content] of result.addedFiles) {
-                files.set(name, content);
-                projectFiles.set(name, content);
-              }
-              console.log(
-                `[ZIP] User added ${result.addedFiles.size} missing file(s):`,
-                Array.from(result.addedFiles.keys())
-              );
-            }
-
-            // Re-show overlay while we finish loading
-            dismissOverlay = showProcessingOverlay(
-              `Opening projectâ€¦`,
-              result.action === 'add-files'
-                ? 'Loading with added files.'
-                : 'Continuing with available files.'
-            );
-
-            if (result.action === 'continue') {
-              console.warn(
-                '[ZIP] Continuing despite missing files:',
-                formatMissingDependencies(preflight.missing)
-              );
-            }
-          }
-
-          dismissOverlay();
-          // Continue with extracted content, passing mainFilePath and original ZIP name
-          // The original ZIP filename is used as the default project name when saving
-          const zipFileName = file.name;
-          handleFile(
-            null,
-            fileContent,
-            projectFiles,
-            mainFilePath,
-            source,
-            zipFileName
-          );
-          return;
-        } catch (error) {
-          dismissOverlay();
-          console.error('[ZIP] Extraction failed:', error);
-          updateStatus('Failed to extract ZIP file');
-          _announceError('Failed to extract ZIP file');
-          alert(error.message);
-          return;
-        }
-      }
-
-      // Handle single .scad files (existing logic)
-      if (file.size > FILE_SIZE_LIMITS.SCAD_FILE) {
-        const limitMB = FILE_SIZE_LIMITS.SCAD_FILE / (1024 * 1024);
-        alert(`File size exceeds ${limitMB}MB limit`);
-        return;
-      }
-    }
-
-    if (file && !content) {
-      const originalFileName = fileName; // Preserve file name for recursive call
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        // Pass a minimal object with the original file name
-        handleFile(
-          { name: originalFileName },
-          e.target.result,
-          extractedFiles,
-          mainFilePath,
-          source
-        );
-      };
-      reader.readAsText(file);
-      return;
-    }
-
-    console.log('File loaded:', fileName, fileContent.length, 'bytes');
-
-    // Single-file preflight: detect missing companion include/use/import files.
-    // The ZIP path already runs its own preflight above; only check here for
-    // bare .scad uploads where extractedFiles is null.
-    if (!extractedFiles) {
-      const singleFilePreflight = runPreflightCheck(fileContent, [fileName], {
-        availableLibraries: new Set(
-          Object.keys(LIBRARY_DEFINITIONS).map((k) => k.toLowerCase())
-        ),
-      });
-      if (!singleFilePreflight.success) {
-        const allMissingFiles = [
-          ...singleFilePreflight.missing.includes,
-          ...singleFilePreflight.missing.uses,
-          ...singleFilePreflight.missing.imports,
-        ].join(', ');
-        console.warn(
-          '[Upload] Single-file upload references missing companion files:',
-          singleFilePreflight.missing
-        );
-        getErrorLogPanel().addEntry({
-          type: ERROR_LOG_TYPE.WARNING,
-          group: 'Import',
-          file: fileName,
-          line: null,
-          message: `Missing companion files: ${allMissingFiles} â€” upload the full project folder or ZIP to include all dependencies`,
-          timestamp: Date.now(),
-        });
-      }
-    }
-
-    // Extract parameters
-    updateStatus('Extracting parameters...');
-    try {
-      const extracted = extractParameters(fileContent);
-      console.log('Extracted parameters:', extracted);
-
-      const paramCount = Object.keys(extracted.parameters).length;
-      console.log(
-        `Found ${paramCount} parameters in ${extracted.groups.length} groups`
-      );
-      const colorParamNames = Object.values(extracted.parameters)
-        .filter((param) => param.uiType === 'color')
-        .map((param) => param.name);
-
-      // Analyze file complexity to determine quality tier
-      const complexityAnalysis = analyzeComplexity(fileContent, {});
-      const adaptiveConfig = getAdaptiveQualityConfig(fileContent, {});
-
-      console.log('[Complexity] Analysis:', {
-        tier: adaptiveConfig.tierName,
-        score: complexityAnalysis.score,
-        curvedFeatures: complexityAnalysis.estimatedCurvedFeatures,
-        hardware: adaptiveConfig.hardware.level,
-        warnings: complexityAnalysis.warnings,
-      });
-
-      // Show complexity warnings if any
-      if (complexityAnalysis.warnings.length > 0) {
-        complexityAnalysis.warnings.forEach((w) =>
-          console.warn('[Complexity]', w)
-        );
-      }
-
-      // Build paramTypes map from schema for boolean vs string disambiguation
-      // This is critical for "yes"/"no" string dropdown parameters (e.g. expose_home_button)
-      // which must NOT be converted to OpenSCAD booleans true/false.
-      const paramTypes = {};
-      for (const [pName, pDef] of Object.entries(extracted.parameters || {})) {
-        paramTypes[pName] = pDef.type || 'string';
-      }
-
-      // Store in state (including project files for multi-file support)
-      // For ZIP files: fileName = main .scad file, originalFileName = ZIP name
-      // For single files: both are the same
-      stateManager.setState({
-        uploadedFile: { name: originalFileName, content: fileContent },
-        projectFiles: projectFiles || null, // Map of additional files (null for single-file projects)
-        mainFilePath: mainFilePath || fileName, // Track main file path (the .scad file inside ZIP)
-        schema: extracted,
-        paramTypes,
-        parameters: {},
-        defaults: {},
-        // Adaptive quality configuration
-        complexityTier: adaptiveConfig.tier,
-        complexityAnalysis: complexityAnalysis,
-        adaptiveQualityConfig: adaptiveConfig,
-      });
-      setCanonicalProjectFiles(projectFiles || null);
-
-      // Clear undo/redo history on new file upload
-      stateManager.clearHistory();
-
-      // Project isolation: reset all project-scoped state so data from
-      // a previously loaded project never bleeds into the new one.
-      forceClearPresetSelection();
-      presetCompanionMap = null;
-
-      // Clear the reference overlay (SVG/image) from the previous project so it
-      // doesn't appear under the new project's model.
-      if (previewManager) {
-        previewManager.setReferenceOverlaySource({
-          kind: null,
-          name: null,
-          dataUrlOrText: null,
-        });
-        previewManager.setOverlayEnabled(false);
-      }
-      if (overlayToggle) overlayToggle.checked = false;
-      if (overlaySourceSelect) overlaySourceSelect.value = '';
-
-      // Reset saved project tracking for new uploads (not reloads from saved projects)
-      if (source !== 'saved') {
-        currentSavedProjectId = null;
-      }
-
-      // Reset output format to STL for fresh project loads â€”
-      // dispatch change to update format info panel and 2D guidance.
-      if (outputFormatSelect && outputFormatSelect.value !== 'stl') {
-        outputFormatSelect.value = 'stl';
-        outputFormatSelect.dispatchEvent(new Event('change'));
-      }
-      stateManager.setState({ outputFormat: 'stl' });
-
-      // Show main interface
-      welcomeScreen.classList.add('hidden');
-      mainInterface.classList.remove('hidden');
-
-      // Layout reset: clear stale visual state from a previous project so the
-      // flex layout computes cleanly when mainInterface transitions from
-      // display:none back to flex.  Without this, the echo drawer can remain
-      // expanded with old warnings, scroll positions can be non-zero (from
-      // browser auto-scroll), and the Three.js canvas may retain stale
-      // dimensions â€” all of which combine to produce a blank region and an
-      // upward layout shift that hides the app header.
-      updatePreviewDrawer([]);
-      if (typeof window.clearConsoleState === 'function') {
-        window.clearConsoleState();
-      }
-      const appEl = document.getElementById('app');
-      if (appEl) appEl.scrollTop = 0;
-      const appMainEl = document.getElementById('main-content');
-      if (appMainEl) appMainEl.scrollTop = 0;
-      const previewContentEl = document.querySelector('.preview-content');
-      if (previewContentEl) previewContentEl.scrollTop = 0;
-      requestAnimationFrame(() => {
-        if (previewManager) previewManager.handleResize();
-      });
-
-      // Update file info summary (used by E2E tests and screen readers)
-      const fileInfoSummaryEl = document.getElementById('fileInfoSummary');
-      if (fileInfoSummaryEl && fileName) {
-        fileInfoSummaryEl.textContent = fileName;
-      }
-
-      // Apply mode-aware toolbar/workflow visibility now that the main interface
-      // is active. Advanced: toolbar visible, workflow hidden. Basic: vice versa.
-      applyToolbarModeVisibility(getUIModeController().getMode());
-
-      // Detect include/use statements for single-file uploads
-      let includeUseWarning = '';
-      if (!projectFiles || projectFiles.size <= 1) {
-        const detection = detectIncludeUse(fileContent);
-        if (detection.hasIncludes || detection.hasUse) {
-          const fileList = detection.files.join(', ');
-          includeUseWarning = `\nâš ï¸ Note: This file references external files (${fileList}). For multi-file projects, upload a ZIP containing all files.`;
-          console.warn(
-            '[Upload] Single-file upload with include/use detected:',
-            detection.files
-          );
-        }
-      }
-
-      // Enable compact header after file is loaded
-      const appHeader = document.querySelector('.app-header');
-      if (appHeader) {
-        appHeader.classList.add('compact');
-      }
-
-      // Update complexity tier indicator
-      const complexityTierLabel = document.getElementById(
-        'complexityTierLabel'
-      );
-      if (complexityTierLabel) {
-        const tierName = adaptiveConfig.tierName;
-        complexityTierLabel.textContent = tierName;
-        complexityTierLabel.className = `complexity-tier-label tier-${adaptiveConfig.tier}`;
-        complexityTierLabel.title =
-          `${adaptiveConfig.tierDescription}\n` +
-          `Curved features: ~${complexityAnalysis.estimatedCurvedFeatures}\n` +
-          `Hardware: ${adaptiveConfig.hardware.level}\n` +
-          `Preview: ${adaptiveConfig.defaultPreviewLevel}, Export: ${adaptiveConfig.defaultExportLevel}`;
-      }
-
-      // Show include/use warning in status if detected
-      if (includeUseWarning) {
-        updateStatus(`File loaded. ${includeUseWarning.trim()}`);
-      }
-
-      // Handle detected libraries
-      const detectedLibraries = extracted.libraries || [];
-      console.log('Detected libraries:', detectedLibraries);
-      stateManager.setState({
-        detectedLibraries,
-      });
-
-      // Auto-enable detected libraries
-      if (detectedLibraries.length > 0) {
-        const autoEnabled = libraryManager.autoEnable(fileContent);
-        if (autoEnabled.length > 0) {
-          console.log('Auto-enabled libraries:', autoEnabled);
-          updateStatus(`Enabled ${autoEnabled.length} required libraries`);
-        }
-      }
-
-      // Always show library UI (even when no libraries detected)
-      renderLibraryUI(detectedLibraries);
-
-      // Render parameter UI
-      const parametersContainer = document.getElementById(
-        'parametersContainer'
-      );
-      const currentValues = renderParameterUI(
-        extracted,
-        parametersContainer,
-        (values) => {
-          // Record state for undo before applying change
-          stateManager.recordParameterState();
-          stateManager.setState({ parameters: values });
-          // Clear preset selection when parameters are manually changed
-          clearPresetSelection(values);
-          // Trigger auto-preview on parameter change
-          if (autoPreviewController) {
-            autoPreviewController.onParameterChange(values);
-          }
-          // Update button state when parameters change
-          updatePrimaryActionButton();
-          // Refresh color legend swatches with new parameter values
-          _updateColorLegend();
-          // Sync overlay with include_screenshot param
-          companionFilesCtrl.syncOverlayWithScreenshotParam(values);
-        }
-      );
-
-      // Store default values
-      stateManager.setState({
-        parameters: currentValues,
-        defaults: { ...currentValues },
-      });
-
-      // Load per-project UI preferences if saved, then apply panel visibility
-      try {
-        const projectPrefsKey = `openscad-forge-ui-prefs-${fileName}`;
-        const savedProjectPrefs = localStorage.getItem(projectPrefsKey);
-        if (savedProjectPrefs) {
-          const prefs = JSON.parse(savedProjectPrefs);
-          getUIModeController().importPreferences(prefs, {
-            applyImmediately: false,
-          });
-          console.log(
-            `[App] Loaded per-project UI preferences for: ${fileName}`
-          );
-        } else {
-          getUIModeController().setProjectHiddenPanels(null);
-        }
-      } catch {
-        getUIModeController().setProjectHiddenPanels(null);
-      }
-      getUIModeController().applyCurrentMode();
-
-      // Track file in recent files list
-      fileActionsController.trackOpen(fileName);
-
-      // Apply hidden groups from saved preference and set up hide/show-all behavior
-      overlayGridCtrl.applyHiddenGroups(parametersContainer, extracted?.modelName || fileName);
-
-      // C1: Auto-size overlay from SCAD parameters (screen dims or case opening)
-      overlayGridCtrl.autoApplyScreenDimensionsFromParams(currentValues);
-
-      // Auto-import JSON presets from ZIP companion files (Item 14: desktop parity)
-      // After state is set with schema + defaults, scan projectFiles for .json preset files
-      if (projectFiles && projectFiles.size > 0) {
-        // Diagnostic: log all files available to WASM FS (companion file mount)
-        console.debug(
-          '[WASM FS] Companion files mounted:',
-          Array.from(projectFiles.entries()).map(([path, content]) => ({
-            path,
-            sizeBytes: content.length,
-          }))
-        );
-
-        let autoImportedCount = 0;
-        const paramSchema = {};
-        // Build param schema for type coercion from extracted parameters
-        for (const [pName, pDef] of Object.entries(
-          extracted.parameters || {}
-        )) {
-          paramSchema[pName] = { type: pDef.type || 'string' };
-        }
-
-        for (const [filePath, fileContentStr] of projectFiles.entries()) {
-          if (
-            filePath.toLowerCase().endsWith('.json') &&
-            !filePath.toLowerCase().endsWith('.scad')
-          ) {
-            try {
-              console.log(`[ZIP] Auto-importing presets from: ${filePath}`);
-              console.debug(
-                `[ZIP] JSON content preview (first 200 chars): ${fileContentStr.substring(0, 200)}`
-              );
-              const hiddenParamNamesForImport = Object.keys(
-                extracted.hiddenParameters || {}
-              );
-              const importResult = presetManager.importPreset(
-                fileContentStr,
-                originalFileName,
-                paramSchema,
-                hiddenParamNamesForImport
-              );
-              if (importResult.success && importResult.imported > 0) {
-                autoImportedCount += importResult.imported;
-                console.log(
-                  `[ZIP] Auto-imported ${importResult.imported} preset(s) from ${filePath}`
-                );
-                console.debug(`[ZIP] Import result details:`, importResult);
-              } else if (!importResult.success) {
-                console.warn(
-                  `[ZIP] Failed to auto-import presets from ${filePath}:`,
-                  importResult.error
-                );
-              }
-            } catch (jsonError) {
-              console.warn(
-                `[ZIP] Error auto-importing presets from ${filePath}:`,
-                jsonError.message
-              );
-            }
-          }
-        }
-
-        if (autoImportedCount > 0) {
-          // Count companion files (non-.scad, non-.json)
-          const companionCount = Array.from(projectFiles.keys()).filter(
-            (p) =>
-              !p.toLowerCase().endsWith('.scad') &&
-              !p.toLowerCase().endsWith('.json')
-          ).length;
-          const companionText =
-            companionCount > 0
-              ? ` + ${companionCount} companion file${companionCount > 1 ? 's' : ''}`
-              : '';
-          updateStatus(
-            `Loaded: ${fileName}${companionText} + ${autoImportedCount} preset${autoImportedCount > 1 ? 's' : ''}`
-          );
-          updatePresetDropdown();
-
-          // Build presetâ†’companion-file path mapping for alias mounting on preset load.
-          // Uses the imported preset names to match against nested file paths in the ZIP.
-          const importedPresets =
-            presetManager.getPresetsForModel(originalFileName);
-          if (importedPresets.length > 0) {
-            const parameterSetsForMap = Object.fromEntries(
-              importedPresets.map((p) => [p.name, p.parameters])
-            );
-            // Extract aliasable companion targets from SCAD analysis so
-            // the companion map resolves all referenced basenames, not just
-            // hardcoded keyguard-specific filenames.
-            const scadRefs = detectRequiredCompanionFiles(fileContent);
-            const companionTargets = [
-              ...new Set(
-                (scadRefs?.files || [])
-                  .filter(
-                    (f) =>
-                      f.required &&
-                      (f.type === 'include' || f.type === 'import')
-                  )
-                  .map((f) => f.path.split('/').pop())
-              ),
-            ].filter((basename) => {
-              let count = 0;
-              for (const key of projectFiles.keys()) {
-                if (key.split('/').pop() === basename) count++;
-              }
-              return count > 1;
-            });
-            presetCompanionMap = buildPresetCompanionMap(
-              projectFiles,
-              parameterSetsForMap,
-              { companionTargets }
-            );
-            console.log(
-              `[ZIP] Built preset companion map for ${presetCompanionMap.size} presets` +
-                (companionTargets.length > 0
-                  ? ` (generic targets: ${companionTargets.join(', ')})`
-                  : ' (legacy path)')
-            );
-          }
-        }
-      }
-
-      // Load URL parameters if present (after defaults are set)
-      const urlParams = stateManager.loadFromURL();
-      if (urlParams && Object.keys(urlParams).length > 0) {
-        console.log('Loaded parameters from URL:', urlParams);
-
-        const { sanitized, adjustments } = sanitizeUrlParams(
-          extracted,
-          urlParams
-        );
-
-        // Re-render UI with URL parameters - MUST include updatePrimaryActionButton in callback!
-        const updatedValues = renderParameterUI(
-          extracted,
-          parametersContainer,
-          (values) => {
-            // Record state for undo before applying change
-            stateManager.recordParameterState();
-            stateManager.setState({ parameters: values });
-            // Clear preset selection when parameters are manually changed
-            clearPresetSelection(values);
-            // Trigger auto-preview on parameter change
-            if (autoPreviewController) {
-              autoPreviewController.onParameterChange(values);
-            }
-            // Update button state when parameters change
-            updatePrimaryActionButton();
-          },
-          sanitized
-        );
-
-        // Ensure state matches sanitized UI values
-        stateManager.setState({ parameters: updatedValues });
-
-        if (Object.keys(adjustments).length > 0) {
-          updateStatus(
-            'Some URL parameters were adjusted to fit allowed ranges.'
-          );
-        }
-
-        // Trigger initial auto-preview with URL params
-        if (autoPreviewController) {
-          autoPreviewController.onParameterChange(updatedValues);
-        }
-
-        updateStatus(
-          `Ready - ${paramCount} parameters loaded (${Object.keys(urlParams).length} from URL)`
-        );
-      } else {
-        updateStatus(`Ready - ${paramCount} parameters loaded`);
-      }
-
-      // Auto-expand the Presets panel when a project loads
-      const presetControlsEl = document.getElementById('presetControls');
-      if (presetControlsEl && !presetControlsEl.open) {
-        presetControlsEl.open = true;
-      }
-
-      // Move focus to the first parameter input after file load (WCAG 2.4.3 Focus Order)
-      // This tells screen reader users that parameters are now available to customize.
-      // preventScroll: true keeps the panel's scroll position at the top so the user
-      // sees the beginning of the parameter list when they first open the panel (mobile
-      // drawer is off-canvas; desktop panel may be collapsed â€” either way we must not
-      // advance the scroll position before the user has opened the panel).
-      requestAnimationFrame(() => {
-        const firstInput = parametersContainer?.querySelector(
-          'input:not([type="hidden"]), select, textarea'
-        );
-        if (firstInput) {
-          firstInput.focus({ preventScroll: true });
-        }
-      });
-
-      // Initialize 3D preview (lazy loads Three.js)
-      if (!previewManager) {
-        previewManager = new PreviewManager(previewContainer);
-        await previewManager.init();
-
-        // Re-create #rendered2dPreview â€” init() clears container innerHTML,
-        // destroying the element that was defined in index.html.
-        if (!document.getElementById('rendered2dPreview')) {
-          const preview2d = document.createElement('div');
-          preview2d.id = 'rendered2dPreview';
-          preview2d.className = 'rendered-2d-preview hidden';
-          preview2d.setAttribute('role', 'img');
-          preview2d.setAttribute('aria-label', 'Rendered 2D SVG preview');
-          previewContainer.appendChild(preview2d);
-        }
-
-        // Append preview state indicator and rendering overlay immediately
-        // after init so they are in the DOM before any async setup below.
-        previewContainer.style.position = 'relative';
-        previewContainer.appendChild(previewStateIndicator);
-        previewContainer.appendChild(renderingOverlay);
-
-        syncPreviewModelColorOverride();
-        syncPreviewAppearanceOverride();
-
-        // Sync measurements toggle with saved preference
-        if (measurementsToggle) {
-          measurementsToggle.checked = previewManager.measurementsEnabled;
-        }
-
-        // Sync grid toggle with saved preference
-        if (gridToggle) {
-          gridToggle.checked = previewManager.gridEnabled;
-        }
-
-        // Restore grid, overlay, and auto-rotate settings from saved preferences
-        overlayGridCtrl.connectPreviewManager(previewManager);
-
-        // Sync auto-bed toggle with saved preference
-        if (autoBedToggle) {
-          autoBedToggle.checked = previewManager.autoBedEnabled;
-        }
-
-        // Apply persisted model appearance controls
-        syncPreviewAppearanceOverride();
-
-        // Update camera panel controller with preview manager reference
-        if (cameraPanelController) {
-          cameraPanelController.setPreviewManager(previewManager);
-        }
-
-        // If unlock was triggered before preview was ready, inject toggle now
-        if (hfmCtrl.isUnlocked() && !document.getElementById('_hfmToggle')) {
-          hfmCtrl.injectAltToggle();
-        }
-
-        // If user toggled the alt view on from the welcome screen, enable it now.
-        if (hfmCtrl.isPendingEnable()) {
-          const toggleBtn = document.getElementById('_hfmToggle');
-          if (toggleBtn) {
-            await hfmCtrl.enableAltViewWithPreview(toggleBtn);
-          }
-        }
-
-        syncPreviewModelColorOverride();
-        syncPreviewAppearanceOverride();
-
-        // Listen for theme changes and update preview
-        themeManager.addListener((theme, activeTheme, highContrast) => {
-          if (previewManager) {
-            previewManager.updateTheme(activeTheme, highContrast);
-
-            // Update color picker to show theme default when no custom color is set
-            const modelColorPicker =
-              document.getElementById('modelColorPicker');
-            const hasSavedColor = localStorage.getItem(STORAGE_KEY_MODEL_COLOR);
-            if (modelColorPicker && !hasSavedColor) {
-              const themeKey = highContrast ? `${activeTheme}-hc` : activeTheme;
-              const PREVIEW_COLORS = {
-                light: 0x2196f3,
-                dark: 0x4d9fff,
-                'light-hc': 0x0052cc,
-                'dark-hc': 0x66b3ff,
-              };
-              const colorHex = PREVIEW_COLORS[themeKey] || PREVIEW_COLORS.light;
-              modelColorPicker.value =
-                '#' + colorHex.toString(16).padStart(6, '0');
-            }
-          }
-
-          // Sync grid color picker to show theme default when no custom color is set
-          overlayGridCtrl.syncGridColorPicker();
-
-          // Update mono variant assets when theme changes (light=amber, dark=green)
-          const root = document.documentElement;
-          if (root.getAttribute('data-ui-variant') === 'mono') {
-            hfmCtrl.refreshVariantAssets();
-          }
-        });
-      }
-
-      // Initialize or update AutoPreviewController
-      if (!autoPreviewController) {
-        // Pass true to defer init if WASM isn't ready yet - this will trigger WASM init
-        await initAutoPreviewController(true);
-      }
-      if (autoPreviewController) {
-        autoPreviewController.setColorParamNames(colorParamNames);
-        autoPreviewController.setParamTypes(paramTypes);
-        autoPreviewController.setSchema(extracted || null);
-      }
-
-      // Show color parameter legend when multiple color params exist
-      _updateColorLegend(colorParamNames);
-
-      // Set the SCAD content and project files for auto-preview
-      if (autoPreviewController) {
-        autoPreviewController.setScadContent(fileContent);
-        autoPreviewController.setProjectFiles(projectFiles, mainFilePath);
-        // CRITICAL: Set enabled libraries BEFORE triggering initial preview
-        const libsForRender = getEnabledLibrariesForRender();
-        autoPreviewController.setEnabledLibraries(libsForRender);
-        updatePreviewStateUI(PREVIEW_STATE.IDLE);
-      }
-
-      // Update Project Files Manager UI (for multi-file projects)
-      companionFilesCtrl.updateProjectFilesUI();
-
-      // Restore SharedImageStore from saved screenshots in projectFiles.
-      // This rehydrates the in-memory image store so screenshots appear in
-      // both Image Measurement and Reference Overlay dropdowns after reload.
-      if (projectFiles) {
-        const imageExts = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
-        for (const [path, content] of projectFiles) {
-          const ext = path.split('.').pop()?.toLowerCase();
-          if (
-            imageExts.includes(ext) &&
-            typeof content === 'string' &&
-            content.startsWith('data:')
-          ) {
-            const name = path.includes('/') ? path.split('/').pop() : path;
-            SharedImageStore.addImageFromDataUrl(name, content).catch(() => {
-              console.warn(`[App] Failed to restore image: ${path}`);
-            });
-          }
-        }
-      }
-
-      // Trigger an initial preview immediately on first load (and also for URL-param loads).
-      if (autoPreviewController) {
-        if (autoPreviewEnabled) {
-          // Use .then()/.catch() to handle errors without blocking file load completion
-          autoPreviewController
-            .forcePreview(stateManager.getState().parameters)
-            .then((initiated) => {
-              if (initiated) {
-                console.log('[Init] Initial preview render started');
-              } else {
-                console.warn('[Init] Initial preview render was skipped');
-              }
-            })
-            .catch((error) => {
-              console.error('[Init] Initial preview render failed:', error);
-              updatePreviewStateUI(PREVIEW_STATE.ERROR, {
-                error: error.message,
-              });
-              updateStatus(`Initial preview failed: ${error.message}`);
-            });
-        }
-      }
-
-      // Show opt-in save prompt for user uploads only (not examples or saved projects)
-      if (source === 'user') {
-        try {
-          const state = stateManager.getState();
-          await savedProjectsUI.showSaveProjectPrompt(state);
-        } catch (error) {
-          console.error('[Saved Projects] Error showing save prompt:', error);
-        }
-      }
-    } catch (error) {
-      console.error('Failed to extract parameters:', error);
-      updateStatus('Error: Failed to extract parameters');
-      alert(
-        'Failed to extract parameters from file. Please check the file format.'
-      );
-    }
-  }
+  // handleFile moved to file-handler.js
 
   // File input change
   fileInput.addEventListener('change', (e) => {
     const selectedFile = e.target.files[0];
     if (!selectedFile) return;
-    handleFile(selectedFile);
+    fileHandler.handleFile(selectedFile);
     // Allow re-selecting the same file if needed
     e.target.value = '';
   });
@@ -6353,7 +5246,7 @@ async function initApp() {
   uploadZone.addEventListener('drop', (e) => {
     e.preventDefault();
     uploadZone.classList.remove('drag-over');
-    handleFile(e.dataTransfer.files[0]);
+    fileHandler.handleFile(e.dataTransfer.files[0]);
   });
 
   // Click to upload is handled by the label wrapping the input.
@@ -6409,7 +5302,7 @@ if (rounded) {
         // Process it like a regular file upload, but pass content directly.
         // `handleFile()` uses FileReader for `File`/Blob inputs; passing a plain object
         // without content will throw. This path intentionally avoids FileReader.
-        await handleFile(
+        await fileHandler.handleFile(
           { name: fileName },
           starterTemplate,
           null,
@@ -6431,125 +5324,7 @@ if (rounded) {
     });
   }
 
-  // Shared example loader (reusable by welcome buttons and Features Guide)
-  // Direct-launch URL support for external website integration
-  async function loadExampleByKey(
-    exampleKey,
-    { closeFeaturesGuideModal = false } = {}
-  ) {
-    const example = EXAMPLE_DEFINITIONS[exampleKey];
-    if (!example) {
-      console.error('Unknown example type:', exampleKey);
-      return;
-    }
-
-    // If a tutorial is open, close it before switching context.
-    // This prevents stale highlights/listeners from referencing the previous UI state.
-    try {
-      closeTutorial();
-    } catch {
-      // ignore (tutorial module may not be initialized)
-    }
-
-    // Confirm before replacing if file already uploaded
-    const state = stateManager.getState();
-    if (state.uploadedFile) {
-      if (!confirm('Load example? This will replace the current file.')) {
-        return;
-      }
-    }
-
-    try {
-      updateStatus('Loading example...');
-      const response = await fetch(example.path);
-      if (!response.ok) throw new Error('Failed to fetch example');
-
-      // Close modal if requested (before any async processing)
-      if (closeFeaturesGuideModal) {
-        const featuresGuideModal =
-          document.getElementById('featuresGuideModal');
-        if (featuresGuideModal) {
-          closeModal(featuresGuideModal);
-        }
-      }
-
-      // ZIP examples must be fetched as binary and routed through ZIP extraction
-      if (example.path.toLowerCase().endsWith('.zip')) {
-        const blob = await response.blob();
-        const zipFile = new File([blob], example.name, {
-          type: 'application/zip',
-        });
-        handleFile(zipFile, null, null, null, 'example');
-        return;
-      }
-
-      const content = await response.text();
-      console.log('Example loaded:', example.name, content.length, 'bytes');
-
-      // Check for multi-file design package with additionalFiles
-      let projectFiles = null;
-      let mainFilePath = null;
-
-      if (example.additionalFiles && example.additionalFiles.length > 0) {
-        console.log(
-          `[Example] Multi-file package: ${example.additionalFiles.length} additional file(s)`
-        );
-
-        projectFiles = new Map();
-
-        const mainFileName = example.path.split('/').pop();
-        mainFilePath = mainFileName;
-        projectFiles.set(mainFileName, content);
-
-        const additionalPromises = example.additionalFiles.map(
-          async (filePath) => {
-            try {
-              const fileResponse = await fetch(filePath);
-              if (!fileResponse.ok) {
-                console.warn(
-                  `[Example] Failed to load additional file: ${filePath}`
-                );
-                return null;
-              }
-              const fileContent = await fileResponse.text();
-              const fileName = filePath.split('/').pop();
-              return { fileName, content: fileContent };
-            } catch (error) {
-              console.warn(
-                `[Example] Error loading additional file ${filePath}:`,
-                error
-              );
-              return null;
-            }
-          }
-        );
-
-        const additionalResults = await Promise.all(additionalPromises);
-        for (const result of additionalResults) {
-          if (result) {
-            projectFiles.set(result.fileName, result.content);
-            console.log(`[Example] Loaded additional file: ${result.fileName}`);
-          }
-        }
-
-        console.log(`[Example] Total files in package: ${projectFiles.size}`);
-      }
-
-      handleFile(
-        { name: example.name },
-        content,
-        projectFiles,
-        mainFilePath,
-        'example'
-      );
-    } catch (error) {
-      console.error('Failed to load example:', error);
-      updateStatus('Error loading example');
-      alert(
-        'Failed to load example file. The file may not be available in the public directory.'
-      );
-    }
-  }
+  // loadExampleByKey moved to file-handler.js
 
   // Load examples - unified handler
   // IMPORTANT: Keep this as the single click handler for all example buttons.
@@ -6567,7 +5342,7 @@ if (rounded) {
       const tutorialId = button.dataset.tutorial;
 
       // Load the example first
-      await loadExampleByKey(exampleType);
+      await fileHandler.loadExampleByKey(exampleType);
 
       if (exampleType) {
         // Screen reader confirmation that an example was loaded
@@ -6604,7 +5379,7 @@ if (rounded) {
       // Load the example after a short delay to ensure UI is ready
       setTimeout(async () => {
         try {
-          await loadExampleByKey(exampleParam);
+          await fileHandler.loadExampleByKey(exampleParam);
 
           // Clean up URL to avoid reloading on refresh
           initUrlParams.delete('example');
@@ -6916,7 +5691,7 @@ if (rounded) {
         const result = await loadManifest(origin.url, {
           onProgress: ({ message }) => updateStatus(message),
         });
-        await handleFile(
+        await fileHandler.handleFile(
           null,
           result.mainContent,
           result.projectFiles,
@@ -7032,7 +5807,7 @@ if (rounded) {
         announceImmediate(`Loading project: ${projectName}`);
 
         // Step 4 â€” PROCESS: parse and load the project into the editor
-        await handleFile(
+        await fileHandler.handleFile(
           null,
           mainContent,
           projectFiles,
@@ -7267,11 +6042,11 @@ if (rounded) {
           const file = new File([blob], urlFileName, {
             type: 'application/zip',
           });
-          await handleFile(file, null, null, null, 'user');
+          await fileHandler.handleFile(file, null, null, null, 'user');
         } else {
           // Handle single .scad file
           const scadContent = await response.text();
-          await handleFile(
+          await fileHandler.handleFile(
             { name: urlFileName },
             scadContent,
             null,
@@ -12407,7 +11182,7 @@ if (rounded) {
     if (exampleBtn && exampleBtn.dataset.example) {
       e.preventDefault();
       const exampleKey = exampleBtn.dataset.example;
-      loadExampleByKey(exampleKey, {
+      fileHandler.loadExampleByKey(exampleKey, {
         closeFeaturesGuideModal: true,
       });
     }
