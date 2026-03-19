@@ -48,13 +48,9 @@ import {
   extractZipFiles,
   validateZipFile,
   getZipStats,
-  resolveProjectFile,
   buildPresetCompanionMap,
   applyCompanionAliases,
   getOverlaySvgTarget,
-  buildNestedTree,
-  getNodeAtPath,
-  countFilesRecursive,
 } from './js/zip-handler.js';
 import { loadManifest, ManifestError } from './js/manifest-loader.js';
 import {
@@ -129,6 +125,11 @@ import {
   FLAGS as _FLAGS,
 } from './js/feature-flags.js';
 import { initSearchableCombobox } from './js/searchable-combobox.js';
+import {
+  initCompanionFilesController,
+  detectIncludeUse,
+  detectRequiredCompanionFiles,
+} from './js/companion-files-controller.js';
 import { initCSPReporter } from './js/csp-reporter.js';
 import {
   migrateStorageKeys,
@@ -332,10 +333,7 @@ let renderQueue = null;
 // Track which saved project is currently loaded (for auto-saving companion files)
 let currentSavedProjectId = null;
 
-// Navigation path for the Companion Files panel tree (module-level so it
-// survives re-renders triggered by add/remove actions).
-// Each element is a folder name segment, e.g. ['Cases', 'iPad 7,8,9'].
-let companionCurrentPath = [];
+// companionCurrentPath moved to companion-files-controller.js
 
 // Screen reader announcer - now uses centralized announcer.js
 // (Local implementation removed - use imported announce/announceImmediate/announceError)
@@ -2509,12 +2507,15 @@ async function initApp() {
   initKeyboardShortcuts();
 
   // Initialize saved projects UI controller
+  // updateCompanionSaveButton is wrapped because companionFilesCtrl is
+  // created later (after DOM element queries); the wrapper defers safely
+  // since savedProjectsUI only invokes it after user interaction.
   const savedProjectsUI = initSavedProjectsUI({
     showConfirmDialog,
     showProcessingOverlay,
     handleFile,
     updateStatus,
-    updateCompanionSaveButton,
+    updateCompanionSaveButton: (...args) => companionFilesCtrl.updateCompanionSaveButton(...args),
     downloadSingleProject,
     setCurrentSavedProjectId: (id) => {
       currentSavedProjectId = id;
@@ -3448,7 +3449,7 @@ async function initApp() {
             : undefined,
       });
       if (result.success) {
-        updateCompanionSaveButton();
+        companionFilesCtrl.updateCompanionSaveButton();
         stateManager.announceChange(successMessage);
         updateStatus(successMessage);
         await savedProjectsUI.renderSavedProjectsList();
@@ -5482,7 +5483,7 @@ async function initApp() {
   const dimensionsDisplay = document.getElementById('dimensionsDisplay');
   // Note: outputFormatSelect and formatInfo already declared above
 
-  // Reference overlay controls (remaining refs used by syncOverlayWithScreenshotParam etc.)
+  // Reference overlay controls (used by preset load, back-to-welcome reset, etc.)
   const overlaySourceSelect = document.getElementById('overlaySourceSelect');
   const overlayToggle = document.getElementById('overlayToggle');
 
@@ -5742,6 +5743,16 @@ async function initApp() {
   const overlayGridCtrl = initOverlayGridController({
     getPreviewManager: () => previewManager,
     updateStatus,
+  });
+
+  // Initialize companion files controller (extracted module)
+  const companionFilesCtrl = initCompanionFilesController({
+    getPreviewManager: () => previewManager,
+    getAutoPreviewController: () => autoPreviewController,
+    overlayGridCtrl,
+    updateStatus,
+    getCurrentSavedProjectId: () => currentSavedProjectId,
+    setCanonicalProjectFiles,
   });
 
   // Wire auto-bed toggle
@@ -6717,887 +6728,12 @@ async function initApp() {
     stateManager.announceChange(message);
   }
 
-  /**
-   * Detect include/use statements in SCAD content
-   * @param {string} scadContent - OpenSCAD source code
-   * @returns {Object} Detection result with hasIncludes, hasUse, and files array
-   */
-  function detectIncludeUse(scadContent) {
-    // Match include <...> and use <...> statements
-    const includePattern = /^\s*include\s*<([^>]+)>/gm;
-    const usePattern = /^\s*use\s*<([^>]+)>/gm;
-
-    const includes = [];
-    const uses = [];
-
-    let match;
-    while ((match = includePattern.exec(scadContent)) !== null) {
-      includes.push(match[1]);
-    }
-
-    while ((match = usePattern.exec(scadContent)) !== null) {
-      uses.push(match[1]);
-    }
-
-    return {
-      hasIncludes: includes.length > 0,
-      hasUse: uses.length > 0,
-      includes,
-      uses,
-      files: [...includes, ...uses],
-    };
-  }
-
-  /**
-   * Detect required companion files from SCAD content
-   * Scans for include/use statements, import() calls, and file variable patterns
-   * @param {string} scadContent - OpenSCAD source code
-   * @returns {Object} Detection result with all referenced files
-   */
-  function detectRequiredCompanionFiles(scadContent) {
-    const files = new Set();
-
-    // Match include <...> and use <...> statements
-    const includePattern = /^\s*include\s*<([^>]+)>/gm;
-    const usePattern = /^\s*use\s*<([^>]+)>/gm;
-
-    // Match import(file="...") statements (for STL/other imports)
-    const importPattern = /import\s*\(\s*(?:file\s*=\s*)?["']([^"']+)["']/gi;
-
-    // Match common file variable patterns like screenshot_file = "filename"
-    // This handles common patterns: screenshot_file = "default.svg"
-    const fileVarPatterns = [
-      /(\w*_?file\w*)\s*=\s*["']([^"']+\.\w+)["']/gi, // xxx_file = "name.ext"
-      /(\w*_?filename\w*)\s*=\s*["']([^"']+\.\w+)["']/gi, // xxx_filename = "name.ext"
-      /(\w*_?path\w*)\s*=\s*["']([^"']+\.\w+)["']/gi, // xxx_path = "name.ext"
-    ];
-
-    // Match surface() calls which load heightmap files
-    const surfacePattern = /surface\s*\(\s*(?:file\s*=\s*)?["']([^"']+)["']/gi;
-
-    let match;
-
-    // Collect include files
-    while ((match = includePattern.exec(scadContent)) !== null) {
-      files.add({ path: match[1], type: 'include', required: true });
-    }
-
-    // Collect use files
-    while ((match = usePattern.exec(scadContent)) !== null) {
-      files.add({ path: match[1], type: 'use', required: true });
-    }
-
-    // Collect import files
-    while ((match = importPattern.exec(scadContent)) !== null) {
-      files.add({ path: match[1], type: 'import', required: true });
-    }
-
-    // Collect surface files
-    while ((match = surfacePattern.exec(scadContent)) !== null) {
-      files.add({ path: match[1], type: 'surface', required: true });
-    }
-
-    // Collect file variable references (may be optional/customizable)
-    for (const pattern of fileVarPatterns) {
-      while ((match = pattern.exec(scadContent)) !== null) {
-        const varName = match[1];
-        const fileName = match[2];
-        // Skip obvious non-file variables
-        if (!fileName.includes('.') || fileName.startsWith('http')) continue;
-        files.add({
-          path: fileName,
-          type: 'variable',
-          variableName: varName,
-          required: false, // File variables are often optional/customizable
-        });
-      }
-    }
-
-    // Convert Set to array (dedupe by path)
-    const uniqueFiles = [];
-    const seenPaths = new Set();
-    for (const file of files) {
-      if (!seenPaths.has(file.path)) {
-        seenPaths.add(file.path);
-        uniqueFiles.push(file);
-      }
-    }
-
-    return {
-      files: uniqueFiles,
-      requiredCount: uniqueFiles.filter((f) => f.required).length,
-      optionalCount: uniqueFiles.filter((f) => !f.required).length,
-    };
-  }
-
-  /**
-   * Auto-save companion files to the current saved project (if tracked).
-   * Called after add, edit, or remove operations on companion files.
-   */
-  async function autoSaveCompanionFiles() {
-    if (!currentSavedProjectId) return;
-    const state = stateManager.getState();
-    const { projectFiles, mainFilePath, uploadedFile } = state;
-    if (!uploadedFile || !projectFiles) return;
-
-    try {
-      const projectFilesObj = Object.fromEntries(projectFiles);
-      // Update the kind if companion files were added to a single-file project
-      const kind = projectFiles.size > 1 ? 'zip' : 'scad';
-      await updateProject({
-        id: currentSavedProjectId,
-        projectFiles: projectFilesObj,
-        mainFilePath: mainFilePath || uploadedFile.name,
-        kind,
-      });
-      updateStatus('Project updated', 'success');
-      console.log(
-        '[CompanionFiles] Auto-saved companion files to project:',
-        currentSavedProjectId
-      );
-    } catch (error) {
-      console.error('[CompanionFiles] Auto-save failed:', error);
-      // Don't show alert for auto-save failures -- just log
-    }
-  }
-
-  /**
-   * Update the companion files Save/Update button text and visibility.
-   */
-  function updateCompanionSaveButton() {
-    const saveBtn = document.getElementById('companionSaveBtn');
-    if (!saveBtn) return;
-    const state = stateManager.getState();
-    if (!state.uploadedFile) {
-      saveBtn.classList.add('hidden');
-      return;
-    }
-    saveBtn.classList.remove('hidden');
-    if (currentSavedProjectId) {
-      saveBtn.textContent = 'Update Saved Project';
-      saveBtn.setAttribute(
-        'aria-label',
-        'Update companion files in the saved project'
-      );
-    } else {
-      saveBtn.textContent = 'Save as Project';
-      saveBtn.setAttribute(
-        'aria-label',
-        'Save this file and companion files as a project'
-      );
-    }
-  }
-
-  /**
-   * Render the project files list in the UI
-   * @param {Map<string, string>} projectFiles - Map of file paths to content
-   * @param {string} mainFilePath - Path to the main .scad file
-   * @param {Object} requiredFiles - Detection result from detectRequiredCompanionFiles
-   */
-  function renderProjectFilesList(
-    projectFiles,
-    mainFilePath,
-    requiredFiles = null
-  ) {
-    const container = document.getElementById('projectFilesList');
-    const badge = document.getElementById('projectFilesBadge');
-    const controls = document.getElementById('projectFilesControls');
-    const warning = document.getElementById('projectFilesWarning');
-    const warningText = document.getElementById('projectFilesWarningText');
-
-    if (!container || !controls) return;
-
-    const emptyState = document.getElementById('companionEmptyState');
-    const helpText = document.getElementById('projectFilesHelp');
-    const saveBtn = document.getElementById('companionSaveBtn');
-
-    // Always show the panel when a file is loaded (empty-state provides guidance)
-    const state = stateManager.getState();
-    if (!state.uploadedFile) {
-      controls.classList.add('hidden');
-      return;
-    }
-    controls.classList.remove('hidden');
-
-    // Count companion files (exclude the main file)
-    const companionFiles = projectFiles
-      ? new Map(
-          Array.from(projectFiles.entries()).filter(
-            ([path]) => path !== mainFilePath
-          )
-        )
-      : new Map();
-    const companionCount = companionFiles.size;
-
-    // Toggle empty state vs file list
-    if (emptyState) {
-      emptyState.style.display = companionCount === 0 ? '' : 'none';
-    }
-    if (helpText) {
-      helpText.style.display = companionCount > 0 ? '' : 'none';
-    }
-
-    // If no companion files, show empty state and badge=0
-    if (companionCount === 0) {
-      if (badge) badge.textContent = '0';
-      container.innerHTML = '';
-      // Update save button visibility
-      if (saveBtn) {
-        updateCompanionSaveButton();
-      }
-      // Still check for missing required files
-      if (warning && warningText) {
-        const missingFiles = [];
-        if (requiredFiles && requiredFiles.files) {
-          for (const reqFile of requiredFiles.files) {
-            if (
-              reqFile.required &&
-              (!projectFiles || !projectFiles.has(reqFile.path))
-            ) {
-              missingFiles.push(reqFile.path);
-            }
-          }
-        }
-        if (missingFiles.length > 0) {
-          warning.classList.remove('hidden');
-          warningText.textContent = `Missing files: ${missingFiles.join(', ')}`;
-        } else {
-          warning.classList.add('hidden');
-        }
-      }
-      return;
-    }
-
-    // Show controls (has companion files)
-    controls.classList.remove('hidden');
-
-    // Update badge count
-    if (badge) {
-      badge.textContent = projectFiles.size;
-    }
-
-    // Check for missing required files
-    const missingFiles = [];
-    if (requiredFiles && requiredFiles.files) {
-      for (const reqFile of requiredFiles.files) {
-        if (reqFile.required && !projectFiles.has(reqFile.path)) {
-          missingFiles.push(reqFile.path);
-        }
-      }
-    }
-
-    // Show/hide warning
-    if (warning && warningText) {
-      if (missingFiles.length > 0) {
-        warning.classList.remove('hidden');
-        warningText.textContent = `Missing files: ${missingFiles.join(', ')}`;
-      } else {
-        warning.classList.add('hidden');
-      }
-    }
-
-    // Build nested tree and render the current folder view
-    const tree = buildNestedTree(projectFiles);
-
-    // Validate that companionCurrentPath still points to a valid node;
-    // if the user deleted a folder we were inside, reset to root.
-    if (getNodeAtPath(tree, companionCurrentPath) === null) {
-      companionCurrentPath = [];
-    }
-
-    const currentNode = getNodeAtPath(tree, companionCurrentPath) || tree;
-
-    // --- Breadcrumb bar ---
-    const crumbItems = companionCurrentPath.map((segment, idx) => {
-      const targetDepth = idx; // clicking this crumb navigates to segments[0..idx]
-      return `<li class="file-nav-breadcrumb-item">
-        <button class="file-nav-breadcrumb-btn" data-depth="${targetDepth + 1}" aria-label="Navigate to ${escapeHtml(segment)}">${escapeHtml(segment)}</button>
-      </li>`;
-    });
-
-    const breadcrumbHtml =
-      companionCurrentPath.length > 0
-        ? `<nav class="file-nav-breadcrumbs" aria-label="Folder navigation">
-            <ol class="file-nav-breadcrumb-list">
-              <li class="file-nav-breadcrumb-item">
-                <button class="file-nav-breadcrumb-btn file-nav-breadcrumb-home" data-depth="0" aria-label="Navigate to root">ðŸ </button>
-              </li>
-              ${crumbItems.join('')}
-            </ol>
-          </nav>`
-        : '';
-
-    // --- Folder rows ---
-    const sortedFolders = [...currentNode.folders.entries()].sort((a, b) =>
-      a[0].localeCompare(b[0])
-    );
-    const folderItems = sortedFolders.map(([folderName, childNode]) => {
-      const count = countFilesRecursive(childNode);
-      return `
-        <div class="project-file-item file-nav-folder-row" role="button" tabindex="0"
-             data-folder-enter="${escapeHtml(folderName)}"
-             aria-label="Open folder ${escapeHtml(folderName)}, ${count} file${count !== 1 ? 's' : ''}">
-          <span class="project-file-icon" aria-hidden="true">ðŸ“</span>
-          <span class="project-file-name">${escapeHtml(folderName)}</span>
-          <span class="project-file-size file-nav-folder-count">${count} file${count !== 1 ? 's' : ''}</span>
-          <span class="file-nav-folder-chevron" aria-hidden="true">â€º</span>
-        </div>`;
-    });
-
-    // --- File rows ---
-    const sortedFiles = [...currentNode.files].sort((a, b) =>
-      a.name.localeCompare(b.name)
-    );
-    const fileItems = sortedFiles.map(({ path, name }) => {
-      const isMain = path === mainFilePath;
-      const content = projectFiles.get(path);
-      const size =
-        typeof content === 'string'
-          ? formatFileSize(new Blob([content]).size)
-          : 'â€”';
-      const ext = name.split('.').pop().toLowerCase();
-      const isEditable = ['txt', 'csv', 'json', 'scad'].includes(ext);
-      const icon = getFileIcon(ext);
-
-      const mainBadge = isMain
-        ? '<span class="project-file-badge">main</span>'
-        : '';
-      const editBtn =
-        isEditable && !isMain
-          ? `<button class="project-file-btn" data-action="edit" data-path="${escapeHtml(path)}" aria-label="Edit ${escapeHtml(name)}">âœï¸</button>`
-          : '';
-      const removeBtn = !isMain
-        ? `<button class="project-file-btn btn-danger" data-action="remove" data-path="${escapeHtml(path)}" aria-label="Remove ${escapeHtml(name)}">âœ•</button>`
-        : '';
-
-      const itemClass = isMain
-        ? 'project-file-item main-file'
-        : 'project-file-item';
-
-      return `
-        <div class="${itemClass}" role="listitem">
-          <span class="project-file-icon" aria-hidden="true">${icon}</span>
-          <span class="project-file-name" title="${escapeHtml(path)}">${escapeHtml(name)}</span>
-          ${mainBadge}
-          <span class="project-file-size">${size}</span>
-          <div class="project-file-actions">
-            ${editBtn}
-            ${removeBtn}
-          </div>
-        </div>`;
-    });
-
-    container.innerHTML =
-      breadcrumbHtml +
-      '<div role="list">' +
-      folderItems.join('') +
-      fileItems.join('') +
-      '</div>';
-
-    // Breadcrumb navigation
-    container.querySelectorAll('.file-nav-breadcrumb-btn').forEach((btn) => {
-      const depth = parseInt(btn.dataset.depth, 10);
-      const activate = () => {
-        companionCurrentPath = companionCurrentPath.slice(0, depth);
-        renderProjectFilesList(projectFiles, mainFilePath, requiredFiles);
-      };
-      btn.addEventListener('click', activate);
-      btn.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          activate();
-        }
-      });
-    });
-
-    // Folder row navigation
-    container.querySelectorAll('[data-folder-enter]').forEach((row) => {
-      const folderName = row.dataset.folderEnter;
-      const enter = () => {
-        companionCurrentPath = [...companionCurrentPath, folderName];
-        renderProjectFilesList(projectFiles, mainFilePath, requiredFiles);
-      };
-      row.addEventListener('click', enter);
-      row.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          enter();
-        } else if (e.key === 'Escape' && companionCurrentPath.length > 0) {
-          e.preventDefault();
-          companionCurrentPath = companionCurrentPath.slice(0, -1);
-          renderProjectFilesList(projectFiles, mainFilePath, requiredFiles);
-        }
-      });
-    });
-
-    // File action buttons
-    container.querySelectorAll('button[data-action]').forEach((btn) => {
-      btn.addEventListener('click', handleProjectFileAction);
-    });
-
-    // Update overlay source dropdown with available image files
-    overlayGridCtrl.updateOverlaySourceDropdown();
-
-    // Auto-select overlay source based on screenshot_file variable detection
-    autoSelectOverlaySource(requiredFiles);
-  }
-
-  /**
-   * Sync overlay visibility with the include_screenshot SCAD parameter.
-   * Called on parameter change and preset load so the overlay tracks user intent.
-   * @param {Object} parameters - Current parameter values
-   */
-  function syncOverlayWithScreenshotParam(parameters) {
-    if (!overlayToggle || !previewManager || !parameters) return;
-
-    const includeFlag = parameters.include_screenshot;
-    if (includeFlag === undefined) return;
-
-    const shouldShow =
-      includeFlag === 'yes' || includeFlag === true || includeFlag === 'true';
-    const state = stateManager.getState();
-    const projectFiles = state.projectFiles;
-
-    if (shouldShow) {
-      // COMPATIBILITY FALLBACK â€” Phase 8 removal candidate:
-      // 'default.svg' when screenshot_file param exists but is empty/unset.
-      const screenshotFile = parameters.screenshot_file || 'default.svg';
-      const resolved = resolveProjectFile(projectFiles, screenshotFile);
-      if (resolved) {
-        if (overlaySourceSelect) overlaySourceSelect.value = resolved.key;
-        overlayGridCtrl.loadOverlayFromProjectFile(resolved.key)
-          .then(() => {
-            // SVG 96 DPI size applied; SCAD case-opening / screen dims override.
-            overlayGridCtrl.autoApplyScreenDimensionsFromParams(parameters);
-            overlayToggle.checked = true;
-            previewManager.setOverlayEnabled(true);
-            overlayGridCtrl.updateOverlayUIFromConfig();
-            overlayGridCtrl.updateOverlayStatus?.();
-          })
-          .catch((err) => {
-            console.warn(
-              '[App] Overlay enable via include_screenshot failed:',
-              err
-            );
-          });
-      } else {
-        console.warn(
-          `[App] syncOverlayWithScreenshotParam: "${screenshotFile}" not found ` +
-            'or ambiguous in projectFiles â€” overlay not displayed.'
-        );
-      }
-    } else {
-      overlayToggle.checked = false;
-      previewManager.setOverlayEnabled(false);
-      overlayGridCtrl.updateOverlayStatus?.();
-    }
-  }
-
-  /**
-   * Auto-select overlay source based on screenshot_file variable detection
-   * @param {Object} requiredFiles - Detection result from detectRequiredCompanionFiles
-   */
-  function autoSelectOverlaySource(requiredFiles) {
-    if (!overlaySourceSelect || !previewManager) return;
-
-    const state = stateManager.getState();
-    const projectFiles = state.projectFiles;
-    if (!projectFiles || projectFiles.size === 0) return;
-
-    // Check if user has already selected a source (don't override)
-    const currentSource = overlaySourceSelect.value;
-    if (currentSource && projectFiles.has(currentSource)) return;
-
-    // Check for saved preference first
-    const savedSource = localStorage.getItem(getAppPrefKey('overlay-source'));
-    if (savedSource && projectFiles.has(savedSource)) {
-      overlaySourceSelect.value = savedSource;
-      // Don't auto-load, just select it in the dropdown
-      return;
-    }
-
-    // Look for file variables pointing to SVG/image overlay candidates.
-    // Prefers screenshot_file when available, then any file variable with
-    // an overlay-suitable extension.
-    let screenshotFile = null;
-    if (requiredFiles && requiredFiles.files) {
-      const OVERLAY_EXTS = ['.svg', '.png', '.jpg', '.jpeg', '.gif', '.webp'];
-      const overlayVars = requiredFiles.files.filter(
-        (f) =>
-          f.type === 'variable' &&
-          OVERLAY_EXTS.some((ext) => f.path.toLowerCase().endsWith(ext))
-      );
-      if (overlayVars.length > 0) {
-        const preferred =
-          overlayVars.find((v) => v.variableName === 'screenshot_file') ||
-          overlayVars[0];
-        const resolved = resolveProjectFile(projectFiles, preferred.path);
-        if (resolved) screenshotFile = resolved.key;
-      }
-    }
-
-    // COMPATIBILITY FALLBACK â€” Phase 8 removal candidate.
-    // Try 'default.svg' for backward compatibility with keyguard projects
-    // that lack a manifest but use the known convention.
-    if (!screenshotFile) {
-      const resolved = resolveProjectFile(projectFiles, 'default.svg');
-      if (resolved) screenshotFile = resolved.key;
-    }
-
-    // If found, select it in the dropdown and auto-load + enable the overlay.
-    // AAC keyguard designers need the overlay active immediately on project load.
-    if (screenshotFile) {
-      overlaySourceSelect.value = screenshotFile;
-      console.log(`[App] Auto-selected overlay source: ${screenshotFile}`);
-      // Load the overlay image into the preview and enable the toggle
-      overlayGridCtrl.loadOverlayFromProjectFile(screenshotFile)
-        .then(() => {
-          // SVG 96 DPI size applied; SCAD case-opening / screen dims override.
-          const currentParams = stateManager.getState().parameters;
-          overlayGridCtrl.autoApplyScreenDimensionsFromParams(currentParams);
-          if (overlayToggle && !overlayToggle.checked) {
-            overlayToggle.checked = true;
-            previewManager?.setOverlayEnabled(true);
-            overlayGridCtrl.updateOverlayUIFromConfig();
-            overlayGridCtrl.updateOverlayStatus?.();
-            console.log(
-              '[App] Overlay auto-enabled for screenshot companion file'
-            );
-          }
-        })
-        .catch((err) => {
-          console.warn('[App] Auto-enable overlay failed:', err);
-        });
-    }
-  }
-
-  /**
-   * Get icon for file type
-   * @param {string} ext - File extension
-   * @returns {string} Icon emoji
-   */
-  function getFileIcon(ext) {
-    const icons = {
-      scad: 'ðŸ“',
-      txt: 'ðŸ“',
-      csv: 'ðŸ“Š',
-      json: 'ðŸ“‹',
-      svg: 'ðŸŽ¨',
-      stl: 'ðŸ§Š',
-      png: 'ðŸ–¼ï¸',
-      jpg: 'ðŸ–¼ï¸',
-      jpeg: 'ðŸ–¼ï¸',
-    };
-    return icons[ext] || 'ðŸ“Ž';
-  }
-
-  /**
-   * Handle project file action (edit/remove)
-   * @param {Event} event - Click event
-   */
-  function handleProjectFileAction(event) {
-    const btn = event.currentTarget;
-    const action = btn.dataset.action;
-    const path = btn.dataset.path;
-
-    if (action === 'edit') {
-      editProjectFile(path);
-    } else if (action === 'remove') {
-      removeProjectFile(path);
-    }
-  }
-
-  /**
-   * Add companion file to project
-   * @param {File} file - File to add
-   */
-  async function handleAddCompanionFile(file) {
-    const state = stateManager.getState();
-    let { projectFiles, mainFilePath, uploadedFile } = state;
-
-    if (!uploadedFile) {
-      updateStatus('No project loaded', 'error');
-      return;
-    }
-
-    try {
-      const fileName = file.name;
-      const ext = fileName.split('.').pop()?.toLowerCase();
-      const isImage = ['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext);
-
-      // Read image files as data URLs (binary-safe); text files as text
-      let content;
-      if (isImage) {
-        content = await new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result);
-          reader.onerror = () => reject(new Error('Failed to read image file'));
-          reader.readAsDataURL(file);
-        });
-      } else {
-        content = await file.text();
-      }
-
-      // Initialize projectFiles if needed (converting single-file to multi-file)
-      if (!projectFiles) {
-        projectFiles = new Map();
-        // Add the main file to projectFiles
-        const mainPath = mainFilePath || uploadedFile.name;
-        projectFiles.set(mainPath, uploadedFile.content);
-        mainFilePath = mainPath;
-      }
-
-      // Check for duplicate
-      if (projectFiles.has(fileName)) {
-        const overwrite = confirm(
-          `File "${fileName}" already exists. Overwrite?`
-        );
-        if (!overwrite) return;
-      }
-
-      // Add the new file
-      projectFiles.set(fileName, content);
-
-      // Update state
-      stateManager.setState({
-        projectFiles,
-        mainFilePath,
-      });
-      setCanonicalProjectFiles(projectFiles);
-
-      // Mirror image files to SharedImageStore so they appear in Image Measurement
-      if (isImage) {
-        await SharedImageStore.addImageFromDataUrl(fileName, content);
-      }
-
-      // Update UI
-      const requiredFiles = detectRequiredCompanionFiles(uploadedFile.content);
-      renderProjectFilesList(projectFiles, mainFilePath, requiredFiles);
-
-      // Update auto-preview controller
-      if (autoPreviewController) {
-        autoPreviewController.setProjectFiles(projectFiles, mainFilePath);
-        await autoPreviewController.forcePreview(
-          stateManager.getState().parameters
-        );
-      }
-
-      updateStatus(`Added file: ${fileName}`, 'success');
-      console.log(`[ProjectFiles] Added companion file: ${fileName}`);
-
-      // Auto-save to tracked saved project
-      await autoSaveCompanionFiles();
-
-      // If include_screenshot is active but no overlay is displayed yet,
-      // re-sync so the newly added file can be picked up as the overlay source.
-      const currentParams = stateManager.getState().parameters;
-      const includeFlag = currentParams?.include_screenshot;
-      if (
-        (includeFlag === 'yes' ||
-          includeFlag === true ||
-          includeFlag === 'true') &&
-        overlayToggle &&
-        !overlayToggle.checked
-      ) {
-        syncOverlayWithScreenshotParam(currentParams);
-      }
-    } catch (error) {
-      console.error('[ProjectFiles] Error adding file:', error);
-      updateStatus(`Failed to add file: ${error.message}`, 'error');
-    }
-  }
-
-  /**
-   * Remove a companion file from the project
-   * @param {string} path - Path to the file to remove
-   */
-  async function removeProjectFile(path) {
-    const state = stateManager.getState();
-    const { projectFiles, mainFilePath, uploadedFile } = state;
-
-    if (!projectFiles || !projectFiles.has(path)) {
-      updateStatus('File not found', 'error');
-      return;
-    }
-
-    // Don't allow removing the main file
-    if (path === mainFilePath) {
-      updateStatus('Cannot remove the main file', 'error');
-      return;
-    }
-
-    const confirmed = confirm(`Remove "${path}" from the project?`);
-    if (!confirmed) return;
-
-    projectFiles.delete(path);
-
-    // Update state
-    stateManager.setState({ projectFiles });
-    setCanonicalProjectFiles(projectFiles);
-
-    // Update UI
-    const requiredFiles = uploadedFile
-      ? detectRequiredCompanionFiles(uploadedFile.content)
-      : null;
-    renderProjectFilesList(projectFiles, mainFilePath, requiredFiles);
-
-    // Update auto-preview controller
-    if (autoPreviewController) {
-      autoPreviewController.setProjectFiles(projectFiles, mainFilePath);
-      await autoPreviewController.forcePreview(
-        stateManager.getState().parameters
-      );
-    }
-
-    updateStatus(`Removed file: ${path}`, 'success');
-    console.log(`[ProjectFiles] Removed file: ${path}`);
-
-    // Auto-save to tracked saved project
-    await autoSaveCompanionFiles();
-  }
-
-  /**
-   * Open the text file editor modal for a companion file
-   * @param {string} path - Path to the file to edit
-   */
-  function editProjectFile(path) {
-    const state = stateManager.getState();
-    const { projectFiles } = state;
-
-    if (!projectFiles || !projectFiles.has(path)) {
-      updateStatus('File not found', 'error');
-      return;
-    }
-
-    const content = projectFiles.get(path);
-
-    // Get modal elements
-    const modal = document.getElementById('textFileEditorModal');
-    const fileNameEl = document.getElementById('textFileEditorFileName');
-    const textarea = document.getElementById('textFileEditorContent');
-
-    if (!modal || !textarea) {
-      console.error('[ProjectFiles] Text editor modal not found');
-      return;
-    }
-
-    // Set content
-    if (fileNameEl) fileNameEl.textContent = path;
-    textarea.value = content;
-    textarea.dataset.editingPath = path;
-
-    // Open modal
-    openModal(modal, {
-      focusTarget: textarea,
-    });
-  }
-
-  /**
-   * Apply text file editor changes and trigger preview
-   */
-  async function applyTextFileEditorChanges() {
-    const textarea = document.getElementById('textFileEditorContent');
-    const modal = document.getElementById('textFileEditorModal');
-
-    if (!textarea || !modal) return;
-
-    const path = textarea.dataset.editingPath;
-    const newContent = textarea.value;
-
-    const state = stateManager.getState();
-    const { projectFiles, mainFilePath } = state;
-
-    if (!projectFiles || !path) {
-      closeModal(modal);
-      return;
-    }
-
-    // Update file content
-    projectFiles.set(path, newContent);
-
-    // Update state
-    stateManager.setState({ projectFiles });
-    setCanonicalProjectFiles(projectFiles);
-
-    // Update UI
-    const requiredFiles = state.uploadedFile
-      ? detectRequiredCompanionFiles(state.uploadedFile.content)
-      : null;
-    renderProjectFilesList(projectFiles, mainFilePath, requiredFiles);
-
-    // Close modal
-    closeModal(modal);
-
-    // Trigger preview with updated files
-    if (autoPreviewController) {
-      autoPreviewController.setProjectFiles(projectFiles, mainFilePath);
-      await autoPreviewController.forcePreview(
-        stateManager.getState().parameters
-      );
-    }
-
-    updateStatus(`Updated file: ${path}`, 'success');
-    console.log(`[ProjectFiles] Updated file: ${path}`);
-
-    // Auto-save to tracked saved project
-    await autoSaveCompanionFiles();
-  }
-
-  /**
-   * Update the project files UI after file load
-   */
-  function updateProjectFilesUI() {
-    const state = stateManager.getState();
-    const { projectFiles, mainFilePath, uploadedFile } = state;
-
-    if (!uploadedFile) {
-      const controls = document.getElementById('projectFilesControls');
-      if (controls) controls.classList.add('hidden');
-      return;
-    }
-
-    const requiredFiles = detectRequiredCompanionFiles(uploadedFile.content);
-    renderProjectFilesList(projectFiles, mainFilePath, requiredFiles);
-
-    // Emit synthetic console warnings for missing companion files so the
-    // Console panel mirrors what desktop OpenSCAD would show for missing includes.
-    if (
-      requiredFiles?.files &&
-      typeof window.updateConsoleOutput === 'function'
-    ) {
-      const knownLibraryIdSet = new Set(
-        Object.keys(LIBRARY_DEFINITIONS).map((id) => id.toLowerCase())
-      );
-      const projectBasenames = projectFiles
-        ? new Set(
-            Array.from(projectFiles.keys()).map((p) =>
-              p.split('/').pop().toLowerCase()
-            )
-          )
-        : new Set();
-      const missing = requiredFiles.files.filter((f) => {
-        if (!f.required) return false;
-        if (typeof f.path !== 'string' || f.path.trim() === '') return false;
-        const normalizedPath = f.path.trim().replace(/^\/+/, '');
-        const pathParts = normalizedPath.split('/');
-        const firstSegment = pathParts[0].toLowerCase();
-        const isLibraryReference =
-          pathParts.length > 1 && knownLibraryIdSet.has(firstSegment);
-        // Companion-file warnings should not include library include/use refs.
-        if (isLibraryReference) return false;
-        if (!projectFiles) return true;
-        if (projectFiles.has(f.path)) return false;
-        const baseName = pathParts[pathParts.length - 1].toLowerCase();
-        return !projectBasenames.has(baseName);
-      });
-      if (missing.length > 0) {
-        const warnings = missing
-          .map((f) => `WARNING: Can't open include file '${f.path}'.`)
-          .join('\n');
-        window.updateConsoleOutput(warnings);
-      }
-    }
-  }
+  // Companion file functions (detectIncludeUse, detectRequiredCompanionFiles,
+  // autoSaveCompanionFiles, updateCompanionSaveButton, renderProjectFilesList,
+  // syncOverlayWithScreenshotParam, autoSelectOverlaySource, getFileIcon,
+  // handleProjectFileAction, handleAddCompanionFile, removeProjectFile,
+  // editProjectFile, applyTextFileEditorChanges, updateProjectFilesUI)
+  // moved to companion-files-controller.js
 
   /**
    * Show a full-screen processing overlay for long operations.
@@ -8104,7 +7240,7 @@ async function initApp() {
           // Refresh color legend swatches with new parameter values
           _updateColorLegend();
           // Sync overlay with include_screenshot param
-          syncOverlayWithScreenshotParam(values);
+          companionFilesCtrl.syncOverlayWithScreenshotParam(values);
         }
       );
 
@@ -8462,7 +7598,7 @@ async function initApp() {
       }
 
       // Update Project Files Manager UI (for multi-file projects)
-      updateProjectFilesUI();
+      companionFilesCtrl.updateProjectFilesUI();
 
       // Restore SharedImageStore from saved screenshots in projectFiles.
       // This rehydrates the in-memory image store so screenshots appear in
@@ -8544,7 +7680,7 @@ async function initApp() {
       if (!files || files.length === 0) return;
 
       for (const file of files) {
-        await handleAddCompanionFile(file);
+        await companionFilesCtrl.handleAddCompanionFile(file);
       }
 
       // Reset input for potential re-selection
@@ -8570,7 +7706,7 @@ async function initApp() {
     companionSaveBtn.addEventListener('click', async () => {
       if (currentSavedProjectId) {
         // Update existing saved project
-        await autoSaveCompanionFiles();
+        await companionFilesCtrl.autoSaveCompanionFiles();
       } else {
         // Route to save prompt for new projects
         const state = stateManager.getState();
@@ -8591,7 +7727,7 @@ async function initApp() {
   );
 
   if (textFileEditorApply) {
-    textFileEditorApply.addEventListener('click', applyTextFileEditorChanges);
+    textFileEditorApply.addEventListener('click', () => companionFilesCtrl.applyTextFileEditorChanges());
   }
 
   // Ctrl+S / Cmd+S keyboard shortcut to save and apply changes
@@ -8603,7 +7739,7 @@ async function initApp() {
       // Ctrl+S or Cmd+S to save and apply
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault();
-        applyTextFileEditorChanges();
+        companionFilesCtrl.applyTextFileEditorChanges();
       }
       // Escape to cancel
       if (e.key === 'Escape') {
@@ -10606,7 +9742,7 @@ if (rounded) {
             setCanonicalProjectFiles(projectFiles);
 
             // Auto-save to IndexedDB so screenshots persist across sessions
-            await autoSaveCompanionFiles();
+            await companionFilesCtrl.autoSaveCompanionFiles();
           }
 
           // Select the newly uploaded image in the dropdown
@@ -12664,7 +11800,7 @@ if (rounded) {
           autoPreviewController.onParameterChange(values);
         }
         updatePrimaryActionButton();
-        syncOverlayWithScreenshotParam(values);
+        companionFilesCtrl.syncOverlayWithScreenshotParam(values);
       },
       mergedParams
     );
@@ -12747,7 +11883,7 @@ if (rounded) {
     }
 
     updatePrimaryActionButton();
-    updateProjectFilesUI();
+    companionFilesCtrl.updateProjectFilesUI();
 
     // When the preset has a mapped SVG, force-select the aliased overlay
     // in the dropdown. Without this, the dropdown retains the previous
@@ -12769,7 +11905,7 @@ if (rounded) {
         });
     }
 
-    syncOverlayWithScreenshotParam(mergedParams);
+    companionFilesCtrl.syncOverlayWithScreenshotParam(mergedParams);
     setCurrentPresetSelection(preset);
 
     isLoadingPreset = false;
