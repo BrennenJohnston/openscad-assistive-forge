@@ -4276,21 +4276,41 @@ export class PreviewManager {
     const doc = parser.parseFromString(svgText, 'image/svg+xml');
     const svg = doc.documentElement;
 
-    // Remove <script> elements
-    for (const el of [...svg.querySelectorAll('script')]) {
+    // Remove elements that can embed arbitrary HTML or external content
+    for (const el of [
+      ...svg.querySelectorAll(
+        'script, foreignObject, iframe, embed, object'
+      ),
+    ]) {
       el.remove();
     }
 
-    // Remove event-handler attributes from all elements
+    // Block <use> elements with external references (SSRF / data exfiltration)
+    for (const useEl of [...svg.querySelectorAll('use')]) {
+      const href =
+        useEl.getAttribute('href') ||
+        useEl.getAttribute('xlink:href') ||
+        '';
+      const val = href.trim().toLowerCase();
+      if (
+        val.startsWith('http:') ||
+        val.startsWith('https:') ||
+        val.startsWith('//')
+      ) {
+        useEl.remove();
+      }
+    }
+
+    // Remove event-handler attributes and dangerous URI schemes from all elements
     const allEls = svg.querySelectorAll('*');
     for (const el of allEls) {
       for (const attr of [...el.attributes]) {
         if (attr.name.startsWith('on')) {
           el.removeAttribute(attr.name);
         }
-        // Remove xlink:href to javascript:
         if (attr.name === 'href' || attr.name === 'xlink:href') {
-          if (attr.value.trim().toLowerCase().startsWith('javascript:')) {
+          const val = attr.value.trim().toLowerCase();
+          if (val.startsWith('javascript:') || val.startsWith('data:')) {
             el.removeAttribute(attr.name);
           }
         }
