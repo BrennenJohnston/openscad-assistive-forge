@@ -29,8 +29,6 @@ export default defineConfig({
         'src/js/color-utils.js',
         'src/js/html-utils.js',
         'src/js/keyboard-config.js',
-        'src/js/sw-manager.js',
-        'src/js/version.js',
         'src/js/gamepad-controller.js',
         // UI controller modules - primarily tested via E2E / manual interaction
         'src/js/image-measurement.js',
