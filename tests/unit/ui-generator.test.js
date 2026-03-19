@@ -6,7 +6,9 @@ import {
   getAllDefaults, 
   getDefaultValue,
   resetParameter,
-  updateDependentParameters
+  updateDependentParameters,
+  setGalleryOptions,
+  clearGalleryOptions
 } from '../../src/js/ui-generator.js'
 
 const buildParams = ({ groups = null, params = [] }) => {
@@ -984,6 +986,199 @@ describe('UI Generator', () => {
       const unitLabel = container.querySelector('.slider-unit')
       expect(unitLabel).toBeTruthy()
       expect(unitLabel.textContent).toBe('°')
+    })
+  })
+
+  describe('SVG Gallery Picker', () => {
+    afterEach(() => {
+      clearGalleryOptions()
+    })
+
+    it('renders gallery when galleryOptions are registered for a file param', () => {
+      setGalleryOptions('design_file', [
+        { file: 'heart.svg', label: 'Heart', url: '/examples/heart.svg' },
+        { file: 'star.svg', label: 'Star', url: '/examples/star.svg' },
+      ])
+
+      const schema = buildParams({
+        params: [
+          {
+            name: 'design_file',
+            type: 'file',
+            default: '',
+            uiType: 'file',
+            acceptedExtensions: ['svg', 'png', 'jpg']
+          }
+        ]
+      })
+      const onChange = vi.fn()
+
+      renderParameterUI(schema, container, onChange, {})
+
+      const gallery = container.querySelector('.svg-gallery')
+      expect(gallery).toBeTruthy()
+
+      const listbox = gallery.querySelector('[role="listbox"]')
+      expect(listbox).toBeTruthy()
+
+      const options = gallery.querySelectorAll('[role="option"]')
+      expect(options.length).toBe(2)
+      expect(options[0].title).toBe('Heart')
+      expect(options[1].title).toBe('Star')
+    })
+
+    it('does not render gallery when no galleryOptions are registered', () => {
+      const schema = buildParams({
+        params: [
+          {
+            name: 'logo_file',
+            type: 'file',
+            default: '',
+            uiType: 'file',
+            acceptedExtensions: ['svg']
+          }
+        ]
+      })
+      const onChange = vi.fn()
+
+      renderParameterUI(schema, container, onChange, {})
+
+      const gallery = container.querySelector('.svg-gallery')
+      expect(gallery).toBeFalsy()
+    })
+
+    it('gallery options have accessible labels and thumbnails', () => {
+      setGalleryOptions('design_file', [
+        { file: 'flower.svg', label: 'Flower', url: '/examples/flower.svg' },
+      ])
+
+      const schema = buildParams({
+        params: [
+          {
+            name: 'design_file',
+            type: 'file',
+            default: '',
+            uiType: 'file',
+            acceptedExtensions: ['svg']
+          }
+        ]
+      })
+      const onChange = vi.fn()
+
+      renderParameterUI(schema, container, onChange, {})
+
+      const option = container.querySelector('[role="option"]')
+      expect(option).toBeTruthy()
+      expect(option.getAttribute('aria-selected')).toBe('false')
+
+      const thumb = option.querySelector('img')
+      expect(thumb).toBeTruthy()
+      expect(thumb.alt).toBe('Flower')
+      expect(thumb.src).toContain('/examples/flower.svg')
+
+      const label = option.querySelector('.svg-gallery-label')
+      expect(label).toBeTruthy()
+      expect(label.textContent).toBe('Flower')
+    })
+
+    it('gallery listbox has proper ARIA attributes', () => {
+      setGalleryOptions('design_file', [
+        { file: 'heart.svg', label: 'Heart', url: '/examples/heart.svg' },
+      ])
+
+      const schema = buildParams({
+        params: [
+          {
+            name: 'design_file',
+            type: 'file',
+            default: '',
+            uiType: 'file',
+            acceptedExtensions: ['svg']
+          }
+        ]
+      })
+      const onChange = vi.fn()
+
+      renderParameterUI(schema, container, onChange, {})
+
+      const listbox = container.querySelector('[role="listbox"]')
+      expect(listbox).toBeTruthy()
+      expect(listbox.getAttribute('aria-labelledby')).toBe('gallery-heading-design_file')
+      expect(listbox.getAttribute('tabindex')).toBe('0')
+
+      const heading = container.querySelector('#gallery-heading-design_file')
+      expect(heading).toBeTruthy()
+      expect(heading.textContent).toBe('Choose a design')
+    })
+
+    it('clearGalleryOptions removes gallery on re-render', () => {
+      setGalleryOptions('design_file', [
+        { file: 'heart.svg', label: 'Heart', url: '/examples/heart.svg' },
+      ])
+
+      const schema = buildParams({
+        params: [
+          {
+            name: 'design_file',
+            type: 'file',
+            default: '',
+            uiType: 'file',
+            acceptedExtensions: ['svg']
+          }
+        ]
+      })
+      const onChange = vi.fn()
+
+      renderParameterUI(schema, container, onChange, {})
+      expect(container.querySelector('.svg-gallery')).toBeTruthy()
+
+      clearGalleryOptions()
+      renderParameterUI(schema, container, onChange, {})
+      expect(container.querySelector('.svg-gallery')).toBeFalsy()
+    })
+
+    it('gallery options support keyboard navigation', () => {
+      setGalleryOptions('design_file', [
+        { file: 'heart.svg', label: 'Heart', url: '/examples/heart.svg' },
+        { file: 'star.svg', label: 'Star', url: '/examples/star.svg' },
+        { file: 'moon.svg', label: 'Moon', url: '/examples/moon.svg' },
+      ])
+
+      const schema = buildParams({
+        params: [
+          {
+            name: 'design_file',
+            type: 'file',
+            default: '',
+            uiType: 'file',
+            acceptedExtensions: ['svg']
+          }
+        ]
+      })
+      const onChange = vi.fn()
+
+      renderParameterUI(schema, container, onChange, {})
+
+      const listbox = container.querySelector('[role="listbox"]')
+      expect(listbox).toBeTruthy()
+
+      // Navigate right
+      listbox.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
+      const options = container.querySelectorAll('[role="option"]')
+      expect(options[0].getAttribute('aria-selected')).toBe('true')
+
+      // Navigate right again
+      listbox.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
+      expect(options[0].getAttribute('aria-selected')).toBe('false')
+      expect(options[1].getAttribute('aria-selected')).toBe('true')
+
+      // Navigate to end
+      listbox.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }))
+      expect(options[2].getAttribute('aria-selected')).toBe('true')
+
+      // Navigate to home
+      listbox.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true }))
+      expect(options[0].getAttribute('aria-selected')).toBe('true')
     })
   })
 })

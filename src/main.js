@@ -12,6 +12,8 @@ import {
   focusParameter,
   locateParameterKey,
   setParameterValue as _setParameterValue,
+  setGalleryOptions,
+  clearGalleryOptions,
 } from './js/ui-generator.js';
 import { stateManager } from './js/state.js';
 import {
@@ -309,6 +311,26 @@ const EXAMPLE_DEFINITIONS = {
     path: '/examples/logo-plate/logo_plate.scad',
     name: 'logo_plate.scad',
     description: 'Logo Plate (SVG Import)',
+  },
+  'nasif-charm-maker': {
+    path: '/examples/nasif-charm-maker/nasif_charm_maker.scad',
+    name: 'nasif_charm_maker.scad',
+    description: "Nasif's Charm Maker",
+    manifest: '/examples/nasif-charm-maker/manifest.json',
+    additionalFiles: [
+      '/examples/nasif-charm-maker/svg-library/heart.svg',
+      '/examples/nasif-charm-maker/svg-library/star.svg',
+      '/examples/nasif-charm-maker/svg-library/paw.svg',
+      '/examples/nasif-charm-maker/svg-library/lightning.svg',
+      '/examples/nasif-charm-maker/svg-library/music-note.svg',
+      '/examples/nasif-charm-maker/svg-library/smiley.svg',
+      '/examples/nasif-charm-maker/svg-library/moon.svg',
+      '/examples/nasif-charm-maker/svg-library/flower.svg',
+      '/examples/nasif-charm-maker/svg-library/diamond.svg',
+      '/examples/nasif-charm-maker/svg-library/crown.svg',
+      '/examples/nasif-charm-maker/svg-library/leaf.svg',
+      '/examples/nasif-charm-maker/svg-library/sun.svg',
+    ],
   },
 };
 
@@ -11753,6 +11775,7 @@ if (rounded) {
     }
 
     try {
+      clearGalleryOptions();
       updateStatus('Loading example...');
       const response = await fetch(example.path);
       if (!response.ok) throw new Error('Failed to fetch example');
@@ -11826,6 +11849,35 @@ if (rounded) {
         }
 
         console.log(`[Example] Total files in package: ${projectFiles.size}`);
+      }
+
+      // Load manifest for SVG gallery options
+      if (example.manifest) {
+        try {
+          const manifestRes = await fetch(example.manifest);
+          if (manifestRes.ok) {
+            const manifest = await manifestRes.json();
+            if (manifest.svgLibrary?.options?.length) {
+              const baseDir = example.manifest.replace(/\/[^/]+$/, '');
+              const galleryEntries = manifest.svgLibrary.options.map(
+                (opt) => ({
+                  file: opt.file,
+                  label: opt.label,
+                  url: `${baseDir}/${opt.file}`,
+                })
+              );
+              setGalleryOptions(
+                manifest.svgLibrary.paramName,
+                galleryEntries
+              );
+              console.log(
+                `[Example] Gallery loaded: ${galleryEntries.length} designs for "${manifest.svgLibrary.paramName}"`
+              );
+            }
+          }
+        } catch (err) {
+          console.warn('[Example] Manifest load failed (non-fatal):', err);
+        }
       }
 
       handleFile(

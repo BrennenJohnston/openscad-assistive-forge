@@ -78,6 +78,26 @@ function createLabelContainer(param, options = {}) {
   return labelContainer;
 }
 
+// Gallery options for file parameters (populated by example manifest loading)
+let galleryOptionsMap = {};
+
+/**
+ * Register bundled SVG gallery options for a file parameter.
+ * Called when loading an example whose manifest declares an svgLibrary.
+ * @param {string} paramName - File parameter name
+ * @param {Array<{file: string, label: string, url: string}>} options - Gallery entries
+ */
+export function setGalleryOptions(paramName, options) {
+  galleryOptionsMap[paramName] = options;
+}
+
+/**
+ * Clear all gallery options (called when switching examples or clearing files).
+ */
+export function clearGalleryOptions() {
+  galleryOptionsMap = {};
+}
+
 // Store current parameter values for dependency checking
 let currentParameterValues = {};
 
@@ -1450,6 +1470,132 @@ function createColorControl(param, onChange) {
 }
 
 /**
+ * Create an accessible SVG gallery picker for file parameters with bundled options.
+ * Implements WCAG listbox pattern with arrow key navigation and focus management.
+ *
+ * @param {Array<{file: string, label: string, url: string}>} options - Gallery entries
+ * @param {Object} param - Parameter definition
+ * @param {Function} onSelect - Called with file-like object when a design is selected
+ * @returns {HTMLElement} Gallery container element
+ */
+function createSvgGallery(options, param, onSelect) {
+  const gallery = document.createElement('div');
+  gallery.className = 'svg-gallery';
+
+  const heading = document.createElement('span');
+  heading.className = 'svg-gallery-heading';
+  heading.textContent = 'Choose a design';
+  heading.id = `gallery-heading-${param.name}`;
+  gallery.appendChild(heading);
+
+  const listbox = document.createElement('div');
+  listbox.className = 'svg-gallery-listbox';
+  listbox.setAttribute('role', 'listbox');
+  listbox.setAttribute('aria-labelledby', heading.id);
+  listbox.setAttribute('tabindex', '0');
+
+  let activeIndex = -1;
+
+  function setActiveOption(index) {
+    const items = listbox.querySelectorAll('[role="option"]');
+    items.forEach((item, i) => {
+      const isActive = i === index;
+      item.classList.toggle('svg-gallery-option--active', isActive);
+      item.setAttribute('aria-selected', String(isActive));
+    });
+    if (items[index]) {
+      listbox.setAttribute('aria-activedescendant', items[index].id);
+      if (typeof items[index].scrollIntoView === 'function') {
+        items[index].scrollIntoView({ block: 'nearest' });
+      }
+    }
+    activeIndex = index;
+  }
+
+  function selectOption(index) {
+    const opt = options[index];
+    if (!opt) return;
+    setActiveOption(index);
+
+    fetch(opt.url)
+      .then((res) => {
+        if (!res.ok) throw new Error(`Failed to fetch ${opt.file}`);
+        return res.text();
+      })
+      .then((svgText) => {
+        const svgDataUrl =
+          'data:image/svg+xml;base64,' + btoa(svgText);
+        announceChange(`Selected design: ${opt.label}`);
+        onSelect(param.name, {
+          name: opt.file.split('/').pop(),
+          size: svgText.length,
+          type: 'image/svg+xml',
+          data: svgDataUrl,
+        });
+      })
+      .catch((err) => {
+        console.error('[SvgGallery] fetch error:', err);
+        announceChange(`Failed to load design: ${opt.label}`);
+      });
+  }
+
+  options.forEach((opt, index) => {
+    const option = document.createElement('button');
+    option.type = 'button';
+    option.className = 'svg-gallery-option';
+    option.setAttribute('role', 'option');
+    option.setAttribute('aria-selected', 'false');
+    option.id = `gallery-${param.name}-${index}`;
+    option.title = opt.label;
+
+    const thumb = document.createElement('img');
+    thumb.src = opt.url;
+    thumb.alt = opt.label;
+    thumb.className = 'svg-gallery-thumb';
+    thumb.loading = 'lazy';
+    thumb.setAttribute('aria-hidden', 'true');
+    option.appendChild(thumb);
+
+    const label = document.createElement('span');
+    label.className = 'svg-gallery-label';
+    label.textContent = opt.label;
+    option.appendChild(label);
+
+    option.addEventListener('click', () => selectOption(index));
+
+    listbox.appendChild(option);
+  });
+
+  // Arrow key navigation within the listbox
+  listbox.addEventListener('keydown', (e) => {
+    const count = options.length;
+    if (!count) return;
+
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      const next = activeIndex < count - 1 ? activeIndex + 1 : 0;
+      setActiveOption(next);
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      const prev = activeIndex > 0 ? activeIndex - 1 : count - 1;
+      setActiveOption(prev);
+    } else if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      if (activeIndex >= 0) selectOption(activeIndex);
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      setActiveOption(0);
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      setActiveOption(count - 1);
+    }
+  });
+
+  gallery.appendChild(listbox);
+  return gallery;
+}
+
+/**
  * Create a file upload control with optional image preview and
  * automatic PNG/JPG-to-SVG conversion when the parameter accepts SVG.
  * @param {Object} param - Parameter definition
@@ -1625,6 +1771,24 @@ function createFileControl(param, onChange) {
     preview.alt = '';
     onChange(param.name, null);
   });
+
+  // SVG gallery picker (rendered when bundled options are registered)
+  const galleryOptions = galleryOptionsMap[param.name];
+  if (galleryOptions && galleryOptions.length > 0) {
+    const gallery = createSvgGallery(
+      galleryOptions,
+      param,
+      (name, fileObj) => {
+        fileInfo.textContent = `${fileObj.name} (design library)`;
+        fileInfo.title = fileObj.name;
+        clearButton.style.display = 'inline-block';
+        preview.style.display = 'none';
+        preview.alt = '';
+        onChange(name, fileObj);
+      }
+    );
+    fileContainer.appendChild(gallery);
+  }
 
   fileContainer.appendChild(fileButton);
   fileContainer.appendChild(preview);

@@ -71,8 +71,10 @@ inspired by a proof-of-concept built by **Nasif Zaman**
 - **Contribution**: Demonstrated PNG-to-SCAD geometry pipeline, designed
   the logo-plate example concept, validated the client-side image
   processing approach, established the upload + invert + depth UX pattern
-- **Named tool**: The "Nasif's Charm Maker" tool in the application is
-  named in his honor (Phase 3)
+- **Named tool**: The **"Nasif's Charm Maker"** tool in the application
+  (`public/examples/nasif-charm-maker/`) is named in his honor. It appears
+  in the example selector, the manifest display name, the page title when
+  the tool is loaded, and the SCAD file header comment.
 
 ---
 
