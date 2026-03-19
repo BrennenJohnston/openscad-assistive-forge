@@ -6,6 +6,11 @@
 import { formatFileSize } from './download.js';
 import { announceChange } from './announcer.js';
 import { reapplyDetailLevel } from './param-detail-controller.js';
+import { isRasterImageFile } from './file-param-resolver.js';
+import {
+  convertPngToSvg,
+  validateImageDimensions,
+} from './image-import.js';
 
 /**
  * Format a parameter name for display (replaces underscores with spaces)
@@ -1445,7 +1450,8 @@ function createColorControl(param, onChange) {
 }
 
 /**
- * Create a file upload control
+ * Create a file upload control with optional image preview and
+ * automatic PNG/JPG-to-SVG conversion when the parameter accepts SVG.
  * @param {Object} param - Parameter definition
  * @param {Function} onChange - Change handler
  * @returns {HTMLElement} Control element
@@ -1492,6 +1498,13 @@ function createFileControl(param, onChange) {
   fileInfo.setAttribute('role', 'status');
   fileInfo.setAttribute('aria-live', 'polite');
 
+  // Image preview thumbnail (hidden until a raster image is uploaded)
+  const preview = document.createElement('img');
+  preview.className = 'file-preview-thumbnail';
+  preview.style.display = 'none';
+  preview.setAttribute('role', 'img');
+  preview.alt = '';
+
   const clearButton = document.createElement('button');
   clearButton.type = 'button';
   clearButton.className = 'file-clear-button';
@@ -1503,43 +1516,103 @@ function createFileControl(param, onChange) {
   );
   clearButton.style.display = 'none';
 
+  const acceptsSvg = param.acceptedExtensions?.includes('svg');
+
   // Button triggers file input
   fileButton.addEventListener('click', () => {
     fileInput.click();
   });
 
   // Handle file selection
-  fileInput.addEventListener('change', async (e) => {
+  fileInput.addEventListener('change', (e) => {
     const file = e.target.files[0];
-    if (file) {
-      try {
-        // Read file as base64
-        const reader = new FileReader();
-        reader.onload = (evt) => {
-          const dataUrl = evt.target.result;
-          fileInfo.textContent = `${file.name} (${formatFileSize(file.size)})`;
-          fileInfo.title = file.name;
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      const dataUrl = evt.target.result;
+
+      // Show image preview for raster uploads
+      if (isRasterImageFile(file.name)) {
+        preview.src = dataUrl;
+        preview.alt = `Preview of ${file.name}`;
+        preview.style.display = 'block';
+      } else {
+        preview.style.display = 'none';
+        preview.alt = '';
+      }
+
+      // Auto-convert raster images to SVG when the param accepts SVG
+      if (isRasterImageFile(file.name) && acceptsSvg) {
+        try {
+          fileInfo.textContent = 'Converting to SVG\u2026';
+          fileInfo.setAttribute('aria-busy', 'true');
+          fileButton.disabled = true;
+
+          // Validate before starting conversion
+          const img = new Image();
+          const dimCheck = await new Promise((resolve, reject) => {
+            img.onload = () =>
+              resolve(validateImageDimensions(img.width, img.height));
+            img.onerror = () => reject(new Error('Failed to load image'));
+            img.src = dataUrl;
+          });
+
+          if (dimCheck.warning) {
+            fileInfo.textContent = `Converting\u2026 ${dimCheck.warning}`;
+            announceChange(dimCheck.warning);
+          }
+
+          const svgString = await convertPngToSvg(dataUrl);
+          const svgName = file.name.replace(/\.[^.]+$/, '.svg');
+          const svgDataUrl =
+            'data:image/svg+xml;base64,' + btoa(svgString);
+
+          fileInfo.textContent = `${svgName} (converted from ${file.name})`;
+          fileInfo.title = svgName;
+          fileInfo.removeAttribute('aria-busy');
+          fileButton.disabled = false;
           clearButton.style.display = 'inline-block';
 
-          // Pass file data to onChange
+          announceChange(
+            `Image converted to vector format: ${svgName}`
+          );
+
           onChange(param.name, {
-            name: file.name,
-            size: file.size,
-            type: file.type,
-            data: dataUrl,
+            name: svgName,
+            size: svgString.length,
+            type: 'image/svg+xml',
+            data: svgDataUrl,
           });
-        };
-        reader.onerror = () => {
-          fileInfo.textContent = 'Error reading file';
+        } catch (err) {
+          fileInfo.textContent = `Conversion failed: ${err.message}`;
           fileInfo.className = 'file-info file-info--error';
-        };
-        reader.readAsDataURL(file);
-      } catch (error) {
-        fileInfo.textContent = 'Error reading file';
-        fileInfo.className = 'file-info file-info--error';
-        console.error('File read error:', error);
+          fileInfo.removeAttribute('aria-busy');
+          fileButton.disabled = false;
+          preview.style.display = 'none';
+          announceChange(`Image conversion failed: ${err.message}`);
+          console.error('[ImageImport] Conversion error:', err);
+        }
+        return;
       }
-    }
+
+      // Standard file upload path (non-raster or no SVG conversion needed)
+      fileInfo.textContent = `${file.name} (${formatFileSize(file.size)})`;
+      fileInfo.title = file.name;
+      clearButton.style.display = 'inline-block';
+
+      onChange(param.name, {
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        data: dataUrl,
+      });
+    };
+    reader.onerror = () => {
+      fileInfo.textContent = 'Error reading file';
+      fileInfo.className = 'file-info file-info--error';
+    };
+    reader.readAsDataURL(file);
   });
 
   // Clear file
@@ -1548,10 +1621,13 @@ function createFileControl(param, onChange) {
     fileInfo.textContent = 'No file selected';
     fileInfo.className = 'file-info';
     clearButton.style.display = 'none';
+    preview.style.display = 'none';
+    preview.alt = '';
     onChange(param.name, null);
   });
 
   fileContainer.appendChild(fileButton);
+  fileContainer.appendChild(preview);
   fileContainer.appendChild(fileInfo);
   fileContainer.appendChild(clearButton);
   fileContainer.appendChild(fileInput);

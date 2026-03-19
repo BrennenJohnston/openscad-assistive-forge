@@ -19,8 +19,8 @@ plate_thickness = 4; // [2:0.5:10]
 corner_radius = 3; // [0:0.5:10]
 
 /* [Logo] */
-// SVG file for engraving
-logo_file = "sample-logo.svg"; // [file:svg]
+// Image file for engraving (SVG, PNG, or JPG — raster images auto-convert to SVG)
+logo_file = "sample-logo.svg"; // [file:svg,png,jpg]
 
 // Engraving depth
 cut_depth = 1.0; // [0.3:0.1:3.0]
