@@ -11303,6 +11303,242 @@ body.tutorial-body-locked {
   border-width: 3px;
 }
 
+/* ---------------------------------------------------------------------------
+   Friendly Error Modal (critical errors -- role="alertdialog")
+   Reuses existing .preset-modal layout pattern with error-specific styling.
+   --------------------------------------------------------------------------- */
+
+.friendly-error-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: var(--z-index-modal);
+  padding: var(--space-md);
+  padding-top: calc(var(--space-md) + env(safe-area-inset-top, 0px));
+  padding-bottom: calc(var(--space-md) + env(safe-area-inset-bottom, 0px));
+}
+
+.friendly-error-modal-content {
+  background: var(--color-bg-primary);
+  border: 2px solid var(--color-error);
+  border-radius: var(--border-radius-lg);
+  padding: var(--space-lg);
+  max-width: 480px;
+  width: 100%;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow-lg);
+}
+
+.friendly-error-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-md);
+}
+
+.friendly-error-modal-title {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  color: var(--color-error);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.friendly-error-modal-close {
+  background: transparent;
+  border: none;
+  font-size: var(--font-size-xl);
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  padding: var(--space-xs);
+  line-height: 1;
+  border-radius: var(--border-radius-sm);
+  flex-shrink: 0;
+}
+
+.friendly-error-modal-close:hover {
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+}
+
+.friendly-error-modal-close:focus {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.friendly-error-modal-body {
+  margin-bottom: var(--space-md);
+}
+
+.friendly-error-modal-body .error-explanation {
+  font-size: var(--font-size-base);
+  color: var(--color-text-primary);
+  margin: 0 0 var(--space-md) 0;
+  line-height: 1.6;
+}
+
+.friendly-error-modal-body .error-suggestion {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin: 0;
+  padding: var(--space-sm);
+  background: var(--color-bg-tertiary);
+  border-radius: var(--border-radius-sm);
+}
+
+.friendly-error-modal-body .error-suggestion strong {
+  color: var(--color-text-primary);
+}
+
+.friendly-error-modal-body .error-details-toggle {
+  margin-top: var(--space-md);
+}
+
+.friendly-error-modal-body .error-details-toggle summary {
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  user-select: none;
+}
+
+.friendly-error-modal-body .error-technical {
+  margin-top: var(--space-sm);
+  padding: var(--space-sm);
+  background: var(--color-bg-tertiary);
+  border-radius: var(--border-radius-sm);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.friendly-error-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--color-border);
+}
+
+[data-high-contrast='true'] .friendly-error-modal-content {
+  border-width: 3px;
+}
+
+/* ---------------------------------------------------------------------------
+   Error Toast (informational errors -- role="alert")
+   --------------------------------------------------------------------------- */
+
+.error-toast-container {
+  position: fixed;
+  top: var(--space-md);
+  right: var(--space-md);
+  z-index: calc(var(--z-index-modal) + 50);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  pointer-events: none;
+  max-width: min(420px, calc(100vw - 2 * var(--space-md)));
+}
+
+.error-toast {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  background: var(--color-bg-primary);
+  border: 2px solid var(--color-error);
+  border-radius: var(--border-radius-md);
+  padding: var(--space-sm) var(--space-md);
+  box-shadow: var(--shadow-md);
+  pointer-events: auto;
+  animation: error-toast-enter 0.25s ease-out;
+}
+
+.error-toast-icon {
+  flex-shrink: 0;
+  font-size: var(--font-size-lg);
+  line-height: 1.4;
+}
+
+.error-toast-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.error-toast-title {
+  display: block;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-error);
+  line-height: 1.4;
+}
+
+.error-toast-message {
+  display: block;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  line-height: 1.4;
+  margin-top: 2px;
+}
+
+.error-toast-dismiss {
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  font-size: var(--font-size-lg);
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  padding: 0 var(--space-xs);
+  line-height: 1;
+  border-radius: var(--border-radius-sm);
+}
+
+.error-toast-dismiss:hover {
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+}
+
+.error-toast-dismiss:focus {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+@keyframes error-toast-enter {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.error-toast-exit {
+  animation: error-toast-exit 0.2s ease-in forwards;
+}
+
+@keyframes error-toast-exit {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+}
+
+[data-high-contrast='true'] .error-toast {
+  border-width: 3px;
+}
+
 /* Mobile responsive */
 @media (max-width: 767px) {
 
@@ -11768,6 +12004,30 @@ body.tutorial-body-locked {
     background: Field;
     color: FieldText;
     border: 1px solid CanvasText !important;
+  }
+
+  /* Friendly error modal */
+  .friendly-error-modal {
+    background: rgba(0, 0, 0, 0.8);
+  }
+
+  .friendly-error-modal-content {
+    background: Canvas;
+    border: 3px solid CanvasText !important;
+  }
+
+  .friendly-error-modal-title {
+    color: CanvasText;
+  }
+
+  /* Error toast */
+  .error-toast {
+    background: Canvas;
+    border: 3px solid CanvasText !important;
+  }
+
+  .error-toast-title {
+    color: CanvasText;
   }
 }
 

@@ -41,6 +41,7 @@ import { getAppPrefKey } from './storage-keys.js';
 import { importProjectFromFiles } from './storage-manager.js';
 import { showMissingDependenciesDialog } from './dialogs.js';
 import { announceError as _announceError } from './announcer.js';
+import { showErrorModal, showErrorToast } from './error-translator.js';
 import { closeTutorial } from './tutorial-sandbox.js';
 import {
   sanitizeUrlParams,
@@ -430,7 +431,10 @@ export function initFileHandler({
 
       if (isActualFileUpload) {
         if (!isZip && !isScad) {
-          alert('Please upload a .scad or .zip file');
+          showErrorToast({
+            title: 'Invalid File Type',
+            message: 'Please upload a .scad or .zip file.',
+          });
           return;
         }
 
@@ -462,7 +466,7 @@ export function initFileHandler({
           } else {
             userMsg = 'Please upload a .scad or .zip file.';
           }
-          alert(userMsg);
+          showErrorToast({ title: 'File Too Large', message: userMsg });
           console.error(
             '[File Upload] Validation failed:',
             validateFileUpload.errors
@@ -566,8 +570,14 @@ export function initFileHandler({
           dismissOverlay();
           console.error('[ZIP] Extraction failed:', error);
           updateStatus('Failed to extract ZIP file');
-          _announceError('Failed to extract ZIP file');
-          alert(error.message);
+          showErrorModal({
+            title: 'ZIP Extraction Failed',
+            message:
+              'Could not extract files from the uploaded ZIP archive.',
+            suggestion:
+              'Verify the ZIP file is not corrupted and contains valid .scad files.',
+            technical: error.message,
+          });
           return;
         }
       }
@@ -1167,9 +1177,13 @@ export function initFileHandler({
     } catch (error) {
       console.error('Failed to extract parameters:', error);
       updateStatus('Error: Failed to extract parameters');
-      alert(
-        'Failed to extract parameters from file. Please check the file format.'
-      );
+      showErrorModal({
+        title: 'Parameter Extraction Failed',
+        message: 'Could not read parameters from the uploaded file.',
+        suggestion:
+          'Check that the file is a valid OpenSCAD (.scad) file with properly formatted parameters.',
+        technical: error.message,
+      });
     }
   }
 
@@ -1283,9 +1297,13 @@ export function initFileHandler({
     } catch (error) {
       console.error('Failed to load example:', error);
       updateStatus('Error loading example');
-      alert(
-        'Failed to load example file. The file may not be available in the public directory.'
-      );
+      showErrorModal({
+        title: 'Example Load Failed',
+        message: 'The example file could not be loaded.',
+        suggestion:
+          'Check your internet connection and try again. The file may not be available.',
+        technical: error.message,
+      });
     }
   }
 

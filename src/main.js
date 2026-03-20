@@ -71,7 +71,11 @@ import {
   initStaticModals,
   isAnyModalOpen,
 } from './js/modal-manager.js';
-import { translateError } from './js/error-translator.js';
+import {
+  translateError,
+  showErrorModal,
+  showErrorToast,
+} from './js/error-translator.js';
 import {
   getStorageEstimate,
   clearCachedData as _clearCachedData,
@@ -1697,7 +1701,10 @@ async function initApp() {
         updateStatus(successMessage);
         await savedProjectsUI.renderSavedProjectsList();
       } else {
-        alert(`Failed to save: ${result.error}`);
+        showErrorToast({
+          title: 'Save Failed',
+          message: `Failed to save: ${result.error}`,
+        });
       }
     } else {
       await savedProjectsUI.showSaveProjectPrompt(state, { preSave: true });
@@ -1716,11 +1723,18 @@ async function initApp() {
   async function _export2DOneClick(format) {
     const state = stateManager.getState();
     if (!state.uploadedFile) {
-      alert('Open a SCAD file first.');
+      showErrorToast({
+        title: 'No File Open',
+        message: 'Open a .scad file first.',
+      });
       return;
     }
     if (!renderController) {
-      alert('OpenSCAD engine not initialized.');
+      showErrorToast({
+        title: 'Engine Not Ready',
+        message:
+          'The OpenSCAD engine has not initialized yet. Please wait or refresh the page.',
+      });
       return;
     }
 
@@ -3128,11 +3142,14 @@ async function initApp() {
           'OpenSCAD engine failed to initialize. Some features may not work.'
         );
         const details = error?.details ? ` Details: ${error.details}` : '';
-        alert(
-          'Failed to initialize OpenSCAD engine. Some features may not work. Error: ' +
-            error.message +
-            details
-        );
+        showErrorModal({
+          title: 'Engine Initialization Failed',
+          message:
+            'Failed to initialize the OpenSCAD engine. Some features may not work.',
+          suggestion:
+            'Try refreshing the page. If the problem persists, try a different browser.',
+          technical: error.message + details,
+        });
         return false;
       }
     }
@@ -7574,7 +7591,10 @@ if (rounded) {
 
       // Fallback to state.stl
       if (!state.stl) {
-        alert('No file generated yet');
+        showErrorToast({
+          title: 'Nothing to Download',
+          message: 'No file has been generated yet. Click Generate first.',
+        });
         return;
       }
 
@@ -7591,12 +7611,19 @@ if (rounded) {
 
     // Generate action - perform full quality render for download
     if (!state.uploadedFile) {
-      alert('No file uploaded');
+      showErrorToast({
+        title: 'No File Uploaded',
+        message: 'Upload a .scad or .zip file first.',
+      });
       return;
     }
 
     if (!renderController) {
-      alert('OpenSCAD engine not initialized');
+      showErrorToast({
+        title: 'Engine Not Ready',
+        message:
+          'The OpenSCAD engine has not initialized. Please wait or refresh the page.',
+      });
       return;
     }
 
