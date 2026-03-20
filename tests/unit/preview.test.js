@@ -18,8 +18,8 @@ describe('PreviewManager', () => {
   })
 
   describe('Three.js Loading', () => {
-    it('reports Three.js as not loaded initially', () => {
-      expect(isThreeJsLoaded()).toBe(false)
+    it('reports Three.js as loaded (static import)', () => {
+      expect(isThreeJsLoaded()).toBe(true)
     })
   })
 
