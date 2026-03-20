@@ -161,10 +161,10 @@ describe('ModeManager', () => {
   });
 
   describe('setPreferredEditor', () => {
-    it('should set preferred editor to monaco', () => {
-      modeManager.setPreferredEditor('monaco');
+    it('should set preferred editor to codemirror', () => {
+      modeManager.setPreferredEditor('codemirror');
 
-      expect(modeManager.getPreferredEditor()).toBe('monaco');
+      expect(modeManager.getPreferredEditor()).toBe('codemirror');
     });
 
     it('should set preferred editor to textarea', () => {
@@ -187,20 +187,20 @@ describe('ModeManager', () => {
     });
 
     it('should save preference to localStorage', () => {
-      modeManager.setPreferredEditor('monaco');
+      modeManager.setPreferredEditor('codemirror');
 
       const prefs = JSON.parse(
         localStorage.getItem('openscad-forge-mode-prefs')
       );
-      expect(prefs.preferredEditor).toBe('monaco');
+      expect(prefs.preferredEditor).toBe('codemirror');
     });
   });
 
   describe('resolveEditorType', () => {
-    it('should return monaco when explicitly preferred', () => {
-      modeManager.setPreferredEditor('monaco');
+    it('should return codemirror when explicitly preferred', () => {
+      modeManager.setPreferredEditor('codemirror');
 
-      expect(modeManager.resolveEditorType()).toBe('monaco');
+      expect(modeManager.resolveEditorType()).toBe('codemirror');
     });
 
     it('should return textarea when explicitly preferred', () => {
@@ -213,8 +213,8 @@ describe('ModeManager', () => {
       // Default auto mode
       const result = modeManager.resolveEditorType();
 
-      // Should return either 'monaco' or 'textarea'
-      expect(['monaco', 'textarea']).toContain(result);
+      // Should return either 'codemirror' or 'textarea'
+      expect(['codemirror', 'textarea']).toContain(result);
     });
   });
 

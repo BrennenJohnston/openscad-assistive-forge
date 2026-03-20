@@ -177,6 +177,7 @@ import { getDisplayOptionsController } from './js/display-options-controller.js'
 // import { getAnimationController } from './js/animation-controller.js';
 import { getEditorStateManager } from './js/editor-state-manager.js';
 import { TextareaEditor } from './js/textarea-editor.js';
+import { CodeMirrorEditor } from './js/codemirror-editor.js';
 import { showConfirmDialog } from './js/dialogs.js';
 import {
   initHfmController,
@@ -342,12 +343,12 @@ async function initApp() {
     // Apply conservative settings per B.5.4 Recovery Mode Specification:
     // - Auto-preview OFF (no automatic renders)
     // - Quality set to fast (minimum quality settings)
-    // - Monaco disabled (use textarea only â€” less memory overhead)
+    // - CodeMirror disabled (use textarea only â€” less memory overhead)
     localStorage.setItem(STORAGE_KEY_AUTO_PREVIEW_ENABLED, 'false');
     localStorage.setItem(STORAGE_KEY_PREVIEW_QUALITY, 'fast');
-    // Disable Monaco in recovery mode to reduce memory footprint.
+    // Disable CodeMirror in recovery mode to reduce memory footprint.
     // The user can re-enable it manually from settings after recovery.
-    localStorage.setItem('openscad-forge-flag-monaco_editor', 'false');
+    localStorage.setItem('openscad-forge-flag-codemirror_editor', 'false');
 
     // Clean up crash detection flags
     localStorage.removeItem('openscad-forge-wasm-init-started');
@@ -6438,48 +6439,45 @@ if (rounded) {
      * Initialize the Expert Mode code editor
      */
     function initExpertEditor() {
-      // Determine which editor to use based on preference
       const editorType = modeManager.resolveEditorType();
       console.log(`[Expert Mode] Using ${editorType} editor`);
 
-      // For now, always use textarea editor (Monaco integration in future iteration)
-      // This ensures CSP compatibility and accessibility-first approach
-      currentEditor = new TextareaEditor({
+      const editorOptions = {
         container: expertModeBody,
         onChange: (code) => {
-          // Update state manager with new code
           editorStateManager.setSource(code, { markDirty: true });
-
-          // Update dirty indicator
           updateDirtyIndicator();
         },
         onSave: () => {
-          // Trigger save action
           const saveBtn = document.getElementById('saveProjectBtn');
           if (saveBtn) saveBtn.click();
         },
         onRun: () => {
-          // Trigger preview render
           triggerPreviewFromEditor();
         },
         announce: (msg) => announceToScreenReader(msg),
-      });
+      };
+
+      if (editorType === 'codemirror') {
+        currentEditor = new CodeMirrorEditor(editorOptions);
+      } else {
+        currentEditor = new TextareaEditor(editorOptions);
+      }
 
       currentEditor.initialize();
 
-      // Sync initial code from state
       const initialCode =
         editorStateManager.getSource() || window._currentSCADCode || '';
       if (initialCode) {
         currentEditor.setValue(initialCode);
       }
 
-      // Register editor with state manager
-      if (editorStateManager.setTextareaElement && currentEditor.textarea) {
+      editorStateManager.setEditorInstance(currentEditor);
+
+      if (currentEditor.textarea) {
         editorStateManager.setTextareaElement(currentEditor.textarea);
       }
 
-      // Register editor instance with ModeManager for Edit menu wiring
       modeManager.setEditorInstance(currentEditor);
     }
 
