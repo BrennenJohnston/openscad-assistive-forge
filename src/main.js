@@ -308,7 +308,7 @@ async function initApp() {
   // Feature flags: Enable controlled rollout of new features
   debugFlags(); // Log flag states for debugging
 
-  // CSP Reporter: Monitor Content-Security-Policy violations (report-only mode)
+  // CSP Reporter: Monitor Content-Security-Policy violations
   initCSPReporter();
 
   // Storage key migration: One-time migration of localStorage keys to standardized naming
