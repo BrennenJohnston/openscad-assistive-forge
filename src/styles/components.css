@@ -184,6 +184,7 @@ summary:focus-visible,
 }
 
 @media (prefers-reduced-motion: reduce) {
+
   .forge-disclosure summary,
   .forge-disclosure summary::after {
     transition: none;
@@ -357,6 +358,7 @@ summary:focus-visible,
 }
 
 @media (prefers-reduced-motion: reduce) {
+
   #collapseParamPanelBtn svg {
     transition: none;
   }
@@ -369,6 +371,7 @@ summary:focus-visible,
 
 /* Desktop only - hide collapse button on mobile (drawer toggle is used instead) */
 @media (max-width: 767px) {
+
   .param-panel .btn-collapse-panel {
     display: none;
   }
@@ -383,6 +386,7 @@ summary:focus-visible,
 }
 
 @media (max-width: 767px) {
+
   .mobile-only {
     display: inline-flex;
   }
@@ -397,6 +401,7 @@ summary:focus-visible,
 }
 
 @media (max-width: 767px) {
+
   #mobileDrawerToggle {
     display: inline-flex;
   }
@@ -404,6 +409,7 @@ summary:focus-visible,
 
 /* Hide label on very small screens for space efficiency */
 @media (max-width: 360px) {
+
   #mobileDrawerToggle .btn-label {
     display: none;
   }
@@ -482,6 +488,7 @@ summary:focus-visible,
 }
 
 @media (prefers-reduced-motion: reduce) {
+
   .preview-drawer-toggle-btn.btn-collapse-panel svg {
     transition: none;
   }
@@ -501,6 +508,7 @@ summary:focus-visible,
 }
 
 @media (max-width: 767px) {
+
   .actions-drawer-toggle {
     display: flex;
     align-items: center;
@@ -547,6 +555,7 @@ summary:focus-visible,
 
   /* Respect reduced motion */
   @media (prefers-reduced-motion: reduce) {
+
     .actions-toggle-arrow {
       transition: none;
     }
@@ -620,6 +629,7 @@ summary:focus-visible,
 }
 
 @media (forced-colors: active) {
+
   .upload-panel {
     border: 2px solid CanvasText;
   }
@@ -712,6 +722,7 @@ summary:focus-visible,
 }
 
 @media (forced-colors: active) {
+
   #importFolderBtn {
     border: 1px solid ButtonText;
     color: ButtonText;
@@ -1002,6 +1013,7 @@ summary:focus-visible,
 
 /* Mobile responsive adjustments */
 @media (max-width: 767px) {
+
   .saved-projects-panel {
     /* Reduce padding on mobile for more content space */
     padding: var(--space-md);
@@ -1032,6 +1044,7 @@ summary:focus-visible,
 
 /* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
+
   .saved-project-card {
     transition: none;
   }
@@ -1286,49 +1299,6 @@ summary:focus-visible,
 }
 
 /* Folder Context Menu */
-.folder-context-menu {
-  position: absolute;
-  z-index: var(--z-index-modal);
-  min-width: 160px;
-  background: var(--color-bg-primary);
-  border: 1px solid var(--color-border);
-  border-radius: var(--border-radius-md);
-  box-shadow: var(--shadow-lg);
-  padding: var(--space-xs);
-}
-
-.folder-context-menu-item {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  width: 100%;
-  padding: var(--space-sm) var(--space-md);
-  background: transparent;
-  border: none;
-  font-size: var(--font-size-sm);
-  color: var(--color-text-primary);
-  text-align: left;
-  cursor: pointer;
-  border-radius: var(--border-radius-sm);
-  transition: background-color var(--motion-fast);
-}
-
-.folder-context-menu-item:hover {
-  background: var(--color-hover-bg);
-}
-
-.folder-context-menu-item:focus-visible {
-  outline: var(--focus-ring-width) solid var(--color-focus);
-  outline-offset: var(--focus-ring-offset);
-}
-
-.folder-context-menu-item.danger {
-  color: var(--color-error);
-}
-
-.folder-context-menu-item.danger:hover {
-  background: color-mix(in srgb, var(--color-error) 15%, transparent);
-}
 
 /* Drag and Drop Feedback */
 .folder-item.drag-over > .folder-header {
@@ -1348,22 +1318,6 @@ summary:focus-visible,
 .saved-project-card.drag-over {
   border-color: var(--color-accent);
   border-style: dashed;
-}
-
-.drop-zone-indicator {
-  padding: var(--space-md);
-  border: 2px dashed var(--color-border);
-  border-radius: var(--border-radius-sm);
-  text-align: center;
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
-  margin-bottom: var(--space-md);
-}
-
-.drop-zone-indicator.active {
-  border-color: var(--color-accent-fg);
-  background: color-mix(in srgb, var(--color-accent) 10%, transparent);
-  color: var(--color-accent-fg);
 }
 
 /* Folder Color Indicator */
@@ -1470,6 +1424,7 @@ summary:focus-visible,
 
 /* Forced colors (Windows High Contrast) */
 @media (forced-colors: active) {
+
   .preset-import-mode-dialog,
   .import-mode-dialog {
     border: 1px solid ButtonText;
@@ -1769,107 +1724,9 @@ summary:focus-visible,
   cursor: not-allowed;
 }
 
-/* Nested folder grouping in file manager */
-.file-manager-folder {
-  border-bottom: 1px solid var(--color-border);
-}
-
-.file-manager-folder:last-child {
-  border-bottom: none;
-}
-
-.file-manager-folder-header {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  padding: var(--space-sm) var(--space-md);
-  min-height: var(--size-touch-target);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold, 600);
-  cursor: pointer;
-  list-style: none;
-  color: var(--color-text-primary);
-  background: var(--color-bg-secondary);
-}
-
-.file-manager-folder-header::-webkit-details-marker {
-  display: none;
-}
-
-.file-manager-folder-header:hover {
-  background: var(--color-hover-bg);
-}
-
-.file-manager-folder-icon {
-  flex-shrink: 0;
-  color: var(--color-accent-fg);
-}
-
-.file-manager-folder-name {
-  flex: 1;
-  color: var(--color-text-primary);
-}
-
-.file-manager-folder-count {
-  font-size: var(--font-size-xs);
-  font-weight: 400;
-  color: var(--color-text-secondary);
-}
-
-.file-manager-folder-contents {
-  padding-left: var(--space-md);
-}
-
-.file-manager-folder-contents .file-manager-item {
-  padding-left: var(--space-lg);
-}
-
-.file-manager-folder-actions {
-  display: flex;
-  gap: var(--space-2xs);
-  margin-left: auto;
-}
-
-/* Always visible with subdued styling; enhanced on hover */
-.file-manager-folder-actions .btn-icon {
-  color: var(--color-text-secondary);
-  border-color: var(--color-border-light, var(--color-border));
-  background: transparent;
-  transition:
-    color var(--motion-fast),
-    border-color var(--motion-fast),
-    background-color var(--motion-fast);
-}
-
-.file-manager-folder-actions .btn-icon:hover:not(:disabled) {
-  color: var(--color-text-primary);
-  border-color: var(--color-text-primary);
-  background: var(--color-bg-secondary);
-}
-
-.file-manager-folder-actions .btn-icon:focus-visible {
-  outline: var(--focus-ring-width) solid var(--color-focus);
-  outline-offset: var(--focus-ring-offset);
-}
-
-.file-manager-empty-folder {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-  padding: var(--space-sm) var(--space-lg);
-  font-style: italic;
-}
-
 /* High Contrast Mode - File Manager */
 :root[data-high-contrast='true'] .file-manager-item {
   border-width: 2px;
-}
-
-:root[data-high-contrast='true'] .file-manager-folder {
-  border-width: 2px;
-}
-
-:root[data-high-contrast='true'] .file-manager-folder-header {
-  font-weight: 700;
 }
 
 :root[data-high-contrast='true'] .file-manager-main-badge {
@@ -1882,8 +1739,7 @@ summary:focus-visible,
   .btn-rename-project-file,
 :root[data-high-contrast='true']
   .file-manager-item-actions
-  .btn-delete-project-file,
-:root[data-high-contrast='true'] .file-manager-folder-actions .btn-icon {
+  .btn-delete-project-file {
   border-width: 2px;
   color: var(--color-text-primary);
   border-color: var(--color-text-primary);
@@ -1894,10 +1750,7 @@ summary:focus-visible,
   .btn-rename-project-file:focus-visible,
 :root[data-high-contrast='true']
   .file-manager-item-actions
-  .btn-delete-project-file:focus-visible,
-:root[data-high-contrast='true']
-  .file-manager-folder-actions
-  .btn-icon:focus-visible {
+  .btn-delete-project-file:focus-visible {
   outline-width: 4px;
 }
 
@@ -1905,7 +1758,6 @@ summary:focus-visible,
 @media (prefers-reduced-motion: reduce) {
   .file-manager-item-actions .btn-rename-project-file,
   .file-manager-item-actions .btn-delete-project-file,
-  .file-manager-folder-actions .btn-icon,
   .file-manager-item {
     transition: none;
   }
@@ -1913,6 +1765,7 @@ summary:focus-visible,
 
 /* Forced Colors Mode (Windows High Contrast) - File Manager */
 @media (forced-colors: active) {
+
   .file-manager-item {
     border-color: CanvasText;
     color: CanvasText;
@@ -1923,13 +1776,11 @@ summary:focus-visible,
     color: CanvasText;
   }
 
-  .file-manager-item-path,
-  .file-manager-folder-name {
+  .file-manager-item-path {
     color: CanvasText;
   }
 
-  .file-manager-item-size,
-  .file-manager-folder-count {
+  .file-manager-item-size {
     color: GrayText;
   }
 
@@ -1939,26 +1790,8 @@ summary:focus-visible,
     border: 1px solid HighlightText;
   }
 
-  .file-manager-folder {
-    border-color: CanvasText;
-  }
-
-  .file-manager-folder-header {
-    background: Canvas;
-    color: CanvasText;
-  }
-
-  .file-manager-folder-icon {
-    color: CanvasText;
-  }
-
-  .file-manager-empty-folder {
-    color: GrayText;
-  }
-
   .file-manager-item-actions .btn-rename-project-file,
-  .file-manager-item-actions .btn-delete-project-file,
-  .file-manager-folder-actions .btn-icon {
+  .file-manager-item-actions .btn-delete-project-file {
     border: 1px solid ButtonText;
     color: ButtonText;
     background: ButtonFace;
@@ -1977,8 +1810,7 @@ summary:focus-visible,
   }
 
   .file-manager-item-actions .btn-rename-project-file:focus-visible,
-  .file-manager-item-actions .btn-delete-project-file:focus-visible,
-  .file-manager-folder-actions .btn-icon:focus-visible {
+  .file-manager-item-actions .btn-delete-project-file:focus-visible {
     outline: 2px solid Highlight;
     outline-offset: 2px;
   }
@@ -1991,32 +1823,10 @@ summary:focus-visible,
 }
 
 /* Persistence Status Indicator */
-.persistence-status {
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-  font-size: var(--font-size-xs);
-  padding: var(--space-xs) var(--space-sm);
-  border-radius: var(--border-radius-sm);
-}
-
-.persistence-status.persistent {
-  background: color-mix(in srgb, var(--color-success) 15%, transparent);
-  color: var(--color-success);
-}
-
-.persistence-status.not-persistent {
-  background: color-mix(in srgb, var(--color-warning) 15%, transparent);
-  color: var(--color-warning);
-}
-
-.persistence-status-icon {
-  width: 12px;
-  height: 12px;
-}
 
 /* Mobile responsive adjustments for folder tree */
 @media (max-width: 767px) {
+
   .saved-projects-header {
     flex-direction: column;
     align-items: stretch;
@@ -2052,24 +1862,12 @@ summary:focus-visible,
 }
 
 @media (prefers-reduced-motion: reduce) {
+
   .folder-header,
   .folder-expand-icon,
   .folder-actions {
     transition: none;
   }
-}
-
-.examples-section {
-  margin-top: var(--space-xl);
-  padding-top: var(--space-xl);
-  padding-left: max(0px, env(safe-area-inset-left, 0px));
-  padding-right: max(0px, env(safe-area-inset-right, 0px));
-  border-top: 1px solid var(--color-border);
-}
-
-.examples-section p {
-  margin-bottom: var(--space-md);
-  color: var(--color-text-secondary);
 }
 
 .preview-settings-panel {
@@ -2199,34 +1997,6 @@ summary:focus-visible,
   letter-spacing: 0.05em;
 }
 
-.preview-setting-inline {
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-  font-size: var(--font-size-sm);
-}
-
-.preview-setting-inline span {
-  min-width: 6rem;
-  color: var(--color-text-primary);
-}
-
-.preview-setting-inline select,
-.preview-setting-inline input[type='number'] {
-  flex: 1;
-  min-width: 0;
-  padding: var(--space-xs) var(--space-sm);
-  background: var(--color-surface-raised);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  color: var(--color-text-primary);
-  font-size: var(--font-size-sm);
-}
-
-.preview-setting-inline input[type='number'] {
-  width: 5rem;
-}
-
 /* Grid color picker: [label] [color swatch] [Reset button] */
 .grid-color-row {
   display: flex;
@@ -2263,6 +2033,7 @@ summary:focus-visible,
 }
 
 @media (forced-colors: active) {
+
   .grid-color-picker {
     border: 1px solid ButtonText;
     forced-color-adjust: none;
@@ -2332,6 +2103,7 @@ summary:focus-visible,
 
 /* Forced Colors Mode */
 @media (forced-colors: active) {
+
   .grid-preset-select,
   .grid-dim-input {
     border: 1px solid ButtonText;
@@ -2392,6 +2164,7 @@ summary:focus-visible,
 
 /* Forced Colors Mode */
 @media (forced-colors: active) {
+
   .grid-preset-name-input {
     border: 1px solid ButtonText;
     background: Field;
@@ -2539,6 +2312,7 @@ summary:focus-visible,
 }
 
 @media (max-width: 767px) {
+
   .preview-settings {
     grid-template-columns: 1fr;
     gap: var(--space-sm);
@@ -2547,6 +2321,7 @@ summary:focus-visible,
 }
 
 @media (pointer: fine) and (min-width: 768px) {
+
   .preview-settings {
     gap: var(--space-sm);
   }
@@ -2619,10 +2394,6 @@ summary:focus-visible,
 
 .overlay-details[open] .overlay-summary {
   border-bottom: 1px solid var(--color-border);
-}
-
-.overlay-summary-icon {
-  font-size: var(--font-size-base);
 }
 
 .overlay-summary-text {
@@ -3291,6 +3062,7 @@ summary:focus-visible,
   min-height: var(--size-touch-target);
 }
 @media (prefers-reduced-motion: reduce) {
+
   .measure-fullscreen-backdrop {
     backdrop-filter: none;
   }
@@ -3316,6 +3088,7 @@ summary:focus-visible,
 
 /* Forced Colors Mode (Windows High Contrast) - Measurement Tool */
 @media (forced-colors: active) {
+
   .measure-canvas {
     border-color: ButtonText;
   }
@@ -3357,6 +3130,7 @@ summary:focus-visible,
 
 /* Responsive: measurement tool rows on narrow screens */
 @media (max-width: 767px) {
+
   .measure-toolbar {
     flex-wrap: wrap;
   }
@@ -3375,19 +3149,6 @@ summary:focus-visible,
   }
   .measure-scale-hint {
     flex-basis: 100%;
-  }
-}
-
-.example-buttons {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-sm);
-}
-
-@media (min-width: 768px) {
-  .example-buttons {
-    flex-direction: row;
-    flex-wrap: wrap;
   }
 }
 
@@ -3431,6 +3192,7 @@ summary:focus-visible,
 
 /* Reduced motion: instant show/hide */
 @media (prefers-reduced-motion: reduce) {
+
   .param-control {
     transition: none;
   }
@@ -3520,25 +3282,6 @@ summary:focus-visible,
 }
 
 /* Detail level dropdown in param search bar */
-.param-detail-wrapper {
-  flex-shrink: 0;
-}
-
-.param-detail-select {
-  min-height: var(--size-touch-target);
-  padding: var(--space-xs) var(--space-sm);
-  font-size: var(--font-size-sm);
-  border: 1px solid var(--color-input-border);
-  border-radius: var(--border-radius-sm);
-  background: var(--color-input-bg);
-  color: var(--color-text-primary);
-  cursor: pointer;
-}
-
-.param-detail-select:focus-visible {
-  outline: var(--focus-ring-width) solid var(--color-focus);
-  outline-offset: var(--focus-ring-offset);
-}
 
 .param-help-wrapper {
   position: relative;
@@ -3634,6 +3377,7 @@ body.high-contrast .param-tooltip {
 
 /* Dark Mode Adjustments for Tooltips */
 @media (prefers-color-scheme: dark) {
+
   .param-tooltip {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
   }
@@ -3641,6 +3385,7 @@ body.high-contrast .param-tooltip {
 
 /* Mobile Adjustments for Tooltips */
 @media (max-width: 767px) {
+
   .param-tooltip {
     position: fixed;
     left: 16px;
@@ -3657,13 +3402,6 @@ body.high-contrast .param-tooltip {
   .param-tooltip::after {
     display: none;
   }
-}
-
-.param-unit {
-  color: var(--color-text-secondary);
-  font-weight: normal;
-  font-size: var(--font-size-sm);
-  margin-left: var(--space-xs);
 }
 
 /* Range Slider */
@@ -3752,6 +3490,7 @@ body.high-contrast .param-tooltip {
 
 /* High contrast mode - enhanced visibility */
 @media (prefers-contrast: more) {
+
   .slider-spinbox {
     border-width: 2px;
     border-color: var(--color-text);
@@ -3783,6 +3522,7 @@ body.high-contrast .param-tooltip {
 
 /* Mobile responsiveness - stack on small screens */
 @media (max-width: 480px) {
+
   .slider-container {
     flex-wrap: wrap;
   }
@@ -3825,6 +3565,7 @@ body.high-contrast .param-tooltip {
    Without wrapping, "(default: ...)" can consume the row and collapse
    the number input to a few pixels. */
 @media (max-width: 767px) {
+
   .number-input-container {
     flex-wrap: wrap;
     align-items: flex-start;
@@ -4117,6 +3858,7 @@ select:focus-visible {
 
 /* Forced Colors (Windows High Contrast) for Processing Overlay */
 @media (forced-colors: active) {
+
   .processing-overlay {
     background: Canvas;
     color: CanvasText;
@@ -4140,11 +3882,6 @@ select:focus-visible {
    ======================================== */
 
 /* Preview container wrapper */
-.preview-wrapper {
-  position: relative;
-  width: 100%;
-  height: 100%;
-}
 
 /* Preview state indicator badge */
 .preview-state-indicator {
@@ -4306,34 +4043,8 @@ select:focus-visible {
 }
 
 /* Auto-preview toggle in settings */
-.auto-preview-toggle {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  padding: var(--space-sm) 0;
-  border-top: 1px solid var(--color-border);
-  margin-top: var(--space-md);
-}
-
-.auto-preview-toggle label {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-}
 
 /* Quality indicator */
-.quality-indicator {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-  margin-left: var(--space-xs);
-}
-
-.quality-indicator.preview-quality {
-  color: var(--color-warning);
-}
-
-.quality-indicator.full-quality {
-  color: var(--color-success);
-}
 
 /* Stats with quality info */
 .stats-quality {
@@ -4409,6 +4120,7 @@ select:focus-visible {
 
 /* Responsive adjustments */
 @media (prefers-reduced-motion: reduce) {
+
   .preview-state-indicator.state-pending,
   .preview-state-indicator.state-rendering,
   .preview-container.preview-rendering {
@@ -4482,6 +4194,7 @@ select:focus-visible {
 
 /* Dark mode scrollbar contrast */
 @media (prefers-color-scheme: dark) {
+
   :root:not([data-theme='light']) .preset-modal-content,
   :root:not([data-theme='light']) .file-tree {
     scrollbar-color: var(--color-border) transparent;
@@ -4558,16 +4271,6 @@ select:focus-visible {
 }
 
 /* Format Selector */
-.format-selector {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  padding: var(--space-md);
-  background: var(--color-bg-secondary);
-  border-radius: var(--border-radius-md);
-  margin-bottom: var(--space-md);
-  flex-wrap: wrap;
-}
 
 .format-label {
   font-weight: 600;
@@ -4615,11 +4318,6 @@ select:focus-visible {
 }
 
 @media (max-width: 767px) {
-  .format-selector {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
   .format-select,
   .format-info {
     width: 100%;
@@ -4701,12 +4399,6 @@ select:focus-visible {
   margin: 0 0 var(--space-xs) 0;
 }
 
-.format-2d-guidance .guidance-text {
-  color: var(--color-text-secondary);
-  margin: 0 0 var(--space-sm) 0;
-  line-height: 1.5;
-}
-
 .format-2d-guidance .guidance-steps {
   color: var(--color-text-secondary);
   margin: 0 0 var(--space-sm) var(--space-md);
@@ -4722,14 +4414,6 @@ select:focus-visible {
   background: var(--color-bg-tertiary, var(--color-bg-primary));
   padding: 0.125em 0.375em;
   border-radius: var(--border-radius-xs);
-  font-size: 0.9em;
-}
-
-.format-2d-guidance .guidance-text code {
-  background: var(--color-bg-tertiary, var(--color-bg-primary));
-  padding: 0.125em 0.375em;
-  border-radius: var(--border-radius-xs);
-  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
   font-size: 0.9em;
 }
 
@@ -4789,6 +4473,7 @@ select:focus-visible {
 }
 
 @media (prefers-reduced-motion: reduce) {
+
   .format-2d-guidance.guidance-enter {
     animation: none;
   }
@@ -4844,10 +4529,6 @@ select:focus-visible {
 .preset-summary:focus {
   outline: 3px solid var(--color-focus);
   outline-offset: -3px;
-}
-
-.preset-icon {
-  /* Icon sizing now provided by .forge-disclosure-icon */
 }
 
 .preset-content {
@@ -5161,6 +4842,7 @@ select:focus-visible {
 
 /* Reduced-motion: remove dropdown fade/transition if we add one later */
 @media (prefers-reduced-motion: reduce) {
+
   .preset-combobox-input-wrap,
   .preset-combobox-chevron {
     transition: none;
@@ -5187,6 +4869,7 @@ select:focus-visible {
 
 /* Forced Colors Mode (Windows High Contrast) */
 @media (forced-colors: active) {
+
   .preset-combobox-input-wrap {
     border: 1px solid ButtonText;
     forced-color-adjust: none;
@@ -5274,6 +4957,7 @@ select:focus-visible {
 @supports not (
   (backdrop-filter: blur(6px)) or (-webkit-backdrop-filter: blur(6px))
 ) {
+
   .modal-overlay {
     background: rgba(12, 12, 12, 0.7);
   }
@@ -5663,6 +5347,7 @@ body.first-visit-blocking #app {
 }
 
 @media (forced-colors: active) {
+
   .panel-help-btn {
     forced-color-adjust: auto;
     border-color: ButtonText;
@@ -5885,6 +5570,7 @@ body.first-visit-blocking #app {
 
 /* Mobile responsiveness */
 @media (max-width: 480px) {
+
   .console-controls {
     flex-direction: column;
     align-items: flex-start;
@@ -5908,14 +5594,6 @@ body.first-visit-blocking #app {
   /* Card styling provided by .forge-disclosure */
 }
 
-.error-log-summary {
-  font-weight: 600;
-}
-
-.error-log-title {
-  flex: 1;
-}
-
 .error-log-badge {
   background: var(--color-error);
   color: var(--color-error-text);
@@ -5935,21 +5613,6 @@ body.first-visit-blocking #app {
   display: none;
 }
 
-.error-log-content {
-  padding: var(--space-sm);
-  border-top: 1px solid var(--color-border);
-}
-
-.error-log-controls {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-sm);
-  margin-bottom: var(--space-sm);
-  padding-bottom: var(--space-sm);
-  border-bottom: 1px solid var(--color-border);
-}
-
 .error-log-filter {
   display: flex;
   align-items: center;
@@ -5960,12 +5623,6 @@ body.first-visit-blocking #app {
 
 .error-log-filter input[type='checkbox'] {
   margin: 0;
-}
-
-.error-log-actions {
-  display: flex;
-  gap: 2px;
-  margin-left: auto;
 }
 
 .error-log-output {
@@ -6127,16 +5784,6 @@ body.first-visit-blocking #app {
 }
 
 @media (max-width: 480px) {
-  .error-log-controls {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .error-log-actions {
-    margin-left: 0;
-    margin-top: var(--space-xs);
-  }
-
   .error-log-table th:nth-child(2),
   .error-log-row td:nth-child(2) {
     display: none;
@@ -6220,27 +5867,6 @@ body.first-visit-blocking #app {
 
 /* ---- Animation Panel & Controls ----------------------------------------- */
 
-.animation-panel-body {
-  padding: var(--space-sm);
-}
-
-.anim-controls {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-sm);
-}
-
-.anim-controls-row {
-  display: flex;
-  gap: var(--space-sm);
-  align-items: center;
-}
-
-.anim-btn {
-  min-height: var(--size-touch-target);
-  flex: 1;
-}
-
 .anim-label {
   font-size: var(--font-size-xs);
   font-weight: 600;
@@ -6248,36 +5874,7 @@ body.first-visit-blocking #app {
   white-space: nowrap;
 }
 
-.anim-input {
-  width: 4.5em;
-  min-height: var(--size-touch-target);
-  padding: var(--space-xs) var(--space-sm);
-  font-size: var(--font-size-sm);
-  border: 1px solid var(--color-input-border);
-  border-radius: var(--border-radius-sm);
-  background: var(--color-input-bg);
-  color: var(--color-text-primary);
-}
-
-.anim-input:focus-visible {
-  outline: var(--focus-ring-width) solid var(--color-focus);
-  outline-offset: var(--focus-ring-offset);
-}
-
-.anim-t-display {
-  font-size: var(--font-size-sm);
-  font-family: var(--font-family-mono);
-  font-variant-numeric: tabular-nums;
-  color: var(--color-text-secondary);
-}
-
 /* ---- Camera Copy Values Grid -------------------------------------------- */
-
-.camera-copy-values {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: var(--space-xs);
-}
 
 /* Save Preset Form */
 .preset-form {
@@ -6336,6 +5933,7 @@ body.first-visit-blocking #app {
 }
 
 @media (max-width: 767px) {
+
   .preset-modal {
     padding: var(--space-sm);
     padding-top: calc(var(--space-sm) + env(safe-area-inset-top, 0px));
@@ -6419,6 +6017,7 @@ body.first-visit-blocking #app {
 
 /* Mobile: stack dimensions vertically */
 @media (max-width: 767px) {
+
   .dimensions-list {
     grid-template-columns: 1fr;
   }
@@ -6477,6 +6076,7 @@ body.first-visit-blocking #app {
 
 /* WebKit scrollbar dark mode contrast */
 @media (prefers-color-scheme: dark) {
+
   :root:not([data-theme='light']) .comparison-grid::-webkit-scrollbar-thumb {
     background-color: var(--color-border);
   }
@@ -6497,6 +6097,7 @@ body.first-visit-blocking #app {
 
 /* Dark mode scrollbar contrast (Firefox) */
 @media (prefers-color-scheme: dark) {
+
   :root:not([data-theme='light']) .comparison-grid {
     scrollbar-color: var(--color-border) transparent;
   }
@@ -6666,12 +6267,14 @@ body.first-visit-blocking #app {
 
 /* Responsive Design */
 @media (max-width: 1200px) {
+
   .comparison-grid {
     grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
   }
 }
 
 @media (max-width: 767px) {
+
   .comparison-header {
     flex-direction: column;
     align-items: flex-start;
@@ -6725,6 +6328,7 @@ body.first-visit-blocking #app {
 
 /* Reduced Motion - Comparison View (global reduced-motion handled in variables.css) */
 @media (prefers-reduced-motion: reduce) {
+
   .variant-card {
     transition: none;
   }
@@ -6936,6 +6540,7 @@ body.first-visit-blocking #app {
 
 /* Responsive Design */
 @media (max-width: 767px) {
+
   .library-item {
     padding: var(--space-xs);
   }
@@ -6955,6 +6560,7 @@ body.first-visit-blocking #app {
 
 /* Reduced Motion */
 @media (prefers-reduced-motion: reduce) {
+
   .library-summary,
   .library-item {
     transition: none;
@@ -7289,6 +6895,7 @@ body.first-visit-blocking #app {
 
 /* Forced-colors (Windows High Contrast) */
 @media (forced-colors: active) {
+
   .file-nav-breadcrumbs {
     border-color: CanvasText;
     background: Canvas;
@@ -7316,6 +6923,7 @@ body.first-visit-blocking #app {
 
 /* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
+
   .file-nav-breadcrumb-btn,
   .file-nav-folder-row {
     transition: none;
@@ -7534,6 +7142,7 @@ body.first-visit-blocking #app {
 
 /* Responsive */
 @media (max-width: 767px) {
+
   .color-picker-container {
     flex-wrap: wrap;
   }
@@ -7625,11 +7234,6 @@ body.first-visit-blocking #app {
   line-height: 1.4;
 }
 
-.file-info-summary {
-  min-width: 0;
-  word-wrap: break-word;
-}
-
 .file-info-details {
   font-size: var(--font-size-xs);
 }
@@ -7649,14 +7253,6 @@ body.first-visit-blocking #app {
 .file-info-details summary:focus {
   outline: 2px solid var(--color-focus);
   outline-offset: 2px;
-}
-
-.file-info-tree {
-  margin-top: var(--space-xs);
-  font-family: monospace;
-  font-size: var(--font-size-xs);
-  white-space: pre-wrap;
-  overflow-x: auto;
 }
 
 .file-info--error {
@@ -7710,6 +7306,7 @@ body.first-visit-blocking #app {
 
 /* Responsive */
 @media (max-width: 767px) {
+
   .file-upload-container {
     flex-direction: column;
     align-items: stretch;
@@ -7727,6 +7324,7 @@ body.first-visit-blocking #app {
 }
 
 @media (max-height: 720px) {
+
   .upload-zone {
     padding: var(--space-lg);
   }
@@ -7738,6 +7336,7 @@ body.first-visit-blocking #app {
 
 /* Reduced Motion */
 @media (prefers-reduced-motion: reduce) {
+
   .color-preview,
   .color-picker,
   .color-hex-input,
@@ -7840,6 +7439,7 @@ body.first-visit-blocking #app {
 
 /* Mobile responsive vector layout */
 @media (max-width: 480px) {
+
   .vector-inputs {
     flex-direction: column;
   }
@@ -7886,6 +7486,7 @@ body.first-visit-blocking #app {
 
 /* Reduced motion for vector controls */
 @media (prefers-reduced-motion: reduce) {
+
   .vector-input {
     transition: none;
   }
@@ -8143,6 +7744,7 @@ body.first-visit-blocking #app {
 
 /* Responsive */
 @media (max-width: 767px) {
+
   .queue-controls {
     padding: var(--space-sm);
   }
@@ -8176,6 +7778,7 @@ body.first-visit-blocking #app {
 
 /* Reduced Motion */
 @media (prefers-reduced-motion: reduce) {
+
   .queue-item {
     transition: none;
   }
@@ -8234,6 +7837,7 @@ body.first-visit-blocking #app {
 }
 
 @media (forced-colors: active) {
+
   .color-legend {
     border: 1px solid ButtonText;
     background: Canvas;
@@ -8354,6 +7958,7 @@ body.first-visit-blocking #app {
 
 /* Reduced Motion */
 @media (prefers-reduced-motion: reduce) {
+
   .lod-warning {
     animation: none;
   }
@@ -8361,6 +7966,7 @@ body.first-visit-blocking #app {
 
 /* Mobile Responsive */
 @media (max-width: 480px) {
+
   .lod-warning {
     max-width: 95%;
     padding: var(--space-sm);
@@ -8455,6 +8061,7 @@ body.first-visit-blocking #app {
 
 /* Mobile Responsive */
 @media (max-width: 480px) {
+
   .memory-warning {
     max-width: calc(100% - 2 * var(--space-sm));
     bottom: calc(var(--space-sm) + env(safe-area-inset-bottom, 0px));
@@ -8468,6 +8075,7 @@ body.first-visit-blocking #app {
 
 /* Reduced Motion */
 @media (prefers-reduced-motion: reduce) {
+
   .memory-warning {
     animation: none;
   }
@@ -8612,6 +8220,7 @@ body.first-visit-blocking #app {
 
 /* Reduced Motion */
 @media (prefers-reduced-motion: reduce) {
+
   .memory-status-badge[data-state='critical'],
   .memory-status-badge[data-state='emergency'] {
     animation: none;
@@ -8646,10 +8255,6 @@ body.first-visit-blocking #app {
 
 .advanced-menu[open] .advanced-menu-summary {
   border-bottom: 1px solid var(--color-border);
-}
-
-.advanced-icon {
-  /* Icon sizing now provided by .forge-disclosure-icon */
 }
 
 .advanced-menu-content {
@@ -8849,38 +8454,12 @@ body.first-visit-blocking #app {
   box-shadow: 0 0 0 2px rgba(255, 193, 7, 0.2);
 }
 
-.param-unlocked-indicator {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-xs);
-  font-size: var(--font-size-xs);
-  color: var(--color-warning);
-  margin-left: var(--space-xs);
-}
-
-.param-unlocked-indicator::before {
-  content: '🔓';
-}
-
 /* Warning for out-of-range values */
 .param-control.out-of-range .slider-value,
 .param-control.out-of-range input[type='number'] {
   color: var(--color-warning);
   -webkit-text-fill-color: var(--color-warning);
   font-weight: 600;
-}
-
-.param-out-of-range-warning {
-  font-size: var(--font-size-xs);
-  color: var(--color-warning);
-  margin-top: var(--space-xs);
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-}
-
-.param-out-of-range-warning::before {
-  content: '⚠️';
 }
 
 /* =========================================
@@ -8948,6 +8527,7 @@ body.first-visit-blocking #app {
 
 /* Mobile Responsive */
 @media (max-width: 767px) {
+
   .modal-source {
     height: 90vh;
     max-width: 100%;
@@ -9077,6 +8657,7 @@ body.first-visit-blocking #app {
 
 /* Mobile responsive */
 @media (max-width: 767px) {
+
   .modal-console {
     height: 90vh;
     max-width: 100%;
@@ -9198,6 +8779,7 @@ body.first-visit-blocking #app {
 
 /* Reduced Motion for WASM Loading */
 @media (prefers-reduced-motion: reduce) {
+
   .wasm-loading-progress-fill.indeterminate {
     animation: none;
     width: 50% !important;
@@ -9650,6 +9232,7 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
 
 /* Mobile: adjust panel position when modal is open */
 @media (max-width: 767px) {
+
   body:has(#featuresGuideModal:not(.hidden)) .tutorial-panel {
     bottom: 0 !important;
     left: 0 !important;
@@ -9663,6 +9246,7 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
 
 /* Responsive adjustments */
 @media (max-width: 767px) {
+
   .features-guide-body {
     max-height: 80vh;
     max-height: 80dvh;
@@ -9894,6 +9478,7 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
 
 /* Mobile Responsive */
 @media (max-width: 767px) {
+
   .camera-controls {
     bottom: calc(var(--space-sm) + env(safe-area-inset-bottom, 0px));
     right: var(--space-sm);
@@ -9917,6 +9502,7 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
 
 /* Reduced Motion */
 @media (prefers-reduced-motion: reduce) {
+
   .camera-control-btn {
     transition: none;
   }
@@ -9950,13 +9536,6 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
   margin: 0 0 var(--space-sm) 0;
 }
 
-.feature-cards {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: var(--space-md);
-  margin-bottom: var(--space-lg);
-}
-
 .feature-card {
   padding: var(--space-md);
   background: var(--color-bg-primary);
@@ -9971,13 +9550,6 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
 .feature-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
-
-.feature-card-icon {
-  font-size: 2.5rem;
-  display: block;
-  margin-bottom: var(--space-sm);
-  line-height: 1;
 }
 
 .feature-card h4 {
@@ -10010,12 +9582,9 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
 
 /* Responsive for feature cards */
 @media (min-width: 768px) {
+
   .features-overview {
     padding: var(--space-lg);
-  }
-
-  .feature-cards {
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
   }
 
   .role-paths-grid {
@@ -10033,13 +9602,6 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
    New role-based entry points for discovering accessibility features.
    Designed for keyboard-first navigation with large touch targets.
    ============================================================================ */
-
-.features-intro {
-  font-size: var(--font-size-base);
-  color: var(--color-text-secondary);
-  text-align: center;
-  margin: 0 0 var(--space-lg) 0;
-}
 
 .role-path-meta {
   font-size: var(--font-size-sm);
@@ -10080,6 +9642,7 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
 }
 
 @media (prefers-reduced-motion: reduce) {
+
   .role-path-details > summary::before {
     transition: none;
   }
@@ -10221,6 +9784,7 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
 }
 
 @media (prefers-reduced-motion: reduce) {
+
   .spotlights-summary::before {
     transition: none;
   }
@@ -10293,6 +9857,7 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
 }
 
 @supports not selector(:focus-visible) {
+
   .spotlight-link:focus {
     outline: 3px solid var(--color-focus);
     outline-offset: 2px;
@@ -10300,6 +9865,7 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
 }
 
 @media (max-width: 767px) {
+
   .accessibility-spotlights {
     padding: var(--space-md);
   }
@@ -10372,6 +9938,7 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
 
 /* Use dynamic viewport height on modern browsers */
 @supports (max-height: 100dvh) {
+
   .tutorial-panel {
     max-height: calc(100dvh - 32px);
   }
@@ -10580,6 +10147,7 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
 
 /* Small-height viewport adjustments for tutorial panel */
 @media (max-height: 640px) {
+
   .tutorial-panel {
     max-height: calc(100vh - 16px);
     max-height: calc(100dvh - 16px);
@@ -10623,6 +10191,7 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
 
 /* Even smaller viewport - mobile portrait with zoom */
 @media (max-height: 520px) {
+
   .tutorial-panel {
     max-height: calc(100vh - 8px);
     max-height: calc(100dvh - 8px);
@@ -10824,16 +10393,13 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
 }
 
 @media (forced-colors: active) {
+
   .tutorial-keyboard-hint kbd {
     border: 1px solid ButtonText;
   }
 }
 
 /* During repositioning, temporarily remove containment for accurate measurements */
-.tutorial-panel.measuring {
-  contain: none;
-  content-visibility: visible;
-}
 
 /* Minimized state - floating pill button */
 .tutorial-minimized {
@@ -11124,6 +10690,7 @@ body:has(#featuresGuideModal .modal-content.tutorial-target-highlight)
 
 /* Forced Colors Mode (Windows High Contrast) - Tutorial buttons */
 @media (forced-colors: active) {
+
   .tutorial-btn-back,
   .tutorial-btn-next {
     border: 2px solid ButtonText !important;
@@ -11159,6 +10726,7 @@ body:has(#featuresGuideModal .modal-content.tutorial-target-highlight)
 
 /* Enhanced Contrast Mode (prefers-contrast: more) - Tutorial */
 @media (prefers-contrast: more) {
+
   .tutorial-btn-back,
   .tutorial-btn-next {
     border-width: 2px;
@@ -11186,6 +10754,7 @@ body:has(#featuresGuideModal .modal-content.tutorial-target-highlight)
 
 /* Reduced Transparency Mode */
 @media (prefers-reduced-transparency: reduce) {
+
   .tutorial-backdrop {
     backdrop-filter: none !important;
     fill: var(--color-overlay-solid, rgba(0, 0, 0, 0.85)) !important;
@@ -11199,6 +10768,7 @@ body:has(#featuresGuideModal .modal-content.tutorial-target-highlight)
 
 /* Reduced Motion */
 @media (prefers-reduced-motion: reduce) {
+
   .tutorial-overlay,
   .tutorial-panel,
   .tutorial-spotlight-cutout,
@@ -11222,6 +10792,7 @@ body:has(#featuresGuideModal .modal-content.tutorial-target-highlight)
    When a target is highlighted, allow JS positioning so the panel can move
    out of the way instead of covering the control. */
 @media (max-width: 600px) {
+
   .tutorial-panel:not(.tutorial-panel-positioned) {
     position: fixed;
     bottom: 0;
@@ -11256,6 +10827,7 @@ body:has(#featuresGuideModal .modal-content.tutorial-target-highlight)
 
 /* Landscape on notched devices */
 @media (orientation: landscape) and (max-height: 500px) {
+
   .tutorial-panel {
     max-width: calc(
       100vw - env(safe-area-inset-left) - env(safe-area-inset-right) -
@@ -11268,6 +10840,7 @@ body:has(#featuresGuideModal .modal-content.tutorial-target-highlight)
 
 /* Touch device optimizations */
 @media (pointer: coarse) {
+
   .tutorial-btn-back,
   .tutorial-btn-next {
     min-height: 44px;
@@ -11328,6 +10901,7 @@ body.tutorial-body-locked {
 
 /* Print styles - hide tutorial completely */
 @media print {
+
   .tutorial-overlay,
   .tutorial-backdrop,
   .tutorial-panel,
@@ -11339,6 +10913,7 @@ body.tutorial-body-locked {
 
 /* Inverted colors support (iOS/macOS Smart Invert) */
 @media (inverted-colors: inverted) {
+
   .tutorial-backdrop,
   .tutorial-panel {
     filter: invert(0); /* Prevent double-inversion */
@@ -11360,6 +10935,7 @@ body.tutorial-body-locked {
 
 /* Responsive: Stack cards on mobile */
 @media (max-width: 767px) {
+
   .role-paths-grid {
     grid-template-columns: 1fr;
   }
@@ -11371,6 +10947,7 @@ body.tutorial-body-locked {
 
 /* Reduced motion: Disable transitions */
 @media (prefers-reduced-motion: reduce) {
+
   .role-path-card {
     transition: none;
   }
@@ -11599,6 +11176,7 @@ body.tutorial-body-locked {
 
 /* Hide button text on small screens, show only icons */
 @media (max-width: 600px) {
+
   .workflow-actions .btn-text {
     display: none;
   }
@@ -11727,6 +11305,7 @@ body.tutorial-body-locked {
 
 /* Mobile responsive */
 @media (max-width: 767px) {
+
   .param-search-row {
     flex-direction: column;
   }
@@ -11763,6 +11342,7 @@ body.tutorial-body-locked {
 
 /* Reduced motion */
 @media (forced-colors: active) {
+
   /* Skip link must be visible */
   .skip-link {
     background: ButtonFace;
@@ -12295,6 +11875,7 @@ body.tutorial-body-locked {
 
 /* High Contrast Mode */
 @media (prefers-contrast: more) {
+
   .storage-panel {
     border-width: 3px;
   }
@@ -12306,6 +11887,7 @@ body.tutorial-body-locked {
 
 /* Forced Colors Mode (Windows High Contrast) */
 @media (forced-colors: active) {
+
   .storage-panel {
     border: 2px solid CanvasText;
   }
@@ -12322,6 +11904,7 @@ body.tutorial-body-locked {
 
 /* Mobile Responsive */
 @media (max-width: 767px) {
+
   .storage-panel {
     padding: var(--space-sm);
   }
@@ -12335,6 +11918,7 @@ body.tutorial-body-locked {
 
 /* Reduced Motion */
 @media (prefers-reduced-motion: reduce) {
+
   .storage-meter-fill {
     transition: none;
   }
@@ -12542,6 +12126,7 @@ body.tutorial-body-locked {
 
 /* Mobile Responsive */
 @media (max-width: 600px) {
+
   .shortcut-item {
     flex-direction: column;
     align-items: flex-start;
@@ -12568,6 +12153,7 @@ body.tutorial-body-locked {
 
 /* High Contrast Mode */
 @media (prefers-contrast: more) {
+
   .shortcut-key-btn {
     border-width: 3px;
   }
@@ -12579,6 +12165,7 @@ body.tutorial-body-locked {
 
 /* Forced Colors Mode (Windows High Contrast) */
 @media (forced-colors: active) {
+
   .shortcut-key-btn {
     border: 2px solid ButtonBorder;
   }
@@ -12597,6 +12184,7 @@ body.tutorial-body-locked {
 
 /* Reduced Motion */
 @media (prefers-reduced-motion: reduce) {
+
   .shortcut-key-btn.capturing {
     animation: none;
   }
@@ -12882,33 +12470,6 @@ body.tutorial-body-locked {
   color: #b5cea8;
 }
 
-/* Expert Mode layout - side by side with preview */
-.expert-layout {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-md);
-  height: 100%;
-  min-height: 0;
-}
-
-.expert-layout.editor-only {
-  grid-template-columns: 1fr;
-}
-
-.expert-editor-pane {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.expert-preview-pane {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  overflow: hidden;
-}
-
 /* Editor dirty indicator */
 .editor-dirty-indicator {
   display: inline-block;
@@ -12926,19 +12487,6 @@ body.tutorial-body-locked {
 }
 
 /* Editor error badge */
-.editor-error-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 4px;
-  font-size: var(--font-size-xs);
-  font-weight: 600;
-  color: white;
-  background: var(--color-error);
-  border-radius: var(--border-radius-pill);
-}
 
 /* Raw control for expressions */
 .raw-parameter {
@@ -13056,6 +12604,7 @@ body.tutorial-body-locked {
 
 /* Forced Colors Mode (Windows High Contrast) */
 @media (forced-colors: active) {
+
   .mode-toggle-btn {
     border: 2px solid ButtonText !important;
   }
@@ -13089,17 +12638,9 @@ body.tutorial-body-locked {
 }
 
 /* Mobile Responsive */
-@media (max-width: 900px) {
-  .expert-layout {
-    grid-template-columns: 1fr;
-  }
-
-  .expert-preview-pane {
-    min-height: 300px;
-  }
-}
 
 @media (max-width: 600px) {
+
   .textarea-line-numbers {
     width: 40px;
     min-width: 40px;
@@ -13219,6 +12760,7 @@ body.tutorial-body-locked {
 
 /* Reduced Motion */
 @media (prefers-reduced-motion: reduce) {
+
   .mode-toggle-btn,
   .editor-dirty-indicator {
     transition: none;
@@ -13238,29 +12780,6 @@ body.tutorial-body-locked {
   flex-wrap: wrap;
   border-bottom: var(--border-width-thin) solid var(--color-border);
   margin-bottom: var(--space-xs);
-}
-
-.customizer-header-control {
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-  min-height: var(--size-touch-target);
-  font-size: var(--font-size-sm);
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.customizer-header-control input[type='checkbox'] {
-  width: var(--space-md);
-  height: var(--space-md);
-  cursor: pointer;
-  accent-color: var(--color-accent);
-}
-
-.customizer-header-control:focus-within {
-  outline: var(--focus-ring-width) solid var(--color-focus);
-  outline-offset: var(--focus-ring-offset);
-  border-radius: var(--border-radius-sm);
 }
 
 .customizer-header-select {
@@ -13368,6 +12887,7 @@ body.tutorial-body-locked {
 }
 
 @media (prefers-reduced-motion: reduce) {
+
   .preset-search-input,
   .preset-search-clear {
     transition: none;
