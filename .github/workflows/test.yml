@@ -124,14 +124,10 @@ jobs:
           path: playwright-report/
           retention-days: 30
 
-  # Firefox E2E tests - non-blocking per Milestone 0-2 requirements
-  # See: docs/planning/browser-matrix.md, docs/planning/LAYER_2_BUILD_PLAN.md
-  # STATUS: Will become blocking at Milestone 3 exit
-  # TO MAKE BLOCKING: Remove 'continue-on-error: true' after M3 validation
+  # Firefox E2E tests - blocking (stabilized in v4.3.0 via parallel workers + timeouts)
   e2e-tests-firefox:
-    name: E2E Tests (Firefox) [Non-Blocking]
+    name: E2E Tests (Firefox)
     runs-on: ubuntu-latest
-    continue-on-error: true  # REMOVE THIS LINE AT M3 EXIT
     
     steps:
       - name: Checkout code
@@ -145,6 +141,12 @@ jobs:
       
       - name: Install dependencies
         run: npm ci
+      
+      - name: Cache Liberation fonts
+        uses: actions/cache@v4
+        with:
+          path: public/fonts/*.ttf
+          key: liberation-fonts-${{ hashFiles('scripts/download-wasm.js') }}
       
       - name: Download OpenSCAD WASM files
         run: npm run setup-wasm
@@ -163,13 +165,11 @@ jobs:
           path: playwright-report/
           retention-days: 30
 
-  # Safari/WebKit E2E tests - requires macOS runner (Milestone 3)
-  # See: docs/planning/browser-matrix.md - Tier 2 browser
-  # STATUS: Non-blocking until M3 validation complete
+  # Safari/WebKit E2E tests - blocking (stabilized in v4.3.0 via parallel workers + timeouts)
+  # Requires macOS runner for WebKit
   e2e-tests-webkit:
-    name: E2E Tests (Safari/WebKit) [Non-Blocking]
+    name: E2E Tests (Safari/WebKit)
     runs-on: macos-latest
-    continue-on-error: true  # REMOVE THIS LINE AT M3 EXIT
     
     steps:
       - name: Checkout code
@@ -184,6 +184,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
       
+      - name: Cache Liberation fonts
+        uses: actions/cache@v4
+        with:
+          path: public/fonts/*.ttf
+          key: liberation-fonts-${{ hashFiles('scripts/download-wasm.js') }}
+      
       - name: Download OpenSCAD WASM files
         run: npm run setup-wasm
       
@@ -191,10 +197,7 @@ jobs:
         run: npx playwright install --with-deps webkit
       
       - name: Run E2E tests (WebKit)
-        run: npx playwright test --project=webkit || true
-        env:
-          # WebKit project needs to be added to playwright.config.js
-          PW_WEBKIT_ENABLED: true
+        run: npx playwright test --project=webkit
       
       - name: Upload Playwright report (WebKit)
         uses: actions/upload-artifact@v4
