@@ -1042,10 +1042,9 @@
                 <!-- Mobile close button for drawer -->
                 <button type="button"
                   id="drawerCloseBtn"
-                  class="btn btn-sm btn-icon mobile-only drawer-close-btn forge-control"
+                  class="btn btn-sm btn-icon mobile-only drawer-close-btn forge-control hidden"
                   aria-label="Close parameters panel"
                   title="Close"
-                  style="display: none"
                   data-tutorial-target="mobile-drawer-close"
                 >
                   <svg
@@ -4738,7 +4737,7 @@
       type="file"
       id="queueImportInput"
       accept=".json"
-      style="display: none"
+      class="hidden"
       aria-hidden="true"
     />
     <!-- Source Code Viewer Modal -->
@@ -6005,7 +6004,7 @@ No console output yet. Generate a model to see output.</pre
             You've been directed to a shared project:
             <strong id="manifestSaveCopyProjectName"></strong>
           </p>
-          <p id="manifestSaveCopyAuthorLine" style="display: none">
+          <p id="manifestSaveCopyAuthorLine" class="hidden">
             Created by <strong id="manifestSaveCopyAuthor"></strong>
           </p>
           <h3>Before you start</h3>
@@ -6023,7 +6022,7 @@ No console output yet. Generate a model to see output.</pre
             You can also save a copy later from the project banner.
           </p>
         </div>
-        <div class="modal-footer" style="display: flex; gap: var(--space-sm); justify-content: flex-end; padding-top: var(--space-md); border-top: 1px solid var(--color-border); flex-wrap: wrap;">
+        <div class="modal-footer modal-footer-actions">
           <button
             type="button"
             class="btn btn-secondary"

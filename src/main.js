@@ -5525,7 +5525,7 @@ if (rounded) {
         if (nameEl) nameEl.textContent = projectName || 'Untitled Project';
         if (author && authorEl && authorLine) {
           authorEl.textContent = author;
-          authorLine.style.display = '';
+          authorLine.classList.remove('hidden');
         }
 
         const cleanup = (result) => {
