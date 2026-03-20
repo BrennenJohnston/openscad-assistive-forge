@@ -83,9 +83,18 @@
     "yaml": "^2.8.2"
   },
   "dependencies": {
+    "@codemirror/autocomplete": "^6.20.1",
+    "@codemirror/commands": "^6.10.3",
+    "@codemirror/language": "^6.12.2",
+    "@codemirror/lint": "^6.9.5",
+    "@codemirror/search": "^6.6.0",
+    "@codemirror/state": "^6.6.0",
+    "@codemirror/view": "^6.40.0",
     "@github/combobox-nav": "^3.0.1",
+    "@lezer/highlight": "^1.2.3",
     "@radix-ui/colors": "^3.0.0",
     "ajv": "^8.12.0",
+    "codemirror": "^6.0.2",
     "jszip": "^3.10.1",
     "split.js": "^1.6.5",
     "three": "^0.182.0"
