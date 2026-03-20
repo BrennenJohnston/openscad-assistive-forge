@@ -334,55 +334,68 @@
           role="navigation"
           aria-label="Workflow progress"
         >
-          <div
-            id="toolbarMenuBar"
-            class="toolbar-menu-bar hidden"
-            aria-label="Application menu"
+        <div
+          id="toolbarMenuBar"
+          class="toolbar-menu-bar hidden"
+          role="menubar"
+          aria-label="Application menu"
+        >
+          <button type="button"
+            class="toolbar-menu-btn btn"
+            id="fileMenuBtn"
+            role="menuitem"
+            aria-haspopup="menu"
+            aria-expanded="false"
+            tabindex="0"
           >
-            <button type="button"
-              class="toolbar-menu-btn btn"
-              id="fileMenuBtn"
-              aria-haspopup="dialog"
-              aria-expanded="false"
-            >
-              File</button
-            ><button type="button"
-              class="toolbar-menu-btn btn"
-              id="editMenuBtn"
-              aria-haspopup="dialog"
-              aria-expanded="false"
-            >
-              Edit</button
-            ><button type="button"
-              class="toolbar-menu-btn btn"
-              id="designMenuBtn"
-              aria-haspopup="dialog"
-              aria-expanded="false"
-            >
-              Design</button
-            ><button type="button"
-              class="toolbar-menu-btn btn"
-              id="viewMenuBtn"
-              aria-haspopup="dialog"
-              aria-expanded="false"
-            >
-              View</button
-            ><button type="button"
-              class="toolbar-menu-btn btn"
-              id="windowMenuBtn"
-              aria-haspopup="dialog"
-              aria-expanded="false"
-            >
-              Window</button
-            ><button type="button"
-              class="toolbar-menu-btn btn"
-              id="helpMenuBtn"
-              aria-haspopup="dialog"
-              aria-expanded="false"
-            >
-              Help
-            </button>
-          </div>
+            File</button
+          ><button type="button"
+            class="toolbar-menu-btn btn"
+            id="editMenuBtn"
+            role="menuitem"
+            aria-haspopup="menu"
+            aria-expanded="false"
+            tabindex="-1"
+          >
+            Edit</button
+          ><button type="button"
+            class="toolbar-menu-btn btn"
+            id="designMenuBtn"
+            role="menuitem"
+            aria-haspopup="menu"
+            aria-expanded="false"
+            tabindex="-1"
+          >
+            Design</button
+          ><button type="button"
+            class="toolbar-menu-btn btn"
+            id="viewMenuBtn"
+            role="menuitem"
+            aria-haspopup="menu"
+            aria-expanded="false"
+            tabindex="-1"
+          >
+            View</button
+          ><button type="button"
+            class="toolbar-menu-btn btn"
+            id="windowMenuBtn"
+            role="menuitem"
+            aria-haspopup="menu"
+            aria-expanded="false"
+            tabindex="-1"
+          >
+            Window</button
+          ><button type="button"
+            class="toolbar-menu-btn btn"
+            id="helpMenuBtn"
+            role="menuitem"
+            aria-haspopup="menu"
+            aria-expanded="false"
+            tabindex="-1"
+          >
+            Help
+          </button>
+        </div>
           <div class="workflow-actions">
             <button type="button"
               id="uiModeToggle"
@@ -6160,9 +6173,6 @@ No console output yet. Generate a model to see output.</pre
     <div
       id="fileMenuModal"
       class="toolbar-menu-modal hidden"
-      role="dialog"
-      aria-modal="true"
-      aria-label="File menu"
       aria-hidden="true"
     >
       <div
@@ -6173,24 +6183,22 @@ No console output yet. Generate a model to see output.</pre
         <div class="toolbar-menu-header">
           <span class="toolbar-menu-title">File</span
           ><button
-            class="modal-close toolbar-menu-close btn-icon"
+            class="toolbar-menu-close btn-icon"
             type="button"
             aria-label="Close File menu"
+            tabindex="-1"
           >
             &times;
           </button>
         </div>
         <div class="toolbar-menu-body">
-          <ul class="menu-items-list" id="fileMenuItems"></ul>
+          <ul class="menu-items-list" id="fileMenuItems" role="menu" aria-label="File"></ul>
         </div>
       </div>
     </div>
     <div
       id="editMenuModal"
       class="toolbar-menu-modal hidden"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Edit menu"
       aria-hidden="true"
     >
       <div
@@ -6201,24 +6209,22 @@ No console output yet. Generate a model to see output.</pre
         <div class="toolbar-menu-header">
           <span class="toolbar-menu-title">Edit</span
           ><button
-            class="modal-close toolbar-menu-close btn-icon"
+            class="toolbar-menu-close btn-icon"
             type="button"
             aria-label="Close Edit menu"
+            tabindex="-1"
           >
             &times;
           </button>
         </div>
         <div class="toolbar-menu-body">
-          <ul class="menu-items-list" id="editMenuItems"></ul>
+          <ul class="menu-items-list" id="editMenuItems" role="menu" aria-label="Edit"></ul>
         </div>
       </div>
     </div>
     <div
       id="designMenuModal"
       class="toolbar-menu-modal hidden"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Design menu"
       aria-hidden="true"
     >
       <div
@@ -6229,24 +6235,22 @@ No console output yet. Generate a model to see output.</pre
         <div class="toolbar-menu-header">
           <span class="toolbar-menu-title">Design</span
           ><button
-            class="modal-close toolbar-menu-close btn-icon"
+            class="toolbar-menu-close btn-icon"
             type="button"
             aria-label="Close Design menu"
+            tabindex="-1"
           >
             &times;
           </button>
         </div>
         <div class="toolbar-menu-body">
-          <ul class="menu-items-list" id="designMenuItems"></ul>
+          <ul class="menu-items-list" id="designMenuItems" role="menu" aria-label="Design"></ul>
         </div>
       </div>
     </div>
     <div
       id="viewMenuModal"
       class="toolbar-menu-modal hidden"
-      role="dialog"
-      aria-modal="true"
-      aria-label="View menu"
       aria-hidden="true"
     >
       <div
@@ -6257,24 +6261,22 @@ No console output yet. Generate a model to see output.</pre
         <div class="toolbar-menu-header">
           <span class="toolbar-menu-title">View</span
           ><button
-            class="modal-close toolbar-menu-close btn-icon"
+            class="toolbar-menu-close btn-icon"
             type="button"
             aria-label="Close View menu"
+            tabindex="-1"
           >
             &times;
           </button>
         </div>
         <div class="toolbar-menu-body">
-          <ul class="menu-items-list" id="viewMenuItems"></ul>
+          <ul class="menu-items-list" id="viewMenuItems" role="menu" aria-label="View"></ul>
         </div>
       </div>
     </div>
     <div
       id="windowMenuModal"
       class="toolbar-menu-modal hidden"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Window menu"
       aria-hidden="true"
     >
       <div
@@ -6285,24 +6287,22 @@ No console output yet. Generate a model to see output.</pre
         <div class="toolbar-menu-header">
           <span class="toolbar-menu-title">Window</span
           ><button
-            class="modal-close toolbar-menu-close btn-icon"
+            class="toolbar-menu-close btn-icon"
             type="button"
             aria-label="Close Window menu"
+            tabindex="-1"
           >
             &times;
           </button>
         </div>
         <div class="toolbar-menu-body">
-          <ul class="menu-items-list" id="windowMenuItems"></ul>
+          <ul class="menu-items-list" id="windowMenuItems" role="menu" aria-label="Window"></ul>
         </div>
       </div>
     </div>
     <div
       id="helpMenuModal"
       class="toolbar-menu-modal hidden"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Help menu"
       aria-hidden="true"
     >
       <div
@@ -6313,15 +6313,16 @@ No console output yet. Generate a model to see output.</pre
         <div class="toolbar-menu-header">
           <span class="toolbar-menu-title">Help</span
           ><button
-            class="modal-close toolbar-menu-close btn-icon"
+            class="toolbar-menu-close btn-icon"
             type="button"
             aria-label="Close Help menu"
+            tabindex="-1"
           >
             &times;
           </button>
         </div>
         <div class="toolbar-menu-body">
-          <ul class="menu-items-list" id="helpMenuItems"></ul>
+          <ul class="menu-items-list" id="helpMenuItems" role="menu" aria-label="Help"></ul>
         </div>
       </div>
     </div>
