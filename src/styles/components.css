@@ -12875,6 +12875,25 @@ body.tutorial-body-locked {
     border-color: Highlight !important;
   }
 
+  .expert-mode-panel {
+    border: 2px solid CanvasText !important;
+  }
+
+  .expert-mode-header {
+    background: Canvas;
+    border-bottom: 2px solid CanvasText !important;
+  }
+
+  .textarea-editor {
+    border: 2px solid CanvasText !important;
+  }
+
+  .textarea-editor.focused {
+    box-shadow: none !important;
+    outline: 3px solid Highlight !important;
+    outline-offset: -3px;
+  }
+
   .textarea-editor-input {
     background: Field;
     color: FieldText;
@@ -12883,6 +12902,38 @@ body.tutorial-body-locked {
   .textarea-line-numbers {
     background: Canvas;
     border-color: CanvasText !important;
+  }
+
+  /* CodeMirror 6 editor */
+  .cm-editor {
+    border: 2px solid CanvasText !important;
+    background: Field !important;
+    color: FieldText !important;
+  }
+
+  .cm-editor.cm-focused {
+    outline: 3px solid Highlight !important;
+    outline-offset: -3px;
+  }
+
+  .cm-editor .cm-gutters {
+    background: Canvas !important;
+    color: CanvasText !important;
+    border-right: 2px solid CanvasText !important;
+  }
+
+  .cm-editor .cm-content {
+    caret-color: CanvasText !important;
+  }
+
+  .cm-editor .cm-activeLine {
+    background: Highlight !important;
+    color: HighlightText !important;
+  }
+
+  .cm-editor .cm-activeLineGutter {
+    background: Highlight !important;
+    color: HighlightText !important;
   }
 
   .vector-parameter {

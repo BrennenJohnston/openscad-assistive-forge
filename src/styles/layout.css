@@ -3634,6 +3634,48 @@ details summary:focus,
   .camera-drawer-section-title {
     color: CanvasText !important;
   }
+
+  /* Desktop camera panel */
+  .camera-panel {
+    background: Canvas !important;
+    border: 2px solid CanvasText !important;
+  }
+
+  .camera-btn,
+  .camera-btn-wide,
+  .camera-btn-full {
+    background: ButtonFace !important;
+    color: ButtonText !important;
+    border: 2px solid ButtonText !important;
+  }
+
+  .camera-btn:hover,
+  .camera-btn:focus,
+  .camera-btn-wide:hover,
+  .camera-btn-wide:focus,
+  .camera-btn-full:hover,
+  .camera-btn-full:focus {
+    background: Highlight !important;
+    color: HighlightText !important;
+    border-color: Highlight !important;
+  }
+
+  .camera-view-btn {
+    background: ButtonFace !important;
+    color: ButtonText !important;
+    border: 2px solid ButtonText !important;
+  }
+
+  .camera-view-btn:hover,
+  .camera-view-btn:focus {
+    background: Highlight !important;
+    color: HighlightText !important;
+    border-color: Highlight !important;
+  }
+
+  .camera-control-section-title {
+    color: CanvasText !important;
+  }
 }
 
 /* File info in preview drawer */

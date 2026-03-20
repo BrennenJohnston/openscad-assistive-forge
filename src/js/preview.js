@@ -147,6 +147,22 @@ const PREVIEW_COLORS = {
     model: 0xffb000,
     ambientLight: 0xffb000,
   },
+  // Green phosphor high-contrast (wider grid contrast ratio)
+  'mono-hc': {
+    background: 0x000000,
+    gridPrimary: 0x00ff00,
+    gridSecondary: 0x003300,
+    model: 0x33ff33,
+    ambientLight: 0x00ff00,
+  },
+  // Amber phosphor high-contrast (wider grid contrast ratio)
+  'mono-light-hc': {
+    background: 0x000000,
+    gridPrimary: 0xffb000,
+    gridSecondary: 0x4d3500,
+    model: 0xffc233,
+    ambientLight: 0xffb000,
+  },
 };
 
 // RENDER_STATE_COLORS was removed: it applied fabricated amber/red tints
@@ -467,7 +483,7 @@ export class PreviewManager {
 
   /**
    * Detect current theme from document
-   * @returns {string} 'light', 'dark', 'light-hc', 'dark-hc', 'mono', or 'mono-light'
+   * @returns {string} 'light' | 'dark' | 'light-hc' | 'dark-hc' | 'mono' | 'mono-light' | 'mono-hc' | 'mono-light-hc'
    */
   detectTheme() {
     const root = document.documentElement;
@@ -477,17 +493,17 @@ export class PreviewManager {
     // Check for variant override (takes precedence)
     const uiVariant = root.getAttribute('data-ui-variant');
     if (uiVariant === 'mono') {
-      // Light theme = amber phosphor, Dark theme = green phosphor
+      let base;
       if (dataTheme === 'light') {
-        return 'mono-light';
+        base = 'mono-light';
       } else if (dataTheme === 'dark') {
-        return 'mono';
+        base = 'mono';
       } else {
-        // Auto mode - check system preference
-        return window.matchMedia('(prefers-color-scheme: dark)').matches
+        base = window.matchMedia('(prefers-color-scheme: dark)').matches
           ? 'mono'
           : 'mono-light';
       }
+      return highContrast ? `${base}-hc` : base;
     }
 
     let baseTheme;

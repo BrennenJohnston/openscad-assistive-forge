@@ -246,9 +246,32 @@ describe('PreviewManager', () => {
       expect(theme).toBe('dark-hc')
     })
 
+    it('detects mono-hc theme (dark + high contrast + mono variant)', () => {
+      document.documentElement.setAttribute('data-theme', 'dark')
+      document.documentElement.setAttribute('data-high-contrast', 'true')
+      document.documentElement.setAttribute('data-ui-variant', 'mono')
+
+      const manager = new PreviewManager(container)
+      const theme = manager.detectTheme()
+
+      expect(theme).toBe('mono-hc')
+    })
+
+    it('detects mono-light-hc theme (light + high contrast + mono variant)', () => {
+      document.documentElement.setAttribute('data-theme', 'light')
+      document.documentElement.setAttribute('data-high-contrast', 'true')
+      document.documentElement.setAttribute('data-ui-variant', 'mono')
+
+      const manager = new PreviewManager(container)
+      const theme = manager.detectTheme()
+
+      expect(theme).toBe('mono-light-hc')
+    })
+
     afterEach(() => {
       document.documentElement.removeAttribute('data-theme')
       document.documentElement.removeAttribute('data-high-contrast')
+      document.documentElement.removeAttribute('data-ui-variant')
     })
   })
 
@@ -2083,6 +2106,20 @@ describe('PreviewManager', () => {
         expect(color).toBe('#ffb000')
       })
 
+      it('returns mono-hc theme default', () => {
+        manager.currentTheme = 'mono-hc'
+        manager.renderState = 'preview'
+        const color = manager._resolveModelColor()
+        expect(color).toBe('#33ff33')
+      })
+
+      it('returns mono-light-hc theme default', () => {
+        manager.currentTheme = 'mono-light-hc'
+        manager.renderState = 'laser'
+        const color = manager._resolveModelColor()
+        expect(color).toBe('#ffc233')
+      })
+
       it('returns colorOverride when enabled regardless of render state', () => {
         manager.renderState = 'laser'
         manager.colorOverrideEnabled = true
@@ -2149,7 +2186,7 @@ describe('PreviewManager', () => {
       })
 
       it('each theme has a distinct model color', () => {
-        const themes = ['light', 'dark', 'light-hc', 'dark-hc', 'mono', 'mono-light']
+        const themes = ['light', 'dark', 'light-hc', 'dark-hc', 'mono', 'mono-light', 'mono-hc', 'mono-light-hc']
         const colors = themes.map(t => {
           manager.currentTheme = t
           return manager._resolveModelColor()
