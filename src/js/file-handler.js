@@ -313,20 +313,20 @@ export function initFileHandler({
 
     if (fileArr.length > MAX_FILES) {
       dismissOverlay();
-      alert(
-        `The selected folder contains ${fileArr.length} files (limit: ${MAX_FILES}). ` +
-          `Please select a smaller project folder.`
-      );
+      showErrorToast({
+        title: 'Too Many Files',
+        message: `The selected folder contains ${fileArr.length} files (limit: ${MAX_FILES}). Please select a smaller project folder.`,
+      });
       return;
     }
 
     if (totalBytes > MAX_BYTES) {
       dismissOverlay();
       const mb = (totalBytes / 1024 / 1024).toFixed(1);
-      alert(
-        `The selected folder is ${mb} MB (limit: 100 MB). ` +
-          `Please select a smaller project folder.`
-      );
+      showErrorToast({
+        title: 'Folder Too Large',
+        message: `The selected folder is ${mb} MB (limit: 100 MB). Please select a smaller project folder.`,
+      });
       return;
     }
 
@@ -366,7 +366,7 @@ export function initFileHandler({
       );
     } else {
       dismissOverlay();
-      alert('No OpenSCAD (.scad) files found in the selected folder.');
+      showErrorToast({ title: 'No .scad Files', message: 'No OpenSCAD (.scad) files found in the selected folder.' });
       return;
     }
 
@@ -391,11 +391,11 @@ export function initFileHandler({
           await savedProjectsUI.loadSavedProject(result.id);
         }
       } else {
-        alert(`Folder import failed: ${result.error}`);
+        showErrorToast({ title: 'Folder Import Failed', message: result.error });
       }
     } catch (err) {
       dismissOverlay();
-      alert(`Folder import failed: ${err.message}`);
+      showErrorToast({ title: 'Folder Import Failed', message: err.message });
     }
   }
 
@@ -478,7 +478,7 @@ export function initFileHandler({
       if (isZip && !content && !extractedFiles) {
         const validation = validateZipFile(file);
         if (!validation.valid) {
-          alert(validation.error);
+          showErrorToast({ title: 'Invalid ZIP File', message: validation.error });
           return;
         }
 
@@ -585,7 +585,7 @@ export function initFileHandler({
       const FILE_SIZE_LIMITS = getFileSizeLimits();
       if (file.size > FILE_SIZE_LIMITS.SCAD_FILE) {
         const limitMB = FILE_SIZE_LIMITS.SCAD_FILE / (1024 * 1024);
-        alert(`File size exceeds ${limitMB}MB limit`);
+        showErrorToast({ title: 'File Too Large', message: `File size exceeds the ${limitMB} MB limit.` });
         return;
       }
     }

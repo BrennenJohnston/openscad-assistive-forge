@@ -31,6 +31,7 @@ import {
   getProjectsInFolder,
 } from './saved-projects-manager.js';
 import { getUIModeController } from './ui-mode-controller.js';
+import { showErrorModal, showErrorToast } from './error-translator.js';
 
 /**
  * Initialize the saved projects UI controller.
@@ -557,7 +558,7 @@ export function initSavedProjectsUI({
           await renderSavedProjectsList();
           stateManager.announceChange('Project moved to folder');
         } else {
-          alert(`Failed to move project: ${result.error}`);
+          showErrorToast({ title: 'Move Failed', message: result.error });
         }
       }
     });
@@ -577,7 +578,7 @@ export function initSavedProjectsUI({
         await renderSavedProjectsList();
         stateManager.announceChange(`Folder renamed to ${newName.trim()}`);
       } else {
-        alert(`Failed to rename folder: ${result.error}`);
+        showErrorToast({ title: 'Rename Failed', message: result.error });
       }
     }
   }
@@ -606,7 +607,7 @@ export function initSavedProjectsUI({
         await renderSavedProjectsList();
         stateManager.announceChange(`Folder "${folder.name}" deleted`);
       } else {
-        alert(`Failed to delete folder: ${result.error}`);
+        showErrorToast({ title: 'Delete Failed', message: result.error });
       }
     }
   }
@@ -618,12 +619,12 @@ export function initSavedProjectsUI({
   async function showProjectFileManager(projectId) {
     const project = await getProject(projectId);
     if (!project) {
-      alert('Project not found');
+      showErrorToast({ title: 'Not Found', message: 'The requested project could not be found.' });
       return;
     }
 
     if (project.kind !== 'zip' || !project.projectFiles) {
-      alert('This feature is only available for ZIP projects');
+      showErrorToast({ title: 'Not Available', message: 'File management is only available for ZIP projects.' });
       return;
     }
 
@@ -912,7 +913,7 @@ export function initSavedProjectsUI({
             (p) => p.startsWith(newPrefix) && !p.startsWith(oldPrefix)
           );
           if (conflict) {
-            alert(`Folder "${safeName}" already exists.`);
+            showErrorToast({ title: 'Name Conflict', message: `Folder "${safeName}" already exists.` });
             return;
           }
 
@@ -948,7 +949,7 @@ export function initSavedProjectsUI({
             stateManager.announceChange(`Folder renamed to "${safeName}"`);
             renderFmView();
           } else {
-            alert(`Failed to rename folder: ${result.error}`);
+            showErrorToast({ title: 'Rename Failed', message: result.error });
           }
         });
       });
@@ -968,9 +969,10 @@ export function initSavedProjectsUI({
 
           if (newPath === oldPath) return;
           if (currentFiles[newPath] !== undefined) {
-            alert(
-              `A file named "${safeName}" already exists${folder ? ` in ${folder}` : ''}.`
-            );
+            showErrorToast({
+              title: 'Name Conflict',
+              message: `A file named "${safeName}" already exists${folder ? ` in ${folder}` : ''}.`,
+            });
             return;
           }
 
@@ -994,7 +996,7 @@ export function initSavedProjectsUI({
             stateManager.announceChange(`File renamed to "${safeName}"`);
             renderFmView();
           } else {
-            alert(`Failed to rename file: ${result.error}`);
+            showErrorToast({ title: 'Rename Failed', message: result.error });
           }
         });
       });
@@ -1021,7 +1023,7 @@ export function initSavedProjectsUI({
             stateManager.announceChange(`Deleted file "${fileName}"`);
             renderFmView();
           } else {
-            alert(`Failed to delete file: ${result.error}`);
+            showErrorToast({ title: 'Delete Failed', message: result.error });
           }
         });
       });
@@ -1038,9 +1040,10 @@ export function initSavedProjectsUI({
             project.mainFilePath &&
             project.mainFilePath.startsWith(folderPrefix)
           ) {
-            alert(
-              `Cannot delete folder "${folderName}" because it contains the main file. Move or change the main file first.`
-            );
+            showErrorToast({
+              title: 'Cannot Delete Folder',
+              message: `Folder "${folderName}" contains the main file. Move or change the main file first.`,
+            });
             return;
           }
 
@@ -1080,7 +1083,7 @@ export function initSavedProjectsUI({
             stateManager.announceChange(`Deleted folder "${folderName}"`);
             renderFmView();
           } else {
-            alert(`Failed to delete folder: ${result.error}`);
+            showErrorToast({ title: 'Delete Failed', message: result.error });
           }
         });
       });
@@ -1157,7 +1160,7 @@ export function initSavedProjectsUI({
               );
               renderFmView();
             } else {
-              alert(`Failed to add files: ${result.error}`);
+              showErrorToast({ title: 'Add Files Failed', message: result.error });
             }
           }
         });
@@ -1181,7 +1184,7 @@ export function initSavedProjectsUI({
           p.startsWith(newFolderPrefix)
         );
         if (exists) {
-          alert(`Folder "${safeName}" already exists.`);
+          showErrorToast({ title: 'Name Conflict', message: `Folder "${safeName}" already exists.` });
           return;
         }
 
@@ -1198,7 +1201,7 @@ export function initSavedProjectsUI({
           stateManager.announceChange(`Created folder "${safeName}"`);
           renderFmView();
         } else {
-          alert(`Failed to create folder: ${result.error}`);
+          showErrorToast({ title: 'Create Folder Failed', message: result.error });
         }
       });
     }
@@ -1259,7 +1262,7 @@ export function initSavedProjectsUI({
     try {
       const project = await getProject(projectId);
       if (!project) {
-        alert('Project not found');
+        showErrorToast({ title: 'Not Found', message: 'The requested project could not be found.' });
         return;
       }
 
@@ -1340,7 +1343,12 @@ export function initSavedProjectsUI({
     } catch (error) {
       dismissOverlay();
       console.error('Error loading saved project:', error);
-      alert(`Failed to load project: ${error.message}`);
+      showErrorModal({
+        title: 'Project Load Failed',
+        message: 'The saved project could not be loaded.',
+        suggestion: 'The project data may be corrupted. Try deleting and re-saving it.',
+        technical: error.message,
+      });
     }
   }
 
@@ -1487,7 +1495,12 @@ export function initSavedProjectsUI({
         updateStatus(`Saved: ${projectName}`);
         await renderSavedProjectsList();
       } else {
-        alert(`Failed to save project: ${result.error}`);
+        showErrorModal({
+          title: 'Save Failed',
+          message: 'The project could not be saved.',
+          suggestion: 'Check available browser storage space and try again.',
+          technical: result.error,
+        });
       }
 
       closeModal(modal);
@@ -1548,7 +1561,7 @@ export function initSavedProjectsUI({
     try {
       const project = await getProject(projectId);
       if (!project) {
-        alert('Project not found');
+        showErrorToast({ title: 'Not Found', message: 'The requested project could not be found.' });
         return;
       }
 
@@ -1609,7 +1622,7 @@ export function initSavedProjectsUI({
         const notes = notesTextarea.value.trim();
 
         if (!name) {
-          alert('Project name cannot be empty');
+          showErrorToast({ title: 'Name Required', message: 'Project name cannot be empty.' });
           return;
         }
 
@@ -1624,7 +1637,7 @@ export function initSavedProjectsUI({
           updateStatus(`Updated: ${name}`);
           await renderSavedProjectsList();
         } else {
-          alert(`Failed to update project: ${result.error}`);
+          showErrorToast({ title: 'Update Failed', message: result.error });
         }
 
         closeModal(modal);
@@ -1646,7 +1659,11 @@ export function initSavedProjectsUI({
       nameInput.select();
     } catch (error) {
       console.error('Error showing edit modal:', error);
-      alert(`Failed to load project: ${error.message}`);
+      showErrorModal({
+        title: 'Project Load Failed',
+        message: 'Could not load project details for editing.',
+        technical: error.message,
+      });
     }
   }
 
@@ -1658,7 +1675,7 @@ export function initSavedProjectsUI({
     try {
       const project = await getProject(projectId);
       if (!project) {
-        alert('Project not found');
+        showErrorToast({ title: 'Not Found', message: 'The requested project could not be found.' });
         return;
       }
 
@@ -1678,11 +1695,11 @@ export function initSavedProjectsUI({
         updateStatus(`Deleted: ${project.name}`);
         await renderSavedProjectsList();
       } else {
-        alert(`Failed to delete project: ${result.error}`);
+        showErrorToast({ title: 'Delete Failed', message: result.error });
       }
     } catch (error) {
       console.error('Error deleting project:', error);
-      alert(`Failed to delete project: ${error.message}`);
+      showErrorToast({ title: 'Delete Failed', message: error.message });
     }
   }
 

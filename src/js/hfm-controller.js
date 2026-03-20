@@ -22,6 +22,7 @@ import {
   STORAGE_KEY_HFM_FONT_SCALE,
   STORAGE_KEY_HFM_PERSIST_FADE,
 } from './storage-keys.js';
+import { showErrorToast } from './error-translator.js';
 
 // ---------------------------------------------------------------------------
 // Standalone utilities (no HFM state dependency)
@@ -94,7 +95,7 @@ export function exportFormatFromMenu(format) {
   const state = stateManager.getState();
   const outputData = state.generatedOutput?.data || state.stl;
   if (!outputData) {
-    alert('No rendered model to export. Run Render first.');
+    showErrorToast({ title: 'No Rendered Model', message: 'No rendered model to export. Run Render first.' });
     return;
   }
   const stateFormat = (
@@ -103,9 +104,10 @@ export function exportFormatFromMenu(format) {
     'stl'
   ).toLowerCase();
   if (stateFormat !== format) {
-    alert(
-      `The current render is ${stateFormat.toUpperCase()}. To export as ${format.toUpperCase()}, change the output format and click Generate first.`
-    );
+    showErrorToast({
+      title: 'Format Mismatch',
+      message: `The current render is ${stateFormat.toUpperCase()}. To export as ${format.toUpperCase()}, change the output format and click Generate first.`,
+    });
     return;
   }
   const filename = generateFilename(

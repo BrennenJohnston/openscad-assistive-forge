@@ -1410,14 +1410,12 @@ async function initApp() {
               await fileHandler.collectFilesFromDir(dirHandle, dirHandle.name, files);
             } catch (collectErr) {
               dismissOverlay();
-              alert(`Error reading folder contents: ${collectErr.message}`);
+              showErrorToast({ title: 'Folder Read Error', message: collectErr.message });
               return;
             }
             if (files.length === 0) {
               dismissOverlay();
-              alert(
-                'No files found in the selected folder. The folder may be empty.'
-              );
+              showErrorToast({ title: 'Empty Folder', message: 'No files found in the selected folder. The folder may be empty.' });
               return;
             }
             dismissOverlay();
@@ -1428,7 +1426,7 @@ async function initApp() {
               updateStatus('Folder selection cancelled');
               return;
             }
-            alert(`Folder import error: ${err.message}`);
+            showErrorToast({ title: 'Folder Import Error', message: err.message });
           }
         } else {
           // Fallback to webkitdirectory input
@@ -1448,7 +1446,7 @@ async function initApp() {
           await fileHandler.handleFolderImport(files);
           importFolderInput.value = '';
         } catch (err) {
-          alert(`Folder import error: ${err.message}`);
+          showErrorToast({ title: 'Folder Import Error', message: err.message });
         }
       });
     }
@@ -7942,14 +7940,11 @@ if (rounded) {
           );
 
           if (alreadySet2D) {
-            const userMessage =
-              `${currentFormat.toUpperCase()} Export Issue\n\n` +
-              `The "${actualGenerateValue}" setting is selected, but the rendering engine ` +
-              `could not produce 2D geometry. This can happen due to browser-based rendering ` +
-              `limitations with complex models.\n\n` +
-              `Try: Re-generate, or export the 3D model as STL and use desktop OpenSCAD ` +
-              `for SVG/DXF export.`;
-            alert(userMessage);
+            showErrorModal({
+              title: `${currentFormat.toUpperCase()} Export Issue`,
+              message: `The "${actualGenerateValue}" setting is selected, but the rendering engine could not produce 2D geometry. This can happen due to browser-based rendering limitations with complex models.`,
+              suggestion: 'Re-generate, or export the 3D model as STL and use desktop OpenSCAD for SVG/DXF export.',
+            });
           } else {
             showDependencyGuidanceModal({
               label: 'generate',
@@ -7969,10 +7964,12 @@ if (rounded) {
         `Error: ${friendlyError.title}. ${friendlyError.explanation}`
       );
 
-      // Show user-friendly error in alert (using translated message)
-      const userMessage = `${friendlyError.title}\n\n${friendlyError.explanation}\n\nTry: ${friendlyError.suggestion}`;
-
-      alert(userMessage);
+      showErrorModal({
+        title: friendlyError.title,
+        message: friendlyError.explanation,
+        suggestion: friendlyError.suggestion,
+        technical: error.message,
+      });
     } finally {
       primaryActionBtn.disabled = false;
       // Hide cancel button
@@ -8022,7 +8019,7 @@ if (rounded) {
       const state = stateManager.getState();
 
       if (!state.uploadedFile) {
-        alert('No file uploaded yet');
+        showErrorToast({ title: 'No File Loaded', message: 'Upload a .scad or .zip file first.' });
         return;
       }
 
@@ -8144,7 +8141,7 @@ if (rounded) {
     publishProjectBtn.addEventListener('click', () => {
       const state = stateManager.getState();
       if (!state.uploadedFile) {
-        alert('No file uploaded yet. Upload a .scad or .zip file first.');
+        showErrorToast({ title: 'No File Loaded', message: 'Upload a .scad or .zip file first.' });
         return;
       }
 
@@ -8397,12 +8394,12 @@ if (rounded) {
     const state = stateManager.getState();
 
     if (!state.uploadedFile) {
-      alert('No file uploaded yet');
+      showErrorToast({ title: 'No File Loaded', message: 'Upload a .scad or .zip file first.' });
       return;
     }
 
     if (renderQueue.isAtMaxCapacity()) {
-      alert('Queue is full (maximum 20 jobs)');
+      showErrorToast({ title: 'Queue Full', message: 'The render queue is full (maximum 20 jobs).' });
       return;
     }
 
@@ -8474,7 +8471,7 @@ if (rounded) {
   // Clear All button
   clearQueueBtn?.addEventListener('click', () => {
     if (renderQueue.isQueueProcessing()) {
-      alert('Cannot clear queue while processing');
+      showErrorToast({ title: 'Queue Busy', message: 'Cannot clear the queue while processing is in progress.' });
       return;
     }
 
@@ -8522,7 +8519,7 @@ if (rounded) {
       updateStatus('Imported queue from JSON');
     } catch (error) {
       console.error('Queue import error:', error);
-      alert('Failed to import queue: ' + error.message);
+      showErrorToast({ title: 'Queue Import Failed', message: error.message });
     }
 
     // Clear file input
@@ -8588,7 +8585,7 @@ if (rounded) {
           renderQueue.removeJob(jobId);
           renderQueueList();
         } catch (error) {
-          alert(error.message);
+          showErrorToast({ title: 'Remove Failed', message: error.message });
         }
         break;
     }
@@ -8652,7 +8649,7 @@ if (rounded) {
     const state = stateManager.getState();
 
     if (!state.uploadedFile) {
-      alert('No file uploaded yet');
+      showErrorToast({ title: 'No File Loaded', message: 'Upload a .scad or .zip file first.' });
       return;
     }
 
@@ -9260,7 +9257,7 @@ if (rounded) {
     const state = stateManager.getState();
 
     if (!state.uploadedFile) {
-      alert('No model loaded');
+      showErrorToast({ title: 'No Model Loaded', message: 'Upload a model before saving a preset.' });
       return;
     }
 
@@ -9324,7 +9321,7 @@ if (rounded) {
         ?.value.trim();
 
       if (!name) {
-        alert('Please enter a preset name');
+        showErrorToast({ title: 'Name Required', message: 'Please enter a preset name.' });
         return;
       }
 
@@ -9408,7 +9405,7 @@ if (rounded) {
 
         closeSavePresetModal();
       } catch (error) {
-        alert(`Failed to save preset: ${error.message}`);
+        showErrorToast({ title: 'Preset Save Failed', message: error.message });
       }
     });
 
@@ -9440,7 +9437,7 @@ if (rounded) {
       if (result.errors?.length > 0) {
         message += `\n\nErrors:\n${result.errors.join('\n')}`;
       }
-      alert(message);
+      showErrorToast({ title: 'Import Complete', message });
       updatePresetDropdown();
       if (result.presets?.length > 0) {
         const last = result.presets[result.presets.length - 1];
@@ -9455,9 +9452,9 @@ if (rounded) {
       showManagePresetsModal();
     } else {
       const errorMsg = result.errors?.length
-        ? `Import failed:\n${result.errors.join('\n')}`
+        ? `Import failed: ${result.errors.join('; ')}`
         : 'No valid designs found in the selected file(s).';
-      alert(errorMsg);
+      showErrorToast({ title: 'Import Failed', message: errorMsg });
     }
   }
 
@@ -9466,7 +9463,7 @@ if (rounded) {
     const state = stateManager.getState();
 
     if (!state.uploadedFile) {
-      alert('No model loaded');
+      showErrorToast({ title: 'No Model Loaded', message: 'Upload a model before managing presets.' });
       return;
     }
 
@@ -9775,9 +9772,10 @@ if (rounded) {
                 }
               });
               if (!hasValidContent) {
-                alert(
-                  'The selected file(s) contain no valid preset data. Import cancelled to protect your existing designs.'
-                );
+                showErrorToast({
+                  title: 'Invalid Import Data',
+                  message: 'The selected file(s) contain no valid preset data. Import cancelled to protect your existing designs.',
+                });
                 return;
               }
 
@@ -9819,7 +9817,7 @@ if (rounded) {
             );
             _handleImportResult(result, currentModelName);
           } catch (error) {
-            alert(`Failed to import designs: ${error.message}`);
+            showErrorToast({ title: 'Import Failed', message: error.message });
           }
         };
         input.click();
@@ -10885,7 +10883,7 @@ if (rounded) {
   resetGroupBtn?.addEventListener('click', () => {
     const state = stateManager.getState();
     if (!state.schema || !state.schema.groups) {
-      alert('No model loaded');
+      showErrorToast({ title: 'No Model Loaded', message: 'Upload a model with parameter groups first.' });
       return;
     }
 
@@ -10961,7 +10959,7 @@ if (rounded) {
   viewParamsJsonBtn?.addEventListener('click', () => {
     const state = stateManager.getState();
     if (!state.uploadedFile) {
-      alert('No file uploaded');
+      showErrorToast({ title: 'No File Loaded', message: 'Upload a .scad or .zip file first.' });
       return;
     }
 
@@ -11001,7 +10999,7 @@ if (rounded) {
   exportChangedBtn?.addEventListener('click', () => {
     const state = stateManager.getState();
     if (!state.uploadedFile || !state.schema) {
-      alert('No file uploaded');
+      showErrorToast({ title: 'No File Loaded', message: 'Upload a .scad or .zip file first.' });
       return;
     }
 
