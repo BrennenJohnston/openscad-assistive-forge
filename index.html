@@ -2646,6 +2646,10 @@
               aria-label="OpenSCAD code editor"
               aria-live="polite"
             >
+              <!-- Mobile touch-drag resize handle -->
+              <div class="expert-mode-drag-handle" aria-hidden="true">
+                <span class="drag-handle-bar"></span>
+              </div>
               <div class="expert-mode-header">
                 <span class="expert-mode-title">
                   <span aria-hidden="true">{ }</span> OpenSCAD Code
@@ -2656,6 +2660,20 @@
                   ></span>
                 </span>
                 <div class="expert-mode-actions">
+                  <button type="button"
+                    id="expertModeCollapseBtn"
+                    class="btn btn-sm btn-icon mobile-only"
+                    aria-expanded="true"
+                    aria-label="Collapse code editor"
+                    title="Collapse editor"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"
+                      aria-hidden="true">
+                      <path d="M4 6l4 4 4-4" stroke="currentColor"
+                        stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round"/>
+                    </svg>
+                  </button>
                   <button type="button"
                     id="expertRunPreviewBtn"
                     class="btn btn-sm btn-primary"

@@ -12544,6 +12544,31 @@ body.tutorial-body-locked {
   overflow: hidden;
 }
 
+/* Mobile drag handle — hidden by default, shown via layout.css media query */
+.expert-mode-drag-handle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-xs) 0;
+  cursor: ns-resize;
+  touch-action: none;
+  flex-shrink: 0;
+}
+
+.expert-mode-drag-handle .drag-handle-bar {
+  width: 36px;
+  height: 4px;
+  border-radius: var(--border-radius-pill);
+  background: var(--color-border);
+}
+
+/* CodeMirror 6 and textarea fill their container */
+.expert-mode-body .cm-editor {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
 /* Textarea Editor Styles */
 .textarea-editor {
   display: flex;
@@ -12877,6 +12902,10 @@ body.tutorial-body-locked {
 
   .expert-mode-panel {
     border: 2px solid CanvasText !important;
+  }
+
+  .expert-mode-drag-handle .drag-handle-bar {
+    background: CanvasText !important;
   }
 
   .expert-mode-header {

@@ -6554,6 +6554,85 @@ if (rounded) {
       });
     }
 
+    // Mobile: collapse toggle for bottom-sheet expert panel
+    const expertCollapseBtn = document.getElementById('expertModeCollapseBtn');
+    if (expertCollapseBtn) {
+      expertCollapseBtn.addEventListener('click', () => {
+        const isCollapsed = expertModePanel.classList.toggle('expert-mode-collapsed');
+        expertCollapseBtn.setAttribute('aria-expanded', String(!isCollapsed));
+        expertCollapseBtn.setAttribute(
+          'aria-label',
+          isCollapsed ? 'Expand code editor' : 'Collapse code editor'
+        );
+        // Clear any inline height set by drag resize
+        const paramPanel = expertModePanel.closest('.param-panel');
+        if (paramPanel) paramPanel.style.maxHeight = '';
+      });
+    }
+
+    // Mobile: touch-drag resize on the bottom-sheet handle
+    const dragHandle = expertModePanel.querySelector('.expert-mode-drag-handle');
+    if (dragHandle) {
+      let dragStartY = 0;
+      let dragStartHeight = 0;
+
+      dragHandle.addEventListener('touchstart', (e) => {
+        const paramPanel = expertModePanel.closest('.param-panel');
+        if (!paramPanel) return;
+        dragStartY = e.touches[0].clientY;
+        dragStartHeight = paramPanel.offsetHeight;
+        paramPanel.style.transition = 'none';
+        e.preventDefault();
+      }, { passive: false });
+
+      dragHandle.addEventListener('touchmove', (e) => {
+        const paramPanel = expertModePanel.closest('.param-panel');
+        if (!paramPanel) return;
+        const deltaY = dragStartY - e.touches[0].clientY;
+        const maxH = window.innerHeight * 0.7;
+        const minH = 48;
+        const newHeight = Math.min(maxH, Math.max(minH, dragStartHeight + deltaY));
+        paramPanel.style.maxHeight = `${newHeight}px`;
+        // Auto-uncollapse when dragging past minimum
+        if (newHeight > 80 && expertModePanel.classList.contains('expert-mode-collapsed')) {
+          expertModePanel.classList.remove('expert-mode-collapsed');
+          if (expertCollapseBtn) {
+            expertCollapseBtn.setAttribute('aria-expanded', 'true');
+            expertCollapseBtn.setAttribute('aria-label', 'Collapse code editor');
+          }
+        }
+        e.preventDefault();
+      }, { passive: false });
+
+      dragHandle.addEventListener('touchend', () => {
+        const paramPanel = expertModePanel.closest('.param-panel');
+        if (!paramPanel) return;
+        paramPanel.style.transition = '';
+        // Snap to collapsed if dragged very small
+        if (paramPanel.offsetHeight < 80) {
+          expertModePanel.classList.add('expert-mode-collapsed');
+          paramPanel.style.maxHeight = '';
+          if (expertCollapseBtn) {
+            expertCollapseBtn.setAttribute('aria-expanded', 'false');
+            expertCollapseBtn.setAttribute('aria-label', 'Expand code editor');
+          }
+        }
+      });
+    }
+
+    // Reset mobile bottom-sheet state when switching back to standard mode
+    modeManager.subscribe((newMode) => {
+      if (newMode === 'standard') {
+        expertModePanel.classList.remove('expert-mode-collapsed');
+        const paramPanel = expertModePanel.closest('.param-panel');
+        if (paramPanel) paramPanel.style.maxHeight = '';
+        if (expertCollapseBtn) {
+          expertCollapseBtn.setAttribute('aria-expanded', 'true');
+          expertCollapseBtn.setAttribute('aria-label', 'Collapse code editor');
+        }
+      }
+    });
+
     // Keyboard shortcut: Ctrl+E to toggle Expert Mode (registered via keyboard config below)
 
     // Sync code changes from parameter panel to editor state
