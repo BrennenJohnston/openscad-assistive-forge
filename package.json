@@ -43,7 +43,8 @@
     "validate:html": "vnu --also-check-css --also-check-svg index.html",
     "validate:html:built": "vnu --also-check-css --also-check-svg dist/index.html",
     "bloat-scan": "node scripts/bloat-scanner.js src/",
-    "import-check": "node scripts/import-check.js src/"
+    "import-check": "node scripts/import-check.js src/",
+    "css-variable-audit": "node scripts/css-variable-audit.js"
   },
   "keywords": [
     "openscad",
