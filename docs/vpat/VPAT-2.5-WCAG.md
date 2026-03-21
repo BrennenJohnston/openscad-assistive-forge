@@ -4,8 +4,8 @@
 
 **Version**: 2.5 (February 2024 VPAT Format)  
 **Product**: OpenSCAD Assistive Forge  
-**Product Version**: 4.2.0  
-**Report Date**: 2026-03-16  
+**Product Version**: 4.3.0
+**Report Date**: 2026-03-20
 **Contact**: [Project Maintainer via GitHub Issues]
 
 ---
@@ -127,9 +127,9 @@ The VPAT is a registered trademark of the Information Technology Industry Counci
 | Field | Value |
 |-------|-------|
 | **Product Name** | OpenSCAD Assistive Forge |
-| **Product Version** | 4.2.0 |
-| **Report Version** | 2.0 |
-| **Report Date** | 2026-03-16 |
+| **Product Version** | 4.3.0 |
+| **Report Version** | 3.0 |
+| **Report Date** | 2026-03-20 |
 | **VPAT Version** | 2.5 |
 | **Evaluation Methods** | Automated (axe-core, Lighthouse), Manual testing, Screen reader testing (NVDA, JAWS, VoiceOver) |
 | **Testing Environment** | Chrome 134, Firefox 136, Safari 18, Edge 134 on Windows 11 and macOS 15 |
@@ -179,4 +179,5 @@ The VPAT is a registered trademark of the Information Technology Industry Counci
 |---------|------|-------------|
 | 1.0 | 2026-02-02 | Initial VPAT for version 1.0 |
 | 1.1 | 2026-02-14 | Updated 2.4.3 and 4.1.3 with focus management and live region improvements |
+| 3.0 | 2026-03-20 | v4.3.0: CSP enforcement, all alert() replaced with accessible dialogs, WAI-ARIA menubar, role-path cards, forced-colors support, mobile layout |
 | 2.0 | 2026-03-16 | v4.2.0 audit: updated version/dates, browser versions, AT versions; changed 2.1.2 and 3.3.1 to Partially Supports with remarks; added Expert Mode, vector parameters, memory monitoring features |

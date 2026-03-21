@@ -256,9 +256,11 @@ export async function initSavedProjectsDB() {
                   project.overlayFiles = project.overlayFiles ?? {};
                   project.presets = project.presets ?? [];
                   cursor.update(project);
-                  console.log(
-                    `[Saved Projects] Migrated project: ${project.name}`
-                  );
+                  if (import.meta.env.DEV) {
+                    console.log(
+                      `[Saved Projects] Migrated project: ${project.name}`
+                    );
+                  }
                 }
                 cursor.continue();
               } else {
@@ -606,9 +608,11 @@ export async function listSavedProjects() {
     if (storageType === 'indexeddb') {
       try {
         projects = await getFromIndexedDB();
-        console.log(
-          `[Saved Projects] Retrieved ${projects.length} project(s) from IndexedDB`
-        );
+        if (import.meta.env.DEV) {
+          console.log(
+            `[Saved Projects] Retrieved ${projects.length} project(s) from IndexedDB`
+          );
+        }
       } catch (indexedDbError) {
         console.error(
           '[Saved Projects] IndexedDB read failed, trying localStorage:',
@@ -616,15 +620,19 @@ export async function listSavedProjects() {
         );
         // Fall back to localStorage if IndexedDB fails
         projects = getFromLocalStorage();
-        console.log(
-          `[Saved Projects] Fallback: Retrieved ${projects.length} project(s) from localStorage`
-        );
+        if (import.meta.env.DEV) {
+          console.log(
+            `[Saved Projects] Fallback: Retrieved ${projects.length} project(s) from localStorage`
+          );
+        }
       }
     } else {
       projects = getFromLocalStorage();
-      console.log(
-        `[Saved Projects] Retrieved ${projects.length} project(s) from localStorage`
-      );
+      if (import.meta.env.DEV) {
+        console.log(
+          `[Saved Projects] Retrieved ${projects.length} project(s) from localStorage`
+        );
+      }
     }
 
     // Sort by lastLoadedAt (most recent first), then savedAt
@@ -749,13 +757,17 @@ export async function saveProject({
         await saveToIndexedDB(project);
         if (useBatchedStorage) {
           await saveProjectFilesInBatches(project.id, filesObj);
+          if (import.meta.env.DEV) {
+            console.log(
+              `[Saved Projects] Project files saved in ${Math.ceil(fileCount / LARGE_FILES_BATCH_SIZE)} batch(es) to PROJECT_FILES_STORE: ${project.name}`
+            );
+          }
+        }
+        if (import.meta.env.DEV) {
           console.log(
-            `[Saved Projects] Project files saved in ${Math.ceil(fileCount / LARGE_FILES_BATCH_SIZE)} batch(es) to PROJECT_FILES_STORE: ${project.name}`
+            `[Saved Projects] Project saved to IndexedDB: ${project.name}`
           );
         }
-        console.log(
-          `[Saved Projects] Project saved to IndexedDB: ${project.name}`
-        );
       } catch (indexedDbError) {
         console.error(
           '[Saved Projects] IndexedDB save failed:',
@@ -775,9 +787,11 @@ export async function saveProject({
         const projects = getFromLocalStorage();
         projects.push(projectForLS);
         saveToLocalStorage(projects);
-        console.log(
-          `[Saved Projects] Fallback: Project saved to localStorage: ${project.name}`
-        );
+        if (import.meta.env.DEV) {
+          console.log(
+            `[Saved Projects] Fallback: Project saved to localStorage: ${project.name}`
+          );
+        }
       }
 
       // Also save to localStorage as backup (best-effort, ignore errors)
@@ -796,13 +810,15 @@ export async function saveProject({
               ? { ...project, projectFiles: null }
               : project;
           if (pfLen > LS_MAX_PROJECT_FILES_BYTES) {
-            console.log(
-              `[Saved Projects] Project files too large for LS backup (${(pfLen / 1024 / 1024).toFixed(1)}MB), saving metadata-only copy to localStorage`
-            );
+            if (import.meta.env.DEV) {
+              console.log(
+                `[Saved Projects] Project files too large for LS backup (${(pfLen / 1024 / 1024).toFixed(1)}MB), saving metadata-only copy to localStorage`
+              );
+            }
           }
           lsProjects.push(projectForLS);
           saveToLocalStorage(lsProjects);
-          console.log('[Saved Projects] Backup copy saved to localStorage');
+          if (import.meta.env.DEV) console.log('[Saved Projects] Backup copy saved to localStorage');
         }
       } catch (lsError) {
         // localStorage backup failed - not critical
@@ -815,9 +831,11 @@ export async function saveProject({
       const projects = getFromLocalStorage();
       projects.push(project);
       saveToLocalStorage(projects);
-      console.log(
-        `[Saved Projects] Project saved to localStorage: ${project.name}`
-      );
+      if (import.meta.env.DEV) {
+        console.log(
+          `[Saved Projects] Project saved to localStorage: ${project.name}`
+        );
+      }
     }
 
     return { success: true, id: project.id };
@@ -858,7 +876,7 @@ export async function getProject(id) {
       const lsProjects = getFromLocalStorage();
       project = lsProjects.find((p) => p.id === id);
       if (project && storageType === 'indexeddb') {
-        console.log('[Saved Projects] Project found in localStorage fallback');
+        if (import.meta.env.DEV) console.log('[Saved Projects] Project found in localStorage fallback');
       }
     }
 
@@ -1077,7 +1095,7 @@ export async function deleteProject(id) {
     if (storageType === 'indexeddb') {
       try {
         await deleteFromIndexedDB(id);
-        console.log(`[Saved Projects] Deleted from IndexedDB: ${id}`);
+        if (import.meta.env.DEV) console.log(`[Saved Projects] Deleted from IndexedDB: ${id}`);
       } catch (indexedDbError) {
         console.error(
           '[Saved Projects] IndexedDB delete failed:',
@@ -1091,7 +1109,7 @@ export async function deleteProject(id) {
     const filtered = projects.filter((p) => p.id !== id);
     try {
       saveToLocalStorage(filtered);
-      console.log(`[Saved Projects] Deleted from localStorage: ${id}`);
+      if (import.meta.env.DEV) console.log(`[Saved Projects] Deleted from localStorage: ${id}`);
     } catch (lsError) {
       console.warn(
         '[Saved Projects] localStorage delete failed:',
@@ -1146,7 +1164,7 @@ export async function clearAllSavedProjects() {
     if (storageType === 'indexeddb') {
       try {
         await clearIndexedDB();
-        console.log('[Saved Projects] Cleared IndexedDB');
+        if (import.meta.env.DEV) console.log('[Saved Projects] Cleared IndexedDB');
       } catch (indexedDbError) {
         console.error(
           '[Saved Projects] IndexedDB clear failed:',
@@ -1158,7 +1176,7 @@ export async function clearAllSavedProjects() {
     // Also clear localStorage
     try {
       localStorage.removeItem(LS_KEY);
-      console.log('[Saved Projects] Cleared localStorage');
+      if (import.meta.env.DEV) console.log('[Saved Projects] Cleared localStorage');
     } catch (lsError) {
       console.warn(
         '[Saved Projects] localStorage clear failed:',
@@ -1220,7 +1238,7 @@ export async function getStorageDiagnostics() {
     diagnostics.localStorageReadError = e.message;
   }
 
-  console.log('[Saved Projects] Storage diagnostics:', diagnostics);
+  if (import.meta.env.DEV) console.log('[Saved Projects] Storage diagnostics:', diagnostics);
   return diagnostics;
 }
 
@@ -1271,7 +1289,7 @@ export async function createFolder({ name, parentId = null, color = null }) {
         request.onsuccess = () => resolve();
         request.onerror = () => reject(request.error);
       });
-      console.log(`[Saved Projects] Folder created: ${folder.name}`);
+      if (import.meta.env.DEV) console.log(`[Saved Projects] Folder created: ${folder.name}`);
     } else {
       // localStorage fallback - store folders in a separate key (also used when v2 stores don't exist)
       const folders = getFoldersFromLocalStorage();
@@ -1332,9 +1350,11 @@ export async function listFolders() {
     if (storageType === 'indexeddb' && db) {
       // Check if folders store exists (v2 schema) - gracefully handle v1 databases
       if (!db.objectStoreNames.contains(FOLDERS_STORE)) {
-        console.log(
-          '[Saved Projects] Folders store not found (v1 database), returning empty array'
-        );
+        if (import.meta.env.DEV) {
+          console.log(
+            '[Saved Projects] Folders store not found (v1 database), returning empty array'
+          );
+        }
         return getFoldersFromLocalStorage();
       }
       return new Promise((resolve, reject) => {
@@ -1395,7 +1415,7 @@ export async function renameFolder(id, newName) {
       }
     }
 
-    console.log(`[Saved Projects] Folder renamed to: ${folder.name}`);
+    if (import.meta.env.DEV) console.log(`[Saved Projects] Folder renamed to: ${folder.name}`);
     return { success: true };
   } catch (error) {
     console.error('[Saved Projects] Error renaming folder:', error);
@@ -1460,7 +1480,7 @@ export async function deleteFolder(id, deleteContents = false) {
       saveFoldersToLocalStorage(filtered);
     }
 
-    console.log(`[Saved Projects] Folder deleted: ${folder.name}`);
+    if (import.meta.env.DEV) console.log(`[Saved Projects] Folder deleted: ${folder.name}`);
     return { success: true };
   } catch (error) {
     console.error('[Saved Projects] Error deleting folder:', error);
@@ -1525,7 +1545,7 @@ export async function moveFolder(id, newParentId) {
       }
     }
 
-    console.log(`[Saved Projects] Folder moved: ${folder.name}`);
+    if (import.meta.env.DEV) console.log(`[Saved Projects] Folder moved: ${folder.name}`);
     return { success: true };
   } catch (error) {
     console.error('[Saved Projects] Error moving folder:', error);
@@ -1680,9 +1700,11 @@ export async function moveProject(projectId, folderId) {
       saveToLocalStorage(lsProjects);
     }
 
-    console.log(
-      `[Saved Projects] Project moved: ${project.name} to folder ${folderId || 'root'}`
-    );
+    if (import.meta.env.DEV) {
+      console.log(
+        `[Saved Projects] Project moved: ${project.name} to folder ${folderId || 'root'}`
+      );
+    }
     return { success: true };
   } catch (error) {
     console.error('[Saved Projects] Error moving project:', error);
@@ -1757,7 +1779,7 @@ export async function addProjectFile({
       });
     }
 
-    console.log(`[Saved Projects] File added to project: ${path}`);
+    if (import.meta.env.DEV) console.log(`[Saved Projects] File added to project: ${path}`);
     return { success: true, id: fileRecord.id };
   } catch (error) {
     console.error('[Saved Projects] Error adding project file:', error);
@@ -1839,7 +1861,7 @@ export async function deleteProjectFile(fileId) {
       });
     }
 
-    console.log(`[Saved Projects] File deleted: ${fileId}`);
+    if (import.meta.env.DEV) console.log(`[Saved Projects] File deleted: ${fileId}`);
     return { success: true };
   } catch (error) {
     console.error('[Saved Projects] Error deleting project file:', error);
@@ -1900,9 +1922,11 @@ export async function storeAsset({ data, mimeType, fileName = null }) {
       });
     }
 
-    console.log(
-      `[Saved Projects] Asset stored: ${asset.id} (${asset.size} bytes)`
-    );
+    if (import.meta.env.DEV) {
+      console.log(
+        `[Saved Projects] Asset stored: ${asset.id} (${asset.size} bytes)`
+      );
+    }
     return { success: true, id: asset.id };
   } catch (error) {
     console.error('[Saved Projects] Error storing asset:', error);
@@ -1955,7 +1979,7 @@ export async function deleteAsset(id) {
       });
     }
 
-    console.log(`[Saved Projects] Asset deleted: ${id}`);
+    if (import.meta.env.DEV) console.log(`[Saved Projects] Asset deleted: ${id}`);
     return { success: true };
   } catch (error) {
     console.error('[Saved Projects] Error deleting asset:', error);
@@ -2026,7 +2050,7 @@ export async function saveOverlayToProject(
       await saveToIndexedDB(projectToSave);
     }
 
-    console.log(`[Saved Projects] Overlay saved to project: ${fileName}`);
+    if (import.meta.env.DEV) console.log(`[Saved Projects] Overlay saved to project: ${fileName}`);
     return { success: true, assetId: assetResult.id };
   } catch (error) {
     console.error('[Saved Projects] Error saving overlay to project:', error);
@@ -2151,7 +2175,7 @@ export async function savePresetToProject(
       await saveToIndexedDB(projectToSave);
     }
 
-    console.log(`[Saved Projects] Preset saved to project: ${name}`);
+    if (import.meta.env.DEV) console.log(`[Saved Projects] Preset saved to project: ${name}`);
     return { success: true };
   } catch (error) {
     console.error('[Saved Projects] Error saving preset to project:', error);

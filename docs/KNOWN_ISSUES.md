@@ -2,7 +2,7 @@
 
 Things we know about but haven't fixed yet, along with workarounds you can use in the meantime. If you hit something not listed here, please [open an issue](https://github.com/BrennenJohnston/openscad-assistive-forge/issues).
 
-**Last updated**: 2026-03-16
+**Last updated**: 2026-03-20
 
 ---
 
@@ -122,20 +122,6 @@ Things we know about but haven't fixed yet, along with workarounds you can use i
 
 ---
 
-#### KI-008: Firefox and WebKit E2E Suites Non-Blocking in CI
-
-**Status**: Acknowledged (by design for v4.2.0)  
-**Affected**: CI pipeline — Firefox and WebKit E2E test jobs  
-**Severity**: Medium
-
-**Description**: The Firefox and WebKit E2E test jobs in `.github/workflows/test.yml` run with `continue-on-error: true`, meaning failures do not block the CI pipeline. Most failures (~80%) are infrastructure-related — timeouts caused by single-worker execution and WASM initialization overhead — not application bugs. Firefox has 2 additional browser-specific test skips for contrast and color-scheme emulation not supported by Playwright.
-
-**Decision for v4.2.0**: Keep `continue-on-error: true`. Removing it without resolving the infrastructure issues would make CI unreliable. Core browser testing (Chromium + Edge) remains blocking.
-
-**Plan for v4.3.0**: Resolve infrastructure issues (parallel workers, WASM caching, timeout tuning), then remove `continue-on-error` per the M3 exit criteria in the workflow comments.
-
----
-
 #### KI-009: E2E Tests Need Combobox-Aware Preset Selectors
 
 **Status**: Workaround applied (flag disabled in test)
@@ -182,6 +168,12 @@ Things we know about but haven't fixed yet, along with workarounds you can use i
 ---
 
 ## Resolved Issues
+
+### v4.3.0 CI Stabilization (2026-03-20)
+
+| Issue | Description | Resolution |
+|-------|-------------|------------|
+| KI-008 | Firefox and WebKit E2E suites non-blocking in CI | Parallel workers (2), per-project timeout increases (90 s test / 15 s action / 45 s navigation), Liberation font caching, `continue-on-error` removed |
 
 ### Parity Remediation (2026-03-12)
 

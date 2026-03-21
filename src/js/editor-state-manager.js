@@ -65,8 +65,8 @@ export class EditorStateManager {
     /** @type {Array<Object>} */
     this.errors = [];
 
-    /** @type {Object|null} - Reference to Monaco editor instance */
-    this.monacoInstance = null;
+    /** @type {Object|null} - Reference to active editor instance (CodeMirror or TextareaEditor) */
+    this.editorInstance = null;
 
     /** @type {HTMLTextAreaElement|null} - Reference to textarea element */
     this.textareaElement = null;
@@ -79,11 +79,11 @@ export class EditorStateManager {
   }
 
   /**
-   * Set Monaco editor reference
-   * @param {Object} monaco - Monaco editor instance
+   * Set active editor reference (CodeMirrorEditor or TextareaEditor)
+   * @param {Object|null} editor - Editor instance implementing the shared editor API
    */
-  setMonacoInstance(monaco) {
-    this.monacoInstance = monaco;
+  setEditorInstance(editor) {
+    this.editorInstance = editor;
   }
 
   /**
@@ -246,50 +246,36 @@ export class EditorStateManager {
    * @private
    */
   _captureFromExpertMode() {
-    if (this.monacoInstance) {
-      this._captureFromMonaco();
+    if (this.editorInstance) {
+      this._captureFromEditor();
     } else if (this.textareaElement) {
       this._captureFromTextarea();
     }
   }
 
   /**
-   * Capture state from Monaco editor
+   * Capture state from the active editor (CodeMirror or TextareaEditor)
+   * using the shared editor API: getValue(), getSelection()
    * @private
    */
-  _captureFromMonaco() {
-    const editor = this.monacoInstance;
+  _captureFromEditor() {
+    const editor = this.editorInstance;
     if (!editor) return;
 
     this.source = editor.getValue();
 
-    const position = editor.getPosition();
-    if (position) {
-      this.cursor = {
-        line: position.lineNumber,
-        column: position.column,
-      };
-    }
+    const sel = editor.getSelection();
+    if (sel) {
+      const startPos = this._offsetToPosition(sel.start);
+      const endPos = this._offsetToPosition(sel.end);
 
-    const selection = editor.getSelection();
-    if (selection && !selection.isEmpty()) {
-      this.selection = {
-        start: {
-          line: selection.startLineNumber,
-          column: selection.startColumn,
-        },
-        end: {
-          line: selection.endLineNumber,
-          column: selection.endColumn,
-        },
-      };
-    } else {
-      this.selection = null;
-    }
+      this.cursor = startPos;
 
-    const visibleRanges = editor.getVisibleRanges();
-    if (visibleRanges && visibleRanges.length > 0) {
-      this.scrollLine = visibleRanges[0].startLineNumber;
+      if (sel.start !== sel.end) {
+        this.selection = { start: startPos, end: endPos };
+      } else {
+        this.selection = null;
+      }
     }
   }
 
@@ -321,44 +307,37 @@ export class EditorStateManager {
    * @private
    */
   _restoreToExpertMode() {
-    if (this.monacoInstance) {
-      this._restoreToMonaco();
+    if (this.editorInstance) {
+      this._restoreToEditor();
     } else if (this.textareaElement) {
       this._restoreToTextarea();
     }
   }
 
   /**
-   * Restore state to Monaco editor
+   * Restore state to the active editor (CodeMirror or TextareaEditor)
+   * using the shared editor API: setValue(), setCursorPosition(), setSelection(),
+   * scrollToLine(), focus()
    * @private
    */
-  _restoreToMonaco() {
-    const editor = this.monacoInstance;
+  _restoreToEditor() {
+    const editor = this.editorInstance;
     if (!editor) return;
 
-    // Set content
     editor.setValue(this.source);
 
-    // Restore cursor
-    editor.setPosition({
-      lineNumber: this.cursor.line,
-      column: this.cursor.column,
-    });
+    editor.setCursorPosition(this.cursor.line, this.cursor.column);
 
-    // Restore selection if any
     if (this.selection) {
-      editor.setSelection({
-        startLineNumber: this.selection.start.line,
-        startColumn: this.selection.start.column,
-        endLineNumber: this.selection.end.line,
-        endColumn: this.selection.end.column,
-      });
+      const startOffset = this._positionToOffset(this.selection.start);
+      const endOffset = this._positionToOffset(this.selection.end);
+      editor.setSelection(startOffset, endOffset);
     }
 
-    // Restore scroll position
-    editor.revealLineInCenter(this.scrollLine);
+    if (editor.scrollToLine) {
+      editor.scrollToLine(this.scrollLine);
+    }
 
-    // Focus editor
     editor.focus();
   }
 

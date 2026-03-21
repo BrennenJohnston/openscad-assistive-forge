@@ -9,15 +9,13 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: isCI,
   retries: isCI ? 2 : 0,
-  // Limit workers on Windows to reduce terminal hangs/stalls
-  workers: isCI || isWindows ? 1 : undefined,
+  // Windows: 1 worker (terminal hang avoidance). CI: 2 workers (ubuntu-latest has 2 vCPUs).
+  workers: isWindows ? 1 : (isCI ? 2 : undefined),
   // Use list reporter in CI to prevent HTML reporter hangs, HTML locally
   reporter: isCI ? [['list'], ['html', { open: 'never' }]] : 'html',
   
-  // Global timeout to prevent hangs (per test: 60s, total suite: 10min in CI)
-  // Edge suite with 1 worker + retries runs ~7-8min; 600s gives safe headroom
-  // for the expanded COFF/color-passthrough test suite.
-  // Local: 30min to accommodate large test suites on Windows with 1 worker
+  // Global timeout: 10min CI (2 workers + retries), 30min local (1 worker on Windows)
+  // Firefox/WebKit projects override per-test timeout to 90s (see below).
   timeout: 60000,
   globalTimeout: isCI ? 600000 : 1800000,
   
@@ -45,16 +43,22 @@ export default defineConfig({
       name: 'msedge',
       use: { ...devices['Desktop Edge'], channel: 'msedge' },
     },
-    // Firefox - Tier 1 browser
+    // Firefox - Tier 1 browser (extended timeouts for WASM init overhead)
     {
       name: 'firefox',
-      use: { ...devices['Desktop Firefox'] },
+      use: {
+        ...devices['Desktop Firefox'],
+        actionTimeout: 15000,
+        navigationTimeout: 45000,
+      },
+      timeout: 90000,
     },
     // Visual regression tests (Milestone 3: Performance & Stability)
     // Run separately with: npm run test:visual
     {
       name: 'visual-regression',
       testDir: './tests/visual',
+      snapshotPathTemplate: '{testDir}/baselines/{platform}/{arg}{ext}',
       use: {
         ...devices['Desktop Chrome'],
         // Consistent viewport for visual comparisons
@@ -63,10 +67,15 @@ export default defineConfig({
       // Visual tests should not run with regular E2E
       testMatch: '**/*.visual.spec.js',
     },
-    // WebKit/Safari - Tier 2 browser (requires macOS runners)
+    // WebKit/Safari - Tier 2 browser (requires macOS runners, extended timeouts)
     {
       name: 'webkit',
-      use: { ...devices['Desktop Safari'] },
+      use: {
+        ...devices['Desktop Safari'],
+        actionTimeout: 15000,
+        navigationTimeout: 45000,
+      },
+      timeout: 90000,
     },
   ],
   

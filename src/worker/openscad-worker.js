@@ -67,7 +67,7 @@ function _resolveWasmAsset(path, prefix) {
     !wasmAssetLogShown &&
     (path.endsWith('.wasm') || path.endsWith('.data'))
   ) {
-    console.log('[Worker] Resolved WASM asset URL:', resolved);
+    if (import.meta.env.DEV) console.log('[Worker] Resolved WASM asset URL:', resolved);
     wasmAssetLogShown = true;
   }
 
@@ -294,7 +294,7 @@ async function initWASM(baseUrl = '', cachedCapabilities = null) {
 
     // Set asset base URL (derive from self.location if not provided)
     assetBaseUrl = baseUrl || self.location.origin;
-    console.log('[Worker] Asset base URL:', assetBaseUrl);
+    if (import.meta.env.DEV) console.log('[Worker] Asset base URL:', assetBaseUrl);
 
     self.postMessage({
       type: 'PROGRESS',
@@ -309,7 +309,7 @@ async function initWASM(baseUrl = '', cachedCapabilities = null) {
     const wasmBasePath = `${assetBaseUrl}/wasm/openscad-official`;
     const wasmJsUrl = `${wasmBasePath}/openscad.js`;
 
-    console.log('[Worker] Loading official OpenSCAD from:', wasmJsUrl);
+    if (import.meta.env.DEV) console.log('[Worker] Loading official OpenSCAD from:', wasmJsUrl);
 
     // Integrity check: verify WASM artifacts match expected manifest.
     // Guards against corrupted or tampered files before they produce silent wrong results.
@@ -322,9 +322,11 @@ async function initWASM(baseUrl = '', cachedCapabilities = null) {
         integrityData = await integrityResp.json();
         console.log(`[Worker] WASM build: ${integrityData.build}`);
         if (integrityData.knownIssues?.length) {
-          console.log(
-            `[Worker] Known issues: ${integrityData.knownIssues.length} documented`
-          );
+          if (import.meta.env.DEV) {
+            console.log(
+              `[Worker] Known issues: ${integrityData.knownIssues.length} documented`
+            );
+          }
         }
 
         // Verify sizes of both JS loader and WASM binary
@@ -370,7 +372,7 @@ async function initWASM(baseUrl = '', cachedCapabilities = null) {
       }
     } catch (integrityErr) {
       // Non-fatal — integrity check is informational, not blocking
-      console.log('[Worker] Integrity check skipped:', integrityErr.message);
+      if (import.meta.env.DEV) console.log('[Worker] Integrity check skipped:', integrityErr.message);
     }
 
     // Dynamic import of official WASM module
@@ -397,7 +399,7 @@ async function initWASM(baseUrl = '', cachedCapabilities = null) {
         if (path.endsWith('.wasm') || path.endsWith('.data')) {
           const resolved = `${wasmBasePath}/${path}`;
           if (!wasmAssetLogShown) {
-            console.log('[Worker] Resolved WASM asset:', resolved);
+            if (import.meta.env.DEV) console.log('[Worker] Resolved WASM asset:', resolved);
             wasmAssetLogShown = true;
           }
           return resolved;
@@ -452,9 +454,11 @@ async function initWASM(baseUrl = '', cachedCapabilities = null) {
     // the actual render) corrupts Emscripten global state and degrades geometry output.
     let detectedCapabilities;
     if (cachedCapabilities) {
-      console.log(
-        '[Worker] Using cached capabilities — skipping callMain --help'
-      );
+      if (import.meta.env.DEV) {
+        console.log(
+          '[Worker] Using cached capabilities — skipping callMain --help'
+        );
+      }
       detectedCapabilities = cachedCapabilities;
     } else {
       self.postMessage({
@@ -572,7 +576,7 @@ async function mountFonts() {
 
       const fontData = await response.arrayBuffer();
       FS.writeFile(`${fontPath}/${fontFile}`, new Uint8Array(fontData));
-      console.log(`[Worker] Mounted font: ${fontFile}`);
+      if (import.meta.env.DEV) console.log(`[Worker] Mounted font: ${fontFile}`);
       mounted++;
     } catch (error) {
       console.warn(`[Worker] Failed to mount font ${fontFile}:`, error.message);
@@ -581,9 +585,11 @@ async function mountFonts() {
   }
 
   if (mounted > 0) {
-    console.log(
-      `[Worker] Font mounting complete: ${mounted} mounted, ${failed} failed`
-    );
+    if (import.meta.env.DEV) {
+      console.log(
+        `[Worker] Font mounting complete: ${mounted} mounted, ${failed} failed`
+      );
+    }
   } else {
     console.warn(
       '[Worker] No fonts mounted - text() function may not work correctly'
@@ -698,7 +704,7 @@ async function checkCapabilities() {
       capabilities.version = versionMatch[1];
     }
 
-    console.log('[Worker] Detected capabilities:', capabilities);
+    if (import.meta.env.DEV) console.log('[Worker] Detected capabilities:', capabilities);
     return capabilities;
   } catch (error) {
     console.error('[Worker] Capability check failed:', error);
@@ -738,7 +744,7 @@ async function mountFiles(files, options = {}) {
   if (useWorkDir) {
     try {
       FS.mkdir(WORK_DIR);
-      console.log(`[Worker FS] Created work directory: ${WORK_DIR}`);
+      if (import.meta.env.DEV) console.log(`[Worker FS] Created work directory: ${WORK_DIR}`);
     } catch (error) {
       if (error.code !== 'EEXIST') {
         console.warn(
@@ -775,7 +781,7 @@ async function mountFiles(files, options = {}) {
   for (const dir of Array.from(directories).sort()) {
     try {
       FS.mkdir(dir);
-      console.log(`[Worker FS] Created directory: ${dir}`);
+      if (import.meta.env.DEV) console.log(`[Worker FS] Created directory: ${dir}`);
     } catch (error) {
       // Directory may already exist, ignore
       if (error.code !== 'EEXIST') {
@@ -808,9 +814,11 @@ async function mountFiles(files, options = {}) {
       if (typeof content === 'string' && content.startsWith('data:')) {
         try {
           fsContent = decodeDataUrl(content);
-          console.log(
-            `[Worker FS] Decoded data URL for: ${resolvedPath} (${fsContent.byteLength} binary bytes)`
-          );
+          if (import.meta.env.DEV) {
+            console.log(
+              `[Worker FS] Decoded data URL for: ${resolvedPath} (${fsContent.byteLength} binary bytes)`
+            );
+          }
         } catch (decodeErr) {
           console.warn(
             `[Worker FS] Failed to decode data URL for ${resolvedPath}, mounting as text:`,
@@ -825,16 +833,18 @@ async function mountFiles(files, options = {}) {
         fsContent instanceof Uint8Array
           ? fsContent.byteLength
           : fsContent.length;
-      console.log(`[Worker FS] Mounted file: ${resolvedPath} (${size} bytes)`);
+      if (import.meta.env.DEV) console.log(`[Worker FS] Mounted file: ${resolvedPath} (${size} bytes)`);
     } catch (error) {
       console.error(`[Worker FS] Failed to mount file ${resolvedPath}:`, error);
       throw new Error(`Failed to mount file: ${filePath}`);
     }
   }
 
-  console.log(
-    `[Worker FS] Successfully mounted ${files.size} files under ${baseDir || '/'}`
-  );
+  if (import.meta.env.DEV) {
+    console.log(
+      `[Worker FS] Successfully mounted ${files.size} files under ${baseDir || '/'}`
+    );
+  }
 
   return {
     workDir: baseDir,
@@ -932,7 +942,7 @@ function clearMountedFiles() {
   }
 
   mountedFiles.clear();
-  console.log('[Worker FS] Cleared all mounted files');
+  if (import.meta.env.DEV) console.log('[Worker FS] Cleared all mounted files');
 }
 
 /**
@@ -986,7 +996,7 @@ async function mountLibraries(libraries) {
     if (mountedLibraries.has(lib.id)) {
       const rootExists = !!FS.analyzePath(libRoot).exists;
       if (rootExists) {
-        console.log(`[Worker FS] Library ${lib.id} already mounted`);
+        if (import.meta.env.DEV) console.log(`[Worker FS] Library ${lib.id} already mounted`);
         continue;
       }
       // Stale mount tracked (root missing) - remount
@@ -994,7 +1004,7 @@ async function mountLibraries(libraries) {
     }
 
     try {
-      console.log(`[Worker FS] Mounting library: ${lib.id} from ${lib.path}`);
+      if (import.meta.env.DEV) console.log(`[Worker FS] Mounting library: ${lib.id} from ${lib.path}`);
 
       // Fetch library file list from manifest or directory listing
       // For now, we'll try to mount the library directory recursively
@@ -1054,7 +1064,7 @@ async function mountLibraries(libraries) {
         }
 
         mountedLibraries.add(lib.id);
-        console.log(`[Worker FS] Successfully mounted library: ${lib.id}`);
+        if (import.meta.env.DEV) console.log(`[Worker FS] Successfully mounted library: ${lib.id}`);
       } else {
         // No manifest, try to fetch common files
         console.warn(`[Worker FS] No manifest found for ${lib.id}, skipping`);
@@ -1069,9 +1079,11 @@ async function mountLibraries(libraries) {
     }
   }
 
-  console.log(
-    `[Worker FS] Successfully mounted ${mountedLibraries.size} libraries (${totalMounted} files)`
-  );
+  if (import.meta.env.DEV) {
+    console.log(
+      `[Worker FS] Successfully mounted ${mountedLibraries.size} libraries (${totalMounted} files)`
+    );
+  }
 }
 
 /**
@@ -1086,7 +1098,7 @@ function clearLibraries() {
   // Note: We don't actually delete library files from FS as they may be reused
   // Just clear the tracking set
   mountedLibraries.clear();
-  console.log('[Worker FS] Cleared library tracking');
+  if (import.meta.env.DEV) console.log('[Worker FS] Cleared library tracking');
 }
 
 /**
@@ -1448,7 +1460,7 @@ async function renderWithCallMain(
     }
   } else if (supportsManifold && !useManifold) {
     performanceFlags.push('--backend=CGAL');
-    console.log('[Worker] Using CGAL (stable) backend instead of Manifold');
+    if (import.meta.env.DEV) console.log('[Worker] Using CGAL (stable) backend instead of Manifold');
   }
   if (enableLazyUnion) {
     performanceFlags.push('--enable=lazy-union');
@@ -1525,9 +1537,11 @@ async function renderWithCallMain(
             /* path may not exist */
           }
           module.FS.symlink(libPath, symlinkPath);
-          console.log(
-            `[Worker FS] Symlinked ${symlinkPath} -> ${libPath} for include resolution`
-          );
+          if (import.meta.env.DEV) {
+            console.log(
+              `[Worker FS] Symlinked ${symlinkPath} -> ${libPath} for include resolution`
+            );
+          }
         } catch (e) {
           console.warn(
             `[Worker FS] Failed to symlink ${libId} for include resolution:`,
@@ -1581,7 +1595,7 @@ async function renderWithCallMain(
       inputFile,
     ];
 
-    console.log('[Worker] Calling OpenSCAD with args:', args);
+    if (import.meta.env.DEV) console.log('[Worker] Calling OpenSCAD with args:', args);
     let inputExists = false;
     let _inputSize = null;
     try {
@@ -2408,7 +2422,7 @@ async function render(payload) {
         },
       });
 
-      console.log('[Worker] Files mounted under:', mountResult.workDir);
+      if (import.meta.env.DEV) console.log('[Worker] Files mounted under:', mountResult.workDir);
     }
 
     // Mount uploaded [file] parameter bytes into the worker FS so that
@@ -2432,9 +2446,11 @@ async function render(payload) {
           try {
             module.FS.writeFile(op.mountPath, op.data);
             mountedFiles.set(op.mountPath, op.data);
-            console.log(
-              `[Worker FS] Mounted file param "${op.paramName}": ${op.mountPath} (${op.data.byteLength} bytes)`
-            );
+            if (import.meta.env.DEV) {
+              console.log(
+                `[Worker FS] Mounted file param "${op.paramName}": ${op.mountPath} (${op.data.byteLength} bytes)`
+              );
+            }
           } catch (err) {
             console.warn(
               `[Worker FS] Failed to mount file param "${op.paramName}":`,
@@ -2446,7 +2462,7 @@ async function render(payload) {
       renderParameters = fileParamResult.resolvedParams;
     }
 
-    console.log('[Worker] Rendering with parameters:', renderParameters);
+    if (import.meta.env.DEV) console.log('[Worker] Rendering with parameters:', renderParameters);
 
     self.postMessage({
       type: 'PROGRESS',
@@ -2489,7 +2505,7 @@ async function render(payload) {
       renderStartTime = performance.now();
 
       // Always use callMain approach - official WASM uses callMain for all operations
-      console.log('[Worker] Using callMain with official OpenSCAD WASM');
+      if (import.meta.env.DEV) console.log('[Worker] Using callMain with official OpenSCAD WASM');
 
       // Determine main file path
       // For multi-file projects, use the work directory path
@@ -2499,7 +2515,7 @@ async function render(payload) {
       if (mainFile && mountResult && mountResult.workDir) {
         // Multi-file project: use the work directory path
         mainFileToUse = `${mountResult.workDir}/${mainFile}`;
-        console.log(`[Worker] Multi-file project: using ${mainFileToUse}`);
+        if (import.meta.env.DEV) console.log(`[Worker] Multi-file project: using ${mainFileToUse}`);
       } else if (mainFile && mountResult && mountResult.files.has(mainFile)) {
         // File was mounted but without work directory
         mainFileToUse = mountResult.files.get(mainFile);
@@ -2683,9 +2699,11 @@ async function render(payload) {
       },
       [outputBuffer]
     ); // Transfer ownership of ArrayBuffer
-    console.log(
-      `[Worker] Render complete: ${triangleCount} triangles in ${workerRenderMs}ms`
-    );
+    if (import.meta.env.DEV) {
+      console.log(
+        `[Worker] Render complete: ${triangleCount} triangles in ${workerRenderMs}ms`
+      );
+    }
   } catch (error) {
     // Clear timeout on error
     if (currentRenderTimeout) {

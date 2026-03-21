@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 
+const mockShowErrorToast = vi.fn()
+
 vi.mock('../../src/js/preview.js', () => ({
   PreviewManager: class {
     constructor() {}
@@ -15,6 +17,10 @@ vi.mock('../../src/js/preview.js', () => ({
   }
 }))
 
+vi.mock('../../src/js/error-translator.js', () => ({
+  showErrorToast: (...args) => mockShowErrorToast(...args),
+}))
+
 import { ComparisonView } from '../../src/js/comparison-view.js'
 import { escapeHtml } from '../../src/js/html-utils.js'
 
@@ -24,6 +30,7 @@ describe('ComparisonView', () => {
   let view
 
   beforeEach(() => {
+    mockShowErrorToast.mockClear()
     container = document.createElement('div')
     document.body.appendChild(container)
 
@@ -593,16 +600,14 @@ describe('ComparisonView', () => {
       expect(comparisonController.renderVariant).toHaveBeenCalledWith('v1')
     })
 
-    it('shows alert on render error', async () => {
+    it('shows toast on render error', async () => {
       await view.init()
       comparisonController.renderVariant.mockRejectedValueOnce(new Error('Render failed'))
-      const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {})
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
       
       await view.handleRenderVariant('v1')
       
-      expect(alertSpy).toHaveBeenCalledWith('Render failed: Render failed')
-      alertSpy.mockRestore()
+      expect(mockShowErrorToast).toHaveBeenCalledWith({ title: 'Render Failed', message: 'Render failed' })
       consoleSpy.mockRestore()
     })
   })
@@ -624,24 +629,26 @@ describe('ComparisonView', () => {
       window.removeEventListener('comparison:download-variant', eventSpy)
     })
 
-    it('shows alert when no STL available', () => {
-      const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {})
+    it('shows toast when no STL available', () => {
       comparisonController.getVariant.mockReturnValue({ id: 'v1', name: 'Test' })
       
       view.handleDownloadVariant('v1')
       
-      expect(alertSpy).toHaveBeenCalledWith('No STL available for this variant')
-      alertSpy.mockRestore()
+      expect(mockShowErrorToast).toHaveBeenCalledWith({
+        title: 'No STL Available',
+        message: 'No STL data is available for this variant.',
+      })
     })
 
-    it('shows alert when variant not found', () => {
-      const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {})
+    it('shows toast when variant not found', () => {
       comparisonController.getVariant.mockReturnValue(null)
       
       view.handleDownloadVariant('v1')
       
-      expect(alertSpy).toHaveBeenCalledWith('No STL available for this variant')
-      alertSpy.mockRestore()
+      expect(mockShowErrorToast).toHaveBeenCalledWith({
+        title: 'No STL Available',
+        message: 'No STL data is available for this variant.',
+      })
     })
   })
 
@@ -688,16 +695,14 @@ describe('ComparisonView', () => {
   })
 
   describe('Handle Render All Error', () => {
-    it('shows alert on error', async () => {
+    it('shows toast on error', async () => {
       await view.init()
       comparisonController.renderAllVariants.mockRejectedValueOnce(new Error('Render failed'))
-      const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {})
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
       
       await view.handleRenderAll()
       
-      expect(alertSpy).toHaveBeenCalled()
-      alertSpy.mockRestore()
+      expect(mockShowErrorToast).toHaveBeenCalled()
       consoleSpy.mockRestore()
     })
   })

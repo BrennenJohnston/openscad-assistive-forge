@@ -3,7 +3,6 @@
  * @license GPL-3.0-or-later
  */
 
-import JSZip from 'jszip';
 import { escapeHtml } from './html-utils.js';
 
 /**
@@ -13,6 +12,7 @@ import { escapeHtml } from './html-utils.js';
  */
 export async function extractZipFiles(zipFile) {
   try {
+    const { default: JSZip } = await import('jszip');
     const zip = new JSZip();
     const zipData = await zip.loadAsync(zipFile);
 

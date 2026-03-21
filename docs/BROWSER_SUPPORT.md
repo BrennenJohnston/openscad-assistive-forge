@@ -1,7 +1,7 @@
 # Browser Support Statement
 
-**Version**: 4.2.0  
-**Effective Date**: 2026-03-16  
+**Version**: 4.3.0  
+**Effective Date**: 2026-03-20  
 **Status**: Production
 
 ---
@@ -159,5 +159,6 @@ When reporting, please include:
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 4.3.0 | 2026-03-20 | Updated for v4.3.0 release; CSP enforcement, menubar, CodeMirror 6, CI stabilization |
 | 4.2.0 | 2026-03-16 | Updated for v4.2.0 release; Expert Mode, memory monitoring, vector parameters |
 | 4.1.0 | 2026-02-02 | Initial supported browsers statement |

@@ -30,8 +30,9 @@ const getEnvNumber = (name, fallback) => {
 
 // Configuration
 const CONFIG = {
-  // Maximum time to wait for tests (6 minutes for CI, 2 minutes local)
-  GLOBAL_TIMEOUT: getEnvNumber('PW_FAILSAFE_TIMEOUT', process.env.CI ? 360000 : 120000),
+  // Maximum time to wait for tests (6 minutes for CI, 30 minutes local)
+  // The full 1400+ test suite on Windows with 1 worker takes up to 30 minutes.
+  GLOBAL_TIMEOUT: getEnvNumber('PW_FAILSAFE_TIMEOUT', process.env.CI ? 360000 : 1800000),
   // Kill if no output for 90 seconds (indicates hang)
   IDLE_TIMEOUT: getEnvNumber('PW_FAILSAFE_IDLE_TIMEOUT', process.env.CI ? 90000 : 0),
   // Time to wait before force-killing hung process (10 seconds)

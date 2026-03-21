@@ -3634,6 +3634,48 @@ details summary:focus,
   .camera-drawer-section-title {
     color: CanvasText !important;
   }
+
+  /* Desktop camera panel */
+  .camera-panel {
+    background: Canvas !important;
+    border: 2px solid CanvasText !important;
+  }
+
+  .camera-btn,
+  .camera-btn-wide,
+  .camera-btn-full {
+    background: ButtonFace !important;
+    color: ButtonText !important;
+    border: 2px solid ButtonText !important;
+  }
+
+  .camera-btn:hover,
+  .camera-btn:focus,
+  .camera-btn-wide:hover,
+  .camera-btn-wide:focus,
+  .camera-btn-full:hover,
+  .camera-btn-full:focus {
+    background: Highlight !important;
+    color: HighlightText !important;
+    border-color: Highlight !important;
+  }
+
+  .camera-view-btn {
+    background: ButtonFace !important;
+    color: ButtonText !important;
+    border: 2px solid ButtonText !important;
+  }
+
+  .camera-view-btn:hover,
+  .camera-view-btn:focus {
+    background: Highlight !important;
+    color: HighlightText !important;
+    border-color: Highlight !important;
+  }
+
+  .camera-control-section-title {
+    color: CanvasText !important;
+  }
 }
 
 /* File info in preview drawer */
@@ -4211,5 +4253,97 @@ details summary:focus,
     :root[data-theme='dark'] .camera-focus-exit-btn {
       background: var(--color-bg-secondary) !important;
     }
+  }
+}
+
+/* ============================================================================
+   Expert Mode: Mobile Bottom-Sheet Layout (DEBT-13)
+   ============================================================================
+   On mobile, the param-panel is normally an off-canvas left drawer. When Expert
+   Mode is active, the panel converts to a bottom sheet so the code editor sits
+   below the 3D preview at full viewport width — far more usable than the narrow
+   off-canvas drawer for editing code.
+   ============================================================================ */
+@media (max-width: 767px) {
+  /* Convert param-panel from off-canvas drawer to bottom sheet */
+  .param-panel:has(.expert-mode-panel.active) {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    max-height: 40vh;
+    max-height: 40dvh;
+    transform: none;
+    border-right: none;
+    border-top: 2px solid var(--color-border);
+    border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0;
+    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.15);
+    z-index: calc(var(--z-index-modal-backdrop) + 10);
+    overflow: hidden;
+    transition: max-height var(--motion-base) ease;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .param-panel:has(.expert-mode-panel.active) {
+      transition: none;
+    }
+  }
+
+  /* Hide param-panel's own header — expert-mode-header serves that role */
+  .param-panel:has(.expert-mode-panel.active) > .panel-header {
+    display: none;
+  }
+
+  /* Expert Mode panel fills the bottom sheet */
+  .param-panel:has(.expert-mode-panel.active) .expert-mode-panel.active {
+    height: 100%;
+    border: none;
+    border-radius: 0;
+  }
+
+  /* Show drag handle only on mobile */
+  .expert-mode-panel.active .expert-mode-drag-handle {
+    display: flex;
+  }
+
+  /* Collapsed bottom sheet — only header visible */
+  .param-panel:has(.expert-mode-panel.expert-mode-collapsed) {
+    max-height: none;
+    height: auto;
+  }
+
+  .expert-mode-panel.expert-mode-collapsed .expert-mode-body {
+    display: none;
+  }
+
+  /* Rotate chevron when collapsed */
+  .expert-mode-panel.expert-mode-collapsed #expertModeCollapseBtn svg {
+    transform: rotate(180deg);
+  }
+
+  /* Preview panel needs bottom spacing so content isn't hidden behind the sheet */
+  .main-interface:has(.expert-mode-panel.active:not(.expert-mode-collapsed)) .preview-panel {
+    padding-bottom: calc(40vh + var(--actions-bar-collapsed-offset, 0px));
+  }
+
+  .main-interface:has(.expert-mode-panel.expert-mode-collapsed) .preview-panel {
+    padding-bottom: calc(3.5rem + var(--actions-bar-collapsed-offset, 0px));
+  }
+
+  /* Dark mode shadow */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) .param-panel:has(.expert-mode-panel.active) {
+      box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.4);
+    }
+  }
+
+  :root[data-theme='dark'] .param-panel:has(.expert-mode-panel.active) {
+    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.4);
+  }
+
+  /* High contrast border */
+  :root[data-high-contrast='true'] .param-panel:has(.expert-mode-panel.active) {
+    border-top: 3px solid var(--color-border);
   }
 }

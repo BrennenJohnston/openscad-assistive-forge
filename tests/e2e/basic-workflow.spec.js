@@ -12,9 +12,11 @@ test.beforeEach(async ({ page }) => {
 })
 
 test.describe('Basic Workflow - Upload → Customize → Download', () => {
-  // Note: This test requires file upload to trigger UI change, which may not work
-  // consistently in all headless browser environments. Skip if flaky.
-  test.skip('should complete full workflow with simple box', async ({ page }) => {
+  test('should complete full workflow with simple box', async ({ page }) => {
+    // Full WASM render + STL export takes 120s+ and the download event is unreliable
+    // in headless automated mode. Run manually via: npm run test:e2e:headed
+    test.skip(isCI, 'Full WASM render + download requires headed mode (too slow for automated CI)')
+    test.setTimeout(180_000) // WASM init + parameter extraction + full render + download
     // 1. Navigate to app
     await page.goto('/')
     
@@ -24,6 +26,13 @@ test.describe('Basic Workflow - Upload → Customize → Download', () => {
     // 3. Check that the upload zone is visible
     const uploadZone = page.locator('#uploadZone, .upload-zone').first()
     await expect(uploadZone).toBeVisible({ timeout: 5000 })
+
+    // Wait for WASM engine to be ready before file upload so parameter
+    // extraction completes and the UI transitions reliably.
+    await page.waitForSelector('body[data-wasm-ready="true"]', {
+      state: 'attached',
+      timeout: 120_000,
+    })
     
     // 4. Upload a test file - use the main file input, not the queue import input
     const fileInput = page.locator('#fileInput')
@@ -35,15 +44,25 @@ test.describe('Basic Workflow - Upload → Customize → Download', () => {
     
     // 6. Wait for main interface to become visible
     await expect(page.locator('#mainInterface')).toBeVisible({ timeout: 5000 })
+
+    // Dismiss save-project modal if it appears (shown after file load)
+    try {
+      const notNowBtn = page.locator('#saveProjectNotNow')
+      await notNowBtn.waitFor({ state: 'visible', timeout: 3000 })
+      await notNowBtn.click()
+      await page.waitForTimeout(300)
+    } catch {
+      // Modal didn't appear, continue
+    }
     
     // 7. Wait for parameter controls to be rendered in the visible parameters section
-    // Look specifically for range/number inputs in the param-groups area
+    // Look specifically for range/number inputs in the param-group area
     await expect(
-      page.locator('.param-groups input[type="range"], .param-groups input[type="number"]').first()
+      page.locator('.param-group input[type="range"], .param-group input[type="number"]').first()
     ).toBeVisible({ timeout: 10000 })
     
     // 8. Try to find and adjust a parameter (if any numeric input exists)
-    const numericInput = page.locator('.param-groups input[type="number"], .param-groups input[type="range"]').first()
+    const numericInput = page.locator('.param-group input[type="number"], .param-group input[type="range"]').first()
     if (await numericInput.isVisible({ timeout: 5000 })) {
       const currentValue = await numericInput.inputValue()
       console.log('Found numeric parameter with value:', currentValue)
@@ -72,8 +91,8 @@ test.describe('Basic Workflow - Upload → Customize → Download', () => {
       await expect(downloadBtn).toBeEnabled({ timeout: 60000 })
     }
     
-    // 9. Trigger download
-    const downloadPromise = page.waitForEvent('download', { timeout: 65000 })
+    // 9. Trigger download (WASM render can take up to 120s)
+    const downloadPromise = page.waitForEvent('download', { timeout: 120000 })
     await downloadBtn.click()
     
     const download = await downloadPromise

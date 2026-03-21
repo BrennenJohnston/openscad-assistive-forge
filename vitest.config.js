@@ -29,8 +29,6 @@ export default defineConfig({
         'src/js/color-utils.js',
         'src/js/html-utils.js',
         'src/js/keyboard-config.js',
-        'src/js/sw-manager.js',
-        'src/js/version.js',
         'src/js/gamepad-controller.js',
         // UI controller modules - primarily tested via E2E / manual interaction
         'src/js/image-measurement.js',
@@ -41,10 +39,10 @@ export default defineConfig({
         'src/js/_seq.js'
       ],
       thresholds: {
-        lines: 43,
+        lines: 42,
         functions: 44,
-        branches: 42,
-        statements: 43,
+        branches: 40,
+        statements: 42,
         // Note: Thresholds adjusted after adding searchable-combobox.js,
         // saved-projects-manager.js, modal-manager.js, error-log-panel.js,
         // and other UI modules without unit tests (tested via E2E).

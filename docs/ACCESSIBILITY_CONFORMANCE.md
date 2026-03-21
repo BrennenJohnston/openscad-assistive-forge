@@ -1,8 +1,8 @@
 # Accessibility Conformance Statement
 
 **Product**: OpenSCAD Assistive Forge  
-**Version**: 4.2.0  
-**Date**: 2026-03-16  
+**Version**: 4.3.0  
+**Date**: 2026-03-20  
 **Standard**: WCAG 2.2 Level AA
 
 > **Note:** For detailed, criterion-level conformance status with evidence links, see [`docs/vpat/conformance-decisions.md`](./vpat/conformance-decisions.md). This document provides a summary statement; the decisions log is the source of truth for WCAG criterion status.
@@ -198,4 +198,5 @@ This conformance statement represents our current understanding and testing resu
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0 | 2026-02-02 | Initial conformance statement |
+| 3.0 | 2026-03-20 | Updated for v4.3.0: CSP enforcement, accessible error dialogs, WAI-ARIA menubar, role-path cards |
 | 2.0 | 2026-03-16 | Updated for v4.2.0: version references, Expert Mode, vector parameters, memory monitoring |

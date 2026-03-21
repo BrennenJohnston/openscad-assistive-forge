@@ -72,7 +72,7 @@ export function initDrawerController() {
 
     // Show close button on mobile
     if (closeBtn) {
-      closeBtn.style.display = 'flex';
+      closeBtn.classList.remove('hidden');
     }
 
     // Lock body scroll
@@ -126,7 +126,7 @@ export function initDrawerController() {
 
     // Hide close button
     if (closeBtn) {
-      closeBtn.style.display = 'none';
+      closeBtn.classList.add('hidden');
     }
 
     // Unlock body scroll

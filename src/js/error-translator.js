@@ -336,3 +336,226 @@ export function clearFriendlyError(container) {
   container.innerHTML = '';
   container.classList.add('hidden');
 }
+
+// ---------------------------------------------------------------------------
+// Tiered error display: modal (critical) + toast (informational)
+// ---------------------------------------------------------------------------
+
+let _modalIdCounter = 0;
+
+/**
+ * Show a modal error dialog for critical errors that block workflow.
+ * Uses role="alertdialog" with focus trap and keyboard dismissal.
+ * @param {Object} options
+ * @param {string} options.title - Error title
+ * @param {string} options.message - Error explanation
+ * @param {string} [options.suggestion] - What the user can try
+ * @param {string} [options.technical] - Technical details (collapsible)
+ * @returns {Promise<void>} Resolves when the user dismisses the dialog
+ */
+export function showErrorModal({ title, message, suggestion, technical }) {
+  return new Promise((resolve) => {
+    const id = `error-modal-${++_modalIdCounter}`;
+    const titleId = `${id}-title`;
+    const descId = `${id}-desc`;
+
+    const overlay = document.createElement('div');
+    overlay.className = 'friendly-error-modal';
+    overlay.setAttribute('role', 'alertdialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.setAttribute('aria-labelledby', titleId);
+    overlay.setAttribute('aria-describedby', descId);
+    overlay.dataset.testid = 'friendly-error-modal';
+
+    const content = document.createElement('div');
+    content.className = 'friendly-error-modal-content';
+    overlay.appendChild(content);
+
+    // Header
+    const header = document.createElement('div');
+    header.className = 'friendly-error-modal-header';
+    content.appendChild(header);
+
+    const titleEl = document.createElement('h3');
+    titleEl.id = titleId;
+    titleEl.className = 'friendly-error-modal-title';
+    const iconSpan = document.createElement('span');
+    iconSpan.setAttribute('aria-hidden', 'true');
+    iconSpan.textContent = '\u26A0\uFE0F';
+    titleEl.appendChild(iconSpan);
+    titleEl.appendChild(document.createTextNode(' ' + title));
+    header.appendChild(titleEl);
+
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'friendly-error-modal-close';
+    closeBtn.setAttribute('aria-label', 'Close error dialog');
+    closeBtn.textContent = '\u00D7';
+    header.appendChild(closeBtn);
+
+    // Body
+    const body = document.createElement('div');
+    body.className = 'friendly-error-modal-body';
+    body.id = descId;
+    content.appendChild(body);
+
+    const messageEl = document.createElement('p');
+    messageEl.className = 'error-explanation';
+    messageEl.textContent = message;
+    body.appendChild(messageEl);
+
+    if (suggestion) {
+      const suggEl = document.createElement('p');
+      suggEl.className = 'error-suggestion';
+      const strong = document.createElement('strong');
+      strong.textContent = 'What to try:';
+      suggEl.appendChild(strong);
+      suggEl.appendChild(document.createTextNode(' ' + suggestion));
+      body.appendChild(suggEl);
+    }
+
+    if (technical) {
+      const details = document.createElement('details');
+      details.className = 'error-details-toggle';
+      const summary = document.createElement('summary');
+      summary.textContent = 'Show technical details';
+      details.appendChild(summary);
+      const pre = document.createElement('pre');
+      pre.className = 'error-technical';
+      pre.textContent = technical;
+      details.appendChild(pre);
+      body.appendChild(details);
+    }
+
+    // Footer
+    const footer = document.createElement('div');
+    footer.className = 'friendly-error-modal-footer';
+    content.appendChild(footer);
+
+    const okBtn = document.createElement('button');
+    okBtn.type = 'button';
+    okBtn.className = 'btn btn-primary';
+    okBtn.textContent = 'OK';
+    footer.appendChild(okBtn);
+
+    const cleanup = () => {
+      overlay.remove();
+      document.removeEventListener('keydown', keyHandler);
+      resolve();
+    };
+
+    closeBtn.addEventListener('click', cleanup);
+    okBtn.addEventListener('click', cleanup);
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) cleanup();
+    });
+
+    const keyHandler = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        cleanup();
+        return;
+      }
+      if (e.key === 'Tab') {
+        const focusable = overlay.querySelectorAll(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"]), summary'
+        );
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey) {
+          if (document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+          }
+        } else {
+          if (document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
+      }
+    };
+    document.addEventListener('keydown', keyHandler);
+
+    document.body.appendChild(overlay);
+    okBtn.focus();
+
+    announceError(`Error: ${title}. ${message}`);
+  });
+}
+
+function _getToastContainer() {
+  let container = document.getElementById('error-toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'error-toast-container';
+    container.className = 'error-toast-container';
+    document.body.appendChild(container);
+  }
+  return container;
+}
+
+/**
+ * Show a toast notification for non-blocking informational errors.
+ * Auto-dismisses after the specified duration.
+ * @param {Object} options
+ * @param {string} options.title - Toast title
+ * @param {string} options.message - Toast message
+ * @param {number} [options.duration=8000] - Auto-dismiss delay in ms (0 = no auto-dismiss)
+ */
+export function showErrorToast({ title, message, duration = 8000 }) {
+  const container = _getToastContainer();
+
+  const toast = document.createElement('div');
+  toast.className = 'error-toast';
+  toast.setAttribute('role', 'alert');
+
+  const icon = document.createElement('span');
+  icon.className = 'error-toast-icon';
+  icon.setAttribute('aria-hidden', 'true');
+  icon.textContent = '\u26A0\uFE0F';
+  toast.appendChild(icon);
+
+  const textWrap = document.createElement('div');
+  textWrap.className = 'error-toast-text';
+  toast.appendChild(textWrap);
+
+  const titleEl = document.createElement('strong');
+  titleEl.className = 'error-toast-title';
+  titleEl.textContent = title;
+  textWrap.appendChild(titleEl);
+
+  const msgEl = document.createElement('span');
+  msgEl.className = 'error-toast-message';
+  msgEl.textContent = message;
+  textWrap.appendChild(msgEl);
+
+  const dismissBtn = document.createElement('button');
+  dismissBtn.type = 'button';
+  dismissBtn.className = 'error-toast-dismiss';
+  dismissBtn.setAttribute('aria-label', 'Dismiss notification');
+  dismissBtn.textContent = '\u00D7';
+  toast.appendChild(dismissBtn);
+
+  let timeoutId = null;
+  const dismiss = () => {
+    if (timeoutId) clearTimeout(timeoutId);
+    toast.classList.add('error-toast-exit');
+    toast.addEventListener('animationend', () => toast.remove(), {
+      once: true,
+    });
+    setTimeout(() => {
+      if (toast.parentNode) toast.remove();
+    }, 400);
+  };
+
+  dismissBtn.addEventListener('click', dismiss);
+  container.appendChild(toast);
+
+  if (duration > 0) {
+    timeoutId = setTimeout(dismiss, duration);
+  }
+
+  announceError(`${title}. ${message}`);
+}

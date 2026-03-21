@@ -2,7 +2,7 @@
  * Mode Manager - Controls switching between Standard and Expert modes
  *
  * Standard Mode: Customizer UI with parameter sliders/inputs
- * Expert Mode: Code editor (Monaco or textarea fallback)
+ * Expert Mode: Code editor (CodeMirror 6 or textarea fallback)
  *
  * @license GPL-3.0-or-later
  */
@@ -15,7 +15,7 @@ import { announceImmediate } from './announcer.js';
  */
 
 /**
- * @typedef {'monaco' | 'textarea' | 'auto'} EditorType
+ * @typedef {'codemirror' | 'textarea' | 'auto'} EditorType
  */
 
 /**
@@ -93,7 +93,7 @@ export class ModeManager {
   }
 
   /**
-   * Store a reference to the active editor instance (MonacoEditor or TextareaEditor)
+   * Store a reference to the active editor instance (CodeMirrorEditor or TextareaEditor)
    * @param {Object|null} editor
    */
   setEditorInstance(editor) {
@@ -129,7 +129,7 @@ export class ModeManager {
    * @param {EditorType} type
    */
   setPreferredEditor(type) {
-    if (!['monaco', 'textarea', 'auto'].includes(type)) {
+    if (!['codemirror', 'textarea', 'auto'].includes(type)) {
       console.warn(`[ModeManager] Invalid editor type: ${type}`);
       return;
     }
@@ -234,11 +234,11 @@ export class ModeManager {
 
   /**
    * Determine which editor to use based on preferences and detection
-   * @returns {'monaco' | 'textarea'}
+   * @returns {'codemirror' | 'textarea'}
    */
   resolveEditorType() {
-    if (this.preferredEditor === 'monaco') {
-      return 'monaco';
+    if (this.preferredEditor === 'codemirror') {
+      return 'codemirror';
     }
 
     if (this.preferredEditor === 'textarea') {
@@ -251,19 +251,16 @@ export class ModeManager {
 
   /**
    * Auto-detect preferred editor based on user preferences and environment
-   * @returns {'monaco' | 'textarea'}
+   * @returns {'codemirror' | 'textarea'}
    * @private
    */
   _detectPreferredEditor() {
-    // Check accessibility hints
     const hints = {
       reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)')
         .matches,
       highContrast: window.matchMedia('(prefers-contrast: more)').matches,
-      // Note: Direct AT detection is unreliable; prefer user preference
     };
 
-    // Conservative default: if any hint suggests AT, offer textarea
     if (hints.highContrast) {
       console.log(
         '[ModeManager] High contrast detected, preferring textarea editor'
@@ -271,8 +268,7 @@ export class ModeManager {
       return 'textarea';
     }
 
-    // Default to Monaco for most users
-    return 'monaco';
+    return 'codemirror';
   }
 
   /**
@@ -310,19 +306,16 @@ export class ModeManager {
           return;
         }
       } else if (mode === 'expert') {
-        // Focus the code editor (textarea fallback or Monaco container)
+        const cmContent = document.querySelector('.cm-content');
+        if (cmContent) {
+          cmContent.focus();
+          return;
+        }
         const textarea = document.querySelector(
           '#textareaEditor, .textarea-editor textarea'
         );
         if (textarea) {
           textarea.focus();
-          return;
-        }
-        const monacoContainer = document.querySelector(
-          '.monaco-editor textarea'
-        );
-        if (monacoContainer) {
-          monacoContainer.focus();
           return;
         }
       }

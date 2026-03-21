@@ -204,27 +204,18 @@ export function getLocalStorageUsageBytes() {
 }
 
 /**
- * Clear all cached data (via service worker)
+ * Clear browser caches via Service Worker message and the CacheStorage API.
+ * Both strategies run in parallel; returns true if either succeeded.
  * @returns {Promise<boolean>}
  */
-export async function clearCachedData() {
-  let cacheCleared = false;
-  let storageCleared = false;
-  let indexedDbCleared = false;
+async function _clearBrowserCaches() {
+  const tasks = [];
 
-  const cacheTasks = [];
-
-  // Method 1: Send message to service worker
   if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-    cacheTasks.push(
+    tasks.push(
       new Promise((resolve) => {
-        // Repo reality: `public/sw.js` broadcasts {type:'CACHE_CLEARED'} to all clients.
         const onMessage = (event) => {
-          // Validate message type against allowlist
-          if (!isValidServiceWorkerMessage(event, ['CACHE_CLEARED'])) {
-            return; // Ignore invalid messages, keep listening
-          }
-
+          if (!isValidServiceWorkerMessage(event, ['CACHE_CLEARED'])) return;
           if (event.data.type === 'CACHE_CLEARED') {
             navigator.serviceWorker.removeEventListener('message', onMessage);
             resolve(true);
@@ -232,7 +223,6 @@ export async function clearCachedData() {
         };
         navigator.serviceWorker.addEventListener('message', onMessage);
         navigator.serviceWorker.controller.postMessage({ type: 'CLEAR_CACHE' });
-        // Timeout fallback
         setTimeout(() => {
           navigator.serviceWorker.removeEventListener('message', onMessage);
           resolve(false);
@@ -241,23 +231,30 @@ export async function clearCachedData() {
     );
   }
 
-  // Method 2: Clear Cache Storage API directly
   if ('caches' in window) {
-    cacheTasks.push(
-      (async () => {
-        const keys = await caches.keys();
-        await Promise.all(keys.map((key) => caches.delete(key)));
-        return true;
-      })()
+    tasks.push(
+      caches
+        .keys()
+        .then((keys) => Promise.all(keys.map((k) => caches.delete(k))))
+        .then(() => true)
     );
   }
 
-  if (cacheTasks.length > 0) {
-    const results = await Promise.allSettled(cacheTasks);
-    cacheCleared = results.some(
-      (result) => result.status === 'fulfilled' && result.value === true
-    );
-  }
+  if (tasks.length === 0) return false;
+
+  const results = await Promise.allSettled(tasks);
+  return results.some((r) => r.status === 'fulfilled' && r.value === true);
+}
+
+/**
+ * Clear all cached data (via service worker)
+ * @returns {Promise<boolean>}
+ */
+export async function clearCachedData() {
+  let storageCleared = false;
+  let indexedDbCleared = false;
+
+  const cacheCleared = await _clearBrowserCaches();
 
   // Clear local/session storage
   try {
@@ -459,48 +456,11 @@ export async function requestPersistentStorage() {
  * @returns {Promise<boolean>}
  */
 export async function clearAppCachesOnly() {
-  let cacheCleared = false;
-
-  // Method 1: Clear via Service Worker
-  if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-    try {
-      await new Promise((resolve) => {
-        const onMessage = (event) => {
-          if (!isValidServiceWorkerMessage(event, ['CACHE_CLEARED'])) return;
-          if (event.data.type === 'CACHE_CLEARED') {
-            navigator.serviceWorker.removeEventListener('message', onMessage);
-            resolve(true);
-          }
-        };
-        navigator.serviceWorker.addEventListener('message', onMessage);
-        navigator.serviceWorker.controller.postMessage({ type: 'CLEAR_CACHE' });
-        setTimeout(() => {
-          navigator.serviceWorker.removeEventListener('message', onMessage);
-          resolve(false);
-        }, 5000);
-      });
-      cacheCleared = true;
-    } catch (error) {
-      console.warn(
-        '[StorageManager] Service Worker cache clear failed:',
-        error
-      );
-    }
+  const cleared = await _clearBrowserCaches();
+  if (import.meta.env.DEV) {
+    console.log('[StorageManager] App caches cleared:', cleared);
   }
-
-  // Method 2: Clear Cache Storage API directly
-  if ('caches' in window) {
-    try {
-      const keys = await caches.keys();
-      await Promise.all(keys.map((key) => caches.delete(key)));
-      cacheCleared = true;
-    } catch (error) {
-      console.warn('[StorageManager] CacheStorage clear failed:', error);
-    }
-  }
-
-  console.log('[StorageManager] App caches cleared:', cacheCleared);
-  return cacheCleared;
+  return cleared;
 }
 
 /**
