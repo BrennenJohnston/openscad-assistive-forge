@@ -70,7 +70,14 @@ export function closeModal(modal) {
     state.focusTrap.deactivate();
 
     if (state.trigger && typeof state.trigger.focus === 'function') {
+      // WebKit requires a microtask boundary after focus trap deactivation
+      // before focus() reliably moves to the trigger element.
       state.trigger.focus();
+      requestAnimationFrame(() => {
+        if (document.activeElement !== state.trigger) {
+          state.trigger.focus();
+        }
+      });
     }
   }
 

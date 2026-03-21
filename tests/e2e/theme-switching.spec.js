@@ -232,10 +232,12 @@ test.describe('Theme Switching', () => {
     const themeButton = page.locator('#themeToggle')
     await expect(themeButton).toBeVisible()
 
-    // 1) Verify the button is reachable via Tab
+    // 1) Verify the button is reachable via Tab.
+    // WebKit may expose more focusable elements (e.g. the skip-link stays in
+    // the tab order even when off-screen), so allow extra iterations.
     await page.keyboard.press('Tab')
     let found = false
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 50; i++) {
       const id = await page.evaluate(() => document.activeElement?.id)
       if (id === 'themeToggle') { found = true; break }
       await page.keyboard.press('Tab')

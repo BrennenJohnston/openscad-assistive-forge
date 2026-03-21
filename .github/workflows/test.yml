@@ -7,6 +7,9 @@ on:
     branches: [main, develop]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   unit-tests:
     name: Unit Tests
@@ -287,8 +290,6 @@ jobs:
   visual-regression:
     name: Visual Regression (Linux)
     runs-on: ubuntu-latest
-    # Non-blocking until Linux baselines are committed.
-    # Generate with: gh workflow run visual-baselines.yml -f platform=linux
     continue-on-error: true
     
     steps:
@@ -310,8 +311,37 @@ jobs:
       - name: Install Playwright browsers (Chromium)
         run: npx playwright install --with-deps chromium
       
+      - name: Check for existing baselines
+        id: check-baselines
+        run: |
+          BASELINE_COUNT=$(find tests/visual/baselines/linux -name '*.png' 2>/dev/null | wc -l)
+          echo "baseline_count=$BASELINE_COUNT" >> "$GITHUB_OUTPUT"
+          if [ "$BASELINE_COUNT" -eq 0 ]; then
+            echo "No Linux baselines found — will generate them."
+          else
+            echo "Found $BASELINE_COUNT existing baselines."
+          fi
+      
+      - name: Generate baselines (first run)
+        if: steps.check-baselines.outputs.baseline_count == '0'
+        run: npx playwright test --project=visual-regression --update-snapshots
+      
       - name: Run visual regression tests
+        if: steps.check-baselines.outputs.baseline_count != '0'
         run: npx playwright test --project=visual-regression
+      
+      - name: Commit generated baselines
+        if: steps.check-baselines.outputs.baseline_count == '0'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tests/visual/baselines/linux/*.png
+          if git diff --cached --quiet; then
+            echo "No new baselines to commit."
+          else
+            git commit -m "ci: auto-generate Linux visual regression baselines"
+            git push
+          fi
       
       - name: Upload visual diff artifacts
         uses: actions/upload-artifact@v4
