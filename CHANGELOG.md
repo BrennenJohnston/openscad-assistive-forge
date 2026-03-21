@@ -9,6 +9,81 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [4.3.0] - 2026-03-20
+
+### Architecture, Security & Accessibility Release
+
+Major release completing the main.js decomposition (~6,300 lines extracted into 5 modules), enforcing Content-Security-Policy, replacing all `alert()` calls with accessible error dialogs, migrating the toolbar to WAI-ARIA menubar, and stabilizing cross-browser CI.
+
+### Added
+
+- **CodeMirror 6 editor** replacing dead Monaco Editor module
+  - CSP-compatible (uses constructable stylesheets, no `unsafe-inline` required)
+  - OpenSCAD language support with syntax highlighting
+  - Integrated into Expert Mode with editor-state-manager and mode-manager
+- **Accessible error dialogs** (`showFriendlyError`) replacing all 56 `alert()` calls
+  - Modal with `role="alertdialog"` for critical errors (WASM init, file corruption)
+  - Toast with `role="alert"` for informational messages (save success, format unsupported)
+  - Auto-focused close button with focus trap
+- **WAI-ARIA menubar** for toolbar navigation
+  - `role="menubar"` container with `role="menuitem"` triggers
+  - Arrow-key roving across 6 menus and within menu items
+  - Enter/Space activates, Escape closes, Home/End jump
+- **Accessibility role-path cards** on welcome screen
+  - 5 cards re-enabled: Keyboard-Only, Low Vision, Voice Input, Screen Reader, Advanced Makers
+  - Content updated with accurate feature references and documentation links
+- **Expert Mode mobile layout** for viewports below 768px
+  - Collapsible panel with max 40vh height
+  - Touch-friendly resize handle
+- **Forced-colors support** for camera D-pad buttons and code editor borders
+- **Mono high-contrast preview colors** (`mono-hc`, `mono-light-hc`) for differentiated 3D preview
+- **Automated benchmark runner** recording render times for 4 benchmark models
+- **CSS variable audit** verifying all semantic tokens have mono variant overrides
+- **Platform-specific visual regression baselines** (win32 + Linux directory structure)
+
+### Changed
+
+- **main.js decomposed** into 5 extracted modules (~6,300 lines removed):
+  - `overlay-grid-controller.js` — grid/overlay settings and SVG color management
+  - `saved-projects-ui.js` — project save/load/rename/delete UI
+  - `companion-files-controller.js` — include/use file detection and management
+  - `hfm-controller.js` — HFM/Alt View controller, confirm dialogs, URL sanitization
+  - `file-handler.js` — drag-drop, file input, URL load, and folder import handling
+- **Cache-clearing consolidated** into single `_clearBrowserCaches()` helper in storage-manager
+- **Content-Security-Policy enforced** (upgraded from Report-Only)
+  - Removed `unsafe-inline` from `style-src` directive
+  - Updated csp-reporter from report-only to enforcing mode
+- **Three.js granular imports** for tree-shaking (replaced `import('three')` with named imports)
+- **JSZip converted to dynamic import** for on-demand code splitting
+
+### Security
+
+- **CSP enforcement**: `Content-Security-Policy` header active (no longer Report-Only)
+- **`unsafe-inline` removed** from `style-src` — all styles via external CSS or constructable stylesheets
+- **SVG sanitizer hardened**: strips `<foreignObject>`, `<iframe>`, `<embed>`, `<object>`; blocks external `<use>` references and `data:` protocol in `href`/`xlink:href`
+
+### Fixed
+
+- Firefox/WebKit CI stabilized with parallel workers and WASM binary caching
+- Saved-projects and basic-workflow E2E tests un-skipped (modal timing and file upload fixes)
+- Expert Mode responsive layout prevents full-screen takeover on mobile
+
+### Removed
+
+- Orphaned `sw-manager.js` and `version.js` modules
+- Dead Monaco Editor module (`monaco-editor.js`, 730 lines)
+- ~1,600 lines of confirmed dead CSS rules
+- ~85 debug `console.log` calls gated behind `import.meta.env.DEV` flag
+
+### Technical
+
+- E2E: Firefox and WebKit CI jobs pass without `continue-on-error`
+- Visual regression: platform-specific baselines (win32 + Linux)
+- Benchmark runner outputs JSON for CI artifact collection
+- CSS variable audit enforces mono variant completeness
+
+---
+
 ## [4.2.0] - 2026-03-16
 
 ### Accessibility, Security & Expert Mode Release
@@ -907,6 +982,7 @@ Multi-variant comparison system for side-by-side parameter testing.
 - **v4.0.0** (2026-01-22): Major stable release with full documentation
 - **v4.1.0** (2026-01-27): Security hardening, saved projects, documentation overhaul
 - **v4.2.0** (2026-03-16): Expert Mode, vector parameters, memory management, desktop parity, Alt View
+- **v4.3.0** (2026-03-20): Architecture decomposition, CSP enforcement, accessible errors, menubar, CI stabilization
 
 ## Version Scheme
 

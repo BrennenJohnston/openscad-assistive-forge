@@ -1,5 +1,33 @@
 # Release Notes
 
+## v4.3.0 (2026-03-20)
+
+Architecture cleanup, security enforcement, and accessibility improvements. The main.js monolith has been decomposed, CSP is now enforced, all `alert()` calls replaced with accessible dialogs, and the toolbar uses a proper WAI-ARIA menubar.
+
+### Highlights
+
+- **main.js decomposition**: ~6,300 lines extracted into 5 focused modules (overlay/grid, saved projects, companion files, HFM/Alt View, file handler)
+- **CSP enforced**: Content-Security-Policy active with `unsafe-inline` removed from `style-src`. CodeMirror 6 replaces dead Monaco code for CSP compatibility.
+- **Accessible error dialogs**: All 56 `alert()` calls replaced with `showFriendlyError` — modal dialogs for critical errors, toast notifications for informational messages
+- **WAI-ARIA menubar**: Toolbar menus migrated to `role="menubar"` with full arrow-key navigation
+- **Welcome role-path cards**: 5 accessibility role-path cards re-enabled with updated content
+- **Expert Mode mobile layout**: Responsive layout for viewports below 768px
+- **CI stabilization**: Firefox and WebKit jobs pass reliably without `continue-on-error`
+- **SVG sanitizer hardened**: Blocks `<foreignObject>`, external `<use>`, `data:` URIs, `<iframe>`/`<embed>`/`<object>`
+- **Performance**: Three.js tree-shaking via granular imports, JSZip dynamic import, ~1,600 dead CSS rules removed
+
+### Upgrade Notes
+
+This is a backward-compatible upgrade with no breaking changes:
+
+1. Clear browser cache for best experience
+2. All existing saved projects remain compatible
+3. Expert Mode now uses CodeMirror 6 (Monaco Editor was dead code and has been removed)
+
+See [CHANGELOG.md](CHANGELOG.md) for the full list of changes.
+
+---
+
 ## v4.2.0 (2026-03-16)
 
 A big update focused on accessibility, security, and reliability. This brings the app up to WCAG 2.2 AA / Section 508 conformance.
@@ -37,7 +65,7 @@ Intelligent memory monitoring with graceful degradation prevents crashes on comp
 
 ### Security Enhancements
 
-- **Content Security Policy**: Content Security Policy headers in Report-Only mode with comprehensive directives covering script-src, style-src, connect-src, frame-ancestors, and object-src. Enforcement roadmap for v4.3.0
+- **Content Security Policy**: Content Security Policy headers with comprehensive directives covering script-src, style-src, connect-src, frame-ancestors, and object-src (enforced in v4.3.0)
 - **CSP Reporting**: Violation monitoring with privacy-preserving logging
 - **Supply Chain Security**: SBOM generation, npm audit in CI, lockfile integrity checks
 - **Security Documentation**: Administrator guide for deployment hardening
