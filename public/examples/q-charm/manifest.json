@@ -1,0 +1,13 @@
+{
+  "name": "Q Charm",
+  "description": "A C-shaped charm created by extruding a DXF side profile. The profile stands vertically with the large flat surface facing up — ideal for engraving or labeling.",
+  "version": "1.0.0",
+  "author": "OpenSCAD Assistive Forge contributors",
+  "license": "CC0-1.0",
+  "main": "q_charm.scad",
+  "files": [
+    "q_charm.scad",
+    "q_Charm_L.dxf"
+  ],
+  "tags": ["charm", "dxf", "import", "extrusion", "c-shape"]
+}

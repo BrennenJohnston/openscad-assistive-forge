@@ -177,7 +177,7 @@ import { getFileActionsController } from './js/file-actions-controller.js';
 import { getEditActionsController } from './js/edit-actions-controller.js';
 import { getDesignPanelController } from './js/design-panel-controller.js';
 import { getDisplayOptionsController } from './js/display-options-controller.js';
-// Animation controller import preserved for future development â€” see ./js/animation-controller.js
+// Animation controller import preserved for future development — see ./js/animation-controller.js
 // import { getAnimationController } from './js/animation-controller.js';
 import { getEditorStateManager } from './js/editor-state-manager.js';
 import { TextareaEditor } from './js/textarea-editor.js';
@@ -331,7 +331,7 @@ async function initApp() {
 
   if (wasmCrashDetected && !isRecoveryMode) {
     console.warn(
-      '[Recovery] Detected unclean WASM shutdown â€” offering recovery mode'
+      '[Recovery] Detected unclean WASM shutdown — offering recovery mode'
     );
     // Clear the flags so we don't loop
     localStorage.removeItem('openscad-forge-wasm-init-started');
@@ -347,7 +347,7 @@ async function initApp() {
     // Apply conservative settings per B.5.4 Recovery Mode Specification:
     // - Auto-preview OFF (no automatic renders)
     // - Quality set to fast (minimum quality settings)
-    // - CodeMirror disabled (use textarea only â€” less memory overhead)
+    // - CodeMirror disabled (use textarea only — less memory overhead)
     localStorage.setItem(STORAGE_KEY_AUTO_PREVIEW_ENABLED, 'false');
     localStorage.setItem(STORAGE_KEY_PREVIEW_QUALITY, 'fast');
     // Disable CodeMirror in recovery mode to reduce memory footprint.
@@ -565,12 +565,12 @@ async function initApp() {
   let cameraPanelController = null; // Declared here, initialized later
   let autoPreviewEnabled = true;
   // Runtime mapping from preset name to companion file paths (built on ZIP load).
-  // Stores path references only â€” content is resolved lazily on preset activation.
+  // Stores path references only — content is resolved lazily on preset activation.
   let presetCompanionMap = null;
   // Canonical project files snapshot used as the clean base when applying presets.
   // This prevents alias-mounted companion files from one preset bleeding into the next.
   let canonicalProjectFiles = null;
-  // Preset tracking state â€” must be declared before handleFile (which calls
+  // Preset tracking state — must be declared before handleFile (which calls
   // forceClearPresetSelection) to avoid a TDZ error during draft restoration.
   let isLoadingPreset = false;
   let currentPresetSignature = null;
@@ -901,7 +901,7 @@ async function initApp() {
     const statusArea = document.getElementById('statusArea');
     if (statusArea) {
       const originalText = statusArea.textContent;
-      statusArea.textContent = 'âœ… App installed! You can now use it offline.';
+      statusArea.textContent = '✅ App installed! You can now use it offline.';
       setTimeout(() => {
         statusArea.textContent = originalText;
       }, 5000);
@@ -1071,7 +1071,7 @@ async function initApp() {
 
           <div class="preset-modal-body">
             <div class="cache-clear-warning">
-              <span class="cache-clear-warning-icon" aria-hidden="true">âš ï¸</span>
+              <span class="cache-clear-warning-icon" aria-hidden="true">⚠️</span>
               <div class="cache-clear-warning-text">
                 <strong>Warning:</strong> This will delete all saved projects and cached app data by default.
                 Check the box below if you want to keep your saved projects.
@@ -1104,7 +1104,7 @@ async function initApp() {
                   <div class="cache-clear-option-label">
                     Keep my Saved Projects
                     <span class="preservation-indicator danger" id="preserveIndicator">
-                      <span aria-hidden="true">âš ï¸</span> Will be deleted
+                      <span aria-hidden="true">⚠️</span> Will be deleted
                     </span>
                   </div>
                   <div class="cache-clear-option-desc">
@@ -1118,7 +1118,7 @@ async function initApp() {
               hasProjects
                 ? `
               <div class="cache-clear-backup-prompt">
-                <span>ðŸ’¾</span>
+                <span>💾</span>
                 <span>Export a backup before clearing?</span>
                 <button type="button" class="btn btn-sm btn-outline" id="exportBeforeClearBtn">
                   Export Backup
@@ -1149,13 +1149,13 @@ async function initApp() {
           preserveOption.classList.add('preservation-on');
           preserveIndicator.className = 'preservation-indicator safe';
           preserveIndicator.innerHTML =
-            '<span aria-hidden="true">âœ“</span> Will be kept';
+            '<span aria-hidden="true">✓</span> Will be kept';
         } else {
           preserveOption.classList.remove('preservation-on');
           preserveOption.classList.add('preservation-off');
           preserveIndicator.className = 'preservation-indicator danger';
           preserveIndicator.innerHTML =
-            '<span aria-hidden="true">âš ï¸</span> Will be deleted';
+            '<span aria-hidden="true">⚠️</span> Will be deleted';
         }
       });
 
@@ -1384,7 +1384,7 @@ async function initApp() {
     });
   }
 
-  // Folder import â€” gated behind feature flag and webkitdirectory feature detection
+  // Folder import — gated behind feature flag and webkitdirectory feature detection
   if (
     _isEnabled('folder_import') &&
     'webkitdirectory' in document.createElement('input')
@@ -1402,7 +1402,7 @@ async function initApp() {
           try {
             const dirHandle = await window.showDirectoryPicker();
             dismissOverlay = showProcessingOverlay(
-              `Reading folder "${dirHandle.name}"â€¦`,
+              `Reading folder "${dirHandle.name}"…`,
               'Scanning files and subfolders. Please do not close or refresh the page.'
             );
             const files = [];
@@ -1482,23 +1482,23 @@ async function initApp() {
     }
   });
 
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-  // FIRST-VISIT GATE â€” Critical Initialization Barrier
+  // ═══════════════════════════════════════════════════════════════════════
+  // FIRST-VISIT GATE — Critical Initialization Barrier
   //
   // On the very first visit the app shows a blocking disclosure modal that
   // the user must accept before any downloads (WASM, manifest files, etc.)
   // can begin. Several subsystems depend on this gate:
   //
-  //   â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-  //   â”‚  Z-INDEX STACK (highest on top)                                 â”‚
-  //   â”‚                                                                 â”‚
-  //   â”‚  z: 10000  Processing overlay  (.processing-overlay)            â”‚
-  //   â”‚  z: 10000  Tutorial panel      (--z-index-tutorial-panel)       â”‚
-  //   â”‚  z:  9999  Skip-link / Tutorial spotlight                       â”‚
-  //   â”‚  z:  1000  Modals              (--z-index-modal)                â”‚
-  //   â”‚  z:   950  Modal backdrop      (--z-index-modal-backdrop)       â”‚
-  //   â”‚  z:   900  Drawers             (--z-index-drawer)               â”‚
-  //   â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+  //   ┌──────────────────────────────────────────────────────────────────┐
+  //   │  Z-INDEX STACK (highest on top)                                 │
+  //   │                                                                 │
+  //   │  z: 10000  Processing overlay  (.processing-overlay)            │
+  //   │  z: 10000  Tutorial panel      (--z-index-tutorial-panel)       │
+  //   │  z:  9999  Skip-link / Tutorial spotlight                       │
+  //   │  z:  1000  Modals              (--z-index-modal)                │
+  //   │  z:   950  Modal backdrop      (--z-index-modal-backdrop)       │
+  //   │  z:   900  Drawers             (--z-index-drawer)               │
+  //   └──────────────────────────────────────────────────────────────────┘
   //
   // INVARIANT: The processing overlay (z: 10000) MUST NEVER be shown while
   // the first-visit modal (z: 1000) is open. Because the overlay sits
@@ -1513,9 +1513,9 @@ async function initApp() {
   //   - Save-copy modal             (showManifestSaveCopyModal)
   //
   // See also: the per-step lifecycle comments in the manifest deep-link
-  // handler below for the exact required ordering of overlay â†’ download â†’
-  // process â†’ dismiss â†’ save-copy.
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // handler below for the exact required ordering of overlay → download →
+  // process → dismiss → save-copy.
+  // ═══════════════════════════════════════════════════════════════════════
   const appRoot = document.getElementById('app');
   let firstVisitBlocking = false;
   let hasUserAcceptedDownload = !isFirstVisit();
@@ -1780,7 +1780,7 @@ async function initApp() {
       } catch (renderErr) {
         if (renderErr.code === 'MODEL_NOT_2D') {
           updateStatus(
-            `Model produces 3D geometry â€” projecting to ${formatName}...`
+            `Model produces 3D geometry — projecting to ${formatName}...`
           );
           result = await renderController.render2DFallback(
             state.uploadedFile.content,
@@ -1897,7 +1897,7 @@ async function initApp() {
   });
   fileActionsController.init();
 
-  // â”€â”€ Toolbar: File menu â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Toolbar: File menu ──────────────────────────────────────────────────
   getToolbarMenuController().registerMenuBuilder('file', () => {
     const state = stateManager.getState();
     const hasFile = Boolean(state.uploadedFile);
@@ -2092,7 +2092,7 @@ async function initApp() {
   });
   editActionsController.init();
 
-  // â”€â”€ Toolbar: Edit menu â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Toolbar: Edit menu ──────────────────────────────────────────────────
   getToolbarMenuController().registerMenuBuilder('edit', () => {
     const state = stateManager.getState();
     const hasFile = Boolean(state.uploadedFile);
@@ -2269,7 +2269,7 @@ async function initApp() {
   });
   designPanelController.init();
 
-  // â”€â”€ Toolbar: Design menu â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Toolbar: Design menu ─────────────────────────────────────────────────
   getToolbarMenuController().registerMenuBuilder('design', () => {
     const state = stateManager.getState();
     const hasFile = Boolean(state.uploadedFile);
@@ -2376,7 +2376,7 @@ async function initApp() {
   });
   displayOptionsController.init();
 
-  // â”€â”€ Toolbar: View menu â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Toolbar: View menu ───────────────────────────────────────────────────
   getToolbarMenuController().registerMenuBuilder('view', () => {
     const state = stateManager.getState();
     const hasRender = Boolean(state.stl);
@@ -2563,7 +2563,7 @@ async function initApp() {
     ];
   });
 
-  // â”€â”€ Toolbar: Window menu â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Toolbar: Window menu ─────────────────────────────────────────────────
   getToolbarMenuController().registerMenuBuilder('window', () => {
     const uiCtrl = getUIModeController();
     const hidden = new Set(
@@ -2622,7 +2622,7 @@ async function initApp() {
       },
       { type: 'separator' },
       // -- Web-only panel toggles --
-      // fileActions, editTools, designTools, displayOptions removed â€” now in toolbar menus
+      // fileActions, editTools, designTools, displayOptions removed — now in toolbar menus
       panelToggle('libraries', 'Libraries'),
       panelToggle('companionFileManagement', 'Companion Files'),
       panelToggle('imageMeasurement', 'Image Measurement'),
@@ -2630,7 +2630,7 @@ async function initApp() {
     ];
   });
 
-  // â”€â”€ Toolbar: Help menu â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Toolbar: Help menu ───────────────────────────────────────────────────
   getToolbarMenuController().registerMenuBuilder('help', () => {
     function _openFeaturesTab(tabId) {
       const modal = document.getElementById('featuresGuideModal');
@@ -2724,7 +2724,7 @@ async function initApp() {
     ];
   });
 
-  // Animation controller ($t) initialization removed from UI wiring â€” see animation-controller.js for future re-integration
+  // Animation controller ($t) initialization removed from UI wiring — see animation-controller.js for future re-integration
 
   // Listen for "Save to Project" events from UI preferences panel
   document.addEventListener('ui-mode-save-to-project', (e) => {
@@ -2764,7 +2764,7 @@ async function initApp() {
       } catch (error) {
         if (error.name === 'QuotaExceededError') {
           console.warn(
-            '[App] localStorage quota exceeded â€” UI prefs not saved'
+            '[App] localStorage quota exceeded — UI prefs not saved'
           );
         } else {
           console.warn('[App] Could not save UI preferences:', error);
@@ -2910,7 +2910,7 @@ async function initApp() {
             `Generate ${formatName} file from current parameters`
           );
         } else {
-          primaryActionBtn.textContent = `ðŸ“¥ Download ${formatName}`;
+          primaryActionBtn.textContent = `📥 Download ${formatName}`;
           primaryActionBtn.setAttribute(
             'aria-label',
             `Download generated ${formatName} file`
@@ -2959,7 +2959,7 @@ async function initApp() {
                 autoAdjustList.innerHTML = adjustments
                   .map(
                     ([k, v]) =>
-                      `<li><code>${escapeHtml(k)}</code>: currently <em>${escapeHtml(String(state.parameters[k]))}</em> â†’ will use <strong>${escapeHtml(String(v))}</strong></li>`
+                      `<li><code>${escapeHtml(k)}</code>: currently <em>${escapeHtml(String(state.parameters[k]))}</em> → will use <strong>${escapeHtml(String(v))}</strong></li>`
                   )
                   .join('');
                 autoAdjustDiv.classList.remove('hidden');
@@ -3121,7 +3121,7 @@ async function initApp() {
         hideWasmLoadingIndicator(wasmLoadingOverlay);
         wasmInitialized = true;
 
-        // Clear crash detection flag â€” WASM init succeeded
+        // Clear crash detection flag — WASM init succeeded
         localStorage.setItem('openscad-forge-wasm-init-completed', 'true');
 
         // Start worker health monitoring
@@ -3261,13 +3261,13 @@ async function initApp() {
     warning.setAttribute('role', 'alert');
     warning.innerHTML = `
       <div class="memory-warning-content">
-        <span class="memory-warning-icon">âš ï¸</span>
+        <span class="memory-warning-icon">⚠️</span>
         <div class="memory-warning-text">
           <strong>High Memory Usage</strong>
           <p>Memory: ${memoryInfo.usedMB}MB / ${memoryInfo.limitMB}MB (${memoryInfo.percent}%)</p>
           <p class="memory-warning-hint">
-            This warning is about the OpenSCAD engineâ€™s allocated memory (it may stay high until the engine is restarted).
-            If you also see an error like â€œproduces no geometryâ€, fix that firstâ€”memory may not be the cause.
+            This warning is about the OpenSCAD engine’s allocated memory (it may stay high until the engine is restarted).
+            If you also see an error like “produces no geometry”, fix that first—memory may not be the cause.
           </p>
           <div class="memory-warning-actions" role="group" aria-label="Memory warning actions">
             <button type="button" class="btn btn-sm btn-outline" data-action="preview-fast">
@@ -3284,7 +3284,7 @@ async function initApp() {
             </button>
           </div>
         </div>
-        <button class="btn btn-sm btn-outline memory-warning-dismiss" aria-label="Dismiss warning">Ã—</button>
+        <button class="btn btn-sm btn-outline memory-warning-dismiss" aria-label="Dismiss warning">×</button>
       </div>
     `;
 
@@ -3335,7 +3335,7 @@ async function initApp() {
         }
         if (!found) {
           updateStatus(
-            'Try searching parameters for â€œ$fnâ€, â€œsmoothnessâ€, â€œresolutionâ€, or â€œqualityâ€.',
+            'Try searching parameters for “$fn”, “smoothness”, “resolution”, or “quality”.',
             'info'
           );
         }
@@ -3365,7 +3365,7 @@ async function initApp() {
   }
 
   /**
-   * Provide actionable guidance for configuration-dependent â€œno geometryâ€ errors.
+   * Provide actionable guidance for configuration-dependent “no geometry” errors.
    * Returns true if it handled the error.
    */
   function updateMemoryIndicator(memoryInfo) {
@@ -3447,7 +3447,7 @@ async function initApp() {
     const details = error?.details || '';
     const detailsStr = String(details || '');
 
-    // BUG-B fix: handle NO_GEOMETRY â€” emitted by isNonPreviewableParameters() when
+    // BUG-B fix: handle NO_GEOMETRY — emitted by isNonPreviewableParameters() when
     // generate=Customizer Settings (or similar non-previewable mode). The previous mesh
     // must be cleared so the 3D canvas is empty, matching the expectation that
     // "Customizer Settings" produces no visible geometry.
@@ -3460,13 +3460,13 @@ async function initApp() {
         'success'
       );
       previewStateIndicator.className = 'preview-state-indicator state-current';
-      previewStateIndicator.textContent = 'â€” No geometry (Customizer mode)';
+      previewStateIndicator.textContent = '— No geometry (Customizer mode)';
       previewContainer.classList.remove('preview-error');
       previewContainer.classList.add('preview-current');
       return true;
     }
 
-    // Handle 2D model case â€” applies to any project producing 2D output
+    // Handle 2D model case — applies to any project producing 2D output
     const is2DModel =
       code === 'MODEL_IS_2D' ||
       /MODEL_IS_2D|not a 3D object|Top level object is a 2D object/i.test(
@@ -3478,7 +3478,7 @@ async function initApp() {
       if (previewManager) {
         previewManager.clear();
       }
-      // Show guidance for 2D model â€” this is informational, not an error
+      // Show guidance for 2D model — this is informational, not an error
       // Use 'success' not 'error' to avoid alarming red warnings on a correct workflow path
       updateStatus(
         'Your model produces 2D geometry. Select SVG or DXF output format to export.',
@@ -3488,11 +3488,11 @@ async function initApp() {
       // Override the preview state badge: auto-preview-controller already set it to ERROR
       // before this handler fired. Replace with a non-alarming "2D Model" indicator.
       previewStateIndicator.className = 'preview-state-indicator state-current';
-      previewStateIndicator.textContent = 'âœ“ 2D Model â€” use SVG/DXF';
+      previewStateIndicator.textContent = '✓ 2D Model — use SVG/DXF';
       previewContainer.classList.remove('preview-error');
       previewContainer.classList.add('preview-current');
 
-      // Dismiss any memory warning that may have been triggered by the failed 2Dâ†’STL render.
+      // Dismiss any memory warning that may have been triggered by the failed 2D→STL render.
       // The high memory is a side effect of the expected 2D path, not a real memory issue.
       const memWarning = document.getElementById('memoryWarning');
       if (memWarning) memWarning.remove();
@@ -3544,7 +3544,7 @@ async function initApp() {
       matches.length > 0 ? matches[0] : { label: null, current: null };
     let targetKey = null;
 
-    // Prefer a match we can actually find in the UI (prevents â€œwrong toggleâ€ guidance).
+    // Prefer a match we can actually find in the UI (prevents “wrong toggle” guidance).
     for (const candidate of matches) {
       if (!candidate.label) continue;
       const keyGuess = candidate.label
@@ -3573,10 +3573,10 @@ async function initApp() {
       ? suggested
         ? `Change it to "${suggested}" and try again.`
         : `Change that option (toggle it) and try again.`
-      : 'Look for a required option (often â€œenable/show/include/hasâ€¦â€) and try again.';
+      : 'Look for a required option (often “enable/show/include/has…”) and try again.';
 
     const findHint = label
-      ? `Tip: use the â€œSearch parametersâ€ box and type "${label}".`
+      ? `Tip: use the “Search parameters” box and type "${label}".`
       : '';
 
     updateStatus(`${headline} ${nextStep} ${findHint}`.trim(), 'error');
@@ -3599,7 +3599,7 @@ async function initApp() {
    */
   function showDependencyGuidanceModal(info) {
     if (isAnyModalOpen()) {
-      console.log('[DependencyGuidance] Suppressed â€” another modal is active');
+      console.log('[DependencyGuidance] Suppressed — another modal is active');
       return;
     }
 
@@ -3709,7 +3709,7 @@ async function initApp() {
 
     let message = `Estimated render time: ~${estimate.seconds}s`;
     if (estimate.warning) {
-      message += ` âš ï¸ ${estimate.warning}`;
+      message += ` ⚠️ ${estimate.warning}`;
     }
     updateStatus(message);
   }
@@ -4073,7 +4073,7 @@ async function initApp() {
     // Update hint text based on initial state
     if (manifoldEngineHint) {
       manifoldEngineHint.textContent = manifoldEnabled
-        ? '5-30Ã— faster. Disable if models fail to render.'
+        ? '5-30× faster. Disable if models fail to render.'
         : 'Using stable engine. Enable for faster rendering.';
     }
 
@@ -4087,7 +4087,7 @@ async function initApp() {
       // Update hint text
       if (manifoldEngineHint) {
         manifoldEngineHint.textContent = enabled
-          ? '5-30Ã— faster. Disable if models fail to render.'
+          ? '5-30× faster. Disable if models fail to render.'
           : 'Using stable engine. Enable for faster rendering.';
       }
 
@@ -4388,7 +4388,7 @@ async function initApp() {
       if (dimYEl) dimYEl.textContent = `${dimensions.y} mm`;
       if (dimZEl) dimZEl.textContent = `${dimensions.z} mm`;
       if (dimVolumeEl)
-        dimVolumeEl.textContent = `${dimensions.volume.toLocaleString()} mmÂ³`;
+        dimVolumeEl.textContent = `${dimensions.volume.toLocaleString()} mm³`;
     } else {
       // Hide dimensions panel
       dimensionsDisplay.classList.add('hidden');
@@ -4415,12 +4415,12 @@ async function initApp() {
     const stateMessages = {
       [PREVIEW_STATE.IDLE]: 'No preview',
       [PREVIEW_STATE.CURRENT]: extra.cached
-        ? 'âœ“ Preview (cached)'
-        : 'âœ“ Preview ready',
-      [PREVIEW_STATE.PENDING]: 'â³ Changes pending...',
-      [PREVIEW_STATE.RENDERING]: 'âŸ³ Generating...',
-      [PREVIEW_STATE.STALE]: 'âš  Preview outdated',
-      [PREVIEW_STATE.ERROR]: 'âœ— Preview failed',
+        ? '✓ Preview (cached)'
+        : '✓ Preview ready',
+      [PREVIEW_STATE.PENDING]: '⏳ Changes pending...',
+      [PREVIEW_STATE.RENDERING]: '⟳ Generating...',
+      [PREVIEW_STATE.STALE]: '⚠ Preview outdated',
+      [PREVIEW_STATE.ERROR]: '✗ Preview failed',
     };
     previewStateIndicator.textContent = stateMessages[state] || state;
 
@@ -4678,7 +4678,7 @@ async function initApp() {
       !paramsChanged;
 
     if (isStlFormat && hasFullQualitySTL && !needsFullRender) {
-      primaryActionBtn.textContent = 'ðŸ“¥ Download';
+      primaryActionBtn.textContent = '📥 Download';
       primaryActionBtn.dataset.action = 'download';
       primaryActionBtn.classList.remove('btn-primary');
       primaryActionBtn.classList.add('btn-success');
@@ -4688,7 +4688,7 @@ async function initApp() {
       );
       downloadFallbackLink.classList.add('hidden');
     } else if (hasMatchingOutput) {
-      primaryActionBtn.textContent = 'ðŸ“¥ Download';
+      primaryActionBtn.textContent = '📥 Download';
       primaryActionBtn.dataset.action = 'download';
       primaryActionBtn.classList.remove('btn-primary');
       primaryActionBtn.classList.add('btn-success');
@@ -4899,9 +4899,9 @@ async function initApp() {
     const formatLabel = detectedFormat
       ? detectedFormat
       : isLikelyBinary
-        ? 'Binary STL âœ“'
+        ? 'Binary STL ✓'
         : isLikelyASCII
-          ? 'ASCII STL âš ï¸'
+          ? 'ASCII STL ⚠️'
           : 'Unknown';
 
     console.log(
@@ -4931,13 +4931,13 @@ async function initApp() {
     // Log overall performance status
     if (isLikelyBinary && capabilities.hasManifold) {
       console.log(
-        '[Performance] âœ“ Optimal settings: Binary STL + Manifold enabled'
+        '[Performance] ✓ Optimal settings: Binary STL + Manifold enabled'
       );
     } else if (!isLikelyBinary || !capabilities.hasManifold) {
       const issues = [];
       if (!isLikelyBinary) issues.push('Binary STL not active');
       if (!capabilities.hasManifold) issues.push('Manifold not available');
-      console.log(`[Performance] âš ï¸ Suboptimal settings: ${issues.join(', ')}`);
+      console.log(`[Performance] ⚠️ Suboptimal settings: ${issues.join(', ')}`);
     }
   }
 
@@ -5752,8 +5752,8 @@ if (rounded) {
       mainInterface.classList.remove('hidden');
     }
 
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    // MANIFEST DEEP-LINK LIFECYCLE â€” ORDER OF OPERATIONS
+    // ─────────────────────────────────────────────────────────────────────
+    // MANIFEST DEEP-LINK LIFECYCLE — ORDER OF OPERATIONS
     //
     // The steps below MUST execute in this exact order. Reordering them
     // causes hard-to-diagnose bugs (e.g. the processing overlay covering
@@ -5782,11 +5782,11 @@ if (rounded) {
     //
     // ERROR PATH: If any step after the overlay is shown throws, the
     // catch block dismisses the overlay to prevent it from getting stuck.
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ─────────────────────────────────────────────────────────────────────
     setTimeout(async () => {
       let dismissOverlay = null;
       try {
-        // Step 1 â€” GATE: first-visit acceptance must complete before we
+        // Step 1 — GATE: first-visit acceptance must complete before we
         // show any overlay or start any network requests. The first-visit
         // modal sits at z-index 1000; the processing overlay at z-index
         // 10000. Showing the overlay first would bury the modal and trap
@@ -5796,7 +5796,7 @@ if (rounded) {
           await waitForFirstVisitAcceptance();
         }
 
-        // Step 2 â€” OVERLAY: safe to show now that no blocking modal is open
+        // Step 2 — OVERLAY: safe to show now that no blocking modal is open
         dismissOverlay = showProcessingOverlay(
           'Loading project from manifest...',
           {
@@ -5804,7 +5804,7 @@ if (rounded) {
           }
         );
 
-        // Step 3 â€” DOWNLOAD
+        // Step 3 — DOWNLOAD
         const result = await loadManifest(manifestParam, {
           onProgress: ({ message }) => {
             updateStatus(message);
@@ -5824,7 +5824,7 @@ if (rounded) {
         );
         announceImmediate(`Loading project: ${projectName}`);
 
-        // Step 4 â€” PROCESS: parse and load the project into the editor
+        // Step 4 — PROCESS: parse and load the project into the editor
         await fileHandler.handleFile(
           null,
           mainContent,
@@ -5834,7 +5834,7 @@ if (rounded) {
           projectName
         );
 
-        // Step 5 â€” DISMISS OVERLAY before showing the save-copy modal
+        // Step 5 — DISMISS OVERLAY before showing the save-copy modal
         if (dismissOverlay) dismissOverlay();
 
         // Store manifest origin in state for provenance tracking
@@ -5918,7 +5918,7 @@ if (rounded) {
               }
               updatePrimaryActionButton();
 
-              updateStatus(`Loaded: ${projectName} â€” preset: ${match.name}`);
+              updateStatus(`Loaded: ${projectName} — preset: ${match.name}`);
               announceImmediate(
                 `${projectName} loaded with preset ${match.name}`
               );
@@ -5957,7 +5957,7 @@ if (rounded) {
 
         console.log(`[DeepLink] Manifest load complete: ${projectName}`);
 
-        // Step 6 â€” SAVE-COPY MODAL: prompt user to save a local copy
+        // Step 6 — SAVE-COPY MODAL: prompt user to save a local copy
         const saveCopyChoice = await showManifestSaveCopyModal(
           projectName,
           manifest.author
@@ -6170,7 +6170,7 @@ if (rounded) {
     }
   }
 
-  // Undo/Redo buttons in Parameters header â€” delegates to shared logic
+  // Undo/Redo buttons in Parameters header — delegates to shared logic
   const undoBtn = document.getElementById('undoBtn');
   const redoBtn = document.getElementById('redoBtn');
 
@@ -7056,7 +7056,7 @@ if (rounded) {
           const state = stateManager.getState();
           let { projectFiles, mainFilePath, uploadedFile: uf } = state;
 
-          // Initialize projectFiles Map if needed (single-file â†’ multi-file)
+          // Initialize projectFiles Map if needed (single-file → multi-file)
           if (!projectFiles && uf) {
             projectFiles = new Map();
             const mainPath = mainFilePath || uf.name;
@@ -7713,7 +7713,7 @@ if (rounded) {
         OUTPUT_FORMATS[outputFormat]?.name || outputFormat.toUpperCase();
 
       primaryActionBtn.disabled = true;
-      primaryActionBtn.textContent = `â³ Generating ${formatName}...`;
+      primaryActionBtn.textContent = `⏳ Generating ${formatName}...`;
 
       // Show cancel button
       cancelRenderBtn.classList.remove('hidden');
@@ -7761,7 +7761,7 @@ if (rounded) {
           outputFormatSelect.dispatchEvent(new Event('change'));
         }
         stateManager.setState({ outputFormat: 'svg' });
-        updateStatus('Generating SVGâ€¦ (auto-switched from STL for 2D output)');
+        updateStatus('Generating SVG… (auto-switched from STL for 2D output)');
       }
 
       // Use auto-preview controller for full render if available (STL only for now)
@@ -7806,7 +7806,7 @@ if (rounded) {
         } catch (renderErr) {
           if (renderErr.code === 'MODEL_NOT_2D') {
             updateStatus(
-              `Model produces 3D geometry â€” projecting to ${outputFormat.toUpperCase()}...`
+              `Model produces 3D geometry — projecting to ${outputFormat.toUpperCase()}...`
             );
             result = await renderController.render2DFallback(
               state.uploadedFile.content,
@@ -7949,7 +7949,7 @@ if (rounded) {
         return;
       }
 
-      // Special-case: SVG/DXF export failures â€” 3D geometry produced when 2D is required.
+      // Special-case: SVG/DXF export failures — 3D geometry produced when 2D is required.
       // Guide the user to the specific 'generate' parameter that controls the output mode.
       const currentFormat = outputFormatSelect?.value || 'stl';
       if (currentFormat === 'svg' || currentFormat === 'dxf') {
@@ -8402,12 +8402,12 @@ if (rounded) {
 
     const stateIcon =
       {
-        queued: 'â³',
-        rendering: 'âš™ï¸',
-        complete: 'âœ…',
-        error: 'âŒ',
-        cancelled: 'â¹ï¸',
-      }[job.state] || 'â“';
+        queued: '⏳',
+        rendering: '⚙️',
+        complete: '✅',
+        error: '❌',
+        cancelled: '⏹️',
+      }[job.state] || '❓';
 
     const formatName =
       OUTPUT_FORMATS[job.outputFormat]?.name || job.outputFormat.toUpperCase();
@@ -8425,10 +8425,10 @@ if (rounded) {
         ${job.result?.stats?.triangles ? `<div class="queue-item-stats">${job.result.stats.triangles.toLocaleString()} triangles</div>` : ''}
       </div>
       <div class="queue-item-actions">
-        ${job.state === 'complete' ? `<button class="btn btn-sm btn-primary" data-action="download" data-job-id="${job.id}" aria-label="Download ${job.name}">ðŸ“¥ Download</button>` : ''}
-        ${job.state === 'queued' ? `<button class="btn btn-sm btn-outline" data-action="edit" data-job-id="${job.id}" aria-label="Edit ${job.name} parameters">âœï¸ Edit</button>` : ''}
-        ${job.state === 'queued' ? `<button class="btn btn-sm btn-outline" data-action="cancel" data-job-id="${job.id}" aria-label="Cancel ${job.name}">â¹ï¸ Cancel</button>` : ''}
-        ${job.state !== 'rendering' ? `<button class="btn btn-sm btn-outline" data-action="remove" data-job-id="${job.id}" aria-label="Remove ${job.name}">ðŸ—‘ï¸ Remove</button>` : ''}
+        ${job.state === 'complete' ? `<button class="btn btn-sm btn-primary" data-action="download" data-job-id="${job.id}" aria-label="Download ${job.name}">📥 Download</button>` : ''}
+        ${job.state === 'queued' ? `<button class="btn btn-sm btn-outline" data-action="edit" data-job-id="${job.id}" aria-label="Edit ${job.name} parameters">✏️ Edit</button>` : ''}
+        ${job.state === 'queued' ? `<button class="btn btn-sm btn-outline" data-action="cancel" data-job-id="${job.id}" aria-label="Cancel ${job.name}">⏹️ Cancel</button>` : ''}
+        ${job.state !== 'rendering' ? `<button class="btn btn-sm btn-outline" data-action="remove" data-job-id="${job.id}" aria-label="Remove ${job.name}">🗑️ Remove</button>` : ''}
       </div>
     `;
 
@@ -9128,11 +9128,11 @@ if (rounded) {
     if (companionMapping?.aliases) {
       for (const [target, source] of Object.entries(companionMapping.aliases)) {
         if (aliasedFiles.has(target)) {
-          console.log(`[Preset] Alias-mounted: ${source} â†’ ${target}`);
+          console.log(`[Preset] Alias-mounted: ${source} → ${target}`);
         }
       }
     } else {
-      // COMPATIBILITY FALLBACK â€” legacy logging for {openingsPath, svgPath}
+      // COMPATIBILITY FALLBACK — legacy logging for {openingsPath, svgPath}
       if (
         companionMapping?.openingsPath &&
         aliasedFiles.has('openings_and_additions.txt')
@@ -9406,7 +9406,7 @@ if (rounded) {
         return;
       }
 
-      // Auto-rename duplicates: "test1" â†’ "test1 (1)" â†’ "test1 (2)" etc.
+      // Auto-rename duplicates: "test1" → "test1 (1)" → "test1 (2)" etc.
       const existingPresets = presetManager.getPresetsForModel(
         state.uploadedFile.name
       );
@@ -9513,7 +9513,7 @@ if (rounded) {
     if (result.imported > 0 || result.skipped > 0) {
       let message = `Imported ${result.imported} design${result.imported !== 1 ? 's' : ''}`;
       if (result.skipped > 0) {
-        message += ` (${result.skipped} skipped â€” duplicate names)`;
+        message += ` (${result.skipped} skipped — duplicate names)`;
       }
       if (result.errors?.length > 0) {
         message += `\n\nErrors:\n${result.errors.join('\n')}`;
@@ -9576,7 +9576,7 @@ if (rounded) {
             <div class="preset-item-info">
               <h4 class="preset-item-name">${preset.name}</h4>
               <p class="preset-item-meta">
-                ${preset.description || 'No description'} â€¢ 
+                ${preset.description || 'No description'} • 
                 Created ${formatDate(preset.created)}
               </p>
             </div>
@@ -9604,10 +9604,10 @@ if (rounded) {
         </div>
         <div class="preset-import-export-actions" style="display:flex;gap:12px;padding:16px;border-bottom:1px solid var(--border-color, #e0e0e0);">
           <button class="btn btn-primary" data-action="import" style="flex:1;padding:12px;font-size:1em;">
-            ðŸ“‚ Import Designs
+            📂 Import Designs
           </button>
           <button class="btn btn-primary" data-action="export-all" style="flex:1;padding:12px;font-size:1em;">
-            ðŸ’¾ Export All Designs
+            💾 Export All Designs
           </button>
         </div>
         ${
@@ -9620,8 +9620,8 @@ if (rounded) {
           <div class="preset-list-toolbar">
             <label class="preset-sort-label" for="presetSortSelect">Sort</label>
             <select id="presetSortSelect" class="preset-sort-select" aria-label="Sort presets by">
-              <option value="name-asc"${currentSortOrder === 'name-asc' ? ' selected' : ''}>Name (Aâ€“Z)</option>
-              <option value="name-desc"${currentSortOrder === 'name-desc' ? ' selected' : ''}>Name (Zâ€“A)</option>
+              <option value="name-asc"${currentSortOrder === 'name-asc' ? ' selected' : ''}>Name (A–Z)</option>
+              <option value="name-desc"${currentSortOrder === 'name-desc' ? ' selected' : ''}>Name (Z–A)</option>
               <option value="date-created"${currentSortOrder === 'date-created' ? ' selected' : ''}>Date created (newest)</option>
               <option value="date-modified"${currentSortOrder === 'date-modified' ? ' selected' : ''}>Date modified (newest)</option>
             </select>
@@ -9659,7 +9659,7 @@ if (rounded) {
             <div class="preset-item-info">
               <h4 class="preset-item-name">${preset.name}</h4>
               <p class="preset-item-meta">
-                ${preset.description || 'No description'} â€¢
+                ${preset.description || 'No description'} •
                 Created ${formatDate(preset.created)}
               </p>
             </div>
@@ -9783,12 +9783,12 @@ if (rounded) {
                 <input type="radio" name="importMode" value="copies" />
                 <span class="import-mode-label">
                   <strong>Import as copies</strong>
-                  <span class="import-mode-desc">Import all designs; rename duplicates with (2), (3)â€¦ suffixes</span>
+                  <span class="import-mode-desc">Import all designs; rename duplicates with (2), (3)… suffixes</span>
                 </span>
               </label>
             </fieldset>
             <div class="import-mode-actions">
-              <button type="submit" value="ok" class="btn btn-primary">Choose filesâ€¦</button>
+              <button type="submit" value="ok" class="btn btn-primary">Choose files…</button>
               <button type="submit" value="cancel" class="btn btn-outline">Cancel</button>
             </div>
           </form>`;
@@ -9882,8 +9882,8 @@ if (rounded) {
             }
 
             // Map UI modes to importAndMergePresets conflictStrategy
-            // merge â†’ 'keep' (skip duplicates by name)
-            // copies â†’ 'rename' (append (2), (3) suffix)
+            // merge → 'keep' (skip duplicates by name)
+            // copies → 'rename' (append (2), (3) suffix)
             const conflictStrategy =
               importMode === 'copies' ? 'rename' : 'keep';
 
@@ -9995,9 +9995,9 @@ if (rounded) {
       setCurrentPresetSelection(savedPreset);
 
       // Brief visual feedback on button
-      savePresetBtn.textContent = 'âœ“';
+      savePresetBtn.textContent = '✓';
       setTimeout(() => {
-        savePresetBtn.textContent = 'ðŸ’¾';
+        savePresetBtn.textContent = '💾';
       }, 1500);
     } catch (error) {
       updateStatus(`Failed to save preset: ${error.message}`, 'error');
@@ -10033,7 +10033,7 @@ if (rounded) {
       return;
     }
 
-    // Show warning modal â€” deletion is irreversible
+    // Show warning modal — deletion is irreversible
     const confirmed = await showConfirmDialog(
       `Are you sure you want to delete the preset "<strong>${preset.name}</strong>"?<br><br>This action <strong>cannot be undone</strong>.`,
       'Delete Preset',
@@ -10073,7 +10073,7 @@ if (rounded) {
       try {
         localStorage.setItem(PRESET_SORT_KEY, presetDropdownSort.value);
       } catch (_) {
-        /* localStorage overflow â€” continue with in-memory value */
+        /* localStorage overflow — continue with in-memory value */
       }
       updatePresetDropdown();
       const label =
@@ -10144,7 +10144,7 @@ if (rounded) {
 
       _presetCombobox = initSearchableCombobox({
         container: comboContainer,
-        placeholder: 'Search presetsâ€¦',
+        placeholder: 'Search presets…',
         inputId: 'presetComboboxInput',
         disabled: true,
       });
@@ -10333,7 +10333,7 @@ if (rounded) {
       if (compatibility.extraParams.length > 0) {
         issueHtml += `
           <div class="preset-compat-section">
-            <h4>âš ï¸ Obsolete parameters (${compatibility.extraParams.length})</h4>
+            <h4>⚠️ Obsolete parameters (${compatibility.extraParams.length})</h4>
             <p>These preset parameters don't exist in the current file (may have been removed or renamed):</p>
             <ul class="preset-compat-list">
               ${compatibility.extraParams.map((p) => `<li><code>${escapeHtml(p)}</code></li>`).join('')}
@@ -10345,7 +10345,7 @@ if (rounded) {
       if (compatibility.missingParams.length > 0) {
         issueHtml += `
           <div class="preset-compat-section">
-            <h4>â„¹ï¸ New parameters (${compatibility.missingParams.length})</h4>
+            <h4>ℹ️ New parameters (${compatibility.missingParams.length})</h4>
             <p>These file parameters aren't in the preset (will use defaults):</p>
             <ul class="preset-compat-list">
               ${compatibility.missingParams
@@ -10464,9 +10464,9 @@ if (rounded) {
     const lineCount = state.uploadedFile.content.split('\n').length;
     const charCount = state.uploadedFile.content.length;
     sourceViewerInfo.innerHTML = `
-      <span>ðŸ“„ ${state.uploadedFile.name}</span>
-      <span>ðŸ“ ${lineCount.toLocaleString()} lines</span>
-      <span>ðŸ“Š ${charCount.toLocaleString()} characters</span>
+      <span>📄 ${state.uploadedFile.name}</span>
+      <span>📏 ${lineCount.toLocaleString()} lines</span>
+      <span>📊 ${charCount.toLocaleString()} characters</span>
     `;
 
     setTimeout(() => sourceViewerContent.focus(), 100);
@@ -10481,10 +10481,10 @@ if (rounded) {
 
     try {
       await navigator.clipboard.writeText(state.uploadedFile.content);
-      copySourceBtn.textContent = 'âœ… Copied!';
+      copySourceBtn.textContent = '✅ Copied!';
       updateStatus('Source code copied to clipboard');
       setTimeout(() => {
-        copySourceBtn.textContent = 'ðŸ“‹ Copy Source';
+        copySourceBtn.textContent = '📋 Copy Source';
       }, 2000);
     } catch (error) {
       console.error('Failed to copy source:', error);
@@ -10494,9 +10494,9 @@ if (rounded) {
       textarea.select();
       document.execCommand('copy');
       document.body.removeChild(textarea);
-      copySourceBtn.textContent = 'âœ… Copied!';
+      copySourceBtn.textContent = '✅ Copied!';
       setTimeout(() => {
-        copySourceBtn.textContent = 'ðŸ“‹ Copy Source';
+        copySourceBtn.textContent = '📋 Copy Source';
       }, 2000);
     }
   });
@@ -10512,9 +10512,9 @@ if (rounded) {
   sourceViewerCopy?.addEventListener('click', async () => {
     try {
       await navigator.clipboard.writeText(sourceViewerContent.value);
-      sourceViewerCopy.textContent = 'âœ… Copied!';
+      sourceViewerCopy.textContent = '✅ Copied!';
       setTimeout(() => {
-        sourceViewerCopy.textContent = 'ðŸ“‹ Copy';
+        sourceViewerCopy.textContent = '📋 Copy';
       }, 2000);
     } catch (error) {
       console.error('Failed to copy:', error);
@@ -10857,7 +10857,7 @@ if (rounded) {
 
     try {
       await navigator.clipboard.writeText(lastConsoleOutput);
-      consoleCopyBtn.textContent = 'âœ… Copied!';
+      consoleCopyBtn.textContent = '✅ Copied!';
       announceImmediate('Console output copied to clipboard');
       setTimeout(() => {
         consoleCopyBtn.innerHTML = `
@@ -10942,7 +10942,7 @@ if (rounded) {
 
     if (unlocked) {
       updateStatus(
-        'âš ï¸ Parameter limits unlocked - values outside normal range allowed'
+        '⚠️ Parameter limits unlocked - values outside normal range allowed'
       );
     } else {
       updateStatus('Parameter limits restored to defaults');
@@ -11062,10 +11062,10 @@ if (rounded) {
   paramsJsonCopy?.addEventListener('click', async () => {
     try {
       await navigator.clipboard.writeText(paramsJsonContent.value);
-      paramsJsonCopy.textContent = 'âœ… Copied!';
+      paramsJsonCopy.textContent = '✅ Copied!';
       updateStatus('Parameters JSON copied to clipboard');
       setTimeout(() => {
-        paramsJsonCopy.textContent = 'ðŸ“‹ Copy';
+        paramsJsonCopy.textContent = '📋 Copy';
       }, 2000);
     } catch (error) {
       console.error('Failed to copy:', error);
@@ -11869,7 +11869,7 @@ if (typeof window !== 'undefined') {
   window.libraryManager = libraryManager;
 }
 
-// Global error handlers â€” catch uncaught exceptions and unhandled promise
+// Global error handlers — catch uncaught exceptions and unhandled promise
 // rejections so screen reader users receive audible feedback.
 window.onerror = (message) => {
   console.error('[Global]', message);
