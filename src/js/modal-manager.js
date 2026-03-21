@@ -70,20 +70,28 @@ export function closeModal(modal) {
     state.focusTrap.deactivate();
 
     if (state.trigger && typeof state.trigger.focus === 'function') {
-      // WebKit requires a microtask boundary after focus trap deactivation
-      // before focus() reliably moves to the trigger element.
       state.trigger.focus();
-      requestAnimationFrame(() => {
-        if (document.activeElement !== state.trigger) {
-          state.trigger.focus();
-        }
-      });
     }
   }
 
-  // Safe to hide now that focus is outside the modal.
   modal.classList.add('hidden');
   modal.setAttribute('aria-hidden', 'true');
+
+  // WebKit needs a frame after the modal is hidden for focus() to
+  // reliably land on the trigger. Re-apply if it didn't stick.
+  if (state?.trigger && typeof state.trigger.focus === 'function') {
+    const trigger = state.trigger;
+    setTimeout(() => {
+      if (document.activeElement !== trigger) {
+        trigger.focus();
+      }
+    }, 0);
+    requestAnimationFrame(() => {
+      if (document.activeElement !== trigger) {
+        trigger.focus();
+      }
+    });
+  }
 
   if (state) {
     // Call onClose callback
