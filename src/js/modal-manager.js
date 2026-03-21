@@ -77,15 +77,15 @@ export function closeModal(modal) {
   modal.classList.add('hidden');
   modal.setAttribute('aria-hidden', 'true');
 
-  // WebKit needs a frame after the modal is hidden for focus() to
-  // reliably land on the trigger. Re-apply if it didn't stick.
+  // WebKit may lose focus during the hide/reflow cycle. Retry across
+  // both a microtask (setTimeout 0) and a frame boundary (rAF).
   if (state?.trigger && typeof state.trigger.focus === 'function') {
     const trigger = state.trigger;
     setTimeout(() => {
       if (document.activeElement !== trigger) {
         trigger.focus();
       }
-    }, 0);
+    }, 50);
     requestAnimationFrame(() => {
       if (document.activeElement !== trigger) {
         trigger.focus();
@@ -94,12 +94,9 @@ export function closeModal(modal) {
   }
 
   if (state) {
-    // Call onClose callback
     if (state.onClose) {
       state.onClose();
     }
-
-    // Clean up state
     modalStates.delete(modal);
   }
 
