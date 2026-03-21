@@ -2420,27 +2420,26 @@ test.describe('UI Uniformity Regression', () => {
   });
 
   test('all forge-disclosure summaries have uniform typography', async ({ page }) => {
+    await page.waitForSelector('.forge-disclosure summary', { timeout: 10000 });
     const typography = await page.evaluate(() => {
       const summaries = document.querySelectorAll('.forge-disclosure summary');
       if (summaries.length === 0) return null;
-      // Only check visible summaries — hidden elements (e.g. inside collapsed
-      // panels) may return different computed styles in WebKit because the
-      // rendering engine skips layout for display:none subtrees.
-      const visible = Array.from(summaries).filter(s => {
-        const rect = s.getBoundingClientRect();
-        return rect.width > 0 && rect.height > 0;
-      });
-      if (visible.length === 0) return null;
-      const values = visible.map(s => {
+      const values = Array.from(summaries).map(s => {
         const cs = getComputedStyle(s);
         return {
           fontSize: cs.fontSize,
           fontWeight: cs.fontWeight,
         };
       });
+      if (values.length === 0) return null;
+      // Normalize fontWeight: browsers may report "bold" vs "700" or
+      // "normal" vs "400". Map named weights to numeric equivalents.
+      const weightMap = { normal: '400', bold: '700' };
+      const normalize = (w) => weightMap[w] || w;
       const first = values[0];
       const allMatch = values.every(
-        v => v.fontSize === first.fontSize && v.fontWeight === first.fontWeight
+        v => v.fontSize === first.fontSize &&
+             normalize(v.fontWeight) === normalize(first.fontWeight)
       );
       return { count: values.length, allMatch, sample: first };
     });
