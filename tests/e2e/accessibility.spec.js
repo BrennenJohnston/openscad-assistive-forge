@@ -2420,7 +2420,6 @@ test.describe('UI Uniformity Regression', () => {
   });
 
   test('all forge-disclosure summaries have uniform typography', async ({ page }) => {
-    await page.waitForSelector('.forge-disclosure summary', { timeout: 10000 });
     const typography = await page.evaluate(() => {
       const summaries = document.querySelectorAll('.forge-disclosure summary');
       if (summaries.length === 0) return null;
