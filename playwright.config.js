@@ -58,6 +58,7 @@ export default defineConfig({
     {
       name: 'visual-regression',
       testDir: './tests/visual',
+      snapshotPathTemplate: '{testDir}/baselines/{platform}/{arg}{ext}',
       use: {
         ...devices['Desktop Chrome'],
         // Consistent viewport for visual comparisons

@@ -283,6 +283,40 @@ jobs:
           path: sbom-generated.json
           retention-days: 90
 
+  visual-regression:
+    name: Visual Regression (Linux)
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Download OpenSCAD WASM files
+        run: npm run setup-wasm
+      
+      - name: Install Playwright browsers (Chromium)
+        run: npx playwright install --with-deps chromium
+      
+      - name: Run visual regression tests
+        run: npx playwright test --project=visual-regression
+      
+      - name: Upload visual diff artifacts
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: visual-regression-diff
+          path: test-results/
+          retention-days: 14
+
   lint-markdown:
     name: Lint Markdown
     runs-on: ubuntu-latest

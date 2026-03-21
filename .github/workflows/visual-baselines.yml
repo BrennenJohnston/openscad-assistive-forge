@@ -1,0 +1,48 @@
+name: Update Visual Baselines
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: 'Platform to generate baselines for'
+        required: true
+        default: 'linux'
+        type: choice
+        options:
+          - linux
+          - all
+
+jobs:
+  generate-linux-baselines:
+    name: Generate Linux Baselines
+    runs-on: ubuntu-latest
+    if: inputs.platform == 'linux' || inputs.platform == 'all'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download OpenSCAD WASM files
+        run: npm run setup-wasm
+
+      - name: Install Playwright browsers (Chromium)
+        run: npx playwright install --with-deps chromium
+
+      - name: Generate visual baselines
+        run: npx playwright test --project=visual-regression --update-snapshots
+
+      - name: Upload baselines artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-baselines-linux
+          path: tests/visual/baselines/linux/
+          retention-days: 30
