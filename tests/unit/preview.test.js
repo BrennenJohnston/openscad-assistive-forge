@@ -18,8 +18,8 @@ describe('PreviewManager', () => {
   })
 
   describe('Three.js Loading', () => {
-    it('reports Three.js as not loaded initially', () => {
-      expect(isThreeJsLoaded()).toBe(false)
+    it('reports Three.js as loaded (static import)', () => {
+      expect(isThreeJsLoaded()).toBe(true)
     })
   })
 
@@ -246,9 +246,32 @@ describe('PreviewManager', () => {
       expect(theme).toBe('dark-hc')
     })
 
+    it('detects mono-hc theme (dark + high contrast + mono variant)', () => {
+      document.documentElement.setAttribute('data-theme', 'dark')
+      document.documentElement.setAttribute('data-high-contrast', 'true')
+      document.documentElement.setAttribute('data-ui-variant', 'mono')
+
+      const manager = new PreviewManager(container)
+      const theme = manager.detectTheme()
+
+      expect(theme).toBe('mono-hc')
+    })
+
+    it('detects mono-light-hc theme (light + high contrast + mono variant)', () => {
+      document.documentElement.setAttribute('data-theme', 'light')
+      document.documentElement.setAttribute('data-high-contrast', 'true')
+      document.documentElement.setAttribute('data-ui-variant', 'mono')
+
+      const manager = new PreviewManager(container)
+      const theme = manager.detectTheme()
+
+      expect(theme).toBe('mono-light-hc')
+    })
+
     afterEach(() => {
       document.documentElement.removeAttribute('data-theme')
       document.documentElement.removeAttribute('data-high-contrast')
+      document.documentElement.removeAttribute('data-ui-variant')
     })
   })
 
@@ -2083,6 +2106,20 @@ describe('PreviewManager', () => {
         expect(color).toBe('#ffb000')
       })
 
+      it('returns mono-hc theme default', () => {
+        manager.currentTheme = 'mono-hc'
+        manager.renderState = 'preview'
+        const color = manager._resolveModelColor()
+        expect(color).toBe('#33ff33')
+      })
+
+      it('returns mono-light-hc theme default', () => {
+        manager.currentTheme = 'mono-light-hc'
+        manager.renderState = 'laser'
+        const color = manager._resolveModelColor()
+        expect(color).toBe('#ffc233')
+      })
+
       it('returns colorOverride when enabled regardless of render state', () => {
         manager.renderState = 'laser'
         manager.colorOverrideEnabled = true
@@ -2149,7 +2186,7 @@ describe('PreviewManager', () => {
       })
 
       it('each theme has a distinct model color', () => {
-        const themes = ['light', 'dark', 'light-hc', 'dark-hc', 'mono', 'mono-light']
+        const themes = ['light', 'dark', 'light-hc', 'dark-hc', 'mono', 'mono-light', 'mono-hc', 'mono-light-hc']
         const colors = themes.map(t => {
           manager.currentTheme = t
           return manager._resolveModelColor()
@@ -2322,6 +2359,82 @@ describe('PreviewManager', () => {
           '<svg xmlns="http://www.w3.org/2000/svg"><a href="javascript:alert(1)"><rect width="10" height="10"/></a></svg>'
         )
         expect(result).not.toContain('javascript:')
+      })
+
+      it('strips <foreignObject> elements', () => {
+        const result = PreviewManager.sanitizeSVG(
+          '<svg xmlns="http://www.w3.org/2000/svg"><foreignObject width="100" height="100"><body xmlns="http://www.w3.org/1999/xhtml"><p>evil</p></body></foreignObject><rect width="10" height="10"/></svg>'
+        )
+        expect(result).not.toContain('foreignObject')
+        expect(result).toContain('<rect')
+      })
+
+      it('strips <iframe> elements', () => {
+        const result = PreviewManager.sanitizeSVG(
+          '<svg xmlns="http://www.w3.org/2000/svg"><iframe src="https://evil.com"></iframe><rect width="10" height="10"/></svg>'
+        )
+        expect(result).not.toContain('iframe')
+        expect(result).toContain('<rect')
+      })
+
+      it('strips <embed> elements', () => {
+        const result = PreviewManager.sanitizeSVG(
+          '<svg xmlns="http://www.w3.org/2000/svg"><embed src="evil.swf"/><rect width="10" height="10"/></svg>'
+        )
+        expect(result).not.toContain('embed')
+        expect(result).toContain('<rect')
+      })
+
+      it('strips <object> elements', () => {
+        const result = PreviewManager.sanitizeSVG(
+          '<svg xmlns="http://www.w3.org/2000/svg"><object data="evil.swf"></object><rect width="10" height="10"/></svg>'
+        )
+        expect(result).not.toContain('object')
+        expect(result).toContain('<rect')
+      })
+
+      it('blocks <use> with external http: href', () => {
+        const result = PreviewManager.sanitizeSVG(
+          '<svg xmlns="http://www.w3.org/2000/svg"><use href="http://evil.com/sprite.svg#icon"/><rect width="10" height="10"/></svg>'
+        )
+        expect(result).not.toContain('<use')
+        expect(result).toContain('<rect')
+      })
+
+      it('blocks <use> with external https: href', () => {
+        const result = PreviewManager.sanitizeSVG(
+          '<svg xmlns="http://www.w3.org/2000/svg"><use href="https://evil.com/sprite.svg#icon"/><rect width="10" height="10"/></svg>'
+        )
+        expect(result).not.toContain('<use')
+      })
+
+      it('blocks <use> with protocol-relative href', () => {
+        const result = PreviewManager.sanitizeSVG(
+          '<svg xmlns="http://www.w3.org/2000/svg"><use href="//evil.com/sprite.svg#icon"/><rect width="10" height="10"/></svg>'
+        )
+        expect(result).not.toContain('<use')
+      })
+
+      it('preserves <use> with local fragment href', () => {
+        const result = PreviewManager.sanitizeSVG(
+          '<svg xmlns="http://www.w3.org/2000/svg"><defs><circle id="dot" r="5"/></defs><use href="#dot"/></svg>'
+        )
+        expect(result).toContain('use')
+        expect(result).toContain('#dot')
+      })
+
+      it('blocks data: protocol in href', () => {
+        const result = PreviewManager.sanitizeSVG(
+          '<svg xmlns="http://www.w3.org/2000/svg"><a href="data:text/html,<script>alert(1)</script>"><rect width="10" height="10"/></a></svg>'
+        )
+        expect(result).not.toContain('data:')
+      })
+
+      it('blocks data: protocol in xlink:href', () => {
+        const result = PreviewManager.sanitizeSVG(
+          '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><image xlink:href="data:image/svg+xml;base64,PHN2Zz4=" width="10" height="10"/></svg>'
+        )
+        expect(result).not.toContain('data:')
       })
     })
 

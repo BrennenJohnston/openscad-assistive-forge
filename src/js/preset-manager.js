@@ -155,7 +155,7 @@ export function migrateFromLegacyStorage(options = {}) {
         };
         localStorage.setItem(STORAGE_KEYS.backup, JSON.stringify(backupData));
         result.backupCreated = true;
-        console.log('[PresetManager] Created backup of legacy presets');
+        if (import.meta.env.DEV) console.log('[PresetManager] Created backup of legacy presets');
       } catch (error) {
         result.errors.push(`Backup failed: ${error.message}`);
         // Continue with migration anyway
@@ -212,18 +212,22 @@ export function migrateFromLegacyStorage(options = {}) {
     if (deleteLegacy) {
       try {
         localStorage.removeItem(migrationInfo.legacyKey);
-        console.log(
-          `[PresetManager] Deleted legacy storage: ${migrationInfo.legacyKey}`
-        );
+        if (import.meta.env.DEV) {
+          console.log(
+            `[PresetManager] Deleted legacy storage: ${migrationInfo.legacyKey}`
+          );
+        }
       } catch {
         // Non-critical error
       }
     }
 
     result.success = true;
-    console.log(
-      `[PresetManager] Migration complete: ${result.migratedPresets} presets from ${result.migratedModels} models`
-    );
+    if (import.meta.env.DEV) {
+      console.log(
+        `[PresetManager] Migration complete: ${result.migratedPresets} presets from ${result.migratedModels} models`
+      );
+    }
   } catch (error) {
     result.errors.push(`Migration failed: ${error.message}`);
     console.error('[PresetManager] Migration error:', error);
@@ -238,7 +242,7 @@ export function migrateFromLegacyStorage(options = {}) {
 export function dismissMigrationOffer() {
   try {
     localStorage.setItem(STORAGE_KEYS.migrationFlag, 'true');
-    console.log('[PresetManager] Migration offer dismissed');
+    if (import.meta.env.DEV) console.log('[PresetManager] Migration offer dismissed');
   } catch {
     // Non-critical
   }
@@ -250,7 +254,7 @@ export function dismissMigrationOffer() {
 function resetMigrationFlag() {
   try {
     localStorage.removeItem(STORAGE_KEYS.migrationFlag);
-    console.log('[PresetManager] Migration flag reset');
+    if (import.meta.env.DEV) console.log('[PresetManager] Migration flag reset');
   } catch {
     // Non-critical
   }
@@ -284,9 +288,11 @@ function isOpenSCADNativeFormat(data) {
     return false;
   }
 
-  console.log(
-    `[PresetManager] Detected OpenSCAD native format with ${presetCount} preset(s)`
-  );
+  if (import.meta.env.DEV) {
+    console.log(
+      `[PresetManager] Detected OpenSCAD native format with ${presetCount} preset(s)`
+    );
+  }
   return true;
 }
 
@@ -548,10 +554,10 @@ export class PresetManager {
 
     if (existingIndex >= 0) {
       this.presets[modelName][existingIndex] = preset;
-      console.log(`Updated preset: ${sanitized}`);
+      if (import.meta.env.DEV) console.log(`Updated preset: ${sanitized}`);
     } else {
       this.presets[modelName].push(preset);
-      console.log(`Saved preset: ${sanitized}`);
+      if (import.meta.env.DEV) console.log(`Saved preset: ${sanitized}`);
     }
 
     this.persist();
@@ -573,13 +579,15 @@ export class PresetManager {
 
     const preset = modelPresets.find((p) => p.id === presetId);
     if (preset) {
-      console.log(`Loaded preset: ${preset.name}`);
-      console.debug('[PresetManager] Preset load details:', {
-        name: preset.name,
-        id: preset.id,
-        parameterCount: Object.keys(preset.parameters || {}).length,
-        parameterKeys: Object.keys(preset.parameters || {}),
-      });
+      if (import.meta.env.DEV) console.log(`Loaded preset: ${preset.name}`);
+      if (import.meta.env.DEV) {
+        console.debug('[PresetManager] Preset load details:', {
+          name: preset.name,
+          id: preset.id,
+          parameterCount: Object.keys(preset.parameters || {}).length,
+          parameterKeys: Object.keys(preset.parameters || {}),
+        });
+      }
       this.notifyListeners('load', preset, modelName);
     }
     return preset;
@@ -608,7 +616,7 @@ export class PresetManager {
     }
 
     this.persist();
-    console.log(`Deleted preset: ${deleted.name}`);
+    if (import.meta.env.DEV) console.log(`Deleted preset: ${deleted.name}`);
     this.notifyListeners('delete', deleted, modelName);
     return true;
   }
@@ -1005,16 +1013,18 @@ export class PresetManager {
       const data = JSON.parse(json);
 
       // Debug logging for preset import diagnostics
-      console.log('[PresetManager] Import attempt:', {
-        modelName,
-        hasParamSchema: Object.keys(paramSchema || {}).length > 0,
-        dataKeys: Object.keys(data),
-        hasParameterSets: 'parameterSets' in data,
-        hasType: 'type' in data,
-      });
+      if (import.meta.env.DEV) {
+        console.log('[PresetManager] Import attempt:', {
+          modelName,
+          hasParamSchema: Object.keys(paramSchema || {}).length > 0,
+          dataKeys: Object.keys(data),
+          hasParameterSets: 'parameterSets' in data,
+          hasType: 'type' in data,
+        });
+      }
 
       if (isOpenSCADNativeFormat(data)) {
-        console.log('[PresetManager] Detected OpenSCAD native format');
+        if (import.meta.env.DEV) console.log('[PresetManager] Detected OpenSCAD native format');
         return this.importOpenSCADNativePresets(
           data,
           modelName,
@@ -1024,7 +1034,7 @@ export class PresetManager {
       }
 
       if (isForgeFormat(data)) {
-        console.log('[PresetManager] Detected Forge format');
+        if (import.meta.env.DEV) console.log('[PresetManager] Detected Forge format');
         return this.importForgePresets(
           data,
           paramSchema,
@@ -1182,14 +1192,16 @@ export class PresetManager {
     const errors = [];
     const presetNames = Object.keys(parameterSets);
 
-    console.log(
-      `[PresetManager] Importing ${presetNames.length} OpenSCAD native preset(s)`,
-      {
-        modelName: effectiveModelName,
-        presetNames,
-        schemaParamCount: Object.keys(safeSchema).length,
-      }
-    );
+    if (import.meta.env.DEV) {
+      console.log(
+        `[PresetManager] Importing ${presetNames.length} OpenSCAD native preset(s)`,
+        {
+          modelName: effectiveModelName,
+          presetNames,
+          schemaParamCount: Object.keys(safeSchema).length,
+        }
+      );
+    }
 
     for (const [presetName, presetValues] of Object.entries(parameterSets)) {
       try {
@@ -1197,18 +1209,22 @@ export class PresetManager {
         // the Forge generates from .scad source. Importing it would create a
         // stored preset that collides with the immutable virtual preset.
         if (presetName === 'design default values') {
-          console.log(
-            `[PresetManager] Skipping virtual preset: "${presetName}"`
-          );
+          if (import.meta.env.DEV) {
+            console.log(
+              `[PresetManager] Skipping virtual preset: "${presetName}"`
+            );
+          }
           continue;
         }
 
         // Debug: log first preset's structure
         if (imported === 0 && skipped === 0) {
-          console.log(`[PresetManager] Sample preset "${presetName}":`, {
-            paramCount: Object.keys(presetValues || {}).length,
-            sampleParams: Object.keys(presetValues || {}).slice(0, 5),
-          });
+          if (import.meta.env.DEV) {
+            console.log(`[PresetManager] Sample preset "${presetName}":`, {
+              paramCount: Object.keys(presetValues || {}).length,
+              sampleParams: Object.keys(presetValues || {}).slice(0, 5),
+            });
+          }
         }
 
         // Defensive: skip presets with no values or non-object values
@@ -1259,7 +1275,7 @@ export class PresetManager {
 
         imported++;
         results.push(result);
-        console.log(`[PresetManager] Imported preset: "${presetName}"`);
+        if (import.meta.env.DEV) console.log(`[PresetManager] Imported preset: "${presetName}"`);
       } catch (error) {
         console.warn(
           `[PresetManager] Skipped preset "${presetName}":`,
@@ -1270,12 +1286,14 @@ export class PresetManager {
       }
     }
 
-    console.log(`[PresetManager] Import complete:`, {
-      imported,
-      skipped,
-      modelName: effectiveModelName,
-      errors: errors.length > 0 ? errors : undefined,
-    });
+    if (import.meta.env.DEV) {
+      console.log(`[PresetManager] Import complete:`, {
+        imported,
+        skipped,
+        modelName: effectiveModelName,
+        errors: errors.length > 0 ? errors : undefined,
+      });
+    }
 
     return {
       success: true,
@@ -1310,9 +1328,11 @@ export class PresetManager {
         if (data.version && data.presets) {
           // Versioned format (v2+)
           presets = data.presets;
-          console.log(
-            `[PresetManager] Loaded v${data.version} presets: ${Object.keys(presets).length} models`
-          );
+          if (import.meta.env.DEV) {
+            console.log(
+              `[PresetManager] Loaded v${data.version} presets: ${Object.keys(presets).length} models`
+            );
+          }
         } else {
           // Unexpected format in versioned key - treat as presets
           presets = data;
@@ -1327,9 +1347,11 @@ export class PresetManager {
           if (version === 1) {
             // Legacy format - use it directly but also save in new format
             presets = legacyData;
-            console.log(
-              `[PresetManager] Loaded legacy presets: ${Object.keys(presets).length} models (will migrate on save)`
-            );
+            if (import.meta.env.DEV) {
+              console.log(
+                `[PresetManager] Loaded legacy presets: ${Object.keys(presets).length} models (will migrate on save)`
+              );
+            }
           }
         }
       }
@@ -1349,9 +1371,11 @@ export class PresetManager {
           }
         }
 
-        console.log(
-          `[PresetManager] Validated ${Object.keys(validatedData).length} model preset collections`
-        );
+        if (import.meta.env.DEV) {
+          console.log(
+            `[PresetManager] Validated ${Object.keys(validatedData).length} model preset collections`
+          );
+        }
         return validatedData;
       }
 
@@ -1383,9 +1407,11 @@ export class PresetManager {
 
       const serialized = JSON.stringify(versionedData);
       localStorage.setItem(this.storageKey, serialized);
-      console.log(
-        '[PresetManager] Presets saved (v' + STORAGE_SCHEMA_VERSION + ')'
-      );
+      if (import.meta.env.DEV) {
+        console.log(
+          '[PresetManager] Presets saved (v' + STORAGE_SCHEMA_VERSION + ')'
+        );
+      }
     } catch (error) {
       console.error('[PresetManager] Failed to save presets:', error);
       if (error.name === 'QuotaExceededError') {
@@ -1411,10 +1437,10 @@ export class PresetManager {
   clearPresets(modelName = null) {
     if (modelName) {
       delete this.presets[modelName];
-      console.log(`Cleared presets for model: ${modelName}`);
+      if (import.meta.env.DEV) console.log(`Cleared presets for model: ${modelName}`);
     } else {
       this.presets = {};
-      console.log('Cleared all presets');
+      if (import.meta.env.DEV) console.log('Cleared all presets');
     }
     this.persist();
     this.notifyListeners('clear', null, modelName);
@@ -1487,9 +1513,11 @@ export class PresetManager {
     this.persist();
     const after = this.presets[modelName]?.length ?? 0;
     const removed = before - after;
-    console.log(
-      `[PresetManager] Cleared ${removed} preset(s) for model: ${modelName}`
-    );
+    if (import.meta.env.DEV) {
+      console.log(
+        `[PresetManager] Cleared ${removed} preset(s) for model: ${modelName}`
+      );
+    }
     return removed;
   }
 

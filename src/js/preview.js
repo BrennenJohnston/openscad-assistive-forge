@@ -3,12 +3,51 @@
  * @license GPL-3.0-or-later
  */
 
+import {
+  AmbientLight,
+  AxesHelper,
+  Box3,
+  BoxHelper,
+  BufferGeometry,
+  CanvasTexture,
+  Color,
+  ColorManagement,
+  DirectionalLight,
+  DoubleSide,
+  EdgesGeometry,
+  Float32BufferAttribute,
+  GridHelper,
+  Group,
+  Line,
+  LineBasicMaterial,
+  LineSegments,
+  LinearSRGBColorSpace,
+  Mesh,
+  MeshBasicMaterial,
+  MeshPhongMaterial,
+  OrthographicCamera,
+  PerspectiveCamera,
+  PlaneGeometry,
+  Scene,
+  Sprite,
+  SpriteMaterial,
+  Texture,
+  Vector3,
+  WebGLRenderer,
+} from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { normalizeHexColor } from './color-utils.js';
 import {
   announceCameraAction as announceCamera,
   announceImmediate,
 } from './announcer.js';
 import { getAppPrefKey } from './storage-keys.js';
+
+// Disable Three.js color management to match desktop OpenSCAD's
+// non-linear-aware OpenGL pipeline. OpenSCAD passes sRGB colors
+// directly through lighting without linearization or gamma correction.
+ColorManagement.enabled = false;
 
 // Storage keys using standardized naming convention
 const STORAGE_KEY_MEASUREMENTS = getAppPrefKey('measurements');
@@ -27,70 +66,28 @@ const STORAGE_KEY_LOD_WARNING_DISMISSED = getAppPrefKey(
 /** Default grid config — 220×220mm matches popular mid-range FDM printers (Creality K1C, FlashForge Adventurer 5M Pro) */
 const DEFAULT_GRID_CONFIG = { widthMm: 220, heightMm: 220 };
 
-// Lazy-loaded Three.js modules - loaded on demand to reduce initial bundle size
-let THREE = null;
-let OrbitControls = null;
-let STLLoader = null;
-let threeJsLoaded = false;
-let threeJsLoading = null;
+export function isThreeJsLoaded() {
+  return true;
+}
 
 /**
- * Lazy load Three.js and its dependencies
- * @returns {Promise<{THREE: object, OrbitControls: Function, STLLoader: Function}>}
+ * @returns {object} Object containing Three.js classes for external consumers
+ *                   (e.g. display-options-controller).
  */
-async function loadThreeJS() {
-  if (threeJsLoaded) {
-    return { THREE, OrbitControls, STLLoader };
-  }
-
-  // If already loading, wait for that promise
-  if (threeJsLoading) {
-    return threeJsLoading;
-  }
-
-  console.log('[Preview] Loading Three.js modules...');
-  const startTime = performance.now();
-
-  threeJsLoading = (async () => {
-    try {
-      // Parallel loading of all Three.js modules
-      const [threeModule, controlsModule, loaderModule] = await Promise.all([
-        import('three'),
-        import('three/examples/jsm/controls/OrbitControls.js'),
-        import('three/examples/jsm/loaders/STLLoader.js'),
-      ]);
-
-      THREE = threeModule;
-      OrbitControls = controlsModule.OrbitControls;
-      STLLoader = loaderModule.STLLoader;
-      threeJsLoaded = true;
-
-      // Disable Three.js color management to match desktop OpenSCAD's
-      // non-linear-aware OpenGL pipeline. OpenSCAD passes sRGB colors
-      // directly through lighting without linearization or gamma correction.
-      THREE.ColorManagement.enabled = false;
-
-      const loadTime = Math.round(performance.now() - startTime);
-      console.log(`[Preview] Three.js loaded in ${loadTime}ms`);
-
-      return { THREE, OrbitControls, STLLoader };
-    } catch (error) {
-      console.error('[Preview] Failed to load Three.js:', error);
-      threeJsLoading = null;
-      throw error;
-    }
-  })();
-
-  return threeJsLoading;
-}
-
-export function isThreeJsLoaded() {
-  return threeJsLoaded;
-}
-
-/** @returns {object|null} The THREE module if loaded, else null */
 export function getThreeModule() {
-  return THREE;
+  return {
+    AxesHelper,
+    Box3,
+    BoxHelper,
+    BufferGeometry,
+    EdgesGeometry,
+    Float32BufferAttribute,
+    Group,
+    Line,
+    LineBasicMaterial,
+    LineSegments,
+    Vector3,
+  };
 }
 
 /**
@@ -148,6 +145,22 @@ const PREVIEW_COLORS = {
     gridPrimary: 0xffb000,
     gridSecondary: 0xcc8c00,
     model: 0xffb000,
+    ambientLight: 0xffb000,
+  },
+  // Green phosphor high-contrast (wider grid contrast ratio)
+  'mono-hc': {
+    background: 0x000000,
+    gridPrimary: 0x00ff00,
+    gridSecondary: 0x003300,
+    model: 0x33ff33,
+    ambientLight: 0x00ff00,
+  },
+  // Amber phosphor high-contrast (wider grid contrast ratio)
+  'mono-light-hc': {
+    background: 0x000000,
+    gridPrimary: 0xffb000,
+    gridSecondary: 0x4d3500,
+    model: 0xffc233,
     ambientLight: 0xffb000,
   },
 };
@@ -250,17 +263,10 @@ export class PreviewManager {
   }
 
   /**
-   * Initialize Three.js scene (async - loads Three.js on demand)
+   * Initialize Three.js scene
    * @returns {Promise<void>}
    */
   async init() {
-    // Show loading state
-    this.container.innerHTML =
-      '<div class="preview-loading" style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--color-text-secondary)">Loading 3D preview...</div>';
-
-    // Lazy load Three.js
-    await loadThreeJS();
-
     // Clear container (preserving/recreating #rendered2dPreview for 2D SVG display)
     this.container.innerHTML = '';
 
@@ -279,13 +285,13 @@ export class PreviewManager {
     const colors = PREVIEW_COLORS[this.currentTheme];
 
     // Create scene
-    this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(colors.background);
+    this.scene = new Scene();
+    this.scene.background = new Color(colors.background);
 
     // Create camera with OpenSCAD-compatible Z-up coordinate system
     const width = this.container.clientWidth;
     const height = this.container.clientHeight;
-    this.camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 10000);
+    this.camera = new PerspectiveCamera(45, width / height, 0.1, 10000);
 
     // Initialize resize tracking state
     this._lastAspect = width / height;
@@ -303,8 +309,8 @@ export class PreviewManager {
     // When that happens, geometry parsing (loadOFF / loadSTL) still works;
     // only the visual canvas is disabled.
     try {
-      this.renderer = new THREE.WebGLRenderer({ antialias: true });
-      this.renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
+      this.renderer = new WebGLRenderer({ antialias: true });
+      this.renderer.outputColorSpace = LinearSRGBColorSpace;
       this.renderer.setSize(width, height);
       this.renderer.setPixelRatio(window.devicePixelRatio);
       this.container.appendChild(this.renderer.domElement);
@@ -333,13 +339,13 @@ export class PreviewManager {
     const piAmbient = 0.2 * Math.PI;
     const piDirectional = 1.0 * Math.PI;
 
-    this.ambientLight = new THREE.AmbientLight(colors.ambientLight, piAmbient);
+    this.ambientLight = new AmbientLight(colors.ambientLight, piAmbient);
     this.scene.add(this.ambientLight);
 
     // Camera must be in the scene graph for child lights to render
     this.scene.add(this.camera);
 
-    this.directionalLight1 = new THREE.DirectionalLight(
+    this.directionalLight1 = new DirectionalLight(
       0xffffff,
       piDirectional
     );
@@ -347,7 +353,7 @@ export class PreviewManager {
     this.camera.add(this.directionalLight1);
     this.camera.add(this.directionalLight1.target);
 
-    this.directionalLight2 = new THREE.DirectionalLight(
+    this.directionalLight2 = new DirectionalLight(
       0xffffff,
       piDirectional
     );
@@ -477,7 +483,7 @@ export class PreviewManager {
 
   /**
    * Detect current theme from document
-   * @returns {string} 'light', 'dark', 'light-hc', 'dark-hc', 'mono', or 'mono-light'
+   * @returns {string} 'light' | 'dark' | 'light-hc' | 'dark-hc' | 'mono' | 'mono-light' | 'mono-hc' | 'mono-light-hc'
    */
   detectTheme() {
     const root = document.documentElement;
@@ -487,17 +493,17 @@ export class PreviewManager {
     // Check for variant override (takes precedence)
     const uiVariant = root.getAttribute('data-ui-variant');
     if (uiVariant === 'mono') {
-      // Light theme = amber phosphor, Dark theme = green phosphor
+      let base;
       if (dataTheme === 'light') {
-        return 'mono-light';
+        base = 'mono-light';
       } else if (dataTheme === 'dark') {
-        return 'mono';
+        base = 'mono';
       } else {
-        // Auto mode - check system preference
-        return window.matchMedia('(prefers-color-scheme: dark)').matches
+        base = window.matchMedia('(prefers-color-scheme: dark)').matches
           ? 'mono'
           : 'mono-light';
       }
+      return highContrast ? `${base}-hc` : base;
     }
 
     let baseTheme;
@@ -1157,14 +1163,14 @@ export class PreviewManager {
         }
 
         // Create material using render-state-aware color resolution
-        const material = new THREE.MeshPhongMaterial({
+        const material = new MeshPhongMaterial({
           color: parseInt(this._resolveModelColor().slice(1), 16),
           specular: 0x000000,
           shininess: 30,
           flatShading: false,
         });
 
-        this.mesh = new THREE.Mesh(geometry, material);
+        this.mesh = new Mesh(geometry, material);
         this.scene.add(this.mesh);
 
         if (this.colorOverrideEnabled && this.colorOverride) {
@@ -1361,15 +1367,15 @@ export class PreviewManager {
           return;
         }
 
-        const geometry = new THREE.BufferGeometry();
+        const geometry = new BufferGeometry();
         geometry.setAttribute(
           'position',
-          new THREE.Float32BufferAttribute(positions, 3)
+          new Float32BufferAttribute(positions, 3)
         );
         if (hasColors && colors.length === positions.length) {
           geometry.setAttribute(
             'color',
-            new THREE.Float32BufferAttribute(colors, 3)
+            new Float32BufferAttribute(colors, 3)
           );
         }
         geometry.computeVertexNormals();
@@ -1390,13 +1396,13 @@ export class PreviewManager {
           // Desktop OpenSCAD F5 renders #-marked geometry at full color with
           // a pink {255,81,81,128} overlay on top.
           const normalMaterial = hasColors
-            ? new THREE.MeshPhongMaterial({
+            ? new MeshPhongMaterial({
                 vertexColors: true,
                 specular: 0x000000,
                 shininess: 30,
                 flatShading: false,
               })
-            : new THREE.MeshPhongMaterial({
+            : new MeshPhongMaterial({
                 color: parseInt(this._resolveModelColor().slice(1), 16),
                 specular: 0x000000,
                 shininess: 30,
@@ -1404,7 +1410,7 @@ export class PreviewManager {
               });
 
           const highlightGeometry = geometry.clone();
-          const highlightMaterial = new THREE.MeshPhongMaterial({
+          const highlightMaterial = new MeshPhongMaterial({
             color: parseInt(debugHighlight.hex.replace('#', ''), 16),
             specular: 0x000000,
             shininess: 30,
@@ -1414,34 +1420,34 @@ export class PreviewManager {
             depthWrite: false,
           });
 
-          const normalMesh = new THREE.Mesh(geometry, normalMaterial);
-          const highlightMesh = new THREE.Mesh(
+          const normalMesh = new Mesh(geometry, normalMaterial);
+          const highlightMesh = new Mesh(
             highlightGeometry,
             highlightMaterial
           );
           highlightMesh.userData.isHighlightOverlay = true;
           highlightMesh.renderOrder = 1;
 
-          this.mesh = new THREE.Group();
+          this.mesh = new Group();
           this.mesh.add(normalMesh);
           this.mesh.add(highlightMesh);
         } else {
           const useVertexColors =
             hasColors && !(this.colorOverrideEnabled && this.colorOverride);
           const material = useVertexColors
-            ? new THREE.MeshPhongMaterial({
+            ? new MeshPhongMaterial({
                 vertexColors: true,
                 specular: 0x000000,
                 shininess: 30,
                 flatShading: false,
               })
-            : new THREE.MeshPhongMaterial({
+            : new MeshPhongMaterial({
                 color: parseInt(this._resolveModelColor().slice(1), 16),
                 specular: 0x000000,
                 shininess: 30,
                 flatShading: false,
               });
-          this.mesh = new THREE.Mesh(geometry, material);
+          this.mesh = new Mesh(geometry, material);
         }
         this.scene.add(this.mesh);
 
@@ -1680,9 +1686,9 @@ export class PreviewManager {
     if (!this.mesh) return;
 
     // Compute bounding box
-    const box = new THREE.Box3().setFromObject(this.mesh);
-    const center = box.getCenter(new THREE.Vector3());
-    const size = box.getSize(new THREE.Vector3());
+    const box = new Box3().setFromObject(this.mesh);
+    const center = box.getCenter(new Vector3());
+    const size = box.getSize(new Vector3());
 
     const maxDim = Math.max(size.x, size.y, size.z);
     const fov = this.camera.fov * (Math.PI / 180);
@@ -1781,9 +1787,9 @@ export class PreviewManager {
     }
 
     // Compute bounding box to get center and appropriate distance
-    const box = new THREE.Box3().setFromObject(this.mesh);
-    const center = box.getCenter(new THREE.Vector3());
-    const size = box.getSize(new THREE.Vector3());
+    const box = new Box3().setFromObject(this.mesh);
+    const center = box.getCenter(new Vector3());
+    const size = box.getSize(new Vector3());
 
     const maxDim = Math.max(size.x, size.y, size.z);
     // Always use the perspective camera FOV for distance calculation
@@ -1793,7 +1799,7 @@ export class PreviewManager {
 
     // Use whichever camera is currently active
     const camera = this.getActiveCamera();
-    const direction = new THREE.Vector3(...view.direction).normalize();
+    const direction = new Vector3(...view.direction).normalize();
 
     // Position camera along the direction vector from center
     camera.position.copy(center).addScaledVector(direction, cameraDistance);
@@ -1853,7 +1859,7 @@ export class PreviewManager {
       const frustumHeight = 2 * distance * Math.tan(fovRad / 2);
 
       if (!this.orthoCamera) {
-        this.orthoCamera = new THREE.OrthographicCamera(
+        this.orthoCamera = new OrthographicCamera(
           (frustumHeight * aspect) / -2,
           (frustumHeight * aspect) / 2,
           frustumHeight / 2,
@@ -1985,7 +1991,7 @@ export class PreviewManager {
     }
 
     // Calculate direction vector from target to camera
-    const direction = new THREE.Vector3()
+    const direction = new Vector3()
       .subVectors(camera.position, this.controls.target)
       .normalize();
 
@@ -2025,8 +2031,8 @@ export class PreviewManager {
   calculateDimensions() {
     if (!this.mesh) return null;
 
-    const box = new THREE.Box3().setFromObject(this.mesh);
-    const size = box.getSize(new THREE.Vector3());
+    const box = new Box3().setFromObject(this.mesh);
+    const size = box.getSize(new Vector3());
     const volume = size.x * size.y * size.z;
     const geo = this._getPrimaryGeometry();
     const triangles = geo
@@ -2078,13 +2084,13 @@ export class PreviewManager {
     if (!this.controls) return;
 
     const camera = this.getActiveCamera();
-    const right = new THREE.Vector3().setFromMatrixColumn(
+    const right = new Vector3().setFromMatrixColumn(
       camera.matrixWorld,
       0
     );
-    const up = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1);
+    const up = new Vector3().setFromMatrixColumn(camera.matrixWorld, 1);
 
-    const panOffset = new THREE.Vector3()
+    const panOffset = new Vector3()
       .addScaledVector(right, deltaRight)
       .addScaledVector(up, deltaUp);
 
@@ -2104,7 +2110,7 @@ export class PreviewManager {
     // Compute offset from the orbit target (NOT world origin)
     const offset = camera.position.clone().sub(this.controls.target);
     // Rotate offset around the Z-axis (world up)
-    offset.applyAxisAngle(new THREE.Vector3(0, 0, 1), angle);
+    offset.applyAxisAngle(new Vector3(0, 0, 1), angle);
     // Reposition camera at target + rotated offset
     camera.position.copy(this.controls.target).add(offset);
     this.controls.update();
@@ -2159,7 +2165,7 @@ export class PreviewManager {
     } else {
       // Perspective: translate camera along view direction
       const camera = this.getActiveCamera();
-      const direction = new THREE.Vector3();
+      const direction = new Vector3();
       camera.getWorldDirection(direction);
       camera.position.addScaledVector(direction, amount);
     }
@@ -2194,39 +2200,39 @@ export class PreviewManager {
     this.dimensions = this.calculateDimensions();
     if (!this.dimensions) return;
 
-    this.measurementHelpers = new THREE.Group();
+    this.measurementHelpers = new Group();
     this.measurementHelpers.name = 'measurements';
 
-    const box = new THREE.Box3().setFromObject(this.mesh);
+    const box = new Box3().setFromObject(this.mesh);
     const min = box.min;
     const max = box.max;
 
     const lineColor = this.currentTheme.includes('dark') ? 0xff6b6b : 0xff0000;
 
-    const boxHelper = new THREE.BoxHelper(this.mesh, lineColor);
+    const boxHelper = new BoxHelper(this.mesh, lineColor);
     // Note: linewidth is ignored in WebGL, relying on color contrast instead
     this.measurementHelpers.add(boxHelper);
 
     // Add dimension lines and labels (we'll render text as sprites)
     this.addDimensionLine(
-      new THREE.Vector3(min.x, min.y, min.z),
-      new THREE.Vector3(max.x, min.y, min.z),
+      new Vector3(min.x, min.y, min.z),
+      new Vector3(max.x, min.y, min.z),
       `${this.dimensions.x} mm`,
       'X',
       lineColor
     );
 
     this.addDimensionLine(
-      new THREE.Vector3(min.x, min.y, min.z),
-      new THREE.Vector3(min.x, max.y, min.z),
+      new Vector3(min.x, min.y, min.z),
+      new Vector3(min.x, max.y, min.z),
       `${this.dimensions.y} mm`,
       'Y',
       lineColor
     );
 
     this.addDimensionLine(
-      new THREE.Vector3(min.x, min.y, min.z),
-      new THREE.Vector3(min.x, min.y, max.z),
+      new Vector3(min.x, min.y, min.z),
+      new Vector3(min.x, min.y, max.z),
       `${this.dimensions.z} mm`,
       'Z',
       lineColor
@@ -2247,16 +2253,16 @@ export class PreviewManager {
   addDimensionLine(start, end, label, axis, color) {
     // Create line geometry
     const points = [start, end];
-    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+    const geometry = new BufferGeometry().setFromPoints(points);
     // Note: linewidth is ignored in WebGL, relying on color contrast instead
-    const material = new THREE.LineBasicMaterial({
+    const material = new LineBasicMaterial({
       color: color,
     });
-    const line = new THREE.Line(geometry, material);
+    const line = new Line(geometry, material);
     this.measurementHelpers.add(line);
 
     // Create text sprite for label
-    const midpoint = new THREE.Vector3().lerpVectors(start, end, 0.5);
+    const midpoint = new Vector3().lerpVectors(start, end, 0.5);
     const sprite = this.createTextSprite(label, color);
 
     // Offset sprite slightly from the line
@@ -2306,12 +2312,12 @@ export class PreviewManager {
     context.fillText(text, canvas.width / 2, canvas.height / 2);
 
     // Create texture from canvas
-    const texture = new THREE.CanvasTexture(canvas);
+    const texture = new CanvasTexture(canvas);
     texture.needsUpdate = true;
 
     // Create sprite
-    const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
-    const sprite = new THREE.Sprite(spriteMaterial);
+    const spriteMaterial = new SpriteMaterial({ map: texture });
+    const sprite = new Sprite(spriteMaterial);
     sprite.scale.set(20, 5, 1);
 
     return sprite;
@@ -2625,7 +2631,7 @@ export class PreviewManager {
     // height via geometry scaling so rectangular beds are represented correctly.
     const size = Math.max(widthMm, heightMm);
     const divisions = Math.round(size / 10);
-    const helper = new THREE.GridHelper(
+    const helper = new GridHelper(
       size,
       divisions,
       colors.gridPrimary,
@@ -3268,7 +3274,7 @@ export class PreviewManager {
     }
 
     // Create Three.js texture from canvas
-    const texture = new THREE.CanvasTexture(canvas);
+    const texture = new CanvasTexture(canvas);
     texture.needsUpdate = true;
 
     return { texture, aspect, widthMm, heightMm };
@@ -3299,13 +3305,13 @@ export class PreviewManager {
       const ctx = canvas.getContext('2d');
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-      const texture = new THREE.CanvasTexture(canvas);
+      const texture = new CanvasTexture(canvas);
       texture.needsUpdate = true;
       return { texture, aspect };
     }
 
     // Use TextureLoader for full-res images
-    const texture = new THREE.Texture(img);
+    const texture = new Texture(img);
     texture.needsUpdate = true;
     return { texture, aspect };
   }
@@ -3346,16 +3352,16 @@ export class PreviewManager {
       this.overlayConfig;
 
     if (!this.referenceOverlay) {
-      const geometry = new THREE.PlaneGeometry(width, height);
-      const material = new THREE.MeshBasicMaterial({
+      const geometry = new PlaneGeometry(width, height);
+      const material = new MeshBasicMaterial({
         map: this.referenceTexture,
         transparent: true,
         opacity: opacity,
         depthWrite: false, // Prevent overlay from occluding other objects
-        side: THREE.DoubleSide,
+        side: DoubleSide,
       });
 
-      this.referenceOverlay = new THREE.Mesh(geometry, material);
+      this.referenceOverlay = new Mesh(geometry, material);
       this.referenceOverlay.name = 'referenceOverlay';
 
       // Position on XY plane (normal +Z) for Z-up coordinate system
@@ -3368,7 +3374,7 @@ export class PreviewManager {
       const geo = this.referenceOverlay.geometry;
       if (geo.parameters.width !== width || geo.parameters.height !== height) {
         geo.dispose();
-        this.referenceOverlay.geometry = new THREE.PlaneGeometry(width, height);
+        this.referenceOverlay.geometry = new PlaneGeometry(width, height);
       }
 
       this.referenceOverlay.material.map = this.referenceTexture;
@@ -3396,8 +3402,8 @@ export class PreviewManager {
       return;
     }
 
-    const box = new THREE.Box3().setFromObject(this.mesh);
-    const size = box.getSize(new THREE.Vector3());
+    const box = new Box3().setFromObject(this.mesh);
+    const size = box.getSize(new Vector3());
 
     // Update overlay dimensions to match model XY
     this.overlayConfig.width = size.x;
@@ -3653,7 +3659,7 @@ export class PreviewManager {
     this.hideOverlayMeasurements();
 
     // Create group for overlay measurement visuals
-    this.overlayMeasurementHelpers = new THREE.Group();
+    this.overlayMeasurementHelpers = new Group();
     this.overlayMeasurementHelpers.name = 'overlayMeasurements';
 
     const { width, height, offsetX, offsetY, zPosition, rotationDeg } =
@@ -3703,12 +3709,12 @@ export class PreviewManager {
       const start = corners[i];
       const end = corners[(i + 1) % 4];
       const points = [
-        new THREE.Vector3(start.x, start.y, zLabel),
-        new THREE.Vector3(end.x, end.y, zLabel),
+        new Vector3(start.x, start.y, zLabel),
+        new Vector3(end.x, end.y, zLabel),
       ];
-      const geometry = new THREE.BufferGeometry().setFromPoints(points);
-      const material = new THREE.LineBasicMaterial({ color: lineColor });
-      const line = new THREE.Line(geometry, material);
+      const geometry = new BufferGeometry().setFromPoints(points);
+      const material = new LineBasicMaterial({ color: lineColor });
+      const line = new Line(geometry, material);
       this.overlayMeasurementHelpers.add(line);
     }
 
@@ -3807,24 +3813,24 @@ export class PreviewManager {
     context.fillText(text, canvas.width / 2, canvas.height / 2);
 
     // Create texture from canvas
-    const texture = new THREE.CanvasTexture(canvas);
+    const texture = new CanvasTexture(canvas);
     texture.needsUpdate = true;
 
     // Create a plane geometry lying flat on XY
     // Size the plane proportionally to the text (roughly 20mm wide for readability)
     const planeWidth = 30;
     const planeHeight = planeWidth * (canvas.height / canvas.width);
-    const geometry = new THREE.PlaneGeometry(planeWidth, planeHeight);
+    const geometry = new PlaneGeometry(planeWidth, planeHeight);
 
-    const material = new THREE.MeshBasicMaterial({
+    const material = new MeshBasicMaterial({
       map: texture,
       transparent: true,
-      side: THREE.DoubleSide,
+      side: DoubleSide,
       depthTest: true,
       depthWrite: false,
     });
 
-    const mesh = new THREE.Mesh(geometry, material);
+    const mesh = new Mesh(geometry, material);
 
     // Rotate to lie flat on XY plane (facing up, +Z)
     // PlaneGeometry faces +Z by default, so no X rotation needed
@@ -3843,16 +3849,16 @@ export class PreviewManager {
    */
   addDimensionExtensionLine(from, to, z, color) {
     const points = [
-      new THREE.Vector3(from.x, from.y, z),
-      new THREE.Vector3(to.x, to.y, z),
+      new Vector3(from.x, from.y, z),
+      new Vector3(to.x, to.y, z),
     ];
-    const geometry = new THREE.BufferGeometry().setFromPoints(points);
-    const material = new THREE.LineBasicMaterial({
+    const geometry = new BufferGeometry().setFromPoints(points);
+    const material = new LineBasicMaterial({
       color: color,
       transparent: true,
       opacity: 0.5,
     });
-    const line = new THREE.Line(geometry, material);
+    const line = new Line(geometry, material);
     this.overlayMeasurementHelpers.add(line);
   }
 
@@ -4201,15 +4207,15 @@ export class PreviewManager {
     const planeW = widthMm || 200;
     const planeH = heightMm || 150;
 
-    const geometry = new THREE.PlaneGeometry(planeW, planeH);
-    const material = new THREE.MeshBasicMaterial({
+    const geometry = new PlaneGeometry(planeW, planeH);
+    const material = new MeshBasicMaterial({
       map: texture,
       transparent: true,
-      side: THREE.DoubleSide,
+      side: DoubleSide,
       depthWrite: true,
     });
 
-    this.mesh = new THREE.Mesh(geometry, material);
+    this.mesh = new Mesh(geometry, material);
     this.mesh.name = '2dPreviewPlane';
     this.scene.add(this.mesh);
 
@@ -4276,21 +4282,41 @@ export class PreviewManager {
     const doc = parser.parseFromString(svgText, 'image/svg+xml');
     const svg = doc.documentElement;
 
-    // Remove <script> elements
-    for (const el of [...svg.querySelectorAll('script')]) {
+    // Remove elements that can embed arbitrary HTML or external content
+    for (const el of [
+      ...svg.querySelectorAll(
+        'script, foreignObject, iframe, embed, object'
+      ),
+    ]) {
       el.remove();
     }
 
-    // Remove event-handler attributes from all elements
+    // Block <use> elements with external references (SSRF / data exfiltration)
+    for (const useEl of [...svg.querySelectorAll('use')]) {
+      const href =
+        useEl.getAttribute('href') ||
+        useEl.getAttribute('xlink:href') ||
+        '';
+      const val = href.trim().toLowerCase();
+      if (
+        val.startsWith('http:') ||
+        val.startsWith('https:') ||
+        val.startsWith('//')
+      ) {
+        useEl.remove();
+      }
+    }
+
+    // Remove event-handler attributes and dangerous URI schemes from all elements
     const allEls = svg.querySelectorAll('*');
     for (const el of allEls) {
       for (const attr of [...el.attributes]) {
         if (attr.name.startsWith('on')) {
           el.removeAttribute(attr.name);
         }
-        // Remove xlink:href to javascript:
         if (attr.name === 'href' || attr.name === 'xlink:href') {
-          if (attr.value.trim().toLowerCase().startsWith('javascript:')) {
+          const val = attr.value.trim().toLowerCase();
+          if (val.startsWith('javascript:') || val.startsWith('data:')) {
             el.removeAttribute(attr.name);
           }
         }

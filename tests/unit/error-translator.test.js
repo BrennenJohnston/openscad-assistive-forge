@@ -3,10 +3,12 @@
  * Tests COGA-compliant error translation functionality
  */
 
-import { describe, test, expect } from 'vitest';
-import { 
-  translateError, 
-  createFriendlyErrorDisplay 
+import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
+import {
+  translateError,
+  createFriendlyErrorDisplay,
+  showErrorModal,
+  showErrorToast,
 } from '../../src/js/error-translator.js';
 
 describe('Error Translator', () => {
@@ -130,6 +132,191 @@ describe('Error Translator', () => {
       
       const technical = details.querySelector('.error-technical');
       expect(technical.textContent).toBe('technical error message');
+    });
+  });
+
+  describe('showErrorModal', () => {
+    beforeEach(() => {
+      document.body.innerHTML = '';
+      const assertiveRegion = document.createElement('div');
+      assertiveRegion.id = 'srAnnouncerAssertive';
+      assertiveRegion.setAttribute('aria-live', 'assertive');
+      document.body.appendChild(assertiveRegion);
+    });
+
+    afterEach(() => {
+      document.body.innerHTML = '';
+    });
+
+    test('should create a modal with role="alertdialog"', () => {
+      showErrorModal({
+        title: 'Test Error',
+        message: 'Something went wrong',
+      });
+
+      const modal = document.querySelector('[data-testid="friendly-error-modal"]');
+      expect(modal).toBeTruthy();
+      expect(modal.getAttribute('role')).toBe('alertdialog');
+      expect(modal.getAttribute('aria-modal')).toBe('true');
+    });
+
+    test('should set aria-labelledby and aria-describedby', () => {
+      showErrorModal({
+        title: 'Test Error',
+        message: 'Description text',
+      });
+
+      const modal = document.querySelector('[data-testid="friendly-error-modal"]');
+      const labelId = modal.getAttribute('aria-labelledby');
+      const descId = modal.getAttribute('aria-describedby');
+
+      expect(document.getElementById(labelId)).toBeTruthy();
+      expect(document.getElementById(descId)).toBeTruthy();
+      expect(document.getElementById(labelId).textContent).toContain('Test Error');
+      expect(document.getElementById(descId).textContent).toContain('Description text');
+    });
+
+    test('should include suggestion when provided', () => {
+      showErrorModal({
+        title: 'Error',
+        message: 'Problem',
+        suggestion: 'Try this fix',
+      });
+
+      const suggestion = document.querySelector('.error-suggestion');
+      expect(suggestion).toBeTruthy();
+      expect(suggestion.textContent).toContain('Try this fix');
+    });
+
+    test('should include collapsible technical details when provided', () => {
+      showErrorModal({
+        title: 'Error',
+        message: 'Problem',
+        technical: 'stack trace here',
+      });
+
+      const details = document.querySelector('.error-details-toggle');
+      expect(details).toBeTruthy();
+      const pre = details.querySelector('.error-technical');
+      expect(pre.textContent).toBe('stack trace here');
+    });
+
+    test('should resolve when OK button is clicked', async () => {
+      const promise = showErrorModal({
+        title: 'Error',
+        message: 'Problem',
+      });
+
+      const okBtn = document.querySelector('.friendly-error-modal-footer .btn-primary');
+      expect(okBtn).toBeTruthy();
+      okBtn.click();
+
+      await promise;
+      expect(document.querySelector('[data-testid="friendly-error-modal"]')).toBeNull();
+    });
+
+    test('should resolve when close button is clicked', async () => {
+      const promise = showErrorModal({
+        title: 'Error',
+        message: 'Problem',
+      });
+
+      const closeBtn = document.querySelector('.friendly-error-modal-close');
+      closeBtn.click();
+
+      await promise;
+      expect(document.querySelector('[data-testid="friendly-error-modal"]')).toBeNull();
+    });
+
+    test('should resolve on Escape key', async () => {
+      const promise = showErrorModal({
+        title: 'Error',
+        message: 'Problem',
+      });
+
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+
+      await promise;
+      expect(document.querySelector('[data-testid="friendly-error-modal"]')).toBeNull();
+    });
+
+    test('should resolve when clicking the overlay backdrop', async () => {
+      const promise = showErrorModal({
+        title: 'Error',
+        message: 'Problem',
+      });
+
+      const overlay = document.querySelector('[data-testid="friendly-error-modal"]');
+      overlay.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+      await promise;
+      expect(document.querySelector('[data-testid="friendly-error-modal"]')).toBeNull();
+    });
+  });
+
+  describe('showErrorToast', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+      document.body.innerHTML = '';
+      const assertiveRegion = document.createElement('div');
+      assertiveRegion.id = 'srAnnouncerAssertive';
+      assertiveRegion.setAttribute('aria-live', 'assertive');
+      document.body.appendChild(assertiveRegion);
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+      document.body.innerHTML = '';
+    });
+
+    test('should create a toast with role="alert"', () => {
+      showErrorToast({ title: 'Info', message: 'Something happened' });
+
+      const toast = document.querySelector('.error-toast');
+      expect(toast).toBeTruthy();
+      expect(toast.getAttribute('role')).toBe('alert');
+    });
+
+    test('should create a toast container if absent', () => {
+      expect(document.getElementById('error-toast-container')).toBeNull();
+      showErrorToast({ title: 'Info', message: 'Test' });
+      expect(document.getElementById('error-toast-container')).toBeTruthy();
+    });
+
+    test('should display title and message', () => {
+      showErrorToast({ title: 'My Title', message: 'My message text' });
+
+      const titleEl = document.querySelector('.error-toast-title');
+      const msgEl = document.querySelector('.error-toast-message');
+      expect(titleEl.textContent).toBe('My Title');
+      expect(msgEl.textContent).toBe('My message text');
+    });
+
+    test('should auto-dismiss after duration', () => {
+      showErrorToast({ title: 'Info', message: 'Bye', duration: 5000 });
+
+      expect(document.querySelector('.error-toast')).toBeTruthy();
+      vi.advanceTimersByTime(5000);
+      const toast = document.querySelector('.error-toast');
+      expect(toast.classList.contains('error-toast-exit')).toBe(true);
+    });
+
+    test('should dismiss when dismiss button clicked', () => {
+      showErrorToast({ title: 'Info', message: 'Click me', duration: 0 });
+
+      const dismissBtn = document.querySelector('.error-toast-dismiss');
+      dismissBtn.click();
+
+      const toast = document.querySelector('.error-toast');
+      expect(toast.classList.contains('error-toast-exit')).toBe(true);
+    });
+
+    test('should stack multiple toasts', () => {
+      showErrorToast({ title: 'First', message: 'A' });
+      showErrorToast({ title: 'Second', message: 'B' });
+
+      const toasts = document.querySelectorAll('.error-toast');
+      expect(toasts.length).toBe(2);
     });
   });
 });

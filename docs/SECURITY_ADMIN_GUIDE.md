@@ -40,15 +40,15 @@ No user data leaves the browser except for explicit file downloads.
 The application uses a strict Content Security Policy to prevent XSS and injection attacks:
 
 ```http
-Content-Security-Policy-Report-Only:
+Content-Security-Policy:
   default-src 'self';
-  script-src 'self' 'wasm-unsafe-eval';
+  script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval';
   worker-src 'self' blob:;
   child-src 'self' blob:;
-  style-src 'self' 'unsafe-inline';
+  style-src 'self';
   img-src 'self' data: blob:;
   font-src 'self';
-  connect-src 'self' https://raw.githubusercontent.com https://*.github.io https://*.gitlab.io https://*.pages.dev;
+  connect-src 'self' data: https://raw.githubusercontent.com https://media.githubusercontent.com https://*.github.io https://*.gitlab.io https://*.pages.dev;
   frame-ancestors 'none';
   object-src 'none';
   base-uri 'self';
@@ -56,24 +56,25 @@ Content-Security-Policy-Report-Only:
   upgrade-insecure-requests
 ```
 
-> **Note**: The CSP is currently in **Report-Only** mode (Phase 1). Violations are logged but not blocked. Plan to transition to enforcing mode after the manifest feature stabilizes and a burn-down period confirms no false positives.
+> **Note**: The CSP is in **enforcing** mode. Violations are blocked and logged to the browser console via `csp-reporter.js`. For production monitoring, a reporting endpoint can be added via Cloudflare Workers (see [CSP Reporting](#csp-reporting) below).
 
 ### Directive Explanations
 
 | Directive | Value | Rationale |
 |-----------|-------|-----------|
+| `script-src 'unsafe-eval'` | Required | AJV compiles JSON schemas at runtime via `new Function()` |
 | `script-src 'wasm-unsafe-eval'` | Required | OpenSCAD WASM needs to compile code at runtime |
 | `worker-src blob:` | Required | Web Worker blob URLs for WASM processing |
-| `style-src 'unsafe-inline'` | Required | Monaco Editor requires inline styles |
+| `style-src 'self'` | Tightened | CodeMirror 6 uses constructable stylesheets — no `unsafe-inline` needed |
 | `connect-src` (external origins) | Required | Manifest sharing (`?manifest=`) fetches project files from author-hosted repos on GitHub, GitLab, and Cloudflare Pages |
 | `frame-ancestors 'none'` | Security | Prevents clickjacking via framing |
 
 ### CSP Reporting
 
-CSP violations are logged to the browser console. For production monitoring, configure a report endpoint:
+CSP violations are logged to the browser console via `csp-reporter.js` (controlled by the `csp_reporting` feature flag). For production monitoring, add a `report-uri` or `report-to` directive pointing to a reporting endpoint. Since this is a static site, the endpoint can be implemented as a Cloudflare Worker:
 
 ```http
-Content-Security-Policy-Report-Only: ...; report-uri /csp-report
+Content-Security-Policy: ...; report-uri https://your-worker.your-domain.workers.dev/csp-report
 ```
 
 ### Modifying CSP
@@ -257,7 +258,7 @@ This data never leaves the user's browser.
 The application makes network requests only to:
 
 1. The hosting origin (static assets)
-2. cdn.jsdelivr.net (Monaco Editor - if Expert Mode enabled)
+2. No external CDN dependencies (CodeMirror 6 is bundled locally)
 3. `raw.githubusercontent.com` / `*.github.io` / `*.gitlab.io` / `*.pages.dev` (only when a `?manifest=` or `?project=` deep-link is used to load an externally-hosted project)
 
 No user content is transmitted. However, when a user clicks a manifest link, their browser fetches files directly from the author's hosting platform (e.g., GitHub). This exposes the user's IP address and request timing to that platform. GitHub's [privacy policy](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement) applies to those requests. This is inherent to any client-side architecture that fetches remote resources without a proxy backend.

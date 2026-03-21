@@ -4,7 +4,7 @@ Notes on keeping the app fast.
 
 ## Bundle size
 
-Current bundle (v4.2.0):
+Current bundle (v4.3.0):
 - `index.js` ~231.8KB gzipped (main), ~187KB gzipped (Three.js chunk)
 - Three.js lazy-loaded via code splitting
 - OpenSCAD WASM vendored in `public/wasm/` (~2MB, loaded on first render)
@@ -75,7 +75,7 @@ Static assets are cached in the service worker for offline use:
 
 ## Memory monitoring
 
-The v4.2.0 memory monitoring system tracks WASM heap usage and implements graceful degradation to prevent browser crashes on complex models.
+The memory monitoring system tracks WASM heap usage and implements graceful degradation to prevent browser crashes on complex models.
 
 ### Three-tier threshold system
 

@@ -5,6 +5,7 @@
 
 import { PreviewManager } from './preview.js';
 import { escapeHtml } from './html-utils.js';
+import { showErrorToast } from './error-translator.js';
 
 /**
  * ComparisonView handles the multi-panel comparison UI
@@ -465,7 +466,7 @@ export class ComparisonView {
       await this.comparisonController.renderAllVariants();
     } catch (error) {
       console.error('Failed to render all variants:', error);
-      alert('Some variants failed to render. Check console for details.');
+      showErrorToast({ title: 'Render Incomplete', message: 'Some variants failed to render. Check the console for details.' });
     } finally {
       if (btn) {
         btn.disabled = false;
@@ -507,7 +508,7 @@ export class ComparisonView {
       await this.comparisonController.renderVariant(variantId);
     } catch (error) {
       console.error(`Failed to render variant ${variantId}:`, error);
-      alert(`Render failed: ${error.message}`);
+      showErrorToast({ title: 'Render Failed', message: error.message });
     }
   }
 
@@ -517,7 +518,7 @@ export class ComparisonView {
   handleDownloadVariant(variantId) {
     const variant = this.comparisonController.getVariant(variantId);
     if (!variant || !variant.stl) {
-      alert('No STL available for this variant');
+      showErrorToast({ title: 'No STL Available', message: 'No STL data is available for this variant.' });
       return;
     }
 

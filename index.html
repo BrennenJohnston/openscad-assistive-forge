@@ -334,55 +334,68 @@
           role="navigation"
           aria-label="Workflow progress"
         >
-          <div
-            id="toolbarMenuBar"
-            class="toolbar-menu-bar hidden"
-            aria-label="Application menu"
+        <div
+          id="toolbarMenuBar"
+          class="toolbar-menu-bar hidden"
+          role="menubar"
+          aria-label="Application menu"
+        >
+          <button type="button"
+            class="toolbar-menu-btn btn"
+            id="fileMenuBtn"
+            role="menuitem"
+            aria-haspopup="menu"
+            aria-expanded="false"
+            tabindex="0"
           >
-            <button type="button"
-              class="toolbar-menu-btn btn"
-              id="fileMenuBtn"
-              aria-haspopup="dialog"
-              aria-expanded="false"
-            >
-              File</button
-            ><button type="button"
-              class="toolbar-menu-btn btn"
-              id="editMenuBtn"
-              aria-haspopup="dialog"
-              aria-expanded="false"
-            >
-              Edit</button
-            ><button type="button"
-              class="toolbar-menu-btn btn"
-              id="designMenuBtn"
-              aria-haspopup="dialog"
-              aria-expanded="false"
-            >
-              Design</button
-            ><button type="button"
-              class="toolbar-menu-btn btn"
-              id="viewMenuBtn"
-              aria-haspopup="dialog"
-              aria-expanded="false"
-            >
-              View</button
-            ><button type="button"
-              class="toolbar-menu-btn btn"
-              id="windowMenuBtn"
-              aria-haspopup="dialog"
-              aria-expanded="false"
-            >
-              Window</button
-            ><button type="button"
-              class="toolbar-menu-btn btn"
-              id="helpMenuBtn"
-              aria-haspopup="dialog"
-              aria-expanded="false"
-            >
-              Help
-            </button>
-          </div>
+            File</button
+          ><button type="button"
+            class="toolbar-menu-btn btn"
+            id="editMenuBtn"
+            role="menuitem"
+            aria-haspopup="menu"
+            aria-expanded="false"
+            tabindex="-1"
+          >
+            Edit</button
+          ><button type="button"
+            class="toolbar-menu-btn btn"
+            id="designMenuBtn"
+            role="menuitem"
+            aria-haspopup="menu"
+            aria-expanded="false"
+            tabindex="-1"
+          >
+            Design</button
+          ><button type="button"
+            class="toolbar-menu-btn btn"
+            id="viewMenuBtn"
+            role="menuitem"
+            aria-haspopup="menu"
+            aria-expanded="false"
+            tabindex="-1"
+          >
+            View</button
+          ><button type="button"
+            class="toolbar-menu-btn btn"
+            id="windowMenuBtn"
+            role="menuitem"
+            aria-haspopup="menu"
+            aria-expanded="false"
+            tabindex="-1"
+          >
+            Window</button
+          ><button type="button"
+            class="toolbar-menu-btn btn"
+            id="helpMenuBtn"
+            role="menuitem"
+            aria-haspopup="menu"
+            aria-expanded="false"
+            tabindex="-1"
+          >
+            Help
+          </button>
+        </div>
           <div class="workflow-actions">
             <button type="button"
               id="uiModeToggle"
@@ -537,152 +550,127 @@
                     </button>
                   </div>
                 </div>
-                <!-- Other tutorials are temporarily hidden (we'll re-enable later) -->
-                <div class="role-path-card" hidden>
+                <div class="role-path-card">
                   <h3 class="role-path-title">Advanced Makers</h3>
                   <p class="role-path-description">
                     Work with multi-file projects, libraries, and advanced
-                    OpenSCAD features
+                    OpenSCAD features.
                   </p>
-                  <ul class="role-path-tips" aria-label="What you'll learn">
-                    <li>Upload ZIP files with dependencies</li>
-                    <li>Enable MCAD, BOSL2, and other libraries</li>
-                    <li>Export in multiple formats (STL, OBJ, 3MF)</li>
-                  </ul>
+                  <details class="role-path-details">
+                    <summary>Key capabilities</summary>
+                    <ul class="role-path-tips" aria-label="Key capabilities">
+                      <li>Upload ZIP files with include/use dependencies</li>
+                      <li>Enable MCAD, BOSL2, and other libraries</li>
+                      <li>Export in multiple formats (STL, OBJ, 3MF, SVG, DXF)</li>
+                      <li>Save and manage projects with companion files</li>
+                    </ul>
+                  </details>
                   <div class="role-path-actions">
                     <button type="button"
-                      class="btn btn-primary btn-role-try"
-                      data-example="library-test"
-                      data-role="makers"
-                      data-tutorial="makers"
-                    >
-                      Start Tutorial
-                    </button>
-                    <button type="button"
-                      class="btn btn-link btn-role-learn"
+                      class="btn btn-outline btn-role-learn"
                       data-feature-tab="libraries"
-                      aria-label="Open Features Guide: Libraries"
+                      aria-label="Open Help: Libraries"
                     >
-                      Learn More
+                      Open Help: Libraries
                     </button>
                   </div>
                 </div>
-                <div class="role-path-card" hidden>
+                <div class="role-path-card">
                   <h3 class="role-path-title">Keyboard-Only Users</h3>
                   <p class="role-path-description">
                     Complete the full workflow without a mouse using predictable
-                    keyboard controls
+                    keyboard controls.
                   </p>
-                  <ul class="role-path-tips" aria-label="What you'll learn">
-                    <li>Tab through parameters logically</li>
-                    <li>Undo/Redo with Ctrl+Z / Ctrl+Shift+Z</li>
-                    <li>Skip to main content (screen top)</li>
-                  </ul>
+                  <details class="role-path-details">
+                    <summary>Navigation highlights</summary>
+                    <ul class="role-path-tips" aria-label="Navigation highlights">
+                      <li>Tab through parameters in logical order</li>
+                      <li>Undo / Redo with Ctrl+Z / Ctrl+Y</li>
+                      <li>Skip-to-content link at screen top</li>
+                      <li>Arrow keys navigate toolbar menus</li>
+                    </ul>
+                  </details>
                   <div class="role-path-actions">
                     <button type="button"
-                      class="btn btn-primary btn-role-try"
-                      data-example="cylinder"
-                      data-role="keyboard-only"
-                      data-tutorial="keyboard-only"
+                      class="btn btn-outline btn-role-learn"
+                      data-feature-tab="accessibility"
+                      aria-label="Open Help: Accessibility"
                     >
-                      Start Tutorial
-                    </button>
-                    <button type="button"
-                      class="btn btn-link btn-role-learn"
-                      data-doc="KEYGUARD_WORKFLOW_GUIDE"
-                      aria-label="Learn about keyboard navigation"
-                    >
-                      Learn More
+                      Open Help: Accessibility
                     </button>
                   </div>
                 </div>
-                <div class="role-path-card" hidden>
+                <div class="role-path-card">
                   <h3 class="role-path-title">Low Vision Users</h3>
                   <p class="role-path-description">
-                    Use high contrast themes, large touch targets, and visible
-                    focus indicators
+                    Use high-contrast themes, large touch targets, and visible
+                    focus indicators.
                   </p>
-                  <ul class="role-path-tips" aria-label="What you'll learn">
-                    <li>Toggle HC button (high contrast mode)</li>
-                    <li>Switch light/dark theme</li>
-                    <li>All buttons meet 44×44px touch target</li>
-                  </ul>
+                  <details class="role-path-details">
+                    <summary>Visual aids</summary>
+                    <ul class="role-path-tips" aria-label="Visual aids">
+                      <li>Toggle High Contrast mode via the HC button</li>
+                      <li>Switch between light and dark themes</li>
+                      <li>All interactive controls meet 44×44 px touch targets</li>
+                      <li>Visible focus rings on every focusable element</li>
+                    </ul>
+                  </details>
                   <div class="role-path-actions">
                     <button type="button"
-                      class="btn btn-primary btn-role-try"
-                      data-example="simple-box"
-                      data-role="low-vision"
-                      data-tutorial="low-vision"
-                    >
-                      Start Tutorial
-                    </button>
-                    <button type="button"
-                      class="btn btn-link btn-role-learn"
-                      data-doc="ACCESSIBILITY_GUIDE"
+                      class="btn btn-outline btn-role-learn"
                       data-feature-tab="accessibility"
-                      aria-label="Learn about visual accessibility features"
+                      aria-label="Open Help: Accessibility"
                     >
-                      Learn More
+                      Open Help: Accessibility
                     </button>
                   </div>
                 </div>
-                <div class="role-path-card" hidden>
+                <div class="role-path-card">
                   <h3 class="role-path-title">Voice Input Users</h3>
                   <p class="role-path-description">
                     Control the app with voice commands using stable, speakable
-                    names
+                    button names.
                   </p>
-                  <ul class="role-path-tips" aria-label="What you'll learn">
-                    <li>Say button labels: "Click Generate"</li>
-                    <li>Navigate: "Click Help", "Click Reset"</li>
-                    <li>All controls have unique, speakable names</li>
-                  </ul>
+                  <details class="role-path-details">
+                    <summary>Voice-friendly features</summary>
+                    <ul class="role-path-tips" aria-label="Voice-friendly features">
+                      <li>Say button labels: "Click Generate", "Click Help"</li>
+                      <li>Every control has a unique, speakable name</li>
+                      <li>Toolbar menus open with "Click File", "Click View"</li>
+                    </ul>
+                  </details>
                   <div class="role-path-actions">
                     <button type="button"
-                      class="btn btn-primary btn-role-try"
-                      data-example="simple-box"
-                      data-role="voice-input"
-                      data-tutorial="voice-input"
-                    >
-                      Start Tutorial
-                    </button>
-                    <button type="button"
-                      class="btn btn-link btn-role-learn"
-                      data-doc="ACCESSIBILITY_GUIDE"
+                      class="btn btn-outline btn-role-learn"
                       data-feature-tab="accessibility"
-                      aria-label="Learn about voice input and accessible control names"
+                      aria-label="Open Help: Accessibility"
                     >
-                      Learn More
+                      Open Help: Accessibility
                     </button>
                   </div>
                 </div>
-                <div class="role-path-card" hidden>
+                <div class="role-path-card">
                   <h3 class="role-path-title">Screen Reader Users</h3>
                   <p class="role-path-description">
                     Customize models with clear status announcements and
-                    keyboard-only workflow
+                    full keyboard-only workflow.
                   </p>
-                  <ul class="role-path-tips" aria-label="What you'll learn">
-                    <li>Status area announces all changes</li>
-                    <li>ARIA landmarks for quick navigation</li>
-                    <li>Plain-language error messages</li>
-                  </ul>
+                  <details class="role-path-details">
+                    <summary>Assistive-tech features</summary>
+                    <ul class="role-path-tips" aria-label="Assistive-tech features">
+                      <li>Live region announces parameter changes and render status</li>
+                      <li>ARIA landmarks for quick navigation between sections</li>
+                      <li>Plain-language error messages instead of raw alerts</li>
+                      <li>Accessible modal dialogs with focus management</li>
+                    </ul>
+                  </details>
                   <div class="role-path-actions">
                     <button type="button"
-                      class="btn btn-primary btn-role-try"
-                      data-example="simple-box"
-                      data-role="screen-reader"
-                      data-tutorial="screen-reader"
-                    >
-                      Start Tutorial
-                    </button>
-                    <button type="button"
-                      class="btn btn-link btn-role-learn"
-                      data-doc="ACCESSIBILITY_GUIDE"
+                      class="btn btn-outline btn-role-learn"
                       data-feature-tab="accessibility"
-                      aria-label="Learn about screen reader accessibility features"
+                      aria-label="Open Help: Accessibility"
                     >
-                      Learn More
+                      Open Help: Accessibility
                     </button>
                   </div>
                 </div>
@@ -1042,10 +1030,9 @@
                 <!-- Mobile close button for drawer -->
                 <button type="button"
                   id="drawerCloseBtn"
-                  class="btn btn-sm btn-icon mobile-only drawer-close-btn forge-control"
+                  class="btn btn-sm btn-icon mobile-only drawer-close-btn forge-control hidden"
                   aria-label="Close parameters panel"
                   title="Close"
-                  style="display: none"
                   data-tutorial-target="mobile-drawer-close"
                 >
                   <svg
@@ -2634,6 +2621,10 @@
               aria-label="OpenSCAD code editor"
               aria-live="polite"
             >
+              <!-- Mobile touch-drag resize handle -->
+              <div class="expert-mode-drag-handle" aria-hidden="true">
+                <span class="drag-handle-bar"></span>
+              </div>
               <div class="expert-mode-header">
                 <span class="expert-mode-title">
                   <span aria-hidden="true">{ }</span> OpenSCAD Code
@@ -2644,6 +2635,20 @@
                   ></span>
                 </span>
                 <div class="expert-mode-actions">
+                  <button type="button"
+                    id="expertModeCollapseBtn"
+                    class="btn btn-sm btn-icon mobile-only"
+                    aria-expanded="true"
+                    aria-label="Collapse code editor"
+                    title="Collapse editor"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"
+                      aria-hidden="true">
+                      <path d="M4 6l4 4 4-4" stroke="currentColor"
+                        stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round"/>
+                    </svg>
+                  </button>
                   <button type="button"
                     id="expertRunPreviewBtn"
                     class="btn btn-sm btn-primary"
@@ -4738,7 +4743,7 @@
       type="file"
       id="queueImportInput"
       accept=".json"
-      style="display: none"
+      class="hidden"
       aria-hidden="true"
     />
     <!-- Source Code Viewer Modal -->
@@ -6005,7 +6010,7 @@ No console output yet. Generate a model to see output.</pre
             You've been directed to a shared project:
             <strong id="manifestSaveCopyProjectName"></strong>
           </p>
-          <p id="manifestSaveCopyAuthorLine" style="display: none">
+          <p id="manifestSaveCopyAuthorLine" class="hidden">
             Created by <strong id="manifestSaveCopyAuthor"></strong>
           </p>
           <h3>Before you start</h3>
@@ -6023,7 +6028,7 @@ No console output yet. Generate a model to see output.</pre
             You can also save a copy later from the project banner.
           </p>
         </div>
-        <div class="modal-footer" style="display: flex; gap: var(--space-sm); justify-content: flex-end; padding-top: var(--space-md); border-top: 1px solid var(--color-border); flex-wrap: wrap;">
+        <div class="modal-footer modal-footer-actions">
           <button
             type="button"
             class="btn btn-secondary"
@@ -6161,9 +6166,6 @@ No console output yet. Generate a model to see output.</pre
     <div
       id="fileMenuModal"
       class="toolbar-menu-modal hidden"
-      role="dialog"
-      aria-modal="true"
-      aria-label="File menu"
       aria-hidden="true"
     >
       <div
@@ -6174,24 +6176,22 @@ No console output yet. Generate a model to see output.</pre
         <div class="toolbar-menu-header">
           <span class="toolbar-menu-title">File</span
           ><button
-            class="modal-close toolbar-menu-close btn-icon"
+            class="toolbar-menu-close btn-icon"
             type="button"
             aria-label="Close File menu"
+            tabindex="-1"
           >
             &times;
           </button>
         </div>
         <div class="toolbar-menu-body">
-          <ul class="menu-items-list" id="fileMenuItems"></ul>
+          <ul class="menu-items-list" id="fileMenuItems" role="menu" aria-label="File"></ul>
         </div>
       </div>
     </div>
     <div
       id="editMenuModal"
       class="toolbar-menu-modal hidden"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Edit menu"
       aria-hidden="true"
     >
       <div
@@ -6202,24 +6202,22 @@ No console output yet. Generate a model to see output.</pre
         <div class="toolbar-menu-header">
           <span class="toolbar-menu-title">Edit</span
           ><button
-            class="modal-close toolbar-menu-close btn-icon"
+            class="toolbar-menu-close btn-icon"
             type="button"
             aria-label="Close Edit menu"
+            tabindex="-1"
           >
             &times;
           </button>
         </div>
         <div class="toolbar-menu-body">
-          <ul class="menu-items-list" id="editMenuItems"></ul>
+          <ul class="menu-items-list" id="editMenuItems" role="menu" aria-label="Edit"></ul>
         </div>
       </div>
     </div>
     <div
       id="designMenuModal"
       class="toolbar-menu-modal hidden"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Design menu"
       aria-hidden="true"
     >
       <div
@@ -6230,24 +6228,22 @@ No console output yet. Generate a model to see output.</pre
         <div class="toolbar-menu-header">
           <span class="toolbar-menu-title">Design</span
           ><button
-            class="modal-close toolbar-menu-close btn-icon"
+            class="toolbar-menu-close btn-icon"
             type="button"
             aria-label="Close Design menu"
+            tabindex="-1"
           >
             &times;
           </button>
         </div>
         <div class="toolbar-menu-body">
-          <ul class="menu-items-list" id="designMenuItems"></ul>
+          <ul class="menu-items-list" id="designMenuItems" role="menu" aria-label="Design"></ul>
         </div>
       </div>
     </div>
     <div
       id="viewMenuModal"
       class="toolbar-menu-modal hidden"
-      role="dialog"
-      aria-modal="true"
-      aria-label="View menu"
       aria-hidden="true"
     >
       <div
@@ -6258,24 +6254,22 @@ No console output yet. Generate a model to see output.</pre
         <div class="toolbar-menu-header">
           <span class="toolbar-menu-title">View</span
           ><button
-            class="modal-close toolbar-menu-close btn-icon"
+            class="toolbar-menu-close btn-icon"
             type="button"
             aria-label="Close View menu"
+            tabindex="-1"
           >
             &times;
           </button>
         </div>
         <div class="toolbar-menu-body">
-          <ul class="menu-items-list" id="viewMenuItems"></ul>
+          <ul class="menu-items-list" id="viewMenuItems" role="menu" aria-label="View"></ul>
         </div>
       </div>
     </div>
     <div
       id="windowMenuModal"
       class="toolbar-menu-modal hidden"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Window menu"
       aria-hidden="true"
     >
       <div
@@ -6286,24 +6280,22 @@ No console output yet. Generate a model to see output.</pre
         <div class="toolbar-menu-header">
           <span class="toolbar-menu-title">Window</span
           ><button
-            class="modal-close toolbar-menu-close btn-icon"
+            class="toolbar-menu-close btn-icon"
             type="button"
             aria-label="Close Window menu"
+            tabindex="-1"
           >
             &times;
           </button>
         </div>
         <div class="toolbar-menu-body">
-          <ul class="menu-items-list" id="windowMenuItems"></ul>
+          <ul class="menu-items-list" id="windowMenuItems" role="menu" aria-label="Window"></ul>
         </div>
       </div>
     </div>
     <div
       id="helpMenuModal"
       class="toolbar-menu-modal hidden"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Help menu"
       aria-hidden="true"
     >
       <div
@@ -6314,15 +6306,16 @@ No console output yet. Generate a model to see output.</pre
         <div class="toolbar-menu-header">
           <span class="toolbar-menu-title">Help</span
           ><button
-            class="modal-close toolbar-menu-close btn-icon"
+            class="toolbar-menu-close btn-icon"
             type="button"
             aria-label="Close Help menu"
+            tabindex="-1"
           >
             &times;
           </button>
         </div>
         <div class="toolbar-menu-body">
-          <ul class="menu-items-list" id="helpMenuItems"></ul>
+          <ul class="menu-items-list" id="helpMenuItems" role="menu" aria-label="Help"></ul>
         </div>
       </div>
     </div>

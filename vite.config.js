@@ -73,7 +73,6 @@ export default defineConfig({
         manualChunks: {
           'three': ['three'],
           'ajv': ['ajv'],
-          'jszip': ['jszip'],
         },
       },
     },

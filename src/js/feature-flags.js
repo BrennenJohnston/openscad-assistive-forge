@@ -51,15 +51,15 @@ export const FLAGS = {
     userConfigurable: true,
     killSwitch: false,
   },
-  monaco_editor: {
-    id: 'monaco_editor',
-    name: 'Advanced Code Editor',
-    description: 'Use Monaco editor (VS Code-like) instead of simple textarea',
+  codemirror_editor: {
+    id: 'codemirror_editor',
+    name: 'Advanced Code Editor (CodeMirror)',
+    description: 'Use CodeMirror 6 editor with syntax highlighting instead of simple textarea',
     default: true,
     rollout: 100,
     userConfigurable: true,
     killSwitch: false,
-    requires: ['expert_mode'], // Only available when expert_mode is enabled
+    requires: ['expert_mode'],
   },
   vector_parameters: {
     id: 'vector_parameters',

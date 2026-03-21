@@ -2,7 +2,7 @@
  * CSP Violation Reporter
  *
  * Listens for Content Security Policy violations and logs them
- * for debugging during the report-only phase.
+ * for debugging. Active in both report-only and enforcing modes.
  *
  * @license GPL-3.0-or-later
  */
@@ -79,7 +79,7 @@ export function initCSPReporter() {
   // Add violation listener
   document.addEventListener('securitypolicyviolation', handleViolation);
 
-  console.log('[CSP] Violation reporter initialized (report-only mode)');
+  console.log('[CSP] Violation reporter initialized (enforcing mode)');
 }
 
 /**

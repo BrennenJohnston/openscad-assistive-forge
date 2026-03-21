@@ -2,27 +2,18 @@
 # Required for OpenSCAD WASM SharedArrayBuffer support
 # See: https://developers.cloudflare.com/pages/configuration/headers/
 
-# Apply cross-origin isolation headers to all routes
+# All routes: cross-origin isolation + security + CSP
+# 'unsafe-eval' in script-src is required because AJV compiles JSON schemas at runtime via new Function().
+# 'unsafe-inline' is NOT needed in style-src — CodeMirror 6 uses constructable stylesheets.
+# connect-src includes GitHub raw/media URLs for ?manifest= and ?project= deep-links.
 /*
   Cross-Origin-Opener-Policy: same-origin
   Cross-Origin-Embedder-Policy: require-corp
   Cross-Origin-Resource-Policy: cross-origin
-
-# Security headers
-/*
   X-Content-Type-Options: nosniff
   X-Frame-Options: SAMEORIGIN
   Referrer-Policy: strict-origin-when-cross-origin
-
-# Content Security Policy - Report-Only Mode (Milestone 0)
-# See: docs/planning/csp-policy.md
-# Phase 1: Report-only to identify violations without breaking functionality
-# Phase 2: Move to enforcing after burn-down period
-# Note: connect-src includes GitHub raw and media URLs to support ?manifest= and ?project= deep-links
-#   that fetch external forge-manifest.json and project files from author-hosted repos.
-#   media.githubusercontent.com is required for Git LFS-tracked bundles (LFS pointer redirect).
-/*
-  Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' data: https://raw.githubusercontent.com https://media.githubusercontent.com https://*.github.io https://*.gitlab.io https://*.pages.dev; worker-src 'self' blob:; child-src 'self' blob:; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' data: https://raw.githubusercontent.com https://media.githubusercontent.com https://*.github.io https://*.gitlab.io https://*.pages.dev; worker-src 'self' blob:; child-src 'self' blob:; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests
 
 # Cache static assets aggressively
 /assets/*
@@ -44,7 +35,7 @@
 # Cache OpenSCAD libraries
 /libraries/*
   Cache-Control: public, max-age=604800
-  
+
 # Cache example files
 /examples/*
   Cache-Control: public, max-age=604800

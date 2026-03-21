@@ -30,15 +30,12 @@ import {
 import {
   escapeHtml,
   isValidServiceWorkerMessage,
-  setupNotesCounter,
 } from './js/html-utils.js';
 import {
-  analyzeComplexity,
-  getAdaptiveQualityConfig,
   getQualityPreset,
   COMPLEXITY_TIER,
 } from './js/quality-tiers.js';
-import { PreviewManager, getThreeModule } from './js/preview.js';
+import { getThreeModule } from './js/preview.js';
 import { normalizeHexColor } from './js/color-utils.js';
 import {
   AutoPreviewController,
@@ -46,27 +43,14 @@ import {
 } from './js/auto-preview-controller.js';
 import { resolve2DExportIntent, isNonPreviewable } from './js/render-intent.js';
 import {
-  extractZipFiles,
-  validateZipFile,
-  getZipStats,
-  resolveProjectFile,
-  buildPresetCompanionMap,
   applyCompanionAliases,
   getOverlaySvgTarget,
-  buildNestedTree,
-  getNodeAtPath,
-  countFilesRecursive,
 } from './js/zip-handler.js';
 import { loadManifest, ManifestError } from './js/manifest-loader.js';
-import {
-  runPreflightCheck,
-  formatMissingDependencies,
-} from './js/dependency-checker.js';
 import { getConsolePanel } from './js/console-panel.js';
 import {
   getErrorLogPanel,
   initAddStructuredError,
-  ERROR_LOG_TYPE,
 } from './js/error-log-panel.js';
 import { themeManager, initThemeToggle } from './js/theme-manager.js';
 import {
@@ -87,7 +71,11 @@ import {
   initStaticModals,
   isAnyModalOpen,
 } from './js/modal-manager.js';
-import { translateError } from './js/error-translator.js';
+import {
+  translateError,
+  showErrorModal,
+  showErrorToast,
+} from './js/error-translator.js';
 import {
   getStorageEstimate,
   clearCachedData as _clearCachedData,
@@ -104,13 +92,9 @@ import {
   exportProjectsBackup,
   exportSingleProject,
   importProjectsBackup,
-  importProjectFromFiles,
 } from './js/storage-manager.js';
-import {
-  showWorkflowProgress,
-  hideWorkflowProgress,
-} from './js/workflow-progress.js';
-import { startTutorial, closeTutorial } from './js/tutorial-sandbox.js';
+// showWorkflowProgress / hideWorkflowProgress moved to hfm-controller.js (applyToolbarModeVisibility)
+import { startTutorial } from './js/tutorial-sandbox.js';
 import { initDrawerController } from './js/drawer-controller.js';
 import { initPreviewSettingsDrawer } from './js/preview-settings-drawer.js';
 import { initCameraPanelController } from './js/camera-panel-controller.js';
@@ -130,14 +114,12 @@ import {
   FLAGS as _FLAGS,
 } from './js/feature-flags.js';
 import { initSearchableCombobox } from './js/searchable-combobox.js';
+import { initCompanionFilesController } from './js/companion-files-controller.js';
 import { initCSPReporter } from './js/csp-reporter.js';
 import {
   migrateStorageKeys,
   getAppPrefKey,
   getDrawerStateKey,
-  STORAGE_KEY_HFM_CONTRAST_SCALE,
-  STORAGE_KEY_HFM_FONT_SCALE,
-  STORAGE_KEY_HFM_PERSIST_FADE,
 } from './js/storage-keys.js';
 import {
   initImageMeasurement,
@@ -164,15 +146,7 @@ const STORAGE_KEY_PREVIEW_QUALITY = getAppPrefKey('preview-quality-mode');
 const STORAGE_KEY_RECOVERY_SOURCE = getAppPrefKey('recovery-source');
 const STORAGE_KEY_RECOVERY_TIMESTAMP = getAppPrefKey('recovery-timestamp');
 const STORAGE_KEY_STATUS_BAR = getAppPrefKey('status-bar');
-const STORAGE_KEY_OVERLAY_ENABLED = getAppPrefKey('overlay-enabled');
-const STORAGE_KEY_OVERLAY_OPACITY = getAppPrefKey('overlay-opacity');
-const STORAGE_KEY_OVERLAY_SOURCE = getAppPrefKey('overlay-source');
-const STORAGE_KEY_OVERLAY_SVG_COLOR = getAppPrefKey('overlay-svg-color');
-const STORAGE_KEY_OVERLAY_AUTO_COLOR = getAppPrefKey('overlay-auto-color');
-const STORAGE_KEY_OVERLAY_WIDTH = getAppPrefKey('overlay-width');
-const STORAGE_KEY_OVERLAY_HEIGHT = getAppPrefKey('overlay-height');
-const STORAGE_KEY_AUTO_ROTATE = getAppPrefKey('auto-rotate');
-const STORAGE_KEY_ROTATE_SPEED = getAppPrefKey('rotate-speed');
+// Overlay, grid, and auto-rotate storage keys moved to overlay-grid-controller.js
 const STORAGE_KEY_MODEL_COLOR = getAppPrefKey('model-color');
 const STORAGE_KEY_MODEL_COLOR_ENABLED = getAppPrefKey('model-color-enabled');
 const STORAGE_KEY_MODEL_OPACITY = getAppPrefKey('model-opacity');
@@ -197,6 +171,8 @@ import { getUIModeController } from './js/ui-mode-controller.js';
 // Toolbar Menu Controller - File|Edit|Design|View|Window|Help menu bar
 import { getToolbarMenuController } from './js/toolbar-menu-controller.js';
 import { initParamDetailController } from './js/param-detail-controller.js';
+import { initOverlayGridController } from './js/overlay-grid-controller.js';
+import { initSavedProjectsUI } from './js/saved-projects-ui.js';
 import { getFileActionsController } from './js/file-actions-controller.js';
 import { getEditActionsController } from './js/edit-actions-controller.js';
 import { getDesignPanelController } from './js/design-panel-controller.js';
@@ -205,6 +181,18 @@ import { getDisplayOptionsController } from './js/display-options-controller.js'
 // import { getAnimationController } from './js/animation-controller.js';
 import { getEditorStateManager } from './js/editor-state-manager.js';
 import { TextareaEditor } from './js/textarea-editor.js';
+import { CodeMirrorEditor } from './js/codemirror-editor.js';
+import { showConfirmDialog } from './js/dialogs.js';
+import {
+  initHfmController,
+  exportFormatFromMenu,
+  applyToolbarModeVisibility,
+} from './js/hfm-controller.js';
+import {
+  EXAMPLE_DEFINITIONS,
+  showProcessingOverlay,
+  initFileHandler,
+} from './js/file-handler.js';
 import {
   initMemoryMonitor,
   getMemoryMonitor as _getMemoryMonitor,
@@ -213,27 +201,13 @@ import {
 } from './js/memory-monitor.js';
 import {
   initSavedProjectsDB,
-  listSavedProjects,
-  saveProject,
-  getProject,
-  touchProject,
   updateProject,
-  deleteProject,
   getSavedProjectsSummary as _getSavedProjectsSummary,
   clearAllSavedProjects as _clearAllSavedProjects,
   getStorageDiagnostics,
   // v2: Folder operations
   createFolder as _createFolder,
-  getFolder,
-  listFolders,
-  renameFolder,
-  deleteFolder,
   moveFolder as _moveFolder,
-  getFolderTree,
-  getFolderBreadcrumbs,
-  // v2: Project-folder operations
-  moveProject,
-  getProjectsInFolder,
 } from './js/saved-projects-manager.js';
 import Split from 'split.js';
 
@@ -272,40 +246,7 @@ function resolve2DExportParameters(parameters, schema, format) {
   return resolved;
 }
 
-// Example definitions (used by welcome screen, Features Guide, and deep-linking)
-// Direct-launch URLs for external website integration
-// Usage: ?example=simple-box or ?load=colored-box
-const EXAMPLE_DEFINITIONS = {
-  'simple-box': {
-    path: '/examples/simple-box/simple_box.scad',
-    name: 'simple_box.scad',
-  },
-  cylinder: {
-    path: '/examples/parametric-cylinder/parametric_cylinder.scad',
-    name: 'parametric_cylinder.scad',
-  },
-  'library-test': {
-    path: '/examples/library-test/library_test.scad',
-    name: 'library_test.scad',
-  },
-  'colored-box': {
-    path: '/examples/colored-box/colored_box.scad',
-    name: 'colored_box.scad',
-  },
-  'multi-file-box': {
-    path: '/examples/multi-file-box.zip',
-    name: 'multi-file-box.zip',
-  },
-  // Additional examples for deep-linking
-  'cable-organizer': {
-    path: '/examples/cable-organizer/cable_organizer.scad',
-    name: 'cable_organizer.scad',
-  },
-  'honeycomb-grid': {
-    path: '/examples/honeycomb-grid/honeycomb_grid.scad',
-    name: 'honeycomb_grid.scad',
-  },
-};
+// EXAMPLE_DEFINITIONS moved to file-handler.js
 
 // Feature detection
 function checkBrowserSupport() {
@@ -353,1564 +294,14 @@ let renderQueue = null;
 // Track which saved project is currently loaded (for auto-saving companion files)
 let currentSavedProjectId = null;
 
-// Navigation path for the Companion Files panel tree (module-level so it
-// survives re-renders triggered by add/remove actions).
-// Each element is a folder name segment, e.g. ['Cases', 'iPad 7,8,9'].
-let companionCurrentPath = [];
+// companionCurrentPath moved to companion-files-controller.js
 
 // Screen reader announcer - now uses centralized announcer.js
 // (Local implementation removed - use imported announce/announceImmediate/announceError)
 
-// Hidden feature state (non-persistent)
-let _hfmUnlocked = false;
-let _hfmAltView = null;
-let _hfmInitPromise = null;
-let _hfmEnabled = false;
-let _hfmPendingEnable = false;
-// Edge sharpness range: controls contrast exponent (Harri technique)
-// Base exponents: Global=1.8, Directional=2.5
-// Effective range: scale 0.5→exp ~0.9 (off), scale 4.0→exp ~7.2 (very sharp)
-// Research shows useful range is exponent 1-8 before artifacts appear
-const _HFM_CONTRAST_RANGE = { min: 0.5, max: 4.0, step: 0.05, default: 1 };
-let _hfmContrastScale = _HFM_CONTRAST_RANGE.default;
-let _hfmContrastControls = null;
-// Font size range: controls character size and effective ASCII resolution
-// Smaller = more characters = higher resolution (harder to read)
-// Larger = fewer characters = lower resolution (more legible)
-const _HFM_FONT_SCALE_RANGE = { min: 0.5, max: 2.5, step: 0.05, default: 1 };
-let _hfmFontScale = _HFM_FONT_SCALE_RANGE.default;
-let _hfmFontScaleControls = null;
-const _HFM_PERSIST_FADE_RANGE = { min: 0, max: 1, step: 0.05, default: 0 };
-let _hfmPersistFade = _HFM_PERSIST_FADE_RANGE.default;
-const _HFM_ZOOM_EPSILON = 0.02;
-let _hfmZoomBaseline = null;
-let _hfmZoomListening = false;
-let _hfmZoomHandling = false;
-let _hfmPanAdjustEnabled = false;
-let _hfmPanToggleButtons = null; // { desktop: HTMLButtonElement|null, mobile: HTMLButtonElement|null }
-let _hfmMotionListener = null; // MediaQueryList change listener for prefers-reduced-motion
-
-function _syncHfmPanToggleUi() {
-  const btns = [
-    _hfmPanToggleButtons?.desktop,
-    _hfmPanToggleButtons?.mobile,
-  ].filter(Boolean);
-
-  // Format values with descriptive labels (Harri's technique terminology)
-  // "Edge" = contrast exponent (controls edge sharpness/boundary definition)
-  // "Size" = font scale (controls character size/effective resolution)
-  // "Glow" = persist fade (controls phosphor afterglow intensity)
-  const edge = _formatHfmContrastValue(_hfmContrastScale);
-  const size = _formatHfmFontScaleValue(_hfmFontScale);
-  const glow = _formatHfmPersistFadeValue(_hfmPersistFade);
-
-  // Update pan toggle buttons if they exist
-  btns.forEach((btn) => {
-    btn.setAttribute('aria-pressed', _hfmPanAdjustEnabled ? 'true' : 'false');
-    btn.classList.toggle('active', _hfmPanAdjustEnabled);
-    btn.title = _hfmPanAdjustEnabled
-      ? `Alt adjust ON (Pan: Edge ${edge}, Size ${size}, Glow ${glow})`
-      : `Alt adjust OFF (Pan controls). Current: Edge ${edge}, Size ${size}, Glow ${glow}`;
-    btn.setAttribute(
-      'aria-label',
-      _hfmPanAdjustEnabled
-        ? `Alt adjust on. Pan up/down changes edge sharpness (${edge}). Pan left/right changes character size (${size}). Shift+up/down changes afterglow (${glow}).`
-        : `Alt adjust off. Pan controls. Current edge sharpness ${edge}, character size ${size}, afterglow ${glow}.`
-    );
-  });
-
-  // Update status bar alt adjust display (always, regardless of button state)
-  _updateHfmStatusBar();
-}
-
-/**
- * Update the preview status bar with alt adjust values.
- * Only shows in mono/retro theme when alt view is enabled.
- * Includes auto-calibration info when first launched.
- */
-function _updateHfmStatusBar() {
-  const root = document.documentElement;
-  const isMono = root.getAttribute('data-ui-variant') === 'mono';
-  const statusBar = document.getElementById('previewStatusBar');
-  const altAdjustEl = document.getElementById('previewStatusAltAdjust');
-
-  if (!statusBar || !altAdjustEl) return;
-
-  // Only show alt adjust info in mono variant when alt view is enabled
-  if (!isMono || !_hfmEnabled) {
-    statusBar.classList.remove('has-alt-adjust');
-    altAdjustEl.textContent = '';
-    return;
-  }
-
-  // Format values
-  // Contrast controls edge sharpness via exponent (Harri technique: higher = sharper edges)
-  // Font scale controls character size/resolution (higher = larger chars, lower resolution)
-  // Persist fade controls phosphor afterglow intensity
-  const edge = _formatHfmContrastValue(_hfmContrastScale);
-  const size = _formatHfmFontScaleValue(_hfmFontScale);
-  const glow = _formatHfmPersistFadeValue(_hfmPersistFade);
-
-  // Build the display string with descriptive labels aligned with Harri's ASCII research:
-  // - Edge Sharpness (contrast exponent): controls boundary definition
-  // - Char Size (font scale): controls effective ASCII resolution
-  // - Glow (persist fade): controls phosphor afterglow intensity
-  // Include device calibration info when available
-  let displayText;
-  const deviceInfo = _hfmCalibratedDevice ? ` [${_hfmCalibratedDevice}]` : '';
-
-  if (_hfmPanAdjustEnabled) {
-    displayText = `[ALT ADJUST]${deviceInfo} Edge: ${edge} (Up/Down) | Size: ${size} (Left/Right) | Glow: ${glow} (Shift+Up/Down)`;
-  } else {
-    displayText = `[ALT VIEW]${deviceInfo} Edge: ${edge} | Size: ${size} | Glow: ${glow}`;
-  }
-
-  altAdjustEl.textContent = displayText;
-  statusBar.classList.add('has-alt-adjust');
-}
-
-function _setHfmPanAdjustEnabled(enabled) {
-  _hfmPanAdjustEnabled = Boolean(enabled);
-
-  // When using Pan D-pad for adjustments, hide the sliders to avoid duplicate UI.
-  // When toggled off, restore them (only if alt view is enabled).
-  if (_hfmEnabled) {
-    _initHfmContrastControls().setEnabled(!_hfmPanAdjustEnabled);
-    _initHfmFontScaleControls().setEnabled(!_hfmPanAdjustEnabled);
-  }
-
-  _syncHfmPanToggleUi();
-}
-
-function _isLightThemeActive() {
-  const root = document.documentElement;
-  const dataTheme = root.getAttribute('data-theme');
-  if (dataTheme === 'light') return true;
-  if (dataTheme === 'dark') return false;
-  // Auto mode - check system preference
-  return !window.matchMedia('(prefers-color-scheme: dark)').matches;
-}
-
-/**
- * Auto-calibrate Edge (contrast) and Size (font) settings based on the
- * viewing environment. Picks sensible defaults by looking at:
- * - Viewport/preview container size
- * - Device pixel ratio (screen density)
- * - Touch capability (mobile vs desktop)
- * - Browser/platform characteristics
- *
- * Based on Harri's ASCII rendering research:
- * - Smaller screens benefit from larger characters and moderate edge sharpening
- * - Larger/high-DPI screens can handle more characters and sharper edges
- * - Mobile devices prioritize legibility over resolution
- *
- * @returns {{ edgeScale: number, sizeScale: number }} Calibrated values
- */
-function _calibrateHfmSettings() {
-  // Gather system information
-  const dpr = window.devicePixelRatio || 1;
-  const isTouchDevice =
-    'ontouchstart' in window || navigator.maxTouchPoints > 0;
-
-  // Get preview container dimensions (primary factor for calibration)
-  const previewContainer = document.getElementById('previewContainer');
-  const containerWidth = previewContainer?.clientWidth || window.innerWidth;
-  const containerHeight = previewContainer?.clientHeight || window.innerHeight;
-  const containerArea = containerWidth * containerHeight;
-
-  // Detect browser/platform hints
-  const isMobile =
-    isTouchDevice && Math.min(containerWidth, containerHeight) < 500;
-  const isTablet = isTouchDevice && !isMobile;
-  const isHighDpi = dpr >= 1.5;
-  const isVeryHighDpi = dpr >= 2.5;
-
-  // Viewport size categories (based on container area in CSS pixels)
-  const isSmallViewport = containerArea < 200000; // ~447x447 or smaller
-  const isMediumViewport = containerArea >= 200000 && containerArea < 500000;
-  const isLargeViewport = containerArea >= 500000;
-
-  // ========================================
-  // SIZE (Font Scale) Calibration
-  // ========================================
-  // Goal: Achieve readable character density based on viewing conditions
-  // - Small/mobile: Larger chars (1.2-1.5) for legibility
-  // - Large/desktop: Can use default or smaller (0.8-1.0) for more detail
-  // - High DPI: Can afford smaller chars while maintaining readability
-
-  let sizeScale = 1.0; // Default
-
-  if (isMobile) {
-    // Mobile: Prioritize legibility with larger characters
-    sizeScale = 1.4;
-    if (isVeryHighDpi) sizeScale = 1.2; // High DPI mobile can be slightly smaller
-  } else if (isTablet) {
-    // Tablet: Balance between legibility and detail
-    sizeScale = 1.15;
-    if (isHighDpi) sizeScale = 1.0;
-  } else if (isSmallViewport) {
-    // Small desktop window
-    sizeScale = 1.1;
-  } else if (isMediumViewport) {
-    // Medium desktop - default works well
-    sizeScale = 1.0;
-    if (isHighDpi) sizeScale = 0.9; // High DPI can show more detail
-  } else if (isLargeViewport) {
-    // Large desktop - can show more characters
-    sizeScale = 0.9;
-    if (isHighDpi) sizeScale = 0.8; // High DPI large screen = maximum detail
-    if (isVeryHighDpi) sizeScale = 0.75;
-  }
-
-  // ========================================
-  // EDGE (Contrast Exponent) Calibration
-  // ========================================
-  // Goal: Sharp edges without artifacts (Harri research: useful range 1-8)
-  // - Small screens: Lower values (artifacts more visible)
-  // - Large screens: Higher values (can appreciate sharper definition)
-  // - High DPI: Can use slightly higher values (finer detail visible)
-
-  let edgeScale = 1.0; // Default (exponent ~1.8)
-
-  if (isMobile) {
-    // Mobile: Conservative edge sharpening (artifacts very visible)
-    edgeScale = 0.85;
-  } else if (isTablet) {
-    // Tablet: Moderate edge sharpening
-    edgeScale = 0.95;
-  } else if (isSmallViewport) {
-    // Small desktop: Slightly conservative
-    edgeScale = 0.9;
-  } else if (isMediumViewport) {
-    // Medium desktop: Default is good
-    edgeScale = 1.0;
-    if (isHighDpi) edgeScale = 1.1; // High DPI can handle slightly sharper
-  } else if (isLargeViewport) {
-    // Large desktop: Can appreciate sharper edges
-    edgeScale = 1.15;
-    if (isHighDpi) edgeScale = 1.25;
-    if (isVeryHighDpi) edgeScale = 1.35;
-  }
-
-  // Clamp to valid ranges
-  edgeScale = Math.max(
-    _HFM_CONTRAST_RANGE.min,
-    Math.min(_HFM_CONTRAST_RANGE.max, edgeScale)
-  );
-  sizeScale = Math.max(
-    _HFM_FONT_SCALE_RANGE.min,
-    Math.min(_HFM_FONT_SCALE_RANGE.max, sizeScale)
-  );
-
-  // Determine device category for display
-  let deviceCategory;
-  if (isMobile) {
-    deviceCategory = isVeryHighDpi ? 'Mobile HD' : 'Mobile';
-  } else if (isTablet) {
-    deviceCategory = isHighDpi ? 'Tablet HD' : 'Tablet';
-  } else if (isSmallViewport) {
-    deviceCategory = 'Compact';
-  } else if (isMediumViewport) {
-    deviceCategory = isHighDpi ? 'Desktop HD' : 'Desktop';
-  } else {
-    deviceCategory = isVeryHighDpi
-      ? 'Large HD'
-      : isHighDpi
-        ? 'Large HD'
-        : 'Large';
-  }
-
-  // Log calibration results for debugging
-  console.log('[Alt View] Auto-calibration:', {
-    viewport: `${containerWidth}x${containerHeight}`,
-    dpr,
-    deviceCategory,
-    calibrated: {
-      edge: `${Math.round(edgeScale * 100)}%`,
-      size: `${Math.round(sizeScale * 100)}%`,
-    },
-  });
-
-  return { edgeScale, sizeScale, deviceCategory };
-}
-
-// Track if calibration has been applied this session (only auto-calibrate once)
-let _hfmCalibrated = false;
-let _hfmCalibratedDevice = ''; // Store detected device category for status display
-
-/**
- * Clear saved HFM settings from localStorage and re-run auto-calibration so
- * the user gets sensible defaults again.  Triggered by double-clicking the
- * pan-adjust toggle button.
- */
-function _resetHfmSettings() {
-  try {
-    localStorage.removeItem(STORAGE_KEY_HFM_CONTRAST_SCALE);
-    localStorage.removeItem(STORAGE_KEY_HFM_FONT_SCALE);
-    localStorage.removeItem(STORAGE_KEY_HFM_PERSIST_FADE);
-  } catch (_) {
-    // Storage unavailable — proceed anyway
-  }
-  _hfmCalibrated = false;
-  const calibrated = _calibrateHfmSettings();
-  _applyHfmContrastScale(calibrated.edgeScale);
-  _applyHfmFontScale(calibrated.sizeScale);
-  _hfmPersistFade = _HFM_PERSIST_FADE_RANGE.default;
-  _applyHfmPersistFade(_hfmPersistFade);
-  _hfmCalibratedDevice = calibrated.deviceCategory;
-  _hfmCalibrated = true;
-  console.log(
-    '[Alt View] Settings reset to auto-calibrated defaults:',
-    calibrated
-  );
-}
-
-function _formatHfmContrastValue(scale) {
-  return `${Math.round(scale * 100)}%`;
-}
-
-function _formatHfmFontScaleValue(scale) {
-  return `${Math.round(scale * 100)}%`;
-}
-
-function _getHfmZoomLevel() {
-  const dpr = Number.isFinite(window.devicePixelRatio)
-    ? window.devicePixelRatio
-    : 1;
-  const vvScale =
-    window.visualViewport && Number.isFinite(window.visualViewport.scale)
-      ? window.visualViewport.scale
-      : 1;
-  return Math.max(0.1, dpr * vvScale);
-}
-
-function _setHfmZoomBaseline() {
-  _hfmZoomBaseline = {
-    zoom: _getHfmZoomLevel(),
-    contrastScale: _hfmContrastScale,
-    fontScale: _hfmFontScale,
-  };
-}
-
-function _applyHfmZoomCompensation() {
-  if (!_hfmEnabled || !_hfmZoomBaseline) return;
-  const currentZoom = _getHfmZoomLevel();
-  const baseZoom = _hfmZoomBaseline.zoom || 1;
-  if (!Number.isFinite(currentZoom) || !Number.isFinite(baseZoom)) return;
-  if (Math.abs(currentZoom - baseZoom) < _HFM_ZOOM_EPSILON) return;
-
-  const factor = baseZoom / currentZoom;
-  _hfmZoomHandling = true;
-  _applyHfmContrastScale(_hfmZoomBaseline.contrastScale * factor, {
-    setBaseline: false,
-  });
-  _applyHfmFontScale(_hfmZoomBaseline.fontScale * factor, {
-    setBaseline: false,
-  });
-  _hfmZoomHandling = false;
-}
-
-function _handleHfmZoomChange() {
-  _applyHfmZoomCompensation();
-}
-
-function _enableHfmZoomTracking() {
-  if (_hfmZoomListening) return;
-  _hfmZoomListening = true;
-  window.addEventListener('resize', _handleHfmZoomChange);
-  if (window.visualViewport) {
-    window.visualViewport.addEventListener('resize', _handleHfmZoomChange);
-    window.visualViewport.addEventListener('scroll', _handleHfmZoomChange);
-  }
-}
-
-function _disableHfmZoomTracking() {
-  if (!_hfmZoomListening) return;
-  _hfmZoomListening = false;
-  window.removeEventListener('resize', _handleHfmZoomChange);
-  if (window.visualViewport) {
-    window.visualViewport.removeEventListener('resize', _handleHfmZoomChange);
-    window.visualViewport.removeEventListener('scroll', _handleHfmZoomChange);
-  }
-}
-
-function _applyHfmContrastScale(scale, options = {}) {
-  const { setBaseline = true } = options;
-  const raw = Number(scale);
-  const next = Number.isFinite(raw) ? raw : _HFM_CONTRAST_RANGE.default;
-  const clamped = Math.max(
-    _HFM_CONTRAST_RANGE.min,
-    Math.min(_HFM_CONTRAST_RANGE.max, next)
-  );
-  _hfmContrastScale = clamped;
-
-  if (_hfmAltView?.setContrastScale) {
-    _hfmAltView.setContrastScale(clamped);
-  }
-
-  _hfmContrastControls?.sync?.(clamped);
-  _syncHfmPanToggleUi();
-  if (setBaseline && !_hfmZoomHandling) {
-    _setHfmZoomBaseline();
-  }
-
-  try {
-    localStorage.setItem(STORAGE_KEY_HFM_CONTRAST_SCALE, String(clamped));
-  } catch (error) {
-    if (error.name === 'QuotaExceededError') {
-      console.warn(
-        '[Alt View] localStorage quota exceeded — contrast scale not saved'
-      );
-    } else {
-      console.warn('[Alt View] Could not save contrast scale:', error);
-    }
-  }
-
-  return clamped;
-}
-
-function _applyHfmFontScale(scale, options = {}) {
-  const { setBaseline = true } = options;
-  const raw = Number(scale);
-  const next = Number.isFinite(raw) ? raw : _HFM_FONT_SCALE_RANGE.default;
-  const clamped = Math.max(
-    _HFM_FONT_SCALE_RANGE.min,
-    Math.min(_HFM_FONT_SCALE_RANGE.max, next)
-  );
-  _hfmFontScale = clamped;
-
-  if (_hfmAltView?.setFontScale) {
-    _hfmAltView.setFontScale(clamped);
-  }
-
-  _hfmFontScaleControls?.sync?.(clamped);
-  _syncHfmPanToggleUi();
-  if (setBaseline && !_hfmZoomHandling) {
-    _setHfmZoomBaseline();
-  }
-
-  try {
-    localStorage.setItem(STORAGE_KEY_HFM_FONT_SCALE, String(clamped));
-  } catch (error) {
-    if (error.name === 'QuotaExceededError') {
-      console.warn(
-        '[Alt View] localStorage quota exceeded — font scale not saved'
-      );
-    } else {
-      console.warn('[Alt View] Could not save font scale:', error);
-    }
-  }
-
-  return clamped;
-}
-
-function _formatHfmPersistFadeValue(value) {
-  return `${Math.round(value * 100)}%`;
-}
-
-function _applyHfmPersistFade(value) {
-  const raw = Number(value);
-  const next = Number.isFinite(raw) ? raw : _HFM_PERSIST_FADE_RANGE.default;
-  const clamped = Math.max(
-    _HFM_PERSIST_FADE_RANGE.min,
-    Math.min(_HFM_PERSIST_FADE_RANGE.max, next)
-  );
-  _hfmPersistFade = clamped;
-
-  if (_hfmAltView?.setPersistFade) {
-    _hfmAltView.setPersistFade(clamped);
-  }
-
-  _syncHfmPanToggleUi();
-
-  try {
-    localStorage.setItem(STORAGE_KEY_HFM_PERSIST_FADE, String(clamped));
-  } catch (error) {
-    if (error.name === 'QuotaExceededError') {
-      console.warn(
-        '[Alt View] localStorage quota exceeded — persist fade not saved'
-      );
-    } else {
-      console.warn('[Alt View] Could not save persist fade:', error);
-    }
-  }
-
-  return clamped;
-}
-
-function _initHfmContrastControls() {
-  if (_hfmContrastControls) return _hfmContrastControls;
-
-  const inputs = [];
-  const valueEls = [];
-  const sections = [];
-  const formatValue = (value) => _formatHfmContrastValue(value);
-
-  const buildSection = ({
-    container,
-    insertBefore,
-    sectionClass,
-    titleClass,
-    inputId,
-    titleText,
-  }) => {
-    if (!container || document.getElementById(inputId)) return null;
-
-    const section = document.createElement('div');
-    section.className = sectionClass;
-
-    const title = document.createElement('h3');
-    title.className = titleClass;
-    title.id = `${inputId}-label`;
-    title.textContent = titleText;
-
-    const sliderContainer = document.createElement('div');
-    sliderContainer.className = 'slider-container';
-
-    const input = document.createElement('input');
-    input.type = 'range';
-    input.id = inputId;
-    input.min = String(_HFM_CONTRAST_RANGE.min);
-    input.max = String(_HFM_CONTRAST_RANGE.max);
-    input.step = String(_HFM_CONTRAST_RANGE.step);
-    input.value = String(_hfmContrastScale);
-    input.setAttribute('aria-labelledby', title.id);
-
-    const valueEl = document.createElement('span');
-    valueEl.className = 'slider-value';
-    valueEl.id = `${inputId}-value`;
-    valueEl.textContent = formatValue(_hfmContrastScale);
-
-    sliderContainer.appendChild(input);
-    sliderContainer.appendChild(valueEl);
-    section.appendChild(title);
-    section.appendChild(sliderContainer);
-
-    if (insertBefore) {
-      container.insertBefore(section, insertBefore);
-    } else {
-      container.appendChild(section);
-    }
-
-    inputs.push(input);
-    valueEls.push(valueEl);
-    sections.push(section);
-
-    input.addEventListener('input', () => {
-      _applyHfmContrastScale(parseFloat(input.value));
-    });
-
-    return section;
-  };
-
-  const panelBody = document.getElementById('cameraPanelBody');
-  const panelInsertBefore =
-    panelBody?.querySelector('.camera-shortcuts-help') ?? null;
-  buildSection({
-    container: panelBody,
-    insertBefore: panelInsertBefore,
-    sectionClass: 'camera-control-section hfm-contrast-section',
-    titleClass: 'camera-control-section-title',
-    inputId: '_hfmContrast',
-    titleText: 'Alt View Contrast',
-  });
-
-  const drawerBody = document.getElementById('cameraDrawerBody');
-  buildSection({
-    container: drawerBody,
-    insertBefore: null,
-    sectionClass: 'camera-drawer-section camera-drawer-contrast',
-    titleClass: 'camera-drawer-section-title',
-    inputId: '_hfmContrastMobile',
-    titleText: 'Alt View Contrast',
-  });
-
-  _hfmContrastControls = {
-    setEnabled(_isEnabled) {
-      // Sliders permanently hidden - use Pan D-pad adjust mode instead
-      sections.forEach((section) => {
-        section.style.display = 'none';
-      });
-      inputs.forEach((input) => {
-        input.disabled = true;
-      });
-    },
-    sync(value) {
-      const formatted = formatValue(value);
-      const rawValue = value.toFixed(2);
-      inputs.forEach((input) => {
-        if (input.value !== rawValue) {
-          input.value = rawValue;
-        }
-        input.setAttribute('aria-valuetext', formatted);
-      });
-      valueEls.forEach((el) => {
-        el.textContent = formatted;
-      });
-    },
-  };
-
-  _hfmContrastControls.setEnabled(false);
-  _hfmContrastControls.sync(_hfmContrastScale);
-
-  return _hfmContrastControls;
-}
-
-function _initHfmFontScaleControls() {
-  if (_hfmFontScaleControls) return _hfmFontScaleControls;
-
-  const inputs = [];
-  const valueEls = [];
-  const sections = [];
-  const formatValue = (value) => _formatHfmFontScaleValue(value);
-
-  const buildSection = ({
-    container,
-    insertBefore,
-    sectionClass,
-    titleClass,
-    inputId,
-    titleText,
-  }) => {
-    if (!container || document.getElementById(inputId)) return null;
-
-    const section = document.createElement('div');
-    section.className = sectionClass;
-
-    const title = document.createElement('h3');
-    title.className = titleClass;
-    title.id = `${inputId}-label`;
-    title.textContent = titleText;
-
-    const sliderContainer = document.createElement('div');
-    sliderContainer.className = 'slider-container';
-
-    const input = document.createElement('input');
-    input.type = 'range';
-    input.id = inputId;
-    input.min = String(_HFM_FONT_SCALE_RANGE.min);
-    input.max = String(_HFM_FONT_SCALE_RANGE.max);
-    input.step = String(_HFM_FONT_SCALE_RANGE.step);
-    input.value = String(_hfmFontScale);
-    input.setAttribute('aria-labelledby', title.id);
-
-    const valueEl = document.createElement('span');
-    valueEl.className = 'slider-value';
-    valueEl.id = `${inputId}-value`;
-    valueEl.textContent = formatValue(_hfmFontScale);
-
-    sliderContainer.appendChild(input);
-    sliderContainer.appendChild(valueEl);
-    section.appendChild(title);
-    section.appendChild(sliderContainer);
-
-    if (insertBefore) {
-      container.insertBefore(section, insertBefore);
-    } else {
-      container.appendChild(section);
-    }
-
-    inputs.push(input);
-    valueEls.push(valueEl);
-    sections.push(section);
-
-    input.addEventListener('input', () => {
-      _applyHfmFontScale(parseFloat(input.value));
-    });
-
-    return section;
-  };
-
-  const panelBody = document.getElementById('cameraPanelBody');
-  const panelInsertBefore =
-    panelBody?.querySelector('.camera-shortcuts-help') ?? null;
-  buildSection({
-    container: panelBody,
-    insertBefore: panelInsertBefore,
-    sectionClass: 'camera-control-section hfm-font-scale-section',
-    titleClass: 'camera-control-section-title',
-    inputId: '_hfmFontScale',
-    titleText: 'Alt View Font Size',
-  });
-
-  const drawerBody = document.getElementById('cameraDrawerBody');
-  buildSection({
-    container: drawerBody,
-    insertBefore: null,
-    sectionClass: 'camera-drawer-section camera-drawer-font-scale',
-    titleClass: 'camera-drawer-section-title',
-    inputId: '_hfmFontScaleMobile',
-    titleText: 'Alt View Font Size',
-  });
-
-  _hfmFontScaleControls = {
-    setEnabled(_isEnabled) {
-      // Sliders permanently hidden - use Pan D-pad adjust mode instead
-      sections.forEach((section) => {
-        section.style.display = 'none';
-      });
-      inputs.forEach((input) => {
-        input.disabled = true;
-      });
-    },
-    sync(value) {
-      const formatted = formatValue(value);
-      const rawValue = value.toFixed(2);
-      inputs.forEach((input) => {
-        if (input.value !== rawValue) {
-          input.value = rawValue;
-        }
-        input.setAttribute('aria-valuetext', formatted);
-      });
-      valueEls.forEach((el) => {
-        el.textContent = formatted;
-      });
-    },
-  };
-
-  _hfmFontScaleControls.setEnabled(false);
-  _hfmFontScaleControls.sync(_hfmFontScale);
-
-  return _hfmFontScaleControls;
-}
-
-function _setHeaderLogoForVariant(enabled) {
-  const img = document.querySelector('.header-logo');
-  if (!img) return;
-
-  if (!img.dataset.defaultSrc) {
-    img.dataset.defaultSrc = img.getAttribute('src') || '';
-  }
-
-  if (enabled) {
-    // Use amber logo for light theme, green for dark theme
-    const isLight = _isLightThemeActive();
-    const logoSrc = isLight
-      ? '/icons/logo-mono-hc.svg'
-      : '/icons/logo-mono.svg';
-    img.setAttribute('src', logoSrc);
-  } else if (img.dataset.defaultSrc) {
-    img.setAttribute('src', img.dataset.defaultSrc);
-  }
-}
-
-function _setFaviconForVariant(enabled) {
-  const faviconSvg = document.querySelector(
-    'link[rel="icon"][type="image/svg+xml"]'
-  );
-  if (!faviconSvg) return;
-
-  if (!faviconSvg.dataset.defaultHref) {
-    faviconSvg.dataset.defaultHref = faviconSvg.getAttribute('href') || '';
-  }
-
-  if (enabled) {
-    // Use amber favicon for light theme, green for dark theme
-    const isLight = _isLightThemeActive();
-    const faviconSrc = isLight
-      ? '/icons/favicon-mono-hc.svg'
-      : '/icons/favicon-mono.svg';
-    faviconSvg.setAttribute('href', faviconSrc);
-  } else if (faviconSvg.dataset.defaultHref) {
-    faviconSvg.setAttribute('href', faviconSvg.dataset.defaultHref);
-  }
-}
-
-function _setAssetsForVariant(enabled) {
-  _setHeaderLogoForVariant(enabled);
-  _setFaviconForVariant(enabled);
-}
-
-/**
- * Show an accessible confirmation dialog (WCAG COGA compliant)
- * Prevents accidental destructive actions by requiring explicit confirmation
- * @param {string} message - Confirmation message
- * @param {string} [title='Confirm Action'] - Dialog title
- * @param {string} [confirmLabel='Confirm'] - Label for confirm button
- * @param {string} [cancelLabel='Cancel'] - Label for cancel button
- * @returns {Promise<boolean>} True if confirmed, false if cancelled
- */
-function showConfirmDialog(
-  message,
-  title = 'Confirm Action',
-  confirmLabel = 'Confirm',
-  cancelLabel = 'Cancel',
-  { destructive = false } = {}
-) {
-  return new Promise((resolve) => {
-    const modal = document.createElement('div');
-    modal.className = 'preset-modal confirm-modal';
-    modal.setAttribute('role', 'alertdialog');
-    modal.setAttribute('aria-labelledby', 'confirmDialogTitle');
-    modal.setAttribute('aria-describedby', 'confirmDialogMessage');
-    modal.setAttribute('aria-modal', 'true');
-
-    const confirmBtnClass = destructive ? 'btn btn-danger' : 'btn btn-primary';
-
-    modal.innerHTML = `
-      <div class="preset-modal-content confirm-modal-content">
-        <div class="preset-modal-header">
-          <h3 id="confirmDialogTitle" class="preset-modal-title">${title}</h3>
-        </div>
-        <div class="confirm-modal-body">
-          <p id="confirmDialogMessage">${message}</p>
-        </div>
-        <div class="preset-form-actions">
-          <button type="button" class="btn btn-secondary" data-action="cancel">${cancelLabel}</button>
-          <button type="button" class="${confirmBtnClass}" data-action="confirm">${confirmLabel}</button>
-        </div>
-      </div>
-    `;
-
-    document.body.appendChild(modal);
-
-    const cleanup = (result) => {
-      closeModal(modal);
-      document.body.removeChild(modal);
-      resolve(result);
-    };
-
-    // Handle button clicks
-    modal.addEventListener('click', (e) => {
-      const btn = e.target.closest('button[data-action]');
-      if (!btn) return;
-
-      if (btn.dataset.action === 'confirm') {
-        cleanup(true);
-      } else if (btn.dataset.action === 'cancel') {
-        cleanup(false);
-      }
-    });
-
-    // Close on backdrop click (cancel)
-    modal.addEventListener('click', (e) => {
-      if (e.target === modal) {
-        cleanup(false);
-      }
-    });
-
-    // Escape closes (cancel) for consistent keyboard behavior
-    modal.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        cleanup(false);
-      }
-    });
-
-    // Open modal with focus management
-    openModal(modal, {
-      focusTarget: modal.querySelector('[data-action="cancel"]'),
-    });
-  });
-}
-
-/**
- * Show missing dependencies dialog with actionable warnings
- * When a design package is missing include/use/import files, warn the user
- * with actionable options: add the files, continue anyway, or cancel
- * @param {Object} missing - Missing files by type
- * @param {string} packageName - Name of the uploaded package
- * @returns {Promise<boolean>} True if user chooses to continue, false to cancel
- */
-/**
- * Show missing dependencies dialog with options to cancel, continue, or add files.
- * @param {{ includes: string[], uses: string[], imports: string[] }} missing
- * @param {string} packageName
- * @returns {Promise<{ action: 'cancel'|'continue'|'add-files', addedFiles?: Map<string,string> }>}
- */
-function showMissingDependenciesDialog(missing, packageName) {
-  return new Promise((resolve) => {
-    const modal = document.createElement('div');
-    modal.className = 'preset-modal missing-deps-modal';
-    modal.setAttribute('role', 'alertdialog');
-    modal.setAttribute('aria-labelledby', 'missingDepsTitle');
-    modal.setAttribute('aria-describedby', 'missingDepsList');
-    modal.setAttribute('aria-modal', 'true');
-
-    const allMissing = [
-      ...missing.includes.map((f) => ({ file: f, type: 'include' })),
-      ...missing.uses.map((f) => ({ file: f, type: 'use' })),
-      ...missing.imports.map((f) => ({ file: f, type: 'import' })),
-    ];
-
-    const fileListHtml = allMissing
-      .map(
-        ({ file, type }) =>
-          `<li class="missing-dep-item" data-file="${escapeHtml(file)}">
-            <span class="missing-dep-file">${escapeHtml(file)}</span>
-            <span class="missing-dep-type">(${type})</span>
-          </li>`
-      )
-      .join('');
-
-    modal.innerHTML = `
-      <div class="preset-modal-content missing-deps-content">
-        <div class="preset-modal-header">
-          <h3 id="missingDepsTitle" class="preset-modal-title">
-            ⚠️ Missing Files Detected
-          </h3>
-        </div>
-        <div class="missing-deps-body">
-          <p>
-            The design package <strong>"${escapeHtml(packageName)}"</strong>
-            references files that weren't included:
-          </p>
-          <ul id="missingDepsList" class="missing-deps-list" aria-label="Missing files">
-            ${fileListHtml}
-          </ul>
-          <p class="missing-deps-hint">
-            You can add the missing files now, continue without them, or cancel.
-          </p>
-          <input type="file" class="missing-deps-file-input" multiple
-                 accept=".scad,.txt,.csv,.dat,.json,.dxf,.svg,.stl,.png,.jpg"
-                 aria-label="Select missing dependency files" hidden />
-          <div class="missing-deps-added hidden" aria-live="polite">
-            <span class="missing-deps-added-count"></span>
-          </div>
-        </div>
-        <div class="preset-form-actions missing-deps-actions">
-          <button type="button" class="btn btn-secondary" data-action="cancel">
-            Cancel Upload
-          </button>
-          <button type="button" class="btn btn-secondary" data-action="continue">
-            Continue Anyway
-          </button>
-          <button type="button" class="btn btn-primary" data-action="add-files">
-            Add Missing Files…
-          </button>
-        </div>
-      </div>
-    `;
-
-    document.body.appendChild(modal);
-
-    const fileInput = modal.querySelector('.missing-deps-file-input');
-    const addedDisplay = modal.querySelector('.missing-deps-added');
-    const addedCount = modal.querySelector('.missing-deps-added-count');
-    const addedFiles = new Map();
-
-    const cleanup = (result) => {
-      closeModal(modal);
-      document.body.removeChild(modal);
-      resolve(result);
-    };
-
-    const addFilesBtn = modal.querySelector('[data-action="add-files"]');
-    const continueBtn = modal.querySelector('[data-action="continue"]');
-    const titleEl = modal.querySelector('#missingDepsTitle');
-    const hintEl = modal.querySelector('.missing-deps-hint');
-
-    const updateAddedDisplay = () => {
-      if (addedFiles.size === 0) return;
-
-      addedDisplay.classList.remove('hidden');
-      addedCount.textContent = `${addedFiles.size} file${addedFiles.size > 1 ? 's' : ''} added: ${Array.from(addedFiles.keys()).join(', ')}`;
-
-      // Mark resolved items in the list
-      const items = modal.querySelectorAll('.missing-dep-item');
-      let resolvedCount = 0;
-      items.forEach((item) => {
-        const fileName = item.dataset.file;
-        const baseName = fileName.split('/').pop();
-        const resolved = addedFiles.has(fileName) || addedFiles.has(baseName);
-        item.classList.toggle('missing-dep-resolved', resolved);
-        if (resolved) resolvedCount++;
-      });
-
-      const allResolved = resolvedCount === allMissing.length;
-
-      if (allResolved) {
-        // All files resolved — transform the dialog to a success state
-        titleEl.textContent = '✅ All Files Added';
-        hintEl.textContent =
-          'All missing files have been provided. You can now load the project.';
-        hintEl.style.borderLeftColor = 'var(--color-success, #38a169)';
-        hintEl.style.background =
-          'color-mix(in srgb, var(--color-success, #38a169) 12%, transparent)';
-
-        // Promote "Continue" to primary with clear load label, demote "Add Files"
-        continueBtn.textContent = 'Load Project';
-        continueBtn.className = 'btn btn-success';
-        addFilesBtn.className = 'btn btn-secondary';
-        addFilesBtn.textContent = 'Add More Files…';
-        continueBtn.focus();
-      } else {
-        // Partial resolution — keep "Add Files" primary but update hint
-        const remaining = allMissing.length - resolvedCount;
-        hintEl.textContent = `${resolvedCount} of ${allMissing.length} resolved. ${remaining} file${remaining > 1 ? 's' : ''} still missing.`;
-
-        // Restore button states in case user removed files and re-added
-        continueBtn.textContent = 'Continue Anyway';
-        continueBtn.className = 'btn btn-secondary';
-        addFilesBtn.className = 'btn btn-primary';
-        addFilesBtn.textContent = 'Add Missing Files…';
-      }
-    };
-
-    // Read selected files as text and store them
-    fileInput.addEventListener('change', async () => {
-      const selectedFiles = fileInput.files;
-      if (!selectedFiles || selectedFiles.length === 0) return;
-
-      for (const f of selectedFiles) {
-        try {
-          const text = await f.text();
-          addedFiles.set(f.name, text);
-        } catch (_e) {
-          console.warn(`[MissingDeps] Could not read file: ${f.name}`);
-        }
-      }
-      updateAddedDisplay();
-      fileInput.value = '';
-    });
-
-    modal.addEventListener('click', (e) => {
-      const btn = e.target.closest('button[data-action]');
-      if (!btn) return;
-
-      if (btn.dataset.action === 'add-files') {
-        fileInput.click();
-      } else if (btn.dataset.action === 'continue') {
-        if (addedFiles.size > 0) {
-          cleanup({ action: 'add-files', addedFiles });
-        } else {
-          cleanup({ action: 'continue' });
-        }
-      } else if (btn.dataset.action === 'cancel') {
-        cleanup({ action: 'cancel' });
-      }
-    });
-
-    modal.addEventListener('click', (e) => {
-      if (e.target === modal) {
-        cleanup({ action: 'cancel' });
-      }
-    });
-
-    modal.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        cleanup({ action: 'cancel' });
-      }
-    });
-
-    openModal(modal, {
-      focusTarget: modal.querySelector('[data-action="add-files"]'),
-    });
-  });
-}
-
-// Sanitize URL parameters against extracted schema
-function sanitizeUrlParams(extracted, urlParams) {
-  const sanitized = {};
-  const adjustments = {};
-
-  for (const [key, value] of Object.entries(urlParams || {})) {
-    const schema = extracted?.parameters?.[key];
-    if (!schema) {
-      adjustments[key] = { reason: 'unknown-param', value };
-      continue;
-    }
-
-    // Enum validation
-    if (Array.isArray(schema.enum)) {
-      if (!schema.enum.includes(value)) {
-        adjustments[key] = { reason: 'enum', value, allowed: schema.enum };
-        continue;
-      }
-      sanitized[key] = value;
-      continue;
-    }
-
-    // Numeric validation/clamping
-    if (typeof value === 'number') {
-      let nextValue = value;
-      if (schema.minimum !== undefined && nextValue < schema.minimum) {
-        adjustments[key] = {
-          reason: 'min',
-          value,
-          minimum: schema.minimum,
-          maximum: schema.maximum,
-        };
-        nextValue = schema.minimum;
-      }
-      if (schema.maximum !== undefined && nextValue > schema.maximum) {
-        adjustments[key] = {
-          reason: 'max',
-          value,
-          minimum: schema.minimum,
-          maximum: schema.maximum,
-        };
-        nextValue = schema.maximum;
-      }
-      if (schema.type === 'integer') {
-        nextValue = Math.round(nextValue);
-      }
-      sanitized[key] = nextValue;
-      continue;
-    }
-
-    // Booleans and strings (non-enum) pass through
-    sanitized[key] = value;
-  }
-
-  return { sanitized, adjustments };
-}
-
-/**
- * Inject toggle button for alternate view (internal use)
- */
-function _injectAltToggle() {
-  const themeToggle = document.getElementById('themeToggle');
-  if (!themeToggle) return;
-  if (document.getElementById('_hfmToggle')) return; // Already exists
-
-  const toggleBtn = document.createElement('button');
-  toggleBtn.id = '_hfmToggle';
-  toggleBtn.className = 'btn btn-sm btn-secondary alt-view-toggle';
-  toggleBtn.setAttribute('aria-pressed', 'false');
-  toggleBtn.setAttribute('aria-label', 'Toggle alternate view');
-  toggleBtn.setAttribute('title', 'Alternate view');
-  toggleBtn.innerHTML = `
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      <!-- Key icon -->
-      <circle cx="8" cy="8" r="5" />
-      <path d="M11.3 11.3L21 21" />
-      <path d="M16 16l3-3" />
-      <path d="M18 18l3-3" />
-    </svg>
-  `;
-
-  // Insert after themeToggle (before next sibling)
-  themeToggle.parentElement.insertBefore(toggleBtn, themeToggle.nextSibling);
-
-  // Create "Alt adjust" toggle button (placed in PAN D-pad center)
-  const panToggleBtn = document.createElement('button');
-  panToggleBtn.id = '_hfmPanAdjust';
-  panToggleBtn.className =
-    'btn btn-sm btn-icon camera-btn alt-pan-toggle dpad-center';
-  panToggleBtn.setAttribute('aria-pressed', 'false');
-  panToggleBtn.setAttribute(
-    'aria-label',
-    'Toggle alternate pan adjustment mode'
-  );
-  panToggleBtn.setAttribute('title', 'Toggle alternate pan adjustment');
-  panToggleBtn.style.display = 'none'; // Hidden until alt view is enabled
-  panToggleBtn.innerHTML = `
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      <path d="M12 3v18" />
-      <path d="M3 12h18" />
-      <path d="M7 7h0.01" />
-      <path d="M17 17h0.01" />
-    </svg>
-  `;
-
-  const desktopPanDpad = document
-    .getElementById('cameraPanUp')
-    ?.closest('.camera-control-dpad');
-  if (desktopPanDpad) {
-    desktopPanDpad.appendChild(panToggleBtn);
-  }
-
-  const mobilePanToggleBtn = panToggleBtn.cloneNode(true);
-  mobilePanToggleBtn.id = '_hfmPanAdjustMobile';
-  mobilePanToggleBtn.className =
-    'btn btn-sm btn-icon camera-drawer-btn alt-pan-toggle dpad-center';
-
-  const mobilePanDpad = document
-    .getElementById('mobileCameraPanUp')
-    ?.closest('.camera-drawer-dpad');
-  if (mobilePanDpad) {
-    mobilePanDpad.appendChild(mobilePanToggleBtn);
-  }
-
-  _hfmPanToggleButtons = {
-    desktop: panToggleBtn,
-    mobile: mobilePanToggleBtn,
-  };
-  _setHfmPanAdjustEnabled(false);
-
-  const handlePanToggleClick = () => {
-    // Only meaningful when alt view is enabled
-    if (!_hfmAltView || !_hfmEnabled) return;
-    _setHfmPanAdjustEnabled(!_hfmPanAdjustEnabled);
-  };
-  const handlePanToggleDblClick = (e) => {
-    // Double-click resets saved HFM settings to auto-calibrated defaults
-    if (!_hfmAltView || !_hfmEnabled) return;
-    e.preventDefault();
-    _resetHfmSettings();
-  };
-  panToggleBtn.addEventListener('click', handlePanToggleClick);
-  panToggleBtn.addEventListener('dblclick', handlePanToggleDblClick);
-  mobilePanToggleBtn.addEventListener('click', handlePanToggleClick);
-  mobilePanToggleBtn.addEventListener('dblclick', handlePanToggleDblClick);
-
-  // Wire toggle click handler
-  toggleBtn.addEventListener('click', async () => {
-    const root = document.documentElement;
-    const isCurrentlyEnabled =
-      toggleBtn.getAttribute('aria-pressed') === 'true';
-
-    if (!previewManager) {
-      if (!isCurrentlyEnabled) {
-        _setAssetsForVariant(true);
-        root.setAttribute('data-ui-variant', 'mono');
-        toggleBtn.setAttribute('aria-pressed', 'true');
-        _hfmPendingEnable = true;
-      } else {
-        root.removeAttribute('data-ui-variant');
-        _setAssetsForVariant(false);
-        toggleBtn.setAttribute('aria-pressed', 'false');
-        _hfmPendingEnable = false;
-      }
-      return;
-    }
-
-    if (!isCurrentlyEnabled) {
-      await _enableAltViewWithPreview(toggleBtn);
-    } else {
-      _disableAltViewWithPreview(toggleBtn);
-    }
-  });
-
-  // Keep injected control consistent if dev auto-enabled already ran
-  if (_hfmEnabled) {
-    toggleBtn.setAttribute('aria-pressed', 'true');
-    _initHfmContrastControls().setEnabled(true);
-    _initHfmFontScaleControls().setEnabled(true);
-    _enableHfmZoomTracking();
-    if (_hfmPanToggleButtons?.desktop)
-      _hfmPanToggleButtons.desktop.style.display = 'flex';
-    if (_hfmPanToggleButtons?.mobile)
-      _hfmPanToggleButtons.mobile.style.display = 'flex';
-    _setHfmPanAdjustEnabled(false);
-  }
-}
-
-/**
- * Handle unlock sequence match (internal use)
- */
-function _handleUnlock() {
-  if (_hfmUnlocked) return; // Already unlocked
-  _hfmUnlocked = true;
-
-  // Inject toggle button
-  _injectAltToggle();
-
-  // Reveal gated Features Guide tab and panel
-  document.querySelectorAll('[data-hfm-gated]').forEach((el) => {
-    el.hidden = false;
-  });
-
-  // Optional: brief flash on preview container
-  const container = document.getElementById('previewContainer');
-  if (container) {
-    container.classList.add('_hfm-unlock');
-    container.addEventListener(
-      'animationend',
-      () => {
-        container.classList.remove('_hfm-unlock');
-      },
-      { once: true }
-    );
-  }
-}
-
-async function _enableAltViewWithPreview(toggleBtn) {
-  if (!previewManager) return;
-
-  const root = document.documentElement;
-  _setAssetsForVariant(true);
-
-  // Enabling - lazy load if needed
-  if (!_hfmInitPromise) {
-    _hfmInitPromise = import('./js/_hfm.js').then((mod) =>
-      mod.initAltView(previewManager)
-    );
-  }
-  _hfmAltView = await _hfmInitPromise;
-  _hfmAltView.enable();
-
-  // Live prefers-reduced-motion listener — updates afterglow without disable/re-enable
-  const motionMql = window.matchMedia('(prefers-reduced-motion: reduce)');
-  _hfmMotionListener = (event) => {
-    _hfmAltView?.setReducedMotion(event.matches);
-    if (event.matches) {
-      _hfmPersistFade = 0;
-      _updateHfmStatusBar();
-    } else {
-      let savedFade = null;
-      try {
-        savedFade = localStorage.getItem(STORAGE_KEY_HFM_PERSIST_FADE);
-      } catch (_) {
-        /* storage unavailable */
-      }
-      const parsed = savedFade !== null ? parseFloat(savedFade) : NaN;
-      const valid =
-        Number.isFinite(parsed) &&
-        parsed >= _HFM_PERSIST_FADE_RANGE.min &&
-        parsed <= _HFM_PERSIST_FADE_RANGE.max;
-      _applyHfmPersistFade(valid ? parsed : _HFM_PERSIST_FADE_RANGE.default);
-    }
-  };
-  motionMql.addEventListener('change', _hfmMotionListener);
-
-  // Restore user's saved settings, falling back to auto-calibration for missing values
-  if (!_hfmCalibrated) {
-    let savedContrast = null;
-    let savedFont = null;
-    let savedPersistFade = null;
-    try {
-      savedContrast = localStorage.getItem(STORAGE_KEY_HFM_CONTRAST_SCALE);
-      savedFont = localStorage.getItem(STORAGE_KEY_HFM_FONT_SCALE);
-      savedPersistFade = localStorage.getItem(STORAGE_KEY_HFM_PERSIST_FADE);
-    } catch (_) {
-      // Private browsing or storage unavailable — use calibration
-    }
-
-    const parsedContrast =
-      savedContrast !== null ? parseFloat(savedContrast) : NaN;
-    const parsedFont = savedFont !== null ? parseFloat(savedFont) : NaN;
-    const parsedPersistFade =
-      savedPersistFade !== null ? parseFloat(savedPersistFade) : NaN;
-
-    const contrastValid =
-      Number.isFinite(parsedContrast) &&
-      parsedContrast >= _HFM_CONTRAST_RANGE.min &&
-      parsedContrast <= _HFM_CONTRAST_RANGE.max;
-    const fontValid =
-      Number.isFinite(parsedFont) &&
-      parsedFont >= _HFM_FONT_SCALE_RANGE.min &&
-      parsedFont <= _HFM_FONT_SCALE_RANGE.max;
-    const persistFadeValid =
-      Number.isFinite(parsedPersistFade) &&
-      parsedPersistFade >= _HFM_PERSIST_FADE_RANGE.min &&
-      parsedPersistFade <= _HFM_PERSIST_FADE_RANGE.max;
-
-    if (contrastValid && fontValid) {
-      // Full saved state: skip auto-calibration entirely
-      _hfmContrastScale = parsedContrast;
-      _hfmFontScale = parsedFont;
-      _hfmCalibratedDevice = '';
-      _hfmCalibrated = true;
-    } else {
-      // Auto-calibrate, then overlay any valid saved value
-      const calibrated = _calibrateHfmSettings();
-      _hfmContrastScale = contrastValid ? parsedContrast : calibrated.edgeScale;
-      _hfmFontScale = fontValid ? parsedFont : calibrated.sizeScale;
-      _hfmCalibratedDevice = calibrated.deviceCategory;
-      _hfmCalibrated = true;
-    }
-
-    _hfmPersistFade = persistFadeValid
-      ? parsedPersistFade
-      : _HFM_PERSIST_FADE_RANGE.default;
-  }
-
-  _applyHfmContrastScale(_hfmContrastScale);
-  _applyHfmFontScale(_hfmFontScale);
-  _applyHfmPersistFade(_hfmPersistFade);
-  _setHfmZoomBaseline();
-  _enableHfmZoomTracking();
-  _initHfmContrastControls().setEnabled(true);
-  _initHfmFontScaleControls().setEnabled(true);
-
-  // Enable rotation centering for better auto-rotate viewing
-  // This centers the object at the origin so rotation looks better
-  if (previewManager?.mesh && previewManager.enableRotationCentering) {
-    previewManager.enableRotationCentering();
-  }
-
-  // Set up post-load hook to re-enable rotation centering when models are reloaded
-  // and refresh display overlays (edges, wireframe) so they match the new geometry.
-  previewManager?.setPostLoadHook?.(() => {
-    if (previewManager?.mesh && previewManager.enableRotationCentering) {
-      previewManager.enableRotationCentering();
-    }
-    getDisplayOptionsController().refreshOverlays();
-  });
-
-  previewManager.setRenderOverride(() => _hfmAltView.render());
-  previewManager.setResizeHook(({ width, height }) =>
-    _hfmAltView.resize(width, height)
-  );
-
-  // Apply variant theme (non-persistent, session only)
-  root.setAttribute('data-ui-variant', 'mono');
-
-  // Update preview colors to match the variant theme
-  const newTheme = previewManager.detectTheme();
-  previewManager.updateTheme(
-    newTheme,
-    root.getAttribute('data-high-contrast') === 'true'
-  );
-
-  // Trigger resize to sync dimensions
-  previewManager.handleResize?.();
-  toggleBtn?.setAttribute('aria-pressed', 'true');
-  _hfmEnabled = true;
-  _hfmPendingEnable = false;
-
-  // Show pan-adjust toggles (default OFF so pan works normally)
-  if (_hfmPanToggleButtons?.desktop)
-    _hfmPanToggleButtons.desktop.style.display = 'flex';
-  if (_hfmPanToggleButtons?.mobile)
-    _hfmPanToggleButtons.mobile.style.display = 'flex';
-  _setHfmPanAdjustEnabled(false);
-}
-
-function _disableAltViewWithPreview(toggleBtn) {
-  const root = document.documentElement;
-
-  // Remove prefers-reduced-motion listener
-  if (_hfmMotionListener) {
-    const motionMql = window.matchMedia('(prefers-reduced-motion: reduce)');
-    motionMql.removeEventListener('change', _hfmMotionListener);
-    _hfmMotionListener = null;
-  }
-
-  // Disabling
-  if (_hfmAltView) {
-    _hfmAltView.disable();
-  }
-  previewManager?.clearRenderOverride();
-  previewManager?.clearResizeHook();
-  previewManager?.clearPostLoadHook?.();
-
-  // Disable rotation centering and restore object to auto-bed position
-  if (previewManager?.disableRotationCentering) {
-    previewManager.disableRotationCentering();
-  }
-
-  // Remove variant theme
-  root.removeAttribute('data-ui-variant');
-  _setAssetsForVariant(false);
-
-  // Restore normal theme
-  if (previewManager) {
-    const normalTheme = previewManager.detectTheme();
-    previewManager.updateTheme(
-      normalTheme,
-      root.getAttribute('data-high-contrast') === 'true'
-    );
-  }
-
-  toggleBtn?.setAttribute('aria-pressed', 'false');
-  _hfmEnabled = false;
-  _hfmPendingEnable = false;
-
-  // Reset pan-adjust mode and hide toggles
-  _hfmPanAdjustEnabled = false;
-  if (_hfmPanToggleButtons?.desktop)
-    _hfmPanToggleButtons.desktop.style.display = 'none';
-  if (_hfmPanToggleButtons?.mobile)
-    _hfmPanToggleButtons.mobile.style.display = 'none';
-  _initHfmContrastControls().setEnabled(false);
-  _initHfmFontScaleControls().setEnabled(false);
-  _disableHfmZoomTracking();
-  _hfmZoomBaseline = null;
-
-  // Clear alt adjust info from status bar
-  _updateHfmStatusBar();
-}
-
-/**
- * Export the current render result in the given format from a toolbar menu action.
- * Reads from state directly so it doesn't depend on the outputFormatSelect element.
- *
- * @param {string} format - Format key from OUTPUT_FORMATS (e.g. 'stl', 'obj')
- */
-function _exportFormatFromMenu(format) {
-  const state = stateManager.getState();
-  const outputData = state.generatedOutput?.data || state.stl;
-  if (!outputData) {
-    alert('No rendered model to export. Run Render first.');
-    return;
-  }
-  const stateFormat = (
-    state.generatedOutput?.format ||
-    state.outputFormat ||
-    'stl'
-  ).toLowerCase();
-  if (stateFormat !== format) {
-    alert(
-      `The current render is ${stateFormat.toUpperCase()}. To export as ${format.toUpperCase()}, change the output format and click Generate first.`
-    );
-    return;
-  }
-  const filename = generateFilename(
-    state.uploadedFile?.name || 'model',
-    state.parameters || {},
-    format
-  );
-  downloadFile(outputData, filename, format);
-}
-
-/**
- * Apply toolbar bar / workflow progress mutual exclusion based on UI mode.
- *
- * Advanced mode: toolbar visible, workflowProgress hidden.
- * Basic mode (default): toolbar hidden, workflowProgress managed as-is.
- * Basic mode (override): when any toolbarMenu* panel is explicitly shown via
- *   PANEL_REGISTRY, the toolbar bar is shown with only those buttons visible
- *   and workflowProgress is hidden.
- *
- * @param {'basic'|'advanced'} mode
- */
-function _applyToolbarModeVisibility(mode) {
-  const controller = getToolbarMenuController();
-
-  // Toolbar is only relevant in the main UI (file loaded). On the welcome screen
-  // both the toolbar and workflow progress must be hidden to keep the slot empty.
-  const mainInterfaceEl = document.getElementById('mainInterface');
-  const mainInterfaceVisible =
-    mainInterfaceEl && !mainInterfaceEl.classList.contains('hidden');
-
-  if (!mainInterfaceVisible) {
-    // Welcome screen / no file loaded: hide toolbar and entire workflow-progress
-    // container (including its action buttons — Back/Help/etc. are irrelevant here).
-    controller.hide();
-    hideWorkflowProgress();
-    return;
-  }
-
-  // Main UI is active.
-  // #workflowProgress must remain visible because it contains essential navigation
-  // buttons (#uiModeToggle, #focusModeBtn, #featuresGuideBtn, #clearFileBtn).
-  showWorkflowProgress();
-
-  if (mode === 'advanced') {
-    controller.show();
-  } else {
-    // Basic mode: check if any per-menu buttons are enabled via PANEL_REGISTRY
-    const uiMode = getUIModeController();
-    const registry = uiMode.getRegistry();
-    const menuIdMap = {
-      toolbarMenuFile: 'file',
-      toolbarMenuEdit: 'edit',
-      toolbarMenuDesign: 'design',
-      toolbarMenuView: 'view',
-      toolbarMenuWindow: 'window',
-      toolbarMenuHelp: 'help',
-    };
-
-    // Determine which toolbar menu buttons are explicitly visible (i.e., NOT hidden)
-    const visibleMenuIds = registry
-      .filter((p) => p.id in menuIdMap)
-      .filter((p) => {
-        const el = document.getElementById(`${menuIdMap[p.id]}MenuBtn`);
-        return el && !el.classList.contains('ui-mode-hidden');
-      })
-      .map((p) => menuIdMap[p.id]);
-
-    if (visibleMenuIds.length > 0) {
-      controller.setVisibleMenus(visibleMenuIds);
-    } else {
-      controller.hide();
-    }
-  }
-}
+// HFM/Alt View state and functions moved to hfm-controller.js
+// Dialog functions moved to dialogs.js
+// sanitizeUrlParams, exportFormatFromMenu, applyToolbarModeVisibility moved to hfm-controller.js
 
 // Initialize app
 async function initApp() {
@@ -1921,7 +312,7 @@ async function initApp() {
   // Feature flags: Enable controlled rollout of new features
   debugFlags(); // Log flag states for debugging
 
-  // CSP Reporter: Monitor Content-Security-Policy violations (report-only mode)
+  // CSP Reporter: Monitor Content-Security-Policy violations
   initCSPReporter();
 
   // Storage key migration: One-time migration of localStorage keys to standardized naming
@@ -1956,12 +347,12 @@ async function initApp() {
     // Apply conservative settings per B.5.4 Recovery Mode Specification:
     // - Auto-preview OFF (no automatic renders)
     // - Quality set to fast (minimum quality settings)
-    // - Monaco disabled (use textarea only — less memory overhead)
+    // - CodeMirror disabled (use textarea only — less memory overhead)
     localStorage.setItem(STORAGE_KEY_AUTO_PREVIEW_ENABLED, 'false');
     localStorage.setItem(STORAGE_KEY_PREVIEW_QUALITY, 'fast');
-    // Disable Monaco in recovery mode to reduce memory footprint.
+    // Disable CodeMirror in recovery mode to reduce memory footprint.
     // The user can re-enable it manually from settings after recovery.
-    localStorage.setItem('openscad-forge-flag-monaco_editor', 'false');
+    localStorage.setItem('openscad-forge-flag-codemirror_editor', 'false');
 
     // Clean up crash detection flags
     localStorage.removeItem('openscad-forge-wasm-init-started');
@@ -2198,12 +589,17 @@ async function initApp() {
 
   // CRITICAL: Import validation constants early to avoid TDZ in handleFile()
   let FILE_SIZE_LIMITS = null;
+  let validateFileUpload = null;
   try {
     const validationModule = await import('./js/validation-constants.js');
     FILE_SIZE_LIMITS = validationModule.FILE_SIZE_LIMITS;
   } catch (e) {
     console.error('Failed to import validation constants:', e);
   }
+
+  // File handler controller -- declared early so wrappers can reference it;
+  // assigned after all const deps are available (see initFileHandler call below).
+  let fileHandler; // eslint-disable-line prefer-const
 
   function cloneProjectFiles(files) {
     return files ? new Map(files) : null;
@@ -2529,9 +925,21 @@ async function initApp() {
   // Initialize configurable keyboard shortcuts
   initKeyboardShortcuts();
 
-  // Track current folder for saved projects navigation (must be declared
-  // before renderSavedProjectsList is called to avoid TDZ ReferenceError).
-  let currentFolderId = null;
+  // Initialize saved projects UI controller
+  // updateCompanionSaveButton is wrapped because companionFilesCtrl is
+  // created later (after DOM element queries); the wrapper defers safely
+  // since savedProjectsUI only invokes it after user interaction.
+  const savedProjectsUI = initSavedProjectsUI({
+    showConfirmDialog,
+    showProcessingOverlay,
+    handleFile: (...args) => fileHandler.handleFile(...args),
+    updateStatus,
+    updateCompanionSaveButton: (...args) => companionFilesCtrl.updateCompanionSaveButton(...args),
+    downloadSingleProject,
+    setCurrentSavedProjectId: (id) => {
+      currentSavedProjectId = id;
+    },
+  });
 
   // Initialize saved projects database
   try {
@@ -2550,12 +958,12 @@ async function initApp() {
     }
 
     // Render saved projects list on welcome screen
-    await renderSavedProjectsList();
+    await savedProjectsUI.renderSavedProjectsList();
   } catch (error) {
     console.error('[Saved Projects] Initialization failed:', error);
     // Still try to render from localStorage as fallback
     try {
-      await renderSavedProjectsList();
+      await savedProjectsUI.renderSavedProjectsList();
     } catch (renderError) {
       console.error(
         '[Saved Projects] Render fallback also failed:',
@@ -2930,7 +1338,7 @@ async function initApp() {
       const result = await importProjectsBackup(file);
 
       if (result.success) {
-        await renderSavedProjectsList();
+        await savedProjectsUI.renderSavedProjectsList();
         const msg = `Imported ${result.imported} project${result.imported !== 1 ? 's' : ''}`;
         updateStatus(msg, 'success');
         stateManager.announceChange(msg);
@@ -2999,28 +1407,26 @@ async function initApp() {
             );
             const files = [];
             try {
-              await _collectFilesFromDir(dirHandle, dirHandle.name, files);
+              await fileHandler.collectFilesFromDir(dirHandle, dirHandle.name, files);
             } catch (collectErr) {
               dismissOverlay();
-              alert(`Error reading folder contents: ${collectErr.message}`);
+              showErrorToast({ title: 'Folder Read Error', message: collectErr.message });
               return;
             }
             if (files.length === 0) {
               dismissOverlay();
-              alert(
-                'No files found in the selected folder. The folder may be empty.'
-              );
+              showErrorToast({ title: 'Empty Folder', message: 'No files found in the selected folder. The folder may be empty.' });
               return;
             }
             dismissOverlay();
-            await handleFolderImport(files);
+            await fileHandler.handleFolderImport(files);
           } catch (err) {
             dismissOverlay();
             if (err.name === 'AbortError') {
               updateStatus('Folder selection cancelled');
               return;
             }
-            alert(`Folder import error: ${err.message}`);
+            showErrorToast({ title: 'Folder Import Error', message: err.message });
           }
         } else {
           // Fallback to webkitdirectory input
@@ -3037,197 +1443,20 @@ async function initApp() {
             updateStatus('No files in selected folder');
             return;
           }
-          await handleFolderImport(files);
+          await fileHandler.handleFolderImport(files);
           importFolderInput.value = '';
         } catch (err) {
-          alert(`Folder import error: ${err.message}`);
+          showErrorToast({ title: 'Folder Import Error', message: err.message });
         }
       });
     }
   }
 
-  /**
-   * Recursively collect files from a FileSystemDirectoryHandle.
-   * Attaches webkitRelativePath to each File for compatibility with handleFolderImport.
-   */
-  async function _collectFilesFromDir(dirHandle, basePath, out) {
-    for await (const entry of dirHandle.values()) {
-      if (entry.kind === 'file') {
-        const file = await entry.getFile();
-        const relPath = `${basePath}/${entry.name}`;
-        Object.defineProperty(file, 'webkitRelativePath', {
-          value: relPath,
-          writable: false,
-        });
-        out.push(file);
-      } else if (entry.kind === 'directory') {
-        await _collectFilesFromDir(entry, `${basePath}/${entry.name}`, out);
-      }
-    }
-  }
+  // _collectFilesFromDir moved to file-handler.js
 
-  /**
-   * Handle a folder selection from the webkitdirectory input or showDirectoryPicker.
-   * @param {FileList|File[]} files - FileList or array of Files with webkitRelativePath
-   */
-  async function handleFolderImport(files) {
-    const fileArr = Array.from(files);
-    let dismissOverlay = () => {};
+  // handleFolderImport moved to file-handler.js
 
-    dismissOverlay = showProcessingOverlay(
-      `Processing ${fileArr.length} files from folder…`,
-      'Analyzing project structure. Please do not close or refresh the page.'
-    );
-
-    // Size guards — generous limits for real-world multi-folder projects
-    const MAX_FILES = 500;
-    const MAX_BYTES = 100 * 1024 * 1024; // 100 MB
-    const WARN_FILES = 200;
-
-    const totalBytes = fileArr.reduce((sum, f) => sum + f.size, 0);
-
-    if (fileArr.length > MAX_FILES) {
-      dismissOverlay();
-      alert(
-        `The selected folder contains ${fileArr.length} files (limit: ${MAX_FILES}). ` +
-          `Please select a smaller project folder.`
-      );
-      return;
-    }
-
-    if (totalBytes > MAX_BYTES) {
-      dismissOverlay();
-      const mb = (totalBytes / 1024 / 1024).toFixed(1);
-      alert(
-        `The selected folder is ${mb} MB (limit: 100 MB). ` +
-          `Please select a smaller project folder.`
-      );
-      return;
-    }
-
-    if (fileArr.length > WARN_FILES) {
-      console.warn(
-        `[FolderImport] ${fileArr.length} files selected — large project folder.`
-      );
-    }
-
-    // Find the root directory name (all files share the same first path segment)
-    const rootDir = fileArr[0]?.webkitRelativePath?.split('/')[0] || '';
-
-    // Detect .scad files in the root
-    const scadInRoot = fileArr.filter((f) => {
-      const rel = f.webkitRelativePath || f.name;
-      const parts = rel.split('/');
-      return parts.length === 2 && parts[1].endsWith('.scad');
-    });
-
-    const scadAnywhere = fileArr.filter((f) =>
-      (f.webkitRelativePath || f.name).endsWith('.scad')
-    );
-
-    let mainFilePath = null;
-
-    if (scadInRoot.length === 1) {
-      mainFilePath = scadInRoot[0].webkitRelativePath;
-    } else if (scadInRoot.length > 1) {
-      dismissOverlay();
-      mainFilePath = await _promptScadSelection(
-        scadInRoot.map((f) => f.webkitRelativePath),
-        'Multiple .scad files found in the folder root. Select the main file:'
-      );
-    } else if (scadAnywhere.length > 0) {
-      dismissOverlay();
-      mainFilePath = await _promptScadSelection(
-        scadAnywhere.map((f) => f.webkitRelativePath),
-        'No .scad files found in the folder root. Select the main file:'
-      );
-    } else {
-      dismissOverlay();
-      alert('No OpenSCAD (.scad) files found in the selected folder.');
-      return;
-    }
-
-    if (!mainFilePath) return;
-
-    const totalMB = (totalBytes / (1024 * 1024)).toFixed(1);
-    dismissOverlay = showProcessingOverlay(
-      `Importing folder "${rootDir}" (${fileArr.length} files, ${totalMB} MB)…`,
-      'This may take a moment for large projects. Please do not close or refresh the page.'
-    );
-
-    try {
-      const result = await importProjectFromFiles(files, mainFilePath);
-
-      dismissOverlay();
-
-      if (result.success) {
-        updateStatus(`Folder imported: ${rootDir || mainFilePath}`);
-        await renderSavedProjectsList();
-        // Auto-load the imported project (matches .zip behaviour)
-        if (result.id) {
-          await loadSavedProject(result.id);
-        }
-      } else {
-        alert(`Folder import failed: ${result.error}`);
-      }
-    } catch (err) {
-      dismissOverlay();
-      alert(`Folder import failed: ${err.message}`);
-    }
-  }
-
-  /**
-   * Show a modal prompting the user to select one .scad file from a list.
-   * @param {string[]} paths - webkitRelativePath values to choose from
-   * @param {string} prompt - Heading text
-   * @returns {Promise<string|null>} Selected path, or null if cancelled
-   */
-  async function _promptScadSelection(paths, prompt) {
-    return new Promise((resolve) => {
-      const dialog = document.createElement('dialog');
-      dialog.className = 'folder-scad-select-dialog';
-      dialog.setAttribute('aria-labelledby', 'scadSelectTitle');
-
-      const optionsHtml = paths
-        .map(
-          (p, i) =>
-            `<label class="import-mode-option">
-              <input type="radio" name="scadFile" value="${p}"${i === 0 ? ' checked' : ''} />
-              <span>${p.split('/').pop()}</span>
-            </label>`
-        )
-        .join('');
-
-      dialog.innerHTML = `
-        <form method="dialog" class="import-mode-form">
-          <h3 id="scadSelectTitle" class="import-mode-title">${prompt}</h3>
-          <fieldset class="import-mode-fieldset">
-            <legend class="import-mode-legend">Select main .scad file</legend>
-            ${optionsHtml}
-          </fieldset>
-          <div class="import-mode-actions">
-            <button type="submit" value="ok" class="btn btn-primary">Import</button>
-            <button type="submit" value="cancel" class="btn btn-outline">Cancel</button>
-          </div>
-        </form>`;
-
-      document.body.appendChild(dialog);
-      dialog.showModal();
-
-      dialog.addEventListener(
-        'close',
-        () => {
-          const returnValue = dialog.returnValue;
-          const selected =
-            dialog.querySelector('input[name="scadFile"]:checked')?.value ||
-            null;
-          document.body.removeChild(dialog);
-          resolve(returnValue === 'ok' ? selected : null);
-        },
-        { once: true }
-      );
-    });
-  }
+  // _promptScadSelection moved to file-handler.js
 
   let storageUpdateTimeout = null;
   const scheduleStorageUpdate = (delayMs = 2500) => {
@@ -3409,8 +1638,7 @@ async function initApp() {
 
       if (shouldRestore) {
         console.log('Restoring deferred draft...');
-        // handleFile will be available since it's defined later but hoisted
-        handleFile(
+        fileHandler.handleFile(
           { name: draftToRestore.fileName },
           draftToRestore.fileContent,
           null,
@@ -3435,9 +1663,15 @@ async function initApp() {
 
   // Initialize toolbar menu bar (File|Edit|Design|View|Window|Help)
   getToolbarMenuController().init();
-  _applyToolbarModeVisibility(getUIModeController().getMode());
+  applyToolbarModeVisibility(getUIModeController().getMode());
   getUIModeController().subscribe((newMode) => {
-    _applyToolbarModeVisibility(newMode);
+    applyToolbarModeVisibility(newMode);
+  });
+
+  // Initialize HFM/Alt View controller (hidden feature mode)
+  const hfmCtrl = initHfmController({
+    getPreviewManager: () => previewManager,
+    getDisplayOptionsController,
   });
 
   // Initialize parameter detail level controller (Show/Inline/Hide/Desc-only)
@@ -3460,15 +1694,18 @@ async function initApp() {
             : undefined,
       });
       if (result.success) {
-        updateCompanionSaveButton();
+        companionFilesCtrl.updateCompanionSaveButton();
         stateManager.announceChange(successMessage);
         updateStatus(successMessage);
-        await renderSavedProjectsList();
+        await savedProjectsUI.renderSavedProjectsList();
       } else {
-        alert(`Failed to save: ${result.error}`);
+        showErrorToast({
+          title: 'Save Failed',
+          message: `Failed to save: ${result.error}`,
+        });
       }
     } else {
-      await showSaveProjectPrompt(state, { preSave: true });
+      await savedProjectsUI.showSaveProjectPrompt(state, { preSave: true });
     }
   }
 
@@ -3484,11 +1721,18 @@ async function initApp() {
   async function _export2DOneClick(format) {
     const state = stateManager.getState();
     if (!state.uploadedFile) {
-      alert('Open a SCAD file first.');
+      showErrorToast({
+        title: 'No File Open',
+        message: 'Open a .scad file first.',
+      });
       return;
     }
     if (!renderController) {
-      alert('OpenSCAD engine not initialized.');
+      showErrorToast({
+        title: 'Engine Not Ready',
+        message:
+          'The OpenSCAD engine has not initialized yet. Please wait or refresh the page.',
+      });
       return;
     }
 
@@ -3616,7 +1860,7 @@ async function initApp() {
     onReload: () => {
       const state = stateManager.getState();
       if (state.uploadedFile) {
-        handleFile(
+        fileHandler.handleFile(
           null,
           state.uploadedFile.content,
           state.projectFiles || null,
@@ -3630,7 +1874,7 @@ async function initApp() {
     onSaveAs: async () => {
       const state = stateManager.getState();
       if (!state.uploadedFile?.content) return;
-      await showSaveProjectPrompt(state, { preSave: true });
+      await savedProjectsUI.showSaveProjectPrompt(state, { preSave: true });
     },
     onSaveAll: () => _saveCurrentProject('All changes saved'),
     onExportImage: () => {
@@ -3726,7 +1970,7 @@ async function initApp() {
         tooltip: hasFullRender
           ? fmt.description
           : 'Press Generate first to enable this export',
-        handler: () => _exportFormatFromMenu(key),
+        handler: () => exportFormatFromMenu(key),
       })),
       { type: 'separator' },
       {
@@ -3768,7 +2012,7 @@ async function initApp() {
         items: Object.entries(EXAMPLE_DEFINITIONS).map(([key, def]) => ({
           type: 'action',
           label: def.description || def.name,
-          handler: () => loadExampleByKey(key),
+          handler: () => fileHandler.loadExampleByKey(key),
         })),
       },
       {
@@ -4896,11 +3140,14 @@ async function initApp() {
           'OpenSCAD engine failed to initialize. Some features may not work.'
         );
         const details = error?.details ? ` Details: ${error.details}` : '';
-        alert(
-          'Failed to initialize OpenSCAD engine. Some features may not work. Error: ' +
-            error.message +
-            details
-        );
+        showErrorModal({
+          title: 'Engine Initialization Failed',
+          message:
+            'Failed to initialize the OpenSCAD engine. Some features may not work.',
+          suggestion:
+            'Try refreshing the page. If the problem persists, try a different browser.',
+          technical: error.message + details,
+        });
         return false;
       }
     }
@@ -5494,38 +3741,9 @@ async function initApp() {
   const dimensionsDisplay = document.getElementById('dimensionsDisplay');
   // Note: outputFormatSelect and formatInfo already declared above
 
-  // Reference overlay controls
+  // Reference overlay controls (used by preset load, back-to-welcome reset, etc.)
   const overlaySourceSelect = document.getElementById('overlaySourceSelect');
   const overlayToggle = document.getElementById('overlayToggle');
-  const overlayOpacityInput = document.getElementById('overlayOpacityInput');
-  const overlayOpacityValue = document.getElementById('overlayOpacityValue');
-  const overlayColorInput = document.getElementById('overlayColorInput');
-  const overlayAutoColorToggle = document.getElementById(
-    'overlayAutoColorToggle'
-  );
-  const overlayFitModelBtn = document.getElementById('overlayFitModelBtn');
-  const overlayCenterBtn = document.getElementById('overlayCenterBtn');
-  const overlayWidthInput = document.getElementById('overlayWidthInput');
-  const overlayHeightInput = document.getElementById('overlayHeightInput');
-  const overlayAspectLockBtn = document.getElementById('overlayAspectLockBtn');
-  const overlayOffsetXInput = document.getElementById('overlayOffsetXInput');
-  const overlayOffsetYInput = document.getElementById('overlayOffsetYInput');
-  const overlayRotationInput = document.getElementById('overlayRotationInput');
-  const overlayRotationValue = document.getElementById('overlayRotationValue');
-  const overlayStatus = document.getElementById('overlayStatus');
-  const overlayFileInput = document.getElementById('overlayFileInput');
-  const overlayManualOverrideToggle = document.getElementById(
-    'overlayManualOverrideToggle'
-  );
-  const overlayCalibrationFieldset = document.getElementById(
-    'overlayCalibrationFieldset'
-  );
-  const overlayDimensionsValue = document.getElementById(
-    'overlayDimensionsValue'
-  );
-  const overlayMeasurementsToggle = document.getElementById(
-    'overlayMeasurementsToggle'
-  );
 
   // Create preview state indicator element
   const previewStateIndicator = document.createElement('div');
@@ -5779,232 +3997,21 @@ async function initApp() {
     });
   }
 
-  // Wire grid color picker
-  const gridColorPicker = document.getElementById('gridColorPicker');
-  const resetGridColorBtn = document.getElementById('resetGridColorBtn');
+  // Initialize overlay/grid/auto-rotate controller (extracted module)
+  const overlayGridCtrl = initOverlayGridController({
+    getPreviewManager: () => previewManager,
+    updateStatus,
+  });
 
-  function syncGridColorPicker() {
-    if (!gridColorPicker || !previewManager) return;
-    const custom = previewManager.getGridColor();
-    if (custom) {
-      gridColorPicker.value = custom;
-    } else {
-      const themeKey = previewManager.currentTheme || 'light';
-      const PREVIEW_COLORS_MAP = {
-        light: '#cccccc',
-        dark: '#404040',
-        'light-hc': '#000000',
-        'dark-hc': '#ffffff',
-        mono: '#00ff00',
-        'mono-light': '#ffb000',
-      };
-      gridColorPicker.value = PREVIEW_COLORS_MAP[themeKey] || '#cccccc';
-    }
-  }
-
-  if (gridColorPicker) {
-    syncGridColorPicker();
-    gridColorPicker.addEventListener('input', () => {
-      if (previewManager) {
-        previewManager.setGridColor(gridColorPicker.value);
-      }
-    });
-  }
-
-  if (resetGridColorBtn) {
-    resetGridColorBtn.addEventListener('click', () => {
-      if (previewManager) {
-        previewManager.resetGridColor();
-        syncGridColorPicker();
-        updateStatus('Grid color reset to theme default');
-      }
-    });
-  }
-
-  // Wire grid opacity slider
-  const gridOpacityInput = document.getElementById('gridOpacityInput');
-  const gridOpacityValue = document.getElementById('gridOpacityValue');
-
-  function syncGridOpacitySlider() {
-    if (!gridOpacityInput || !previewManager) return;
-    const val = previewManager.getGridOpacity();
-    gridOpacityInput.value = String(val);
-    if (gridOpacityValue) gridOpacityValue.textContent = `${val}%`;
-  }
-
-  if (gridOpacityInput) {
-    syncGridOpacitySlider();
-    gridOpacityInput.addEventListener('input', () => {
-      const v = parseInt(gridOpacityInput.value, 10);
-      if (gridOpacityValue) gridOpacityValue.textContent = `${v}%`;
-      if (previewManager) previewManager.setGridOpacity(v);
-    });
-  }
-
-  // Wire grid size preset selector, custom inputs, and user-saved custom presets
-  const gridPresetSelect = document.getElementById('gridPresetSelect');
-  const gridWidthInput = document.getElementById('gridWidthInput');
-  const gridHeightInput = document.getElementById('gridHeightInput');
-  const gridPresetSaveRow = document.getElementById('gridPresetSaveRow');
-  const gridPresetNameInput = document.getElementById('gridPresetNameInput');
-  const saveGridPresetBtn = document.getElementById('saveGridPresetBtn');
-  const gridPresetSaveError = document.getElementById('gridPresetSaveError');
-  const gridPresetDeleteRow = document.getElementById('gridPresetDeleteRow');
-  const deleteGridPresetBtn = document.getElementById('deleteGridPresetBtn');
-  const gridSizeDims = document.getElementById('gridSizeDims');
-
-  function applyGridSize(widthMm, heightMm) {
-    if (!previewManager) return;
-    previewManager.setGridSize(widthMm, heightMm);
-    if (gridWidthInput) gridWidthInput.value = widthMm;
-    if (gridHeightInput) gridHeightInput.value = heightMm;
-    updateStatus(`Grid size updated to ${widthMm} × ${heightMm} mm`);
-  }
-
-  // Prefix for user-preset option values to distinguish from built-ins
-  const USER_GRID_PREFIX = 'user:';
-
-  function _populateCustomGridPresets() {
-    if (!gridPresetSelect || !previewManager) return;
-
-    // Remove any existing user optgroup
-    const existing = gridPresetSelect.querySelector(
-      'optgroup[data-user-presets]'
-    );
-    if (existing) existing.remove();
-
-    const userPresets = previewManager.loadCustomGridPresets();
-    if (userPresets.length === 0) return;
-
-    const group = document.createElement('optgroup');
-    group.label = 'My presets';
-    group.setAttribute('data-user-presets', 'true');
-
-    for (const p of userPresets) {
-      const opt = document.createElement('option');
-      opt.value = `${USER_GRID_PREFIX}${p.name}`;
-      opt.textContent = `${p.name} (${p.widthMm}×${p.heightMm} mm)`;
-      group.appendChild(opt);
-    }
-
-    // Insert before "Custom..." option
-    const customOpt = gridPresetSelect.querySelector('option[value="custom"]');
-    if (customOpt) {
-      gridPresetSelect.insertBefore(group, customOpt);
-    } else {
-      gridPresetSelect.appendChild(group);
-    }
-  }
-
-  function _updateGridPresetActionRows() {
-    if (!gridPresetSelect) return;
-    const val = gridPresetSelect.value;
-    const isCustom = val === 'custom';
-    const isUserPreset = val.startsWith(USER_GRID_PREFIX);
-
-    if (gridSizeDims) gridSizeDims.hidden = !isCustom;
-    if (gridPresetSaveRow) gridPresetSaveRow.hidden = !isCustom;
-    if (gridPresetDeleteRow) gridPresetDeleteRow.hidden = !isUserPreset;
-    if (gridPresetSaveError) gridPresetSaveError.textContent = '';
-  }
-
-  if (gridPresetSelect) {
-    // Populate initial values from saved preference
-    if (previewManager) {
-      const saved = previewManager.getGridSize();
-      if (gridWidthInput) gridWidthInput.value = saved.widthMm;
-      if (gridHeightInput) gridHeightInput.value = saved.heightMm;
-    }
-
-    _populateCustomGridPresets();
-
-    gridPresetSelect.addEventListener('change', () => {
-      const val = gridPresetSelect.value;
-      if (val === 'custom') {
-        _updateGridPresetActionRows();
-        return;
-      }
-      if (val.startsWith(USER_GRID_PREFIX) && previewManager) {
-        const name = val.slice(USER_GRID_PREFIX.length);
-        const presets = previewManager.loadCustomGridPresets();
-        const found = presets.find((p) => p.name === name);
-        if (found) applyGridSize(found.widthMm, found.heightMm);
-        _updateGridPresetActionRows();
-        return;
-      }
-      const [w, h] = val.split('x').map(Number);
-      if (w && h) applyGridSize(w, h);
-      _updateGridPresetActionRows();
-    });
-  }
-
-  if (gridWidthInput) {
-    gridWidthInput.addEventListener('change', () => {
-      const w = parseInt(gridWidthInput.value, 10);
-      const h = parseInt(gridHeightInput?.value || '220', 10);
-      if (!isNaN(w) && !isNaN(h)) {
-        if (gridPresetSelect) gridPresetSelect.value = 'custom';
-        applyGridSize(w, h);
-        _updateGridPresetActionRows();
-      }
-    });
-  }
-
-  if (gridHeightInput) {
-    gridHeightInput.addEventListener('change', () => {
-      const w = parseInt(gridWidthInput?.value || '220', 10);
-      const h = parseInt(gridHeightInput.value, 10);
-      if (!isNaN(w) && !isNaN(h)) {
-        if (gridPresetSelect) gridPresetSelect.value = 'custom';
-        applyGridSize(w, h);
-        _updateGridPresetActionRows();
-      }
-    });
-  }
-
-  if (saveGridPresetBtn) {
-    saveGridPresetBtn.addEventListener('click', () => {
-      if (!previewManager) {
-        if (gridPresetSaveError)
-          gridPresetSaveError.textContent =
-            'Preview not ready yet. Please load a model first.';
-        return;
-      }
-      const name = gridPresetNameInput?.value || '';
-      const w = parseInt(gridWidthInput?.value || '0', 10);
-      const h = parseInt(gridHeightInput?.value || '0', 10);
-      const result = previewManager.saveCustomGridPreset(name, w, h);
-      if (!result.success) {
-        if (gridPresetSaveError) gridPresetSaveError.textContent = result.error;
-        return;
-      }
-      if (gridPresetSaveError) gridPresetSaveError.textContent = '';
-      if (gridPresetNameInput) gridPresetNameInput.value = '';
-      _populateCustomGridPresets();
-      // Select the newly saved preset
-      const newValue = `${USER_GRID_PREFIX}${name.trim()}`;
-      if (gridPresetSelect) {
-        gridPresetSelect.value = newValue;
-      }
-      _updateGridPresetActionRows();
-      updateStatus(`Custom grid preset "${name.trim()}" saved`);
-    });
-  }
-
-  if (deleteGridPresetBtn) {
-    deleteGridPresetBtn.addEventListener('click', () => {
-      if (!previewManager) return;
-      const val = gridPresetSelect?.value || '';
-      if (!val.startsWith(USER_GRID_PREFIX)) return;
-      const name = val.slice(USER_GRID_PREFIX.length);
-      if (!confirm(`Delete custom grid preset "${name}"?`)) return;
-      previewManager.deleteCustomGridPreset(name);
-      _populateCustomGridPresets();
-      if (gridPresetSelect) gridPresetSelect.value = 'custom';
-      _updateGridPresetActionRows();
-      updateStatus(`Custom grid preset "${name}" deleted`);
-    });
-  }
+  // Initialize companion files controller (extracted module)
+  const companionFilesCtrl = initCompanionFilesController({
+    getPreviewManager: () => previewManager,
+    getAutoPreviewController: () => autoPreviewController,
+    overlayGridCtrl,
+    updateStatus,
+    getCurrentSavedProjectId: () => currentSavedProjectId,
+    setCanonicalProjectFiles,
+  });
 
   // Wire auto-bed toggle
   if (autoBedToggle) {
@@ -6106,893 +4113,6 @@ async function initApp() {
     });
   }
 
-  // ============================================================================
-  // Reference Overlay Controls
-  // (Storage keys defined at module level using standardized naming convention)
-  // ============================================================================
-
-  /**
-   * Update the overlay source dropdown with available project files
-   */
-  function updateOverlaySourceDropdown() {
-    if (!overlaySourceSelect) return;
-
-    // Preserve current selection across rebuild
-    const previousVal = overlaySourceSelect.value;
-
-    const state = stateManager.getState();
-    const projectFiles = state.projectFiles;
-
-    // Clear and rebuild dropdown
-    overlaySourceSelect.innerHTML =
-      '<option value="">-- Select file --</option>';
-
-    if (!projectFiles || projectFiles.size === 0) {
-      overlaySourceSelect.disabled = true;
-    } else {
-      overlaySourceSelect.disabled = false;
-
-      // Filter for image files (SVG, PNG, JPG)
-      const imageExtensions = ['svg', 'png', 'jpg', 'jpeg'];
-      const imageFiles = Array.from(projectFiles.keys())
-        .filter((path) => {
-          const ext = path.split('.').pop()?.toLowerCase();
-          return imageExtensions.includes(ext);
-        })
-        .sort();
-
-      if (imageFiles.length === 0) {
-        const option = document.createElement('option');
-        option.value = '';
-        option.textContent = '-- No image files --';
-        option.disabled = true;
-        overlaySourceSelect.appendChild(option);
-      } else {
-        imageFiles.forEach((path) => {
-          const option = document.createElement('option');
-          option.value = path;
-          option.textContent = path;
-          overlaySourceSelect.appendChild(option);
-        });
-      }
-    }
-
-    // Re-add shared screenshot entries from the image store
-    const imgs = SharedImageStore.getImages();
-    for (const [, rec] of imgs) {
-      const opt = document.createElement('option');
-      opt.value = `screenshot:${rec.name}`;
-      opt.textContent = `\uD83D\uDCF7 ${rec.name}`;
-      opt.dataset.shared = '1';
-      overlaySourceSelect.appendChild(opt);
-    }
-
-    // Restore selection if the option still exists
-    if (previousVal) {
-      overlaySourceSelect.value = previousVal;
-    }
-  }
-
-  // Track uploaded overlay files (not part of project files)
-  const uploadedOverlayFiles = new Map();
-
-  /**
-   * Load overlay from selected project file or uploaded file
-   * @param {string} fileName - Name of the file to load
-   */
-  async function loadOverlayFromProjectFile(fileName) {
-    if (!previewManager || !fileName) {
-      if (previewManager) {
-        await previewManager.setReferenceOverlaySource({
-          kind: null,
-          name: null,
-          dataUrlOrText: null,
-        });
-      }
-      updateOverlayStatus();
-      return;
-    }
-
-    // Check uploaded overlay files first
-    if (uploadedOverlayFiles.has(fileName)) {
-      await loadOverlayFromUploadedFile(fileName);
-      return;
-    }
-
-    const state = stateManager.getState();
-    const projectFiles = state.projectFiles;
-
-    if (!projectFiles || !projectFiles.has(fileName)) {
-      console.warn(`[App] Overlay file not found: ${fileName}`);
-      return;
-    }
-
-    const content = projectFiles.get(fileName);
-    const ext = fileName.split('.').pop()?.toLowerCase();
-
-    try {
-      if (ext === 'svg') {
-        await previewManager.setReferenceOverlaySource({
-          kind: 'svg',
-          name: fileName,
-          dataUrlOrText: content,
-        });
-      } else {
-        // PNG/JPG - content should be a data URL or we need to convert
-        // If it's already a data URL, use it directly
-        // If it's raw binary, convert to data URL
-        let dataUrl = content;
-        if (!content.startsWith('data:')) {
-          // Assume it's a Blob URL or needs conversion
-          const mimeType = ext === 'png' ? 'image/png' : 'image/jpeg';
-          const blob = new Blob([content], { type: mimeType });
-          dataUrl = await new Promise((resolve) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result);
-            reader.readAsDataURL(blob);
-          });
-        }
-        await previewManager.setReferenceOverlaySource({
-          kind: 'raster',
-          name: fileName,
-          dataUrlOrText: dataUrl,
-        });
-      }
-
-      // Update UI to reflect loaded overlay
-      updateOverlayUIFromConfig();
-      localStorage.setItem(STORAGE_KEY_OVERLAY_SOURCE, fileName);
-      console.log(`[App] Overlay loaded: ${fileName}`);
-    } catch (error) {
-      console.error('[App] Failed to load overlay:', error);
-      updateStatus(`Failed to load overlay: ${error.message}`, 'error');
-    }
-  }
-
-  /**
-   * Apply persisted hidden-group state to a rendered parameter container
-   * and wire up the group-hide event + show-all link.
-   * @param {HTMLElement} container - The parametersContainer element
-   * @param {string} modelName - Current model name (used as storage key)
-   */
-  function applyHiddenGroups(container, modelName) {
-    if (!container || !modelName) return;
-
-    const HIDDEN_KEY = `openscad-forge-hidden-groups-${modelName}`;
-
-    function loadHidden() {
-      try {
-        return new Set(JSON.parse(localStorage.getItem(HIDDEN_KEY) || '[]'));
-      } catch {
-        return new Set();
-      }
-    }
-
-    function saveHidden(set) {
-      try {
-        localStorage.setItem(HIDDEN_KEY, JSON.stringify([...set]));
-      } catch (_) {
-        /* storage full */
-      }
-    }
-
-    function refreshShowAll() {
-      const existing = container.querySelector('.param-groups-show-all');
-      const hiddenGroups = container.querySelectorAll('.param-group[hidden]');
-      const count = hiddenGroups.length;
-      if (count === 0) {
-        existing?.remove();
-        return;
-      }
-      if (!existing) {
-        const link = document.createElement('button');
-        link.className = 'param-groups-show-all btn btn-sm btn-outline';
-        link.type = 'button';
-        link.setAttribute('aria-live', 'polite');
-        container.appendChild(link);
-        link.addEventListener('click', () => {
-          container.querySelectorAll('.param-group[hidden]').forEach((el) => {
-            el.removeAttribute('hidden');
-            const btn = el.querySelector('.param-group-hide-btn');
-            if (btn) btn.setAttribute('aria-pressed', 'false');
-          });
-          saveHidden(new Set());
-          refreshShowAll();
-          announceImmediate('All parameter groups shown');
-        });
-      }
-      container.querySelector('.param-groups-show-all').textContent =
-        `${count} group${count !== 1 ? 's' : ''} hidden — Show all`;
-    }
-
-    // Apply saved hidden groups
-    const hidden = loadHidden();
-    container
-      .querySelectorAll('.param-group[data-group-id]')
-      .forEach((details) => {
-        if (hidden.has(details.dataset.groupId)) {
-          details.setAttribute('hidden', '');
-          const btn = details.querySelector('.param-group-hide-btn');
-          if (btn) btn.setAttribute('aria-pressed', 'true');
-        }
-      });
-    refreshShowAll();
-
-    // Listen for hide events from group hide buttons
-    container.addEventListener('group-hide', (e) => {
-      const { groupId, groupLabel } = e.detail;
-      const groupEl = container.querySelector(
-        `.param-group[data-group-id="${groupId}"]`
-      );
-      if (!groupEl) return;
-      groupEl.setAttribute('hidden', '');
-      const btn = groupEl.querySelector('.param-group-hide-btn');
-      if (btn) btn.setAttribute('aria-pressed', 'true');
-      const hiddenSet = loadHidden();
-      hiddenSet.add(groupId);
-      saveHidden(hiddenSet);
-      refreshShowAll();
-      announceImmediate(`${groupLabel} group hidden`);
-    });
-  }
-
-  /**
-   * C1: Auto-size the reference overlay from SCAD parameters.
-   *
-   * Priority order (first match wins):
-   *   1. Explicit `screen_width_mm` + `screen_height_mm` parameters
-   *   2. Keyguard case opening: `width_of_opening_in_case` + `height_of_opening_in_case`
-   *      (these represent the visible screen area the SVG screenshot covers)
-   *
-   * The `orientation` parameter ("landscape"/"portrait") swaps width/height when
-   * the case-opening dimensions are in portrait but the SVG is landscape or vice-versa.
-   *
-   * @param {Object} paramValues - Current parameter values
-   */
-  function autoApplyScreenDimensionsFromParams(paramValues) {
-    if (!previewManager || !paramValues) return;
-
-    // Priority 1: explicit screen dimensions
-    const sw = parseFloat(paramValues['screen_width_mm']);
-    const sh = parseFloat(paramValues['screen_height_mm']);
-    if (!isNaN(sw) && !isNaN(sh) && sw > 0 && sh > 0) {
-      previewManager.fitOverlayToScreenDimensions(sw, sh);
-      console.log(
-        `[App] Overlay auto-sized from screen_width/height_mm: ${sw} × ${sh} mm`
-      );
-      return;
-    }
-
-    // Priority 2: keyguard case opening dimensions (physical screen area)
-    let cw = parseFloat(paramValues['width_of_opening_in_case']);
-    let ch = parseFloat(paramValues['height_of_opening_in_case']);
-    if (!isNaN(cw) && !isNaN(ch) && cw > 0 && ch > 0) {
-      const orientation = (paramValues['orientation'] || '').toLowerCase();
-      if (orientation === 'landscape' && ch > cw) {
-        [cw, ch] = [ch, cw];
-      } else if (orientation === 'portrait' && cw > ch) {
-        [cw, ch] = [ch, cw];
-      }
-      previewManager.fitOverlayToScreenDimensions(cw, ch);
-      console.log(
-        `[App] Overlay auto-sized from case opening: ${cw} × ${ch} mm (${orientation || 'default'})`
-      );
-      return;
-    }
-  }
-
-  /**
-   * Update overlay status indicator
-   */
-  function updateOverlayStatus() {
-    if (!overlayStatus) return;
-
-    const config = previewManager?.getOverlayConfig();
-    const isEnabled = config?.enabled && config?.sourceFileName;
-
-    overlayStatus.textContent = isEnabled ? 'On' : 'Off';
-    overlayStatus.classList.toggle('active', isEnabled);
-  }
-
-  /**
-   * Update overlay UI controls from the current config
-   */
-  function updateOverlayUIFromConfig() {
-    if (!previewManager) return;
-
-    const config = previewManager.getOverlayConfig();
-
-    if (overlayToggle) {
-      overlayToggle.checked = config.enabled;
-    }
-
-    if (overlayOpacityInput) {
-      const opacityPercent = Math.round(config.opacity * 100);
-      overlayOpacityInput.value = opacityPercent;
-      if (overlayOpacityValue) {
-        overlayOpacityValue.textContent = `${opacityPercent}%`;
-      }
-    }
-
-    if (overlayWidthInput) {
-      overlayWidthInput.value = parseFloat(config.width.toFixed(1));
-    }
-
-    if (overlayHeightInput) {
-      overlayHeightInput.value = parseFloat(config.height.toFixed(1));
-    }
-
-    if (overlayOffsetXInput) {
-      overlayOffsetXInput.value = Math.round(config.offsetX);
-    }
-
-    if (overlayOffsetYInput) {
-      overlayOffsetYInput.value = Math.round(config.offsetY);
-    }
-
-    if (overlayRotationInput) {
-      overlayRotationInput.value = Math.round(config.rotationDeg);
-      if (overlayRotationValue) {
-        overlayRotationValue.textContent = `${Math.round(config.rotationDeg)}°`;
-      }
-    }
-
-    if (overlayAspectLockBtn) {
-      overlayAspectLockBtn.setAttribute(
-        'aria-pressed',
-        config.lockAspect ? 'true' : 'false'
-      );
-    }
-
-    if (overlaySourceSelect && config.sourceFileName) {
-      overlaySourceSelect.value = config.sourceFileName;
-    }
-
-    // Update dimensions display
-    if (overlayDimensionsValue) {
-      const w = Math.round(config.width);
-      const h = Math.round(config.height);
-      overlayDimensionsValue.textContent = `${w} × ${h} mm`;
-    }
-
-    updateOverlayStatus();
-  }
-
-  // Wire overlay source select
-  if (overlaySourceSelect) {
-    overlaySourceSelect.addEventListener('change', async () => {
-      const fileName = overlaySourceSelect.value;
-      // Handle shared screenshot images (uploaded via Image Measurement tool)
-      if (fileName.startsWith('screenshot:')) {
-        const imageName = fileName.slice('screenshot:'.length);
-        const rec = SharedImageStore.getImageByName(imageName);
-        if (rec && previewManager) {
-          try {
-            await previewManager.setReferenceOverlaySource({
-              kind: 'raster',
-              name: imageName,
-              dataUrlOrText: rec.dataUrl,
-            });
-            if (!overlayToggle?.checked) {
-              overlayToggle.checked = true;
-              previewManager.setOverlayEnabled(true);
-            }
-            updateOverlayUIFromConfig();
-            // updateOverlayUIFromConfig sets dropdown to config.sourceFileName
-            // ("Test.png") but the option value is "screenshot:Test.png" --
-            // restore the prefixed value so the dropdown shows the filename.
-            overlaySourceSelect.value = fileName;
-            localStorage.setItem(STORAGE_KEY_OVERLAY_SOURCE, fileName);
-            console.log(`[App] Screenshot overlay loaded: ${imageName}`);
-          } catch (error) {
-            console.error('[App] Failed to load screenshot overlay:', error);
-          }
-        }
-        return;
-      }
-
-      await loadOverlayFromProjectFile(fileName);
-    });
-  }
-
-  // Wire overlay file upload input
-  if (overlayFileInput) {
-    overlayFileInput.addEventListener('change', async (e) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-
-      const fileName = file.name;
-      const ext = fileName.split('.').pop()?.toLowerCase();
-      const isSvg = ext === 'svg' || file.type === 'image/svg+xml';
-
-      try {
-        let content;
-        if (isSvg) {
-          // Read SVG as text
-          content = await file.text();
-        } else {
-          // Read raster as data URL
-          content = await new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result);
-            reader.onerror = () => reject(new Error('Failed to read file'));
-            reader.readAsDataURL(file);
-          });
-        }
-
-        // Store in uploaded overlay files map
-        uploadedOverlayFiles.set(fileName, { content, isSvg });
-
-        // Add to dropdown if not already there
-        if (overlaySourceSelect) {
-          let optionExists = false;
-          for (const opt of overlaySourceSelect.options) {
-            if (opt.value === fileName) {
-              optionExists = true;
-              break;
-            }
-          }
-          if (!optionExists) {
-            const option = document.createElement('option');
-            option.value = fileName;
-            option.textContent = `📤 ${fileName}`;
-            overlaySourceSelect.appendChild(option);
-          }
-          overlaySourceSelect.value = fileName;
-        }
-
-        // Load the overlay
-        await loadOverlayFromUploadedFile(fileName);
-
-        updateStatus(`Overlay image loaded: ${fileName}`);
-      } catch (error) {
-        console.error('[App] Failed to load overlay file:', error);
-        updateStatus(`Failed to load overlay: ${error.message}`, 'error');
-      }
-
-      // Reset input so same file can be re-uploaded
-      overlayFileInput.value = '';
-    });
-  }
-
-  /**
-   * Load overlay from an uploaded file (not from project files)
-   * @param {string} fileName - Name of the uploaded file
-   */
-  async function loadOverlayFromUploadedFile(fileName) {
-    if (!previewManager || !fileName) return;
-
-    const uploadedFile = uploadedOverlayFiles.get(fileName);
-    if (!uploadedFile) {
-      // Try loading from project files as fallback
-      await loadOverlayFromProjectFile(fileName);
-      return;
-    }
-
-    const { content, isSvg } = uploadedFile;
-
-    try {
-      await previewManager.setReferenceOverlaySource({
-        kind: isSvg ? 'svg' : 'raster',
-        name: fileName,
-        dataUrlOrText: content,
-      });
-
-      // Auto-enable overlay when file is uploaded
-      if (!overlayToggle?.checked) {
-        overlayToggle.checked = true;
-        previewManager.setOverlayEnabled(true);
-      }
-
-      updateOverlayUIFromConfig();
-      localStorage.setItem(STORAGE_KEY_OVERLAY_SOURCE, fileName);
-      console.log(`[App] Overlay loaded from upload: ${fileName}`);
-    } catch (error) {
-      console.error('[App] Failed to load overlay:', error);
-      throw error;
-    }
-  }
-
-  // Wire overlay toggle
-  if (overlayToggle) {
-    overlayToggle.addEventListener('change', () => {
-      const enabled = overlayToggle.checked;
-      if (previewManager) {
-        previewManager.setOverlayEnabled(enabled);
-        updateOverlayStatus();
-        localStorage.setItem(
-          STORAGE_KEY_OVERLAY_ENABLED,
-          enabled ? 'true' : 'false'
-        );
-      }
-      console.log(
-        `[App] Reference overlay ${enabled ? 'enabled' : 'disabled'}`
-      );
-    });
-  }
-
-  // Wire overlay measurements toggle
-  if (overlayMeasurementsToggle) {
-    overlayMeasurementsToggle.addEventListener('change', () => {
-      const enabled = overlayMeasurementsToggle.checked;
-      if (previewManager) {
-        previewManager.toggleOverlayMeasurements(enabled);
-      }
-      console.log(
-        `[App] Overlay measurements ${enabled ? 'enabled' : 'disabled'}`
-      );
-    });
-  }
-
-  // Wire overlay opacity slider
-  if (overlayOpacityInput) {
-    overlayOpacityInput.addEventListener('input', () => {
-      const opacityPercent = parseInt(overlayOpacityInput.value, 10);
-      if (overlayOpacityValue) {
-        overlayOpacityValue.textContent = `${opacityPercent}%`;
-      }
-      if (previewManager) {
-        previewManager.setOverlayOpacity(opacityPercent / 100);
-        localStorage.setItem(
-          STORAGE_KEY_OVERLAY_OPACITY,
-          opacityPercent.toString()
-        );
-      }
-    });
-  }
-
-  // SVG overlay color — auto-adapts to theme so dark SVGs stay visible on dark backgrounds
-  function getThemeAwareSvgColor() {
-    const root = document.documentElement;
-    const explicit = root.getAttribute('data-theme');
-    const prefersDark = window.matchMedia?.(
-      '(prefers-color-scheme: dark)'
-    )?.matches;
-    const isDark = explicit === 'dark' || (!explicit && prefersDark);
-    return isDark ? '#ffffff' : '#000000';
-  }
-
-  function applyOverlaySvgColor() {
-    const autoColor = overlayAutoColorToggle?.checked ?? true;
-    const color = autoColor
-      ? getThemeAwareSvgColor()
-      : overlayColorInput?.value || '#000000';
-    if (overlayColorInput && autoColor) {
-      overlayColorInput.value = color;
-    }
-    if (previewManager) {
-      previewManager.setOverlaySvgColor(color);
-    }
-    localStorage.setItem(STORAGE_KEY_OVERLAY_SVG_COLOR, color);
-    localStorage.setItem(
-      STORAGE_KEY_OVERLAY_AUTO_COLOR,
-      autoColor ? 'true' : 'false'
-    );
-  }
-
-  if (overlayColorInput) {
-    overlayColorInput.addEventListener('input', () => {
-      if (overlayAutoColorToggle) {
-        overlayAutoColorToggle.checked = false;
-        overlayColorInput.classList.remove('overlay-color-auto');
-      }
-      applyOverlaySvgColor();
-    });
-  }
-
-  if (overlayAutoColorToggle) {
-    overlayAutoColorToggle.addEventListener('change', () => {
-      if (overlayColorInput) {
-        overlayColorInput.classList.toggle(
-          'overlay-color-auto',
-          overlayAutoColorToggle.checked
-        );
-      }
-      applyOverlaySvgColor();
-    });
-  }
-
-  // Re-apply SVG color when theme changes
-  const themeObserver = new MutationObserver(() => {
-    if (overlayAutoColorToggle?.checked) {
-      applyOverlaySvgColor();
-    }
-  });
-  themeObserver.observe(document.documentElement, {
-    attributes: true,
-    attributeFilter: ['data-theme', 'data-high-contrast'],
-  });
-
-  // Wire manual calibration override toggle
-  if (overlayManualOverrideToggle && overlayCalibrationFieldset) {
-    overlayManualOverrideToggle.addEventListener('change', () => {
-      const enabled = overlayManualOverrideToggle.checked;
-      overlayCalibrationFieldset.disabled = !enabled;
-      console.log(
-        `[App] Overlay manual calibration ${enabled ? 'enabled' : 'disabled'}`
-      );
-    });
-  }
-
-  // Wire fit to model button
-  if (overlayFitModelBtn) {
-    overlayFitModelBtn.addEventListener('click', () => {
-      if (previewManager) {
-        previewManager.fitOverlayToModelXY();
-        updateOverlayUIFromConfig();
-      }
-    });
-  }
-
-  // Wire tablet device selector for overlay auto-sizing (C1: hybrid approach)
-  const overlayTabletSelect = document.getElementById('overlayTabletSelect');
-  if (overlayTabletSelect) {
-    // Lazy-load the tablet database on first interaction
-    let tabletDb = null;
-    async function loadTabletDb() {
-      if (tabletDb) return tabletDb;
-      try {
-        const resp = await fetch('/data/tablets.json');
-        const data = await resp.json();
-        tabletDb = data.tablets || [];
-        // Populate options
-        overlayTabletSelect.innerHTML = tabletDb
-          .map(
-            (t) =>
-              `<option value="${escapeHtml(String(t.id))}" data-w="${escapeHtml(String(t.screenWidthMm ?? ''))}" data-h="${escapeHtml(String(t.screenHeightMm ?? ''))}">${escapeHtml(t.label)}</option>`
-          )
-          .join('');
-      } catch (err) {
-        console.warn('[App] Could not load tablet database:', err);
-        tabletDb = [];
-      }
-      return tabletDb;
-    }
-
-    overlayTabletSelect.addEventListener('focus', () => loadTabletDb());
-    overlayTabletSelect.addEventListener('change', async () => {
-      await loadTabletDb();
-      const opt = overlayTabletSelect.selectedOptions[0];
-      if (!opt) return;
-      const w = parseFloat(opt.dataset.w);
-      const h = parseFloat(opt.dataset.h);
-      if (!isNaN(w) && !isNaN(h) && previewManager) {
-        previewManager.fitOverlayToScreenDimensions(w, h);
-        updateOverlayUIFromConfig();
-        updateStatus(`Overlay sized to ${opt.text}: ${w} × ${h} mm`);
-      }
-    });
-  }
-
-  // Auto-detect screen_width_mm / screen_height_mm SCAD parameters for overlay sizing
-  // Called when parameters are rendered — see autoApplyScreenDimensionsFromParams()
-
-  // Wire center button
-  if (overlayCenterBtn) {
-    overlayCenterBtn.addEventListener('click', () => {
-      if (previewManager) {
-        previewManager.setOverlayTransform({ offsetX: 0, offsetY: 0 });
-        updateOverlayUIFromConfig();
-      }
-    });
-  }
-
-  // Wire width input
-  if (overlayWidthInput) {
-    overlayWidthInput.addEventListener('change', () => {
-      const width = parseFloat(overlayWidthInput.value);
-      if (!isNaN(width) && previewManager) {
-        previewManager.setOverlaySize({ width });
-        updateOverlayUIFromConfig();
-        localStorage.setItem(STORAGE_KEY_OVERLAY_WIDTH, String(width));
-      }
-    });
-  }
-
-  // Wire height input
-  if (overlayHeightInput) {
-    overlayHeightInput.addEventListener('change', () => {
-      const height = parseFloat(overlayHeightInput.value);
-      if (!isNaN(height) && previewManager) {
-        previewManager.setOverlaySize({ height });
-        updateOverlayUIFromConfig();
-        localStorage.setItem(STORAGE_KEY_OVERLAY_HEIGHT, String(height));
-      }
-    });
-  }
-
-  // Wire aspect lock button
-  if (overlayAspectLockBtn) {
-    overlayAspectLockBtn.addEventListener('click', () => {
-      const isCurrentlyLocked =
-        overlayAspectLockBtn.getAttribute('aria-pressed') === 'true';
-      const newLocked = !isCurrentlyLocked;
-      overlayAspectLockBtn.setAttribute(
-        'aria-pressed',
-        newLocked ? 'true' : 'false'
-      );
-      if (previewManager) {
-        previewManager.setOverlayAspectLock(newLocked);
-      }
-    });
-  }
-
-  // Wire offset X input
-  if (overlayOffsetXInput) {
-    overlayOffsetXInput.addEventListener('change', () => {
-      const offsetX = parseFloat(overlayOffsetXInput.value);
-      if (!isNaN(offsetX) && previewManager) {
-        previewManager.setOverlayTransform({ offsetX });
-      }
-    });
-  }
-
-  // Wire offset Y input
-  if (overlayOffsetYInput) {
-    overlayOffsetYInput.addEventListener('change', () => {
-      const offsetY = parseFloat(overlayOffsetYInput.value);
-      if (!isNaN(offsetY) && previewManager) {
-        previewManager.setOverlayTransform({ offsetY });
-      }
-    });
-  }
-
-  // Wire rotation slider
-  if (overlayRotationInput) {
-    overlayRotationInput.addEventListener('input', () => {
-      const rotationDeg = parseInt(overlayRotationInput.value, 10);
-      if (overlayRotationValue) {
-        overlayRotationValue.textContent = `${rotationDeg}°`;
-      }
-      if (previewManager) {
-        previewManager.setOverlayTransform({ rotationDeg });
-      }
-    });
-  }
-
-  // Wire auto-rotate toggle buttons (desktop and mobile)
-  const autoRotateToggle = document.getElementById('autoRotateToggle');
-  const mobileAutoRotateToggle = document.getElementById(
-    'mobileAutoRotateToggle'
-  );
-  const rotationSpeedInput = document.getElementById('rotationSpeedInput');
-
-  // (Storage keys for auto-rotate defined at module level using standardized naming)
-
-  // Check for prefers-reduced-motion preference
-  const prefersReducedMotion = window.matchMedia(
-    '(prefers-reduced-motion: reduce)'
-  );
-
-  /**
-   * Sync all auto-rotate toggle buttons to the same state
-   * @param {boolean} enabled - Whether auto-rotate is enabled
-   */
-  function syncAutoRotateToggles(enabled) {
-    const toggles = [autoRotateToggle, mobileAutoRotateToggle];
-    toggles.forEach((toggle) => {
-      if (toggle) {
-        toggle.setAttribute('aria-pressed', enabled ? 'true' : 'false');
-        toggle.classList.toggle('active', enabled);
-      }
-    });
-  }
-
-  /**
-   * Toggle auto-rotation state
-   * @param {boolean} enabled - Whether to enable auto-rotation
-   */
-  function setAutoRotation(enabled) {
-    // Respect prefers-reduced-motion - don't enable if user prefers reduced motion
-    if (enabled && prefersReducedMotion.matches) {
-      console.log('[App] Auto-rotate blocked: user prefers reduced motion');
-      // Announce to screen reader
-      announceImmediate(
-        'Auto-rotation is disabled because you prefer reduced motion'
-      );
-      return;
-    }
-
-    if (previewManager) {
-      previewManager.setAutoRotate(enabled);
-    }
-    syncAutoRotateToggles(enabled);
-    localStorage.setItem(STORAGE_KEY_AUTO_ROTATE, enabled ? 'true' : 'false');
-
-    // Announce to screen reader
-    announceImmediate(`Auto-rotation ${enabled ? 'enabled' : 'disabled'}`);
-
-    console.log(`[App] Auto-rotate ${enabled ? 'enabled' : 'disabled'}`);
-  }
-
-  // Load saved auto-rotate preferences
-  const savedRotateSpeed = localStorage.getItem(STORAGE_KEY_ROTATE_SPEED);
-
-  // Get the rotation speed value display element
-  const rotationSpeedValue = document.getElementById('rotationSpeedValue');
-
-  /**
-   * Update the rotation speed slider visual state
-   * @param {number} speed - Current speed value
-   */
-  function updateRotationSpeedDisplay(speed) {
-    // Update value display
-    if (rotationSpeedValue) {
-      rotationSpeedValue.textContent = `${speed.toFixed(1)}°/s`;
-    }
-
-    // Update aria-valuenow for screen readers
-    if (rotationSpeedInput) {
-      rotationSpeedInput.setAttribute('aria-valuenow', speed.toFixed(1));
-    }
-  }
-
-  // Initialize rotation speed from saved preference
-  if (savedRotateSpeed && rotationSpeedInput) {
-    const speed = parseFloat(savedRotateSpeed);
-    if (!isNaN(speed) && speed >= 0.1 && speed <= 3) {
-      rotationSpeedInput.value = speed;
-      updateRotationSpeedDisplay(speed);
-    } else {
-      // Default to 0.5 if invalid
-      updateRotationSpeedDisplay(0.5);
-    }
-  } else if (rotationSpeedInput) {
-    // Initialize display with default value
-    updateRotationSpeedDisplay(0.5);
-  }
-
-  // Wire desktop auto-rotate toggle
-  if (autoRotateToggle) {
-    autoRotateToggle.addEventListener('click', () => {
-      const currentState =
-        autoRotateToggle.getAttribute('aria-pressed') === 'true';
-      setAutoRotation(!currentState);
-    });
-  }
-
-  // Wire mobile auto-rotate toggle
-  if (mobileAutoRotateToggle) {
-    mobileAutoRotateToggle.addEventListener('click', () => {
-      const currentState =
-        mobileAutoRotateToggle.getAttribute('aria-pressed') === 'true';
-      setAutoRotation(!currentState);
-    });
-  }
-
-  // Wire rotation speed slider - use 'input' for real-time feedback
-  if (rotationSpeedInput) {
-    rotationSpeedInput.addEventListener('input', () => {
-      let speed = parseFloat(rotationSpeedInput.value);
-      // Clamp to valid range
-      speed = Math.max(0.1, Math.min(3, speed));
-
-      // Update visual display
-      updateRotationSpeedDisplay(speed);
-
-      if (previewManager) {
-        previewManager.setAutoRotateSpeed(speed);
-      }
-    });
-
-    // Save to localStorage on change (when user releases slider)
-    rotationSpeedInput.addEventListener('change', () => {
-      const speed = parseFloat(rotationSpeedInput.value);
-      localStorage.setItem(STORAGE_KEY_ROTATE_SPEED, speed.toString());
-      console.log(`[App] Auto-rotate speed set to ${speed.toFixed(1)} deg/s`);
-    });
-  }
-
-  // Listen for prefers-reduced-motion changes
-  prefersReducedMotion.addEventListener('change', (e) => {
-    if (e.matches && previewManager?.isAutoRotateEnabled()) {
-      // User switched to preferring reduced motion, disable auto-rotate
-      setAutoRotation(false);
-      console.log(
-        '[App] Auto-rotate disabled: user now prefers reduced motion'
-      );
-    }
-  });
 
   // Wire model color picker and override toggle
   const modelColorPicker = document.getElementById('modelColorPicker');
@@ -7229,7 +4349,7 @@ async function initApp() {
     // Check for mono variant first
     if (uiVariant === 'mono') {
       // Light theme = amber, dark theme = green
-      return _isLightThemeActive() ? '#ffb000' : '#00ff00';
+      return hfmCtrl.isLightThemeActive() ? '#ffb000' : '#00ff00';
     }
 
     const activeTheme = themeManager.getActiveTheme();
@@ -7462,9 +4582,7 @@ async function initApp() {
               autoPreviewHints.lastPreviewTriangles = extra.stats.triangles;
               adaptivePreviewMemo = { key: null, info: null };
             }
-            if (_hfmEnabled && _hfmAltView?.clearPersistence) {
-              _hfmAltView.clearPersistence();
-            }
+            hfmCtrl.clearPersistence();
           }
           updatePreviewStateUI(newState, extra);
         },
@@ -7598,7 +4716,43 @@ async function initApp() {
   }
 
   // Import shared validation schemas (FILE_SIZE_LIMITS is now imported at top of initApp() to avoid TDZ)
-  const { validateFileUpload } = await import('./js/validation-schemas.js');
+  ({ validateFileUpload } = await import('./js/validation-schemas.js'));
+
+  // Initialize file handler controller (extracted from main.js)
+  fileHandler = initFileHandler({
+    getPreviewManager: () => previewManager,
+    setPreviewManager: (pm) => { previewManager = pm; },
+    getAutoPreviewController: () => autoPreviewController,
+    getAutoPreviewEnabled: () => autoPreviewEnabled,
+    setCurrentSavedProjectId: (id) => { currentSavedProjectId = id; },
+    setPresetCompanionMap: (map) => { presetCompanionMap = map; },
+    getFileSizeLimits: () => FILE_SIZE_LIMITS,
+    getValidateFileUpload: () => validateFileUpload,
+    getCameraPanelController: () => cameraPanelController,
+    getOverlayGridCtrl: () => overlayGridCtrl,
+    getCompanionFilesCtrl: () => companionFilesCtrl,
+    getHfmCtrl: () => hfmCtrl,
+    getSavedProjectsUI: () => savedProjectsUI,
+    getFileActionsController: () => fileActionsController,
+    getLibraryManager: () => libraryManager,
+    getPreviewContainer: () => previewContainer,
+    getPreviewStateIndicator: () => previewStateIndicator,
+    getRenderingOverlay: () => renderingOverlay,
+    updateStatus,
+    updatePreviewDrawer,
+    updatePrimaryActionButton,
+    updateColorLegend: _updateColorLegend,
+    updatePreviewStateUI,
+    clearPresetSelection,
+    forceClearPresetSelection,
+    updatePresetDropdown,
+    syncPreviewModelColorOverride,
+    syncPreviewAppearanceOverride,
+    initAutoPreviewController,
+    setCanonicalProjectFiles,
+    renderLibraryUI,
+    getEnabledLibrariesForRender,
+  });
 
   // Check for saved draft - but only if first-visit modal is not blocking
   // If first-visit is blocking, defer draft restoration until user accepts
@@ -7626,7 +4780,7 @@ async function initApp() {
       if (shouldRestore) {
         console.log('Restoring draft...');
         // Treat draft as uploaded file
-        handleFile(
+        fileHandler.handleFile(
           { name: draft.fileName },
           draft.fileContent,
           null,
@@ -7685,7 +4839,7 @@ async function initApp() {
       );
 
       // Process the embedded content using handleFile
-      handleFile({ name: fileName }, scadContent, null, null, 'example');
+      fileHandler.handleFile({ name: fileName }, scadContent, null, null, 'example');
 
       return true;
     } catch (e) {
@@ -7866,1914 +5020,22 @@ async function initApp() {
     stateManager.announceChange(message);
   }
 
-  /**
-   * Detect include/use statements in SCAD content
-   * @param {string} scadContent - OpenSCAD source code
-   * @returns {Object} Detection result with hasIncludes, hasUse, and files array
-   */
-  function detectIncludeUse(scadContent) {
-    // Match include <...> and use <...> statements
-    const includePattern = /^\s*include\s*<([^>]+)>/gm;
-    const usePattern = /^\s*use\s*<([^>]+)>/gm;
-
-    const includes = [];
-    const uses = [];
-
-    let match;
-    while ((match = includePattern.exec(scadContent)) !== null) {
-      includes.push(match[1]);
-    }
-
-    while ((match = usePattern.exec(scadContent)) !== null) {
-      uses.push(match[1]);
-    }
-
-    return {
-      hasIncludes: includes.length > 0,
-      hasUse: uses.length > 0,
-      includes,
-      uses,
-      files: [...includes, ...uses],
-    };
-  }
-
-  /**
-   * Detect required companion files from SCAD content
-   * Scans for include/use statements, import() calls, and file variable patterns
-   * @param {string} scadContent - OpenSCAD source code
-   * @returns {Object} Detection result with all referenced files
-   */
-  function detectRequiredCompanionFiles(scadContent) {
-    const files = new Set();
-
-    // Match include <...> and use <...> statements
-    const includePattern = /^\s*include\s*<([^>]+)>/gm;
-    const usePattern = /^\s*use\s*<([^>]+)>/gm;
-
-    // Match import(file="...") statements (for STL/other imports)
-    const importPattern = /import\s*\(\s*(?:file\s*=\s*)?["']([^"']+)["']/gi;
-
-    // Match common file variable patterns like screenshot_file = "filename"
-    // This handles common patterns: screenshot_file = "default.svg"
-    const fileVarPatterns = [
-      /(\w*_?file\w*)\s*=\s*["']([^"']+\.\w+)["']/gi, // xxx_file = "name.ext"
-      /(\w*_?filename\w*)\s*=\s*["']([^"']+\.\w+)["']/gi, // xxx_filename = "name.ext"
-      /(\w*_?path\w*)\s*=\s*["']([^"']+\.\w+)["']/gi, // xxx_path = "name.ext"
-    ];
-
-    // Match surface() calls which load heightmap files
-    const surfacePattern = /surface\s*\(\s*(?:file\s*=\s*)?["']([^"']+)["']/gi;
-
-    let match;
-
-    // Collect include files
-    while ((match = includePattern.exec(scadContent)) !== null) {
-      files.add({ path: match[1], type: 'include', required: true });
-    }
-
-    // Collect use files
-    while ((match = usePattern.exec(scadContent)) !== null) {
-      files.add({ path: match[1], type: 'use', required: true });
-    }
-
-    // Collect import files
-    while ((match = importPattern.exec(scadContent)) !== null) {
-      files.add({ path: match[1], type: 'import', required: true });
-    }
-
-    // Collect surface files
-    while ((match = surfacePattern.exec(scadContent)) !== null) {
-      files.add({ path: match[1], type: 'surface', required: true });
-    }
-
-    // Collect file variable references (may be optional/customizable)
-    for (const pattern of fileVarPatterns) {
-      while ((match = pattern.exec(scadContent)) !== null) {
-        const varName = match[1];
-        const fileName = match[2];
-        // Skip obvious non-file variables
-        if (!fileName.includes('.') || fileName.startsWith('http')) continue;
-        files.add({
-          path: fileName,
-          type: 'variable',
-          variableName: varName,
-          required: false, // File variables are often optional/customizable
-        });
-      }
-    }
-
-    // Convert Set to array (dedupe by path)
-    const uniqueFiles = [];
-    const seenPaths = new Set();
-    for (const file of files) {
-      if (!seenPaths.has(file.path)) {
-        seenPaths.add(file.path);
-        uniqueFiles.push(file);
-      }
-    }
-
-    return {
-      files: uniqueFiles,
-      requiredCount: uniqueFiles.filter((f) => f.required).length,
-      optionalCount: uniqueFiles.filter((f) => !f.required).length,
-    };
-  }
-
-  /**
-   * Auto-save companion files to the current saved project (if tracked).
-   * Called after add, edit, or remove operations on companion files.
-   */
-  async function autoSaveCompanionFiles() {
-    if (!currentSavedProjectId) return;
-    const state = stateManager.getState();
-    const { projectFiles, mainFilePath, uploadedFile } = state;
-    if (!uploadedFile || !projectFiles) return;
-
-    try {
-      const projectFilesObj = Object.fromEntries(projectFiles);
-      // Update the kind if companion files were added to a single-file project
-      const kind = projectFiles.size > 1 ? 'zip' : 'scad';
-      await updateProject({
-        id: currentSavedProjectId,
-        projectFiles: projectFilesObj,
-        mainFilePath: mainFilePath || uploadedFile.name,
-        kind,
-      });
-      updateStatus('Project updated', 'success');
-      console.log(
-        '[CompanionFiles] Auto-saved companion files to project:',
-        currentSavedProjectId
-      );
-    } catch (error) {
-      console.error('[CompanionFiles] Auto-save failed:', error);
-      // Don't show alert for auto-save failures -- just log
-    }
-  }
-
-  /**
-   * Update the companion files Save/Update button text and visibility.
-   */
-  function updateCompanionSaveButton() {
-    const saveBtn = document.getElementById('companionSaveBtn');
-    if (!saveBtn) return;
-    const state = stateManager.getState();
-    if (!state.uploadedFile) {
-      saveBtn.classList.add('hidden');
-      return;
-    }
-    saveBtn.classList.remove('hidden');
-    if (currentSavedProjectId) {
-      saveBtn.textContent = 'Update Saved Project';
-      saveBtn.setAttribute(
-        'aria-label',
-        'Update companion files in the saved project'
-      );
-    } else {
-      saveBtn.textContent = 'Save as Project';
-      saveBtn.setAttribute(
-        'aria-label',
-        'Save this file and companion files as a project'
-      );
-    }
-  }
-
-  /**
-   * Render the project files list in the UI
-   * @param {Map<string, string>} projectFiles - Map of file paths to content
-   * @param {string} mainFilePath - Path to the main .scad file
-   * @param {Object} requiredFiles - Detection result from detectRequiredCompanionFiles
-   */
-  function renderProjectFilesList(
-    projectFiles,
-    mainFilePath,
-    requiredFiles = null
-  ) {
-    const container = document.getElementById('projectFilesList');
-    const badge = document.getElementById('projectFilesBadge');
-    const controls = document.getElementById('projectFilesControls');
-    const warning = document.getElementById('projectFilesWarning');
-    const warningText = document.getElementById('projectFilesWarningText');
-
-    if (!container || !controls) return;
-
-    const emptyState = document.getElementById('companionEmptyState');
-    const helpText = document.getElementById('projectFilesHelp');
-    const saveBtn = document.getElementById('companionSaveBtn');
-
-    // Always show the panel when a file is loaded (empty-state provides guidance)
-    const state = stateManager.getState();
-    if (!state.uploadedFile) {
-      controls.classList.add('hidden');
-      return;
-    }
-    controls.classList.remove('hidden');
-
-    // Count companion files (exclude the main file)
-    const companionFiles = projectFiles
-      ? new Map(
-          Array.from(projectFiles.entries()).filter(
-            ([path]) => path !== mainFilePath
-          )
-        )
-      : new Map();
-    const companionCount = companionFiles.size;
-
-    // Toggle empty state vs file list
-    if (emptyState) {
-      emptyState.style.display = companionCount === 0 ? '' : 'none';
-    }
-    if (helpText) {
-      helpText.style.display = companionCount > 0 ? '' : 'none';
-    }
-
-    // If no companion files, show empty state and badge=0
-    if (companionCount === 0) {
-      if (badge) badge.textContent = '0';
-      container.innerHTML = '';
-      // Update save button visibility
-      if (saveBtn) {
-        updateCompanionSaveButton();
-      }
-      // Still check for missing required files
-      if (warning && warningText) {
-        const missingFiles = [];
-        if (requiredFiles && requiredFiles.files) {
-          for (const reqFile of requiredFiles.files) {
-            if (
-              reqFile.required &&
-              (!projectFiles || !projectFiles.has(reqFile.path))
-            ) {
-              missingFiles.push(reqFile.path);
-            }
-          }
-        }
-        if (missingFiles.length > 0) {
-          warning.classList.remove('hidden');
-          warningText.textContent = `Missing files: ${missingFiles.join(', ')}`;
-        } else {
-          warning.classList.add('hidden');
-        }
-      }
-      return;
-    }
-
-    // Show controls (has companion files)
-    controls.classList.remove('hidden');
-
-    // Update badge count
-    if (badge) {
-      badge.textContent = projectFiles.size;
-    }
-
-    // Check for missing required files
-    const missingFiles = [];
-    if (requiredFiles && requiredFiles.files) {
-      for (const reqFile of requiredFiles.files) {
-        if (reqFile.required && !projectFiles.has(reqFile.path)) {
-          missingFiles.push(reqFile.path);
-        }
-      }
-    }
-
-    // Show/hide warning
-    if (warning && warningText) {
-      if (missingFiles.length > 0) {
-        warning.classList.remove('hidden');
-        warningText.textContent = `Missing files: ${missingFiles.join(', ')}`;
-      } else {
-        warning.classList.add('hidden');
-      }
-    }
-
-    // Build nested tree and render the current folder view
-    const tree = buildNestedTree(projectFiles);
-
-    // Validate that companionCurrentPath still points to a valid node;
-    // if the user deleted a folder we were inside, reset to root.
-    if (getNodeAtPath(tree, companionCurrentPath) === null) {
-      companionCurrentPath = [];
-    }
-
-    const currentNode = getNodeAtPath(tree, companionCurrentPath) || tree;
-
-    // --- Breadcrumb bar ---
-    const crumbItems = companionCurrentPath.map((segment, idx) => {
-      const targetDepth = idx; // clicking this crumb navigates to segments[0..idx]
-      return `<li class="file-nav-breadcrumb-item">
-        <button class="file-nav-breadcrumb-btn" data-depth="${targetDepth + 1}" aria-label="Navigate to ${escapeHtml(segment)}">${escapeHtml(segment)}</button>
-      </li>`;
-    });
-
-    const breadcrumbHtml =
-      companionCurrentPath.length > 0
-        ? `<nav class="file-nav-breadcrumbs" aria-label="Folder navigation">
-            <ol class="file-nav-breadcrumb-list">
-              <li class="file-nav-breadcrumb-item">
-                <button class="file-nav-breadcrumb-btn file-nav-breadcrumb-home" data-depth="0" aria-label="Navigate to root">🏠</button>
-              </li>
-              ${crumbItems.join('')}
-            </ol>
-          </nav>`
-        : '';
-
-    // --- Folder rows ---
-    const sortedFolders = [...currentNode.folders.entries()].sort((a, b) =>
-      a[0].localeCompare(b[0])
-    );
-    const folderItems = sortedFolders.map(([folderName, childNode]) => {
-      const count = countFilesRecursive(childNode);
-      return `
-        <div class="project-file-item file-nav-folder-row" role="button" tabindex="0"
-             data-folder-enter="${escapeHtml(folderName)}"
-             aria-label="Open folder ${escapeHtml(folderName)}, ${count} file${count !== 1 ? 's' : ''}">
-          <span class="project-file-icon" aria-hidden="true">📁</span>
-          <span class="project-file-name">${escapeHtml(folderName)}</span>
-          <span class="project-file-size file-nav-folder-count">${count} file${count !== 1 ? 's' : ''}</span>
-          <span class="file-nav-folder-chevron" aria-hidden="true">›</span>
-        </div>`;
-    });
-
-    // --- File rows ---
-    const sortedFiles = [...currentNode.files].sort((a, b) =>
-      a.name.localeCompare(b.name)
-    );
-    const fileItems = sortedFiles.map(({ path, name }) => {
-      const isMain = path === mainFilePath;
-      const content = projectFiles.get(path);
-      const size =
-        typeof content === 'string'
-          ? formatFileSize(new Blob([content]).size)
-          : '—';
-      const ext = name.split('.').pop().toLowerCase();
-      const isEditable = ['txt', 'csv', 'json', 'scad'].includes(ext);
-      const icon = getFileIcon(ext);
-
-      const mainBadge = isMain
-        ? '<span class="project-file-badge">main</span>'
-        : '';
-      const editBtn =
-        isEditable && !isMain
-          ? `<button class="project-file-btn" data-action="edit" data-path="${escapeHtml(path)}" aria-label="Edit ${escapeHtml(name)}">✏️</button>`
-          : '';
-      const removeBtn = !isMain
-        ? `<button class="project-file-btn btn-danger" data-action="remove" data-path="${escapeHtml(path)}" aria-label="Remove ${escapeHtml(name)}">✕</button>`
-        : '';
-
-      const itemClass = isMain
-        ? 'project-file-item main-file'
-        : 'project-file-item';
-
-      return `
-        <div class="${itemClass}" role="listitem">
-          <span class="project-file-icon" aria-hidden="true">${icon}</span>
-          <span class="project-file-name" title="${escapeHtml(path)}">${escapeHtml(name)}</span>
-          ${mainBadge}
-          <span class="project-file-size">${size}</span>
-          <div class="project-file-actions">
-            ${editBtn}
-            ${removeBtn}
-          </div>
-        </div>`;
-    });
-
-    container.innerHTML =
-      breadcrumbHtml +
-      '<div role="list">' +
-      folderItems.join('') +
-      fileItems.join('') +
-      '</div>';
-
-    // Breadcrumb navigation
-    container.querySelectorAll('.file-nav-breadcrumb-btn').forEach((btn) => {
-      const depth = parseInt(btn.dataset.depth, 10);
-      const activate = () => {
-        companionCurrentPath = companionCurrentPath.slice(0, depth);
-        renderProjectFilesList(projectFiles, mainFilePath, requiredFiles);
-      };
-      btn.addEventListener('click', activate);
-      btn.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          activate();
-        }
-      });
-    });
-
-    // Folder row navigation
-    container.querySelectorAll('[data-folder-enter]').forEach((row) => {
-      const folderName = row.dataset.folderEnter;
-      const enter = () => {
-        companionCurrentPath = [...companionCurrentPath, folderName];
-        renderProjectFilesList(projectFiles, mainFilePath, requiredFiles);
-      };
-      row.addEventListener('click', enter);
-      row.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          enter();
-        } else if (e.key === 'Escape' && companionCurrentPath.length > 0) {
-          e.preventDefault();
-          companionCurrentPath = companionCurrentPath.slice(0, -1);
-          renderProjectFilesList(projectFiles, mainFilePath, requiredFiles);
-        }
-      });
-    });
-
-    // File action buttons
-    container.querySelectorAll('button[data-action]').forEach((btn) => {
-      btn.addEventListener('click', handleProjectFileAction);
-    });
-
-    // Update overlay source dropdown with available image files
-    updateOverlaySourceDropdown();
-
-    // Auto-select overlay source based on screenshot_file variable detection
-    autoSelectOverlaySource(requiredFiles);
-  }
-
-  /**
-   * Sync overlay visibility with the include_screenshot SCAD parameter.
-   * Called on parameter change and preset load so the overlay tracks user intent.
-   * @param {Object} parameters - Current parameter values
-   */
-  function syncOverlayWithScreenshotParam(parameters) {
-    if (!overlayToggle || !previewManager || !parameters) return;
-
-    const includeFlag = parameters.include_screenshot;
-    if (includeFlag === undefined) return;
-
-    const shouldShow =
-      includeFlag === 'yes' || includeFlag === true || includeFlag === 'true';
-    const state = stateManager.getState();
-    const projectFiles = state.projectFiles;
-
-    if (shouldShow) {
-      // COMPATIBILITY FALLBACK — Phase 8 removal candidate:
-      // 'default.svg' when screenshot_file param exists but is empty/unset.
-      const screenshotFile = parameters.screenshot_file || 'default.svg';
-      const resolved = resolveProjectFile(projectFiles, screenshotFile);
-      if (resolved) {
-        if (overlaySourceSelect) overlaySourceSelect.value = resolved.key;
-        loadOverlayFromProjectFile(resolved.key)
-          .then(() => {
-            // SVG 96 DPI size applied; SCAD case-opening / screen dims override.
-            autoApplyScreenDimensionsFromParams(parameters);
-            overlayToggle.checked = true;
-            previewManager.setOverlayEnabled(true);
-            updateOverlayUIFromConfig();
-            updateOverlayStatus?.();
-          })
-          .catch((err) => {
-            console.warn(
-              '[App] Overlay enable via include_screenshot failed:',
-              err
-            );
-          });
-      } else {
-        console.warn(
-          `[App] syncOverlayWithScreenshotParam: "${screenshotFile}" not found ` +
-            'or ambiguous in projectFiles — overlay not displayed.'
-        );
-      }
-    } else {
-      overlayToggle.checked = false;
-      previewManager.setOverlayEnabled(false);
-      updateOverlayStatus?.();
-    }
-  }
-
-  /**
-   * Auto-select overlay source based on screenshot_file variable detection
-   * @param {Object} requiredFiles - Detection result from detectRequiredCompanionFiles
-   */
-  function autoSelectOverlaySource(requiredFiles) {
-    if (!overlaySourceSelect || !previewManager) return;
-
-    const state = stateManager.getState();
-    const projectFiles = state.projectFiles;
-    if (!projectFiles || projectFiles.size === 0) return;
-
-    // Check if user has already selected a source (don't override)
-    const currentSource = overlaySourceSelect.value;
-    if (currentSource && projectFiles.has(currentSource)) return;
-
-    // Check for saved preference first
-    const savedSource = localStorage.getItem(STORAGE_KEY_OVERLAY_SOURCE);
-    if (savedSource && projectFiles.has(savedSource)) {
-      overlaySourceSelect.value = savedSource;
-      // Don't auto-load, just select it in the dropdown
-      return;
-    }
-
-    // Look for file variables pointing to SVG/image overlay candidates.
-    // Prefers screenshot_file when available, then any file variable with
-    // an overlay-suitable extension.
-    let screenshotFile = null;
-    if (requiredFiles && requiredFiles.files) {
-      const OVERLAY_EXTS = ['.svg', '.png', '.jpg', '.jpeg', '.gif', '.webp'];
-      const overlayVars = requiredFiles.files.filter(
-        (f) =>
-          f.type === 'variable' &&
-          OVERLAY_EXTS.some((ext) => f.path.toLowerCase().endsWith(ext))
-      );
-      if (overlayVars.length > 0) {
-        const preferred =
-          overlayVars.find((v) => v.variableName === 'screenshot_file') ||
-          overlayVars[0];
-        const resolved = resolveProjectFile(projectFiles, preferred.path);
-        if (resolved) screenshotFile = resolved.key;
-      }
-    }
-
-    // COMPATIBILITY FALLBACK — Phase 8 removal candidate.
-    // Try 'default.svg' for backward compatibility with keyguard projects
-    // that lack a manifest but use the known convention.
-    if (!screenshotFile) {
-      const resolved = resolveProjectFile(projectFiles, 'default.svg');
-      if (resolved) screenshotFile = resolved.key;
-    }
-
-    // If found, select it in the dropdown and auto-load + enable the overlay.
-    // AAC keyguard designers need the overlay active immediately on project load.
-    if (screenshotFile) {
-      overlaySourceSelect.value = screenshotFile;
-      console.log(`[App] Auto-selected overlay source: ${screenshotFile}`);
-      // Load the overlay image into the preview and enable the toggle
-      loadOverlayFromProjectFile(screenshotFile)
-        .then(() => {
-          // SVG 96 DPI size applied; SCAD case-opening / screen dims override.
-          const currentParams = stateManager.getState().parameters;
-          autoApplyScreenDimensionsFromParams(currentParams);
-          if (overlayToggle && !overlayToggle.checked) {
-            overlayToggle.checked = true;
-            previewManager?.setOverlayEnabled(true);
-            updateOverlayUIFromConfig();
-            updateOverlayStatus?.();
-            console.log(
-              '[App] Overlay auto-enabled for screenshot companion file'
-            );
-          }
-        })
-        .catch((err) => {
-          console.warn('[App] Auto-enable overlay failed:', err);
-        });
-    }
-  }
-
-  /**
-   * Get icon for file type
-   * @param {string} ext - File extension
-   * @returns {string} Icon emoji
-   */
-  function getFileIcon(ext) {
-    const icons = {
-      scad: '📐',
-      txt: '📝',
-      csv: '📊',
-      json: '📋',
-      svg: '🎨',
-      stl: '🧊',
-      png: '🖼️',
-      jpg: '🖼️',
-      jpeg: '🖼️',
-    };
-    return icons[ext] || '📎';
-  }
-
-  /**
-   * Handle project file action (edit/remove)
-   * @param {Event} event - Click event
-   */
-  function handleProjectFileAction(event) {
-    const btn = event.currentTarget;
-    const action = btn.dataset.action;
-    const path = btn.dataset.path;
-
-    if (action === 'edit') {
-      editProjectFile(path);
-    } else if (action === 'remove') {
-      removeProjectFile(path);
-    }
-  }
-
-  /**
-   * Add companion file to project
-   * @param {File} file - File to add
-   */
-  async function handleAddCompanionFile(file) {
-    const state = stateManager.getState();
-    let { projectFiles, mainFilePath, uploadedFile } = state;
-
-    if (!uploadedFile) {
-      updateStatus('No project loaded', 'error');
-      return;
-    }
-
-    try {
-      const fileName = file.name;
-      const ext = fileName.split('.').pop()?.toLowerCase();
-      const isImage = ['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext);
-
-      // Read image files as data URLs (binary-safe); text files as text
-      let content;
-      if (isImage) {
-        content = await new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result);
-          reader.onerror = () => reject(new Error('Failed to read image file'));
-          reader.readAsDataURL(file);
-        });
-      } else {
-        content = await file.text();
-      }
-
-      // Initialize projectFiles if needed (converting single-file to multi-file)
-      if (!projectFiles) {
-        projectFiles = new Map();
-        // Add the main file to projectFiles
-        const mainPath = mainFilePath || uploadedFile.name;
-        projectFiles.set(mainPath, uploadedFile.content);
-        mainFilePath = mainPath;
-      }
-
-      // Check for duplicate
-      if (projectFiles.has(fileName)) {
-        const overwrite = confirm(
-          `File "${fileName}" already exists. Overwrite?`
-        );
-        if (!overwrite) return;
-      }
-
-      // Add the new file
-      projectFiles.set(fileName, content);
-
-      // Update state
-      stateManager.setState({
-        projectFiles,
-        mainFilePath,
-      });
-      setCanonicalProjectFiles(projectFiles);
-
-      // Mirror image files to SharedImageStore so they appear in Image Measurement
-      if (isImage) {
-        await SharedImageStore.addImageFromDataUrl(fileName, content);
-      }
-
-      // Update UI
-      const requiredFiles = detectRequiredCompanionFiles(uploadedFile.content);
-      renderProjectFilesList(projectFiles, mainFilePath, requiredFiles);
-
-      // Update auto-preview controller
-      if (autoPreviewController) {
-        autoPreviewController.setProjectFiles(projectFiles, mainFilePath);
-        await autoPreviewController.forcePreview(
-          stateManager.getState().parameters
-        );
-      }
-
-      updateStatus(`Added file: ${fileName}`, 'success');
-      console.log(`[ProjectFiles] Added companion file: ${fileName}`);
-
-      // Auto-save to tracked saved project
-      await autoSaveCompanionFiles();
-
-      // If include_screenshot is active but no overlay is displayed yet,
-      // re-sync so the newly added file can be picked up as the overlay source.
-      const currentParams = stateManager.getState().parameters;
-      const includeFlag = currentParams?.include_screenshot;
-      if (
-        (includeFlag === 'yes' ||
-          includeFlag === true ||
-          includeFlag === 'true') &&
-        overlayToggle &&
-        !overlayToggle.checked
-      ) {
-        syncOverlayWithScreenshotParam(currentParams);
-      }
-    } catch (error) {
-      console.error('[ProjectFiles] Error adding file:', error);
-      updateStatus(`Failed to add file: ${error.message}`, 'error');
-    }
-  }
-
-  /**
-   * Remove a companion file from the project
-   * @param {string} path - Path to the file to remove
-   */
-  async function removeProjectFile(path) {
-    const state = stateManager.getState();
-    const { projectFiles, mainFilePath, uploadedFile } = state;
-
-    if (!projectFiles || !projectFiles.has(path)) {
-      updateStatus('File not found', 'error');
-      return;
-    }
-
-    // Don't allow removing the main file
-    if (path === mainFilePath) {
-      updateStatus('Cannot remove the main file', 'error');
-      return;
-    }
-
-    const confirmed = confirm(`Remove "${path}" from the project?`);
-    if (!confirmed) return;
-
-    projectFiles.delete(path);
-
-    // Update state
-    stateManager.setState({ projectFiles });
-    setCanonicalProjectFiles(projectFiles);
-
-    // Update UI
-    const requiredFiles = uploadedFile
-      ? detectRequiredCompanionFiles(uploadedFile.content)
-      : null;
-    renderProjectFilesList(projectFiles, mainFilePath, requiredFiles);
-
-    // Update auto-preview controller
-    if (autoPreviewController) {
-      autoPreviewController.setProjectFiles(projectFiles, mainFilePath);
-      await autoPreviewController.forcePreview(
-        stateManager.getState().parameters
-      );
-    }
-
-    updateStatus(`Removed file: ${path}`, 'success');
-    console.log(`[ProjectFiles] Removed file: ${path}`);
-
-    // Auto-save to tracked saved project
-    await autoSaveCompanionFiles();
-  }
-
-  /**
-   * Open the text file editor modal for a companion file
-   * @param {string} path - Path to the file to edit
-   */
-  function editProjectFile(path) {
-    const state = stateManager.getState();
-    const { projectFiles } = state;
-
-    if (!projectFiles || !projectFiles.has(path)) {
-      updateStatus('File not found', 'error');
-      return;
-    }
-
-    const content = projectFiles.get(path);
-
-    // Get modal elements
-    const modal = document.getElementById('textFileEditorModal');
-    const fileNameEl = document.getElementById('textFileEditorFileName');
-    const textarea = document.getElementById('textFileEditorContent');
-
-    if (!modal || !textarea) {
-      console.error('[ProjectFiles] Text editor modal not found');
-      return;
-    }
-
-    // Set content
-    if (fileNameEl) fileNameEl.textContent = path;
-    textarea.value = content;
-    textarea.dataset.editingPath = path;
-
-    // Open modal
-    openModal(modal, {
-      focusTarget: textarea,
-    });
-  }
-
-  /**
-   * Apply text file editor changes and trigger preview
-   */
-  async function applyTextFileEditorChanges() {
-    const textarea = document.getElementById('textFileEditorContent');
-    const modal = document.getElementById('textFileEditorModal');
-
-    if (!textarea || !modal) return;
-
-    const path = textarea.dataset.editingPath;
-    const newContent = textarea.value;
-
-    const state = stateManager.getState();
-    const { projectFiles, mainFilePath } = state;
-
-    if (!projectFiles || !path) {
-      closeModal(modal);
-      return;
-    }
-
-    // Update file content
-    projectFiles.set(path, newContent);
-
-    // Update state
-    stateManager.setState({ projectFiles });
-    setCanonicalProjectFiles(projectFiles);
-
-    // Update UI
-    const requiredFiles = state.uploadedFile
-      ? detectRequiredCompanionFiles(state.uploadedFile.content)
-      : null;
-    renderProjectFilesList(projectFiles, mainFilePath, requiredFiles);
-
-    // Close modal
-    closeModal(modal);
-
-    // Trigger preview with updated files
-    if (autoPreviewController) {
-      autoPreviewController.setProjectFiles(projectFiles, mainFilePath);
-      await autoPreviewController.forcePreview(
-        stateManager.getState().parameters
-      );
-    }
-
-    updateStatus(`Updated file: ${path}`, 'success');
-    console.log(`[ProjectFiles] Updated file: ${path}`);
-
-    // Auto-save to tracked saved project
-    await autoSaveCompanionFiles();
-  }
-
-  /**
-   * Update the project files UI after file load
-   */
-  function updateProjectFilesUI() {
-    const state = stateManager.getState();
-    const { projectFiles, mainFilePath, uploadedFile } = state;
-
-    if (!uploadedFile) {
-      const controls = document.getElementById('projectFilesControls');
-      if (controls) controls.classList.add('hidden');
-      return;
-    }
-
-    const requiredFiles = detectRequiredCompanionFiles(uploadedFile.content);
-    renderProjectFilesList(projectFiles, mainFilePath, requiredFiles);
-
-    // Emit synthetic console warnings for missing companion files so the
-    // Console panel mirrors what desktop OpenSCAD would show for missing includes.
-    if (
-      requiredFiles?.files &&
-      typeof window.updateConsoleOutput === 'function'
-    ) {
-      const knownLibraryIdSet = new Set(
-        Object.keys(LIBRARY_DEFINITIONS).map((id) => id.toLowerCase())
-      );
-      const projectBasenames = projectFiles
-        ? new Set(
-            Array.from(projectFiles.keys()).map((p) =>
-              p.split('/').pop().toLowerCase()
-            )
-          )
-        : new Set();
-      const missing = requiredFiles.files.filter((f) => {
-        if (!f.required) return false;
-        if (typeof f.path !== 'string' || f.path.trim() === '') return false;
-        const normalizedPath = f.path.trim().replace(/^\/+/, '');
-        const pathParts = normalizedPath.split('/');
-        const firstSegment = pathParts[0].toLowerCase();
-        const isLibraryReference =
-          pathParts.length > 1 && knownLibraryIdSet.has(firstSegment);
-        // Companion-file warnings should not include library include/use refs.
-        if (isLibraryReference) return false;
-        if (!projectFiles) return true;
-        if (projectFiles.has(f.path)) return false;
-        const baseName = pathParts[pathParts.length - 1].toLowerCase();
-        return !projectBasenames.has(baseName);
-      });
-      if (missing.length > 0) {
-        const warnings = missing
-          .map((f) => `WARNING: Can't open include file '${f.path}'.`)
-          .join('\n');
-        window.updateConsoleOutput(warnings);
-      }
-    }
-  }
-
-  /**
-   * Show a full-screen processing overlay for long operations.
-   *
-   * IMPORTANT: This overlay renders at z-index 10000, which is ABOVE all
-   * modals (z-index 1000). Callers MUST ensure no blocking modal (especially
-   * the first-visit disclosure) is open when invoking this function, or the
-   * modal's buttons will be unreachable. Always await
-   * waitForFirstVisitAcceptance() before calling this.
-   *
-   * @param {string} message - Primary message
-   * @param {Object} [opts]
-   * @param {string} [opts.hint] - Secondary hint text
-   * @param {number} [opts.delayMs=0] - Delay before showing (0 = immediate)
-   * @returns {Function} dismiss callback (safe to call multiple times)
-   */
-  function showProcessingOverlay(message, opts = {}) {
-    const { hint = 'Please do not close or refresh the page.', delayMs = 0 } =
-      typeof opts === 'string' ? { hint: opts } : opts;
-    let dismissed = false;
-    let timerId = null;
-
-    const show = () => {
-      if (dismissed) return;
-      let overlay = document.getElementById('processingOverlay');
-      if (!overlay) {
-        overlay = document.createElement('div');
-        overlay.id = 'processingOverlay';
-        overlay.className = 'processing-overlay';
-        overlay.setAttribute('role', 'alert');
-        overlay.setAttribute('aria-live', 'assertive');
-        overlay.innerHTML = `
-          <div class="processing-spinner"></div>
-          <div class="processing-message"></div>
-          <div class="processing-hint"></div>
-        `;
-        document.body.appendChild(overlay);
-      }
-      overlay.querySelector('.processing-message').textContent = message;
-      overlay.querySelector('.processing-hint').textContent = hint;
-    };
-
-    if (delayMs > 0) {
-      timerId = setTimeout(show, delayMs);
-    } else {
-      show();
-    }
-
-    return () => {
-      dismissed = true;
-      if (timerId) clearTimeout(timerId);
-      const el = document.getElementById('processingOverlay');
-      if (el) el.remove();
-    };
-  }
-
-  // Handle file upload (supports both .scad and .zip files)
-  async function handleFile(
-    file,
-    content = null,
-    extractedFiles = null,
-    mainFilePathArg = null,
-    source = 'user', // 'user' | 'example' | 'saved' - track upload source
-    originalFileNameArg = null // Original file name (e.g., ZIP name) for multi-file projects
-  ) {
-    if (!file && !content) return;
-
-    const rawFileName =
-      typeof file?.name === 'string' && file.name.trim().length > 0
-        ? file.name
-        : '';
-    let fileName = rawFileName || 'example.scad';
-    let fileContent = content;
-    let projectFiles = extractedFiles; // Map of additional files for multi-file projects
-    let mainFilePath = mainFilePathArg; // Path to main file in multi-file project (passed from ZIP extraction)
-    // For ZIP files, preserve the original ZIP filename for display/save purposes
-    const originalFileName = originalFileNameArg || fileName;
-
-    if (file) {
-      const fileNameLower = fileName.toLowerCase();
-      // Only validate file metadata for actual File objects (user uploads)
-      // Skip validation when content is already provided (example loading path)
-      const isZip = fileNameLower.endsWith('.zip');
-      const isScad = fileNameLower.endsWith('.scad');
-      const isActualFileUpload = !content && file instanceof File;
-
-      if (isActualFileUpload) {
-        if (!isZip && !isScad) {
-          alert('Please upload a .scad or .zip file');
-          return;
-        }
-
-        // Validate file metadata with Ajv before processing
-        const fileMeta = {
-          name: fileNameLower,
-          size: file.size,
-        };
-
-        const isValid = validateFileUpload(fileMeta);
-        if (!isValid) {
-          const fileSizeMB = (file.size / (1024 * 1024)).toFixed(1);
-          const isZipName = fileNameLower.endsWith('.zip');
-          const isScadName = fileNameLower.endsWith('.scad');
-          let userMsg;
-          if (isZipName) {
-            const limitMB = (FILE_SIZE_LIMITS.ZIP_FILE / (1024 * 1024)).toFixed(
-              0
-            );
-            userMsg = `ZIP file is too large (${fileSizeMB} MB). Maximum allowed size is ${limitMB} MB.`;
-          } else if (isScadName) {
-            const limitMB = (
-              FILE_SIZE_LIMITS.SCAD_FILE /
-              (1024 * 1024)
-            ).toFixed(0);
-            userMsg = `.scad file is too large (${fileSizeMB} MB). Maximum allowed size is ${limitMB} MB.`;
-          } else {
-            userMsg = 'Please upload a .scad or .zip file.';
-          }
-          alert(userMsg);
-          console.error(
-            '[File Upload] Validation failed:',
-            validateFileUpload.errors
-          );
-          return;
-        }
-      }
-
-      // Handle ZIP files - but SKIP if content is already provided (e.g., from saved project)
-      // When loading a saved ZIP project, content and extractedFiles are already available
-      if (isZip && !content && !extractedFiles) {
-        const validation = validateZipFile(file);
-        if (!validation.valid) {
-          alert(validation.error);
-          return;
-        }
-
-        let dismissOverlay = () => {};
-        try {
-          const fileSizeMB = (file.size / (1024 * 1024)).toFixed(1);
-          dismissOverlay = showProcessingOverlay(
-            `Opening project (${fileSizeMB} MB)…`,
-            'This may take a moment for large files. Please do not close or refresh the page.'
-          );
-          updateStatus('Extracting ZIP file...');
-          const { files, mainFile } = await extractZipFiles(file);
-
-          // Get statistics
-          const stats = getZipStats(files);
-          console.log('[ZIP] Statistics:', stats);
-
-          // Get main file content
-          fileContent = files.get(mainFile);
-          fileName = mainFile;
-          mainFilePath = mainFile;
-
-          // Store all files except the main one (main is passed as scadContent)
-          projectFiles = new Map(files);
-          // Note: We keep the main file in projectFiles for include/use resolution
-
-          console.log(
-            `[ZIP] Loaded multi-file project: ${mainFile} (${stats.totalFiles} files)`
-          );
-
-          // Dependency preflight check: verify all include/use/import files are present
-          // Check if all include/use/import files are present in the ZIP
-          const uploadedFilenames = Array.from(files.keys());
-          const preflight = runPreflightCheck(fileContent, uploadedFilenames, {
-            availableLibraries: new Set(
-              Object.keys(LIBRARY_DEFINITIONS).map((k) => k.toLowerCase())
-            ),
-          });
-
-          if (!preflight.success) {
-            console.warn(
-              '[ZIP] Missing dependencies detected:',
-              preflight.missing
-            );
-            // Dismiss the processing overlay so the dialog is accessible
-            dismissOverlay();
-
-            const result = await showMissingDependenciesDialog(
-              preflight.missing,
-              file.name
-            );
-
-            if (result.action === 'cancel') {
-              updateStatus('Upload cancelled - missing dependencies');
-              return;
-            }
-
-            if (result.action === 'add-files' && result.addedFiles?.size > 0) {
-              for (const [name, content] of result.addedFiles) {
-                files.set(name, content);
-                projectFiles.set(name, content);
-              }
-              console.log(
-                `[ZIP] User added ${result.addedFiles.size} missing file(s):`,
-                Array.from(result.addedFiles.keys())
-              );
-            }
-
-            // Re-show overlay while we finish loading
-            dismissOverlay = showProcessingOverlay(
-              `Opening project…`,
-              result.action === 'add-files'
-                ? 'Loading with added files.'
-                : 'Continuing with available files.'
-            );
-
-            if (result.action === 'continue') {
-              console.warn(
-                '[ZIP] Continuing despite missing files:',
-                formatMissingDependencies(preflight.missing)
-              );
-            }
-          }
-
-          dismissOverlay();
-          // Continue with extracted content, passing mainFilePath and original ZIP name
-          // The original ZIP filename is used as the default project name when saving
-          const zipFileName = file.name;
-          handleFile(
-            null,
-            fileContent,
-            projectFiles,
-            mainFilePath,
-            source,
-            zipFileName
-          );
-          return;
-        } catch (error) {
-          dismissOverlay();
-          console.error('[ZIP] Extraction failed:', error);
-          updateStatus('Failed to extract ZIP file');
-          _announceError('Failed to extract ZIP file');
-          alert(error.message);
-          return;
-        }
-      }
-
-      // Handle single .scad files (existing logic)
-      if (file.size > FILE_SIZE_LIMITS.SCAD_FILE) {
-        const limitMB = FILE_SIZE_LIMITS.SCAD_FILE / (1024 * 1024);
-        alert(`File size exceeds ${limitMB}MB limit`);
-        return;
-      }
-    }
-
-    if (file && !content) {
-      const originalFileName = fileName; // Preserve file name for recursive call
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        // Pass a minimal object with the original file name
-        handleFile(
-          { name: originalFileName },
-          e.target.result,
-          extractedFiles,
-          mainFilePath,
-          source
-        );
-      };
-      reader.readAsText(file);
-      return;
-    }
-
-    console.log('File loaded:', fileName, fileContent.length, 'bytes');
-
-    // Single-file preflight: detect missing companion include/use/import files.
-    // The ZIP path already runs its own preflight above; only check here for
-    // bare .scad uploads where extractedFiles is null.
-    if (!extractedFiles) {
-      const singleFilePreflight = runPreflightCheck(fileContent, [fileName], {
-        availableLibraries: new Set(
-          Object.keys(LIBRARY_DEFINITIONS).map((k) => k.toLowerCase())
-        ),
-      });
-      if (!singleFilePreflight.success) {
-        const allMissingFiles = [
-          ...singleFilePreflight.missing.includes,
-          ...singleFilePreflight.missing.uses,
-          ...singleFilePreflight.missing.imports,
-        ].join(', ');
-        console.warn(
-          '[Upload] Single-file upload references missing companion files:',
-          singleFilePreflight.missing
-        );
-        getErrorLogPanel().addEntry({
-          type: ERROR_LOG_TYPE.WARNING,
-          group: 'Import',
-          file: fileName,
-          line: null,
-          message: `Missing companion files: ${allMissingFiles} — upload the full project folder or ZIP to include all dependencies`,
-          timestamp: Date.now(),
-        });
-      }
-    }
-
-    // Extract parameters
-    updateStatus('Extracting parameters...');
-    try {
-      const extracted = extractParameters(fileContent);
-      console.log('Extracted parameters:', extracted);
-
-      const paramCount = Object.keys(extracted.parameters).length;
-      console.log(
-        `Found ${paramCount} parameters in ${extracted.groups.length} groups`
-      );
-      const colorParamNames = Object.values(extracted.parameters)
-        .filter((param) => param.uiType === 'color')
-        .map((param) => param.name);
-
-      // Analyze file complexity to determine quality tier
-      const complexityAnalysis = analyzeComplexity(fileContent, {});
-      const adaptiveConfig = getAdaptiveQualityConfig(fileContent, {});
-
-      console.log('[Complexity] Analysis:', {
-        tier: adaptiveConfig.tierName,
-        score: complexityAnalysis.score,
-        curvedFeatures: complexityAnalysis.estimatedCurvedFeatures,
-        hardware: adaptiveConfig.hardware.level,
-        warnings: complexityAnalysis.warnings,
-      });
-
-      // Show complexity warnings if any
-      if (complexityAnalysis.warnings.length > 0) {
-        complexityAnalysis.warnings.forEach((w) =>
-          console.warn('[Complexity]', w)
-        );
-      }
-
-      // Build paramTypes map from schema for boolean vs string disambiguation
-      // This is critical for "yes"/"no" string dropdown parameters (e.g. expose_home_button)
-      // which must NOT be converted to OpenSCAD booleans true/false.
-      const paramTypes = {};
-      for (const [pName, pDef] of Object.entries(extracted.parameters || {})) {
-        paramTypes[pName] = pDef.type || 'string';
-      }
-
-      // Store in state (including project files for multi-file support)
-      // For ZIP files: fileName = main .scad file, originalFileName = ZIP name
-      // For single files: both are the same
-      stateManager.setState({
-        uploadedFile: { name: originalFileName, content: fileContent },
-        projectFiles: projectFiles || null, // Map of additional files (null for single-file projects)
-        mainFilePath: mainFilePath || fileName, // Track main file path (the .scad file inside ZIP)
-        schema: extracted,
-        paramTypes,
-        parameters: {},
-        defaults: {},
-        // Adaptive quality configuration
-        complexityTier: adaptiveConfig.tier,
-        complexityAnalysis: complexityAnalysis,
-        adaptiveQualityConfig: adaptiveConfig,
-      });
-      setCanonicalProjectFiles(projectFiles || null);
-
-      // Clear undo/redo history on new file upload
-      stateManager.clearHistory();
-
-      // Project isolation: reset all project-scoped state so data from
-      // a previously loaded project never bleeds into the new one.
-      forceClearPresetSelection();
-      presetCompanionMap = null;
-
-      // Clear the reference overlay (SVG/image) from the previous project so it
-      // doesn't appear under the new project's model.
-      if (previewManager) {
-        previewManager.setReferenceOverlaySource({
-          kind: null,
-          name: null,
-          dataUrlOrText: null,
-        });
-        previewManager.setOverlayEnabled(false);
-      }
-      if (overlayToggle) overlayToggle.checked = false;
-      if (overlaySourceSelect) overlaySourceSelect.value = '';
-
-      // Reset saved project tracking for new uploads (not reloads from saved projects)
-      if (source !== 'saved') {
-        currentSavedProjectId = null;
-      }
-
-      // Reset output format to STL for fresh project loads —
-      // dispatch change to update format info panel and 2D guidance.
-      if (outputFormatSelect && outputFormatSelect.value !== 'stl') {
-        outputFormatSelect.value = 'stl';
-        outputFormatSelect.dispatchEvent(new Event('change'));
-      }
-      stateManager.setState({ outputFormat: 'stl' });
-
-      // Show main interface
-      welcomeScreen.classList.add('hidden');
-      mainInterface.classList.remove('hidden');
-
-      // Layout reset: clear stale visual state from a previous project so the
-      // flex layout computes cleanly when mainInterface transitions from
-      // display:none back to flex.  Without this, the echo drawer can remain
-      // expanded with old warnings, scroll positions can be non-zero (from
-      // browser auto-scroll), and the Three.js canvas may retain stale
-      // dimensions — all of which combine to produce a blank region and an
-      // upward layout shift that hides the app header.
-      updatePreviewDrawer([]);
-      if (typeof window.clearConsoleState === 'function') {
-        window.clearConsoleState();
-      }
-      const appEl = document.getElementById('app');
-      if (appEl) appEl.scrollTop = 0;
-      const appMainEl = document.getElementById('main-content');
-      if (appMainEl) appMainEl.scrollTop = 0;
-      const previewContentEl = document.querySelector('.preview-content');
-      if (previewContentEl) previewContentEl.scrollTop = 0;
-      requestAnimationFrame(() => {
-        if (previewManager) previewManager.handleResize();
-      });
-
-      // Update file info summary (used by E2E tests and screen readers)
-      const fileInfoSummaryEl = document.getElementById('fileInfoSummary');
-      if (fileInfoSummaryEl && fileName) {
-        fileInfoSummaryEl.textContent = fileName;
-      }
-
-      // Apply mode-aware toolbar/workflow visibility now that the main interface
-      // is active. Advanced: toolbar visible, workflow hidden. Basic: vice versa.
-      _applyToolbarModeVisibility(getUIModeController().getMode());
-
-      // Detect include/use statements for single-file uploads
-      let includeUseWarning = '';
-      if (!projectFiles || projectFiles.size <= 1) {
-        const detection = detectIncludeUse(fileContent);
-        if (detection.hasIncludes || detection.hasUse) {
-          const fileList = detection.files.join(', ');
-          includeUseWarning = `\n⚠️ Note: This file references external files (${fileList}). For multi-file projects, upload a ZIP containing all files.`;
-          console.warn(
-            '[Upload] Single-file upload with include/use detected:',
-            detection.files
-          );
-        }
-      }
-
-      // Enable compact header after file is loaded
-      const appHeader = document.querySelector('.app-header');
-      if (appHeader) {
-        appHeader.classList.add('compact');
-      }
-
-      // Update complexity tier indicator
-      const complexityTierLabel = document.getElementById(
-        'complexityTierLabel'
-      );
-      if (complexityTierLabel) {
-        const tierName = adaptiveConfig.tierName;
-        complexityTierLabel.textContent = tierName;
-        complexityTierLabel.className = `complexity-tier-label tier-${adaptiveConfig.tier}`;
-        complexityTierLabel.title =
-          `${adaptiveConfig.tierDescription}\n` +
-          `Curved features: ~${complexityAnalysis.estimatedCurvedFeatures}\n` +
-          `Hardware: ${adaptiveConfig.hardware.level}\n` +
-          `Preview: ${adaptiveConfig.defaultPreviewLevel}, Export: ${adaptiveConfig.defaultExportLevel}`;
-      }
-
-      // Show include/use warning in status if detected
-      if (includeUseWarning) {
-        updateStatus(`File loaded. ${includeUseWarning.trim()}`);
-      }
-
-      // Handle detected libraries
-      const detectedLibraries = extracted.libraries || [];
-      console.log('Detected libraries:', detectedLibraries);
-      stateManager.setState({
-        detectedLibraries,
-      });
-
-      // Auto-enable detected libraries
-      if (detectedLibraries.length > 0) {
-        const autoEnabled = libraryManager.autoEnable(fileContent);
-        if (autoEnabled.length > 0) {
-          console.log('Auto-enabled libraries:', autoEnabled);
-          updateStatus(`Enabled ${autoEnabled.length} required libraries`);
-        }
-      }
-
-      // Always show library UI (even when no libraries detected)
-      renderLibraryUI(detectedLibraries);
-
-      // Render parameter UI
-      const parametersContainer = document.getElementById(
-        'parametersContainer'
-      );
-      const currentValues = renderParameterUI(
-        extracted,
-        parametersContainer,
-        (values) => {
-          // Record state for undo before applying change
-          stateManager.recordParameterState();
-          stateManager.setState({ parameters: values });
-          // Clear preset selection when parameters are manually changed
-          clearPresetSelection(values);
-          // Trigger auto-preview on parameter change
-          if (autoPreviewController) {
-            autoPreviewController.onParameterChange(values);
-          }
-          // Update button state when parameters change
-          updatePrimaryActionButton();
-          // Refresh color legend swatches with new parameter values
-          _updateColorLegend();
-          // Sync overlay with include_screenshot param
-          syncOverlayWithScreenshotParam(values);
-        }
-      );
-
-      // Store default values
-      stateManager.setState({
-        parameters: currentValues,
-        defaults: { ...currentValues },
-      });
-
-      // Load per-project UI preferences if saved, then apply panel visibility
-      try {
-        const projectPrefsKey = `openscad-forge-ui-prefs-${fileName}`;
-        const savedProjectPrefs = localStorage.getItem(projectPrefsKey);
-        if (savedProjectPrefs) {
-          const prefs = JSON.parse(savedProjectPrefs);
-          getUIModeController().importPreferences(prefs, {
-            applyImmediately: false,
-          });
-          console.log(
-            `[App] Loaded per-project UI preferences for: ${fileName}`
-          );
-        } else {
-          getUIModeController().setProjectHiddenPanels(null);
-        }
-      } catch {
-        getUIModeController().setProjectHiddenPanels(null);
-      }
-      getUIModeController().applyCurrentMode();
-
-      // Track file in recent files list
-      fileActionsController.trackOpen(fileName);
-
-      // Apply hidden groups from saved preference and set up hide/show-all behavior
-      applyHiddenGroups(parametersContainer, extracted?.modelName || fileName);
-
-      // C1: Auto-size overlay from SCAD parameters (screen dims or case opening)
-      autoApplyScreenDimensionsFromParams(currentValues);
-
-      // Auto-import JSON presets from ZIP companion files (Item 14: desktop parity)
-      // After state is set with schema + defaults, scan projectFiles for .json preset files
-      if (projectFiles && projectFiles.size > 0) {
-        // Diagnostic: log all files available to WASM FS (companion file mount)
-        console.debug(
-          '[WASM FS] Companion files mounted:',
-          Array.from(projectFiles.entries()).map(([path, content]) => ({
-            path,
-            sizeBytes: content.length,
-          }))
-        );
-
-        let autoImportedCount = 0;
-        const paramSchema = {};
-        // Build param schema for type coercion from extracted parameters
-        for (const [pName, pDef] of Object.entries(
-          extracted.parameters || {}
-        )) {
-          paramSchema[pName] = { type: pDef.type || 'string' };
-        }
-
-        for (const [filePath, fileContentStr] of projectFiles.entries()) {
-          if (
-            filePath.toLowerCase().endsWith('.json') &&
-            !filePath.toLowerCase().endsWith('.scad')
-          ) {
-            try {
-              console.log(`[ZIP] Auto-importing presets from: ${filePath}`);
-              console.debug(
-                `[ZIP] JSON content preview (first 200 chars): ${fileContentStr.substring(0, 200)}`
-              );
-              const hiddenParamNamesForImport = Object.keys(
-                extracted.hiddenParameters || {}
-              );
-              const importResult = presetManager.importPreset(
-                fileContentStr,
-                originalFileName,
-                paramSchema,
-                hiddenParamNamesForImport
-              );
-              if (importResult.success && importResult.imported > 0) {
-                autoImportedCount += importResult.imported;
-                console.log(
-                  `[ZIP] Auto-imported ${importResult.imported} preset(s) from ${filePath}`
-                );
-                console.debug(`[ZIP] Import result details:`, importResult);
-              } else if (!importResult.success) {
-                console.warn(
-                  `[ZIP] Failed to auto-import presets from ${filePath}:`,
-                  importResult.error
-                );
-              }
-            } catch (jsonError) {
-              console.warn(
-                `[ZIP] Error auto-importing presets from ${filePath}:`,
-                jsonError.message
-              );
-            }
-          }
-        }
-
-        if (autoImportedCount > 0) {
-          // Count companion files (non-.scad, non-.json)
-          const companionCount = Array.from(projectFiles.keys()).filter(
-            (p) =>
-              !p.toLowerCase().endsWith('.scad') &&
-              !p.toLowerCase().endsWith('.json')
-          ).length;
-          const companionText =
-            companionCount > 0
-              ? ` + ${companionCount} companion file${companionCount > 1 ? 's' : ''}`
-              : '';
-          updateStatus(
-            `Loaded: ${fileName}${companionText} + ${autoImportedCount} preset${autoImportedCount > 1 ? 's' : ''}`
-          );
-          updatePresetDropdown();
-
-          // Build preset→companion-file path mapping for alias mounting on preset load.
-          // Uses the imported preset names to match against nested file paths in the ZIP.
-          const importedPresets =
-            presetManager.getPresetsForModel(originalFileName);
-          if (importedPresets.length > 0) {
-            const parameterSetsForMap = Object.fromEntries(
-              importedPresets.map((p) => [p.name, p.parameters])
-            );
-            // Extract aliasable companion targets from SCAD analysis so
-            // the companion map resolves all referenced basenames, not just
-            // hardcoded keyguard-specific filenames.
-            const scadRefs = detectRequiredCompanionFiles(fileContent);
-            const companionTargets = [
-              ...new Set(
-                (scadRefs?.files || [])
-                  .filter(
-                    (f) =>
-                      f.required &&
-                      (f.type === 'include' || f.type === 'import')
-                  )
-                  .map((f) => f.path.split('/').pop())
-              ),
-            ].filter((basename) => {
-              let count = 0;
-              for (const key of projectFiles.keys()) {
-                if (key.split('/').pop() === basename) count++;
-              }
-              return count > 1;
-            });
-            presetCompanionMap = buildPresetCompanionMap(
-              projectFiles,
-              parameterSetsForMap,
-              { companionTargets }
-            );
-            console.log(
-              `[ZIP] Built preset companion map for ${presetCompanionMap.size} presets` +
-                (companionTargets.length > 0
-                  ? ` (generic targets: ${companionTargets.join(', ')})`
-                  : ' (legacy path)')
-            );
-          }
-        }
-      }
-
-      // Load URL parameters if present (after defaults are set)
-      const urlParams = stateManager.loadFromURL();
-      if (urlParams && Object.keys(urlParams).length > 0) {
-        console.log('Loaded parameters from URL:', urlParams);
-
-        const { sanitized, adjustments } = sanitizeUrlParams(
-          extracted,
-          urlParams
-        );
-
-        // Re-render UI with URL parameters - MUST include updatePrimaryActionButton in callback!
-        const updatedValues = renderParameterUI(
-          extracted,
-          parametersContainer,
-          (values) => {
-            // Record state for undo before applying change
-            stateManager.recordParameterState();
-            stateManager.setState({ parameters: values });
-            // Clear preset selection when parameters are manually changed
-            clearPresetSelection(values);
-            // Trigger auto-preview on parameter change
-            if (autoPreviewController) {
-              autoPreviewController.onParameterChange(values);
-            }
-            // Update button state when parameters change
-            updatePrimaryActionButton();
-          },
-          sanitized
-        );
-
-        // Ensure state matches sanitized UI values
-        stateManager.setState({ parameters: updatedValues });
-
-        if (Object.keys(adjustments).length > 0) {
-          updateStatus(
-            'Some URL parameters were adjusted to fit allowed ranges.'
-          );
-        }
-
-        // Trigger initial auto-preview with URL params
-        if (autoPreviewController) {
-          autoPreviewController.onParameterChange(updatedValues);
-        }
-
-        updateStatus(
-          `Ready - ${paramCount} parameters loaded (${Object.keys(urlParams).length} from URL)`
-        );
-      } else {
-        updateStatus(`Ready - ${paramCount} parameters loaded`);
-      }
-
-      // Auto-expand the Presets panel when a project loads
-      const presetControlsEl = document.getElementById('presetControls');
-      if (presetControlsEl && !presetControlsEl.open) {
-        presetControlsEl.open = true;
-      }
-
-      // Move focus to the first parameter input after file load (WCAG 2.4.3 Focus Order)
-      // This tells screen reader users that parameters are now available to customize.
-      // preventScroll: true keeps the panel's scroll position at the top so the user
-      // sees the beginning of the parameter list when they first open the panel (mobile
-      // drawer is off-canvas; desktop panel may be collapsed — either way we must not
-      // advance the scroll position before the user has opened the panel).
-      requestAnimationFrame(() => {
-        const firstInput = parametersContainer?.querySelector(
-          'input:not([type="hidden"]), select, textarea'
-        );
-        if (firstInput) {
-          firstInput.focus({ preventScroll: true });
-        }
-      });
-
-      // Initialize 3D preview (lazy loads Three.js)
-      if (!previewManager) {
-        previewManager = new PreviewManager(previewContainer);
-        await previewManager.init();
-
-        // Re-create #rendered2dPreview — init() clears container innerHTML,
-        // destroying the element that was defined in index.html.
-        if (!document.getElementById('rendered2dPreview')) {
-          const preview2d = document.createElement('div');
-          preview2d.id = 'rendered2dPreview';
-          preview2d.className = 'rendered-2d-preview hidden';
-          preview2d.setAttribute('role', 'img');
-          preview2d.setAttribute('aria-label', 'Rendered 2D SVG preview');
-          previewContainer.appendChild(preview2d);
-        }
-
-        // Append preview state indicator and rendering overlay immediately
-        // after init so they are in the DOM before any async setup below.
-        previewContainer.style.position = 'relative';
-        previewContainer.appendChild(previewStateIndicator);
-        previewContainer.appendChild(renderingOverlay);
-
-        syncPreviewModelColorOverride();
-        syncPreviewAppearanceOverride();
-
-        // Sync measurements toggle with saved preference
-        if (measurementsToggle) {
-          measurementsToggle.checked = previewManager.measurementsEnabled;
-        }
-
-        // Sync grid toggle with saved preference
-        if (gridToggle) {
-          gridToggle.checked = previewManager.gridEnabled;
-        }
-
-        // Sync grid size inputs with saved preference
-        {
-          const savedGrid = previewManager.getGridSize();
-          if (gridWidthInput) gridWidthInput.value = savedGrid.widthMm;
-          if (gridHeightInput) gridHeightInput.value = savedGrid.heightMm;
-        }
-
-        // Sync grid opacity slider with saved preference
-        syncGridOpacitySlider();
-
-        // Sync auto-bed toggle with saved preference
-        if (autoBedToggle) {
-          autoBedToggle.checked = previewManager.autoBedEnabled;
-        }
-
-        // Initialize overlay settings from localStorage
-        const savedOverlayOpacity = localStorage.getItem(
-          STORAGE_KEY_OVERLAY_OPACITY
-        );
-        if (savedOverlayOpacity) {
-          const opacity = parseInt(savedOverlayOpacity, 10);
-          if (!isNaN(opacity) && opacity >= 0 && opacity <= 100) {
-            previewManager.setOverlayOpacity(opacity / 100);
-            if (overlayOpacityInput) {
-              overlayOpacityInput.value = opacity;
-            }
-            if (overlayOpacityValue) {
-              overlayOpacityValue.textContent = `${opacity}%`;
-            }
-          }
-        }
-
-        // Restore overlay width/height from localStorage
-        const savedOverlayWidth = localStorage.getItem(
-          STORAGE_KEY_OVERLAY_WIDTH
-        );
-        const savedOverlayHeight = localStorage.getItem(
-          STORAGE_KEY_OVERLAY_HEIGHT
-        );
-        if (savedOverlayWidth || savedOverlayHeight) {
-          const sizeUpdate = {};
-          if (savedOverlayWidth) {
-            const w = parseFloat(savedOverlayWidth);
-            if (!isNaN(w) && w > 0) sizeUpdate.width = w;
-          }
-          if (savedOverlayHeight) {
-            const h = parseFloat(savedOverlayHeight);
-            if (!isNaN(h) && h > 0) sizeUpdate.height = h;
-          }
-          if (Object.keys(sizeUpdate).length > 0) {
-            previewManager.setOverlaySize(sizeUpdate);
-            updateOverlayUIFromConfig();
-          }
-        }
-
-        // Initialize overlay SVG color from localStorage or auto-detect
-        const savedAutoColor = localStorage.getItem(
-          STORAGE_KEY_OVERLAY_AUTO_COLOR
-        );
-        const isAutoColor = savedAutoColor !== 'false';
-        if (overlayAutoColorToggle) {
-          overlayAutoColorToggle.checked = isAutoColor;
-        }
-        if (overlayColorInput) {
-          overlayColorInput.classList.toggle('overlay-color-auto', isAutoColor);
-        }
-        if (isAutoColor) {
-          const themeColor = getThemeAwareSvgColor();
-          if (overlayColorInput) overlayColorInput.value = themeColor;
-          previewManager.overlayConfig.svgColor = themeColor;
-        } else {
-          const savedColor = localStorage.getItem(
-            STORAGE_KEY_OVERLAY_SVG_COLOR
-          );
-          if (savedColor && overlayColorInput) {
-            overlayColorInput.value = savedColor;
-          }
-          previewManager.overlayConfig.svgColor = savedColor || '#000000';
-        }
-
-        // Apply persisted model appearance controls
-        syncPreviewAppearanceOverride();
-
-        // Initialize auto-rotate settings from localStorage
-        // Only enable if user doesn't prefer reduced motion
-        const savedAutoRotatePref = localStorage.getItem(
-          STORAGE_KEY_AUTO_ROTATE
-        );
-        const savedRotateSpeedPref = localStorage.getItem(
-          STORAGE_KEY_ROTATE_SPEED
-        );
-
-        // Apply saved rotation speed first
-        if (savedRotateSpeedPref) {
-          const speed = parseFloat(savedRotateSpeedPref);
-          if (!isNaN(speed) && speed >= 0.1 && speed <= 3) {
-            previewManager.setAutoRotateSpeed(speed);
-          }
-        }
-
-        // Apply saved auto-rotate state (respecting reduced motion preference)
-        if (savedAutoRotatePref === 'true' && !prefersReducedMotion.matches) {
-          previewManager.setAutoRotate(true);
-          syncAutoRotateToggles(true);
-        }
-
-        // Update camera panel controller with preview manager reference
-        if (cameraPanelController) {
-          cameraPanelController.setPreviewManager(previewManager);
-        }
-
-        // If unlock was triggered before preview was ready, inject toggle now
-        if (_hfmUnlocked && !document.getElementById('_hfmToggle')) {
-          _injectAltToggle();
-        }
-
-        // If user toggled the alt view on from the welcome screen, enable it now.
-        if (_hfmPendingEnable && !_hfmEnabled) {
-          const toggleBtn = document.getElementById('_hfmToggle');
-          if (toggleBtn) {
-            await _enableAltViewWithPreview(toggleBtn);
-          }
-        }
-
-        syncPreviewModelColorOverride();
-        syncPreviewAppearanceOverride();
-
-        // Listen for theme changes and update preview
-        themeManager.addListener((theme, activeTheme, highContrast) => {
-          if (previewManager) {
-            previewManager.updateTheme(activeTheme, highContrast);
-
-            // Update color picker to show theme default when no custom color is set
-            const modelColorPicker =
-              document.getElementById('modelColorPicker');
-            const hasSavedColor = localStorage.getItem(STORAGE_KEY_MODEL_COLOR);
-            if (modelColorPicker && !hasSavedColor) {
-              const themeKey = highContrast ? `${activeTheme}-hc` : activeTheme;
-              const PREVIEW_COLORS = {
-                light: 0x2196f3,
-                dark: 0x4d9fff,
-                'light-hc': 0x0052cc,
-                'dark-hc': 0x66b3ff,
-              };
-              const colorHex = PREVIEW_COLORS[themeKey] || PREVIEW_COLORS.light;
-              modelColorPicker.value =
-                '#' + colorHex.toString(16).padStart(6, '0');
-            }
-          }
-
-          // Sync grid color picker to show theme default when no custom color is set
-          syncGridColorPicker();
-
-          // Update mono variant assets when theme changes (light=amber, dark=green)
-          const root = document.documentElement;
-          if (root.getAttribute('data-ui-variant') === 'mono') {
-            _setAssetsForVariant(true);
-          }
-        });
-      }
-
-      // Initialize or update AutoPreviewController
-      if (!autoPreviewController) {
-        // Pass true to defer init if WASM isn't ready yet - this will trigger WASM init
-        await initAutoPreviewController(true);
-      }
-      if (autoPreviewController) {
-        autoPreviewController.setColorParamNames(colorParamNames);
-        autoPreviewController.setParamTypes(paramTypes);
-        autoPreviewController.setSchema(extracted || null);
-      }
-
-      // Show color parameter legend when multiple color params exist
-      _updateColorLegend(colorParamNames);
-
-      // Set the SCAD content and project files for auto-preview
-      if (autoPreviewController) {
-        autoPreviewController.setScadContent(fileContent);
-        autoPreviewController.setProjectFiles(projectFiles, mainFilePath);
-        // CRITICAL: Set enabled libraries BEFORE triggering initial preview
-        const libsForRender = getEnabledLibrariesForRender();
-        autoPreviewController.setEnabledLibraries(libsForRender);
-        updatePreviewStateUI(PREVIEW_STATE.IDLE);
-      }
-
-      // Update Project Files Manager UI (for multi-file projects)
-      updateProjectFilesUI();
-
-      // Restore SharedImageStore from saved screenshots in projectFiles.
-      // This rehydrates the in-memory image store so screenshots appear in
-      // both Image Measurement and Reference Overlay dropdowns after reload.
-      if (projectFiles) {
-        const imageExts = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
-        for (const [path, content] of projectFiles) {
-          const ext = path.split('.').pop()?.toLowerCase();
-          if (
-            imageExts.includes(ext) &&
-            typeof content === 'string' &&
-            content.startsWith('data:')
-          ) {
-            const name = path.includes('/') ? path.split('/').pop() : path;
-            SharedImageStore.addImageFromDataUrl(name, content).catch(() => {
-              console.warn(`[App] Failed to restore image: ${path}`);
-            });
-          }
-        }
-      }
-
-      // Trigger an initial preview immediately on first load (and also for URL-param loads).
-      if (autoPreviewController) {
-        if (autoPreviewEnabled) {
-          // Use .then()/.catch() to handle errors without blocking file load completion
-          autoPreviewController
-            .forcePreview(stateManager.getState().parameters)
-            .then((initiated) => {
-              if (initiated) {
-                console.log('[Init] Initial preview render started');
-              } else {
-                console.warn('[Init] Initial preview render was skipped');
-              }
-            })
-            .catch((error) => {
-              console.error('[Init] Initial preview render failed:', error);
-              updatePreviewStateUI(PREVIEW_STATE.ERROR, {
-                error: error.message,
-              });
-              updateStatus(`Initial preview failed: ${error.message}`);
-            });
-        }
-      }
-
-      // Show opt-in save prompt for user uploads only (not examples or saved projects)
-      if (source === 'user') {
-        try {
-          const state = stateManager.getState();
-          await showSaveProjectPrompt(state);
-        } catch (error) {
-          console.error('[Saved Projects] Error showing save prompt:', error);
-        }
-      }
-    } catch (error) {
-      console.error('Failed to extract parameters:', error);
-      updateStatus('Error: Failed to extract parameters');
-      alert(
-        'Failed to extract parameters from file. Please check the file format.'
-      );
-    }
-  }
+  // Companion file functions (detectIncludeUse, detectRequiredCompanionFiles,
+  // autoSaveCompanionFiles, updateCompanionSaveButton, renderProjectFilesList,
+  // syncOverlayWithScreenshotParam, autoSelectOverlaySource, getFileIcon,
+  // handleProjectFileAction, handleAddCompanionFile, removeProjectFile,
+  // editProjectFile, applyTextFileEditorChanges, updateProjectFilesUI)
+  // moved to companion-files-controller.js
+
+  // showProcessingOverlay moved to file-handler.js
+
+  // handleFile moved to file-handler.js
 
   // File input change
   fileInput.addEventListener('change', (e) => {
     const selectedFile = e.target.files[0];
     if (!selectedFile) return;
-    handleFile(selectedFile);
+    fileHandler.handleFile(selectedFile);
     // Allow re-selecting the same file if needed
     e.target.value = '';
   });
@@ -9788,7 +5050,7 @@ async function initApp() {
       if (!files || files.length === 0) return;
 
       for (const file of files) {
-        await handleAddCompanionFile(file);
+        await companionFilesCtrl.handleAddCompanionFile(file);
       }
 
       // Reset input for potential re-selection
@@ -9814,12 +5076,12 @@ async function initApp() {
     companionSaveBtn.addEventListener('click', async () => {
       if (currentSavedProjectId) {
         // Update existing saved project
-        await autoSaveCompanionFiles();
+        await companionFilesCtrl.autoSaveCompanionFiles();
       } else {
         // Route to save prompt for new projects
         const state = stateManager.getState();
         if (state.uploadedFile) {
-          await showSaveProjectPrompt(state);
+          await savedProjectsUI.showSaveProjectPrompt(state);
         }
       }
     });
@@ -9835,7 +5097,7 @@ async function initApp() {
   );
 
   if (textFileEditorApply) {
-    textFileEditorApply.addEventListener('click', applyTextFileEditorChanges);
+    textFileEditorApply.addEventListener('click', () => companionFilesCtrl.applyTextFileEditorChanges());
   }
 
   // Ctrl+S / Cmd+S keyboard shortcut to save and apply changes
@@ -9847,7 +5109,7 @@ async function initApp() {
       // Ctrl+S or Cmd+S to save and apply
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault();
-        applyTextFileEditorChanges();
+        companionFilesCtrl.applyTextFileEditorChanges();
       }
       // Escape to cancel
       if (e.key === 'Escape') {
@@ -9879,11 +5141,13 @@ async function initApp() {
   if (clearFileBtn) {
     clearFileBtn.addEventListener('click', async () => {
       // Confirm before going back - warn about unsaved changes
-      if (
-        confirm(
-          'Go back to the welcome screen?\n\nAny unsaved changes to your current project will be lost.'
-        )
-      ) {
+      const confirmed = await showConfirmDialog(
+        'Any unsaved changes to your current project will be lost.',
+        'Go back to welcome screen?',
+        'Confirm',
+        'Cancel'
+      );
+      if (confirmed) {
         // Reset file input
         fileInput.value = '';
 
@@ -9919,12 +5183,12 @@ async function initApp() {
         updateStorageDisplay();
 
         // Refresh saved projects list when returning to welcome screen
-        await renderSavedProjectsList();
+        await savedProjectsUI.renderSavedProjectsList();
 
         // Reset workflow step state, then re-apply slot visibility.
-        // _applyToolbarModeVisibility sees mainInterface.hidden=true and hides both
+        // applyToolbarModeVisibility sees mainInterface.hidden=true and hides both
         // the toolbar and the workflow progress (welcome-screen branch).
-        _applyToolbarModeVisibility(getUIModeController().getMode());
+        applyToolbarModeVisibility(getUIModeController().getMode());
 
         // Exit focus mode if active
         const focusModeBtn = document.getElementById('focusModeBtn');
@@ -9961,8 +5225,8 @@ async function initApp() {
         // Reset overlay UI controls so the previous project's state doesn't linger
         if (overlayToggle) overlayToggle.checked = false;
         if (overlaySourceSelect) overlaySourceSelect.value = '';
-        updateOverlaySourceDropdown();
-        updateOverlayStatus();
+        overlayGridCtrl.updateOverlaySourceDropdown();
+        overlayGridCtrl.updateOverlayStatus();
 
         // Reset echo drawer so stale warnings don't persist into the
         // next project load (prevents layout shift from expanded drawer).
@@ -10000,7 +5264,7 @@ async function initApp() {
   uploadZone.addEventListener('drop', (e) => {
     e.preventDefault();
     uploadZone.classList.remove('drag-over');
-    handleFile(e.dataTransfer.files[0]);
+    fileHandler.handleFile(e.dataTransfer.files[0]);
   });
 
   // Click to upload is handled by the label wrapping the input.
@@ -10056,7 +5320,7 @@ if (rounded) {
         // Process it like a regular file upload, but pass content directly.
         // `handleFile()` uses FileReader for `File`/Blob inputs; passing a plain object
         // without content will throw. This path intentionally avoids FileReader.
-        await handleFile(
+        await fileHandler.handleFile(
           { name: fileName },
           starterTemplate,
           null,
@@ -10078,1766 +5342,7 @@ if (rounded) {
     });
   }
 
-  // ========== SAVED PROJECTS ==========
-
-  /**
-   * Format relative time (e.g., "2 days ago")
-   * @param {number} timestamp - Unix timestamp in milliseconds
-   * @returns {string}
-   */
-  function formatRelativeTime(timestamp) {
-    const now = Date.now();
-    const diff = now - timestamp;
-    const seconds = Math.floor(diff / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const hours = Math.floor(minutes / 60);
-    const days = Math.floor(hours / 24);
-
-    if (seconds < 60) return 'just now';
-    if (minutes < 60) return `${minutes} minute${minutes !== 1 ? 's' : ''} ago`;
-    if (hours < 24) return `${hours} hour${hours !== 1 ? 's' : ''} ago`;
-    if (days < 7) return `${days} day${days !== 1 ? 's' : ''} ago`;
-    if (days < 30) {
-      const weeks = Math.floor(days / 7);
-      return `${weeks} week${weeks !== 1 ? 's' : ''} ago`;
-    }
-    if (days < 365) {
-      const months = Math.floor(days / 30);
-      return `${months} month${months !== 1 ? 's' : ''} ago`;
-    }
-    const years = Math.floor(days / 365);
-    return `${years} year${years !== 1 ? 's' : ''} ago`;
-  }
-
-  /**
-   * Linkify URLs in text (convert http/https URLs to clickable links)
-   * @param {string} text - Plain text with URLs
-   * @returns {string} - HTML string with links
-   */
-  function linkifyText(text) {
-    if (!text) return '';
-
-    const escaped = escapeHtml(text);
-    const urlPattern = /(https?:\/\/[^\s]+)/g;
-
-    return escaped.replace(urlPattern, (url) => {
-      return `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`;
-    });
-  }
-
-  // (currentFolderId is declared earlier in initApp, before first use.)
-
-  /**
-   * Render saved projects list on welcome screen (v2 with folder tree)
-   */
-  async function renderSavedProjectsList() {
-    const savedProjectsList = document.getElementById('savedProjectsList');
-    const savedProjectsEmpty = document.getElementById('savedProjectsEmpty');
-    const folderTree = document.getElementById('folderTree');
-    const breadcrumbNav = document.getElementById('folderBreadcrumbs');
-    const breadcrumbList = document.getElementById('breadcrumbList');
-
-    if (!savedProjectsList || !savedProjectsEmpty) return;
-
-    // Get folder tree structure
-    let folders, rootProjects, allProjects;
-    try {
-      const treeResult = await getFolderTree();
-      folders = treeResult.folders;
-      rootProjects = treeResult.rootProjects;
-      allProjects = await listSavedProjects();
-    } catch (error) {
-      console.error('[Saved Projects] Error rendering list:', error);
-      return;
-    }
-
-    // Determine what to show based on current folder
-    let projectsToShow = [];
-    let foldersToShow = [];
-
-    if (currentFolderId) {
-      // Show contents of current folder
-      projectsToShow = allProjects.filter(
-        (p) => p.folderId === currentFolderId
-      );
-      foldersToShow = folders.filter((f) => f.parentId === currentFolderId);
-
-      // Also get nested folders
-      const findNestedFolders = (parentId) => {
-        const nested = [];
-        for (const folder of folders) {
-          if (folder.parentId === parentId) {
-            nested.push(folder);
-          }
-        }
-        return nested;
-      };
-      foldersToShow = findNestedFolders(currentFolderId);
-
-      // Update breadcrumbs
-      if (breadcrumbNav && breadcrumbList) {
-        const breadcrumbs = await getFolderBreadcrumbs(currentFolderId);
-        breadcrumbNav.classList.remove('hidden');
-        breadcrumbList.innerHTML = `
-          <li class="breadcrumb-item">
-            <button class="breadcrumb-link" data-folder-id="" aria-label="Go to root">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
-                <polyline points="9 22 9 12 15 12 15 22"></polyline>
-              </svg>
-              Root
-            </button>
-          </li>
-          ${breadcrumbs
-            .map(
-              (folder, index) => `
-            <li class="breadcrumb-item">
-              <button class="breadcrumb-link ${index === breadcrumbs.length - 1 ? 'current' : ''}" 
-                      data-folder-id="${folder.id}"
-                      ${index === breadcrumbs.length - 1 ? 'aria-current="page"' : ''}>
-                ${escapeHtml(folder.name)}
-              </button>
-            </li>
-          `
-            )
-            .join('')}
-        `;
-
-        // Wire up breadcrumb navigation
-        breadcrumbList.querySelectorAll('.breadcrumb-link').forEach((link) => {
-          link.addEventListener('click', () => {
-            const folderId = link.dataset.folderId || null;
-            navigateToFolder(folderId);
-          });
-        });
-      }
-    } else {
-      // Show root level
-      projectsToShow = rootProjects;
-      foldersToShow = folders.filter((f) => !f.parentId);
-      if (breadcrumbNav) {
-        breadcrumbNav.classList.add('hidden');
-      }
-    }
-
-    // Check if empty
-    if (allProjects.length === 0 && folders.length === 0) {
-      savedProjectsList.innerHTML = '';
-      if (folderTree) folderTree.innerHTML = '';
-      savedProjectsEmpty.classList.remove('hidden');
-      return;
-    }
-
-    savedProjectsEmpty.classList.add('hidden');
-
-    // Render folder tree (if at root level)
-    if (folderTree) {
-      if (currentFolderId === null) {
-        folderTree.innerHTML = renderFolders(
-          foldersToShow,
-          folders,
-          allProjects
-        );
-        wireUpFolderEvents(folderTree);
-      } else {
-        // When inside a folder, show subfolders inline
-        folderTree.innerHTML = renderFolders(
-          foldersToShow,
-          folders,
-          allProjects
-        );
-        wireUpFolderEvents(folderTree);
-      }
-    }
-
-    // Render project cards
-    const cardsHtml = projectsToShow
-      .map((project) => renderProjectCard(project))
-      .join('');
-
-    savedProjectsList.innerHTML = cardsHtml;
-    wireUpProjectCardEvents(savedProjectsList);
-  }
-
-  /**
-   * Render folders recursively
-   */
-  function renderFolders(foldersToRender, allFolders, allProjects) {
-    return foldersToRender
-      .map((folder) => {
-        const childCount = allProjects.filter(
-          (p) => p.folderId === folder.id
-        ).length;
-        const childFolders = allFolders.filter((f) => f.parentId === folder.id);
-        const totalItems = childCount + childFolders.length;
-        const colorDot = folder.color
-          ? `<span class="folder-color-dot" style="background: ${folder.color}"></span>`
-          : '';
-
-        return `
-        <div class="folder-item" data-folder-id="${folder.id}">
-          <div class="folder-header" 
-               role="treeitem" 
-               tabindex="0"
-               aria-expanded="false"
-               aria-label="${escapeHtml(folder.name)} folder, ${totalItems} items">
-            <svg class="folder-expand-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-              <polyline points="9 18 15 12 9 6"></polyline>
-            </svg>
-            ${colorDot}
-            <svg class="folder-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-            </svg>
-            <span class="folder-name">${escapeHtml(folder.name)}</span>
-            <span class="folder-count">${totalItems}</span>
-            <div class="folder-actions">
-              <button class="btn btn-sm btn-icon btn-rename-folder" data-folder-id="${folder.id}" aria-label="Rename folder" title="Rename">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                </svg>
-              </button>
-              <button class="btn btn-sm btn-icon btn-delete-folder" data-folder-id="${folder.id}" aria-label="Delete folder" title="Delete">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                  <polyline points="3 6 5 6 21 6"></polyline>
-                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                </svg>
-              </button>
-            </div>
-          </div>
-          <div class="folder-contents" id="folder-contents-${folder.id}">
-            <!-- Contents loaded on expand -->
-          </div>
-        </div>
-      `;
-      })
-      .join('');
-  }
-
-  /**
-   * Render a single project card
-   */
-  function renderProjectCard(project) {
-    const notesPreview = project.notes
-      ? `<div class="saved-project-notes-preview">${linkifyText(project.notes)}</div>`
-      : '';
-
-    const savedTime = formatRelativeTime(project.savedAt);
-    const loadedTime =
-      project.lastLoadedAt !== project.savedAt
-        ? formatRelativeTime(project.lastLoadedAt)
-        : null;
-
-    const isZip = project.kind === 'zip';
-    const iconPath = isZip
-      ? '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>'
-      : '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline>';
-
-    return `
-      <div class="saved-project-card" role="listitem" data-project-id="${project.id}" draggable="true">
-        <div class="saved-project-header">
-          <svg class="saved-project-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-            ${iconPath}
-          </svg>
-          <div class="saved-project-info">
-            <h4 class="saved-project-name">${escapeHtml(project.name)}</h4>
-            <div class="saved-project-meta">
-              <span class="saved-project-date">Saved ${savedTime}</span>
-              ${loadedTime ? `<span class="saved-project-date">Opened ${loadedTime}</span>` : ''}
-            </div>
-          </div>
-        </div>
-        ${notesPreview}
-        <div class="saved-project-actions">
-            <button class="btn btn-primary btn-load-project" data-project-id="${project.id}">
-              Load
-            </button>
-            ${
-              isZip
-                ? `<button class="btn btn-secondary btn-manage-files" data-project-id="${project.id}" title="View and manage project files">
-              Files
-            </button>`
-                : ''
-            }
-            <button class="btn btn-secondary btn-edit-project" data-project-id="${project.id}">
-              Edit
-            </button>
-            <button class="btn btn-secondary btn-download-project" data-project-id="${project.id}" title="Download this project as a ZIP">
-              Export
-            </button>
-            <button class="btn btn-danger btn-delete-project" data-project-id="${project.id}">
-              Delete
-            </button>
-          </div>
-        </div>
-    `;
-  }
-
-  /**
-   * Wire up event listeners for folder tree
-   */
-  function wireUpFolderEvents(container) {
-    // Folder expand/collapse
-    container.querySelectorAll('.folder-header').forEach((header) => {
-      header.addEventListener('click', async (e) => {
-        if (e.target.closest('.folder-actions')) return;
-
-        const folderItem = header.closest('.folder-item');
-        const folderId = folderItem.dataset.folderId;
-        const contents = folderItem.querySelector('.folder-contents');
-        const isExpanded = header.getAttribute('aria-expanded') === 'true';
-
-        if (isExpanded) {
-          // Collapse
-          header.setAttribute('aria-expanded', 'false');
-          contents.classList.remove('expanded');
-        } else {
-          // Expand and load contents
-          header.setAttribute('aria-expanded', 'true');
-          contents.classList.add('expanded');
-          await loadFolderContents(folderId, contents);
-        }
-      });
-
-      // Double-click to navigate into folder
-      header.addEventListener('dblclick', (e) => {
-        if (e.target.closest('.folder-actions')) return;
-        const folderId = header.closest('.folder-item').dataset.folderId;
-        navigateToFolder(folderId);
-      });
-
-      // Keyboard navigation
-      header.addEventListener('keydown', (e) => {
-        const folderId = header.closest('.folder-item').dataset.folderId;
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          navigateToFolder(folderId);
-        } else if (e.key === ' ') {
-          e.preventDefault();
-          header.click(); // Toggle expand
-        }
-      });
-    });
-
-    // Rename folder buttons
-    container.querySelectorAll('.btn-rename-folder').forEach((btn) => {
-      btn.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        const folderId = btn.dataset.folderId;
-        await showRenameFolderDialog(folderId);
-      });
-    });
-
-    // Delete folder buttons
-    container.querySelectorAll('.btn-delete-folder').forEach((btn) => {
-      btn.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        const folderId = btn.dataset.folderId;
-        await handleDeleteFolder(folderId);
-      });
-    });
-  }
-
-  /**
-   * Wire up event listeners for project cards
-   */
-  function wireUpProjectCardEvents(container) {
-    container.querySelectorAll('.btn-load-project').forEach((btn) => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        loadSavedProject(btn.dataset.projectId);
-      });
-    });
-
-    container.querySelectorAll('.btn-manage-files').forEach((btn) => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        showProjectFileManager(btn.dataset.projectId);
-      });
-    });
-
-    container.querySelectorAll('.btn-edit-project').forEach((btn) => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        showEditProjectModal(btn.dataset.projectId);
-      });
-    });
-
-    container.querySelectorAll('.btn-download-project').forEach((btn) => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        downloadSingleProject(btn.dataset.projectId);
-      });
-    });
-
-    container.querySelectorAll('.btn-delete-project').forEach((btn) => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        deleteSavedProject(btn.dataset.projectId);
-      });
-    });
-
-    // Make cards clickable to load
-    container.querySelectorAll('.saved-project-card').forEach((card) => {
-      card.addEventListener('click', (e) => {
-        if (e.target.closest('button')) return;
-        loadSavedProject(card.dataset.projectId);
-      });
-
-      card.setAttribute('tabindex', '0');
-      card.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          loadSavedProject(card.dataset.projectId);
-        }
-      });
-
-      // Drag and drop support
-      card.addEventListener('dragstart', (e) => {
-        e.dataTransfer.setData('text/plain', card.dataset.projectId);
-        e.dataTransfer.setData(
-          'application/x-project-id',
-          card.dataset.projectId
-        );
-        card.classList.add('dragging');
-      });
-
-      card.addEventListener('dragend', () => {
-        card.classList.remove('dragging');
-      });
-    });
-  }
-
-  /**
-   * Load folder contents dynamically
-   */
-  async function loadFolderContents(folderId, container) {
-    const allProjects = await listSavedProjects();
-    const allFolders = await listFolders();
-
-    const projectsInFolder = allProjects.filter((p) => p.folderId === folderId);
-    const subfoldersInFolder = allFolders.filter(
-      (f) => f.parentId === folderId
-    );
-
-    let html = '';
-
-    // Render subfolders
-    if (subfoldersInFolder.length > 0) {
-      html += `<div class="folder-tree">${renderFolders(subfoldersInFolder, allFolders, allProjects)}</div>`;
-    }
-
-    // Render projects
-    if (projectsInFolder.length > 0) {
-      html += `<div class="saved-projects-list">${projectsInFolder.map((p) => renderProjectCard(p)).join('')}</div>`;
-    }
-
-    if (!html) {
-      html = '<p class="folder-empty">This folder is empty</p>';
-    }
-
-    container.innerHTML = html;
-
-    // Wire up events for new content
-    const subFolderTree = container.querySelector('.folder-tree');
-    if (subFolderTree) {
-      wireUpFolderEvents(subFolderTree);
-    }
-
-    const projectsList = container.querySelector('.saved-projects-list');
-    if (projectsList) {
-      wireUpProjectCardEvents(projectsList);
-    }
-
-    // Setup folder as drop target
-    setupFolderDropTarget(container.closest('.folder-item'));
-  }
-
-  /**
-   * Navigate to a folder
-   */
-  async function navigateToFolder(folderId) {
-    currentFolderId = folderId;
-    await renderSavedProjectsList();
-  }
-
-  /**
-   * Setup folder as drop target for projects
-   */
-  function setupFolderDropTarget(folderItem) {
-    if (!folderItem) return;
-
-    const header = folderItem.querySelector('.folder-header');
-    const folderId = folderItem.dataset.folderId;
-
-    header.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      folderItem.classList.add('drag-over');
-    });
-
-    header.addEventListener('dragleave', () => {
-      folderItem.classList.remove('drag-over');
-    });
-
-    header.addEventListener('drop', async (e) => {
-      e.preventDefault();
-      folderItem.classList.remove('drag-over');
-
-      const projectId = e.dataTransfer.getData('application/x-project-id');
-      if (projectId) {
-        const result = await moveProject(projectId, folderId);
-        if (result.success) {
-          await renderSavedProjectsList();
-          stateManager.announceChange('Project moved to folder');
-        } else {
-          alert(`Failed to move project: ${result.error}`);
-        }
-      }
-    });
-  }
-
-  /**
-   * Show dialog to rename a folder
-   */
-  async function showRenameFolderDialog(folderId) {
-    const folder = await getFolder(folderId);
-    if (!folder) return;
-
-    const newName = prompt('Enter new folder name:', folder.name);
-    if (newName && newName.trim() && newName !== folder.name) {
-      const result = await renameFolder(folderId, newName.trim());
-      if (result.success) {
-        await renderSavedProjectsList();
-        stateManager.announceChange(`Folder renamed to ${newName.trim()}`);
-      } else {
-        alert(`Failed to rename folder: ${result.error}`);
-      }
-    }
-  }
-
-  /**
-   * Handle folder deletion
-   */
-  async function handleDeleteFolder(folderId) {
-    const folder = await getFolder(folderId);
-    if (!folder) return;
-
-    const projectsInFolder = await getProjectsInFolder(folderId);
-    const hasContents = projectsInFolder.length > 0;
-
-    let message = `Delete folder "${folder.name}"?`;
-    if (hasContents) {
-      message = `Delete folder "${folder.name}"?\n\nThis folder contains ${projectsInFolder.length} project(s). They will be moved to the root level.`;
-    }
-
-    if (confirm(message)) {
-      const result = await deleteFolder(folderId, false); // Don't delete contents, move to root
-      if (result.success) {
-        if (currentFolderId === folderId) {
-          currentFolderId = null; // Navigate back to root if we deleted current folder
-        }
-        await renderSavedProjectsList();
-        stateManager.announceChange(`Folder "${folder.name}" deleted`);
-      } else {
-        alert(`Failed to delete folder: ${result.error}`);
-      }
-    }
-  }
-
-  /**
-   * Show Project File Manager modal for ZIP projects
-   * @param {string} projectId - The project ID
-   */
-  async function showProjectFileManager(projectId) {
-    const project = await getProject(projectId);
-    if (!project) {
-      alert('Project not found');
-      return;
-    }
-
-    if (project.kind !== 'zip' || !project.projectFiles) {
-      alert('This feature is only available for ZIP projects');
-      return;
-    }
-
-    // currentFiles is a plain object (path → content) kept in sync with DB
-    let currentFiles =
-      typeof project.projectFiles === 'string'
-        ? JSON.parse(project.projectFiles)
-        : { ...project.projectFiles };
-
-    // Navigation path local to this modal closure — cleaned up when modal closes
-    let fmCurrentPath = [];
-
-    const modal = document.createElement('div');
-    modal.className = 'preset-modal file-manager-modal';
-    modal.setAttribute('role', 'dialog');
-    modal.setAttribute('aria-labelledby', 'fileManagerTitle');
-    modal.setAttribute('aria-modal', 'true');
-
-    modal.innerHTML = `
-      <div class="preset-modal-content">
-        <div class="preset-modal-header">
-          <h3 id="fileManagerTitle" class="preset-modal-title">Project Files: ${escapeHtml(project.name)}</h3>
-          <button class="preset-modal-close" id="fileManagerXCloseBtn" aria-label="Close file manager">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-              <line x1="18" y1="6" x2="6" y2="18"></line>
-              <line x1="6" y1="6" x2="18" y2="18"></line>
-            </svg>
-          </button>
-        </div>
-
-        <div class="preset-modal-body">
-          <div class="file-manager-toolbar">
-            <button type="button" class="btn btn-sm btn-outline" id="addFileToProjectBtn">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                <line x1="12" y1="5" x2="12" y2="19"></line>
-                <line x1="5" y1="12" x2="19" y2="12"></line>
-              </svg>
-              Add File
-            </button>
-            <button type="button" class="btn btn-sm btn-outline" id="addFolderToProjectBtn">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-                <line x1="12" y1="11" x2="12" y2="17"></line>
-                <line x1="9" y1="14" x2="15" y2="14"></line>
-              </svg>
-              New Folder
-            </button>
-            <span class="file-manager-count" id="fmFileCount"></span>
-          </div>
-
-          <div id="fmBreadcrumbs"></div>
-          <div class="file-manager-tree" id="fmTree"></div>
-        </div>
-
-        <div class="preset-modal-footer">
-          <button class="btn btn-secondary" id="fileManagerCloseBtn">Close</button>
-          <button class="btn btn-primary" id="fileManagerLoadBtn">Load Project</button>
-        </div>
-      </div>
-    `;
-
-    document.body.appendChild(modal);
-    openModal(modal);
-
-    const dismissFileManager = () => {
-      closeModal(modal);
-      document.body.removeChild(modal);
-    };
-
-    // ------------------------------------------------------------------ //
-    // renderFmView — re-renders breadcrumbs + tree without closing modal  //
-    // ------------------------------------------------------------------ //
-    function renderFmView() {
-      const fileMap = new Map(Object.entries(currentFiles));
-      const tree = buildNestedTree(fileMap);
-
-      // Validate path still exists after mutations
-      if (getNodeAtPath(tree, fmCurrentPath) === null) {
-        fmCurrentPath = [];
-      }
-      const node = getNodeAtPath(tree, fmCurrentPath) || tree;
-
-      const totalFiles = Object.keys(currentFiles).filter(
-        (p) => !p.endsWith('/.folder')
-      ).length;
-      const countEl = modal.querySelector('#fmFileCount');
-      if (countEl)
-        countEl.textContent = `${totalFiles} file${totalFiles !== 1 ? 's' : ''}`;
-
-      // --- Breadcrumbs ---
-      const breadcrumbsEl = modal.querySelector('#fmBreadcrumbs');
-      if (fmCurrentPath.length > 0) {
-        const crumbItems = fmCurrentPath.map((seg, idx) => {
-          return `<li class="file-nav-breadcrumb-item">
-            <button class="file-nav-breadcrumb-btn" data-depth="${idx + 1}" aria-label="Navigate to ${escapeHtml(seg)}">${escapeHtml(seg)}</button>
-          </li>`;
-        });
-        breadcrumbsEl.innerHTML = `
-          <nav class="file-nav-breadcrumbs file-nav-breadcrumbs--modal" aria-label="Folder navigation">
-            <ol class="file-nav-breadcrumb-list">
-              <li class="file-nav-breadcrumb-item">
-                <button class="file-nav-breadcrumb-btn file-nav-breadcrumb-home" data-depth="0" aria-label="Navigate to root">🏠 Root</button>
-              </li>
-              ${crumbItems.join('')}
-            </ol>
-          </nav>`;
-        breadcrumbsEl
-          .querySelectorAll('.file-nav-breadcrumb-btn')
-          .forEach((btn) => {
-            btn.addEventListener('click', () => {
-              fmCurrentPath = fmCurrentPath.slice(
-                0,
-                parseInt(btn.dataset.depth, 10)
-              );
-              renderFmView();
-            });
-          });
-      } else {
-        breadcrumbsEl.innerHTML = '';
-      }
-
-      // --- Folder rows ---
-      const sortedFolders = [...node.folders.entries()].sort((a, b) =>
-        a[0].localeCompare(b[0])
-      );
-
-      // Build the full path prefix for a folder at current depth
-      const makeFolderFullPath = (name) => [...fmCurrentPath, name].join('/');
-
-      const folderRowsHtml = sortedFolders
-        .map(([folderName, childNode]) => {
-          const count = countFilesRecursive(childNode);
-          const fullPath = makeFolderFullPath(folderName);
-          return `
-          <div class="file-manager-item file-nav-folder-row" role="button" tabindex="0"
-               data-folder-enter="${escapeHtml(folderName)}"
-               aria-label="Open folder ${escapeHtml(folderName)}, ${count} file${count !== 1 ? 's' : ''}">
-            <svg class="file-manager-item-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-            </svg>
-            <span class="file-manager-item-path">${escapeHtml(folderName)}</span>
-            <span class="file-manager-item-size file-nav-folder-count">${count} file${count !== 1 ? 's' : ''}</span>
-            <div class="file-manager-item-actions">
-              <button class="btn btn-sm btn-icon btn-rename-project-folder" data-folder="${escapeHtml(fullPath)}" aria-label="Rename folder ${escapeHtml(folderName)}" title="Rename">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                </svg>
-              </button>
-              <button class="btn btn-sm btn-icon btn-delete-project-folder" data-folder="${escapeHtml(fullPath)}" aria-label="Delete folder ${escapeHtml(folderName)}" title="Delete folder">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                  <polyline points="3 6 5 6 21 6"></polyline>
-                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                </svg>
-              </button>
-              <span class="file-nav-folder-chevron" aria-hidden="true">›</span>
-            </div>
-          </div>`;
-        })
-        .join('');
-
-      // --- File rows ---
-      const sortedFiles = [...node.files].sort((a, b) =>
-        a.name.localeCompare(b.name)
-      );
-
-      const fileRowsHtml = sortedFiles
-        .map((file) => {
-          const isMain = file.path === project.mainFilePath;
-          const size = new Blob([file.content]).size;
-          const iconClass = isMain ? 'main-file' : '';
-          return `
-          <div class="file-manager-item" data-path="${escapeHtml(file.path)}">
-            <svg class="file-manager-item-icon ${iconClass}" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-              ${
-                isMain
-                  ? '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line>'
-                  : '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline>'
-              }
-            </svg>
-            <span class="file-manager-item-path">${escapeHtml(file.name)}</span>
-            <span class="file-manager-item-size">${formatFileSize(size)}</span>
-            <div class="file-manager-item-actions">
-              ${
-                isMain
-                  ? '<span class="file-manager-main-badge">Main</span>'
-                  : `<button class="btn btn-sm btn-icon btn-set-main-file" data-path="${escapeHtml(file.path)}" aria-label="Set as main file" title="Set as main">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                        <polyline points="20 6 9 17 4 12"></polyline>
-                      </svg>
-                    </button>`
-              }
-              <button class="btn btn-sm btn-icon btn-preview-file" data-path="${escapeHtml(file.path)}" aria-label="Preview file" title="Preview">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                  <circle cx="12" cy="12" r="3"></circle>
-                </svg>
-              </button>
-              <button class="btn btn-sm btn-icon btn-rename-project-file" data-path="${escapeHtml(file.path)}" aria-label="Rename file" title="Rename">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                </svg>
-              </button>
-              <button class="btn btn-sm btn-icon btn-delete-project-file${isMain ? ' btn-disabled' : ''}" data-path="${escapeHtml(file.path)}" aria-label="Delete file" title="${isMain ? 'Cannot delete main file' : 'Delete'}"${isMain ? ' disabled' : ''}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                  <polyline points="3 6 5 6 21 6"></polyline>
-                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                </svg>
-              </button>
-            </div>
-          </div>`;
-        })
-        .join('');
-
-      const treeEl = modal.querySelector('#fmTree');
-      treeEl.innerHTML =
-        folderRowsHtml + fileRowsHtml ||
-        '<p class="text-muted">No files in this folder</p>';
-
-      // --- Wire folder navigation ---
-      treeEl.querySelectorAll('[data-folder-enter]').forEach((row) => {
-        const folderName = row.dataset.folderEnter;
-        const enter = () => {
-          fmCurrentPath = [...fmCurrentPath, folderName];
-          renderFmView();
-        };
-        row.addEventListener('click', (e) => {
-          // Don't navigate if a button inside the row was clicked
-          if (e.target.closest('button')) return;
-          enter();
-        });
-        row.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            enter();
-          } else if (e.key === 'Escape' && fmCurrentPath.length > 0) {
-            e.preventDefault();
-            fmCurrentPath = fmCurrentPath.slice(0, -1);
-            renderFmView();
-          }
-        });
-      });
-
-      // --- Preview file buttons ---
-      treeEl.querySelectorAll('.btn-preview-file').forEach((btn) => {
-        btn.addEventListener('click', () => {
-          const path = btn.dataset.path;
-          showFilePreviewModal(path, currentFiles[path]);
-        });
-      });
-
-      // --- Set main file buttons ---
-      treeEl.querySelectorAll('.btn-set-main-file').forEach((btn) => {
-        btn.addEventListener('click', async () => {
-          const path = btn.dataset.path;
-          project.mainFilePath = path;
-          const result = await updateProject({
-            id: projectId,
-            mainFilePath: path,
-          });
-          if (result.success) {
-            stateManager.announceChange(`Main file set to ${path}`);
-            renderFmView();
-          }
-        });
-      });
-
-      // --- Rename folder buttons ---
-      treeEl.querySelectorAll('.btn-rename-project-folder').forEach((btn) => {
-        btn.addEventListener('click', async (e) => {
-          e.stopPropagation();
-          const oldFullPath = btn.dataset.folder; // e.g. "Cases/iPad 7,8,9"
-          const oldName = oldFullPath.split('/').pop();
-          const newName = prompt(`Rename folder "${oldName}" to:`, oldName);
-          if (!newName || !newName.trim() || newName.trim() === oldName) return;
-          const safeName = newName.trim().replace(/[\\/:*?"<>|]/g, '_');
-          const parentPrefix = oldFullPath.includes('/')
-            ? oldFullPath.slice(0, oldFullPath.lastIndexOf('/') + 1)
-            : '';
-          const newFullPath = parentPrefix + safeName;
-          const oldPrefix = oldFullPath + '/';
-          const newPrefix = newFullPath + '/';
-
-          const conflict = Object.keys(currentFiles).some(
-            (p) => p.startsWith(newPrefix) && !p.startsWith(oldPrefix)
-          );
-          if (conflict) {
-            alert(`Folder "${safeName}" already exists.`);
-            return;
-          }
-
-          const updatedFiles = {};
-          for (const [path, content] of Object.entries(currentFiles)) {
-            updatedFiles[
-              path.startsWith(oldPrefix)
-                ? newPrefix + path.slice(oldPrefix.length)
-                : path
-            ] = content;
-          }
-
-          let newMainFilePath = project.mainFilePath;
-          if (newMainFilePath && newMainFilePath.startsWith(oldPrefix)) {
-            newMainFilePath =
-              newPrefix + newMainFilePath.slice(oldPrefix.length);
-          }
-
-          const result = await updateProject({
-            id: projectId,
-            projectFiles: JSON.stringify(updatedFiles),
-            mainFilePath: newMainFilePath,
-          });
-
-          if (result.success) {
-            currentFiles = updatedFiles;
-            project.mainFilePath = newMainFilePath;
-            // If we renamed a folder we're currently inside, update path
-            fmCurrentPath = fmCurrentPath.map((seg, idx) => {
-              const prefix = fmCurrentPath.slice(0, idx + 1).join('/');
-              return prefix === oldFullPath ? safeName : seg;
-            });
-            stateManager.announceChange(`Folder renamed to "${safeName}"`);
-            renderFmView();
-          } else {
-            alert(`Failed to rename folder: ${result.error}`);
-          }
-        });
-      });
-
-      // --- Rename file buttons ---
-      treeEl.querySelectorAll('.btn-rename-project-file').forEach((btn) => {
-        btn.addEventListener('click', async () => {
-          const oldPath = btn.dataset.path;
-          const parts = oldPath.split('/');
-          const oldName = parts[parts.length - 1];
-          const folder = parts.length > 1 ? parts.slice(0, -1).join('/') : '';
-
-          const newName = prompt(`Rename "${oldName}" to:`, oldName);
-          if (!newName || !newName.trim() || newName.trim() === oldName) return;
-          const safeName = newName.trim().replace(/[\\/:*?"<>|]/g, '_');
-          const newPath = folder ? `${folder}/${safeName}` : safeName;
-
-          if (newPath === oldPath) return;
-          if (currentFiles[newPath] !== undefined) {
-            alert(
-              `A file named "${safeName}" already exists${folder ? ` in ${folder}` : ''}.`
-            );
-            return;
-          }
-
-          const updatedFiles = {};
-          for (const [path, content] of Object.entries(currentFiles)) {
-            updatedFiles[path === oldPath ? newPath : path] = content;
-          }
-
-          let newMainFilePath = project.mainFilePath;
-          if (newMainFilePath === oldPath) newMainFilePath = newPath;
-
-          const result = await updateProject({
-            id: projectId,
-            projectFiles: JSON.stringify(updatedFiles),
-            mainFilePath: newMainFilePath,
-          });
-
-          if (result.success) {
-            currentFiles = updatedFiles;
-            project.mainFilePath = newMainFilePath;
-            stateManager.announceChange(`File renamed to "${safeName}"`);
-            renderFmView();
-          } else {
-            alert(`Failed to rename file: ${result.error}`);
-          }
-        });
-      });
-
-      // --- Delete file buttons ---
-      treeEl.querySelectorAll('.btn-delete-project-file').forEach((btn) => {
-        btn.addEventListener('click', async () => {
-          const filePath = btn.dataset.path;
-          if (filePath === project.mainFilePath) return;
-
-          const fileName = filePath.split('/').pop();
-          if (!confirm(`Delete "${fileName}"? This cannot be undone.`)) return;
-
-          const updatedFiles = { ...currentFiles };
-          delete updatedFiles[filePath];
-
-          const result = await updateProject({
-            id: projectId,
-            projectFiles: JSON.stringify(updatedFiles),
-          });
-
-          if (result.success) {
-            currentFiles = updatedFiles;
-            stateManager.announceChange(`Deleted file "${fileName}"`);
-            renderFmView();
-          } else {
-            alert(`Failed to delete file: ${result.error}`);
-          }
-        });
-      });
-
-      // --- Delete folder buttons ---
-      treeEl.querySelectorAll('.btn-delete-project-folder').forEach((btn) => {
-        btn.addEventListener('click', async (e) => {
-          e.stopPropagation();
-          const folderFullPath = btn.dataset.folder;
-          const folderName = folderFullPath.split('/').pop();
-          const folderPrefix = folderFullPath + '/';
-
-          if (
-            project.mainFilePath &&
-            project.mainFilePath.startsWith(folderPrefix)
-          ) {
-            alert(
-              `Cannot delete folder "${folderName}" because it contains the main file. Move or change the main file first.`
-            );
-            return;
-          }
-
-          const fileCount = Object.keys(currentFiles).filter(
-            (p) => p.startsWith(folderPrefix) && !p.endsWith('/.folder')
-          ).length;
-          const message =
-            fileCount > 0
-              ? `Delete folder "${folderName}" and its ${fileCount} file${fileCount !== 1 ? 's' : ''}? This cannot be undone.`
-              : `Delete empty folder "${folderName}"?`;
-
-          if (!confirm(message)) return;
-
-          const updatedFiles = {};
-          for (const [path, content] of Object.entries(currentFiles)) {
-            if (!path.startsWith(folderPrefix)) updatedFiles[path] = content;
-          }
-
-          const result = await updateProject({
-            id: projectId,
-            projectFiles: JSON.stringify(updatedFiles),
-          });
-
-          if (result.success) {
-            currentFiles = updatedFiles;
-            // If we deleted a folder we're inside, navigate up
-            const deletedPathStr = folderFullPath;
-            const currentPathStr = fmCurrentPath.join('/');
-            if (
-              currentPathStr === deletedPathStr ||
-              currentPathStr.startsWith(deletedPathStr + '/')
-            ) {
-              fmCurrentPath = folderFullPath.includes('/')
-                ? folderFullPath.split('/').slice(0, -1)
-                : [];
-            }
-            stateManager.announceChange(`Deleted folder "${folderName}"`);
-            renderFmView();
-          } else {
-            alert(`Failed to delete folder: ${result.error}`);
-          }
-        });
-      });
-    }
-
-    // Initial render
-    renderFmView();
-
-    // Wire up static modal buttons
-    modal
-      .querySelector('#fileManagerXCloseBtn')
-      .addEventListener('click', dismissFileManager);
-    modal
-      .querySelector('#fileManagerCloseBtn')
-      .addEventListener('click', dismissFileManager);
-    modal.querySelector('#fileManagerLoadBtn').addEventListener('click', () => {
-      dismissFileManager();
-      loadSavedProject(projectId);
-    });
-
-    // Add file button
-    const addFileBtn = modal.querySelector('#addFileToProjectBtn');
-    if (addFileBtn) {
-      addFileBtn.addEventListener('click', () => {
-        const fileInput = document.createElement('input');
-        fileInput.type = 'file';
-        fileInput.multiple = true;
-        fileInput.accept = '.scad,.json,.svg,.png,.jpg,.jpeg,.stl,.txt';
-
-        fileInput.addEventListener('change', async (e) => {
-          const files = Array.from(e.target.files || []);
-          if (files.length === 0) return;
-
-          let addedCount = 0;
-          const updatedFiles = { ...currentFiles };
-          // Place new files in the currently viewed folder
-          const folderPrefix =
-            fmCurrentPath.length > 0 ? fmCurrentPath.join('/') + '/' : '';
-
-          for (const file of files) {
-            try {
-              const ext = file.name.split('.').pop().toLowerCase();
-              const isText = ['scad', 'json', 'txt', 'svg'].includes(ext);
-              let content;
-              if (isText) {
-                content = await file.text();
-              } else {
-                content = await new Promise((resolve, reject) => {
-                  const reader = new FileReader();
-                  reader.onload = () => resolve(reader.result);
-                  reader.onerror = reject;
-                  reader.readAsDataURL(file);
-                });
-              }
-              updatedFiles[folderPrefix + file.name] = content;
-              addedCount++;
-            } catch (err) {
-              console.error(
-                `[FileManager] Error reading file ${file.name}:`,
-                err
-              );
-            }
-          }
-
-          if (addedCount > 0) {
-            const result = await updateProject({
-              id: projectId,
-              projectFiles: JSON.stringify(updatedFiles),
-            });
-            if (result.success) {
-              currentFiles = updatedFiles;
-              stateManager.announceChange(
-                `Added ${addedCount} file${addedCount !== 1 ? 's' : ''} to project`
-              );
-              renderFmView();
-            } else {
-              alert(`Failed to add files: ${result.error}`);
-            }
-          }
-        });
-
-        fileInput.click();
-      });
-    }
-
-    // New folder button — creates folder inside currently viewed folder
-    const addFolderBtn = modal.querySelector('#addFolderToProjectBtn');
-    if (addFolderBtn) {
-      addFolderBtn.addEventListener('click', async () => {
-        const folderName = prompt('Enter folder name:');
-        if (!folderName || !folderName.trim()) return;
-        const safeName = folderName.trim().replace(/[\\/:*?"<>|]/g, '_');
-        const parentPrefix =
-          fmCurrentPath.length > 0 ? fmCurrentPath.join('/') + '/' : '';
-        const newFolderPrefix = parentPrefix + safeName + '/';
-
-        const exists = Object.keys(currentFiles).some((p) =>
-          p.startsWith(newFolderPrefix)
-        );
-        if (exists) {
-          alert(`Folder "${safeName}" already exists.`);
-          return;
-        }
-
-        const updatedFiles = { ...currentFiles };
-        updatedFiles[`${newFolderPrefix}.folder`] = '';
-
-        const result = await updateProject({
-          id: projectId,
-          projectFiles: JSON.stringify(updatedFiles),
-        });
-
-        if (result.success) {
-          currentFiles = updatedFiles;
-          stateManager.announceChange(`Created folder "${safeName}"`);
-          renderFmView();
-        } else {
-          alert(`Failed to create folder: ${result.error}`);
-        }
-      });
-    }
-  }
-
-  /**
-   * Show file preview modal
-   */
-  function showFilePreviewModal(path, content) {
-    const modal = document.createElement('div');
-    modal.className = 'preset-modal';
-    modal.setAttribute('role', 'dialog');
-    modal.setAttribute('aria-labelledby', 'filePreviewTitle');
-    modal.setAttribute('aria-modal', 'true');
-
-    const ext = path.split('.').pop().toLowerCase();
-    const isCode = ['scad', 'json', 'txt', 'md'].includes(ext);
-
-    modal.innerHTML = `
-      <div class="preset-modal-content">
-        <div class="preset-modal-header">
-          <h3 id="filePreviewTitle" class="preset-modal-title">${escapeHtml(path)}</h3>
-        </div>
-
-        <div class="preset-modal-body">
-          ${
-            isCode
-              ? `<pre style="max-height: 400px; overflow: auto; background: var(--color-bg-secondary); padding: var(--space-md); border-radius: var(--border-radius-sm); font-size: var(--font-size-sm);"><code>${escapeHtml(content)}</code></pre>`
-              : `<p class="text-muted">Binary file - preview not available</p>`
-          }
-        </div>
-
-        <div class="preset-modal-footer">
-          <button class="btn btn-secondary" id="filePreviewCloseBtn">Close</button>
-        </div>
-      </div>
-    `;
-
-    document.body.appendChild(modal);
-    openModal(modal);
-
-    const dismissPreview = () => {
-      closeModal(modal);
-      document.body.removeChild(modal);
-    };
-
-    modal
-      .querySelector('#filePreviewCloseBtn')
-      .addEventListener('click', dismissPreview);
-  }
-
-  /**
-   * Load a saved project
-   * @param {string} projectId
-   */
-  async function loadSavedProject(projectId) {
-    let dismissOverlay = () => {};
-    try {
-      const project = await getProject(projectId);
-      if (!project) {
-        alert('Project not found');
-        return;
-      }
-
-      // Check if file is currently loaded
-      const currentState = stateManager.getState();
-      if (currentState.uploadedFile) {
-        const confirmed = await showConfirmDialog(
-          'Loading a saved design will replace the current file. Continue?',
-          'Load Saved Design',
-          'Load',
-          'Cancel'
-        );
-        if (!confirmed) return;
-      }
-
-      dismissOverlay = showProcessingOverlay(`Loading "${project.name}"…`, {
-        hint: 'Large projects may take a moment to open.',
-      });
-
-      // Yield to allow the browser to paint the overlay before heavy work begins
-      await new Promise((r) => setTimeout(r, 0));
-
-      // Reconstruct file data
-      const content = project.content;
-      const fileName = project.originalName;
-      const projectFiles = project.projectFiles
-        ? new Map(Object.entries(project.projectFiles))
-        : null;
-      const mainFilePath =
-        projectFiles && projectFiles.size > 0 ? project.mainFilePath : null;
-
-      // Update last loaded timestamp
-      await touchProject(projectId);
-
-      // Track which saved project is loaded (for companion file auto-save)
-      currentSavedProjectId = projectId;
-
-      // Load the file (reuse existing handleFile logic)
-      await handleFile(
-        { name: fileName },
-        content,
-        projectFiles,
-        mainFilePath,
-        'saved',
-        project.name
-      );
-
-      // Apply per-project UI preferences from the project record (authoritative
-      // source). This overrides whatever handleFile loaded from the legacy
-      // openscad-forge-ui-prefs-{fileName} localStorage key.
-      if (project.uiPreferences != null) {
-        try {
-          getUIModeController().importPreferences(project.uiPreferences, {
-            applyImmediately: true,
-          });
-          console.log(
-            `[App] Applied per-project UI preferences from project record: ${project.name}`
-          );
-        } catch (prefsErr) {
-          console.warn(
-            '[App] Could not apply project UI preferences:',
-            prefsErr
-          );
-        }
-      }
-
-      dismissOverlay();
-
-      // Update companion save button after loading
-      updateCompanionSaveButton();
-
-      // Announce success
-      stateManager.announceChange(`Loaded saved design: ${project.name}`);
-      updateStatus(`Loaded: ${project.name}`);
-
-      // Re-render list to update "last opened" time
-      await renderSavedProjectsList();
-    } catch (error) {
-      dismissOverlay();
-      console.error('Error loading saved project:', error);
-      alert(`Failed to load project: ${error.message}`);
-    }
-  }
-
-  /**
-   * Show opt-in save prompt after file upload
-   * @param {Object} fileData - Current file state
-   */
-  async function showSaveProjectPrompt(fileData, { preSave = false } = {}) {
-    const { uploadedFile, projectFiles, mainFilePath } = fileData;
-
-    if (!uploadedFile) return;
-
-    const kind = projectFiles ? 'zip' : 'scad';
-    const fileName = uploadedFile.name || 'untitled.scad';
-
-    // Create modal
-    const modal = document.createElement('div');
-    modal.className = 'preset-modal save-project-modal';
-    modal.setAttribute('role', 'dialog');
-    modal.setAttribute('aria-labelledby', 'saveProjectTitle');
-    modal.setAttribute('aria-modal', 'true');
-
-    modal.innerHTML = `
-      <div class="preset-modal-content">
-        <div class="preset-modal-header">
-          <h3 id="saveProjectTitle" class="preset-modal-title">Save this file for quick access?</h3>
-          <button class="preset-modal-close" aria-label="Close dialog">&times;</button>
-        </div>
-        <div class="modal-body">
-          <p style="margin-bottom: var(--space-md); color: var(--color-text-secondary);">
-            Saved projects are stored in this browser. Clearing cache/site data will remove them.
-          </p>
-          <div class="save-project-checkbox-wrapper">
-            <input type="checkbox" id="saveProjectCheckbox" />
-            <label for="saveProjectCheckbox">Save this file to Saved Projects</label>
-          </div>
-          <div class="edit-project-field">
-            <label for="saveProjectName">Project Name</label>
-            <input type="text" id="saveProjectName" value="${escapeHtml(fileName)}" />
-          </div>
-          <div class="save-project-notes-field">
-            <label for="saveProjectNotes">Notes (optional - you can paste links)</label>
-            <textarea id="saveProjectNotes" placeholder="Add notes about this project..."></textarea>
-            <div class="save-project-notes-counter">
-              <span id="saveProjectNotesCount">0</span> / 5000 characters
-            </div>
-          </div>
-          <div id="saveProjectDuplicateWarning" style="display:none; margin-top: var(--space-md); padding: var(--space-sm) var(--space-md); border-radius: var(--radius-sm); background: color-mix(in srgb, var(--color-warning, #f59e0b) 15%, transparent); border: 1px solid var(--color-warning, #f59e0b);">
-            <p style="margin: 0 0 var(--space-sm); font-weight: 600; color: var(--color-text-primary);">
-              ⚠ A project named &ldquo;<span id="saveProjectDuplicateName"></span>&rdquo; already exists.
-            </p>
-            <p style="margin: 0; color: var(--color-text-secondary); font-size: var(--text-sm);">
-              Do you want to overwrite it, or save this as a new copy?
-            </p>
-          </div>
-        </div>
-        <div class="preset-modal-footer" id="saveProjectFooter">
-          <button class="btn btn-secondary" id="saveProjectNotNow">Not now</button>
-          <button class="btn btn-primary" id="saveProjectSave" disabled>Save</button>
-        </div>
-      </div>
-    `;
-
-    document.body.appendChild(modal);
-
-    // Get elements
-    const checkbox = modal.querySelector('#saveProjectCheckbox');
-    const nameInput = modal.querySelector('#saveProjectName');
-    const notesTextarea = modal.querySelector('#saveProjectNotes');
-    const notesCount = modal.querySelector('#saveProjectNotesCount');
-    const saveBtn = modal.querySelector('#saveProjectSave');
-    const notNowBtn = modal.querySelector('#saveProjectNotNow');
-    const closeBtn = modal.querySelector('.preset-modal-close');
-    const footer = modal.querySelector('#saveProjectFooter');
-    const duplicateWarning = modal.querySelector(
-      '#saveProjectDuplicateWarning'
-    );
-    const duplicateNameSpan = modal.querySelector('#saveProjectDuplicateName');
-
-    // When called from an explicit Save/Save As action, pre-check the box
-    if (preSave) {
-      checkbox.checked = true;
-      saveBtn.disabled = false;
-    }
-
-    // Update save button state based on checkbox
-    checkbox.addEventListener('change', () => {
-      saveBtn.disabled = !checkbox.checked;
-    });
-
-    // Setup character counter for notes with validation
-    const counter = modal.querySelector('.save-project-notes-counter');
-    setupNotesCounter(notesTextarea, notesCount, counter, {
-      maxLength: 5000,
-      warningThreshold: 4500,
-      onValidChange: (isValid) => {
-        if (isValid) {
-          saveBtn.disabled = !checkbox.checked;
-        } else {
-          saveBtn.disabled = true;
-        }
-      },
-    });
-
-    async function doSave(overwriteProject) {
-      const projectName = nameInput.value.trim() || fileName;
-      const notes = notesTextarea.value.trim();
-      const projectFilesObj = projectFiles
-        ? Object.fromEntries(projectFiles)
-        : null;
-
-      let result;
-      if (overwriteProject) {
-        result = await updateProject({
-          id: overwriteProject.id,
-          notes,
-          content: uploadedFile.content,
-          projectFiles:
-            projectFilesObj !== null
-              ? JSON.stringify(projectFilesObj)
-              : undefined,
-        });
-        if (result.success) {
-          currentSavedProjectId = overwriteProject.id;
-        }
-      } else {
-        result = await saveProject({
-          name: projectName,
-          originalName: fileName,
-          kind,
-          mainFilePath: mainFilePath || fileName,
-          content: uploadedFile.content,
-          projectFiles: projectFilesObj,
-          notes,
-        });
-        if (result.success) {
-          currentSavedProjectId = result.id;
-        }
-      }
-
-      if (result.success) {
-        updateCompanionSaveButton();
-        stateManager.announceChange(`Project saved: ${projectName}`);
-        updateStatus(`Saved: ${projectName}`);
-        await renderSavedProjectsList();
-      } else {
-        alert(`Failed to save project: ${result.error}`);
-      }
-
-      closeModal(modal);
-      modal.remove();
-    }
-
-    // Handle save — shows inline duplicate confirmation when needed
-    saveBtn.addEventListener('click', async () => {
-      if (!checkbox.checked) return;
-
-      const projectName = nameInput.value.trim() || fileName;
-      const existingProjects = await listSavedProjects();
-      const duplicate = existingProjects.find((p) => p.name === projectName);
-
-      if (duplicate) {
-        // Show inline confirmation — no native dialog
-        duplicateNameSpan.textContent = projectName;
-        duplicateWarning.style.display = 'block';
-
-        // Replace footer buttons with overwrite / new copy choices
-        footer.innerHTML = `
-          <button class="btn btn-secondary" id="saveProjectNewCopy">Save as New Copy</button>
-          <button class="btn btn-danger" id="saveProjectOverwrite">Overwrite Existing</button>
-        `;
-        footer
-          .querySelector('#saveProjectOverwrite')
-          .addEventListener('click', () => doSave(duplicate));
-        footer
-          .querySelector('#saveProjectNewCopy')
-          .addEventListener('click', () => doSave(null));
-      } else {
-        await doSave(null);
-      }
-    });
-
-    // Handle close
-    const closeHandler = () => {
-      closeModal(modal);
-      modal.remove();
-    };
-
-    notNowBtn.addEventListener('click', closeHandler);
-    closeBtn.addEventListener('click', closeHandler);
-
-    // Open modal with focus management
-    openModal(modal);
-
-    // Focus the project name input for easy editing
-    nameInput.focus();
-    nameInput.select();
-  }
-
-  /**
-   * Show edit project modal
-   * @param {string} projectId
-   */
-  async function showEditProjectModal(projectId) {
-    try {
-      const project = await getProject(projectId);
-      if (!project) {
-        alert('Project not found');
-        return;
-      }
-
-      // Create modal
-      const modal = document.createElement('div');
-      modal.className = 'preset-modal edit-project-modal';
-      modal.setAttribute('role', 'dialog');
-      modal.setAttribute('aria-labelledby', 'editProjectTitle');
-      modal.setAttribute('aria-modal', 'true');
-
-      modal.innerHTML = `
-        <div class="preset-modal-content">
-          <div class="preset-modal-header">
-            <h3 id="editProjectTitle" class="preset-modal-title">Edit Project</h3>
-            <button class="preset-modal-close" aria-label="Close dialog">&times;</button>
-          </div>
-          <div class="modal-body">
-            <div class="edit-project-field">
-              <label for="editProjectName">Project Name</label>
-              <input type="text" id="editProjectName" value="${escapeHtml(project.name)}" />
-            </div>
-            <div class="edit-project-field">
-              <label for="editProjectNotes">Notes</label>
-              <textarea id="editProjectNotes">${escapeHtml(project.notes || '')}</textarea>
-              <div class="save-project-notes-counter">
-                <span id="editProjectNotesCount">${(project.notes || '').length}</span> / 5000 characters
-              </div>
-            </div>
-          </div>
-          <div class="preset-modal-footer">
-            <button class="btn btn-secondary" id="editProjectCancel">Cancel</button>
-            <button class="btn btn-primary" id="editProjectSave">Save Changes</button>
-          </div>
-        </div>
-      `;
-
-      document.body.appendChild(modal);
-
-      // Get elements
-      const nameInput = modal.querySelector('#editProjectName');
-      const notesTextarea = modal.querySelector('#editProjectNotes');
-      const notesCount = modal.querySelector('#editProjectNotesCount');
-      const saveBtn = modal.querySelector('#editProjectSave');
-      const cancelBtn = modal.querySelector('#editProjectCancel');
-      const closeBtn = modal.querySelector('.preset-modal-close');
-
-      // Setup character counter for notes with validation
-      const counter = modal.querySelector('.save-project-notes-counter');
-      setupNotesCounter(notesTextarea, notesCount, counter, {
-        maxLength: 5000,
-        warningThreshold: 4500,
-        submitButton: saveBtn, // Disable save button when over limit
-      });
-
-      // Handle save
-      saveBtn.addEventListener('click', async () => {
-        const name = nameInput.value.trim();
-        const notes = notesTextarea.value.trim();
-
-        if (!name) {
-          alert('Project name cannot be empty');
-          return;
-        }
-
-        const result = await updateProject({
-          id: projectId,
-          name,
-          notes,
-        });
-
-        if (result.success) {
-          stateManager.announceChange(`Project updated: ${name}`);
-          updateStatus(`Updated: ${name}`);
-          await renderSavedProjectsList();
-        } else {
-          alert(`Failed to update project: ${result.error}`);
-        }
-
-        closeModal(modal);
-        modal.remove();
-      });
-
-      // Handle close
-      const closeHandler = () => {
-        closeModal(modal);
-        modal.remove();
-      };
-
-      cancelBtn.addEventListener('click', closeHandler);
-      closeBtn.addEventListener('click', closeHandler);
-
-      // Open modal with focus management
-      openModal(modal);
-      nameInput.focus();
-      nameInput.select();
-    } catch (error) {
-      console.error('Error showing edit modal:', error);
-      alert(`Failed to load project: ${error.message}`);
-    }
-  }
-
-  /**
-   * Delete a saved project (with confirmation)
-   * @param {string} projectId
-   */
-  async function deleteSavedProject(projectId) {
-    try {
-      const project = await getProject(projectId);
-      if (!project) {
-        alert('Project not found');
-        return;
-      }
-
-      const confirmed = await showConfirmDialog(
-        `Delete "${project.name}"?\n\nThis cannot be undone.`,
-        'Delete Saved Design',
-        'Delete',
-        'Cancel'
-      );
-
-      if (!confirmed) return;
-
-      const result = await deleteProject(projectId);
-
-      if (result.success) {
-        stateManager.announceChange(`Deleted project: ${project.name}`);
-        updateStatus(`Deleted: ${project.name}`);
-        await renderSavedProjectsList();
-      } else {
-        alert(`Failed to delete project: ${result.error}`);
-      }
-    } catch (error) {
-      console.error('Error deleting project:', error);
-      alert(`Failed to delete project: ${error.message}`);
-    }
-  }
-
-  // Shared example loader (reusable by welcome buttons and Features Guide)
-  // Direct-launch URL support for external website integration
-  async function loadExampleByKey(
-    exampleKey,
-    { closeFeaturesGuideModal = false } = {}
-  ) {
-    const example = EXAMPLE_DEFINITIONS[exampleKey];
-    if (!example) {
-      console.error('Unknown example type:', exampleKey);
-      return;
-    }
-
-    // If a tutorial is open, close it before switching context.
-    // This prevents stale highlights/listeners from referencing the previous UI state.
-    try {
-      closeTutorial();
-    } catch {
-      // ignore (tutorial module may not be initialized)
-    }
-
-    // Confirm before replacing if file already uploaded
-    const state = stateManager.getState();
-    if (state.uploadedFile) {
-      if (!confirm('Load example? This will replace the current file.')) {
-        return;
-      }
-    }
-
-    try {
-      updateStatus('Loading example...');
-      const response = await fetch(example.path);
-      if (!response.ok) throw new Error('Failed to fetch example');
-
-      // Close modal if requested (before any async processing)
-      if (closeFeaturesGuideModal) {
-        const featuresGuideModal =
-          document.getElementById('featuresGuideModal');
-        if (featuresGuideModal) {
-          closeModal(featuresGuideModal);
-        }
-      }
-
-      // ZIP examples must be fetched as binary and routed through ZIP extraction
-      if (example.path.toLowerCase().endsWith('.zip')) {
-        const blob = await response.blob();
-        const zipFile = new File([blob], example.name, {
-          type: 'application/zip',
-        });
-        handleFile(zipFile, null, null, null, 'example');
-        return;
-      }
-
-      const content = await response.text();
-      console.log('Example loaded:', example.name, content.length, 'bytes');
-
-      // Check for multi-file design package with additionalFiles
-      let projectFiles = null;
-      let mainFilePath = null;
-
-      if (example.additionalFiles && example.additionalFiles.length > 0) {
-        console.log(
-          `[Example] Multi-file package: ${example.additionalFiles.length} additional file(s)`
-        );
-
-        projectFiles = new Map();
-
-        const mainFileName = example.path.split('/').pop();
-        mainFilePath = mainFileName;
-        projectFiles.set(mainFileName, content);
-
-        const additionalPromises = example.additionalFiles.map(
-          async (filePath) => {
-            try {
-              const fileResponse = await fetch(filePath);
-              if (!fileResponse.ok) {
-                console.warn(
-                  `[Example] Failed to load additional file: ${filePath}`
-                );
-                return null;
-              }
-              const fileContent = await fileResponse.text();
-              const fileName = filePath.split('/').pop();
-              return { fileName, content: fileContent };
-            } catch (error) {
-              console.warn(
-                `[Example] Error loading additional file ${filePath}:`,
-                error
-              );
-              return null;
-            }
-          }
-        );
-
-        const additionalResults = await Promise.all(additionalPromises);
-        for (const result of additionalResults) {
-          if (result) {
-            projectFiles.set(result.fileName, result.content);
-            console.log(`[Example] Loaded additional file: ${result.fileName}`);
-          }
-        }
-
-        console.log(`[Example] Total files in package: ${projectFiles.size}`);
-      }
-
-      handleFile(
-        { name: example.name },
-        content,
-        projectFiles,
-        mainFilePath,
-        'example'
-      );
-    } catch (error) {
-      console.error('Failed to load example:', error);
-      updateStatus('Error loading example');
-      alert(
-        'Failed to load example file. The file may not be available in the public directory.'
-      );
-    }
-  }
+  // loadExampleByKey moved to file-handler.js
 
   // Load examples - unified handler
   // IMPORTANT: Keep this as the single click handler for all example buttons.
@@ -11855,7 +5360,7 @@ if (rounded) {
       const tutorialId = button.dataset.tutorial;
 
       // Load the example first
-      await loadExampleByKey(exampleType);
+      await fileHandler.loadExampleByKey(exampleType);
 
       if (exampleType) {
         // Screen reader confirmation that an example was loaded
@@ -11892,7 +5397,7 @@ if (rounded) {
       // Load the example after a short delay to ensure UI is ready
       setTimeout(async () => {
         try {
-          await loadExampleByKey(exampleParam);
+          await fileHandler.loadExampleByKey(exampleParam);
 
           // Clean up URL to avoid reloading on refresh
           initUrlParams.delete('example');
@@ -12037,7 +5542,7 @@ if (rounded) {
         if (nameEl) nameEl.textContent = projectName || 'Untitled Project';
         if (author && authorEl && authorLine) {
           authorEl.textContent = author;
-          authorLine.style.display = '';
+          authorLine.classList.remove('hidden');
         }
 
         const cleanup = (result) => {
@@ -12180,7 +5685,7 @@ if (rounded) {
         manifestSaveCopyBtn.textContent = 'Saved!';
         updateStatus('Local copy saved');
         announceImmediate('Local copy saved to browser storage');
-        await renderSavedProjectsList();
+        await savedProjectsUI.renderSavedProjectsList();
 
         if (manifestBanner) manifestBanner.classList.add('hidden');
       } catch (err) {
@@ -12204,7 +5709,7 @@ if (rounded) {
         const result = await loadManifest(origin.url, {
           onProgress: ({ message }) => updateStatus(message),
         });
-        await handleFile(
+        await fileHandler.handleFile(
           null,
           result.mainContent,
           result.projectFiles,
@@ -12320,7 +5825,7 @@ if (rounded) {
         announceImmediate(`Loading project: ${projectName}`);
 
         // Step 4 — PROCESS: parse and load the project into the editor
-        await handleFile(
+        await fileHandler.handleFile(
           null,
           mainContent,
           projectFiles,
@@ -12555,11 +6060,11 @@ if (rounded) {
           const file = new File([blob], urlFileName, {
             type: 'application/zip',
           });
-          await handleFile(file, null, null, null, 'user');
+          await fileHandler.handleFile(file, null, null, null, 'user');
         } else {
           // Handle single .scad file
           const scadContent = await response.text();
-          await handleFile(
+          await fileHandler.handleFile(
             { name: urlFileName },
             scadContent,
             null,
@@ -12951,48 +6456,45 @@ if (rounded) {
      * Initialize the Expert Mode code editor
      */
     function initExpertEditor() {
-      // Determine which editor to use based on preference
       const editorType = modeManager.resolveEditorType();
       console.log(`[Expert Mode] Using ${editorType} editor`);
 
-      // For now, always use textarea editor (Monaco integration in future iteration)
-      // This ensures CSP compatibility and accessibility-first approach
-      currentEditor = new TextareaEditor({
+      const editorOptions = {
         container: expertModeBody,
         onChange: (code) => {
-          // Update state manager with new code
           editorStateManager.setSource(code, { markDirty: true });
-
-          // Update dirty indicator
           updateDirtyIndicator();
         },
         onSave: () => {
-          // Trigger save action
           const saveBtn = document.getElementById('saveProjectBtn');
           if (saveBtn) saveBtn.click();
         },
         onRun: () => {
-          // Trigger preview render
           triggerPreviewFromEditor();
         },
         announce: (msg) => announceToScreenReader(msg),
-      });
+      };
+
+      if (editorType === 'codemirror') {
+        currentEditor = new CodeMirrorEditor(editorOptions);
+      } else {
+        currentEditor = new TextareaEditor(editorOptions);
+      }
 
       currentEditor.initialize();
 
-      // Sync initial code from state
       const initialCode =
         editorStateManager.getSource() || window._currentSCADCode || '';
       if (initialCode) {
         currentEditor.setValue(initialCode);
       }
 
-      // Register editor with state manager
-      if (editorStateManager.setTextareaElement && currentEditor.textarea) {
+      editorStateManager.setEditorInstance(currentEditor);
+
+      if (currentEditor.textarea) {
         editorStateManager.setTextareaElement(currentEditor.textarea);
       }
 
-      // Register editor instance with ModeManager for Edit menu wiring
       modeManager.setEditorInstance(currentEditor);
     }
 
@@ -13053,6 +6555,85 @@ if (rounded) {
         modeManager.switchMode('standard');
       });
     }
+
+    // Mobile: collapse toggle for bottom-sheet expert panel
+    const expertCollapseBtn = document.getElementById('expertModeCollapseBtn');
+    if (expertCollapseBtn) {
+      expertCollapseBtn.addEventListener('click', () => {
+        const isCollapsed = expertModePanel.classList.toggle('expert-mode-collapsed');
+        expertCollapseBtn.setAttribute('aria-expanded', String(!isCollapsed));
+        expertCollapseBtn.setAttribute(
+          'aria-label',
+          isCollapsed ? 'Expand code editor' : 'Collapse code editor'
+        );
+        // Clear any inline height set by drag resize
+        const paramPanel = expertModePanel.closest('.param-panel');
+        if (paramPanel) paramPanel.style.maxHeight = '';
+      });
+    }
+
+    // Mobile: touch-drag resize on the bottom-sheet handle
+    const dragHandle = expertModePanel.querySelector('.expert-mode-drag-handle');
+    if (dragHandle) {
+      let dragStartY = 0;
+      let dragStartHeight = 0;
+
+      dragHandle.addEventListener('touchstart', (e) => {
+        const paramPanel = expertModePanel.closest('.param-panel');
+        if (!paramPanel) return;
+        dragStartY = e.touches[0].clientY;
+        dragStartHeight = paramPanel.offsetHeight;
+        paramPanel.style.transition = 'none';
+        e.preventDefault();
+      }, { passive: false });
+
+      dragHandle.addEventListener('touchmove', (e) => {
+        const paramPanel = expertModePanel.closest('.param-panel');
+        if (!paramPanel) return;
+        const deltaY = dragStartY - e.touches[0].clientY;
+        const maxH = window.innerHeight * 0.7;
+        const minH = 48;
+        const newHeight = Math.min(maxH, Math.max(minH, dragStartHeight + deltaY));
+        paramPanel.style.maxHeight = `${newHeight}px`;
+        // Auto-uncollapse when dragging past minimum
+        if (newHeight > 80 && expertModePanel.classList.contains('expert-mode-collapsed')) {
+          expertModePanel.classList.remove('expert-mode-collapsed');
+          if (expertCollapseBtn) {
+            expertCollapseBtn.setAttribute('aria-expanded', 'true');
+            expertCollapseBtn.setAttribute('aria-label', 'Collapse code editor');
+          }
+        }
+        e.preventDefault();
+      }, { passive: false });
+
+      dragHandle.addEventListener('touchend', () => {
+        const paramPanel = expertModePanel.closest('.param-panel');
+        if (!paramPanel) return;
+        paramPanel.style.transition = '';
+        // Snap to collapsed if dragged very small
+        if (paramPanel.offsetHeight < 80) {
+          expertModePanel.classList.add('expert-mode-collapsed');
+          paramPanel.style.maxHeight = '';
+          if (expertCollapseBtn) {
+            expertCollapseBtn.setAttribute('aria-expanded', 'false');
+            expertCollapseBtn.setAttribute('aria-label', 'Expand code editor');
+          }
+        }
+      });
+    }
+
+    // Reset mobile bottom-sheet state when switching back to standard mode
+    modeManager.subscribe((newMode) => {
+      if (newMode === 'standard') {
+        expertModePanel.classList.remove('expert-mode-collapsed');
+        const paramPanel = expertModePanel.closest('.param-panel');
+        if (paramPanel) paramPanel.style.maxHeight = '';
+        if (expertCollapseBtn) {
+          expertCollapseBtn.setAttribute('aria-expanded', 'true');
+          expertCollapseBtn.setAttribute('aria-label', 'Collapse code editor');
+        }
+      }
+    });
 
     // Keyboard shortcut: Ctrl+E to toggle Expert Mode (registered via keyboard config below)
 
@@ -13491,7 +7072,7 @@ if (rounded) {
             setCanonicalProjectFiles(projectFiles);
 
             // Auto-save to IndexedDB so screenshots persist across sessions
-            await autoSaveCompanionFiles();
+            await companionFilesCtrl.autoSaveCompanionFiles();
           }
 
           // Select the newly uploaded image in the dropdown
@@ -13506,7 +7087,7 @@ if (rounded) {
           }
 
           // Update overlay dropdown with the new screenshot
-          updateOverlaySourceDropdown();
+          overlayGridCtrl.updateOverlaySourceDropdown();
         } catch (err) {
           console.error('[App] Measurement image upload failed:', err);
         }
@@ -13643,51 +7224,7 @@ if (rounded) {
     // Initialize camera panel controller (right-side drawer)
     cameraPanelController = initCameraPanelController({
       previewManager: null, // Will be set after preview manager is initialized
-      onPanControl: ({ direction, shiftKey }) => {
-        const root = document.documentElement;
-        const isMono = root.getAttribute('data-ui-variant') === 'mono';
-        const canAdjust = _hfmEnabled && _hfmAltView && _hfmPanAdjustEnabled;
-        if (!isMono) return false;
-        if (!canAdjust) return false;
-
-        if (shiftKey && direction === 'up') {
-          const next = _applyHfmPersistFade(
-            _hfmPersistFade + _HFM_PERSIST_FADE_RANGE.step
-          );
-          return `Alt view afterglow: ${_formatHfmPersistFadeValue(next)}`;
-        }
-        if (shiftKey && direction === 'down') {
-          const next = _applyHfmPersistFade(
-            _hfmPersistFade - _HFM_PERSIST_FADE_RANGE.step
-          );
-          return `Alt view afterglow: ${_formatHfmPersistFadeValue(next)}`;
-        }
-        if (direction === 'up') {
-          const next = _applyHfmContrastScale(
-            _hfmContrastScale + _HFM_CONTRAST_RANGE.step
-          );
-          return `Alt view contrast: ${_formatHfmContrastValue(next)}`;
-        }
-        if (direction === 'down') {
-          const next = _applyHfmContrastScale(
-            _hfmContrastScale - _HFM_CONTRAST_RANGE.step
-          );
-          return `Alt view contrast: ${_formatHfmContrastValue(next)}`;
-        }
-        if (direction === 'left') {
-          const next = _applyHfmFontScale(
-            _hfmFontScale - _HFM_FONT_SCALE_RANGE.step
-          );
-          return `Alt view font size: ${_formatHfmFontScaleValue(next)}`;
-        }
-        if (direction === 'right') {
-          const next = _applyHfmFontScale(
-            _hfmFontScale + _HFM_FONT_SCALE_RANGE.step
-          );
-          return `Alt view font size: ${_formatHfmFontScaleValue(next)}`;
-        }
-        return true;
-      },
+      onPanControl: (params) => hfmCtrl.onPanControl(params),
     });
 
     // Dev bypass: check localStorage or URL param before sequence detector
@@ -13706,16 +7243,16 @@ if (rounded) {
     }
 
     if (devUnlockFlag || urlUnlock) {
-      _handleUnlock();
+      hfmCtrl.handleUnlock();
     }
 
     // Initialize input sequence detector (still works for non-dev users)
-    initSequenceDetector(_handleUnlock);
+    initSequenceDetector(() => hfmCtrl.handleUnlock());
 
     // Expose DevTools helper for manual unlock
     window.__unlockAltView = () => {
       localStorage.setItem(HFM_UNLOCK_KEY, 'true');
-      _handleUnlock();
+      hfmCtrl.handleUnlock();
       return 'Alt View unlocked. Refresh to persist.';
     };
 
@@ -14133,7 +7670,10 @@ if (rounded) {
 
       // Fallback to state.stl
       if (!state.stl) {
-        alert('No file generated yet');
+        showErrorToast({
+          title: 'Nothing to Download',
+          message: 'No file has been generated yet. Click Generate first.',
+        });
         return;
       }
 
@@ -14150,12 +7690,19 @@ if (rounded) {
 
     // Generate action - perform full quality render for download
     if (!state.uploadedFile) {
-      alert('No file uploaded');
+      showErrorToast({
+        title: 'No File Uploaded',
+        message: 'Upload a .scad or .zip file first.',
+      });
       return;
     }
 
     if (!renderController) {
-      alert('OpenSCAD engine not initialized');
+      showErrorToast({
+        title: 'Engine Not Ready',
+        message:
+          'The OpenSCAD engine has not initialized. Please wait or refresh the page.',
+      });
       return;
     }
 
@@ -14333,9 +7880,7 @@ if (rounded) {
           }
           previewManager.hide2DPreview();
           await previewManager.loadSTL(outputData, { preserveCamera: false });
-          if (_hfmEnabled && _hfmAltView?.clearPersistence) {
-            _hfmAltView.clearPersistence();
-          }
+          hfmCtrl.clearPersistence();
         } catch (loadErr) {
           console.warn('[Generate] Failed to load STL into preview:', loadErr);
         }
@@ -14476,14 +8021,11 @@ if (rounded) {
           );
 
           if (alreadySet2D) {
-            const userMessage =
-              `${currentFormat.toUpperCase()} Export Issue\n\n` +
-              `The "${actualGenerateValue}" setting is selected, but the rendering engine ` +
-              `could not produce 2D geometry. This can happen due to browser-based rendering ` +
-              `limitations with complex models.\n\n` +
-              `Try: Re-generate, or export the 3D model as STL and use desktop OpenSCAD ` +
-              `for SVG/DXF export.`;
-            alert(userMessage);
+            showErrorModal({
+              title: `${currentFormat.toUpperCase()} Export Issue`,
+              message: `The "${actualGenerateValue}" setting is selected, but the rendering engine could not produce 2D geometry. This can happen due to browser-based rendering limitations with complex models.`,
+              suggestion: 'Re-generate, or export the 3D model as STL and use desktop OpenSCAD for SVG/DXF export.',
+            });
           } else {
             showDependencyGuidanceModal({
               label: 'generate',
@@ -14503,10 +8045,12 @@ if (rounded) {
         `Error: ${friendlyError.title}. ${friendlyError.explanation}`
       );
 
-      // Show user-friendly error in alert (using translated message)
-      const userMessage = `${friendlyError.title}\n\n${friendlyError.explanation}\n\nTry: ${friendlyError.suggestion}`;
-
-      alert(userMessage);
+      showErrorModal({
+        title: friendlyError.title,
+        message: friendlyError.explanation,
+        suggestion: friendlyError.suggestion,
+        technical: error.message,
+      });
     } finally {
       primaryActionBtn.disabled = false;
       // Hide cancel button
@@ -14556,7 +8100,7 @@ if (rounded) {
       const state = stateManager.getState();
 
       if (!state.uploadedFile) {
-        alert('No file uploaded yet');
+        showErrorToast({ title: 'No File Loaded', message: 'Upload a .scad or .zip file first.' });
         return;
       }
 
@@ -14678,7 +8222,7 @@ if (rounded) {
     publishProjectBtn.addEventListener('click', () => {
       const state = stateManager.getState();
       if (!state.uploadedFile) {
-        alert('No file uploaded yet. Upload a .scad or .zip file first.');
+        showErrorToast({ title: 'No File Loaded', message: 'Upload a .scad or .zip file first.' });
         return;
       }
 
@@ -14931,12 +8475,12 @@ if (rounded) {
     const state = stateManager.getState();
 
     if (!state.uploadedFile) {
-      alert('No file uploaded yet');
+      showErrorToast({ title: 'No File Loaded', message: 'Upload a .scad or .zip file first.' });
       return;
     }
 
     if (renderQueue.isAtMaxCapacity()) {
-      alert('Queue is full (maximum 20 jobs)');
+      showErrorToast({ title: 'Queue Full', message: 'The render queue is full (maximum 20 jobs).' });
       return;
     }
 
@@ -15008,7 +8552,7 @@ if (rounded) {
   // Clear All button
   clearQueueBtn?.addEventListener('click', () => {
     if (renderQueue.isQueueProcessing()) {
-      alert('Cannot clear queue while processing');
+      showErrorToast({ title: 'Queue Busy', message: 'Cannot clear the queue while processing is in progress.' });
       return;
     }
 
@@ -15056,7 +8600,7 @@ if (rounded) {
       updateStatus('Imported queue from JSON');
     } catch (error) {
       console.error('Queue import error:', error);
-      alert('Failed to import queue: ' + error.message);
+      showErrorToast({ title: 'Queue Import Failed', message: error.message });
     }
 
     // Clear file input
@@ -15122,7 +8666,7 @@ if (rounded) {
           renderQueue.removeJob(jobId);
           renderQueueList();
         } catch (error) {
-          alert(error.message);
+          showErrorToast({ title: 'Remove Failed', message: error.message });
         }
         break;
     }
@@ -15186,7 +8730,7 @@ if (rounded) {
     const state = stateManager.getState();
 
     if (!state.uploadedFile) {
-      alert('No file uploaded yet');
+      showErrorToast({ title: 'No File Loaded', message: 'Upload a .scad or .zip file first.' });
       return;
     }
 
@@ -15549,7 +9093,7 @@ if (rounded) {
           autoPreviewController.onParameterChange(values);
         }
         updatePrimaryActionButton();
-        syncOverlayWithScreenshotParam(values);
+        companionFilesCtrl.syncOverlayWithScreenshotParam(values);
       },
       mergedParams
     );
@@ -15632,7 +9176,7 @@ if (rounded) {
     }
 
     updatePrimaryActionButton();
-    updateProjectFilesUI();
+    companionFilesCtrl.updateProjectFilesUI();
 
     // When the preset has a mapped SVG, force-select the aliased overlay
     // in the dropdown. Without this, the dropdown retains the previous
@@ -15643,18 +9187,18 @@ if (rounded) {
       if (overlaySourceSelect) {
         overlaySourceSelect.value = svgTarget;
       }
-      loadOverlayFromProjectFile(svgTarget)
+      overlayGridCtrl.loadOverlayFromProjectFile(svgTarget)
         .then(() => {
           // SVG 96 DPI size applied; SCAD case-opening / screen dims override.
-          autoApplyScreenDimensionsFromParams(mergedParams);
-          updateOverlayUIFromConfig();
+          overlayGridCtrl.autoApplyScreenDimensionsFromParams(mergedParams);
+          overlayGridCtrl.updateOverlayUIFromConfig();
         })
         .catch((err) => {
           console.warn('[Preset] Failed to load preset SVG overlay:', err);
         });
     }
 
-    syncOverlayWithScreenshotParam(mergedParams);
+    companionFilesCtrl.syncOverlayWithScreenshotParam(mergedParams);
     setCurrentPresetSelection(preset);
 
     isLoadingPreset = false;
@@ -15794,7 +9338,7 @@ if (rounded) {
     const state = stateManager.getState();
 
     if (!state.uploadedFile) {
-      alert('No model loaded');
+      showErrorToast({ title: 'No Model Loaded', message: 'Upload a model before saving a preset.' });
       return;
     }
 
@@ -15858,7 +9402,7 @@ if (rounded) {
         ?.value.trim();
 
       if (!name) {
-        alert('Please enter a preset name');
+        showErrorToast({ title: 'Name Required', message: 'Please enter a preset name.' });
         return;
       }
 
@@ -15942,7 +9486,7 @@ if (rounded) {
 
         closeSavePresetModal();
       } catch (error) {
-        alert(`Failed to save preset: ${error.message}`);
+        showErrorToast({ title: 'Preset Save Failed', message: error.message });
       }
     });
 
@@ -15974,7 +9518,7 @@ if (rounded) {
       if (result.errors?.length > 0) {
         message += `\n\nErrors:\n${result.errors.join('\n')}`;
       }
-      alert(message);
+      showErrorToast({ title: 'Import Complete', message });
       updatePresetDropdown();
       if (result.presets?.length > 0) {
         const last = result.presets[result.presets.length - 1];
@@ -15989,9 +9533,9 @@ if (rounded) {
       showManagePresetsModal();
     } else {
       const errorMsg = result.errors?.length
-        ? `Import failed:\n${result.errors.join('\n')}`
+        ? `Import failed: ${result.errors.join('; ')}`
         : 'No valid designs found in the selected file(s).';
-      alert(errorMsg);
+      showErrorToast({ title: 'Import Failed', message: errorMsg });
     }
   }
 
@@ -16000,7 +9544,7 @@ if (rounded) {
     const state = stateManager.getState();
 
     if (!state.uploadedFile) {
-      alert('No model loaded');
+      showErrorToast({ title: 'No Model Loaded', message: 'Upload a model before managing presets.' });
       return;
     }
 
@@ -16309,9 +9853,10 @@ if (rounded) {
                 }
               });
               if (!hasValidContent) {
-                alert(
-                  'The selected file(s) contain no valid preset data. Import cancelled to protect your existing designs.'
-                );
+                showErrorToast({
+                  title: 'Invalid Import Data',
+                  message: 'The selected file(s) contain no valid preset data. Import cancelled to protect your existing designs.',
+                });
                 return;
               }
 
@@ -16353,7 +9898,7 @@ if (rounded) {
             );
             _handleImportResult(result, currentModelName);
           } catch (error) {
-            alert(`Failed to import designs: ${error.message}`);
+            showErrorToast({ title: 'Import Failed', message: error.message });
           }
         };
         input.click();
@@ -17419,7 +10964,7 @@ if (rounded) {
   resetGroupBtn?.addEventListener('click', () => {
     const state = stateManager.getState();
     if (!state.schema || !state.schema.groups) {
-      alert('No model loaded');
+      showErrorToast({ title: 'No Model Loaded', message: 'Upload a model with parameter groups first.' });
       return;
     }
 
@@ -17495,7 +11040,7 @@ if (rounded) {
   viewParamsJsonBtn?.addEventListener('click', () => {
     const state = stateManager.getState();
     if (!state.uploadedFile) {
-      alert('No file uploaded');
+      showErrorToast({ title: 'No File Loaded', message: 'Upload a .scad or .zip file first.' });
       return;
     }
 
@@ -17535,7 +11080,7 @@ if (rounded) {
   exportChangedBtn?.addEventListener('click', () => {
     const state = stateManager.getState();
     if (!state.uploadedFile || !state.schema) {
-      alert('No file uploaded');
+      showErrorToast({ title: 'No File Loaded', message: 'Upload a .scad or .zip file first.' });
       return;
     }
 
@@ -17741,7 +11286,7 @@ if (rounded) {
     if (exampleBtn && exampleBtn.dataset.example) {
       e.preventDefault();
       const exampleKey = exampleBtn.dataset.example;
-      loadExampleByKey(exampleKey, {
+      fileHandler.loadExampleByKey(exampleKey, {
         closeFeaturesGuideModal: true,
       });
     }

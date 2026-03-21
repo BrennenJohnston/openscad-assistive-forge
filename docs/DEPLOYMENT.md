@@ -31,9 +31,23 @@ Output is in `dist/`.
 | Build output directory | `dist` |
 | Node version | 18 or 20 |
 
-### 3. Deploy
+### 3. Deploy (GitHub Actions — recommended)
 
-Push to your connected Git repository. Cloudflare Pages builds automatically.
+This repo includes `.github/workflows/deploy.yml` which builds and deploys
+via `wrangler pages deploy` on every push to `main`. To enable it:
+
+1. In your Cloudflare dashboard, create an API token with **Cloudflare Pages: Edit** permission.
+2. Find your Account ID on the dashboard overview page (right sidebar).
+3. In your GitHub repo, go to **Settings → Secrets and variables → Actions** and add:
+   - `CLOUDFLARE_API_TOKEN` — the API token from step 1
+   - `CLOUDFLARE_ACCOUNT_ID` — the account ID from step 2
+4. Push to `main` — the workflow builds and deploys automatically.
+
+> **If using Cloudflare's built-in GitHub integration instead**, go to
+> Cloudflare Dashboard → Pages → openscad-assistive-forge → Settings → Builds & deployments
+> and verify: Build command = `npm run build`, Build output directory = `dist`,
+> Node.js version = 20. Mismatched settings here will cause the site to
+> serve raw source files instead of the built application.
 
 ---
 
@@ -54,30 +68,17 @@ These headers are configured in `public/_headers` and copied to `dist/` during b
 
 ### Security Headers (Recommended)
 
-> **Note:** The values below are **recommended** for production. The actual deployed configuration in `public/_headers` may differ—for example, CSP may be in report-only mode during burn-in. Always check `public/_headers` for current values.
-
-**Recommended (fully enforced):**
+The CSP is in **enforcing mode**. See `public/_headers` for the full policy. Key directives:
 
 ```
 /*
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://cdn.jsdelivr.net; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
-  Strict-Transport-Security: max-age=31536000; includeSubDomains
-  X-Content-Type-Options: nosniff
-  X-Frame-Options: DENY
-  Referrer-Policy: strict-origin-when-cross-origin
-```
-
-**Current deployed (`public/_headers`):**
-
-```
-/*
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' data: https://raw.githubusercontent.com https://media.githubusercontent.com https://*.github.io https://*.gitlab.io https://*.pages.dev; worker-src 'self' blob:; child-src 'self' blob:; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests
   X-Content-Type-Options: nosniff
   X-Frame-Options: SAMEORIGIN
   Referrer-Policy: strict-origin-when-cross-origin
-  Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; ...
 ```
 
-The CSP is intentionally in **Report-Only mode** during the burn-in period to identify violations without breaking functionality. `X-Frame-Options: SAMEORIGIN` allows same-origin iframe embedding (vs `DENY` which blocks all). See `public/_headers` comments for phased rollout plan.
+`X-Frame-Options: SAMEORIGIN` allows same-origin iframe embedding (vs `DENY` which blocks all). CodeMirror 6 uses constructable stylesheets, so `style-src` does not need `'unsafe-inline'`.
 
 ### SPA Routing
 
@@ -377,7 +378,7 @@ Keep a ZIP of the last known-good `dist/` folder. In emergency:
 1. Check browser console for CSP errors
 2. Review `Content-Security-Policy` header
 3. Add necessary directives for blocked resources
-4. Test with `Content-Security-Policy-Report-Only` first
+4. Test with `Content-Security-Policy-Report-Only` first if unsure, then switch to enforcing
 
 ---
 

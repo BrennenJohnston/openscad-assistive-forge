@@ -1,6 +1,6 @@
 {
   "name": "openscad-assistive-forge",
-  "version": "4.2.0",
+  "version": "4.3.0",
   "description": "Accessibility-first web-based OpenSCAD customizer with client-side WASM rendering and developer toolchain",
   "type": "module",
   "author": "Brennen Johnston <https://github.com/BrennenJohnston>",
@@ -43,7 +43,8 @@
     "validate:html": "vnu --also-check-css --also-check-svg index.html",
     "validate:html:built": "vnu --also-check-css --also-check-svg dist/index.html",
     "bloat-scan": "node scripts/bloat-scanner.js src/",
-    "import-check": "node scripts/import-check.js src/"
+    "import-check": "node scripts/import-check.js src/",
+    "css-variable-audit": "node scripts/css-variable-audit.js"
   },
   "keywords": [
     "openscad",
@@ -83,9 +84,18 @@
     "yaml": "^2.8.2"
   },
   "dependencies": {
+    "@codemirror/autocomplete": "^6.20.1",
+    "@codemirror/commands": "^6.10.3",
+    "@codemirror/language": "^6.12.2",
+    "@codemirror/lint": "^6.9.5",
+    "@codemirror/search": "^6.6.0",
+    "@codemirror/state": "^6.6.0",
+    "@codemirror/view": "^6.40.0",
     "@github/combobox-nav": "^3.0.1",
+    "@lezer/highlight": "^1.2.3",
     "@radix-ui/colors": "^3.0.0",
     "ajv": "^8.12.0",
+    "codemirror": "^6.0.2",
     "jszip": "^3.10.1",
     "split.js": "^1.6.5",
     "three": "^0.182.0"
