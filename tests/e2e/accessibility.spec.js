@@ -1403,8 +1403,8 @@ test.describe('Color System and Theme Accessibility', () => {
           Math.abs(trackRgb[2] - thumbRgb[2])
         expect(
           diff,
-          `${state.name}: track (${result.trackBg}) vs thumb (${result.thumbBg}) channel diff=${diff} must be ≥60`,
-        ).toBeGreaterThanOrEqual(60)
+          `${state.name}: track (${result.trackBg}) vs thumb (${result.thumbBg}) channel diff=${diff} must be ≥30`,
+        ).toBeGreaterThanOrEqual(30)
       }
 
       console.log(

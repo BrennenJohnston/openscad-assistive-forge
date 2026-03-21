@@ -42,7 +42,7 @@ The application uses a strict Content Security Policy to prevent XSS and injecti
 ```http
 Content-Security-Policy:
   default-src 'self';
-  script-src 'self' 'wasm-unsafe-eval';
+  script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval';
   worker-src 'self' blob:;
   child-src 'self' blob:;
   style-src 'self';
@@ -62,6 +62,7 @@ Content-Security-Policy:
 
 | Directive | Value | Rationale |
 |-----------|-------|-----------|
+| `script-src 'unsafe-eval'` | Required | AJV compiles JSON schemas at runtime via `new Function()` |
 | `script-src 'wasm-unsafe-eval'` | Required | OpenSCAD WASM needs to compile code at runtime |
 | `worker-src blob:` | Required | Web Worker blob URLs for WASM processing |
 | `style-src 'self'` | Tightened | CodeMirror 6 uses constructable stylesheets — no `unsafe-inline` needed |
