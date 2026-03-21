@@ -22,16 +22,22 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-// Skip all tests in this file - save-project-modal doesn't appear reliably in CI headless mode
-// The feature works in manual testing but has timing issues with E2E automation
-// TODO: Investigate modal display timing in headless Chromium
-test.describe.skip('Saved Projects', () => {
+test.describe('Saved Projects', () => {
+  test.describe.configure({ timeout: 150_000 });
+
   test.beforeEach(async ({ page }) => {
     // Navigate to app
     await page.goto('/');
     
     // Wait for app to be ready
     await page.waitForSelector('#welcomeScreen', { state: 'visible' });
+
+    // Wait for WASM engine to be ready before file operations.
+    // The save-prompt only fires after parameter extraction, which needs WASM.
+    await page.waitForSelector('body[data-wasm-ready="true"]', {
+      state: 'attached',
+      timeout: 120_000,
+    });
     
     // Clear any existing saved projects via console
     await page.evaluate(() => {
@@ -56,7 +62,7 @@ test.describe.skip('Saved Projects', () => {
     await fileInput.setInputFiles(getFixturePath('sample.scad'));
     
     // Wait for file to load and save prompt to appear
-    await page.waitForSelector('.save-project-modal', { state: 'visible', timeout: 10000 });
+    await page.waitForSelector('.save-project-modal', { state: 'visible', timeout: 30000 });
     
     // Check that project name defaults to file name
     const nameInput = page.locator('#saveProjectName');
@@ -104,7 +110,7 @@ test.describe.skip('Saved Projects', () => {
     const fileInput = page.locator('#fileInput');
     await fileInput.setInputFiles(getFixturePath('sample.scad'));
     
-    await page.waitForSelector('.save-project-modal', { state: 'visible', timeout: 10000 });
+    await page.waitForSelector('.save-project-modal', { state: 'visible', timeout: 30000 });
     await page.locator('#saveProjectCheckbox').check();
     await page.locator('#saveProjectSave').click();
     await expect(page.locator('.save-project-modal')).not.toBeVisible();
@@ -123,8 +129,10 @@ test.describe.skip('Saved Projects', () => {
     await expect(page.locator('#mainInterface')).toBeVisible();
     await expect(page.locator('#welcomeScreen')).not.toBeVisible();
     
-    // Check that parameters are loaded
-    await expect(page.locator('#parametersForm')).toBeVisible();
+    // Check that parameter controls are rendered
+    await expect(
+      page.locator('.param-group input[type="range"], .param-group input[type="number"]').first()
+    ).toBeVisible({ timeout: 15000 });
   });
 
   test('should edit project name and notes', async ({ page }) => {
@@ -132,7 +140,7 @@ test.describe.skip('Saved Projects', () => {
     const fileInput = page.locator('#fileInput');
     await fileInput.setInputFiles(getFixturePath('sample.scad'));
     
-    await page.waitForSelector('.save-project-modal', { state: 'visible', timeout: 10000 });
+    await page.waitForSelector('.save-project-modal', { state: 'visible', timeout: 30000 });
     await page.locator('#saveProjectCheckbox').check();
     await page.locator('#saveProjectNotes').fill('Original notes');
     await page.locator('#saveProjectSave').click();
@@ -180,7 +188,7 @@ test.describe.skip('Saved Projects', () => {
     const fileInput = page.locator('#fileInput');
     await fileInput.setInputFiles(getFixturePath('sample.scad'));
     
-    await page.waitForSelector('.save-project-modal', { state: 'visible', timeout: 10000 });
+    await page.waitForSelector('.save-project-modal', { state: 'visible', timeout: 30000 });
     await page.locator('#saveProjectCheckbox').check();
     await page.locator('#saveProjectSave').click();
     await expect(page.locator('.save-project-modal')).not.toBeVisible();
@@ -210,7 +218,7 @@ test.describe.skip('Saved Projects', () => {
     const fileInput = page.locator('#fileInput');
     await fileInput.setInputFiles(getFixturePath('sample.scad'));
     
-    await page.waitForSelector('.save-project-modal', { state: 'visible', timeout: 10000 });
+    await page.waitForSelector('.save-project-modal', { state: 'visible', timeout: 30000 });
     await page.locator('#saveProjectCheckbox').check();
     await page.locator('#saveProjectSave').click();
     await expect(page.locator('.save-project-modal')).not.toBeVisible();
@@ -219,7 +227,7 @@ test.describe.skip('Saved Projects', () => {
     await fileInput.setInputFiles(getFixturePath('sample-advanced.scad'));
     
     // Close save prompt without saving
-    await page.waitForSelector('.save-project-modal', { state: 'visible', timeout: 10000 });
+    await page.waitForSelector('.save-project-modal', { state: 'visible', timeout: 30000 });
     await page.locator('#saveProjectNotNow').click();
     
     // Try to load saved project
@@ -240,7 +248,7 @@ test.describe.skip('Saved Projects', () => {
     const fileInput = page.locator('#fileInput');
     await fileInput.setInputFiles(getFixturePath('sample.scad'));
     
-    await page.waitForSelector('.save-project-modal', { state: 'visible', timeout: 10000 });
+    await page.waitForSelector('.save-project-modal', { state: 'visible', timeout: 30000 });
     await page.locator('#saveProjectCheckbox').check();
     await page.locator('#saveProjectSave').click();
     await expect(page.locator('.save-project-modal')).not.toBeVisible();
@@ -288,7 +296,7 @@ test.describe.skip('Saved Projects', () => {
     await fileInput.setInputFiles(getFixturePath('sample.scad'));
     
     // Wait for save prompt
-    await page.waitForSelector('.save-project-modal', { state: 'visible', timeout: 10000 });
+    await page.waitForSelector('.save-project-modal', { state: 'visible', timeout: 30000 });
     
     // Click "Not now"
     const notNowBtn = page.locator('#saveProjectNotNow');
@@ -313,7 +321,7 @@ test.describe.skip('Saved Projects', () => {
     await fileInput.setInputFiles(getFixturePath('sample.scad'));
     
     // Wait for save prompt
-    await page.waitForSelector('.save-project-modal', { state: 'visible', timeout: 10000 });
+    await page.waitForSelector('.save-project-modal', { state: 'visible', timeout: 30000 });
     
     // Change project name
     const nameInput = page.locator('#saveProjectName');
@@ -343,7 +351,7 @@ test.describe.skip('Saved Projects', () => {
     const fileInput = page.locator('#fileInput');
     await fileInput.setInputFiles(getFixturePath('sample.scad'));
     
-    await page.waitForSelector('.save-project-modal', { state: 'visible', timeout: 10000 });
+    await page.waitForSelector('.save-project-modal', { state: 'visible', timeout: 30000 });
     await page.locator('#saveProjectCheckbox').check();
     await page.locator('#saveProjectSave').click();
     await expect(page.locator('.save-project-modal')).not.toBeVisible();
@@ -357,11 +365,10 @@ test.describe.skip('Saved Projects', () => {
     const clearCacheBtn = page.locator('#clearStorageBtn');
     await clearCacheBtn.click();
     
-    // Should show confirmation with saved projects warning
-    await page.waitForSelector('.confirm-modal', { state: 'visible' });
-    const confirmText = await page.locator('.confirm-modal').textContent();
+    // Should show the smart cache-clear dialog with saved projects warning
+    await page.waitForSelector('.cache-clear-dialog', { state: 'visible', timeout: 10000 });
+    const confirmText = await page.locator('.cache-clear-dialog').textContent();
     expect(confirmText).toContain('saved project');
-    expect(confirmText).toContain('permanently delete');
   });
 
   test('should validate notes character limit', async ({ page }) => {
@@ -369,7 +376,7 @@ test.describe.skip('Saved Projects', () => {
     const fileInput = page.locator('#fileInput');
     await fileInput.setInputFiles(getFixturePath('sample.scad'));
     
-    await page.waitForSelector('.save-project-modal', { state: 'visible', timeout: 10000 });
+    await page.waitForSelector('.save-project-modal', { state: 'visible', timeout: 30000 });
     await page.locator('#saveProjectCheckbox').check();
     
     // Try to enter notes exceeding limit
@@ -394,7 +401,7 @@ test.describe.skip('Saved Projects', () => {
       const fileInput = page.locator('#fileInput');
       await fileInput.setInputFiles(getFixturePath('sample.scad'));
       
-      await page.waitForSelector('.save-project-modal', { state: 'visible', timeout: 10000 });
+      await page.waitForSelector('.save-project-modal', { state: 'visible', timeout: 30000 });
       await page.locator('#saveProjectCheckbox').check();
       await page.locator('#saveProjectSave').click();
       await expect(page.locator('.save-project-modal')).not.toBeVisible();
@@ -422,7 +429,7 @@ test.describe.skip('Saved Projects', () => {
       const fileInput = page.locator('#fileInput');
       await fileInput.setInputFiles(getFixturePath('sample.scad'));
       
-      await page.waitForSelector('.save-project-modal', { state: 'visible', timeout: 10000 });
+      await page.waitForSelector('.save-project-modal', { state: 'visible', timeout: 30000 });
       await page.locator('#saveProjectCheckbox').check();
       await page.locator('#saveProjectSave').click();
       await expect(page.locator('.save-project-modal')).not.toBeVisible();

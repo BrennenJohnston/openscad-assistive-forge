@@ -5141,11 +5141,13 @@ async function initApp() {
   if (clearFileBtn) {
     clearFileBtn.addEventListener('click', async () => {
       // Confirm before going back - warn about unsaved changes
-      if (
-        confirm(
-          'Go back to the welcome screen?\n\nAny unsaved changes to your current project will be lost.'
-        )
-      ) {
+      const confirmed = await showConfirmDialog(
+        'Any unsaved changes to your current project will be lost.',
+        'Go back to welcome screen?',
+        'Confirm',
+        'Cancel'
+      );
+      if (confirmed) {
         // Reset file input
         fileInput.value = '';
 
