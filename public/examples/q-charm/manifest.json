@@ -1,13 +1,47 @@
 {
   "name": "Q Charm",
-  "description": "A C-shaped charm created by extruding a DXF side profile. The profile stands vertically with the large flat surface facing up — ideal for engraving or labeling.",
-  "version": "1.0.0",
+  "description": "A C-shaped clip-on charm for silicone bracelets. Snap it onto a band and personalize the face with engraved or raised designs from SVG images.",
+  "version": "2.0.0",
   "author": "OpenSCAD Assistive Forge contributors",
   "license": "CC0-1.0",
   "main": "q_charm.scad",
   "files": [
     "q_charm.scad",
-    "q_Charm_L.dxf"
+    "q_Charm_L.dxf",
+    "smiley.svg",
+    "heart.svg",
+    "star.svg",
+    "paw.svg",
+    "lightning.svg",
+    "music-note.svg",
+    "moon.svg",
+    "flower.svg",
+    "diamond.svg",
+    "crown.svg",
+    "leaf.svg",
+    "sun.svg"
   ],
-  "tags": ["charm", "dxf", "import", "extrusion", "c-shape"]
+  "svgLibrary": {
+    "paramName": "design_file",
+    "options": [
+      { "file": "smiley.svg", "label": "Smiley face" },
+      { "file": "heart.svg", "label": "Heart" },
+      { "file": "star.svg", "label": "Star" },
+      { "file": "paw.svg", "label": "Paw print" },
+      { "file": "lightning.svg", "label": "Lightning bolt" },
+      { "file": "music-note.svg", "label": "Music note" },
+      { "file": "moon.svg", "label": "Crescent moon" },
+      { "file": "flower.svg", "label": "Flower" },
+      { "file": "diamond.svg", "label": "Diamond" },
+      { "file": "crown.svg", "label": "Crown" },
+      { "file": "leaf.svg", "label": "Leaf" },
+      { "file": "sun.svg", "label": "Sun" }
+    ]
+  },
+  "tags": ["charm", "bracelet", "clip", "wearable", "dxf", "svg", "import", "engraving", "c-shape", "nasif"],
+  "inspired_by": {
+    "name": "Nasif Zaman",
+    "github": "Znasif",
+    "reference": "https://github.com/Znasif/openscad-assistive-forge"
+  }
 }

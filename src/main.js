@@ -12,8 +12,6 @@ import {
   focusParameter,
   locateParameterKey,
   setParameterValue as _setParameterValue,
-  setGalleryOptions,
-  clearGalleryOptions,
 } from './js/ui-generator.js';
 import { stateManager } from './js/state.js';
 import {

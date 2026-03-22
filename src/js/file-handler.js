@@ -9,7 +9,11 @@
 
 import { stateManager } from './state.js';
 import { extractParameters } from './parser.js';
-import { renderParameterUI } from './ui-generator.js';
+import {
+  renderParameterUI,
+  setGalleryOptions,
+  clearGalleryOptions,
+} from './ui-generator.js';
 import {
   extractZipFiles,
   validateZipFile,
@@ -100,6 +104,27 @@ export const EXAMPLE_DEFINITIONS = {
       '/examples/nasif-charm-maker/svg-library/lightning.svg',
       '/examples/nasif-charm-maker/svg-library/music-note.svg',
       '/examples/nasif-charm-maker/svg-library/smiley.svg',
+      '/examples/nasif-charm-maker/svg-library/moon.svg',
+      '/examples/nasif-charm-maker/svg-library/flower.svg',
+      '/examples/nasif-charm-maker/svg-library/diamond.svg',
+      '/examples/nasif-charm-maker/svg-library/crown.svg',
+      '/examples/nasif-charm-maker/svg-library/leaf.svg',
+      '/examples/nasif-charm-maker/svg-library/sun.svg',
+    ],
+  },
+  'q-charm': {
+    path: '/examples/q-charm/q_charm.scad',
+    name: 'q_charm.scad',
+    description: 'Q Charm (Bracelet Clip)',
+    manifest: '/examples/q-charm/manifest.json',
+    additionalFiles: [
+      '/examples/q-charm/q_Charm_L.dxf',
+      '/examples/nasif-charm-maker/svg-library/smiley.svg',
+      '/examples/nasif-charm-maker/svg-library/heart.svg',
+      '/examples/nasif-charm-maker/svg-library/star.svg',
+      '/examples/nasif-charm-maker/svg-library/paw.svg',
+      '/examples/nasif-charm-maker/svg-library/lightning.svg',
+      '/examples/nasif-charm-maker/svg-library/music-note.svg',
       '/examples/nasif-charm-maker/svg-library/moon.svg',
       '/examples/nasif-charm-maker/svg-library/flower.svg',
       '/examples/nasif-charm-maker/svg-library/diamond.svg',
@@ -1310,6 +1335,43 @@ export function initFileHandler({
         }
 
         console.log(`[Example] Total files in package: ${exProjectFiles.size}`);
+      }
+
+      // Set up SVG gallery from manifest when available
+      clearGalleryOptions();
+      if (example.manifest) {
+        try {
+          const manifestResponse = await fetch(example.manifest);
+          if (manifestResponse.ok) {
+            const manifestData = await manifestResponse.json();
+            if (manifestData.svgLibrary?.options?.length > 0) {
+              const lib = manifestData.svgLibrary;
+              const fileUrlMap = {};
+              if (example.additionalFiles) {
+                for (const fp of example.additionalFiles) {
+                  fileUrlMap[fp.split('/').pop()] = fp;
+                }
+              }
+              const exampleDir = example.path.substring(
+                0,
+                example.path.lastIndexOf('/')
+              );
+              const galleryOpts = lib.options.map((opt) => ({
+                file: opt.file,
+                label: opt.label,
+                url:
+                  fileUrlMap[opt.file.split('/').pop()] ||
+                  `${exampleDir}/${opt.file}`,
+              }));
+              setGalleryOptions(lib.paramName, galleryOpts);
+              console.log(
+                `[Example] SVG gallery: ${galleryOpts.length} designs for "${lib.paramName}"`
+              );
+            }
+          }
+        } catch (manifestErr) {
+          console.warn('[Example] Failed to load manifest for gallery:', manifestErr.message);
+        }
       }
 
       handleFile(
