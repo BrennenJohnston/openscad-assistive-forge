@@ -8,6 +8,16 @@
 // Width along the bracelet (Y axis)
 extrude_width = 20; // [10:1:40]
 
+/* [Fit] */
+// Overall height of the C-clip profile
+charm_height = 8.5; // [6:0.5:15]
+
+// Wall and material thickness
+charm_thickness = 3; // [1.5:0.5:5]
+
+// Width of the inner bracelet channel
+bracelet_width = 14; // [10:1:25]
+
 /* [Design] */
 // Image file for the design (SVG, PNG, or JPG — raster images auto-convert to SVG)
 design_file = "smiley.svg"; // [file:svg,png,jpg]
@@ -46,20 +56,17 @@ hole_diameter = 4; // [2:0.5:8]
 $fn = 64; // [24:8:128]
 
 /* [Hidden] */
-// C-clip profile geometry (user-facing params added in a later phase)
-inner_width = 14;              // [10:1:25]
-inner_height = 2.5;            // [1.5:0.5:6]
-wall_thickness = 3;            // [1.5:0.5:5]
 gap_width = 4;                 // [2:0.5:8]
 profile_corner_radius = 2;    // [0.5:0.5:4]
 
-outer_width = inner_width + 2 * wall_thickness;
-outer_height = inner_height + 2 * wall_thickness;
+inner_height = max(0.5, charm_height - 2 * charm_thickness);
+outer_width = bracelet_width + 2 * charm_thickness;
+outer_height = charm_height;
 z_offset = outer_height / 2;
 profile_center_x = 0;
 profile_max_y = outer_height / 2;
 charm_top_z = outer_height;
-face_dim = min(extrude_width, inner_width);
+face_dim = min(extrude_width, bracelet_width);
 design_size = face_dim * design_scale / 100;
 total_top_z = charm_top_z
     + (add_border == "yes" ? border_height : 0)
@@ -74,12 +81,12 @@ module profile_2d() {
         offset(delta = clip_fillet) offset(r = -clip_fillet)
             polygon([
                 [-gap_width/2,   -outer_height/2 - 0.1],
-                [-gap_width/2,   -outer_height/2 + wall_thickness],
-                [-inner_width/2, -outer_height/2 + wall_thickness],
-                [-inner_width/2,  outer_height/2 - wall_thickness],
-                [ inner_width/2,  outer_height/2 - wall_thickness],
-                [ inner_width/2, -outer_height/2 + wall_thickness],
-                [ gap_width/2,   -outer_height/2 + wall_thickness],
+                [-gap_width/2,   -outer_height/2 + charm_thickness],
+                [-bracelet_width/2, -outer_height/2 + charm_thickness],
+                [-bracelet_width/2,  outer_height/2 - charm_thickness],
+                [ bracelet_width/2,  outer_height/2 - charm_thickness],
+                [ bracelet_width/2, -outer_height/2 + charm_thickness],
+                [ gap_width/2,   -outer_height/2 + charm_thickness],
                 [ gap_width/2,   -outer_height/2 - 0.1]
             ]);
     }
