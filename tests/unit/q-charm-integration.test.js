@@ -113,6 +113,19 @@ describe('q_charm.scad parser integration', () => {
     expect(parsed.parameters.design_offset.maximum).toBe(1.5);
   });
 
+  it('extracts Border parameters added in Phase 3 remediation', () => {
+    scadContent = readFileSync(scadPath, 'utf-8');
+    parsed = extractParameters(scadContent);
+
+    expect(parsed.parameters.add_border).toBeDefined();
+    expect(parsed.parameters.border_width).toBeDefined();
+    expect(parsed.parameters.border_width.default).toBe(1.5);
+    expect(parsed.parameters.border_width.minimum).toBe(0.5);
+    expect(parsed.parameters.border_width.maximum).toBe(4);
+    expect(parsed.parameters.border_height).toBeDefined();
+    expect(parsed.parameters.border_height.default).toBe(0.5);
+  });
+
   it('extracts Text parameters added in Phase 4', () => {
     scadContent = readFileSync(scadPath, 'utf-8');
     parsed = extractParameters(scadContent);

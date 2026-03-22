@@ -76,10 +76,13 @@ text_depth = 0.8; // [0.2:0.1:2]
 text_raised = "yes"; // [yes, no]
 
 /* [Border] */
-// Add a raised border rim around the charm perimeter
+// Add a raised border rim around the top face of the charm
 add_border = "no"; // [yes, no]
 
-// Border height above the surface
+// Width of the border ring (how far inward the rim extends)
+border_width = 1.5; // [0.5:0.5:4]
+
+// Height of the border rim above the top surface
 border_height = 0.5; // [0.2:0.1:2.0]
 
 /* [Rounding] */
@@ -204,14 +207,13 @@ module text_2d() {
 
 module border_shell() {
     if (add_border == "yes") {
-        translate([0, 0, z_offset])
-            rotate([90, 0, 0])
-                linear_extrude(height = extrude_width, center = true)
-                    difference() {
-                        offset(r = border_height)
-                            profile_2d();
-                        profile_2d();
-                    }
+        safe_bw = max(0.1, min(border_width, outer_width / 2 - 1, extrude_width / 2 - 1));
+        translate([profile_center_x, 0, charm_top_z])
+            linear_extrude(height = border_height)
+                difference() {
+                    square([outer_width, extrude_width], center = true);
+                    square([outer_width - 2 * safe_bw, extrude_width - 2 * safe_bw], center = true);
+                }
     }
 }
 
