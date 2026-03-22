@@ -3205,6 +3205,13 @@ summary:focus-visible,
   font-style: italic;
 }
 
+.param-hint {
+  display: block;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  margin-top: var(--space-2xs);
+}
+
 .param-control label {
   display: block;
   font-weight: 500;

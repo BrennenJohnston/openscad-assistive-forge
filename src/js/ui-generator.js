@@ -1372,6 +1372,17 @@ function createTextInput(param, onChange) {
   });
   container.appendChild(input);
 
+  const applyHint = document.createElement('span');
+  applyHint.id = `${input.id}-apply-hint`;
+  applyHint.className = 'param-hint';
+  applyHint.textContent = 'Press Enter to apply';
+  container.appendChild(applyHint);
+
+  const describedBy = [input.getAttribute('aria-describedby'), applyHint.id]
+    .filter(Boolean)
+    .join(' ');
+  input.setAttribute('aria-describedby', describedBy);
+
   return container;
 }
 
