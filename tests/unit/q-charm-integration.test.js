@@ -126,6 +126,34 @@ describe('q_charm.scad parser integration', () => {
     expect(parsed.parameters.border_height.default).toBe(0.5);
   });
 
+  it('extracts Rounding parameters updated in Phase 4 remediation', () => {
+    scadContent = readFileSync(scadPath, 'utf-8');
+    parsed = extractParameters(scadContent);
+
+    expect(parsed.parameters.rounding_mode).toBeDefined();
+    expect(parsed.parameters.rounding_mode.default).toBe('sides_only');
+
+    expect(parsed.parameters.edge_radius).toBeDefined();
+    expect(parsed.parameters.edge_radius.default).toBe(1.0);
+    expect(parsed.parameters.edge_radius.minimum).toBe(0);
+    expect(parsed.parameters.edge_radius.maximum).toBe(3);
+
+    expect(parsed.parameters.profile_corner_radius).toBeDefined();
+    expect(parsed.parameters.profile_corner_radius.default).toBe(2);
+    expect(parsed.parameters.profile_corner_radius.minimum).toBe(0.5);
+    expect(parsed.parameters.profile_corner_radius.maximum).toBe(4);
+
+    expect(parsed.parameters.inner_corner_radius).toBeDefined();
+    expect(parsed.parameters.inner_corner_radius.default).toBe(1);
+    expect(parsed.parameters.inner_corner_radius.minimum).toBe(0.25);
+    expect(parsed.parameters.inner_corner_radius.maximum).toBe(3);
+
+    expect(parsed.parameters.sidesonly).toBeUndefined();
+
+    const groupIds = parsed.groups.map((g) => g.id);
+    expect(groupIds).toContain('Rounding');
+  });
+
   it('extracts Text parameters added in Phase 4', () => {
     scadContent = readFileSync(scadPath, 'utf-8');
     parsed = extractParameters(scadContent);
