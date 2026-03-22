@@ -67,6 +67,14 @@ test.describe('Example Files Exist', () => {
     const response = await page.request.get('/examples/multi-file-box.zip')
     expect(response.ok()).toBe(true)
   })
+
+  test('q-charm scad and manifest exist', async ({ page }) => {
+    const scadResponse = await page.request.get('/examples/q-charm/q_charm.scad')
+    expect(scadResponse.ok()).toBe(true)
+
+    const manifestResponse = await page.request.get('/examples/q-charm/manifest.json')
+    expect(manifestResponse.ok()).toBe(true)
+  })
 })
 
 test.describe('Welcome Screen Examples', () => {
@@ -100,6 +108,32 @@ test.describe('Welcome Screen Examples', () => {
       
       expect(hasAccessibleName).toBe(true)
     }
+  })
+})
+
+test.describe('Q-Charm Smoke Tests', () => {
+  test('loads q-charm via deep-link and shows parameter groups', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
+
+    await page.goto('/?example=q-charm')
+
+    const mainInterface = page.locator('#mainInterface')
+    await expect(mainInterface).toBeVisible({ timeout: 20000 })
+
+    await expect(page.locator('.param-control').first()).toBeVisible({ timeout: 10000 })
+  })
+
+  test('welcome screen has Q-Charm button with accessible name', async ({ page }) => {
+    await page.goto('/')
+
+    const qCharmBtn = page.locator('[data-example="q-charm"]')
+    await expect(qCharmBtn).toBeVisible()
+
+    const ariaLabel = await qCharmBtn.getAttribute('aria-label')
+    const textContent = await qCharmBtn.textContent()
+    const hasName = (ariaLabel && ariaLabel.length > 0) ||
+                    (textContent && textContent.trim().length > 0)
+    expect(hasName).toBe(true)
   })
 })
 
