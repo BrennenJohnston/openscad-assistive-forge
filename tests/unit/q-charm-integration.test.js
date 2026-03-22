@@ -96,6 +96,11 @@ describe('q_charm.scad parser integration', () => {
     expect(parsed.parameters.gap_offset.default).toBe(0);
     expect(parsed.parameters.gap_offset.minimum).toBe(-4);
     expect(parsed.parameters.gap_offset.maximum).toBe(4);
+
+    expect(parsed.parameters.gap_width).toBeDefined();
+    expect(parsed.parameters.gap_width.default).toBe(4);
+    expect(parsed.parameters.gap_width.minimum).toBe(2);
+    expect(parsed.parameters.gap_width.maximum).toBe(8);
   });
 
   it('extracts design_offset parameter added in Phase 3', () => {

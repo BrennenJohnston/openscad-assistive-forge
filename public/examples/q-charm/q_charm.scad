@@ -21,6 +21,9 @@ bracelet_width = 14; // [10:1:25]
 // Shift the gap opening left (−) or right (+) for asymmetric legs
 gap_offset = 0; // [-4:0.5:4]
 
+// Width of the bottom opening (gap between the C-clip legs)
+gap_width = 4; // [2:0.5:8]
+
 /* [Design] */
 // Image file for the design (SVG, PNG, or JPG — raster images auto-convert to SVG)
 design_file = "smiley.svg"; // [file:svg,png,jpg]
@@ -103,7 +106,6 @@ bail_inner_radius = 3; // [2:0.5:6]
 $fn = 64; // [24:8:128]
 
 /* [Hidden] */
-gap_width = 4;                 // [2:0.5:8]
 profile_corner_radius = 2;    // [0.5:0.5:4]
 inner_corner_radius = 1;      // [0.25:0.25:3]
 
