@@ -37,6 +37,7 @@
       { "file": "svg-library/sun.svg", "label": "Sun" }
     ]
   },
+  "program": "nasifs-charm-maker",
   "tags": ["charm", "pendant", "keychain", "svg", "import", "engraving", "nasif"],
   "inspired_by": {
     "name": "Nasif Zaman",

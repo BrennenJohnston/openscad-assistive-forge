@@ -136,6 +136,17 @@ export const EXAMPLE_DEFINITIONS = {
 };
 
 // ---------------------------------------------------------------------------
+// Program definitions — group related examples under a single umbrella
+// ---------------------------------------------------------------------------
+
+export const PROGRAM_DEFINITIONS = {
+  'nasifs-charm-maker': {
+    label: "Nasif's Charm Maker",
+    examples: ['nasif-charm-maker', 'q-charm', 'logo-plate'],
+  },
+};
+
+// ---------------------------------------------------------------------------
 // Standalone utility: processing overlay
 // ---------------------------------------------------------------------------
 

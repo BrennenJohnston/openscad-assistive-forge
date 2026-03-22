@@ -38,6 +38,7 @@
       { "file": "sun.svg", "label": "Sun" }
     ]
   },
+  "program": "nasifs-charm-maker",
   "tags": ["charm", "bracelet", "clip", "wearable", "dxf", "svg", "import", "engraving", "c-shape", "nasif"],
   "inspired_by": {
     "name": "Nasif Zaman",

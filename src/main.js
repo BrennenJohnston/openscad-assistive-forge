@@ -190,6 +190,7 @@ import {
 } from './js/hfm-controller.js';
 import {
   EXAMPLE_DEFINITIONS,
+  PROGRAM_DEFINITIONS,
   showProcessingOverlay,
   initFileHandler,
 } from './js/file-handler.js';
@@ -2009,11 +2010,43 @@ async function initApp() {
       {
         type: 'submenu',
         label: 'Examples',
-        items: Object.entries(EXAMPLE_DEFINITIONS).map(([key, def]) => ({
-          type: 'action',
-          label: def.description || def.name,
-          handler: () => fileHandler.loadExampleByKey(key),
-        })),
+        items: (() => {
+          const programmedKeys = new Set();
+          const grouped = [];
+
+          for (const prog of Object.values(PROGRAM_DEFINITIONS)) {
+            const subItems = prog.examples
+              .filter((k) => EXAMPLE_DEFINITIONS[k])
+              .map((k) => ({
+                type: 'action',
+                label:
+                  EXAMPLE_DEFINITIONS[k].description ||
+                  EXAMPLE_DEFINITIONS[k].name,
+                handler: () => fileHandler.loadExampleByKey(k),
+              }));
+            if (subItems.length > 0) {
+              grouped.push({
+                type: 'submenu',
+                label: prog.label,
+                items: subItems,
+              });
+              prog.examples.forEach((k) => programmedKeys.add(k));
+            }
+          }
+
+          const ungrouped = Object.entries(EXAMPLE_DEFINITIONS)
+            .filter(([k]) => !programmedKeys.has(k))
+            .map(([k, def]) => ({
+              type: 'action',
+              label: def.description || def.name,
+              handler: () => fileHandler.loadExampleByKey(k),
+            }));
+
+          if (grouped.length > 0 && ungrouped.length > 0) {
+            return [...ungrouped, { type: 'separator' }, ...grouped];
+          }
+          return [...ungrouped, ...grouped];
+        })(),
       },
       {
         type: 'action',

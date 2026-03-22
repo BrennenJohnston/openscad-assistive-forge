@@ -9,6 +9,7 @@
     "logo_plate.scad",
     "sample-logo.svg"
   ],
+  "program": "nasifs-charm-maker",
   "tags": ["svg", "import", "engraving", "plate", "logo"],
   "inspired_by": {
     "name": "Nasif Zaman",
