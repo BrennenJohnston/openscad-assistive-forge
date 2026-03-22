@@ -103,9 +103,12 @@ describe('q_charm.scad parser integration', () => {
     expect(parsed.parameters.gap_width.maximum).toBe(8);
   });
 
-  it('extracts design_offset parameter added in Phase 3', () => {
+  it('extracts Design parameters updated in Phase 5', () => {
     scadContent = readFileSync(scadPath, 'utf-8');
     parsed = extractParameters(scadContent);
+
+    expect(parsed.parameters.design_file).toBeDefined();
+    expect(parsed.parameters.design_file.default).toBe('');
 
     expect(parsed.parameters.design_offset).toBeDefined();
     expect(parsed.parameters.design_offset.default).toBe(0.6);
@@ -179,7 +182,7 @@ describe('q_charm.scad parser integration', () => {
     expect(parsed.parameters.bail_inner_radius).toBeDefined();
   });
 
-  it('extracts Design Layer 2 parameters added in Phase 7', () => {
+  it('extracts Design Layer 2 parameters including Z-offset added in Phase 5', () => {
     scadContent = readFileSync(scadPath, 'utf-8');
     parsed = extractParameters(scadContent);
 
@@ -188,6 +191,11 @@ describe('q_charm.scad parser integration', () => {
     expect(parsed.parameters.design_x_2).toBeDefined();
     expect(parsed.parameters.design_y_2).toBeDefined();
     expect(parsed.parameters.design_raised_2).toBeDefined();
+
+    expect(parsed.parameters.design_z_2).toBeDefined();
+    expect(parsed.parameters.design_z_2.default).toBe(0);
+    expect(parsed.parameters.design_z_2.minimum).toBe(-3);
+    expect(parsed.parameters.design_z_2.maximum).toBe(3);
   });
 
   it('has at least 20 user-facing parameters', () => {

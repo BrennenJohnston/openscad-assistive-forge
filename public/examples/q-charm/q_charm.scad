@@ -25,8 +25,8 @@ gap_offset = 0; // [-4:0.5:4]
 gap_width = 4; // [2:0.5:8]
 
 /* [Design] */
-// Image file for the design (SVG, PNG, or JPG — raster images auto-convert to SVG)
-design_file = "smiley.svg"; // [file:svg,png,jpg]
+// Image file for the design (SVG, PNG, or JPG — raster images auto-convert to SVG; use simple single-path SVGs for best results)
+design_file = ""; // [file:svg,png,jpg]
 
 // Depth of engraving (or height of raised design)
 engrave_depth = 0.8; // [0.2:0.1:3.0]
@@ -38,7 +38,7 @@ design_raised = "yes"; // [yes, no]
 design_scale = 60; // [20:5:95]
 
 // Offset to thicken SVG lines for FDM printability (0.6 = 1.2mm total, two 0.4mm nozzle walls)
-design_offset = 0.6; // [0:0.1:1.5]
+design_offset = 0.6; // [0:0.2:1.5]
 
 /* [Design Layer 2] */
 // Second image file for layered designs (leave empty for none)
@@ -52,6 +52,9 @@ design_x_2 = 0; // [-10:0.5:10]
 
 // Vertical position offset for second design
 design_y_2 = 0; // [-10:0.5:10]
+
+// Z-offset for second design layer (adjust height relative to the charm surface)
+design_z_2 = 0; // [-3:0.1:3]
 
 // Raised second design instead of engraved
 design_raised_2 = "yes"; // [yes, no]
@@ -134,7 +137,7 @@ total_top_z = charm_top_z
     + (add_border == "yes" ? border_height : 0)
     + max(
         (design_raised == "yes") ? engrave_depth : 0,
-        (design_file_2 != "" && design_raised_2 == "yes") ? engrave_depth : 0,
+        (design_file_2 != "" && design_raised_2 == "yes") ? max(0, engrave_depth + design_z_2) : 0,
         (text_content != "" && text_raised == "yes") ? text_depth : 0
     );
 
@@ -195,10 +198,16 @@ module charm_body() {
         }
 }
 
+// SVG limitation: OpenSCAD import() renders all filled SVG elements as solid
+// geometry. Multi-element SVGs that rely on color layering (e.g., white shapes
+// over black to simulate cutouts) will appear solid. Use single-path SVGs or
+// the SVG preparer tool (F-11, planned) for compound designs.
 module design_2d() {
-    offset(r = design_offset)
-        resize([design_size, 0], auto = true)
-            import(design_file, center = true);
+    if (design_file != "") {
+        offset(r = design_offset)
+            resize([design_size, 0], auto = true)
+                import(design_file, center = true);
+    }
 }
 
 module design_2d_layer2() {
@@ -271,7 +280,7 @@ module q_charm() {
                         design_2d();
             }
             if (design_file_2 != "" && design_raised_2 == "yes") {
-                translate([profile_center_x, 0, charm_top_z])
+                translate([profile_center_x, 0, charm_top_z + design_z_2])
                     linear_extrude(height = engrave_depth)
                         design_2d_layer2();
             }
@@ -287,7 +296,7 @@ module q_charm() {
                     design_2d();
         }
         if (design_file_2 != "" && design_raised_2 != "yes") {
-            translate([profile_center_x, 0, charm_top_z - engrave_depth])
+            translate([profile_center_x, 0, charm_top_z - engrave_depth + design_z_2])
                 linear_extrude(height = engrave_depth + 0.01)
                     design_2d_layer2();
         }
