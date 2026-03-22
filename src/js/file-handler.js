@@ -1355,29 +1355,35 @@ export function initFileHandler({
           const manifestResponse = await fetch(example.manifest);
           if (manifestResponse.ok) {
             const manifestData = await manifestResponse.json();
-            if (manifestData.svgLibrary?.options?.length > 0) {
-              const lib = manifestData.svgLibrary;
-              const fileUrlMap = {};
-              if (example.additionalFiles) {
-                for (const fp of example.additionalFiles) {
-                  fileUrlMap[fp.split('/').pop()] = fp;
-                }
+            const libs = Array.isArray(manifestData.svgLibrary)
+              ? manifestData.svgLibrary
+              : manifestData.svgLibrary
+                ? [manifestData.svgLibrary]
+                : [];
+            const fileUrlMap = {};
+            if (example.additionalFiles) {
+              for (const fp of example.additionalFiles) {
+                fileUrlMap[fp.split('/').pop()] = fp;
               }
-              const exampleDir = example.path.substring(
-                0,
-                example.path.lastIndexOf('/')
-              );
-              const galleryOpts = lib.options.map((opt) => ({
-                file: opt.file,
-                label: opt.label,
-                url:
-                  fileUrlMap[opt.file.split('/').pop()] ||
-                  `${exampleDir}/${opt.file}`,
-              }));
-              setGalleryOptions(lib.paramName, galleryOpts);
-              console.log(
-                `[Example] SVG gallery: ${galleryOpts.length} designs for "${lib.paramName}"`
-              );
+            }
+            const exampleDir = example.path.substring(
+              0,
+              example.path.lastIndexOf('/')
+            );
+            for (const lib of libs) {
+              if (lib?.options?.length > 0) {
+                const galleryOpts = lib.options.map((opt) => ({
+                  file: opt.file,
+                  label: opt.label,
+                  url:
+                    fileUrlMap[opt.file.split('/').pop()] ||
+                    `${exampleDir}/${opt.file}`,
+                }));
+                setGalleryOptions(lib.paramName, galleryOpts);
+                console.log(
+                  `[Example] SVG gallery: ${galleryOpts.length} designs for "${lib.paramName}"`
+                );
+              }
             }
           }
         } catch (manifestErr) {

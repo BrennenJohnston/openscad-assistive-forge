@@ -276,22 +276,47 @@ describe('Charm Maker program manifests', () => {
     });
   }
 
-  it('q-charm manifest has svgLibrary with options', () => {
+  it('q-charm manifest has svgLibrary array with design_file and design_file_2', () => {
     const raw = readFileSync(
       join(PUBLIC_DIR, 'examples/q-charm/manifest.json'),
       'utf-8'
     );
     const manifest = JSON.parse(raw);
 
-    expect(manifest.svgLibrary).toBeDefined();
-    expect(manifest.svgLibrary.paramName).toBe('design_file');
-    expect(Array.isArray(manifest.svgLibrary.options)).toBe(true);
-    expect(manifest.svgLibrary.options.length).toBeGreaterThan(0);
+    expect(Array.isArray(manifest.svgLibrary)).toBe(true);
+    expect(manifest.svgLibrary.length).toBe(2);
 
-    for (const opt of manifest.svgLibrary.options) {
+    const layer1 = manifest.svgLibrary.find((l) => l.paramName === 'design_file');
+    expect(layer1).toBeDefined();
+    expect(Array.isArray(layer1.options)).toBe(true);
+    expect(layer1.options.length).toBeGreaterThan(0);
+    for (const opt of layer1.options) {
       expect(typeof opt.file).toBe('string');
       expect(typeof opt.label).toBe('string');
     }
+
+    const layer2 = manifest.svgLibrary.find((l) => l.paramName === 'design_file_2');
+    expect(layer2).toBeDefined();
+    expect(Array.isArray(layer2.options)).toBe(true);
+    expect(layer2.options.length).toBeGreaterThan(0);
+    for (const opt of layer2.options) {
+      expect(typeof opt.file).toBe('string');
+      expect(typeof opt.label).toBe('string');
+    }
+  });
+
+  it('nasif-charm-maker manifest has svgLibrary as object (backward compat)', () => {
+    const raw = readFileSync(
+      join(PUBLIC_DIR, 'examples/nasif-charm-maker/manifest.json'),
+      'utf-8'
+    );
+    const manifest = JSON.parse(raw);
+
+    expect(manifest.svgLibrary).toBeDefined();
+    expect(Array.isArray(manifest.svgLibrary)).toBe(false);
+    expect(manifest.svgLibrary.paramName).toBe('design_file');
+    expect(Array.isArray(manifest.svgLibrary.options)).toBe(true);
+    expect(manifest.svgLibrary.options.length).toBeGreaterThan(0);
   });
 });
 
