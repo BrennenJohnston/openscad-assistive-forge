@@ -86,17 +86,17 @@ border_width = 1.5; // [0.5:0.5:4]
 border_height = 0.5; // [0.2:0.1:2.0]
 
 /* [Rounding] */
-// Rounding mode: none = sharp edges, sides_only = long extrusion edges only, all_edges = full spherical rounding
-rounding_mode = "sides_only"; // [none, sides_only, all_edges]
-
-// Edge rounding radius — applies when rounding mode is not none
+// Side edge rounding radius (0 = sharp side edges)
 edge_radius = 1.0; // [0:0.25:3]
 
-// Outer corner radius — rounds the 4 outer corners of the C-clip cross-section
-profile_corner_radius = 2; // [0.5:0.5:4]
+// All-edges rounding radius including top and bottom faces (0 = off; overrides side-only when active — slower render)
+all_edges_radius = 0; // [0:0.25:3]
 
-// Inner corner radius — rounds the 8 inner T-shape channel corners (2D profile shape, independent of edge rounding)
-inner_corner_radius = 1; // [0.25:0.25:3]
+// Outer corner radius — rounds the 4 outer corners of the C-clip cross-section (0 = sharp corners)
+profile_corner_radius = 2; // [0:0.5:4]
+
+// Inner corner radius — rounds the 4 inner channel corners (0 = sharp corners)
+inner_corner_radius = 1; // [0:0.25:3]
 
 /* [Attachment] */
 // Optional attachment at one end of the charm
@@ -119,6 +119,8 @@ min_inner_height = 1.5;
 effective_thickness = min(charm_thickness, (charm_height - min_inner_height) / 2);
 inner_height = max(min_inner_height, charm_height - 2 * effective_thickness);
 safe_edge_radius = min(edge_radius, min(effective_thickness, inner_height, gap_width) / 2);
+safe_all_edges = min(all_edges_radius, min(effective_thickness, inner_height, gap_width, extrude_width) / 2 - 0.1);
+safe_icr = min(inner_corner_radius, inner_height / 2 - 0.1, gap_width / 2 - 0.1);
 outer_width = bracelet_width + 2 * effective_thickness;
 outer_height = charm_height;
 z_offset = outer_height / 2;
@@ -137,14 +139,21 @@ total_top_z = charm_top_z
     );
 
 module profile_2d() {
-    clip_fillet = min(inner_corner_radius, inner_height / 3, gap_width / 4);
     max_gap_shift = (bracelet_width - gap_width) / 2 - 1;
     safe_gap_offset = max(-max_gap_shift, min(gap_offset, max_gap_shift));
     difference() {
         offset(r = profile_corner_radius)
             square([outer_width - 2 * profile_corner_radius,
                     outer_height - 2 * profile_corner_radius], center = true);
-        offset(delta = clip_fillet) offset(r = -clip_fillet)
+        if (safe_icr > 0) {
+            gap_ext = 10;
+            offset(r = safe_icr) offset(r = -safe_icr)
+                union() {
+                    square([bracelet_width, inner_height], center = true);
+                    translate([safe_gap_offset, -outer_height / 2 + (effective_thickness - gap_ext) / 2])
+                        square([gap_width, effective_thickness + gap_ext], center = true);
+                }
+        } else {
             polygon([
                 [-gap_width/2 + safe_gap_offset, -outer_height/2 - 0.1],
                 [-gap_width/2 + safe_gap_offset, -outer_height/2 + effective_thickness],
@@ -155,28 +164,29 @@ module profile_2d() {
                 [ gap_width/2 + safe_gap_offset, -outer_height/2 + effective_thickness],
                 [ gap_width/2 + safe_gap_offset, -outer_height/2 - 0.1]
             ]);
+        }
     }
 }
 
 module charm_body() {
     translate([0, 0, z_offset])
         rotate([90, 0, 0]) {
-            if (safe_edge_radius > 0 && rounding_mode == "sides_only") {
+            if (safe_all_edges > 0) {
+                minkowski() {
+                    linear_extrude(
+                        height = extrude_width - 2 * safe_all_edges,
+                        center = true
+                    )
+                        offset(r = -safe_all_edges)
+                            profile_2d();
+                    sphere(r = safe_all_edges);
+                }
+            } else if (safe_edge_radius > 0) {
                 minkowski() {
                     linear_extrude(height = extrude_width, center = true)
                         offset(r = -safe_edge_radius)
                             profile_2d();
                     cylinder(r = safe_edge_radius, h = 0.01, center = true);
-                }
-            } else if (safe_edge_radius > 0 && rounding_mode == "all_edges") {
-                minkowski() {
-                    linear_extrude(
-                        height = extrude_width - 2 * safe_edge_radius,
-                        center = true
-                    )
-                        offset(r = -safe_edge_radius)
-                            profile_2d();
-                    sphere(r = safe_edge_radius);
                 }
             } else {
                 linear_extrude(height = extrude_width, center = true)

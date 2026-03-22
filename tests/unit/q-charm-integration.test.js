@@ -130,25 +130,28 @@ describe('q_charm.scad parser integration', () => {
     scadContent = readFileSync(scadPath, 'utf-8');
     parsed = extractParameters(scadContent);
 
-    expect(parsed.parameters.rounding_mode).toBeDefined();
-    expect(parsed.parameters.rounding_mode.default).toBe('sides_only');
+    expect(parsed.parameters.rounding_mode).toBeUndefined();
+    expect(parsed.parameters.sidesonly).toBeUndefined();
 
     expect(parsed.parameters.edge_radius).toBeDefined();
     expect(parsed.parameters.edge_radius.default).toBe(1.0);
     expect(parsed.parameters.edge_radius.minimum).toBe(0);
     expect(parsed.parameters.edge_radius.maximum).toBe(3);
 
+    expect(parsed.parameters.all_edges_radius).toBeDefined();
+    expect(parsed.parameters.all_edges_radius.default).toBe(0);
+    expect(parsed.parameters.all_edges_radius.minimum).toBe(0);
+    expect(parsed.parameters.all_edges_radius.maximum).toBe(3);
+
     expect(parsed.parameters.profile_corner_radius).toBeDefined();
     expect(parsed.parameters.profile_corner_radius.default).toBe(2);
-    expect(parsed.parameters.profile_corner_radius.minimum).toBe(0.5);
+    expect(parsed.parameters.profile_corner_radius.minimum).toBe(0);
     expect(parsed.parameters.profile_corner_radius.maximum).toBe(4);
 
     expect(parsed.parameters.inner_corner_radius).toBeDefined();
     expect(parsed.parameters.inner_corner_radius.default).toBe(1);
-    expect(parsed.parameters.inner_corner_radius.minimum).toBe(0.25);
+    expect(parsed.parameters.inner_corner_radius.minimum).toBe(0);
     expect(parsed.parameters.inner_corner_radius.maximum).toBe(3);
-
-    expect(parsed.parameters.sidesonly).toBeUndefined();
 
     const groupIds = parsed.groups.map((g) => g.id);
     expect(groupIds).toContain('Rounding');
