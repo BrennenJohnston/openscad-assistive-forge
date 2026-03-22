@@ -1,12 +1,32 @@
-// Q Charm — DXF Profile Extrusion
-// C-shaped charm extruded from a 2D DXF side profile.
-// Dimensions: ~22 mm long × 20 mm wide × 8.5 mm tall
-// Orientation: profile vertical (XZ plane), large surface area facing up.
+// Q Charm — Parametric C-Clip Bracelet Charm
+// C-shaped clip-on charm for silicone bracelets with customizable design.
+// Profile stands vertically; the outer surface faces up for engraving.
+// Concept inspired by Nasif Zaman's image-to-OpenSCAD proof-of-concept.
 // License: CC0 (Public Domain)
 
 /* [Dimensions] */
-// Extrusion width (Y axis depth)
+// Width along the bracelet (Y axis)
 extrude_width = 20; // [10:1:40]
+
+/* [Design] */
+// Image file for the design (SVG, PNG, or JPG — raster images auto-convert to SVG)
+design_file = "smiley.svg"; // [file:svg,png,jpg]
+
+// Depth of engraving (or height of raised design)
+engrave_depth = 0.8; // [0.2:0.1:3.0]
+
+// Raised design instead of engraved
+design_raised = "yes"; // [yes, no]
+
+// Scale the design relative to the charm face (percentage)
+design_scale = 60; // [20:5:95]
+
+/* [Border] */
+// Add a raised border rim around the charm perimeter
+add_border = "no"; // [yes, no]
+
+// Border height above the surface
+border_height = 0.5; // [0.2:0.1:2.0]
 
 /* [Rounding] */
 // Edge rounding radius (0 = sharp edges)
@@ -15,41 +35,127 @@ edge_radius = 1.0; // [0:0.25:3]
 // Round only the long extrusion edges (faster) or all edges
 sidesonly = true; // [true, false]
 
+/* [Attachment] */
+// Optional keychain hole at one end of the charm
+attachment_type = "none"; // [none, keychain_hole]
+
+// Hole diameter (for keychain hole)
+hole_diameter = 4; // [2:0.5:8]
+
 /* [Quality] */
 $fn = 64; // [24:8:128]
 
 /* [Hidden] */
-dxf_file = "q_Charm_L.dxf";
-z_offset = 3;
+// C-clip profile geometry (user-facing params added in a later phase)
+inner_width = 14;              // [10:1:25]
+inner_height = 2.5;            // [1.5:0.5:6]
+wall_thickness = 3;            // [1.5:0.5:5]
+gap_width = 4;                 // [2:0.5:8]
+profile_corner_radius = 2;    // [0.5:0.5:4]
 
-module q_charm() {
+outer_width = inner_width + 2 * wall_thickness;
+outer_height = inner_height + 2 * wall_thickness;
+z_offset = outer_height / 2;
+profile_center_x = 0;
+profile_max_y = outer_height / 2;
+charm_top_z = outer_height;
+face_dim = min(extrude_width, inner_width);
+design_size = face_dim * design_scale / 100;
+total_top_z = charm_top_z
+    + (add_border == "yes" ? border_height : 0)
+    + (design_raised == "yes" ? engrave_depth : 0);
+
+module profile_2d() {
+    clip_fillet = min(profile_corner_radius / 2, inner_height / 3, gap_width / 4);
+    difference() {
+        offset(r = profile_corner_radius)
+            square([outer_width - 2 * profile_corner_radius,
+                    outer_height - 2 * profile_corner_radius], center = true);
+        offset(delta = clip_fillet) offset(r = -clip_fillet)
+            polygon([
+                [-gap_width/2,   -outer_height/2 - 0.1],
+                [-gap_width/2,   -outer_height/2 + wall_thickness],
+                [-inner_width/2, -outer_height/2 + wall_thickness],
+                [-inner_width/2,  outer_height/2 - wall_thickness],
+                [ inner_width/2,  outer_height/2 - wall_thickness],
+                [ inner_width/2, -outer_height/2 + wall_thickness],
+                [ gap_width/2,   -outer_height/2 + wall_thickness],
+                [ gap_width/2,   -outer_height/2 - 0.1]
+            ]);
+    }
+}
+
+module charm_body() {
     translate([0, 0, z_offset])
         rotate([90, 0, 0]) {
             if (edge_radius > 0 && sidesonly) {
-                // Cylinder kernel: rounds the long edges running along the
-                // extrusion axis while keeping the profile outline crisp.
                 minkowski() {
                     linear_extrude(height = extrude_width, center = true)
                         offset(r = -edge_radius)
-                            import(dxf_file);
+                            profile_2d();
                     cylinder(r = edge_radius, h = 0.01, center = true);
                 }
             } else if (edge_radius > 0) {
-                // Sphere kernel: rounds every edge uniformly.
                 minkowski() {
                     linear_extrude(
                         height = extrude_width - 2 * edge_radius,
                         center = true
                     )
                         offset(r = -edge_radius)
-                            import(dxf_file);
+                            profile_2d();
                     sphere(r = edge_radius);
                 }
             } else {
                 linear_extrude(height = extrude_width, center = true)
-                    import(dxf_file);
+                    profile_2d();
             }
         }
+}
+
+module design_2d() {
+    resize([design_size, 0], auto = true)
+        import(design_file, center = true);
+}
+
+module border_shell() {
+    if (add_border == "yes") {
+        translate([0, 0, z_offset])
+            rotate([90, 0, 0])
+                linear_extrude(height = extrude_width, center = true)
+                    difference() {
+                        offset(r = border_height)
+                            profile_2d();
+                        profile_2d();
+                    }
+    }
+}
+
+module keychain_hole() {
+    if (attachment_type == "keychain_hole") {
+        margin = hole_diameter / 2 + 1;
+        translate([profile_center_x, extrude_width / 2 - margin, -0.01])
+            cylinder(d = hole_diameter, h = total_top_z + 0.02);
+    }
+}
+
+module q_charm() {
+    difference() {
+        union() {
+            charm_body();
+            border_shell();
+            if (design_raised == "yes") {
+                translate([profile_center_x, 0, charm_top_z])
+                    linear_extrude(height = engrave_depth)
+                        design_2d();
+            }
+        }
+        if (design_raised != "yes") {
+            translate([profile_center_x, 0, charm_top_z - engrave_depth])
+                linear_extrude(height = engrave_depth + 0.01)
+                    design_2d();
+        }
+        keychain_hole();
+    }
 }
 
 q_charm();
