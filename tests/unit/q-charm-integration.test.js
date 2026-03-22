@@ -87,9 +87,15 @@ describe('q_charm.scad parser integration', () => {
 
     expect(parsed.parameters.charm_thickness).toBeDefined();
     expect(parsed.parameters.charm_thickness.default).toBe(3);
+    expect(parsed.parameters.charm_thickness.maximum).toBe(4);
 
     expect(parsed.parameters.bracelet_width).toBeDefined();
     expect(parsed.parameters.bracelet_width.default).toBe(14);
+
+    expect(parsed.parameters.gap_offset).toBeDefined();
+    expect(parsed.parameters.gap_offset.default).toBe(0);
+    expect(parsed.parameters.gap_offset.minimum).toBe(-4);
+    expect(parsed.parameters.gap_offset.maximum).toBe(4);
   });
 
   it('extracts design_offset parameter added in Phase 3', () => {
