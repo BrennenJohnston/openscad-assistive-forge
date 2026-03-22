@@ -31,6 +31,9 @@ design_raised = "yes"; // [yes, no]
 // Scale the design relative to the charm face (percentage)
 design_scale = 60; // [20:5:95]
 
+// Offset to thicken SVG lines for FDM printability (0.6 = 1.2mm total, two 0.4mm nozzle walls)
+design_offset = 0.6; // [0:0.1:1.5]
+
 /* [Border] */
 // Add a raised border rim around the charm perimeter
 add_border = "no"; // [yes, no]
@@ -120,8 +123,9 @@ module charm_body() {
 }
 
 module design_2d() {
-    resize([design_size, 0], auto = true)
-        import(design_file, center = true);
+    offset(r = design_offset)
+        resize([design_size, 0], auto = true)
+            import(design_file, center = true);
 }
 
 module border_shell() {
