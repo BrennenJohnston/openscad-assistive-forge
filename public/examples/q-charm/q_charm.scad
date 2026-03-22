@@ -114,6 +114,18 @@ bail_thickness = 2; // [1:0.5:4]
 // Bail loop inner radius
 bail_inner_radius = 3; // [2:0.5:6]
 
+// Horizontal position offset for attachment (X axis)
+attachment_x = 0; // [-10:0.5:10]
+
+// Position offset along the bracelet width (Y axis)
+attachment_y = 0; // [-10:0.5:10]
+
+// Vertical position offset for attachment (Z axis)
+attachment_z = 0; // [-5:0.5:5]
+
+// Cutout depth — 0 cuts through entire height; positive values cut partially from the top surface
+attachment_depth = 0; // [0:0.5:10]
+
 /* [Quality] */
 $fn = 64; // [24:8:128]
 
@@ -241,16 +253,22 @@ module border_shell() {
 }
 
 module attachment_cutout() {
+    cut_h = attachment_depth > 0 ? attachment_depth + 0.02 : total_top_z + 0.02;
+    cut_z = attachment_depth > 0 ? total_top_z - attachment_depth : -0.01;
     if (attachment_type == "keychain_hole") {
         margin = hole_diameter / 2 + 1;
-        translate([profile_center_x, extrude_width / 2 - margin, -0.01])
-            cylinder(d = hole_diameter, h = total_top_z + 0.02);
+        translate([profile_center_x + attachment_x,
+                   extrude_width / 2 - margin + attachment_y,
+                   cut_z + attachment_z])
+            cylinder(d = hole_diameter, h = cut_h);
     } else if (attachment_type == "lanyard_slot") {
         slot_width = hole_diameter * 2;
         r = hole_diameter / 4;
         margin = hole_diameter / 2 + 1;
-        translate([profile_center_x, extrude_width / 2 - margin, -0.01])
-            linear_extrude(height = total_top_z + 0.02)
+        translate([profile_center_x + attachment_x,
+                   extrude_width / 2 - margin + attachment_y,
+                   cut_z + attachment_z])
+            linear_extrude(height = cut_h)
                 hull() {
                     translate([-(slot_width / 2 - r), 0]) circle(r = r);
                     translate([ (slot_width / 2 - r), 0]) circle(r = r);
@@ -260,7 +278,7 @@ module attachment_cutout() {
 
 module bail_loop() {
     if (attachment_type == "bail_loop") {
-        translate([0, extrude_width / 2, z_offset])
+        translate([attachment_x, extrude_width / 2 + attachment_y, z_offset + attachment_z])
             rotate([0, 90, 0])
                 rotate_extrude(angle = 180, $fn = 32)
                     translate([bail_inner_radius, 0, 0])

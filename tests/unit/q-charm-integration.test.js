@@ -172,7 +172,7 @@ describe('q_charm.scad parser integration', () => {
     expect(parsed.parameters.text_raised).toBeDefined();
   });
 
-  it('extracts Attachment parameters added in Phase 6', () => {
+  it('extracts Attachment parameters including position and depth from Phase 7', () => {
     scadContent = readFileSync(scadPath, 'utf-8');
     parsed = extractParameters(scadContent);
 
@@ -180,6 +180,26 @@ describe('q_charm.scad parser integration', () => {
     expect(parsed.parameters.hole_diameter).toBeDefined();
     expect(parsed.parameters.bail_thickness).toBeDefined();
     expect(parsed.parameters.bail_inner_radius).toBeDefined();
+
+    expect(parsed.parameters.attachment_x).toBeDefined();
+    expect(parsed.parameters.attachment_x.default).toBe(0);
+    expect(parsed.parameters.attachment_x.minimum).toBe(-10);
+    expect(parsed.parameters.attachment_x.maximum).toBe(10);
+
+    expect(parsed.parameters.attachment_y).toBeDefined();
+    expect(parsed.parameters.attachment_y.default).toBe(0);
+    expect(parsed.parameters.attachment_y.minimum).toBe(-10);
+    expect(parsed.parameters.attachment_y.maximum).toBe(10);
+
+    expect(parsed.parameters.attachment_z).toBeDefined();
+    expect(parsed.parameters.attachment_z.default).toBe(0);
+    expect(parsed.parameters.attachment_z.minimum).toBe(-5);
+    expect(parsed.parameters.attachment_z.maximum).toBe(5);
+
+    expect(parsed.parameters.attachment_depth).toBeDefined();
+    expect(parsed.parameters.attachment_depth.default).toBe(0);
+    expect(parsed.parameters.attachment_depth.minimum).toBe(0);
+    expect(parsed.parameters.attachment_depth.maximum).toBe(10);
   });
 
   it('extracts Design Layer 2 parameters including Z-offset added in Phase 5', () => {
