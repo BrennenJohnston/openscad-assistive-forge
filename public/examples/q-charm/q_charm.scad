@@ -34,6 +34,25 @@ design_scale = 60; // [20:5:95]
 // Offset to thicken SVG lines for FDM printability (0.6 = 1.2mm total, two 0.4mm nozzle walls)
 design_offset = 0.6; // [0:0.1:1.5]
 
+/* [Text] */
+// Text or number to display on the charm face (leave empty for none)
+text_content = "";
+
+// Text height in mm
+text_size = 5; // [3:0.5:12]
+
+// Horizontal position offset from center
+text_x = 0; // [-10:0.5:10]
+
+// Vertical position offset from center
+text_y = 0; // [-10:0.5:10]
+
+// Depth of text engraving (or height of raised text)
+text_depth = 0.8; // [0.2:0.1:2]
+
+// Raised text instead of engraved
+text_raised = "yes"; // [yes, no]
+
 /* [Border] */
 // Add a raised border rim around the charm perimeter
 add_border = "no"; // [yes, no]
@@ -73,7 +92,10 @@ face_dim = min(extrude_width, bracelet_width);
 design_size = face_dim * design_scale / 100;
 total_top_z = charm_top_z
     + (add_border == "yes" ? border_height : 0)
-    + (design_raised == "yes" ? engrave_depth : 0);
+    + max(
+        (design_raised == "yes") ? engrave_depth : 0,
+        (text_content != "" && text_raised == "yes") ? text_depth : 0
+    );
 
 module profile_2d() {
     clip_fillet = min(profile_corner_radius / 2, inner_height / 3, gap_width / 4);
@@ -128,6 +150,15 @@ module design_2d() {
             import(design_file, center = true);
 }
 
+module text_2d() {
+    if (text_content != "") {
+        translate([text_x, text_y])
+            text(text_content, size = text_size,
+                 font = "Liberation Sans",
+                 halign = "center", valign = "center");
+    }
+}
+
 module border_shell() {
     if (add_border == "yes") {
         translate([0, 0, z_offset])
@@ -159,11 +190,21 @@ module q_charm() {
                     linear_extrude(height = engrave_depth)
                         design_2d();
             }
+            if (text_content != "" && text_raised == "yes") {
+                translate([profile_center_x, 0, charm_top_z])
+                    linear_extrude(height = text_depth)
+                        text_2d();
+            }
         }
         if (design_raised != "yes") {
             translate([profile_center_x, 0, charm_top_z - engrave_depth])
                 linear_extrude(height = engrave_depth + 0.01)
                     design_2d();
+        }
+        if (text_content != "" && text_raised != "yes") {
+            translate([profile_center_x, 0, charm_top_z - text_depth])
+                linear_extrude(height = text_depth + 0.01)
+                    text_2d();
         }
         keychain_hole();
     }
