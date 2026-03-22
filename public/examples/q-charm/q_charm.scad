@@ -68,11 +68,17 @@ edge_radius = 1.0; // [0:0.25:3]
 sidesonly = true; // [true, false]
 
 /* [Attachment] */
-// Optional keychain hole at one end of the charm
-attachment_type = "none"; // [none, keychain_hole]
+// Optional attachment at one end of the charm
+attachment_type = "none"; // [none, keychain_hole, bail_loop, lanyard_slot]
 
-// Hole diameter (for keychain hole)
+// Hole diameter (for keychain hole and lanyard slot sizing)
 hole_diameter = 4; // [2:0.5:8]
+
+// Bail loop wire thickness
+bail_thickness = 2; // [1:0.5:4]
+
+// Bail loop inner radius
+bail_inner_radius = 3; // [2:0.5:6]
 
 /* [Quality] */
 $fn = 64; // [24:8:128]
@@ -172,11 +178,31 @@ module border_shell() {
     }
 }
 
-module keychain_hole() {
+module attachment_cutout() {
     if (attachment_type == "keychain_hole") {
         margin = hole_diameter / 2 + 1;
         translate([profile_center_x, extrude_width / 2 - margin, -0.01])
             cylinder(d = hole_diameter, h = total_top_z + 0.02);
+    } else if (attachment_type == "lanyard_slot") {
+        slot_width = hole_diameter * 2;
+        r = hole_diameter / 4;
+        margin = hole_diameter / 2 + 1;
+        translate([profile_center_x, extrude_width / 2 - margin, -0.01])
+            linear_extrude(height = total_top_z + 0.02)
+                hull() {
+                    translate([-(slot_width / 2 - r), 0]) circle(r = r);
+                    translate([ (slot_width / 2 - r), 0]) circle(r = r);
+                }
+    }
+}
+
+module bail_loop() {
+    if (attachment_type == "bail_loop") {
+        translate([0, extrude_width / 2, z_offset])
+            rotate([0, 90, 0])
+                rotate_extrude(angle = 180, $fn = 32)
+                    translate([bail_inner_radius, 0, 0])
+                        circle(d = bail_thickness);
     }
 }
 
@@ -185,6 +211,7 @@ module q_charm() {
         union() {
             charm_body();
             border_shell();
+            bail_loop();
             if (design_raised == "yes") {
                 translate([profile_center_x, 0, charm_top_z])
                     linear_extrude(height = engrave_depth)
@@ -206,7 +233,7 @@ module q_charm() {
                 linear_extrude(height = text_depth + 0.01)
                     text_2d();
         }
-        keychain_hole();
+        attachment_cutout();
     }
 }
 
