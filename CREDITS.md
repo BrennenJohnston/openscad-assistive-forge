@@ -60,9 +60,9 @@ Cursor icons are adapted from the **Retrosmart X11 Cursors** project by mdomlop.
 
 ---
 
-## Image Import and Charm Maker — Proof-of-Concept and UX Design
+## Nasif's Charm Maker Program — Concept, Proof-of-Concept, and UX Design
 
-The image-to-OpenSCAD import feature and the charm/plate builder tool were
+The image-to-OpenSCAD import feature and the charm builder tools were
 inspired by a proof-of-concept built by **Nasif Zaman**
 ([@Znasif](https://github.com/Znasif)).
 
@@ -71,10 +71,23 @@ inspired by a proof-of-concept built by **Nasif Zaman**
 - **Contribution**: Demonstrated PNG-to-SCAD geometry pipeline, designed
   the logo-plate example concept, validated the client-side image
   processing approach, established the upload + invert + depth UX pattern
-- **Named tool**: The **"Nasif's Charm Maker"** tool in the application
-  (`public/examples/nasif-charm-maker/`) is named in his honor. It appears
-  in the example selector, the manifest display name, the page title when
-  the tool is loaded, and the SCAD file header comment.
+- **Image Prep proof-of-concept**: Nasif's fork also included a
+  Flask-based image processing pipeline (median filter, thresholding,
+  edge detection) that converted raster images into SVG outlines for
+  OpenSCAD `import()`. The Forge's client-side image pipeline using
+  imagetracerjs serves the same purpose without a server dependency.
+- **Named program**: Three example tools are grouped under the
+  **"Nasif's Charm Maker"** program in his honor:
+  - **Nasif's Charm Maker** (`public/examples/nasif-charm-maker/`) —
+    flat pendant/charm with SVG designs
+  - **Q-Charm** (`public/examples/q-charm/`) — C-clip bracelet charm
+    with parametric fit, dual-layer SVG, and text support
+  - **Logo Plate** (`public/examples/logo-plate/`) — parametric plate
+    with engraved SVG logo
+
+  The program name appears in each tool's manifest (`"program":
+  "nasifs-charm-maker"`), the File > Examples submenu, and the welcome
+  screen card. Each SCAD file's header comment credits Nasif by name.
 
 ---
 
