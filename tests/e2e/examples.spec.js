@@ -123,14 +123,20 @@ test.describe('Q-Charm Smoke Tests', () => {
     await expect(page.locator('.param-control').first()).toBeVisible({ timeout: 10000 })
   })
 
-  test('welcome screen has Q-Charm button with accessible name', async ({ page }) => {
+  test('welcome screen has Charm Maker card with variant selector including Q-Charm', async ({ page }) => {
     await page.goto('/')
 
-    const qCharmBtn = page.locator('[data-example="q-charm"]')
-    await expect(qCharmBtn).toBeVisible()
+    const variantSelect = page.locator('#charmVariantSelect')
+    await expect(variantSelect).toBeVisible()
 
-    const ariaLabel = await qCharmBtn.getAttribute('aria-label')
-    const textContent = await qCharmBtn.textContent()
+    const qCharmOption = variantSelect.locator('option[value="q-charm"]')
+    await expect(qCharmOption).toHaveCount(1)
+
+    const openBtn = page.locator('#openCharmMakerBtn')
+    await expect(openBtn).toBeVisible()
+
+    const ariaLabel = await openBtn.getAttribute('aria-label')
+    const textContent = await openBtn.textContent()
     const hasName = (ariaLabel && ariaLabel.length > 0) ||
                     (textContent && textContent.trim().length > 0)
     expect(hasName).toBe(true)

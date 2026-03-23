@@ -9841,6 +9841,30 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
   min-height: 44px;
 }
 
+.charm-variant-selector {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.charm-variant-selector label {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--color-text-primary);
+}
+
+.charm-variant-select {
+  flex: 1;
+  min-height: 36px;
+  padding: var(--space-xs) var(--space-sm);
+  font-size: var(--font-size-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+}
+
 .btn-role-learn {
   width: 100%;
   justify-content: center;

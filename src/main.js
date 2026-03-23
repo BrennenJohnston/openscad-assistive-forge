@@ -5412,6 +5412,15 @@ if (rounded) {
     });
   });
 
+  // Wire charm variant selector to update the single Open button
+  const charmVariantSelect = document.getElementById('charmVariantSelect');
+  const openCharmMakerBtn = document.getElementById('openCharmMakerBtn');
+  if (charmVariantSelect && openCharmMakerBtn) {
+    charmVariantSelect.addEventListener('change', () => {
+      openCharmMakerBtn.dataset.example = charmVariantSelect.value;
+    });
+  }
+
   // =========================================
   // Deep-linking: URL parameter support for external website integration
   // Allows external sites to link directly to Forge with a specific example loaded
