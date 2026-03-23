@@ -98,7 +98,9 @@
     "codemirror": "^6.0.2",
     "imagetracerjs": "^1.2.6",
     "jszip": "^3.10.1",
+    "path-bool": "^0.0.7",
     "split.js": "^1.6.5",
+    "svg-path-commander": "^2.1.11",
     "three": "^0.182.0"
   },
   "overrides": {

@@ -153,6 +153,16 @@ export const FLAGS = {
     userConfigurable: true,
     killSwitch: false,
   },
+  svg_preparer: {
+    id: 'svg_preparer',
+    name: 'SVG Preparer',
+    description:
+      'Transform multi-element SVGs into OpenSCAD-compatible compound-path SVGs using boolean operations',
+    default: false,
+    rollout: 0,
+    userConfigurable: true,
+    killSwitch: false,
+  },
 };
 
 // Storage key for user preferences
