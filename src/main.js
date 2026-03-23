@@ -4758,6 +4758,7 @@ async function initApp() {
     getAutoPreviewController: () => autoPreviewController,
     getAutoPreviewEnabled: () => autoPreviewEnabled,
     setCurrentSavedProjectId: (id) => { currentSavedProjectId = id; },
+    getCurrentSavedProjectId: () => currentSavedProjectId,
     setPresetCompanionMap: (map) => { presetCompanionMap = map; },
     getFileSizeLimits: () => FILE_SIZE_LIMITS,
     getValidateFileUpload: () => validateFileUpload,

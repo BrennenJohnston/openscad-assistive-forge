@@ -81,6 +81,12 @@ function createLabelContainer(param, options = {}) {
 // Gallery options for file parameters (populated by example manifest loading)
 let galleryOptionsMap = {};
 
+// Per-param references to gallery listbox DOM nodes for dynamic insertion
+const galleryListboxRefs = {};
+
+// Optional listener called when a user uploads an SVG via the file picker
+let fileUploadListener = null;
+
 /**
  * Register bundled SVG gallery options for a file parameter.
  * Called when loading an example whose manifest declares an svgLibrary.
@@ -96,6 +102,114 @@ export function setGalleryOptions(paramName, options) {
  */
 export function clearGalleryOptions() {
   galleryOptionsMap = {};
+  for (const key of Object.keys(galleryListboxRefs)) {
+    delete galleryListboxRefs[key];
+  }
+}
+
+/**
+ * Return the parameter names that currently have gallery options registered.
+ * @returns {string[]}
+ */
+export function getGalleryParamNames() {
+  return Object.keys(galleryOptionsMap);
+}
+
+/**
+ * Set a listener that is called when the user uploads an SVG via a file picker.
+ * @param {Function|null} fn - Callback `(paramName, fileObj) => void`
+ */
+export function setFileUploadListener(fn) {
+  fileUploadListener = fn;
+}
+
+/**
+ * Dynamically append a user-uploaded SVG option to a live gallery.
+ * If the gallery DOM is not rendered, the option is only added to the options map
+ * so it appears on next render.
+ * @param {string} paramName - File parameter name
+ * @param {{file: string, label: string, url: string, userUpload?: boolean}} svgOpt
+ */
+export function appendUserSvgToGallery(paramName, svgOpt) {
+  if (!galleryOptionsMap[paramName]) {
+    galleryOptionsMap[paramName] = [];
+  }
+  const opts = galleryOptionsMap[paramName];
+
+  if (opts.some((o) => o.file === svgOpt.file && o.userUpload)) return;
+
+  opts.push(svgOpt);
+
+  const ref = galleryListboxRefs[paramName];
+  if (!ref) return;
+
+  const { listbox, onSelectFn, paramDef } = ref;
+  const index = opts.length - 1;
+
+  // Insert a "Your uploads" heading before the first user upload
+  if (!listbox.querySelector('.svg-gallery-user-heading')) {
+    const heading = document.createElement('span');
+    heading.className = 'svg-gallery-heading svg-gallery-user-heading';
+    heading.textContent = 'Your uploads';
+    listbox.parentNode.insertBefore(heading, listbox.nextSibling);
+    const userListbox = document.createElement('div');
+    userListbox.className = 'svg-gallery-listbox svg-gallery-user-listbox';
+    userListbox.setAttribute('role', 'listbox');
+    userListbox.setAttribute(
+      'aria-label',
+      'Your uploaded designs'
+    );
+    heading.parentNode.insertBefore(userListbox, heading.nextSibling);
+    ref.userListbox = userListbox;
+  }
+
+  const targetListbox = ref.userListbox || listbox;
+  const userCount = targetListbox.querySelectorAll('[role="option"]').length;
+
+  const option = document.createElement('button');
+  option.type = 'button';
+  option.className = 'svg-gallery-option';
+  option.setAttribute('role', 'option');
+  option.setAttribute('aria-selected', 'false');
+  option.id = `gallery-user-${paramDef.name}-${userCount}`;
+  option.title = svgOpt.label;
+
+  const thumb = document.createElement('img');
+  thumb.src = svgOpt.url;
+  thumb.alt = svgOpt.label;
+  thumb.className = 'svg-gallery-thumb';
+  thumb.loading = 'lazy';
+  thumb.setAttribute('aria-hidden', 'true');
+  option.appendChild(thumb);
+
+  const label = document.createElement('span');
+  label.className = 'svg-gallery-label';
+  label.textContent = svgOpt.label;
+  option.appendChild(label);
+
+  option.addEventListener('click', () => {
+    fetch(svgOpt.url)
+      .then((res) => {
+        if (!res.ok) throw new Error(`Failed to fetch ${svgOpt.file}`);
+        return res.text();
+      })
+      .then((svgText) => {
+        const svgDataUrl =
+          'data:image/svg+xml;base64,' + btoa(svgText);
+        announceChange(`Selected design: ${svgOpt.label}`);
+        onSelectFn(paramDef.name, {
+          name: svgOpt.file.split('/').pop(),
+          size: svgText.length,
+          type: 'image/svg+xml',
+          data: svgDataUrl,
+        });
+      })
+      .catch((err) => {
+        console.error('[SvgGallery] user upload fetch error:', err);
+      });
+  });
+
+  targetListbox.appendChild(option);
 }
 
 // Store current parameter values for dependency checking
@@ -1603,6 +1717,13 @@ function createSvgGallery(options, param, onSelect) {
   });
 
   gallery.appendChild(listbox);
+
+  galleryListboxRefs[param.name] = {
+    listbox,
+    onSelectFn: onSelect,
+    paramDef: param,
+  };
+
   return gallery;
 }
 
@@ -1735,12 +1856,16 @@ function createFileControl(param, onChange) {
             `Image converted to vector format: ${svgName}`
           );
 
-          onChange(param.name, {
+          const convertedFile = {
             name: svgName,
             size: svgString.length,
             type: 'image/svg+xml',
             data: svgDataUrl,
-          });
+          };
+          onChange(param.name, convertedFile);
+          if (fileUploadListener) {
+            fileUploadListener(param.name, convertedFile);
+          }
         } catch (err) {
           fileInfo.textContent = `Conversion failed: ${err.message}`;
           fileInfo.className = 'file-info file-info--error';
@@ -1758,12 +1883,16 @@ function createFileControl(param, onChange) {
       fileInfo.title = file.name;
       clearButton.style.display = 'inline-block';
 
-      onChange(param.name, {
+      const uploadedFileObj = {
         name: file.name,
         size: file.size,
         type: file.type,
         data: dataUrl,
-      });
+      };
+      onChange(param.name, uploadedFileObj);
+      if (fileUploadListener && file.type === 'image/svg+xml') {
+        fileUploadListener(param.name, uploadedFileObj);
+      }
     };
     reader.onerror = () => {
       fileInfo.textContent = 'Error reading file';

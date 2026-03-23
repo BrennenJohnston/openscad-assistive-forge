@@ -13,6 +13,9 @@ import {
   renderParameterUI,
   setGalleryOptions,
   clearGalleryOptions,
+  setFileUploadListener,
+  appendUserSvgToGallery,
+  getGalleryParamNames,
 } from './ui-generator.js';
 import {
   extractZipFiles,
@@ -43,6 +46,10 @@ import { getErrorLogPanel, ERROR_LOG_TYPE } from './error-log-panel.js';
 import * as SharedImageStore from './shared-image-store.js';
 import { getAppPrefKey } from './storage-keys.js';
 import { importProjectFromFiles } from './storage-manager.js';
+import {
+  addProjectFile,
+  getProjectFiles,
+} from './saved-projects-manager.js';
 import { showMissingDependenciesDialog } from './dialogs.js';
 import { announceError as _announceError } from './announcer.js';
 import { showErrorModal, showErrorToast } from './error-translator.js';
@@ -217,6 +224,7 @@ export function showProcessingOverlay(message, opts = {}) {
  * @param {Function} deps.getAutoPreviewController - Returns current AutoPreviewController (may be null)
  * @param {Function} deps.getAutoPreviewEnabled - Returns whether auto-preview is enabled
  * @param {Function} deps.setCurrentSavedProjectId - Sets current saved project ID
+ * @param {Function} deps.getCurrentSavedProjectId - Gets current saved project ID
  * @param {Function} deps.setPresetCompanionMap - Sets preset companion map
  * @param {Function} deps.getFileSizeLimits - Returns FILE_SIZE_LIMITS object
  * @param {Function} deps.getValidateFileUpload - Returns validateFileUpload validator
@@ -252,6 +260,7 @@ export function initFileHandler({
   getAutoPreviewController,
   getAutoPreviewEnabled,
   setCurrentSavedProjectId,
+  getCurrentSavedProjectId,
   setPresetCompanionMap,
   getFileSizeLimits,
   getValidateFileUpload,
@@ -1227,10 +1236,15 @@ export function initFileHandler({
         }
       }
 
-      if (source === 'user') {
+      if (source === 'user' || source === 'program-example') {
         try {
           const state = stateManager.getState();
-          await getSavedProjectsUI().showSaveProjectPrompt(state);
+          const promptResult =
+            await getSavedProjectsUI().showSaveProjectPrompt(state);
+
+          if (promptResult?.saved && promptResult.projectId) {
+            await loadUserSvgsIntoGallery(promptResult.projectId);
+          }
         } catch (error) {
           console.error('[Saved Projects] Error showing save prompt:', error);
         }
@@ -1391,12 +1405,16 @@ export function initFileHandler({
         }
       }
 
+      const isProgramExample = Object.values(PROGRAM_DEFINITIONS).some(
+        (prog) => prog.examples.includes(exampleKey)
+      );
+
       handleFile(
         { name: example.name },
         exampleContent,
         exProjectFiles,
         exMainFilePath,
-        'example'
+        isProgramExample ? 'program-example' : 'example'
       );
     } catch (error) {
       console.error('Failed to load example:', error);
@@ -1408,6 +1426,80 @@ export function initFileHandler({
           'Check your internet connection and try again. The file may not be available.',
         technical: error.message,
       });
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // F-26: Save user-uploaded SVGs to project and update gallery
+  // ------------------------------------------------------------------
+
+  setFileUploadListener(async (paramName, fileObj) => {
+    const projectId = getCurrentSavedProjectId?.();
+    if (!projectId || !fileObj.data) return;
+
+    try {
+      const svgText = fileObj.data.startsWith('data:')
+        ? atob(fileObj.data.split(',')[1])
+        : fileObj.data;
+
+      await addProjectFile({
+        projectId,
+        path: `svg-uploads/${fileObj.name}`,
+        kind: 'image',
+        textContent: svgText,
+        mimeType: 'image/svg+xml',
+      });
+
+      appendUserSvgToGallery(paramName, {
+        file: fileObj.name,
+        label: fileObj.name.replace(/\.svg$/i, '').replace(/[-_]/g, ' '),
+        url: fileObj.data,
+        userUpload: true,
+      });
+
+      console.log(
+        `[SVG Upload] Saved to project ${projectId}: ${fileObj.name}`
+      );
+    } catch (err) {
+      console.warn('[SVG Upload] Failed to save to project:', err);
+    }
+  });
+
+  /**
+   * Load user-uploaded SVGs from a project's file store into the gallery.
+   * @param {string} projectId
+   */
+  async function loadUserSvgsIntoGallery(projectId) {
+    try {
+      const files = await getProjectFiles(projectId);
+      const svgFiles = files.filter(
+        (f) => f.path.startsWith('svg-uploads/') && f.textContent
+      );
+
+      for (const f of svgFiles) {
+        const fileName = f.path.replace('svg-uploads/', '');
+        const dataUrl =
+          'data:image/svg+xml;base64,' + btoa(f.textContent);
+
+        const svgParams = getGalleryParamNames();
+
+        for (const paramName of svgParams) {
+          appendUserSvgToGallery(paramName, {
+            file: fileName,
+            label: fileName.replace(/\.svg$/i, '').replace(/[-_]/g, ' '),
+            url: dataUrl,
+            userUpload: true,
+          });
+        }
+      }
+
+      if (svgFiles.length > 0) {
+        console.log(
+          `[SVG Upload] Loaded ${svgFiles.length} user SVG(s) from project ${projectId}`
+        );
+      }
+    } catch (err) {
+      console.warn('[SVG Upload] Failed to load user SVGs:', err);
     }
   }
 

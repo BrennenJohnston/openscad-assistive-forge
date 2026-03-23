@@ -407,4 +407,48 @@ describe('PROGRAM_DEFINITIONS', () => {
       }
     });
   }
+
+  it('q-charm and nasif-charm-maker are program examples (F-25 save prompt)', () => {
+    const programExampleKeys = new Set();
+    for (const prog of Object.values(PROGRAM_DEFINITIONS)) {
+      for (const key of prog.examples) {
+        programExampleKeys.add(key);
+      }
+    }
+
+    expect(programExampleKeys.has('q-charm')).toBe(true);
+    expect(programExampleKeys.has('nasif-charm-maker')).toBe(true);
+    expect(programExampleKeys.has('logo-plate')).toBe(true);
+
+    expect(programExampleKeys.has('simple-box')).toBe(false);
+    expect(programExampleKeys.has('cylinder')).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// F-26: SVG gallery exports from ui-generator
+// ---------------------------------------------------------------------------
+
+describe('SVG gallery module exports (F-26)', () => {
+  it('exports setGalleryOptions and clearGalleryOptions', async () => {
+    const mod = await import('../../src/js/ui-generator.js');
+    expect(typeof mod.setGalleryOptions).toBe('function');
+    expect(typeof mod.clearGalleryOptions).toBe('function');
+  });
+
+  it('exports setFileUploadListener for SVG upload hooks', async () => {
+    const mod = await import('../../src/js/ui-generator.js');
+    expect(typeof mod.setFileUploadListener).toBe('function');
+  });
+
+  it('exports appendUserSvgToGallery for dynamic gallery updates', async () => {
+    const mod = await import('../../src/js/ui-generator.js');
+    expect(typeof mod.appendUserSvgToGallery).toBe('function');
+  });
+
+  it('exports getGalleryParamNames for discovering active galleries', async () => {
+    const mod = await import('../../src/js/ui-generator.js');
+    expect(typeof mod.getGalleryParamNames).toBe('function');
+    expect(Array.isArray(mod.getGalleryParamNames())).toBe(true);
+  });
 });

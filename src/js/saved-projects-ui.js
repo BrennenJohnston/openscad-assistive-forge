@@ -1353,204 +1353,211 @@ export function initSavedProjectsUI({
   }
 
   /**
-   * Show opt-in save prompt after file upload
+   * Show opt-in save prompt after file upload or program entry.
    * @param {Object} fileData - Current file state
+   * @param {Object} [options]
+   * @param {boolean} [options.preSave=false] - Pre-check the save box (explicit Save action)
+   * @returns {Promise<{saved: boolean, projectId?: string}>}
    */
   async function showSaveProjectPrompt(fileData, { preSave = false } = {}) {
     const { uploadedFile, projectFiles, mainFilePath } = fileData;
 
-    if (!uploadedFile) return;
+    if (!uploadedFile) return { saved: false };
 
     const kind = projectFiles ? 'zip' : 'scad';
     const fileName = uploadedFile.name || 'untitled.scad';
 
-    // Create modal
-    const modal = document.createElement('div');
-    modal.className = 'preset-modal save-project-modal';
-    modal.setAttribute('role', 'dialog');
-    modal.setAttribute('aria-labelledby', 'saveProjectTitle');
-    modal.setAttribute('aria-modal', 'true');
+    return new Promise((resolvePrompt) => {
+      const modal = document.createElement('div');
+      modal.className = 'preset-modal save-project-modal';
+      modal.setAttribute('role', 'dialog');
+      modal.setAttribute('aria-labelledby', 'saveProjectTitle');
+      modal.setAttribute('aria-modal', 'true');
 
-    modal.innerHTML = `
-      <div class="preset-modal-content">
-        <div class="preset-modal-header">
-          <h3 id="saveProjectTitle" class="preset-modal-title">Save this file for quick access?</h3>
-          <button class="preset-modal-close" aria-label="Close dialog">&times;</button>
-        </div>
-        <div class="modal-body">
-          <p style="margin-bottom: var(--space-md); color: var(--color-text-secondary);">
-            Saved projects are stored in this browser. Clearing cache/site data will remove them.
-          </p>
-          <div class="save-project-checkbox-wrapper">
-            <input type="checkbox" id="saveProjectCheckbox" />
-            <label for="saveProjectCheckbox">Save this file to Saved Projects</label>
+      modal.innerHTML = `
+        <div class="preset-modal-content">
+          <div class="preset-modal-header">
+            <h3 id="saveProjectTitle" class="preset-modal-title">Save this file for quick access?</h3>
+            <button class="preset-modal-close" aria-label="Close dialog">&times;</button>
           </div>
-          <div class="edit-project-field">
-            <label for="saveProjectName">Project Name</label>
-            <input type="text" id="saveProjectName" value="${escapeHtml(fileName)}" />
-          </div>
-          <div class="save-project-notes-field">
-            <label for="saveProjectNotes">Notes (optional - you can paste links)</label>
-            <textarea id="saveProjectNotes" placeholder="Add notes about this project..."></textarea>
-            <div class="save-project-notes-counter">
-              <span id="saveProjectNotesCount">0</span> / 5000 characters
+          <div class="modal-body">
+            <p style="margin-bottom: var(--space-md); color: var(--color-text-secondary);">
+              Saved projects are stored in this browser. Clearing cache/site data will remove them.
+            </p>
+            <div class="save-project-checkbox-wrapper">
+              <input type="checkbox" id="saveProjectCheckbox" />
+              <label for="saveProjectCheckbox">Save this file to Saved Projects</label>
+            </div>
+            <div class="edit-project-field">
+              <label for="saveProjectName">Project Name</label>
+              <input type="text" id="saveProjectName" value="${escapeHtml(fileName)}" />
+            </div>
+            <div class="save-project-notes-field">
+              <label for="saveProjectNotes">Notes (optional - you can paste links)</label>
+              <textarea id="saveProjectNotes" placeholder="Add notes about this project..."></textarea>
+              <div class="save-project-notes-counter">
+                <span id="saveProjectNotesCount">0</span> / 5000 characters
+              </div>
+            </div>
+            <div id="saveProjectDuplicateWarning" style="display:none; margin-top: var(--space-md); padding: var(--space-sm) var(--space-md); border-radius: var(--radius-sm); background: color-mix(in srgb, var(--color-warning, #f59e0b) 15%, transparent); border: 1px solid var(--color-warning, #f59e0b);">
+              <p style="margin: 0 0 var(--space-sm); font-weight: 600; color: var(--color-text-primary);">
+                \u26A0 A project named &ldquo;<span id="saveProjectDuplicateName"></span>&rdquo; already exists.
+              </p>
+              <p style="margin: 0; color: var(--color-text-secondary); font-size: var(--text-sm);">
+                Do you want to overwrite it, or save this as a new copy?
+              </p>
             </div>
           </div>
-          <div id="saveProjectDuplicateWarning" style="display:none; margin-top: var(--space-md); padding: var(--space-sm) var(--space-md); border-radius: var(--radius-sm); background: color-mix(in srgb, var(--color-warning, #f59e0b) 15%, transparent); border: 1px solid var(--color-warning, #f59e0b);">
-            <p style="margin: 0 0 var(--space-sm); font-weight: 600; color: var(--color-text-primary);">
-              \u26A0 A project named &ldquo;<span id="saveProjectDuplicateName"></span>&rdquo; already exists.
-            </p>
-            <p style="margin: 0; color: var(--color-text-secondary); font-size: var(--text-sm);">
-              Do you want to overwrite it, or save this as a new copy?
-            </p>
+          <div class="preset-modal-footer" id="saveProjectFooter">
+            <button class="btn btn-secondary" id="saveProjectNotNow">Not now</button>
+            <button class="btn btn-primary" id="saveProjectSave" disabled>Save</button>
           </div>
         </div>
-        <div class="preset-modal-footer" id="saveProjectFooter">
-          <button class="btn btn-secondary" id="saveProjectNotNow">Not now</button>
-          <button class="btn btn-primary" id="saveProjectSave" disabled>Save</button>
-        </div>
-      </div>
-    `;
+      `;
 
-    document.body.appendChild(modal);
+      document.body.appendChild(modal);
 
-    // Get elements
-    const checkbox = modal.querySelector('#saveProjectCheckbox');
-    const nameInput = modal.querySelector('#saveProjectName');
-    const notesTextarea = modal.querySelector('#saveProjectNotes');
-    const notesCount = modal.querySelector('#saveProjectNotesCount');
-    const saveBtn = modal.querySelector('#saveProjectSave');
-    const notNowBtn = modal.querySelector('#saveProjectNotNow');
-    const closeBtn = modal.querySelector('.preset-modal-close');
-    const footer = modal.querySelector('#saveProjectFooter');
-    const duplicateWarning = modal.querySelector(
-      '#saveProjectDuplicateWarning'
-    );
-    const duplicateNameSpan = modal.querySelector('#saveProjectDuplicateName');
+      const checkbox = modal.querySelector('#saveProjectCheckbox');
+      const nameInput = modal.querySelector('#saveProjectName');
+      const notesTextarea = modal.querySelector('#saveProjectNotes');
+      const notesCount = modal.querySelector('#saveProjectNotesCount');
+      const saveBtn = modal.querySelector('#saveProjectSave');
+      const notNowBtn = modal.querySelector('#saveProjectNotNow');
+      const closeBtn = modal.querySelector('.preset-modal-close');
+      const footer = modal.querySelector('#saveProjectFooter');
+      const duplicateWarning = modal.querySelector(
+        '#saveProjectDuplicateWarning'
+      );
+      const duplicateNameSpan = modal.querySelector(
+        '#saveProjectDuplicateName'
+      );
 
-    // When called from an explicit Save/Save As action, pre-check the box
-    if (preSave) {
-      checkbox.checked = true;
-      saveBtn.disabled = false;
-    }
+      if (preSave) {
+        checkbox.checked = true;
+        saveBtn.disabled = false;
+      }
 
-    // Update save button state based on checkbox
-    checkbox.addEventListener('change', () => {
-      saveBtn.disabled = !checkbox.checked;
-    });
+      checkbox.addEventListener('change', () => {
+        saveBtn.disabled = !checkbox.checked;
+      });
 
-    // Setup character counter for notes with validation
-    const counter = modal.querySelector('.save-project-notes-counter');
-    setupNotesCounter(notesTextarea, notesCount, counter, {
-      maxLength: 5000,
-      warningThreshold: 4500,
-      onValidChange: (isValid) => {
-        if (isValid) {
-          saveBtn.disabled = !checkbox.checked;
+      const counter = modal.querySelector('.save-project-notes-counter');
+      setupNotesCounter(notesTextarea, notesCount, counter, {
+        maxLength: 5000,
+        warningThreshold: 4500,
+        onValidChange: (isValid) => {
+          if (isValid) {
+            saveBtn.disabled = !checkbox.checked;
+          } else {
+            saveBtn.disabled = true;
+          }
+        },
+      });
+
+      async function doSave(overwriteProject) {
+        const projectName = nameInput.value.trim() || fileName;
+        const notes = notesTextarea.value.trim();
+        const projectFilesObj = projectFiles
+          ? Object.fromEntries(projectFiles)
+          : null;
+
+        let result;
+        let savedProjectId = null;
+        if (overwriteProject) {
+          result = await updateProject({
+            id: overwriteProject.id,
+            notes,
+            content: uploadedFile.content,
+            projectFiles:
+              projectFilesObj !== null
+                ? JSON.stringify(projectFilesObj)
+                : undefined,
+          });
+          if (result.success) {
+            savedProjectId = overwriteProject.id;
+            setCurrentSavedProjectId(savedProjectId);
+          }
         } else {
-          saveBtn.disabled = true;
+          result = await saveProject({
+            name: projectName,
+            originalName: fileName,
+            kind,
+            mainFilePath: mainFilePath || fileName,
+            content: uploadedFile.content,
+            projectFiles: projectFilesObj,
+            notes,
+          });
+          if (result.success) {
+            savedProjectId = result.id;
+            setCurrentSavedProjectId(savedProjectId);
+          }
         }
-      },
-    });
 
-    async function doSave(overwriteProject) {
-      const projectName = nameInput.value.trim() || fileName;
-      const notes = notesTextarea.value.trim();
-      const projectFilesObj = projectFiles
-        ? Object.fromEntries(projectFiles)
-        : null;
-
-      let result;
-      if (overwriteProject) {
-        result = await updateProject({
-          id: overwriteProject.id,
-          notes,
-          content: uploadedFile.content,
-          projectFiles:
-            projectFilesObj !== null
-              ? JSON.stringify(projectFilesObj)
-              : undefined,
-        });
         if (result.success) {
-          setCurrentSavedProjectId(overwriteProject.id);
+          updateCompanionSaveButton();
+          stateManager.announceChange(`Project saved: ${projectName}`);
+          updateStatus(`Saved: ${projectName}`);
+          await renderSavedProjectsList();
+        } else {
+          showErrorModal({
+            title: 'Save Failed',
+            message: 'The project could not be saved.',
+            suggestion:
+              'Check available browser storage space and try again.',
+            technical: result.error,
+          });
         }
-      } else {
-        result = await saveProject({
-          name: projectName,
-          originalName: fileName,
-          kind,
-          mainFilePath: mainFilePath || fileName,
-          content: uploadedFile.content,
-          projectFiles: projectFilesObj,
-          notes,
-        });
-        if (result.success) {
-          setCurrentSavedProjectId(result.id);
-        }
-      }
 
-      if (result.success) {
-        updateCompanionSaveButton();
-        stateManager.announceChange(`Project saved: ${projectName}`);
-        updateStatus(`Saved: ${projectName}`);
-        await renderSavedProjectsList();
-      } else {
-        showErrorModal({
-          title: 'Save Failed',
-          message: 'The project could not be saved.',
-          suggestion: 'Check available browser storage space and try again.',
-          technical: result.error,
+        closeModal(modal);
+        modal.remove();
+        resolvePrompt({
+          saved: result.success,
+          projectId: savedProjectId,
         });
       }
 
-      closeModal(modal);
-      modal.remove();
-    }
+      saveBtn.addEventListener('click', async () => {
+        if (!checkbox.checked) return;
 
-    // Handle save — shows inline duplicate confirmation when needed
-    saveBtn.addEventListener('click', async () => {
-      if (!checkbox.checked) return;
+        const projectName = nameInput.value.trim() || fileName;
+        const existingProjects = await listSavedProjects();
+        const duplicate = existingProjects.find(
+          (p) => p.name === projectName
+        );
 
-      const projectName = nameInput.value.trim() || fileName;
-      const existingProjects = await listSavedProjects();
-      const duplicate = existingProjects.find((p) => p.name === projectName);
+        if (duplicate) {
+          duplicateNameSpan.textContent = projectName;
+          duplicateWarning.style.display = 'block';
 
-      if (duplicate) {
-        // Show inline confirmation — no native dialog
-        duplicateNameSpan.textContent = projectName;
-        duplicateWarning.style.display = 'block';
+          footer.innerHTML = `
+            <button class="btn btn-secondary" id="saveProjectNewCopy">Save as New Copy</button>
+            <button class="btn btn-danger" id="saveProjectOverwrite">Overwrite Existing</button>
+          `;
+          footer
+            .querySelector('#saveProjectOverwrite')
+            .addEventListener('click', () => doSave(duplicate));
+          footer
+            .querySelector('#saveProjectNewCopy')
+            .addEventListener('click', () => doSave(null));
+        } else {
+          await doSave(null);
+        }
+      });
 
-        // Replace footer buttons with overwrite / new copy choices
-        footer.innerHTML = `
-          <button class="btn btn-secondary" id="saveProjectNewCopy">Save as New Copy</button>
-          <button class="btn btn-danger" id="saveProjectOverwrite">Overwrite Existing</button>
-        `;
-        footer
-          .querySelector('#saveProjectOverwrite')
-          .addEventListener('click', () => doSave(duplicate));
-        footer
-          .querySelector('#saveProjectNewCopy')
-          .addEventListener('click', () => doSave(null));
-      } else {
-        await doSave(null);
-      }
+      const closeHandler = () => {
+        closeModal(modal);
+        modal.remove();
+        resolvePrompt({ saved: false });
+      };
+
+      notNowBtn.addEventListener('click', closeHandler);
+      closeBtn.addEventListener('click', closeHandler);
+
+      openModal(modal);
+
+      nameInput.focus();
+      nameInput.select();
     });
-
-    // Handle close
-    const closeHandler = () => {
-      closeModal(modal);
-      modal.remove();
-    };
-
-    notNowBtn.addEventListener('click', closeHandler);
-    closeBtn.addEventListener('click', closeHandler);
-
-    // Open modal with focus management
-    openModal(modal);
-
-    // Focus the project name input for easy editing
-    nameInput.focus();
-    nameInput.select();
   }
 
   /**
