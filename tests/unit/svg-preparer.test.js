@@ -726,3 +726,60 @@ describe('prepareSvg', () => {
     expect(dMatch).not.toBeNull();
   });
 });
+
+// ===========================================================================
+// Phase 3 — Pipeline integration: base64 round-trip and idempotency
+// ===========================================================================
+
+describe('pipeline integration (base64 round-trip)', () => {
+  it('prepared SVG round-trips through base64 encoding', () => {
+    const prepared = prepareSvg(SMILEY_SVG);
+    const encoded = btoa(prepared);
+    const decoded = atob(encoded);
+    expect(decoded).toBe(prepared);
+  });
+
+  it('preparation is idempotent (double-prepare produces same result)', () => {
+    const first = prepareSvg(SMILEY_SVG);
+    const second = prepareSvg(first);
+    expect(second).toBe(first);
+  });
+
+  it('needsPreparation returns false for already-prepared output', () => {
+    const prepared = prepareSvg(SMILEY_SVG);
+    expect(needsPreparation(prepared)).toBe(false);
+  });
+
+  it('single-element SVGs survive base64 round-trip unchanged', () => {
+    const encoded = btoa(HEART_SVG);
+    const decoded = atob(encoded);
+    expect(decoded).toBe(HEART_SVG);
+    expect(needsPreparation(decoded)).toBe(false);
+    expect(prepareSvg(decoded)).toBe(decoded);
+  });
+
+  it('prepared smiley has exactly one <path> after base64 round-trip', () => {
+    const prepared = prepareSvg(SMILEY_SVG);
+    const encoded = btoa(prepared);
+    const decoded = atob(encoded);
+    const pathMatches = decoded.match(/<path[\s/]/g) || [];
+    expect(pathMatches).toHaveLength(1);
+  });
+
+  it('prepared smiley data URL can be decoded back to valid SVG', () => {
+    const prepared = prepareSvg(SMILEY_SVG);
+    const dataUrl = 'data:image/svg+xml;base64,' + btoa(prepared);
+    const decoded = atob(dataUrl.split(',')[1]);
+    expect(decoded).toContain('<svg');
+    expect(decoded).toContain('<path');
+    expect(needsPreparation(decoded)).toBe(false);
+  });
+
+  it('star.svg (polygon) passes through without modification via base64', () => {
+    const encoded = btoa(STAR_SVG);
+    const decoded = atob(encoded);
+    expect(decoded).toBe(STAR_SVG);
+    expect(needsPreparation(decoded)).toBe(false);
+    expect(prepareSvg(decoded)).toBe(decoded);
+  });
+});

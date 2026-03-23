@@ -11,6 +11,8 @@ import {
   convertPngToSvg,
   validateImageDimensions,
 } from './image-import.js';
+import { isEnabled } from './feature-flags.js';
+import { prepareSvg, needsPreparation } from './svg-preparer.js';
 
 /**
  * Format a parameter name for display (replaces underscores with spaces)
@@ -76,6 +78,26 @@ function createLabelContainer(param, options = {}) {
   }
 
   return labelContainer;
+}
+
+/**
+ * Optionally prepare an SVG for OpenSCAD import when the svg_preparer
+ * feature flag is enabled. Multi-element SVGs are flattened into a single
+ * compound path. Single-element SVGs pass through unchanged.
+ * @param {string} svgText - Raw SVG markup
+ * @returns {string} Prepared SVG or the original if no preparation needed
+ */
+function maybePrepareForOpenScad(svgText) {
+  try {
+    if (isEnabled('svg_preparer') && needsPreparation(svgText)) {
+      const prepared = prepareSvg(svgText);
+      console.log('[SVG Preparer] Auto-prepared multi-element SVG for OpenSCAD');
+      return prepared;
+    }
+  } catch (err) {
+    console.warn('[SVG Preparer] Preparation failed, using original:', err);
+  }
+  return svgText;
 }
 
 // Gallery options for file parameters (populated by example manifest loading)
@@ -1648,12 +1670,13 @@ function createSvgGallery(options, param, onSelect) {
         return res.text();
       })
       .then((svgText) => {
+        const prepared = maybePrepareForOpenScad(svgText);
         const svgDataUrl =
-          'data:image/svg+xml;base64,' + btoa(svgText);
+          'data:image/svg+xml;base64,' + btoa(prepared);
         announceChange(`Selected design: ${opt.label}`);
         onSelect(param.name, {
           name: opt.file.split('/').pop(),
-          size: svgText.length,
+          size: prepared.length,
           type: 'image/svg+xml',
           data: svgDataUrl,
         });
@@ -1842,9 +1865,10 @@ function createFileControl(param, onChange) {
           }
 
           const svgString = await convertPngToSvg(dataUrl);
+          const preparedSvg = maybePrepareForOpenScad(svgString);
           const svgName = file.name.replace(/\.[^.]+$/, '.svg');
           const svgDataUrl =
-            'data:image/svg+xml;base64,' + btoa(svgString);
+            'data:image/svg+xml;base64,' + btoa(preparedSvg);
 
           fileInfo.textContent = `${svgName} (converted from ${file.name})`;
           fileInfo.title = svgName;
@@ -1858,7 +1882,7 @@ function createFileControl(param, onChange) {
 
           const convertedFile = {
             name: svgName,
-            size: svgString.length,
+            size: preparedSvg.length,
             type: 'image/svg+xml',
             data: svgDataUrl,
           };
@@ -1889,6 +1913,15 @@ function createFileControl(param, onChange) {
         type: file.type,
         data: dataUrl,
       };
+      if (file.type === 'image/svg+xml') {
+        const rawSvgText = atob(dataUrl.split(',')[1]);
+        const prepared = maybePrepareForOpenScad(rawSvgText);
+        if (prepared !== rawSvgText) {
+          uploadedFileObj.data =
+            'data:image/svg+xml;base64,' + btoa(prepared);
+          uploadedFileObj.size = prepared.length;
+        }
+      }
       onChange(param.name, uploadedFileObj);
       if (fileUploadListener && file.type === 'image/svg+xml') {
         fileUploadListener(param.name, uploadedFileObj);

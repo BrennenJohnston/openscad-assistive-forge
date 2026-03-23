@@ -58,6 +58,8 @@ import {
   sanitizeUrlParams,
   applyToolbarModeVisibility,
 } from './hfm-controller.js';
+import { isEnabled } from './feature-flags.js';
+import { prepareSvg, needsPreparation } from './svg-preparer.js';
 
 const STORAGE_KEY_MODEL_COLOR = getAppPrefKey('model-color');
 
@@ -1438,9 +1440,20 @@ export function initFileHandler({
     if (!projectId || !fileObj.data) return;
 
     try {
-      const svgText = fileObj.data.startsWith('data:')
+      let svgText = fileObj.data.startsWith('data:')
         ? atob(fileObj.data.split(',')[1])
         : fileObj.data;
+
+      if (isEnabled('svg_preparer') && needsPreparation(svgText)) {
+        try {
+          svgText = prepareSvg(svgText);
+        } catch (prepErr) {
+          console.warn(
+            '[SVG Upload] Preparation failed, storing original:',
+            prepErr
+          );
+        }
+      }
 
       await addProjectFile({
         projectId,
