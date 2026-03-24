@@ -115,16 +115,14 @@ function setHighlight(previewEl, index) {
   const svg = previewEl.querySelector('svg');
   if (!svg) return;
 
-  svg.querySelectorAll('[data-preparer-idx]').forEach((el) => {
-    el.style.outline = '';
-    el.style.outlineOffset = '';
+  svg.querySelectorAll('[data-preparer-highlight]').forEach((el) => {
+    el.removeAttribute('data-preparer-highlight');
   });
 
   if (index < 0) return;
   const target = svg.querySelector(`[data-preparer-idx="${index}"]`);
   if (target) {
-    target.style.outline = '2px solid var(--color-focus, #0078d4)';
-    target.style.outlineOffset = '2px';
+    target.setAttribute('data-preparer-highlight', '');
   }
 }
 
@@ -248,9 +246,7 @@ export function showSvgPreparerDialog(svgString, options = {}) {
       const swatch = document.createElement('span');
       swatch.className = 'svg-preparer-swatch';
       swatch.setAttribute('aria-hidden', 'true');
-      swatch.style.cssText =
-        `display:inline-block;width:16px;height:16px;border:1px solid var(--color-border,#888);` +
-        `border-radius:2px;background:${color};vertical-align:middle;flex-shrink:0;`;
+      swatch.style.background = color;
 
       // Element label
       const label = document.createElement('span');
@@ -260,8 +256,6 @@ export function showSvgPreparerDialog(svgString, options = {}) {
       // Role radio group
       const fieldset = document.createElement('fieldset');
       fieldset.className = 'svg-preparer-role-group';
-      fieldset.style.cssText =
-        'display:inline-flex;gap:8px;border:0;padding:0;margin:0 0 0 auto;';
 
       const legend = document.createElement('legend');
       legend.className = 'sr-only';
@@ -270,7 +264,6 @@ export function showSvgPreparerDialog(svgString, options = {}) {
 
       ROLE_OPTIONS.forEach(({ value, label: text }) => {
         const lbl = document.createElement('label');
-        lbl.style.cssText = 'cursor:pointer;display:inline-flex;align-items:center;gap:2px;';
         const radio = document.createElement('input');
         radio.type = 'radio';
         radio.name = `svgprep-role-${i}`;
