@@ -13,6 +13,7 @@ import {
 } from './image-import.js';
 import { isEnabled } from './feature-flags.js';
 import { prepareSvg, needsPreparation } from './svg-preparer.js';
+import { showSvgPreparerDialog } from './svg-preparer-dialog.js';
 
 /**
  * Format a parameter name for display (replaces underscores with spaces)
@@ -1679,6 +1680,7 @@ function createSvgGallery(options, param, onSelect) {
           size: prepared.length,
           type: 'image/svg+xml',
           data: svgDataUrl,
+          _rawSvg: svgText,
         });
       })
       .catch((err) => {
@@ -1817,6 +1819,40 @@ function createFileControl(param, onChange) {
   );
   clearButton.style.display = 'none';
 
+  // "Prepare SVG" button — opens the interactive classification dialog.
+  // Visible only when an SVG is loaded and the svg_preparer flag is on.
+  const prepareSvgBtn = document.createElement('button');
+  prepareSvgBtn.type = 'button';
+  prepareSvgBtn.className = 'file-prepare-svg-button btn btn-secondary';
+  prepareSvgBtn.textContent = 'Prepare SVG\u2026';
+  prepareSvgBtn.setAttribute(
+    'aria-label',
+    `Interactively prepare SVG for ${formatParamName(param.name)}`
+  );
+  prepareSvgBtn.style.display = 'none';
+  let currentRawSvg = null;
+
+  prepareSvgBtn.addEventListener('click', async () => {
+    if (!currentRawSvg) return;
+    const result = await showSvgPreparerDialog(currentRawSvg);
+    if (result === null) return;
+
+    const svgDataUrl = 'data:image/svg+xml;base64,' + btoa(result);
+    const fileName =
+      fileInfo.title || fileInfo.textContent || 'prepared.svg';
+    const fileObj = {
+      name: fileName,
+      size: result.length,
+      type: 'image/svg+xml',
+      data: svgDataUrl,
+    };
+    onChange(param.name, fileObj);
+    if (fileUploadListener) {
+      fileUploadListener(param.name, fileObj);
+    }
+    announceChange('SVG prepared for OpenSCAD');
+  });
+
   const acceptsSvg = param.acceptedExtensions?.includes('svg');
 
   // Button triggers file input
@@ -1870,6 +1906,12 @@ function createFileControl(param, onChange) {
           const svgDataUrl =
             'data:image/svg+xml;base64,' + btoa(preparedSvg);
 
+          currentRawSvg = svgString;
+          prepareSvgBtn.style.display =
+            isEnabled('svg_preparer') && needsPreparation(svgString)
+              ? 'inline-block'
+              : 'none';
+
           fileInfo.textContent = `${svgName} (converted from ${file.name})`;
           fileInfo.title = svgName;
           fileInfo.removeAttribute('aria-busy');
@@ -1915,12 +1957,20 @@ function createFileControl(param, onChange) {
       };
       if (file.type === 'image/svg+xml') {
         const rawSvgText = atob(dataUrl.split(',')[1]);
+        currentRawSvg = rawSvgText;
+        prepareSvgBtn.style.display =
+          isEnabled('svg_preparer') && needsPreparation(rawSvgText)
+            ? 'inline-block'
+            : 'none';
         const prepared = maybePrepareForOpenScad(rawSvgText);
         if (prepared !== rawSvgText) {
           uploadedFileObj.data =
             'data:image/svg+xml;base64,' + btoa(prepared);
           uploadedFileObj.size = prepared.length;
         }
+      } else {
+        currentRawSvg = null;
+        prepareSvgBtn.style.display = 'none';
       }
       onChange(param.name, uploadedFileObj);
       if (fileUploadListener && file.type === 'image/svg+xml') {
@@ -1940,6 +1990,8 @@ function createFileControl(param, onChange) {
     fileInfo.textContent = 'No file selected';
     fileInfo.className = 'file-info';
     clearButton.style.display = 'none';
+    prepareSvgBtn.style.display = 'none';
+    currentRawSvg = null;
     preview.style.display = 'none';
     preview.alt = '';
     onChange(param.name, null);
@@ -1952,6 +2004,17 @@ function createFileControl(param, onChange) {
       galleryOptions,
       param,
       (name, fileObj) => {
+        if (fileObj._rawSvg) {
+          currentRawSvg = fileObj._rawSvg;
+          delete fileObj._rawSvg;
+          prepareSvgBtn.style.display =
+            isEnabled('svg_preparer') && needsPreparation(currentRawSvg)
+              ? 'inline-block'
+              : 'none';
+        } else {
+          currentRawSvg = null;
+          prepareSvgBtn.style.display = 'none';
+        }
         fileInfo.textContent = `${fileObj.name} (design library)`;
         fileInfo.title = fileObj.name;
         clearButton.style.display = 'inline-block';
@@ -1967,6 +2030,7 @@ function createFileControl(param, onChange) {
   fileContainer.appendChild(preview);
   fileContainer.appendChild(fileInfo);
   fileContainer.appendChild(clearButton);
+  fileContainer.appendChild(prepareSvgBtn);
   fileContainer.appendChild(fileInput);
 
   container.appendChild(fileContainer);
