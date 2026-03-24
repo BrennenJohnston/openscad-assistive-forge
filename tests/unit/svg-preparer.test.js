@@ -728,6 +728,383 @@ describe('prepareSvg', () => {
 });
 
 // ===========================================================================
+// Phase 6 — parseSvgElements edge cases
+// ===========================================================================
+
+describe('parseSvgElements edge cases', () => {
+  it('handles SVG with only stroked elements (no fill)', () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg">' +
+      '<line x1="0" y1="0" x2="10" y2="10" stroke="red" fill="none"/>' +
+      '<polyline points="0,0 10,10 20,0" stroke="blue" fill="none"/>' +
+      '</svg>';
+    const elements = parseSvgElements(svg);
+    expect(elements).toHaveLength(2);
+    elements.forEach((el) => {
+      expect(el.fill).toBe('none');
+      expect(el.luminance).toBeNull();
+    });
+  });
+
+  it('handles SVG with gradient fill references', () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg">' +
+      '<defs><linearGradient id="g1"><stop offset="0" stop-color="red"/></linearGradient></defs>' +
+      '<rect x="0" y="0" width="50" height="50" fill="url(#g1)"/>' +
+      '</svg>';
+    const elements = parseSvgElements(svg);
+    expect(elements).toHaveLength(1);
+    expect(elements[0].fill).toBe('url(#g1)');
+    // url() fill is not a parseable color — luminance falls back to 0
+    expect(typeof elements[0].luminance).toBe('number');
+  });
+
+  it('handles SVG with pattern fill references', () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg">' +
+      '<defs><pattern id="p1"><rect width="5" height="5" fill="red"/></pattern></defs>' +
+      '<circle cx="25" cy="25" r="20" fill="url(#p1)"/>' +
+      '</svg>';
+    const elements = parseSvgElements(svg);
+    // OBSERVED: querySelectorAll('*') finds the rect inside <pattern> too
+    expect(elements).toHaveLength(2);
+    const circle = elements.find(
+      (el) => el.element.tagName.toLowerCase() === 'circle'
+    );
+    expect(circle).toBeDefined();
+    expect(circle.fill).toBe('url(#p1)');
+  });
+
+  it('handles SVG with transform attributes on elements', () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg">' +
+      '<rect x="0" y="0" width="20" height="20" fill="black" transform="rotate(45 10 10)"/>' +
+      '</svg>';
+    const elements = parseSvgElements(svg);
+    expect(elements).toHaveLength(1);
+    expect(elements[0].pathData).toMatch(/^M/);
+    expect(elements[0].fill).toBe('black');
+  });
+
+  it('handles SVG with clip-path on elements', () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg">' +
+      '<defs><clipPath id="c1"><rect x="0" y="0" width="50" height="50"/></clipPath></defs>' +
+      '<circle cx="50" cy="50" r="40" fill="black" clip-path="url(#c1)"/>' +
+      '</svg>';
+    const elements = parseSvgElements(svg);
+    // clipPath defs contain shape elements; only the non-defs circle should be parsed
+    // The rect inside clipPath is also found by querySelectorAll('*')
+    const circles = elements.filter(
+      (el) => el.element.tagName.toLowerCase() === 'circle'
+    );
+    expect(circles).toHaveLength(1);
+    expect(circles[0].fill).toBe('black');
+  });
+
+  it('handles SVG with nested groups', () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg">' +
+      '<g><g><circle cx="10" cy="10" r="5" fill="red"/></g></g>' +
+      '</svg>';
+    const elements = parseSvgElements(svg);
+    expect(elements).toHaveLength(1);
+    expect(elements[0].element.tagName.toLowerCase()).toBe('circle');
+  });
+
+  it('handles SVG with mixed shape types', () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg">' +
+      '<circle cx="20" cy="20" r="10" fill="black"/>' +
+      '<rect x="40" y="10" width="20" height="20" fill="white"/>' +
+      '<ellipse cx="80" cy="20" rx="10" ry="5" fill="gray"/>' +
+      '<polygon points="10,80 30,80 20,60" fill="black"/>' +
+      '</svg>';
+    const elements = parseSvgElements(svg);
+    expect(elements).toHaveLength(4);
+    const tags = elements.map((el) => el.element.tagName.toLowerCase());
+    expect(tags).toContain('circle');
+    expect(tags).toContain('rect');
+    expect(tags).toContain('ellipse');
+    expect(tags).toContain('polygon');
+    elements.forEach((el) => {
+      expect(el.pathData).toMatch(/^M/);
+    });
+  });
+
+  it('returns empty path data for path element with no d attribute', () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg"><path fill="black"/></svg>';
+    const elements = parseSvgElements(svg);
+    expect(elements).toHaveLength(1);
+    expect(elements[0].pathData).toBe('');
+  });
+});
+
+// ===========================================================================
+// Phase 6 — classifyElements edge cases
+// ===========================================================================
+
+describe('classifyElements edge cases', () => {
+  it('classifies all-same-luminance elements as foreground when dark', () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg">' +
+      '<circle cx="20" cy="20" r="10" fill="black"/>' +
+      '<circle cx="50" cy="20" r="10" fill="black"/>' +
+      '<circle cx="80" cy="20" r="10" fill="black"/>' +
+      '</svg>';
+    const elements = parseSvgElements(svg);
+    const classified = classifyElements(elements);
+    classified.forEach((el) => expect(el.role).toBe('foreground'));
+  });
+
+  it('classifies all-same-luminance elements as hole when bright', () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg">' +
+      '<circle cx="20" cy="20" r="10" fill="white"/>' +
+      '<circle cx="50" cy="20" r="10" fill="white"/>' +
+      '</svg>';
+    const elements = parseSvgElements(svg);
+    const classified = classifyElements(elements);
+    classified.forEach((el) => expect(el.role).toBe('hole'));
+  });
+
+  it('handles elements with url() fills by defaulting to foreground', () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg">' +
+      '<defs><linearGradient id="g1"><stop stop-color="red"/></linearGradient></defs>' +
+      '<rect x="0" y="0" width="50" height="50" fill="url(#g1)"/>' +
+      '</svg>';
+    const elements = parseSvgElements(svg);
+    const classified = classifyElements(elements);
+    // url() fill returns luminance 0 from parseLuminance, so classified as foreground
+    expect(classified[0].role).toBe('foreground');
+  });
+
+  it('handles mixed stroke-only and filled elements', () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg">' +
+      '<circle cx="20" cy="20" r="10" fill="black"/>' +
+      '<line x1="0" y1="0" x2="40" y2="40" stroke="red" fill="none"/>' +
+      '<circle cx="60" cy="20" r="10" fill="white"/>' +
+      '</svg>';
+    const elements = parseSvgElements(svg);
+    const classified = classifyElements(elements);
+    expect(classified[0].role).toBe('foreground');
+    expect(classified[1].role).toBe('ignore');
+    expect(classified[2].role).toBe('hole');
+  });
+
+  it('handles medium-luminance colors near the threshold', () => {
+    // gray (#808080) has luminance ~128, below default threshold of 200
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg">' +
+      '<circle cx="20" cy="20" r="10" fill="gray"/>' +
+      '</svg>';
+    const elements = parseSvgElements(svg);
+    const classified = classifyElements(elements);
+    expect(classified[0].role).toBe('foreground');
+  });
+
+  it('uses roleOverrides even for elements that would be stroke-only', () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg">' +
+      '<line x1="0" y1="0" x2="10" y2="10" stroke="red" fill="none"/>' +
+      '</svg>';
+    const elements = parseSvgElements(svg);
+    const classified = classifyElements(elements, {
+      roleOverrides: { 0: 'foreground' },
+    });
+    expect(classified[0].role).toBe('foreground');
+  });
+});
+
+// ===========================================================================
+// Phase 6 — flattenToCompoundPath edge cases
+// ===========================================================================
+
+describe('flattenToCompoundPath edge cases', () => {
+  it('handles foreground-only elements (no holes)', () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+      '<circle cx="30" cy="50" r="20" fill="black"/>' +
+      '<circle cx="70" cy="50" r="20" fill="black"/>' +
+      '</svg>';
+    const elements = parseSvgElements(svg);
+    const classified = classifyElements(elements);
+    // Both should be foreground (both dark)
+    expect(classified.every((el) => el.role === 'foreground')).toBe(true);
+
+    const result = flattenToCompoundPath(classified, {
+      viewBox: '0 0 100 100',
+    });
+    expect(result).toContain('<path');
+    expect(result).not.toBeNull();
+  });
+
+  it('handles overlapping holes that merge', () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+      '<circle cx="50" cy="50" r="45" fill="black"/>' +
+      '<circle cx="40" cy="40" r="10" fill="white"/>' +
+      '<circle cx="45" cy="40" r="10" fill="white"/>' +
+      '</svg>';
+    const elements = parseSvgElements(svg);
+    const classified = classifyElements(elements);
+
+    const holes = classified.filter((el) => el.role === 'hole');
+    expect(holes).toHaveLength(2);
+
+    const result = flattenToCompoundPath(classified, {
+      viewBox: '0 0 100 100',
+    });
+    expect(result).toContain('<path');
+    expect(result).not.toContain('NaN');
+  });
+
+  it('returns null when all elements are ignored', () => {
+    const classified = [
+      { pathData: 'M0,0 L10,10', role: 'ignore' },
+      { pathData: 'M20,20 L30,30', role: 'ignore' },
+    ];
+    expect(flattenToCompoundPath(classified)).toBeNull();
+  });
+
+  it('handles single foreground with multiple holes', () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+      '<rect x="0" y="0" width="100" height="100" fill="black"/>' +
+      '<circle cx="25" cy="25" r="10" fill="white"/>' +
+      '<circle cx="75" cy="25" r="10" fill="white"/>' +
+      '<circle cx="25" cy="75" r="10" fill="white"/>' +
+      '<circle cx="75" cy="75" r="10" fill="white"/>' +
+      '</svg>';
+    const elements = parseSvgElements(svg);
+    const classified = classifyElements(elements);
+
+    const foreground = classified.filter((el) => el.role === 'foreground');
+    const holes = classified.filter((el) => el.role === 'hole');
+    expect(foreground).toHaveLength(1);
+    expect(holes).toHaveLength(4);
+
+    const result = flattenToCompoundPath(classified, {
+      viewBox: '0 0 100 100',
+    });
+    expect(result).toContain('<path');
+
+    const dMatch = result.match(/d="([^"]+)"/);
+    expect(dMatch).not.toBeNull();
+    const mCount = (dMatch[1].match(/M/g) || []).length;
+    // Rectangle + 4 holes = at least 5 M commands
+    expect(mCount).toBeGreaterThanOrEqual(5);
+  });
+
+  it('handles elements with empty pathData gracefully', () => {
+    const classified = [
+      { pathData: '', role: 'foreground' },
+      { pathData: 'M10,10 L20,20', role: 'foreground' },
+    ];
+    // Empty pathData elements should be filtered out (no pathData = falsy)
+    const result = flattenToCompoundPath(classified);
+    // Should produce output from the valid element only
+    expect(result).not.toBeNull();
+    expect(result).toContain('<path');
+  });
+});
+
+// ===========================================================================
+// Phase 6 — OpenSCAD output validation (compound path structure checks)
+// ===========================================================================
+
+describe('OpenSCAD output validation', () => {
+  it('prepareSvg(smiley) produces exactly one <path> and no other shapes', () => {
+    const result = prepareSvg(SMILEY_SVG);
+
+    const pathCount = (result.match(/<path[\s/]/g) || []).length;
+    expect(pathCount).toBe(1);
+
+    expect(result).not.toMatch(/<circle[\s/]/);
+    expect(result).not.toMatch(/<rect[\s/]/);
+    expect(result).not.toMatch(/<ellipse[\s/]/);
+    expect(result).not.toMatch(/<polygon[\s/]/);
+    expect(result).not.toMatch(/<polyline[\s/]/);
+    expect(result).not.toMatch(/<line[\s/]/);
+  });
+
+  it('prepared smiley compound path has multiple M-command subpaths', () => {
+    const result = prepareSvg(SMILEY_SVG);
+    const dMatch = result.match(/d="([^"]+)"/);
+    expect(dMatch).not.toBeNull();
+
+    const pathD = dMatch[1];
+    const mCount = (pathD.match(/M/g) || []).length;
+    // Face outline + 2 eye holes = 3 subpaths
+    expect(mCount).toBe(3);
+  });
+
+  it('prepared smiley preserves viewBox for OpenSCAD dimension mapping', () => {
+    const result = prepareSvg(SMILEY_SVG);
+    expect(result).toContain('viewBox="0 0 100 100"');
+  });
+
+  it('prepared smiley uses fill="black" (solid geometry)', () => {
+    const result = prepareSvg(SMILEY_SVG);
+    expect(result).toContain('fill="black"');
+  });
+
+  it('prepared smiley does NOT set fill-rule (OpenSCAD always uses evenodd)', () => {
+    const result = prepareSvg(SMILEY_SVG);
+    expect(result).not.toContain('fill-rule');
+  });
+
+  it('prepared smiley path data contains only valid SVG commands', () => {
+    const result = prepareSvg(SMILEY_SVG);
+    const dMatch = result.match(/d="([^"]+)"/);
+    const pathD = dMatch[1];
+
+    // Valid SVG path commands: M, L, H, V, C, S, Q, T, A, Z (upper and lower)
+    // path-bool output uses absolute commands
+    expect(pathD).not.toContain('NaN');
+    expect(pathD).not.toContain('undefined');
+    expect(pathD).not.toContain('Infinity');
+    expect(pathD).toMatch(/^M/);
+    // Every command letter should be a valid SVG path command
+    const commands = pathD.match(/[A-Za-z]/g);
+    const validCommands = new Set('MmLlHhVvCcSsQqTtAaZz'.split(''));
+    commands.forEach((cmd) => expect(validCommands.has(cmd)).toBe(true));
+  });
+
+  it('prepared smiley is well-formed XML', () => {
+    const result = prepareSvg(SMILEY_SVG);
+    expect(result).toMatch(/^<svg\s/);
+    expect(result).toMatch(/<\/svg>$/);
+    expect(result).toContain('xmlns="http://www.w3.org/2000/svg"');
+
+    // Verify DOMParser can re-parse it without error
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(result, 'image/svg+xml');
+    const svg = doc.querySelector('svg');
+    expect(svg).not.toBeNull();
+    expect(doc.querySelector('parsererror')).toBeNull();
+  });
+
+  it('single-path SVGs pass through as valid OpenSCAD input', () => {
+    const heartResult = prepareSvg(HEART_SVG);
+    expect(heartResult).toBe(HEART_SVG);
+
+    const starResult = prepareSvg(STAR_SVG);
+    expect(starResult).toBe(STAR_SVG);
+  });
+
+  it('prepared output is idempotent for OpenSCAD consumption', () => {
+    const first = prepareSvg(SMILEY_SVG);
+    const second = prepareSvg(first);
+    expect(second).toBe(first);
+    expect(needsPreparation(first)).toBe(false);
+  });
+});
+
+// ===========================================================================
 // Phase 3 — Pipeline integration: base64 round-trip and idempotency
 // ===========================================================================
 
