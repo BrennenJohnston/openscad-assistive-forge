@@ -30,14 +30,14 @@ design_file = ""; // [file:svg,png,jpg]
 // Depth of engraving (or height of raised design)
 engrave_depth = 0.8; // [0.2:0.1:3.0]
 
-// Raised design instead of engraved
-design_raised = "yes"; // [yes, no]
+// Design style on the charm surface
+design_style = "raised"; // [raised, engraved]
 
 // Scale the design relative to the charm face (percentage)
 design_scale = 60; // [20:5:95]
 
-// Offset to thicken SVG lines for FDM printability (0.6 = 1.2mm total, two 0.4mm nozzle walls)
-design_offset = 0.6; // [0:0.2:1.5]
+// Offset to thicken SVG lines for FDM printability (0 = off; 0.6 = recommended for 0.4mm nozzle)
+design_offset = 0; // [0:0.2:1.5]
 
 // Horizontal position offset for design
 design_x = 0; // [-10:0.5:10]
@@ -61,8 +61,8 @@ design_y_2 = 0; // [-10:0.5:10]
 // Z-offset for second design layer (adjust height relative to the charm surface)
 design_z_2 = 0; // [-3:0.1:3]
 
-// Raised second design instead of engraved
-design_raised_2 = "yes"; // [yes, no]
+// Design style for second layer
+design_style_2 = "raised"; // [raised, engraved]
 
 /* [Text] */
 // Text or number to display on the charm face (leave empty for none)
@@ -72,26 +72,16 @@ text_content = "";
 text_size = 5; // [3:0.5:12]
 
 // Horizontal position offset from center
-text_x = 0; // [-10:0.5:10]
+text_x = -5.5; // [-10:0.5:10]
 
 // Vertical position offset from center
-text_y = 0; // [-10:0.5:10]
+text_y = 6; // [-10:0.5:10]
 
 // Depth of text engraving (or height of raised text)
 text_depth = 0.8; // [0.2:0.1:2]
 
-// Raised text instead of engraved
-text_raised = "yes"; // [yes, no]
-
-/* [Border] */
-// Add a raised border rim around the top face of the charm
-add_border = "no"; // [yes, no]
-
-// Width of the border ring (how far inward the rim extends)
-border_width = 1.5; // [0.5:0.5:4]
-
-// Height of the border rim above the top surface
-border_height = 0.5; // [0.2:0.1:2.0]
+// Text style on the charm surface
+text_style = "raised"; // [raised, engraved]
 
 /* [Rounding] */
 // Side edge rounding radius (0 = sharp side edges)
@@ -151,11 +141,10 @@ design_ref_dim = 14;
 design_size = design_ref_dim * design_scale / 100;
 design_size_2 = design_ref_dim * design_scale_2 / 100;
 total_top_z = charm_top_z
-    + (add_border == "yes" ? border_height : 0)
     + max(
-        (design_raised == "yes") ? engrave_depth : 0,
-        (design_file_2 != "" && design_raised_2 == "yes") ? max(0, engrave_depth + design_z_2) : 0,
-        (text_content != "" && text_raised == "yes") ? text_depth : 0
+        (design_style == "raised") ? engrave_depth : 0,
+        (design_file_2 != "" && design_style_2 == "raised") ? max(0, engrave_depth + design_z_2) : 0,
+        (text_content != "" && text_style == "raised") ? text_depth : 0
     );
 
 module profile_2d() {
@@ -246,18 +235,6 @@ module text_2d() {
     }
 }
 
-module border_shell() {
-    if (add_border == "yes") {
-        safe_bw = max(0.1, min(border_width, outer_width / 2 - 1, charm_length / 2 - 1));
-        translate([profile_center_x, 0, charm_top_z])
-            linear_extrude(height = border_height)
-                difference() {
-                    square([outer_width, charm_length], center = true);
-                    square([outer_width - 2 * safe_bw, charm_length - 2 * safe_bw], center = true);
-                }
-    }
-}
-
 module attachment_cutout() {
     cut_h = attachment_depth > 0 ? attachment_depth + 0.02 : total_top_z + 0.02;
     cut_z = attachment_depth > 0 ? total_top_z - attachment_depth : -0.01;
@@ -296,35 +273,34 @@ module q_charm() {
     difference() {
         union() {
             charm_body();
-            border_shell();
             bail_loop();
-            if (design_raised == "yes") {
+            if (design_style == "raised") {
                 translate([profile_center_x, 0, charm_top_z])
                     linear_extrude(height = engrave_depth)
                         design_2d();
             }
-            if (design_file_2 != "" && design_raised_2 == "yes") {
+            if (design_file_2 != "" && design_style_2 == "raised") {
                 translate([profile_center_x, 0, charm_top_z + design_z_2])
                     linear_extrude(height = engrave_depth)
                         design_2d_layer2();
             }
-            if (text_content != "" && text_raised == "yes") {
+            if (text_content != "" && text_style == "raised") {
                 translate([profile_center_x, 0, charm_top_z])
                     linear_extrude(height = text_depth)
                         text_2d();
             }
         }
-        if (design_raised != "yes") {
+        if (design_style != "raised") {
             translate([profile_center_x, 0, charm_top_z - engrave_depth])
                 linear_extrude(height = engrave_depth + 0.01)
                     design_2d();
         }
-        if (design_file_2 != "" && design_raised_2 != "yes") {
+        if (design_file_2 != "" && design_style_2 != "raised") {
             translate([profile_center_x, 0, charm_top_z - engrave_depth + design_z_2])
                 linear_extrude(height = engrave_depth + 0.01)
                     design_2d_layer2();
         }
-        if (text_content != "" && text_raised != "yes") {
+        if (text_content != "" && text_style != "raised") {
             translate([profile_center_x, 0, charm_top_z - text_depth])
                 linear_extrude(height = text_depth + 0.01)
                     text_2d();

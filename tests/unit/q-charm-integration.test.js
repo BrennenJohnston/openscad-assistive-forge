@@ -57,7 +57,6 @@ describe('q_charm.scad parser integration', () => {
       'Design',
       'Design Layer 2',
       'Text',
-      'Border',
       'Rounding',
       'Attachment',
       'Quality',
@@ -108,15 +107,19 @@ describe('q_charm.scad parser integration', () => {
     expect(parsed.parameters.gap_width.maximum).toBe(8);
   });
 
-  it('extracts Design parameters updated in Phase 5', () => {
+  it('extracts Design parameters with Phase 9 updates', () => {
     scadContent = readFileSync(scadPath, 'utf-8');
     parsed = extractParameters(scadContent);
 
     expect(parsed.parameters.design_file).toBeDefined();
     expect(parsed.parameters.design_file.default).toBe('');
 
+    expect(parsed.parameters.design_style).toBeDefined();
+    expect(parsed.parameters.design_style.default).toBe('raised');
+    expect(parsed.parameters.design_raised).toBeUndefined();
+
     expect(parsed.parameters.design_offset).toBeDefined();
-    expect(parsed.parameters.design_offset.default).toBe(0.6);
+    expect(parsed.parameters.design_offset.default).toBe(0);
     expect(parsed.parameters.design_offset.minimum).toBe(0);
     expect(parsed.parameters.design_offset.maximum).toBe(1.5);
   });
@@ -138,17 +141,15 @@ describe('q_charm.scad parser integration', () => {
     expect(parsed.parameters.design_y.group).toBe('Design');
   });
 
-  it('extracts Border parameters added in Phase 3 remediation', () => {
+  it('Border group removed in Phase 9', () => {
     scadContent = readFileSync(scadPath, 'utf-8');
     parsed = extractParameters(scadContent);
 
-    expect(parsed.parameters.add_border).toBeDefined();
-    expect(parsed.parameters.border_width).toBeDefined();
-    expect(parsed.parameters.border_width.default).toBe(1.5);
-    expect(parsed.parameters.border_width.minimum).toBe(0.5);
-    expect(parsed.parameters.border_width.maximum).toBe(4);
-    expect(parsed.parameters.border_height).toBeDefined();
-    expect(parsed.parameters.border_height.default).toBe(0.5);
+    const groupIds = parsed.groups.map((g) => g.id);
+    expect(groupIds).not.toContain('Border');
+    expect(parsed.parameters.add_border).toBeUndefined();
+    expect(parsed.parameters.border_width).toBeUndefined();
+    expect(parsed.parameters.border_height).toBeUndefined();
   });
 
   it('extracts Rounding parameters updated in Phase 4 remediation', () => {
@@ -182,16 +183,20 @@ describe('q_charm.scad parser integration', () => {
     expect(groupIds).toContain('Rounding');
   });
 
-  it('extracts Text parameters added in Phase 4', () => {
+  it('extracts Text parameters with updated defaults (Phase 9)', () => {
     scadContent = readFileSync(scadPath, 'utf-8');
     parsed = extractParameters(scadContent);
 
     expect(parsed.parameters.text_content).toBeDefined();
     expect(parsed.parameters.text_size).toBeDefined();
     expect(parsed.parameters.text_x).toBeDefined();
+    expect(parsed.parameters.text_x.default).toBe(-5.5);
     expect(parsed.parameters.text_y).toBeDefined();
+    expect(parsed.parameters.text_y.default).toBe(6);
     expect(parsed.parameters.text_depth).toBeDefined();
-    expect(parsed.parameters.text_raised).toBeDefined();
+    expect(parsed.parameters.text_style).toBeDefined();
+    expect(parsed.parameters.text_style.default).toBe('raised');
+    expect(parsed.parameters.text_raised).toBeUndefined();
   });
 
   it('extracts Attachment parameters including position and depth from Phase 7', () => {
@@ -232,7 +237,7 @@ describe('q_charm.scad parser integration', () => {
     expect(parsed.parameters.design_scale_2).toBeDefined();
     expect(parsed.parameters.design_x_2).toBeDefined();
     expect(parsed.parameters.design_y_2).toBeDefined();
-    expect(parsed.parameters.design_raised_2).toBeDefined();
+    expect(parsed.parameters.design_style_2).toBeDefined();
 
     expect(parsed.parameters.design_z_2).toBeDefined();
     expect(parsed.parameters.design_z_2.default).toBe(0);
