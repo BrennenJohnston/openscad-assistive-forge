@@ -257,14 +257,18 @@ export function appendUserSvgToGallery(paramName, svgOpt) {
         return res.text();
       })
       .then((svgText) => {
+        const toUse = isEnabled('svg_preparer')
+          ? svgText
+          : maybePrepareForOpenScad(svgText);
         const svgDataUrl =
-          'data:image/svg+xml;base64,' + btoa(svgText);
+          'data:image/svg+xml;base64,' + btoa(toUse);
         announceChange(`Selected design: ${svgOpt.label}`);
         onSelectFn(paramDef.name, {
           name: svgOpt.file.split('/').pop(),
-          size: svgText.length,
+          size: toUse.length,
           type: 'image/svg+xml',
           data: svgDataUrl,
+          _rawSvg: svgText,
         });
       })
       .catch((err) => {
@@ -1910,9 +1914,12 @@ function createFileControl(param, onChange) {
     const count = analysis.elements.length;
 
     if (analysis.recommendation === 'pass_through') {
-      badge.textContent = 'SVG Ready';
+      badge.textContent = count > 1
+        ? `SVG Ready (${count} subpaths)`
+        : 'SVG Ready';
       badge.dataset.level = 'ready';
       statusCard.appendChild(badge);
+      statusCard.appendChild(createStatusEditButton());
     } else if (analysis.recommendation === 'auto_prepare') {
       badge.textContent = `SVG Ready (${count} elements)`;
       badge.dataset.level = 'ready';
@@ -2014,6 +2021,7 @@ function createFileControl(param, onChange) {
     }
 
     const analysis = analyzeSvg(rawSvgText);
+
     currentSvgAnalysis = analysis;
     updateStatusCard(analysis);
     statusCard.style.display = '';

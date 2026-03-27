@@ -14,7 +14,13 @@
  */
 
 import { parseLuminance } from './image-import.js';
-import { shapeToPathArray, pathToString } from 'svg-path-commander';
+import {
+  parsePathString,
+  pathToAbsolute,
+  pathToString,
+  shapeToPathArray,
+  splitPath,
+} from 'svg-path-commander';
 import {
   pathFromPathData,
   pathToPathData,
@@ -145,13 +151,44 @@ function elementToPathData(element) {
 }
 
 /**
+ * Split a compound path `d` attribute into individual subpath strings.
+ * Uses svg-path-commander's parser so each returned subpath starts with an
+ * absolute `M`, preserving coordinates when any subset is later concatenated.
+ *
+ * @param {string} pathData - SVG path `d` attribute value
+ * @returns {string[]} Individual subpath strings (length >= 1)
+ */
+function splitSubpaths(pathData) {
+  if (!pathData) return [];
+  const trimmed = pathData.trim();
+  if (!trimmed) return [];
+  try {
+    const parsed = parsePathString(trimmed);
+    const absolute = pathToAbsolute(parsed);
+    const split = splitPath(absolute);
+    const parts = split
+      .map((subpath) => pathToString(subpath))
+      .filter((s) => s.trim());
+    return parts.length > 0 ? parts : [trimmed];
+  } catch {
+    // Fall back to the original string if parsing fails unexpectedly.
+    return [trimmed];
+  }
+}
+
+/**
  * Parse an SVG string into an array of shape element descriptors.
  *
  * Each descriptor contains the DOM element, its path data string,
  * fill/stroke values, and computed luminance for classification.
  *
+ * Compound paths (a single `<path>` whose `d` attribute contains
+ * multiple M-command subpaths) are expanded so each subpath becomes
+ * its own descriptor. This lets analyzeSvg and the workspace treat
+ * each visual subpath as an independent element.
+ *
  * @param {string} svgString - Complete SVG markup
- * @returns {Array<{element: Element, pathData: string, fill: string, stroke: string, luminance: number|null}>}
+ * @returns {Array<{element: Element, pathData: string, fill: string, stroke: string, luminance: number|null, subpathIndex?: number}>}
  */
 export function parseSvgElements(svgString) {
   const parser = new DOMParser();
@@ -165,7 +202,9 @@ export function parseSvgElements(svgString) {
   const shapes = Array.from(svg.querySelectorAll('*')).filter((el) =>
     SHAPE_TAGS.has(el.tagName.toLowerCase())
   );
-  return shapes.map((element) => {
+
+  const result = [];
+  for (const element of shapes) {
     const pathData = elementToPathData(element);
     const rawFill = element.getAttribute('fill');
     const fill = rawFill || '';
@@ -176,8 +215,23 @@ export function parseSvgElements(svgString) {
     const luminance =
       resolvedFill !== null ? parseLuminance(resolvedFill) : null;
 
-    return { element, pathData, fill, stroke, luminance };
-  });
+    const subpaths = splitSubpaths(pathData);
+    if (subpaths.length > 1) {
+      subpaths.forEach((sp, idx) => {
+        result.push({
+          element,
+          pathData: sp,
+          fill,
+          stroke,
+          luminance,
+          subpathIndex: idx,
+        });
+      });
+    } else {
+      result.push({ element, pathData, fill, stroke, luminance });
+    }
+  }
+  return result;
 }
 
 /**
@@ -394,6 +448,15 @@ export function analyzeSvg(svgString) {
   });
   const singleElement = filledElements.length <= 1;
 
+  // A compound path is a single DOM <path> whose d attribute was decomposed
+  // into multiple subpaths. It's already OpenSCAD-compatible and doesn't
+  // need boolean flattening — only the workspace needs the decomposition.
+  const uniqueDomElements = new Set(renderElements.map((el) => el.element));
+  const isCompoundPathOnly =
+    uniqueDomElements.size === 1 &&
+    renderElements.length > 1 &&
+    renderElements[0].subpathIndex !== undefined;
+
   const classified = classifyElements(renderElements);
 
   const warnings = [];
@@ -486,7 +549,7 @@ export function analyzeSvg(svgString) {
 
   // Status and recommendation
   let status, recommendation;
-  if (singleElement) {
+  if (singleElement || isCompoundPathOnly) {
     status = 'ready';
     recommendation = 'pass_through';
   } else if (unsupportedFeatures.length > 0) {
@@ -508,6 +571,7 @@ export function analyzeSvg(svgString) {
     unsupportedFeatures,
     recommendation,
     singleElement,
+    isCompoundPathOnly,
   };
 }
 
@@ -521,5 +585,5 @@ export function analyzeSvg(svgString) {
  * @returns {boolean} true if the SVG has multiple filled shapes
  */
 export function needsPreparation(svgString) {
-  return !analyzeSvg(svgString).singleElement;
+  return analyzeSvg(svgString).recommendation !== 'pass_through';
 }

@@ -436,6 +436,26 @@ export function createSvgPrepWorkspace(containerEl) {
     return imported;
   }
 
+  /**
+   * Build an SVG string by concatenating selected subpath d-values into a
+   * single compound path. Used for compound-path SVGs where boolean
+   * flattening would destroy the original spatial arrangement.
+   */
+  function concatenateSubpaths(classified, svgMeta) {
+    const included = classified.filter(
+      (el) => el.role !== 'ignore' && el.pathData
+    );
+    if (included.length === 0) return null;
+
+    const compoundD = included.map((el) => el.pathData).join(' ');
+    const { viewBox, width, height } = svgMeta;
+    let attrs = 'xmlns="http://www.w3.org/2000/svg"';
+    if (viewBox) attrs += ` viewBox="${viewBox}"`;
+    if (width) attrs += ` width="${width}"`;
+    if (height) attrs += ` height="${height}"`;
+    return `<svg ${attrs}><path d="${compoundD}" fill="black" fill-rule="evenodd"/></svg>`;
+  }
+
   function updateResultPreview() {
     if (!currentAnalysis || !currentSvgMeta) return;
 
@@ -450,7 +470,11 @@ export function createSvgPrepWorkspace(containerEl) {
     const classified = classifyElements(currentAnalysis.elements, {
       roleOverrides,
     });
-    const resultSvgString = flattenToCompoundPath(classified, currentSvgMeta);
+
+    const isCompound = currentAnalysis.isCompoundPathOnly;
+    const resultSvgString = isCompound
+      ? concatenateSubpaths(classified, currentSvgMeta)
+      : flattenToCompoundPath(classified, currentSvgMeta);
 
     if (!resultSvgString) {
       currentResult = null;
@@ -469,12 +493,14 @@ export function createSvgPrepWorkspace(containerEl) {
     refs.resultPane.insertBefore(imported, refs.resultZoom);
 
     const fgCount = classified.filter(
-      (el) => el.role === 'foreground' && el.pathData
+      (el) => el.role !== 'ignore' && el.pathData
     ).length;
-    const holeCount = classified.filter(
-      (el) => el.role === 'hole' && el.pathData
+    const ignoredCount = classified.filter(
+      (el) => el.role === 'ignore'
     ).length;
-    liveRegion.textContent = `Preview updated \u2014 ${fgCount} foreground, ${holeCount} holes`;
+    liveRegion.textContent = isCompound
+      ? `Preview updated \u2014 ${fgCount} subpaths included, ${ignoredCount} ignored`
+      : `Preview updated \u2014 ${fgCount} foreground, ${classified.filter((el) => el.role === 'hole' && el.pathData).length} holes`;
   }
 
   function setupPaneZoom(pane, zoomEl, naturalVBStr) {
