@@ -141,6 +141,17 @@ describe('q_charm.scad parser integration', () => {
     expect(parsed.parameters.design_y.group).toBe('Design');
   });
 
+  it('extracts design_rotation parameter for SVG rotation', () => {
+    scadContent = readFileSync(scadPath, 'utf-8');
+    parsed = extractParameters(scadContent);
+
+    expect(parsed.parameters.design_rotation).toBeDefined();
+    expect(parsed.parameters.design_rotation.default).toBe(0);
+    expect(parsed.parameters.design_rotation.minimum).toBe(-90);
+    expect(parsed.parameters.design_rotation.maximum).toBe(90);
+    expect(parsed.parameters.design_rotation.group).toBe('Design');
+  });
+
   it('Border group removed in Phase 9', () => {
     scadContent = readFileSync(scadPath, 'utf-8');
     parsed = extractParameters(scadContent);
@@ -243,6 +254,12 @@ describe('q_charm.scad parser integration', () => {
     expect(parsed.parameters.design_z_2.default).toBe(0);
     expect(parsed.parameters.design_z_2.minimum).toBe(-3);
     expect(parsed.parameters.design_z_2.maximum).toBe(3);
+
+    expect(parsed.parameters.design_rotation_2).toBeDefined();
+    expect(parsed.parameters.design_rotation_2.default).toBe(0);
+    expect(parsed.parameters.design_rotation_2.minimum).toBe(-90);
+    expect(parsed.parameters.design_rotation_2.maximum).toBe(90);
+    expect(parsed.parameters.design_rotation_2.group).toBe('Design Layer 2');
   });
 
   it('has at least 20 user-facing parameters', () => {
