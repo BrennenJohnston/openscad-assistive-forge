@@ -8,8 +8,28 @@ import {
   resetParameter,
   updateDependentParameters,
   setGalleryOptions,
-  clearGalleryOptions
+  clearGalleryOptions,
+  getSvgPrepMetadata,
+  setSvgPrepMetadata,
+  clearSvgPrepMetadata
 } from '../../src/js/ui-generator.js'
+import { isEnabled } from '../../src/js/feature-flags.js'
+import { analyzeSvg, prepareSvg } from '../../src/js/svg-preparer.js'
+
+vi.mock('../../src/js/feature-flags.js', () => ({
+  isEnabled: vi.fn(() => false)
+}))
+
+vi.mock('../../src/js/svg-preparer.js', () => ({
+  prepareSvg: vi.fn((svg) => svg),
+  needsPreparation: vi.fn(() => false),
+  analyzeSvg: vi.fn(() => ({
+    status: 'ready',
+    recommendation: 'pass_through',
+    elements: [],
+    warnings: []
+  }))
+}))
 
 const buildParams = ({ groups = null, params = [] }) => {
   const resolvedGroups = groups || [{ id: 'General', label: 'General', order: 0 }]
@@ -1179,6 +1199,269 @@ describe('UI Generator', () => {
       // Navigate to home
       listbox.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true }))
       expect(options[0].getAttribute('aria-selected')).toBe('true')
+    })
+  })
+
+  // ── Phase 4a — SVG preparation integration ─────────────────────────────
+
+  describe('SVG preparation editor integration', () => {
+    const svgFileSchema = buildParams({
+      params: [
+        {
+          name: 'svg_file',
+          type: 'file',
+          default: '',
+          uiType: 'file',
+          acceptedExtensions: ['svg']
+        }
+      ]
+    })
+
+    const nonSvgFileSchema = buildParams({
+      params: [
+        {
+          name: 'stl_file',
+          type: 'file',
+          default: '',
+          uiType: 'file',
+          acceptedExtensions: ['stl']
+        }
+      ]
+    })
+
+    it('SVG file control contains a status card element', () => {
+      const onChange = vi.fn()
+      renderParameterUI(svgFileSchema, container, onChange, {})
+
+      const statusCard = container.querySelector('.svg-prep-status')
+      expect(statusCard).toBeTruthy()
+    })
+
+    it('status card is hidden by default', () => {
+      const onChange = vi.fn()
+      renderParameterUI(svgFileSchema, container, onChange, {})
+
+      const statusCard = container.querySelector('.svg-prep-status')
+      expect(statusCard.style.display).toBe('none')
+    })
+
+    it('status card has proper ARIA attributes', () => {
+      const onChange = vi.fn()
+      renderParameterUI(svgFileSchema, container, onChange, {})
+
+      const statusCard = container.querySelector('.svg-prep-status')
+      expect(statusCard.getAttribute('role')).toBe('status')
+      expect(statusCard.getAttribute('aria-live')).toBe('polite')
+    })
+
+    it('SVG file control contains a workspace container', () => {
+      const onChange = vi.fn()
+      renderParameterUI(svgFileSchema, container, onChange, {})
+
+      const wsContainer = container.querySelector('.svg-prep-workspace-container')
+      expect(wsContainer).toBeTruthy()
+    })
+
+    it('workspace container includes the workspace root element', () => {
+      const onChange = vi.fn()
+      renderParameterUI(svgFileSchema, container, onChange, {})
+
+      const wsRoot = container.querySelector('.svg-prep-workspace')
+      expect(wsRoot).toBeTruthy()
+      expect(wsRoot.getAttribute('role')).toBe('region')
+      expect(wsRoot.hidden).toBe(true)
+    })
+
+    it('non-SVG file control does not include a workspace container', () => {
+      const onChange = vi.fn()
+      renderParameterUI(nonSvgFileSchema, container, onChange, {})
+
+      const wsContainer = container.querySelector('.svg-prep-workspace-container')
+      expect(wsContainer).toBeFalsy()
+    })
+
+    it('status card is present even for non-SVG file controls', () => {
+      const onChange = vi.fn()
+      renderParameterUI(nonSvgFileSchema, container, onChange, {})
+
+      const statusCard = container.querySelector('.svg-prep-status')
+      expect(statusCard).toBeTruthy()
+      expect(statusCard.style.display).toBe('none')
+    })
+
+    it('old Prepare SVG button is removed (Phase 4b)', () => {
+      const onChange = vi.fn()
+      renderParameterUI(svgFileSchema, container, onChange, {})
+
+      const prepBtn = container.querySelector('.file-prepare-svg-button')
+      expect(prepBtn).toBeNull()
+    })
+  })
+
+  // ── Phase 5 — SVG prep metadata persistence ──────────────────────────
+
+  describe('SVG prep metadata storage', () => {
+    afterEach(() => {
+      clearSvgPrepMetadata()
+    })
+
+    it('getSvgPrepMetadata returns null for unknown file', () => {
+      expect(getSvgPrepMetadata('unknown.svg')).toBeNull()
+    })
+
+    it('setSvgPrepMetadata stores and retrieves metadata', () => {
+      const meta = {
+        rawSvg: '<svg></svg>',
+        preparedSvg: '<svg>prep</svg>',
+        prepOverrides: ['foreground', 'hole'],
+        prepAnalysis: { elementCount: 2 }
+      }
+      setSvgPrepMetadata('test.svg', meta)
+      expect(getSvgPrepMetadata('test.svg')).toEqual(meta)
+    })
+
+    it('setSvgPrepMetadata with null clears metadata', () => {
+      setSvgPrepMetadata('test.svg', { rawSvg: '<svg/>' })
+      setSvgPrepMetadata('test.svg', null)
+      expect(getSvgPrepMetadata('test.svg')).toBeNull()
+    })
+
+    it('clearSvgPrepMetadata removes all entries', () => {
+      setSvgPrepMetadata('a.svg', { rawSvg: 'a' })
+      setSvgPrepMetadata('b.svg', { rawSvg: 'b' })
+      clearSvgPrepMetadata()
+      expect(getSvgPrepMetadata('a.svg')).toBeNull()
+      expect(getSvgPrepMetadata('b.svg')).toBeNull()
+    })
+
+    it('clearGalleryOptions also clears SVG prep metadata', () => {
+      setSvgPrepMetadata('test.svg', { rawSvg: '<svg/>' })
+      clearGalleryOptions()
+      expect(getSvgPrepMetadata('test.svg')).toBeNull()
+    })
+
+    it('metadata entries are independent per filename', () => {
+      const meta1 = { rawSvg: '<svg>1</svg>', preparedSvg: null }
+      const meta2 = { rawSvg: '<svg>2</svg>', preparedSvg: '<svg>2p</svg>' }
+      setSvgPrepMetadata('one.svg', meta1)
+      setSvgPrepMetadata('two.svg', meta2)
+
+      expect(getSvgPrepMetadata('one.svg')).toEqual(meta1)
+      expect(getSvgPrepMetadata('two.svg')).toEqual(meta2)
+
+      setSvgPrepMetadata('one.svg', null)
+      expect(getSvgPrepMetadata('one.svg')).toBeNull()
+      expect(getSvgPrepMetadata('two.svg')).toEqual(meta2)
+    })
+
+    it('overwriting metadata replaces the previous entry', () => {
+      setSvgPrepMetadata('test.svg', { rawSvg: 'old' })
+      setSvgPrepMetadata('test.svg', { rawSvg: 'new', prepOverrides: ['ignore'] })
+
+      const stored = getSvgPrepMetadata('test.svg')
+      expect(stored.rawSvg).toBe('new')
+      expect(stored.prepOverrides).toEqual(['ignore'])
+    })
+  })
+
+  describe('Edit button in needs_review and unsupported status cards', () => {
+    const svgFileSchema = buildParams({
+      params: [
+        {
+          name: 'design_file',
+          type: 'file',
+          default: '',
+          uiType: 'file',
+          acceptedExtensions: ['svg']
+        }
+      ]
+    })
+
+    beforeEach(() => {
+      vi.mocked(isEnabled).mockReturnValue(true)
+      vi.mocked(prepareSvg).mockImplementation((svg) => svg)
+    })
+
+    afterEach(() => {
+      vi.mocked(isEnabled).mockReturnValue(false)
+      vi.mocked(analyzeSvg).mockReset()
+      vi.mocked(prepareSvg).mockReset()
+    })
+
+    async function uploadSvg(fileInput, svgContent = '<svg><path/><circle/></svg>') {
+      const file = new File([svgContent], 'test.svg', { type: 'image/svg+xml' })
+      Object.defineProperty(fileInput, 'files', { value: [file], configurable: true })
+      fileInput.dispatchEvent(new Event('change'))
+      await new Promise(resolve => setTimeout(resolve, 100))
+    }
+
+    it('shows Edit button for needs_review status', async () => {
+      vi.mocked(analyzeSvg).mockReturnValue({
+        status: 'needs_review',
+        recommendation: 'needs_review',
+        elements: [{ type: 'path' }, { type: 'circle' }],
+        warnings: []
+      })
+
+      const onChange = vi.fn()
+      renderParameterUI(svgFileSchema, container, onChange, {})
+
+      const fileInput = container.querySelector('input[type="file"]')
+      await uploadSvg(fileInput)
+
+      const statusCard = container.querySelector('.svg-prep-status')
+      const editBtn = statusCard.querySelector('.svg-prep-edit-btn')
+      expect(editBtn).toBeTruthy()
+      expect(editBtn.getAttribute('aria-label')).toBe('Open SVG preparation editor')
+      expect(editBtn.textContent).toBe('Edit')
+
+      const badge = statusCard.querySelector('.svg-prep-status-badge')
+      expect(badge.dataset.level).toBe('review')
+    })
+
+    it('shows Edit button for unsupported status', async () => {
+      vi.mocked(analyzeSvg).mockReturnValue({
+        status: 'unsupported',
+        recommendation: 'unsupported',
+        elements: [{ type: 'text' }],
+        warnings: ['Contains text elements']
+      })
+
+      const onChange = vi.fn()
+      renderParameterUI(svgFileSchema, container, onChange, {})
+
+      const fileInput = container.querySelector('input[type="file"]')
+      await uploadSvg(fileInput)
+
+      const statusCard = container.querySelector('.svg-prep-status')
+      const editBtn = statusCard.querySelector('.svg-prep-edit-btn')
+      expect(editBtn).toBeTruthy()
+      expect(editBtn.getAttribute('aria-label')).toBe('Open SVG preparation editor')
+
+      const warnings = statusCard.querySelector('.svg-prep-status-warnings')
+      expect(warnings).toBeTruthy()
+      expect(warnings.textContent).toContain('Contains text elements')
+    })
+
+    it('Edit button has semantic button element with correct attributes', async () => {
+      vi.mocked(analyzeSvg).mockReturnValue({
+        status: 'needs_review',
+        recommendation: 'needs_review',
+        elements: [{ type: 'path' }],
+        warnings: []
+      })
+
+      const onChange = vi.fn()
+      renderParameterUI(svgFileSchema, container, onChange, {})
+
+      const fileInput = container.querySelector('input[type="file"]')
+      await uploadSvg(fileInput)
+
+      const editBtn = container.querySelector('.svg-prep-edit-btn')
+      expect(editBtn.tagName).toBe('BUTTON')
+      expect(editBtn.type).toBe('button')
+      expect(editBtn.classList.contains('btn')).toBe(true)
+      expect(editBtn.classList.contains('btn-ghost')).toBe(true)
     })
   })
 })
