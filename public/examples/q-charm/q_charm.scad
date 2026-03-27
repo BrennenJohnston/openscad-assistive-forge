@@ -45,6 +45,9 @@ design_x = 0; // [-10:0.5:10]
 // Vertical position offset for design
 design_y = 0; // [-10:0.5:10]
 
+// Rotation angle for design (degrees, counter-clockwise)
+design_rotation = 0; // [-90:5:90]
+
 /* [Design Layer 2] */
 // Second image file for layered designs (leave empty for none)
 design_file_2 = ""; // [file:svg,png,jpg]
@@ -57,6 +60,9 @@ design_x_2 = 0; // [-10:0.5:10]
 
 // Vertical position offset for second design
 design_y_2 = 0; // [-10:0.5:10]
+
+// Rotation angle for second design (degrees, counter-clockwise)
+design_rotation_2 = 0; // [-90:5:90]
 
 // Z-offset for second design layer (adjust height relative to the charm surface)
 design_z_2 = 0; // [-3:0.1:3]
@@ -188,14 +194,14 @@ module charm_body() {
                     )
                         offset(r = -safe_all_edges)
                             profile_2d();
-                    sphere(r = safe_all_edges);
+                    sphere(r = safe_all_edges, $fn = min($fn, 30));
                 }
             } else if (safe_edge_radius > 0) {
                 minkowski() {
                     linear_extrude(height = charm_length, center = true)
                         offset(r = -safe_edge_radius)
                             profile_2d();
-                    cylinder(r = safe_edge_radius, h = 0.01, center = true);
+                    cylinder(r = safe_edge_radius, h = 0.01, center = true, $fn = min($fn, 30));
                 }
             } else {
                 linear_extrude(height = charm_length, center = true)
@@ -211,18 +217,20 @@ module charm_body() {
 module design_2d() {
     if (design_file != "") {
         translate([design_x, design_y])
-            offset(r = design_offset)
-                resize([design_size, 0], auto = true)
-                    import(design_file, center = true);
+            rotate([0, 0, design_rotation])
+                offset(r = design_offset)
+                    resize([design_size, 0], auto = true)
+                        import(design_file, center = true);
     }
 }
 
 module design_2d_layer2() {
     if (design_file_2 != "") {
         translate([design_x_2, design_y_2])
-            offset(r = design_offset)
-                resize([design_size_2, 0], auto = true)
-                    import(design_file_2, center = true);
+            rotate([0, 0, design_rotation_2])
+                offset(r = design_offset)
+                    resize([design_size_2, 0], auto = true)
+                        import(design_file_2, center = true);
     }
 }
 
