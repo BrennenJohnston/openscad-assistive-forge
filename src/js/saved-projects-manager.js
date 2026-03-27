@@ -674,6 +674,7 @@ export async function saveProject({
   folderId = null,
   forkedFrom = null,
   uiPreferences = null,
+  sourceExampleKey = null,
 }) {
   try {
     await ensureInitialized();
@@ -738,6 +739,7 @@ export async function saveProject({
       notes: notes || '',
       forkedFrom: forkedFrom || null,
       uiPreferences: uiPreferences || null, // v2: per-project UI preferences sidecar
+      sourceExampleKey: sourceExampleKey || null,
       savedAt: now,
       lastLoadedAt: now,
     };

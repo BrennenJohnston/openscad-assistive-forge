@@ -1302,7 +1302,7 @@ export function initSavedProjectsUI({
 
       // Load the file (reuse existing handleFile logic)
       await handleFile(
-        { name: fileName },
+        { name: fileName, sourceExampleKey: project.sourceExampleKey || null },
         content,
         projectFiles,
         mainFilePath,
@@ -1360,7 +1360,8 @@ export function initSavedProjectsUI({
    * @returns {Promise<{saved: boolean, projectId?: string}>}
    */
   async function showSaveProjectPrompt(fileData, { preSave = false } = {}) {
-    const { uploadedFile, projectFiles, mainFilePath } = fileData;
+    const { uploadedFile, projectFiles, mainFilePath, sourceExampleKey } =
+      fileData;
 
     if (!uploadedFile) return { saved: false };
 
@@ -1486,6 +1487,7 @@ export function initSavedProjectsUI({
             content: uploadedFile.content,
             projectFiles: projectFilesObj,
             notes,
+            sourceExampleKey: sourceExampleKey || undefined,
           });
           if (result.success) {
             savedProjectId = result.id;

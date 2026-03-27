@@ -16,6 +16,8 @@ import {
   setFileUploadListener,
   appendUserSvgToGallery,
   getGalleryParamNames,
+  getSvgPrepMetadata,
+  setSvgPrepMetadata,
 } from './ui-generator.js';
 import {
   extractZipFiles,
@@ -62,6 +64,72 @@ import { isEnabled } from './feature-flags.js';
 import { prepareSvg, needsPreparation } from './svg-preparer.js';
 
 const STORAGE_KEY_MODEL_COLOR = getAppPrefKey('model-color');
+
+let currentExampleKey = null;
+
+/**
+ * Reverse-lookup an example key from EXAMPLE_DEFINITIONS by file name.
+ * @param {string} fileName - e.g. 'q_charm.scad'
+ * @returns {string|null} Example key or null
+ */
+function findExampleKeyByFileName(fileName) {
+  if (!fileName) return null;
+  for (const [key, def] of Object.entries(EXAMPLE_DEFINITIONS)) {
+    if (def.name === fileName) return key;
+  }
+  return null;
+}
+
+/**
+ * Fetch an example's manifest and register its SVG gallery options.
+ * Extracted from loadExampleByKey for reuse during saved-project restore.
+ * @param {string} exampleKey - Key into EXAMPLE_DEFINITIONS
+ */
+async function restoreGalleryFromManifest(exampleKey) {
+  const example = EXAMPLE_DEFINITIONS[exampleKey];
+  if (!example?.manifest) return;
+
+  try {
+    const manifestResponse = await fetch(example.manifest);
+    if (!manifestResponse.ok) return;
+    const manifestData = await manifestResponse.json();
+    const libs = Array.isArray(manifestData.svgLibrary)
+      ? manifestData.svgLibrary
+      : manifestData.svgLibrary
+        ? [manifestData.svgLibrary]
+        : [];
+    const fileUrlMap = {};
+    if (example.additionalFiles) {
+      for (const fp of example.additionalFiles) {
+        fileUrlMap[fp.split('/').pop()] = fp;
+      }
+    }
+    const exampleDir = example.path.substring(
+      0,
+      example.path.lastIndexOf('/')
+    );
+    for (const lib of libs) {
+      if (lib?.options?.length > 0) {
+        const galleryOpts = lib.options.map((opt) => ({
+          file: opt.file,
+          label: opt.label,
+          url:
+            fileUrlMap[opt.file.split('/').pop()] ||
+            `${exampleDir}/${opt.file}`,
+        }));
+        setGalleryOptions(lib.paramName, galleryOpts);
+        console.log(
+          `[Gallery] SVG gallery: ${galleryOpts.length} designs for "${lib.paramName}"`
+        );
+      }
+    }
+  } catch (err) {
+    console.warn(
+      '[Gallery] Failed to restore gallery from manifest:',
+      err.message
+    );
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Example definitions
@@ -485,6 +553,10 @@ export function initFileHandler({
   ) {
     if (!file && !content) return;
 
+    if (source !== 'example' && source !== 'program-example') {
+      currentExampleKey = null;
+    }
+
     const rawFileName =
       typeof file?.name === 'string' && file.name.trim().length > 0
         ? file.name
@@ -866,6 +938,15 @@ export function initFileHandler({
 
       renderLibraryUI(detectedLibraries);
 
+      if (source === 'saved') {
+        const exampleKey =
+          file?.sourceExampleKey || findExampleKeyByFileName(fileName);
+        if (exampleKey) {
+          clearGalleryOptions();
+          await restoreGalleryFromManifest(exampleKey);
+        }
+      }
+
       const parametersContainer = document.getElementById(
         'parametersContainer'
       );
@@ -1238,11 +1319,26 @@ export function initFileHandler({
         }
       }
 
-      if (source === 'user' || source === 'program-example') {
+      if (source === 'saved') {
+        const savedProjectId = getCurrentSavedProjectId?.();
+        if (savedProjectId) {
+          try {
+            await loadUserSvgsIntoGallery(savedProjectId);
+          } catch (error) {
+            console.warn(
+              '[Saved Projects] Failed to restore user SVGs:',
+              error
+            );
+          }
+        }
+      } else if (source === 'user' || source === 'program-example') {
         try {
           const state = stateManager.getState();
+          const promptState = currentExampleKey
+            ? { ...state, sourceExampleKey: currentExampleKey }
+            : state;
           const promptResult =
-            await getSavedProjectsUI().showSaveProjectPrompt(state);
+            await getSavedProjectsUI().showSaveProjectPrompt(promptState);
 
           if (promptResult?.saved && promptResult.projectId) {
             await loadUserSvgsIntoGallery(promptResult.projectId);
@@ -1364,48 +1460,9 @@ export function initFileHandler({
         console.log(`[Example] Total files in package: ${exProjectFiles.size}`);
       }
 
-      // Set up SVG gallery from manifest when available
+      currentExampleKey = exampleKey;
       clearGalleryOptions();
-      if (example.manifest) {
-        try {
-          const manifestResponse = await fetch(example.manifest);
-          if (manifestResponse.ok) {
-            const manifestData = await manifestResponse.json();
-            const libs = Array.isArray(manifestData.svgLibrary)
-              ? manifestData.svgLibrary
-              : manifestData.svgLibrary
-                ? [manifestData.svgLibrary]
-                : [];
-            const fileUrlMap = {};
-            if (example.additionalFiles) {
-              for (const fp of example.additionalFiles) {
-                fileUrlMap[fp.split('/').pop()] = fp;
-              }
-            }
-            const exampleDir = example.path.substring(
-              0,
-              example.path.lastIndexOf('/')
-            );
-            for (const lib of libs) {
-              if (lib?.options?.length > 0) {
-                const galleryOpts = lib.options.map((opt) => ({
-                  file: opt.file,
-                  label: opt.label,
-                  url:
-                    fileUrlMap[opt.file.split('/').pop()] ||
-                    `${exampleDir}/${opt.file}`,
-                }));
-                setGalleryOptions(lib.paramName, galleryOpts);
-                console.log(
-                  `[Example] SVG gallery: ${galleryOpts.length} designs for "${lib.paramName}"`
-                );
-              }
-            }
-          }
-        } catch (manifestErr) {
-          console.warn('[Example] Failed to load manifest for gallery:', manifestErr.message);
-        }
-      }
+      await restoreGalleryFromManifest(exampleKey);
 
       const isProgramExample = Object.values(PROGRAM_DEFINITIONS).some(
         (prog) => prog.examples.includes(exampleKey)
@@ -1463,6 +1520,17 @@ export function initFileHandler({
         mimeType: 'image/svg+xml',
       });
 
+      const prepMeta = getSvgPrepMetadata(fileObj.name);
+      if (prepMeta) {
+        await addProjectFile({
+          projectId,
+          path: `svg-prep-metadata/${fileObj.name}.json`,
+          kind: 'json',
+          textContent: JSON.stringify(prepMeta),
+          mimeType: 'application/json',
+        });
+      }
+
       appendUserSvgToGallery(paramName, {
         file: fileObj.name,
         label: fileObj.name.replace(/\.svg$/i, '').replace(/[-_]/g, ' '),
@@ -1488,6 +1556,21 @@ export function initFileHandler({
       const svgFiles = files.filter(
         (f) => f.path.startsWith('svg-uploads/') && f.textContent
       );
+      const metaFiles = files.filter(
+        (f) => f.path.startsWith('svg-prep-metadata/') && f.textContent
+      );
+
+      for (const mf of metaFiles) {
+        try {
+          const metadata = JSON.parse(mf.textContent);
+          const svgFileName = mf.path
+            .replace('svg-prep-metadata/', '')
+            .replace(/\.json$/, '');
+          setSvgPrepMetadata(svgFileName, metadata);
+        } catch {
+          // ignore malformed metadata
+        }
+      }
 
       for (const f of svgFiles) {
         const fileName = f.path.replace('svg-uploads/', '');
@@ -1511,6 +1594,11 @@ export function initFileHandler({
           `[SVG Upload] Loaded ${svgFiles.length} user SVG(s) from project ${projectId}`
         );
       }
+      if (metaFiles.length > 0) {
+        console.log(
+          `[SVG Upload] Restored ${metaFiles.length} SVG prep metadata record(s)`
+        );
+      }
     } catch (err) {
       console.warn('[SVG Upload] Failed to load user SVGs:', err);
     }
@@ -1526,5 +1614,6 @@ export function initFileHandler({
     loadExampleByKey,
     /** @internal Exposed for folder picker wiring in main.js */
     collectFilesFromDir: _collectFilesFromDir,
+    getCurrentExampleKey: () => currentExampleKey,
   };
 }

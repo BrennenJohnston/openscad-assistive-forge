@@ -549,6 +549,39 @@ describe('Saved Projects Manager', () => {
       expect(result.success).toBe(true);
       expect(result.id).toBeDefined();
     });
+
+    it('should persist sourceExampleKey through save/get round-trip', async () => {
+      const result = await saveProject({
+        name: 'Q-Charm Project',
+        originalName: 'q-charm.scad',
+        kind: 'scad',
+        mainFilePath: 'q-charm.scad',
+        content: '// Q-Charm',
+        notes: '',
+        sourceExampleKey: 'q-charm',
+      });
+
+      expect(result.success).toBe(true);
+
+      const project = await getProject(result.id);
+      expect(project.sourceExampleKey).toBe('q-charm');
+    });
+
+    it('should default sourceExampleKey to null when not provided', async () => {
+      const result = await saveProject({
+        name: 'No Example Key',
+        originalName: 'test.scad',
+        kind: 'scad',
+        mainFilePath: 'test.scad',
+        content: '// Test',
+        notes: '',
+      });
+
+      expect(result.success).toBe(true);
+
+      const project = await getProject(result.id);
+      expect(project.sourceExampleKey).toBeNull();
+    });
   });
 
   describe('listSavedProjects', () => {
