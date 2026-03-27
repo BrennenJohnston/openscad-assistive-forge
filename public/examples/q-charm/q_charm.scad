@@ -13,7 +13,7 @@ extrude_width = 20; // [10:1:40]
 charm_height = 8.5; // [6:0.5:15]
 
 // Wall and material thickness
-charm_thickness = 3; // [1.5:0.25:4]
+charm_thickness = 3; // [2.25:0.25:4]
 
 // Width of the inner bracelet channel
 bracelet_width = 14; // [10:1:25]

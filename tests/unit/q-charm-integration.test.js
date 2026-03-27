@@ -87,6 +87,7 @@ describe('q_charm.scad parser integration', () => {
 
     expect(parsed.parameters.charm_thickness).toBeDefined();
     expect(parsed.parameters.charm_thickness.default).toBe(3);
+    expect(parsed.parameters.charm_thickness.minimum).toBe(2.25);
     expect(parsed.parameters.charm_thickness.maximum).toBe(4);
 
     expect(parsed.parameters.bracelet_width).toBeDefined();
