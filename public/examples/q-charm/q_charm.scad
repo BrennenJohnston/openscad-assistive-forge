@@ -147,9 +147,9 @@ z_offset = outer_height / 2;
 profile_center_x = 0;
 profile_max_y = outer_height / 2;
 charm_top_z = outer_height;
-face_dim = min(charm_length, bracelet_width);
-design_size = face_dim * design_scale / 100;
-design_size_2 = face_dim * design_scale_2 / 100;
+design_ref_dim = 14;
+design_size = design_ref_dim * design_scale / 100;
+design_size_2 = design_ref_dim * design_scale_2 / 100;
 total_top_z = charm_top_z
     + (add_border == "yes" ? border_height : 0)
     + max(
