@@ -53,7 +53,6 @@ describe('q_charm.scad parser integration', () => {
 
     const groupIds = parsed.groups.map((g) => g.id);
     const expectedGroups = [
-      'Dimensions',
       'Fit',
       'Design',
       'Design Layer 2',
@@ -68,14 +67,19 @@ describe('q_charm.scad parser integration', () => {
     }
   });
 
-  it('extracts core Dimensions parameters', () => {
+  it('extracts charm_length in Fit group (renamed from extrude_width)', () => {
     scadContent = readFileSync(scadPath, 'utf-8');
     parsed = extractParameters(scadContent);
 
-    expect(parsed.parameters.extrude_width).toBeDefined();
-    expect(parsed.parameters.extrude_width.default).toBe(20);
-    expect(parsed.parameters.extrude_width.minimum).toBe(10);
-    expect(parsed.parameters.extrude_width.maximum).toBe(40);
+    expect(parsed.parameters.charm_length).toBeDefined();
+    expect(parsed.parameters.charm_length.default).toBe(20);
+    expect(parsed.parameters.charm_length.minimum).toBe(10);
+    expect(parsed.parameters.charm_length.maximum).toBe(40);
+
+    expect(parsed.parameters.extrude_width).toBeUndefined();
+
+    const groupIds = parsed.groups.map((g) => g.id);
+    expect(groupIds).not.toContain('Dimensions');
   });
 
   it('extracts Fit parameters added in Phase 2', () => {

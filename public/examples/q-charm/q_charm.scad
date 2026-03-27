@@ -4,11 +4,10 @@
 // Concept inspired by Nasif Zaman's image-to-OpenSCAD proof-of-concept.
 // License: CC0 (Public Domain)
 
-/* [Dimensions] */
-// Width along the bracelet (Y axis)
-extrude_width = 20; // [10:1:40]
-
 /* [Fit] */
+// Length of the charm along the bracelet (Y axis)
+charm_length = 20; // [10:1:40]
+
 // Overall height of the C-clip profile
 charm_height = 8.5; // [6:0.5:15]
 
@@ -134,7 +133,7 @@ min_inner_height = 1.5;
 effective_thickness = min(charm_thickness, (charm_height - min_inner_height) / 2);
 inner_height = max(min_inner_height, charm_height - 2 * effective_thickness);
 safe_edge_radius = min(edge_radius, min(effective_thickness, inner_height, gap_width) / 2);
-safe_all_edges = min(all_edges_radius, min(effective_thickness, inner_height, gap_width, extrude_width) / 2 - 0.1);
+safe_all_edges = min(all_edges_radius, min(effective_thickness, inner_height, gap_width, charm_length) / 2 - 0.1);
 safe_icr = min(inner_corner_radius, inner_height / 2 - 0.1, gap_width / 2 - 0.1);
 outer_width = bracelet_width + 2 * effective_thickness;
 outer_height = charm_height;
@@ -142,7 +141,7 @@ z_offset = outer_height / 2;
 profile_center_x = 0;
 profile_max_y = outer_height / 2;
 charm_top_z = outer_height;
-face_dim = min(extrude_width, bracelet_width);
+face_dim = min(charm_length, bracelet_width);
 design_size = face_dim * design_scale / 100;
 design_size_2 = face_dim * design_scale_2 / 100;
 total_top_z = charm_top_z
@@ -189,7 +188,7 @@ module charm_body() {
             if (safe_all_edges > 0) {
                 minkowski() {
                     linear_extrude(
-                        height = extrude_width - 2 * safe_all_edges,
+                        height = charm_length - 2 * safe_all_edges,
                         center = true
                     )
                         offset(r = -safe_all_edges)
@@ -198,13 +197,13 @@ module charm_body() {
                 }
             } else if (safe_edge_radius > 0) {
                 minkowski() {
-                    linear_extrude(height = extrude_width, center = true)
+                    linear_extrude(height = charm_length, center = true)
                         offset(r = -safe_edge_radius)
                             profile_2d();
                     cylinder(r = safe_edge_radius, h = 0.01, center = true);
                 }
             } else {
-                linear_extrude(height = extrude_width, center = true)
+                linear_extrude(height = charm_length, center = true)
                     profile_2d();
             }
         }
@@ -242,12 +241,12 @@ module text_2d() {
 
 module border_shell() {
     if (add_border == "yes") {
-        safe_bw = max(0.1, min(border_width, outer_width / 2 - 1, extrude_width / 2 - 1));
+        safe_bw = max(0.1, min(border_width, outer_width / 2 - 1, charm_length / 2 - 1));
         translate([profile_center_x, 0, charm_top_z])
             linear_extrude(height = border_height)
                 difference() {
-                    square([outer_width, extrude_width], center = true);
-                    square([outer_width - 2 * safe_bw, extrude_width - 2 * safe_bw], center = true);
+                    square([outer_width, charm_length], center = true);
+                    square([outer_width - 2 * safe_bw, charm_length - 2 * safe_bw], center = true);
                 }
     }
 }
@@ -258,7 +257,7 @@ module attachment_cutout() {
     if (attachment_type == "keychain_hole") {
         margin = hole_diameter / 2 + 1;
         translate([profile_center_x + attachment_x,
-                   extrude_width / 2 - margin + attachment_y,
+                   charm_length / 2 - margin + attachment_y,
                    cut_z + attachment_z])
             cylinder(d = hole_diameter, h = cut_h);
     } else if (attachment_type == "lanyard_slot") {
@@ -266,7 +265,7 @@ module attachment_cutout() {
         r = hole_diameter / 4;
         margin = hole_diameter / 2 + 1;
         translate([profile_center_x + attachment_x,
-                   extrude_width / 2 - margin + attachment_y,
+                   charm_length / 2 - margin + attachment_y,
                    cut_z + attachment_z])
             linear_extrude(height = cut_h)
                 hull() {
@@ -278,7 +277,7 @@ module attachment_cutout() {
 
 module bail_loop() {
     if (attachment_type == "bail_loop") {
-        translate([attachment_x, extrude_width / 2 + attachment_y, z_offset + attachment_z])
+        translate([attachment_x, charm_length / 2 + attachment_y, z_offset + attachment_z])
             rotate([0, 90, 0])
                 rotate_extrude(angle = 180, $fn = 32)
                     translate([bail_inner_radius, 0, 0])
