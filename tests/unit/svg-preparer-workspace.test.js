@@ -1563,6 +1563,21 @@ describe('Phase 6b: accessibility — all interactive elements have names', () =
     ws.destroy();
   });
 
+  it('color swatches are non-interactive decorative elements, not checkboxes', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(2));
+
+    const swatches = ws._root.querySelectorAll('.svg-prep-swatch');
+    expect(swatches.length).toBe(2);
+    swatches.forEach((s) => {
+      expect(s.tagName).toBe('SPAN');
+      expect(s.querySelector('input')).toBeNull();
+      expect(s.getAttribute('role')).toBeNull();
+    });
+
+    ws.destroy();
+  });
+
   it('backdrop is marked aria-hidden when shown and hidden', () => {
     const ws = createSvgPrepWorkspace(container);
     ws.open(SIMPLE_SVG, makeAnalysis(1));
