@@ -121,6 +121,23 @@ describe('q_charm.scad parser integration', () => {
     expect(parsed.parameters.design_offset.maximum).toBe(1.5);
   });
 
+  it('extracts design_x and design_y position parameters (Phase 7)', () => {
+    scadContent = readFileSync(scadPath, 'utf-8');
+    parsed = extractParameters(scadContent);
+
+    expect(parsed.parameters.design_x).toBeDefined();
+    expect(parsed.parameters.design_x.default).toBe(0);
+    expect(parsed.parameters.design_x.minimum).toBe(-10);
+    expect(parsed.parameters.design_x.maximum).toBe(10);
+    expect(parsed.parameters.design_x.group).toBe('Design');
+
+    expect(parsed.parameters.design_y).toBeDefined();
+    expect(parsed.parameters.design_y.default).toBe(0);
+    expect(parsed.parameters.design_y.minimum).toBe(-10);
+    expect(parsed.parameters.design_y.maximum).toBe(10);
+    expect(parsed.parameters.design_y.group).toBe('Design');
+  });
+
   it('extracts Border parameters added in Phase 3 remediation', () => {
     scadContent = readFileSync(scadPath, 'utf-8');
     parsed = extractParameters(scadContent);

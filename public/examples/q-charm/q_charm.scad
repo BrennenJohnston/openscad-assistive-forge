@@ -39,6 +39,12 @@ design_scale = 60; // [20:5:95]
 // Offset to thicken SVG lines for FDM printability (0.6 = 1.2mm total, two 0.4mm nozzle walls)
 design_offset = 0.6; // [0:0.2:1.5]
 
+// Horizontal position offset for design
+design_x = 0; // [-10:0.5:10]
+
+// Vertical position offset for design
+design_y = 0; // [-10:0.5:10]
+
 /* [Design Layer 2] */
 // Second image file for layered designs (leave empty for none)
 design_file_2 = ""; // [file:svg,png,jpg]
@@ -215,9 +221,10 @@ module charm_body() {
 // the SVG preparer tool (F-11, planned) for compound designs.
 module design_2d() {
     if (design_file != "") {
-        offset(r = design_offset)
-            resize([design_size, 0], auto = true)
-                import(design_file, center = true);
+        translate([design_x, design_y])
+            offset(r = design_offset)
+                resize([design_size, 0], auto = true)
+                    import(design_file, center = true);
     }
 }
 
