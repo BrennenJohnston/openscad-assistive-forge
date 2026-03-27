@@ -63,6 +63,9 @@ export default defineConfig({
     __APP_VERSION__: JSON.stringify(buildInfo.version),
     __BUILD_TIME__: JSON.stringify(buildInfo.buildTime),
     __COMMIT_SHA__: JSON.stringify(buildInfo.commitSha),
+    // path-bool references process.env.PATH_BOOL_DEV_ASSERTS (Node-only global).
+    // Vite doesn't auto-replace arbitrary process.env.* in pre-bundled deps.
+    'process.env.PATH_BOOL_DEV_ASSERTS': 'undefined',
   },
   build: {
     target: 'es2020',

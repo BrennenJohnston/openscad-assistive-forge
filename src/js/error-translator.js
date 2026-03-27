@@ -83,6 +83,16 @@ const ERROR_PATTERNS = [
     suggestion:
       'Reduce $fn values, simplify the model, or try the "Fast" preview quality setting.',
   },
+  {
+    pattern: /Render cancelled.*hard cancel/i,
+    title: 'Render Timed Out',
+    explanation:
+      'The model took too long to render and was cancelled. ' +
+      'This often happens with minkowski() or all-edges rounding at high quality.',
+    suggestion:
+      'Try setting "All-edges rounding radius" to 0 (use side-only rounding instead), ' +
+      'lower the $fn value, or reduce the number of rounding operations.',
+  },
 
   // File errors
   {

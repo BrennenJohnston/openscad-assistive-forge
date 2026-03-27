@@ -941,10 +941,17 @@ export class RenderController {
       const quality = options.quality || RENDER_QUALITY.FULL;
       const adjustedParams = this.applyQualitySettings(parameters, quality);
       // Use explicit timeout if provided, then quality preset, then controller default
-      const timeoutMs =
+      let timeoutMs =
         options.timeoutMs ||
         quality.timeoutMs ||
         this.timeoutConfig.defaultTimeoutMs;
+
+      // Minkowski operations can trigger CGAL Nef fallback which is orders of
+      // magnitude slower than the Manifold fast-path.  Double the timeout so
+      // the watchdog doesn't kill a legitimate (but slow) render.
+      if (scadContent && /\bminkowski\s*\(/m.test(scadContent)) {
+        timeoutMs = Math.max(timeoutMs, 60000);
+      }
 
       const shouldRetryOnce = (err) => {
         const msg = err?.message || String(err);

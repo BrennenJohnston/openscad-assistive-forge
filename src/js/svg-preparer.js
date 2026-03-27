@@ -33,6 +33,15 @@ const SHAPE_TAGS = new Set([
   'rect',
 ]);
 
+const NON_RENDERING_CONTAINERS = new Set([
+  'defs',
+  'clippath',
+  'mask',
+  'symbol',
+  'marker',
+  'pattern',
+]);
+
 // CSS Level 2 named colors → hex.
 // parseLuminance() (image-import.js:130) handles rgb() and #hex only;
 // named colors like "black"/"white" fall through to the default return 0.
@@ -282,7 +291,7 @@ export function flattenToCompoundPath(classifiedElements, svgMeta = {}) {
   if (width) attrs += ` width="${width}"`;
   if (height) attrs += ` height="${height}"`;
 
-  return `<svg ${attrs}><path d="${compoundD}" fill="black"/></svg>`;
+  return `<svg ${attrs}><path d="${compoundD}" fill="black" fill-rule="evenodd"/></svg>`;
 }
 
 /**
@@ -317,28 +326,200 @@ export function prepareSvg(svgString, options = {}) {
 }
 
 /**
+ * Check whether an SVG element is inside a non-rendering container
+ * (<defs>, <clipPath>, <mask>, <symbol>, <marker>, <pattern>).
+ * @param {Element} element - SVG DOM element
+ * @returns {boolean}
+ */
+function isInsideNonRenderingScope(element) {
+  let parent = element.parentElement;
+  while (parent) {
+    if (NON_RENDERING_CONTAINERS.has(parent.tagName.toLowerCase())) return true;
+    parent = parent.parentElement;
+  }
+  return false;
+}
+
+/**
+ * Analyze an SVG for preparation complexity, element roles, and warnings.
+ *
+ * Replaces the boolean `needsPreparation()` as the primary entry point
+ * for SVG assessment. Returns a structured analysis with confidence score,
+ * per-element roles, warnings about unsupported features, and a
+ * recommendation for how to proceed.
+ *
+ * @param {string} svgString - Complete SVG markup
+ * @returns {{
+ *   status: 'ready'|'needs_review'|'unsupported',
+ *   confidence: number,
+ *   elements: Array<{element: Element, pathData: string, fill: string, stroke: string, luminance: number|null, autoRole: string, warnings: string[]}>,
+ *   warnings: string[],
+ *   unsupportedFeatures: string[],
+ *   recommendation: 'auto_prepare'|'open_editor'|'pass_through',
+ *   singleElement: boolean,
+ * }}
+ */
+export function analyzeSvg(svgString) {
+  const passThrough = {
+    status: 'ready',
+    confidence: 1.0,
+    elements: [],
+    warnings: [],
+    unsupportedFeatures: [],
+    recommendation: 'pass_through',
+    singleElement: true,
+  };
+
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(svgString, 'image/svg+xml');
+  const svg = doc.querySelector('svg');
+  if (!svg) return passThrough;
+
+  const allElements = parseSvgElements(svgString);
+  if (allElements.length === 0) return passThrough;
+
+  const renderElements = [];
+  const defsCount = { value: 0 };
+  for (const el of allElements) {
+    if (isInsideNonRenderingScope(el.element)) {
+      defsCount.value++;
+    } else {
+      renderElements.push(el);
+    }
+  }
+
+  const filledElements = renderElements.filter((el) => {
+    const fill = (el.fill || '').toLowerCase();
+    return fill !== 'none' && fill !== 'transparent';
+  });
+  const singleElement = filledElements.length <= 1;
+
+  const classified = classifyElements(renderElements);
+
+  const warnings = [];
+  const unsupportedFeatures = [];
+  let confidence = 1.0;
+
+  // Per-element analysis
+  const elements = classified.map((el) => {
+    const elWarnings = [];
+    const fillLower = (el.fill || '').toLowerCase();
+    const hasFill = fillLower !== 'none' && fillLower !== 'transparent';
+    const hasStroke = el.stroke !== '' && el.stroke.toLowerCase() !== 'none';
+
+    if (!hasFill && hasStroke) {
+      elWarnings.push('Stroked path \u2014 not supported for boolean operations');
+    }
+    if (fillLower.startsWith('url(')) {
+      elWarnings.push(
+        'Gradient or pattern fill \u2014 cannot classify by luminance'
+      );
+    }
+    if (el.element.hasAttribute('transform')) {
+      elWarnings.push('Has transform \u2014 may affect visual stacking');
+    }
+    if (el.element.hasAttribute('clip-path')) {
+      elWarnings.push('Has clip-path reference');
+    }
+
+    return {
+      element: el.element,
+      pathData: el.pathData,
+      fill: el.fill,
+      stroke: el.stroke,
+      luminance: el.luminance,
+      autoRole: el.role,
+      warnings: elWarnings,
+    };
+  });
+
+  // Global warnings
+  if (defsCount.value > 0) {
+    warnings.push(
+      `${defsCount.value} element(s) inside <defs> skipped`
+    );
+  }
+
+  const strokedCount = elements.filter((el) =>
+    el.warnings.some((w) => w.includes('Stroked path'))
+  ).length;
+  if (strokedCount > 0) {
+    warnings.push(
+      `${strokedCount} stroked path(s) ignored \u2014 stroke-to-fill not yet supported`
+    );
+  }
+
+  // Unsupported feature detection
+  const hasGradients = elements.some((el) =>
+    el.warnings.some((w) => w.includes('Gradient or pattern'))
+  );
+  if (hasGradients) unsupportedFeatures.push('gradient or pattern fills');
+
+  const hasClipPaths = elements.some((el) =>
+    el.warnings.some((w) => w.includes('clip-path'))
+  );
+  if (hasClipPaths) unsupportedFeatures.push('clip-path references');
+
+  // Confidence scoring — penalize ambiguous or unsupported scenarios
+  if (filledElements.length > 1) {
+    const luminances = filledElements
+      .filter((el) => el.luminance !== null)
+      .map((el) => el.luminance);
+    if (luminances.length > 1) {
+      const min = Math.min(...luminances);
+      const max = Math.max(...luminances);
+      if (max - min < 50) {
+        confidence -= 0.3;
+        warnings.push(
+          'All elements have similar luminance \u2014 classification may be ambiguous'
+        );
+      }
+    }
+  }
+  if (hasGradients) confidence -= 0.2;
+  if (hasClipPaths) confidence -= 0.1;
+  const hasTransforms = elements.some((el) =>
+    el.warnings.some((w) => w.includes('transform'))
+  );
+  if (hasTransforms) confidence -= 0.1;
+  confidence = Math.max(0, Math.min(1, confidence));
+
+  // Status and recommendation
+  let status, recommendation;
+  if (singleElement) {
+    status = 'ready';
+    recommendation = 'pass_through';
+  } else if (unsupportedFeatures.length > 0) {
+    status = 'unsupported';
+    recommendation = 'open_editor';
+  } else if (confidence >= 0.7) {
+    status = 'ready';
+    recommendation = 'auto_prepare';
+  } else {
+    status = 'needs_review';
+    recommendation = 'open_editor';
+  }
+
+  return {
+    status,
+    confidence,
+    elements,
+    warnings,
+    unsupportedFeatures,
+    recommendation,
+    singleElement,
+  };
+}
+
+/**
  * Quick check: does this SVG contain more than one filled shape element?
  *
- * Single-element SVGs don't need preparation — they are already
- * OpenSCAD-compatible. Multi-element SVGs with overlapping fills need
- * boolean flattening.
+ * Thin wrapper around analyzeSvg() for backward compatibility.
+ * Prefer analyzeSvg() for richer analysis.
  *
  * @param {string} svgString - Complete SVG markup
  * @returns {boolean} true if the SVG has multiple filled shapes
  */
 export function needsPreparation(svgString) {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(svgString, 'image/svg+xml');
-  const svg = doc.querySelector('svg');
-  if (!svg) return false;
-
-  const shapes = Array.from(svg.querySelectorAll('*')).filter((el) =>
-    SHAPE_TAGS.has(el.tagName.toLowerCase())
-  );
-  let filledCount = 0;
-  for (const shape of shapes) {
-    const fill = (shape.getAttribute('fill') || '').toLowerCase();
-    if (fill !== 'none') filledCount++;
-  }
-  return filledCount > 1;
+  return !analyzeSvg(svgString).singleElement;
 }

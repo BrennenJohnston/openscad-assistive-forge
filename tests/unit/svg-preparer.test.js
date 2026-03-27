@@ -26,6 +26,7 @@ import {
   flattenToCompoundPath,
   prepareSvg,
   needsPreparation,
+  analyzeSvg,
 } from '../../src/js/svg-preparer.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -271,15 +272,15 @@ describe('svg_preparer feature flag', () => {
     expect(FLAGS.svg_preparer).toBeDefined();
     expect(FLAGS.svg_preparer.id).toBe('svg_preparer');
     expect(FLAGS.svg_preparer.name).toBe('SVG Preparer');
-    expect(FLAGS.svg_preparer.default).toBe(false);
-    expect(FLAGS.svg_preparer.rollout).toBe(0);
+    expect(FLAGS.svg_preparer.default).toBe(true);
+    expect(FLAGS.svg_preparer.rollout).toBe(100);
     expect(FLAGS.svg_preparer.userConfigurable).toBe(true);
     expect(FLAGS.svg_preparer.killSwitch).toBe(false);
   });
 
-  it('is disabled by default (rollout 0, default false)', async () => {
+  it('is enabled by default (rollout 100, default true)', async () => {
     const { isEnabled } = await import('../../src/js/feature-flags.js');
-    expect(isEnabled('svg_preparer')).toBe(false);
+    expect(isEnabled('svg_preparer')).toBe(true);
   });
 });
 
@@ -1052,9 +1053,9 @@ describe('OpenSCAD output validation', () => {
     expect(result).toContain('fill="black"');
   });
 
-  it('prepared smiley does NOT set fill-rule (OpenSCAD always uses evenodd)', () => {
+  it('prepared smiley sets fill-rule="evenodd" for correct hole rendering', () => {
     const result = prepareSvg(SMILEY_SVG);
-    expect(result).not.toContain('fill-rule');
+    expect(result).toContain('fill-rule="evenodd"');
   });
 
   it('prepared smiley path data contains only valid SVG commands', () => {
@@ -1158,5 +1159,542 @@ describe('pipeline integration (base64 round-trip)', () => {
     expect(decoded).toBe(STAR_SVG);
     expect(needsPreparation(decoded)).toBe(false);
     expect(prepareSvg(decoded)).toBe(decoded);
+  });
+});
+
+// ===========================================================================
+// Phase 1a — Blank square bug investigation and regression tests
+// ===========================================================================
+
+describe('blank square bug fix (fill-rule="evenodd")', () => {
+  it('flattenToCompoundPath includes fill-rule="evenodd" on the path element', () => {
+    const elements = parseSvgElements(SMILEY_SVG);
+    const classified = classifyElements(elements);
+    const result = flattenToCompoundPath(classified, {
+      viewBox: '0 0 100 100',
+    });
+
+    expect(result).toContain('fill-rule="evenodd"');
+
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(result, 'image/svg+xml');
+    const path = doc.querySelector('path');
+    expect(path).not.toBeNull();
+    expect(path.getAttribute('fill-rule')).toBe('evenodd');
+  });
+
+  it('prepareSvg output includes fill-rule="evenodd" for multi-element SVGs', () => {
+    const result = prepareSvg(SMILEY_SVG);
+    expect(result).toContain('fill-rule="evenodd"');
+  });
+
+  it('single-element SVGs pass through without fill-rule injection', () => {
+    const heartResult = prepareSvg(HEART_SVG);
+    expect(heartResult).toBe(HEART_SVG);
+
+    const starResult = prepareSvg(STAR_SVG);
+    expect(starResult).toBe(STAR_SVG);
+  });
+
+  it('prepared smiley compound path has non-degenerate geometry', () => {
+    const result = prepareSvg(SMILEY_SVG);
+    const dMatch = result.match(/d="([^"]+)"/);
+    expect(dMatch).not.toBeNull();
+
+    const pathD = dMatch[1];
+    const coords = pathD.match(/[\d.]+/g).map(Number);
+    const xCoords = coords.filter((_, i) => i % 2 === 0);
+    const yCoords = coords.filter((_, i) => i % 2 === 1);
+
+    const xMin = Math.min(...xCoords);
+    const xMax = Math.max(...xCoords);
+    const yMin = Math.min(...yCoords);
+    const yMax = Math.max(...yCoords);
+
+    expect(xMax - xMin).toBeGreaterThan(10);
+    expect(yMax - yMin).toBeGreaterThan(10);
+  });
+
+  it('prepared SVG viewBox matches the source SVG', () => {
+    const result = prepareSvg(SMILEY_SVG);
+
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(result, 'image/svg+xml');
+    const svg = doc.querySelector('svg');
+
+    expect(svg.getAttribute('viewBox')).toBe('0 0 100 100');
+  });
+
+  it('prepared SVG survives DOMParser round-trip as valid SVG', () => {
+    const result = prepareSvg(SMILEY_SVG);
+
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(result, 'image/svg+xml');
+
+    expect(doc.querySelector('parsererror')).toBeNull();
+
+    const svg = doc.querySelector('svg');
+    expect(svg).not.toBeNull();
+    expect(svg.getAttribute('xmlns')).toBe('http://www.w3.org/2000/svg');
+
+    const path = doc.querySelector('path');
+    expect(path).not.toBeNull();
+    expect(path.getAttribute('fill')).toBe('black');
+    expect(path.getAttribute('fill-rule')).toBe('evenodd');
+    expect(path.getAttribute('d')).toMatch(/^M/);
+  });
+
+  it('data URL encoding of prepared SVG preserves fill-rule', () => {
+    const prepared = prepareSvg(SMILEY_SVG);
+    const dataUrl = 'data:image/svg+xml;base64,' + btoa(prepared);
+    const decoded = atob(dataUrl.split(',')[1]);
+
+    expect(decoded).toContain('fill-rule="evenodd"');
+    expect(decoded).toBe(prepared);
+  });
+
+  it('multi-foreground union also includes fill-rule="evenodd"', () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+      '<circle cx="30" cy="50" r="25" fill="black"/>' +
+      '<circle cx="70" cy="50" r="25" fill="black"/>' +
+      '</svg>';
+    const elements = parseSvgElements(svg);
+    const classified = classifyElements(elements);
+    const result = flattenToCompoundPath(classified, {
+      viewBox: '0 0 100 100',
+    });
+
+    expect(result).toContain('fill-rule="evenodd"');
+  });
+});
+
+// ===========================================================================
+// Phase 1b — analyzeSvg() analysis model
+// ===========================================================================
+
+describe('analyzeSvg', () => {
+  describe('return shape', () => {
+    it('returns all required fields', () => {
+      const result = analyzeSvg(SMILEY_SVG);
+      expect(result).toHaveProperty('status');
+      expect(result).toHaveProperty('confidence');
+      expect(result).toHaveProperty('elements');
+      expect(result).toHaveProperty('warnings');
+      expect(result).toHaveProperty('unsupportedFeatures');
+      expect(result).toHaveProperty('recommendation');
+      expect(result).toHaveProperty('singleElement');
+    });
+
+    it('status is one of the allowed values', () => {
+      const result = analyzeSvg(SMILEY_SVG);
+      expect(['ready', 'needs_review', 'unsupported']).toContain(result.status);
+    });
+
+    it('recommendation is one of the allowed values', () => {
+      const result = analyzeSvg(SMILEY_SVG);
+      expect(['auto_prepare', 'open_editor', 'pass_through']).toContain(
+        result.recommendation
+      );
+    });
+
+    it('confidence is between 0 and 1', () => {
+      const result = analyzeSvg(SMILEY_SVG);
+      expect(result.confidence).toBeGreaterThanOrEqual(0);
+      expect(result.confidence).toBeLessThanOrEqual(1);
+    });
+  });
+
+  describe('smiley.svg analysis', () => {
+    it('detects multi-element SVG (singleElement = false)', () => {
+      const result = analyzeSvg(SMILEY_SVG);
+      expect(result.singleElement).toBe(false);
+    });
+
+    it('recommends auto_prepare for clear foreground/hole separation', () => {
+      const result = analyzeSvg(SMILEY_SVG);
+      expect(result.recommendation).toBe('auto_prepare');
+    });
+
+    it('status is ready for smiley (high confidence classification)', () => {
+      const result = analyzeSvg(SMILEY_SVG);
+      expect(result.status).toBe('ready');
+    });
+
+    it('has high confidence (luminance spread > 50)', () => {
+      const result = analyzeSvg(SMILEY_SVG);
+      expect(result.confidence).toBe(1.0);
+    });
+
+    it('returns 4 render-scope elements', () => {
+      const result = analyzeSvg(SMILEY_SVG);
+      expect(result.elements).toHaveLength(4);
+    });
+
+    it('classifies face as foreground, eyes as hole, smile as ignore', () => {
+      const result = analyzeSvg(SMILEY_SVG);
+      const face = result.elements.find((el) => el.fill === 'black');
+      const eyes = result.elements.filter((el) => el.fill === 'white');
+      const smile = result.elements.find((el) => el.fill === 'none');
+
+      expect(face.autoRole).toBe('foreground');
+      expect(eyes[0].autoRole).toBe('hole');
+      expect(eyes[1].autoRole).toBe('hole');
+      expect(smile.autoRole).toBe('ignore');
+    });
+
+    it('warns about the stroked smile path', () => {
+      const result = analyzeSvg(SMILEY_SVG);
+      const smile = result.elements.find((el) => el.fill === 'none');
+      expect(smile.warnings.length).toBeGreaterThan(0);
+      expect(smile.warnings[0]).toContain('Stroked path');
+    });
+
+    it('has a global warning about stroked paths', () => {
+      const result = analyzeSvg(SMILEY_SVG);
+      expect(result.warnings.some((w) => w.includes('stroked path'))).toBe(
+        true
+      );
+    });
+
+    it('has no unsupported features', () => {
+      const result = analyzeSvg(SMILEY_SVG);
+      expect(result.unsupportedFeatures).toHaveLength(0);
+    });
+
+    it('each element has pathData, fill, stroke, luminance, and autoRole', () => {
+      const result = analyzeSvg(SMILEY_SVG);
+      for (const el of result.elements) {
+        expect(el).toHaveProperty('pathData');
+        expect(el).toHaveProperty('fill');
+        expect(el).toHaveProperty('stroke');
+        expect(el).toHaveProperty('luminance');
+        expect(el).toHaveProperty('autoRole');
+        expect(el).toHaveProperty('warnings');
+        expect(Array.isArray(el.warnings)).toBe(true);
+      }
+    });
+  });
+
+  describe('heart.svg analysis (single element)', () => {
+    it('detects single-element SVG', () => {
+      const result = analyzeSvg(HEART_SVG);
+      expect(result.singleElement).toBe(true);
+    });
+
+    it('recommends pass_through', () => {
+      const result = analyzeSvg(HEART_SVG);
+      expect(result.recommendation).toBe('pass_through');
+    });
+
+    it('status is ready', () => {
+      const result = analyzeSvg(HEART_SVG);
+      expect(result.status).toBe('ready');
+    });
+
+    it('confidence is 1.0', () => {
+      const result = analyzeSvg(HEART_SVG);
+      expect(result.confidence).toBe(1.0);
+    });
+
+    it('returns 1 element', () => {
+      const result = analyzeSvg(HEART_SVG);
+      expect(result.elements).toHaveLength(1);
+      expect(result.elements[0].autoRole).toBe('foreground');
+    });
+  });
+
+  describe('star.svg analysis (single element)', () => {
+    it('detects single-element SVG', () => {
+      const result = analyzeSvg(STAR_SVG);
+      expect(result.singleElement).toBe(true);
+    });
+
+    it('recommends pass_through', () => {
+      const result = analyzeSvg(STAR_SVG);
+      expect(result.recommendation).toBe('pass_through');
+    });
+
+    it('status is ready with full confidence', () => {
+      const result = analyzeSvg(STAR_SVG);
+      expect(result.status).toBe('ready');
+      expect(result.confidence).toBe(1.0);
+    });
+  });
+
+  describe('empty and invalid SVG', () => {
+    it('returns pass_through for empty string', () => {
+      const result = analyzeSvg('');
+      expect(result.singleElement).toBe(true);
+      expect(result.recommendation).toBe('pass_through');
+      expect(result.status).toBe('ready');
+      expect(result.confidence).toBe(1.0);
+      expect(result.elements).toHaveLength(0);
+    });
+
+    it('returns pass_through for non-SVG markup', () => {
+      const result = analyzeSvg('<div>not svg</div>');
+      expect(result.singleElement).toBe(true);
+      expect(result.recommendation).toBe('pass_through');
+    });
+
+    it('returns pass_through for SVG with no shapes', () => {
+      const svg =
+        '<svg xmlns="http://www.w3.org/2000/svg"><text>hello</text></svg>';
+      const result = analyzeSvg(svg);
+      expect(result.singleElement).toBe(true);
+      expect(result.recommendation).toBe('pass_through');
+      expect(result.elements).toHaveLength(0);
+    });
+  });
+
+  describe('gradient and pattern fills', () => {
+    it('flags gradient fills as unsupported feature', () => {
+      const svg =
+        '<svg xmlns="http://www.w3.org/2000/svg">' +
+        '<defs><linearGradient id="g1"><stop offset="0" stop-color="red"/></linearGradient></defs>' +
+        '<rect x="0" y="0" width="50" height="50" fill="url(#g1)"/>' +
+        '<circle cx="75" cy="25" r="20" fill="black"/>' +
+        '</svg>';
+      const result = analyzeSvg(svg);
+      expect(result.unsupportedFeatures).toContain('gradient or pattern fills');
+    });
+
+    it('reduces confidence for gradient fills', () => {
+      const svg =
+        '<svg xmlns="http://www.w3.org/2000/svg">' +
+        '<defs><linearGradient id="g1"><stop offset="0" stop-color="red"/></linearGradient></defs>' +
+        '<rect x="0" y="0" width="50" height="50" fill="url(#g1)"/>' +
+        '<circle cx="75" cy="25" r="20" fill="black"/>' +
+        '</svg>';
+      const result = analyzeSvg(svg);
+      expect(result.confidence).toBeLessThan(1.0);
+    });
+
+    it('sets status to unsupported when gradients present in multi-element SVG', () => {
+      const svg =
+        '<svg xmlns="http://www.w3.org/2000/svg">' +
+        '<defs><linearGradient id="g1"><stop offset="0" stop-color="red"/></linearGradient></defs>' +
+        '<rect x="0" y="0" width="50" height="50" fill="url(#g1)"/>' +
+        '<circle cx="75" cy="25" r="20" fill="black"/>' +
+        '</svg>';
+      const result = analyzeSvg(svg);
+      expect(result.status).toBe('unsupported');
+      expect(result.recommendation).toBe('open_editor');
+    });
+
+    it('per-element warning on gradient-filled element', () => {
+      const svg =
+        '<svg xmlns="http://www.w3.org/2000/svg">' +
+        '<defs><linearGradient id="g1"><stop offset="0" stop-color="red"/></linearGradient></defs>' +
+        '<rect x="0" y="0" width="50" height="50" fill="url(#g1)"/>' +
+        '</svg>';
+      const result = analyzeSvg(svg);
+      const gradientEl = result.elements.find((el) =>
+        el.fill.startsWith('url(')
+      );
+      expect(gradientEl).toBeDefined();
+      expect(
+        gradientEl.warnings.some((w) => w.includes('Gradient or pattern'))
+      ).toBe(true);
+    });
+  });
+
+  describe('transforms', () => {
+    it('reduces confidence when transforms are present', () => {
+      const svg =
+        '<svg xmlns="http://www.w3.org/2000/svg">' +
+        '<rect x="0" y="0" width="20" height="20" fill="black" transform="rotate(45 10 10)"/>' +
+        '<circle cx="50" cy="50" r="15" fill="white"/>' +
+        '</svg>';
+      const result = analyzeSvg(svg);
+      expect(result.confidence).toBeLessThan(1.0);
+    });
+
+    it('per-element warning on transformed element', () => {
+      const svg =
+        '<svg xmlns="http://www.w3.org/2000/svg">' +
+        '<rect x="0" y="0" width="20" height="20" fill="black" transform="rotate(45 10 10)"/>' +
+        '</svg>';
+      const result = analyzeSvg(svg);
+      expect(
+        result.elements[0].warnings.some((w) => w.includes('transform'))
+      ).toBe(true);
+    });
+  });
+
+  describe('elements inside <defs>', () => {
+    it('filters out elements inside <defs> from the elements array', () => {
+      const svg =
+        '<svg xmlns="http://www.w3.org/2000/svg">' +
+        '<defs><rect id="template" x="0" y="0" width="10" height="10" fill="red"/></defs>' +
+        '<circle cx="50" cy="50" r="20" fill="black"/>' +
+        '</svg>';
+      const result = analyzeSvg(svg);
+      expect(result.elements).toHaveLength(1);
+      expect(result.elements[0].element.tagName.toLowerCase()).toBe('circle');
+    });
+
+    it('warns about skipped defs elements', () => {
+      const svg =
+        '<svg xmlns="http://www.w3.org/2000/svg">' +
+        '<defs><rect id="template" x="0" y="0" width="10" height="10" fill="red"/></defs>' +
+        '<circle cx="50" cy="50" r="20" fill="black"/>' +
+        '</svg>';
+      const result = analyzeSvg(svg);
+      expect(result.warnings.some((w) => w.includes('<defs> skipped'))).toBe(
+        true
+      );
+    });
+
+    it('filters out elements inside <clipPath>', () => {
+      const svg =
+        '<svg xmlns="http://www.w3.org/2000/svg">' +
+        '<defs><clipPath id="c1"><rect x="0" y="0" width="50" height="50"/></clipPath></defs>' +
+        '<circle cx="50" cy="50" r="40" fill="black" clip-path="url(#c1)"/>' +
+        '</svg>';
+      const result = analyzeSvg(svg);
+      const circles = result.elements.filter(
+        (el) => el.element.tagName.toLowerCase() === 'circle'
+      );
+      expect(circles).toHaveLength(1);
+      const rects = result.elements.filter(
+        (el) => el.element.tagName.toLowerCase() === 'rect'
+      );
+      expect(rects).toHaveLength(0);
+    });
+
+    it('filters out elements inside <pattern>', () => {
+      const svg =
+        '<svg xmlns="http://www.w3.org/2000/svg">' +
+        '<defs><pattern id="p1"><rect width="5" height="5" fill="red"/></pattern></defs>' +
+        '<circle cx="25" cy="25" r="20" fill="url(#p1)"/>' +
+        '</svg>';
+      const result = analyzeSvg(svg);
+      const circles = result.elements.filter(
+        (el) => el.element.tagName.toLowerCase() === 'circle'
+      );
+      expect(circles).toHaveLength(1);
+    });
+  });
+
+  describe('similar luminance (ambiguous classification)', () => {
+    it('reduces confidence when all filled elements have similar luminance', () => {
+      const svg =
+        '<svg xmlns="http://www.w3.org/2000/svg">' +
+        '<circle cx="20" cy="20" r="10" fill="black"/>' +
+        '<circle cx="50" cy="20" r="10" fill="black"/>' +
+        '</svg>';
+      const result = analyzeSvg(svg);
+      expect(result.confidence).toBeLessThan(1.0);
+      expect(
+        result.warnings.some((w) => w.includes('similar luminance'))
+      ).toBe(true);
+    });
+
+    it('does not penalize single-element SVGs for luminance', () => {
+      const svg =
+        '<svg xmlns="http://www.w3.org/2000/svg">' +
+        '<circle cx="20" cy="20" r="10" fill="black"/>' +
+        '</svg>';
+      const result = analyzeSvg(svg);
+      expect(result.confidence).toBe(1.0);
+    });
+
+    it('does not penalize multi-element SVGs with wide luminance spread', () => {
+      const svg =
+        '<svg xmlns="http://www.w3.org/2000/svg">' +
+        '<circle cx="20" cy="20" r="10" fill="black"/>' +
+        '<circle cx="50" cy="20" r="10" fill="white"/>' +
+        '</svg>';
+      const result = analyzeSvg(svg);
+      expect(
+        result.warnings.some((w) => w.includes('similar luminance'))
+      ).toBe(false);
+    });
+  });
+
+  describe('clip-path references', () => {
+    it('flags clip-path as unsupported feature on multi-element SVGs', () => {
+      const svg =
+        '<svg xmlns="http://www.w3.org/2000/svg">' +
+        '<circle cx="20" cy="20" r="15" fill="black" clip-path="url(#c1)"/>' +
+        '<circle cx="50" cy="20" r="15" fill="white"/>' +
+        '</svg>';
+      const result = analyzeSvg(svg);
+      expect(result.unsupportedFeatures).toContain('clip-path references');
+    });
+
+    it('per-element warning on clipped element', () => {
+      const svg =
+        '<svg xmlns="http://www.w3.org/2000/svg">' +
+        '<circle cx="20" cy="20" r="15" fill="black" clip-path="url(#c1)"/>' +
+        '</svg>';
+      const result = analyzeSvg(svg);
+      expect(
+        result.elements[0].warnings.some((w) => w.includes('clip-path'))
+      ).toBe(true);
+    });
+  });
+
+  describe('needsPreparation backward compatibility', () => {
+    it('returns true for smiley.svg via analyzeSvg delegation', () => {
+      expect(needsPreparation(SMILEY_SVG)).toBe(true);
+    });
+
+    it('returns false for heart.svg via analyzeSvg delegation', () => {
+      expect(needsPreparation(HEART_SVG)).toBe(false);
+    });
+
+    it('returns false for star.svg via analyzeSvg delegation', () => {
+      expect(needsPreparation(STAR_SVG)).toBe(false);
+    });
+
+    it('returns false for empty string via analyzeSvg delegation', () => {
+      expect(needsPreparation('')).toBe(false);
+    });
+
+    it('returns true for two filled elements', () => {
+      const svg =
+        '<svg xmlns="http://www.w3.org/2000/svg">' +
+        '<circle cx="10" cy="10" r="5" fill="black"/>' +
+        '<circle cx="20" cy="20" r="5" fill="white"/>' +
+        '</svg>';
+      expect(needsPreparation(svg)).toBe(true);
+    });
+
+    it('excludes fill="none" elements from filled count', () => {
+      const svg =
+        '<svg xmlns="http://www.w3.org/2000/svg">' +
+        '<circle cx="10" cy="10" r="5" fill="black"/>' +
+        '<line x1="0" y1="0" x2="10" y2="10" stroke="black" fill="none"/>' +
+        '</svg>';
+      expect(needsPreparation(svg)).toBe(false);
+    });
+  });
+
+  describe('combined confidence penalties', () => {
+    it('stacks penalties from gradients + transforms + similar luminance', () => {
+      const svg =
+        '<svg xmlns="http://www.w3.org/2000/svg">' +
+        '<defs><linearGradient id="g1"><stop offset="0" stop-color="red"/></linearGradient></defs>' +
+        '<rect x="0" y="0" width="30" height="30" fill="url(#g1)" transform="rotate(10)"/>' +
+        '<rect x="40" y="0" width="30" height="30" fill="#050505"/>' +
+        '</svg>';
+      const result = analyzeSvg(svg);
+      // gradient (-0.2) + transform (-0.1) = at least -0.3
+      expect(result.confidence).toBeLessThanOrEqual(0.7);
+    });
+
+    it('confidence never goes below 0', () => {
+      const svg =
+        '<svg xmlns="http://www.w3.org/2000/svg">' +
+        '<defs><linearGradient id="g1"><stop offset="0" stop-color="red"/></linearGradient></defs>' +
+        '<rect x="0" y="0" width="30" height="30" fill="url(#g1)" transform="rotate(10)" clip-path="url(#x)"/>' +
+        '<rect x="40" y="0" width="30" height="30" fill="url(#g1)" transform="scale(2)" clip-path="url(#y)"/>' +
+        '</svg>';
+      const result = analyzeSvg(svg);
+      expect(result.confidence).toBeGreaterThanOrEqual(0);
+    });
   });
 });

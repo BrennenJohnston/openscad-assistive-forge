@@ -9727,6 +9727,38 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
   line-height: 1.4;
 }
 
+.role-path-meta a {
+  color: var(--color-accent-fg);
+  text-decoration: underline;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 2px;
+  border-radius: 2px;
+  transition: color var(--motion-base), text-decoration-color var(--motion-base);
+}
+
+.role-path-meta a:hover {
+  color: var(--color-accent-hover);
+  text-decoration-thickness: 2.5px;
+}
+
+.role-path-meta a:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+@supports not selector(:focus-visible) {
+
+  .role-path-meta a:focus {
+    outline: 3px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+}
+
+.role-path-meta a[target='_blank']::after {
+  content: '\2009\2197';
+  font-size: 0.85em;
+}
+
 .role-path-details {
   margin-top: var(--space-xs);
 }
@@ -11070,6 +11102,14 @@ body.tutorial-body-locked {
   border-width: 4px;
 }
 
+[data-high-contrast='true'] .role-path-meta a {
+  text-decoration-thickness: 2px;
+}
+
+[data-high-contrast='true'] .role-path-meta a:hover {
+  text-decoration-thickness: 3px;
+}
+
 [data-high-contrast='true'] .spotlight-link {
   border-width: 2px;
 }
@@ -12070,6 +12110,16 @@ body.tutorial-body-locked {
   .role-path-card:focus-within {
     border: 3px solid Highlight !important;
     box-shadow: none;
+  }
+
+  .role-path-meta a {
+    color: LinkText;
+    text-decoration: underline;
+    forced-color-adjust: none;
+  }
+
+  .role-path-meta a:hover {
+    color: ActiveText;
   }
 
   .spotlight-link {

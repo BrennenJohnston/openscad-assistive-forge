@@ -158,8 +158,8 @@ export const FLAGS = {
     name: 'SVG Preparer',
     description:
       'Transform multi-element SVGs into OpenSCAD-compatible compound-path SVGs using boolean operations',
-    default: false,
-    rollout: 0,
+    default: true,
+    rollout: 100,
     userConfigurable: true,
     killSwitch: false,
   },

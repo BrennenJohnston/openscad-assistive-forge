@@ -54,6 +54,8 @@ The app provides automatic announcements for:
 - Camera movement actions
 - Auto-rotate state changes (enabled/disabled)
 - Preset loading confirmations
+- SVG preparation editor open/close and fullscreen state changes
+- SVG preparation preview updates (foreground/hole counts after role changes)
 
 #### Helpful Landmarks
 
@@ -61,6 +63,37 @@ The app provides automatic announcements for:
 - `role="status"` for render status updates
 - `role="dialog"` for modal interactions
 - `aria-live="polite"` for non-disruptive updates
+
+### SVG Preparation Editor
+
+The SVG Preparation Editor is fully keyboard accessible and screen reader friendly. When an uploaded SVG needs review, the editor opens automatically with focus moved into it.
+
+#### Keyboard Controls
+
+| Key | Action |
+|-----|--------|
+| `Tab` / `Shift+Tab` | Move between objects, controls, and buttons |
+| `Arrow keys` | Switch between Foreground / Hole / Ignore within a radio group |
+| `+` or `=` | Zoom in (when a preview pane is focused) |
+| `-` | Zoom out (when a preview pane is focused) |
+| `Escape` | Exit fullscreen (if active), or close the editor |
+
+#### Screen Reader Behavior
+
+- The editor is a labelled `region` landmark ("SVG Preparation Editor")
+- The object list uses `role="list"` with `role="listitem"` children
+- Each object's aria-label includes the element name and current role (e.g., "Circle 1, role: foreground")
+- Role changes update the aria-label immediately
+- Preview updates are announced via an `aria-live="polite"` region: "Preview updated — N foreground, M holes"
+- Warnings appear in a `role="status"` live region
+- Fullscreen and close state changes are announced ("SVG editor expanded to fullscreen", "Exited fullscreen SVG editor")
+- Each radio group has a screen-reader-only `<legend>` ("Role for Circle 1")
+- Color swatches are `aria-hidden="true"` (decorative only)
+- The fullscreen backdrop is `aria-hidden` (not perceived by screen readers)
+
+#### Fullscreen Mode
+
+Fullscreen uses a focus trap — `Tab` and `Shift+Tab` cycle within the editor only. Press `Escape` to exit fullscreen (the editor stays open). Focus returns to the element that was focused before entering fullscreen.
 
 ### Forced Colors Mode (Windows High Contrast)
 
