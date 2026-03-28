@@ -9708,6 +9708,10 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   }
 
+  .role-paths-grid--collapsed {
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  }
+
   .spotlights-list {
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   }
@@ -9802,6 +9806,11 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
   grid-template-columns: 1fr;
   gap: var(--space-lg);
   margin-bottom: var(--space-xl);
+}
+
+.role-paths-grid--collapsed {
+  margin-top: var(--space-lg);
+  margin-bottom: 0;
 }
 
 .role-path-card {
