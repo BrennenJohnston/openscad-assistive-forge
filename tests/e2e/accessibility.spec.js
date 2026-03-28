@@ -703,10 +703,10 @@ test.describe('Screen Reader Support', () => {
       await page.goto('/')
       await dismissFirstVisitModal(page)
       
-      // Check that role path cards are present (2 visible: Beginners + Explore Features)
+      // Check that role path cards are present (2 visible: Beginners Start Here + Nasif's Charm Maker)
       const roleCards = page.locator('.role-path-card:visible')
       const cardCount = await roleCards.count()
-      expect(cardCount).toBeGreaterThanOrEqual(1)
+      expect(cardCount).toBe(2)
       
       // Check that at least one card has a "Try" button
       const tryButtons = page.locator('.btn-role-try:visible')
@@ -860,10 +860,10 @@ test.describe('Screen Reader Support', () => {
       await page.goto('/')
       await dismissFirstVisitModal(page)
       
-      // Get all visible role path cards (Beginners + Explore Features)
+      // Get all visible role path cards (Beginners Start Here + Nasif's Charm Maker)
       const roleCards = page.locator('.role-path-card:visible')
       const cardCount = await roleCards.count()
-      expect(cardCount).toBeGreaterThanOrEqual(1)
+      expect(cardCount).toBe(2)
       
       // Check first card is Beginner
       const firstCardTitle = await roleCards.nth(0).locator('.role-path-title').textContent()
