@@ -14,7 +14,7 @@ todos:
     status: completed
   - id: phase-03-lighting
     content: "Phase 3: Correct directionalLight2 Z-position to match desktop"
-    status: pending
+    status: completed
   - id: phase-04-material
     content: "Phase 4: Align material shininess to desktop value (64)"
     status: pending
@@ -336,7 +336,7 @@ A phase is only complete when every applicable item below is done:
 
 - [x] Phase 1. Fix Show Edges overlay auto-refresh after mesh changes
 - [x] Phase 2. Align default colorscheme to OpenSCAD Cornfield gold
-- [ ] Phase 3. Correct directionalLight2 Z-position to match desktop
+- [x] Phase 3. Correct directionalLight2 Z-position to match desktop
 - [ ] Phase 4. Align material shininess to desktop value (64)
 - [ ] Phase 5. Visual validation and tuning across example models
 
@@ -447,6 +447,26 @@ A phase is only complete when every applicable item below is done:
 - Do not widen into: Do not change ambient light intensity. Do not change
   directionalLight1 position. Do not modify brightness/contrast controls.
 - Pause rule: Once validation passes, mark Phase 3 complete and end the chat.
+
+**Phase 3 completion record:**
+
+- Approach: Single-line fix — changed `directionalLight2.position.set(1, -1, 1)`
+  to `directionalLight2.position.set(1, -1, -1)` at `src/js/preview.js` line 365.
+  The Z-component was `+1` but should be `-1` to match desktop OpenSCAD's
+  `light_position1[] = {+1.0, -1.0, -1.0, 0.0}` [OBSERVED at
+  `src/glview/GLView.cc` line 309 (master), `src/GLView.cc` line 336 (2021)].
+- Fallback used: No — fix applied cleanly with no visual degradation concerns.
+  Phase 5 will perform visual validation to confirm the lighting distribution
+  is balanced.
+- Regression test: Added `sets directional light positions to match desktop
+  OpenSCAD GLView` test in `tests/unit/preview.test.js` (Constructor describe
+  block). Test asserts both `directionalLight1` and `directionalLight2` positions
+  match the desktop values. Confirmed the test fails before the fix (Z=1) and
+  passes after (Z=-1).
+- Files changed: `src/js/preview.js`, `tests/unit/preview.test.js`,
+  `docs/plans/lighting-visual-parity.plan.md`
+- Validation: 2625 tests passed (2 pre-existing failures in
+  `q-charm-integration.test.js` — unrelated). Lint: 0 errors. Build: success.
 
 ### Phase 4 — Align material shininess
 

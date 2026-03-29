@@ -362,7 +362,7 @@ export class PreviewManager {
       0xffffff,
       piDirectional
     );
-    this.directionalLight2.position.set(1, -1, 1);
+    this.directionalLight2.position.set(1, -1, -1);
     this.camera.add(this.directionalLight2);
     this.camera.add(this.directionalLight2.target);
 

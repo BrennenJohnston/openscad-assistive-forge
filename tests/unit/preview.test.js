@@ -52,6 +52,21 @@ describe('PreviewManager', () => {
       
       expect(manager.measurementsEnabled).toBe(true)
     })
+
+    it('sets directional light positions to match desktop OpenSCAD GLView', async () => {
+      const manager = new PreviewManager(container)
+      await manager.init()
+
+      // Light 0: {-1, +1, +1, 0} — GLView.cc line 308 (master) / line 335 (2021)
+      expect(manager.directionalLight1.position.x).toBe(-1)
+      expect(manager.directionalLight1.position.y).toBe(1)
+      expect(manager.directionalLight1.position.z).toBe(1)
+
+      // Light 1: {+1, -1, -1, 0} — GLView.cc line 309 (master) / line 336 (2021)
+      expect(manager.directionalLight2.position.x).toBe(1)
+      expect(manager.directionalLight2.position.y).toBe(-1)
+      expect(manager.directionalLight2.position.z).toBe(-1)
+    })
   })
 
   describe('Measurement Preferences', () => {
