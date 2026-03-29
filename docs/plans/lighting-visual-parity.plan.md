@@ -20,7 +20,7 @@ todos:
     status: completed
   - id: phase-05-validation
     content: "Phase 5: Visual validation and tuning across example models"
-    status: pending
+    status: completed
 isProject: false
 ---
 
@@ -338,7 +338,7 @@ A phase is only complete when every applicable item below is done:
 - [x] Phase 2. Align default colorscheme to OpenSCAD Cornfield gold
 - [x] Phase 3. Correct directionalLight2 Z-position to match desktop
 - [x] Phase 4. Align material shininess to desktop value (64)
-- [ ] Phase 5. Visual validation and tuning across example models
+- [x] Phase 5. Visual validation and tuning across example models
 
 ## Phase details
 
@@ -543,6 +543,59 @@ A phase is only complete when every applicable item below is done:
 - Do not widen into: Do not add new UI controls. Do not implement colorscheme
   switching. Do not change background colors. Do not modify grid appearance.
 - Pause rule: Once validation passes, mark Phase 5 complete and end the chat.
+
+**Phase 5 completion record:**
+
+- Approach: Code-level cross-phase validation + regression test suite. Automated
+  visual diff tooling was unavailable in the session environment, so the
+  **fallback gate** was used: manual code-level verification of all Phase 1–4
+  changes with a comprehensive regression test suite substituting for
+  side-by-side screenshot comparison.
+- Validation findings (code-level, all confirmed in current source):
+  - (a) Default color is Cornfield gold: `CORNFIELD_FRONT_COLOR = 0xf9d72c`
+    used in `PREVIEW_COLORS.light.model` (preview.js line 120). Inline copies
+    in `main.js` (line 4393) and `file-handler.js` (line 1242) also updated
+    to `0xf9d72c`. [VERIFIED]
+  - (b) Lighting distribution: `directionalLight1.position.set(-1, 1, 1)` and
+    `directionalLight2.position.set(1, -1, -1)` match desktop GLView positions.
+    Ambient `0.2 * π`, directional `1.0 * π` correctly compensate for Three.js
+    BRDF_Lambert divisor. Both directional lights parented to camera for
+    view-space positioning. [VERIFIED]
+  - (c) Show Edges tracks mesh changes: `_postLoadListeners` array with
+    `addPostLoadListener`/`removePostLoadListener` on PreviewManager;
+    `_firePostLoadListeners()` called after both `loadSTL` (line 1203) and
+    `loadOFF` (line 1482). `DisplayOptionsController` registers
+    `refreshOverlays()` as listener at init. [VERIFIED]
+  - (d) Material shininess: `DESKTOP_SHININESS = 64` used in all 6
+    `MeshPhongMaterial` creation sites. `specular: 0x000000` on all 6 sites
+    (zero specular contribution). [VERIFIED]
+  - (e) Color override unaffected: `_syncColorOverride` bypasses theme defaults
+    when `colorOverrideEnabled` is true. COFF vertex-color path sets
+    `vertexColors: true` with white multiplier, unaffected by theme default
+    change. [VERIFIED]
+- Example models reviewed (code-level only, not visual render):
+  1. `public/examples/simple-box/simple_box.scad` — no `color()` calls, would
+     render in theme default (Cornfield gold for light theme)
+  2. `public/examples/colored-box/colored_box.scad` — uses `color()` with hex
+     codes, would follow COFF vertex-color path (unaffected by theme default)
+  3. `public/examples/honeycomb-grid/honeycomb_grid.scad` — complex geometry,
+     no `color()` calls, would render in theme default (Cornfield gold)
+- Tuning applied: None needed — all values aligned to desktop OpenSCAD without
+  adjustment. No discrepancies found in code-level review.
+- Discrepancies requiring new approach: None identified.
+- Regression test: Added "Visual Parity — desktop OpenSCAD alignment (Phase 5)"
+  describe block in `tests/unit/preview.test.js` with 11 tests covering:
+  lighting intensities, camera parenting, base intensity records, Cornfield
+  gold resolution, color override priority, DESKTOP_SHININESS constant, and
+  post-load listener API.
+- Fallback used: Yes — automated visual diff unavailable. Used code-level
+  verification + regression test suite per fallback gate. Visual comparison
+  against OpenSCAD desktop deferred to human review.
+- Files changed: `tests/unit/preview.test.js`,
+  `docs/plans/lighting-visual-parity.plan.md`
+- Validation: 2637 tests passed (2 pre-existing failures in
+  `q-charm-integration.test.js` — unrelated). Lint: 0 errors (14 pre-existing
+  warnings). Build: success.
 
 ## Deferred follow-on work
 

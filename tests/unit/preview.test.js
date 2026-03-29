@@ -2736,3 +2736,108 @@ describe('PreviewManager', () => {
     })
   })
 })
+
+// ---------------------------------------------------------------------------
+// Phase 5 — Visual-Parity Cross-Phase Validation
+//
+// Validates that all Phase 1–4 changes compose correctly: Cornfield gold
+// default color, desktop-matched lighting, aligned shininess, zero specular,
+// and post-load overlay refresh. This suite guards against regressions that
+// individual phase tests might miss by checking the full configuration in a
+// single constructed PreviewManager instance.
+// ---------------------------------------------------------------------------
+describe('Visual Parity — desktop OpenSCAD alignment (Phase 5)', () => {
+  let container
+  let manager
+
+  beforeEach(async () => {
+    container = document.createElement('div')
+    container.style.width = '800px'
+    container.style.height = '600px'
+    document.body.appendChild(container)
+    localStorage.clear()
+    manager = new PreviewManager(container)
+    await manager.init()
+  })
+
+  afterEach(() => {
+    document.body.removeChild(container)
+    localStorage.clear()
+  })
+
+  describe('lighting pipeline matches desktop GLView::initializeGL()', () => {
+    it('ambient intensity is 0.2 * π (OpenGL default GL_LIGHT_MODEL_AMBIENT)', () => {
+      const expected = 0.2 * Math.PI
+      expect(manager.ambientLight.intensity).toBeCloseTo(expected, 5)
+    })
+
+    it('directional intensities are 1.0 * π (OpenGL diffuse {1,1,1,1})', () => {
+      const expected = 1.0 * Math.PI
+      expect(manager.directionalLight1.intensity).toBeCloseTo(expected, 5)
+      expect(manager.directionalLight2.intensity).toBeCloseTo(expected, 5)
+    })
+
+    it('directional lights are parented to camera (view-space positioning)', () => {
+      expect(manager.directionalLight1.parent).toBe(manager.camera)
+      expect(manager.directionalLight2.parent).toBe(manager.camera)
+    })
+
+    it('base intensities record matches constructed values', () => {
+      expect(manager.baseLightIntensities.ambient).toBeCloseTo(0.2 * Math.PI, 5)
+      expect(manager.baseLightIntensities.dir1).toBeCloseTo(1.0 * Math.PI, 5)
+      expect(manager.baseLightIntensities.dir2).toBeCloseTo(1.0 * Math.PI, 5)
+    })
+  })
+
+  describe('Cornfield colorscheme (light theme default)', () => {
+    it('light theme model color resolves to Cornfield gold #f9d72c', () => {
+      manager.currentTheme = 'light'
+      const color = manager._resolveModelColor()
+      expect(color).toBe('#f9d72c')
+    })
+
+    it('color override takes priority over Cornfield default', () => {
+      manager.currentTheme = 'light'
+      manager.colorOverrideEnabled = true
+      manager.colorOverride = '#ff0000'
+      const color = manager._resolveModelColor()
+      expect(color).toBe('#ff0000')
+    })
+
+    it('disabling color override reverts to Cornfield gold', () => {
+      manager.currentTheme = 'light'
+      manager.colorOverride = '#ff0000'
+      manager.colorOverrideEnabled = false
+      const color = manager._resolveModelColor()
+      expect(color).toBe('#f9d72c')
+    })
+  })
+
+  describe('material configuration', () => {
+    it('DESKTOP_SHININESS constant is 64 (GLView.cc line 324)', () => {
+      expect(DESKTOP_SHININESS).toBe(64)
+    })
+  })
+
+  describe('post-load listener infrastructure (Show Edges refresh)', () => {
+    it('PreviewManager exposes addPostLoadListener API', () => {
+      expect(typeof manager.addPostLoadListener).toBe('function')
+      expect(typeof manager.removePostLoadListener).toBe('function')
+    })
+
+    it('listeners fire after registration', () => {
+      const spy = vi.fn()
+      manager.addPostLoadListener(spy)
+      manager._firePostLoadListeners()
+      expect(spy).toHaveBeenCalledTimes(1)
+    })
+
+    it('removed listeners do not fire', () => {
+      const spy = vi.fn()
+      manager.addPostLoadListener(spy)
+      manager.removePostLoadListener(spy)
+      manager._firePostLoadListeners()
+      expect(spy).not.toHaveBeenCalled()
+    })
+  })
+})
