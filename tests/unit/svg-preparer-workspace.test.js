@@ -10,7 +10,9 @@
  * @license GPL-3.0-or-later
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
 
@@ -1738,5 +1740,49 @@ describe('Phase 6b: accessibility — focus management', () => {
     expect(announce).toHaveBeenCalledWith('SVG Preparation Editor closed');
 
     ws.destroy();
+  });
+});
+
+// ── Fullscreen sticky layout CSS contract ────────────────────────────────
+//
+// jsdom does not compute styles from external CSS. These tests read the
+// stylesheet source to verify the layout contract for fullscreen mode.
+// They are intentionally red until Phase 2 adds the required CSS rules.
+
+describe('Fullscreen sticky layout CSS contract', () => {
+  let css;
+
+  beforeAll(() => {
+    css = readFileSync(resolve('src/styles/components.css'), 'utf-8');
+  });
+
+  it('fullscreen root sets overflow: hidden so only objects list scrolls', () => {
+    const match = css.match(
+      /\.svg-prep-workspace\.svg-prep-fullscreen\s*\{([^}]*)\}/
+    );
+    expect(match).not.toBeNull();
+    expect(match[1]).toMatch(/overflow\s*:\s*hidden/);
+  });
+
+  it('fullscreen objects list has overflow-y: auto', () => {
+    expect(css).toMatch(
+      /\.svg-prep-fullscreen\s+\.svg-prep-objects\s*\{[^}]*overflow-y\s*:\s*auto/
+    );
+  });
+
+  it('540px stacking media query is scoped to non-fullscreen only', () => {
+    const mediaMatch = css.match(
+      /@media\s*\(\s*max-width\s*:\s*540px\s*\)\s*\{([\s\S]*?\n\})/
+    );
+    expect(mediaMatch).not.toBeNull();
+    expect(mediaMatch[1]).toMatch(/:not\(\.svg-prep-fullscreen\)/);
+  });
+
+  it('non-fullscreen workspace preserves default overflow', () => {
+    const baseMatch = css.match(
+      /\.svg-prep-workspace\s*\{([^}]*)\}/
+    );
+    expect(baseMatch).not.toBeNull();
+    expect(baseMatch[1]).not.toMatch(/overflow\s*:\s*hidden/);
   });
 });
