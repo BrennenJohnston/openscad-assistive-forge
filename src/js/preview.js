@@ -222,6 +222,7 @@ export class PreviewManager {
     this._renderOverride = null;
     this._resizeHook = null;
     this._postLoadHook = null; // Called after STL is loaded
+    this._postLoadListeners = []; // Multi-listener post-load event
 
     // Reference overlay (screenshot/SVG image plane under the model)
     this.referenceOverlay = null; // THREE.Mesh for the overlay plane
@@ -1189,6 +1190,7 @@ export class PreviewManager {
         if (this._postLoadHook) {
           this._postLoadHook();
         }
+        this._firePostLoadListeners();
 
         if (this.measurementsEnabled) {
           this.showMeasurements();
@@ -1467,6 +1469,7 @@ export class PreviewManager {
         if (this._postLoadHook) {
           this._postLoadHook();
         }
+        this._firePostLoadListeners();
         if (this.measurementsEnabled) {
           this.showMeasurements();
         }
@@ -4021,6 +4024,31 @@ export class PreviewManager {
    */
   clearPostLoadHook() {
     this._postLoadHook = null;
+  }
+
+  /**
+   * Register a listener invoked after every loadSTL / loadOFF completion.
+   * Unlike setPostLoadHook (single-slot), multiple listeners can coexist.
+   * @param {Function} fn
+   */
+  addPostLoadListener(fn) {
+    if (typeof fn === 'function') this._postLoadListeners.push(fn);
+  }
+
+  /** @param {Function} fn */
+  removePostLoadListener(fn) {
+    this._postLoadListeners = this._postLoadListeners.filter((l) => l !== fn);
+  }
+
+  /** @private Fire all registered post-load listeners. */
+  _firePostLoadListeners() {
+    for (const fn of this._postLoadListeners) {
+      try {
+        fn();
+      } catch (e) {
+        console.error('[Preview] post-load listener error:', e);
+      }
+    }
   }
 
   // --- Model Appearance Controls ---

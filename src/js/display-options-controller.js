@@ -56,6 +56,20 @@ export class DisplayOptionsController {
     this._wireCheckboxes();
     this._syncCheckboxes();
     this._applyAll();
+    this._registerPostLoadListener();
+  }
+
+  /**
+   * Subscribe to PreviewManager's post-load event so overlays
+   * (edges, wireframe) are rebuilt whenever a model is loaded.
+   * @private
+   */
+  _registerPostLoadListener() {
+    const pm = this.getPreviewManager();
+    if (pm?.addPostLoadListener) {
+      this._boundRefresh = () => this.refreshOverlays();
+      pm.addPostLoadListener(this._boundRefresh);
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -266,6 +280,9 @@ export class DisplayOptionsController {
 
   dispose() {
     const pm = this.getPreviewManager();
+    if (pm?.removePostLoadListener && this._boundRefresh) {
+      pm.removePostLoadListener(this._boundRefresh);
+    }
     if (pm?.scene) {
       if (this._axesHelper) pm.scene.remove(this._axesHelper);
       if (this._edgesOverlay) pm.scene.remove(this._edgesOverlay);
@@ -274,6 +291,7 @@ export class DisplayOptionsController {
     this._axesHelper = null;
     this._edgesOverlay = null;
     this._crosshairGroup = null;
+    this._boundRefresh = null;
   }
 }
 

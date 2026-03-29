@@ -1,14 +1,16 @@
 /**
- * Regression test for Phase 7: show-edges overlay not refreshing on model change.
+ * Regression tests for show-edges overlay refresh behavior.
  *
  * The bug: when "Show Edges" was enabled, the edge overlay stayed at its
  * original geometry after parameter changes or project switches because
- * refreshOverlays() was never called from anywhere in the codebase.
+ * refreshOverlays() was never called after model loads in non-HFM paths.
  *
  * These tests verify that:
  *  1. refreshOverlays() rebuilds the edges overlay from the current mesh
  *  2. _applyEdges() disposes the old overlay before creating a new one
  *  3. Toggling edges off properly removes the overlay
+ *  4. init() registers a post-load listener so overlays auto-refresh
+ *  5. dispose() unregisters the post-load listener
  *
  * @license GPL-3.0-or-later
  */
@@ -59,6 +61,7 @@ function createMockThree() {
 
 function createMockPreviewManager(mesh = null) {
   const children = [];
+  const listeners = [];
   return {
     mesh,
     currentTheme: 'light',
@@ -71,6 +74,12 @@ function createMockPreviewManager(mesh = null) {
       getObjectByName: vi.fn(() => null),
       children,
     },
+    addPostLoadListener: vi.fn((fn) => listeners.push(fn)),
+    removePostLoadListener: vi.fn((fn) => {
+      const idx = listeners.indexOf(fn);
+      if (idx >= 0) listeners.splice(idx, 1);
+    }),
+    _testListeners: listeners,
   };
 }
 
@@ -144,5 +153,108 @@ describe('DisplayOptionsController — edge overlay refresh', () => {
     ctrl.refreshOverlays();
 
     expect(mockThree.EdgesGeometry).toHaveBeenLastCalledWith(newGeometry, 15);
+  });
+});
+
+describe('DisplayOptionsController — post-load listener registration', () => {
+  let mockThree;
+  let mockPm;
+  const mockMesh = {
+    geometry: createMockGeometry(),
+    material: createMockMaterial(),
+    position: { copy: vi.fn(), x: 0, y: 0, z: 0 },
+    rotation: { copy: vi.fn(), x: 0, y: 0, z: 0 },
+    scale: { copy: vi.fn(), x: 1, y: 1, z: 1 },
+  };
+
+  beforeEach(() => {
+    resetDisplayOptionsController();
+    localStorage.clear();
+    document.body.innerHTML = '';
+    mockThree = createMockThree();
+    mockPm = createMockPreviewManager(mockMesh);
+  });
+
+  it('init() registers a post-load listener on the preview manager', () => {
+    const ctrl = new DisplayOptionsController({
+      getPreviewManager: () => mockPm,
+      getThree: () => mockThree,
+    });
+    ctrl.init();
+
+    expect(mockPm.addPostLoadListener).toHaveBeenCalledTimes(1);
+    expect(typeof mockPm.addPostLoadListener.mock.calls[0][0]).toBe(
+      'function'
+    );
+  });
+
+  it('post-load listener rebuilds edges overlay when edges are enabled', () => {
+    const ctrl = new DisplayOptionsController({
+      getPreviewManager: () => mockPm,
+      getThree: () => mockThree,
+    });
+    ctrl.init();
+    ctrl.state.edges = true;
+
+    const listener = mockPm._testListeners[0];
+    listener();
+
+    expect(mockThree.EdgesGeometry).toHaveBeenCalledWith(mockMesh.geometry, 15);
+    expect(ctrl._edgesOverlay).not.toBeNull();
+  });
+
+  it('post-load listener picks up new geometry after model swap', () => {
+    const ctrl = new DisplayOptionsController({
+      getPreviewManager: () => mockPm,
+      getThree: () => mockThree,
+    });
+    ctrl.init();
+    ctrl.state.edges = true;
+
+    const listener = mockPm._testListeners[0];
+    listener();
+    const firstOverlay = ctrl._edgesOverlay;
+
+    const newGeometry = createMockGeometry();
+    mockPm.mesh = { ...mockMesh, geometry: newGeometry };
+
+    listener();
+
+    expect(firstOverlay.geometry.dispose).toHaveBeenCalled();
+    expect(mockThree.EdgesGeometry).toHaveBeenLastCalledWith(newGeometry, 15);
+    expect(ctrl._edgesOverlay).not.toBe(firstOverlay);
+  });
+
+  it('dispose() removes the post-load listener', () => {
+    const ctrl = new DisplayOptionsController({
+      getPreviewManager: () => mockPm,
+      getThree: () => mockThree,
+    });
+    ctrl.init();
+    const listener = mockPm._testListeners[0];
+
+    ctrl.dispose();
+
+    expect(mockPm.removePostLoadListener).toHaveBeenCalledWith(listener);
+    expect(mockPm._testListeners).toHaveLength(0);
+  });
+
+  it('init() is safe when preview manager lacks addPostLoadListener', () => {
+    const legacyPm = {
+      mesh: mockMesh,
+      currentTheme: 'light',
+      scene: {
+        add: vi.fn(),
+        remove: vi.fn(),
+        getObjectByName: vi.fn(() => null),
+        children: [],
+      },
+    };
+    const ctrl = new DisplayOptionsController({
+      getPreviewManager: () => legacyPm,
+      getThree: () => mockThree,
+    });
+
+    expect(() => ctrl.init()).not.toThrow();
   });
 });

@@ -8,7 +8,7 @@ overview: >-
 todos:
   - id: phase-01-show-edges
     content: "Phase 1: Fix Show Edges overlay auto-refresh after mesh changes"
-    status: pending
+    status: completed
   - id: phase-02-default-colors
     content: "Phase 2: Align default colorscheme to OpenSCAD Cornfield gold"
     status: pending
@@ -334,7 +334,7 @@ A phase is only complete when every applicable item below is done:
 
 ## Master checklist
 
-- [ ] Phase 1. Fix Show Edges overlay auto-refresh after mesh changes
+- [x] Phase 1. Fix Show Edges overlay auto-refresh after mesh changes
 - [ ] Phase 2. Align default colorscheme to OpenSCAD Cornfield gold
 - [ ] Phase 3. Correct directionalLight2 Z-position to match desktop
 - [ ] Phase 4. Align material shininess to desktop value (64)
@@ -367,6 +367,18 @@ A phase is only complete when every applicable item below is done:
   approach. Do not modify the `_applyEdges` algorithm. Do not change HFM
   controller logic.
 - Pause rule: Once validation passes, mark Phase 1 complete and end the chat.
+
+**Phase 1 completion record:**
+- Approach: Event-based (preferred). Added `_postLoadListeners` array with
+  `addPostLoadListener`/`removePostLoadListener` to PreviewManager, plus
+  `_firePostLoadListeners()` called after both `loadSTL` and `loadOFF`.
+  `DisplayOptionsController.init()` registers `refreshOverlays()` as a
+  post-load listener; `dispose()` unregisters it.
+- Fallback used: No — event-based approach worked without issues.
+- Files changed: `src/js/preview.js`, `src/js/display-options-controller.js`,
+  `tests/unit/display-options-controller.test.js`
+- Validation: 2624 tests passed (2 pre-existing failures in
+  `q-charm-integration.test.js` — unrelated). Lint: 0 errors. Build: success.
 
 ### Phase 2 — Align default colors to Cornfield
 
