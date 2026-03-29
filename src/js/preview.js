@@ -106,6 +106,12 @@ const LOD_CONFIG = {
 // OPENCSG_FACE_FRONT_COLOR = #F9D72C [OBSERVED]
 const CORNFIELD_FRONT_COLOR = 0xf9d72c;
 
+// Desktop Phong exponent: OpenSCAD src/glview/GLView.cc line 324 (master),
+// src/GLView.cc line 351 (2021) — glMateriali(GL_FRONT_AND_BACK, GL_SHININESS, 64) [OBSERVED]
+// Specular is black (0,0,0) so shininess has no visible effect, but aligning
+// for forward compatibility if specular is ever enabled.
+export const DESKTOP_SHININESS = 64;
+
 const PREVIEW_COLORS = {
   light: {
     background: 0xf5f5f5,
@@ -1171,7 +1177,7 @@ export class PreviewManager {
         const material = new MeshPhongMaterial({
           color: parseInt(this._resolveModelColor().slice(1), 16),
           specular: 0x000000,
-          shininess: 30,
+          shininess: DESKTOP_SHININESS,
           flatShading: false,
         });
 
@@ -1405,13 +1411,13 @@ export class PreviewManager {
             ? new MeshPhongMaterial({
                 vertexColors: true,
                 specular: 0x000000,
-                shininess: 30,
+                shininess: DESKTOP_SHININESS,
                 flatShading: false,
               })
             : new MeshPhongMaterial({
                 color: parseInt(this._resolveModelColor().slice(1), 16),
                 specular: 0x000000,
-                shininess: 30,
+                shininess: DESKTOP_SHININESS,
                 flatShading: false,
               });
 
@@ -1419,7 +1425,7 @@ export class PreviewManager {
           const highlightMaterial = new MeshPhongMaterial({
             color: parseInt(debugHighlight.hex.replace('#', ''), 16),
             specular: 0x000000,
-            shininess: 30,
+            shininess: DESKTOP_SHININESS,
             flatShading: false,
             transparent: true,
             opacity: debugHighlight.opacity,
@@ -1444,13 +1450,13 @@ export class PreviewManager {
             ? new MeshPhongMaterial({
                 vertexColors: true,
                 specular: 0x000000,
-                shininess: 30,
+                shininess: DESKTOP_SHININESS,
                 flatShading: false,
               })
             : new MeshPhongMaterial({
                 color: parseInt(this._resolveModelColor().slice(1), 16),
                 specular: 0x000000,
-                shininess: 30,
+                shininess: DESKTOP_SHININESS,
                 flatShading: false,
               });
           this.mesh = new Mesh(geometry, material);

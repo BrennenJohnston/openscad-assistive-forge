@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { PreviewManager, isThreeJsLoaded } from '../../src/js/preview.js'
+import { PreviewManager, isThreeJsLoaded, DESKTOP_SHININESS } from '../../src/js/preview.js'
 
 describe('PreviewManager', () => {
   let container
@@ -66,6 +66,12 @@ describe('PreviewManager', () => {
       expect(manager.directionalLight2.position.x).toBe(1)
       expect(manager.directionalLight2.position.y).toBe(-1)
       expect(manager.directionalLight2.position.z).toBe(-1)
+    })
+
+    it('exports DESKTOP_SHININESS matching OpenSCAD GLView value (64)', () => {
+      // GLView.cc line 324 (master) / line 351 (2021):
+      // glMateriali(GL_FRONT_AND_BACK, GL_SHININESS, 64) [OBSERVED]
+      expect(DESKTOP_SHININESS).toBe(64)
     })
   })
 

@@ -17,7 +17,7 @@ todos:
     status: completed
   - id: phase-04-material
     content: "Phase 4: Align material shininess to desktop value (64)"
-    status: pending
+    status: completed
   - id: phase-05-validation
     content: "Phase 5: Visual validation and tuning across example models"
     status: pending
@@ -337,7 +337,7 @@ A phase is only complete when every applicable item below is done:
 - [x] Phase 1. Fix Show Edges overlay auto-refresh after mesh changes
 - [x] Phase 2. Align default colorscheme to OpenSCAD Cornfield gold
 - [x] Phase 3. Correct directionalLight2 Z-position to match desktop
-- [ ] Phase 4. Align material shininess to desktop value (64)
+- [x] Phase 4. Align material shininess to desktop value (64)
 - [ ] Phase 5. Visual validation and tuning across example models
 
 ## Phase details
@@ -489,6 +489,29 @@ A phase is only complete when every applicable item below is done:
 - Do not widen into: Do not add specular highlights. Do not change material
   type (keep MeshPhongMaterial). Do not modify flatShading setting.
 - Pause rule: Once validation passes, mark Phase 4 complete and end the chat.
+
+**Phase 4 completion record:**
+- Approach: Extracted `DESKTOP_SHININESS = 64` as an exported named constant
+  in `preview.js` (with source citation comment referencing
+  `src/glview/GLView.cc` line 324 (master), `src/GLView.cc` line 351 (2021)
+  — `glMateriali(GL_FRONT_AND_BACK, GL_SHININESS, 64)` [OBSERVED]).
+  Replaced all 6 instances of `shininess: 30` in MeshPhongMaterial creation:
+  loadSTL (line 1180), loadOFF debug-highlight vertex-color material (line
+  1414), loadOFF debug-highlight solid-color material (line 1420), loadOFF
+  debug-highlight overlay material (line 1428), loadOFF non-debug
+  vertex-color material (line 1453), loadOFF non-debug solid-color material
+  (line 1459).
+- Fallback used: No — no unexpected specular highlights appeared (specular
+  remains `0x000000` on all materials, so the change is cosmetically
+  invisible as expected). No fallback needed.
+- Regression test: Added `exports DESKTOP_SHININESS matching OpenSCAD GLView
+  value (64)` test in `tests/unit/preview.test.js` (Constructor describe
+  block). Test asserts the exported constant equals the desktop value (64).
+  Fails if someone reverts to the old value (30).
+- Files changed: `src/js/preview.js`, `tests/unit/preview.test.js`,
+  `docs/plans/lighting-visual-parity.plan.md`
+- Validation: 2626 tests passed (2 pre-existing failures in
+  `q-charm-integration.test.js` — unrelated). Lint: 0 errors. Build: success.
 
 ### Phase 5 — Visual validation and tuning
 
