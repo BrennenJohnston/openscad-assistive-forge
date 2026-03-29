@@ -106,6 +106,10 @@ const LOD_CONFIG = {
 // OPENCSG_FACE_FRONT_COLOR = #F9D72C [OBSERVED]
 const CORNFIELD_FRONT_COLOR = 0xf9d72c;
 
+// Cornfield back-face (CUTOUT) color: OpenSCAD src/glview/ColorMap.cc default ctor
+// OPENCSG_FACE_BACK_COLOR = #9DCB51 [OBSERVED]
+export const CORNFIELD_BACK_COLOR = 0x9dcb51;
+
 // Desktop Phong exponent: OpenSCAD src/glview/GLView.cc line 324 (master),
 // src/GLView.cc line 351 (2021) — glMateriali(GL_FRONT_AND_BACK, GL_SHININESS, 64) [OBSERVED]
 // Specular is black (0,0,0) so shininess has no visible effect, but aligning
@@ -118,6 +122,7 @@ const PREVIEW_COLORS = {
     gridPrimary: 0xcccccc,
     gridSecondary: 0xe0e0e0,
     model: CORNFIELD_FRONT_COLOR,
+    modelBack: CORNFIELD_BACK_COLOR,
     ambientLight: 0xffffff,
   },
   dark: {
@@ -125,6 +130,7 @@ const PREVIEW_COLORS = {
     gridPrimary: 0x404040,
     gridSecondary: 0x2d2d2d,
     model: 0x4d9fff,
+    modelBack: 0x3d8a44, // [UNVERIFIED] green tint for dark background
     ambientLight: 0xffffff,
   },
   'light-hc': {
@@ -132,6 +138,7 @@ const PREVIEW_COLORS = {
     gridPrimary: 0x000000,
     gridSecondary: 0x666666,
     model: 0x0052cc,
+    modelBack: 0x338a33, // [UNVERIFIED] high-contrast green
     ambientLight: 0xffffff,
   },
   'dark-hc': {
@@ -139,6 +146,7 @@ const PREVIEW_COLORS = {
     gridPrimary: 0xffffff,
     gridSecondary: 0x999999,
     model: 0x66b3ff,
+    modelBack: 0x66cc66, // [UNVERIFIED] high-contrast green for dark
     ambientLight: 0xffffff,
   },
   // Green phosphor (dark theme mono variant)
@@ -147,6 +155,7 @@ const PREVIEW_COLORS = {
     gridPrimary: 0x00ff00,
     gridSecondary: 0x00aa00,
     model: 0x00ff00,
+    modelBack: 0x00aa00, // [UNVERIFIED] dimmer green for intensity distinction
     ambientLight: 0x00ff00,
   },
   // Amber phosphor (light theme mono variant)
@@ -155,6 +164,7 @@ const PREVIEW_COLORS = {
     gridPrimary: 0xffb000,
     gridSecondary: 0xcc8c00,
     model: 0xffb000,
+    modelBack: 0xcc8c00, // [UNVERIFIED] dimmer amber for intensity distinction
     ambientLight: 0xffb000,
   },
   // Green phosphor high-contrast (wider grid contrast ratio)
@@ -163,6 +173,7 @@ const PREVIEW_COLORS = {
     gridPrimary: 0x00ff00,
     gridSecondary: 0x003300,
     model: 0x33ff33,
+    modelBack: 0x00cc00, // [UNVERIFIED] dimmer green phosphor HC
     ambientLight: 0x00ff00,
   },
   // Amber phosphor high-contrast (wider grid contrast ratio)
@@ -171,6 +182,7 @@ const PREVIEW_COLORS = {
     gridPrimary: 0xffb000,
     gridSecondary: 0x4d3500,
     model: 0xffc233,
+    modelBack: 0xcc9a00, // [UNVERIFIED] dimmer amber phosphor HC
     ambientLight: 0xffb000,
   },
 };
@@ -655,6 +667,19 @@ export class PreviewManager {
     const themeColors =
       PREVIEW_COLORS[this.currentTheme] || PREVIEW_COLORS.light;
     return `#${themeColors.model.toString(16).padStart(6, '0')}`;
+  }
+
+  /**
+   * Resolve the back-face (CUTOUT) color for the current theme.
+   * Always theme-driven — color overrides do not affect back faces,
+   * matching desktop OpenSCAD where CUTOUT color is scheme-level.
+   *
+   * @returns {number} hex integer (e.g. 0x9dcb51)
+   */
+  _resolveModelBackColor() {
+    const themeColors =
+      PREVIEW_COLORS[this.currentTheme] || PREVIEW_COLORS.light;
+    return themeColors.modelBack;
   }
 
   /**

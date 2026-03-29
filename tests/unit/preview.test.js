@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { PreviewManager, isThreeJsLoaded, DESKTOP_SHININESS } from '../../src/js/preview.js'
+import { PreviewManager, isThreeJsLoaded, DESKTOP_SHININESS, CORNFIELD_BACK_COLOR } from '../../src/js/preview.js'
 
 describe('PreviewManager', () => {
   let container
@@ -2813,9 +2813,53 @@ describe('Visual Parity — desktop OpenSCAD alignment (Phase 5)', () => {
     })
   })
 
+  describe('back-face (CUTOUT) color entries', () => {
+    it('every theme has a modelBack property', () => {
+      const themes = ['light', 'dark', 'light-hc', 'dark-hc', 'mono', 'mono-light', 'mono-hc', 'mono-light-hc']
+      themes.forEach(theme => {
+        manager.currentTheme = theme
+        const backColor = manager._resolveModelBackColor()
+        expect(backColor).toBeTypeOf('number')
+        expect(backColor).toBeGreaterThanOrEqual(0)
+        expect(backColor).toBeLessThanOrEqual(0xffffff)
+      })
+    })
+
+    it('light theme modelBack is Cornfield green 0x9dcb51', () => {
+      manager.currentTheme = 'light'
+      expect(manager._resolveModelBackColor()).toBe(0x9dcb51)
+    })
+
+    it('back-face color is theme-driven (ignores color override)', () => {
+      manager.currentTheme = 'light'
+      manager.colorOverrideEnabled = true
+      manager.colorOverride = '#ff0000'
+      expect(manager._resolveModelBackColor()).toBe(0x9dcb51)
+    })
+
+    it('back-face color differs from front-face model color for all themes', () => {
+      const themes = ['light', 'dark', 'light-hc', 'dark-hc', 'mono', 'mono-light', 'mono-hc', 'mono-light-hc']
+      themes.forEach(theme => {
+        manager.currentTheme = theme
+        const frontHex = parseInt(manager._resolveModelColor().slice(1), 16)
+        const backHex = manager._resolveModelBackColor()
+        expect(backHex).not.toBe(frontHex)
+      })
+    })
+
+    it('falls back to light theme modelBack for unknown theme', () => {
+      manager.currentTheme = 'nonexistent'
+      expect(manager._resolveModelBackColor()).toBe(0x9dcb51)
+    })
+  })
+
   describe('material configuration', () => {
     it('DESKTOP_SHININESS constant is 64 (GLView.cc line 324)', () => {
       expect(DESKTOP_SHININESS).toBe(64)
+    })
+
+    it('CORNFIELD_BACK_COLOR constant is 0x9dcb51 (ColorMap.cc OPENCSG_FACE_BACK_COLOR)', () => {
+      expect(CORNFIELD_BACK_COLOR).toBe(0x9dcb51)
     })
   })
 
