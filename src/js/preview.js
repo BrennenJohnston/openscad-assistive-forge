@@ -632,6 +632,12 @@ export class PreviewManager {
           material.needsUpdate = true;
         }
       }
+
+      if (material.userData?.backfaceColorUniform) {
+        material.userData.backfaceColorUniform.value.setHex(
+          this._resolveModelBackColor()
+        );
+      }
     };
 
     if (this.mesh.isGroup) {
@@ -680,6 +686,49 @@ export class PreviewManager {
     const themeColors =
       PREVIEW_COLORS[this.currentTheme] || PREVIEW_COLORS.light;
     return themeColors.modelBack;
+  }
+
+  /**
+   * Configure a MeshPhongMaterial for two-sided face coloring via
+   * gl_FrontFacing. Front faces keep the material's diffuse color;
+   * back faces display backfaceHex (the CUTOUT / scheme back-face color).
+   *
+   * Shader replacement strings verified against Three.js v0.182:
+   *   meshphong.glsl.js lines 59, 89, 97
+   *   color_fragment.glsl.js (full chunk)
+   *
+   * @param {MeshPhongMaterial} material
+   * @param {number} backfaceHex - e.g. 0x9dcb51
+   */
+  _applyBackfaceColoring(material, backfaceHex) {
+    material.side = DoubleSide;
+
+    material.onBeforeCompile = (shader) => {
+      shader.uniforms.backfaceColor = {
+        value: new Color(backfaceHex),
+      };
+
+      shader.fragmentShader = shader.fragmentShader.replace(
+        'uniform float opacity;',
+        'uniform float opacity;\nuniform vec3 backfaceColor;'
+      );
+
+      shader.fragmentShader = shader.fragmentShader.replace(
+        'vec4 diffuseColor = vec4( diffuse, opacity );',
+        'vec4 diffuseColor = vec4( gl_FrontFacing ? diffuse : backfaceColor, opacity );'
+      );
+
+      // CUTOUT overrides COFF per-face vertex colors on back faces,
+      // matching desktop OpenSCAD where back-face color is scheme-level.
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <color_fragment>',
+        '#include <color_fragment>\nif ( !gl_FrontFacing ) diffuseColor = vec4( backfaceColor, opacity );'
+      );
+
+      material.userData.backfaceColorUniform = shader.uniforms.backfaceColor;
+    };
+
+    material.customProgramCacheKey = () => 'backface-coloring';
   }
 
   /**
@@ -1205,6 +1254,7 @@ export class PreviewManager {
           shininess: DESKTOP_SHININESS,
           flatShading: false,
         });
+        this._applyBackfaceColoring(material, this._resolveModelBackColor());
 
         this.mesh = new Mesh(geometry, material);
         this.scene.add(this.mesh);
@@ -1445,6 +1495,10 @@ export class PreviewManager {
                 shininess: DESKTOP_SHININESS,
                 flatShading: false,
               });
+          this._applyBackfaceColoring(
+            normalMaterial,
+            this._resolveModelBackColor()
+          );
 
           const highlightGeometry = geometry.clone();
           const highlightMaterial = new MeshPhongMaterial({
@@ -1484,6 +1538,10 @@ export class PreviewManager {
                 shininess: DESKTOP_SHININESS,
                 flatShading: false,
               });
+          this._applyBackfaceColoring(
+            material,
+            this._resolveModelBackColor()
+          );
           this.mesh = new Mesh(geometry, material);
         }
         this.scene.add(this.mesh);

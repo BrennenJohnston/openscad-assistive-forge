@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { MeshPhongMaterial, DoubleSide } from 'three'
 import { PreviewManager, isThreeJsLoaded, DESKTOP_SHININESS, CORNFIELD_BACK_COLOR } from '../../src/js/preview.js'
 
 describe('PreviewManager', () => {
@@ -2860,6 +2861,117 @@ describe('Visual Parity — desktop OpenSCAD alignment (Phase 5)', () => {
 
     it('CORNFIELD_BACK_COLOR constant is 0x9dcb51 (ColorMap.cc OPENCSG_FACE_BACK_COLOR)', () => {
       expect(CORNFIELD_BACK_COLOR).toBe(0x9dcb51)
+    })
+  })
+
+  describe('two-sided (backface) material configuration', () => {
+    let material
+
+    beforeEach(() => {
+      material = new MeshPhongMaterial({
+        color: 0xf9d72c,
+        specular: 0x000000,
+        shininess: 64,
+        flatShading: false,
+      })
+      manager._applyBackfaceColoring(material, CORNFIELD_BACK_COLOR)
+    })
+
+    it('sets material.side to DoubleSide', () => {
+      expect(material.side).toBe(DoubleSide)
+    })
+
+    it('sets onBeforeCompile callback', () => {
+      expect(typeof material.onBeforeCompile).toBe('function')
+    })
+
+    it('sets customProgramCacheKey for shader caching', () => {
+      expect(typeof material.customProgramCacheKey).toBe('function')
+      expect(material.customProgramCacheKey()).toBe('backface-coloring')
+    })
+
+    it('populates userData.backfaceColorUniform after compile callback fires', () => {
+      const mockShader = {
+        fragmentShader: [
+          'uniform float opacity;',
+          'void main() {',
+          'vec4 diffuseColor = vec4( diffuse, opacity );',
+          '#include <color_fragment>',
+          '}',
+        ].join('\n'),
+        uniforms: {},
+      }
+      material.onBeforeCompile(mockShader)
+      expect(material.userData.backfaceColorUniform).toBeDefined()
+      expect(material.userData.backfaceColorUniform.value).toBeDefined()
+    })
+
+    it('injects backfaceColor uniform declaration into fragment shader', () => {
+      const mockShader = {
+        fragmentShader: [
+          'uniform float opacity;',
+          'void main() {',
+          'vec4 diffuseColor = vec4( diffuse, opacity );',
+          '#include <color_fragment>',
+          '}',
+        ].join('\n'),
+        uniforms: {},
+      }
+      material.onBeforeCompile(mockShader)
+      expect(mockShader.fragmentShader).toContain('uniform vec3 backfaceColor;')
+    })
+
+    it('replaces diffuse init with gl_FrontFacing ternary', () => {
+      const mockShader = {
+        fragmentShader: [
+          'uniform float opacity;',
+          'void main() {',
+          'vec4 diffuseColor = vec4( diffuse, opacity );',
+          '#include <color_fragment>',
+          '}',
+        ].join('\n'),
+        uniforms: {},
+      }
+      material.onBeforeCompile(mockShader)
+      expect(mockShader.fragmentShader).toContain('gl_FrontFacing ? diffuse : backfaceColor')
+      expect(mockShader.fragmentShader).not.toContain('vec4 diffuseColor = vec4( diffuse, opacity );')
+    })
+
+    it('adds back-face override after color_fragment include', () => {
+      const mockShader = {
+        fragmentShader: [
+          'uniform float opacity;',
+          'void main() {',
+          'vec4 diffuseColor = vec4( diffuse, opacity );',
+          '#include <color_fragment>',
+          '}',
+        ].join('\n'),
+        uniforms: {},
+      }
+      material.onBeforeCompile(mockShader)
+      expect(mockShader.fragmentShader).toContain('if ( !gl_FrontFacing ) diffuseColor = vec4( backfaceColor, opacity );')
+    })
+
+    it('_syncColorOverride propagates back-face color when uniform exists', () => {
+      const mockShader = {
+        fragmentShader: [
+          'uniform float opacity;',
+          'void main() {',
+          'vec4 diffuseColor = vec4( diffuse, opacity );',
+          '#include <color_fragment>',
+          '}',
+        ].join('\n'),
+        uniforms: {},
+      }
+      material.onBeforeCompile(mockShader)
+
+      const geometry = { attributes: {} }
+      const mesh = { material, geometry, isGroup: false }
+      manager.mesh = mesh
+      manager.currentTheme = 'dark'
+      manager._syncColorOverride()
+      const expectedHex = 0x3d8a44
+      expect(material.userData.backfaceColorUniform.value.getHex()).toBe(expectedHex)
     })
   })
 
