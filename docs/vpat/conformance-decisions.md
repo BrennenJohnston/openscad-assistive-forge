@@ -106,6 +106,7 @@
 | 2026-02-02 | 2.4.1, 2.4.3, 2.4.7 | Updated to "Supports" based on skip link and focus styles review | Code audit |
 | 2026-02-02 | 4.1.2, 4.1.3 | Updated to "Supports" based on ARIA and announcer.js review | Code audit |
 | 2026-03-13 | Multiple | Accessibility audit: evaluated 29 previously "Not Evaluated" criteria. Fixed heading hierarchy (h1→h2→h3). Added `.visually-hidden` CSS class. Upgraded axe E2E tests to WCAG 2.2 tags. | Code audit + E2E review |
+| 2026-03-29 | 2.4.7, 2.4.11 | SVG prep fullscreen sticky layout: added `padding-block` to scrollable objects list to prevent `:focus-visible` outline clipping at container edges. SC 2.4.7 and 2.4.11 status unchanged (Supports). | Code audit |
 
 ---
 

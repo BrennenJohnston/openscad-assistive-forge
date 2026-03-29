@@ -13737,6 +13737,7 @@ body.tutorial-body-locked {
   overflow-y: auto;
   overscroll-behavior: contain;
   scroll-padding-block: var(--space-sm);
+  padding-block: var(--space-xs);
 }
 
 .svg-prep-workspace.svg-prep-fullscreen .svg-prep-warnings {

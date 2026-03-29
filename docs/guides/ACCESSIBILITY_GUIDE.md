@@ -95,6 +95,8 @@ The SVG Preparation Editor is fully keyboard accessible and screen reader friend
 
 Fullscreen uses a focus trap — `Tab` and `Shift+Tab` cycle within the editor only. Press `Escape` to exit fullscreen (the editor stays open). Focus returns to the element that was focused before entering fullscreen.
 
+In fullscreen, the source and result previews remain pinned at the top (sticky) while only the object list scrolls. This keeps both previews visible at all times so you can see the effect of role changes immediately. The header, warnings, and footer also stay fixed outside the scrollable area.
+
 ### Forced Colors Mode (Windows High Contrast)
 
 The app fully supports Windows High Contrast mode and other OS-enforced color schemes:
