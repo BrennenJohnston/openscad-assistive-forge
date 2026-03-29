@@ -11,7 +11,7 @@ todos:
     status: completed
   - id: phase-02-default-colors
     content: "Phase 2: Align default colorscheme to OpenSCAD Cornfield gold"
-    status: pending
+    status: completed
   - id: phase-03-lighting
     content: "Phase 3: Correct directionalLight2 Z-position to match desktop"
     status: pending
@@ -335,7 +335,7 @@ A phase is only complete when every applicable item below is done:
 ## Master checklist
 
 - [x] Phase 1. Fix Show Edges overlay auto-refresh after mesh changes
-- [ ] Phase 2. Align default colorscheme to OpenSCAD Cornfield gold
+- [x] Phase 2. Align default colorscheme to OpenSCAD Cornfield gold
 - [ ] Phase 3. Correct directionalLight2 Z-position to match desktop
 - [ ] Phase 4. Align material shininess to desktop value (64)
 - [ ] Phase 5. Visual validation and tuning across example models
@@ -402,6 +402,29 @@ A phase is only complete when every applicable item below is done:
   colorscheme selection UI. Do not change dark theme, high-contrast theme, or
   mono theme defaults.
 - Pause rule: Once validation passes, mark Phase 2 complete and end the chat.
+
+**Phase 2 completion record:**
+
+- Approach: Extracted `CORNFIELD_FRONT_COLOR = 0xf9d72c` as a named constant
+  in `preview.js` (with source citation comment referencing
+  `src/glview/ColorMap.cc` OPENCSG_FACE_FRONT_COLOR [OBSERVED]) and used it
+  in `PREVIEW_COLORS.light.model`. Also updated duplicated inline copies of
+  the light theme model color in `main.js` (line 4393) and `file-handler.js`
+  (line 1241) to `0xf9d72c` — both had comments "Match PREVIEW_COLORS from
+  preview.js" indicating they must stay in sync.
+- Dark theme: Left unchanged per plan constraint ("Do not change dark theme").
+  The dark theme model color `0x4d9fff` is a deliberate departure from
+  Cornfield, which has no dark-mode equivalent.
+- Fallback used: No — gold color applied cleanly. Named constant pattern used
+  proactively per fallback gate recommendation.
+- Color override path: Unaffected — `_syncColorOverride` and
+  `setColorOverride` bypass theme defaults when override is enabled.
+- COFF vertex-color path: Unaffected — vertex colors set `material.color` to
+  `0xffffff` (white multiplier) and enable `vertexColors: true`.
+- Files changed: `src/js/preview.js`, `src/main.js`, `src/js/file-handler.js`,
+  `tests/unit/preview.test.js`, `docs/plans/lighting-visual-parity.plan.md`
+- Validation: 2624 tests passed (2 pre-existing failures in
+  `q-charm-integration.test.js` — unrelated). Lint: 0 errors. Build: success.
 
 ### Phase 3 — Fix lighting direction
 

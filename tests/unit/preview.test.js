@@ -2049,19 +2049,19 @@ describe('PreviewManager', () => {
     describe('_resolveModelColor', () => {
       it('returns theme default when no state and no override (light)', () => {
         const color = manager._resolveModelColor()
-        expect(color).toBe('#2196f3')
+        expect(color).toBe('#f9d72c')
       })
 
       it('returns theme default regardless of renderState (light, preview)', () => {
         manager.renderState = 'preview'
         const color = manager._resolveModelColor()
-        expect(color).toBe('#2196f3')
+        expect(color).toBe('#f9d72c')
       })
 
       it('returns theme default regardless of renderState (light, laser)', () => {
         manager.renderState = 'laser'
         const color = manager._resolveModelColor()
-        expect(color).toBe('#2196f3')
+        expect(color).toBe('#f9d72c')
       })
 
       it('returns dark theme default regardless of renderState', () => {
@@ -2140,13 +2140,13 @@ describe('PreviewManager', () => {
         manager.colorOverride = '#abcdef'
         manager.colorOverrideEnabled = false
         const color = manager._resolveModelColor()
-        expect(color).toBe('#2196f3')
+        expect(color).toBe('#f9d72c')
       })
 
       it('falls back to theme default for unknown render state', () => {
         manager.renderState = 'unknown_state'
         const color = manager._resolveModelColor()
-        expect(color).toBe('#2196f3')
+        expect(color).toBe('#f9d72c')
       })
     })
 

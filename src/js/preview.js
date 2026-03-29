@@ -102,12 +102,16 @@ const LOD_CONFIG = {
 /**
  * Theme-aware color scheme for 3D preview
  */
+// Cornfield front-face color: OpenSCAD src/glview/ColorMap.cc default ctor
+// OPENCSG_FACE_FRONT_COLOR = #F9D72C [OBSERVED]
+const CORNFIELD_FRONT_COLOR = 0xf9d72c;
+
 const PREVIEW_COLORS = {
   light: {
     background: 0xf5f5f5,
     gridPrimary: 0xcccccc,
     gridSecondary: 0xe0e0e0,
-    model: 0x2196f3,
+    model: CORNFIELD_FRONT_COLOR,
     ambientLight: 0xffffff,
   },
   dark: {

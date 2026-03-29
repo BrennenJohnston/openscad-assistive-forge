@@ -4388,9 +4388,9 @@ async function initApp() {
     const activeTheme = themeManager.getActiveTheme();
     const themeKey = highContrast ? `${activeTheme}-hc` : activeTheme;
 
-    // Match PREVIEW_COLORS from preview.js
+    // Match PREVIEW_COLORS from preview.js (Cornfield gold [OBSERVED])
     const PREVIEW_COLORS = {
-      light: 0x2196f3,
+      light: 0xf9d72c,
       dark: 0x4d9fff,
       'light-hc': 0x0052cc,
       'dark-hc': 0x66b3ff,
