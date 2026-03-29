@@ -13708,22 +13708,49 @@ body.tutorial-body-locked {
   padding: var(--space-lg);
   border: 0;
   border-radius: 0;
-  overflow-y: auto;
+  overflow: hidden;
+}
+
+.svg-prep-workspace.svg-prep-fullscreen .svg-prep-header {
+  flex-shrink: 0;
 }
 
 .svg-prep-workspace.svg-prep-fullscreen .svg-prep-previews {
-  flex: 1;
+  flex: 0 0 auto;
+  max-height: 45vh;
   min-height: 0;
 }
 
 .svg-prep-workspace.svg-prep-fullscreen .svg-prep-source-pane,
 .svg-prep-workspace.svg-prep-fullscreen .svg-prep-result-pane {
-  min-height: 300px;
+  min-height: 0;
 }
 
 .svg-prep-workspace.svg-prep-fullscreen .svg-prep-source-pane svg,
 .svg-prep-workspace.svg-prep-fullscreen .svg-prep-result-pane svg {
   max-height: none;
+}
+
+.svg-prep-workspace.svg-prep-fullscreen .svg-prep-objects {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scroll-padding-block: var(--space-sm);
+}
+
+.svg-prep-workspace.svg-prep-fullscreen .svg-prep-warnings {
+  flex-shrink: 0;
+}
+
+.svg-prep-workspace.svg-prep-fullscreen .svg-prep-footer {
+  flex-shrink: 0;
+}
+
+@media (max-height: 500px) {
+  .svg-prep-workspace.svg-prep-fullscreen .svg-prep-previews {
+    max-height: 35vh;
+  }
 }
 
 .svg-prep-fullscreen-backdrop {
@@ -13738,15 +13765,15 @@ body.tutorial-body-locked {
   display: none;
 }
 
-/* ── Responsive: stack panes on narrow viewports ─────────────────────────── */
+/* ── Responsive: stack panes on narrow viewports (non-fullscreen only) ──── */
 @media (max-width: 540px) {
 
-  .svg-prep-previews {
+  .svg-prep-workspace:not(.svg-prep-fullscreen) .svg-prep-previews {
     flex-direction: column;
   }
 
-  .svg-prep-source-pane,
-  .svg-prep-result-pane {
+  .svg-prep-workspace:not(.svg-prep-fullscreen) .svg-prep-source-pane,
+  .svg-prep-workspace:not(.svg-prep-fullscreen) .svg-prep-result-pane {
     min-height: 120px;
   }
 
