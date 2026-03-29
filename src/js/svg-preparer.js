@@ -20,6 +20,8 @@ import {
   pathToString,
   shapeToPathArray,
   splitPath,
+  getPointAtLength,
+  getTotalLength,
 } from 'svg-path-commander';
 import {
   pathFromPathData,
@@ -85,6 +87,95 @@ function resolveColorToHex(fillValue) {
   if (lower === '' || lower === 'none' || lower === 'transparent') return null;
   if (lower in CSS_NAMED_COLORS) return CSS_NAMED_COLORS[lower];
   return fillValue;
+}
+
+/**
+ * Convert a stroked (unfilled) SVG path into a filled outline path.
+ *
+ * Samples points along the path, computes perpendicular offsets at
+ * ±strokeWidth/2, and builds a closed polygon approximating the
+ * stroke outline. Handles butt, round, and square line caps.
+ *
+ * @param {string} pathData - SVG path `d` attribute
+ * @param {number} strokeWidth - Stroke width
+ * @param {string} [lineCap='butt'] - stroke-linecap value
+ * @param {number} [sampleCount=64] - Number of sample points along the path
+ * @returns {string} Filled outline path `d` string
+ */
+export function strokeToFill(pathData, strokeWidth, lineCap = 'butt', sampleCount = 64) {
+  const totalLen = getTotalLength(pathData);
+  if (totalLen === 0 || strokeWidth <= 0) return pathData;
+
+  const half = strokeWidth / 2;
+  const dt = totalLen * 0.0005;
+  const left = [];
+  const right = [];
+
+  for (let i = 0; i <= sampleCount; i++) {
+    const t = (i / sampleCount) * totalLen;
+    const pt = getPointAtLength(pathData, t);
+    const prev = getPointAtLength(pathData, Math.max(0, t - dt));
+    const next = getPointAtLength(pathData, Math.min(totalLen, t + dt));
+
+    let dx = next.x - prev.x;
+    let dy = next.y - prev.y;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if (len === 0) continue;
+    dx /= len;
+    dy /= len;
+
+    left.push({ x: pt.x - dy * half, y: pt.y + dx * half });
+    right.push({ x: pt.x + dy * half, y: pt.y - dx * half });
+  }
+
+  if (left.length === 0) return pathData;
+
+  const r = (n) => Math.round(n * 1000) / 1000;
+  let d = `M${r(left[0].x)},${r(left[0].y)}`;
+  for (let i = 1; i < left.length; i++) {
+    d += ` L${r(left[i].x)},${r(left[i].y)}`;
+  }
+
+  if (lineCap === 'round') {
+    const endL = left[left.length - 1];
+    const endR = right[right.length - 1];
+    d += ` A${r(half)},${r(half)} 0 0,1 ${r(endR.x)},${r(endR.y)}`;
+  } else if (lineCap === 'square') {
+    const lastL = left[left.length - 1];
+    const lastR = right[right.length - 1];
+    const endPt = getPointAtLength(pathData, totalLen);
+    const prevPt = getPointAtLength(pathData, totalLen - dt);
+    let ex = endPt.x - prevPt.x;
+    let ey = endPt.y - prevPt.y;
+    const el = Math.sqrt(ex * ex + ey * ey) || 1;
+    ex /= el; ey /= el;
+    d += ` L${r(lastL.x + ex * half)},${r(lastL.y + ey * half)}`;
+    d += ` L${r(lastR.x + ex * half)},${r(lastR.y + ey * half)}`;
+  }
+
+  for (let i = right.length - 1; i >= 0; i--) {
+    d += ` L${r(right[i].x)},${r(right[i].y)}`;
+  }
+
+  if (lineCap === 'round') {
+    const startL = left[0];
+    const startR = right[0];
+    d += ` A${r(half)},${r(half)} 0 0,1 ${r(startL.x)},${r(startL.y)}`;
+  } else if (lineCap === 'square') {
+    const firstL = left[0];
+    const firstR = right[0];
+    const startPt = getPointAtLength(pathData, 0);
+    const nextPt = getPointAtLength(pathData, dt);
+    let sx = startPt.x - nextPt.x;
+    let sy = startPt.y - nextPt.y;
+    const sl = Math.sqrt(sx * sx + sy * sy) || 1;
+    sx /= sl; sy /= sl;
+    d += ` L${r(firstR.x + sx * half)},${r(firstR.y + sy * half)}`;
+    d += ` L${r(firstL.x + sx * half)},${r(firstL.y + sy * half)}`;
+  }
+
+  d += ' Z';
+  return d;
 }
 
 /**
@@ -239,18 +330,21 @@ export function parseSvgElements(svgString) {
  *
  * - Elements with luminance > threshold → 'hole'
  * - Elements with luminance ≤ threshold → 'foreground'
- * - Elements with fill="none" and a stroke → per strokeHandling option
+ * - Elements with fill="none" and a stroke:
+ *   - 'convert' (default): expand stroke to filled outline, classify by stroke color
+ *   - 'ignore': exclude from compound path
+ *   - 'foreground'/'hole': assign that role directly
  *
  * @param {Array} elements - Output of parseSvgElements()
  * @param {object} [options]
- * @param {string} [options.strokeHandling='ignore'] - Role for stroke-only elements
+ * @param {string} [options.strokeHandling='convert'] - How to handle stroke-only elements
  * @param {number} [options.luminanceThreshold=200] - Luminance above this → hole
  * @param {object} [options.roleOverrides] - Map of element index → forced role
  * @returns {Array} Elements with added `role` property
  */
 export function classifyElements(elements, options = {}) {
   const {
-    strokeHandling = 'ignore',
+    strokeHandling = 'convert',
     luminanceThreshold = 200,
     roleOverrides = {},
   } = options;
@@ -267,6 +361,15 @@ export function classifyElements(elements, options = {}) {
       el.stroke !== '' && el.stroke.toLowerCase() !== 'none';
 
     if (!hasFill && hasStroke) {
+      if (strokeHandling === 'convert') {
+        const sw = parseFloat(el.element.getAttribute('stroke-width')) || 1;
+        const cap = el.element.getAttribute('stroke-linecap') || 'butt';
+        const expandedPath = strokeToFill(el.pathData, sw, cap);
+        const strokeColor = resolveColorToHex(el.stroke);
+        const strokeLum = strokeColor !== null ? parseLuminance(strokeColor) : null;
+        role = (strokeLum !== null && strokeLum > luminanceThreshold) ? 'hole' : 'foreground';
+        return { ...el, pathData: expandedPath, role, strokeConverted: true };
+      }
       role = strokeHandling;
     } else if (el.luminance !== null && el.luminance > luminanceThreshold) {
       role = 'hole';
@@ -299,7 +402,6 @@ export function flattenToCompoundPath(classifiedElements, svgMeta = {}) {
   const holes = classifiedElements.filter(
     (el) => el.role === 'hole' && el.pathData
   );
-
   if (foreground.length === 0) return null;
 
   let fgPath = pathFromPathData(foreground[0].pathData);
@@ -314,13 +416,16 @@ export function flattenToCompoundPath(classifiedElements, svgMeta = {}) {
     if (result.length > 0) fgPath = result[0];
   }
 
-  if (holes.length > 0) {
-    let holePath = pathFromPathData(holes[0].pathData);
-    for (let i = 1; i < holes.length; i++) {
+  const nativeHoles = holes.filter((el) => !el.strokeConverted);
+  const convertedHoles = holes.filter((el) => el.strokeConverted);
+
+  if (nativeHoles.length > 0) {
+    let holePath = pathFromPathData(nativeHoles[0].pathData);
+    for (let i = 1; i < nativeHoles.length; i++) {
       const result = pathBoolean(
         holePath,
         FillRule.EvenOdd,
-        pathFromPathData(holes[i].pathData),
+        pathFromPathData(nativeHoles[i].pathData),
         FillRule.EvenOdd,
         PathBooleanOperation.Union
       );
@@ -337,7 +442,10 @@ export function flattenToCompoundPath(classifiedElements, svgMeta = {}) {
     if (result.length > 0) fgPath = result[0];
   }
 
-  const compoundD = pathToPathData(fgPath);
+  let compoundD = pathToPathData(fgPath);
+  for (const ch of convertedHoles) {
+    compoundD += ' ' + ch.pathData;
+  }
   const { viewBox, width, height } = svgMeta;
 
   let attrs = 'xmlns="http://www.w3.org/2000/svg"';
@@ -446,7 +554,13 @@ export function analyzeSvg(svgString) {
     const fill = (el.fill || '').toLowerCase();
     return fill !== 'none' && fill !== 'transparent';
   });
-  const singleElement = filledElements.length <= 1;
+  const strokedOnlyElements = renderElements.filter((el) => {
+    const fill = (el.fill || '').toLowerCase();
+    const hasStroke = el.stroke !== '' && el.stroke.toLowerCase() !== 'none';
+    return (fill === 'none' || fill === 'transparent') && hasStroke;
+  });
+  const singleElement =
+    (filledElements.length + strokedOnlyElements.length) <= 1;
 
   // A compound path is a single DOM <path> whose d attribute was decomposed
   // into multiple subpaths. It's already OpenSCAD-compatible and doesn't
@@ -467,10 +581,11 @@ export function analyzeSvg(svgString) {
   const elements = classified.map((el) => {
     const elWarnings = [];
     const fillLower = (el.fill || '').toLowerCase();
-    const hasFill = fillLower !== 'none' && fillLower !== 'transparent';
     const hasStroke = el.stroke !== '' && el.stroke.toLowerCase() !== 'none';
 
-    if (!hasFill && hasStroke) {
+    if (el.strokeConverted) {
+      elWarnings.push('Stroked path \u2014 converted to filled outline');
+    } else if (fillLower === 'none' && hasStroke) {
       elWarnings.push('Stroked path \u2014 not supported for boolean operations');
     }
     if (fillLower.startsWith('url(')) {
@@ -492,6 +607,7 @@ export function analyzeSvg(svgString) {
       stroke: el.stroke,
       luminance: el.luminance,
       autoRole: el.role,
+      strokeConverted: el.strokeConverted || false,
       warnings: elWarnings,
     };
   });
@@ -503,12 +619,19 @@ export function analyzeSvg(svgString) {
     );
   }
 
-  const strokedCount = elements.filter((el) =>
-    el.warnings.some((w) => w.includes('Stroked path'))
-  ).length;
-  if (strokedCount > 0) {
+  const convertedCount = elements.filter((el) => el.strokeConverted).length;
+  if (convertedCount > 0) {
     warnings.push(
-      `${strokedCount} stroked path(s) ignored \u2014 stroke-to-fill not yet supported`
+      `${convertedCount} stroked path(s) converted to filled outline(s)`
+    );
+  }
+
+  const ignoredStrokedCount = elements.filter((el) =>
+    el.warnings.some((w) => w.includes('not supported for boolean'))
+  ).length;
+  if (ignoredStrokedCount > 0) {
+    warnings.push(
+      `${ignoredStrokedCount} stroked path(s) ignored \u2014 stroke-to-fill not yet supported`
     );
   }
 

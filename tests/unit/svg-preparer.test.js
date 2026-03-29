@@ -27,6 +27,7 @@ import {
   prepareSvg,
   needsPreparation,
   analyzeSvg,
+  strokeToFill,
 } from '../../src/js/svg-preparer.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -439,21 +440,33 @@ describe('parseSvgElements', () => {
 // ===========================================================================
 
 describe('classifyElements', () => {
-  it('classifies smiley elements correctly by default', () => {
+  it('classifies smiley elements correctly by default (stroke converted)', () => {
     const elements = parseSvgElements(SMILEY_SVG);
     const classified = classifyElements(elements);
 
     const face = classified.find((el) => el.fill === 'black');
     const eyes = classified.filter((el) => el.fill === 'white');
-    const smile = classified.find((el) => el.fill === 'none');
+    const smile = classified.find(
+      (el) => el.fill === 'none' || el.strokeConverted
+    );
 
     expect(face.role).toBe('foreground');
     expect(eyes[0].role).toBe('hole');
     expect(eyes[1].role).toBe('hole');
+    expect(smile.role).toBe('hole');
+    expect(smile.strokeConverted).toBe(true);
+  });
+
+  it('respects strokeHandling: ignore option', () => {
+    const elements = parseSvgElements(SMILEY_SVG);
+    const classified = classifyElements(elements, {
+      strokeHandling: 'ignore',
+    });
+    const smile = classified.find((el) => el.fill === 'none');
     expect(smile.role).toBe('ignore');
   });
 
-  it('respects strokeHandling option', () => {
+  it('respects strokeHandling: foreground option', () => {
     const elements = parseSvgElements(SMILEY_SVG);
     const classified = classifyElements(elements, {
       strokeHandling: 'foreground',
@@ -513,6 +526,50 @@ describe('classifyElements', () => {
 });
 
 // ===========================================================================
+// Phase 2 — strokeToFill
+// ===========================================================================
+
+describe('strokeToFill', () => {
+  it('converts a simple line to a closed filled polygon', () => {
+    const d = strokeToFill('M0,0 L100,0', 10);
+    expect(d).toContain('M');
+    expect(d).toContain('Z');
+    expect(d).not.toContain('NaN');
+    expect(d).not.toContain('undefined');
+  });
+
+  it('converts a quadratic bezier (smiley smile) to a filled outline', () => {
+    const d = strokeToFill('M28,58 Q50,82 72,58', 5);
+    expect(d).toContain('M');
+    expect(d).toContain('Z');
+    expect(d.length).toBeGreaterThan(50);
+  });
+
+  it('returns original path for zero stroke width', () => {
+    const original = 'M0,0 L100,0';
+    expect(strokeToFill(original, 0)).toBe(original);
+  });
+
+  it('produces wider outline for larger stroke width', () => {
+    const narrow = strokeToFill('M0,0 L100,0', 2);
+    const wide = strokeToFill('M0,0 L100,0', 20);
+    expect(wide.length).toBeGreaterThan(narrow.length);
+  });
+
+  it('handles round linecap', () => {
+    const d = strokeToFill('M10,50 L90,50', 10, 'round');
+    expect(d).toContain('A');
+    expect(d).toContain('Z');
+  });
+
+  it('handles square linecap', () => {
+    const d = strokeToFill('M10,50 L90,50', 10, 'square');
+    expect(d).toContain('Z');
+    expect(d).not.toContain('NaN');
+  });
+});
+
+// ===========================================================================
 // Phase 2 — flattenToCompoundPath
 // ===========================================================================
 
@@ -531,7 +588,7 @@ describe('flattenToCompoundPath', () => {
     expect(result).toContain('viewBox="0 0 100 100"');
   });
 
-  it('smiley compound path has exactly 3 M-command subpaths', () => {
+  it('smiley compound path includes smile outline (4+ M-command subpaths)', () => {
     const elements = parseSvgElements(SMILEY_SVG);
     const classified = classifyElements(elements);
     const result = flattenToCompoundPath(classified, {
@@ -541,7 +598,7 @@ describe('flattenToCompoundPath', () => {
     const dMatch = result.match(/d="([^"]+)"/);
     expect(dMatch).not.toBeNull();
     const mCount = (dMatch[1].match(/M/g) || []).length;
-    expect(mCount).toBe(3);
+    expect(mCount).toBeGreaterThanOrEqual(4);
   });
 
   it('single foreground element with no holes produces single-path SVG', () => {
@@ -636,13 +693,13 @@ describe('needsPreparation', () => {
     expect(needsPreparation('<div>not svg</div>')).toBe(false);
   });
 
-  it('excludes fill="none" elements from filled count', () => {
+  it('needs preparation when stroked element accompanies a filled element', () => {
     const svg =
       '<svg xmlns="http://www.w3.org/2000/svg">' +
       '<circle cx="10" cy="10" r="5" fill="black"/>' +
       '<line x1="0" y1="0" x2="10" y2="10" stroke="black" fill="none"/>' +
       '</svg>';
-    expect(needsPreparation(svg)).toBe(false);
+    expect(needsPreparation(svg)).toBe(true);
   });
 
   it('returns true for two filled elements', () => {
@@ -681,7 +738,7 @@ describe('prepareSvg', () => {
     const dMatch = result.match(/d="([^"]+)"/);
     expect(dMatch).not.toBeNull();
     const mCount = (dMatch[1].match(/M/g) || []).length;
-    expect(mCount).toBe(3);
+    expect(mCount).toBeGreaterThanOrEqual(4);
   });
 
   it('prepared smiley does not need further preparation', () => {
@@ -704,8 +761,15 @@ describe('prepareSvg', () => {
     expect(result).toContain('viewBox="0 0 100 100"');
   });
 
-  it('ignores stroked smile path by default (fallback gate)', () => {
+  it('converts stroked smile path to filled outline by default', () => {
     const result = prepareSvg(SMILEY_SVG);
+    const dMatch = result.match(/d="([^"]+)"/);
+    const mCount = (dMatch[1].match(/M/g) || []).length;
+    expect(mCount).toBeGreaterThanOrEqual(4);
+  });
+
+  it('ignores stroked smile when strokeHandling is ignore', () => {
+    const result = prepareSvg(SMILEY_SVG, { strokeHandling: 'ignore' });
     const dMatch = result.match(/d="([^"]+)"/);
     const mCount = (dMatch[1].match(/M/g) || []).length;
     expect(mCount).toBe(3);
@@ -882,7 +946,7 @@ describe('classifyElements edge cases', () => {
     expect(classified[0].role).toBe('foreground');
   });
 
-  it('handles mixed stroke-only and filled elements', () => {
+  it('handles mixed stroke-only and filled elements (stroke converted)', () => {
     const svg =
       '<svg xmlns="http://www.w3.org/2000/svg">' +
       '<circle cx="20" cy="20" r="10" fill="black"/>' +
@@ -891,6 +955,22 @@ describe('classifyElements edge cases', () => {
       '</svg>';
     const elements = parseSvgElements(svg);
     const classified = classifyElements(elements);
+    expect(classified[0].role).toBe('foreground');
+    // red stroke → luminance ~76 → below threshold → foreground
+    expect(classified[1].role).toBe('foreground');
+    expect(classified[1].strokeConverted).toBe(true);
+    expect(classified[2].role).toBe('hole');
+  });
+
+  it('handles mixed stroke-only and filled elements (stroke ignored)', () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg">' +
+      '<circle cx="20" cy="20" r="10" fill="black"/>' +
+      '<line x1="0" y1="0" x2="40" y2="40" stroke="red" fill="none"/>' +
+      '<circle cx="60" cy="20" r="10" fill="white"/>' +
+      '</svg>';
+    const elements = parseSvgElements(svg);
+    const classified = classifyElements(elements, { strokeHandling: 'ignore' });
     expect(classified[0].role).toBe('foreground');
     expect(classified[1].role).toBe('ignore');
     expect(classified[2].role).toBe('hole');
@@ -1039,8 +1119,8 @@ describe('OpenSCAD output validation', () => {
 
     const pathD = dMatch[1];
     const mCount = (pathD.match(/M/g) || []).length;
-    // Face outline + 2 eye holes = 3 subpaths
-    expect(mCount).toBe(3);
+    // Face outline + 2 eye holes + smile outline = 4+ subpaths
+    expect(mCount).toBeGreaterThanOrEqual(4);
   });
 
   it('prepared smiley preserves viewBox for OpenSCAD dimension mapping', () => {
@@ -1331,28 +1411,33 @@ describe('analyzeSvg', () => {
       expect(result.elements).toHaveLength(4);
     });
 
-    it('classifies face as foreground, eyes as hole, smile as ignore', () => {
+    it('classifies face as foreground, eyes as hole, smile as hole (converted)', () => {
       const result = analyzeSvg(SMILEY_SVG);
       const face = result.elements.find((el) => el.fill === 'black');
       const eyes = result.elements.filter((el) => el.fill === 'white');
-      const smile = result.elements.find((el) => el.fill === 'none');
+      const smile = result.elements.find(
+        (el) => el.fill === 'none' || el.strokeConverted
+      );
 
       expect(face.autoRole).toBe('foreground');
       expect(eyes[0].autoRole).toBe('hole');
       expect(eyes[1].autoRole).toBe('hole');
-      expect(smile.autoRole).toBe('ignore');
+      expect(smile.autoRole).toBe('hole');
+      expect(smile.strokeConverted).toBe(true);
     });
 
-    it('warns about the stroked smile path', () => {
+    it('notes the stroked smile path was converted', () => {
       const result = analyzeSvg(SMILEY_SVG);
-      const smile = result.elements.find((el) => el.fill === 'none');
+      const smile = result.elements.find(
+        (el) => el.strokeConverted
+      );
       expect(smile.warnings.length).toBeGreaterThan(0);
-      expect(smile.warnings[0]).toContain('Stroked path');
+      expect(smile.warnings[0]).toContain('converted');
     });
 
-    it('has a global warning about stroked paths', () => {
+    it('has a global info about converted stroked paths', () => {
       const result = analyzeSvg(SMILEY_SVG);
-      expect(result.warnings.some((w) => w.includes('stroked path'))).toBe(
+      expect(result.warnings.some((w) => w.includes('converted'))).toBe(
         true
       );
     });
@@ -1663,13 +1748,13 @@ describe('analyzeSvg', () => {
       expect(needsPreparation(svg)).toBe(true);
     });
 
-    it('excludes fill="none" elements from filled count', () => {
+    it('needs preparation when stroked element accompanies a filled element', () => {
       const svg =
         '<svg xmlns="http://www.w3.org/2000/svg">' +
         '<circle cx="10" cy="10" r="5" fill="black"/>' +
         '<line x1="0" y1="0" x2="10" y2="10" stroke="black" fill="none"/>' +
         '</svg>';
-      expect(needsPreparation(svg)).toBe(false);
+      expect(needsPreparation(svg)).toBe(true);
     });
   });
 

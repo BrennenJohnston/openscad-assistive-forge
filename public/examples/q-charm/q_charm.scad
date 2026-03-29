@@ -46,7 +46,7 @@ design_x = 0; // [-10:0.5:10]
 design_y = 0; // [-10:0.5:10]
 
 // Rotation angle for design (degrees, counter-clockwise)
-design_rotation = 0; // [-90:5:90]
+design_rotation = 90; // [-180:5:180]
 
 /* [Design Layer 2] */
 // Second image file for layered designs (leave empty for none)
@@ -62,7 +62,7 @@ design_x_2 = 0; // [-10:0.5:10]
 design_y_2 = 0; // [-10:0.5:10]
 
 // Rotation angle for second design (degrees, counter-clockwise)
-design_rotation_2 = 0; // [-90:5:90]
+design_rotation_2 = 90; // [-180:5:180]
 
 // Z-offset for second design layer (adjust height relative to the charm surface)
 design_z_2 = 0; // [-3:0.1:3]
@@ -85,6 +85,9 @@ text_y = 6; // [-10:0.5:10]
 
 // Depth of text engraving (or height of raised text)
 text_depth = 0.8; // [0.2:0.1:2]
+
+// Rotation angle for text (degrees, counter-clockwise)
+text_rotation = 90; // [-180:5:180]
 
 // Text style on the charm surface
 text_style = "raised"; // [raised, engraved]
@@ -237,9 +240,10 @@ module design_2d_layer2() {
 module text_2d() {
     if (text_content != "") {
         translate([text_x, text_y])
-            text(text_content, size = text_size,
-                 font = "Liberation Sans",
-                 halign = "center", valign = "center");
+            rotate([0, 0, text_rotation])
+                text(text_content, size = text_size,
+                     font = "Liberation Sans",
+                     halign = "center", valign = "center");
     }
 }
 
@@ -317,4 +321,4 @@ module q_charm() {
     }
 }
 
-q_charm();
+rotate([0, 0, -90]) q_charm();
