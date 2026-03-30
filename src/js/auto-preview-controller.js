@@ -792,8 +792,9 @@ export class AutoPreviewController {
       const between = scadContent.slice(firstChildEnd, closeBrace).trim();
       if (between.length === 0) continue;
 
-      ops.push({ pos: closeBrace, text: ` }` });
-      ops.push({ pos: firstChildEnd, text: ` color("${GREEN}") {` });
+      ops.push({ pos: closeBrace, text: ' }' });
+      ops.push({ pos: firstChildEnd, text: `} color("${GREEN}") {` });
+      ops.push({ pos: openBrace + 1, text: ` color("${GOLD}") {` });
     }
 
     ops.sort((a, b) => b.pos - a.pos);
@@ -802,8 +803,6 @@ export class AutoPreviewController {
     for (const op of ops) {
       result = result.slice(0, op.pos) + op.text + result.slice(op.pos);
     }
-
-    result = `color("${GOLD}") {\n${result}\n}`;
 
     return result;
   }
@@ -1040,8 +1039,9 @@ export class AutoPreviewController {
       this.currentScadContent
     );
     const colorPassthroughEnabled = isFlagEnabled('color_passthrough');
+    const caps = this.renderController?.getCapabilities?.() || {};
     const supportsRenderColors = Boolean(
-      this.renderController?.getCapabilities?.()?.hasRenderColorsFlag
+      caps.hasRenderColorsFlag || caps.hasManifold
     );
 
     let previewOutputFormat;
@@ -1388,8 +1388,9 @@ export class AutoPreviewController {
       this.currentScadContent
     );
     const colorPassthroughEnabled = isFlagEnabled('color_passthrough');
+    const fullCaps = this.renderController?.getCapabilities?.() || {};
     const supportsRenderColors = Boolean(
-      this.renderController?.getCapabilities?.()?.hasRenderColorsFlag
+      fullCaps.hasRenderColorsFlag || fullCaps.hasManifold
     );
 
     let fullOutputFormat;

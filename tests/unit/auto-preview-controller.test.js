@@ -1226,11 +1226,11 @@ describe('AutoPreviewController', () => {
       expect(AutoPreviewController.injectCsgColors(42)).toBe(42)
     })
 
-    it('wraps simple SCAD without difference() in gold only', () => {
+    it('returns simple SCAD without difference() unchanged', () => {
       const result = AutoPreviewController.injectCsgColors('cube(10);')
 
-      expect(result).toContain(`color("${GOLD}")`)
-      expect(result).toContain('cube(10);')
+      expect(result).toBe('cube(10);')
+      expect(result).not.toContain(`color("${GOLD}")`)
       expect(result).not.toContain(`color("${GREEN}")`)
     })
 
@@ -1271,11 +1271,11 @@ describe('AutoPreviewController', () => {
       expect(greenCount).toBe(2)
     })
 
-    it('does not inject green when difference() has only one child', () => {
+    it('does not inject colors when difference() has only one child', () => {
       const scad = 'difference() { cube(10); }'
       const result = AutoPreviewController.injectCsgColors(scad)
 
-      expect(result).toContain(`color("${GOLD}")`)
+      expect(result).toBe(scad)
       expect(result).not.toContain(`color("${GREEN}")`)
     })
 
@@ -1290,7 +1290,7 @@ describe('AutoPreviewController', () => {
       const scad = '// difference() { cube(20); cube(10); }\ncube(5);'
       const result = AutoPreviewController.injectCsgColors(scad)
 
-      expect(result).toContain(`color("${GOLD}")`)
+      expect(result).toBe(scad)
       expect(result).not.toContain(`color("${GREEN}")`)
     })
 
@@ -1298,7 +1298,7 @@ describe('AutoPreviewController', () => {
       const scad = '/* difference() { cube(20); cube(10); } */ sphere(5);'
       const result = AutoPreviewController.injectCsgColors(scad)
 
-      expect(result).toContain(`color("${GOLD}")`)
+      expect(result).toBe(scad)
       expect(result).not.toContain(`color("${GREEN}")`)
     })
 
@@ -1306,7 +1306,7 @@ describe('AutoPreviewController', () => {
       const scad = 'text("difference() { cube(20); cube(10); }");'
       const result = AutoPreviewController.injectCsgColors(scad)
 
-      expect(result).toContain(`color("${GOLD}")`)
+      expect(result).toBe(scad)
       expect(result).not.toContain(`color("${GREEN}")`)
     })
 
@@ -1320,12 +1320,11 @@ describe('AutoPreviewController', () => {
       expect(afterGreen).toContain('cylinder')
     })
 
-    it('preserves original source structure', () => {
+    it('preserves original source structure for non-difference SCAD', () => {
       const scad = 'cube(10);'
       const result = AutoPreviewController.injectCsgColors(scad)
 
-      expect(result.startsWith(`color("${GOLD}") {\n`)).toBe(true)
-      expect(result.endsWith('\n}')).toBe(true)
+      expect(result).toBe(scad)
     })
   })
 
@@ -1347,7 +1346,7 @@ describe('AutoPreviewController', () => {
 
     it('uses OFF format and injects CSG colors when no color() calls in SCAD', async () => {
       isFlagEnabled.mockReturnValue(false)
-      controller.setScadContent('cube(10);')
+      controller.setScadContent('difference() { cube(20); cube(10); }')
       const params = { width: 10 }
       const paramHash = controller.hashParams(params)
       controller.currentParamHash = paramHash
@@ -1358,12 +1357,12 @@ describe('AutoPreviewController', () => {
       const [source, , options] = renderController.renderPreview.mock.calls[0]
       expect(options.outputFormat).toBe('off')
       expect(source).toContain('color("#f9d72c")')
-      expect(source).toContain('cube(10);')
+      expect(source).toContain('color("#9dcb51")')
     })
 
     it('uses OFF format with strip+inject when color() present and passthrough off', async () => {
       isFlagEnabled.mockReturnValue(false)
-      controller.setScadContent('color("red") cube(10);')
+      controller.setScadContent('color("red") difference() { cube(20); cube(10); }')
       const params = { width: 10 }
       const paramHash = controller.hashParams(params)
       controller.currentParamHash = paramHash
@@ -1394,7 +1393,8 @@ describe('AutoPreviewController', () => {
 
     it('falls back to STL when render-colors not supported and no color() calls', async () => {
       renderController.getCapabilities = vi.fn(() => ({
-        hasRenderColorsFlag: false
+        hasRenderColorsFlag: false,
+        hasManifold: false,
       }))
       isFlagEnabled.mockReturnValue(false)
       controller.setScadContent('cube(10);')
@@ -1441,19 +1441,19 @@ describe('AutoPreviewController', () => {
 
     it('uses OFF format and injects CSG colors for full render when no color() calls', async () => {
       isFlagEnabled.mockReturnValue(false)
-      controller.setScadContent('cube(10);')
+      controller.setScadContent('difference() { cube(20); cube(10); }')
 
       await controller.renderFull({ width: 10 })
 
       const [source, , options] = renderController.renderFull.mock.calls[0]
       expect(options.outputFormat).toBe('off')
       expect(source).toContain('color("#f9d72c")')
-      expect(source).toContain('cube(10);')
+      expect(source).toContain('color("#9dcb51")')
     })
 
     it('uses OFF format with strip+inject for full render when color() present and passthrough off', async () => {
       isFlagEnabled.mockReturnValue(false)
-      controller.setScadContent('color("blue") sphere(5);')
+      controller.setScadContent('color("blue") difference() { sphere(10); sphere(5); }')
 
       await controller.renderFull({ width: 10 })
 
@@ -1480,7 +1480,8 @@ describe('AutoPreviewController', () => {
 
     it('falls back to no outputFormat when render-colors not supported and no passthrough', async () => {
       renderController.getCapabilities = vi.fn(() => ({
-        hasRenderColorsFlag: false
+        hasRenderColorsFlag: false,
+        hasManifold: false,
       }))
       isFlagEnabled.mockReturnValue(false)
       controller.setScadContent('cube(10);')
@@ -1500,9 +1501,10 @@ describe('AutoPreviewController', () => {
 
     it('updates project files map when CSG colors are injected and project files exist', async () => {
       isFlagEnabled.mockReturnValue(false)
-      const files = new Map([['main.scad', 'cube(10);']])
+      const scad = 'difference() { cube(20); cube(10); }'
+      const files = new Map([['main.scad', scad]])
       controller.setProjectFiles(files, 'main.scad')
-      controller.setScadContent('cube(10);')
+      controller.setScadContent(scad)
 
       await controller.renderFull({ width: 10 })
 
