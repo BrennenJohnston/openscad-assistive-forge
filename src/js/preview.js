@@ -689,13 +689,138 @@ export class PreviewManager {
   }
 
   /**
-   * Configure a MeshPhongMaterial for two-sided face coloring via
-   * gl_FrontFacing. Front faces keep the material's diffuse color;
-   * back faces display backfaceHex (the CUTOUT / scheme back-face color).
+   * CPU-side face classifier for CSG cavity detection.
+   * Sets a per-vertex `aIsInner` float attribute (1.0 = inner/cavity, 0.0 = outer).
    *
-   * Shader replacement strings verified against Three.js v0.182:
-   *   meshphong.glsl.js lines 59, 89, 97
-   *   color_fragment.glsl.js (full chunk)
+   * Pass 1: dot(faceNormal, faceCentroid) < 0.1 on centered geometry (baseline).
+   * Pass 2: edge adjacency via hashed vertex positions (4 decimal places).
+   * Pass 3: concave-edge correction — reclassify borderline faces (dot 0.1–0.85)
+   *         adjacent to inner faces across concave edges (inter-normal dot < −0.5).
+   *
+   * @param {BufferGeometry} geometry - centered, with computed vertex normals
+   */
+  _classifyInnerFaces(geometry) {
+    const posAttr = geometry.getAttribute('position');
+    const normAttr = geometry.getAttribute('normal');
+    if (!posAttr || !normAttr) return;
+
+    const pos = posAttr.array;
+    const norm = normAttr.array;
+    const vertCount = posAttr.count;
+    const faceCount = vertCount / 3;
+
+    const faceIsInner = new Uint8Array(faceCount);
+    const faceDot = new Float32Array(faceCount);
+    const faceNx = new Float32Array(faceCount);
+    const faceNy = new Float32Array(faceCount);
+    const faceNz = new Float32Array(faceCount);
+
+    for (let f = 0; f < faceCount; f++) {
+      const b = f * 9;
+      const cx = (pos[b] + pos[b + 3] + pos[b + 6]) / 3;
+      const cy = (pos[b + 1] + pos[b + 4] + pos[b + 7]) / 3;
+      const cz = (pos[b + 2] + pos[b + 5] + pos[b + 8]) / 3;
+      const nx = norm[b];
+      const ny = norm[b + 1];
+      const nz = norm[b + 2];
+
+      faceNx[f] = nx;
+      faceNy[f] = ny;
+      faceNz[f] = nz;
+
+      const cLen = Math.sqrt(cx * cx + cy * cy + cz * cz) || 1;
+      const nLen = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
+      const dot =
+        (nx / nLen) * (cx / cLen) +
+        (ny / nLen) * (cy / cLen) +
+        (nz / nLen) * (cz / cLen);
+
+      faceDot[f] = dot;
+      faceIsInner[f] = dot < 0.1 ? 1 : 0;
+    }
+
+    const edgeMap = new Map();
+    const r = (v) => v.toFixed(4);
+
+    for (let f = 0; f < faceCount; f++) {
+      const b = f * 9;
+      const v0 = `${r(pos[b])},${r(pos[b + 1])},${r(pos[b + 2])}`;
+      const v1 = `${r(pos[b + 3])},${r(pos[b + 4])},${r(pos[b + 5])}`;
+      const v2 = `${r(pos[b + 6])},${r(pos[b + 7])},${r(pos[b + 8])}`;
+
+      const edges = [
+        v0 < v1 ? `${v0}|${v1}` : `${v1}|${v0}`,
+        v1 < v2 ? `${v1}|${v2}` : `${v2}|${v1}`,
+        v2 < v0 ? `${v2}|${v0}` : `${v0}|${v2}`,
+      ];
+
+      for (const key of edges) {
+        const list = edgeMap.get(key);
+        if (list) list.push(f);
+        else edgeMap.set(key, [f]);
+      }
+    }
+
+    for (const faces of edgeMap.values()) {
+      if (faces.length !== 2) continue;
+      const [a, b] = faces;
+
+      const l1 =
+        Math.sqrt(
+          faceNx[a] * faceNx[a] +
+            faceNy[a] * faceNy[a] +
+            faceNz[a] * faceNz[a]
+        ) || 1;
+      const l2 =
+        Math.sqrt(
+          faceNx[b] * faceNx[b] +
+            faceNy[b] * faceNy[b] +
+            faceNz[b] * faceNz[b]
+        ) || 1;
+      const nDot =
+        (faceNx[a] / l1) * (faceNx[b] / l2) +
+        (faceNy[a] / l1) * (faceNy[b] / l2) +
+        (faceNz[a] / l1) * (faceNz[b] / l2);
+
+      if (nDot >= -0.5) continue;
+
+      if (faceIsInner[a] && !faceIsInner[b] && faceDot[b] < 0.85) {
+        faceIsInner[b] = 1;
+      } else if (faceIsInner[b] && !faceIsInner[a] && faceDot[a] < 0.85) {
+        faceIsInner[a] = 1;
+      }
+    }
+
+    let innerCount = 0;
+    for (let f = 0; f < faceCount; f++) {
+      if (faceIsInner[f]) innerCount++;
+    }
+    if (innerCount / faceCount > 0.15) {
+      console.warn(
+        `[Preview] Concave-edge correction produced ${((innerCount / faceCount) * 100).toFixed(1)}% inner faces — reverting to baseline`
+      );
+      for (let f = 0; f < faceCount; f++) {
+        faceIsInner[f] = faceDot[f] < 0.1 ? 1 : 0;
+      }
+    }
+
+    const isInner = new Float32Array(vertCount);
+    for (let f = 0; f < faceCount; f++) {
+      const val = faceIsInner[f];
+      isInner[f * 3] = val;
+      isInner[f * 3 + 1] = val;
+      isInner[f * 3 + 2] = val;
+    }
+
+    geometry.setAttribute('aIsInner', new Float32BufferAttribute(isInner, 1));
+  }
+
+  /**
+   * Configure a MeshPhongMaterial for two-sided face coloring that
+   * approximates desktop OpenSCAD's F5 back-face rendering.
+   *
+   * Uses gl_FrontFacing combined with the CPU-side aIsInner attribute
+   * (set by _classifyInnerFaces) to identify cavity/cutout faces.
    *
    * @param {MeshPhongMaterial} material
    * @param {number} backfaceHex - e.g. 0x9dcb51
@@ -708,27 +833,34 @@ export class PreviewManager {
         value: new Color(backfaceHex),
       };
 
+      shader.vertexShader = shader.vertexShader.replace(
+        'varying vec3 vViewPosition;',
+        'varying vec3 vViewPosition;\nattribute float aIsInner;\nvarying float vIsInner;'
+      );
+      shader.vertexShader = shader.vertexShader.replace(
+        'vViewPosition = - mvPosition.xyz;',
+        'vViewPosition = - mvPosition.xyz;\nvIsInner = aIsInner;'
+      );
+
       shader.fragmentShader = shader.fragmentShader.replace(
         'uniform float opacity;',
-        'uniform float opacity;\nuniform vec3 backfaceColor;'
+        'uniform float opacity;\nuniform vec3 backfaceColor;\nvarying float vIsInner;'
       );
 
       shader.fragmentShader = shader.fragmentShader.replace(
         'vec4 diffuseColor = vec4( diffuse, opacity );',
-        'vec4 diffuseColor = vec4( gl_FrontFacing ? diffuse : backfaceColor, opacity );'
+        'bool isBack = !gl_FrontFacing || vIsInner > 0.5;\nvec4 diffuseColor = vec4( isBack ? backfaceColor : diffuse, opacity );'
       );
 
-      // CUTOUT overrides COFF per-face vertex colors on back faces,
-      // matching desktop OpenSCAD where back-face color is scheme-level.
       shader.fragmentShader = shader.fragmentShader.replace(
         '#include <color_fragment>',
-        '#include <color_fragment>\nif ( !gl_FrontFacing ) diffuseColor = vec4( backfaceColor, opacity );'
+        '#include <color_fragment>\nif ( isBack ) diffuseColor = vec4( backfaceColor, opacity );'
       );
 
       material.userData.backfaceColorUniform = shader.uniforms.backfaceColor;
     };
 
-    material.customProgramCacheKey = () => 'backface-coloring';
+    material.customProgramCacheKey = () => 'backface-coloring-v7';
   }
 
   /**
@@ -1242,6 +1374,12 @@ export class PreviewManager {
         geometry.computeVertexNormals();
         geometry.center();
 
+        try {
+          this._classifyInnerFaces(geometry);
+        } catch (e) {
+          console.warn('[Preview] Face classification failed, using default coloring:', e);
+        }
+
         // Apply auto-bed if enabled (place object on Z=0 build plate)
         if (this.autoBedEnabled) {
           this.applyAutoBed(geometry);
@@ -1467,6 +1605,12 @@ export class PreviewManager {
         }
         geometry.computeVertexNormals();
         geometry.center();
+
+        try {
+          this._classifyInnerFaces(geometry);
+        } catch (e) {
+          console.warn('[Preview] Face classification failed, using default coloring:', e);
+        }
 
         if (this.autoBedEnabled) {
           this.applyAutoBed(geometry);

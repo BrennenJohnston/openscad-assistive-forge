@@ -2887,11 +2887,17 @@ describe('Visual Parity — desktop OpenSCAD alignment (Phase 5)', () => {
 
     it('sets customProgramCacheKey for shader caching', () => {
       expect(typeof material.customProgramCacheKey).toBe('function')
-      expect(material.customProgramCacheKey()).toBe('backface-coloring')
+      expect(material.customProgramCacheKey()).toBe('backface-coloring-v7')
     })
 
     it('populates userData.backfaceColorUniform after compile callback fires', () => {
       const mockShader = {
+        vertexShader: [
+          'varying vec3 vViewPosition;',
+          'void main() {',
+          'vViewPosition = - mvPosition.xyz;',
+          '}',
+        ].join('\n'),
         fragmentShader: [
           'uniform float opacity;',
           'void main() {',
@@ -2906,8 +2912,14 @@ describe('Visual Parity — desktop OpenSCAD alignment (Phase 5)', () => {
       expect(material.userData.backfaceColorUniform.value).toBeDefined()
     })
 
-    it('injects backfaceColor uniform declaration into fragment shader', () => {
+    it('injects backfaceColor uniform and varyings into fragment shader', () => {
       const mockShader = {
+        vertexShader: [
+          'varying vec3 vViewPosition;',
+          'void main() {',
+          'vViewPosition = - mvPosition.xyz;',
+          '}',
+        ].join('\n'),
         fragmentShader: [
           'uniform float opacity;',
           'void main() {',
@@ -2919,10 +2931,17 @@ describe('Visual Parity — desktop OpenSCAD alignment (Phase 5)', () => {
       }
       material.onBeforeCompile(mockShader)
       expect(mockShader.fragmentShader).toContain('uniform vec3 backfaceColor;')
+      expect(mockShader.fragmentShader).toContain('varying float vIsInner;')
     })
 
-    it('replaces diffuse init with gl_FrontFacing ternary', () => {
+    it('injects aIsInner attribute and vIsInner varying into vertex shader', () => {
       const mockShader = {
+        vertexShader: [
+          'varying vec3 vViewPosition;',
+          'void main() {',
+          'vViewPosition = - mvPosition.xyz;',
+          '}',
+        ].join('\n'),
         fragmentShader: [
           'uniform float opacity;',
           'void main() {',
@@ -2933,12 +2952,42 @@ describe('Visual Parity — desktop OpenSCAD alignment (Phase 5)', () => {
         uniforms: {},
       }
       material.onBeforeCompile(mockShader)
-      expect(mockShader.fragmentShader).toContain('gl_FrontFacing ? diffuse : backfaceColor')
+      expect(mockShader.vertexShader).toContain('attribute float aIsInner;')
+      expect(mockShader.vertexShader).toContain('varying float vIsInner;')
+      expect(mockShader.vertexShader).toContain('vIsInner = aIsInner;')
+    })
+
+    it('replaces diffuse init with combined gl_FrontFacing + aIsInner test', () => {
+      const mockShader = {
+        vertexShader: [
+          'varying vec3 vViewPosition;',
+          'void main() {',
+          'vViewPosition = - mvPosition.xyz;',
+          '}',
+        ].join('\n'),
+        fragmentShader: [
+          'uniform float opacity;',
+          'void main() {',
+          'vec4 diffuseColor = vec4( diffuse, opacity );',
+          '#include <color_fragment>',
+          '}',
+        ].join('\n'),
+        uniforms: {},
+      }
+      material.onBeforeCompile(mockShader)
+      expect(mockShader.fragmentShader).toContain('isBack ? backfaceColor : diffuse')
+      expect(mockShader.fragmentShader).toContain('vIsInner > 0.5')
       expect(mockShader.fragmentShader).not.toContain('vec4 diffuseColor = vec4( diffuse, opacity );')
     })
 
-    it('adds back-face override after color_fragment include', () => {
+    it('adds isBack override after color_fragment include', () => {
       const mockShader = {
+        vertexShader: [
+          'varying vec3 vViewPosition;',
+          'void main() {',
+          'vViewPosition = - mvPosition.xyz;',
+          '}',
+        ].join('\n'),
         fragmentShader: [
           'uniform float opacity;',
           'void main() {',
@@ -2949,11 +2998,17 @@ describe('Visual Parity — desktop OpenSCAD alignment (Phase 5)', () => {
         uniforms: {},
       }
       material.onBeforeCompile(mockShader)
-      expect(mockShader.fragmentShader).toContain('if ( !gl_FrontFacing ) diffuseColor = vec4( backfaceColor, opacity );')
+      expect(mockShader.fragmentShader).toContain('if ( isBack ) diffuseColor = vec4( backfaceColor, opacity );')
     })
 
     it('_syncColorOverride propagates back-face color when uniform exists', () => {
       const mockShader = {
+        vertexShader: [
+          'varying vec3 vViewPosition;',
+          'void main() {',
+          'vViewPosition = - mvPosition.xyz;',
+          '}',
+        ].join('\n'),
         fragmentShader: [
           'uniform float opacity;',
           'void main() {',
