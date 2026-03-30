@@ -3031,13 +3031,29 @@ describe('Visual Parity — desktop OpenSCAD alignment (Phase 5)', () => {
   })
 
   describe('_classifyInnerFaces CPU-side classifier', () => {
+    let originalFetch
+
+    beforeEach(() => {
+      originalFetch = globalThis.fetch
+      globalThis.fetch = vi.fn(() => Promise.resolve())
+    })
+
+    afterEach(() => {
+      globalThis.fetch = originalFetch
+    })
+
     function buildCavityGeometry() {
       const outerPos = []
       const outerNrm = []
-      for (let i = 0; i < 12; i++) {
+      for (let i = 0; i < 6; i++) {
         const x = 20 + i * 3
         outerPos.push(x, 0, 0, x, 1, 0, x, 0, 1)
         outerNrm.push(1, 0, 0, 1, 0, 0, 1, 0, 0)
+      }
+      for (let i = 0; i < 6; i++) {
+        const x = -20 - i * 3
+        outerPos.push(x, 0, 0, x, -1, 0, x, 0, 1)
+        outerNrm.push(-1, 0, 0, -1, 0, 0, -1, 0, 0)
       }
       const positions = new Float32Array([
         0, 0, 2,  1, 0, 2,  0.5, 1, 2,
@@ -3055,28 +3071,49 @@ describe('Visual Parity — desktop OpenSCAD alignment (Phase 5)', () => {
       return geometry
     }
 
-    it('sets aIsInner attribute on geometry with concave cavity', () => {
+    it('classifies inner cavity face and promotes across concave edge', () => {
       const geometry = buildCavityGeometry()
       manager._classifyInnerFaces(geometry)
 
       const attr = geometry.getAttribute('aIsInner')
       expect(attr).toBeDefined()
-      expect(attr.count).toBe(42)
+      // face 0: dot < 0 AND concaveEdgeCount >= 1 → baseline inner
       expect(attr.getX(0)).toBe(1)
-      expect(attr.getX(1)).toBe(1)
-      expect(attr.getX(2)).toBe(1)
-      for (let v = 6; v < 42; v += 3) {
+      // face 1: dot > 0 but promoted across concave edge (nDot = -1) from face 0
+      expect(attr.getX(3)).toBe(1)
+      // outer faces: dot >> 0, no concave edges → outer
+      for (let v = 6; v < attr.count; v += 3) {
         expect(attr.getX(v)).toBe(0)
       }
     })
 
-    it('concave-edge correction reclassifies borderline face adjacent to inner face', () => {
-      const geometry = buildCavityGeometry()
+    it('coplanar smoothing eliminates isolated mismatches via majority vote', () => {
+      const positions = new Float32Array([
+        // 3 coplanar faces sharing edges (grid), all with dot < 0 → baseline inner
+        0, 0, 0.5,  2, 0, 0.5,  0, 2, 0.5,
+        2, 0, 0.5,  2, 2, 0.5,  0, 2, 0.5,
+        2, 0, 0.5,  4, 0, 0.5,  2, 2, 0.5,
+        // face 3: same normal but forced dot > 0 by placing far from origin
+        40, 0, 0,  42, 0, 0,  41, 1, 0,
+      ])
+      const normals = new Float32Array([
+        0, 0, -1,  0, 0, -1,  0, 0, -1,
+        0, 0, -1,  0, 0, -1,  0, 0, -1,
+        0, 0, -1,  0, 0, -1,  0, 0, -1,
+        0, 0, -1,  0, 0, -1,  0, 0, -1,
+      ])
+      const geometry = new BufferGeometry()
+      geometry.setAttribute('position', new Float32BufferAttribute(positions, 3))
+      geometry.setAttribute('normal', new Float32BufferAttribute(normals, 3))
       manager._classifyInnerFaces(geometry)
 
       const attr = geometry.getAttribute('aIsInner')
+      // faces 0-2: connected coplanar component, all dot < 0 → all inner
       expect(attr.getX(0)).toBe(1)
       expect(attr.getX(3)).toBe(1)
+      expect(attr.getX(6)).toBe(1)
+      // face 3: disconnected, dot > 0 → outer (not affected by smoothing of faces 0-2)
+      expect(attr.getX(9)).toBe(0)
     })
   })
 
@@ -3100,5 +3137,84 @@ describe('Visual Parity — desktop OpenSCAD alignment (Phase 5)', () => {
       manager._firePostLoadListeners()
       expect(spy).not.toHaveBeenCalled()
     })
+  })
+})
+
+describe('loadOFF() heuristic skip — CSG color preprocessing', () => {
+  let container
+  let manager
+
+  beforeEach(async () => {
+    container = document.createElement('div')
+    container.style.width = '800px'
+    container.style.height = '600px'
+    document.body.appendChild(container)
+    localStorage.clear()
+    manager = new PreviewManager(container)
+    await manager.init()
+  })
+
+  afterEach(() => {
+    document.body.removeChild(container)
+    localStorage.clear()
+  })
+
+  const OFF_WITHOUT_COLORS = [
+    'OFF',
+    '4 2 0',
+    '0 0 0',
+    '1 0 0',
+    '0 1 0',
+    '0 0 1',
+    '3 0 1 2',
+    '3 0 2 3',
+  ].join('\n')
+
+  const OFF_WITH_FACE_COLORS = [
+    'OFF',
+    '4 2 0',
+    '0 0 0',
+    '1 0 0',
+    '0 1 0',
+    '0 0 1',
+    '3 0 1 2 249 215 44 255',
+    '3 0 2 3 157 203 81 255',
+  ].join('\n')
+
+  it('calls _classifyInnerFaces when OFF has no face colors', async () => {
+    const spy = vi.spyOn(manager, '_classifyInnerFaces')
+
+    const { hasColors } = await manager.loadOFF(OFF_WITHOUT_COLORS)
+
+    expect(hasColors).toBe(false)
+    expect(spy).toHaveBeenCalledTimes(1)
+  })
+
+  it('skips _classifyInnerFaces when OFF has per-face colors', async () => {
+    const spy = vi.spyOn(manager, '_classifyInnerFaces')
+
+    const { hasColors } = await manager.loadOFF(OFF_WITH_FACE_COLORS)
+
+    expect(hasColors).toBe(true)
+    expect(spy).not.toHaveBeenCalled()
+  })
+
+  it('applies vertex colors from OFF face color data', async () => {
+    await manager.loadOFF(OFF_WITH_FACE_COLORS)
+
+    const geometry = manager.mesh?.geometry
+    expect(geometry).toBeDefined()
+    const colorAttr = geometry.getAttribute('color')
+    expect(colorAttr).toBeDefined()
+    expect(colorAttr.count).toBeGreaterThan(0)
+  })
+
+  it('applies _classifyInnerFaces aIsInner attribute for colorless OFF', async () => {
+    await manager.loadOFF(OFF_WITHOUT_COLORS)
+
+    const geometry = manager.mesh?.geometry
+    expect(geometry).toBeDefined()
+    const innerAttr = geometry.getAttribute('aIsInner')
+    expect(innerAttr).toBeDefined()
   })
 })

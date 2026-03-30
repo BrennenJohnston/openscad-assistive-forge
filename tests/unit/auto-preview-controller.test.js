@@ -1212,4 +1212,303 @@ describe('AutoPreviewController', () => {
       )
     })
   })
+
+  describe('injectCsgColors() static method', () => {
+    const GOLD = '#f9d72c';
+    const GREEN = '#9dcb51';
+
+    it('returns null unchanged', () => {
+      expect(AutoPreviewController.injectCsgColors(null)).toBeNull()
+    })
+
+    it('returns non-string input unchanged', () => {
+      expect(AutoPreviewController.injectCsgColors(undefined)).toBeUndefined()
+      expect(AutoPreviewController.injectCsgColors(42)).toBe(42)
+    })
+
+    it('wraps simple SCAD without difference() in gold only', () => {
+      const result = AutoPreviewController.injectCsgColors('cube(10);')
+
+      expect(result).toContain(`color("${GOLD}")`)
+      expect(result).toContain('cube(10);')
+      expect(result).not.toContain(`color("${GREEN}")`)
+    })
+
+    it('wraps subtracted children in green for single difference()', () => {
+      const scad = 'difference() { cube(20); cube(10); }'
+      const result = AutoPreviewController.injectCsgColors(scad)
+
+      expect(result).toContain(`color("${GOLD}")`)
+      expect(result).toContain(`color("${GREEN}")`)
+      expect(result).toContain('cube(20);')
+      expect(result).toContain('cube(10);')
+    })
+
+    it('wraps all children after first in green for multi-child difference()', () => {
+      const scad = 'difference() { cube(30); cube(20); sphere(5); }'
+      const result = AutoPreviewController.injectCsgColors(scad)
+
+      const greenIdx = result.indexOf(`color("${GREEN}")`);
+      expect(greenIdx).toBeGreaterThan(-1)
+      const afterGreen = result.slice(greenIdx);
+      expect(afterGreen).toContain('cube(20)')
+      expect(afterGreen).toContain('sphere(5)')
+    })
+
+    it('handles nested difference() blocks', () => {
+      const scad = [
+        'difference() {',
+        '  union() {',
+        '    cube(30);',
+        '    difference() { cube(20); cylinder(r=5, h=10); }',
+        '  }',
+        '  sphere(8);',
+        '}'
+      ].join('\n')
+      const result = AutoPreviewController.injectCsgColors(scad)
+
+      const greenCount = (result.match(new RegExp(`color\\("${GREEN.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"\\)`, 'g')) || []).length
+      expect(greenCount).toBe(2)
+    })
+
+    it('does not inject green when difference() has only one child', () => {
+      const scad = 'difference() { cube(10); }'
+      const result = AutoPreviewController.injectCsgColors(scad)
+
+      expect(result).toContain(`color("${GOLD}")`)
+      expect(result).not.toContain(`color("${GREEN}")`)
+    })
+
+    it('does not inject green when difference() has only whitespace after first child', () => {
+      const scad = 'difference() { cube(10);   }'
+      const result = AutoPreviewController.injectCsgColors(scad)
+
+      expect(result).not.toContain(`color("${GREEN}")`)
+    })
+
+    it('ignores difference() inside comments', () => {
+      const scad = '// difference() { cube(20); cube(10); }\ncube(5);'
+      const result = AutoPreviewController.injectCsgColors(scad)
+
+      expect(result).toContain(`color("${GOLD}")`)
+      expect(result).not.toContain(`color("${GREEN}")`)
+    })
+
+    it('ignores difference() inside block comments', () => {
+      const scad = '/* difference() { cube(20); cube(10); } */ sphere(5);'
+      const result = AutoPreviewController.injectCsgColors(scad)
+
+      expect(result).toContain(`color("${GOLD}")`)
+      expect(result).not.toContain(`color("${GREEN}")`)
+    })
+
+    it('ignores difference() inside string literals', () => {
+      const scad = 'text("difference() { cube(20); cube(10); }");'
+      const result = AutoPreviewController.injectCsgColors(scad)
+
+      expect(result).toContain(`color("${GOLD}")`)
+      expect(result).not.toContain(`color("${GREEN}")`)
+    })
+
+    it('handles difference() with block child (curly-brace terminated first child)', () => {
+      const scad = 'difference() { union() { cube(20); sphere(5); } cylinder(r=3, h=15); }'
+      const result = AutoPreviewController.injectCsgColors(scad)
+
+      expect(result).toContain(`color("${GREEN}")`)
+      const greenIdx = result.indexOf(`color("${GREEN}")`);
+      const afterGreen = result.slice(greenIdx);
+      expect(afterGreen).toContain('cylinder')
+    })
+
+    it('preserves original source structure', () => {
+      const scad = 'cube(10);'
+      const result = AutoPreviewController.injectCsgColors(scad)
+
+      expect(result.startsWith(`color("${GOLD}") {\n`)).toBe(true)
+      expect(result.endsWith('\n}')).toBe(true)
+    })
+  })
+
+  describe('CSG Color Preprocessing — Preview Format Decision', () => {
+    beforeEach(() => {
+      renderController.getCapabilities = vi.fn(() => ({
+        hasRenderColorsFlag: true
+      }))
+      renderController.renderPreview.mockResolvedValue({
+        stl: new ArrayBuffer(8),
+        stats: { triangles: 12 },
+        format: 'off'
+      })
+    })
+
+    afterEach(() => {
+      isFlagEnabled.mockReset()
+    })
+
+    it('uses OFF format and injects CSG colors when no color() calls in SCAD', async () => {
+      isFlagEnabled.mockReturnValue(false)
+      controller.setScadContent('cube(10);')
+      const params = { width: 10 }
+      const paramHash = controller.hashParams(params)
+      controller.currentParamHash = paramHash
+      controller.currentPreviewKey = `${paramHash}|model`
+
+      await controller.renderPreview(params, paramHash)
+
+      const [source, , options] = renderController.renderPreview.mock.calls[0]
+      expect(options.outputFormat).toBe('off')
+      expect(source).toContain('color("#f9d72c")')
+      expect(source).toContain('cube(10);')
+    })
+
+    it('uses OFF format with strip+inject when color() present and passthrough off', async () => {
+      isFlagEnabled.mockReturnValue(false)
+      controller.setScadContent('color("red") cube(10);')
+      const params = { width: 10 }
+      const paramHash = controller.hashParams(params)
+      controller.currentParamHash = paramHash
+      controller.currentPreviewKey = `${paramHash}|model`
+
+      await controller.renderPreview(params, paramHash)
+
+      const [source, , options] = renderController.renderPreview.mock.calls[0]
+      expect(options.outputFormat).toBe('off')
+      expect(source).toContain('color("#f9d72c")')
+      expect(source).not.toMatch(/color\s*\(\s*"red"\s*\)/)
+    })
+
+    it('uses OFF format with original source when color() present and passthrough on', async () => {
+      isFlagEnabled.mockImplementation((flag) => flag === 'color_passthrough')
+      controller.setScadContent('color("red") cube(10);')
+      const params = { width: 10 }
+      const paramHash = controller.hashParams(params)
+      controller.currentParamHash = paramHash
+      controller.currentPreviewKey = `${paramHash}|model`
+
+      await controller.renderPreview(params, paramHash)
+
+      const [source, , options] = renderController.renderPreview.mock.calls[0]
+      expect(options.outputFormat).toBe('off')
+      expect(source).toBe('color("red") cube(10);')
+    })
+
+    it('falls back to STL when render-colors not supported and no color() calls', async () => {
+      renderController.getCapabilities = vi.fn(() => ({
+        hasRenderColorsFlag: false
+      }))
+      isFlagEnabled.mockReturnValue(false)
+      controller.setScadContent('cube(10);')
+      const params = { width: 10 }
+      const paramHash = controller.hashParams(params)
+      controller.currentParamHash = paramHash
+      controller.currentPreviewKey = `${paramHash}|model`
+
+      renderController.renderPreview.mockResolvedValue({
+        stl: new ArrayBuffer(8),
+        stats: { triangles: 12 },
+        format: 'stl'
+      })
+
+      await controller.renderPreview(params, paramHash)
+
+      const [source, , options] = renderController.renderPreview.mock.calls[0]
+      expect(options.outputFormat).toBe('stl')
+      expect(source).toBe('cube(10);')
+    })
+  })
+
+  describe('CSG Color Preprocessing — Full Render Format Decision', () => {
+    beforeEach(() => {
+      renderController.getCapabilities = vi.fn(() => ({
+        hasRenderColorsFlag: true
+      }))
+      renderController.renderFull = vi.fn().mockResolvedValue({
+        stl: new ArrayBuffer(32),
+        stats: { triangles: 42 },
+        format: 'off',
+        consoleOutput: '',
+      })
+      previewManager.loadOFF = vi.fn().mockResolvedValue()
+      previewManager.loadSTL = vi.fn().mockResolvedValue()
+      previewManager.setRenderState = vi.fn()
+      previewManager.colorOverrideEnabled = false
+      previewManager._getPrimaryGeometry = vi.fn(() => null)
+    })
+
+    afterEach(() => {
+      isFlagEnabled.mockReset()
+    })
+
+    it('uses OFF format and injects CSG colors for full render when no color() calls', async () => {
+      isFlagEnabled.mockReturnValue(false)
+      controller.setScadContent('cube(10);')
+
+      await controller.renderFull({ width: 10 })
+
+      const [source, , options] = renderController.renderFull.mock.calls[0]
+      expect(options.outputFormat).toBe('off')
+      expect(source).toContain('color("#f9d72c")')
+      expect(source).toContain('cube(10);')
+    })
+
+    it('uses OFF format with strip+inject for full render when color() present and passthrough off', async () => {
+      isFlagEnabled.mockReturnValue(false)
+      controller.setScadContent('color("blue") sphere(5);')
+
+      await controller.renderFull({ width: 10 })
+
+      const [source, , options] = renderController.renderFull.mock.calls[0]
+      expect(options.outputFormat).toBe('off')
+      expect(source).toContain('color("#f9d72c")')
+      expect(source).not.toMatch(/color\s*\(\s*"blue"\s*\)/)
+    })
+
+    it('uses OFF format with original source for full render when color() present and passthrough on', async () => {
+      isFlagEnabled.mockImplementation((flag) => flag === 'color_passthrough')
+      controller.setScadContent('color("red") cube(10);')
+
+      await controller.renderFull({ width: 10 })
+
+      expect(renderController.renderFull).toHaveBeenCalledWith(
+        'color("red") cube(10);',
+        { width: 10 },
+        expect.objectContaining({
+          outputFormat: 'off',
+        })
+      )
+    })
+
+    it('falls back to no outputFormat when render-colors not supported and no passthrough', async () => {
+      renderController.getCapabilities = vi.fn(() => ({
+        hasRenderColorsFlag: false
+      }))
+      isFlagEnabled.mockReturnValue(false)
+      controller.setScadContent('cube(10);')
+
+      renderController.renderFull.mockResolvedValue({
+        stl: new ArrayBuffer(32),
+        stats: { triangles: 42 },
+        format: 'stl',
+        consoleOutput: '',
+      })
+
+      await controller.renderFull({ width: 10 })
+
+      const callOptions = renderController.renderFull.mock.calls[0][2]
+      expect(callOptions.outputFormat).toBeUndefined()
+    })
+
+    it('updates project files map when CSG colors are injected and project files exist', async () => {
+      isFlagEnabled.mockReturnValue(false)
+      const files = new Map([['main.scad', 'cube(10);']])
+      controller.setProjectFiles(files, 'main.scad')
+      controller.setScadContent('cube(10);')
+
+      await controller.renderFull({ width: 10 })
+
+      const callOptions = renderController.renderFull.mock.calls[0][2]
+      expect(callOptions.files).toBeInstanceOf(Map)
+      expect(callOptions.files.get('main.scad')).toContain('color("#f9d72c")')
+    })
+  })
 })
