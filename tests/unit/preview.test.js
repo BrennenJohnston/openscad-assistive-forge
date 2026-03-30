@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { MeshPhongMaterial, DoubleSide } from 'three'
+import { MeshPhongMaterial, DoubleSide, BufferGeometry, Float32BufferAttribute } from 'three'
 import { PreviewManager, isThreeJsLoaded, DESKTOP_SHININESS, CORNFIELD_BACK_COLOR } from '../../src/js/preview.js'
 
 describe('PreviewManager', () => {
@@ -3027,6 +3027,56 @@ describe('Visual Parity — desktop OpenSCAD alignment (Phase 5)', () => {
       manager._syncColorOverride()
       const expectedHex = 0x3d8a44
       expect(material.userData.backfaceColorUniform.value.getHex()).toBe(expectedHex)
+    })
+  })
+
+  describe('_classifyInnerFaces CPU-side classifier', () => {
+    function buildCavityGeometry() {
+      const outerPos = []
+      const outerNrm = []
+      for (let i = 0; i < 12; i++) {
+        const x = 20 + i * 3
+        outerPos.push(x, 0, 0, x, 1, 0, x, 0, 1)
+        outerNrm.push(1, 0, 0, 1, 0, 0, 1, 0, 0)
+      }
+      const positions = new Float32Array([
+        0, 0, 2,  1, 0, 2,  0.5, 1, 2,
+        0, 0, 2,  1, 0, 2,  0.5, -5, 3,
+        ...outerPos,
+      ])
+      const normals = new Float32Array([
+        0, 0, -1,  0, 0, -1,  0, 0, -1,
+        0, 0, 1,   0, 0, 1,   0, 0, 1,
+        ...outerNrm,
+      ])
+      const geometry = new BufferGeometry()
+      geometry.setAttribute('position', new Float32BufferAttribute(positions, 3))
+      geometry.setAttribute('normal', new Float32BufferAttribute(normals, 3))
+      return geometry
+    }
+
+    it('sets aIsInner attribute on geometry with concave cavity', () => {
+      const geometry = buildCavityGeometry()
+      manager._classifyInnerFaces(geometry)
+
+      const attr = geometry.getAttribute('aIsInner')
+      expect(attr).toBeDefined()
+      expect(attr.count).toBe(42)
+      expect(attr.getX(0)).toBe(1)
+      expect(attr.getX(1)).toBe(1)
+      expect(attr.getX(2)).toBe(1)
+      for (let v = 6; v < 42; v += 3) {
+        expect(attr.getX(v)).toBe(0)
+      }
+    })
+
+    it('concave-edge correction reclassifies borderline face adjacent to inner face', () => {
+      const geometry = buildCavityGeometry()
+      manager._classifyInnerFaces(geometry)
+
+      const attr = geometry.getAttribute('aIsInner')
+      expect(attr.getX(0)).toBe(1)
+      expect(attr.getX(3)).toBe(1)
     })
   })
 
