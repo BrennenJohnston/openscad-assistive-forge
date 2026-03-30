@@ -736,6 +736,79 @@ export class AutoPreviewController {
   }
 
   /**
+   * Inject ThrownTogether-style CSG colors into SCAD source. Wraps the entire
+   * source in gold (positive body) and wraps the subtracted children (2nd+) of
+   * each difference() block in green (subtracted body). Uses balanced-brace
+   * scanning on a comment/string-stripped copy so that difference() inside
+   * comments or string literals is ignored.
+   *
+   * @param {string} scadContent - OpenSCAD source code without user color() calls
+   * @returns {string} Source with injected gold/green color() wrappers
+   */
+  static injectCsgColors(scadContent) {
+    if (!scadContent || typeof scadContent !== 'string') return scadContent;
+
+    const GOLD = '#f9d72c';
+    const GREEN = '#9dcb51';
+
+    const cleaned = AutoPreviewController.stripCommentsAndStrings(scadContent);
+    const diffPattern = /\bdifference\s*\(\s*\)/g;
+    const ops = [];
+
+    let match;
+    while ((match = diffPattern.exec(cleaned)) !== null) {
+      const afterParen = match.index + match[0].length;
+
+      let openBrace = afterParen;
+      while (openBrace < cleaned.length && /\s/.test(cleaned[openBrace])) {
+        openBrace++;
+      }
+      if (openBrace >= cleaned.length || cleaned[openBrace] !== '{') continue;
+
+      let depth = 0;
+      let closeBrace = -1;
+      let firstChildEnd = -1;
+
+      for (let i = openBrace; i < cleaned.length; i++) {
+        const ch = cleaned[i];
+        if (ch === '{') {
+          depth++;
+        } else if (ch === '}') {
+          depth--;
+          if (depth === 0) {
+            closeBrace = i;
+            break;
+          }
+          if (firstChildEnd === -1 && depth === 1) {
+            firstChildEnd = i + 1;
+          }
+        } else if (ch === ';' && firstChildEnd === -1 && depth === 1) {
+          firstChildEnd = i + 1;
+        }
+      }
+
+      if (closeBrace === -1 || firstChildEnd === -1) continue;
+
+      const between = scadContent.slice(firstChildEnd, closeBrace).trim();
+      if (between.length === 0) continue;
+
+      ops.push({ pos: closeBrace, text: ` }` });
+      ops.push({ pos: firstChildEnd, text: ` color("${GREEN}") {` });
+    }
+
+    ops.sort((a, b) => b.pos - a.pos);
+
+    let result = scadContent;
+    for (const op of ops) {
+      result = result.slice(0, op.pos) + op.text + result.slice(op.pos);
+    }
+
+    result = `color("${GOLD}") {\n${result}\n}`;
+
+    return result;
+  }
+
+  /**
    * Strip comments and string literals while preserving overall structure.
    * This enables lightweight source scanning without false-positives from
    * `#` inside comments/strings.
