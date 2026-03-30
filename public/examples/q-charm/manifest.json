@@ -62,6 +62,11 @@
   "inspired_by": {
     "name": "Nasif Zaman",
     "github": "Znasif",
-    "reference": "https://github.com/Znasif/openscad-assistive-forge"
+    "reference": "https://github.com/Znasif/openscad-assistive-forge",
+    "hackathon": {
+      "name": "Adaptive Solutions Mini-Hackathon",
+      "team": "HuskyADAPT",
+      "url": "https://create.uw.edu/adaptive-solutions-mini-hackathon/"
+    }
   }
 }

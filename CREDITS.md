@@ -89,6 +89,20 @@ inspired by a proof-of-concept built by **Nasif Zaman**
   "charm-customizer"`), the File > Examples submenu, and the welcome
   screen card. Each SCAD file's header comment credits Nasif by name.
 
+### HuskyADAPT Team & Adaptive Solutions Mini-Hackathon
+
+The Charm Customizer tools grew out of the **Adaptive Solutions
+Mini-Hackathon**, a collaboration between UW CREATE, King County Library
+System (KCLS), and the **HuskyADAPT** student team at the University of
+Washington.
+
+- **Event**: Adaptive Solutions Mini-Hackathon
+- **URL**: https://create.uw.edu/adaptive-solutions-mini-hackathon/
+- **Organizers**: UW CREATE, King County Library System
+- **Team**: HuskyADAPT (University of Washington)
+- **Context**: The hackathon paired community members who use assistive
+  technology with engineering students to co-design practical solutions.
+
 ---
 
 ## Special Thanks
