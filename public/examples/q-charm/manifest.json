@@ -1,5 +1,5 @@
 {
-  "name": "Q Charm",
+  "name": "Bracelet Clip Charm",
   "description": "A C-shaped clip-on charm for silicone bracelets. Snap it onto a band and personalize the face with engraved or raised designs from SVG images.",
   "version": "2.0.0",
   "author": "OpenSCAD Assistive Forge contributors",
@@ -57,8 +57,8 @@
       ]
     }
   ],
-  "program": "nasifs-charm-maker",
-  "tags": ["charm", "bracelet", "clip", "wearable", "dxf", "svg", "import", "engraving", "c-shape", "nasif"],
+  "program": "charm-customizer",
+  "tags": ["charm", "bracelet", "clip", "wearable", "dxf", "svg", "import", "engraving", "c-shape"],
   "inspired_by": {
     "name": "Nasif Zaman",
     "github": "Znasif",

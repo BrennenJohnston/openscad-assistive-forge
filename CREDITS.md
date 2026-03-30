@@ -60,7 +60,7 @@ Cursor icons are adapted from the **Retrosmart X11 Cursors** project by mdomlop.
 
 ---
 
-## Nasif's Charm Maker Program — Concept, Proof-of-Concept, and UX Design
+## Charm Customizer Program — Concept, Proof-of-Concept, and UX Design
 
 The image-to-OpenSCAD import feature and the charm builder tools were
 inspired by a proof-of-concept built by **Nasif Zaman**
@@ -77,16 +77,16 @@ inspired by a proof-of-concept built by **Nasif Zaman**
   OpenSCAD `import()`. The Forge's client-side image pipeline using
   imagetracerjs serves the same purpose without a server dependency.
 - **Named program**: Three example tools are grouped under the
-  **"Nasif's Charm Maker"** program in his honor:
-  - **Nasif's Charm Maker** (`public/examples/nasif-charm-maker/`) —
+  **"Charm Customizer"** program:
+  - **Charm Customizer** (`public/examples/nasif-charm-maker/`) —
     flat pendant/charm with SVG designs
-  - **Q-Charm** (`public/examples/q-charm/`) — C-clip bracelet charm
+  - **Bracelet Clip Charm** (`public/examples/q-charm/`) — C-clip bracelet charm
     with parametric fit, dual-layer SVG, and text support
   - **Logo Plate** (`public/examples/logo-plate/`) — parametric plate
     with engraved SVG logo
 
   The program name appears in each tool's manifest (`"program":
-  "nasifs-charm-maker"`), the File > Examples submenu, and the welcome
+  "charm-customizer"`), the File > Examples submenu, and the welcome
   screen card. Each SCAD file's header comment credits Nasif by name.
 
 ---

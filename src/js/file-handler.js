@@ -172,7 +172,7 @@ export const EXAMPLE_DEFINITIONS = {
   'nasif-charm-maker': {
     path: '/examples/nasif-charm-maker/nasif_charm_maker.scad',
     name: 'nasif_charm_maker.scad',
-    description: "Nasif's Charm Maker",
+    description: 'Charm Customizer',
     manifest: '/examples/nasif-charm-maker/manifest.json',
     additionalFiles: [
       '/examples/nasif-charm-maker/svg-library/heart.svg',
@@ -192,7 +192,7 @@ export const EXAMPLE_DEFINITIONS = {
   'q-charm': {
     path: '/examples/q-charm/q_charm.scad',
     name: 'q_charm.scad',
-    description: 'Q Charm (Bracelet Clip)',
+    description: 'Bracelet Clip Charm',
     manifest: '/examples/q-charm/manifest.json',
     additionalFiles: [
       '/examples/q-charm/q_Charm_L.dxf',
@@ -217,8 +217,8 @@ export const EXAMPLE_DEFINITIONS = {
 // ---------------------------------------------------------------------------
 
 export const PROGRAM_DEFINITIONS = {
-  'nasifs-charm-maker': {
-    label: "Nasif's Charm Maker",
+  'charm-customizer': {
+    label: 'Charm Customizer',
     examples: ['nasif-charm-maker', 'q-charm', 'logo-plate'],
   },
 };

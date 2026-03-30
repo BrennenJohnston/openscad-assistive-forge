@@ -1,4 +1,4 @@
-// Q Charm — Parametric C-Clip Bracelet Charm
+// Bracelet Clip Charm — Parametric C-Clip Bracelet Charm
 // C-shaped clip-on charm for silicone bracelets with customizable design.
 // Profile stands vertically; the outer surface faces up for engraving.
 // Concept inspired by Nasif Zaman's image-to-OpenSCAD proof-of-concept.
