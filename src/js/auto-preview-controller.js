@@ -1033,29 +1033,52 @@ export class AutoPreviewController {
 
     this.setState(PREVIEW_STATE.RENDERING);
 
-    // ENH-A: Use COFF (Color OFF) format when the flag is enabled and the
-    // SCAD source contains color() calls OR the # debug modifier. The #
-    // modifier needs OFF so the dual-render overlay can be applied even
-    // when color() is absent from the source.
     const hasDebugModifier = AutoPreviewController.scadUsesDebugModifier(
       this.currentScadContent
     );
-    const useColorPassthrough =
-      isFlagEnabled('color_passthrough') &&
-      (AutoPreviewController.scadUsesColor(this.currentScadContent) ||
-        hasDebugModifier);
-    const previewOutputFormat = useColorPassthrough ? 'off' : 'stl';
+    const hasColorCalls = AutoPreviewController.scadUsesColor(
+      this.currentScadContent
+    );
+    const colorPassthroughEnabled = isFlagEnabled('color_passthrough');
+    const supportsRenderColors = Boolean(
+      this.renderController?.getCapabilities?.()?.hasRenderColorsFlag
+    );
+
+    let previewOutputFormat;
+    let scadForPreview = this.currentScadContent;
+    let filesForPreview = this.projectFiles;
+    let csgColorsInjected = false;
+
+    if (supportsRenderColors) {
+      previewOutputFormat = 'off';
+      if (!hasColorCalls || !colorPassthroughEnabled) {
+        scadForPreview = AutoPreviewController.injectCsgColors(
+          hasColorCalls
+            ? AutoPreviewController.stripColorCalls(this.currentScadContent)
+            : this.currentScadContent
+        );
+        csgColorsInjected = true;
+        if (this.projectFiles && this.mainFilePath) {
+          filesForPreview = new Map(this.projectFiles);
+          filesForPreview.set(this.mainFilePath, scadForPreview);
+        }
+      }
+    } else {
+      const useColorPassthrough =
+        colorPassthroughEnabled && (hasColorCalls || hasDebugModifier);
+      previewOutputFormat = useColorPassthrough ? 'off' : 'stl';
+    }
 
     let renderFailed = false;
     try {
       const startTime = Date.now();
       const result = await this.renderController.renderPreview(
-        this.currentScadContent,
+        scadForPreview,
         previewParameters,
         {
           ...(quality ? { quality } : {}),
           outputFormat: previewOutputFormat,
-          files: this.projectFiles,
+          files: filesForPreview,
           mainFile: this.mainFilePath,
           libraries: this.enabledLibraries,
           paramTypes: this.paramTypes,
@@ -1083,7 +1106,8 @@ export class AutoPreviewController {
       // isn't visually useful. Re-render with color() calls stripped so the
       // Manifold CSG engine assigns per-operation face colors instead.
       let activeResult = result;
-      if ((result.format || 'stl') === 'off' && useColorPassthrough) {
+      const useAuthorColors = hasColorCalls && colorPassthroughEnabled && !csgColorsInjected;
+      if ((result.format || 'stl') === 'off' && useAuthorColors) {
         const uniqueColors = AutoPreviewController.countUniqueOFFColors(
           result.stl
         );
@@ -1092,8 +1116,8 @@ export class AutoPreviewController {
             '[AutoPreview] Monochrome OFF detected (1 unique color) — ' +
               're-rendering with stripped color() for CSG face colors'
           );
-          const strippedSource = AutoPreviewController.stripColorCalls(
-            this.currentScadContent
+          const strippedSource = AutoPreviewController.injectCsgColors(
+            AutoPreviewController.stripColorCalls(this.currentScadContent)
           );
           let strippedFiles = this.projectFiles;
           if (this.projectFiles && this.mainFilePath) {
@@ -1357,18 +1381,41 @@ export class AutoPreviewController {
       };
     }
 
-    // Use COFF (Color OFF) format for the preview when color passthrough is
-    // active, mirroring the same logic used in renderPreview() (lines 844-855).
     const hasDebugModifier = AutoPreviewController.scadUsesDebugModifier(
       this.currentScadContent
     );
-    const useColorPassthrough =
-      isFlagEnabled('color_passthrough') &&
-      (AutoPreviewController.scadUsesColor(this.currentScadContent) ||
-        hasDebugModifier);
+    const hasColorCalls = AutoPreviewController.scadUsesColor(
+      this.currentScadContent
+    );
+    const colorPassthroughEnabled = isFlagEnabled('color_passthrough');
+    const supportsRenderColors = Boolean(
+      this.renderController?.getCapabilities?.()?.hasRenderColorsFlag
+    );
 
-    const scadContentForRender = this.currentScadContent;
-    const filesForRender = this.projectFiles;
+    let fullOutputFormat;
+    let scadContentForRender = this.currentScadContent;
+    let filesForRender = this.projectFiles;
+    let csgColorsInjected = false;
+
+    if (supportsRenderColors) {
+      fullOutputFormat = 'off';
+      if (!hasColorCalls || !colorPassthroughEnabled) {
+        scadContentForRender = AutoPreviewController.injectCsgColors(
+          hasColorCalls
+            ? AutoPreviewController.stripColorCalls(this.currentScadContent)
+            : this.currentScadContent
+        );
+        csgColorsInjected = true;
+        if (this.projectFiles && this.mainFilePath) {
+          filesForRender = new Map(this.projectFiles);
+          filesForRender.set(this.mainFilePath, scadContentForRender);
+        }
+      }
+    } else {
+      const useColorPassthrough =
+        colorPassthroughEnabled && (hasColorCalls || hasDebugModifier);
+      fullOutputFormat = useColorPassthrough ? 'off' : undefined;
+    }
 
     const renderOptions = {
       files: filesForRender,
@@ -1376,27 +1423,25 @@ export class AutoPreviewController {
       libraries: this.enabledLibraries,
       paramTypes: this.paramTypes,
       ...(quality ? { quality } : {}),
-      ...(useColorPassthrough ? { outputFormat: 'off' } : {}),
+      ...(fullOutputFormat ? { outputFormat: fullOutputFormat } : {}),
       onProgress: (percent, message) => {
         this.onProgress(percent, message, 'full');
       },
     };
 
-    // Perform full render (OFF when color passthrough active, STL otherwise)
     let result = await this.renderController.renderFull(
       scadContentForRender,
       parameters,
       renderOptions
     );
 
-    if (useColorPassthrough) {
-      console.log('[AutoPreview] Full render using OFF for color passthrough');
+    if (fullOutputFormat === 'off') {
+      console.log('[AutoPreview] Full render using OFF format');
     }
 
-    // Monochrome fallback: same logic as renderPreview() — if the OFF output
-    // has only 1 unique face color, strip color() and re-render for CSG colors.
+    const useAuthorColors = hasColorCalls && colorPassthroughEnabled && !csgColorsInjected;
     if (
-      useColorPassthrough &&
+      useAuthorColors &&
       (result.format || 'stl') === 'off' &&
       AutoPreviewController.countUniqueOFFColors(result.stl) === 1
     ) {
@@ -1404,8 +1449,8 @@ export class AutoPreviewController {
         '[AutoPreview] Full render monochrome OFF detected — ' +
           're-rendering with stripped color() for CSG face colors'
       );
-      const strippedSource = AutoPreviewController.stripColorCalls(
-        this.currentScadContent
+      const strippedSource = AutoPreviewController.injectCsgColors(
+        AutoPreviewController.stripColorCalls(this.currentScadContent)
       );
       let strippedFiles = this.projectFiles;
       if (this.projectFiles && this.mainFilePath) {
@@ -1514,9 +1559,10 @@ export class AutoPreviewController {
       );
     }
 
-    // When color passthrough rendered OFF for preview, perform a second STL
-    // render so getCurrentFullSTL() returns valid STL data for download.
-    if (useColorPassthrough && (result.format || 'stl') === 'off') {
+    // When the full render produced OFF (for CSG colors or author colors),
+    // perform a second STL render so getCurrentFullSTL() returns valid STL
+    // data for download.
+    if ((result.format || 'stl') === 'off') {
       try {
         const stlResult = await this.renderController.renderFull(
           this.currentScadContent,
