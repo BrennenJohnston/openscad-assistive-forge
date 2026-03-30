@@ -1,5 +1,5 @@
 /**
- * Integration tests for Q-Charm and Nasif's Charm Maker program
+ * Integration tests for Bracelet Clip Charm and Charm Customizer program
  *
  * Validates:
  * - q_charm.scad parses without errors and yields expected parameters
@@ -314,11 +314,11 @@ describe('Charm Maker program manifests', () => {
         expect(manifest.files.length).toBeGreaterThan(0);
       });
 
-      it('has program field set to nasifs-charm-maker', () => {
+      it('has program field set to charm-customizer', () => {
         const fullPath = join(PUBLIC_DIR, path);
         manifest = JSON.parse(readFileSync(fullPath, 'utf-8'));
 
-        expect(manifest.program).toBe('nasifs-charm-maker');
+        expect(manifest.program).toBe('charm-customizer');
       });
 
       it('has inspired_by attribution', () => {

@@ -552,11 +552,11 @@ describe('Saved Projects Manager', () => {
 
     it('should persist sourceExampleKey through save/get round-trip', async () => {
       const result = await saveProject({
-        name: 'Q-Charm Project',
+        name: 'Bracelet Clip Charm Project',
         originalName: 'q-charm.scad',
         kind: 'scad',
         mainFilePath: 'q-charm.scad',
-        content: '// Q-Charm',
+        content: '// Bracelet Clip Charm',
         notes: '',
         sourceExampleKey: 'q-charm',
       });

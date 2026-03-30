@@ -111,7 +111,7 @@ test.describe('Welcome Screen Examples', () => {
   })
 })
 
-test.describe('Q-Charm Smoke Tests', () => {
+test.describe('Bracelet Clip Charm Smoke Tests', () => {
   test('loads q-charm via deep-link and shows parameter groups', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
 
@@ -123,7 +123,7 @@ test.describe('Q-Charm Smoke Tests', () => {
     await expect(page.locator('.param-control').first()).toBeVisible({ timeout: 10000 })
   })
 
-  test('welcome screen has Charm Maker card with variant selector including Q-Charm', async ({ page }) => {
+  test('welcome screen has Charm Customizer card with variant selector including Bracelet Clip Charm', async ({ page }) => {
     await page.goto('/')
 
     const variantSelect = page.locator('#charmVariantSelect')

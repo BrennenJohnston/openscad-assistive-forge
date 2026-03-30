@@ -21,7 +21,7 @@
  * running (`pixi run dev`).
  *
  * 1. Navigate to `/?example=q-charm&flag_svg_preparer=true`
- * 2. Wait for Q-Charm to load and parameters to appear
+ * 2. Wait for Bracelet Clip Charm to load and parameters to appear
  * 3. In the SVG gallery, select "Smiley face"
  * 4. Verify the "Prepare SVG..." button appears next to the file parameter
  * 5. Click "Prepare SVG..." — the dialog should open
@@ -93,7 +93,7 @@ test.describe('SVG Preparer — Asset Verification', () => {
     }
   })
 
-  test('Q-Charm manifest references SVG library with 12 options', async ({ page }) => {
+  test('Bracelet Clip Charm manifest references SVG library with 12 options', async ({ page }) => {
     const response = await page.request.get('/examples/q-charm/manifest.json')
     expect(response.ok()).toBe(true)
     const manifest = await response.json()

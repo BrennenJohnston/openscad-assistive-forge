@@ -703,7 +703,7 @@ test.describe('Screen Reader Support', () => {
       await page.goto('/')
       await dismissFirstVisitModal(page)
       
-      // Check that role path cards are present (2 visible: Beginners Start Here + Nasif's Charm Maker)
+      // Check that role path cards are present (2 visible: Beginners Start Here + Charm Customizer)
       const roleCards = page.locator('.role-path-card:visible')
       const cardCount = await roleCards.count()
       expect(cardCount).toBe(2)
@@ -860,7 +860,7 @@ test.describe('Screen Reader Support', () => {
       await page.goto('/')
       await dismissFirstVisitModal(page)
       
-      // Get all visible role path cards (Beginners Start Here + Nasif's Charm Maker)
+      // Get all visible role path cards (Beginners Start Here + Charm Customizer)
       const roleCards = page.locator('.role-path-card:visible')
       const cardCount = await roleCards.count()
       expect(cardCount).toBe(2)
