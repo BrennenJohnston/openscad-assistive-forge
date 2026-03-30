@@ -66,6 +66,7 @@ const STORAGE_KEY_LOD_WARNING_DISMISSED = getAppPrefKey(
 /** Default grid config — 220×220mm matches popular mid-range FDM printers (Creality K1C, FlashForge Adventurer 5M Pro) */
 const DEFAULT_GRID_CONFIG = { widthMm: 220, heightMm: 220 };
 
+
 export function isThreeJsLoaded() {
   return true;
 }
@@ -708,12 +709,28 @@ export class PreviewManager {
     const norm = normAttr.array;
     const vertCount = posAttr.count;
     const faceCount = vertCount / 3;
-
     const faceIsInner = new Uint8Array(faceCount);
     const faceDot = new Float32Array(faceCount);
     const faceNx = new Float32Array(faceCount);
     const faceNy = new Float32Array(faceCount);
     const faceNz = new Float32Array(faceCount);
+    const faceCx = new Float32Array(faceCount);
+    const faceCy = new Float32Array(faceCount);
+    const faceCz = new Float32Array(faceCount);
+
+    let minX = Infinity, minY = Infinity, minZ = Infinity;
+    let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+    for (let i = 0; i < pos.length; i += 3) {
+      if (pos[i] < minX) minX = pos[i];
+      if (pos[i] > maxX) maxX = pos[i];
+      if (pos[i + 1] < minY) minY = pos[i + 1];
+      if (pos[i + 1] > maxY) maxY = pos[i + 1];
+      if (pos[i + 2] < minZ) minZ = pos[i + 2];
+      if (pos[i + 2] > maxZ) maxZ = pos[i + 2];
+    }
+    const mcx = (minX + maxX) / 2;
+    const mcy = (minY + maxY) / 2;
+    const mcz = (minZ + maxZ) / 2;
 
     for (let f = 0; f < faceCount; f++) {
       const b = f * 9;
@@ -727,16 +744,17 @@ export class PreviewManager {
       faceNx[f] = nx;
       faceNy[f] = ny;
       faceNz[f] = nz;
+      faceCx[f] = cx;
+      faceCy[f] = cy;
+      faceCz[f] = cz;
 
-      const cLen = Math.sqrt(cx * cx + cy * cy + cz * cz) || 1;
+      const rcx = cx - mcx, rcy = cy - mcy, rcz = cz - mcz;
+      const cLen = Math.sqrt(rcx * rcx + rcy * rcy + rcz * rcz) || 1;
       const nLen = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
-      const dot =
-        (nx / nLen) * (cx / cLen) +
-        (ny / nLen) * (cy / cLen) +
-        (nz / nLen) * (cz / cLen);
-
-      faceDot[f] = dot;
-      faceIsInner[f] = dot < 0.1 ? 1 : 0;
+      faceDot[f] =
+        (nx / nLen) * (rcx / cLen) +
+        (ny / nLen) * (rcy / cLen) +
+        (nz / nLen) * (rcz / cLen);
     }
 
     const edgeMap = new Map();
@@ -761,6 +779,11 @@ export class PreviewManager {
       }
     }
 
+    const smoothAdj = Array.from({ length: faceCount }, () => []);
+    const concaveAdj = Array.from({ length: faceCount }, () => []);
+    const concaveNdot = Array.from({ length: faceCount }, () => []);
+    const concaveEdgeCount = new Uint8Array(faceCount);
+
     for (const faces of edgeMap.values()) {
       if (faces.length !== 2) continue;
       const [a, b] = faces;
@@ -782,26 +805,80 @@ export class PreviewManager {
         (faceNy[a] / l1) * (faceNy[b] / l2) +
         (faceNz[a] / l1) * (faceNz[b] / l2);
 
-      if (nDot >= -0.5) continue;
+      if (nDot > 0.999) {
+        smoothAdj[a].push(b);
+        smoothAdj[b].push(a);
+      }
 
-      if (faceIsInner[a] && !faceIsInner[b] && faceDot[b] < 0.85) {
-        faceIsInner[b] = 1;
-      } else if (faceIsInner[b] && !faceIsInner[a] && faceDot[a] < 0.85) {
-        faceIsInner[a] = 1;
+      if (nDot < -0.5) {
+        concaveAdj[a].push(b);
+        concaveAdj[b].push(a);
+        concaveNdot[a].push(nDot);
+        concaveNdot[b].push(nDot);
+        concaveEdgeCount[a]++;
+        concaveEdgeCount[b]++;
       }
     }
 
-    let innerCount = 0;
     for (let f = 0; f < faceCount; f++) {
-      if (faceIsInner[f]) innerCount++;
+      faceIsInner[f] = faceDot[f] < 0 ? 1 : 0;
     }
-    if (innerCount / faceCount > 0.15) {
-      console.warn(
-        `[Preview] Concave-edge correction produced ${((innerCount / faceCount) * 100).toFixed(1)}% inner faces — reverting to baseline`
-      );
-      for (let f = 0; f < faceCount; f++) {
-        faceIsInner[f] = faceDot[f] < 0.1 ? 1 : 0;
+
+    let promotionCount = 0;
+    const bfsQueue = [];
+    for (let f = 0; f < faceCount; f++) {
+      if (faceIsInner[f]) bfsQueue.push(f);
+    }
+
+    while (bfsQueue.length) {
+      const src = bfsQueue.pop();
+      for (let i = 0; i < concaveAdj[src].length; i++) {
+        const tgt = concaveAdj[src][i];
+        if (faceIsInner[tgt] || faceDot[tgt] >= 0.85) continue;
+        faceIsInner[tgt] = 1;
+        promotionCount++;
+        bfsQueue.push(tgt);
       }
+    }
+
+    if (faceCount && promotionCount / faceCount > 0.15) {
+      console.warn(
+        `[Preview] Concave-edge BFS promoted ${((promotionCount / faceCount) * 100).toFixed(1)}% — reverting to baseline`
+      );
+      promotionCount = 0;
+      for (let f = 0; f < faceCount; f++) {
+        faceIsInner[f] = faceDot[f] < 0 ? 1 : 0;
+      }
+    }
+
+    const componentId = new Int32Array(faceCount).fill(-1);
+    let numComponents = 0;
+    for (let f = 0; f < faceCount; f++) {
+      if (componentId[f] >= 0) continue;
+      const cid = numComponents++;
+      const queue = [f];
+      componentId[f] = cid;
+      while (queue.length) {
+        const cur = queue.pop();
+        for (const neighbor of smoothAdj[cur]) {
+          if (componentId[neighbor] >= 0) continue;
+          componentId[neighbor] = cid;
+          queue.push(neighbor);
+        }
+      }
+    }
+
+    const compInnerCount = new Uint32Array(numComponents);
+    const compFaceCount = new Uint32Array(numComponents);
+    for (let f = 0; f < faceCount; f++) {
+      compFaceCount[componentId[f]]++;
+      if (faceIsInner[f]) compInnerCount[componentId[f]]++;
+    }
+
+    for (let f = 0; f < faceCount; f++) {
+      const cid = componentId[f];
+      const majorityInner = compInnerCount[cid] * 2 > compFaceCount[cid];
+      faceIsInner[f] = majorityInner ? 1 : 0;
     }
 
     const isInner = new Float32Array(vertCount);
@@ -1606,10 +1683,12 @@ export class PreviewManager {
         geometry.computeVertexNormals();
         geometry.center();
 
-        try {
-          this._classifyInnerFaces(geometry);
-        } catch (e) {
-          console.warn('[Preview] Face classification failed, using default coloring:', e);
+        if (!hasColors) {
+          try {
+            this._classifyInnerFaces(geometry);
+          } catch (e) {
+            console.warn('[Preview] Face classification failed, using default coloring:', e);
+          }
         }
 
         if (this.autoBedEnabled) {
