@@ -549,6 +549,7 @@ export class RenderController {
           hasManifold: false,
           hasFastCSG: false,
           hasLazyUnion: false,
+          hasRenderColorsFlag: false,
           hasBinarySTL: false,
           version: 'unknown',
         };
@@ -811,6 +812,7 @@ export class RenderController {
         hasManifold: false,
         hasFastCSG: false,
         hasLazyUnion: false,
+        hasRenderColorsFlag: false,
         hasBinarySTL: false,
         version: 'unknown',
       }

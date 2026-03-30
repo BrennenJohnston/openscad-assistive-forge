@@ -637,7 +637,32 @@ describe('Capability Detection', () => {
     
     const caps = controller.getCapabilities()
     expect(caps.hasManifold).toBe(false)
+    expect(caps.hasRenderColorsFlag).toBe(false)
     expect(caps.version).toBe('unknown')
+  })
+
+  it('propagates hasRenderColorsFlag from READY payload', () => {
+    const controller = new RenderController()
+    const capabilities = {
+      hasManifold: true,
+      hasFastCSG: false,
+      hasLazyUnion: false,
+      hasRenderColorsFlag: true,
+      hasBinarySTL: true,
+      version: '2024.01.01'
+    }
+
+    controller.handleMessage({
+      type: 'READY',
+      payload: { wasmInitDurationMs: 1000, capabilities }
+    })
+
+    expect(controller.getCapabilities().hasRenderColorsFlag).toBe(true)
+  })
+
+  it('defaults hasRenderColorsFlag to false in getCapabilities() before init', () => {
+    const controller = new RenderController()
+    expect(controller.getCapabilities().hasRenderColorsFlag).toBe(false)
   })
   
   it('calls capability callback when capabilities detected', () => {
