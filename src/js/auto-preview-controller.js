@@ -705,9 +705,6 @@ export class AutoPreviewController {
    */
   static stripColorCalls(scadContent) {
     if (!scadContent || typeof scadContent !== 'string') return scadContent;
-    // #region agent log
-    try{fetch('http://127.0.0.1:7246/ingest/e232bc4a-5832-4c44-af42-5e90b8e9ab4e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'90ca10'},body:JSON.stringify({sessionId:'90ca10',location:'auto-preview-controller.js:stripColorCalls:entry',message:'stripColorCalls called',data:{inputLen:scadContent.length},timestamp:Date.now(),hypothesisId:'B'})})?.catch(()=>{})}catch(_){}
-    // #endregion
     // Match `color` keyword boundary, optional whitespace, then balanced parens.
     // We manually find the matching closing paren to handle nested brackets
     // like color([1,0,0,0.5]) correctly.
@@ -750,13 +747,6 @@ export class AutoPreviewController {
    */
   static injectCsgColors(scadContent) {
     if (!scadContent || typeof scadContent !== 'string') return scadContent;
-
-    // #region agent log
-    const _dbgInputLen = scadContent.length;
-    const _dbgInputLines = scadContent.split('\n');
-    const _dbgLine4939 = _dbgInputLines.length >= 4939 ? _dbgInputLines.slice(4934, 4944).join('\n') : 'FILE_TOO_SHORT';
-    try{fetch('http://127.0.0.1:7246/ingest/e232bc4a-5832-4c44-af42-5e90b8e9ab4e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'90ca10'},body:JSON.stringify({sessionId:'90ca10',location:'auto-preview-controller.js:injectCsgColors:entry',message:'injectCsgColors called',data:{inputLen:_dbgInputLen,inputLineCount:_dbgInputLines.length,linesAround4939:_dbgLine4939},timestamp:Date.now(),hypothesisId:'A'})})?.catch(()=>{})}catch(_){}
-    // #endregion
 
     const GOLD = '#f9d72c';
     const GREEN = '#9dcb51';
@@ -816,12 +806,6 @@ export class AutoPreviewController {
     for (const op of ops) {
       result = result.slice(0, op.pos) + op.text + result.slice(op.pos);
     }
-
-    // #region agent log
-    const _dbgResultLines = result.split('\n');
-    const _dbgModule = _dbgResultLines.length >= 4895 ? _dbgResultLines.slice(4767, 4895).join('\n') : 'RESULT_TOO_SHORT';
-    try{fetch('http://127.0.0.1:7246/ingest/e232bc4a-5832-4c44-af42-5e90b8e9ab4e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'90ca10'},body:JSON.stringify({sessionId:'90ca10',location:'auto-preview-controller.js:injectCsgColors:exit',message:'injectCsgColors result',data:{resultLen:result.length,resultLineCount:_dbgResultLines.length,opsCount:ops.length,moduleLines4768to4895:_dbgModule},timestamp:Date.now(),hypothesisId:'A'})})?.catch(()=>{})}catch(_){}
-    // #endregion
 
     return result;
   }
@@ -1079,10 +1063,6 @@ export class AutoPreviewController {
     let filesForPreview = this.projectFiles;
     let csgColorsInjected = false;
 
-    // #region agent log
-    try{fetch('http://127.0.0.1:7246/ingest/e232bc4a-5832-4c44-af42-5e90b8e9ab4e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'90ca10'},body:JSON.stringify({sessionId:'90ca10',location:'auto-preview-controller.js:renderPreview:pipeline',message:'CSG color pipeline decision',data:{supportsRenderColors,hasColorCalls,colorPassthroughEnabled,hasDebugModifier,scadLen:this.currentScadContent?.length},timestamp:Date.now(),hypothesisId:'A'})})?.catch(()=>{})}catch(_){}
-    // #endregion
-
     if (supportsRenderColors) {
       previewOutputFormat = 'off';
       if (!hasColorCalls || !colorPassthroughEnabled) {
@@ -1164,9 +1144,6 @@ export class AutoPreviewController {
       // isn't visually useful. Re-render with color() calls stripped so the
       // Manifold CSG engine assigns per-operation face colors instead.
       let activeResult = result;
-      // #region agent log
-      try{fetch('http://127.0.0.1:7246/ingest/e232bc4a-5832-4c44-af42-5e90b8e9ab4e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'90ca10'},body:JSON.stringify({sessionId:'90ca10',location:'auto-preview-controller.js:renderPreview:firstRenderOK',message:'First preview render succeeded',data:{format:result.format||'stl',dataLen:result.stl?.length||result.data?.length||0,csgColorsInjected},timestamp:Date.now(),hypothesisId:'A'})})?.catch(()=>{})}catch(_){}
-      // #endregion
       const useAuthorColors = hasColorCalls && colorPassthroughEnabled && !csgColorsInjected;
       if ((result.format || 'stl') === 'off' && useAuthorColors) {
         const uniqueColors = AutoPreviewController.countUniqueOFFColors(
@@ -1207,9 +1184,6 @@ export class AutoPreviewController {
                 `${AutoPreviewController.countUniqueOFFColors(fallbackResult.stl)} unique colors`
             );
           } catch (fallbackErr) {
-            // #region agent log
-            try{fetch('http://127.0.0.1:7246/ingest/e232bc4a-5832-4c44-af42-5e90b8e9ab4e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'90ca10'},body:JSON.stringify({sessionId:'90ca10',location:'auto-preview-controller.js:renderPreview:fallbackFailed',message:'Monochrome fallback FAILED',data:{errorMsg:fallbackErr.message?.substring(0,500),errorCode:fallbackErr.code},timestamp:Date.now(),hypothesisId:'A'})})?.catch(()=>{})}catch(_){}
-            // #endregion
             console.warn(
               '[AutoPreview] Monochrome fallback render failed, using original:',
               fallbackErr.message
@@ -1305,9 +1279,6 @@ export class AutoPreviewController {
       );
     } catch (error) {
       renderFailed = true;
-      // #region agent log
-      try{fetch('http://127.0.0.1:7246/ingest/e232bc4a-5832-4c44-af42-5e90b8e9ab4e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'90ca10'},body:JSON.stringify({sessionId:'90ca10',location:'auto-preview-controller.js:renderPreview:renderFailed',message:'Preview render FAILED (outer catch)',data:{errorMsg:error.message?.substring(0,500),errorCode:error.code,csgColorsInjected},timestamp:Date.now(),hypothesisId:'A'})})?.catch(()=>{})}catch(_){}
-      // #endregion
       console.error('[AutoPreview] Preview render failed:', error);
 
       // If the file changed mid-render, ignore this error.
