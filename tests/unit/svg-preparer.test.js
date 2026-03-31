@@ -28,6 +28,7 @@ import {
   needsPreparation,
   analyzeSvg,
   strokeToFill,
+  applyPerPathOffsets,
 } from '../../src/js/svg-preparer.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -1781,5 +1782,107 @@ describe('analyzeSvg', () => {
       const result = analyzeSvg(svg);
       expect(result.confidence).toBeGreaterThanOrEqual(0);
     });
+  });
+});
+
+// ===========================================================================
+// Phase 4 — applyPerPathOffsets
+// ===========================================================================
+
+describe('applyPerPathOffsets', () => {
+  const SQUARE = 'M10,10 L90,10 L90,90 L10,90 Z';
+
+  it('applies offset to elements with non-zero values', () => {
+    const elements = [
+      { pathData: SQUARE, role: 'foreground' },
+      { pathData: SQUARE, role: 'hole' },
+    ];
+    const result = applyPerPathOffsets(elements, [5, 0]);
+
+    expect(result[0].pathData).not.toBe(SQUARE);
+    expect(result[0].pathData).toMatch(/^M/);
+    expect(result[1].pathData).toBe(SQUARE);
+  });
+
+  it('skips elements with role "ignore" even with non-zero offset', () => {
+    const elements = [{ pathData: SQUARE, role: 'ignore' }];
+    const result = applyPerPathOffsets(elements, [5]);
+
+    expect(result[0].pathData).toBe(SQUARE);
+    expect(result[0].role).toBe('ignore');
+  });
+
+  it('returns elements unchanged when offsets array is empty', () => {
+    const elements = [{ pathData: SQUARE, role: 'foreground' }];
+    const result = applyPerPathOffsets(elements, []);
+
+    expect(result).toBe(elements);
+  });
+
+  it('returns elements unchanged when offsets is null', () => {
+    const elements = [{ pathData: SQUARE, role: 'foreground' }];
+    const result = applyPerPathOffsets(elements, null);
+
+    expect(result).toBe(elements);
+  });
+
+  it('returns elements unchanged when offsets is undefined', () => {
+    const elements = [{ pathData: SQUARE, role: 'foreground' }];
+    const result = applyPerPathOffsets(elements, undefined);
+
+    expect(result).toBe(elements);
+  });
+
+  it('preserves non-pathData properties on offset elements', () => {
+    const elements = [
+      { pathData: SQUARE, role: 'foreground', fill: 'black', luminance: 0 },
+    ];
+    const result = applyPerPathOffsets(elements, [3]);
+
+    expect(result[0].role).toBe('foreground');
+    expect(result[0].fill).toBe('black');
+    expect(result[0].luminance).toBe(0);
+    expect(result[0].pathData).not.toBe(SQUARE);
+  });
+
+  it('applies offsets selectively per index', () => {
+    const elements = [
+      { pathData: SQUARE, role: 'foreground' },
+      { pathData: SQUARE, role: 'foreground' },
+      { pathData: SQUARE, role: 'foreground' },
+    ];
+    const result = applyPerPathOffsets(elements, [0, 5, 0]);
+
+    expect(result[0].pathData).toBe(SQUARE);
+    expect(result[1].pathData).not.toBe(SQUARE);
+    expect(result[2].pathData).toBe(SQUARE);
+  });
+
+  it('handles offsets array shorter than elements (extra elements unchanged)', () => {
+    const elements = [
+      { pathData: SQUARE, role: 'foreground' },
+      { pathData: SQUARE, role: 'foreground' },
+    ];
+    const result = applyPerPathOffsets(elements, [5]);
+
+    expect(result[0].pathData).not.toBe(SQUARE);
+    expect(result[1].pathData).toBe(SQUARE);
+  });
+
+  it('works with real classified elements from parseSvgElements', () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+      '<circle cx="50" cy="50" r="40" fill="black"/>' +
+      '<circle cx="50" cy="50" r="15" fill="white"/>' +
+      '</svg>';
+    const elements = parseSvgElements(svg);
+    const classified = classifyElements(elements);
+    const offsets = [2, 0];
+    const result = applyPerPathOffsets(classified, offsets);
+
+    expect(result[0].pathData).not.toBe(classified[0].pathData);
+    expect(result[1].pathData).toBe(classified[1].pathData);
+    expect(result[0].role).toBe('foreground');
+    expect(result[1].role).toBe('hole');
   });
 });
