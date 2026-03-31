@@ -320,16 +320,6 @@ export class AutoPreviewController {
   }
 
   /**
-   * True when the loaded project contains companion files beyond the main SCAD.
-   * CSG color injection uses brace-matching heuristics that produce invalid
-   * syntax on complex real-world SCAD with deeply nested control flow, so it
-   * is skipped for multi-file projects where such complexity is expected.
-   */
-  get hasCompanionFiles() {
-    return Boolean(this.projectFiles && this.projectFiles.size > 1);
-  }
-
-  /**
    * Set preview quality preset (preview-only; full-quality export unaffected)
    * Clears preview cache because geometry can change at same parameters.
    * @param {Object|null} qualityPreset - Render quality preset (e.g. RENDER_QUALITY.PREVIEW / DRAFT / HIGH)
@@ -1095,7 +1085,7 @@ export class AutoPreviewController {
 
     if (supportsRenderColors) {
       previewOutputFormat = 'off';
-      if ((!hasColorCalls || !colorPassthroughEnabled) && !this.hasCompanionFiles) {
+      if (!hasColorCalls || !colorPassthroughEnabled) {
         scadForPreview = AutoPreviewController.injectCsgColors(
           hasColorCalls
             ? AutoPreviewController.stripColorCalls(this.currentScadContent)
@@ -1182,7 +1172,7 @@ export class AutoPreviewController {
         const uniqueColors = AutoPreviewController.countUniqueOFFColors(
           result.stl
         );
-        if (uniqueColors === 1 && !this.hasCompanionFiles) {
+        if (uniqueColors === 1) {
           console.log(
             '[AutoPreview] Monochrome OFF detected (1 unique color) — ' +
               're-rendering with stripped color() for CSG face colors'
@@ -1225,14 +1215,6 @@ export class AutoPreviewController {
               fallbackErr.message
             );
           }
-        } else if (uniqueColors === 1 && this.hasCompanionFiles) {
-          // #region agent log
-          try{fetch('http://127.0.0.1:7246/ingest/e232bc4a-5832-4c44-af42-5e90b8e9ab4e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'90ca10'},body:JSON.stringify({sessionId:'90ca10',location:'auto-preview-controller.js:renderPreview:companionSkip',message:'Skipped CSG injection for multi-file project',data:{uniqueColors,projectFileCount:this.projectFiles?.size,mainFile:this.mainFilePath},timestamp:Date.now(),hypothesisId:'FIX'})})?.catch(()=>{})}catch(_){}
-          // #endregion
-          console.log(
-            '[AutoPreview] Monochrome OFF detected but skipping CSG color ' +
-              'injection — multi-file project with companion files'
-          );
         }
       }
 
@@ -1485,7 +1467,7 @@ export class AutoPreviewController {
 
     if (supportsRenderColors) {
       fullOutputFormat = 'off';
-      if ((!hasColorCalls || !colorPassthroughEnabled) && !this.hasCompanionFiles) {
+      if (!hasColorCalls || !colorPassthroughEnabled) {
         scadContentForRender = AutoPreviewController.injectCsgColors(
           hasColorCalls
             ? AutoPreviewController.stripColorCalls(this.currentScadContent)
@@ -1550,8 +1532,7 @@ export class AutoPreviewController {
     if (
       useAuthorColors &&
       (result.format || 'stl') === 'off' &&
-      AutoPreviewController.countUniqueOFFColors(result.stl) === 1 &&
-      !this.hasCompanionFiles
+      AutoPreviewController.countUniqueOFFColors(result.stl) === 1
     ) {
       console.log(
         '[AutoPreview] Full render monochrome OFF detected — ' +
@@ -1592,16 +1573,6 @@ export class AutoPreviewController {
           fallbackErr.message
         );
       }
-    } else if (
-      useAuthorColors &&
-      (result.format || 'stl') === 'off' &&
-      AutoPreviewController.countUniqueOFFColors(result.stl) === 1 &&
-      this.hasCompanionFiles
-    ) {
-      console.log(
-        '[AutoPreview] Full render monochrome OFF detected but skipping CSG color ' +
-          'injection — multi-file project with companion files'
-      );
     }
 
     // Store for reuse — when color passthrough produced OFF, the STL for
