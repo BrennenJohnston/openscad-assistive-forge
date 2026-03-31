@@ -1559,4 +1559,190 @@ describe('AutoPreviewController', () => {
       expect(callOptions.files.get('main.scad')).toContain('color("#f9d72c")')
     })
   })
+
+  describe('isParserError() static method', () => {
+    it('returns true for parser error messages', () => {
+      const err = new Error(
+        'Parser error: syntax error in file /tmp/input.scad, line 51'
+      )
+      expect(AutoPreviewController.isParserError(err)).toBe(true)
+    })
+
+    it('returns true for syntax error messages', () => {
+      const err = new Error('syntax error near unexpected token')
+      expect(AutoPreviewController.isParserError(err)).toBe(true)
+    })
+
+    it('returns false for non-parser errors', () => {
+      expect(
+        AutoPreviewController.isParserError(new Error('WASM out of memory'))
+      ).toBe(false)
+    })
+
+    it('handles string input', () => {
+      expect(AutoPreviewController.isParserError('Parser error')).toBe(true)
+    })
+
+    it('handles null and undefined gracefully', () => {
+      expect(AutoPreviewController.isParserError(null)).toBe(false)
+      expect(AutoPreviewController.isParserError(undefined)).toBe(false)
+    })
+  })
+
+  describe('CSG Color Injection — Error Recovery', () => {
+    const okResult = {
+      stl: new ArrayBuffer(8),
+      stats: { triangles: 12 },
+      format: 'off',
+    }
+    const parserErr = new Error(
+      'Parser error: syntax error in file /tmp/input.scad, line 51'
+    )
+
+    beforeEach(() => {
+      renderController.getCapabilities = vi.fn(() => ({
+        hasRenderColorsFlag: true,
+      }))
+      previewManager.loadOFF = vi.fn().mockResolvedValue({})
+      previewManager.loadSTL = vi.fn().mockResolvedValue({})
+      previewManager.setRenderState = vi.fn()
+      previewManager._getPrimaryGeometry = vi.fn(() => null)
+    })
+
+    afterEach(() => {
+      isFlagEnabled.mockReset()
+    })
+
+    it('retries renderPreview with original source when injection causes parser error', async () => {
+      isFlagEnabled.mockReturnValue(false)
+      const scad = 'difference() { cube(20); cube(10); }'
+      controller.setScadContent(scad)
+      const params = { width: 10 }
+      const paramHash = controller.hashParams(params)
+      controller.currentParamHash = paramHash
+      controller.currentPreviewKey = `${paramHash}|model`
+
+      renderController.renderPreview
+        .mockRejectedValueOnce(parserErr)
+        .mockResolvedValueOnce(okResult)
+
+      await controller.renderPreview(params, paramHash)
+
+      expect(renderController.renderPreview).toHaveBeenCalledTimes(2)
+      const [firstSource] = renderController.renderPreview.mock.calls[0]
+      expect(firstSource).toContain('color("#f9d72c")')
+      const [secondSource] = renderController.renderPreview.mock.calls[1]
+      expect(secondSource).toBe(scad)
+    })
+
+    it('does not retry renderPreview when a non-parser error occurs', async () => {
+      isFlagEnabled.mockReturnValue(false)
+      const scad = 'difference() { cube(20); cube(10); }'
+      controller.setScadContent(scad)
+      const params = { width: 10 }
+      const paramHash = controller.hashParams(params)
+      controller.currentParamHash = paramHash
+      controller.currentPreviewKey = `${paramHash}|model`
+
+      renderController.renderPreview.mockRejectedValueOnce(
+        new Error('WASM out of memory')
+      )
+
+      await controller.renderPreview(params, paramHash)
+
+      expect(renderController.renderPreview).toHaveBeenCalledTimes(1)
+      expect(controller.state).toBe(PREVIEW_STATE.ERROR)
+    })
+
+    it('does not retry renderPreview when no injection was applied', async () => {
+      isFlagEnabled.mockImplementation((flag) => flag === 'color_passthrough')
+      controller.setScadContent('color("red") cube(10);')
+      const params = { width: 10 }
+      const paramHash = controller.hashParams(params)
+      controller.currentParamHash = paramHash
+      controller.currentPreviewKey = `${paramHash}|model`
+
+      renderController.renderPreview.mockRejectedValueOnce(parserErr)
+
+      await controller.renderPreview(params, paramHash)
+
+      expect(renderController.renderPreview).toHaveBeenCalledTimes(1)
+      expect(controller.state).toBe(PREVIEW_STATE.ERROR)
+    })
+
+    it('retries renderFull with original source when injection causes parser error', async () => {
+      isFlagEnabled.mockReturnValue(false)
+      const scad = 'difference() { cube(20); cube(10); }'
+      controller.setScadContent(scad)
+
+      const stlFollowUp = {
+        stl: new ArrayBuffer(32),
+        stats: { triangles: 42 },
+        format: 'stl',
+        consoleOutput: '',
+      }
+      renderController.renderFull = vi.fn()
+        .mockRejectedValueOnce(parserErr)
+        .mockResolvedValueOnce({
+          stl: new ArrayBuffer(32),
+          stats: { triangles: 42 },
+          format: 'off',
+          consoleOutput: '',
+        })
+        .mockResolvedValueOnce(stlFollowUp)
+      previewManager.loadOFF.mockResolvedValue({})
+
+      await controller.renderFull({ width: 10 })
+
+      // 3 calls: injected (fails), retry original (off), STL follow-up for download
+      expect(renderController.renderFull).toHaveBeenCalledTimes(3)
+      const [firstSource] = renderController.renderFull.mock.calls[0]
+      expect(firstSource).toContain('color("#f9d72c")')
+      const [secondSource] = renderController.renderFull.mock.calls[1]
+      expect(secondSource).toBe(scad)
+    })
+
+    it('propagates non-parser errors from renderFull without retry', async () => {
+      isFlagEnabled.mockReturnValue(false)
+      const scad = 'difference() { cube(20); cube(10); }'
+      controller.setScadContent(scad)
+
+      const memErr = new Error('WASM out of memory')
+      renderController.renderFull = vi.fn().mockRejectedValueOnce(memErr)
+
+      await expect(controller.renderFull({ width: 10 })).rejects.toThrow(
+        'WASM out of memory'
+      )
+      expect(renderController.renderFull).toHaveBeenCalledTimes(1)
+    })
+
+    it('uses original project files on retry, not the injection-modified map', async () => {
+      isFlagEnabled.mockReturnValue(false)
+      const scad = 'difference() { cube(20); cube(10); }'
+      const origFiles = new Map([['main.scad', scad]])
+      controller.setProjectFiles(origFiles, 'main.scad')
+      controller.setScadContent(scad)
+
+      renderController.renderFull = vi.fn()
+        .mockRejectedValueOnce(parserErr)
+        .mockResolvedValueOnce({
+          stl: new ArrayBuffer(32),
+          stats: { triangles: 42 },
+          format: 'off',
+          consoleOutput: '',
+        })
+        .mockResolvedValueOnce({
+          stl: new ArrayBuffer(32),
+          stats: { triangles: 42 },
+          format: 'stl',
+          consoleOutput: '',
+        })
+      previewManager.loadOFF.mockResolvedValue({})
+
+      await controller.renderFull({ width: 10 })
+
+      const retryOpts = renderController.renderFull.mock.calls[1][2]
+      expect(retryOpts.files).toBe(origFiles)
+    })
+  })
 })
