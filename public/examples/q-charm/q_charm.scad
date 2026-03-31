@@ -46,7 +46,7 @@ design_x = 0; // [-10:0.5:10]
 design_y = 0; // [-10:0.5:10]
 
 // Rotation angle for design (degrees, counter-clockwise)
-design_rotation = 90; // [-180:5:180]
+design_rotation = 0; // [-180:5:180]
 
 /* [Design Layer 2] */
 // Second image file for layered designs (leave empty for none)
@@ -62,7 +62,7 @@ design_x_2 = 0; // [-10:0.5:10]
 design_y_2 = 0; // [-10:0.5:10]
 
 // Rotation angle for second design (degrees, counter-clockwise)
-design_rotation_2 = 90; // [-180:5:180]
+design_rotation_2 = 0; // [-180:5:180]
 
 // Z-offset for second design layer (adjust height relative to the charm surface)
 design_z_2 = 0; // [-3:0.1:3]
@@ -219,8 +219,8 @@ module charm_body() {
 // the SVG preparer tool (F-11, planned) for compound designs.
 module design_2d() {
     if (design_file != "") {
-        translate([design_x, design_y])
-            rotate([0, 0, design_rotation])
+        translate([-design_y, design_x])
+            rotate([0, 0, design_rotation + 90])
                 offset(r = design_offset)
                     resize([design_size, 0], auto = true)
                         import(design_file, center = true);
@@ -229,8 +229,8 @@ module design_2d() {
 
 module design_2d_layer2() {
     if (design_file_2 != "") {
-        translate([design_x_2, design_y_2])
-            rotate([0, 0, design_rotation_2])
+        translate([-design_y_2, design_x_2])
+            rotate([0, 0, design_rotation_2 + 90])
                 offset(r = design_offset)
                     resize([design_size_2, 0], auto = true)
                         import(design_file_2, center = true);

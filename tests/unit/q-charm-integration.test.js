@@ -147,8 +147,8 @@ describe('q_charm.scad parser integration', () => {
 
     expect(parsed.parameters.design_rotation).toBeDefined();
     expect(parsed.parameters.design_rotation.default).toBe(0);
-    expect(parsed.parameters.design_rotation.minimum).toBe(-90);
-    expect(parsed.parameters.design_rotation.maximum).toBe(90);
+    expect(parsed.parameters.design_rotation.minimum).toBe(-180);
+    expect(parsed.parameters.design_rotation.maximum).toBe(180);
     expect(parsed.parameters.design_rotation.group).toBe('Design');
   });
 
@@ -257,8 +257,8 @@ describe('q_charm.scad parser integration', () => {
 
     expect(parsed.parameters.design_rotation_2).toBeDefined();
     expect(parsed.parameters.design_rotation_2.default).toBe(0);
-    expect(parsed.parameters.design_rotation_2.minimum).toBe(-90);
-    expect(parsed.parameters.design_rotation_2.maximum).toBe(90);
+    expect(parsed.parameters.design_rotation_2.minimum).toBe(-180);
+    expect(parsed.parameters.design_rotation_2.maximum).toBe(180);
     expect(parsed.parameters.design_rotation_2.group).toBe('Design Layer 2');
   });
 
