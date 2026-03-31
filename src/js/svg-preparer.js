@@ -23,6 +23,7 @@ import {
   getPointAtLength,
   getTotalLength,
 } from 'svg-path-commander';
+import { offsetPath } from './svg-offset.js';
 import {
   pathFromPathData,
   pathToPathData,
@@ -385,6 +386,31 @@ export function classifyElements(elements, options = {}) {
     }
 
     return { ...el, role };
+  });
+}
+
+/**
+ * Apply per-element polygon offsets to classified SVG elements.
+ *
+ * For each element whose corresponding offset value is non-zero, the path
+ * is inflated (positive) or deflated (negative) via clipper2-js. Elements
+ * with role 'ignore' are never offset. The offset values are in SVG
+ * coordinate units — callers convert from mm using mmToSvgUnits().
+ *
+ * @param {Array} classifiedElements - Output of classifyElements()
+ * @param {number[]} offsets - Per-element offset in SVG units (parallel array)
+ * @returns {Array} Elements with pathData replaced where offset was applied
+ */
+export function applyPerPathOffsets(classifiedElements, offsets) {
+  if (!offsets || offsets.length === 0) return classifiedElements;
+
+  return classifiedElements.map((el, i) => {
+    const offset = offsets[i];
+    if (!offset || offset === 0) return el;
+    if (el.role === 'ignore') return el;
+
+    const newPathData = offsetPath(el.pathData, offset);
+    return { ...el, pathData: newPathData };
   });
 }
 
