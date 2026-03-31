@@ -13662,6 +13662,55 @@ body.tutorial-body-locked {
   color: var(--color-warning-text);
 }
 
+/* ── Offset input (per-element) ─────────────────────────────────────────── */
+.svg-prep-object .svg-prep-offset-input {
+  width: 60px;
+  flex-shrink: 0;
+  padding: var(--space-2xs) var(--space-xs);
+  text-align: right;
+  font-size: var(--font-size-sm);
+  min-height: var(--size-touch-target);
+  transition: border-color var(--motion-fast) ease;
+}
+
+.svg-prep-offset-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Design width input (header) ────────────────────────────────────────── */
+.svg-prep-design-width {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.svg-prep-design-width[hidden] {
+  display: none;
+}
+
+.svg-prep-design-width label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.svg-prep-design-width .svg-prep-design-width-input {
+  width: 60px;
+  padding: var(--space-2xs) var(--space-xs);
+  text-align: right;
+  font-size: var(--font-size-sm);
+  min-height: var(--size-touch-target);
+}
+
+.svg-prep-design-width-unit {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
 /* ── Warning summary ─────────────────────────────────────────────────────── */
 .svg-prep-warnings ul {
   margin: 0;
@@ -13822,6 +13871,14 @@ body.tutorial-body-locked {
   outline-offset: 2px;
 }
 
+:root[data-high-contrast='true'] .svg-prep-offset-input {
+  border-width: 2px;
+}
+
+:root[data-high-contrast='true'] .svg-prep-design-width-input {
+  border-width: 2px;
+}
+
 /* ── Dark Theme SVG Visibility ──────────────────────────────────────────── */
 :root[data-theme='dark'] .svg-prep-source-pane svg,
 :root[data-theme='dark'] .svg-prep-result-pane svg {
@@ -13859,6 +13916,10 @@ body.tutorial-body-locked {
 
   .svg-prep-fullscreen-backdrop {
     backdrop-filter: none;
+  }
+
+  .svg-prep-offset-input {
+    transition: none;
   }
 }
 
@@ -13932,6 +13993,44 @@ body.tutorial-body-locked {
   }
 
   .svg-prep-warnings ul {
+    color: CanvasText;
+  }
+
+  .svg-prep-offset-input {
+    border: 1px solid ButtonText;
+    background: Canvas;
+    color: CanvasText;
+    -webkit-text-fill-color: CanvasText;
+  }
+
+  .svg-prep-offset-input:focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+
+  .svg-prep-offset-input:disabled {
+    opacity: 1;
+    color: GrayText;
+    -webkit-text-fill-color: GrayText;
+  }
+
+  .svg-prep-design-width-input {
+    border: 1px solid ButtonText;
+    background: Canvas;
+    color: CanvasText;
+    -webkit-text-fill-color: CanvasText;
+  }
+
+  .svg-prep-design-width-input:focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+
+  .svg-prep-design-width label {
+    color: CanvasText;
+  }
+
+  .svg-prep-design-width-unit {
     color: CanvasText;
   }
 }
