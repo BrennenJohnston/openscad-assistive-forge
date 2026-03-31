@@ -13,7 +13,12 @@
 
 import { createDocumentFocusTrap } from './focus-trap.js';
 import { announce } from './announcer.js';
-import { classifyElements, flattenToCompoundPath } from './svg-preparer.js';
+import {
+  classifyElements,
+  flattenToCompoundPath,
+  applyPerPathOffsets,
+} from './svg-preparer.js';
+import { mmToSvgUnits } from './svg-offset.js';
 import { isEnabled } from './feature-flags.js';
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -445,6 +450,7 @@ export function createSvgPrepWorkspace(containerEl) {
   let sourceZoomCleanup = null;
   let resultZoomCleanup = null;
   let highlightCleanup = null;
+  let offsetDebounceTimer = null;
 
   // ARIA live region for role-change and preview announcements
   const liveRegion = document.createElement('div');
@@ -515,10 +521,18 @@ export function createSvgPrepWorkspace(containerEl) {
       roleOverrides,
     });
 
+    const vb = parseViewBox(currentSvgMeta.viewBox);
+    const vbWidth = vb ? vb.w : 0;
+    const designWidthMm = parseFloat(refs.designWidthInput.value) || 14;
+    const svgOffsets = offsets.map((mm) =>
+      mmToSvgUnits(mm, vbWidth, designWidthMm)
+    );
+    const withOffsets = applyPerPathOffsets(classified, svgOffsets);
+
     const isCompound = currentAnalysis.isCompoundPathOnly;
     const resultSvgString = isCompound
-      ? concatenateSubpaths(classified, currentSvgMeta)
-      : flattenToCompoundPath(classified, currentSvgMeta);
+      ? concatenateSubpaths(withOffsets, currentSvgMeta)
+      : flattenToCompoundPath(withOffsets, currentSvgMeta);
 
     if (!resultSvgString) {
       currentResult = null;
@@ -536,15 +550,15 @@ export function createSvgPrepWorkspace(containerEl) {
     const imported = document.importNode(svg, true);
     refs.resultPane.insertBefore(imported, refs.resultZoom);
 
-    const fgCount = classified.filter(
+    const fgCount = withOffsets.filter(
       (el) => el.role !== 'ignore' && el.pathData
     ).length;
-    const ignoredCount = classified.filter(
+    const ignoredCount = withOffsets.filter(
       (el) => el.role === 'ignore'
     ).length;
     liveRegion.textContent = isCompound
       ? `Preview updated \u2014 ${fgCount} subpaths included, ${ignoredCount} ignored`
-      : `Preview updated \u2014 ${fgCount} foreground, ${classified.filter((el) => el.role === 'hole' && el.pathData).length} holes`;
+      : `Preview updated \u2014 ${fgCount} foreground, ${withOffsets.filter((el) => el.role === 'hole' && el.pathData).length} holes`;
   }
 
   function setupPaneZoom(pane, zoomEl, naturalVBStr) {
@@ -688,9 +702,45 @@ export function createSvgPrepWorkspace(containerEl) {
       const nameSpan = item.querySelector('.svg-prep-object-name');
       const nameText = nameSpan ? nameSpan.textContent : `Element ${idx + 1}`;
       item.setAttribute('aria-label', `${nameText}, role: ${e.target.value}`);
+
+      const offsetInput = item.querySelector('.svg-prep-offset-input');
+      if (offsetInput) {
+        if (e.target.value === 'ignore') {
+          offsetInput.disabled = true;
+          offsetInput.value = '0';
+          offsets[idx] = 0;
+        } else {
+          offsetInput.disabled = false;
+        }
+      }
     }
 
     updateResultPreview();
+  }
+
+  function handleOffsetChange(e) {
+    const match = e.target.name && e.target.name.match(/^svg-prep-offset-(\d+)$/);
+    if (!match) return;
+    const idx = parseInt(match[1], 10);
+    offsets[idx] = parseFloat(e.target.value) || 0;
+
+    clearTimeout(offsetDebounceTimer);
+    offsetDebounceTimer = setTimeout(() => {
+      updateResultPreview();
+      if (currentResult) {
+        const item = refs.objects.querySelector(
+          `.svg-prep-object[data-index="${idx}"]`
+        );
+        const nameSpan = item?.querySelector('.svg-prep-object-name');
+        const nameText = nameSpan ? nameSpan.textContent : `Element ${idx + 1}`;
+        liveRegion.textContent = `Offset for ${nameText} updated to ${offsets[idx]} mm`;
+      }
+    }, 300);
+  }
+
+  function handleDesignWidthChange() {
+    clearTimeout(offsetDebounceTimer);
+    offsetDebounceTimer = setTimeout(updateResultPreview, 300);
   }
 
   function handleFooterClick(e) {
@@ -802,6 +852,8 @@ export function createSvgPrepWorkspace(containerEl) {
 
     root.addEventListener('keydown', handleKeydown);
     refs.objects.addEventListener('change', handleRoleChange);
+    refs.objects.addEventListener('input', handleOffsetChange);
+    refs.designWidthInput.addEventListener('input', handleDesignWidthChange);
     refs.footer.addEventListener('click', handleFooterClick);
     refs.closeBtn.addEventListener('click', close);
     refs.fullscreenBtn.addEventListener('click', openFullscreen);
@@ -835,8 +887,13 @@ export function createSvgPrepWorkspace(containerEl) {
     currentSvgMeta = null;
     currentCallbacks = {};
 
+    clearTimeout(offsetDebounceTimer);
+    offsetDebounceTimer = null;
+
     root.removeEventListener('keydown', handleKeydown);
     refs.objects.removeEventListener('change', handleRoleChange);
+    refs.objects.removeEventListener('input', handleOffsetChange);
+    refs.designWidthInput.removeEventListener('input', handleDesignWidthChange);
     refs.footer.removeEventListener('click', handleFooterClick);
     refs.closeBtn.removeEventListener('click', close);
     refs.fullscreenBtn.removeEventListener('click', openFullscreen);
