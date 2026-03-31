@@ -14,6 +14,7 @@
 import { createDocumentFocusTrap } from './focus-trap.js';
 import { announce } from './announcer.js';
 import { classifyElements, flattenToCompoundPath } from './svg-preparer.js';
+import { isEnabled } from './feature-flags.js';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -154,7 +155,29 @@ function buildWorkspaceDom() {
   closeBtn.setAttribute('aria-label', 'Close editor');
   closeBtn.innerHTML = '&times;';
 
-  header.append(title, fullscreenBtn, closeBtn);
+  const designWidthGroup = document.createElement('div');
+  designWidthGroup.className = 'svg-prep-design-width';
+  designWidthGroup.hidden = !isEnabled('svg_path_offset');
+
+  const designWidthLabel = document.createElement('label');
+  designWidthLabel.textContent = 'Design width ';
+
+  const designWidthInput = document.createElement('input');
+  designWidthInput.type = 'number';
+  designWidthInput.className = 'svg-prep-design-width-input';
+  designWidthInput.min = '1';
+  designWidthInput.max = '200';
+  designWidthInput.step = '1';
+  designWidthInput.value = '14';
+
+  const designWidthUnit = document.createElement('span');
+  designWidthUnit.className = 'svg-prep-design-width-unit';
+  designWidthUnit.textContent = 'mm';
+
+  designWidthLabel.append(designWidthInput, ' ', designWidthUnit);
+  designWidthGroup.appendChild(designWidthLabel);
+
+  header.append(title, designWidthGroup, fullscreenBtn, closeBtn);
 
   // Dual preview panes
   const previews = document.createElement('div');
@@ -223,6 +246,8 @@ function buildWorkspaceDom() {
     refs: {
       header,
       title,
+      designWidthGroup,
+      designWidthInput,
       fullscreenBtn,
       closeBtn,
       previews,
@@ -281,12 +306,15 @@ function buildZoomControls(pane) {
 function populateObjectList(listEl, elements, liveRegion) {
   listEl.innerHTML = '';
   const roles = [];
+  const offsets = [];
+  const offsetEnabled = isEnabled('svg_path_offset');
 
   elements.forEach((el, i) => {
     const name = describeElement(el.element, i);
     const color = swatchColor(el);
     const role = el.autoRole || 'ignore';
     roles.push(role);
+    offsets.push(0);
 
     const item = document.createElement('div');
     item.className = 'svg-prep-object';
@@ -326,22 +354,35 @@ function populateObjectList(listEl, elements, liveRegion) {
       fieldset.appendChild(lbl);
     });
 
-    // Warning badge (if element has warnings)
+    item.append(swatch, nameSpan, fieldset);
+
+    if (offsetEnabled) {
+      const offsetInput = document.createElement('input');
+      offsetInput.type = 'number';
+      offsetInput.className = 'svg-prep-offset-input';
+      offsetInput.name = `svg-prep-offset-${i}`;
+      offsetInput.min = '-2';
+      offsetInput.max = '2';
+      offsetInput.step = '0.1';
+      offsetInput.value = '0';
+      offsetInput.setAttribute('aria-label', `Offset for ${name} (mm)`);
+      if (role === 'ignore') offsetInput.disabled = true;
+      item.appendChild(offsetInput);
+    }
+
     if (el.warnings && el.warnings.length > 0) {
       const warning = document.createElement('span');
       warning.className = 'svg-prep-object-warning';
       warning.setAttribute('aria-label', el.warnings.join('; '));
       warning.textContent = '\u26A0';
-      item.append(swatch, nameSpan, fieldset, warning);
-    } else {
-      item.append(swatch, nameSpan, fieldset);
+      item.appendChild(warning);
     }
 
     listEl.appendChild(item);
   });
 
   listEl.appendChild(liveRegion);
-  return roles;
+  return { roles, offsets };
 }
 
 /**
@@ -372,9 +413,11 @@ function renderWarnings(warningsEl, warnings) {
  *
  * @param {HTMLElement} containerEl - Parent element to append the workspace into
  * @returns {{
- *   open: (svgString: string, analysis: Object) => void,
+ *   open: (svgString: string, analysis: Object, callbacks?: Object) => void,
  *   close: () => void,
  *   getResult: () => string|null,
+ *   getRoleOverrides: () => string[],
+ *   getOffsetOverrides: () => number[],
  *   destroy: () => void,
  *   openFullscreen: () => void,
  *   closeFullscreen: () => void,
@@ -394,6 +437,7 @@ export function createSvgPrepWorkspace(containerEl) {
   let previousFocusEl = null;
   let currentResult = null;
   let roles = [];
+  let offsets = [];
   let currentSvgString = null;
   let currentAnalysis = null;
   let currentSvgMeta = null;
@@ -664,6 +708,7 @@ export function createSvgPrepWorkspace(containerEl) {
     } else if (btn.dataset.action === 'reset') {
       if (currentAnalysis) {
         roles = currentAnalysis.elements.map((el) => el.autoRole || 'ignore');
+        offsets = currentAnalysis.elements.map(() => 0);
         const items = refs.objects.querySelectorAll('.svg-prep-object');
         items.forEach((item, i) => {
           const role = roles[i];
@@ -671,6 +716,11 @@ export function createSvgPrepWorkspace(containerEl) {
           radios.forEach((r) => {
             r.checked = r.value === role;
           });
+          const offsetInput = item.querySelector('.svg-prep-offset-input');
+          if (offsetInput) {
+            offsetInput.value = '0';
+            offsetInput.disabled = role === 'ignore';
+          }
           const nameSpan = item.querySelector('.svg-prep-object-name');
           const nameText = nameSpan ? nameSpan.textContent : `Element ${i + 1}`;
           item.setAttribute('aria-label', `${nameText}, role: ${role}`);
@@ -706,6 +756,10 @@ export function createSvgPrepWorkspace(containerEl) {
     return [...roles];
   }
 
+  function getOffsetOverrides() {
+    return [...offsets];
+  }
+
   function open(svgString, analysis, callbacks = {}) {
     if (isOpen) close();
 
@@ -717,11 +771,13 @@ export function createSvgPrepWorkspace(containerEl) {
     currentAnalysis = analysis;
     currentSvgMeta = extractSvgMeta(svgString);
 
-    roles = populateObjectList(
+    const populated = populateObjectList(
       refs.objects,
       analysis.elements || [],
       liveRegion
     );
+    roles = populated.roles;
+    offsets = populated.offsets;
 
     if (callbacks.initialOverrides) {
       applyInitialOverrides(callbacks.initialOverrides);
@@ -846,6 +902,7 @@ export function createSvgPrepWorkspace(containerEl) {
     close,
     getResult,
     getRoleOverrides,
+    getOffsetOverrides,
     destroy,
     openFullscreen,
     closeFullscreen,
