@@ -7411,6 +7411,21 @@ body.first-visit-blocking #app {
   outline: 2px solid currentColor;
 }
 
+/* Dark Theme SVG Gallery Visibility */
+:root[data-theme='dark'] .svg-gallery-thumb {
+  filter: invert(1);
+}
+
+:root[data-high-contrast='true'][data-theme='dark'] .svg-gallery-thumb {
+  filter: invert(1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .svg-gallery-thumb {
+    filter: invert(1);
+  }
+}
+
 /* Responsive */
 @media (max-width: 767px) {
 
