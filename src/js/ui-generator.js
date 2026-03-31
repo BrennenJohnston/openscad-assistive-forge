@@ -143,7 +143,7 @@ export function clearGalleryOptions() {
  * Get stored SVG preparation metadata for a given filename.
  * Returns the metadata object or null if none is stored.
  * @param {string} fileName
- * @returns {{rawSvg: string, preparedSvg: string|null, prepOverrides: string[]|null, prepAnalysis: Object|null}|null}
+ * @returns {{rawSvg: string, preparedSvg: string|null, prepOverrides: string[]|null, prepOffsets: number[]|null, prepAnalysis: Object|null}|null}
  */
 export function getSvgPrepMetadata(fileName) {
   return svgPrepMetadataByFile[fileName] || null;
@@ -153,7 +153,7 @@ export function getSvgPrepMetadata(fileName) {
  * Store SVG preparation metadata for a given filename.
  * Pass null to clear metadata for the file.
  * @param {string} fileName
- * @param {{rawSvg: string, preparedSvg: string|null, prepOverrides: string[]|null, prepAnalysis: Object|null}|null} metadata
+ * @param {{rawSvg: string, preparedSvg: string|null, prepOverrides: string[]|null, prepOffsets: number[]|null, prepAnalysis: Object|null}|null} metadata
  */
 export function setSvgPrepMetadata(fileName, metadata) {
   if (metadata) {
@@ -1901,6 +1901,7 @@ function createFileControl(param, onChange) {
         onApply: handleEditorApply,
         onKeepOriginal: handleEditorKeep,
         initialOverrides: storedMeta?.prepOverrides || null,
+        initialOffsets: storedMeta?.prepOffsets || null,
       });
       announceChange('SVG preparation editor opened');
     });
@@ -1963,11 +1964,13 @@ function createFileControl(param, onChange) {
   function handleEditorApply(result) {
     if (!result) return;
     const overrides = workspace ? workspace.getRoleOverrides() : null;
+    const offsetOverrides = workspace ? workspace.getOffsetOverrides() : null;
     if (currentFileName) {
       setSvgPrepMetadata(currentFileName, {
         rawSvg: currentRawSvg,
         preparedSvg: result,
         prepOverrides: overrides,
+        prepOffsets: offsetOverrides,
         prepAnalysis: currentSvgAnalysis,
       });
     }
@@ -1990,6 +1993,7 @@ function createFileControl(param, onChange) {
         rawSvg: currentRawSvg,
         preparedSvg: null,
         prepOverrides: null,
+        prepOffsets: null,
         prepAnalysis: currentSvgAnalysis,
       });
     }

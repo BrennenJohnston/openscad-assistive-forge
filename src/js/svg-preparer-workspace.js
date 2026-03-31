@@ -802,6 +802,21 @@ export function createSvgPrepWorkspace(containerEl) {
     });
   }
 
+  function applyInitialOffsets(initialOffsets) {
+    if (!Array.isArray(initialOffsets)) return;
+    initialOffsets.forEach((val, i) => {
+      if (i >= offsets.length) return;
+      const num = typeof val === 'number' && Number.isFinite(val) ? val : 0;
+      offsets[i] = num;
+      const item = refs.objects.querySelector(
+        `.svg-prep-object[data-index="${i}"]`
+      );
+      if (!item) return;
+      const input = item.querySelector('.svg-prep-offset-input');
+      if (input) input.value = String(num);
+    });
+  }
+
   function getRoleOverrides() {
     return [...roles];
   }
@@ -831,6 +846,9 @@ export function createSvgPrepWorkspace(containerEl) {
 
     if (callbacks.initialOverrides) {
       applyInitialOverrides(callbacks.initialOverrides);
+    }
+    if (callbacks.initialOffsets) {
+      applyInitialOffsets(callbacks.initialOffsets);
     }
 
     renderWarnings(refs.warnings, analysis.warnings || []);
