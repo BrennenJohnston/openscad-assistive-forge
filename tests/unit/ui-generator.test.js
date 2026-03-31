@@ -9,6 +9,7 @@ import {
   updateDependentParameters,
   setGalleryOptions,
   clearGalleryOptions,
+  appendUserSvgToGallery,
   getSvgPrepMetadata,
   setSvgPrepMetadata,
   clearSvgPrepMetadata
@@ -1199,6 +1200,79 @@ describe('UI Generator', () => {
       // Navigate to home
       listbox.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true }))
       expect(options[0].getAttribute('aria-selected')).toBe('true')
+    })
+
+    it('appendUserSvgToGallery creates exactly one "Your uploads" heading for multiple uploads', () => {
+      setGalleryOptions('design_file', [
+        { file: 'heart.svg', label: 'Heart', url: '/examples/heart.svg' },
+      ])
+
+      const schema = buildParams({
+        params: [
+          {
+            name: 'design_file',
+            type: 'file',
+            default: '',
+            uiType: 'file',
+            acceptedExtensions: ['svg']
+          }
+        ]
+      })
+      const onChange = vi.fn()
+
+      renderParameterUI(schema, container, onChange, {})
+
+      appendUserSvgToGallery('design_file', {
+        file: 'upload1.svg', label: 'Upload 1', url: '/uploads/upload1.svg', userUpload: true
+      })
+      appendUserSvgToGallery('design_file', {
+        file: 'upload2.svg', label: 'Upload 2', url: '/uploads/upload2.svg', userUpload: true
+      })
+      appendUserSvgToGallery('design_file', {
+        file: 'upload3.svg', label: 'Upload 3', url: '/uploads/upload3.svg', userUpload: true
+      })
+
+      const gallery = container.querySelector('.svg-gallery')
+      const headings = gallery.querySelectorAll('.svg-gallery-user-heading')
+      expect(headings.length).toBe(1)
+      expect(headings[0].textContent).toBe('Your uploads')
+
+      const userListboxes = gallery.querySelectorAll('.svg-gallery-user-listbox')
+      expect(userListboxes.length).toBe(1)
+
+      const userOptions = userListboxes[0].querySelectorAll('[role="option"]')
+      expect(userOptions.length).toBe(3)
+    })
+
+    it('appendUserSvgToGallery deduplicates by file name and userUpload flag', () => {
+      setGalleryOptions('design_file', [
+        { file: 'heart.svg', label: 'Heart', url: '/examples/heart.svg' },
+      ])
+
+      const schema = buildParams({
+        params: [
+          {
+            name: 'design_file',
+            type: 'file',
+            default: '',
+            uiType: 'file',
+            acceptedExtensions: ['svg']
+          }
+        ]
+      })
+      const onChange = vi.fn()
+
+      renderParameterUI(schema, container, onChange, {})
+
+      const svgOpt = {
+        file: 'upload1.svg', label: 'Upload 1', url: '/uploads/upload1.svg', userUpload: true
+      }
+      appendUserSvgToGallery('design_file', svgOpt)
+      appendUserSvgToGallery('design_file', svgOpt)
+
+      const userListbox = container.querySelector('.svg-gallery-user-listbox')
+      const userOptions = userListbox.querySelectorAll('[role="option"]')
+      expect(userOptions.length).toBe(1)
     })
   })
 

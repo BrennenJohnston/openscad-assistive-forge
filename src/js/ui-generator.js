@@ -210,7 +210,7 @@ export function appendUserSvgToGallery(paramName, svgOpt) {
   const index = opts.length - 1;
 
   // Insert a "Your uploads" heading before the first user upload
-  if (!listbox.querySelector('.svg-gallery-user-heading')) {
+  if (!listbox.parentNode.querySelector('.svg-gallery-user-heading')) {
     const heading = document.createElement('span');
     heading.className = 'svg-gallery-heading svg-gallery-user-heading';
     heading.textContent = 'Your uploads';
