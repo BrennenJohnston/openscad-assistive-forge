@@ -163,6 +163,17 @@ export const FLAGS = {
     userConfigurable: true,
     killSwitch: false,
   },
+  svg_path_offset: {
+    id: 'svg_path_offset',
+    name: 'SVG Path Offset',
+    description:
+      'Per-element offset controls in the SVG prep editor for adjusting path insets/outsets before boolean flatten',
+    default: false,
+    rollout: 0,
+    userConfigurable: true,
+    killSwitch: false,
+    requires: ['svg_preparer'],
+  },
 };
 
 // Storage key for user preferences
