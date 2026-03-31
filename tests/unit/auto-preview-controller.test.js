@@ -1326,6 +1326,52 @@ describe('AutoPreviewController', () => {
 
       expect(result).toBe(scad)
     })
+
+    it('handles if/else inside difference() without splitting the block', () => {
+      const scad = [
+        'difference() {',
+        '    if (corner_radius > 0) {',
+        '        rounded_box();',
+        '    } else {',
+        '        cube([width, depth, height]);',
+        '    }',
+        '    translate([0,0,0]) cube(5);',
+        '}'
+      ].join('\n')
+      const result = AutoPreviewController.injectCsgColors(scad)
+
+      expect(result).toContain(`color("${GOLD}")`)
+      expect(result).toContain(`color("${GREEN}")`)
+      expect(result).not.toContain('} color("' + GREEN + '") { else')
+      const greenIdx = result.indexOf(`color("${GREEN}")`);
+      const afterGreen = result.slice(greenIdx);
+      expect(afterGreen).toContain('translate')
+      expect(afterGreen).toContain('cube(5)')
+    })
+
+    it('handles if/else if/else inside difference() without splitting', () => {
+      const scad = [
+        'difference() {',
+        '    if (mode == 1) {',
+        '        sphere(10);',
+        '    } else if (mode == 2) {',
+        '        cylinder(r=5, h=10);',
+        '    } else {',
+        '        cube(10);',
+        '    }',
+        '    translate([5,5,5]) sphere(2);',
+        '}'
+      ].join('\n')
+      const result = AutoPreviewController.injectCsgColors(scad)
+
+      expect(result).toContain(`color("${GOLD}")`)
+      expect(result).toContain(`color("${GREEN}")`)
+      expect(result).not.toContain('} color("' + GREEN + '") { else')
+      const greenIdx = result.indexOf(`color("${GREEN}")`);
+      const afterGreen = result.slice(greenIdx);
+      expect(afterGreen).toContain('translate')
+      expect(afterGreen).toContain('sphere(2)')
+    })
   })
 
   describe('CSG Color Preprocessing — Preview Format Decision', () => {

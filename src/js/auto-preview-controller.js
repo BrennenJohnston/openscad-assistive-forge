@@ -780,7 +780,10 @@ export class AutoPreviewController {
             break;
           }
           if (firstChildEnd === -1 && depth === 1) {
-            firstChildEnd = i + 1;
+            const rest = cleaned.slice(i + 1).trimStart();
+            if (!(/^else\b/.test(rest))) {
+              firstChildEnd = i + 1;
+            }
           }
         } else if (ch === ';' && firstChildEnd === -1 && depth === 1) {
           firstChildEnd = i + 1;
