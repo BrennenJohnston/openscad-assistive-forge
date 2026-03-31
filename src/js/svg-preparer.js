@@ -50,6 +50,13 @@ const NON_RENDERING_CONTAINERS = new Set([
   'pattern',
 ]);
 
+/**
+ * Maximum rendering elements before an SVG is rejected as too complex.
+ * Beyond this threshold path-bool operations become prohibitively slow
+ * and produce unreliable output.
+ */
+const MAX_ELEMENT_COUNT = 50;
+
 // CSS Level 2 named colors → hex.
 // parseLuminance() (image-import.js:130) handles rgb() and #hex only;
 // named colors like "black"/"white" fall through to the default return 0.
@@ -512,13 +519,14 @@ function isInsideNonRenderingScope(element) {
  *
  * @param {string} svgString - Complete SVG markup
  * @returns {{
- *   status: 'ready'|'needs_review'|'unsupported',
+ *   status: 'ready'|'needs_review'|'unsupported'|'too_complex',
  *   confidence: number,
  *   elements: Array<{element: Element, pathData: string, fill: string, stroke: string, luminance: number|null, autoRole: string, warnings: string[]}>,
  *   warnings: string[],
  *   unsupportedFeatures: string[],
- *   recommendation: 'auto_prepare'|'open_editor'|'pass_through',
+ *   recommendation: 'auto_prepare'|'open_editor'|'pass_through'|'reject',
  *   singleElement: boolean,
+ *   elementCount?: number,
  * }}
  */
 export function analyzeSvg(svgString) {
@@ -548,6 +556,22 @@ export function analyzeSvg(svgString) {
     } else {
       renderElements.push(el);
     }
+  }
+
+  if (renderElements.length > MAX_ELEMENT_COUNT) {
+    return {
+      status: 'too_complex',
+      confidence: 0,
+      elements: [],
+      warnings: [
+        `This SVG has ${renderElements.length} elements — the maximum is ${MAX_ELEMENT_COUNT}. ` +
+        'Simplify the SVG in a vector editor (e.g., merge paths, remove hidden layers) before importing.',
+      ],
+      unsupportedFeatures: [],
+      recommendation: 'reject',
+      singleElement: false,
+      elementCount: renderElements.length,
+    };
   }
 
   const filledElements = renderElements.filter((el) => {

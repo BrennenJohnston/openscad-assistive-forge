@@ -1946,6 +1946,17 @@ function createFileControl(param, onChange) {
         statusCard.appendChild(ul);
       }
       statusCard.appendChild(createStatusEditButton());
+    } else if (analysis.status === 'too_complex') {
+      badge.textContent = `Too complex (${analysis.elementCount ?? '?'} elements)`;
+      badge.dataset.level = 'error';
+      statusCard.appendChild(badge);
+
+      if (analysis.warnings && analysis.warnings.length > 0) {
+        const guidance = document.createElement('p');
+        guidance.className = 'svg-prep-status-guidance';
+        guidance.textContent = analysis.warnings[0];
+        statusCard.appendChild(guidance);
+      }
     }
   }
 
@@ -2010,40 +2021,70 @@ function createFileControl(param, onChange) {
       return maybePrepareForOpenScad(rawSvgText);
     }
 
-    const stored = currentFileName
-      ? getSvgPrepMetadata(currentFileName)
-      : null;
-    if (stored && stored.rawSvg === rawSvgText) {
-      currentSvgAnalysis = stored.prepAnalysis || analyzeSvg(rawSvgText);
-      updateStatusCard(currentSvgAnalysis);
+    try {
+      const stored = currentFileName
+        ? getSvgPrepMetadata(currentFileName)
+        : null;
+      if (stored && stored.rawSvg === rawSvgText) {
+        currentSvgAnalysis = stored.prepAnalysis || analyzeSvg(rawSvgText);
+        updateStatusCard(currentSvgAnalysis);
+        statusCard.style.display = '';
+        return stored.preparedSvg || rawSvgText;
+      }
+
+      const analysis = analyzeSvg(rawSvgText);
+
+      currentSvgAnalysis = analysis;
+      updateStatusCard(analysis);
       statusCard.style.display = '';
-      return stored.preparedSvg || rawSvgText;
-    }
 
-    const analysis = analyzeSvg(rawSvgText);
+      if (analysis.recommendation === 'pass_through') {
+        return rawSvgText;
+      }
 
-    currentSvgAnalysis = analysis;
-    updateStatusCard(analysis);
-    statusCard.style.display = '';
+      if (analysis.recommendation === 'reject') {
+        announceChange(
+          analysis.warnings?.[0] || 'SVG is too complex to prepare'
+        );
+        return rawSvgText;
+      }
 
-    if (analysis.recommendation === 'pass_through') {
+      const prepared = prepareSvg(rawSvgText);
+
+      if (
+        analysis.recommendation === 'open_editor' &&
+        workspace
+      ) {
+        workspace.open(rawSvgText, analysis, {
+          onApply: handleEditorApply,
+          onKeepOriginal: handleEditorKeep,
+        });
+        announceChange('SVG needs review \u2014 editor opened');
+      }
+
+      return prepared;
+    } catch (err) {
+      console.error('[SVG Preparer] Processing failed:', err);
+      currentSvgAnalysis = null;
+
+      statusCard.innerHTML = '';
+      const badge = document.createElement('span');
+      badge.className = 'svg-prep-status-badge';
+      badge.textContent = 'Preparation failed';
+      badge.dataset.level = 'error';
+      statusCard.appendChild(badge);
+
+      const guidance = document.createElement('p');
+      guidance.className = 'svg-prep-status-guidance';
+      guidance.textContent =
+        'An error occurred while analyzing this SVG. ' +
+        'Try a simpler file or use a vector editor to clean up the SVG.';
+      statusCard.appendChild(guidance);
+      statusCard.style.display = '';
+
+      announceChange('SVG preparation failed \u2014 try a simpler file');
       return rawSvgText;
     }
-
-    const prepared = prepareSvg(rawSvgText);
-
-    if (
-      analysis.recommendation === 'open_editor' &&
-      workspace
-    ) {
-      workspace.open(rawSvgText, analysis, {
-        onApply: handleEditorApply,
-        onKeepOriginal: handleEditorKeep,
-      });
-      announceChange('SVG needs review \u2014 editor opened');
-    }
-
-    return prepared;
   }
 
   // Button triggers file input
