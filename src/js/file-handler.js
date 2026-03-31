@@ -196,6 +196,8 @@ export const EXAMPLE_DEFINITIONS = {
     manifest: '/examples/q-charm/manifest.json',
     additionalFiles: [
       '/examples/q-charm/q_Charm_L.dxf',
+      '/examples/q-charm/presets/large-charm.json',
+      '/examples/q-charm/presets/small-charm.json',
       '/examples/nasif-charm-maker/svg-library/smiley.svg',
       '/examples/nasif-charm-maker/svg-library/heart.svg',
       '/examples/nasif-charm-maker/svg-library/star.svg',

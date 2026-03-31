@@ -8,6 +8,8 @@
   "files": [
     "q_charm.scad",
     "q_Charm_L.dxf",
+    "presets/large-charm.json",
+    "presets/small-charm.json",
     "smiley.svg",
     "heart.svg",
     "star.svg",
@@ -67,6 +69,12 @@
       "name": "Adaptive Solutions Mini-Hackathon",
       "team": "HuskyADAPT",
       "url": "https://create.uw.edu/adaptive-solutions-mini-hackathon/"
+    },
+    "prior_art": {
+      "name": "Duy Do",
+      "club": "UW WOOF3D",
+      "project": "AAC Charms With Boardmaker Symbols For Silicone Bracelets",
+      "url": "https://www.thingiverse.com/thing:7153594"
     }
   }
 }

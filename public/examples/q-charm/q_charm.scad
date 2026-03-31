@@ -2,6 +2,7 @@
 // C-shaped clip-on charm for silicone bracelets with customizable design.
 // Profile stands vertically; the outer surface faces up for engraving.
 // Concept inspired by Nasif Zaman's image-to-OpenSCAD proof-of-concept.
+// AAC bracelet charm prior art by Duy Do (UW WOOF3D): thingiverse.com/thing:7153594
 // License: CC0 (Public Domain)
 
 /* [Fit] */

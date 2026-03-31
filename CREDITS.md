@@ -103,6 +103,18 @@ Washington.
 - **Context**: The hackathon paired community members who use assistive
   technology with engineering students to co-design practical solutions.
 
+### Duy Do & UW WOOF3D
+
+**Duy Do**, working as part of the **UW WOOF3D** club at the University
+of Washington, created AAC charms with Boardmaker symbols designed to
+clip onto silicone bracelets. His original project files directly
+informed the Bracelet Clip Charm tool's design direction.
+
+- **Creator**: Duy Do
+- **Club**: UW WOOF3D (University of Washington)
+- **URL**: https://www.thingiverse.com/thing:7153594
+- **Project**: AAC Charms With Boardmaker Symbols For Silicone Bracelets
+
 ---
 
 ## Special Thanks
