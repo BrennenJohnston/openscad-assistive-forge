@@ -13807,6 +13807,24 @@ body.tutorial-body-locked {
   outline-offset: 2px;
 }
 
+/* ── Dark Theme SVG Visibility ──────────────────────────────────────────── */
+:root[data-theme='dark'] .svg-prep-source-pane svg,
+:root[data-theme='dark'] .svg-prep-result-pane svg {
+  filter: invert(1);
+}
+
+:root[data-high-contrast='true'][data-theme='dark'] .svg-prep-source-pane svg,
+:root[data-high-contrast='true'][data-theme='dark'] .svg-prep-result-pane svg {
+  filter: invert(1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .svg-prep-source-pane svg,
+  :root:not([data-theme='light']) .svg-prep-result-pane svg {
+    filter: invert(1);
+  }
+}
+
 /* ── Reduced Motion ──────────────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
 
