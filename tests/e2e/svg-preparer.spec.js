@@ -143,3 +143,25 @@ test.describe('SVG Preparer — Feature Flag', () => {
     expect(unknownFlagWarning).toBeUndefined()
   })
 })
+
+// ---------------------------------------------------------------------------
+// SVG Path Offset feature flag (no WASM needed)
+// ---------------------------------------------------------------------------
+
+test.describe('SVG Path Offset — Feature Flag', () => {
+  test('flag_svg_path_offset=true is recognized without unknown-flag warnings', async ({ page }) => {
+    const consoleWarnings = []
+    page.on('console', (msg) => {
+      if (msg.type() === 'warning') consoleWarnings.push(msg.text())
+    })
+
+    await page.goto('/?flag_svg_preparer=true&flag_svg_path_offset=true')
+    await expect(page.locator('body')).toBeVisible()
+    await page.waitForTimeout(2000)
+
+    const unknownFlagWarning = consoleWarnings.find(
+      (msg) => msg.includes('Unknown flag') && msg.includes('svg_path_offset')
+    )
+    expect(unknownFlagWarning).toBeUndefined()
+  })
+})

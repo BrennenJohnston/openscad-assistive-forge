@@ -33,12 +33,17 @@ vi.mock('../../src/js/announcer.js', () => ({
   POLITENESS: { POLITE: 'polite', ASSERTIVE: 'assertive' },
 }));
 
+vi.mock('../../src/js/feature-flags.js', () => ({
+  isEnabled: vi.fn(() => false),
+}));
+
 import {
   createSvgPrepWorkspace,
   describeElement,
 } from '../../src/js/svg-preparer-workspace.js';
 import { createDocumentFocusTrap } from '../../src/js/focus-trap.js';
 import { announce } from '../../src/js/announcer.js';
+import { isEnabled } from '../../src/js/feature-flags.js';
 
 // ── Test data ────────────────────────────────────────────────────────────────
 
@@ -1784,5 +1789,356 @@ describe('Fullscreen sticky layout CSS contract', () => {
     );
     expect(baseMatch).not.toBeNull();
     expect(baseMatch[1]).not.toMatch(/overflow\s*:\s*hidden/);
+  });
+});
+
+// ── Phase 9 — Offset input unit tests ────────────────────────────────────
+
+describe('Phase 9: offset inputs (flag disabled)', () => {
+  it('does not render offset inputs when flag is disabled', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(2));
+
+    const inputs = ws._root.querySelectorAll('.svg-prep-offset-input');
+    expect(inputs.length).toBe(0);
+
+    ws.destroy();
+  });
+
+  it('design-width group is hidden when flag is disabled', () => {
+    const ws = createSvgPrepWorkspace(container);
+
+    const group = ws._root.querySelector('.svg-prep-design-width');
+    expect(group.hidden).toBe(true);
+
+    ws.destroy();
+  });
+});
+
+describe('Phase 9: offset inputs (flag enabled)', () => {
+  beforeEach(() => {
+    isEnabled.mockReturnValue(true);
+  });
+  afterEach(() => {
+    isEnabled.mockReturnValue(false);
+  });
+
+  it('renders an offset input per element', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(3));
+
+    const inputs = ws._root.querySelectorAll('.svg-prep-offset-input');
+    expect(inputs.length).toBe(3);
+
+    ws.destroy();
+  });
+
+  it('offset input has correct type, range, and step', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1));
+
+    const input = ws._root.querySelector('.svg-prep-offset-input');
+    expect(input.type).toBe('number');
+    expect(input.min).toBe('-2');
+    expect(input.max).toBe('2');
+    expect(input.step).toBe('0.1');
+    expect(input.value).toBe('0');
+
+    ws.destroy();
+  });
+
+  it('offset input has aria-label including element name and units', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1));
+
+    const input = ws._root.querySelector('.svg-prep-offset-input');
+    expect(input.getAttribute('aria-label')).toMatch(/Offset for .+ \(mm\)/);
+
+    ws.destroy();
+  });
+
+  it('offset input starts disabled when autoRole is "ignore"', () => {
+    const analysis = makeAnalysis(2);
+    analysis.elements[1].autoRole = 'ignore';
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, analysis);
+
+    const items = ws._root.querySelectorAll('.svg-prep-object');
+    const secondInput = items[1].querySelector('.svg-prep-offset-input');
+    expect(secondInput.disabled).toBe(true);
+
+    const firstInput = items[0].querySelector('.svg-prep-offset-input');
+    expect(firstInput.disabled).toBe(false);
+
+    ws.destroy();
+  });
+
+  it('disables offset input when role changes to "ignore"', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1));
+
+    const item = ws._root.querySelector('.svg-prep-object');
+    const ignoreRadio = Array.from(
+      item.querySelectorAll('input[type="radio"]')
+    ).find((r) => r.value === 'ignore');
+    ignoreRadio.checked = true;
+    ignoreRadio.dispatchEvent(new Event('change', { bubbles: true }));
+
+    const offsetInput = item.querySelector('.svg-prep-offset-input');
+    expect(offsetInput.disabled).toBe(true);
+
+    ws.destroy();
+  });
+
+  it('re-enables offset input when role changes back from "ignore"', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1));
+
+    const item = ws._root.querySelector('.svg-prep-object');
+    const radios = item.querySelectorAll('input[type="radio"]');
+    const ignoreRadio = Array.from(radios).find((r) => r.value === 'ignore');
+    const fgRadio = Array.from(radios).find((r) => r.value === 'foreground');
+
+    ignoreRadio.checked = true;
+    ignoreRadio.dispatchEvent(new Event('change', { bubbles: true }));
+
+    fgRadio.checked = true;
+    fgRadio.dispatchEvent(new Event('change', { bubbles: true }));
+
+    expect(item.querySelector('.svg-prep-offset-input').disabled).toBe(false);
+
+    ws.destroy();
+  });
+
+  it('resets offset value to 0 when role changes to "ignore"', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1));
+
+    const item = ws._root.querySelector('.svg-prep-object');
+    const offsetInput = item.querySelector('.svg-prep-offset-input');
+    offsetInput.value = '0.5';
+    offsetInput.dispatchEvent(new Event('input', { bubbles: true }));
+
+    const ignoreRadio = Array.from(
+      item.querySelectorAll('input[type="radio"]')
+    ).find((r) => r.value === 'ignore');
+    ignoreRadio.checked = true;
+    ignoreRadio.dispatchEvent(new Event('change', { bubbles: true }));
+
+    expect(offsetInput.value).toBe('0');
+
+    ws.destroy();
+  });
+});
+
+describe('Phase 9: getOffsetOverrides()', () => {
+  beforeEach(() => {
+    isEnabled.mockReturnValue(true);
+  });
+  afterEach(() => {
+    isEnabled.mockReturnValue(false);
+  });
+
+  it('returns initial zeros for all elements', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(3));
+
+    expect(ws.getOffsetOverrides()).toEqual([0, 0, 0]);
+
+    ws.destroy();
+  });
+
+  it('reflects offset changes from input events', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(2));
+
+    const inputs = ws._root.querySelectorAll('.svg-prep-offset-input');
+    inputs[0].value = '0.5';
+    inputs[0].dispatchEvent(new Event('input', { bubbles: true }));
+
+    expect(ws.getOffsetOverrides()[0]).toBe(0.5);
+    expect(ws.getOffsetOverrides()[1]).toBe(0);
+
+    ws.destroy();
+  });
+
+  it('returns a copy that does not mutate internal state', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(2));
+
+    const overrides = ws.getOffsetOverrides();
+    overrides[0] = 99;
+
+    expect(ws.getOffsetOverrides()[0]).toBe(0);
+
+    ws.destroy();
+  });
+
+  it('is callable from the onApply callback before close', () => {
+    let capturedOffsets = null;
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(2), {
+      onApply: () => {
+        capturedOffsets = ws.getOffsetOverrides();
+      },
+    });
+
+    const inputs = ws._root.querySelectorAll('.svg-prep-offset-input');
+    inputs[0].value = '1.0';
+    inputs[0].dispatchEvent(new Event('input', { bubbles: true }));
+
+    ws._root.querySelector('[data-action="apply"]').click();
+    expect(capturedOffsets).toEqual([1.0, 0]);
+
+    ws.destroy();
+  });
+});
+
+describe('Phase 9: open() with initialOffsets', () => {
+  beforeEach(() => {
+    isEnabled.mockReturnValue(true);
+  });
+  afterEach(() => {
+    isEnabled.mockReturnValue(false);
+  });
+
+  it('applies initial offsets to input values', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(3), {
+      initialOffsets: [0.5, -0.3, 0],
+    });
+
+    const inputs = ws._root.querySelectorAll('.svg-prep-offset-input');
+    expect(inputs[0].value).toBe('0.5');
+    expect(inputs[1].value).toBe('-0.3');
+    expect(inputs[2].value).toBe('0');
+
+    ws.destroy();
+  });
+
+  it('getOffsetOverrides reflects initial offsets', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(2), {
+      initialOffsets: [1.0, -0.5],
+    });
+
+    expect(ws.getOffsetOverrides()).toEqual([1.0, -0.5]);
+
+    ws.destroy();
+  });
+
+  it('ignores non-finite values in initialOffsets', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(3), {
+      initialOffsets: [NaN, null, undefined],
+    });
+
+    expect(ws.getOffsetOverrides()).toEqual([0, 0, 0]);
+
+    ws.destroy();
+  });
+
+  it('works without initialOffsets (backward compat)', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(2));
+
+    expect(ws.getOffsetOverrides()).toEqual([0, 0]);
+
+    ws.destroy();
+  });
+});
+
+describe('Phase 9: design-width input', () => {
+  beforeEach(() => {
+    isEnabled.mockReturnValue(true);
+  });
+  afterEach(() => {
+    isEnabled.mockReturnValue(false);
+  });
+
+  it('renders with default value of 14', () => {
+    const ws = createSvgPrepWorkspace(container);
+
+    const input = ws._root.querySelector('.svg-prep-design-width-input');
+    expect(input).toBeTruthy();
+    expect(input.value).toBe('14');
+
+    ws.destroy();
+  });
+
+  it('has correct type and constraints', () => {
+    const ws = createSvgPrepWorkspace(container);
+
+    const input = ws._root.querySelector('.svg-prep-design-width-input');
+    expect(input.type).toBe('number');
+    expect(input.min).toBe('1');
+    expect(input.max).toBe('200');
+    expect(input.step).toBe('1');
+
+    ws.destroy();
+  });
+
+  it('design-width group is visible when flag is enabled', () => {
+    const ws = createSvgPrepWorkspace(container);
+
+    const group = ws._root.querySelector('.svg-prep-design-width');
+    expect(group.hidden).toBe(false);
+
+    ws.destroy();
+  });
+
+  it('has a label with "mm" unit suffix', () => {
+    const ws = createSvgPrepWorkspace(container);
+
+    const unit = ws._root.querySelector('.svg-prep-design-width-unit');
+    expect(unit).toBeTruthy();
+    expect(unit.textContent).toBe('mm');
+
+    ws.destroy();
+  });
+});
+
+describe('Phase 9: Reset restores offsets', () => {
+  beforeEach(() => {
+    isEnabled.mockReturnValue(true);
+  });
+  afterEach(() => {
+    isEnabled.mockReturnValue(false);
+  });
+
+  it('Reset clears offset values to zero', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(2));
+
+    const inputs = ws._root.querySelectorAll('.svg-prep-offset-input');
+    inputs[0].value = '1.5';
+    inputs[0].dispatchEvent(new Event('input', { bubbles: true }));
+
+    ws._root.querySelector('[data-action="reset"]').click();
+
+    expect(inputs[0].value).toBe('0');
+    expect(ws.getOffsetOverrides()).toEqual([0, 0]);
+
+    ws.destroy();
+  });
+
+  it('Reset re-enables offset inputs disabled by ignore role', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1));
+
+    const item = ws._root.querySelector('.svg-prep-object');
+    const ignoreRadio = Array.from(
+      item.querySelectorAll('input[type="radio"]')
+    ).find((r) => r.value === 'ignore');
+    ignoreRadio.checked = true;
+    ignoreRadio.dispatchEvent(new Event('change', { bubbles: true }));
+
+    expect(item.querySelector('.svg-prep-offset-input').disabled).toBe(true);
+
+    ws._root.querySelector('[data-action="reset"]').click();
+
+    expect(item.querySelector('.svg-prep-offset-input').disabled).toBe(false);
+
+    ws.destroy();
   });
 });
