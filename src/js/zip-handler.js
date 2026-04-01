@@ -506,6 +506,7 @@ export function buildPresetCompanionMap(files, parameterSets, options = {}) {
   function tokenise(name) {
     return name
       .toLowerCase()
+      .replace(/coughdrop/g, 'cough drop')
       .split(/[\s\-_/,().]+/)
       .filter((t) => t.length > 1 || /^\d$/.test(t));
   }
@@ -515,7 +516,10 @@ export function buildPresetCompanionMap(files, parameterSets, options = {}) {
   // Single-digit tokens use exact word-boundary matching within folder segments
   // only, so token "7" does not falsely match a folder named "iPad 78".
   function scorePath(path, tokens) {
-    const lower = path.toLowerCase();
+    const lower = path
+      .toLowerCase()
+      .replace(/-equivalent\s*case/g, '')
+      .replace(/coughdrop/g, 'cough drop');
     const folderWords = new Set(
       lower
         .split('/')
