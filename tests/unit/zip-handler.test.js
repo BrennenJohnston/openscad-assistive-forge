@@ -709,6 +709,89 @@ describe('ZIP Handler', () => {
     })
   })
 
+  describe('buildPresetCompanionMap — keyguard case/app hierarchy', () => {
+    const ANDNARY_CASE_PATH =
+      'Cases and App Specifics/iPad 10,11/Andnary-equivalent Case/openings_and_additions.txt'
+
+    const KEYGUARD_FIXTURE = new Map([
+      ['main.scad', '// keyguard'],
+      ['openings_and_additions.txt', 'root default'],
+      [ANDNARY_CASE_PATH, 'andnary case-level'],
+      [
+        'Cases and App Specifics/iPad 10,11/Andnary-equivalent Case/Grid VocoChat/openings_and_additions.txt',
+        'andnary grid vocochat',
+      ],
+      [
+        'Cases and App Specifics/iPad 10,11/Andnary-equivalent Case/LWFL/openings_and_additions.txt',
+        'andnary lwfl',
+      ],
+      [
+        'Cases and App Specifics/iPad 10,11/Andnary-equivalent Case/P2G/openings_and_additions.txt',
+        'andnary p2g',
+      ],
+      [
+        'Cases and App Specifics/iPad 10,11/SUPCASE-equivalent Case/openings_and_additions.txt',
+        'supcase case-level',
+      ],
+      [
+        'Cases and App Specifics/iPad 10,11/SUPCASE-equivalent Case/TouchChat/openings_and_additions.txt',
+        'supcase touchchat',
+      ],
+    ])
+
+    it('should resolve preset to app-specific path when app subfolder name is a unique token match', () => {
+      const map = buildPresetCompanionMap(KEYGUARD_FIXTURE, {
+        'iPad 10,11 - Andnary - P2G': {},
+      })
+      expect(map.get('iPad 10,11 - Andnary - P2G').openingsPath).toBe(
+        'Cases and App Specifics/iPad 10,11/Andnary-equivalent Case/P2G/openings_and_additions.txt'
+      )
+    })
+
+    it.fails(
+      'should fall back to case-level path when preset app has no dedicated subfolder',
+      () => {
+        // BUG: "grid" token matches Grid VocoChat subfolder, causing
+        // pickBest() to return the wrong deeper path.
+        // Fix target: phases 3-5. Convert to it() once fix lands.
+        const map = buildPresetCompanionMap(KEYGUARD_FIXTURE, {
+          'iPad 10,11 - Andnary - Grid SC 50': {},
+        })
+        expect(
+          map.get('iPad 10,11 - Andnary - Grid SC 50').openingsPath
+        ).toBe(ANDNARY_CASE_PATH)
+      }
+    )
+
+    it.fails(
+      'should prefer case-level path when app tokens cause ties among deeper paths',
+      () => {
+        // BUG: Without a Grid-named subfolder, all Andnary paths tie at
+        // the same score and pickBest() returns null instead of case-level.
+        // Fix target: phases 4-5. Convert to it() once fix lands.
+        const filesWithoutGrid = new Map(KEYGUARD_FIXTURE)
+        filesWithoutGrid.delete(
+          'Cases and App Specifics/iPad 10,11/Andnary-equivalent Case/Grid VocoChat/openings_and_additions.txt'
+        )
+        const map = buildPresetCompanionMap(filesWithoutGrid, {
+          'iPad 10,11 - Andnary - Grid SC 50': {},
+        })
+        expect(
+          map.get('iPad 10,11 - Andnary - Grid SC 50').openingsPath
+        ).toBe(ANDNARY_CASE_PATH)
+      }
+    )
+
+    it('should resolve app-specific preset across case brands', () => {
+      const map = buildPresetCompanionMap(KEYGUARD_FIXTURE, {
+        'iPad 10,11 - SUPCASE - TouchChat': {},
+      })
+      expect(map.get('iPad 10,11 - SUPCASE - TouchChat').openingsPath).toBe(
+        'Cases and App Specifics/iPad 10,11/SUPCASE-equivalent Case/TouchChat/openings_and_additions.txt'
+      )
+    })
+  })
+
   describe('applyCompanionAliases', () => {
     it('should set root-level openings key from mapped nested path', () => {
       const files = new Map([
