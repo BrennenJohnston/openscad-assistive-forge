@@ -532,7 +532,6 @@ export function buildPresetCompanionMap(files, parameterSets, options = {}) {
     ).length;
   }
 
-  // Prefer deeper (longer) paths when scores are tied.
   function pickBest(candidates, tokens) {
     if (!candidates || candidates.length === 0) return null;
     if (candidates.length === 1) {
@@ -542,8 +541,82 @@ export function buildPresetCompanionMap(files, parameterSets, options = {}) {
       .map((p) => ({ path: p, score: scorePath(p, tokens) }))
       .sort((a, b) => b.score - a.score || b.path.length - a.path.length);
     if (scored[0].score === 0) return null;
-    if (scored[0].score === scored[1].score) return null; // ambiguous
-    return scored[0].path;
+    return resolveByHierarchy(scored, tokens);
+  }
+
+  // When candidates share parent-child relationships, resolve using
+  // directory hierarchy rather than raw token overlap scores.
+  function resolveByHierarchy(scored, tokens) {
+    const topScore = scored[0].score;
+    const tied = scored.filter((s) => s.score === topScore);
+
+    if (tied.length === 1) {
+      const winner = tied[0];
+      const parent = findAncestorCandidate(winner, scored);
+      if (parent && parent.score > 0) {
+        if (!extraSegmentsMatchTokens(parent.path, winner.path, tokens)) {
+          return parent.path;
+        }
+      }
+      return winner.path;
+    }
+
+    // Among tied candidates, return the one that is an ancestor of all others
+    const ancestor = tied.find((a) => {
+      const aDir = a.path.substring(0, a.path.lastIndexOf('/'));
+      if (!aDir) return false;
+      return tied.every(
+        (b) =>
+          b === a ||
+          b.path
+            .substring(0, b.path.lastIndexOf('/'))
+            .startsWith(aDir + '/')
+      );
+    });
+    return ancestor ? ancestor.path : null;
+  }
+
+  // Find the nearest (deepest) scored candidate whose directory is a
+  // proper ancestor of the winner's directory.
+  function findAncestorCandidate(winner, scored) {
+    const winnerDir = winner.path.substring(
+      0,
+      winner.path.lastIndexOf('/')
+    );
+    if (!winnerDir) return null;
+
+    let best = null;
+    let bestDirLen = -1;
+    for (const s of scored) {
+      if (s === winner || s.score === 0) continue;
+      const sDir = s.path.substring(0, s.path.lastIndexOf('/'));
+      if (!sDir) continue;
+      if (winnerDir.startsWith(sDir + '/') && sDir.length > bestDirLen) {
+        best = s;
+        bestDirLen = sDir.length;
+      }
+    }
+    return best;
+  }
+
+  // Check whether every word in the child-specific folder segments
+  // appears in the preset tokens. Uses the same normalization as
+  // scorePath so that e.g. "-equivalent Case" is stripped.
+  function extraSegmentsMatchTokens(parentPath, childPath, tokens) {
+    const parentDir = parentPath.substring(
+      0,
+      parentPath.lastIndexOf('/')
+    );
+    const childDir = childPath.substring(0, childPath.lastIndexOf('/'));
+    const extra = childDir.substring(parentDir.length + 1);
+    const words = extra
+      .toLowerCase()
+      .replace(/-equivalent\s*case/g, '')
+      .replace(/coughdrop/g, 'cough drop')
+      .split(/[\s,\-_/().]+/)
+      .filter((w) => w.length > 0);
+    if (words.length === 0) return true;
+    return words.every((w) => tokens.includes(w));
   }
 
   for (const presetName of presetNames) {

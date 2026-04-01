@@ -748,39 +748,27 @@ describe('ZIP Handler', () => {
       )
     })
 
-    it.fails(
-      'should fall back to case-level path when preset app has no dedicated subfolder',
-      () => {
-        // BUG: "grid" token matches Grid VocoChat subfolder, causing
-        // pickBest() to return the wrong deeper path.
-        // Fix target: phases 3-5. Convert to it() once fix lands.
-        const map = buildPresetCompanionMap(KEYGUARD_FIXTURE, {
-          'iPad 10,11 - Andnary - Grid SC 50': {},
-        })
-        expect(
-          map.get('iPad 10,11 - Andnary - Grid SC 50').openingsPath
-        ).toBe(ANDNARY_CASE_PATH)
-      }
-    )
+    it('should fall back to case-level path when preset app has no dedicated subfolder', () => {
+      const map = buildPresetCompanionMap(KEYGUARD_FIXTURE, {
+        'iPad 10,11 - Andnary - Grid SC 50': {},
+      })
+      expect(
+        map.get('iPad 10,11 - Andnary - Grid SC 50').openingsPath
+      ).toBe(ANDNARY_CASE_PATH)
+    })
 
-    it.fails(
-      'should prefer case-level path when app tokens cause ties among deeper paths',
-      () => {
-        // BUG: Without a Grid-named subfolder, all Andnary paths tie at
-        // the same score and pickBest() returns null instead of case-level.
-        // Fix target: phases 4-5. Convert to it() once fix lands.
-        const filesWithoutGrid = new Map(KEYGUARD_FIXTURE)
-        filesWithoutGrid.delete(
-          'Cases and App Specifics/iPad 10,11/Andnary-equivalent Case/Grid VocoChat/openings_and_additions.txt'
-        )
-        const map = buildPresetCompanionMap(filesWithoutGrid, {
-          'iPad 10,11 - Andnary - Grid SC 50': {},
-        })
-        expect(
-          map.get('iPad 10,11 - Andnary - Grid SC 50').openingsPath
-        ).toBe(ANDNARY_CASE_PATH)
-      }
-    )
+    it('should prefer case-level path when app tokens cause ties among deeper paths', () => {
+      const filesWithoutGrid = new Map(KEYGUARD_FIXTURE)
+      filesWithoutGrid.delete(
+        'Cases and App Specifics/iPad 10,11/Andnary-equivalent Case/Grid VocoChat/openings_and_additions.txt'
+      )
+      const map = buildPresetCompanionMap(filesWithoutGrid, {
+        'iPad 10,11 - Andnary - Grid SC 50': {},
+      })
+      expect(
+        map.get('iPad 10,11 - Andnary - Grid SC 50').openingsPath
+      ).toBe(ANDNARY_CASE_PATH)
+    })
 
     it('should resolve app-specific preset across case brands', () => {
       const map = buildPresetCompanionMap(KEYGUARD_FIXTURE, {
