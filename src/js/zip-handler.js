@@ -539,7 +539,11 @@ export function buildPresetCompanionMap(files, parameterSets, options = {}) {
     }
     const scored = candidates
       .map((p) => ({ path: p, score: scorePath(p, tokens) }))
-      .sort((a, b) => b.score - a.score || b.path.length - a.path.length);
+      .sort(
+        (a, b) =>
+          b.score - a.score ||
+          a.path.split('/').length - b.path.split('/').length
+      );
     if (scored[0].score === 0) return null;
     return resolveByHierarchy(scored, tokens);
   }
