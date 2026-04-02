@@ -11,6 +11,7 @@ import {
   applyCompanionAliases,
   getOverlaySvgTarget,
   findFirstOverlayAsset,
+  matchesBrand,
 } from '../../src/js/zip-handler.js'
 import JSZip from 'jszip'
 
@@ -1163,6 +1164,40 @@ describe('ZIP Handler', () => {
         ['assets/sub/logo.svg', '<svg/>'],
       ])
       expect(findFirstOverlayAsset(files)).toBe('assets/sub/logo.svg')
+    })
+  })
+
+  describe('matchesBrand', () => {
+    it('should match brand name to equivalent case folder', () => {
+      expect(matchesBrand('Andnary-equivalent Case', 'Andnary')).toBe(true)
+    })
+
+    it('should handle double-space in folder name', () => {
+      expect(matchesBrand('SUPCASE-equivalent  Case', 'SUPCASE')).toBe(true)
+    })
+
+    it('should match multi-word brand with whitespace normalization', () => {
+      expect(matchesBrand('SP LTROP-equivalent Case', 'SP LTROP')).toBe(true)
+    })
+
+    it('should be case-insensitive', () => {
+      expect(matchesBrand('LTROP-equivalent Case', 'ltrop')).toBe(true)
+    })
+
+    it('should not match different brands', () => {
+      expect(matchesBrand('LTROP-equivalent Case', 'SP LTROP')).toBe(false)
+    })
+
+    it('should not confuse SP LTROP with LTROP', () => {
+      expect(matchesBrand('SP LTROP-equivalent Case', 'LTROP')).toBe(false)
+    })
+
+    it('should match bare folder name without -equivalent Case suffix', () => {
+      expect(matchesBrand('Fintie', 'Fintie')).toBe(true)
+    })
+
+    it('should handle extra whitespace in brand', () => {
+      expect(matchesBrand('SP LTROP-equivalent Case', 'SP  LTROP')).toBe(true)
     })
   })
 

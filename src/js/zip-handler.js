@@ -454,6 +454,25 @@ export function resolveProjectFile(projectFiles, filename) {
 }
 
 /**
+ * Check whether a brand name matches a folder name that may include
+ * the "-equivalent Case" suffix and/or inconsistent whitespace.
+ * Both sides are whitespace-collapsed and lowercased before comparison.
+ *
+ * @param {string} folderName - Folder segment, e.g. "SP LTROP-equivalent Case"
+ * @param {string} brand - Brand extracted from preset name, e.g. "SP LTROP"
+ * @returns {boolean}
+ */
+export function matchesBrand(folderName, brand) {
+  const norm = (s) =>
+    s
+      .replace(/-equivalent\s*case/gi, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase();
+  return norm(folderName) === norm(brand);
+}
+
+/**
  * Build a runtime mapping from preset names to their specific companion file
  * paths inside the projectFiles Map. Uses token-scoring heuristics so that
  * e.g. preset "iPad 7,8,9 - Fintie - TouchChat" maps to
@@ -507,6 +526,7 @@ export function buildPresetCompanionMap(files, parameterSets, options = {}) {
     return name
       .toLowerCase()
       .replace(/coughdrop/g, 'cough drop')
+      .replace(/vocochat/g, 'voco chat')
       .split(/[\s\-_/,().]+/)
       .filter((t) => t.length > 1 || /^\d$/.test(t));
   }
@@ -517,7 +537,8 @@ export function buildPresetCompanionMap(files, parameterSets, options = {}) {
     const lower = path
       .toLowerCase()
       .replace(/-equivalent\s*case/g, '')
-      .replace(/coughdrop/g, 'cough drop');
+      .replace(/coughdrop/g, 'cough drop')
+      .replace(/vocochat/g, 'voco chat');
     const folderWords = new Set(
       lower
         .split('/')
@@ -613,6 +634,7 @@ export function buildPresetCompanionMap(files, parameterSets, options = {}) {
       .toLowerCase()
       .replace(/-equivalent\s*case/g, '')
       .replace(/coughdrop/g, 'cough drop')
+      .replace(/vocochat/g, 'voco chat')
       .split(/[\s,\-_/().]+/)
       .filter((w) => w.length > 0);
     if (words.length === 0) return true;
