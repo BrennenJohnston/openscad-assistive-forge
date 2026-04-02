@@ -1165,4 +1165,197 @@ describe('ZIP Handler', () => {
       expect(findFirstOverlayAsset(files)).toBe('assets/sub/logo.svg')
     })
   })
+
+  // Phase 1 — failure-mode tests (expected to FAIL against current code)
+
+  describe('buildPresetCompanionMap — failure mode: sibling substring ambiguity', () => {
+    const SIBLING_FIXTURE = new Map([
+      ['main.scad', '// keyguard'],
+      ['openings_and_additions.txt', 'root default'],
+      [
+        'Cases and App Specifics/iPad 10,11/Andnary-equivalent Case/openings_and_additions.txt',
+        'andnary case-level',
+      ],
+      [
+        'Cases and App Specifics/iPad 10,11/Andnary-equivalent Case/LWFL/openings_and_additions.txt',
+        'andnary lwfl',
+      ],
+      [
+        'Cases and App Specifics/iPad 10,11/Andnary-equivalent Case/LWFL-VI/openings_and_additions.txt',
+        'andnary lwfl-vi',
+      ],
+    ])
+
+    it('should resolve LWFL preset to LWFL path, not LWFL-VI sibling', () => {
+      const map = buildPresetCompanionMap(SIBLING_FIXTURE, {
+        'iPad 10,11 - Andnary - LWFL': {},
+      })
+      expect(map.get('iPad 10,11 - Andnary - LWFL').openingsPath).toBe(
+        'Cases and App Specifics/iPad 10,11/Andnary-equivalent Case/LWFL/openings_and_additions.txt'
+      )
+    })
+
+    it('should still resolve LWFL-VI preset correctly when both siblings exist', () => {
+      const map = buildPresetCompanionMap(SIBLING_FIXTURE, {
+        'iPad 10,11 - Andnary - LWFL-VI': {},
+      })
+      expect(map.get('iPad 10,11 - Andnary - LWFL-VI').openingsPath).toBe(
+        'Cases and App Specifics/iPad 10,11/Andnary-equivalent Case/LWFL-VI/openings_and_additions.txt'
+      )
+    })
+  })
+
+  describe('buildPresetCompanionMap — failure mode: cross-brand token bleed', () => {
+    const BRAND_CONFUSION_FIXTURE = new Map([
+      ['main.scad', '// keyguard'],
+      ['openings_and_additions.txt', 'root default'],
+      [
+        'Cases and App Specifics/iPad 7,8,9/LTROP-equivalent Case/openings_and_additions.txt',
+        'ltrop case-level',
+      ],
+      [
+        'Cases and App Specifics/iPad 7,8,9/LTROP-equivalent Case/LWFL-VI/openings_and_additions.txt',
+        'ltrop lwfl-vi',
+      ],
+      [
+        'Cases and App Specifics/iPad 7,8,9/SP LTROP-equivalent Case/openings_and_additions.txt',
+        'sp ltrop case-level',
+      ],
+      [
+        'Cases and App Specifics/iPad 7,8,9/SP LTROP-equivalent Case/LWFL-VI/openings_and_additions.txt',
+        'sp ltrop lwfl-vi',
+      ],
+    ])
+
+    it('should resolve SP LTROP preset to SP LTROP path, not LTROP', () => {
+      const map = buildPresetCompanionMap(BRAND_CONFUSION_FIXTURE, {
+        'iPad 7,8,9 - SP LTROP - LWFL-VI': {},
+      })
+      expect(map.get('iPad 7,8,9 - SP LTROP - LWFL-VI').openingsPath).toBe(
+        'Cases and App Specifics/iPad 7,8,9/SP LTROP-equivalent Case/LWFL-VI/openings_and_additions.txt'
+      )
+    })
+
+    it('should not map app tokens from wrong brand when brands share app subfolders', () => {
+      const files = new Map([
+        ['main.scad', '// keyguard'],
+        ['openings_and_additions.txt', 'root default'],
+        [
+          'Cases and App Specifics/iPad 10,11/Andnary-equivalent Case/openings_and_additions.txt',
+          'andnary case-level',
+        ],
+        [
+          'Cases and App Specifics/iPad 10,11/Andnary-equivalent Case/Grid VocoChat/openings_and_additions.txt',
+          'andnary grid vocochat',
+        ],
+        [
+          'Cases and App Specifics/iPad 10,11/SUPCASE-equivalent Case/openings_and_additions.txt',
+          'supcase case-level',
+        ],
+      ])
+      const map = buildPresetCompanionMap(files, {
+        'iPad 10,11 - SUPCASE - Grid SC 50': {},
+      })
+      expect(map.get('iPad 10,11 - SUPCASE - Grid SC 50').openingsPath).toBe(
+        'Cases and App Specifics/iPad 10,11/SUPCASE-equivalent Case/openings_and_additions.txt'
+      )
+    })
+  })
+
+  describe('buildPresetCompanionMap — failure mode: LTROP mount-type ambiguity', () => {
+    const MOUNT_TYPE_FIXTURE = new Map([
+      ['main.scad', '// keyguard'],
+      ['openings_and_additions.txt', 'root default'],
+      [
+        'Cases and App Specifics/iPad 7,8,9/LTROP-equivalent Case/Keyguard Frame/openings_and_additions.txt',
+        'ltrop keyguard frame mount-level',
+      ],
+      [
+        'Cases and App Specifics/iPad 7,8,9/LTROP-equivalent Case/Keyguard Frame/LWFL-VI/openings_and_additions.txt',
+        'ltrop keyguard frame lwfl-vi',
+      ],
+      [
+        'Cases and App Specifics/iPad 7,8,9/LTROP-equivalent Case/No Mount and Slide-in or Raised Tabs/openings_and_additions.txt',
+        'ltrop no mount mount-level',
+      ],
+      [
+        'Cases and App Specifics/iPad 7,8,9/LTROP-equivalent Case/No Mount and Slide-in or Raised Tabs/LWFL-VI/openings_and_additions.txt',
+        'ltrop no mount lwfl-vi',
+      ],
+    ])
+
+    it('should deterministically map LTROP preset when mount-type is ambiguous', () => {
+      const map = buildPresetCompanionMap(MOUNT_TYPE_FIXTURE, {
+        'iPad 7,8,9 - LTROP - LWFL-VI': {},
+      })
+      expect(map.get('iPad 7,8,9 - LTROP - LWFL-VI').openingsPath).not.toBeNull()
+    })
+  })
+
+  describe('buildPresetCompanionMap — compound word normalization gap', () => {
+    it('should resolve VocoChat compound word to Voco Chat folder path', () => {
+      const files = new Map([
+        ['main.scad', '// keyguard'],
+        ['openings_and_additions.txt', 'root default'],
+        [
+          'Cases and App Specifics/iPad mini 6,7/Andnary-equivalent Case/openings_and_additions.txt',
+          'andnary case-level',
+        ],
+        [
+          'Cases and App Specifics/iPad mini 6,7/Andnary-equivalent Case/Voco Chat/openings_and_additions.txt',
+          'andnary voco chat',
+        ],
+      ])
+      const map = buildPresetCompanionMap(files, {
+        'iPad mini 6,7 - Andnary - VocoChat': {},
+      })
+      expect(map.get('iPad mini 6,7 - Andnary - VocoChat').openingsPath).toBe(
+        'Cases and App Specifics/iPad mini 6,7/Andnary-equivalent Case/Voco Chat/openings_and_additions.txt'
+      )
+    })
+  })
+
+  describe('parsePresetParts (Phase 4 — not yet implemented)', () => {
+    it.todo('should parse "iPad 10,11 - Andnary - LWFL" into { tablet, brand, app }')
+    it.todo('should parse "iPad 7,8,9 - SP LTROP - LWFL-VI" with multi-word brand')
+    it.todo('should handle hyphenated app names without splitting on inner hyphens')
+    it.todo('should return null for names without " - " separator')
+    it.todo('should handle names with only tablet and brand (2 parts, no app)')
+  })
+
+  describe('companionTargets — generic alias pipeline regression', () => {
+    it('should produce correct { aliases, svgAliasTarget } shape and apply through full pipeline', () => {
+      const files = new Map([
+        ['main.scad', 'include <openings_and_additions.txt>'],
+        ['Cases/iPad 10/BrandA/TouchChat/openings_and_additions.txt', 'tc openings'],
+        ['Cases/iPad 10/BrandA/Snap/openings_and_additions.txt', 'snap openings'],
+        ['SVG files/iPad 10/BrandA/TouchChat/screen.svg', '<svg>tc</svg>'],
+        ['SVG files/iPad 10/BrandA/Snap/screen.svg', '<svg>snap</svg>'],
+      ])
+      const parameterSets = {
+        'iPad 10 BrandA TouchChat': {},
+        'iPad 10 BrandA Snap': {},
+      }
+      const companionMap = buildPresetCompanionMap(files, parameterSets, {
+        companionTargets: ['openings_and_additions.txt'],
+      })
+
+      const tcMapping = companionMap.get('iPad 10 BrandA TouchChat')
+      expect(tcMapping.aliases).toBeDefined()
+      expect(tcMapping.aliases['openings_and_additions.txt']).toBe(
+        'Cases/iPad 10/BrandA/TouchChat/openings_and_additions.txt'
+      )
+      expect(tcMapping.svgAliasTarget).toBe('screen.svg')
+      expect(tcMapping.aliases['screen.svg']).toBe(
+        'SVG files/iPad 10/BrandA/TouchChat/screen.svg'
+      )
+
+      const applied = applyCompanionAliases(files, tcMapping)
+      expect(applied.get('openings_and_additions.txt')).toBe('tc openings')
+      expect(applied.get('screen.svg')).toBe('<svg>tc</svg>')
+
+      const svgTarget = getOverlaySvgTarget(tcMapping)
+      expect(svgTarget).toBe('screen.svg')
+    })
+  })
 })
