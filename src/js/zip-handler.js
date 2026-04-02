@@ -473,6 +473,31 @@ export function matchesBrand(folderName, brand) {
 }
 
 /**
+ * Parse a structured preset name into its component parts.
+ * Expected format: "<tablet> - <brand> - <app>" using " - " as separator.
+ * Only the first two separators are used; any additional " - " in the
+ * app portion is preserved as-is.
+ *
+ * @param {string} name - Preset name, e.g. "iPad 10,11 - Andnary - LWFL"
+ * @returns {{ tablet: string, brand: string, app: string|null } | null}
+ */
+export function parsePresetParts(name) {
+  const idx1 = name.indexOf(' - ');
+  if (idx1 === -1) return null;
+  const tablet = name.substring(0, idx1);
+  const rest = name.substring(idx1 + 3);
+  const idx2 = rest.indexOf(' - ');
+  if (idx2 === -1) {
+    return { tablet, brand: rest, app: null };
+  }
+  return {
+    tablet,
+    brand: rest.substring(0, idx2),
+    app: rest.substring(idx2 + 3) || null,
+  };
+}
+
+/**
  * Build a runtime mapping from preset names to their specific companion file
  * paths inside the projectFiles Map. Uses token-scoring heuristics so that
  * e.g. preset "iPad 7,8,9 - Fintie - TouchChat" maps to
@@ -641,8 +666,19 @@ export function buildPresetCompanionMap(files, parameterSets, options = {}) {
     return words.every((w) => tokens.includes(w));
   }
 
+  function filterByBrand(candidates, brand) {
+    if (!brand) return candidates;
+    const filtered = candidates.filter((path) => {
+      const segments = path.split('/').slice(0, -1);
+      return segments.some((seg) => matchesBrand(seg, brand));
+    });
+    return filtered.length > 0 ? filtered : candidates;
+  }
+
   for (const presetName of presetNames) {
     const tokens = tokenise(presetName);
+    const parts = parsePresetParts(presetName);
+    const brand = parts ? parts.brand : null;
 
     if (useGenericPath) {
       const aliases = {};
@@ -650,7 +686,7 @@ export function buildPresetCompanionMap(files, parameterSets, options = {}) {
       for (const target of companionTargets) {
         const candidates = aliasableBasenames.get(target);
         if (candidates) {
-          const best = pickBest(candidates, tokens);
+          const best = pickBest(filterByBrand(candidates, brand), tokens);
           if (best) {
             aliases[target] = best;
           } else {
@@ -667,7 +703,7 @@ export function buildPresetCompanionMap(files, parameterSets, options = {}) {
         aliases[basename] = svgPaths[0];
         svgAliasTarget = basename;
       } else if (svgPaths.length > 1) {
-        const best = pickBest(svgPaths, tokens);
+        const best = pickBest(filterByBrand(svgPaths, brand), tokens);
         if (best) {
           const basename = best.split('/').pop();
           aliases[basename] = best;
@@ -685,7 +721,10 @@ export function buildPresetCompanionMap(files, parameterSets, options = {}) {
         'openings_and_additions.txt'
       );
       if (openingsCandidates) {
-        openingsPath = pickBest(openingsCandidates, tokens);
+        openingsPath = pickBest(
+          filterByBrand(openingsCandidates, brand),
+          tokens
+        );
         if (!openingsPath) {
           console.warn(
             `[PresetCompanionMap] Cannot unambiguously resolve openings path for preset: "${presetName}"`
@@ -697,7 +736,7 @@ export function buildPresetCompanionMap(files, parameterSets, options = {}) {
       if (svgPaths.length === 1) {
         svgPath = svgPaths[0];
       } else if (svgPaths.length > 1) {
-        svgPath = pickBest(svgPaths, tokens);
+        svgPath = pickBest(filterByBrand(svgPaths, brand), tokens);
         if (!svgPath) {
           console.warn(
             `[PresetCompanionMap] Cannot unambiguously resolve SVG path for preset: "${presetName}"`

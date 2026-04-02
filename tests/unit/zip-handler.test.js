@@ -12,6 +12,7 @@ import {
   getOverlaySvgTarget,
   findFirstOverlayAsset,
   matchesBrand,
+  parsePresetParts,
 } from '../../src/js/zip-handler.js'
 import JSZip from 'jszip'
 
@@ -1350,12 +1351,31 @@ describe('ZIP Handler', () => {
     })
   })
 
-  describe('parsePresetParts (Phase 4 — not yet implemented)', () => {
-    it.todo('should parse "iPad 10,11 - Andnary - LWFL" into { tablet, brand, app }')
-    it.todo('should parse "iPad 7,8,9 - SP LTROP - LWFL-VI" with multi-word brand')
-    it.todo('should handle hyphenated app names without splitting on inner hyphens')
-    it.todo('should return null for names without " - " separator')
-    it.todo('should handle names with only tablet and brand (2 parts, no app)')
+  describe('parsePresetParts', () => {
+    it('should parse "iPad 10,11 - Andnary - LWFL" into { tablet, brand, app }', () => {
+      const result = parsePresetParts('iPad 10,11 - Andnary - LWFL')
+      expect(result).toEqual({ tablet: 'iPad 10,11', brand: 'Andnary', app: 'LWFL' })
+    })
+
+    it('should parse "iPad 7,8,9 - SP LTROP - LWFL-VI" with multi-word brand', () => {
+      const result = parsePresetParts('iPad 7,8,9 - SP LTROP - LWFL-VI')
+      expect(result).toEqual({ tablet: 'iPad 7,8,9', brand: 'SP LTROP', app: 'LWFL-VI' })
+    })
+
+    it('should handle hyphenated app names without splitting on inner hyphens', () => {
+      const result = parsePresetParts('iPad mini 6,7 - Fintie - LWFL-VI')
+      expect(result).toEqual({ tablet: 'iPad mini 6,7', brand: 'Fintie', app: 'LWFL-VI' })
+    })
+
+    it('should return null for names without " - " separator', () => {
+      expect(parsePresetParts('AlphaTab TouchChat')).toBeNull()
+      expect(parsePresetParts('SingleWord')).toBeNull()
+    })
+
+    it('should handle names with only tablet and brand (2 parts, no app)', () => {
+      const result = parsePresetParts('iPad 10,11 - Andnary')
+      expect(result).toEqual({ tablet: 'iPad 10,11', brand: 'Andnary', app: null })
+    })
   })
 
   describe('companionTargets — generic alias pipeline regression', () => {
