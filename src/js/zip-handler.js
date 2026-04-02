@@ -650,6 +650,30 @@ export function buildPresetCompanionMap(files, parameterSets, options = {}) {
         return matched[0].path;
       }
     }
+
+    // Heuristic default: when sibling ties can't be resolved by
+    // extra-segment matching, fall back to the shallowest scored
+    // ancestor of any tied candidate (e.g. mount-type-level file
+    // when app-level candidates are ambiguous under LTROP's 3-level
+    // hierarchy).
+    const ancestorFallbacks = scored.filter((s) => {
+      if (s.score === 0 || tied.includes(s)) return false;
+      const sDir = s.path.substring(0, s.path.lastIndexOf('/'));
+      if (!sDir) return false;
+      return tied.some((t) => {
+        const tDir = t.path.substring(0, t.path.lastIndexOf('/'));
+        return tDir.startsWith(sDir + '/');
+      });
+    });
+    if (ancestorFallbacks.length > 0) {
+      ancestorFallbacks.sort(
+        (a, b) =>
+          a.path.split('/').length - b.path.split('/').length ||
+          a.path.localeCompare(b.path)
+      );
+      return ancestorFallbacks[0].path;
+    }
+
     return null;
   }
 

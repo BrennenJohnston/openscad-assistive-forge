@@ -1320,11 +1320,25 @@ describe('ZIP Handler', () => {
       ],
     ])
 
-    it('should deterministically map LTROP preset when mount-type is ambiguous', () => {
+    it('should return a mount-type-level heuristic default when app-level paths tie (not unique resolution)', () => {
       const map = buildPresetCompanionMap(MOUNT_TYPE_FIXTURE, {
         'iPad 7,8,9 - LTROP - LWFL-VI': {},
       })
-      expect(map.get('iPad 7,8,9 - LTROP - LWFL-VI').openingsPath).not.toBeNull()
+      const result = map.get('iPad 7,8,9 - LTROP - LWFL-VI')
+      expect(result.openingsPath).not.toBeNull()
+      expect(result.openingsPath).toMatch(
+        /LTROP-equivalent Case\/[^/]+\/openings_and_additions\.txt$/
+      )
+      expect(result.openingsPath).not.toMatch(/LWFL-VI/)
+    })
+
+    it('should produce a deterministic result across repeated calls', () => {
+      const presets = { 'iPad 7,8,9 - LTROP - LWFL-VI': {} }
+      const first = buildPresetCompanionMap(MOUNT_TYPE_FIXTURE, presets)
+      const second = buildPresetCompanionMap(MOUNT_TYPE_FIXTURE, presets)
+      expect(first.get('iPad 7,8,9 - LTROP - LWFL-VI').openingsPath).toBe(
+        second.get('iPad 7,8,9 - LTROP - LWFL-VI').openingsPath
+      )
     })
   })
 
