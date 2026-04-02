@@ -511,10 +511,8 @@ export function buildPresetCompanionMap(files, parameterSets, options = {}) {
       .filter((t) => t.length > 1 || /^\d$/.test(t));
   }
 
-  // Count how many tokens from the preset name appear in a candidate path.
-  // Multi-char tokens use full-path substring matching (existing behaviour).
-  // Single-digit tokens use exact word-boundary matching within folder segments
-  // only, so token "7" does not falsely match a folder named "iPad 78".
+  // Word-boundary matching: tokens must appear as whole words in folder
+  // segments, preventing false positives like "sp" matching "specifics".
   function scorePath(path, tokens) {
     const lower = path
       .toLowerCase()
@@ -527,9 +525,7 @@ export function buildPresetCompanionMap(files, parameterSets, options = {}) {
         .flatMap((seg) => seg.split(/[\s,\-_().]+/))
         .filter(Boolean)
     );
-    return tokens.filter((t) =>
-      t.length > 1 ? lower.includes(t) : folderWords.has(t)
-    ).length;
+    return tokens.filter((t) => folderWords.has(t)).length;
   }
 
   function pickBest(candidates, tokens) {
