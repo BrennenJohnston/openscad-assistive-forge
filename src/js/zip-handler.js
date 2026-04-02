@@ -619,7 +619,38 @@ export function buildPresetCompanionMap(files, parameterSets, options = {}) {
             .startsWith(aDir + '/')
       );
     });
-    return ancestor ? ancestor.path : null;
+    if (ancestor) return ancestor.path;
+
+    // Sibling tie — filter by extra-segment token matching.
+    // Compute the common ancestor directory of all tied candidates, then
+    // keep only those whose extra folder words ALL appear in the preset tokens.
+    const dirs = tied.map((s) =>
+      s.path.substring(0, s.path.lastIndexOf('/')).split('/')
+    );
+    let commonLen = 0;
+    for (let i = 0; i < dirs[0].length; i++) {
+      if (dirs.every((d) => i < d.length && d[i] === dirs[0][i])) {
+        commonLen = i + 1;
+      } else {
+        break;
+      }
+    }
+    const commonDir = dirs[0].slice(0, commonLen).join('/');
+    if (commonDir) {
+      const basename = tied[0].path.split('/').pop();
+      const syntheticParent = commonDir + '/' + basename;
+      const matched = tied.filter((s) =>
+        extraSegmentsMatchTokens(syntheticParent, s.path, tokens)
+      );
+      if (matched.length === 1) return matched[0].path;
+      if (matched.length > 1) {
+        matched.sort(
+          (a, b) => a.path.split('/').length - b.path.split('/').length
+        );
+        return matched[0].path;
+      }
+    }
+    return null;
   }
 
   // Find the nearest (deepest) scored candidate whose directory is a
