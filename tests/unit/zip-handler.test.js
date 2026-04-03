@@ -1431,6 +1431,80 @@ describe('ZIP Handler', () => {
     })
   })
 
+  describe('buildPresetCompanionMap — resolution diagnostics', () => {
+    function makeFiles(entries) {
+      return new Map(entries)
+    }
+
+    it('should tag uniquely resolved presets with resolution: unique', () => {
+      const files = makeFiles([
+        ['main.scad', '// scad'],
+        ['Cases/AlphaTab/TouchChat/openings_and_additions.txt', 'at tc'],
+        ['Cases/AlphaTab/Snap/openings_and_additions.txt', 'at snap'],
+      ])
+      const map = buildPresetCompanionMap(files, {
+        'AlphaTab TouchChat': {},
+        'AlphaTab Snap': {},
+      })
+      expect(map.get('AlphaTab TouchChat').resolution).toBe('unique')
+      expect(map.get('AlphaTab Snap').resolution).toBe('unique')
+    })
+
+    it('should tag ancestor-fallback presets in legacy path', () => {
+      const files = makeFiles([
+        ['main.scad', '// keyguard'],
+        ['openings_and_additions.txt', 'root default'],
+        ['Cases/iPad 7,8,9/LTROP-equivalent Case/Keyguard Frame/openings_and_additions.txt', 'ltrop kf'],
+        ['Cases/iPad 7,8,9/LTROP-equivalent Case/Keyguard Frame/LWFL-VI/openings_and_additions.txt', 'ltrop kf lwfl-vi'],
+        ['Cases/iPad 7,8,9/LTROP-equivalent Case/No Mount and Slide-in or Raised Tabs/openings_and_additions.txt', 'ltrop nm'],
+        ['Cases/iPad 7,8,9/LTROP-equivalent Case/No Mount and Slide-in or Raised Tabs/LWFL-VI/openings_and_additions.txt', 'ltrop nm lwfl-vi'],
+      ])
+      const map = buildPresetCompanionMap(files, {
+        'iPad 7,8,9 - LTROP - LWFL-VI': {},
+      })
+      const entry = map.get('iPad 7,8,9 - LTROP - LWFL-VI')
+      expect(entry.openingsPath).not.toBeNull()
+      expect(entry.resolution).toBe('ancestor-fallback')
+    })
+
+    it('should tag ambiguous presets when scores are tied with no ancestor', () => {
+      const files = makeFiles([
+        ['main.scad', '// scad'],
+        ['Cases/Alpha/openings_and_additions.txt', 'alpha'],
+        ['Cases/Beta/openings_and_additions.txt', 'beta'],
+      ])
+      const map = buildPresetCompanionMap(files, { 'Cases Device': {} })
+      expect(map.get('Cases Device').resolution).toBe('ambiguous')
+    })
+
+    it('should include resolution field in generic companionTargets path', () => {
+      const files = makeFiles([
+        ['main.scad', '// scad'],
+        ['presets/Alpha/config.txt', 'alpha config'],
+        ['presets/Beta/config.txt', 'beta config'],
+      ])
+      const map = buildPresetCompanionMap(files, {
+        'Alpha Preset': {},
+        'Beta Preset': {},
+      }, { companionTargets: ['config.txt'] })
+
+      expect(map.get('Alpha Preset').resolution).toBe('unique')
+      expect(map.get('Beta Preset').resolution).toBe('unique')
+    })
+
+    it('should tag generic path entries as ambiguous when target cannot resolve', () => {
+      const files = makeFiles([
+        ['main.scad', '// scad'],
+        ['Cases/Alpha/openings_and_additions.txt', 'alpha'],
+        ['Cases/Beta/openings_and_additions.txt', 'beta'],
+      ])
+      const map = buildPresetCompanionMap(files, { 'Cases Device': {} }, {
+        companionTargets: ['openings_and_additions.txt'],
+      })
+      expect(map.get('Cases Device').resolution).toBe('ambiguous')
+    })
+  })
+
   describe('buildPresetCompanionMap — Phase 7: full 292-preset validation', () => {
     const __test_dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -1669,6 +1743,64 @@ describe('ZIP Handler', () => {
         const parts = parsePresetParts(name)
         expect(parts).not.toBeNull()
         expect(parts.brand).toBe('LTROP')
+      }
+    })
+
+    it('should include a resolution field on every entry (legacy path)', () => {
+      const map = buildPresetCompanionMap(fileTree, parameterSets)
+
+      for (const name of presetNames) {
+        const entry = map.get(name)
+        expect(entry).toBeDefined()
+        expect(entry).toHaveProperty('resolution')
+        expect(['unique', 'ancestor-fallback', 'ambiguous']).toContain(entry.resolution)
+      }
+    })
+
+    it('should include a resolution field on every entry (generic path)', () => {
+      const map = buildPresetCompanionMap(fileTree, parameterSets, {
+        companionTargets: ['openings_and_additions.txt'],
+      })
+
+      for (const name of presetNames) {
+        const entry = map.get(name)
+        expect(entry).toBeDefined()
+        expect(entry).toHaveProperty('resolution')
+        expect(['unique', 'ancestor-fallback', 'ambiguous']).toContain(entry.resolution)
+      }
+    })
+
+    it('should report consistent resolution counts between legacy and generic paths', () => {
+      const legacyMap = buildPresetCompanionMap(fileTree, parameterSets)
+      const genericMap = buildPresetCompanionMap(fileTree, parameterSets, {
+        companionTargets: ['openings_and_additions.txt'],
+      })
+
+      const legacyCounts = { unique: 0, 'ancestor-fallback': 0, ambiguous: 0 }
+      const genericCounts = { unique: 0, 'ancestor-fallback': 0, ambiguous: 0 }
+
+      for (const name of presetNames) {
+        legacyCounts[legacyMap.get(name).resolution]++
+        genericCounts[genericMap.get(name).resolution]++
+      }
+
+      expect(genericCounts.unique).toBe(legacyCounts.unique)
+      expect(genericCounts['ancestor-fallback']).toBe(legacyCounts['ancestor-fallback'])
+      expect(genericCounts.ambiguous).toBe(legacyCounts.ambiguous)
+
+      console.log(
+        `[Phase 7 Resolution] Unique: ${legacyCounts.unique}, ` +
+          `Ancestor-fallback: ${legacyCounts['ancestor-fallback']}, ` +
+          `Ambiguous: ${legacyCounts.ambiguous}`
+      )
+    })
+
+    it('should tag LTROP heuristic defaults as ancestor-fallback', () => {
+      const map = buildPresetCompanionMap(fileTree, parameterSets)
+      const { heuristicNames } = categorise(map, presetNames)
+
+      for (const name of heuristicNames) {
+        expect(map.get(name).resolution).toBe('ancestor-fallback')
       }
     })
   })

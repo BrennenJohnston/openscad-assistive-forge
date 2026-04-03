@@ -584,6 +584,9 @@ const initialState = {
   // Identity of the currently loaded project presets (for staleness checks)
   // { mainFilePath: string, sidecarFiles: string[], loadedAt: number } or null
   projectPresetIdentity: null,
+  // Project-scoped companion alias map (behind project_presets flag)
+  // Map<presetName, { aliases|openingsPath, resolution }> or null
+  projectCompanionMap: null,
 };
 
 export const stateManager = new StateManager(initialState);

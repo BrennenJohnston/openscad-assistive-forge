@@ -4759,7 +4759,12 @@ async function initApp() {
     getAutoPreviewEnabled: () => autoPreviewEnabled,
     setCurrentSavedProjectId: (id) => { currentSavedProjectId = id; },
     getCurrentSavedProjectId: () => currentSavedProjectId,
-    setPresetCompanionMap: (map) => { presetCompanionMap = map; },
+    setPresetCompanionMap: (map) => {
+      presetCompanionMap = map;
+      if (_isEnabled('project_presets')) {
+        stateManager.setState({ projectCompanionMap: map });
+      }
+    },
     getFileSizeLimits: () => FILE_SIZE_LIMITS,
     getValidateFileUpload: () => validateFileUpload,
     getCameraPanelController: () => cameraPanelController,
@@ -9162,15 +9167,29 @@ if (rounded) {
       }
     }
 
-    const useProjectMap =
-      !_isEnabled('project_presets') || preset.source === 'project';
-    const companionMapping = useProjectMap
-      ? presetCompanionMap?.get(preset.name)
-      : null;
+    let companionMapping = null;
+    if (_isEnabled('project_presets') && preset.source === 'project') {
+      const projState = stateManager.getState();
+      companionMapping = projState.projectCompanionMap?.get(preset.name) ?? null;
+    } else if (!_isEnabled('project_presets')) {
+      companionMapping = presetCompanionMap?.get(preset.name) ?? null;
+    }
+
     const aliasedFiles = applyCompanionAliases(
       newProjectFiles,
       companionMapping
     );
+    if (companionMapping) {
+      if (companionMapping.resolution === 'ancestor-fallback') {
+        console.debug(
+          `[Preset] "${preset.name}" companion resolved via ancestor fallback`
+        );
+      } else if (companionMapping.resolution === 'ambiguous') {
+        console.warn(
+          `[Preset] "${preset.name}" companion resolution is ambiguous — no alias applied`
+        );
+      }
+    }
     if (companionMapping?.aliases) {
       for (const [target, source] of Object.entries(companionMapping.aliases)) {
         if (aliasedFiles.has(target)) {

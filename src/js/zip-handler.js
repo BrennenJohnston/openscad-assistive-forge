@@ -575,9 +575,12 @@ export function buildPresetCompanionMap(files, parameterSets, options = {}) {
   }
 
   function pickBest(candidates, tokens) {
-    if (!candidates || candidates.length === 0) return null;
+    if (!candidates || candidates.length === 0)
+      return { path: null, resolution: 'ambiguous' };
     if (candidates.length === 1) {
-      return scorePath(candidates[0], tokens) > 0 ? candidates[0] : null;
+      return scorePath(candidates[0], tokens) > 0
+        ? { path: candidates[0], resolution: 'unique' }
+        : { path: null, resolution: 'ambiguous' };
     }
     const scored = candidates
       .map((p) => ({ path: p, score: scorePath(p, tokens) }))
@@ -586,12 +589,13 @@ export function buildPresetCompanionMap(files, parameterSets, options = {}) {
           b.score - a.score ||
           a.path.split('/').length - b.path.split('/').length
       );
-    if (scored[0].score === 0) return null;
+    if (scored[0].score === 0) return { path: null, resolution: 'ambiguous' };
     return resolveByHierarchy(scored, tokens);
   }
 
   // When candidates share parent-child relationships, resolve using
   // directory hierarchy rather than raw token overlap scores.
+  // Returns { path: string|null, resolution: 'unique'|'ancestor-fallback'|'ambiguous' }.
   function resolveByHierarchy(scored, tokens) {
     const topScore = scored[0].score;
     const tied = scored.filter((s) => s.score === topScore);
@@ -601,10 +605,10 @@ export function buildPresetCompanionMap(files, parameterSets, options = {}) {
       const parent = findAncestorCandidate(winner, scored);
       if (parent && parent.score > 0) {
         if (!extraSegmentsMatchTokens(parent.path, winner.path, tokens)) {
-          return parent.path;
+          return { path: parent.path, resolution: 'ancestor-fallback' };
         }
       }
-      return winner.path;
+      return { path: winner.path, resolution: 'unique' };
     }
 
     // Among tied candidates, return the one that is an ancestor of all others
@@ -619,7 +623,7 @@ export function buildPresetCompanionMap(files, parameterSets, options = {}) {
             .startsWith(aDir + '/')
       );
     });
-    if (ancestor) return ancestor.path;
+    if (ancestor) return { path: ancestor.path, resolution: 'ancestor-fallback' };
 
     // Sibling tie — filter by extra-segment token matching.
     // Compute the common ancestor directory of all tied candidates, then
@@ -642,12 +646,12 @@ export function buildPresetCompanionMap(files, parameterSets, options = {}) {
       const matched = tied.filter((s) =>
         extraSegmentsMatchTokens(syntheticParent, s.path, tokens)
       );
-      if (matched.length === 1) return matched[0].path;
+      if (matched.length === 1) return { path: matched[0].path, resolution: 'unique' };
       if (matched.length > 1) {
         matched.sort(
           (a, b) => a.path.split('/').length - b.path.split('/').length
         );
-        return matched[0].path;
+        return { path: matched[0].path, resolution: 'unique' };
       }
     }
 
@@ -671,10 +675,10 @@ export function buildPresetCompanionMap(files, parameterSets, options = {}) {
           a.path.split('/').length - b.path.split('/').length ||
           a.path.localeCompare(b.path)
       );
-      return ancestorFallbacks[0].path;
+      return { path: ancestorFallbacks[0].path, resolution: 'ancestor-fallback' };
     }
 
-    return null;
+    return { path: null, resolution: 'ambiguous' };
   }
 
   // Find the nearest (deepest) scored candidate whose directory is a
@@ -737,14 +741,19 @@ export function buildPresetCompanionMap(files, parameterSets, options = {}) {
 
     if (useGenericPath) {
       const aliases = {};
+      let entryResolution = 'unique';
 
       for (const target of companionTargets) {
         const candidates = aliasableBasenames.get(target);
         if (candidates) {
-          const best = pickBest(filterByBrand(candidates, brand), tokens);
-          if (best) {
-            aliases[target] = best;
+          const bestResult = pickBest(filterByBrand(candidates, brand), tokens);
+          if (bestResult.path) {
+            aliases[target] = bestResult.path;
+            if (bestResult.resolution === 'ancestor-fallback' && entryResolution === 'unique') {
+              entryResolution = 'ancestor-fallback';
+            }
           } else {
+            entryResolution = 'ambiguous';
             console.warn(
               `[PresetCompanionMap] Cannot unambiguously resolve "${target}" for preset: "${presetName}"`
             );
@@ -758,32 +767,37 @@ export function buildPresetCompanionMap(files, parameterSets, options = {}) {
         aliases[basename] = svgPaths[0];
         svgAliasTarget = basename;
       } else if (svgPaths.length > 1) {
-        const best = pickBest(filterByBrand(svgPaths, brand), tokens);
-        if (best) {
-          const basename = best.split('/').pop();
-          aliases[basename] = best;
+        const svgResult = pickBest(filterByBrand(svgPaths, brand), tokens);
+        if (svgResult.path) {
+          const basename = svgResult.path.split('/').pop();
+          aliases[basename] = svgResult.path;
           svgAliasTarget = basename;
         }
       }
 
-      result.set(presetName, { aliases, svgAliasTarget });
+      result.set(presetName, { aliases, svgAliasTarget, resolution: entryResolution });
     } else {
       // LEGACY-ONLY COMPATIBILITY PATH:
       // Keep keyguard-shaped fallback mapping for stakeholder archives that do
       // not expose explicit companion metadata yet.
       let openingsPath = null;
+      let entryResolution = 'unique';
       const openingsCandidates = aliasableBasenames.get(
         'openings_and_additions.txt'
       );
       if (openingsCandidates) {
-        openingsPath = pickBest(
+        const openingsResult = pickBest(
           filterByBrand(openingsCandidates, brand),
           tokens
         );
+        openingsPath = openingsResult.path;
         if (!openingsPath) {
+          entryResolution = 'ambiguous';
           console.warn(
             `[PresetCompanionMap] Cannot unambiguously resolve openings path for preset: "${presetName}"`
           );
+        } else if (openingsResult.resolution === 'ancestor-fallback') {
+          entryResolution = 'ancestor-fallback';
         }
       }
 
@@ -791,7 +805,8 @@ export function buildPresetCompanionMap(files, parameterSets, options = {}) {
       if (svgPaths.length === 1) {
         svgPath = svgPaths[0];
       } else if (svgPaths.length > 1) {
-        svgPath = pickBest(filterByBrand(svgPaths, brand), tokens);
+        const svgResult = pickBest(filterByBrand(svgPaths, brand), tokens);
+        svgPath = svgResult.path;
         if (!svgPath) {
           console.warn(
             `[PresetCompanionMap] Cannot unambiguously resolve SVG path for preset: "${presetName}"`
@@ -799,8 +814,14 @@ export function buildPresetCompanionMap(files, parameterSets, options = {}) {
         }
       }
 
-      result.set(presetName, { openingsPath, svgPath });
+      result.set(presetName, { openingsPath, svgPath, resolution: entryResolution });
     }
+  }
+
+  const diagCounts = { unique: 0, 'ancestor-fallback': 0, ambiguous: 0 };
+  for (const entry of result.values()) {
+    const r = entry.resolution || 'unique';
+    diagCounts[r] = (diagCounts[r] || 0) + 1;
   }
 
   if (useGenericPath) {
@@ -817,6 +838,24 @@ export function buildPresetCompanionMap(files, parameterSets, options = {}) {
     console.log(
       `[PresetCompanionMap] Mapped ${mappedCount}/${presetNames.length} presets via legacy openings fallback`
     );
+  }
+
+  console.debug(
+    `[PresetCompanionMap] Resolution: ${diagCounts.unique} unique, ` +
+      `${diagCounts['ancestor-fallback']} ancestor-fallback, ` +
+      `${diagCounts.ambiguous} ambiguous`
+  );
+  if (diagCounts['ancestor-fallback'] > 0) {
+    const fallbackNames = [...result.entries()]
+      .filter(([, v]) => v.resolution === 'ancestor-fallback')
+      .map(([n]) => n);
+    console.debug('[PresetCompanionMap] Ancestor-fallback presets:', fallbackNames);
+  }
+  if (diagCounts.ambiguous > 0) {
+    const ambiguousNames = [...result.entries()]
+      .filter(([, v]) => v.resolution === 'ambiguous')
+      .map(([n]) => n);
+    console.warn('[PresetCompanionMap] Ambiguous presets:', ambiguousNames);
   }
 
   return result;
