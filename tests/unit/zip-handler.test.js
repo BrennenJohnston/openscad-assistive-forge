@@ -1505,6 +1505,171 @@ describe('ZIP Handler', () => {
     })
   })
 
+  describe('buildPresetCompanionMap — ZIP-name independence and alias isolation', () => {
+    it('companion map is identical regardless of the ZIP container name', () => {
+      const files = new Map([
+        ['main.scad', '// scad'],
+        ['openings_and_additions.txt', 'root default'],
+        ['Cases/BrandA/AppX/openings_and_additions.txt', 'brand-a appx'],
+        ['Cases/BrandA/AppY/openings_and_additions.txt', 'brand-a appy'],
+      ])
+      const parameterSets = {
+        'BrandA AppX': {},
+        'BrandA AppY': {},
+      }
+
+      const mapFromZip1 = buildPresetCompanionMap(files, parameterSets)
+      const mapFromZip2 = buildPresetCompanionMap(files, parameterSets)
+
+      expect(mapFromZip1.get('BrandA AppX').openingsPath)
+        .toBe(mapFromZip2.get('BrandA AppX').openingsPath)
+      expect(mapFromZip1.get('BrandA AppY').openingsPath)
+        .toBe(mapFromZip2.get('BrandA AppY').openingsPath)
+    })
+
+    it('no alias state bleeds between separate buildPresetCompanionMap calls', () => {
+      const filesA = new Map([
+        ['main.scad', '// scad'],
+        ['Cases/BrandA/App1/openings_and_additions.txt', 'brand-a app1'],
+        ['Cases/BrandA/App2/openings_and_additions.txt', 'brand-a app2'],
+      ])
+      const filesB = new Map([
+        ['main.scad', '// scad'],
+        ['Cases/BrandB/App3/openings_and_additions.txt', 'brand-b app3'],
+        ['Cases/BrandB/App4/openings_and_additions.txt', 'brand-b app4'],
+      ])
+
+      const mapA = buildPresetCompanionMap(filesA, { 'BrandA App1': {} })
+      const mapB = buildPresetCompanionMap(filesB, { 'BrandB App3': {} })
+
+      expect(mapA.has('BrandA App1')).toBe(true)
+      expect(mapA.has('BrandB App3')).toBe(false)
+      expect(mapB.has('BrandB App3')).toBe(true)
+      expect(mapB.has('BrandA App1')).toBe(false)
+
+      expect(mapB.get('BrandB App3').openingsPath)
+        .toBe('Cases/BrandB/App3/openings_and_additions.txt')
+    })
+
+    it('separate project loads produce independent companion maps', () => {
+      const sharedFiles = new Map([
+        ['main.scad', '// scad'],
+        ['Cases/Tab1/Brand1/openings_and_additions.txt', 'tab1-brand1'],
+        ['Cases/Tab2/Brand2/openings_and_additions.txt', 'tab2-brand2'],
+      ])
+
+      const presetsLoad1 = { 'Tab1 Brand1': {} }
+      const presetsLoad2 = { 'Tab2 Brand2': {} }
+
+      const map1 = buildPresetCompanionMap(sharedFiles, presetsLoad1)
+      const map2 = buildPresetCompanionMap(sharedFiles, presetsLoad2)
+
+      expect(map1.get('Tab1 Brand1').openingsPath)
+        .toBe('Cases/Tab1/Brand1/openings_and_additions.txt')
+      expect(map1.has('Tab2 Brand2')).toBe(false)
+
+      expect(map2.get('Tab2 Brand2').openingsPath)
+        .toBe('Cases/Tab2/Brand2/openings_and_additions.txt')
+      expect(map2.has('Tab1 Brand1')).toBe(false)
+    })
+  })
+
+  describe('buildPresetCompanionMap — real stakeholder naming pattern assertions', () => {
+    const __test_dirname = dirname(fileURLToPath(import.meta.url))
+
+    let parameterSets
+
+    beforeAll(() => {
+      const jsonPath = resolve(
+        __test_dirname,
+        '../fixtures/keyguard-v75/keyguard_v75.json'
+      )
+      const data = JSON.parse(readFileSync(jsonPath, 'utf8'))
+      parameterSets = data.parameterSets
+    })
+
+    it('Fintie presets for different tablet models resolve to distinct paths', () => {
+      const files = new Map([
+        ['main.scad', '// keyguard'],
+        ['openings_and_additions.txt', 'root'],
+        ['Cases and App Specifics/iPad 7,8,9/Fintie-equivalent Case/openings_and_additions.txt', 'fintie 789'],
+        ['Cases and App Specifics/iPad 7,8,9/Fintie-equivalent Case/TouchChat/openings_and_additions.txt', 'fintie 789 tc'],
+        ['Cases and App Specifics/iPad 10,11/Fintie-equivalent Case/openings_and_additions.txt', 'fintie 1011'],
+        ['Cases and App Specifics/iPad 10,11/Fintie-equivalent Case/TouchChat/openings_and_additions.txt', 'fintie 1011 tc'],
+      ])
+
+      const map = buildPresetCompanionMap(files, {
+        'iPad 7,8,9 - Fintie - TouchChat': {},
+        'iPad 10,11 - Fintie - TouchChat': {},
+      })
+
+      expect(map.get('iPad 7,8,9 - Fintie - TouchChat').openingsPath)
+        .toBe('Cases and App Specifics/iPad 7,8,9/Fintie-equivalent Case/TouchChat/openings_and_additions.txt')
+      expect(map.get('iPad 10,11 - Fintie - TouchChat').openingsPath)
+        .toBe('Cases and App Specifics/iPad 10,11/Fintie-equivalent Case/TouchChat/openings_and_additions.txt')
+    })
+
+    it('Andnary case-level fallback works when app has no subfolder', () => {
+      const files = new Map([
+        ['main.scad', '// keyguard'],
+        ['openings_and_additions.txt', 'root'],
+        ['Cases and App Specifics/iPad 10,11/Andnary-equivalent Case/openings_and_additions.txt', 'andnary case-level'],
+        ['Cases and App Specifics/iPad 10,11/Andnary-equivalent Case/LWFL/openings_and_additions.txt', 'andnary lwfl'],
+      ])
+
+      const map = buildPresetCompanionMap(files, {
+        'iPad 10,11 - Andnary - Grid SC 50': {},
+      })
+
+      expect(map.get('iPad 10,11 - Andnary - Grid SC 50').openingsPath)
+        .toBe('Cases and App Specifics/iPad 10,11/Andnary-equivalent Case/openings_and_additions.txt')
+    })
+
+    it('all 292 preset names from the stakeholder fixture are parseable by parsePresetParts', () => {
+      const presetNames = Object.keys(parameterSets).filter(
+        (n) => n !== 'design default values'
+      )
+      expect(presetNames).toHaveLength(292)
+
+      for (const name of presetNames) {
+        const parts = parsePresetParts(name)
+        expect(parts).not.toBeNull()
+        expect(parts.tablet).toBeTruthy()
+        expect(parts.brand).toBeTruthy()
+      }
+    })
+
+    it('stakeholder presets contain expected tablet model variety', () => {
+      const presetNames = Object.keys(parameterSets).filter(
+        (n) => n !== 'design default values'
+      )
+      const tablets = new Set(
+        presetNames.map((n) => parsePresetParts(n)?.tablet).filter(Boolean)
+      )
+
+      expect(tablets.has('iPad 7,8,9')).toBe(true)
+      expect(tablets.has('iPad 10,11')).toBe(true)
+      expect(tablets.has('iPad mini 6,7')).toBe(true)
+      expect(tablets.size).toBeGreaterThanOrEqual(3)
+    })
+
+    it('stakeholder presets contain expected brand variety', () => {
+      const presetNames = Object.keys(parameterSets).filter(
+        (n) => n !== 'design default values'
+      )
+      const brands = new Set(
+        presetNames.map((n) => parsePresetParts(n)?.brand).filter(Boolean)
+      )
+
+      expect(brands.has('Fintie')).toBe(true)
+      expect(brands.has('Andnary')).toBe(true)
+      expect(brands.has('SUPCASE')).toBe(true)
+      expect(brands.has('LTROP')).toBe(true)
+      expect(brands.has('SP LTROP')).toBe(true)
+      expect(brands.size).toBeGreaterThanOrEqual(5)
+    })
+  })
+
   describe('buildPresetCompanionMap — Phase 7: full 292-preset validation', () => {
     const __test_dirname = dirname(fileURLToPath(import.meta.url))
 

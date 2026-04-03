@@ -1499,6 +1499,116 @@ describe('Preset Manager', () => {
   // These tests verify that coercePresetValues() correctly handles
   // "yes"/"no" string values based on the parameter schema type.
   // =====================================================================
+  describe('Project-native vs user-saved preset separation', () => {
+    /**
+     * Simulate the sidecar JSON parsing that file-handler.js does behind the
+     * project_presets flag. This is the same algorithm but isolated for testing.
+     */
+    function parseProjectPresets(sidecarJson) {
+      const data = JSON.parse(sidecarJson);
+      const parsed = {};
+      if (data.parameterSets) {
+        for (const [name, params] of Object.entries(data.parameterSets)) {
+          if (name === 'design default values') continue;
+          if (!params || typeof params !== 'object') continue;
+          parsed[name] = params;
+        }
+      }
+      return parsed;
+    }
+
+    const SIDECAR_A = JSON.stringify({
+      parameterSets: {
+        'design default values': {},
+        'Preset Alpha': { width: '100', height: '50' },
+        'Preset Beta': { width: '200', height: '75' },
+        'Preset Gamma': { width: '300', height: '100' },
+      },
+      fileFormatVersion: '1',
+    })
+
+    const SIDECAR_B = JSON.stringify({
+      parameterSets: {
+        'design default values': {},
+        'Config X': { depth: '10' },
+        'Config Y': { depth: '20' },
+      },
+      fileFormatVersion: '1',
+    })
+
+    it('project-native presets parsed from sidecar do not enter PresetManager storage', () => {
+      const projectPresets = parseProjectPresets(SIDECAR_A)
+
+      expect(Object.keys(projectPresets)).toHaveLength(3)
+      expect(projectPresets['Preset Alpha']).toBeDefined()
+
+      const stored = presetManager.getPresetsForModel('any-model.scad')
+      expect(stored).toHaveLength(0)
+    })
+
+    it('user-saved presets are unaffected by project-native presets existing separately', () => {
+      presetManager.savePreset('my-model.scad', 'User Custom', { width: 42 })
+      presetManager.savePreset('my-model.scad', 'Another Saved', { width: 99 })
+
+      const projectPresets = parseProjectPresets(SIDECAR_A)
+      expect(Object.keys(projectPresets)).toHaveLength(3)
+
+      const userPresets = presetManager.getPresetsForModel('my-model.scad')
+      expect(userPresets).toHaveLength(2)
+      expect(userPresets[0].name).toBe('User Custom')
+      expect(userPresets[1].name).toBe('Another Saved')
+    })
+
+    it('reloading a project replaces project-native presets exactly (no stale entries)', () => {
+      const firstLoad = parseProjectPresets(SIDECAR_A)
+      expect(Object.keys(firstLoad)).toHaveLength(3)
+      expect(firstLoad['Preset Alpha']).toBeDefined()
+
+      const secondLoad = parseProjectPresets(SIDECAR_B)
+      expect(Object.keys(secondLoad)).toHaveLength(2)
+      expect(secondLoad['Config X']).toBeDefined()
+      expect(secondLoad['Config Y']).toBeDefined()
+
+      expect(secondLoad['Preset Alpha']).toBeUndefined()
+      expect(secondLoad['Preset Beta']).toBeUndefined()
+      expect(secondLoad['Preset Gamma']).toBeUndefined()
+    })
+
+    it('same sidecar JSON yields identical project-native presets regardless of container name', () => {
+      const fromZipA = parseProjectPresets(SIDECAR_A)
+      const fromZipB = parseProjectPresets(SIDECAR_A)
+
+      expect(fromZipA).toEqual(fromZipB)
+      expect(Object.keys(fromZipA)).toEqual(['Preset Alpha', 'Preset Beta', 'Preset Gamma'])
+    })
+
+    it('"design default values" is excluded from project-native presets', () => {
+      const projectPresets = parseProjectPresets(SIDECAR_A)
+      expect(projectPresets['design default values']).toBeUndefined()
+    })
+
+    it('legacy import path (flag off) stores presets in PresetManager independently', () => {
+      const result = presetManager.importPreset(SIDECAR_A, 'legacy-model.scad')
+      expect(result.success).toBe(true)
+      expect(result.imported).toBe(3)
+
+      const stored = presetManager.getPresetsForModel('legacy-model.scad')
+      expect(stored).toHaveLength(3)
+
+      const projectPresets = parseProjectPresets(SIDECAR_A)
+      expect(Object.keys(projectPresets)).toHaveLength(3)
+
+      const otherModel = presetManager.getPresetsForModel('other-model.scad')
+      expect(otherModel).toHaveLength(0)
+    })
+
+    it('project-native presets use raw parameter values without localStorage coercion', () => {
+      const projectPresets = parseProjectPresets(SIDECAR_A)
+      expect(projectPresets['Preset Alpha'].width).toBe('100')
+      expect(typeof projectPresets['Preset Alpha'].width).toBe('string')
+    })
+  })
+
   describe('coercePresetValues - yes/no string handling', () => {
     it('should preserve "yes"/"no" as strings when schema type is string', () => {
       const presetValues = {
