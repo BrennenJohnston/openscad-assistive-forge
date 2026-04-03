@@ -75,6 +75,18 @@ $Scenarios = @(
         geom_type   = "3D"
         svg_export  = $false
         echo_pass   = $true
+    },
+    @{
+        id          = "grid-first-layer"
+        params      = @{
+            type_of_keyguard                 = "Laser-Cut"
+            generate                         = "first layer for SVG/DXF file"
+            use_Laser_Cutting_best_practices = "yes"
+        }
+        preset_name = "iPad 7,8,9 - Fintie - Cough Drop QC 60"
+        geom_type   = "2D"
+        svg_export  = $true
+        echo_pass   = $true
     }
 )
 
