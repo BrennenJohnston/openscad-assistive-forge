@@ -67,6 +67,14 @@ $Scenarios = @(
         }
         geom_type  = "3D"
         svg_export = $false
+    },
+    @{
+        id          = "shelf-3d-printed"
+        params      = @{}
+        preset_name = "iPad 7,8,9 - SP LTROP - Cough Drop QC 60"
+        geom_type   = "3D"
+        svg_export  = $false
+        echo_pass   = $true
     }
 )
 
@@ -330,13 +338,20 @@ foreach ($v in $Versions) {
         $scenarioTempDir = Join-Path $TempDir "$($v.id)-$($s.id)"
         New-Item -ItemType Directory -Path $scenarioTempDir -Force | Out-Null
 
+        $presetArgs = @()
+        if ($s.preset_name) {
+            $presetFile = Join-Path $TempDir "keyguard_v75.json"
+            $presetArgs = @("-p", $presetFile, "-P", $s.preset_name)
+        }
+
         # STL export
         $stlFile = Join-Path $scenarioTempDir "output.stl"
         $stlConsole = Run-OpenSCADExport `
             -Exe $v.exe `
             -ScadFile $ScadFile `
             -OutputFile $stlFile `
-            -Params $s.params
+            -Params $s.params `
+            -ExtraArgs $presetArgs
 
         $parsed = Parse-ConsoleOutput -RawOutput $stlConsole
 
@@ -351,7 +366,7 @@ foreach ($v in $Versions) {
             -ScadFile $ScadFile `
             -OutputFile $offFile `
             -Params $s.params `
-            -ExtraArgs $offExtraArgs
+            -ExtraArgs ($presetArgs + $offExtraArgs)
 
         # Parse OFF colors
         $faceColors = $null
@@ -386,7 +401,8 @@ foreach ($v in $Versions) {
                 -Exe $v.exe `
                 -ScadFile $ScadFile `
                 -OutputFile $svgFile `
-                -Params $s.params
+                -Params $s.params `
+                -ExtraArgs $presetArgs
 
             if (-not $DryRun -and (Test-Path $svgFile)) {
                 $svgBytes = (Get-Item $svgFile).Length
@@ -417,7 +433,7 @@ foreach ($v in $Versions) {
                 -ScadFile $ScadFile `
                 -OutputFile $pngFile `
                 -Params $s.params `
-                -ExtraArgs @("--imgsize=800,600")
+                -ExtraArgs ($presetArgs + @("--imgsize=800,600"))
 
             if (-not $DryRun -and (Test-Path $pngFile)) {
                 $destPng = Join-Path $screenshotDir "$($s.id).png"
@@ -433,7 +449,22 @@ foreach ($v in $Versions) {
                 -ScadFile $ScadFile `
                 -OutputFile $pngFile `
                 -Params $s.params `
-                -ExtraArgs @("--imgsize=800,600")
+                -ExtraArgs ($presetArgs + @("--imgsize=800,600"))
+        }
+
+        # Echo pass: companion Customizer settings run for preset scenarios
+        $echoParsed = $null
+        if ($s.echo_pass) {
+            $echoFile = Join-Path $scenarioTempDir "echo-settings.stl"
+            $echoParams = @{ generate = "Customizer settings" }
+            $echoConsole = Run-OpenSCADExport `
+                -Exe $v.exe `
+                -ScadFile $ScadFile `
+                -OutputFile $echoFile `
+                -Params $echoParams `
+                -ExtraArgs $presetArgs
+            $echoParsed = Parse-ConsoleOutput -RawOutput $echoConsole
+            Write-Status "Echo pass captured $($echoParsed.echo_lines.Count) ECHO lines" "OK"
         }
 
         # Assemble JSON result
@@ -467,8 +498,16 @@ foreach ($v in $Versions) {
             }
         }
 
+        if ($s.preset_name) { $result.preset_name = $s.preset_name }
         if ($pngPath) { $result.exports.png_path = $pngPath }
         if ($svgInfo) { $result.exports.svg = $svgInfo }
+        if ($echoParsed) {
+            $result.echo_settings = [ordered]@{
+                echo_lines = $echoParsed.echo_lines
+                warnings   = $echoParsed.warnings
+                errors     = $echoParsed.errors
+            }
+        }
 
         # Write JSON
         $jsonFile = Join-Path $versionOutDir "$($s.id).json"
