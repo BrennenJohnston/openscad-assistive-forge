@@ -1486,6 +1486,50 @@ describe('AutoPreviewController', () => {
 
       localStorage.removeItem('openscad-forge-debug-no-csg-colors')
     })
+
+    it('forces DESKTOP_DEFAULT quality when debug-desktop-quality toggle is set', async () => {
+      localStorage.setItem('openscad-forge-debug-desktop-quality', '1')
+      isFlagEnabled.mockReturnValue(false)
+      controller.setScadContent('cube(10);')
+      const params = { width: 10 }
+      const paramHash = controller.hashParams(params)
+      controller.currentParamHash = paramHash
+      controller.currentPreviewKey = `${paramHash}|desktop`
+
+      renderController.renderPreview.mockResolvedValue({
+        stl: new ArrayBuffer(8),
+        stats: { triangles: 12 },
+        format: 'stl'
+      })
+
+      await controller.renderPreview(params, paramHash)
+
+      const [, , options] = renderController.renderPreview.mock.calls[0]
+      expect(options.quality).toEqual(expect.objectContaining({
+        name: 'desktop',
+        maxFn: null,
+      }))
+
+      localStorage.removeItem('openscad-forge-debug-desktop-quality')
+    })
+
+    it('returns desktop quality from resolvePreviewQualityInfo when toggle is set', () => {
+      localStorage.setItem('openscad-forge-debug-desktop-quality', '1')
+
+      const result = controller.resolvePreviewQualityInfo({ width: 10 })
+      expect(result.quality.name).toBe('desktop')
+      expect(result.quality.maxFn).toBeNull()
+      expect(result.qualityKey).toBe('desktop')
+
+      localStorage.removeItem('openscad-forge-debug-desktop-quality')
+    })
+
+    it('returns normal preview quality when desktop-quality toggle is not set', () => {
+      localStorage.removeItem('openscad-forge-debug-desktop-quality')
+
+      const result = controller.resolvePreviewQualityInfo({ width: 10 })
+      expect(result.qualityKey).not.toBe('desktop')
+    })
   })
 
   describe('CSG Color Preprocessing — Full Render Format Decision', () => {

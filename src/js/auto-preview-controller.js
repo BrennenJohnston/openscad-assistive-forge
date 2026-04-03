@@ -11,6 +11,7 @@ import {
 import { getAppPrefKey } from './storage-keys.js';
 import { isEnabled as isFlagEnabled } from './feature-flags.js';
 import { isNonPreviewable, is2DGenerateValue } from './render-intent.js';
+import { RENDER_QUALITY } from './render-controller.js';
 
 // Storage keys using standardized naming convention
 const STORAGE_KEY_PERF_METRICS = getAppPrefKey('perf-metrics');
@@ -122,6 +123,13 @@ export class AutoPreviewController {
    * @returns {{quality: Object|null, qualityKey: string}}
    */
   resolvePreviewQualityInfo(parameters) {
+    const forceDesktopQuality =
+      typeof localStorage !== 'undefined' &&
+      localStorage.getItem('openscad-forge-debug-desktop-quality') !== null;
+    if (forceDesktopQuality) {
+      return { quality: RENDER_QUALITY.DESKTOP_DEFAULT, qualityKey: 'desktop' };
+    }
+
     const quality = this.resolvePreviewQuality
       ? this.resolvePreviewQuality(parameters)
       : this.previewQuality;
