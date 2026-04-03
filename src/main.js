@@ -9162,8 +9162,11 @@ if (rounded) {
       }
     }
 
-    const companionMapping = presetCompanionMap?.get(preset.name);
-    // Alias-mount preset-specific companion files from the ZIP mapping.
+    const useProjectMap =
+      !_isEnabled('project_presets') || preset.source === 'project';
+    const companionMapping = useProjectMap
+      ? presetCompanionMap?.get(preset.name)
+      : null;
     const aliasedFiles = applyCompanionAliases(
       newProjectFiles,
       companionMapping
@@ -9322,7 +9325,38 @@ if (rounded) {
     defaultsOption.style.fontStyle = 'italic';
     presetSelect.appendChild(defaultsOption);
 
-    if (presets.length > 0) {
+    const useProjectPresets =
+      _isEnabled('project_presets') && state.projectPresets;
+
+    if (useProjectPresets) {
+      const projectGroup = document.createElement('optgroup');
+      projectGroup.label = 'Project Presets';
+      const projectNames = Object.keys(state.projectPresets).sort((a, b) =>
+        a.localeCompare(b, undefined, { sensitivity: 'base' })
+      );
+      for (const name of projectNames) {
+        const option = document.createElement('option');
+        option.value = `proj::${name}`;
+        option.textContent = name;
+        projectGroup.appendChild(option);
+      }
+      if (projectNames.length > 0) {
+        presetSelect.appendChild(projectGroup);
+      }
+
+      const userPresets = presets.filter((p) => p.id !== 'design-defaults');
+      if (userPresets.length > 0) {
+        const savedGroup = document.createElement('optgroup');
+        savedGroup.label = 'Saved Presets';
+        for (const preset of userPresets) {
+          const option = document.createElement('option');
+          option.value = preset.id;
+          option.textContent = preset.name;
+          savedGroup.appendChild(option);
+        }
+        presetSelect.appendChild(savedGroup);
+      }
+    } else if (presets.length > 0) {
       presets.forEach((preset) => {
         if (preset.id === 'design-defaults') return;
         const option = document.createElement('option');
@@ -9340,32 +9374,60 @@ if (rounded) {
       sortSelect.value = currentSortOrder;
     }
 
-    // Update combobox if the feature flag is on
     if (_presetCombobox) {
-      const comboOptions = [
-        {
-          id: DESIGN_DEFAULTS_ID,
-          label: 'design default values',
-          italic: true,
-        },
-        ...presets
-          .filter((p) => p.id !== 'design-defaults')
-          .map((p) => ({ id: p.id, label: p.name })),
-      ];
+      const defaultComboEntry = {
+        id: DESIGN_DEFAULTS_ID,
+        label: 'design default values',
+        italic: true,
+      };
+      let comboOptions;
+      if (useProjectPresets) {
+        const projNames = Object.keys(state.projectPresets).sort((a, b) =>
+          a.localeCompare(b, undefined, { sensitivity: 'base' })
+        );
+        comboOptions = [
+          defaultComboEntry,
+          ...projNames.map((name) => ({
+            id: `proj::${name}`,
+            label: name,
+            group: 'Project Presets',
+          })),
+          ...presets
+            .filter((p) => p.id !== 'design-defaults')
+            .map((p) => ({ id: p.id, label: p.name, group: 'Saved Presets' })),
+        ];
+      } else {
+        comboOptions = [
+          defaultComboEntry,
+          ...presets
+            .filter((p) => p.id !== 'design-defaults')
+            .map((p) => ({ id: p.id, label: p.name })),
+        ];
+      }
       _presetCombobox.update(comboOptions, currentPresetId || null);
       _presetCombobox.setDisabled(false);
     }
 
-    // Restore selection if the preset still exists in the list
     if (currentPresetId) {
-      const currentPreset = presets.find(
-        (preset) => preset.id === currentPresetId
-      );
-      if (currentPreset) {
-        presetSelect.value = currentPresetId;
-        setCurrentPresetSignature(currentPreset.parameters);
-      } else {
-        forceClearPresetSelection();
+      let restoredSelection = false;
+      if (useProjectPresets && currentPresetId.startsWith('proj::')) {
+        const pName = currentPresetId.slice(6);
+        if (state.projectPresets[pName]) {
+          presetSelect.value = currentPresetId;
+          setCurrentPresetSignature(state.projectPresets[pName]);
+          restoredSelection = true;
+        }
+      }
+      if (!restoredSelection) {
+        const currentPreset = presets.find(
+          (preset) => preset.id === currentPresetId
+        );
+        if (currentPreset) {
+          presetSelect.value = currentPresetId;
+          setCurrentPresetSignature(currentPreset.parameters);
+        } else if (currentPresetId !== DESIGN_DEFAULTS_ID) {
+          forceClearPresetSelection();
+        }
       }
     } else {
       currentPresetSignature = null;
@@ -10317,6 +10379,21 @@ if (rounded) {
       isLoadingPreset = false;
       updatePresetControlStates();
       updateStatus('Loaded design default values');
+      return;
+    }
+
+    if (_isEnabled('project_presets') && presetId.startsWith('proj::')) {
+      const presetName = presetId.slice(6);
+      const projPresets = state.projectPresets;
+      if (projPresets && projPresets[presetName]) {
+        const projPreset = {
+          id: presetId,
+          name: presetName,
+          parameters: projPresets[presetName],
+          source: 'project',
+        };
+        applyPresetParametersAndCompanions(projPreset);
+      }
       return;
     }
 
