@@ -168,11 +168,23 @@ export const FLAGS = {
     name: 'SVG Path Offset',
     description:
       'Per-element offset controls in the SVG prep editor for adjusting path insets/outsets before boolean flatten',
-    default: false,
-    rollout: 0,
+    default: true,
+    rollout: 100,
     userConfigurable: true,
     killSwitch: false,
     requires: ['svg_preparer'],
+  },
+  project_presets: {
+    id: 'project_presets',
+    name: 'Project-Native Presets',
+    description:
+      'Use the loaded SCAD project sidecar JSON as the preset source of truth ' +
+      'instead of auto-importing into localStorage. Separates project-native ' +
+      'and user-saved presets in the dropdown.',
+    default: false,
+    rollout: 0,
+    userConfigurable: false,
+    killSwitch: false,
   },
 };
 
