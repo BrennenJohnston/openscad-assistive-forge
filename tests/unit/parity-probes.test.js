@@ -26,7 +26,11 @@ import {
   hexToRgb,
   normalizeHexColor,
 } from '../../src/js/color-utils.js';
-import { isNonPreviewable, RENDER_STATE } from '../../src/js/render-intent.js';
+import {
+  isNonPreviewable,
+  RENDER_STATE,
+  resolve2DExportIntent,
+} from '../../src/js/render-intent.js';
 
 // ── Inlined buildDefineArgs for testability (worker module excluded from vitest)
 // Mirrors src/worker/openscad-worker.js:1050–1126. Keep in sync.
@@ -1398,6 +1402,177 @@ describe('Phase 1: Multi-color COFF parser probe (loadOFF extraction)', () => {
       // Even though input has RGBA, parser only stores RGB (3 per vertex)
       const vertexCount = result.positions.length / 3;
       expect(result.colors.length).toBe(vertexCount * 3);
+    });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 1 Audit: Effective parameter pipeline trace for shelf/grid presets
+//
+// Validates that the parameter pipeline (resolve2DExportIntent → buildDefineArgs)
+// produces the expected serialization for concrete preset values taken from
+// keyguard_v75.json. Anchored to the Phase 1 completion record in the
+// keyguard_geometry_parity plan.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('Phase 1 Audit: shelf/grid preset pipeline trace', () => {
+  const SHELF_PRESET_FOCUS = {
+    mounting_method: 'Shelf',
+    shelf_thickness: '3',
+    shelf_depth: '4',
+    shelf_corner_radius: '10',
+    have_a_case: 'yes',
+    have_a_keyguard_frame: 'no',
+    smoothness_of_circles_and_arcs: '40',
+    generate: 'keyguard',
+    type_of_keyguard: '3D-Printed',
+    use_Laser_Cutting_best_practices: 'yes',
+  };
+
+  const GRID_PRESET_FOCUS = {
+    mounting_method: 'Slide-in Tabs',
+    number_of_rows: '6',
+    number_of_columns: '10',
+    cell_width_in_mm: '18',
+    cell_height_in_mm: '20',
+    top_padding: '1',
+    bottom_padding: '1',
+    left_padding: '0',
+    right_padding: '0',
+    type_of_tablet: 'iPad 9th generation',
+    orientation: 'landscape',
+    unit_of_measure_for_screen: 'mm',
+    smoothness_of_circles_and_arcs: '40',
+    generate: 'keyguard',
+    type_of_keyguard: '3D-Printed',
+  };
+
+  const SHELF_PARAM_TYPES = {
+    mounting_method: 'string',
+    shelf_thickness: 'number',
+    shelf_depth: 'number',
+    shelf_corner_radius: 'number',
+    have_a_case: 'string',
+    have_a_keyguard_frame: 'string',
+    smoothness_of_circles_and_arcs: 'number',
+    generate: 'string',
+    type_of_keyguard: 'string',
+    use_Laser_Cutting_best_practices: 'string',
+  };
+
+  const GRID_PARAM_TYPES = {
+    mounting_method: 'string',
+    number_of_rows: 'number',
+    number_of_columns: 'number',
+    cell_width_in_mm: 'number',
+    cell_height_in_mm: 'number',
+    top_padding: 'number',
+    bottom_padding: 'number',
+    left_padding: 'number',
+    right_padding: 'number',
+    type_of_tablet: 'string',
+    orientation: 'string',
+    unit_of_measure_for_screen: 'string',
+    smoothness_of_circles_and_arcs: 'number',
+    generate: 'string',
+    type_of_keyguard: 'string',
+  };
+
+  describe('resolve2DExportIntent passthrough for 3D export', () => {
+    it('shelf preset is unchanged for STL format', () => {
+      const result = resolve2DExportIntent(SHELF_PRESET_FOCUS, null, 'stl');
+      expect(result).toBe(SHELF_PRESET_FOCUS);
+    });
+
+    it('grid preset is unchanged for STL format', () => {
+      const result = resolve2DExportIntent(GRID_PRESET_FOCUS, null, 'stl');
+      expect(result).toBe(GRID_PRESET_FOCUS);
+    });
+  });
+
+  describe('buildDefineArgs numeric coercion for shelf preset', () => {
+    it('emits shelf_thickness as unquoted number', () => {
+      const args = buildDefineArgs(SHELF_PRESET_FOCUS, SHELF_PARAM_TYPES);
+      expect(args).toContain('shelf_thickness=3');
+    });
+
+    it('emits shelf_depth as unquoted number', () => {
+      const args = buildDefineArgs(SHELF_PRESET_FOCUS, SHELF_PARAM_TYPES);
+      expect(args).toContain('shelf_depth=4');
+    });
+
+    it('emits shelf_corner_radius as unquoted number', () => {
+      const args = buildDefineArgs(SHELF_PRESET_FOCUS, SHELF_PARAM_TYPES);
+      expect(args).toContain('shelf_corner_radius=10');
+    });
+
+    it('emits mounting_method as quoted string', () => {
+      const args = buildDefineArgs(SHELF_PRESET_FOCUS, SHELF_PARAM_TYPES);
+      expect(args).toContain('mounting_method="Shelf"');
+    });
+
+    it('emits have_a_case as quoted string (not boolean)', () => {
+      const args = buildDefineArgs(SHELF_PRESET_FOCUS, SHELF_PARAM_TYPES);
+      expect(args).toContain('have_a_case="yes"');
+    });
+
+    it('emits smoothness_of_circles_and_arcs as unquoted number', () => {
+      const args = buildDefineArgs(SHELF_PRESET_FOCUS, SHELF_PARAM_TYPES);
+      expect(args).toContain('smoothness_of_circles_and_arcs=40');
+    });
+  });
+
+  describe('buildDefineArgs numeric coercion for grid preset', () => {
+    it('emits number_of_rows as unquoted number', () => {
+      const args = buildDefineArgs(GRID_PRESET_FOCUS, GRID_PARAM_TYPES);
+      expect(args).toContain('number_of_rows=6');
+    });
+
+    it('emits number_of_columns as unquoted number', () => {
+      const args = buildDefineArgs(GRID_PRESET_FOCUS, GRID_PARAM_TYPES);
+      expect(args).toContain('number_of_columns=10');
+    });
+
+    it('emits cell_width_in_mm as unquoted number', () => {
+      const args = buildDefineArgs(GRID_PRESET_FOCUS, GRID_PARAM_TYPES);
+      expect(args).toContain('cell_width_in_mm=18');
+    });
+
+    it('emits cell_height_in_mm as unquoted number', () => {
+      const args = buildDefineArgs(GRID_PRESET_FOCUS, GRID_PARAM_TYPES);
+      expect(args).toContain('cell_height_in_mm=20');
+    });
+
+    it('emits padding values as unquoted numbers', () => {
+      const args = buildDefineArgs(GRID_PRESET_FOCUS, GRID_PARAM_TYPES);
+      expect(args).toContain('top_padding=1');
+      expect(args).toContain('bottom_padding=1');
+      expect(args).toContain('left_padding=0');
+      expect(args).toContain('right_padding=0');
+    });
+
+    it('emits type_of_tablet as quoted string', () => {
+      const args = buildDefineArgs(GRID_PRESET_FOCUS, GRID_PARAM_TYPES);
+      expect(args).toContain('type_of_tablet="iPad 9th generation"');
+    });
+
+    it('emits orientation as quoted string', () => {
+      const args = buildDefineArgs(GRID_PRESET_FOCUS, GRID_PARAM_TYPES);
+      expect(args).toContain('orientation="landscape"');
+    });
+  });
+
+  describe('buildDefineArgs with wrong paramType (divergence risk)', () => {
+    it('would quote shelf_thickness if paramType were string (documenting the risk)', () => {
+      const wrongTypes = { ...SHELF_PARAM_TYPES, shelf_thickness: 'string' };
+      const args = buildDefineArgs(SHELF_PRESET_FOCUS, wrongTypes);
+      expect(args).toContain('shelf_thickness="3"');
+    });
+
+    it('would quote number_of_rows if paramType were string', () => {
+      const wrongTypes = { ...GRID_PARAM_TYPES, number_of_rows: 'string' };
+      const args = buildDefineArgs(GRID_PRESET_FOCUS, wrongTypes);
+      expect(args).toContain('number_of_rows="6"');
     });
   });
 });
