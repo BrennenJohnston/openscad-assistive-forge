@@ -1062,8 +1062,13 @@ export class AutoPreviewController {
     let scadForPreview = this.currentScadContent;
     let filesForPreview = this.projectFiles;
     let csgColorsInjected = false;
+    const noCsgColors =
+      typeof localStorage !== 'undefined' &&
+      localStorage.getItem('openscad-forge-debug-no-csg-colors') !== null;
 
-    if (supportsRenderColors) {
+    if (noCsgColors) {
+      previewOutputFormat = 'stl';
+    } else if (supportsRenderColors) {
       previewOutputFormat = 'off';
       if (!hasColorCalls || !colorPassthroughEnabled) {
         scadForPreview = AutoPreviewController.injectCsgColors(
@@ -1145,7 +1150,7 @@ export class AutoPreviewController {
       // Manifold CSG engine assigns per-operation face colors instead.
       let activeResult = result;
       const useAuthorColors = hasColorCalls && colorPassthroughEnabled && !csgColorsInjected;
-      if ((result.format || 'stl') === 'off' && useAuthorColors) {
+      if ((result.format || 'stl') === 'off' && useAuthorColors && !noCsgColors) {
         const uniqueColors = AutoPreviewController.countUniqueOFFColors(
           result.stl
         );
@@ -1435,8 +1440,13 @@ export class AutoPreviewController {
     let scadContentForRender = this.currentScadContent;
     let filesForRender = this.projectFiles;
     let csgColorsInjected = false;
+    const noCsgColors =
+      typeof localStorage !== 'undefined' &&
+      localStorage.getItem('openscad-forge-debug-no-csg-colors') !== null;
 
-    if (supportsRenderColors) {
+    if (noCsgColors) {
+      fullOutputFormat = undefined;
+    } else if (supportsRenderColors) {
       fullOutputFormat = 'off';
       if (!hasColorCalls || !colorPassthroughEnabled) {
         scadContentForRender = AutoPreviewController.injectCsgColors(
@@ -1501,6 +1511,7 @@ export class AutoPreviewController {
 
     const useAuthorColors = hasColorCalls && colorPassthroughEnabled && !csgColorsInjected;
     if (
+      !noCsgColors &&
       useAuthorColors &&
       (result.format || 'stl') === 'off' &&
       AutoPreviewController.countUniqueOFFColors(result.stl) === 1

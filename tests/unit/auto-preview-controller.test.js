@@ -1461,6 +1461,31 @@ describe('AutoPreviewController', () => {
       expect(options.outputFormat).toBe('stl')
       expect(source).toBe('cube(10);')
     })
+
+    it('forces STL and skips CSG injection when debug-no-csg-colors toggle is set', async () => {
+      localStorage.setItem('openscad-forge-debug-no-csg-colors', '1')
+      isFlagEnabled.mockReturnValue(false)
+      controller.setScadContent('difference() { cube(20); cube(10); }')
+      const params = { width: 10 }
+      const paramHash = controller.hashParams(params)
+      controller.currentParamHash = paramHash
+      controller.currentPreviewKey = `${paramHash}|model`
+
+      renderController.renderPreview.mockResolvedValue({
+        stl: new ArrayBuffer(8),
+        stats: { triangles: 12 },
+        format: 'stl'
+      })
+
+      await controller.renderPreview(params, paramHash)
+
+      const [source, , options] = renderController.renderPreview.mock.calls[0]
+      expect(options.outputFormat).toBe('stl')
+      expect(source).toBe('difference() { cube(20); cube(10); }')
+      expect(source).not.toContain('color("#f9d72c")')
+
+      localStorage.removeItem('openscad-forge-debug-no-csg-colors')
+    })
   })
 
   describe('CSG Color Preprocessing — Full Render Format Decision', () => {
@@ -1557,6 +1582,29 @@ describe('AutoPreviewController', () => {
       const callOptions = renderController.renderFull.mock.calls[0][2]
       expect(callOptions.files).toBeInstanceOf(Map)
       expect(callOptions.files.get('main.scad')).toContain('color("#f9d72c")')
+    })
+
+    it('skips CSG injection for full render when debug-no-csg-colors toggle is set', async () => {
+      localStorage.setItem('openscad-forge-debug-no-csg-colors', '1')
+      isFlagEnabled.mockReturnValue(false)
+      const scad = 'difference() { cube(20); cube(10); }'
+      controller.setScadContent(scad)
+
+      renderController.renderFull = vi.fn().mockResolvedValue({
+        stl: new ArrayBuffer(32),
+        stats: { triangles: 42 },
+        format: 'stl',
+        consoleOutput: '',
+      })
+
+      await controller.renderFull({ width: 10 })
+
+      const [source, , options] = renderController.renderFull.mock.calls[0]
+      expect(source).toBe(scad)
+      expect(source).not.toContain('color("#f9d72c")')
+      expect(options.outputFormat).toBeUndefined()
+
+      localStorage.removeItem('openscad-forge-debug-no-csg-colors')
     })
   })
 
