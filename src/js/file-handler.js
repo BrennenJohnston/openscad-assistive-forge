@@ -835,6 +835,13 @@ export function initFileHandler({
       forceClearPresetSelection();
       setPresetCompanionMap(null);
 
+      if (isEnabled('project_presets')) {
+        stateManager.setState({
+          projectPresets: null,
+          projectPresetIdentity: null,
+        });
+      }
+
       let previewManager = getPreviewManager();
       if (previewManager) {
         previewManager.setReferenceOverlaySource({
@@ -1015,67 +1022,70 @@ export function initFileHandler({
           paramSchema[pName] = { type: pDef.type || 'string' };
         }
 
-        for (const [filePath, fileContentStr] of projectFiles.entries()) {
-          if (
-            filePath.toLowerCase().endsWith('.json') &&
-            !filePath.toLowerCase().endsWith('.scad')
-          ) {
-            try {
-              console.log(`[ZIP] Auto-importing presets from: ${filePath}`);
-              console.debug(
-                `[ZIP] JSON content preview (first 200 chars): ${fileContentStr.substring(0, 200)}`
-              );
-              const hiddenParamNamesForImport = Object.keys(
-                extracted.hiddenParameters || {}
-              );
-              const importResult = presetManager.importPreset(
-                fileContentStr,
-                originalFileName,
-                paramSchema,
-                hiddenParamNamesForImport
-              );
-              if (importResult.success && importResult.imported > 0) {
-                autoImportedCount += importResult.imported;
-                console.log(
-                  `[ZIP] Auto-imported ${importResult.imported} preset(s) from ${filePath}`
-                );
-                console.debug(`[ZIP] Import result details:`, importResult);
-              } else if (!importResult.success) {
+        if (isEnabled('project_presets')) {
+          const parsedProjectPresets = {};
+          const sidecarFiles = [];
+
+          for (const [filePath, fileContentStr] of projectFiles.entries()) {
+            if (
+              filePath.toLowerCase().endsWith('.json') &&
+              !filePath.toLowerCase().endsWith('.scad')
+            ) {
+              try {
+                const data = JSON.parse(fileContentStr);
+                if (
+                  data &&
+                  typeof data === 'object' &&
+                  typeof data.parameterSets === 'object' &&
+                  Object.keys(data.parameterSets).length > 0
+                ) {
+                  sidecarFiles.push(filePath);
+                  for (const [name, params] of Object.entries(
+                    data.parameterSets
+                  )) {
+                    if (name === 'design default values') continue;
+                    if (!params || typeof params !== 'object') continue;
+                    parsedProjectPresets[name] = params;
+                  }
+                  console.log(
+                    `[Project Presets] Parsed ${Object.keys(data.parameterSets).length} preset(s) from ${filePath}`
+                  );
+                }
+              } catch (jsonError) {
                 console.warn(
-                  `[ZIP] Failed to auto-import presets from ${filePath}:`,
-                  importResult.error
+                  `[Project Presets] Error parsing presets from ${filePath}:`,
+                  jsonError.message
                 );
               }
-            } catch (jsonError) {
-              console.warn(
-                `[ZIP] Error auto-importing presets from ${filePath}:`,
-                jsonError.message
-              );
             }
           }
-        }
 
-        if (autoImportedCount > 0) {
-          const companionCount = Array.from(projectFiles.keys()).filter(
-            (p) =>
-              !p.toLowerCase().endsWith('.scad') &&
-              !p.toLowerCase().endsWith('.json')
-          ).length;
-          const companionText =
-            companionCount > 0
-              ? ` + ${companionCount} companion file${companionCount > 1 ? 's' : ''}`
-              : '';
-          updateStatus(
-            `Loaded: ${fileName}${companionText} + ${autoImportedCount} preset${autoImportedCount > 1 ? 's' : ''}`
-          );
-          updatePresetDropdown();
+          const presetCount = Object.keys(parsedProjectPresets).length;
+          if (presetCount > 0) {
+            stateManager.setState({
+              projectPresets: parsedProjectPresets,
+              projectPresetIdentity: {
+                mainFilePath: mainFilePath || fileName,
+                sidecarFiles,
+                loadedAt: Date.now(),
+              },
+            });
+            autoImportedCount = presetCount;
 
-          const importedPresets =
-            presetManager.getPresetsForModel(originalFileName);
-          if (importedPresets.length > 0) {
-            const parameterSetsForMap = Object.fromEntries(
-              importedPresets.map((p) => [p.name, p.parameters])
+            const companionCount = Array.from(projectFiles.keys()).filter(
+              (p) =>
+                !p.toLowerCase().endsWith('.scad') &&
+                !p.toLowerCase().endsWith('.json')
+            ).length;
+            const companionText =
+              companionCount > 0
+                ? ` + ${companionCount} companion file${companionCount > 1 ? 's' : ''}`
+                : '';
+            updateStatus(
+              `Loaded: ${fileName}${companionText} + ${presetCount} preset${presetCount > 1 ? 's' : ''}`
             );
+            updatePresetDropdown();
+
             const scadRefs = detectRequiredCompanionFiles(fileContent);
             const companionTargets = [
               ...new Set(
@@ -1096,16 +1106,110 @@ export function initFileHandler({
             });
             const newMap = buildPresetCompanionMap(
               projectFiles,
-              parameterSetsForMap,
+              parsedProjectPresets,
               { companionTargets }
             );
             setPresetCompanionMap(newMap);
             console.log(
-              `[ZIP] Built preset companion map for ${newMap.size} presets` +
+              `[Project Presets] Built companion map for ${newMap.size} presets` +
                 (companionTargets.length > 0
                   ? ` (generic targets: ${companionTargets.join(', ')})`
                   : ' (legacy path)')
             );
+          }
+        } else {
+          for (const [filePath, fileContentStr] of projectFiles.entries()) {
+            if (
+              filePath.toLowerCase().endsWith('.json') &&
+              !filePath.toLowerCase().endsWith('.scad')
+            ) {
+              try {
+                console.log(`[ZIP] Auto-importing presets from: ${filePath}`);
+                console.debug(
+                  `[ZIP] JSON content preview (first 200 chars): ${fileContentStr.substring(0, 200)}`
+                );
+                const hiddenParamNamesForImport = Object.keys(
+                  extracted.hiddenParameters || {}
+                );
+                const importResult = presetManager.importPreset(
+                  fileContentStr,
+                  originalFileName,
+                  paramSchema,
+                  hiddenParamNamesForImport
+                );
+                if (importResult.success && importResult.imported > 0) {
+                  autoImportedCount += importResult.imported;
+                  console.log(
+                    `[ZIP] Auto-imported ${importResult.imported} preset(s) from ${filePath}`
+                  );
+                  console.debug(`[ZIP] Import result details:`, importResult);
+                } else if (!importResult.success) {
+                  console.warn(
+                    `[ZIP] Failed to auto-import presets from ${filePath}:`,
+                    importResult.error
+                  );
+                }
+              } catch (jsonError) {
+                console.warn(
+                  `[ZIP] Error auto-importing presets from ${filePath}:`,
+                  jsonError.message
+                );
+              }
+            }
+          }
+
+          if (autoImportedCount > 0) {
+            const companionCount = Array.from(projectFiles.keys()).filter(
+              (p) =>
+                !p.toLowerCase().endsWith('.scad') &&
+                !p.toLowerCase().endsWith('.json')
+            ).length;
+            const companionText =
+              companionCount > 0
+                ? ` + ${companionCount} companion file${companionCount > 1 ? 's' : ''}`
+                : '';
+            updateStatus(
+              `Loaded: ${fileName}${companionText} + ${autoImportedCount} preset${autoImportedCount > 1 ? 's' : ''}`
+            );
+            updatePresetDropdown();
+
+            const importedPresets =
+              presetManager.getPresetsForModel(originalFileName);
+            if (importedPresets.length > 0) {
+              const parameterSetsForMap = Object.fromEntries(
+                importedPresets.map((p) => [p.name, p.parameters])
+              );
+              const scadRefs = detectRequiredCompanionFiles(fileContent);
+              const companionTargets = [
+                ...new Set(
+                  (scadRefs?.files || [])
+                    .filter(
+                      (f) =>
+                        f.required &&
+                        (f.type === 'include' || f.type === 'import')
+                    )
+                    .map((f) => f.path.split('/').pop())
+                ),
+              ].filter((basename) => {
+                let count = 0;
+                for (const key of projectFiles.keys()) {
+                  if (key.split('/').pop() === basename) count++;
+                }
+                return count > 1;
+              });
+              const newMap = buildPresetCompanionMap(
+                projectFiles,
+                parameterSetsForMap,
+                { companionTargets }
+              );
+              setPresetCompanionMap(newMap);
+              console.log(
+                `[ZIP] Built preset companion map for ${newMap.size} presets` +
+                  (companionTargets.length > 0
+                    ? ` (generic targets: ${companionTargets.join(', ')})`
+                    : ' (legacy path)')
+              );
+            }
           }
         }
       }

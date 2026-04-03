@@ -516,6 +516,92 @@ describe('validateManifest — files.bundle', () => {
 })
 
 // ---------------------------------------------------------------------------
+// loadManifest — project_presets flag (Phase 3)
+// ---------------------------------------------------------------------------
+
+describe('loadManifest — projectPresets return field', () => {
+  const manifestUrl =
+    'https://raw.githubusercontent.com/user/repo/main/forge-manifest.json'
+
+  const manifestWithPresets = {
+    forgeManifest: '1.0',
+    name: 'Preset Project',
+    files: {
+      main: 'model.scad',
+      presets: 'model.json',
+    },
+  }
+
+  const sidecarJson = JSON.stringify({
+    parameterSets: {
+      'design default values': {},
+      'Small Guard': { width: 10, height: 5 },
+      'Large Guard': { width: 30, height: 15 },
+    },
+    fileFormatVersion: '1',
+  })
+
+  function mockResponse(body) {
+    const bodyStr = typeof body === 'string' ? body : JSON.stringify(body)
+    return {
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      headers: { get: () => null },
+      text: () => Promise.resolve(bodyStr),
+    }
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    global.fetch = vi.fn()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('should return projectPresets when project_presets flag is enabled', async () => {
+    const { isEnabled } = await import('../../src/js/feature-flags.js')
+
+    global.fetch
+      .mockResolvedValueOnce(mockResponse(manifestWithPresets))
+      .mockResolvedValueOnce(mockResponse('module model();'))
+      .mockResolvedValueOnce(mockResponse(sidecarJson))
+
+    const result = await loadManifest(manifestUrl)
+
+    if (isEnabled('project_presets')) {
+      expect(result.projectPresets).not.toBeNull()
+      expect(result.projectPresets['Small Guard']).toEqual({ width: 10, height: 5 })
+      expect(result.projectPresets['Large Guard']).toEqual({ width: 30, height: 15 })
+      expect(result.projectPresets['design default values']).toBeUndefined()
+    } else {
+      expect(result.projectPresets).toBeNull()
+    }
+  })
+
+  it('should return null projectPresets for non-preset JSON files', async () => {
+    const manifestNoPresets = {
+      forgeManifest: '1.0',
+      name: 'No Presets',
+      files: {
+        main: 'model.scad',
+        companions: ['helper.txt'],
+      },
+    }
+
+    global.fetch
+      .mockResolvedValueOnce(mockResponse(manifestNoPresets))
+      .mockResolvedValueOnce(mockResponse('module model();'))
+      .mockResolvedValueOnce(mockResponse('helper data'))
+
+    const result = await loadManifest(manifestUrl)
+    expect(result.projectPresets).toBeNull()
+  })
+})
+
+// ---------------------------------------------------------------------------
 // loadManifest — bundle path
 // ---------------------------------------------------------------------------
 
