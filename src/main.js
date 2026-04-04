@@ -12181,6 +12181,69 @@ if (typeof window !== 'undefined') {
     getDesktopReferences() {
       return { ...DESKTOP_REFERENCE_GEOMETRY };
     },
+
+    toggleCsgBypass(enable) {
+      const key = 'openscad-forge-debug-no-csg-colors';
+      const wasEnabled = localStorage.getItem(key) !== null;
+      const nowEnabled = enable !== undefined ? Boolean(enable) : !wasEnabled;
+
+      if (nowEnabled) {
+        localStorage.setItem(key, '1');
+      } else {
+        localStorage.removeItem(key);
+      }
+      console.log(
+        `[ToggleDebug] CSG bypass: ${nowEnabled ? 'ON' : 'OFF'} ` +
+          `(was ${wasEnabled ? 'ON' : 'OFF'})`
+      );
+
+      if (autoPreviewController) {
+        autoPreviewController.clearPreviewCache();
+        const state = stateManager.getState();
+        if (state?.uploadedFile?.content) {
+          autoPreviewController.forcePreview(state.parameters);
+        }
+      }
+      return nowEnabled;
+    },
+
+    toggleDesktopQuality(enable) {
+      const key = 'openscad-forge-debug-desktop-quality';
+      const wasEnabled = localStorage.getItem(key) !== null;
+      const nowEnabled = enable !== undefined ? Boolean(enable) : !wasEnabled;
+
+      if (nowEnabled) {
+        localStorage.setItem(key, '1');
+      } else {
+        localStorage.removeItem(key);
+      }
+      console.log(
+        `[ToggleDebug] Desktop quality: ${nowEnabled ? 'ON' : 'OFF'} ` +
+          `(was ${wasEnabled ? 'ON' : 'OFF'})`
+      );
+
+      if (autoPreviewController) {
+        autoPreviewController.clearPreviewCache();
+        const state = stateManager.getState();
+        if (state?.uploadedFile?.content) {
+          autoPreviewController.forcePreview(state.parameters);
+        }
+      }
+      return nowEnabled;
+    },
+
+    getToggles() {
+      const csgBypass =
+        localStorage.getItem('openscad-forge-debug-no-csg-colors') !== null;
+      const desktopQuality =
+        localStorage.getItem('openscad-forge-debug-desktop-quality') !== null;
+      const toggles = {
+        csgBypass,
+        desktopQuality,
+      };
+      console.log('[ToggleDebug] Current toggles:', toggles);
+      return toggles;
+    },
   };
 }
 
