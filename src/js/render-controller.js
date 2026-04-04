@@ -458,6 +458,7 @@ export class RenderController {
         // avoiding a second callMain() invocation before the actual render.
         const assetBaseUrl = options.assetBaseUrl;
         const cachedCapabilities = options.cachedCapabilities;
+        this._initUsedCachedCapabilities = !!cachedCapabilities;
         this.worker.postMessage({
           type: 'INIT',
           payload: {
@@ -559,6 +560,14 @@ export class RenderController {
             `Manifold: ${this.capabilities.hasManifold}, ` +
             `fast-csg: ${this.capabilities.hasFastCSG})`
         );
+
+        // When the worker ran checkCapabilities() (no cachedCapabilities),
+        // callMain(['--help']) has already been invoked on this module instance.
+        // Mark the module as used so renderOnce() triggers a proactive restart
+        // before the first render, giving it a clean WASM module.
+        if (!this._initUsedCachedCapabilities) {
+          this._moduleUsed = true;
+        }
 
         // Emit capability event for UI to handle
         if (this.onCapabilitiesDetected) {

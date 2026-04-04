@@ -680,6 +680,74 @@ describe('Capability Detection', () => {
   })
 })
 
+describe('callMain --help first-render corruption fix', () => {
+  it('sets _moduleUsed after first init (no cachedCapabilities) so proactive restart fires', () => {
+    const controller = new RenderController()
+    controller._moduleUsed = false
+
+    // Simulate init() without cachedCapabilities (first page load)
+    controller._initUsedCachedCapabilities = false
+
+    controller.handleMessage({
+      type: 'READY',
+      payload: {
+        wasmInitDurationMs: 500,
+        capabilities: { hasManifold: true, hasFastCSG: false, hasLazyUnion: false, hasBinarySTL: true, version: '2025.03' }
+      }
+    })
+
+    expect(controller._moduleUsed).toBe(true)
+  })
+
+  it('does NOT set _moduleUsed after restart init (with cachedCapabilities)', () => {
+    const controller = new RenderController()
+    controller._moduleUsed = false
+
+    // Simulate init() with cachedCapabilities (worker restart)
+    controller._initUsedCachedCapabilities = true
+
+    controller.handleMessage({
+      type: 'READY',
+      payload: {
+        wasmInitDurationMs: 200,
+        capabilities: { hasManifold: true, hasFastCSG: false, hasLazyUnion: false, hasBinarySTL: true, version: '2025.03' }
+      }
+    })
+
+    expect(controller._moduleUsed).toBe(false)
+  })
+
+  it('proactive restart fires before first render when _moduleUsed is true from init', async () => {
+    const controller = new RenderController()
+    controller.worker = { postMessage: vi.fn() }
+    controller.ready = true
+    controller._moduleUsed = true
+
+    const restartSpy = vi.fn().mockImplementation(async () => {
+      controller._moduleUsed = false
+      controller.ready = true
+    })
+    controller.restart = restartSpy
+
+    const renderPromise = controller.render('cube(1);', {})
+
+    await Promise.resolve()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(restartSpy).toHaveBeenCalled()
+
+    if (controller.currentRequest) {
+      controller.handleMessage({
+        type: 'COMPLETE',
+        payload: { requestId: controller.currentRequest.id, data: new ArrayBuffer(1), stats: { triangles: 1 } }
+      })
+    }
+
+    await renderPromise
+  })
+})
+
 describe('Capabilities caching across worker restarts', () => {
   it('stores capabilities when READY message is received', () => {
     const controller = new RenderController()
