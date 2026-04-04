@@ -9351,7 +9351,7 @@ if (rounded) {
       const projectGroup = document.createElement('optgroup');
       projectGroup.label = 'Project Presets';
       const projectNames = Object.keys(state.projectPresets).sort((a, b) =>
-        a.localeCompare(b, undefined, { sensitivity: 'base' })
+        a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
       );
       for (const name of projectNames) {
         const option = document.createElement('option');
@@ -9402,7 +9402,7 @@ if (rounded) {
       let comboOptions;
       if (useProjectPresets) {
         const projNames = Object.keys(state.projectPresets).sort((a, b) =>
-          a.localeCompare(b, undefined, { sensitivity: 'base' })
+          a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
         );
         comboOptions = [
           defaultComboEntry,

@@ -490,7 +490,12 @@ export class PresetManager {
 
     switch (sortOrder) {
       case 'name-desc':
-        rest.sort((a, b) => b.name.localeCompare(a.name));
+        rest.sort((a, b) =>
+          b.name.localeCompare(a.name, undefined, {
+            numeric: true,
+            sensitivity: 'base',
+          })
+        );
         break;
       case 'date-created':
         rest.sort((a, b) => (b.created || 0) - (a.created || 0));
@@ -503,7 +508,12 @@ export class PresetManager {
         break;
       case 'name-asc':
       default:
-        rest.sort((a, b) => a.name.localeCompare(b.name));
+        rest.sort((a, b) =>
+          a.name.localeCompare(b.name, undefined, {
+            numeric: true,
+            sensitivity: 'base',
+          })
+        );
         break;
     }
 
