@@ -1020,6 +1020,169 @@ describe('Geometry Fix Regression: callMain first-render corruption (Phase 1)', 
   })
 })
 
+describe('Preview/Full Render Parity (Phase 5)', () => {
+  it('renderPreview and renderFull both pass paramTypes to the worker', async () => {
+    const controller = new RenderController()
+    controller.worker = { postMessage: vi.fn() }
+    controller.ready = true
+
+    const paramTypes = { expose_home_button: 'string', MW_version: 'boolean' }
+
+    const previewPromise = controller.renderPreview('cube(1);', { w: 10 }, { paramTypes })
+    await Promise.resolve()
+    const previewReqId = controller.currentRequest.id
+    controller.handleMessage({
+      type: 'COMPLETE',
+      payload: { requestId: previewReqId, data: new ArrayBuffer(1), stats: { triangles: 1 } }
+    })
+    await previewPromise
+
+    const previewPayload = controller.worker.postMessage.mock.calls[0][0].payload
+    expect(previewPayload.paramTypes).toEqual(paramTypes)
+
+    controller._moduleUsed = false
+
+    const fullPromise = controller.renderFull('cube(1);', { w: 10 }, { paramTypes })
+    await Promise.resolve()
+    await Promise.resolve()
+    await Promise.resolve()
+    const fullReqId = controller.currentRequest.id
+    controller.handleMessage({
+      type: 'COMPLETE',
+      payload: { requestId: fullReqId, data: new ArrayBuffer(1), stats: { triangles: 1 } }
+    })
+    await fullPromise
+
+    const renderCalls = controller.worker.postMessage.mock.calls
+      .filter(c => c[0]?.type === 'RENDER')
+    expect(renderCalls).toHaveLength(2)
+    expect(renderCalls[1][0].payload.paramTypes).toEqual(paramTypes)
+  })
+
+  it('renderPreview and renderFull both pass libraries to the worker', async () => {
+    const controller = new RenderController()
+    controller.worker = { postMessage: vi.fn() }
+    controller.ready = true
+
+    const libs = [{ id: 'MCAD', path: '/libraries/MCAD' }]
+
+    const previewPromise = controller.renderPreview('cube(1);', {}, { libraries: libs })
+    await Promise.resolve()
+    controller.handleMessage({
+      type: 'COMPLETE',
+      payload: { requestId: controller.currentRequest.id, data: new ArrayBuffer(1), stats: { triangles: 1 } }
+    })
+    await previewPromise
+
+    controller._moduleUsed = false
+
+    const fullPromise = controller.renderFull('cube(1);', {}, { libraries: libs })
+    await Promise.resolve()
+    await Promise.resolve()
+    await Promise.resolve()
+    controller.handleMessage({
+      type: 'COMPLETE',
+      payload: { requestId: controller.currentRequest.id, data: new ArrayBuffer(1), stats: { triangles: 1 } }
+    })
+    await fullPromise
+
+    const renderCalls = controller.worker.postMessage.mock.calls
+      .filter(c => c[0]?.type === 'RENDER')
+    expect(renderCalls).toHaveLength(2)
+    expect(renderCalls[0][0].payload.libraries).toEqual(libs)
+    expect(renderCalls[1][0].payload.libraries).toEqual(libs)
+  })
+
+  it('renderPreview and renderFull both pass files and mainFile to the worker', async () => {
+    const controller = new RenderController()
+    controller.worker = { postMessage: vi.fn() }
+    controller.ready = true
+
+    const files = new Map([['main.scad', 'cube(1);'], ['openings.txt', 'data']])
+
+    const previewPromise = controller.renderPreview('cube(1);', {}, { files, mainFile: 'main.scad' })
+    await Promise.resolve()
+    controller.handleMessage({
+      type: 'COMPLETE',
+      payload: { requestId: controller.currentRequest.id, data: new ArrayBuffer(1), stats: { triangles: 1 } }
+    })
+    await previewPromise
+
+    controller._moduleUsed = false
+
+    const fullPromise = controller.renderFull('cube(1);', {}, { files, mainFile: 'main.scad' })
+    await Promise.resolve()
+    await Promise.resolve()
+    await Promise.resolve()
+    controller.handleMessage({
+      type: 'COMPLETE',
+      payload: { requestId: controller.currentRequest.id, data: new ArrayBuffer(1), stats: { triangles: 1 } }
+    })
+    await fullPromise
+
+    const renderCalls = controller.worker.postMessage.mock.calls
+      .filter(c => c[0]?.type === 'RENDER')
+    expect(renderCalls).toHaveLength(2)
+    expect(renderCalls[0][0].payload.files).toEqual({ 'main.scad': 'cube(1);', 'openings.txt': 'data' })
+    expect(renderCalls[1][0].payload.files).toEqual(renderCalls[0][0].payload.files)
+    expect(renderCalls[0][0].payload.mainFile).toBe('main.scad')
+    expect(renderCalls[1][0].payload.mainFile).toBe('main.scad')
+  })
+
+  it('renderPreview and renderFull both pass outputFormat consistently', async () => {
+    const controller = new RenderController()
+    controller.worker = { postMessage: vi.fn() }
+    controller.ready = true
+
+    const previewPromise = controller.renderPreview('cube(1);', {}, { outputFormat: 'off' })
+    await Promise.resolve()
+    controller.handleMessage({
+      type: 'COMPLETE',
+      payload: { requestId: controller.currentRequest.id, data: new ArrayBuffer(1), stats: { triangles: 1 } }
+    })
+    await previewPromise
+
+    controller._moduleUsed = false
+
+    const fullPromise = controller.renderFull('cube(1);', {}, { outputFormat: 'off' })
+    await Promise.resolve()
+    await Promise.resolve()
+    await Promise.resolve()
+    controller.handleMessage({
+      type: 'COMPLETE',
+      payload: { requestId: controller.currentRequest.id, data: new ArrayBuffer(1), stats: { triangles: 1 } }
+    })
+    await fullPromise
+
+    const renderCalls = controller.worker.postMessage.mock.calls
+      .filter(c => c[0]?.type === 'RENDER')
+    expect(renderCalls).toHaveLength(2)
+    expect(renderCalls[0][0].payload.outputFormat).toBe('off')
+    expect(renderCalls[1][0].payload.outputFormat).toBe('off')
+  })
+
+  it('applyQualitySettings returns identical output for FULL and DESKTOP_DEFAULT with same params', () => {
+    const controller = new RenderController()
+    const params = { $fn: 64, $fa: 6, $fs: 1 }
+
+    const fullAdjusted = controller.applyQualitySettings(params, RENDER_QUALITY.FULL)
+    const desktopAdjusted = controller.applyQualitySettings(params, RENDER_QUALITY.DESKTOP_DEFAULT)
+
+    expect(fullAdjusted).toEqual(desktopAdjusted)
+  })
+
+  it('PREVIEW quality caps $fn but FULL does not, demonstrating the parity gap', () => {
+    const controller = new RenderController()
+    const params = { $fn: 200 }
+
+    const previewAdjusted = controller.applyQualitySettings(params, RENDER_QUALITY.PREVIEW)
+    const fullAdjusted = controller.applyQualitySettings(params, RENDER_QUALITY.FULL)
+
+    expect(previewAdjusted.$fn).toBe(96)
+    expect(fullAdjusted.$fn).toBe(200)
+  })
+})
+
 describe('Binary STL Detection', () => {
   it('detects binary STL by bytes per triangle', () => {
     // Binary STL: ~50 bytes per triangle (12 bytes normal + 36 bytes vertices + 2 attribute)

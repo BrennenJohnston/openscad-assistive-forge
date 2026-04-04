@@ -31,50 +31,13 @@ import {
   RENDER_STATE,
   resolve2DExportIntent,
 } from '../../src/js/render-intent.js';
-
-// ── Inlined buildDefineArgs for testability (worker module excluded from vitest)
-// Mirrors src/worker/openscad-worker.js:1050–1126. Keep in sync.
-function buildDefineArgs(parameters, paramTypes = {}) {
-  if (!parameters || Object.keys(parameters).length === 0) return [];
-  const args = [];
-  for (const [key, value] of Object.entries(parameters)) {
-    if (value === null || value === undefined) continue;
-    let formattedValue;
-    if (typeof value === 'string') {
-      const lowerValue = value.toLowerCase();
-      const isBooleanParam = paramTypes[key] === 'boolean';
-      if (isBooleanParam && (lowerValue === 'true' || lowerValue === 'yes')) {
-        formattedValue = 'true';
-      } else if (
-        isBooleanParam &&
-        (lowerValue === 'false' || lowerValue === 'no')
-      ) {
-        formattedValue = 'false';
-      } else if (/^#?[0-9A-Fa-f]{6}$/.test(value)) {
-        const rgb = hexToRgb(value);
-        formattedValue = `[${rgb[0]},${rgb[1]},${rgb[2]}]`;
-      } else if (
-        (paramTypes[key] === 'integer' || paramTypes[key] === 'number') &&
-        value.trim() !== '' &&
-        !isNaN(Number(value))
-      ) {
-        formattedValue = String(Number(value));
-      } else {
-        const escaped = value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-        formattedValue = `"${escaped}"`;
-      }
-    } else if (typeof value === 'number') {
-      formattedValue = String(value);
-    } else if (typeof value === 'boolean') {
-      formattedValue = value ? 'true' : 'false';
-    } else {
-      formattedValue = JSON.stringify(value);
-    }
-    args.push('-D');
-    args.push(`${key}=${formattedValue}`);
-  }
-  return args;
-}
+import {
+  buildDefineArgs,
+  formatScadValue,
+  serializeScadVector,
+  detectColorParamLiteralStyle,
+  escapeRegExp,
+} from '../../src/js/scad-param-formatter.js';
 
 // ── Synthetic OFF / COFF data ───────────────────────────────────────────────
 
@@ -1887,5 +1850,273 @@ describe('Phase 1 Audit: shelf/grid preset pipeline trace', () => {
       expect(args).toContain('generate="keyguard"');
       expect(args).toContain('type_of_keyguard="3D-Printed"');
     });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 4: Serialization Parity — shared formatScadValue regression tests
+//
+// Validates that the single formatting function (scad-param-formatter.js)
+// produces identical output for all code paths: buildDefineArgs (-D flags),
+// _applyOverrides (source replacement), parametersToScad (source prepend),
+// and dumpRenderArgs (diagnostic logging).
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('Phase 4: formatScadValue parity — yes/no string enums', () => {
+  it('preserves "yes" as quoted string when paramType is string', () => {
+    expect(formatScadValue('have_a_case', 'yes', { have_a_case: 'string' })).toBe('"yes"');
+  });
+
+  it('preserves "no" as quoted string when paramType is string', () => {
+    expect(formatScadValue('have_a_case', 'no', { have_a_case: 'string' })).toBe('"no"');
+  });
+
+  it('converts "yes" to boolean true when paramType is boolean', () => {
+    expect(formatScadValue('MW_version', 'yes', { MW_version: 'boolean' })).toBe('true');
+  });
+
+  it('converts "no" to boolean false when paramType is boolean', () => {
+    expect(formatScadValue('MW_version', 'no', { MW_version: 'boolean' })).toBe('false');
+  });
+
+  it('converts "true" to boolean true when paramType is boolean', () => {
+    expect(formatScadValue('flag', 'true', { flag: 'boolean' })).toBe('true');
+  });
+
+  it('converts "false" to boolean false when paramType is boolean', () => {
+    expect(formatScadValue('flag', 'false', { flag: 'boolean' })).toBe('false');
+  });
+
+  it('preserves "yes" as quoted string when paramType is unknown/missing', () => {
+    expect(formatScadValue('expose_home_button', 'yes', {})).toBe('"yes"');
+    expect(formatScadValue('expose_home_button', 'yes')).toBe('"yes"');
+  });
+
+  it('preserves "no" as quoted string when paramType is unknown/missing', () => {
+    expect(formatScadValue('expose_upper_message_bar', 'no', {})).toBe('"no"');
+  });
+
+  it('preserves "Yes"/"No" (capitalized) as quoted strings for string type', () => {
+    expect(formatScadValue('param', 'Yes', { param: 'string' })).toBe('"Yes"');
+    expect(formatScadValue('param', 'No', { param: 'string' })).toBe('"No"');
+  });
+
+  it('converts "Yes"/"No" (capitalized) to booleans for boolean type', () => {
+    expect(formatScadValue('param', 'Yes', { param: 'boolean' })).toBe('true');
+    expect(formatScadValue('param', 'No', { param: 'boolean' })).toBe('false');
+  });
+});
+
+describe('Phase 4: formatScadValue parity — numeric-string coercion', () => {
+  it('emits unquoted number for integer-typed string "40"', () => {
+    expect(formatScadValue('smoothness', '40', { smoothness: 'integer' })).toBe('40');
+  });
+
+  it('emits unquoted number for number-typed string "3.5"', () => {
+    expect(formatScadValue('thickness', '3.5', { thickness: 'number' })).toBe('3.5');
+  });
+
+  it('emits unquoted 0 for number-typed string "0"', () => {
+    expect(formatScadValue('padding', '0', { padding: 'number' })).toBe('0');
+  });
+
+  it('emits quoted string for numeric-looking value when type is string', () => {
+    expect(formatScadValue('label', '42', { label: 'string' })).toBe('"42"');
+  });
+
+  it('emits quoted string for numeric-looking value when type is missing', () => {
+    expect(formatScadValue('label', '42', {})).toBe('"42"');
+  });
+
+  it('emits unquoted number for native number value regardless of type', () => {
+    expect(formatScadValue('width', 100, { width: 'integer' })).toBe('100');
+    expect(formatScadValue('width', 100, { width: 'string' })).toBe('100');
+    expect(formatScadValue('width', 100, {})).toBe('100');
+  });
+
+  it('handles negative numeric strings', () => {
+    expect(formatScadValue('offset', '-5', { offset: 'number' })).toBe('-5');
+  });
+
+  it('handles float with leading zero', () => {
+    expect(formatScadValue('scale', '0.5', { scale: 'number' })).toBe('0.5');
+  });
+
+  it('does not coerce non-numeric strings for integer type', () => {
+    expect(formatScadValue('param', 'abc', { param: 'integer' })).toBe('"abc"');
+  });
+
+  it('does not coerce empty string for integer type', () => {
+    expect(formatScadValue('param', '', { param: 'integer' })).toBe('""');
+  });
+
+  it('does not coerce whitespace-only string for number type', () => {
+    expect(formatScadValue('param', '   ', { param: 'number' })).toBe('"   "');
+  });
+});
+
+describe('Phase 4: formatScadValue parity — edge cases', () => {
+  it('returns null for null value', () => {
+    expect(formatScadValue('key', null)).toBeNull();
+  });
+
+  it('returns null for undefined value', () => {
+    expect(formatScadValue('key', undefined)).toBeNull();
+  });
+
+  it('formats native boolean true', () => {
+    expect(formatScadValue('flag', true)).toBe('true');
+  });
+
+  it('formats native boolean false', () => {
+    expect(formatScadValue('flag', false)).toBe('false');
+  });
+
+  it('formats array values as OpenSCAD vectors', () => {
+    expect(formatScadValue('pos', [1, 2, 3])).toBe('[1,2,3]');
+  });
+
+  it('formats nested arrays as nested OpenSCAD vectors', () => {
+    expect(formatScadValue('matrix', [[1, 2], [3, 4]])).toBe('[[1,2],[3,4]]');
+  });
+
+  it('formats file parameter objects using filename', () => {
+    const fileParam = { data: new ArrayBuffer(8), name: 'image.png' };
+    expect(formatScadValue('surface_file', fileParam)).toBe('"image.png"');
+  });
+
+  it('escapes backslashes and quotes in string values', () => {
+    expect(formatScadValue('label', 'hello "world"', { label: 'string' })).toBe('"hello \\"world\\""');
+    expect(formatScadValue('path', 'C:\\Users', { path: 'string' })).toBe('"C:\\\\Users"');
+  });
+});
+
+describe('Phase 4: buildDefineArgs and formatScadValue produce identical output', () => {
+  const LWFL_PARAMS = {
+    expose_home_button: 'yes',
+    expose_upper_message_bar: 'no',
+    smoothness_of_circles_and_arcs: '40',
+    shelf_thickness: '3',
+    generate: 'keyguard',
+    type_of_keyguard: '3D-Printed',
+    have_a_case: 'yes',
+    have_a_keyguard_frame: 'no',
+    keyguard_color: '#FF0000',
+  };
+
+  const LWFL_TYPES = {
+    expose_home_button: 'string',
+    expose_upper_message_bar: 'string',
+    smoothness_of_circles_and_arcs: 'integer',
+    shelf_thickness: 'number',
+    generate: 'string',
+    type_of_keyguard: 'string',
+    have_a_case: 'string',
+    have_a_keyguard_frame: 'string',
+    keyguard_color: 'string',
+  };
+
+  it('each -D arg matches formatScadValue output for the same key', () => {
+    const args = buildDefineArgs(LWFL_PARAMS, LWFL_TYPES);
+    for (let i = 0; i < args.length; i += 2) {
+      const assignment = args[i + 1];
+      const eqIdx = assignment.indexOf('=');
+      const key = assignment.substring(0, eqIdx);
+      const argValue = assignment.substring(eqIdx + 1);
+      const directValue = formatScadValue(key, LWFL_PARAMS[key], LWFL_TYPES);
+      expect(argValue).toBe(directValue);
+    }
+  });
+
+  it('string enum "yes" is quoted in -D args (not converted to boolean)', () => {
+    const args = buildDefineArgs(LWFL_PARAMS, LWFL_TYPES);
+    expect(args).toContain('expose_home_button="yes"');
+    expect(args).toContain('have_a_case="yes"');
+  });
+
+  it('string enum "no" is quoted in -D args (not converted to boolean)', () => {
+    const args = buildDefineArgs(LWFL_PARAMS, LWFL_TYPES);
+    expect(args).toContain('expose_upper_message_bar="no"');
+    expect(args).toContain('have_a_keyguard_frame="no"');
+  });
+
+  it('numeric string coerced to unquoted number in -D args', () => {
+    const args = buildDefineArgs(LWFL_PARAMS, LWFL_TYPES);
+    expect(args).toContain('smoothness_of_circles_and_arcs=40');
+    expect(args).toContain('shelf_thickness=3');
+  });
+
+  it('plain strings remain quoted in -D args', () => {
+    const args = buildDefineArgs(LWFL_PARAMS, LWFL_TYPES);
+    expect(args).toContain('generate="keyguard"');
+    expect(args).toContain('type_of_keyguard="3D-Printed"');
+  });
+});
+
+describe('Phase 4: serializeScadVector', () => {
+  it('serializes flat array', () => {
+    expect(serializeScadVector([1, 2, 3])).toBe('[1,2,3]');
+  });
+
+  it('serializes nested array', () => {
+    expect(serializeScadVector([[0, 0], [10, 20]])).toBe('[[0,0],[10,20]]');
+  });
+
+  it('serializes empty array', () => {
+    expect(serializeScadVector([])).toBe('[]');
+  });
+
+  it('serializes deeply nested array', () => {
+    expect(serializeScadVector([[[1]]])).toBe('[[[1]]]');
+  });
+
+  it('handles mixed types in array', () => {
+    expect(serializeScadVector([1, 'a', true])).toBe('[1,a,true]');
+  });
+});
+
+describe('Phase 4: detectColorParamLiteralStyle', () => {
+  it('detects string-style color with #', () => {
+    const scad = 'keyguard_color = "#FF0000"; // [#FF0000, #00FF00]';
+    const result = detectColorParamLiteralStyle(scad, 'keyguard_color');
+    expect(result.style).toBe('string');
+    expect(result.hasHashPrefix).toBe(true);
+  });
+
+  it('detects string-style color without #', () => {
+    const scad = 'frame_color = "FF0000";';
+    const result = detectColorParamLiteralStyle(scad, 'frame_color');
+    expect(result.style).toBe('string');
+    expect(result.hasHashPrefix).toBe(false);
+  });
+
+  it('detects vector-style color', () => {
+    const scad = 'my_color = [1, 0, 0];';
+    const result = detectColorParamLiteralStyle(scad, 'my_color');
+    expect(result.style).toBe('vector');
+  });
+
+  it('returns unknown for missing parameter', () => {
+    const scad = 'other_param = 42;';
+    const result = detectColorParamLiteralStyle(scad, 'missing_param');
+    expect(result.style).toBe('unknown');
+  });
+
+  it('returns unknown for null/empty inputs', () => {
+    expect(detectColorParamLiteralStyle(null, 'key').style).toBe('unknown');
+    expect(detectColorParamLiteralStyle('', 'key').style).toBe('unknown');
+    expect(detectColorParamLiteralStyle('code', null).style).toBe('unknown');
+  });
+});
+
+describe('Phase 4: escapeRegExp', () => {
+  it('escapes regex special characters', () => {
+    expect(escapeRegExp('foo.bar')).toBe('foo\\.bar');
+    expect(escapeRegExp('a+b')).toBe('a\\+b');
+    expect(escapeRegExp('[test]')).toBe('\\[test\\]');
+  });
+
+  it('passes through plain strings unchanged', () => {
+    expect(escapeRegExp('simple_key')).toBe('simple_key');
   });
 });

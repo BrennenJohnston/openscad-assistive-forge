@@ -1323,16 +1323,14 @@ describe('ZIP Handler', () => {
       ],
     ])
 
-    it('should return a mount-type-level heuristic default when app-level paths tie (not unique resolution)', () => {
+    it('should resolve app-level path deterministically when mount-type is ambiguous', () => {
       const map = buildPresetCompanionMap(MOUNT_TYPE_FIXTURE, {
         'iPad 7,8,9 - LTROP - LWFL-VI': {},
       })
       const result = map.get('iPad 7,8,9 - LTROP - LWFL-VI')
       expect(result.openingsPath).not.toBeNull()
-      expect(result.openingsPath).toMatch(
-        /LTROP-equivalent Case\/[^/]+\/openings_and_additions\.txt$/
-      )
-      expect(result.openingsPath).not.toMatch(/LWFL-VI/)
+      expect(result.openingsPath).toMatch(/LWFL-VI\/openings_and_additions\.txt$/)
+      expect(result.resolution).toBe('unique')
     })
 
     it('should produce a deterministic result across repeated calls', () => {
@@ -1365,6 +1363,208 @@ describe('ZIP Handler', () => {
       expect(map.get('iPad mini 6,7 - Andnary - VocoChat').openingsPath).toBe(
         'Cases and App Specifics/iPad mini 6,7/Andnary-equivalent Case/Voco Chat/openings_and_additions.txt'
       )
+    })
+  })
+
+  describe('buildPresetCompanionMap — LWFL family regression', () => {
+    const LWFL_FAMILY_FIXTURE = new Map([
+      ['main.scad', '// keyguard'],
+      ['openings_and_additions.txt', 'root default'],
+      // Andnary brand: LWFL at app-level (no mount-type layer)
+      [
+        'Cases and App Specifics/iPad 10,11/Andnary-equivalent Case/openings_and_additions.txt',
+        'andnary case-level',
+      ],
+      [
+        'Cases and App Specifics/iPad 10,11/Andnary-equivalent Case/LWFL/openings_and_additions.txt',
+        'andnary lwfl',
+      ],
+      [
+        'Cases and App Specifics/iPad 10,11/Andnary-equivalent Case/LWFL-VI/openings_and_additions.txt',
+        'andnary lwfl-vi',
+      ],
+      [
+        'Cases and App Specifics/iPad 10,11/Andnary-equivalent Case/P2G/openings_and_additions.txt',
+        'andnary p2g',
+      ],
+      // LTROP brand: 3-level hierarchy with mount types
+      [
+        'Cases and App Specifics/iPad 7,8,9/LTROP-equivalent Case/Keyguard Frame/openings_and_additions.txt',
+        'ltrop kf mount-level',
+      ],
+      [
+        'Cases and App Specifics/iPad 7,8,9/LTROP-equivalent Case/Keyguard Frame/LWFL/openings_and_additions.txt',
+        'ltrop kf lwfl',
+      ],
+      [
+        'Cases and App Specifics/iPad 7,8,9/LTROP-equivalent Case/Keyguard Frame/LWFL-VI/openings_and_additions.txt',
+        'ltrop kf lwfl-vi',
+      ],
+      [
+        'Cases and App Specifics/iPad 7,8,9/LTROP-equivalent Case/No Mount and Slide-in or Raised Tabs/openings_and_additions.txt',
+        'ltrop nm mount-level',
+      ],
+      [
+        'Cases and App Specifics/iPad 7,8,9/LTROP-equivalent Case/No Mount and Slide-in or Raised Tabs/LWFL/openings_and_additions.txt',
+        'ltrop nm lwfl',
+      ],
+      [
+        'Cases and App Specifics/iPad 7,8,9/LTROP-equivalent Case/No Mount and Slide-in or Raised Tabs/LWFL-VI/openings_and_additions.txt',
+        'ltrop nm lwfl-vi',
+      ],
+      // SP LTROP brand: same structure
+      [
+        'Cases and App Specifics/iPad 7,8,9/SP LTROP-equivalent Case/Keyguard Frame/openings_and_additions.txt',
+        'sp ltrop kf mount-level',
+      ],
+      [
+        'Cases and App Specifics/iPad 7,8,9/SP LTROP-equivalent Case/Keyguard Frame/LWFL-VI/openings_and_additions.txt',
+        'sp ltrop kf lwfl-vi',
+      ],
+      [
+        'Cases and App Specifics/iPad 7,8,9/SP LTROP-equivalent Case/No Mount and Slide-in or Raised Tabs/openings_and_additions.txt',
+        'sp ltrop nm mount-level',
+      ],
+      [
+        'Cases and App Specifics/iPad 7,8,9/SP LTROP-equivalent Case/No Mount and Slide-in or Raised Tabs/LWFL-VI/openings_and_additions.txt',
+        'sp ltrop nm lwfl-vi',
+      ],
+    ])
+
+    it('should resolve Andnary LWFL to exact LWFL path, not LWFL-VI sibling', () => {
+      const map = buildPresetCompanionMap(LWFL_FAMILY_FIXTURE, {
+        'iPad 10,11 - Andnary - LWFL': {},
+      })
+      const entry = map.get('iPad 10,11 - Andnary - LWFL')
+      expect(entry.openingsPath).toBe(
+        'Cases and App Specifics/iPad 10,11/Andnary-equivalent Case/LWFL/openings_and_additions.txt'
+      )
+      expect(entry.resolution).toBe('unique')
+    })
+
+    it('should resolve Andnary LWFL-VI to exact LWFL-VI path', () => {
+      const map = buildPresetCompanionMap(LWFL_FAMILY_FIXTURE, {
+        'iPad 10,11 - Andnary - LWFL-VI': {},
+      })
+      const entry = map.get('iPad 10,11 - Andnary - LWFL-VI')
+      expect(entry.openingsPath).toBe(
+        'Cases and App Specifics/iPad 10,11/Andnary-equivalent Case/LWFL-VI/openings_and_additions.txt'
+      )
+      expect(entry.resolution).toBe('unique')
+    })
+
+    it('should resolve LTROP LWFL deterministically to app-level path despite mount-type ambiguity', () => {
+      const map = buildPresetCompanionMap(LWFL_FAMILY_FIXTURE, {
+        'iPad 7,8,9 - LTROP - LWFL': {},
+      })
+      const entry = map.get('iPad 7,8,9 - LTROP - LWFL')
+      expect(entry.openingsPath).not.toBeNull()
+      expect(entry.openingsPath).toMatch(/LWFL\/openings_and_additions\.txt$/)
+      expect(entry.openingsPath).not.toMatch(/LWFL-VI/)
+      expect(entry.resolution).toBe('unique')
+    })
+
+    it('should resolve LTROP LWFL-VI deterministically to app-level path despite mount-type ambiguity', () => {
+      const map = buildPresetCompanionMap(LWFL_FAMILY_FIXTURE, {
+        'iPad 7,8,9 - LTROP - LWFL-VI': {},
+      })
+      const entry = map.get('iPad 7,8,9 - LTROP - LWFL-VI')
+      expect(entry.openingsPath).not.toBeNull()
+      expect(entry.openingsPath).toMatch(/LWFL-VI\/openings_and_additions\.txt$/)
+      expect(entry.resolution).toBe('unique')
+    })
+
+    it('should resolve SP LTROP LWFL-VI without cross-brand bleed', () => {
+      const map = buildPresetCompanionMap(LWFL_FAMILY_FIXTURE, {
+        'iPad 7,8,9 - SP LTROP - LWFL-VI': {},
+      })
+      const entry = map.get('iPad 7,8,9 - SP LTROP - LWFL-VI')
+      expect(entry.openingsPath).not.toBeNull()
+      expect(entry.openingsPath).toContain('SP LTROP-equivalent Case')
+      expect(entry.openingsPath).toMatch(/LWFL-VI\/openings_and_additions\.txt$/)
+      expect(entry.resolution).toBe('unique')
+    })
+
+    it('should resolve all LWFL family presets simultaneously without interference', () => {
+      const presets = {
+        'iPad 10,11 - Andnary - LWFL': {},
+        'iPad 10,11 - Andnary - LWFL-VI': {},
+        'iPad 10,11 - Andnary - P2G': {},
+        'iPad 7,8,9 - LTROP - LWFL': {},
+        'iPad 7,8,9 - LTROP - LWFL-VI': {},
+        'iPad 7,8,9 - SP LTROP - LWFL-VI': {},
+      }
+      const map = buildPresetCompanionMap(LWFL_FAMILY_FIXTURE, presets)
+
+      expect(map.get('iPad 10,11 - Andnary - LWFL').openingsPath).toContain('Andnary')
+      expect(map.get('iPad 10,11 - Andnary - LWFL').openingsPath).toMatch(/\/LWFL\//)
+      expect(map.get('iPad 10,11 - Andnary - LWFL-VI').openingsPath).toMatch(/\/LWFL-VI\//)
+      expect(map.get('iPad 10,11 - Andnary - P2G').openingsPath).toMatch(/\/P2G\//)
+      expect(map.get('iPad 7,8,9 - LTROP - LWFL').openingsPath).toContain('LTROP')
+      expect(map.get('iPad 7,8,9 - LTROP - LWFL').openingsPath).toMatch(/\/LWFL\//)
+      expect(map.get('iPad 7,8,9 - LTROP - LWFL-VI').openingsPath).toContain('LTROP-equivalent Case')
+      expect(map.get('iPad 7,8,9 - SP LTROP - LWFL-VI').openingsPath).toContain('SP LTROP')
+
+      for (const [, entry] of map) {
+        expect(entry.resolution).toBe('unique')
+      }
+    })
+
+    it('should produce deterministic results across repeated calls for mount-type-ambiguous presets', () => {
+      const presets = {
+        'iPad 7,8,9 - LTROP - LWFL': {},
+        'iPad 7,8,9 - LTROP - LWFL-VI': {},
+      }
+      const first = buildPresetCompanionMap(LWFL_FAMILY_FIXTURE, presets)
+      const second = buildPresetCompanionMap(LWFL_FAMILY_FIXTURE, presets)
+
+      expect(first.get('iPad 7,8,9 - LTROP - LWFL').openingsPath).toBe(
+        second.get('iPad 7,8,9 - LTROP - LWFL').openingsPath
+      )
+      expect(first.get('iPad 7,8,9 - LTROP - LWFL-VI').openingsPath).toBe(
+        second.get('iPad 7,8,9 - LTROP - LWFL-VI').openingsPath
+      )
+    })
+  })
+
+  describe('buildPresetCompanionMap — "x" token word filter parity', () => {
+    const X_TOKEN_FIXTURE = new Map([
+      ['main.scad', '// keyguard'],
+      ['openings_and_additions.txt', 'root default'],
+      [
+        'Cases and App Specifics/iPad 7,8,9/LTROP-equivalent Case/Keyguard Frame/openings_and_additions.txt',
+        'ltrop kf mount-level',
+      ],
+      [
+        'Cases and App Specifics/iPad 7,8,9/LTROP-equivalent Case/Keyguard Frame/TD Snap 8 x 10/openings_and_additions.txt',
+        'ltrop kf td snap 8x10',
+      ],
+      [
+        'Cases and App Specifics/iPad 7,8,9/LTROP-equivalent Case/Keyguard Frame/TD Snap 5 x 5/openings_and_additions.txt',
+        'ltrop kf td snap 5x5',
+      ],
+    ])
+
+    it('should resolve "TD Snap 8 x 10" to app-level path, not mount-type ancestor', () => {
+      const map = buildPresetCompanionMap(X_TOKEN_FIXTURE, {
+        'iPad 7,8,9 - LTROP - TD Snap 8 x 10': {},
+      })
+      const entry = map.get('iPad 7,8,9 - LTROP - TD Snap 8 x 10')
+      expect(entry.openingsPath).toBe(
+        'Cases and App Specifics/iPad 7,8,9/LTROP-equivalent Case/Keyguard Frame/TD Snap 8 x 10/openings_and_additions.txt'
+      )
+      expect(entry.resolution).toBe('unique')
+    })
+
+    it('should resolve "TD Snap 5 x 5" to app-level path, not mount-type ancestor', () => {
+      const map = buildPresetCompanionMap(X_TOKEN_FIXTURE, {
+        'iPad 7,8,9 - LTROP - TD Snap 5 x 5': {},
+      })
+      const entry = map.get('iPad 7,8,9 - LTROP - TD Snap 5 x 5')
+      expect(entry.openingsPath).toBe(
+        'Cases and App Specifics/iPad 7,8,9/LTROP-equivalent Case/Keyguard Frame/TD Snap 5 x 5/openings_and_additions.txt'
+      )
+      expect(entry.resolution).toBe('unique')
     })
   })
 
@@ -1450,7 +1650,7 @@ describe('ZIP Handler', () => {
       expect(map.get('AlphaTab Snap').resolution).toBe('unique')
     })
 
-    it('should tag ancestor-fallback presets in legacy path', () => {
+    it('should resolve LTROP LWFL-VI as unique via app-name match (not ancestor-fallback)', () => {
       const files = makeFiles([
         ['main.scad', '// keyguard'],
         ['openings_and_additions.txt', 'root default'],
@@ -1464,7 +1664,8 @@ describe('ZIP Handler', () => {
       })
       const entry = map.get('iPad 7,8,9 - LTROP - LWFL-VI')
       expect(entry.openingsPath).not.toBeNull()
-      expect(entry.resolution).toBe('ancestor-fallback')
+      expect(entry.openingsPath).toMatch(/LWFL-VI\/openings_and_additions\.txt$/)
+      expect(entry.resolution).toBe('unique')
     })
 
     it('should tag ambiguous presets when scores are tied with no ancestor', () => {
@@ -1806,27 +2007,23 @@ describe('ZIP Handler', () => {
       expect(presetNames).toHaveLength(292)
     })
 
-    // Validated thresholds (actual: 270 unique, 22 heuristic, 0 unmapped):
+    // Validated thresholds (actual: 292 unique, 0 heuristic, 0 unmapped):
     //
-    // Plan estimated 272+ unique / ~18 heuristic. Actual validation shows 4
-    // additional heuristic defaults from two algorithm interactions:
+    // Two companion-resolution improvements eliminated all 22 former
+    // ancestor-fallback heuristic defaults:
     //
-    // 1. LWFL in LTROP 3-level hierarchy (1 preset): LWFL-VI sibling paths
-    //    under different mount types create a 3-way tie that the specificity
-    //    filter can't resolve across mount-type boundaries.
+    // 1. extraSegmentsMatchTokens word filter parity: single-char non-digit
+    //    words (e.g. "x" in "TD Snap 5 x 5") are now skipped, matching the
+    //    tokeniser's own filter. Recovers 3 presets whose single-winner
+    //    ancestor check was failing due to unmatched "x".
     //
-    // 2. "x" token gap (3 presets: TD Snap 5 x 5, TD Snap 5 x 5 max rails,
-    //    TD Snap 8 x 10): The tokenizer intentionally filters single-char
-    //    non-digit tokens like "x", but extraSegmentsMatchTokens requires ALL
-    //    extra folder words to appear in tokens. The "x" in folder names like
-    //    "TD Snap 8 x 10" fails this check, causing the ancestor heuristic to
-    //    prefer the mount-type-level file.
-    //
-    // Both are valid heuristic defaults (correct ancestor path), not incorrect
-    // mappings. Follow-on: ignoring single-char words in
-    // extraSegmentsMatchTokens could recover 3 of these 4.
+    // 2. App-name exact-match tie-breaker: when tied candidates span
+    //    different intermediate folders (e.g. mount types) but the preset has
+    //    a parsed app name, prefer candidates whose leaf folder tokenizes to
+    //    the same set as the app name. Recovers 19 LTROP presets whose
+    //    app-level paths tied across mount types.
 
-    it('should resolve 270+ uniquely and 290+ combined via legacy path', () => {
+    it('should resolve 290+ uniquely via legacy path', () => {
       const map = buildPresetCompanionMap(fileTree, parameterSets)
       const { unique, heuristic, unmapped, unmappedNames, heuristicNames } =
         categorise(map, presetNames)
@@ -1842,12 +2039,11 @@ describe('ZIP Handler', () => {
         console.log('[Phase 7 Legacy] Heuristic:', heuristicNames)
       }
 
-      expect(unique).toBeGreaterThanOrEqual(270)
-      expect(unique + heuristic).toBeGreaterThanOrEqual(290)
-      expect(unmapped).toBeLessThanOrEqual(2)
+      expect(unique).toBeGreaterThanOrEqual(290)
+      expect(unmapped).toBe(0)
     })
 
-    it('should resolve 270+ uniquely and 290+ combined via generic companionTargets path', () => {
+    it('should resolve 290+ uniquely via generic companionTargets path', () => {
       const map = buildPresetCompanionMap(fileTree, parameterSets, {
         companionTargets: ['openings_and_additions.txt'],
       })
@@ -1862,9 +2058,8 @@ describe('ZIP Handler', () => {
         console.log('[Phase 7 Generic] Unmapped:', unmappedNames)
       }
 
-      expect(unique).toBeGreaterThanOrEqual(270)
-      expect(unique + heuristic).toBeGreaterThanOrEqual(290)
-      expect(unmapped).toBeLessThanOrEqual(2)
+      expect(unique).toBeGreaterThanOrEqual(290)
+      expect(unmapped).toBe(0)
     })
 
     it('should produce correct { aliases, svgAliasTarget } shape from generic path', () => {
@@ -1895,20 +2090,16 @@ describe('ZIP Handler', () => {
       expect(generic.unmapped).toBe(legacy.unmapped)
     })
 
-    it('should not conflate uniquely resolved and heuristic default categories', () => {
+    it('should resolve all presets without heuristic defaults after companion-resolution hardening', () => {
       const map = buildPresetCompanionMap(fileTree, parameterSets)
       const { unique, heuristic, heuristicNames } = categorise(
         map,
         presetNames
       )
 
-      expect(heuristic).toBeGreaterThan(0)
-      expect(unique).toBeGreaterThan(heuristic)
-      for (const name of heuristicNames) {
-        const parts = parsePresetParts(name)
-        expect(parts).not.toBeNull()
-        expect(parts.brand).toBe('LTROP')
-      }
+      expect(unique).toBe(presetNames.length)
+      expect(heuristic).toBe(0)
+      expect(heuristicNames).toHaveLength(0)
     })
 
     it('should include a resolution field on every entry (legacy path)', () => {
@@ -1960,12 +2151,19 @@ describe('ZIP Handler', () => {
       )
     })
 
-    it('should tag LTROP heuristic defaults as ancestor-fallback', () => {
+    it('should resolve all LTROP presets as unique after app-name tie-breaking', () => {
       const map = buildPresetCompanionMap(fileTree, parameterSets)
-      const { heuristicNames } = categorise(map, presetNames)
 
-      for (const name of heuristicNames) {
-        expect(map.get(name).resolution).toBe('ancestor-fallback')
+      const ltropPresets = presetNames.filter((n) => {
+        const parts = parsePresetParts(n)
+        return parts?.brand === 'LTROP'
+      })
+      expect(ltropPresets.length).toBeGreaterThan(0)
+
+      for (const name of ltropPresets) {
+        const entry = map.get(name)
+        expect(entry.resolution).toBe('unique')
+        expect(entry.openingsPath).not.toBeNull()
       }
     })
   })
