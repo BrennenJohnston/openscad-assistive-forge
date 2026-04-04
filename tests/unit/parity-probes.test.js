@@ -1637,6 +1637,176 @@ describe('Phase 1 Audit: shelf/grid preset pipeline trace', () => {
     });
   });
 
+  describe('Geometry Fix Regression: desktop reference parity (Phase 2 baseline)', () => {
+    // Desktop reference data from docs/audit/testing-round-7/reference-data/cli-extracts/nightly/
+    // These fixtures are inlined to keep the test self-contained (same pattern as buildDefineArgs above).
+    const DESKTOP_REFERENCES = {
+      '3d-printed-keyguard': {
+        scenarioId: '3d-printed-keyguard',
+        parameters: { generate: 'keyguard', type_of_keyguard: '3D-Printed' },
+        geometry: { vertices: 5978, facets: 12016 },
+        exports: { stl_bytes: 3394047 },
+        openscadVersion: '2026.01.03',
+        backend: 'Manifold',
+      },
+      'laser-cut-keyguard': {
+        scenarioId: 'laser-cut-keyguard',
+        parameters: { generate: 'keyguard', type_of_keyguard: 'Laser-Cut' },
+        geometry: { vertices: 3288, facets: 6636 },
+        exports: { stl_bytes: 1912770 },
+        openscadVersion: '2026.01.03',
+        backend: 'Manifold',
+      },
+      'keyguard-frame-multicolor': {
+        scenarioId: 'keyguard-frame-multicolor',
+        parameters: {
+          type_of_keyguard: '3D-Printed',
+          generate: 'keyguard frame',
+          show_keyguard_with_frame: 'yes',
+          have_a_keyguard_frame: 'yes',
+        },
+        geometry: { vertices: 6981, facets: 14118 },
+        exports: { stl_bytes: 3940675 },
+        openscadVersion: '2026.01.03',
+        backend: 'Manifold',
+      },
+    };
+
+    function findMatchingReference(params) {
+      if (!params) return null;
+      for (const ref of Object.values(DESKTOP_REFERENCES)) {
+        const allMatch = Object.entries(ref.parameters).every(
+          ([key, value]) => params[key] === value
+        );
+        if (allMatch) return ref;
+      }
+      return null;
+    }
+
+    function withinTolerance(actual, reference, tolerancePct) {
+      const delta = Math.abs(actual - reference) / reference;
+      return delta <= tolerancePct / 100;
+    }
+
+    describe('reference data structure validation', () => {
+      it('all reference entries have required geometry fields', () => {
+        for (const [id, ref] of Object.entries(DESKTOP_REFERENCES)) {
+          expect(ref.scenarioId).toBe(id);
+          expect(ref.geometry.vertices).toBeGreaterThan(0);
+          expect(ref.geometry.facets).toBeGreaterThan(0);
+          expect(ref.exports.stl_bytes).toBeGreaterThan(0);
+          expect(ref.openscadVersion).toBe('2026.01.03');
+          expect(ref.backend).toBe('Manifold');
+        }
+      });
+
+      it('all reference entries have parameter sets for matching', () => {
+        for (const ref of Object.values(DESKTOP_REFERENCES)) {
+          expect(ref.parameters).toBeDefined();
+          expect(Object.keys(ref.parameters).length).toBeGreaterThan(0);
+        }
+      });
+
+      it('facet count is always even (triangulated mesh has paired faces)', () => {
+        for (const ref of Object.values(DESKTOP_REFERENCES)) {
+          expect(ref.geometry.facets % 2).toBe(0);
+        }
+      });
+    });
+
+    describe('reference matching logic', () => {
+      it('matches 3D-printed keyguard by generate + type_of_keyguard', () => {
+        const match = findMatchingReference({
+          generate: 'keyguard',
+          type_of_keyguard: '3D-Printed',
+        });
+        expect(match).not.toBeNull();
+        expect(match.scenarioId).toBe('3d-printed-keyguard');
+        expect(match.geometry.facets).toBe(12016);
+      });
+
+      it('matches laser-cut keyguard by generate + type_of_keyguard', () => {
+        const match = findMatchingReference({
+          generate: 'keyguard',
+          type_of_keyguard: 'Laser-Cut',
+        });
+        expect(match).not.toBeNull();
+        expect(match.scenarioId).toBe('laser-cut-keyguard');
+      });
+
+      it('matches keyguard-frame-multicolor by all four parameters', () => {
+        const match = findMatchingReference({
+          type_of_keyguard: '3D-Printed',
+          generate: 'keyguard frame',
+          show_keyguard_with_frame: 'yes',
+          have_a_keyguard_frame: 'yes',
+        });
+        expect(match).not.toBeNull();
+        expect(match.scenarioId).toBe('keyguard-frame-multicolor');
+      });
+
+      it('returns null for unrecognized parameter combinations', () => {
+        expect(findMatchingReference({ generate: 'unknown' })).toBeNull();
+      });
+
+      it('returns null for null input', () => {
+        expect(findMatchingReference(null)).toBeNull();
+      });
+
+      it('does not match when only a subset of required params is present', () => {
+        const match = findMatchingReference({
+          type_of_keyguard: '3D-Printed',
+          generate: 'keyguard frame',
+          // Missing show_keyguard_with_frame and have_a_keyguard_frame
+        });
+        // Should NOT match keyguard-frame-multicolor since only 2 of 4 params present.
+        // May match 3d-printed-keyguard since generate='keyguard frame' != 'keyguard'.
+        expect(match?.scenarioId).not.toBe('keyguard-frame-multicolor');
+      });
+    });
+
+    describe('tolerance comparison utility', () => {
+      it('accepts values within tolerance', () => {
+        expect(withinTolerance(11000, 12016, 10)).toBe(true);
+        expect(withinTolerance(12016, 12016, 10)).toBe(true);
+        expect(withinTolerance(12500, 12016, 10)).toBe(true);
+      });
+
+      it('rejects values outside tolerance', () => {
+        expect(withinTolerance(9000, 12016, 10)).toBe(false);
+        expect(withinTolerance(14000, 12016, 10)).toBe(false);
+      });
+    });
+
+    describe('Phase 2 observed baseline recording', () => {
+      // OBSERVED (browser runtime, 2026-04-03): compareGeometry() at RENDER_QUALITY.FULL
+      // reported 10,348 triangles for the default 3D-printed keyguard preset.
+      // Desktop Nightly reference: 12,016 facets.
+      // Delta: -1,668 (-13.9%) — outside 10% tolerance.
+      // This was measured with WASM build OpenSCAD-2025.03.25 (pre-Phase 4 update).
+      const BROWSER_BASELINE_PRE_PHASE4 = 10348;
+      const DESKTOP_REFERENCE_FACETS = 12016;
+
+      it('baseline delta is recorded as -13.9% (outside 10% tolerance)', () => {
+        const delta =
+          (BROWSER_BASELINE_PRE_PHASE4 - DESKTOP_REFERENCE_FACETS) /
+          DESKTOP_REFERENCE_FACETS;
+        expect(delta).toBeCloseTo(-0.139, 2);
+        expect(withinTolerance(BROWSER_BASELINE_PRE_PHASE4, DESKTOP_REFERENCE_FACETS, 10)).toBe(false);
+      });
+
+      it('a hypothetical 11,000-triangle result would be within 10% tolerance', () => {
+        expect(withinTolerance(11000, DESKTOP_REFERENCE_FACETS, 10)).toBe(true);
+      });
+
+      it('desktop reference for 3D-printed keyguard is 5,978 vertices / 12,016 facets', () => {
+        const ref = DESKTOP_REFERENCES['3d-printed-keyguard'];
+        expect(ref.geometry.vertices).toBe(5978);
+        expect(ref.geometry.facets).toBe(12016);
+      });
+    });
+  });
+
   describe('end-to-end 2D export pipeline for grid preset', () => {
     const GRID_2D_EXPORT_SCHEMA = {
       parameters: {

@@ -1614,6 +1614,134 @@ describe('AutoPreviewController', () => {
     })
   })
 
+  describe('Geometry Fix Regression: developer toggle isolation (Phase 3)', () => {
+    beforeEach(() => {
+      renderController.getCapabilities = vi.fn(() => ({
+        hasRenderColorsFlag: true,
+        hasManifold: true,
+      }))
+      localStorage.removeItem('openscad-forge-debug-no-csg-colors')
+      localStorage.removeItem('openscad-forge-debug-desktop-quality')
+    })
+
+    afterEach(() => {
+      localStorage.removeItem('openscad-forge-debug-no-csg-colors')
+      localStorage.removeItem('openscad-forge-debug-desktop-quality')
+      isFlagEnabled.mockReset()
+    })
+
+    it('CSG bypass toggle forces STL format and preserves original SCAD source', async () => {
+      localStorage.setItem('openscad-forge-debug-no-csg-colors', '1')
+      isFlagEnabled.mockReturnValue(false)
+      controller.setScadContent('color("red") difference() { cube(20); cube(10); }')
+
+      renderController.renderPreview.mockResolvedValue({
+        stl: new ArrayBuffer(8),
+        stats: { triangles: 12 },
+        format: 'stl',
+      })
+
+      const params = { width: 10 }
+      const paramHash = controller.hashParams(params)
+      controller.currentParamHash = paramHash
+      controller.currentPreviewKey = `${paramHash}|model`
+
+      await controller.renderPreview(params, paramHash)
+
+      const [source, , options] = renderController.renderPreview.mock.calls[0]
+      expect(options.outputFormat).toBe('stl')
+      expect(source).not.toContain('color("#f9d72c")')
+      expect(source).toContain('color("red")')
+    })
+
+    it('desktop quality toggle applies DESKTOP_DEFAULT with no $fn cap', () => {
+      localStorage.setItem('openscad-forge-debug-desktop-quality', '1')
+
+      const result = controller.resolvePreviewQualityInfo({ width: 10 })
+      expect(result.quality.name).toBe('desktop')
+      expect(result.quality.maxFn).toBeNull()
+      expect(result.quality.forceFn).toBe(false)
+    })
+
+    it('both toggles active simultaneously: STL format + desktop quality', async () => {
+      localStorage.setItem('openscad-forge-debug-no-csg-colors', '1')
+      localStorage.setItem('openscad-forge-debug-desktop-quality', '1')
+      isFlagEnabled.mockReturnValue(false)
+      controller.setScadContent('difference() { cube(20); cube(10); }')
+
+      renderController.renderPreview.mockResolvedValue({
+        stl: new ArrayBuffer(8),
+        stats: { triangles: 12 },
+        format: 'stl',
+      })
+
+      const params = { width: 10 }
+      const paramHash = controller.hashParams(params)
+      controller.currentParamHash = paramHash
+      controller.currentPreviewKey = `${paramHash}|desktop`
+
+      await controller.renderPreview(params, paramHash)
+
+      const [source, , options] = renderController.renderPreview.mock.calls[0]
+      expect(options.outputFormat).toBe('stl')
+      expect(options.quality).toEqual(expect.objectContaining({
+        name: 'desktop',
+        maxFn: null,
+      }))
+      expect(source).not.toContain('color("#f9d72c")')
+    })
+
+    it('clearPreviewCache resets all cached entries so toggles take effect', () => {
+      controller.previewCache.set('key1', { data: 'cached-stl' })
+      controller.previewCache.set('key2', { data: 'cached-off' })
+      expect(controller.previewCache.size).toBe(2)
+
+      controller.clearPreviewCache()
+
+      expect(controller.previewCache.size).toBe(0)
+      expect(controller.previewParamHash).toBeNull()
+      expect(controller.previewCacheKey).toBeNull()
+    })
+
+    it('disabling CSG bypass returns to OFF format with CSG color injection', async () => {
+      localStorage.setItem('openscad-forge-debug-no-csg-colors', '1')
+      isFlagEnabled.mockReturnValue(false)
+      controller.setScadContent('difference() { cube(20); cube(10); }')
+
+      renderController.renderPreview.mockResolvedValue({
+        stl: new ArrayBuffer(8),
+        stats: { triangles: 12 },
+        format: 'stl',
+      })
+
+      const params = { width: 10 }
+      const paramHash = controller.hashParams(params)
+      controller.currentParamHash = paramHash
+      controller.currentPreviewKey = `${paramHash}|model`
+
+      await controller.renderPreview(params, paramHash)
+      const [, , firstOptions] = renderController.renderPreview.mock.calls[0]
+      expect(firstOptions.outputFormat).toBe('stl')
+
+      localStorage.removeItem('openscad-forge-debug-no-csg-colors')
+      controller.clearPreviewCache()
+
+      renderController.renderPreview.mockResolvedValue({
+        stl: new ArrayBuffer(8),
+        stats: { triangles: 12 },
+        format: 'off',
+      })
+
+      controller.currentParamHash = paramHash
+      controller.currentPreviewKey = `${paramHash}|model`
+      await controller.renderPreview(params, paramHash)
+
+      const [source2, , secondOptions] = renderController.renderPreview.mock.calls[1]
+      expect(secondOptions.outputFormat).toBe('off')
+      expect(source2).toContain('color("#f9d72c")')
+    })
+  })
+
   describe('CSG Color Preprocessing — Full Render Format Decision', () => {
     beforeEach(() => {
       renderController.getCapabilities = vi.fn(() => ({

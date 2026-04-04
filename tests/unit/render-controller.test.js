@@ -897,6 +897,129 @@ describe('Restart serialization', () => {
   })
 })
 
+describe('Geometry Fix Regression: callMain first-render corruption (Phase 1)', () => {
+  it('first init without cachedCapabilities triggers restart before first render completes', async () => {
+    const controller = new RenderController()
+    controller._initUsedCachedCapabilities = false
+
+    const detectedCaps = {
+      hasManifold: true,
+      hasFastCSG: false,
+      hasLazyUnion: false,
+      hasBinarySTL: true,
+      version: '2026.04',
+    }
+
+    controller.handleMessage({
+      type: 'READY',
+      payload: { wasmInitDurationMs: 400, capabilities: detectedCaps },
+    })
+
+    expect(controller._moduleUsed).toBe(true)
+    expect(controller.capabilities).toEqual(detectedCaps)
+
+    controller.worker = { postMessage: vi.fn() }
+
+    const restartCalls = []
+    controller.restart = vi.fn().mockImplementation(async () => {
+      restartCalls.push({ cachedCapabilities: controller.capabilities })
+      controller._moduleUsed = false
+      controller.ready = true
+    })
+
+    const renderPromise = controller.render('cube(1);', {})
+    await Promise.resolve()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(controller.restart).toHaveBeenCalled()
+    expect(restartCalls[0].cachedCapabilities).toEqual(detectedCaps)
+
+    if (controller.currentRequest) {
+      controller.handleMessage({
+        type: 'COMPLETE',
+        payload: {
+          requestId: controller.currentRequest.id,
+          data: new ArrayBuffer(1),
+          stats: { triangles: 1 },
+        },
+      })
+    }
+    await renderPromise
+  })
+
+  it('restart init with cachedCapabilities does NOT trigger a second restart before render', async () => {
+    const controller = new RenderController()
+    controller._initUsedCachedCapabilities = true
+
+    controller.handleMessage({
+      type: 'READY',
+      payload: {
+        wasmInitDurationMs: 200,
+        capabilities: {
+          hasManifold: true,
+          hasFastCSG: false,
+          hasLazyUnion: false,
+          hasBinarySTL: true,
+          version: '2026.04',
+        },
+      },
+    })
+
+    expect(controller._moduleUsed).toBe(false)
+
+    controller.worker = { postMessage: vi.fn() }
+    controller.restart = vi.fn()
+
+    const renderPromise = controller.render('cube(1);', {})
+    await Promise.resolve()
+
+    expect(controller.restart).not.toHaveBeenCalled()
+
+    if (controller.currentRequest) {
+      controller.handleMessage({
+        type: 'COMPLETE',
+        payload: {
+          requestId: controller.currentRequest.id,
+          data: new ArrayBuffer(1),
+          stats: { triangles: 1 },
+        },
+      })
+    }
+    await renderPromise
+  })
+
+  it('capabilities survive the restart cycle and are available for subsequent renders', async () => {
+    const controller = new RenderController()
+    const caps = {
+      hasManifold: true,
+      hasFastCSG: false,
+      hasLazyUnion: true,
+      hasBinarySTL: true,
+      version: '2026.04',
+    }
+
+    controller.handleMessage({
+      type: 'READY',
+      payload: { wasmInitDurationMs: 300, capabilities: caps },
+    })
+    expect(controller.capabilities).toEqual(caps)
+
+    const initSpy = vi.fn().mockResolvedValue(undefined)
+    controller.terminate = vi.fn()
+    controller.init = initSpy
+    controller.startHealthMonitoring = vi.fn()
+
+    await controller.restart()
+
+    expect(initSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ cachedCapabilities: caps })
+    )
+
+    expect(controller.capabilities).toEqual(caps)
+  })
+})
+
 describe('Binary STL Detection', () => {
   it('detects binary STL by bytes per triangle', () => {
     // Binary STL: ~50 bytes per triangle (12 bytes normal + 36 bytes vertices + 2 attribute)
