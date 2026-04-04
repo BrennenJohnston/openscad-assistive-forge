@@ -15,7 +15,7 @@
  * - **Performance Observability:** Real-time metrics and logging
  *
  * ### WASM Build Info:
- * - Source: Official OpenSCAD Playground build (https://files.openscad.org/playground/)
+ * - Source: Official OpenSCAD snapshot build (https://files.openscad.org/snapshots/)
  * - Location: /wasm/openscad-official/openscad.js
  * - Features: Manifold geometry engine, fast-csg, lazy-union support
  *
