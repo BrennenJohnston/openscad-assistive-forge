@@ -23,8 +23,12 @@
  * - Threaded WASM for multi-core parallelism (requires SharedArrayBuffer)
  */
 
-import { hexToRgb } from '../js/color-utils.js';
 import { resolveFileParams, decodeDataUrl } from '../js/file-param-resolver.js';
+import {
+  escapeRegExp,
+  formatScadValue,
+  buildDefineArgs,
+} from '../js/scad-param-formatter.js';
 
 // Official WASM is loaded dynamically in initWASM() from /wasm/openscad-official/
 
@@ -89,15 +93,6 @@ async function ensureOpenSCADModule() {
     openscadModule = openscadInstance;
   }
   return openscadModule;
-}
-
-/**
- * Escape a string for use in a RegExp
- * @param {string} s
- * @returns {string}
- */
-function escapeRegExp(s) {
-  return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /**
@@ -1102,153 +1097,8 @@ function clearLibraries() {
 }
 
 /**
- * Recursively serialize a JS array to OpenSCAD vector syntax, handling nested vectors.
- * @param {Array} arr
- * @returns {string} e.g. "[[1,2],[3,4]]"
- */
-function serializeScadVector(arr) {
-  const parts = arr.map((item) =>
-    Array.isArray(item) ? serializeScadVector(item) : String(item)
-  );
-  return `[${parts.join(',')}]`;
-}
-
-/**
- * Detect how a color parameter is declared in the SCAD source.
- * This allows runtime values from the UI to preserve expected literal style:
- * - string defaults should remain strings (with/without leading #)
- * - vector defaults should keep vector serialization
- *
- * @param {string} scadContent
- * @param {string} key
- * @returns {{style: 'string'|'vector'|'unknown', hasHashPrefix: boolean}}
- */
-function detectColorParamLiteralStyle(scadContent, key) {
-  if (!scadContent || typeof scadContent !== 'string' || !key) {
-    return { style: 'unknown', hasHashPrefix: false };
-  }
-
-  const keyRe = escapeRegExp(key);
-  const assignmentRe = new RegExp(`^\\s*${keyRe}\\s*=\\s*([^;]+);`, 'm');
-  const match = scadContent.match(assignmentRe);
-  if (!match) {
-    return { style: 'unknown', hasHashPrefix: false };
-  }
-
-  const rhs = String(match[1] || '').trim();
-  if (rhs.startsWith('[')) {
-    return { style: 'vector', hasHashPrefix: false };
-  }
-
-  const quote = rhs[0];
-  if ((quote === '"' || quote === "'") && rhs.endsWith(quote)) {
-    const inner = rhs.slice(1, -1).trim();
-    return { style: 'string', hasHashPrefix: inner.startsWith('#') };
-  }
-
-  return { style: 'unknown', hasHashPrefix: false };
-}
-
-/**
- * Build -D command-line arguments from parameters
- * @param {Object} parameters - Parameter key-value pairs
- * @param {Object} paramTypes - Map of parameter names to their schema types (e.g. { expose_home_button: 'string', MW_version: 'boolean' })
- * @param {string} scadContent - Source used to infer color literal style
- * @returns {Array<string>} Array of -D arguments
- */
-function buildDefineArgs(parameters, paramTypes = {}, scadContent = '') {
-  if (!parameters || Object.keys(parameters).length === 0) {
-    return [];
-  }
-
-  const args = [];
-
-  for (const [key, value] of Object.entries(parameters)) {
-    // Skip null/undefined values
-    if (value === null || value === undefined) {
-      continue;
-    }
-
-    let formattedValue;
-
-    // Handle different value types
-    if (typeof value === 'string') {
-      const lowerValue = value.toLowerCase();
-      // CRITICAL FIX: Only convert "yes"/"no"/"true"/"false" to OpenSCAD boolean
-      // when the parameter schema declares the type as 'boolean'.
-      // String dropdown parameters like expose_home_button = "yes"; //[yes,no]
-      // must remain as quoted strings so that OpenSCAD string comparisons
-      // (e.g. if (expose_home_button == "yes")) evaluate correctly.
-      const isBooleanParam = paramTypes[key] === 'boolean';
-
-      if (isBooleanParam && (lowerValue === 'true' || lowerValue === 'yes')) {
-        formattedValue = 'true';
-      } else if (
-        isBooleanParam &&
-        (lowerValue === 'false' || lowerValue === 'no')
-      ) {
-        formattedValue = 'false';
-      }
-      // Check if this is a color (hex string)
-      else if (/^#?[0-9A-Fa-f]{6}$/.test(value)) {
-        const colorStyle =
-          paramTypes[key] === 'color'
-            ? detectColorParamLiteralStyle(scadContent, key)
-            : { style: 'unknown', hasHashPrefix: false };
-
-        if (paramTypes[key] === 'color' && colorStyle.style === 'string') {
-          const normalizedHex = value.replace(/^#/, '').toUpperCase();
-          const literal = colorStyle.hasHashPrefix
-            ? `#${normalizedHex}`
-            : normalizedHex;
-          formattedValue = `"${literal}"`;
-        } else {
-          const rgb = hexToRgb(value);
-          formattedValue = `[${rgb[0]},${rgb[1]},${rgb[2]}]`;
-        }
-      }
-      // When the schema declares a numeric type, a string value resolved from a
-      // numeric enum (e.g. resolve2DExportParameters returning '1' for a
-      // generate param typed as integer) must be emitted unquoted so that
-      // OpenSCAD numeric comparisons (if (generate == 1)) evaluate correctly.
-      else if (
-        (paramTypes[key] === 'integer' || paramTypes[key] === 'number') &&
-        value.trim() !== '' &&
-        !isNaN(Number(value))
-      ) {
-        formattedValue = String(Number(value));
-      } else {
-        // ALL non-boolean strings (including "yes"/"no" dropdowns) stay as quoted strings
-        const escaped = value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-        formattedValue = `"${escaped}"`;
-      }
-    } else if (typeof value === 'number') {
-      formattedValue = String(value);
-    } else if (typeof value === 'boolean') {
-      formattedValue = value ? 'true' : 'false';
-    } else if (Array.isArray(value)) {
-      formattedValue = serializeScadVector(value);
-    } else if (typeof value === 'object' && value.data) {
-      // File parameter - use filename
-      const escaped = (value.name || 'uploaded_file')
-        .replace(/\\/g, '\\\\')
-        .replace(/"/g, '\\"');
-      formattedValue = `"${escaped}"`;
-    } else {
-      // Fallback: JSON stringify
-      formattedValue = JSON.stringify(value);
-    }
-
-    // Add -D flag
-    args.push('-D');
-    args.push(`${key}=${formattedValue}`);
-  }
-
-  return args;
-}
-
-/**
- * Convert parameters to OpenSCAD variable assignments
+ * Convert parameters to OpenSCAD variable assignments.
+ * Uses the shared formatScadValue() to stay in sync with buildDefineArgs().
  * @param {Object} parameters - Parameter key-value pairs
  * @param {Object} paramTypes - Parameter type information for special handling
  * @returns {string} OpenSCAD variable assignments
@@ -1260,56 +1110,11 @@ function parametersToScad(parameters, paramTypes = {}) {
 
   const assignments = Object.entries(parameters)
     .map(([key, value]) => {
-      // Skip null/undefined values
-      if (value === null || value === undefined) {
-        return null;
-      }
-
-      // Check if this is a color parameter (hex string)
-      if (
-        paramTypes[key] === 'color' ||
-        (typeof value === 'string' && /^#?[0-9A-Fa-f]{6}$/.test(value))
-      ) {
-        // Convert hex color to RGB array [r, g, b]
-        const rgb = hexToRgb(value);
-        return `${key} = [${rgb[0]}, ${rgb[1]}, ${rgb[2]}];`;
-      }
-
-      // Check if this is a file parameter (object with data property)
-      if (typeof value === 'object' && value.data) {
-        // For files, we'll use the filename or a special marker
-        // The actual file data handling happens in the render function
-        return `${key} = "${value.name || 'uploaded_file'}";`;
-      }
-
-      // Handle different value types
-      if (typeof value === 'string') {
-        const lowerValue = value.toLowerCase();
-        // CRITICAL FIX: Only convert to boolean when schema type is 'boolean'
-        const isBooleanParam = paramTypes[key] === 'boolean';
-
-        if (isBooleanParam && (lowerValue === 'true' || lowerValue === 'yes')) {
-          return `${key} = true;`;
-        } else if (
-          isBooleanParam &&
-          (lowerValue === 'false' || lowerValue === 'no')
-        ) {
-          return `${key} = false;`;
-        }
-        // ALL non-boolean strings (including "yes"/"no" dropdowns) stay as quoted strings
-        const escaped = value.replace(/"/g, '\\"');
-        return `${key} = "${escaped}";`;
-      } else if (typeof value === 'number') {
-        return `${key} = ${value};`;
-      } else if (typeof value === 'boolean') {
-        return `${key} = ${value};`;
-      } else if (Array.isArray(value)) {
-        return `${key} = ${serializeScadVector(value)};`;
-      } else {
-        return `${key} = ${JSON.stringify(value)};`;
-      }
+      const formatted = formatScadValue(key, value, paramTypes);
+      if (formatted === null) return null;
+      return `${key} = ${formatted};`;
     })
-    .filter((a) => a !== null); // Remove null entries
+    .filter((a) => a !== null);
 
   return assignments.join('\n') + '\n\n';
 }
@@ -1332,60 +1137,8 @@ function _applyOverrides(scadContent, parameters, paramTypes = {}) {
   const replacedKeys = [];
   const prependedKeys = [];
 
-  const formatValue = (key, value) => {
-    // Skip null/undefined
-    if (value === null || value === undefined) {
-      return null;
-    }
-
-    // Check if this is a color parameter (hex string)
-    if (typeof value === 'string' && /^#?[0-9A-Fa-f]{6}$/.test(value)) {
-      // Convert hex color to RGB array [r, g, b]
-      const rgb = hexToRgb(value);
-      return `[${rgb[0]}, ${rgb[1]}, ${rgb[2]}]`;
-    }
-
-    // Check if this is a file parameter (object with data property)
-    if (typeof value === 'object' && value.data) {
-      // For files, use the filename
-      const escaped = (value.name || 'uploaded_file').replace(/"/g, '\\"');
-      return `"${escaped}"`;
-    }
-
-    // Handle arrays (including nested vectors like [[1,2],[3,4]])
-    if (Array.isArray(value)) {
-      return serializeScadVector(value);
-    }
-
-    // Handle strings
-    if (typeof value === 'string') {
-      const lowerValue = value.toLowerCase();
-      // CRITICAL FIX: Only convert to boolean when schema type is 'boolean'
-      const isBooleanParam = paramTypes[key] === 'boolean';
-
-      if (isBooleanParam && (lowerValue === 'true' || lowerValue === 'yes')) {
-        return 'true';
-      } else if (
-        isBooleanParam &&
-        (lowerValue === 'false' || lowerValue === 'no')
-      ) {
-        return 'false';
-      }
-      // ALL non-boolean strings (including "yes"/"no" dropdowns) stay as quoted strings
-      const escaped = value.replace(/"/g, '\\"');
-      return `"${escaped}"`;
-    }
-
-    // Handle numbers and booleans
-    if (typeof value === 'number' || typeof value === 'boolean') {
-      return String(value);
-    }
-
-    return JSON.stringify(value);
-  };
-
   for (const [key, value] of Object.entries(parameters)) {
-    const assignmentValue = formatValue(key, value);
+    const assignmentValue = formatScadValue(key, value, paramTypes, scadContent);
 
     // Skip null values
     if (assignmentValue === null) {
@@ -1555,11 +1308,33 @@ async function renderWithCallMain(
     // parameters like generate="first layer for SVG/DXF file" — is
     // responsible for producing 2D geometry (via its own projection()
     // calls).  We render directly to the target format; no wrapper needed.
+    let effectiveScadContent = scadContent;
+    let defineArgs;
+
+    if (renderOptions?.useSourceOverrides) {
+      const overrideResult = _applyOverrides(
+        scadContent,
+        parameters,
+        paramTypes
+      );
+      effectiveScadContent = overrideResult.scad;
+      defineArgs = [];
+      if (import.meta.env.DEV) {
+        console.log(
+          '[Worker] Source overrides applied — replaced:',
+          overrideResult.replacedKeys,
+          'prepended:',
+          overrideResult.prependedKeys
+        );
+      }
+    } else {
+      defineArgs = buildDefineArgs(parameters, paramTypes, scadContent);
+    }
+
     if (shouldWriteInput) {
-      module.FS.writeFile(inputFile, scadContent);
+      module.FS.writeFile(inputFile, effectiveScadContent);
       wroteTempInput = true;
     }
-    const defineArgs = buildDefineArgs(parameters, paramTypes, scadContent);
 
     // Pre-render guard: scan SCAD source for known-crashy functions
     // roof() and projection() trigger CGAL assertion failures in WASM (openscad-wasm#5, #6)
@@ -1757,7 +1532,16 @@ async function renderWithCallMain(
     } catch (_e) {
       // Ignore cleanup errors
     }
-    return outputData;
+    return {
+      data: outputData,
+      diagnostics: {
+        defineArgs,
+        performanceFlags,
+        exportFlags,
+        inputFile,
+        useSourceOverrides: Boolean(renderOptions?.useSourceOverrides),
+      },
+    };
   } catch (error) {
     console.error(`[Worker] Render via callMain to ${format} failed:`, error);
     throw error;
@@ -2535,7 +2319,7 @@ async function render(payload) {
         }
       }
 
-      const outputData = await renderWithCallMain(
+      const callMainResult = await renderWithCallMain(
         scadContent,
         renderParameters,
         format,
@@ -2543,6 +2327,8 @@ async function render(payload) {
         renderOptions,
         paramTypes
       );
+      const outputData = callMainResult.data;
+      const renderDiagnostics = callMainResult.diagnostics;
 
       // Capture render duration
       renderDurationMs = Math.round(performance.now() - renderStartTime);
@@ -2556,7 +2342,7 @@ async function render(payload) {
         },
       });
 
-      return { data: outputData, format, renderDurationMs };
+      return { data: outputData, format, renderDurationMs, renderDiagnostics };
     })();
 
     // Race between render and timeout
@@ -2565,6 +2351,7 @@ async function render(payload) {
       data: outputData,
       format: resultFormat,
       renderDurationMs: workerRenderMs,
+      renderDiagnostics: workerDiagnostics,
     } = result;
 
     // Clear timeout
@@ -2691,6 +2478,7 @@ async function render(payload) {
             wasmInitMs: wasmInitDurationMs,
           },
           consoleOutput: openscadConsoleOutput || '',
+          diagnostics: workerDiagnostics || undefined,
           postProcessing:
             resultFormat === 'dxf'
               ? { dxfNormalized: dxfPostProcessed, error: dxfPostProcessError }

@@ -574,7 +574,7 @@ export function buildPresetCompanionMap(files, parameterSets, options = {}) {
     return tokens.filter((t) => folderWords.has(t)).length;
   }
 
-  function pickBest(candidates, tokens) {
+  function pickBest(candidates, tokens, parts = null) {
     if (!candidates || candidates.length === 0)
       return { path: null, resolution: 'ambiguous' };
     if (candidates.length === 1) {
@@ -590,13 +590,13 @@ export function buildPresetCompanionMap(files, parameterSets, options = {}) {
           a.path.split('/').length - b.path.split('/').length
       );
     if (scored[0].score === 0) return { path: null, resolution: 'ambiguous' };
-    return resolveByHierarchy(scored, tokens);
+    return resolveByHierarchy(scored, tokens, parts);
   }
 
   // When candidates share parent-child relationships, resolve using
   // directory hierarchy rather than raw token overlap scores.
   // Returns { path: string|null, resolution: 'unique'|'ancestor-fallback'|'ambiguous' }.
-  function resolveByHierarchy(scored, tokens) {
+  function resolveByHierarchy(scored, tokens, parts = null) {
     const topScore = scored[0].score;
     const tied = scored.filter((s) => s.score === topScore);
 
@@ -655,11 +655,39 @@ export function buildPresetCompanionMap(files, parameterSets, options = {}) {
       }
     }
 
+    // App-name exact-match tie-breaker: when the preset has a parsed
+    // app name, prefer candidates whose leaf folder tokenizes to the
+    // same set as the app name. This disambiguates e.g. LWFL vs LWFL-VI
+    // siblings and picks the correct app-level file over a mount-type
+    // ancestor when mount-type info is absent from the preset name.
+    if (parts?.app) {
+      const appTokenSet = new Set(tokenise(parts.app));
+      const leafMatched = tied.filter((s) => {
+        const dir = s.path.substring(0, s.path.lastIndexOf('/'));
+        const leaf = dir.split('/').pop();
+        const leafTokenSet = new Set(tokenise(leaf));
+        if (leafTokenSet.size !== appTokenSet.size) return false;
+        for (const t of leafTokenSet) {
+          if (!appTokenSet.has(t)) return false;
+        }
+        return true;
+      });
+      if (leafMatched.length > 0) {
+        leafMatched.sort(
+          (a, b) =>
+            a.path.split('/').length - b.path.split('/').length ||
+            a.path.localeCompare(b.path)
+        );
+        return { path: leafMatched[0].path, resolution: 'unique' };
+      }
+    }
+
     // Heuristic default: when sibling ties can't be resolved by
-    // extra-segment matching, fall back to the shallowest scored
-    // ancestor of any tied candidate (e.g. mount-type-level file
-    // when app-level candidates are ambiguous under LTROP's 3-level
-    // hierarchy).
+    // extra-segment or app-name matching, fall back to the shallowest
+    // scored ancestor of any tied candidate (e.g. mount-type-level
+    // file when app-level candidates are ambiguous under LTROP's
+    // 3-level hierarchy and the preset app name doesn't match any
+    // leaf folder).
     const ancestorFallbacks = scored.filter((s) => {
       if (s.score === 0 || tied.includes(s)) return false;
       const sDir = s.path.substring(0, s.path.lastIndexOf('/'));
@@ -720,7 +748,7 @@ export function buildPresetCompanionMap(files, parameterSets, options = {}) {
       .replace(/coughdrop/g, 'cough drop')
       .replace(/vocochat/g, 'voco chat')
       .split(/[\s,\-_/().]+/)
-      .filter((w) => w.length > 0);
+      .filter((w) => w.length > 1 || /^\d$/.test(w));
     if (words.length === 0) return true;
     return words.every((w) => tokens.includes(w));
   }
@@ -746,7 +774,7 @@ export function buildPresetCompanionMap(files, parameterSets, options = {}) {
       for (const target of companionTargets) {
         const candidates = aliasableBasenames.get(target);
         if (candidates) {
-          const bestResult = pickBest(filterByBrand(candidates, brand), tokens);
+          const bestResult = pickBest(filterByBrand(candidates, brand), tokens, parts);
           if (bestResult.path) {
             aliases[target] = bestResult.path;
             if (bestResult.resolution === 'ancestor-fallback' && entryResolution === 'unique') {
@@ -767,7 +795,7 @@ export function buildPresetCompanionMap(files, parameterSets, options = {}) {
         aliases[basename] = svgPaths[0];
         svgAliasTarget = basename;
       } else if (svgPaths.length > 1) {
-        const svgResult = pickBest(filterByBrand(svgPaths, brand), tokens);
+        const svgResult = pickBest(filterByBrand(svgPaths, brand), tokens, parts);
         if (svgResult.path) {
           const basename = svgResult.path.split('/').pop();
           aliases[basename] = svgResult.path;
@@ -788,7 +816,8 @@ export function buildPresetCompanionMap(files, parameterSets, options = {}) {
       if (openingsCandidates) {
         const openingsResult = pickBest(
           filterByBrand(openingsCandidates, brand),
-          tokens
+          tokens,
+          parts
         );
         openingsPath = openingsResult.path;
         if (!openingsPath) {
@@ -805,7 +834,7 @@ export function buildPresetCompanionMap(files, parameterSets, options = {}) {
       if (svgPaths.length === 1) {
         svgPath = svgPaths[0];
       } else if (svgPaths.length > 1) {
-        const svgResult = pickBest(filterByBrand(svgPaths, brand), tokens);
+        const svgResult = pickBest(filterByBrand(svgPaths, brand), tokens, parts);
         svgPath = svgResult.path;
         if (!svgPath) {
           console.warn(
