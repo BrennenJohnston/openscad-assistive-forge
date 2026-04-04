@@ -37,10 +37,12 @@ import {
 } from './js/quality-tiers.js';
 import { getThreeModule } from './js/preview.js';
 import { normalizeHexColor } from './js/color-utils.js';
+import { buildDefineArgs as formatBuildDefineArgs } from './js/scad-param-formatter.js';
 import {
   AutoPreviewController,
   PREVIEW_STATE,
 } from './js/auto-preview-controller.js';
+import { isEnabled as isFlagEnabled } from './js/feature-flags.js';
 import { resolve2DExportIntent, isNonPreviewable } from './js/render-intent.js';
 import {
   applyCompanionAliases,
@@ -3901,6 +3903,17 @@ async function initApp() {
 
   const applyAutoPreviewOverrides = (parameters, qualityKey) => {
     if (!qualityKey?.startsWith('auto-fast')) {
+      return parameters;
+    }
+
+    const parityBypass =
+      typeof localStorage !== 'undefined' &&
+      localStorage.getItem('openscad-forge-debug-preview-parity') !== null;
+    if (parityBypass) {
+      console.log(
+        '[PreviewParity] Bypassing auto-preview overrides — ' +
+          'preview will use identical parameters to full render'
+      );
       return parameters;
     }
 
@@ -9179,36 +9192,55 @@ if (rounded) {
       newProjectFiles,
       companionMapping
     );
-    if (companionMapping) {
-      if (companionMapping.resolution === 'ancestor-fallback') {
-        console.debug(
-          `[Preset] "${preset.name}" companion resolved via ancestor fallback`
-        );
-      } else if (companionMapping.resolution === 'ambiguous') {
-        console.warn(
-          `[Preset] "${preset.name}" companion resolution is ambiguous — no alias applied`
-        );
-      }
-    }
+
+    // Ground-truth diagnostics for LWFL geometry debugging (Phase 1)
+    const _diagCompanion = {
+      presetName: preset.name,
+      presetId: preset.id,
+      presetSource: preset.source,
+      resolution: companionMapping?.resolution ?? 'none',
+      aliases: companionMapping?.aliases
+        ? { ...companionMapping.aliases }
+        : companionMapping?.openingsPath
+          ? { 'openings_and_additions.txt': companionMapping.openingsPath }
+          : null,
+    };
     if (companionMapping?.aliases) {
       for (const [target, source] of Object.entries(companionMapping.aliases)) {
-        if (aliasedFiles.has(target)) {
-          console.log(`[Preset] Alias-mounted: ${source} → ${target}`);
+        const content = aliasedFiles.get(target);
+        if (content != null) {
+          const snippet = typeof content === 'string'
+            ? content.slice(0, 120).replace(/\n/g, '\\n')
+            : `<binary ${content.byteLength ?? content.length} bytes>`;
+          _diagCompanion[`mounted:${target}`] = {
+            source,
+            sizeBytes: typeof content === 'string' ? content.length : (content.byteLength ?? 0),
+            preview: snippet,
+          };
         }
       }
-    } else {
-      // COMPATIBILITY FALLBACK — legacy logging for {openingsPath, svgPath}
-      if (
-        companionMapping?.openingsPath &&
-        aliasedFiles.has('openings_and_additions.txt')
-      ) {
-        console.log(
-          `[Preset] Alias-mounted openings: ${companionMapping.openingsPath}`
-        );
+    } else if (companionMapping?.openingsPath) {
+      const content = aliasedFiles.get('openings_and_additions.txt');
+      if (content != null) {
+        const snippet = typeof content === 'string'
+          ? content.slice(0, 120).replace(/\n/g, '\\n')
+          : `<binary ${content.byteLength ?? content.length} bytes>`;
+        _diagCompanion['mounted:openings_and_additions.txt'] = {
+          source: companionMapping.openingsPath,
+          sizeBytes: typeof content === 'string' ? content.length : (content.byteLength ?? 0),
+          preview: snippet,
+        };
       }
-      if (companionMapping?.svgPath && aliasedFiles.has('default.svg')) {
-        console.log(`[Preset] Alias-mounted SVG: ${companionMapping.svgPath}`);
-      }
+    }
+    console.log('[Preset Diag]', _diagCompanion);
+    if (companionMapping?.resolution === 'ancestor-fallback') {
+      console.debug(
+        `[Preset] "${preset.name}" companion resolved via ancestor fallback`
+      );
+    } else if (companionMapping?.resolution === 'ambiguous') {
+      console.warn(
+        `[Preset] "${preset.name}" companion resolution is ambiguous — no alias applied`
+      );
     }
 
     stateManager.setState({ projectFiles: aliasedFiles });
@@ -12232,17 +12264,273 @@ if (typeof window !== 'undefined') {
       return nowEnabled;
     },
 
+    toggleSourceOverrides(enable) {
+      const key = 'openscad-forge-debug-source-overrides';
+      const wasEnabled = localStorage.getItem(key) !== null;
+      const nowEnabled = enable !== undefined ? Boolean(enable) : !wasEnabled;
+
+      if (nowEnabled) {
+        localStorage.setItem(key, '1');
+      } else {
+        localStorage.removeItem(key);
+      }
+      console.log(
+        `[ToggleDebug] Source overrides: ${nowEnabled ? 'ON' : 'OFF'} ` +
+          `(was ${wasEnabled ? 'ON' : 'OFF'}). ` +
+          `When ON, parameters are baked into SCAD source instead of using -D flags.`
+      );
+
+      if (autoPreviewController) {
+        autoPreviewController.clearPreviewCache();
+        const state = stateManager.getState();
+        if (state?.uploadedFile?.content) {
+          autoPreviewController.forcePreview(state.parameters);
+        }
+      }
+      return nowEnabled;
+    },
+
     getToggles() {
       const csgBypass =
         localStorage.getItem('openscad-forge-debug-no-csg-colors') !== null;
       const desktopQuality =
         localStorage.getItem('openscad-forge-debug-desktop-quality') !== null;
+      const sourceOverrides =
+        localStorage.getItem('openscad-forge-debug-source-overrides') !== null;
       const toggles = {
         csgBypass,
         desktopQuality,
+        sourceOverrides,
       };
       console.log('[ToggleDebug] Current toggles:', toggles);
       return toggles;
+    },
+
+    /**
+     * Export the SCAD source exactly as it would be sent to the renderer.
+     * @param {Object} [options]
+     * @param {boolean} [options.injected=false] - true  → return CSG-color-injected source
+     *                                            false → return original (raw) source
+     * @param {boolean} [options.download=false] - trigger a browser file download
+     * @returns {string|null} The SCAD source text, or null if no model is loaded
+     */
+    exportScadSource(options = {}) {
+      const { injected = false, download = false } = options;
+      const state = stateManager.getState();
+      if (!state.uploadedFile?.content) {
+        console.error('[ExportDiag] No model loaded.');
+        return null;
+      }
+
+      const rawSource =
+        autoPreviewController?.currentScadContent ||
+        state.uploadedFile.content;
+
+      let source;
+      let label;
+      if (injected) {
+        const hasColorCalls =
+          AutoPreviewController.scadUsesColor(rawSource);
+        const cleaned = hasColorCalls
+          ? AutoPreviewController.stripColorCalls(rawSource)
+          : rawSource;
+        source = AutoPreviewController.injectCsgColors(cleaned);
+        label = 'csg-injected';
+      } else {
+        source = rawSource;
+        label = 'original';
+      }
+
+      const csgBypass =
+        localStorage.getItem('openscad-forge-debug-no-csg-colors') !== null;
+
+      console.log(`[ExportDiag] Source type: ${label}`);
+      console.log(`[ExportDiag] CSG bypass active: ${csgBypass}`);
+      console.log(`[ExportDiag] Source length: ${source.length} chars`);
+
+      if (download) {
+        const blob = new Blob([source], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `forge-export-${label}.scad`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        console.log(`[ExportDiag] Downloaded as forge-export-${label}.scad`);
+      }
+
+      return source;
+    },
+
+    /**
+     * Dump the render arguments that would be passed to the OpenSCAD worker.
+     * Logs parameters, paramTypes, output format, and capability flags.
+     * @returns {Object|null} Structured diagnostic info, or null if no model loaded
+     */
+    dumpRenderArgs() {
+      const state = stateManager.getState();
+      if (!state.uploadedFile?.content) {
+        console.error('[RenderArgsDiag] No model loaded.');
+        return null;
+      }
+
+      const parameters = state.parameters || {};
+      const paramTypes = state.paramTypes || {};
+
+      const csgBypass =
+        localStorage.getItem('openscad-forge-debug-no-csg-colors') !== null;
+      const rawSource =
+        autoPreviewController?.currentScadContent ||
+        state.uploadedFile.content;
+      const hasColorCalls =
+        AutoPreviewController.scadUsesColor(rawSource);
+      const colorPassthroughEnabled = isFlagEnabled('color_passthrough');
+      const caps = renderController?.getCapabilities?.() || {};
+      const supportsRenderColors = Boolean(
+        caps.hasRenderColorsFlag || caps.hasManifold
+      );
+
+      let previewOutputFormat;
+      if (csgBypass) {
+        previewOutputFormat = 'stl';
+      } else if (supportsRenderColors) {
+        previewOutputFormat = 'off';
+      } else {
+        previewOutputFormat =
+          hasColorCalls && colorPassthroughEnabled ? 'off' : 'stl';
+      }
+
+      console.log('[RenderArgsDiag] === Current Render Arguments ===');
+      console.log(
+        '[RenderArgsDiag] Parameters:',
+        JSON.parse(JSON.stringify(parameters))
+      );
+      console.log(
+        '[RenderArgsDiag] Parameter types:',
+        JSON.parse(JSON.stringify(paramTypes))
+      );
+      console.log(
+        '[RenderArgsDiag] Preview output format:',
+        previewOutputFormat
+      );
+      const sourceOverrides =
+        localStorage.getItem('openscad-forge-debug-source-overrides') !== null;
+      console.log('[RenderArgsDiag] CSG bypass:', csgBypass);
+      console.log(
+        '[RenderArgsDiag] Source overrides (bake params into SCAD):',
+        sourceOverrides
+      );
+      console.log('[RenderArgsDiag] Has color() calls:', hasColorCalls);
+      console.log(
+        '[RenderArgsDiag] Color passthrough flag:',
+        colorPassthroughEnabled
+      );
+      console.log(
+        '[RenderArgsDiag] Supports render colors:',
+        supportsRenderColors
+      );
+      console.log('[RenderArgsDiag] Engine capabilities:', caps);
+
+      const scadSource =
+        autoPreviewController?.currentScadContent ||
+        state.uploadedFile.content;
+      const exactDefineArgs = formatBuildDefineArgs(
+        parameters,
+        paramTypes,
+        scadSource
+      );
+      const paramSummary = [];
+      for (let i = 0; i < exactDefineArgs.length; i += 2) {
+        const assignment = exactDefineArgs[i + 1] || '';
+        const key = assignment.split('=')[0];
+        const type = paramTypes[key] || 'unknown';
+        paramSummary.push(`  ${exactDefineArgs[i]} ${assignment}  (type: ${type})`);
+      }
+      if (sourceOverrides) {
+        console.log(
+          '[RenderArgsDiag] Source overrides ACTIVE — parameters will be ' +
+            'baked into SCAD source via _applyOverrides instead of -D flags'
+        );
+      }
+      console.log(
+        '[RenderArgsDiag] Exact -D args ' +
+          '(same formatting as worker buildDefineArgs):\n' +
+          paramSummary.join('\n')
+      );
+
+      // Preview quality & auto-preview diagnostics
+      const previewInfo = autoPreviewController
+        ? autoPreviewController.resolvePreviewQualityInfo(parameters)
+        : { quality: null, qualityKey: 'unknown' };
+      const previewParams = autoPreviewController
+        ? autoPreviewController.resolvePreviewParametersForRender(
+            parameters,
+            previewInfo.qualityKey,
+            previewInfo.quality
+          )
+        : parameters;
+      const previewOverridesActive = previewParams !== parameters;
+
+      console.log('[RenderArgsDiag] Preview quality key:', previewInfo.qualityKey);
+      console.log('[RenderArgsDiag] Preview quality preset:', previewInfo.quality);
+      console.log('[RenderArgsDiag] Auto-preview overrides active:', previewOverridesActive);
+      if (previewOverridesActive) {
+        const diffs = {};
+        for (const [k, v] of Object.entries(previewParams)) {
+          if (parameters[k] !== v) diffs[k] = { original: parameters[k], preview: v };
+        }
+        console.log('[RenderArgsDiag] Preview parameter overrides:', diffs);
+      }
+
+      // Backend info
+      const manifoldPref = localStorage.getItem(
+        'openscad-forge-manifold-engine'
+      );
+      const useManifold = manifoldPref === null ? true : manifoldPref !== 'false';
+      console.log('[RenderArgsDiag] Backend:', useManifold ? 'Manifold' : 'CGAL');
+
+      // Companion / project file summary
+      const projectFiles = state.projectFiles;
+      const companionSummary = [];
+      if (projectFiles && projectFiles.size > 0) {
+        for (const [name, content] of projectFiles.entries()) {
+          const size = typeof content === 'string'
+            ? content.length
+            : (content?.byteLength ?? content?.length ?? 0);
+          companionSummary.push({ name, sizeBytes: size });
+        }
+      }
+      console.log('[RenderArgsDiag] Mounted project files:', companionSummary);
+      console.log('[RenderArgsDiag] Main file path:', state.mainFilePath || '(single file)');
+
+      // Auto-preview controller state
+      const autoPreviewInfo = autoPreviewController
+        ? autoPreviewController.getStateInfo()
+        : null;
+      console.log('[RenderArgsDiag] Auto-preview state:', autoPreviewInfo);
+
+      console.log('[RenderArgsDiag] === End Render Arguments ===');
+
+      return {
+        parameters,
+        paramTypes,
+        previewOutputFormat,
+        csgBypass,
+        sourceOverrides,
+        hasColorCalls,
+        colorPassthroughEnabled,
+        supportsRenderColors,
+        capabilities: caps,
+        previewQualityKey: previewInfo.qualityKey,
+        previewQuality: previewInfo.quality,
+        previewOverridesActive,
+        backend: useManifold ? 'Manifold' : 'CGAL',
+        mountedFiles: companionSummary,
+        mainFilePath: state.mainFilePath || null,
+        autoPreviewState: autoPreviewInfo,
+      };
     },
   };
 }

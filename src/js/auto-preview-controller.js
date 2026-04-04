@@ -803,12 +803,52 @@ export class AutoPreviewController {
       const between = scadContent.slice(firstChildEnd, closeBrace).trim();
       if (between.length === 0) continue;
 
-      ops.push({ pos: closeBrace, text: ' }' });
-      ops.push({ pos: firstChildEnd, text: `} color("${GREEN}") {` });
-      ops.push({ pos: openBrace + 1, text: ` color("${GOLD}") {` });
+      const subtractors = [];
+      let stmtStart = -1;
+      let stmtDepth = 0;
+
+      for (let i = firstChildEnd; i < closeBrace; i++) {
+        const ch = cleaned[i];
+
+        if (stmtStart === -1) {
+          if (!/\s/.test(ch)) {
+            stmtStart = i;
+            stmtDepth = 0;
+          } else {
+            continue;
+          }
+        }
+
+        if (ch === '{') {
+          stmtDepth++;
+        } else if (ch === '}') {
+          stmtDepth--;
+          if (stmtDepth === 0) {
+            const rest = cleaned.slice(i + 1).trimStart();
+            if (/^else\b/.test(rest)) {
+              continue;
+            }
+            subtractors.push({ start: stmtStart, end: i + 1 });
+            stmtStart = -1;
+          }
+        } else if (ch === ';' && stmtDepth === 0) {
+          subtractors.push({ start: stmtStart, end: i + 1 });
+          stmtStart = -1;
+        }
+      }
+
+      if (subtractors.length === 0) continue;
+
+      ops.push({ pos: openBrace + 1, text: ` color("${GOLD}") {`, pri: 0 });
+      ops.push({ pos: firstChildEnd, text: ' }', pri: 1 });
+
+      for (const sub of subtractors) {
+        ops.push({ pos: sub.start, text: `color("${GREEN}") { `, pri: 0 });
+        ops.push({ pos: sub.end, text: ' }', pri: 1 });
+      }
     }
 
-    ops.sort((a, b) => b.pos - a.pos);
+    ops.sort((a, b) => b.pos - a.pos || a.pri - b.pri);
 
     let result = scadContent;
     for (const op of ops) {
@@ -1096,6 +1136,46 @@ export class AutoPreviewController {
       previewOutputFormat = useColorPassthrough ? 'off' : 'stl';
     }
 
+    const sourceOverridesActive =
+      typeof localStorage !== 'undefined' &&
+      localStorage.getItem('openscad-forge-debug-source-overrides') !== null;
+
+    // Ground-truth diagnostics for LWFL geometry debugging (Phase 1)
+    const previewOverridesActive = previewParameters !== parameters;
+    const parityDiagActive =
+      typeof localStorage !== 'undefined' &&
+      localStorage.getItem('openscad-forge-debug-preview-parity') !== null;
+    console.log('[AutoPreview Diag] Render dispatch:', {
+      qualityKey,
+      qualityName: quality?.name ?? 'model-default',
+      outputFormat: previewOutputFormat,
+      csgColorsInjected,
+      sourceOverridesActive,
+      previewOverridesActive,
+      parityDiagActive,
+      mainFilePath: this.mainFilePath || '(single file)',
+      projectFileCount: this.projectFiles?.size ?? 0,
+      paramTypesCount: Object.keys(this.paramTypes || {}).length,
+    });
+    if (previewOverridesActive) {
+      const diffs = {};
+      for (const [k, v] of Object.entries(previewParameters)) {
+        if (parameters[k] !== v) diffs[k] = { original: parameters[k], preview: v };
+      }
+      if (Object.keys(diffs).length > 0) {
+        console.log('[AutoPreview Diag] Preview parameter overrides:', diffs);
+      }
+    }
+    if (parityDiagActive) {
+      console.log('[PreviewParity] Preview render config:', {
+        qualityKey,
+        qualityName: quality?.name ?? 'model-default',
+        outputFormat: previewOutputFormat,
+        paramCount: Object.keys(previewParameters).length,
+        overridesApplied: previewOverridesActive,
+      });
+    }
+
     let renderFailed = false;
     try {
       const startTime = Date.now();
@@ -1110,6 +1190,13 @@ export class AutoPreviewController {
           this.onProgress(percent, message, 'preview');
         },
       };
+
+      if (sourceOverridesActive) {
+        console.log(
+          '[AutoPreview] Source overrides active — worker will bake ' +
+            'parameters into SCAD source instead of using -D flags'
+        );
+      }
 
       let result;
       try {
@@ -1139,6 +1226,19 @@ export class AutoPreviewController {
       }
 
       const durationMs = Date.now() - startTime;
+
+      if (result?.diagnostics) {
+        console.log(
+          '[AutoPreview Diag] Worker defineArgs:',
+          result.diagnostics.defineArgs
+        );
+        if (result.diagnostics.performanceFlags?.length) {
+          console.log(
+            '[AutoPreview Diag] Worker performanceFlags:',
+            result.diagnostics.performanceFlags
+          );
+        }
+      }
 
       // If the file changed mid-render, ignore this result.
       if (localScadVersion !== this.scadVersion) return;
@@ -1474,6 +1574,10 @@ export class AutoPreviewController {
       fullOutputFormat = useColorPassthrough ? 'off' : undefined;
     }
 
+    const fullSourceOverridesActive =
+      typeof localStorage !== 'undefined' &&
+      localStorage.getItem('openscad-forge-debug-source-overrides') !== null;
+
     const renderOptions = {
       files: filesForRender,
       mainFile: this.mainFilePath,
@@ -1485,6 +1589,26 @@ export class AutoPreviewController {
         this.onProgress(percent, message, 'full');
       },
     };
+
+    if (fullSourceOverridesActive) {
+      console.log(
+        '[AutoPreview] Full render: source overrides active — worker will ' +
+          'bake parameters into SCAD source instead of using -D flags'
+      );
+    }
+
+    const fullParityDiag =
+      typeof localStorage !== 'undefined' &&
+      localStorage.getItem('openscad-forge-debug-preview-parity') !== null;
+    if (fullParityDiag) {
+      console.log('[PreviewParity] Full render config:', {
+        qualityKey,
+        qualityName: quality?.name ?? 'model-default',
+        outputFormat: fullOutputFormat ?? '(default stl)',
+        paramCount: Object.keys(parameters).length,
+        csgColorsInjected,
+      });
+    }
 
     let result;
     try {

@@ -1086,10 +1086,14 @@ export class RenderController {
           // Default is OFF. Only enable if user explicitly opts in via settings.
           // If exposing a UI toggle, add warning: "Lazy union may produce incorrect
           // geometry (wrong difference/union results). Use for preview speed only."
+          const useSourceOverrides =
+            localStorage.getItem('openscad-forge-debug-source-overrides') !==
+            null;
           const renderOptions = {
             enableLazyUnion:
               localStorage.getItem(STORAGE_KEY_LAZY_UNION) === 'true',
             useManifold,
+            useSourceOverrides,
           };
 
           // Clear any stale cancel watchdog before posting the new render.
