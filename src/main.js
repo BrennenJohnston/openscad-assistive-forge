@@ -12000,12 +12000,188 @@ function getEnabledLibrariesForRender() {
   return paths;
 }
 
+// Desktop reference geometry from CLI extracts (OpenSCAD 2026.01.03 Nightly, Manifold backend).
+// Source: docs/audit/testing-round-7/reference-data/cli-extracts/nightly/
+const DESKTOP_REFERENCE_GEOMETRY = {
+  '3d-printed-keyguard': {
+    scenarioId: '3d-printed-keyguard',
+    parameters: { generate: 'keyguard', type_of_keyguard: '3D-Printed' },
+    geometry: { vertices: 5978, facets: 12016 },
+    exports: { stl_bytes: 3394047 },
+    openscadVersion: '2026.01.03',
+    backend: 'Manifold',
+  },
+  'laser-cut-keyguard': {
+    scenarioId: 'laser-cut-keyguard',
+    parameters: { generate: 'keyguard', type_of_keyguard: 'Laser-Cut' },
+    geometry: { vertices: 3288, facets: 6636 },
+    exports: { stl_bytes: 1912770 },
+    openscadVersion: '2026.01.03',
+    backend: 'Manifold',
+  },
+  'keyguard-frame-multicolor': {
+    scenarioId: 'keyguard-frame-multicolor',
+    parameters: {
+      type_of_keyguard: '3D-Printed',
+      generate: 'keyguard frame',
+      show_keyguard_with_frame: 'yes',
+      have_a_keyguard_frame: 'yes',
+    },
+    geometry: { vertices: 6981, facets: 14118 },
+    exports: { stl_bytes: 3940675 },
+    openscadVersion: '2026.01.03',
+    backend: 'Manifold',
+  },
+};
+
+function findMatchingReference(params) {
+  if (!params) return null;
+  for (const ref of Object.values(DESKTOP_REFERENCE_GEOMETRY)) {
+    const allMatch = Object.entries(ref.parameters).every(
+      ([key, value]) => params[key] === value
+    );
+    if (allMatch) return ref;
+  }
+  return null;
+}
+
 // Expose key managers to window for testing and debugging
 if (typeof window !== 'undefined') {
   window.stateManager = stateManager;
   window.presetManager = presetManager;
   window.themeManager = themeManager;
   window.libraryManager = libraryManager;
+
+  window.__forgeDebug = {
+    async compareGeometry() {
+      if (!renderController || !renderController.ready) {
+        console.error(
+          '[GeomDiag] Render controller not ready. Initialize WASM first.'
+        );
+        return null;
+      }
+      const state = stateManager.getState();
+      if (!state.uploadedFile?.content) {
+        console.error('[GeomDiag] No model loaded.');
+        return null;
+      }
+
+      console.log(
+        '[GeomDiag] Rendering at FULL quality (no $fn capping) for geometry comparison...'
+      );
+      const startTime = performance.now();
+
+      try {
+        const result = await renderController.renderFull(
+          state.uploadedFile.content,
+          state.parameters,
+          {
+            quality: RENDER_QUALITY.FULL,
+            outputFormat: 'stl',
+            paramTypes: state.paramTypes || {},
+            files: state.projectFiles,
+            mainFile: state.mainFilePath,
+            libraries: getEnabledLibrariesForRender(),
+          }
+        );
+
+        const durationMs = Math.round(performance.now() - startTime);
+        const stats = result.stats || {};
+        const triangles = stats.triangles || 0;
+        const stlBytes = stats.size || 0;
+
+        const browserResult = { triangles, stlBytes, renderMs: durationMs };
+
+        console.log('[GeomDiag] === Browser Geometry Results ===');
+        console.log(`  Triangles (facets): ${triangles.toLocaleString()}`);
+        console.log(
+          `  STL size: ${stlBytes.toLocaleString()} bytes (${(stlBytes / 1024).toFixed(1)} KB)`
+        );
+        console.log(`  Render time: ${durationMs}ms`);
+
+        const ref = findMatchingReference(state.parameters);
+
+        if (ref) {
+          const refTriangles = ref.geometry.facets;
+          const refVertices = ref.geometry.vertices;
+          const refStlBytes = ref.exports.stl_bytes;
+
+          const triDiff = triangles - refTriangles;
+          const triPct =
+            refTriangles > 0
+              ? ((triDiff / refTriangles) * 100).toFixed(1)
+              : 'N/A';
+          const sizeDiff = stlBytes - refStlBytes;
+          const sizePct =
+            refStlBytes > 0
+              ? ((sizeDiff / refStlBytes) * 100).toFixed(1)
+              : 'N/A';
+
+          console.log(
+            `[GeomDiag] === Desktop Reference (${ref.scenarioId}) ===`
+          );
+          console.log(
+            `  OpenSCAD: ${ref.openscadVersion} (${ref.backend})`
+          );
+          console.log(
+            `  Triangles (facets): ${refTriangles.toLocaleString()}`
+          );
+          console.log(
+            `  Unique vertices (OFF format): ${refVertices.toLocaleString()}`
+          );
+          console.log(
+            `  STL size: ${refStlBytes.toLocaleString()} bytes`
+          );
+
+          console.log('[GeomDiag] === Comparison ===');
+          console.log(
+            `  Triangle delta: ${triDiff > 0 ? '+' : ''}${triDiff.toLocaleString()} (${triPct}%)`
+          );
+          console.log(
+            `  STL size delta: ${sizeDiff > 0 ? '+' : ''}${sizeDiff.toLocaleString()} bytes (${sizePct}%)`
+          );
+
+          const withinTolerance = Math.abs(parseFloat(triPct)) <= 10;
+          console.log(
+            `  Within 10% tolerance: ${withinTolerance ? 'YES' : 'NO'}`
+          );
+
+          return {
+            browser: browserResult,
+            reference: {
+              scenarioId: ref.scenarioId,
+              triangles: refTriangles,
+              vertices: refVertices,
+              stlBytes: refStlBytes,
+            },
+            comparison: {
+              triangleDelta: triDiff,
+              triangleDeltaPct: parseFloat(triPct),
+              stlSizeDelta: sizeDiff,
+              stlSizeDeltaPct: parseFloat(sizePct),
+              withinTolerance,
+            },
+          };
+        }
+
+        console.log(
+          '[GeomDiag] No matching desktop reference for current parameters.'
+        );
+        console.log(
+          '[GeomDiag] Known references:',
+          Object.keys(DESKTOP_REFERENCE_GEOMETRY).join(', ')
+        );
+        return { browser: browserResult, reference: null, comparison: null };
+      } catch (err) {
+        console.error('[GeomDiag] Render failed:', err);
+        return { error: err.message };
+      }
+    },
+
+    getDesktopReferences() {
+      return { ...DESKTOP_REFERENCE_GEOMETRY };
+    },
+  };
 }
 
 // Global error handlers — catch uncaught exceptions and unhandled promise
