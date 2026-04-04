@@ -1752,4 +1752,79 @@ describe('Preset Manager', () => {
       expect(config.parameters.number_of_rows).toBe(5)
     })
   })
+
+  describe('Natural numeric preset sort (regression for QA parity Phase 6)', () => {
+    it('should sort "iPad 7" before "iPad 10" in name-asc order', () => {
+      const names = [
+        'iPad 10 - Fintie - LWFL',
+        'iPad 7 - Fintie - LWFL',
+        'iPad 9 - Fintie - LWFL',
+      ]
+      for (const name of names) {
+        presetManager.savePreset(modelName, name, { width: 100 })
+      }
+
+      const sorted = presetManager.getSortedPresets(modelName, 'name-asc')
+      const sortedNames = sorted.map((p) => p.name)
+
+      expect(sortedNames.indexOf('iPad 7 - Fintie - LWFL')).toBeLessThan(
+        sortedNames.indexOf('iPad 9 - Fintie - LWFL')
+      )
+      expect(sortedNames.indexOf('iPad 9 - Fintie - LWFL')).toBeLessThan(
+        sortedNames.indexOf('iPad 10 - Fintie - LWFL')
+      )
+    })
+
+    it('should sort "iPad 10" before "iPad 7" in name-desc order', () => {
+      const names = [
+        'iPad 7 - Fintie - LWFL',
+        'iPad 10 - Fintie - LWFL',
+        'iPad 9 - Fintie - LWFL',
+      ]
+      for (const name of names) {
+        presetManager.savePreset(modelName, name, { width: 100 })
+      }
+
+      const sorted = presetManager.getSortedPresets(modelName, 'name-desc')
+      const sortedNames = sorted.map((p) => p.name)
+
+      expect(sortedNames.indexOf('iPad 10 - Fintie - LWFL')).toBeLessThan(
+        sortedNames.indexOf('iPad 9 - Fintie - LWFL')
+      )
+      expect(sortedNames.indexOf('iPad 9 - Fintie - LWFL')).toBeLessThan(
+        sortedNames.indexOf('iPad 7 - Fintie - LWFL')
+      )
+    })
+
+    it('should keep design-defaults first regardless of numeric sort', () => {
+      presetManager.savePreset(modelName, 'iPad 10', { width: 100 })
+      presetManager.savePreset(modelName, 'iPad 2', { width: 100 })
+
+      const all = presetManager.getPresetsForModel(modelName)
+      all.unshift({ id: 'design-defaults', name: 'design default values', parameters: {} })
+      presetManager.presets[modelName] = all
+
+      const sorted = presetManager.getSortedPresets(modelName, 'name-asc')
+
+      expect(sorted[0].id).toBe('design-defaults')
+      expect(sorted[1].name).toBe('iPad 2')
+      expect(sorted[2].name).toBe('iPad 10')
+    })
+
+    it('should treat sort as case-insensitive via sensitivity: base', () => {
+      presetManager.savePreset(modelName, 'ipad mini 4', { width: 100 })
+      presetManager.savePreset(modelName, 'iPad Mini 6', { width: 100 })
+      presetManager.savePreset(modelName, 'IPAD MINI 5', { width: 100 })
+
+      const sorted = presetManager.getSortedPresets(modelName, 'name-asc')
+      const sortedNames = sorted.map((p) => p.name)
+
+      expect(sortedNames.indexOf('ipad mini 4')).toBeLessThan(
+        sortedNames.indexOf('IPAD MINI 5')
+      )
+      expect(sortedNames.indexOf('IPAD MINI 5')).toBeLessThan(
+        sortedNames.indexOf('iPad Mini 6')
+      )
+    })
+  })
 })
