@@ -93,7 +93,7 @@ Running a full audit to understand the current state prevented wasted work downs
 **Evidence:** `full_program_audit`, `plans_audit_&_build_plans` (9/9),
 `github_repository_audit` (12/12).
 
-## Top 6 failure anti-patterns
+## Top 8 failure anti-patterns
 
 ### 1. Scope overload
 
@@ -186,7 +186,55 @@ errors propagate into all derivative artifacts. A fabricated summary feeds a
 flawed synthesis feeds a wrong plan. Every layer of derivation from the
 corrupted source amplifies the error.
 
-### 8. Queue executor pattern (validated success)
+### 8. Consensus without runtime evidence
+
+Multiple investigation sessions converge on the same wrong conclusion
+because all sessions use the same methodology (code-level analysis) and
+share the same blind spot (no runtime test against an independent
+reference). Agreement between sessions feels like corroboration but is
+actually correlated bias.
+
+**Evidence:** KI-012 geometry discrepancy investigation. Five prior
+plans over two days unanimously concluded "upstream Manifold engine
+issue" through code audits, CSG tree analysis, and parameter
+serialization reviews. None of the five ever ran the captured WASM
+inputs through desktop OpenSCAD — the single test that would have
+immediately disproven the hypothesis by showing identical output.
+
+The sixth investigation took a fundamentally different approach:
+capture the exact bytes sent to the WASM engine, compare the output
+against desktop CLI with the same inputs, then use `git bisect` to
+find the first bad commit. The root cause turned out to be a 3-line
+app-level bug in `applyCompanionAliases()` — completely unrelated to
+the Manifold engine.
+
+**Cost:** ~2 days of investigation time on the wrong hypothesis, plus
+~1,300 lines of accumulated investigation scaffolding that had to be
+stripped from the working tree.
+
+**Root cause of the meta-failure:** Code audits feel productive and
+are cheaper than runtime tests, so they are preferred. But code
+reading without runtime verification is confirmation-biased — you find
+what you expect to find. When five sessions all read the same code
+with the same prior hypothesis, they all "confirm" the same wrong
+answer.
+
+**Structural fix:** For geometry and rendering bugs, the first test
+must always be a captured-input comparison against an independent
+reference (desktop CLI). No hypothesis should be marked "confirmed"
+without a runtime test that could have falsified it. If an
+investigation plan does not include a falsification step, it is
+incomplete.
+
+**Detection:** Count how many investigation sessions reached the same
+conclusion. If the number is high but none include a runtime
+falsification test, the consensus is suspect. Agreement is not
+evidence — independent verification is.
+
+See `docs/audit/ki-012-investigation/findings-report.md` for the full
+investigation history.
+
+### 9. Queue executor pattern (validated success)
 
 The queue executor workflow emerged as the highest-performing pattern in the
 project's development history. A 15-phase bugfix queue executed across
@@ -218,7 +266,7 @@ rather than relying on AI self-discipline.
 See [QUEUE_EXECUTOR_WORKFLOW.md](QUEUE_EXECUTOR_WORKFLOW.md) for the full
 methodology and templates.
 
-### 9. Recycled build-plan execution prompt (validated success)
+### 10. Recycled build-plan execution prompt (validated success)
 
 A single, reusable prompt pasted into each fresh AI chat to execute exactly
 one phase of a multi-session build plan. Unlike the queue executor pattern

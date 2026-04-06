@@ -390,6 +390,7 @@ Analysis of 100 Cursor development plans from the origin project. Key findings:
 - **Bug fixes complete at the highest rate** (50%) — clear end conditions help
 - **Sprint plans complete at the lowest rate** (7%) — scope overload kills progress
 - **Documentation audits required 3 iterations** to match the project's tone
+- **Consensus without runtime evidence** (anti-pattern #8) — five investigation sessions reached the same wrong diagnosis through code-level analysis alone; the fix required captured-input comparison against desktop CLI and `git bisect` (see KI-012 case study)
 
 **Full analysis:** [LESSONS_LEARNED.md](LESSONS_LEARNED.md)
 
