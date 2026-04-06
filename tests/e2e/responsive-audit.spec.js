@@ -126,8 +126,12 @@ for (const vp of VIEWPORTS) {
       const toggleBox = await themeToggle.boundingBox()
       expect(toggleBox.x + toggleBox.width).toBeLessThanOrEqual(vp.width)
 
+      const isUltraNarrow = vp.width < 360 && vp.height > vp.width
       const isNarrowPortrait = vp.width <= 480 && vp.height > vp.width
-      if (isNarrowPortrait) {
+      if (isUltraNarrow) {
+        await expect(page.locator('.title-short')).not.toBeVisible()
+        await expect(page.locator('.title-full')).not.toBeVisible()
+      } else if (isNarrowPortrait) {
         await expect(page.locator('.title-short')).toBeVisible()
         await expect(page.locator('.title-full')).not.toBeVisible()
       } else {

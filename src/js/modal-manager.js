@@ -188,6 +188,15 @@ export function initStaticModals() {
     });
   }
 
+  // Keyboard Shortcuts Modal
+  const shortcutsModal = document.getElementById('shortcutsModal');
+  if (shortcutsModal) {
+    setupModalCloseHandlers(shortcutsModal, {
+      closeButton: '#shortcutsModalClose',
+      overlay: '#shortcutsModalOverlay',
+    });
+  }
+
   // First-Visit Modal
   const firstVisitModal = document.getElementById('first-visit-modal');
   if (firstVisitModal) {
