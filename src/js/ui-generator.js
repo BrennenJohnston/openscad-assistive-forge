@@ -2564,7 +2564,7 @@ export function renderParameterUI(
   container.innerHTML = '';
 
   const { groups, parameters } = extractedParams;
-  const currentValues = {};
+  const currentValues = initialValues ? { ...initialValues } : {};
 
   // Reset stored limits and metadata when re-rendering
   originalParameterLimits = {};
