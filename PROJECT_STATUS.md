@@ -1,8 +1,8 @@
 # Project status
 
 **Project**: OpenSCAD Assistive Forge  
-**Current version**: 4.3.0  
-**Last updated**: 2026-03-20  
+**Current version**: 4.4.0  
+**Last updated**: 2026-04-06  
 
 This is a single-maintainer project. This file is here so I don’t have to answer “is it abandoned?” and “what’s next?” in every issue thread.
 
@@ -15,9 +15,10 @@ This is a single-maintainer project. This file is here so I don’t have to answ
 ## What’s solid (things I’m pretty happy with)
 
 - **Accessibility-first UI**: keyboard, screen reader friendliness, high contrast / forced colors support
-- **ZIP multi-file support** for `include` / `use`
-- **Presets / undo / sharing** workflows (depending on the model)
-- **Test coverage** exists (unit + e2e)
+- **ZIP multi-file support** for `include` / `use` with hardened companion file resolution
+- **SVG preparation workspace** with path offset, role assignment, and fullscreen editing
+- **Presets / undo / sharing** workflows with project-native preset support and numeric sorting
+- **Test coverage** exists (2,991 unit tests + e2e suite)
 
 ## Known rough edges
 

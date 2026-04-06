@@ -158,7 +158,7 @@ function buildWorkspaceDom() {
   const closeBtn = document.createElement('button');
   closeBtn.className = 'svg-prep-close-btn';
   closeBtn.setAttribute('aria-label', 'Close editor');
-  closeBtn.innerHTML = '&times;';
+  closeBtn.textContent = '\u00D7';
 
   const designWidthGroup = document.createElement('div');
   designWidthGroup.className = 'svg-prep-design-width';

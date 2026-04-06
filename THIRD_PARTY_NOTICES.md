@@ -11,7 +11,7 @@ Generated web applications include OpenSCAD compiled to WebAssembly (WASM) for c
 **Source Code**: https://github.com/openscad/openscad
 **WASM Build**: Official OpenSCAD Playground build (includes Manifold support)
 **Build Source**: https://files.openscad.org/playground/
-**Build Date**: March 25, 2025 (OpenSCAD-2025.03.25.wasm24456-WebAssembly-web)
+**Build Date**: April 3, 2026 (OpenSCAD-2026.04.03-WebAssembly-web)
 **Vendored Location**: `public/wasm/openscad-official/`
 
 ### Manifold Geometry Library
@@ -83,6 +83,16 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
+
+---
+
+## clipper2-js (BSL-1.0)
+
+SVG path offset calculations use clipper2-js for polygon offsetting (Minkowski sum).
+
+**License**: Boost Software License 1.0  
+**Project**: https://github.com/niceDev0908/clipper2-js  
+**Usage**: Used by `src/js/svg-offset.js` for inward/outward path offset in the SVG preparation workspace
 
 ---
 

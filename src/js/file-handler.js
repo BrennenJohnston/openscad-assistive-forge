@@ -52,7 +52,8 @@ import {
   addProjectFile,
   getProjectFiles,
 } from './saved-projects-manager.js';
-import { showMissingDependenciesDialog } from './dialogs.js';
+import { showMissingDependenciesDialog, showConfirmDialog } from './dialogs.js';
+import { escapeHtml } from './html-utils.js';
 import { announceError as _announceError } from './announcer.js';
 import { showErrorModal, showErrorToast } from './error-translator.js';
 import { closeTutorial } from './tutorial-sandbox.js';
@@ -397,15 +398,15 @@ export function initFileHandler({
         .map(
           (p, i) =>
             `<label class="import-mode-option">
-              <input type="radio" name="scadFile" value="${p}"${i === 0 ? ' checked' : ''} />
-              <span>${p.split('/').pop()}</span>
+              <input type="radio" name="scadFile" value="${escapeHtml(p)}"${i === 0 ? ' checked' : ''} />
+              <span>${escapeHtml(p.split('/').pop())}</span>
             </label>`
         )
         .join('');
 
       dialog.innerHTML = `
         <form method="dialog" class="import-mode-form">
-          <h3 id="scadSelectTitle" class="import-mode-title">${prompt}</h3>
+          <h3 id="scadSelectTitle" class="import-mode-title">${escapeHtml(prompt)}</h3>
           <fieldset class="import-mode-fieldset">
             <legend class="import-mode-legend">Select main .scad file</legend>
             ${optionsHtml}
@@ -1489,9 +1490,11 @@ export function initFileHandler({
 
     const state = stateManager.getState();
     if (state.uploadedFile) {
-      if (!confirm('Load example? This will replace the current file.')) {
-        return;
-      }
+      const confirmed = await showConfirmDialog({
+        title: 'Load example',
+        message: 'This will replace the current file. Continue?',
+      });
+      if (!confirmed) return;
     }
 
     try {

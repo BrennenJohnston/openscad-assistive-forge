@@ -51,6 +51,8 @@ mindmap
           zip-handler.js
           library-manager.js
           tutorial-sandbox.js
+          svg-offset.js
+          scad-param-formatter.js
         Utilities
           storage-manager.js
           theme-manager.js

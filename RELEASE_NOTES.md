@@ -1,5 +1,31 @@
 # Release Notes
 
+## v4.4.0 (2026-04-06)
+
+SVG path offset, hardened companion file resolution, project-native presets, developer diagnostics, and an updated OpenSCAD WASM binary. This release also resolves the KI-012 parameter-dropout bug and hardens innerHTML patterns against XSS.
+
+### Highlights
+
+- **SVG path offset**: Inward/outward offset of SVG paths via clipper2-js integration in the preparation workspace
+- **Companion file hardening**: Hierarchy fallback, brand filtering, and sibling disambiguation for robust multi-file project loading
+- **Project-native presets**: Sidecar JSON presets separated from user-saved presets with numeric-aware sorting
+- **KI-012 resolved**: Parameter dropout on re-render fixed via worker restart improvements
+- **Developer diagnostics**: Console-only toggles for CSG bypass, desktop quality, geometry comparison (`window.__forgeDebug`)
+- **WASM update**: OpenSCAD 2026.04.03 binary with `callMain --help` first-init fix
+- **Security**: innerHTML XSS vectors in dialogs and file selection escaped; blocking `confirm()` replaced with accessible dialog
+
+### Upgrade Notes
+
+This is a backward-compatible upgrade with no breaking changes:
+
+1. Clear browser cache for best experience
+2. All existing saved projects and presets remain compatible
+3. New features (`project_presets`, `svg_path_offset`) are behind feature flags — disabled by default
+
+See [CHANGELOG.md](CHANGELOG.md) for the full list of changes.
+
+---
+
 ## v4.3.0 (2026-03-20)
 
 Architecture cleanup, security enforcement, and accessibility improvements. The main.js monolith has been decomposed, CSP is now enforced, all `alert()` calls replaced with accessible dialogs, and the toolbar uses a proper WAI-ARIA menubar.

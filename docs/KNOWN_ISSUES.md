@@ -28,20 +28,20 @@ Things we know about but haven't fixed yet, along with workarounds you can use i
 
 ---
 
-#### KI-002: Monaco Editor AT Limitations
+#### KI-002: Code Editor AT Limitations
 
 **Status**: Documented  
 **Affected**: Expert Mode with screen readers  
 **Severity**: Medium
 
-**Description**: The Monaco code editor has some limitations with certain assistive technology configurations, particularly with JAWS in some browser combinations.
+**Description**: The CodeMirror 6 code editor has some limitations with certain assistive technology configurations, particularly with JAWS in some browser combinations.
 
 **Workaround**:
 1. Enable "Use accessible text editor" in Settings
 2. The textarea fallback provides full AT compatibility
 3. All editing features remain available
 
-**Root Cause**: Monaco editor's complex DOM structure can interfere with some AT navigation patterns.
+**Root Cause**: CodeMirror's complex DOM structure can interfere with some AT navigation patterns.
 
 ---
 

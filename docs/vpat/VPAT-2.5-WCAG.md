@@ -4,8 +4,8 @@
 
 **Version**: 2.5 (February 2024 VPAT Format)  
 **Product**: OpenSCAD Assistive Forge  
-**Product Version**: 4.3.0
-**Report Date**: 2026-03-20
+**Product Version**: 4.4.0
+**Report Date**: 2026-04-06
 **Contact**: [Project Maintainer via GitHub Issues]
 
 ---

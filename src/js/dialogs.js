@@ -36,14 +36,14 @@ export function showConfirmDialog(
     modal.innerHTML = `
       <div class="preset-modal-content confirm-modal-content">
         <div class="preset-modal-header">
-          <h3 id="confirmDialogTitle" class="preset-modal-title">${title}</h3>
+          <h3 id="confirmDialogTitle" class="preset-modal-title">${escapeHtml(title)}</h3>
         </div>
         <div class="confirm-modal-body">
-          <p id="confirmDialogMessage">${message}</p>
+          <p id="confirmDialogMessage">${escapeHtml(message)}</p>
         </div>
         <div class="preset-form-actions">
-          <button type="button" class="btn btn-secondary" data-action="cancel">${cancelLabel}</button>
-          <button type="button" class="${confirmBtnClass}" data-action="confirm">${confirmLabel}</button>
+          <button type="button" class="btn btn-secondary" data-action="cancel">${escapeHtml(cancelLabel)}</button>
+          <button type="button" class="${confirmBtnClass}" data-action="confirm">${escapeHtml(confirmLabel)}</button>
         </div>
       </div>
     `;

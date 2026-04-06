@@ -9,6 +9,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [4.4.0] - 2026-04-06
+
+### SVG Offset, Companion Hardening & Preset Improvements
+
+Feature release adding SVG path offset support, hardened companion file resolution, project-native preset separation, developer diagnostic controls, numeric-aware preset sorting, and an updated OpenSCAD WASM binary.
+
+### Added
+
+- **SVG path offset** — new `svg-offset.js` bridge to clipper2-js enables inward/outward offset of SVG paths in the preparation workspace
+- **Project-native presets** — presets bundled in sidecar JSON files are separated from user-saved presets (behind `project_presets` feature flag)
+- **SCAD parameter formatter** — new `scad-param-formatter.js` module for type-aware parameter formatting
+- **Developer diagnostic controls** — console-only toggles for CSG bypass, desktop quality, geometry comparison, and ground-truth rendering (`window.__forgeDebug`)
+- **Numeric-aware preset sorting** — presets with numeric prefixes sort naturally (e.g., "2 Small" before "10 Large")
+- **E2E test suites** — `lwfl-parity-reproduction.spec.js`, `preset-audit-sweep.spec.js` for regression testing
+- **Unit test suite** — `svg-offset.test.js` for offset geometry validation
+
+### Changed
+
+- **Companion file resolution hardened** — hierarchy fallback, brand filtering, sibling disambiguation for multi-file projects
+- **OpenSCAD WASM updated** to 2026.04.03 build with `callMain --help` first-init fix
+- **Worker refactored** — `openscad-worker.js` major cleanup (+66/−265 lines), improved error translation, defense-in-depth guards
+- **Split preset dropdown** — project-native vs user-saved presets displayed in separate groups
+- **Feature flags** — added `project_presets` and `svg_path_offset` flags
+
+### Fixed
+
+- **KI-012**: Parameter dropout on re-render resolved via worker restart fix
+- **innerHTML XSS** in `dialogs.js` and `file-handler.js` — user content now escaped via `escapeHtml()`
+- **Blocking `confirm()`** in example loader replaced with accessible `showConfirmDialog`
+
+### Security
+
+- **innerHTML hardening** — `showConfirmDialog` title/message/labels and `_promptScadSelection` file paths now escaped to prevent XSS via crafted filenames
+
+---
+
 ## [4.3.0] - 2026-03-20
 
 ### Architecture, Security & Accessibility Release
