@@ -656,6 +656,63 @@ describe('createSvgPrepWorkspace', () => {
 
       ws.destroy();
     });
+
+    it('fullscreen button toggles: second click exits fullscreen', () => {
+      const ws = createSvgPrepWorkspace(container);
+      ws.open(SIMPLE_SVG, makeAnalysis(1));
+
+      const fsBtn = ws._root.querySelector('.svg-prep-fullscreen-btn');
+      fsBtn.click();
+      expect(ws._root.classList.contains('svg-prep-fullscreen')).toBe(true);
+
+      fsBtn.click();
+      expect(ws._root.classList.contains('svg-prep-fullscreen')).toBe(false);
+      expect(ws._root.hidden).toBe(false);
+
+      ws.destroy();
+    });
+
+    it('fullscreen button re-enters fullscreen after toggle cycle', () => {
+      const ws = createSvgPrepWorkspace(container);
+      ws.open(SIMPLE_SVG, makeAnalysis(1));
+
+      const fsBtn = ws._root.querySelector('.svg-prep-fullscreen-btn');
+      fsBtn.click();
+      fsBtn.click();
+      fsBtn.click();
+      expect(ws._root.classList.contains('svg-prep-fullscreen')).toBe(true);
+
+      ws.destroy();
+    });
+  });
+
+  describe('backdrop click-to-close', () => {
+    it('clicking backdrop closes fullscreen', () => {
+      const ws = createSvgPrepWorkspace(container);
+      ws.open(SIMPLE_SVG, makeAnalysis(1));
+      ws.openFullscreen();
+
+      const backdrop = ws._refs.backdrop;
+      backdrop.click();
+
+      expect(ws._root.classList.contains('svg-prep-fullscreen')).toBe(false);
+      expect(backdrop.classList.contains('hidden')).toBe(true);
+      expect(ws._root.hidden).toBe(false);
+
+      ws.destroy();
+    });
+
+    it('clicking backdrop does nothing when not fullscreen', () => {
+      const ws = createSvgPrepWorkspace(container);
+      ws.open(SIMPLE_SVG, makeAnalysis(1));
+
+      ws._refs.backdrop.click();
+
+      expect(ws._root.hidden).toBe(false);
+      expect(ws._root.classList.contains('svg-prep-fullscreen')).toBe(false);
+
+      ws.destroy();
+    });
   });
 
   describe('footer buttons', () => {

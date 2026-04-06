@@ -426,6 +426,7 @@ function renderWarnings(warningsEl, warnings) {
  *   destroy: () => void,
  *   openFullscreen: () => void,
  *   closeFullscreen: () => void,
+ *   toggleFullscreen: () => void,
  *   _root: HTMLElement,
  *   _refs: Object,
  * }}
@@ -874,7 +875,8 @@ export function createSvgPrepWorkspace(containerEl) {
     refs.designWidthInput.addEventListener('input', handleDesignWidthChange);
     refs.footer.addEventListener('click', handleFooterClick);
     refs.closeBtn.addEventListener('click', close);
-    refs.fullscreenBtn.addEventListener('click', openFullscreen);
+    refs.fullscreenBtn.addEventListener('click', toggleFullscreen);
+    refs.backdrop.addEventListener('click', closeFullscreen);
 
     announce('SVG Preparation Editor opened');
   }
@@ -914,7 +916,8 @@ export function createSvgPrepWorkspace(containerEl) {
     refs.designWidthInput.removeEventListener('input', handleDesignWidthChange);
     refs.footer.removeEventListener('click', handleFooterClick);
     refs.closeBtn.removeEventListener('click', close);
-    refs.fullscreenBtn.removeEventListener('click', openFullscreen);
+    refs.fullscreenBtn.removeEventListener('click', toggleFullscreen);
+    refs.backdrop.removeEventListener('click', closeFullscreen);
 
     announce('SVG Preparation Editor closed');
   }
@@ -962,6 +965,14 @@ export function createSvgPrepWorkspace(containerEl) {
     announce('Exited fullscreen SVG editor');
   }
 
+  function toggleFullscreen() {
+    if (isFullscreen) {
+      closeFullscreen();
+    } else {
+      openFullscreen();
+    }
+  }
+
   function getResult() {
     return currentResult;
   }
@@ -981,6 +992,7 @@ export function createSvgPrepWorkspace(containerEl) {
     destroy,
     openFullscreen,
     closeFullscreen,
+    toggleFullscreen,
     _root: root,
     _refs: refs,
   };

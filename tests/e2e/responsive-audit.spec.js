@@ -276,8 +276,16 @@ for (const vp of VIEWPORTS) {
       expect(wsBox.width).toBeGreaterThanOrEqual(vp.width - 2)
       expect(wsBox.height).toBeGreaterThanOrEqual(vp.height - 2)
 
-      // Close: Escape works on desktop; mobile has no Escape key (known bug — Phase 2a)
-      if (!isMobile) {
+      if (isMobile) {
+        await fullscreenBtn.click()
+        await expect(workspace).not.toHaveClass(/svg-prep-fullscreen/)
+
+        await fullscreenBtn.click()
+        await expect(workspace).toHaveClass(/svg-prep-fullscreen/)
+        const backdrop = page.locator('.svg-prep-fullscreen-backdrop')
+        await backdrop.click()
+        await expect(workspace).not.toHaveClass(/svg-prep-fullscreen/)
+      } else {
         await page.keyboard.press('Escape')
         await expect(workspace).not.toHaveClass(/svg-prep-fullscreen/)
       }
