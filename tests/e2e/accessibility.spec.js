@@ -1319,6 +1319,9 @@ test.describe('Color System and Theme Accessibility', () => {
         } else {
           document.documentElement.removeAttribute('data-high-contrast');
         }
+        if (document.activeElement && document.activeElement !== document.body) {
+          document.activeElement.blur();
+        }
       }, config);
       
       await page.waitForTimeout(50);
@@ -1574,6 +1577,9 @@ test.describe('Mono / Alt View Theme State Accessibility', () => {
           root.setAttribute('data-ui-variant', 'mono')
         } else {
           root.removeAttribute('data-ui-variant')
+        }
+        if (document.activeElement && document.activeElement !== document.body) {
+          document.activeElement.blur()
         }
       }, state)
 
