@@ -2,7 +2,7 @@
 
 Things we know about but haven't fixed yet, along with workarounds you can use in the meantime. If you hit something not listed here, please [open an issue](https://github.com/BrennenJohnston/openscad-assistive-forge/issues).
 
-**Last updated**: 2026-04-04
+**Last updated**: 2026-04-06
 
 ---
 
@@ -94,34 +94,26 @@ Things we know about but haven't fixed yet, along with workarounds you can use i
 
 #### KI-012: LWFL Keyguard Geometry Discrepancies vs Desktop OpenSCAD
 
-**Status**: Investigated — upstream Manifold engine issue  
+**Status**: Resolved (2026-04-06)  
 **Affected**: LWFL keyguard preset in web app  
 **Severity**: Medium
 
-**Description**: Two geometry rendering bugs in the LWFL keyguard preset produce output that differs from desktop OpenSCAD (both CGAL 2021 and Nightly Manifold builds):
+**Description**: Two geometry rendering bugs in the LWFL keyguard preset produced output that differed from desktop OpenSCAD:
 
-- **Bug A — Home button tab persists when disabled:** Setting `expose_home_button = "no"` leaves a tab jutting out along the right edge. Desktop renders a straight edge.
-- **Bug B — Ghost cutouts when upper message bar disabled:** Setting `expose_upper_message_bar = "no"` leaves partial square cutouts near grid positions #1 and #12. Desktop renders a solid surface.
+- **Bug A — Home button tab persists when disabled:** Setting `expose_home_button = "no"` left a tab jutting out along the right edge.
+- **Bug B — Ghost cutouts when upper message bar disabled:** Setting `expose_upper_message_bar = "no"` left partial square cutouts near grid positions #1 and #12.
 
-**Investigation summary** (LWFL Geometry Bug Fix plan, Phases 1–5):
+**Root cause**: `applyCompanionAliases()` in `zip-handler.js` used overwrite semantics — when the ZIP already contained a root-level `openings_and_additions.txt`, the function replaced it with preset-specific content. This changed what SCAD `include` directives resolved to, producing wrong geometry. The fix adds `!result.has(target)` guards so aliases only create missing root keys, never replace existing ones.
 
-1. **H1 — CSG color injection restructuring the CSG tree:** Ruled out. The `injectCsgColors` algorithm was improved to wrap each subtractor individually (preserving N+1 children) instead of grouping all subtractors under one `color()` node, but this did not resolve either bug. The CSG bypass debug toggle (`toggleCsgBypass()`) confirmed both bugs persist with injection disabled.
-2. **H2 — `-D` flag behavior differences:** Ruled out. The `_applyOverrides` source-level parameter baking was wired as an alternative to `-D` flags via `toggleSourceOverrides()`. Both bugs persist with source overrides active.
-3. **H3 — Upstream Manifold precision:** Confirmed as root cause. The WASM Manifold engine handles boolean operations on the LWFL preset's complex hulled/offset geometry differently from the desktop Nightly build.
-4. **H4 — Parameter serialization drift:** Ruled out by Phase 4. A shared `scad-param-formatter.js` module now formats `-D` args, `_applyOverrides`, and debug dumps identically. String enum yes/no values are quoted correctly across all paths.
-5. **H5 — Preview/full render parity skew:** Ruled out by Phase 5. `applyAutoPreviewOverrides()` in auto-fast mode reduces `render_quality` and caps `cone_segments` for preview only. A new `togglePreviewParity()` debug toggle (`openscad-forge-debug-preview-parity`) bypasses these overrides, equalizing preview and full render parameters. Testing with the parity toggle active confirmed both bugs persist in both preview and full export with identical parameters, quality, backend, and output format — confirming the issue is in the Manifold engine, not the app-layer preview path.
+**Resolution**: A 3-line guard addition converting `applyCompanionAliases()` from overwrite to create-only semantics. The parameter dropout fix in `ui-generator.js` (seeding `currentValues` from `initialValues`) was also discovered during the investigation.
 
-**Workaround**: Use desktop OpenSCAD for final verification of LWFL keyguard renders where these edges matter. The web preview is functionally correct for all other geometry.
-
-**Root Cause**: Upstream Manifold WASM engine boolean operation differences. All five app-layer hypotheses were investigated and ruled out. No application-layer fix is available.
+**Investigation history**: Five prior investigation plans incorrectly attributed the issue to the upstream Manifold WASM engine based on code-level analysis alone. The successful investigation used captured-input comparison against desktop CLI and `git bisect` to identify the true root cause. See `docs/audit/ki-012-investigation/findings-report.md` for the full write-up.
 
 **Developer toggles for diagnosis** (via browser console):
 - `localStorage.setItem('openscad-forge-debug-preview-parity', '1')` — bypass preview overrides for A/B parity comparison
 - `localStorage.setItem('openscad-forge-debug-desktop-quality', '1')` — use desktop-equivalent quality for preview
 - `localStorage.setItem('openscad-forge-debug-no-csg-colors', '1')` — disable CSG color injection
 - `localStorage.setItem('openscad-forge-debug-source-overrides', '1')` — bake parameters into source
-
-**Suggested action**: File upstream issue at `github.com/openscad/openscad` with LWFL preset parameters and side-by-side comparison. Re-test with each WASM update using `window.__forgeDebug.compareGeometry()` and the developer toggles.
 
 ---
 
