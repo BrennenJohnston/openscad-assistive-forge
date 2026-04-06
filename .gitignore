@@ -39,6 +39,17 @@ localhost_*.report.html
 # Internal planning documents (not for public release)
 docs/planning/
 
+# Investigation capture bundles and directories (contain stakeholder SCAD source)
+docs/audit/ki-012-investigation/*.zip
+docs/audit/ki-012-investigation/baseline-capture/
+docs/audit/ki-012-investigation/bug-a-capture/
+docs/audit/ki-012-investigation/bug-b-capture/
+docs/audit/ki-012-investigation/bug-b-capture-2/
+
+# WASM version bisect working directories
+docs/audit/ki-012-investigation/_wasm-cache/
+docs/audit/ki-012-investigation/_wasm-backup/
+
 # Developer scratch / temp files
 _em_temp/
 
