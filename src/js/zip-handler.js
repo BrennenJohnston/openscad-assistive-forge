@@ -912,8 +912,15 @@ export function applyCompanionAliases(projectFiles, companionMapping) {
     for (const [aliasTarget, sourcePath] of Object.entries(
       companionMapping.aliases
     )) {
-      if (sourcePath && result.has(sourcePath)) {
+      if (sourcePath && result.has(sourcePath) && !result.has(aliasTarget)) {
+        console.debug(
+          `[CompanionAlias] Creating "${aliasTarget}" from "${sourcePath}" (target was missing)`
+        );
         result.set(aliasTarget, result.get(sourcePath));
+      } else if (sourcePath && result.has(sourcePath) && result.has(aliasTarget)) {
+        console.debug(
+          `[CompanionAlias] Skipping "${aliasTarget}" — root key already exists, preserving original`
+        );
       }
     }
     return result;
@@ -922,16 +929,30 @@ export function applyCompanionAliases(projectFiles, companionMapping) {
   // LEGACY-ONLY COMPATIBILITY PATH:
   // Keyguard-shaped mapping copies preset-specific content to
   // hardcoded root-level keys "openings_and_additions.txt" / "default.svg".
+  // Guard: only CREATE a missing root key — replacing an existing root key
+  // would change the content SCAD include/import directives resolve to,
+  // producing wrong geometry (KI-012 Bug A/B).
   if (
     companionMapping.openingsPath &&
-    result.has(companionMapping.openingsPath)
+    result.has(companionMapping.openingsPath) &&
+    !result.has('openings_and_additions.txt')
   ) {
+    console.debug(
+      `[CompanionAlias] Creating "openings_and_additions.txt" from "${companionMapping.openingsPath}" (legacy path)`
+    );
     result.set(
       'openings_and_additions.txt',
       result.get(companionMapping.openingsPath)
     );
   }
-  if (companionMapping.svgPath && result.has(companionMapping.svgPath)) {
+  if (
+    companionMapping.svgPath &&
+    result.has(companionMapping.svgPath) &&
+    !result.has('default.svg')
+  ) {
+    console.debug(
+      `[CompanionAlias] Creating "default.svg" from "${companionMapping.svgPath}" (legacy path)`
+    );
     result.set('default.svg', result.get(companionMapping.svgPath));
   }
 
