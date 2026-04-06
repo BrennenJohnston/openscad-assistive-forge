@@ -13770,9 +13770,13 @@ body.tutorial-body-locked {
   z-index: var(--z-index-modal, 1000);
   background: var(--color-bg-primary);
   padding: var(--space-lg);
+  padding-top: calc(var(--space-lg) + env(safe-area-inset-top, 0px));
+  padding-bottom: calc(var(--space-lg) + env(safe-area-inset-bottom, 0px));
   border: 0;
   border-radius: 0;
   overflow: hidden;
+  height: 100%;
+  width: 100%;
 }
 
 .svg-prep-workspace.svg-prep-fullscreen .svg-prep-header {
@@ -13828,6 +13832,19 @@ body.tutorial-body-locked {
 
 .svg-prep-fullscreen-backdrop.hidden {
   display: none;
+}
+
+/* ── Responsive: narrow fullscreen (compact padding + stacked previews) ─── */
+@media (max-width: 540px) {
+  .svg-prep-workspace.svg-prep-fullscreen {
+    padding: var(--space-sm);
+    padding-top: calc(var(--space-sm) + env(safe-area-inset-top, 0px));
+    padding-bottom: calc(var(--space-sm) + env(safe-area-inset-bottom, 0px));
+  }
+
+  .svg-prep-workspace.svg-prep-fullscreen .svg-prep-previews {
+    flex-direction: column;
+  }
 }
 
 /* ── Responsive: stack panes on narrow viewports (non-fullscreen only) ──── */

@@ -1833,11 +1833,31 @@ describe('Fullscreen sticky layout CSS contract', () => {
   });
 
   it('540px stacking media query is scoped to non-fullscreen only', () => {
-    const mediaMatch = css.match(
-      /@media\s*\(\s*max-width\s*:\s*540px\s*\)\s*\{([\s\S]*?\n\})/
+    const mediaBlocks = [
+      ...css.matchAll(
+        /@media\s*\(\s*max-width\s*:\s*540px\s*\)\s*\{([\s\S]*?\n\})/g
+      ),
+    ];
+    const nonFullscreenBlock = mediaBlocks.find((m) =>
+      /:not\(\.svg-prep-fullscreen\)/.test(m[1])
     );
-    expect(mediaMatch).not.toBeNull();
-    expect(mediaMatch[1]).toMatch(/:not\(\.svg-prep-fullscreen\)/);
+    expect(nonFullscreenBlock).toBeDefined();
+  });
+
+  it('540px fullscreen block uses compact padding with safe-area-insets', () => {
+    const mediaBlocks = [
+      ...css.matchAll(
+        /@media\s*\(\s*max-width\s*:\s*540px\s*\)\s*\{([\s\S]*?\n\})/g
+      ),
+    ];
+    const fullscreenBlock = mediaBlocks.find(
+      (m) =>
+        /\.svg-prep-fullscreen/.test(m[1]) &&
+        !/\:not\(/.test(m[1].split('.svg-prep-fullscreen')[0].split('\n').pop())
+    );
+    expect(fullscreenBlock).toBeDefined();
+    expect(fullscreenBlock[1]).toMatch(/env\(safe-area-inset-top/);
+    expect(fullscreenBlock[1]).toMatch(/env\(safe-area-inset-bottom/);
   });
 
   it('non-fullscreen workspace preserves default overflow', () => {
