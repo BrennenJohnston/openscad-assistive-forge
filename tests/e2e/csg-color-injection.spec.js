@@ -113,7 +113,8 @@ async function sampleCanvasCSGColors(page) {
 test.describe('CSG Color Injection Pipeline', () => {
   test.describe.configure({ timeout: 120_000 });
 
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, browserName }) => {
+    test.skip(browserName === 'webkit', 'WebKit WASM does not emit CSG color metadata');
     await page.addInitScript(() => {
       localStorage.clear();
       localStorage.setItem('openscad-forge-first-visit-seen', 'true');

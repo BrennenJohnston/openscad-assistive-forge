@@ -105,6 +105,8 @@
     "three": "^0.182.0"
   },
   "overrides": {
-    "minimatch": "^10.2.1"
+    "minimatch": "^10.2.1",
+    "@angular/common": "19.2.20",
+    "@angular/core": "19.2.20"
   }
 }

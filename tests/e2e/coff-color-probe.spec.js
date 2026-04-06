@@ -104,7 +104,8 @@ async function sampleCanvasColorGroups(page) {
 test.describe('COFF Color Probe', () => {
   test.describe.configure({ timeout: 120_000 });
 
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, browserName }) => {
+    test.skip(browserName === 'webkit', 'WebKit WASM does not emit COFF color metadata');
     await page.addInitScript(() => {
       localStorage.clear();
       localStorage.setItem('openscad-forge-first-visit-seen', 'true');

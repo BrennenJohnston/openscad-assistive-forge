@@ -1338,8 +1338,9 @@ test.describe('Color System and Theme Accessibility', () => {
       });
       
       // Should have outline or box-shadow for focus
+      // WebKit uses outline-style:auto for its native focus ring (reports width 0px)
       const hasOutline = outlineInfo.outlineStyle !== 'none' && 
-                        parseFloat(outlineInfo.outlineWidth) >= 2;
+                        (outlineInfo.outlineStyle === 'auto' || parseFloat(outlineInfo.outlineWidth) >= 2);
       const hasBoxShadow = outlineInfo.boxShadow !== 'none';
       
       expect(hasOutline || hasBoxShadow).toBe(true);
@@ -1586,9 +1587,10 @@ test.describe('Mono / Alt View Theme State Accessibility', () => {
         }
       })
 
+      // WebKit uses outline-style:auto for its native focus ring (reports width 0px)
       const hasOutline =
         outlineInfo.outlineStyle !== 'none' &&
-        parseFloat(outlineInfo.outlineWidth) >= 2
+        (outlineInfo.outlineStyle === 'auto' || parseFloat(outlineInfo.outlineWidth) >= 2)
       const hasBoxShadow = outlineInfo.boxShadow !== 'none'
 
       expect(

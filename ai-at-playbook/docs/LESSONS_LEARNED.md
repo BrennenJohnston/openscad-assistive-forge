@@ -534,7 +534,7 @@ One row per plan file, sorted by outcome then alphabetically.
 | stakeholder_testing_plan | audit | medium | 11 | 0 | Stalled |
 | stepper_motor_feasibility | research | narrow | 2 | 0 | Stalled |
 | tof_velocity_braking_system | research | medium | 5 | 0 | Stalled |
-| tutorial_+_settings_+_companion_fixes | bug fix | medium | 13 | 0 | Stalled |
+| tutorial\_+\_settings\_+\_companion\_fixes | bug fix | medium | 13 | 0 | Stalled |
 | ui-polish-standardization-pass | refactor | broad | 11 | 0 | Stalled |
 | ui_consistency_framework | refactor | broad | 14 | 0 | Stalled |
 | ui_remediation_plan | bug fix | medium | 9 | 0 | Stalled |
