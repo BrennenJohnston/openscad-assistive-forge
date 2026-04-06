@@ -1,5 +1,5 @@
 {
-  "generated": "2026-03-17T03:50:51.692Z",
+  "generated": "2026-04-05T04:18:13.633Z",
   "libraries": {
     "MCAD": {
       "available": true,
@@ -12,7 +12,7 @@
       "pinned": false,
       "commit": "bd0a7ba3f042bfbced5ca1894b236cea08904e26",
       "date": "2021-10-25",
-      "downloaded": "2026-03-17T03:50:41.715Z"
+      "downloaded": "2026-04-05T04:18:11.323Z"
     },
     "BOSL2": {
       "available": true,
@@ -23,9 +23,9 @@
       "branch": "master",
       "pin": null,
       "pinned": false,
-      "commit": "9defca51f048127fbfe7cecf852736551fd59405",
-      "date": "2026-03-16",
-      "downloaded": "2026-03-17T03:50:45.174Z"
+      "commit": "b9c5dd7618f13bbbe24fbf51d1f46027ea773053",
+      "date": "2026-04-04",
+      "downloaded": "2026-04-05T04:18:12.409Z"
     },
     "NopSCADlib": {
       "available": true,
@@ -38,7 +38,7 @@
       "pinned": false,
       "commit": "c9baa0ed0faa23e849141c3d8c6728545d6af910",
       "date": "2025-10-08",
-      "downloaded": "2026-03-17T03:50:49.425Z"
+      "downloaded": "2026-04-05T04:18:13.057Z"
     },
     "dotSCAD": {
       "available": true,
@@ -51,7 +51,7 @@
       "pinned": false,
       "commit": "bb33edfd75cba0edbb7971606a077b9c69d0b7d2",
       "date": "2022-10-11",
-      "downloaded": "2026-03-17T03:50:51.691Z"
+      "downloaded": "2026-04-05T04:18:13.632Z"
     }
   }
 }
