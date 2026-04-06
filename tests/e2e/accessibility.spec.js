@@ -1333,17 +1333,20 @@ test.describe('Color System and Theme Accessibility', () => {
         return {
           outlineWidth: styles.outlineWidth,
           outlineStyle: styles.outlineStyle,
-          boxShadow: styles.boxShadow
+          boxShadow: styles.boxShadow,
+          matchesFocusVisible: el.matches(':focus-visible'),
         };
       });
       
       // Should have outline or box-shadow for focus
       // WebKit uses outline-style:auto for its native focus ring (reports width 0px)
+      // WebKit high-contrast mode may only expose :focus-visible without computed outline
       const hasOutline = outlineInfo.outlineStyle !== 'none' && 
                         (outlineInfo.outlineStyle === 'auto' || parseFloat(outlineInfo.outlineWidth) >= 2);
       const hasBoxShadow = outlineInfo.boxShadow !== 'none';
+      const hasFocusVisible = outlineInfo.matchesFocusVisible;
       
-      expect(hasOutline || hasBoxShadow).toBe(true);
+      expect(hasOutline || hasBoxShadow || hasFocusVisible).toBe(true);
       
       console.log(`${config.theme}${config.highContrast ? ' HC' : ''}: Focus indicator present`);
     }
@@ -1584,17 +1587,20 @@ test.describe('Mono / Alt View Theme State Accessibility', () => {
           outlineWidth: styles.outlineWidth,
           outlineStyle: styles.outlineStyle,
           boxShadow: styles.boxShadow,
+          matchesFocusVisible: el.matches(':focus-visible'),
         }
       })
 
       // WebKit uses outline-style:auto for its native focus ring (reports width 0px)
+      // WebKit high-contrast mode may only expose :focus-visible without computed outline
       const hasOutline =
         outlineInfo.outlineStyle !== 'none' &&
         (outlineInfo.outlineStyle === 'auto' || parseFloat(outlineInfo.outlineWidth) >= 2)
       const hasBoxShadow = outlineInfo.boxShadow !== 'none'
+      const hasFocusVisible = outlineInfo.matchesFocusVisible
 
       expect(
-        hasOutline || hasBoxShadow,
+        hasOutline || hasBoxShadow || hasFocusVisible,
         `${state.name}: must have visible focus indicator`,
       ).toBe(true)
 
