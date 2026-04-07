@@ -5,20 +5,43 @@
 
 .DESCRIPTION
   Executes both OpenSCAD 2021.01 (CGAL) and Nightly 2026.01.03 (Manifold)
-  against 3 test scenarios, capturing console output, geometry stats,
-  face colors (Nightly COFF), and screenshots.
+  against test scenarios or a full preset sweep, capturing console output,
+  geometry stats, face colors (Nightly COFF), and screenshots.
+
+  In default (scenario) mode, runs the 6 hardcoded scenarios.
+  In preset sweep mode (-PresetSweep or -PresetFilter), dynamically loads
+  presets from keyguard_v75.json and runs each matching preset through the
+  CLI pipeline. Output defaults to testing-round-8.
 
 .PARAMETER DryRun
   Print commands without executing OpenSCAD.
 
 .PARAMETER OutputDir
   Override default output directory.
+
+.PARAMETER PresetFilter
+  Regex pattern to filter preset names. Implies -PresetSweep.
+  Example: -PresetFilter "^iPad 7,8,9 - Fintie"
+
+.PARAMETER PresetSweep
+  Run all (or filtered) presets from keyguard_v75.json instead of the
+  hardcoded scenarios. Output defaults to testing-round-8.
+
+.PARAMETER BatchSize
+  Process presets in batches of this size (0 = all at once).
+
+.PARAMETER BatchIndex
+  Which batch to process (0-based). Requires -BatchSize > 0.
 #>
 
 [CmdletBinding()]
 param(
     [switch]$DryRun,
-    [string]$OutputDir
+    [string]$OutputDir,
+    [string]$PresetFilter,
+    [switch]$PresetSweep,
+    [int]$BatchSize = 0,
+    [int]$BatchIndex = 0
 )
 
 $ErrorActionPreference = 'Stop'
@@ -34,9 +57,7 @@ $OpenSCADNightly = "C:\Program Files\OpenSCAD (Nightly)\openscad.com"
 $FixtureDir = Join-Path $RepoRoot "tests\fixtures\keyguard-v75"
 $ParseOffColors = Join-Path $ScriptRoot "parse-off-colors.js"
 
-if (-not $OutputDir) {
-    $OutputDir = Join-Path $RepoRoot "docs\audit\testing-round-7\reference-data\cli-extracts"
-}
+# OutputDir default is set after mode determination (see preset sweep block below)
 
 $Scenarios = @(
     @{
@@ -67,6 +88,26 @@ $Scenarios = @(
         }
         geom_type  = "3D"
         svg_export = $false
+    },
+    @{
+        id          = "shelf-3d-printed"
+        params      = @{}
+        preset_name = "iPad 7,8,9 - SP LTROP - Cough Drop QC 60"
+        geom_type   = "3D"
+        svg_export  = $false
+        echo_pass   = $true
+    },
+    @{
+        id          = "grid-first-layer"
+        params      = @{
+            type_of_keyguard                 = "Laser-Cut"
+            generate                         = "first layer for SVG/DXF file"
+            use_Laser_Cutting_best_practices = "yes"
+        }
+        preset_name = "iPad 7,8,9 - Fintie - Cough Drop QC 60"
+        geom_type   = "2D"
+        svg_export  = $true
+        echo_pass   = $true
     }
 )
 
@@ -256,6 +297,69 @@ function Run-OpenSCADExport {
     return $combined
 }
 
+# ── Mode Determination & Preset Sweep ────────────────────────────────────
+
+$RunPresetSweep = $PresetSweep -or ($PresetFilter -ne "")
+
+if ($RunPresetSweep) {
+    $PresetJsonPath = Join-Path $FixtureDir "keyguard_v75.json"
+    if (-not (Test-Path $PresetJsonPath)) {
+        Write-Status "Preset JSON not found: $PresetJsonPath" "ERROR"
+        exit 1
+    }
+
+    $PresetData = Get-Content $PresetJsonPath -Raw | ConvertFrom-Json
+    $AllPresetNames = @($PresetData.parameterSets.PSObject.Properties.Name) | Sort-Object
+
+    Write-Status "Loaded $($AllPresetNames.Count) presets from keyguard_v75.json"
+
+    if ($PresetFilter) {
+        $AllPresetNames = @($AllPresetNames | Where-Object { $_ -match $PresetFilter })
+        Write-Status "PresetFilter '$PresetFilter' matched $($AllPresetNames.Count) presets"
+    }
+
+    if ($BatchSize -gt 0) {
+        $totalBatches = [math]::Ceiling($AllPresetNames.Count / $BatchSize)
+        if ($BatchIndex -ge $totalBatches) {
+            Write-Status "Batch $BatchIndex is out of range ($totalBatches batches available)" "ERROR"
+            exit 1
+        }
+        $start = $BatchIndex * $BatchSize
+        $end = [math]::Min($start + $BatchSize, $AllPresetNames.Count) - 1
+        $AllPresetNames = $AllPresetNames[$start..$end]
+        Write-Status "Batch $BatchIndex of $totalBatches (presets $start-$end): $($AllPresetNames.Count) items"
+    }
+
+    if ($AllPresetNames.Count -eq 0) {
+        Write-Status "No presets matched the filter" "WARN"
+        exit 0
+    }
+
+    $Scenarios = @()
+    foreach ($name in $AllPresetNames) {
+        $safeId = ($name -replace '[^a-zA-Z0-9]', '-') -replace '-+', '-'
+        $safeId = $safeId.Trim('-').ToLower()
+        $Scenarios += @{
+            id          = $safeId
+            params      = @{}
+            preset_name = $name
+            geom_type   = "3D"
+            svg_export  = $false
+            echo_pass   = $true
+        }
+    }
+
+    Write-Status "Preset sweep: $($Scenarios.Count) presets to process"
+}
+
+if (-not $OutputDir) {
+    if ($RunPresetSweep) {
+        $OutputDir = Join-Path $RepoRoot "docs\audit\testing-round-8\reference-data\cli-extracts"
+    } else {
+        $OutputDir = Join-Path $RepoRoot "docs\audit\testing-round-7\reference-data\cli-extracts"
+    }
+}
+
 # ── Validation ───────────────────────────────────────────────────────────
 
 Write-Status "=== Desktop Parity Audit Harness ==="
@@ -330,13 +434,20 @@ foreach ($v in $Versions) {
         $scenarioTempDir = Join-Path $TempDir "$($v.id)-$($s.id)"
         New-Item -ItemType Directory -Path $scenarioTempDir -Force | Out-Null
 
+        $presetArgs = @()
+        if ($s.preset_name) {
+            $presetFile = Join-Path $TempDir "keyguard_v75.json"
+            $presetArgs = @("-p", $presetFile, "-P", $s.preset_name)
+        }
+
         # STL export
         $stlFile = Join-Path $scenarioTempDir "output.stl"
         $stlConsole = Run-OpenSCADExport `
             -Exe $v.exe `
             -ScadFile $ScadFile `
             -OutputFile $stlFile `
-            -Params $s.params
+            -Params $s.params `
+            -ExtraArgs $presetArgs
 
         $parsed = Parse-ConsoleOutput -RawOutput $stlConsole
 
@@ -351,7 +462,7 @@ foreach ($v in $Versions) {
             -ScadFile $ScadFile `
             -OutputFile $offFile `
             -Params $s.params `
-            -ExtraArgs $offExtraArgs
+            -ExtraArgs ($presetArgs + $offExtraArgs)
 
         # Parse OFF colors
         $faceColors = $null
@@ -386,7 +497,8 @@ foreach ($v in $Versions) {
                 -Exe $v.exe `
                 -ScadFile $ScadFile `
                 -OutputFile $svgFile `
-                -Params $s.params
+                -Params $s.params `
+                -ExtraArgs $presetArgs
 
             if (-not $DryRun -and (Test-Path $svgFile)) {
                 $svgBytes = (Get-Item $svgFile).Length
@@ -417,7 +529,7 @@ foreach ($v in $Versions) {
                 -ScadFile $ScadFile `
                 -OutputFile $pngFile `
                 -Params $s.params `
-                -ExtraArgs @("--imgsize=800,600")
+                -ExtraArgs ($presetArgs + @("--imgsize=800,600"))
 
             if (-not $DryRun -and (Test-Path $pngFile)) {
                 $destPng = Join-Path $screenshotDir "$($s.id).png"
@@ -433,7 +545,22 @@ foreach ($v in $Versions) {
                 -ScadFile $ScadFile `
                 -OutputFile $pngFile `
                 -Params $s.params `
-                -ExtraArgs @("--imgsize=800,600")
+                -ExtraArgs ($presetArgs + @("--imgsize=800,600"))
+        }
+
+        # Echo pass: companion Customizer settings run for preset scenarios
+        $echoParsed = $null
+        if ($s.echo_pass) {
+            $echoFile = Join-Path $scenarioTempDir "echo-settings.stl"
+            $echoParams = @{ generate = "Customizer settings" }
+            $echoConsole = Run-OpenSCADExport `
+                -Exe $v.exe `
+                -ScadFile $ScadFile `
+                -OutputFile $echoFile `
+                -Params $echoParams `
+                -ExtraArgs $presetArgs
+            $echoParsed = Parse-ConsoleOutput -RawOutput $echoConsole
+            Write-Status "Echo pass captured $($echoParsed.echo_lines.Count) ECHO lines" "OK"
         }
 
         # Assemble JSON result
@@ -467,8 +594,16 @@ foreach ($v in $Versions) {
             }
         }
 
+        if ($s.preset_name) { $result.preset_name = $s.preset_name }
         if ($pngPath) { $result.exports.png_path = $pngPath }
         if ($svgInfo) { $result.exports.svg = $svgInfo }
+        if ($echoParsed) {
+            $result.echo_settings = [ordered]@{
+                echo_lines = $echoParsed.echo_lines
+                warnings   = $echoParsed.warnings
+                errors     = $echoParsed.errors
+            }
+        }
 
         # Write JSON
         $jsonFile = Join-Path $versionOutDir "$($s.id).json"

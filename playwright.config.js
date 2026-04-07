@@ -77,6 +77,23 @@ export default defineConfig({
       },
       timeout: 90000,
     },
+    // Mobile & tablet projects — scoped to responsive audit spec to avoid
+    // interference with desktop-only E2E tests.
+    {
+      name: 'mobile-iphone',
+      use: { ...devices['iPhone 12'] },
+      testMatch: '**/responsive-audit.spec.js',
+    },
+    {
+      name: 'mobile-pixel',
+      use: { ...devices['Pixel 5'] },
+      testMatch: '**/responsive-audit.spec.js',
+    },
+    {
+      name: 'tablet-ipad',
+      use: { ...devices['iPad (gen 7)'] },
+      testMatch: '**/responsive-audit.spec.js',
+    },
   ],
   
   webServer: {

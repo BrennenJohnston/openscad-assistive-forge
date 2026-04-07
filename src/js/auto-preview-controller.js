@@ -11,6 +11,7 @@ import {
 import { getAppPrefKey } from './storage-keys.js';
 import { isEnabled as isFlagEnabled } from './feature-flags.js';
 import { isNonPreviewable, is2DGenerateValue } from './render-intent.js';
+import { RENDER_QUALITY } from './render-controller.js';
 
 // Storage keys using standardized naming convention
 const STORAGE_KEY_PERF_METRICS = getAppPrefKey('perf-metrics');
@@ -122,6 +123,13 @@ export class AutoPreviewController {
    * @returns {{quality: Object|null, qualityKey: string}}
    */
   resolvePreviewQualityInfo(parameters) {
+    const forceDesktopQuality =
+      typeof localStorage !== 'undefined' &&
+      localStorage.getItem('openscad-forge-debug-desktop-quality') !== null;
+    if (forceDesktopQuality) {
+      return { quality: RENDER_QUALITY.DESKTOP_DEFAULT, qualityKey: 'desktop' };
+    }
+
     const quality = this.resolvePreviewQuality
       ? this.resolvePreviewQuality(parameters)
       : this.previewQuality;
@@ -736,6 +744,132 @@ export class AutoPreviewController {
   }
 
   /**
+   * Inject ThrownTogether-style CSG colors into SCAD source. Wraps the entire
+   * source in gold (positive body) and wraps the subtracted children (2nd+) of
+   * each difference() block in green (subtracted body). Uses balanced-brace
+   * scanning on a comment/string-stripped copy so that difference() inside
+   * comments or string literals is ignored.
+   *
+   * @param {string} scadContent - OpenSCAD source code without user color() calls
+   * @returns {string} Source with injected gold/green color() wrappers
+   */
+  static injectCsgColors(scadContent) {
+    if (!scadContent || typeof scadContent !== 'string') return scadContent;
+
+    const GOLD = '#f9d72c';
+    const GREEN = '#9dcb51';
+
+    const cleaned = AutoPreviewController.stripCommentsAndStrings(scadContent);
+    const diffPattern = /\bdifference\s*\(\s*\)/g;
+    const ops = [];
+
+    let match;
+    while ((match = diffPattern.exec(cleaned)) !== null) {
+      const afterParen = match.index + match[0].length;
+
+      let openBrace = afterParen;
+      while (openBrace < cleaned.length && /\s/.test(cleaned[openBrace])) {
+        openBrace++;
+      }
+      if (openBrace >= cleaned.length || cleaned[openBrace] !== '{') continue;
+
+      let depth = 0;
+      let closeBrace = -1;
+      let firstChildEnd = -1;
+
+      for (let i = openBrace; i < cleaned.length; i++) {
+        const ch = cleaned[i];
+        if (ch === '{') {
+          depth++;
+        } else if (ch === '}') {
+          depth--;
+          if (depth === 0) {
+            closeBrace = i;
+            break;
+          }
+          if (firstChildEnd === -1 && depth === 1) {
+            const rest = cleaned.slice(i + 1).trimStart();
+            if (!(/^else\b/.test(rest))) {
+              firstChildEnd = i + 1;
+            }
+          }
+        } else if (ch === ';' && firstChildEnd === -1 && depth === 1) {
+          firstChildEnd = i + 1;
+        }
+      }
+
+      if (closeBrace === -1 || firstChildEnd === -1) continue;
+
+      const between = scadContent.slice(firstChildEnd, closeBrace).trim();
+      if (between.length === 0) continue;
+
+      const subtractors = [];
+      let stmtStart = -1;
+      let stmtDepth = 0;
+
+      for (let i = firstChildEnd; i < closeBrace; i++) {
+        const ch = cleaned[i];
+
+        if (stmtStart === -1) {
+          if (!/\s/.test(ch)) {
+            stmtStart = i;
+            stmtDepth = 0;
+          } else {
+            continue;
+          }
+        }
+
+        if (ch === '{') {
+          stmtDepth++;
+        } else if (ch === '}') {
+          stmtDepth--;
+          if (stmtDepth === 0) {
+            const rest = cleaned.slice(i + 1).trimStart();
+            if (/^else\b/.test(rest)) {
+              continue;
+            }
+            subtractors.push({ start: stmtStart, end: i + 1 });
+            stmtStart = -1;
+          }
+        } else if (ch === ';' && stmtDepth === 0) {
+          subtractors.push({ start: stmtStart, end: i + 1 });
+          stmtStart = -1;
+        }
+      }
+
+      if (subtractors.length === 0) continue;
+
+      ops.push({ pos: openBrace + 1, text: ` color("${GOLD}") {`, pri: 0 });
+      ops.push({ pos: firstChildEnd, text: ' }', pri: 1 });
+
+      for (const sub of subtractors) {
+        ops.push({ pos: sub.start, text: `color("${GREEN}") { `, pri: 0 });
+        ops.push({ pos: sub.end, text: ' }', pri: 1 });
+      }
+    }
+
+    ops.sort((a, b) => b.pos - a.pos || a.pri - b.pri);
+
+    let result = scadContent;
+    for (const op of ops) {
+      result = result.slice(0, op.pos) + op.text + result.slice(op.pos);
+    }
+
+    return result;
+  }
+
+  /**
+   * Test whether an error from the OpenSCAD WASM render is a parser/syntax
+   * error — the kind that injection can cause when it produces invalid SCAD.
+   * @param {Error|string} error
+   * @returns {boolean}
+   */
+  static isParserError(error) {
+    const msg = (error?.message || String(error)).toLowerCase();
+    return msg.includes('parser error') || msg.includes('syntax error');
+  }
+
+  /**
    * Strip comments and string literals while preserving overall structure.
    * This enables lightweight source scanning without false-positives from
    * `#` inside comments/strings.
@@ -960,38 +1094,151 @@ export class AutoPreviewController {
 
     this.setState(PREVIEW_STATE.RENDERING);
 
-    // ENH-A: Use COFF (Color OFF) format when the flag is enabled and the
-    // SCAD source contains color() calls OR the # debug modifier. The #
-    // modifier needs OFF so the dual-render overlay can be applied even
-    // when color() is absent from the source.
     const hasDebugModifier = AutoPreviewController.scadUsesDebugModifier(
       this.currentScadContent
     );
-    const useColorPassthrough =
-      isFlagEnabled('color_passthrough') &&
-      (AutoPreviewController.scadUsesColor(this.currentScadContent) ||
-        hasDebugModifier);
-    const previewOutputFormat = useColorPassthrough ? 'off' : 'stl';
+    const hasColorCalls = AutoPreviewController.scadUsesColor(
+      this.currentScadContent
+    );
+    const colorPassthroughEnabled = isFlagEnabled('color_passthrough');
+    const caps = this.renderController?.getCapabilities?.() || {};
+    const supportsRenderColors = Boolean(
+      caps.hasRenderColorsFlag || caps.hasManifold
+    );
+
+    let previewOutputFormat;
+    let scadForPreview = this.currentScadContent;
+    let filesForPreview = this.projectFiles;
+    let csgColorsInjected = false;
+    const noCsgColors =
+      typeof localStorage !== 'undefined' &&
+      localStorage.getItem('openscad-forge-debug-no-csg-colors') !== null;
+
+    if (noCsgColors) {
+      previewOutputFormat = 'stl';
+    } else if (supportsRenderColors) {
+      previewOutputFormat = 'off';
+      if (!hasColorCalls || !colorPassthroughEnabled) {
+        scadForPreview = AutoPreviewController.injectCsgColors(
+          hasColorCalls
+            ? AutoPreviewController.stripColorCalls(this.currentScadContent)
+            : this.currentScadContent
+        );
+        csgColorsInjected = true;
+        if (this.projectFiles && this.mainFilePath) {
+          filesForPreview = new Map(this.projectFiles);
+          filesForPreview.set(this.mainFilePath, scadForPreview);
+        }
+      }
+    } else {
+      const useColorPassthrough =
+        colorPassthroughEnabled && (hasColorCalls || hasDebugModifier);
+      previewOutputFormat = useColorPassthrough ? 'off' : 'stl';
+    }
+
+    const sourceOverridesActive =
+      typeof localStorage !== 'undefined' &&
+      localStorage.getItem('openscad-forge-debug-source-overrides') !== null;
+
+    // Ground-truth diagnostics for LWFL geometry debugging (Phase 1)
+    const previewOverridesActive = previewParameters !== parameters;
+    const parityDiagActive =
+      typeof localStorage !== 'undefined' &&
+      localStorage.getItem('openscad-forge-debug-preview-parity') !== null;
+    console.log('[AutoPreview Diag] Render dispatch:', {
+      qualityKey,
+      qualityName: quality?.name ?? 'model-default',
+      outputFormat: previewOutputFormat,
+      csgColorsInjected,
+      sourceOverridesActive,
+      previewOverridesActive,
+      parityDiagActive,
+      mainFilePath: this.mainFilePath || '(single file)',
+      projectFileCount: this.projectFiles?.size ?? 0,
+      paramTypesCount: Object.keys(this.paramTypes || {}).length,
+    });
+    if (previewOverridesActive) {
+      const diffs = {};
+      for (const [k, v] of Object.entries(previewParameters)) {
+        if (parameters[k] !== v) diffs[k] = { original: parameters[k], preview: v };
+      }
+      if (Object.keys(diffs).length > 0) {
+        console.log('[AutoPreview Diag] Preview parameter overrides:', diffs);
+      }
+    }
+    if (parityDiagActive) {
+      console.log('[PreviewParity] Preview render config:', {
+        qualityKey,
+        qualityName: quality?.name ?? 'model-default',
+        outputFormat: previewOutputFormat,
+        paramCount: Object.keys(previewParameters).length,
+        overridesApplied: previewOverridesActive,
+      });
+    }
 
     let renderFailed = false;
     try {
       const startTime = Date.now();
-      const result = await this.renderController.renderPreview(
-        this.currentScadContent,
-        previewParameters,
-        {
-          ...(quality ? { quality } : {}),
-          outputFormat: previewOutputFormat,
-          files: this.projectFiles,
-          mainFile: this.mainFilePath,
-          libraries: this.enabledLibraries,
-          paramTypes: this.paramTypes,
-          onProgress: (percent, message) => {
-            this.onProgress(percent, message, 'preview');
-          },
+      const previewRenderOpts = {
+        ...(quality ? { quality } : {}),
+        outputFormat: previewOutputFormat,
+        files: filesForPreview,
+        mainFile: this.mainFilePath,
+        libraries: this.enabledLibraries,
+        paramTypes: this.paramTypes,
+        onProgress: (percent, message) => {
+          this.onProgress(percent, message, 'preview');
+        },
+      };
+
+      if (sourceOverridesActive) {
+        console.log(
+          '[AutoPreview] Source overrides active — worker will bake ' +
+            'parameters into SCAD source instead of using -D flags'
+        );
+      }
+
+      let result;
+      try {
+        result = await this.renderController.renderPreview(
+          scadForPreview,
+          previewParameters,
+          previewRenderOpts
+        );
+      } catch (renderErr) {
+        if (
+          csgColorsInjected &&
+          AutoPreviewController.isParserError(renderErr)
+        ) {
+          console.warn(
+            '[AutoPreview] CSG color injection produced invalid SCAD — ' +
+              'retrying with original source'
+          );
+          csgColorsInjected = false;
+          result = await this.renderController.renderPreview(
+            this.currentScadContent,
+            previewParameters,
+            { ...previewRenderOpts, files: this.projectFiles }
+          );
+        } else {
+          throw renderErr;
         }
-      );
+      }
+
       const durationMs = Date.now() - startTime;
+
+      if (result?.diagnostics) {
+        console.log(
+          '[AutoPreview Diag] Worker defineArgs:',
+          result.diagnostics.defineArgs
+        );
+        if (result.diagnostics.performanceFlags?.length) {
+          console.log(
+            '[AutoPreview Diag] Worker performanceFlags:',
+            result.diagnostics.performanceFlags
+          );
+        }
+      }
 
       // If the file changed mid-render, ignore this result.
       if (localScadVersion !== this.scadVersion) return;
@@ -1010,7 +1257,8 @@ export class AutoPreviewController {
       // isn't visually useful. Re-render with color() calls stripped so the
       // Manifold CSG engine assigns per-operation face colors instead.
       let activeResult = result;
-      if ((result.format || 'stl') === 'off' && useColorPassthrough) {
+      const useAuthorColors = hasColorCalls && colorPassthroughEnabled && !csgColorsInjected;
+      if ((result.format || 'stl') === 'off' && useAuthorColors && !noCsgColors) {
         const uniqueColors = AutoPreviewController.countUniqueOFFColors(
           result.stl
         );
@@ -1019,8 +1267,8 @@ export class AutoPreviewController {
             '[AutoPreview] Monochrome OFF detected (1 unique color) — ' +
               're-rendering with stripped color() for CSG face colors'
           );
-          const strippedSource = AutoPreviewController.stripColorCalls(
-            this.currentScadContent
+          const strippedSource = AutoPreviewController.injectCsgColors(
+            AutoPreviewController.stripColorCalls(this.currentScadContent)
           );
           let strippedFiles = this.projectFiles;
           if (this.projectFiles && this.mainFilePath) {
@@ -1284,18 +1532,51 @@ export class AutoPreviewController {
       };
     }
 
-    // Use COFF (Color OFF) format for the preview when color passthrough is
-    // active, mirroring the same logic used in renderPreview() (lines 844-855).
     const hasDebugModifier = AutoPreviewController.scadUsesDebugModifier(
       this.currentScadContent
     );
-    const useColorPassthrough =
-      isFlagEnabled('color_passthrough') &&
-      (AutoPreviewController.scadUsesColor(this.currentScadContent) ||
-        hasDebugModifier);
+    const hasColorCalls = AutoPreviewController.scadUsesColor(
+      this.currentScadContent
+    );
+    const colorPassthroughEnabled = isFlagEnabled('color_passthrough');
+    const fullCaps = this.renderController?.getCapabilities?.() || {};
+    const supportsRenderColors = Boolean(
+      fullCaps.hasRenderColorsFlag || fullCaps.hasManifold
+    );
 
-    const scadContentForRender = this.currentScadContent;
-    const filesForRender = this.projectFiles;
+    let fullOutputFormat;
+    let scadContentForRender = this.currentScadContent;
+    let filesForRender = this.projectFiles;
+    let csgColorsInjected = false;
+    const noCsgColors =
+      typeof localStorage !== 'undefined' &&
+      localStorage.getItem('openscad-forge-debug-no-csg-colors') !== null;
+
+    if (noCsgColors) {
+      fullOutputFormat = undefined;
+    } else if (supportsRenderColors) {
+      fullOutputFormat = 'off';
+      if (!hasColorCalls || !colorPassthroughEnabled) {
+        scadContentForRender = AutoPreviewController.injectCsgColors(
+          hasColorCalls
+            ? AutoPreviewController.stripColorCalls(this.currentScadContent)
+            : this.currentScadContent
+        );
+        csgColorsInjected = true;
+        if (this.projectFiles && this.mainFilePath) {
+          filesForRender = new Map(this.projectFiles);
+          filesForRender.set(this.mainFilePath, scadContentForRender);
+        }
+      }
+    } else {
+      const useColorPassthrough =
+        colorPassthroughEnabled && (hasColorCalls || hasDebugModifier);
+      fullOutputFormat = useColorPassthrough ? 'off' : undefined;
+    }
+
+    const fullSourceOverridesActive =
+      typeof localStorage !== 'undefined' &&
+      localStorage.getItem('openscad-forge-debug-source-overrides') !== null;
 
     const renderOptions = {
       files: filesForRender,
@@ -1303,27 +1584,67 @@ export class AutoPreviewController {
       libraries: this.enabledLibraries,
       paramTypes: this.paramTypes,
       ...(quality ? { quality } : {}),
-      ...(useColorPassthrough ? { outputFormat: 'off' } : {}),
+      ...(fullOutputFormat ? { outputFormat: fullOutputFormat } : {}),
       onProgress: (percent, message) => {
         this.onProgress(percent, message, 'full');
       },
     };
 
-    // Perform full render (OFF when color passthrough active, STL otherwise)
-    let result = await this.renderController.renderFull(
-      scadContentForRender,
-      parameters,
-      renderOptions
-    );
-
-    if (useColorPassthrough) {
-      console.log('[AutoPreview] Full render using OFF for color passthrough');
+    if (fullSourceOverridesActive) {
+      console.log(
+        '[AutoPreview] Full render: source overrides active — worker will ' +
+          'bake parameters into SCAD source instead of using -D flags'
+      );
     }
 
-    // Monochrome fallback: same logic as renderPreview() — if the OFF output
-    // has only 1 unique face color, strip color() and re-render for CSG colors.
+    const fullParityDiag =
+      typeof localStorage !== 'undefined' &&
+      localStorage.getItem('openscad-forge-debug-preview-parity') !== null;
+    if (fullParityDiag) {
+      console.log('[PreviewParity] Full render config:', {
+        qualityKey,
+        qualityName: quality?.name ?? 'model-default',
+        outputFormat: fullOutputFormat ?? '(default stl)',
+        paramCount: Object.keys(parameters).length,
+        csgColorsInjected,
+      });
+    }
+
+    let result;
+    try {
+      result = await this.renderController.renderFull(
+        scadContentForRender,
+        parameters,
+        renderOptions
+      );
+    } catch (renderErr) {
+      if (
+        csgColorsInjected &&
+        AutoPreviewController.isParserError(renderErr)
+      ) {
+        console.warn(
+          '[AutoPreview] CSG color injection produced invalid SCAD — ' +
+            'retrying with original source'
+        );
+        csgColorsInjected = false;
+        result = await this.renderController.renderFull(
+          this.currentScadContent,
+          parameters,
+          { ...renderOptions, files: this.projectFiles }
+        );
+      } else {
+        throw renderErr;
+      }
+    }
+
+    if (fullOutputFormat === 'off') {
+      console.log('[AutoPreview] Full render using OFF format');
+    }
+
+    const useAuthorColors = hasColorCalls && colorPassthroughEnabled && !csgColorsInjected;
     if (
-      useColorPassthrough &&
+      !noCsgColors &&
+      useAuthorColors &&
       (result.format || 'stl') === 'off' &&
       AutoPreviewController.countUniqueOFFColors(result.stl) === 1
     ) {
@@ -1331,8 +1652,8 @@ export class AutoPreviewController {
         '[AutoPreview] Full render monochrome OFF detected — ' +
           're-rendering with stripped color() for CSG face colors'
       );
-      const strippedSource = AutoPreviewController.stripColorCalls(
-        this.currentScadContent
+      const strippedSource = AutoPreviewController.injectCsgColors(
+        AutoPreviewController.stripColorCalls(this.currentScadContent)
       );
       let strippedFiles = this.projectFiles;
       if (this.projectFiles && this.mainFilePath) {
@@ -1441,9 +1762,10 @@ export class AutoPreviewController {
       );
     }
 
-    // When color passthrough rendered OFF for preview, perform a second STL
-    // render so getCurrentFullSTL() returns valid STL data for download.
-    if (useColorPassthrough && (result.format || 'stl') === 'off') {
+    // When the full render produced OFF (for CSG colors or author colors),
+    // perform a second STL render so getCurrentFullSTL() returns valid STL
+    // data for download.
+    if ((result.format || 'stl') === 'off') {
       try {
         const stlResult = await this.renderController.renderFull(
           this.currentScadContent,

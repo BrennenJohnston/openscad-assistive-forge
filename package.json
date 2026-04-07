@@ -1,6 +1,6 @@
 {
   "name": "openscad-assistive-forge",
-  "version": "4.3.0",
+  "version": "4.4.0",
   "description": "Accessibility-first web-based OpenSCAD customizer with client-side WASM rendering and developer toolchain",
   "type": "module",
   "author": "Brennen Johnston <https://github.com/BrennenJohnston>",
@@ -95,12 +95,18 @@
     "@lezer/highlight": "^1.2.3",
     "@radix-ui/colors": "^3.0.0",
     "ajv": "^8.12.0",
+    "clipper2-js": "^1.2.4",
     "codemirror": "^6.0.2",
+    "imagetracerjs": "^1.2.6",
     "jszip": "^3.10.1",
+    "path-bool": "^0.0.7",
     "split.js": "^1.6.5",
+    "svg-path-commander": "^2.1.11",
     "three": "^0.182.0"
   },
   "overrides": {
-    "minimatch": "^10.2.1"
+    "minimatch": "^10.2.1",
+    "@angular/common": "19.2.20",
+    "@angular/core": "19.2.20"
   }
 }

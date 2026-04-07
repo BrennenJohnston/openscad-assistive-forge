@@ -458,6 +458,7 @@ export class RenderController {
         // avoiding a second callMain() invocation before the actual render.
         const assetBaseUrl = options.assetBaseUrl;
         const cachedCapabilities = options.cachedCapabilities;
+        this._initUsedCachedCapabilities = !!cachedCapabilities;
         this.worker.postMessage({
           type: 'INIT',
           payload: {
@@ -549,6 +550,7 @@ export class RenderController {
           hasManifold: false,
           hasFastCSG: false,
           hasLazyUnion: false,
+          hasRenderColorsFlag: false,
           hasBinarySTL: false,
           version: 'unknown',
         };
@@ -558,6 +560,14 @@ export class RenderController {
             `Manifold: ${this.capabilities.hasManifold}, ` +
             `fast-csg: ${this.capabilities.hasFastCSG})`
         );
+
+        // When the worker ran checkCapabilities() (no cachedCapabilities),
+        // callMain(['--help']) has already been invoked on this module instance.
+        // Mark the module as used so renderOnce() triggers a proactive restart
+        // before the first render, giving it a clean WASM module.
+        if (!this._initUsedCachedCapabilities) {
+          this._moduleUsed = true;
+        }
 
         // Emit capability event for UI to handle
         if (this.onCapabilitiesDetected) {
@@ -811,6 +821,7 @@ export class RenderController {
         hasManifold: false,
         hasFastCSG: false,
         hasLazyUnion: false,
+        hasRenderColorsFlag: false,
         hasBinarySTL: false,
         version: 'unknown',
       }
@@ -941,10 +952,17 @@ export class RenderController {
       const quality = options.quality || RENDER_QUALITY.FULL;
       const adjustedParams = this.applyQualitySettings(parameters, quality);
       // Use explicit timeout if provided, then quality preset, then controller default
-      const timeoutMs =
+      let timeoutMs =
         options.timeoutMs ||
         quality.timeoutMs ||
         this.timeoutConfig.defaultTimeoutMs;
+
+      // Minkowski operations can trigger CGAL Nef fallback which is orders of
+      // magnitude slower than the Manifold fast-path.  Double the timeout so
+      // the watchdog doesn't kill a legitimate (but slow) render.
+      if (scadContent && /\bminkowski\s*\(/m.test(scadContent)) {
+        timeoutMs = Math.max(timeoutMs, 60000);
+      }
 
       const shouldRetryOnce = (err) => {
         const msg = err?.message || String(err);
@@ -1068,10 +1086,14 @@ export class RenderController {
           // Default is OFF. Only enable if user explicitly opts in via settings.
           // If exposing a UI toggle, add warning: "Lazy union may produce incorrect
           // geometry (wrong difference/union results). Use for preview speed only."
+          const useSourceOverrides =
+            localStorage.getItem('openscad-forge-debug-source-overrides') !==
+            null;
           const renderOptions = {
             enableLazyUnion:
               localStorage.getItem(STORAGE_KEY_LAZY_UNION) === 'true',
             useManifold,
+            useSourceOverrides,
           };
 
           // Clear any stale cancel watchdog before posting the new render.

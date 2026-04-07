@@ -140,7 +140,7 @@ OpenSCAD's modifier characters alter how objects appear in the preview viewport:
 From the OpenSCAD User Manual — Modifier Characters section:
 
 > `#` Debug Modifier: "Use this subtree as usual in the rendering process but also draw it unmodified in transparent pink."
-
+>
 > "Note: The color changes triggered by character modifiers appear only in 'Compile' mode, not 'Compile and Render (CGAL)' mode. (As per the color section.)"
 
 **Sources:**

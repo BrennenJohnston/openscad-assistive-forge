@@ -1212,4 +1212,1522 @@ describe('AutoPreviewController', () => {
       )
     })
   })
+
+  describe('injectCsgColors() static method', () => {
+    const GOLD = '#f9d72c';
+    const GREEN = '#9dcb51';
+
+    it('returns null unchanged', () => {
+      expect(AutoPreviewController.injectCsgColors(null)).toBeNull()
+    })
+
+    it('returns non-string input unchanged', () => {
+      expect(AutoPreviewController.injectCsgColors(undefined)).toBeUndefined()
+      expect(AutoPreviewController.injectCsgColors(42)).toBe(42)
+    })
+
+    it('returns simple SCAD without difference() unchanged', () => {
+      const result = AutoPreviewController.injectCsgColors('cube(10);')
+
+      expect(result).toBe('cube(10);')
+      expect(result).not.toContain(`color("${GOLD}")`)
+      expect(result).not.toContain(`color("${GREEN}")`)
+    })
+
+    it('wraps subtracted children in green for single difference()', () => {
+      const scad = 'difference() { cube(20); cube(10); }'
+      const result = AutoPreviewController.injectCsgColors(scad)
+
+      expect(result).toContain(`color("${GOLD}")`)
+      expect(result).toContain(`color("${GREEN}")`)
+      expect(result).toContain('cube(20);')
+      expect(result).toContain('cube(10);')
+    })
+
+    it('wraps each subtractor individually for multi-child difference()', () => {
+      const scad = 'difference() { cube(30); cube(20); sphere(5); }'
+      const result = AutoPreviewController.injectCsgColors(scad)
+
+      const greenRe = new RegExp(`color\\("${GREEN.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"\\)`, 'g')
+      const greenCount = (result.match(greenRe) || []).length
+      expect(greenCount).toBe(2)
+
+      const greenIdx = result.indexOf(`color("${GREEN}")`);
+      expect(greenIdx).toBeGreaterThan(-1)
+      const afterGreen = result.slice(greenIdx);
+      expect(afterGreen).toContain('cube(20)')
+      expect(afterGreen).toContain('sphere(5)')
+    })
+
+    it('handles nested difference() blocks', () => {
+      const scad = [
+        'difference() {',
+        '  union() {',
+        '    cube(30);',
+        '    difference() { cube(20); cylinder(r=5, h=10); }',
+        '  }',
+        '  sphere(8);',
+        '}'
+      ].join('\n')
+      const result = AutoPreviewController.injectCsgColors(scad)
+
+      const greenCount = (result.match(new RegExp(`color\\("${GREEN.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"\\)`, 'g')) || []).length
+      expect(greenCount).toBe(2)
+    })
+
+    it('does not inject colors when difference() has only one child', () => {
+      const scad = 'difference() { cube(10); }'
+      const result = AutoPreviewController.injectCsgColors(scad)
+
+      expect(result).toBe(scad)
+      expect(result).not.toContain(`color("${GREEN}")`)
+    })
+
+    it('does not inject green when difference() has only whitespace after first child', () => {
+      const scad = 'difference() { cube(10);   }'
+      const result = AutoPreviewController.injectCsgColors(scad)
+
+      expect(result).not.toContain(`color("${GREEN}")`)
+    })
+
+    it('ignores difference() inside comments', () => {
+      const scad = '// difference() { cube(20); cube(10); }\ncube(5);'
+      const result = AutoPreviewController.injectCsgColors(scad)
+
+      expect(result).toBe(scad)
+      expect(result).not.toContain(`color("${GREEN}")`)
+    })
+
+    it('ignores difference() inside block comments', () => {
+      const scad = '/* difference() { cube(20); cube(10); } */ sphere(5);'
+      const result = AutoPreviewController.injectCsgColors(scad)
+
+      expect(result).toBe(scad)
+      expect(result).not.toContain(`color("${GREEN}")`)
+    })
+
+    it('ignores difference() inside string literals', () => {
+      const scad = 'text("difference() { cube(20); cube(10); }");'
+      const result = AutoPreviewController.injectCsgColors(scad)
+
+      expect(result).toBe(scad)
+      expect(result).not.toContain(`color("${GREEN}")`)
+    })
+
+    it('handles difference() with block child (curly-brace terminated first child)', () => {
+      const scad = 'difference() { union() { cube(20); sphere(5); } cylinder(r=3, h=15); }'
+      const result = AutoPreviewController.injectCsgColors(scad)
+
+      expect(result).toContain(`color("${GREEN}")`)
+      const greenIdx = result.indexOf(`color("${GREEN}")`);
+      const afterGreen = result.slice(greenIdx);
+      expect(afterGreen).toContain('cylinder')
+    })
+
+    it('preserves original source structure for non-difference SCAD', () => {
+      const scad = 'cube(10);'
+      const result = AutoPreviewController.injectCsgColors(scad)
+
+      expect(result).toBe(scad)
+    })
+
+    it('handles if/else inside difference() without splitting the block', () => {
+      const scad = [
+        'difference() {',
+        '    if (corner_radius > 0) {',
+        '        rounded_box();',
+        '    } else {',
+        '        cube([width, depth, height]);',
+        '    }',
+        '    translate([0,0,0]) cube(5);',
+        '}'
+      ].join('\n')
+      const result = AutoPreviewController.injectCsgColors(scad)
+
+      expect(result).toContain(`color("${GOLD}")`)
+      expect(result).toContain(`color("${GREEN}")`)
+      expect(result).not.toContain('} color("' + GREEN + '") { else')
+      const greenIdx = result.indexOf(`color("${GREEN}")`);
+      const afterGreen = result.slice(greenIdx);
+      expect(afterGreen).toContain('translate')
+      expect(afterGreen).toContain('cube(5)')
+    })
+
+    it('handles if/else if/else inside difference() without splitting', () => {
+      const scad = [
+        'difference() {',
+        '    if (mode == 1) {',
+        '        sphere(10);',
+        '    } else if (mode == 2) {',
+        '        cylinder(r=5, h=10);',
+        '    } else {',
+        '        cube(10);',
+        '    }',
+        '    translate([5,5,5]) sphere(2);',
+        '}'
+      ].join('\n')
+      const result = AutoPreviewController.injectCsgColors(scad)
+
+      expect(result).toContain(`color("${GOLD}")`)
+      expect(result).toContain(`color("${GREEN}")`)
+      expect(result).not.toContain('} color("' + GREEN + '") { else')
+      const greenIdx = result.indexOf(`color("${GREEN}")`);
+      const afterGreen = result.slice(greenIdx);
+      expect(afterGreen).toContain('translate')
+      expect(afterGreen).toContain('sphere(2)')
+    })
+
+    it('preserves CSG tree child count with 4 children', () => {
+      const scad = 'difference() { cube(30); cube(20); sphere(5); cylinder(r=2, h=8); }'
+      const result = AutoPreviewController.injectCsgColors(scad)
+
+      const goldRe = new RegExp(`color\\("${GOLD.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"\\)`, 'g')
+      const greenRe = new RegExp(`color\\("${GREEN.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"\\)`, 'g')
+      const goldCount = (result.match(goldRe) || []).length
+      const greenCount = (result.match(greenRe) || []).length
+      expect(goldCount).toBe(1)
+      expect(greenCount).toBe(3)
+    })
+
+    it('wraps block subtractors individually', () => {
+      const scad = [
+        'difference() {',
+        '  cube(30);',
+        '  translate([1,0,0]) { sphere(5); }',
+        '  translate([0,1,0]) { cylinder(r=3, h=10); }',
+        '}'
+      ].join('\n')
+      const result = AutoPreviewController.injectCsgColors(scad)
+
+      const greenRe = new RegExp(`color\\("${GREEN.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"\\)`, 'g')
+      const greenCount = (result.match(greenRe) || []).length
+      expect(greenCount).toBe(2)
+    })
+
+    it('wraps if/else subtractor as a single unit', () => {
+      const scad = [
+        'difference() {',
+        '  cube(30);',
+        '  if (x) { sphere(5); } else { cylinder(r=3, h=10); }',
+        '  translate([0,0,0]) cube(2);',
+        '}'
+      ].join('\n')
+      const result = AutoPreviewController.injectCsgColors(scad)
+
+      const greenRe = new RegExp(`color\\("${GREEN.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"\\)`, 'g')
+      const greenCount = (result.match(greenRe) || []).length
+      expect(greenCount).toBe(2)
+    })
+
+    it('wraps mixed semicolon and block subtractors individually', () => {
+      const scad = [
+        'difference() {',
+        '  cube(30);',
+        '  sphere(5);',
+        '  translate([1,0,0]) { cylinder(r=2, h=8); }',
+        '  cube(3);',
+        '}'
+      ].join('\n')
+      const result = AutoPreviewController.injectCsgColors(scad)
+
+      const greenRe = new RegExp(`color\\("${GREEN.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"\\)`, 'g')
+      const greenCount = (result.match(greenRe) || []).length
+      expect(greenCount).toBe(3)
+    })
+  })
+
+  describe('CSG Color Preprocessing — Preview Format Decision', () => {
+    beforeEach(() => {
+      renderController.getCapabilities = vi.fn(() => ({
+        hasRenderColorsFlag: true
+      }))
+      renderController.renderPreview.mockResolvedValue({
+        stl: new ArrayBuffer(8),
+        stats: { triangles: 12 },
+        format: 'off'
+      })
+    })
+
+    afterEach(() => {
+      isFlagEnabled.mockReset()
+    })
+
+    it('uses OFF format and injects CSG colors when no color() calls in SCAD', async () => {
+      isFlagEnabled.mockReturnValue(false)
+      controller.setScadContent('difference() { cube(20); cube(10); }')
+      const params = { width: 10 }
+      const paramHash = controller.hashParams(params)
+      controller.currentParamHash = paramHash
+      controller.currentPreviewKey = `${paramHash}|model`
+
+      await controller.renderPreview(params, paramHash)
+
+      const [source, , options] = renderController.renderPreview.mock.calls[0]
+      expect(options.outputFormat).toBe('off')
+      expect(source).toContain('color("#f9d72c")')
+      expect(source).toContain('color("#9dcb51")')
+    })
+
+    it('uses OFF format with strip+inject when color() present and passthrough off', async () => {
+      isFlagEnabled.mockReturnValue(false)
+      controller.setScadContent('color("red") difference() { cube(20); cube(10); }')
+      const params = { width: 10 }
+      const paramHash = controller.hashParams(params)
+      controller.currentParamHash = paramHash
+      controller.currentPreviewKey = `${paramHash}|model`
+
+      await controller.renderPreview(params, paramHash)
+
+      const [source, , options] = renderController.renderPreview.mock.calls[0]
+      expect(options.outputFormat).toBe('off')
+      expect(source).toContain('color("#f9d72c")')
+      expect(source).not.toMatch(/color\s*\(\s*"red"\s*\)/)
+    })
+
+    it('uses OFF format with original source when color() present and passthrough on', async () => {
+      isFlagEnabled.mockImplementation((flag) => flag === 'color_passthrough')
+      controller.setScadContent('color("red") cube(10);')
+      const params = { width: 10 }
+      const paramHash = controller.hashParams(params)
+      controller.currentParamHash = paramHash
+      controller.currentPreviewKey = `${paramHash}|model`
+
+      await controller.renderPreview(params, paramHash)
+
+      const [source, , options] = renderController.renderPreview.mock.calls[0]
+      expect(options.outputFormat).toBe('off')
+      expect(source).toBe('color("red") cube(10);')
+    })
+
+    it('falls back to STL when render-colors not supported and no color() calls', async () => {
+      renderController.getCapabilities = vi.fn(() => ({
+        hasRenderColorsFlag: false,
+        hasManifold: false,
+      }))
+      isFlagEnabled.mockReturnValue(false)
+      controller.setScadContent('cube(10);')
+      const params = { width: 10 }
+      const paramHash = controller.hashParams(params)
+      controller.currentParamHash = paramHash
+      controller.currentPreviewKey = `${paramHash}|model`
+
+      renderController.renderPreview.mockResolvedValue({
+        stl: new ArrayBuffer(8),
+        stats: { triangles: 12 },
+        format: 'stl'
+      })
+
+      await controller.renderPreview(params, paramHash)
+
+      const [source, , options] = renderController.renderPreview.mock.calls[0]
+      expect(options.outputFormat).toBe('stl')
+      expect(source).toBe('cube(10);')
+    })
+
+    it('forces STL and skips CSG injection when debug-no-csg-colors toggle is set', async () => {
+      localStorage.setItem('openscad-forge-debug-no-csg-colors', '1')
+      isFlagEnabled.mockReturnValue(false)
+      controller.setScadContent('difference() { cube(20); cube(10); }')
+      const params = { width: 10 }
+      const paramHash = controller.hashParams(params)
+      controller.currentParamHash = paramHash
+      controller.currentPreviewKey = `${paramHash}|model`
+
+      renderController.renderPreview.mockResolvedValue({
+        stl: new ArrayBuffer(8),
+        stats: { triangles: 12 },
+        format: 'stl'
+      })
+
+      await controller.renderPreview(params, paramHash)
+
+      const [source, , options] = renderController.renderPreview.mock.calls[0]
+      expect(options.outputFormat).toBe('stl')
+      expect(source).toBe('difference() { cube(20); cube(10); }')
+      expect(source).not.toContain('color("#f9d72c")')
+
+      localStorage.removeItem('openscad-forge-debug-no-csg-colors')
+    })
+
+    it('forces DESKTOP_DEFAULT quality when debug-desktop-quality toggle is set', async () => {
+      localStorage.setItem('openscad-forge-debug-desktop-quality', '1')
+      isFlagEnabled.mockReturnValue(false)
+      controller.setScadContent('cube(10);')
+      const params = { width: 10 }
+      const paramHash = controller.hashParams(params)
+      controller.currentParamHash = paramHash
+      controller.currentPreviewKey = `${paramHash}|desktop`
+
+      renderController.renderPreview.mockResolvedValue({
+        stl: new ArrayBuffer(8),
+        stats: { triangles: 12 },
+        format: 'stl'
+      })
+
+      await controller.renderPreview(params, paramHash)
+
+      const [, , options] = renderController.renderPreview.mock.calls[0]
+      expect(options.quality).toEqual(expect.objectContaining({
+        name: 'desktop',
+        maxFn: null,
+      }))
+
+      localStorage.removeItem('openscad-forge-debug-desktop-quality')
+    })
+
+    it('returns desktop quality from resolvePreviewQualityInfo when toggle is set', () => {
+      localStorage.setItem('openscad-forge-debug-desktop-quality', '1')
+
+      const result = controller.resolvePreviewQualityInfo({ width: 10 })
+      expect(result.quality.name).toBe('desktop')
+      expect(result.quality.maxFn).toBeNull()
+      expect(result.qualityKey).toBe('desktop')
+
+      localStorage.removeItem('openscad-forge-debug-desktop-quality')
+    })
+
+    it('returns normal preview quality when desktop-quality toggle is not set', () => {
+      localStorage.removeItem('openscad-forge-debug-desktop-quality')
+
+      const result = controller.resolvePreviewQualityInfo({ width: 10 })
+      expect(result.qualityKey).not.toBe('desktop')
+    })
+
+    it('CSG bypass toggle does NOT change cache key — cache must be cleared manually', () => {
+      localStorage.removeItem('openscad-forge-debug-no-csg-colors')
+      const params = { width: 10 }
+      const infoWithout = controller.resolvePreviewQualityInfo(params)
+      const keyWithout = controller.getPreviewCacheKey(
+        controller.hashParams(params),
+        infoWithout.qualityKey
+      )
+
+      localStorage.setItem('openscad-forge-debug-no-csg-colors', '1')
+      const infoWith = controller.resolvePreviewQualityInfo(params)
+      const keyWith = controller.getPreviewCacheKey(
+        controller.hashParams(params),
+        infoWith.qualityKey
+      )
+
+      expect(keyWith).toBe(keyWithout)
+      localStorage.removeItem('openscad-forge-debug-no-csg-colors')
+    })
+
+    it('clearPreviewCache invalidates stale entry after CSG toggle change', async () => {
+      localStorage.removeItem('openscad-forge-debug-no-csg-colors')
+      isFlagEnabled.mockReturnValue(false)
+      controller.setScadContent('difference() { cube(20); cube(10); }')
+
+      const params = { width: 10 }
+      const paramHash = controller.hashParams(params)
+      controller.currentParamHash = paramHash
+      controller.currentPreviewKey = `${paramHash}|model`
+
+      renderController.renderPreview.mockResolvedValue({
+        stl: new ArrayBuffer(8),
+        stats: { triangles: 12 },
+        format: 'off'
+      })
+
+      await controller.renderPreview(params, paramHash)
+      expect(controller.previewCache.size).toBe(1)
+
+      localStorage.setItem('openscad-forge-debug-no-csg-colors', '1')
+
+      controller.clearPreviewCache()
+      expect(controller.previewCache.size).toBe(0)
+
+      renderController.renderPreview.mockResolvedValue({
+        stl: new ArrayBuffer(8),
+        stats: { triangles: 12 },
+        format: 'stl'
+      })
+
+      controller.currentParamHash = paramHash
+      controller.currentPreviewKey = `${paramHash}|model`
+      await controller.renderPreview(params, paramHash)
+
+      const [source, , options] = renderController.renderPreview.mock.calls[1]
+      expect(options.outputFormat).toBe('stl')
+      expect(source).not.toContain('color("#f9d72c")')
+
+      localStorage.removeItem('openscad-forge-debug-no-csg-colors')
+    })
+
+    it('desktop quality toggle changes cache key — no stale cache served', () => {
+      localStorage.removeItem('openscad-forge-debug-desktop-quality')
+      const params = { width: 10 }
+      const infoWithout = controller.resolvePreviewQualityInfo(params)
+      const keyWithout = controller.getPreviewCacheKey(
+        controller.hashParams(params),
+        infoWithout.qualityKey
+      )
+
+      localStorage.setItem('openscad-forge-debug-desktop-quality', '1')
+      const infoWith = controller.resolvePreviewQualityInfo(params)
+      const keyWith = controller.getPreviewCacheKey(
+        controller.hashParams(params),
+        infoWith.qualityKey
+      )
+
+      expect(keyWith).not.toBe(keyWithout)
+      expect(infoWith.qualityKey).toBe('desktop')
+      localStorage.removeItem('openscad-forge-debug-desktop-quality')
+    })
+  })
+
+  describe('Geometry Fix Regression: developer toggle isolation (Phase 3)', () => {
+    beforeEach(() => {
+      renderController.getCapabilities = vi.fn(() => ({
+        hasRenderColorsFlag: true,
+        hasManifold: true,
+      }))
+      localStorage.removeItem('openscad-forge-debug-no-csg-colors')
+      localStorage.removeItem('openscad-forge-debug-desktop-quality')
+    })
+
+    afterEach(() => {
+      localStorage.removeItem('openscad-forge-debug-no-csg-colors')
+      localStorage.removeItem('openscad-forge-debug-desktop-quality')
+      isFlagEnabled.mockReset()
+    })
+
+    it('CSG bypass toggle forces STL format and preserves original SCAD source', async () => {
+      localStorage.setItem('openscad-forge-debug-no-csg-colors', '1')
+      isFlagEnabled.mockReturnValue(false)
+      controller.setScadContent('color("red") difference() { cube(20); cube(10); }')
+
+      renderController.renderPreview.mockResolvedValue({
+        stl: new ArrayBuffer(8),
+        stats: { triangles: 12 },
+        format: 'stl',
+      })
+
+      const params = { width: 10 }
+      const paramHash = controller.hashParams(params)
+      controller.currentParamHash = paramHash
+      controller.currentPreviewKey = `${paramHash}|model`
+
+      await controller.renderPreview(params, paramHash)
+
+      const [source, , options] = renderController.renderPreview.mock.calls[0]
+      expect(options.outputFormat).toBe('stl')
+      expect(source).not.toContain('color("#f9d72c")')
+      expect(source).toContain('color("red")')
+    })
+
+    it('desktop quality toggle applies DESKTOP_DEFAULT with no $fn cap', () => {
+      localStorage.setItem('openscad-forge-debug-desktop-quality', '1')
+
+      const result = controller.resolvePreviewQualityInfo({ width: 10 })
+      expect(result.quality.name).toBe('desktop')
+      expect(result.quality.maxFn).toBeNull()
+      expect(result.quality.forceFn).toBe(false)
+    })
+
+    it('both toggles active simultaneously: STL format + desktop quality', async () => {
+      localStorage.setItem('openscad-forge-debug-no-csg-colors', '1')
+      localStorage.setItem('openscad-forge-debug-desktop-quality', '1')
+      isFlagEnabled.mockReturnValue(false)
+      controller.setScadContent('difference() { cube(20); cube(10); }')
+
+      renderController.renderPreview.mockResolvedValue({
+        stl: new ArrayBuffer(8),
+        stats: { triangles: 12 },
+        format: 'stl',
+      })
+
+      const params = { width: 10 }
+      const paramHash = controller.hashParams(params)
+      controller.currentParamHash = paramHash
+      controller.currentPreviewKey = `${paramHash}|desktop`
+
+      await controller.renderPreview(params, paramHash)
+
+      const [source, , options] = renderController.renderPreview.mock.calls[0]
+      expect(options.outputFormat).toBe('stl')
+      expect(options.quality).toEqual(expect.objectContaining({
+        name: 'desktop',
+        maxFn: null,
+      }))
+      expect(source).not.toContain('color("#f9d72c")')
+    })
+
+    it('clearPreviewCache resets all cached entries so toggles take effect', () => {
+      controller.previewCache.set('key1', { data: 'cached-stl' })
+      controller.previewCache.set('key2', { data: 'cached-off' })
+      expect(controller.previewCache.size).toBe(2)
+
+      controller.clearPreviewCache()
+
+      expect(controller.previewCache.size).toBe(0)
+      expect(controller.previewParamHash).toBeNull()
+      expect(controller.previewCacheKey).toBeNull()
+    })
+
+    it('disabling CSG bypass returns to OFF format with CSG color injection', async () => {
+      localStorage.setItem('openscad-forge-debug-no-csg-colors', '1')
+      isFlagEnabled.mockReturnValue(false)
+      controller.setScadContent('difference() { cube(20); cube(10); }')
+
+      renderController.renderPreview.mockResolvedValue({
+        stl: new ArrayBuffer(8),
+        stats: { triangles: 12 },
+        format: 'stl',
+      })
+
+      const params = { width: 10 }
+      const paramHash = controller.hashParams(params)
+      controller.currentParamHash = paramHash
+      controller.currentPreviewKey = `${paramHash}|model`
+
+      await controller.renderPreview(params, paramHash)
+      const [, , firstOptions] = renderController.renderPreview.mock.calls[0]
+      expect(firstOptions.outputFormat).toBe('stl')
+
+      localStorage.removeItem('openscad-forge-debug-no-csg-colors')
+      controller.clearPreviewCache()
+
+      renderController.renderPreview.mockResolvedValue({
+        stl: new ArrayBuffer(8),
+        stats: { triangles: 12 },
+        format: 'off',
+      })
+
+      controller.currentParamHash = paramHash
+      controller.currentPreviewKey = `${paramHash}|model`
+      await controller.renderPreview(params, paramHash)
+
+      const [source2, , secondOptions] = renderController.renderPreview.mock.calls[1]
+      expect(secondOptions.outputFormat).toBe('off')
+      expect(source2).toContain('color("#f9d72c")')
+    })
+  })
+
+  describe('CSG Color Preprocessing — Full Render Format Decision', () => {
+    beforeEach(() => {
+      renderController.getCapabilities = vi.fn(() => ({
+        hasRenderColorsFlag: true
+      }))
+      renderController.renderFull = vi.fn().mockResolvedValue({
+        stl: new ArrayBuffer(32),
+        stats: { triangles: 42 },
+        format: 'off',
+        consoleOutput: '',
+      })
+      previewManager.loadOFF = vi.fn().mockResolvedValue()
+      previewManager.loadSTL = vi.fn().mockResolvedValue()
+      previewManager.setRenderState = vi.fn()
+      previewManager.colorOverrideEnabled = false
+      previewManager._getPrimaryGeometry = vi.fn(() => null)
+    })
+
+    afterEach(() => {
+      isFlagEnabled.mockReset()
+    })
+
+    it('uses OFF format and injects CSG colors for full render when no color() calls', async () => {
+      isFlagEnabled.mockReturnValue(false)
+      controller.setScadContent('difference() { cube(20); cube(10); }')
+
+      await controller.renderFull({ width: 10 })
+
+      const [source, , options] = renderController.renderFull.mock.calls[0]
+      expect(options.outputFormat).toBe('off')
+      expect(source).toContain('color("#f9d72c")')
+      expect(source).toContain('color("#9dcb51")')
+    })
+
+    it('uses OFF format with strip+inject for full render when color() present and passthrough off', async () => {
+      isFlagEnabled.mockReturnValue(false)
+      controller.setScadContent('color("blue") difference() { sphere(10); sphere(5); }')
+
+      await controller.renderFull({ width: 10 })
+
+      const [source, , options] = renderController.renderFull.mock.calls[0]
+      expect(options.outputFormat).toBe('off')
+      expect(source).toContain('color("#f9d72c")')
+      expect(source).not.toMatch(/color\s*\(\s*"blue"\s*\)/)
+    })
+
+    it('uses OFF format with original source for full render when color() present and passthrough on', async () => {
+      isFlagEnabled.mockImplementation((flag) => flag === 'color_passthrough')
+      controller.setScadContent('color("red") cube(10);')
+
+      await controller.renderFull({ width: 10 })
+
+      expect(renderController.renderFull).toHaveBeenCalledWith(
+        'color("red") cube(10);',
+        { width: 10 },
+        expect.objectContaining({
+          outputFormat: 'off',
+        })
+      )
+    })
+
+    it('falls back to no outputFormat when render-colors not supported and no passthrough', async () => {
+      renderController.getCapabilities = vi.fn(() => ({
+        hasRenderColorsFlag: false,
+        hasManifold: false,
+      }))
+      isFlagEnabled.mockReturnValue(false)
+      controller.setScadContent('cube(10);')
+
+      renderController.renderFull.mockResolvedValue({
+        stl: new ArrayBuffer(32),
+        stats: { triangles: 42 },
+        format: 'stl',
+        consoleOutput: '',
+      })
+
+      await controller.renderFull({ width: 10 })
+
+      const callOptions = renderController.renderFull.mock.calls[0][2]
+      expect(callOptions.outputFormat).toBeUndefined()
+    })
+
+    it('updates project files map when CSG colors are injected and project files exist', async () => {
+      isFlagEnabled.mockReturnValue(false)
+      const scad = 'difference() { cube(20); cube(10); }'
+      const files = new Map([['main.scad', scad]])
+      controller.setProjectFiles(files, 'main.scad')
+      controller.setScadContent(scad)
+
+      await controller.renderFull({ width: 10 })
+
+      const callOptions = renderController.renderFull.mock.calls[0][2]
+      expect(callOptions.files).toBeInstanceOf(Map)
+      expect(callOptions.files.get('main.scad')).toContain('color("#f9d72c")')
+    })
+
+    it('skips CSG injection for full render when debug-no-csg-colors toggle is set', async () => {
+      localStorage.setItem('openscad-forge-debug-no-csg-colors', '1')
+      isFlagEnabled.mockReturnValue(false)
+      const scad = 'difference() { cube(20); cube(10); }'
+      controller.setScadContent(scad)
+
+      renderController.renderFull = vi.fn().mockResolvedValue({
+        stl: new ArrayBuffer(32),
+        stats: { triangles: 42 },
+        format: 'stl',
+        consoleOutput: '',
+      })
+
+      await controller.renderFull({ width: 10 })
+
+      const [source, , options] = renderController.renderFull.mock.calls[0]
+      expect(source).toBe(scad)
+      expect(source).not.toContain('color("#f9d72c")')
+      expect(options.outputFormat).toBeUndefined()
+
+      localStorage.removeItem('openscad-forge-debug-no-csg-colors')
+    })
+  })
+
+  describe('isParserError() static method', () => {
+    it('returns true for parser error messages', () => {
+      const err = new Error(
+        'Parser error: syntax error in file /tmp/input.scad, line 51'
+      )
+      expect(AutoPreviewController.isParserError(err)).toBe(true)
+    })
+
+    it('returns true for syntax error messages', () => {
+      const err = new Error('syntax error near unexpected token')
+      expect(AutoPreviewController.isParserError(err)).toBe(true)
+    })
+
+    it('returns false for non-parser errors', () => {
+      expect(
+        AutoPreviewController.isParserError(new Error('WASM out of memory'))
+      ).toBe(false)
+    })
+
+    it('handles string input', () => {
+      expect(AutoPreviewController.isParserError('Parser error')).toBe(true)
+    })
+
+    it('handles null and undefined gracefully', () => {
+      expect(AutoPreviewController.isParserError(null)).toBe(false)
+      expect(AutoPreviewController.isParserError(undefined)).toBe(false)
+    })
+  })
+
+  describe('Phase 4 Regression: CSG tree structure preservation', () => {
+    const GOLD = '#f9d72c';
+    const GREEN = '#9dcb51';
+
+    function countTopLevelChildrenOfDifference(injectedSource) {
+      const cleaned = injectedSource;
+      const diffMatch = /\bdifference\s*\(\s*\)\s*\{/.exec(cleaned);
+      if (!diffMatch) return { gold: 0, green: 0, total: 0 };
+
+      const openBrace = diffMatch.index + diffMatch[0].length - 1;
+      let depth = 0;
+      let gold = 0;
+      let green = 0;
+
+      for (let i = openBrace; i < cleaned.length; i++) {
+        if (cleaned[i] === '{') depth++;
+        else if (cleaned[i] === '}') depth--;
+        if (depth === 0) break;
+        if (depth === 1) {
+          const slice = cleaned.slice(i);
+          if (slice.startsWith(`color("${GOLD}")`)) gold++;
+          if (slice.startsWith(`color("${GREEN}")`)) green++;
+        }
+      }
+      return { gold, green, total: gold + green };
+    }
+
+    it('N+1 structural invariant: 2 children → 1 gold + 1 green (total 2)', () => {
+      const scad = 'difference() { cube(30); sphere(5); }';
+      const result = AutoPreviewController.injectCsgColors(scad);
+      const counts = countTopLevelChildrenOfDifference(result);
+      expect(counts.gold).toBe(1);
+      expect(counts.green).toBe(1);
+      expect(counts.total).toBe(2);
+    });
+
+    it('N+1 structural invariant: 5 children → 1 gold + 4 green (total 5)', () => {
+      const scad = 'difference() { cube(30); sphere(5); cylinder(r=3, h=10); cube(8); sphere(2); }';
+      const result = AutoPreviewController.injectCsgColors(scad);
+      const counts = countTopLevelChildrenOfDifference(result);
+      expect(counts.gold).toBe(1);
+      expect(counts.green).toBe(4);
+      expect(counts.total).toBe(5);
+    });
+
+    it('LWFL-like pattern: nested difference() with conditional geometry and transforms', () => {
+      const scad = [
+        'difference() {',
+        '  union() {',
+        '    if (expose_home_button == "yes") {',
+        '      translate([home_x, home_y, 0]) rounded_rect();',
+        '    } else {',
+        '      cube([width, depth, height]);',
+        '    }',
+        '    translate([0, 0, wall_height]) cube([width, depth, 2]);',
+        '  }',
+        '  translate([grid_x_1, grid_y_1, -1]) cylinder(r=hole_r, h=height+2);',
+        '  translate([grid_x_2, grid_y_2, -1]) cylinder(r=hole_r, h=height+2);',
+        '  if (expose_upper_message_bar == "yes") {',
+        '    translate([bar_x, bar_y, -1]) cube([bar_w, bar_h, height+2]);',
+        '  }',
+        '}'
+      ].join('\n');
+      const result = AutoPreviewController.injectCsgColors(scad);
+
+      expect(result).toContain(`color("${GOLD}")`);
+      expect(result).toContain(`color("${GREEN}")`);
+
+      const greenRe = new RegExp(`color\\("${GREEN.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"\\)`, 'g');
+      const greenCount = (result.match(greenRe) || []).length;
+      expect(greenCount).toBe(3);
+    });
+
+    it('multiple difference() blocks each get independent N+1 structure', () => {
+      const scad = [
+        'difference() { cube(30); sphere(5); cylinder(r=2, h=8); }',
+        'difference() { sphere(20); cube(10); }'
+      ].join('\n');
+      const result = AutoPreviewController.injectCsgColors(scad);
+
+      const goldRe = new RegExp(`color\\("${GOLD.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"\\)`, 'g');
+      const greenRe = new RegExp(`color\\("${GREEN.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"\\)`, 'g');
+      const goldCount = (result.match(goldRe) || []).length;
+      const greenCount = (result.match(greenRe) || []).length;
+      expect(goldCount).toBe(2);
+      expect(greenCount).toBe(3);
+    });
+
+    it('deeply nested difference() inside union() inside difference() preserves structure at each level', () => {
+      const scad = [
+        'difference() {',
+        '  union() {',
+        '    cube(30);',
+        '    difference() { cube(20); cylinder(r=5, h=10); sphere(3); }',
+        '  }',
+        '  translate([10, 0, 0]) cube(5);',
+        '  translate([0, 10, 0]) cube(5);',
+        '}'
+      ].join('\n');
+      const result = AutoPreviewController.injectCsgColors(scad);
+
+      const goldRe = new RegExp(`color\\("${GOLD.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"\\)`, 'g');
+      const greenRe = new RegExp(`color\\("${GREEN.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"\\)`, 'g');
+      const goldCount = (result.match(goldRe) || []).length;
+      const greenCount = (result.match(greenRe) || []).length;
+
+      expect(goldCount).toBe(2);
+      expect(greenCount).toBe(4);
+    });
+
+    it('conditional (if/else) subtractor is wrapped as a single unit, preserving child count', () => {
+      const scad = [
+        'difference() {',
+        '  cube(30);',
+        '  if (mode == 1) {',
+        '    sphere(5);',
+        '  } else if (mode == 2) {',
+        '    cylinder(r=3, h=10);',
+        '  } else {',
+        '    cube(8);',
+        '  }',
+        '  translate([5, 5, 5]) sphere(2);',
+        '  cube(3);',
+        '}'
+      ].join('\n');
+      const result = AutoPreviewController.injectCsgColors(scad);
+
+      const counts = countTopLevelChildrenOfDifference(result);
+      expect(counts.gold).toBe(1);
+      expect(counts.green).toBe(3);
+      expect(counts.total).toBe(4);
+    });
+
+    it('injected source remains valid OpenSCAD (no orphaned braces)', () => {
+      const scad = [
+        'difference() {',
+        '  hull() { cube(20); translate([10,0,0]) cube(20); }',
+        '  translate([5,5,-1]) cylinder(r=3, h=25);',
+        '  translate([15,5,-1]) cylinder(r=3, h=25);',
+        '  translate([10,10,-1]) cylinder(r=3, h=25);',
+        '}'
+      ].join('\n');
+      const result = AutoPreviewController.injectCsgColors(scad);
+
+      let braceDepth = 0;
+      for (const ch of result) {
+        if (ch === '{') braceDepth++;
+        else if (ch === '}') braceDepth--;
+        expect(braceDepth).toBeGreaterThanOrEqual(0);
+      }
+      expect(braceDepth).toBe(0);
+    });
+  });
+
+  describe('CSG Color Injection — Error Recovery', () => {
+    const okResult = {
+      stl: new ArrayBuffer(8),
+      stats: { triangles: 12 },
+      format: 'off',
+    }
+    const parserErr = new Error(
+      'Parser error: syntax error in file /tmp/input.scad, line 51'
+    )
+
+    beforeEach(() => {
+      renderController.getCapabilities = vi.fn(() => ({
+        hasRenderColorsFlag: true,
+      }))
+      previewManager.loadOFF = vi.fn().mockResolvedValue({})
+      previewManager.loadSTL = vi.fn().mockResolvedValue({})
+      previewManager.setRenderState = vi.fn()
+      previewManager._getPrimaryGeometry = vi.fn(() => null)
+    })
+
+    afterEach(() => {
+      isFlagEnabled.mockReset()
+    })
+
+    it('retries renderPreview with original source when injection causes parser error', async () => {
+      isFlagEnabled.mockReturnValue(false)
+      const scad = 'difference() { cube(20); cube(10); }'
+      controller.setScadContent(scad)
+      const params = { width: 10 }
+      const paramHash = controller.hashParams(params)
+      controller.currentParamHash = paramHash
+      controller.currentPreviewKey = `${paramHash}|model`
+
+      renderController.renderPreview
+        .mockRejectedValueOnce(parserErr)
+        .mockResolvedValueOnce(okResult)
+
+      await controller.renderPreview(params, paramHash)
+
+      expect(renderController.renderPreview).toHaveBeenCalledTimes(2)
+      const [firstSource] = renderController.renderPreview.mock.calls[0]
+      expect(firstSource).toContain('color("#f9d72c")')
+      const [secondSource] = renderController.renderPreview.mock.calls[1]
+      expect(secondSource).toBe(scad)
+    })
+
+    it('does not retry renderPreview when a non-parser error occurs', async () => {
+      isFlagEnabled.mockReturnValue(false)
+      const scad = 'difference() { cube(20); cube(10); }'
+      controller.setScadContent(scad)
+      const params = { width: 10 }
+      const paramHash = controller.hashParams(params)
+      controller.currentParamHash = paramHash
+      controller.currentPreviewKey = `${paramHash}|model`
+
+      renderController.renderPreview.mockRejectedValueOnce(
+        new Error('WASM out of memory')
+      )
+
+      await controller.renderPreview(params, paramHash)
+
+      expect(renderController.renderPreview).toHaveBeenCalledTimes(1)
+      expect(controller.state).toBe(PREVIEW_STATE.ERROR)
+    })
+
+    it('does not retry renderPreview when no injection was applied', async () => {
+      isFlagEnabled.mockImplementation((flag) => flag === 'color_passthrough')
+      controller.setScadContent('color("red") cube(10);')
+      const params = { width: 10 }
+      const paramHash = controller.hashParams(params)
+      controller.currentParamHash = paramHash
+      controller.currentPreviewKey = `${paramHash}|model`
+
+      renderController.renderPreview.mockRejectedValueOnce(parserErr)
+
+      await controller.renderPreview(params, paramHash)
+
+      expect(renderController.renderPreview).toHaveBeenCalledTimes(1)
+      expect(controller.state).toBe(PREVIEW_STATE.ERROR)
+    })
+
+    it('retries renderFull with original source when injection causes parser error', async () => {
+      isFlagEnabled.mockReturnValue(false)
+      const scad = 'difference() { cube(20); cube(10); }'
+      controller.setScadContent(scad)
+
+      const stlFollowUp = {
+        stl: new ArrayBuffer(32),
+        stats: { triangles: 42 },
+        format: 'stl',
+        consoleOutput: '',
+      }
+      renderController.renderFull = vi.fn()
+        .mockRejectedValueOnce(parserErr)
+        .mockResolvedValueOnce({
+          stl: new ArrayBuffer(32),
+          stats: { triangles: 42 },
+          format: 'off',
+          consoleOutput: '',
+        })
+        .mockResolvedValueOnce(stlFollowUp)
+      previewManager.loadOFF.mockResolvedValue({})
+
+      await controller.renderFull({ width: 10 })
+
+      // 3 calls: injected (fails), retry original (off), STL follow-up for download
+      expect(renderController.renderFull).toHaveBeenCalledTimes(3)
+      const [firstSource] = renderController.renderFull.mock.calls[0]
+      expect(firstSource).toContain('color("#f9d72c")')
+      const [secondSource] = renderController.renderFull.mock.calls[1]
+      expect(secondSource).toBe(scad)
+    })
+
+    it('propagates non-parser errors from renderFull without retry', async () => {
+      isFlagEnabled.mockReturnValue(false)
+      const scad = 'difference() { cube(20); cube(10); }'
+      controller.setScadContent(scad)
+
+      const memErr = new Error('WASM out of memory')
+      renderController.renderFull = vi.fn().mockRejectedValueOnce(memErr)
+
+      await expect(controller.renderFull({ width: 10 })).rejects.toThrow(
+        'WASM out of memory'
+      )
+      expect(renderController.renderFull).toHaveBeenCalledTimes(1)
+    })
+
+    it('uses original project files on retry, not the injection-modified map', async () => {
+      isFlagEnabled.mockReturnValue(false)
+      const scad = 'difference() { cube(20); cube(10); }'
+      const origFiles = new Map([['main.scad', scad]])
+      controller.setProjectFiles(origFiles, 'main.scad')
+      controller.setScadContent(scad)
+
+      renderController.renderFull = vi.fn()
+        .mockRejectedValueOnce(parserErr)
+        .mockResolvedValueOnce({
+          stl: new ArrayBuffer(32),
+          stats: { triangles: 42 },
+          format: 'off',
+          consoleOutput: '',
+        })
+        .mockResolvedValueOnce({
+          stl: new ArrayBuffer(32),
+          stats: { triangles: 42 },
+          format: 'stl',
+          consoleOutput: '',
+        })
+      previewManager.loadOFF.mockResolvedValue({})
+
+      await controller.renderFull({ width: 10 })
+
+      const retryOpts = renderController.renderFull.mock.calls[1][2]
+      expect(retryOpts.files).toBe(origFiles)
+    })
+  })
+
+  describe('Preview/Full Parity (Phase 5)', () => {
+    beforeEach(() => {
+      renderController.getCapabilities = vi.fn(() => ({
+        hasRenderColorsFlag: true,
+        hasManifold: true,
+      }))
+      renderController.renderFull = vi.fn().mockResolvedValue({
+        stl: new ArrayBuffer(32),
+        stats: { triangles: 42 },
+        format: 'off',
+        consoleOutput: '',
+      })
+      previewManager.loadOFF = vi.fn().mockResolvedValue()
+      previewManager.loadSTL = vi.fn().mockResolvedValue()
+      previewManager.setRenderState = vi.fn()
+      previewManager._getPrimaryGeometry = vi.fn(() => null)
+      localStorage.removeItem('openscad-forge-debug-preview-parity')
+      localStorage.removeItem('openscad-forge-debug-no-csg-colors')
+      localStorage.removeItem('openscad-forge-debug-desktop-quality')
+    })
+
+    afterEach(() => {
+      localStorage.removeItem('openscad-forge-debug-preview-parity')
+      localStorage.removeItem('openscad-forge-debug-no-csg-colors')
+      localStorage.removeItem('openscad-forge-debug-desktop-quality')
+      isFlagEnabled.mockReset()
+    })
+
+    it('preview overrides are bypassed when parity toggle is active', async () => {
+      localStorage.setItem('openscad-forge-debug-preview-parity', '1')
+      isFlagEnabled.mockReturnValue(false)
+      controller.setScadContent('cube(10);')
+
+      const overrideResolver = (params, qualityKey) => {
+        if (qualityKey?.startsWith('auto-fast')) {
+          return { ...params, render_quality: 'Low' }
+        }
+        return params
+      }
+      controller.resolvePreviewParameters = overrideResolver
+      controller.resolvePreviewQuality = () => ({ name: 'auto-fast-preview', maxFn: 48 })
+      controller.resolvePreviewCacheKey = () => 'auto-fast-preview'
+
+      renderController.renderPreview.mockResolvedValue({
+        stl: new ArrayBuffer(8),
+        stats: { triangles: 12 },
+        format: 'stl',
+      })
+
+      const params = { width: 20, render_quality: 'High' }
+      controller.currentParamHash = controller.hashParams(params)
+      controller.currentPreviewKey = controller.getPreviewCacheKey(
+        controller.currentParamHash,
+        'auto-fast-preview'
+      )
+
+      await controller.renderPreview(params, controller.currentParamHash)
+
+      const [, renderParams] = renderController.renderPreview.mock.calls[0]
+      expect(renderParams.render_quality).toBe('Low')
+    })
+
+    it('preview and full render use identical parameters when no overrides are active', async () => {
+      isFlagEnabled.mockReturnValue(false)
+      controller.setScadContent('difference() { cube(20); cube(10); }')
+
+      renderController.renderPreview.mockResolvedValue({
+        stl: new ArrayBuffer(8),
+        stats: { triangles: 12 },
+        format: 'off',
+      })
+
+      const params = { width: 20, render_quality: 'High' }
+      const paramHash = controller.hashParams(params)
+      controller.currentParamHash = paramHash
+      controller.currentPreviewKey = `${paramHash}|model`
+
+      await controller.renderPreview(params, paramHash)
+
+      const [, previewParams] = renderController.renderPreview.mock.calls[0]
+      expect(previewParams).toEqual(params)
+
+      await controller.renderFull(params)
+
+      const [, fullParams] = renderController.renderFull.mock.calls[0]
+      expect(fullParams).toEqual(params)
+
+      expect(previewParams).toEqual(fullParams)
+    })
+
+    it('preview and full render use same output format (OFF) when Manifold CSG is available', async () => {
+      isFlagEnabled.mockReturnValue(false)
+      controller.setScadContent('difference() { cube(20); cube(10); }')
+
+      renderController.renderPreview.mockResolvedValue({
+        stl: new ArrayBuffer(8),
+        stats: { triangles: 12 },
+        format: 'off',
+      })
+
+      const params = { width: 20 }
+      const paramHash = controller.hashParams(params)
+      controller.currentParamHash = paramHash
+      controller.currentPreviewKey = `${paramHash}|model`
+
+      await controller.renderPreview(params, paramHash)
+      const [, , previewOpts] = renderController.renderPreview.mock.calls[0]
+
+      await controller.renderFull(params)
+      const [, , fullOpts] = renderController.renderFull.mock.calls[0]
+
+      expect(previewOpts.outputFormat).toBe('off')
+      expect(fullOpts.outputFormat).toBe('off')
+    })
+
+    it('both preview and full render inject CSG colors identically when no color() calls', async () => {
+      isFlagEnabled.mockReturnValue(false)
+      controller.setScadContent('difference() { cube(20); cube(10); }')
+
+      renderController.renderPreview.mockResolvedValue({
+        stl: new ArrayBuffer(8),
+        stats: { triangles: 12 },
+        format: 'off',
+      })
+
+      const params = { width: 20 }
+      const paramHash = controller.hashParams(params)
+      controller.currentParamHash = paramHash
+      controller.currentPreviewKey = `${paramHash}|model`
+
+      await controller.renderPreview(params, paramHash)
+      const [previewSource] = renderController.renderPreview.mock.calls[0]
+
+      await controller.renderFull(params)
+      const [fullSource] = renderController.renderFull.mock.calls[0]
+
+      expect(previewSource).toContain('color("#f9d72c")')
+      expect(fullSource).toContain('color("#f9d72c")')
+      expect(previewSource).toBe(fullSource)
+    })
+
+    it('both preview and full render pass identical paramTypes', async () => {
+      isFlagEnabled.mockReturnValue(false)
+      controller.setScadContent('cube(10);')
+      controller.setParamTypes({
+        expose_home_button: 'string',
+        MW_version: 'boolean',
+      })
+
+      renderController.renderPreview.mockResolvedValue({
+        stl: new ArrayBuffer(8),
+        stats: { triangles: 12 },
+        format: 'stl',
+      })
+
+      const params = { width: 20 }
+      const paramHash = controller.hashParams(params)
+      controller.currentParamHash = paramHash
+      controller.currentPreviewKey = `${paramHash}|model`
+
+      await controller.renderPreview(params, paramHash)
+      const [, , previewOpts] = renderController.renderPreview.mock.calls[0]
+
+      await controller.renderFull(params)
+      const [, , fullOpts] = renderController.renderFull.mock.calls[0]
+
+      expect(previewOpts.paramTypes).toEqual(fullOpts.paramTypes)
+      expect(previewOpts.paramTypes).toEqual({
+        expose_home_button: 'string',
+        MW_version: 'boolean',
+      })
+    })
+
+    it('both preview and full render use same project files and mainFile', async () => {
+      isFlagEnabled.mockReturnValue(false)
+      const scad = 'cube(10);'
+      const files = new Map([
+        ['main.scad', scad],
+        ['openings.txt', 'data'],
+      ])
+      controller.setProjectFiles(files, 'main.scad')
+      controller.setScadContent(scad)
+
+      renderController.renderPreview.mockResolvedValue({
+        stl: new ArrayBuffer(8),
+        stats: { triangles: 12 },
+        format: 'stl',
+      })
+
+      const params = { width: 20 }
+      const paramHash = controller.hashParams(params)
+      controller.currentParamHash = paramHash
+      controller.currentPreviewKey = `${paramHash}|model`
+
+      await controller.renderPreview(params, paramHash)
+      const [, , previewOpts] = renderController.renderPreview.mock.calls[0]
+
+      await controller.renderFull(params)
+      const [, , fullOpts] = renderController.renderFull.mock.calls[0]
+
+      expect(previewOpts.mainFile).toBe(fullOpts.mainFile)
+      expect(previewOpts.mainFile).toBe('main.scad')
+    })
+
+    it('parity diagnostics log appears when toggle is active', async () => {
+      localStorage.setItem('openscad-forge-debug-preview-parity', '1')
+      isFlagEnabled.mockReturnValue(false)
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+      controller.setScadContent('cube(10);')
+
+      renderController.renderPreview.mockResolvedValue({
+        stl: new ArrayBuffer(8),
+        stats: { triangles: 12 },
+        format: 'stl',
+      })
+
+      const params = { width: 20 }
+      controller.currentParamHash = controller.hashParams(params)
+      controller.currentPreviewKey = `${controller.currentParamHash}|model`
+
+      await controller.renderPreview(params, controller.currentParamHash)
+
+      const parityDispatchLog = logSpy.mock.calls.find(
+        (c) => typeof c[0] === 'string' && c[0].includes('[AutoPreview Diag] Render dispatch:')
+      )
+      expect(parityDispatchLog).toBeTruthy()
+      expect(parityDispatchLog[1].parityDiagActive).toBe(true)
+
+      const parityLog = logSpy.mock.calls.find(
+        (c) => typeof c[0] === 'string' && c[0].includes('[PreviewParity] Preview render config:')
+      )
+      expect(parityLog).toBeTruthy()
+
+      logSpy.mockRestore()
+    })
+
+    it('full render parity diagnostics log appears when toggle is active', async () => {
+      localStorage.setItem('openscad-forge-debug-preview-parity', '1')
+      isFlagEnabled.mockReturnValue(false)
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+      controller.setScadContent('cube(10);')
+
+      await controller.renderFull({ width: 20 })
+
+      const parityLog = logSpy.mock.calls.find(
+        (c) => typeof c[0] === 'string' && c[0].includes('[PreviewParity] Full render config:')
+      )
+      expect(parityLog).toBeTruthy()
+
+      logSpy.mockRestore()
+    })
+
+    it('no parity diagnostics when toggle is not active', async () => {
+      localStorage.removeItem('openscad-forge-debug-preview-parity')
+      isFlagEnabled.mockReturnValue(false)
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+      controller.setScadContent('cube(10);')
+
+      renderController.renderPreview.mockResolvedValue({
+        stl: new ArrayBuffer(8),
+        stats: { triangles: 12 },
+        format: 'stl',
+      })
+
+      const params = { width: 20 }
+      controller.currentParamHash = controller.hashParams(params)
+      controller.currentPreviewKey = `${controller.currentParamHash}|model`
+
+      await controller.renderPreview(params, controller.currentParamHash)
+
+      const parityLog = logSpy.mock.calls.find(
+        (c) => typeof c[0] === 'string' && c[0].includes('[PreviewParity]')
+      )
+      expect(parityLog).toBeUndefined()
+
+      logSpy.mockRestore()
+    })
+
+    it('both preview and full render CSG-bypass with no-csg-colors forces identical STL output format', async () => {
+      localStorage.setItem('openscad-forge-debug-no-csg-colors', '1')
+      isFlagEnabled.mockReturnValue(false)
+      controller.setScadContent('difference() { cube(20); cube(10); }')
+
+      renderController.renderPreview.mockResolvedValue({
+        stl: new ArrayBuffer(8),
+        stats: { triangles: 12 },
+        format: 'stl',
+      })
+      renderController.renderFull.mockResolvedValue({
+        stl: new ArrayBuffer(32),
+        stats: { triangles: 42 },
+        format: 'stl',
+        consoleOutput: '',
+      })
+
+      const params = { width: 20 }
+      const paramHash = controller.hashParams(params)
+      controller.currentParamHash = paramHash
+      controller.currentPreviewKey = `${paramHash}|model`
+
+      await controller.renderPreview(params, paramHash)
+      const [previewSrc, , previewOpts] = renderController.renderPreview.mock.calls[0]
+
+      await controller.renderFull(params)
+      const [fullSrc, , fullOpts] = renderController.renderFull.mock.calls[0]
+
+      expect(previewOpts.outputFormat).toBe('stl')
+      expect(fullOpts.outputFormat).toBeUndefined()
+
+      expect(previewSrc).not.toContain('color("#f9d72c")')
+      expect(fullSrc).not.toContain('color("#f9d72c")')
+    })
+  })
+
+  describe('Render diagnostics logging', () => {
+    it('logs render dispatch diagnostics during renderPreview', async () => {
+      isFlagEnabled.mockReturnValue(false)
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+      renderController.renderPreview.mockResolvedValue({
+        stl: new ArrayBuffer(8),
+        stats: { triangles: 12 },
+        format: 'stl',
+      })
+
+      const params = { width: 20 }
+      controller.currentParamHash = controller.hashParams(params)
+      const { qualityKey } = controller.resolvePreviewQualityInfo(params)
+      controller.currentPreviewKey = controller.getPreviewCacheKey(
+        controller.currentParamHash,
+        qualityKey
+      )
+
+      await controller.renderPreview(params, controller.currentParamHash)
+
+      const diagCall = logSpy.mock.calls.find(
+        (c) => typeof c[0] === 'string' && c[0].includes('[AutoPreview Diag] Render dispatch:')
+      )
+      expect(diagCall).toBeTruthy()
+      const diagObj = diagCall[1]
+      expect(diagObj).toHaveProperty('qualityKey')
+      expect(diagObj).toHaveProperty('outputFormat')
+      expect(diagObj).toHaveProperty('csgColorsInjected')
+      expect(diagObj).toHaveProperty('sourceOverridesActive')
+      expect(diagObj).toHaveProperty('previewOverridesActive')
+
+      logSpy.mockRestore()
+    })
+
+    it('logs worker diagnostics when present in render result', async () => {
+      isFlagEnabled.mockReturnValue(false)
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+      renderController.renderPreview.mockResolvedValue({
+        stl: new ArrayBuffer(8),
+        stats: { triangles: 12 },
+        format: 'stl',
+        diagnostics: {
+          defineArgs: ['-D', 'width=20'],
+          performanceFlags: ['--backend=Manifold'],
+          exportFlags: ['--export-format=binstl'],
+          inputFile: '/work/main.scad',
+          useSourceOverrides: false,
+        },
+      })
+
+      const params = { width: 20 }
+      controller.currentParamHash = controller.hashParams(params)
+      const { qualityKey } = controller.resolvePreviewQualityInfo(params)
+      controller.currentPreviewKey = controller.getPreviewCacheKey(
+        controller.currentParamHash,
+        qualityKey
+      )
+
+      await controller.renderPreview(params, controller.currentParamHash)
+
+      const defineArgsCall = logSpy.mock.calls.find(
+        (c) => typeof c[0] === 'string' && c[0].includes('[AutoPreview Diag] Worker defineArgs:')
+      )
+      expect(defineArgsCall).toBeTruthy()
+      expect(defineArgsCall[1]).toEqual(['-D', 'width=20'])
+
+      const perfFlagsCall = logSpy.mock.calls.find(
+        (c) => typeof c[0] === 'string' && c[0].includes('[AutoPreview Diag] Worker performanceFlags:')
+      )
+      expect(perfFlagsCall).toBeTruthy()
+      expect(perfFlagsCall[1]).toEqual(['--backend=Manifold'])
+
+      logSpy.mockRestore()
+    })
+
+    it('does not log worker diagnostics when absent from render result', async () => {
+      isFlagEnabled.mockReturnValue(false)
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+      renderController.renderPreview.mockResolvedValue({
+        stl: new ArrayBuffer(8),
+        stats: { triangles: 12 },
+        format: 'stl',
+      })
+
+      const params = { width: 20 }
+      controller.currentParamHash = controller.hashParams(params)
+      const { qualityKey } = controller.resolvePreviewQualityInfo(params)
+      controller.currentPreviewKey = controller.getPreviewCacheKey(
+        controller.currentParamHash,
+        qualityKey
+      )
+
+      await controller.renderPreview(params, controller.currentParamHash)
+
+      const defineArgsCall = logSpy.mock.calls.find(
+        (c) => typeof c[0] === 'string' && c[0].includes('[AutoPreview Diag] Worker defineArgs:')
+      )
+      expect(defineArgsCall).toBeUndefined()
+
+      logSpy.mockRestore()
+    })
+
+    it('logs preview parameter overrides when active', async () => {
+      isFlagEnabled.mockReturnValue(false)
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+      renderController.renderPreview.mockResolvedValue({
+        stl: new ArrayBuffer(8),
+        stats: { triangles: 12 },
+        format: 'stl',
+      })
+
+      const overrideResolver = (params, qualityKey) => {
+        if (qualityKey?.startsWith('auto-fast')) {
+          return { ...params, render_quality: 'Low' }
+        }
+        return params
+      }
+      controller.resolvePreviewParameters = overrideResolver
+      controller.resolvePreviewQuality = () => ({ name: 'auto-fast-preview', maxFn: 48 })
+      controller.resolvePreviewCacheKey = () => 'auto-fast-preview'
+
+      const params = { width: 20, render_quality: 'High' }
+      controller.currentParamHash = controller.hashParams(params)
+      controller.currentPreviewKey = controller.getPreviewCacheKey(
+        controller.currentParamHash,
+        'auto-fast-preview'
+      )
+
+      await controller.renderPreview(params, controller.currentParamHash)
+
+      const overrideCall = logSpy.mock.calls.find(
+        (c) =>
+          typeof c[0] === 'string' &&
+          c[0].includes('[AutoPreview Diag] Preview parameter overrides:')
+      )
+      expect(overrideCall).toBeTruthy()
+      expect(overrideCall[1]).toHaveProperty('render_quality')
+      expect(overrideCall[1].render_quality).toEqual({
+        original: 'High',
+        preview: 'Low',
+      })
+
+      logSpy.mockRestore()
+    })
+  })
 })

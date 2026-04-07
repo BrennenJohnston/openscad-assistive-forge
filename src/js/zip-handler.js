@@ -454,6 +454,50 @@ export function resolveProjectFile(projectFiles, filename) {
 }
 
 /**
+ * Check whether a brand name matches a folder name that may include
+ * the "-equivalent Case" suffix and/or inconsistent whitespace.
+ * Both sides are whitespace-collapsed and lowercased before comparison.
+ *
+ * @param {string} folderName - Folder segment, e.g. "SP LTROP-equivalent Case"
+ * @param {string} brand - Brand extracted from preset name, e.g. "SP LTROP"
+ * @returns {boolean}
+ */
+export function matchesBrand(folderName, brand) {
+  const norm = (s) =>
+    s
+      .replace(/-equivalent\s*case/gi, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase();
+  return norm(folderName) === norm(brand);
+}
+
+/**
+ * Parse a structured preset name into its component parts.
+ * Expected format: "<tablet> - <brand> - <app>" using " - " as separator.
+ * Only the first two separators are used; any additional " - " in the
+ * app portion is preserved as-is.
+ *
+ * @param {string} name - Preset name, e.g. "iPad 10,11 - Andnary - LWFL"
+ * @returns {{ tablet: string, brand: string, app: string|null } | null}
+ */
+export function parsePresetParts(name) {
+  const idx1 = name.indexOf(' - ');
+  if (idx1 === -1) return null;
+  const tablet = name.substring(0, idx1);
+  const rest = name.substring(idx1 + 3);
+  const idx2 = rest.indexOf(' - ');
+  if (idx2 === -1) {
+    return { tablet, brand: rest, app: null };
+  }
+  return {
+    tablet,
+    brand: rest.substring(0, idx2),
+    app: rest.substring(idx2 + 3) || null,
+  };
+}
+
+/**
  * Build a runtime mapping from preset names to their specific companion file
  * paths inside the projectFiles Map. Uses token-scoring heuristics so that
  * e.g. preset "iPad 7,8,9 - Fintie - TouchChat" maps to
@@ -506,16 +550,20 @@ export function buildPresetCompanionMap(files, parameterSets, options = {}) {
   function tokenise(name) {
     return name
       .toLowerCase()
+      .replace(/coughdrop/g, 'cough drop')
+      .replace(/vocochat/g, 'voco chat')
       .split(/[\s\-_/,().]+/)
       .filter((t) => t.length > 1 || /^\d$/.test(t));
   }
 
-  // Count how many tokens from the preset name appear in a candidate path.
-  // Multi-char tokens use full-path substring matching (existing behaviour).
-  // Single-digit tokens use exact word-boundary matching within folder segments
-  // only, so token "7" does not falsely match a folder named "iPad 78".
+  // Word-boundary matching: tokens must appear as whole words in folder
+  // segments, preventing false positives like "sp" matching "specifics".
   function scorePath(path, tokens) {
-    const lower = path.toLowerCase();
+    const lower = path
+      .toLowerCase()
+      .replace(/-equivalent\s*case/g, '')
+      .replace(/coughdrop/g, 'cough drop')
+      .replace(/vocochat/g, 'voco chat');
     const folderWords = new Set(
       lower
         .split('/')
@@ -523,38 +571,217 @@ export function buildPresetCompanionMap(files, parameterSets, options = {}) {
         .flatMap((seg) => seg.split(/[\s,\-_().]+/))
         .filter(Boolean)
     );
-    return tokens.filter((t) =>
-      t.length > 1 ? lower.includes(t) : folderWords.has(t)
-    ).length;
+    return tokens.filter((t) => folderWords.has(t)).length;
   }
 
-  // Prefer deeper (longer) paths when scores are tied.
-  function pickBest(candidates, tokens) {
-    if (!candidates || candidates.length === 0) return null;
+  function pickBest(candidates, tokens, parts = null) {
+    if (!candidates || candidates.length === 0)
+      return { path: null, resolution: 'ambiguous' };
     if (candidates.length === 1) {
-      return scorePath(candidates[0], tokens) > 0 ? candidates[0] : null;
+      return scorePath(candidates[0], tokens) > 0
+        ? { path: candidates[0], resolution: 'unique' }
+        : { path: null, resolution: 'ambiguous' };
     }
     const scored = candidates
       .map((p) => ({ path: p, score: scorePath(p, tokens) }))
-      .sort((a, b) => b.score - a.score || b.path.length - a.path.length);
-    if (scored[0].score === 0) return null;
-    if (scored[0].score === scored[1].score) return null; // ambiguous
-    return scored[0].path;
+      .sort(
+        (a, b) =>
+          b.score - a.score ||
+          a.path.split('/').length - b.path.split('/').length
+      );
+    if (scored[0].score === 0) return { path: null, resolution: 'ambiguous' };
+    return resolveByHierarchy(scored, tokens, parts);
+  }
+
+  // When candidates share parent-child relationships, resolve using
+  // directory hierarchy rather than raw token overlap scores.
+  // Returns { path: string|null, resolution: 'unique'|'ancestor-fallback'|'ambiguous' }.
+  function resolveByHierarchy(scored, tokens, parts = null) {
+    const topScore = scored[0].score;
+    const tied = scored.filter((s) => s.score === topScore);
+
+    if (tied.length === 1) {
+      const winner = tied[0];
+      const parent = findAncestorCandidate(winner, scored);
+      if (parent && parent.score > 0) {
+        if (!extraSegmentsMatchTokens(parent.path, winner.path, tokens)) {
+          return { path: parent.path, resolution: 'ancestor-fallback' };
+        }
+      }
+      return { path: winner.path, resolution: 'unique' };
+    }
+
+    // Among tied candidates, return the one that is an ancestor of all others
+    const ancestor = tied.find((a) => {
+      const aDir = a.path.substring(0, a.path.lastIndexOf('/'));
+      if (!aDir) return false;
+      return tied.every(
+        (b) =>
+          b === a ||
+          b.path
+            .substring(0, b.path.lastIndexOf('/'))
+            .startsWith(aDir + '/')
+      );
+    });
+    if (ancestor) return { path: ancestor.path, resolution: 'ancestor-fallback' };
+
+    // Sibling tie — filter by extra-segment token matching.
+    // Compute the common ancestor directory of all tied candidates, then
+    // keep only those whose extra folder words ALL appear in the preset tokens.
+    const dirs = tied.map((s) =>
+      s.path.substring(0, s.path.lastIndexOf('/')).split('/')
+    );
+    let commonLen = 0;
+    for (let i = 0; i < dirs[0].length; i++) {
+      if (dirs.every((d) => i < d.length && d[i] === dirs[0][i])) {
+        commonLen = i + 1;
+      } else {
+        break;
+      }
+    }
+    const commonDir = dirs[0].slice(0, commonLen).join('/');
+    if (commonDir) {
+      const basename = tied[0].path.split('/').pop();
+      const syntheticParent = commonDir + '/' + basename;
+      const matched = tied.filter((s) =>
+        extraSegmentsMatchTokens(syntheticParent, s.path, tokens)
+      );
+      if (matched.length === 1) return { path: matched[0].path, resolution: 'unique' };
+      if (matched.length > 1) {
+        matched.sort(
+          (a, b) => a.path.split('/').length - b.path.split('/').length
+        );
+        return { path: matched[0].path, resolution: 'unique' };
+      }
+    }
+
+    // App-name exact-match tie-breaker: when the preset has a parsed
+    // app name, prefer candidates whose leaf folder tokenizes to the
+    // same set as the app name. This disambiguates e.g. LWFL vs LWFL-VI
+    // siblings and picks the correct app-level file over a mount-type
+    // ancestor when mount-type info is absent from the preset name.
+    if (parts?.app) {
+      const appTokenSet = new Set(tokenise(parts.app));
+      const leafMatched = tied.filter((s) => {
+        const dir = s.path.substring(0, s.path.lastIndexOf('/'));
+        const leaf = dir.split('/').pop();
+        const leafTokenSet = new Set(tokenise(leaf));
+        if (leafTokenSet.size !== appTokenSet.size) return false;
+        for (const t of leafTokenSet) {
+          if (!appTokenSet.has(t)) return false;
+        }
+        return true;
+      });
+      if (leafMatched.length > 0) {
+        leafMatched.sort(
+          (a, b) =>
+            a.path.split('/').length - b.path.split('/').length ||
+            a.path.localeCompare(b.path)
+        );
+        return { path: leafMatched[0].path, resolution: 'unique' };
+      }
+    }
+
+    // Heuristic default: when sibling ties can't be resolved by
+    // extra-segment or app-name matching, fall back to the shallowest
+    // scored ancestor of any tied candidate (e.g. mount-type-level
+    // file when app-level candidates are ambiguous under LTROP's
+    // 3-level hierarchy and the preset app name doesn't match any
+    // leaf folder).
+    const ancestorFallbacks = scored.filter((s) => {
+      if (s.score === 0 || tied.includes(s)) return false;
+      const sDir = s.path.substring(0, s.path.lastIndexOf('/'));
+      if (!sDir) return false;
+      return tied.some((t) => {
+        const tDir = t.path.substring(0, t.path.lastIndexOf('/'));
+        return tDir.startsWith(sDir + '/');
+      });
+    });
+    if (ancestorFallbacks.length > 0) {
+      ancestorFallbacks.sort(
+        (a, b) =>
+          a.path.split('/').length - b.path.split('/').length ||
+          a.path.localeCompare(b.path)
+      );
+      return { path: ancestorFallbacks[0].path, resolution: 'ancestor-fallback' };
+    }
+
+    return { path: null, resolution: 'ambiguous' };
+  }
+
+  // Find the nearest (deepest) scored candidate whose directory is a
+  // proper ancestor of the winner's directory.
+  function findAncestorCandidate(winner, scored) {
+    const winnerDir = winner.path.substring(
+      0,
+      winner.path.lastIndexOf('/')
+    );
+    if (!winnerDir) return null;
+
+    let best = null;
+    let bestDirLen = -1;
+    for (const s of scored) {
+      if (s === winner || s.score === 0) continue;
+      const sDir = s.path.substring(0, s.path.lastIndexOf('/'));
+      if (!sDir) continue;
+      if (winnerDir.startsWith(sDir + '/') && sDir.length > bestDirLen) {
+        best = s;
+        bestDirLen = sDir.length;
+      }
+    }
+    return best;
+  }
+
+  // Check whether every word in the child-specific folder segments
+  // appears in the preset tokens. Uses the same normalization as
+  // scorePath so that e.g. "-equivalent Case" is stripped.
+  function extraSegmentsMatchTokens(parentPath, childPath, tokens) {
+    const parentDir = parentPath.substring(
+      0,
+      parentPath.lastIndexOf('/')
+    );
+    const childDir = childPath.substring(0, childPath.lastIndexOf('/'));
+    const extra = childDir.substring(parentDir.length + 1);
+    const words = extra
+      .toLowerCase()
+      .replace(/-equivalent\s*case/g, '')
+      .replace(/coughdrop/g, 'cough drop')
+      .replace(/vocochat/g, 'voco chat')
+      .split(/[\s,\-_/().]+/)
+      .filter((w) => w.length > 1 || /^\d$/.test(w));
+    if (words.length === 0) return true;
+    return words.every((w) => tokens.includes(w));
+  }
+
+  function filterByBrand(candidates, brand) {
+    if (!brand) return candidates;
+    const filtered = candidates.filter((path) => {
+      const segments = path.split('/').slice(0, -1);
+      return segments.some((seg) => matchesBrand(seg, brand));
+    });
+    return filtered.length > 0 ? filtered : candidates;
   }
 
   for (const presetName of presetNames) {
     const tokens = tokenise(presetName);
+    const parts = parsePresetParts(presetName);
+    const brand = parts ? parts.brand : null;
 
     if (useGenericPath) {
       const aliases = {};
+      let entryResolution = 'unique';
 
       for (const target of companionTargets) {
         const candidates = aliasableBasenames.get(target);
         if (candidates) {
-          const best = pickBest(candidates, tokens);
-          if (best) {
-            aliases[target] = best;
+          const bestResult = pickBest(filterByBrand(candidates, brand), tokens, parts);
+          if (bestResult.path) {
+            aliases[target] = bestResult.path;
+            if (bestResult.resolution === 'ancestor-fallback' && entryResolution === 'unique') {
+              entryResolution = 'ancestor-fallback';
+            }
           } else {
+            entryResolution = 'ambiguous';
             console.warn(
               `[PresetCompanionMap] Cannot unambiguously resolve "${target}" for preset: "${presetName}"`
             );
@@ -568,29 +795,38 @@ export function buildPresetCompanionMap(files, parameterSets, options = {}) {
         aliases[basename] = svgPaths[0];
         svgAliasTarget = basename;
       } else if (svgPaths.length > 1) {
-        const best = pickBest(svgPaths, tokens);
-        if (best) {
-          const basename = best.split('/').pop();
-          aliases[basename] = best;
+        const svgResult = pickBest(filterByBrand(svgPaths, brand), tokens, parts);
+        if (svgResult.path) {
+          const basename = svgResult.path.split('/').pop();
+          aliases[basename] = svgResult.path;
           svgAliasTarget = basename;
         }
       }
 
-      result.set(presetName, { aliases, svgAliasTarget });
+      result.set(presetName, { aliases, svgAliasTarget, resolution: entryResolution });
     } else {
       // LEGACY-ONLY COMPATIBILITY PATH:
       // Keep keyguard-shaped fallback mapping for stakeholder archives that do
       // not expose explicit companion metadata yet.
       let openingsPath = null;
+      let entryResolution = 'unique';
       const openingsCandidates = aliasableBasenames.get(
         'openings_and_additions.txt'
       );
       if (openingsCandidates) {
-        openingsPath = pickBest(openingsCandidates, tokens);
+        const openingsResult = pickBest(
+          filterByBrand(openingsCandidates, brand),
+          tokens,
+          parts
+        );
+        openingsPath = openingsResult.path;
         if (!openingsPath) {
+          entryResolution = 'ambiguous';
           console.warn(
             `[PresetCompanionMap] Cannot unambiguously resolve openings path for preset: "${presetName}"`
           );
+        } else if (openingsResult.resolution === 'ancestor-fallback') {
+          entryResolution = 'ancestor-fallback';
         }
       }
 
@@ -598,7 +834,8 @@ export function buildPresetCompanionMap(files, parameterSets, options = {}) {
       if (svgPaths.length === 1) {
         svgPath = svgPaths[0];
       } else if (svgPaths.length > 1) {
-        svgPath = pickBest(svgPaths, tokens);
+        const svgResult = pickBest(filterByBrand(svgPaths, brand), tokens, parts);
+        svgPath = svgResult.path;
         if (!svgPath) {
           console.warn(
             `[PresetCompanionMap] Cannot unambiguously resolve SVG path for preset: "${presetName}"`
@@ -606,8 +843,14 @@ export function buildPresetCompanionMap(files, parameterSets, options = {}) {
         }
       }
 
-      result.set(presetName, { openingsPath, svgPath });
+      result.set(presetName, { openingsPath, svgPath, resolution: entryResolution });
     }
+  }
+
+  const diagCounts = { unique: 0, 'ancestor-fallback': 0, ambiguous: 0 };
+  for (const entry of result.values()) {
+    const r = entry.resolution || 'unique';
+    diagCounts[r] = (diagCounts[r] || 0) + 1;
   }
 
   if (useGenericPath) {
@@ -624,6 +867,24 @@ export function buildPresetCompanionMap(files, parameterSets, options = {}) {
     console.log(
       `[PresetCompanionMap] Mapped ${mappedCount}/${presetNames.length} presets via legacy openings fallback`
     );
+  }
+
+  console.debug(
+    `[PresetCompanionMap] Resolution: ${diagCounts.unique} unique, ` +
+      `${diagCounts['ancestor-fallback']} ancestor-fallback, ` +
+      `${diagCounts.ambiguous} ambiguous`
+  );
+  if (diagCounts['ancestor-fallback'] > 0) {
+    const fallbackNames = [...result.entries()]
+      .filter(([, v]) => v.resolution === 'ancestor-fallback')
+      .map(([n]) => n);
+    console.debug('[PresetCompanionMap] Ancestor-fallback presets:', fallbackNames);
+  }
+  if (diagCounts.ambiguous > 0) {
+    const ambiguousNames = [...result.entries()]
+      .filter(([, v]) => v.resolution === 'ambiguous')
+      .map(([n]) => n);
+    console.warn('[PresetCompanionMap] Ambiguous presets:', ambiguousNames);
   }
 
   return result;
@@ -651,8 +912,15 @@ export function applyCompanionAliases(projectFiles, companionMapping) {
     for (const [aliasTarget, sourcePath] of Object.entries(
       companionMapping.aliases
     )) {
-      if (sourcePath && result.has(sourcePath)) {
+      if (sourcePath && result.has(sourcePath) && !result.has(aliasTarget)) {
+        console.debug(
+          `[CompanionAlias] Creating "${aliasTarget}" from "${sourcePath}" (target was missing)`
+        );
         result.set(aliasTarget, result.get(sourcePath));
+      } else if (sourcePath && result.has(sourcePath) && result.has(aliasTarget)) {
+        console.debug(
+          `[CompanionAlias] Skipping "${aliasTarget}" — root key already exists, preserving original`
+        );
       }
     }
     return result;
@@ -661,16 +929,30 @@ export function applyCompanionAliases(projectFiles, companionMapping) {
   // LEGACY-ONLY COMPATIBILITY PATH:
   // Keyguard-shaped mapping copies preset-specific content to
   // hardcoded root-level keys "openings_and_additions.txt" / "default.svg".
+  // Guard: only CREATE a missing root key — replacing an existing root key
+  // would change the content SCAD include/import directives resolve to,
+  // producing wrong geometry (KI-012 Bug A/B).
   if (
     companionMapping.openingsPath &&
-    result.has(companionMapping.openingsPath)
+    result.has(companionMapping.openingsPath) &&
+    !result.has('openings_and_additions.txt')
   ) {
+    console.debug(
+      `[CompanionAlias] Creating "openings_and_additions.txt" from "${companionMapping.openingsPath}" (legacy path)`
+    );
     result.set(
       'openings_and_additions.txt',
       result.get(companionMapping.openingsPath)
     );
   }
-  if (companionMapping.svgPath && result.has(companionMapping.svgPath)) {
+  if (
+    companionMapping.svgPath &&
+    result.has(companionMapping.svgPath) &&
+    !result.has('default.svg')
+  ) {
+    console.debug(
+      `[CompanionAlias] Creating "default.svg" from "${companionMapping.svgPath}" (legacy path)`
+    );
     result.set('default.svg', result.get(companionMapping.svgPath));
   }
 

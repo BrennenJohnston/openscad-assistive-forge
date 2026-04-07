@@ -342,8 +342,8 @@
 :root[data-ui-variant='mono'] input:focus,
 :root[data-ui-variant='mono'] select:focus,
 :root[data-ui-variant='mono'] textarea:focus {
-  outline: 1px solid var(--color-focus);
-  outline-offset: 0;
+  outline: var(--focus-ring-width, 3px) solid var(--color-focus);
+  outline-offset: 2px;
   box-shadow: none;
 }
 

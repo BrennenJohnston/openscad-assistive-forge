@@ -257,6 +257,21 @@ Track these to evaluate queue effectiveness:
    phases and need periodic human inspection.
 6. **Plan file drift** -- If the codebase changes between phases (e.g., a
    hotfix lands), re-audit affected phases before continuing.
+7. **Missing hallucination safeguards** -- Plans that involve UI/layout
+   assertions, triage decisions, or browser behavior need explicit safeguards
+   requiring OBSERVED/INFERRED/UNVERIFIED labels and prohibiting behavioral
+   assertions from code reading alone. Without these, the AI confidently
+   asserts rendering behavior it has never verified at runtime. This is a
+   recurring gap in plan authoring — the `build-plan-executor-prompt.md`
+   template lists hallucination safeguards as a plan file requirement, but
+   plans generated from the queue-plan template historically omitted them.
+8. **Missing fallback gates** -- Every phase needs a documented degradation
+   path for when the primary approach hits a roadblock. Without one, the AI
+   either stalls (waiting for human guidance) or widens scope to work around
+   the obstacle — both failure modes that the queue executor is designed to
+   prevent. Common fallback patterns: reduce scope (fix 2 instead of 3),
+   use `@supports` progressive enhancement, split into sub-phases, or move
+   to a separate config file to avoid interference with existing behavior.
 
 ## Related: Build plan executor prompt
 

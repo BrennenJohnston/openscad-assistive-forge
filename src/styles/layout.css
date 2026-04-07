@@ -180,6 +180,17 @@ body {
   letter-spacing: 0.5px;
 }
 
+@media (max-width: 480px) {
+  .contrast-label {
+    display: none;
+  }
+
+  .contrast-toggle {
+    width: 44px;
+    padding: var(--space-sm);
+  }
+}
+
 /* High contrast mode active state */
 :root[data-high-contrast='true'] .contrast-toggle {
   background: var(--color-hover-bg);
@@ -3710,8 +3721,10 @@ details summary:focus,
    This maximizes vertical space for the 3D preview and parameters.
    ============================================================================ */
 @media (max-width: 480px) and (orientation: portrait) {
-  /* Hide title and tagline completely */
-  :root .header-branding-text {
+  /* Hide tagline at 360–480 px portrait; .title-full is already hidden by the
+     earlier portrait rule.  Keep .header-branding-text visible so .title-short
+     can render.  At < 360 px the branding text is hidden entirely below. */
+  :root .header-branding-text .app-tagline {
     display: none;
   }
 
@@ -3731,12 +3744,19 @@ details summary:focus,
     justify-content: flex-start;
   }
 
-  /* Logo container - minimal, no extra space */
+  /* Logo container - shrinkable so title truncates before buttons overflow */
   :root .header-branding {
-    flex: 0 0 auto;
-    min-width: auto;
+    flex: 0 1 auto;
+    min-width: 0;
     gap: 0;
     order: 1;
+    overflow: hidden;
+  }
+
+  :root .header-branding-text h1 {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   /* Logo matches button size (44px) */
@@ -3757,7 +3777,17 @@ details summary:focus,
     gap: var(--space-xs);
     flex-wrap: nowrap;
   }
+}
 
+/* Ultra-narrow portrait (< 360 px): icon-only header.
+   There isn't enough horizontal space for even the abbreviated title. */
+@media (max-width: 359px) and (orientation: portrait) {
+  :root .header-branding-text {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) and (orientation: portrait) {
   /* ============================================================================
      Mobile Portrait: Side-by-Side Actions & Camera Drawer Toggles
      ============================================================================

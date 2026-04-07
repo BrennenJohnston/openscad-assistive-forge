@@ -2,7 +2,7 @@
 
 Things we know about but haven't fixed yet, along with workarounds you can use in the meantime. If you hit something not listed here, please [open an issue](https://github.com/BrennenJohnston/openscad-assistive-forge/issues).
 
-**Last updated**: 2026-03-20
+**Last updated**: 2026-04-06
 
 ---
 
@@ -28,20 +28,20 @@ Things we know about but haven't fixed yet, along with workarounds you can use i
 
 ---
 
-#### KI-002: Monaco Editor AT Limitations
+#### KI-002: Code Editor AT Limitations
 
 **Status**: Documented  
 **Affected**: Expert Mode with screen readers  
 **Severity**: Medium
 
-**Description**: The Monaco code editor has some limitations with certain assistive technology configurations, particularly with JAWS in some browser combinations.
+**Description**: The CodeMirror 6 code editor has some limitations with certain assistive technology configurations, particularly with JAWS in some browser combinations.
 
 **Workaround**:
 1. Enable "Use accessible text editor" in Settings
 2. The textarea fallback provides full AT compatibility
 3. All editing features remain available
 
-**Root Cause**: Monaco editor's complex DOM structure can interfere with some AT navigation patterns.
+**Root Cause**: CodeMirror's complex DOM structure can interfere with some AT navigation patterns.
 
 ---
 
@@ -89,6 +89,31 @@ Things we know about but haven't fixed yet, along with workarounds you can use i
 3. Use landscape orientation for more control space
 
 **Root Cause**: Browser gesture handling varies by platform.
+
+---
+
+#### KI-012: LWFL Keyguard Geometry Discrepancies vs Desktop OpenSCAD
+
+**Status**: Resolved (2026-04-06)  
+**Affected**: LWFL keyguard preset in web app  
+**Severity**: Medium
+
+**Description**: Two geometry rendering bugs in the LWFL keyguard preset produced output that differed from desktop OpenSCAD:
+
+- **Bug A — Home button tab persists when disabled:** Setting `expose_home_button = "no"` left a tab jutting out along the right edge.
+- **Bug B — Ghost cutouts when upper message bar disabled:** Setting `expose_upper_message_bar = "no"` left partial square cutouts near grid positions #1 and #12.
+
+**Root cause**: `applyCompanionAliases()` in `zip-handler.js` used overwrite semantics — when the ZIP already contained a root-level `openings_and_additions.txt`, the function replaced it with preset-specific content. This changed what SCAD `include` directives resolved to, producing wrong geometry. The fix adds `!result.has(target)` guards so aliases only create missing root keys, never replace existing ones.
+
+**Resolution**: A 3-line guard addition converting `applyCompanionAliases()` from overwrite to create-only semantics. The parameter dropout fix in `ui-generator.js` (seeding `currentValues` from `initialValues`) was also discovered during the investigation.
+
+**Investigation history**: Five prior investigation plans incorrectly attributed the issue to the upstream Manifold WASM engine based on code-level analysis alone. The successful investigation used captured-input comparison against desktop CLI and `git bisect` to identify the true root cause. See `docs/audit/ki-012-investigation/findings-report.md` for the full write-up.
+
+**Developer toggles for diagnosis** (via browser console):
+- `localStorage.setItem('openscad-forge-debug-preview-parity', '1')` — bypass preview overrides for A/B parity comparison
+- `localStorage.setItem('openscad-forge-debug-desktop-quality', '1')` — use desktop-equivalent quality for preview
+- `localStorage.setItem('openscad-forge-debug-no-csg-colors', '1')` — disable CSG color injection
+- `localStorage.setItem('openscad-forge-debug-source-overrides', '1')` — bake parameters into source
 
 ---
 

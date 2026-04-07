@@ -18,6 +18,7 @@
  */
 
 import { extractZipFiles } from './zip-handler.js';
+import { isEnabled } from './feature-flags.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -648,12 +649,35 @@ export async function loadManifest(manifestUrl, { onProgress } = {}) {
   const projectFiles = new Map();
   let mainFile = null;
   let mainContent = null;
+  let projectPresets = null;
 
   for (const file of fetchedFiles) {
     projectFiles.set(file.path, file.content);
     if (file.kind === 'main') {
       mainFile = file.path;
       mainContent = file.content;
+    }
+
+    if (file.kind === 'preset' && isEnabled('project_presets')) {
+      try {
+        const data = JSON.parse(file.content);
+        if (
+          data &&
+          typeof data.parameterSets === 'object' &&
+          Object.keys(data.parameterSets).length > 0
+        ) {
+          if (!projectPresets) projectPresets = {};
+          for (const [name, params] of Object.entries(data.parameterSets)) {
+            if (name === 'design default values') continue;
+            if (!params || typeof params !== 'object') continue;
+            projectPresets[name] = params;
+          }
+        }
+      } catch {
+        console.warn(
+          `[Manifest] Could not parse preset file: ${file.path}`
+        );
+      }
     }
   }
 
@@ -670,6 +694,7 @@ export async function loadManifest(manifestUrl, { onProgress } = {}) {
     mainFile,
     mainContent,
     defaults: manifestData.defaults || {},
+    projectPresets,
   };
 }
 

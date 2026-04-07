@@ -390,6 +390,7 @@ Analysis of 100 Cursor development plans from the origin project. Key findings:
 - **Bug fixes complete at the highest rate** (50%) — clear end conditions help
 - **Sprint plans complete at the lowest rate** (7%) — scope overload kills progress
 - **Documentation audits required 3 iterations** to match the project's tone
+- **Consensus without runtime evidence** (anti-pattern #8) — five investigation sessions reached the same wrong diagnosis through code-level analysis alone; the fix required captured-input comparison against desktop CLI and `git bisect` (see KI-012 case study)
 
 **Full analysis:** [LESSONS_LEARNED.md](LESSONS_LEARNED.md)
 
@@ -422,6 +423,15 @@ Based on the empirical analysis, use this template when planning AI-assisted wor
 - Delegation-safe tasks in this plan: [list tasks that MAY be delegated]
 - Verification: [ ] All comprehension-critical tasks were performed by the primary model
 
+## Hallucination Safeguards
+[Required for plans involving UI/layout, browser behavior, or triage decisions.
+Recurring gap: plans consistently omit this section, leading to AI asserting
+rendering behavior from code reading without runtime verification.]
+1. Every code claim must cite file path and line number.
+2. Distinguish OBSERVED / INFERRED / UNVERIFIED.
+3. Do not assert browser behavior from code reading alone.
+4. Re-read files when unsure of staleness.
+
 ## OSS-First Search (if feature)
 - Searched: [what was searched]
 - Found: [what was found, or "nothing suitable"]
@@ -429,8 +439,11 @@ Based on the empirical analysis, use this template when planning AI-assisted wor
 
 ## Implementation Steps
 1. [Step 1 -- one file or one logical change]
+   - Fallback gate: [what to do if the primary approach fails]
 2. [Step 2]
+   - Fallback gate: [degradation path]
 3. [Step 3]
+   - Fallback gate: [degradation path]
 
 ## Verification
 - [ ] Pre-commit checklist passes

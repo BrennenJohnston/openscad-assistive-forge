@@ -787,6 +787,96 @@ describe('State Management', () => {
   })
 })
 
+describe('Project-native preset state fields', () => {
+  let state
+
+  beforeEach(() => {
+    state = new StateManager({
+      uploadedFile: null,
+      parameters: {},
+      defaults: {},
+      mainFilePath: null,
+      projectPresets: null,
+      projectPresetIdentity: null,
+    })
+  })
+
+  it('should initialize projectPresets as null', () => {
+    expect(state.getState().projectPresets).toBeNull()
+  })
+
+  it('should initialize projectPresetIdentity as null', () => {
+    expect(state.getState().projectPresetIdentity).toBeNull()
+  })
+
+  it('should initialize mainFilePath as null', () => {
+    expect(state.getState().mainFilePath).toBeNull()
+  })
+
+  it('should accept project presets via setState', () => {
+    const presets = {
+      'Small Guard': { width: 10, height: 5 },
+      'Large Guard': { width: 30, height: 15 },
+    }
+    state.setState({ projectPresets: presets })
+    expect(state.getState().projectPresets).toEqual(presets)
+  })
+
+  it('should accept project preset identity via setState', () => {
+    const identity = {
+      mainFilePath: 'keyguard_v75.scad',
+      sidecarFiles: ['keyguard_v75.json'],
+      loadedAt: 1700000000000,
+    }
+    state.setState({ projectPresetIdentity: identity })
+    expect(state.getState().projectPresetIdentity).toEqual(identity)
+  })
+
+  it('should replace projectPresets exactly on reload', () => {
+    state.setState({
+      projectPresets: { 'Old Preset': { width: 5 } },
+    })
+    expect(Object.keys(state.getState().projectPresets)).toHaveLength(1)
+
+    state.setState({
+      projectPresets: {
+        'New Preset A': { width: 10 },
+        'New Preset B': { width: 20 },
+      },
+    })
+    const presets = state.getState().projectPresets
+    expect(Object.keys(presets)).toHaveLength(2)
+    expect(presets['Old Preset']).toBeUndefined()
+    expect(presets['New Preset A']).toEqual({ width: 10 })
+  })
+
+  it('should clear projectPresets to null', () => {
+    state.setState({
+      projectPresets: { 'Some Preset': { width: 5 } },
+      projectPresetIdentity: { mainFilePath: 'test.scad', sidecarFiles: [], loadedAt: 0 },
+    })
+    state.setState({
+      projectPresets: null,
+      projectPresetIdentity: null,
+    })
+    expect(state.getState().projectPresets).toBeNull()
+    expect(state.getState().projectPresetIdentity).toBeNull()
+  })
+
+  it('should not affect other state when setting projectPresets', () => {
+    state.setState({
+      uploadedFile: { name: 'test.scad' },
+      parameters: { width: 100 },
+    })
+    state.setState({
+      projectPresets: { 'My Preset': { width: 50 } },
+    })
+    expect(state.getState().uploadedFile).toEqual({ name: 'test.scad' })
+    expect(state.getState().parameters).toEqual({ width: 100 })
+    expect(state.getState().projectPresets).toEqual({ 'My Preset': { width: 50 } })
+  })
+})
+
 describe('ParameterHistory (undo-stack model)', () => {
   let history
 

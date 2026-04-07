@@ -1,0 +1,47 @@
+{
+  "name": "Charm Customizer",
+  "description": "Create custom charms and pendants with engraved or raised designs. Upload your own SVG/PNG or pick from the built-in design library.",
+  "version": "1.0.0",
+  "author": "OpenSCAD Assistive Forge contributors",
+  "license": "CC0-1.0",
+  "main": "nasif_charm_maker.scad",
+  "files": [
+    "nasif_charm_maker.scad",
+    "svg-library/heart.svg",
+    "svg-library/star.svg",
+    "svg-library/paw.svg",
+    "svg-library/lightning.svg",
+    "svg-library/music-note.svg",
+    "svg-library/smiley.svg",
+    "svg-library/moon.svg",
+    "svg-library/flower.svg",
+    "svg-library/diamond.svg",
+    "svg-library/crown.svg",
+    "svg-library/leaf.svg",
+    "svg-library/sun.svg"
+  ],
+  "svgLibrary": {
+    "paramName": "design_file",
+    "options": [
+      { "file": "svg-library/heart.svg", "label": "Heart" },
+      { "file": "svg-library/star.svg", "label": "Star" },
+      { "file": "svg-library/paw.svg", "label": "Paw print" },
+      { "file": "svg-library/lightning.svg", "label": "Lightning bolt" },
+      { "file": "svg-library/music-note.svg", "label": "Music note" },
+      { "file": "svg-library/smiley.svg", "label": "Smiley face" },
+      { "file": "svg-library/moon.svg", "label": "Crescent moon" },
+      { "file": "svg-library/flower.svg", "label": "Flower" },
+      { "file": "svg-library/diamond.svg", "label": "Diamond" },
+      { "file": "svg-library/crown.svg", "label": "Crown" },
+      { "file": "svg-library/leaf.svg", "label": "Leaf" },
+      { "file": "svg-library/sun.svg", "label": "Sun" }
+    ]
+  },
+  "program": "charm-customizer",
+  "tags": ["charm", "pendant", "keychain", "svg", "import", "engraving", "nasif"],
+  "inspired_by": {
+    "name": "Nasif Zaman",
+    "github": "Znasif",
+    "reference": "https://github.com/Znasif/openscad-assistive-forge"
+  }
+}

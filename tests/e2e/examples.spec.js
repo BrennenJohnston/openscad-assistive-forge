@@ -67,6 +67,14 @@ test.describe('Example Files Exist', () => {
     const response = await page.request.get('/examples/multi-file-box.zip')
     expect(response.ok()).toBe(true)
   })
+
+  test('q-charm scad and manifest exist', async ({ page }) => {
+    const scadResponse = await page.request.get('/examples/q-charm/q_charm.scad')
+    expect(scadResponse.ok()).toBe(true)
+
+    const manifestResponse = await page.request.get('/examples/q-charm/manifest.json')
+    expect(manifestResponse.ok()).toBe(true)
+  })
 })
 
 test.describe('Welcome Screen Examples', () => {
@@ -100,6 +108,38 @@ test.describe('Welcome Screen Examples', () => {
       
       expect(hasAccessibleName).toBe(true)
     }
+  })
+})
+
+test.describe('Bracelet Clip Charm Smoke Tests', () => {
+  test('loads q-charm via deep-link and shows parameter groups', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
+
+    await page.goto('/?example=q-charm')
+
+    const mainInterface = page.locator('#mainInterface')
+    await expect(mainInterface).toBeVisible({ timeout: 20000 })
+
+    await expect(page.locator('.param-control').first()).toBeVisible({ timeout: 10000 })
+  })
+
+  test('welcome screen has Charm Customizer card with variant selector including Bracelet Clip Charm', async ({ page }) => {
+    await page.goto('/')
+
+    const variantSelect = page.locator('#charmVariantSelect')
+    await expect(variantSelect).toBeVisible()
+
+    const qCharmOption = variantSelect.locator('option[value="q-charm"]')
+    await expect(qCharmOption).toHaveCount(1)
+
+    const openBtn = page.locator('#openCharmMakerBtn')
+    await expect(openBtn).toBeVisible()
+
+    const ariaLabel = await openBtn.getAttribute('aria-label')
+    const textContent = await openBtn.textContent()
+    const hasName = (ariaLabel && ariaLabel.length > 0) ||
+                    (textContent && textContent.trim().length > 0)
+    expect(hasName).toBe(true)
   })
 })
 

@@ -37,10 +37,12 @@ import {
 } from './js/quality-tiers.js';
 import { getThreeModule } from './js/preview.js';
 import { normalizeHexColor } from './js/color-utils.js';
+import { buildDefineArgs as formatBuildDefineArgs } from './js/scad-param-formatter.js';
 import {
   AutoPreviewController,
   PREVIEW_STATE,
 } from './js/auto-preview-controller.js';
+import { isEnabled as isFlagEnabled } from './js/feature-flags.js';
 import { resolve2DExportIntent, isNonPreviewable } from './js/render-intent.js';
 import {
   applyCompanionAliases,
@@ -190,6 +192,7 @@ import {
 } from './js/hfm-controller.js';
 import {
   EXAMPLE_DEFINITIONS,
+  PROGRAM_DEFINITIONS,
   showProcessingOverlay,
   initFileHandler,
 } from './js/file-handler.js';
@@ -2009,11 +2012,43 @@ async function initApp() {
       {
         type: 'submenu',
         label: 'Examples',
-        items: Object.entries(EXAMPLE_DEFINITIONS).map(([key, def]) => ({
-          type: 'action',
-          label: def.description || def.name,
-          handler: () => fileHandler.loadExampleByKey(key),
-        })),
+        items: (() => {
+          const programmedKeys = new Set();
+          const grouped = [];
+
+          for (const prog of Object.values(PROGRAM_DEFINITIONS)) {
+            const subItems = prog.examples
+              .filter((k) => EXAMPLE_DEFINITIONS[k])
+              .map((k) => ({
+                type: 'action',
+                label:
+                  EXAMPLE_DEFINITIONS[k].description ||
+                  EXAMPLE_DEFINITIONS[k].name,
+                handler: () => fileHandler.loadExampleByKey(k),
+              }));
+            if (subItems.length > 0) {
+              grouped.push({
+                type: 'submenu',
+                label: prog.label,
+                items: subItems,
+              });
+              prog.examples.forEach((k) => programmedKeys.add(k));
+            }
+          }
+
+          const ungrouped = Object.entries(EXAMPLE_DEFINITIONS)
+            .filter(([k]) => !programmedKeys.has(k))
+            .map(([k, def]) => ({
+              type: 'action',
+              label: def.description || def.name,
+              handler: () => fileHandler.loadExampleByKey(k),
+            }));
+
+          if (grouped.length > 0 && ungrouped.length > 0) {
+            return [...ungrouped, { type: 'separator' }, ...grouped];
+          }
+          return [...ungrouped, ...grouped];
+        })(),
       },
       {
         type: 'action',
@@ -3871,6 +3906,17 @@ async function initApp() {
       return parameters;
     }
 
+    const parityBypass =
+      typeof localStorage !== 'undefined' &&
+      localStorage.getItem('openscad-forge-debug-preview-parity') !== null;
+    if (parityBypass) {
+      console.log(
+        '[PreviewParity] Bypassing auto-preview overrides — ' +
+          'preview will use identical parameters to full render'
+      );
+      return parameters;
+    }
+
     const adjusted = { ...parameters };
     if (Object.prototype.hasOwnProperty.call(adjusted, 'render_quality')) {
       adjusted.render_quality = 'Low';
@@ -4355,9 +4401,9 @@ async function initApp() {
     const activeTheme = themeManager.getActiveTheme();
     const themeKey = highContrast ? `${activeTheme}-hc` : activeTheme;
 
-    // Match PREVIEW_COLORS from preview.js
+    // Match PREVIEW_COLORS from preview.js (Cornfield gold [OBSERVED])
     const PREVIEW_COLORS = {
-      light: 0x2196f3,
+      light: 0xf9d72c,
       dark: 0x4d9fff,
       'light-hc': 0x0052cc,
       'dark-hc': 0x66b3ff,
@@ -4725,7 +4771,13 @@ async function initApp() {
     getAutoPreviewController: () => autoPreviewController,
     getAutoPreviewEnabled: () => autoPreviewEnabled,
     setCurrentSavedProjectId: (id) => { currentSavedProjectId = id; },
-    setPresetCompanionMap: (map) => { presetCompanionMap = map; },
+    getCurrentSavedProjectId: () => currentSavedProjectId,
+    setPresetCompanionMap: (map) => {
+      presetCompanionMap = map;
+      if (_isEnabled('project_presets')) {
+        stateManager.setState({ projectCompanionMap: map });
+      }
+    },
     getFileSizeLimits: () => FILE_SIZE_LIMITS,
     getValidateFileUpload: () => validateFileUpload,
     getCameraPanelController: () => cameraPanelController,
@@ -5377,6 +5429,15 @@ if (rounded) {
       }
     });
   });
+
+  // Wire charm variant selector to update the single Open button
+  const charmVariantSelect = document.getElementById('charmVariantSelect');
+  const openCharmMakerBtn = document.getElementById('openCharmMakerBtn');
+  if (charmVariantSelect && openCharmMakerBtn) {
+    charmVariantSelect.addEventListener('change', () => {
+      openCharmMakerBtn.dataset.example = charmVariantSelect.value;
+    });
+  }
 
   // =========================================
   // Deep-linking: URL parameter support for external website integration
@@ -9119,31 +9180,67 @@ if (rounded) {
       }
     }
 
-    const companionMapping = presetCompanionMap?.get(preset.name);
-    // Alias-mount preset-specific companion files from the ZIP mapping.
+    let companionMapping = null;
+    if (_isEnabled('project_presets') && preset.source === 'project') {
+      const projState = stateManager.getState();
+      companionMapping = projState.projectCompanionMap?.get(preset.name) ?? null;
+    } else if (!_isEnabled('project_presets')) {
+      companionMapping = presetCompanionMap?.get(preset.name) ?? null;
+    }
+
     const aliasedFiles = applyCompanionAliases(
       newProjectFiles,
       companionMapping
     );
+
+    // Ground-truth diagnostics for LWFL geometry debugging (Phase 1)
+    const _diagCompanion = {
+      presetName: preset.name,
+      presetId: preset.id,
+      presetSource: preset.source,
+      resolution: companionMapping?.resolution ?? 'none',
+      aliases: companionMapping?.aliases
+        ? { ...companionMapping.aliases }
+        : companionMapping?.openingsPath
+          ? { 'openings_and_additions.txt': companionMapping.openingsPath }
+          : null,
+    };
     if (companionMapping?.aliases) {
       for (const [target, source] of Object.entries(companionMapping.aliases)) {
-        if (aliasedFiles.has(target)) {
-          console.log(`[Preset] Alias-mounted: ${source} → ${target}`);
+        const content = aliasedFiles.get(target);
+        if (content != null) {
+          const snippet = typeof content === 'string'
+            ? content.slice(0, 120).replace(/\n/g, '\\n')
+            : `<binary ${content.byteLength ?? content.length} bytes>`;
+          _diagCompanion[`mounted:${target}`] = {
+            source,
+            sizeBytes: typeof content === 'string' ? content.length : (content.byteLength ?? 0),
+            preview: snippet,
+          };
         }
       }
-    } else {
-      // COMPATIBILITY FALLBACK — legacy logging for {openingsPath, svgPath}
-      if (
-        companionMapping?.openingsPath &&
-        aliasedFiles.has('openings_and_additions.txt')
-      ) {
-        console.log(
-          `[Preset] Alias-mounted openings: ${companionMapping.openingsPath}`
-        );
+    } else if (companionMapping?.openingsPath) {
+      const content = aliasedFiles.get('openings_and_additions.txt');
+      if (content != null) {
+        const snippet = typeof content === 'string'
+          ? content.slice(0, 120).replace(/\n/g, '\\n')
+          : `<binary ${content.byteLength ?? content.length} bytes>`;
+        _diagCompanion['mounted:openings_and_additions.txt'] = {
+          source: companionMapping.openingsPath,
+          sizeBytes: typeof content === 'string' ? content.length : (content.byteLength ?? 0),
+          preview: snippet,
+        };
       }
-      if (companionMapping?.svgPath && aliasedFiles.has('default.svg')) {
-        console.log(`[Preset] Alias-mounted SVG: ${companionMapping.svgPath}`);
-      }
+    }
+    console.log('[Preset Diag]', _diagCompanion);
+    if (companionMapping?.resolution === 'ancestor-fallback') {
+      console.debug(
+        `[Preset] "${preset.name}" companion resolved via ancestor fallback`
+      );
+    } else if (companionMapping?.resolution === 'ambiguous') {
+      console.warn(
+        `[Preset] "${preset.name}" companion resolution is ambiguous — no alias applied`
+      );
     }
 
     stateManager.setState({ projectFiles: aliasedFiles });
@@ -9279,7 +9376,38 @@ if (rounded) {
     defaultsOption.style.fontStyle = 'italic';
     presetSelect.appendChild(defaultsOption);
 
-    if (presets.length > 0) {
+    const useProjectPresets =
+      _isEnabled('project_presets') && state.projectPresets;
+
+    if (useProjectPresets) {
+      const projectGroup = document.createElement('optgroup');
+      projectGroup.label = 'Project Presets';
+      const projectNames = Object.keys(state.projectPresets).sort((a, b) =>
+        a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
+      );
+      for (const name of projectNames) {
+        const option = document.createElement('option');
+        option.value = `proj::${name}`;
+        option.textContent = name;
+        projectGroup.appendChild(option);
+      }
+      if (projectNames.length > 0) {
+        presetSelect.appendChild(projectGroup);
+      }
+
+      const userPresets = presets.filter((p) => p.id !== 'design-defaults');
+      if (userPresets.length > 0) {
+        const savedGroup = document.createElement('optgroup');
+        savedGroup.label = 'Saved Presets';
+        for (const preset of userPresets) {
+          const option = document.createElement('option');
+          option.value = preset.id;
+          option.textContent = preset.name;
+          savedGroup.appendChild(option);
+        }
+        presetSelect.appendChild(savedGroup);
+      }
+    } else if (presets.length > 0) {
       presets.forEach((preset) => {
         if (preset.id === 'design-defaults') return;
         const option = document.createElement('option');
@@ -9297,32 +9425,60 @@ if (rounded) {
       sortSelect.value = currentSortOrder;
     }
 
-    // Update combobox if the feature flag is on
     if (_presetCombobox) {
-      const comboOptions = [
-        {
-          id: DESIGN_DEFAULTS_ID,
-          label: 'design default values',
-          italic: true,
-        },
-        ...presets
-          .filter((p) => p.id !== 'design-defaults')
-          .map((p) => ({ id: p.id, label: p.name })),
-      ];
+      const defaultComboEntry = {
+        id: DESIGN_DEFAULTS_ID,
+        label: 'design default values',
+        italic: true,
+      };
+      let comboOptions;
+      if (useProjectPresets) {
+        const projNames = Object.keys(state.projectPresets).sort((a, b) =>
+          a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
+        );
+        comboOptions = [
+          defaultComboEntry,
+          ...projNames.map((name) => ({
+            id: `proj::${name}`,
+            label: name,
+            group: 'Project Presets',
+          })),
+          ...presets
+            .filter((p) => p.id !== 'design-defaults')
+            .map((p) => ({ id: p.id, label: p.name, group: 'Saved Presets' })),
+        ];
+      } else {
+        comboOptions = [
+          defaultComboEntry,
+          ...presets
+            .filter((p) => p.id !== 'design-defaults')
+            .map((p) => ({ id: p.id, label: p.name })),
+        ];
+      }
       _presetCombobox.update(comboOptions, currentPresetId || null);
       _presetCombobox.setDisabled(false);
     }
 
-    // Restore selection if the preset still exists in the list
     if (currentPresetId) {
-      const currentPreset = presets.find(
-        (preset) => preset.id === currentPresetId
-      );
-      if (currentPreset) {
-        presetSelect.value = currentPresetId;
-        setCurrentPresetSignature(currentPreset.parameters);
-      } else {
-        forceClearPresetSelection();
+      let restoredSelection = false;
+      if (useProjectPresets && currentPresetId.startsWith('proj::')) {
+        const pName = currentPresetId.slice(6);
+        if (state.projectPresets[pName]) {
+          presetSelect.value = currentPresetId;
+          setCurrentPresetSignature(state.projectPresets[pName]);
+          restoredSelection = true;
+        }
+      }
+      if (!restoredSelection) {
+        const currentPreset = presets.find(
+          (preset) => preset.id === currentPresetId
+        );
+        if (currentPreset) {
+          presetSelect.value = currentPresetId;
+          setCurrentPresetSignature(currentPreset.parameters);
+        } else if (currentPresetId !== DESIGN_DEFAULTS_ID) {
+          forceClearPresetSelection();
+        }
       }
     } else {
       currentPresetSignature = null;
@@ -10274,6 +10430,21 @@ if (rounded) {
       isLoadingPreset = false;
       updatePresetControlStates();
       updateStatus('Loaded design default values');
+      return;
+    }
+
+    if (_isEnabled('project_presets') && presetId.startsWith('proj::')) {
+      const presetName = presetId.slice(6);
+      const projPresets = state.projectPresets;
+      if (projPresets && projPresets[presetName]) {
+        const projPreset = {
+          id: presetId,
+          name: presetName,
+          parameters: projPresets[presetName],
+          source: 'project',
+        };
+        applyPresetParametersAndCompanions(projPreset);
+      }
       return;
     }
 
@@ -11861,12 +12032,507 @@ function getEnabledLibrariesForRender() {
   return paths;
 }
 
+// Desktop reference geometry from CLI extracts (OpenSCAD 2026.01.03 Nightly, Manifold backend).
+// Source: docs/audit/testing-round-7/reference-data/cli-extracts/nightly/
+const DESKTOP_REFERENCE_GEOMETRY = {
+  '3d-printed-keyguard': {
+    scenarioId: '3d-printed-keyguard',
+    parameters: { generate: 'keyguard', type_of_keyguard: '3D-Printed' },
+    geometry: { vertices: 5978, facets: 12016 },
+    exports: { stl_bytes: 3394047 },
+    openscadVersion: '2026.01.03',
+    backend: 'Manifold',
+  },
+  'laser-cut-keyguard': {
+    scenarioId: 'laser-cut-keyguard',
+    parameters: { generate: 'keyguard', type_of_keyguard: 'Laser-Cut' },
+    geometry: { vertices: 3288, facets: 6636 },
+    exports: { stl_bytes: 1912770 },
+    openscadVersion: '2026.01.03',
+    backend: 'Manifold',
+  },
+  'keyguard-frame-multicolor': {
+    scenarioId: 'keyguard-frame-multicolor',
+    parameters: {
+      type_of_keyguard: '3D-Printed',
+      generate: 'keyguard frame',
+      show_keyguard_with_frame: 'yes',
+      have_a_keyguard_frame: 'yes',
+    },
+    geometry: { vertices: 6981, facets: 14118 },
+    exports: { stl_bytes: 3940675 },
+    openscadVersion: '2026.01.03',
+    backend: 'Manifold',
+  },
+};
+
+function findMatchingReference(params) {
+  if (!params) return null;
+  for (const ref of Object.values(DESKTOP_REFERENCE_GEOMETRY)) {
+    const allMatch = Object.entries(ref.parameters).every(
+      ([key, value]) => params[key] === value
+    );
+    if (allMatch) return ref;
+  }
+  return null;
+}
+
 // Expose key managers to window for testing and debugging
 if (typeof window !== 'undefined') {
   window.stateManager = stateManager;
   window.presetManager = presetManager;
   window.themeManager = themeManager;
   window.libraryManager = libraryManager;
+
+  window.__forgeDebug = {
+    async compareGeometry() {
+      if (!renderController || !renderController.ready) {
+        console.error(
+          '[GeomDiag] Render controller not ready. Initialize WASM first.'
+        );
+        return null;
+      }
+      const state = stateManager.getState();
+      if (!state.uploadedFile?.content) {
+        console.error('[GeomDiag] No model loaded.');
+        return null;
+      }
+
+      console.log(
+        '[GeomDiag] Rendering at FULL quality (no $fn capping) for geometry comparison...'
+      );
+      const startTime = performance.now();
+
+      try {
+        const result = await renderController.renderFull(
+          state.uploadedFile.content,
+          state.parameters,
+          {
+            quality: RENDER_QUALITY.FULL,
+            outputFormat: 'stl',
+            paramTypes: state.paramTypes || {},
+            files: state.projectFiles,
+            mainFile: state.mainFilePath,
+            libraries: getEnabledLibrariesForRender(),
+          }
+        );
+
+        const durationMs = Math.round(performance.now() - startTime);
+        const stats = result.stats || {};
+        const triangles = stats.triangles || 0;
+        const stlBytes = stats.size || 0;
+
+        const browserResult = { triangles, stlBytes, renderMs: durationMs };
+
+        console.log('[GeomDiag] === Browser Geometry Results ===');
+        console.log(`  Triangles (facets): ${triangles.toLocaleString()}`);
+        console.log(
+          `  STL size: ${stlBytes.toLocaleString()} bytes (${(stlBytes / 1024).toFixed(1)} KB)`
+        );
+        console.log(`  Render time: ${durationMs}ms`);
+
+        const ref = findMatchingReference(state.parameters);
+
+        if (ref) {
+          const refTriangles = ref.geometry.facets;
+          const refVertices = ref.geometry.vertices;
+          const refStlBytes = ref.exports.stl_bytes;
+
+          const triDiff = triangles - refTriangles;
+          const triPct =
+            refTriangles > 0
+              ? ((triDiff / refTriangles) * 100).toFixed(1)
+              : 'N/A';
+          const sizeDiff = stlBytes - refStlBytes;
+          const sizePct =
+            refStlBytes > 0
+              ? ((sizeDiff / refStlBytes) * 100).toFixed(1)
+              : 'N/A';
+
+          console.log(
+            `[GeomDiag] === Desktop Reference (${ref.scenarioId}) ===`
+          );
+          console.log(
+            `  OpenSCAD: ${ref.openscadVersion} (${ref.backend})`
+          );
+          console.log(
+            `  Triangles (facets): ${refTriangles.toLocaleString()}`
+          );
+          console.log(
+            `  Unique vertices (OFF format): ${refVertices.toLocaleString()}`
+          );
+          console.log(
+            `  STL size: ${refStlBytes.toLocaleString()} bytes`
+          );
+
+          console.log('[GeomDiag] === Comparison ===');
+          console.log(
+            `  Triangle delta: ${triDiff > 0 ? '+' : ''}${triDiff.toLocaleString()} (${triPct}%)`
+          );
+          console.log(
+            `  STL size delta: ${sizeDiff > 0 ? '+' : ''}${sizeDiff.toLocaleString()} bytes (${sizePct}%)`
+          );
+
+          const withinTolerance = Math.abs(parseFloat(triPct)) <= 10;
+          console.log(
+            `  Within 10% tolerance: ${withinTolerance ? 'YES' : 'NO'}`
+          );
+
+          return {
+            browser: browserResult,
+            reference: {
+              scenarioId: ref.scenarioId,
+              triangles: refTriangles,
+              vertices: refVertices,
+              stlBytes: refStlBytes,
+            },
+            comparison: {
+              triangleDelta: triDiff,
+              triangleDeltaPct: parseFloat(triPct),
+              stlSizeDelta: sizeDiff,
+              stlSizeDeltaPct: parseFloat(sizePct),
+              withinTolerance,
+            },
+          };
+        }
+
+        console.log(
+          '[GeomDiag] No matching desktop reference for current parameters.'
+        );
+        console.log(
+          '[GeomDiag] Known references:',
+          Object.keys(DESKTOP_REFERENCE_GEOMETRY).join(', ')
+        );
+        return { browser: browserResult, reference: null, comparison: null };
+      } catch (err) {
+        console.error('[GeomDiag] Render failed:', err);
+        return { error: err.message };
+      }
+    },
+
+    getDesktopReferences() {
+      return { ...DESKTOP_REFERENCE_GEOMETRY };
+    },
+
+    toggleCsgBypass(enable) {
+      const key = 'openscad-forge-debug-no-csg-colors';
+      const wasEnabled = localStorage.getItem(key) !== null;
+      const nowEnabled = enable !== undefined ? Boolean(enable) : !wasEnabled;
+
+      if (nowEnabled) {
+        localStorage.setItem(key, '1');
+      } else {
+        localStorage.removeItem(key);
+      }
+      console.log(
+        `[ToggleDebug] CSG bypass: ${nowEnabled ? 'ON' : 'OFF'} ` +
+          `(was ${wasEnabled ? 'ON' : 'OFF'})`
+      );
+
+      if (autoPreviewController) {
+        autoPreviewController.clearPreviewCache();
+        const state = stateManager.getState();
+        if (state?.uploadedFile?.content) {
+          autoPreviewController.forcePreview(state.parameters);
+        }
+      }
+      return nowEnabled;
+    },
+
+    toggleDesktopQuality(enable) {
+      const key = 'openscad-forge-debug-desktop-quality';
+      const wasEnabled = localStorage.getItem(key) !== null;
+      const nowEnabled = enable !== undefined ? Boolean(enable) : !wasEnabled;
+
+      if (nowEnabled) {
+        localStorage.setItem(key, '1');
+      } else {
+        localStorage.removeItem(key);
+      }
+      console.log(
+        `[ToggleDebug] Desktop quality: ${nowEnabled ? 'ON' : 'OFF'} ` +
+          `(was ${wasEnabled ? 'ON' : 'OFF'})`
+      );
+
+      if (autoPreviewController) {
+        autoPreviewController.clearPreviewCache();
+        const state = stateManager.getState();
+        if (state?.uploadedFile?.content) {
+          autoPreviewController.forcePreview(state.parameters);
+        }
+      }
+      return nowEnabled;
+    },
+
+    toggleSourceOverrides(enable) {
+      const key = 'openscad-forge-debug-source-overrides';
+      const wasEnabled = localStorage.getItem(key) !== null;
+      const nowEnabled = enable !== undefined ? Boolean(enable) : !wasEnabled;
+
+      if (nowEnabled) {
+        localStorage.setItem(key, '1');
+      } else {
+        localStorage.removeItem(key);
+      }
+      console.log(
+        `[ToggleDebug] Source overrides: ${nowEnabled ? 'ON' : 'OFF'} ` +
+          `(was ${wasEnabled ? 'ON' : 'OFF'}). ` +
+          `When ON, parameters are baked into SCAD source instead of using -D flags.`
+      );
+
+      if (autoPreviewController) {
+        autoPreviewController.clearPreviewCache();
+        const state = stateManager.getState();
+        if (state?.uploadedFile?.content) {
+          autoPreviewController.forcePreview(state.parameters);
+        }
+      }
+      return nowEnabled;
+    },
+
+    getToggles() {
+      const csgBypass =
+        localStorage.getItem('openscad-forge-debug-no-csg-colors') !== null;
+      const desktopQuality =
+        localStorage.getItem('openscad-forge-debug-desktop-quality') !== null;
+      const sourceOverrides =
+        localStorage.getItem('openscad-forge-debug-source-overrides') !== null;
+      const toggles = {
+        csgBypass,
+        desktopQuality,
+        sourceOverrides,
+      };
+      console.log('[ToggleDebug] Current toggles:', toggles);
+      return toggles;
+    },
+
+    /**
+     * Export the SCAD source exactly as it would be sent to the renderer.
+     * @param {Object} [options]
+     * @param {boolean} [options.injected=false] - true  → return CSG-color-injected source
+     *                                            false → return original (raw) source
+     * @param {boolean} [options.download=false] - trigger a browser file download
+     * @returns {string|null} The SCAD source text, or null if no model is loaded
+     */
+    exportScadSource(options = {}) {
+      const { injected = false, download = false } = options;
+      const state = stateManager.getState();
+      if (!state.uploadedFile?.content) {
+        console.error('[ExportDiag] No model loaded.');
+        return null;
+      }
+
+      const rawSource =
+        autoPreviewController?.currentScadContent ||
+        state.uploadedFile.content;
+
+      let source;
+      let label;
+      if (injected) {
+        const hasColorCalls =
+          AutoPreviewController.scadUsesColor(rawSource);
+        const cleaned = hasColorCalls
+          ? AutoPreviewController.stripColorCalls(rawSource)
+          : rawSource;
+        source = AutoPreviewController.injectCsgColors(cleaned);
+        label = 'csg-injected';
+      } else {
+        source = rawSource;
+        label = 'original';
+      }
+
+      const csgBypass =
+        localStorage.getItem('openscad-forge-debug-no-csg-colors') !== null;
+
+      console.log(`[ExportDiag] Source type: ${label}`);
+      console.log(`[ExportDiag] CSG bypass active: ${csgBypass}`);
+      console.log(`[ExportDiag] Source length: ${source.length} chars`);
+
+      if (download) {
+        const blob = new Blob([source], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `forge-export-${label}.scad`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        console.log(`[ExportDiag] Downloaded as forge-export-${label}.scad`);
+      }
+
+      return source;
+    },
+
+    /**
+     * Dump the render arguments that would be passed to the OpenSCAD worker.
+     * Logs parameters, paramTypes, output format, and capability flags.
+     * @returns {Object|null} Structured diagnostic info, or null if no model loaded
+     */
+    dumpRenderArgs() {
+      const state = stateManager.getState();
+      if (!state.uploadedFile?.content) {
+        console.error('[RenderArgsDiag] No model loaded.');
+        return null;
+      }
+
+      const parameters = state.parameters || {};
+      const paramTypes = state.paramTypes || {};
+
+      const csgBypass =
+        localStorage.getItem('openscad-forge-debug-no-csg-colors') !== null;
+      const rawSource =
+        autoPreviewController?.currentScadContent ||
+        state.uploadedFile.content;
+      const hasColorCalls =
+        AutoPreviewController.scadUsesColor(rawSource);
+      const colorPassthroughEnabled = isFlagEnabled('color_passthrough');
+      const caps = renderController?.getCapabilities?.() || {};
+      const supportsRenderColors = Boolean(
+        caps.hasRenderColorsFlag || caps.hasManifold
+      );
+
+      let previewOutputFormat;
+      if (csgBypass) {
+        previewOutputFormat = 'stl';
+      } else if (supportsRenderColors) {
+        previewOutputFormat = 'off';
+      } else {
+        previewOutputFormat =
+          hasColorCalls && colorPassthroughEnabled ? 'off' : 'stl';
+      }
+
+      console.log('[RenderArgsDiag] === Current Render Arguments ===');
+      console.log(
+        '[RenderArgsDiag] Parameters:',
+        JSON.parse(JSON.stringify(parameters))
+      );
+      console.log(
+        '[RenderArgsDiag] Parameter types:',
+        JSON.parse(JSON.stringify(paramTypes))
+      );
+      console.log(
+        '[RenderArgsDiag] Preview output format:',
+        previewOutputFormat
+      );
+      const sourceOverrides =
+        localStorage.getItem('openscad-forge-debug-source-overrides') !== null;
+      console.log('[RenderArgsDiag] CSG bypass:', csgBypass);
+      console.log(
+        '[RenderArgsDiag] Source overrides (bake params into SCAD):',
+        sourceOverrides
+      );
+      console.log('[RenderArgsDiag] Has color() calls:', hasColorCalls);
+      console.log(
+        '[RenderArgsDiag] Color passthrough flag:',
+        colorPassthroughEnabled
+      );
+      console.log(
+        '[RenderArgsDiag] Supports render colors:',
+        supportsRenderColors
+      );
+      console.log('[RenderArgsDiag] Engine capabilities:', caps);
+
+      const scadSource =
+        autoPreviewController?.currentScadContent ||
+        state.uploadedFile.content;
+      const exactDefineArgs = formatBuildDefineArgs(
+        parameters,
+        paramTypes,
+        scadSource
+      );
+      const paramSummary = [];
+      for (let i = 0; i < exactDefineArgs.length; i += 2) {
+        const assignment = exactDefineArgs[i + 1] || '';
+        const key = assignment.split('=')[0];
+        const type = paramTypes[key] || 'unknown';
+        paramSummary.push(`  ${exactDefineArgs[i]} ${assignment}  (type: ${type})`);
+      }
+      if (sourceOverrides) {
+        console.log(
+          '[RenderArgsDiag] Source overrides ACTIVE — parameters will be ' +
+            'baked into SCAD source via _applyOverrides instead of -D flags'
+        );
+      }
+      console.log(
+        '[RenderArgsDiag] Exact -D args ' +
+          '(same formatting as worker buildDefineArgs):\n' +
+          paramSummary.join('\n')
+      );
+
+      // Preview quality & auto-preview diagnostics
+      const previewInfo = autoPreviewController
+        ? autoPreviewController.resolvePreviewQualityInfo(parameters)
+        : { quality: null, qualityKey: 'unknown' };
+      const previewParams = autoPreviewController
+        ? autoPreviewController.resolvePreviewParametersForRender(
+            parameters,
+            previewInfo.qualityKey,
+            previewInfo.quality
+          )
+        : parameters;
+      const previewOverridesActive = previewParams !== parameters;
+
+      console.log('[RenderArgsDiag] Preview quality key:', previewInfo.qualityKey);
+      console.log('[RenderArgsDiag] Preview quality preset:', previewInfo.quality);
+      console.log('[RenderArgsDiag] Auto-preview overrides active:', previewOverridesActive);
+      if (previewOverridesActive) {
+        const diffs = {};
+        for (const [k, v] of Object.entries(previewParams)) {
+          if (parameters[k] !== v) diffs[k] = { original: parameters[k], preview: v };
+        }
+        console.log('[RenderArgsDiag] Preview parameter overrides:', diffs);
+      }
+
+      // Backend info
+      const manifoldPref = localStorage.getItem(
+        'openscad-forge-manifold-engine'
+      );
+      const useManifold = manifoldPref === null ? true : manifoldPref !== 'false';
+      console.log('[RenderArgsDiag] Backend:', useManifold ? 'Manifold' : 'CGAL');
+
+      // Companion / project file summary
+      const projectFiles = state.projectFiles;
+      const companionSummary = [];
+      if (projectFiles && projectFiles.size > 0) {
+        for (const [name, content] of projectFiles.entries()) {
+          const size = typeof content === 'string'
+            ? content.length
+            : (content?.byteLength ?? content?.length ?? 0);
+          companionSummary.push({ name, sizeBytes: size });
+        }
+      }
+      console.log('[RenderArgsDiag] Mounted project files:', companionSummary);
+      console.log('[RenderArgsDiag] Main file path:', state.mainFilePath || '(single file)');
+
+      // Auto-preview controller state
+      const autoPreviewInfo = autoPreviewController
+        ? autoPreviewController.getStateInfo()
+        : null;
+      console.log('[RenderArgsDiag] Auto-preview state:', autoPreviewInfo);
+
+      console.log('[RenderArgsDiag] === End Render Arguments ===');
+
+      return {
+        parameters,
+        paramTypes,
+        previewOutputFormat,
+        csgBypass,
+        sourceOverrides,
+        hasColorCalls,
+        colorPassthroughEnabled,
+        supportsRenderColors,
+        capabilities: caps,
+        previewQualityKey: previewInfo.qualityKey,
+        previewQuality: previewInfo.quality,
+        previewOverridesActive,
+        backend: useManifold ? 'Manifold' : 'CGAL',
+        mountedFiles: companionSummary,
+        mainFilePath: state.mainFilePath || null,
+        autoPreviewState: autoPreviewInfo,
+      };
+    },
+  };
 }
 
 // Global error handlers — catch uncaught exceptions and unhandled promise

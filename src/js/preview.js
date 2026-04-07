@@ -66,6 +66,7 @@ const STORAGE_KEY_LOD_WARNING_DISMISSED = getAppPrefKey(
 /** Default grid config — 220×220mm matches popular mid-range FDM printers (Creality K1C, FlashForge Adventurer 5M Pro) */
 const DEFAULT_GRID_CONFIG = { widthMm: 220, heightMm: 220 };
 
+
 export function isThreeJsLoaded() {
   return true;
 }
@@ -102,12 +103,27 @@ const LOD_CONFIG = {
 /**
  * Theme-aware color scheme for 3D preview
  */
+// Cornfield front-face color: OpenSCAD src/glview/ColorMap.cc default ctor
+// OPENCSG_FACE_FRONT_COLOR = #F9D72C [OBSERVED]
+const CORNFIELD_FRONT_COLOR = 0xf9d72c;
+
+// Cornfield back-face (CUTOUT) color: OpenSCAD src/glview/ColorMap.cc default ctor
+// OPENCSG_FACE_BACK_COLOR = #9DCB51 [OBSERVED]
+export const CORNFIELD_BACK_COLOR = 0x9dcb51;
+
+// Desktop Phong exponent: OpenSCAD src/glview/GLView.cc line 324 (master),
+// src/GLView.cc line 351 (2021) — glMateriali(GL_FRONT_AND_BACK, GL_SHININESS, 64) [OBSERVED]
+// Specular is black (0,0,0) so shininess has no visible effect, but aligning
+// for forward compatibility if specular is ever enabled.
+export const DESKTOP_SHININESS = 64;
+
 const PREVIEW_COLORS = {
   light: {
     background: 0xf5f5f5,
     gridPrimary: 0xcccccc,
     gridSecondary: 0xe0e0e0,
-    model: 0x2196f3,
+    model: CORNFIELD_FRONT_COLOR,
+    modelBack: CORNFIELD_BACK_COLOR,
     ambientLight: 0xffffff,
   },
   dark: {
@@ -115,6 +131,7 @@ const PREVIEW_COLORS = {
     gridPrimary: 0x404040,
     gridSecondary: 0x2d2d2d,
     model: 0x4d9fff,
+    modelBack: 0x3d8a44, // [UNVERIFIED] green tint for dark background
     ambientLight: 0xffffff,
   },
   'light-hc': {
@@ -122,6 +139,7 @@ const PREVIEW_COLORS = {
     gridPrimary: 0x000000,
     gridSecondary: 0x666666,
     model: 0x0052cc,
+    modelBack: 0x338a33, // [UNVERIFIED] high-contrast green
     ambientLight: 0xffffff,
   },
   'dark-hc': {
@@ -129,6 +147,7 @@ const PREVIEW_COLORS = {
     gridPrimary: 0xffffff,
     gridSecondary: 0x999999,
     model: 0x66b3ff,
+    modelBack: 0x66cc66, // [UNVERIFIED] high-contrast green for dark
     ambientLight: 0xffffff,
   },
   // Green phosphor (dark theme mono variant)
@@ -137,6 +156,7 @@ const PREVIEW_COLORS = {
     gridPrimary: 0x00ff00,
     gridSecondary: 0x00aa00,
     model: 0x00ff00,
+    modelBack: 0x00aa00, // [UNVERIFIED] dimmer green for intensity distinction
     ambientLight: 0x00ff00,
   },
   // Amber phosphor (light theme mono variant)
@@ -145,6 +165,7 @@ const PREVIEW_COLORS = {
     gridPrimary: 0xffb000,
     gridSecondary: 0xcc8c00,
     model: 0xffb000,
+    modelBack: 0xcc8c00, // [UNVERIFIED] dimmer amber for intensity distinction
     ambientLight: 0xffb000,
   },
   // Green phosphor high-contrast (wider grid contrast ratio)
@@ -153,6 +174,7 @@ const PREVIEW_COLORS = {
     gridPrimary: 0x00ff00,
     gridSecondary: 0x003300,
     model: 0x33ff33,
+    modelBack: 0x00cc00, // [UNVERIFIED] dimmer green phosphor HC
     ambientLight: 0x00ff00,
   },
   // Amber phosphor high-contrast (wider grid contrast ratio)
@@ -161,6 +183,7 @@ const PREVIEW_COLORS = {
     gridPrimary: 0xffb000,
     gridSecondary: 0x4d3500,
     model: 0xffc233,
+    modelBack: 0xcc9a00, // [UNVERIFIED] dimmer amber phosphor HC
     ambientLight: 0xffb000,
   },
 };
@@ -222,6 +245,7 @@ export class PreviewManager {
     this._renderOverride = null;
     this._resizeHook = null;
     this._postLoadHook = null; // Called after STL is loaded
+    this._postLoadListeners = []; // Multi-listener post-load event
 
     // Reference overlay (screenshot/SVG image plane under the model)
     this.referenceOverlay = null; // THREE.Mesh for the overlay plane
@@ -357,7 +381,7 @@ export class PreviewManager {
       0xffffff,
       piDirectional
     );
-    this.directionalLight2.position.set(1, -1, 1);
+    this.directionalLight2.position.set(1, -1, -1);
     this.camera.add(this.directionalLight2);
     this.camera.add(this.directionalLight2.target);
 
@@ -609,6 +633,12 @@ export class PreviewManager {
           material.needsUpdate = true;
         }
       }
+
+      if (material.userData?.backfaceColorUniform) {
+        material.userData.backfaceColorUniform.value.setHex(
+          this._resolveModelBackColor()
+        );
+      }
     };
 
     if (this.mesh.isGroup) {
@@ -644,6 +674,270 @@ export class PreviewManager {
     const themeColors =
       PREVIEW_COLORS[this.currentTheme] || PREVIEW_COLORS.light;
     return `#${themeColors.model.toString(16).padStart(6, '0')}`;
+  }
+
+  /**
+   * Resolve the back-face (CUTOUT) color for the current theme.
+   * Always theme-driven — color overrides do not affect back faces,
+   * matching desktop OpenSCAD where CUTOUT color is scheme-level.
+   *
+   * @returns {number} hex integer (e.g. 0x9dcb51)
+   */
+  _resolveModelBackColor() {
+    const themeColors =
+      PREVIEW_COLORS[this.currentTheme] || PREVIEW_COLORS.light;
+    return themeColors.modelBack;
+  }
+
+  /**
+   * CPU-side face classifier for CSG cavity detection.
+   * Sets a per-vertex `aIsInner` float attribute (1.0 = inner/cavity, 0.0 = outer).
+   *
+   * Pass 1: dot(faceNormal, faceCentroid) < 0.1 on centered geometry (baseline).
+   * Pass 2: edge adjacency via hashed vertex positions (4 decimal places).
+   * Pass 3: concave-edge correction — reclassify borderline faces (dot 0.1–0.85)
+   *         adjacent to inner faces across concave edges (inter-normal dot < −0.5).
+   *
+   * @param {BufferGeometry} geometry - centered, with computed vertex normals
+   */
+  _classifyInnerFaces(geometry) {
+    const posAttr = geometry.getAttribute('position');
+    const normAttr = geometry.getAttribute('normal');
+    if (!posAttr || !normAttr) return;
+
+    const pos = posAttr.array;
+    const norm = normAttr.array;
+    const vertCount = posAttr.count;
+    const faceCount = vertCount / 3;
+    const faceIsInner = new Uint8Array(faceCount);
+    const faceDot = new Float32Array(faceCount);
+    const faceNx = new Float32Array(faceCount);
+    const faceNy = new Float32Array(faceCount);
+    const faceNz = new Float32Array(faceCount);
+    const faceCx = new Float32Array(faceCount);
+    const faceCy = new Float32Array(faceCount);
+    const faceCz = new Float32Array(faceCount);
+
+    let minX = Infinity, minY = Infinity, minZ = Infinity;
+    let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+    for (let i = 0; i < pos.length; i += 3) {
+      if (pos[i] < minX) minX = pos[i];
+      if (pos[i] > maxX) maxX = pos[i];
+      if (pos[i + 1] < minY) minY = pos[i + 1];
+      if (pos[i + 1] > maxY) maxY = pos[i + 1];
+      if (pos[i + 2] < minZ) minZ = pos[i + 2];
+      if (pos[i + 2] > maxZ) maxZ = pos[i + 2];
+    }
+    const mcx = (minX + maxX) / 2;
+    const mcy = (minY + maxY) / 2;
+    const mcz = (minZ + maxZ) / 2;
+
+    for (let f = 0; f < faceCount; f++) {
+      const b = f * 9;
+      const cx = (pos[b] + pos[b + 3] + pos[b + 6]) / 3;
+      const cy = (pos[b + 1] + pos[b + 4] + pos[b + 7]) / 3;
+      const cz = (pos[b + 2] + pos[b + 5] + pos[b + 8]) / 3;
+      const nx = norm[b];
+      const ny = norm[b + 1];
+      const nz = norm[b + 2];
+
+      faceNx[f] = nx;
+      faceNy[f] = ny;
+      faceNz[f] = nz;
+      faceCx[f] = cx;
+      faceCy[f] = cy;
+      faceCz[f] = cz;
+
+      const rcx = cx - mcx, rcy = cy - mcy, rcz = cz - mcz;
+      const cLen = Math.sqrt(rcx * rcx + rcy * rcy + rcz * rcz) || 1;
+      const nLen = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
+      faceDot[f] =
+        (nx / nLen) * (rcx / cLen) +
+        (ny / nLen) * (rcy / cLen) +
+        (nz / nLen) * (rcz / cLen);
+    }
+
+    const edgeMap = new Map();
+    const r = (v) => v.toFixed(4);
+
+    for (let f = 0; f < faceCount; f++) {
+      const b = f * 9;
+      const v0 = `${r(pos[b])},${r(pos[b + 1])},${r(pos[b + 2])}`;
+      const v1 = `${r(pos[b + 3])},${r(pos[b + 4])},${r(pos[b + 5])}`;
+      const v2 = `${r(pos[b + 6])},${r(pos[b + 7])},${r(pos[b + 8])}`;
+
+      const edges = [
+        v0 < v1 ? `${v0}|${v1}` : `${v1}|${v0}`,
+        v1 < v2 ? `${v1}|${v2}` : `${v2}|${v1}`,
+        v2 < v0 ? `${v2}|${v0}` : `${v0}|${v2}`,
+      ];
+
+      for (const key of edges) {
+        const list = edgeMap.get(key);
+        if (list) list.push(f);
+        else edgeMap.set(key, [f]);
+      }
+    }
+
+    const smoothAdj = Array.from({ length: faceCount }, () => []);
+    const concaveAdj = Array.from({ length: faceCount }, () => []);
+    const concaveNdot = Array.from({ length: faceCount }, () => []);
+    const concaveEdgeCount = new Uint8Array(faceCount);
+
+    for (const faces of edgeMap.values()) {
+      if (faces.length !== 2) continue;
+      const [a, b] = faces;
+
+      const l1 =
+        Math.sqrt(
+          faceNx[a] * faceNx[a] +
+            faceNy[a] * faceNy[a] +
+            faceNz[a] * faceNz[a]
+        ) || 1;
+      const l2 =
+        Math.sqrt(
+          faceNx[b] * faceNx[b] +
+            faceNy[b] * faceNy[b] +
+            faceNz[b] * faceNz[b]
+        ) || 1;
+      const nDot =
+        (faceNx[a] / l1) * (faceNx[b] / l2) +
+        (faceNy[a] / l1) * (faceNy[b] / l2) +
+        (faceNz[a] / l1) * (faceNz[b] / l2);
+
+      if (nDot > 0.999) {
+        smoothAdj[a].push(b);
+        smoothAdj[b].push(a);
+      }
+
+      if (nDot < -0.5) {
+        concaveAdj[a].push(b);
+        concaveAdj[b].push(a);
+        concaveNdot[a].push(nDot);
+        concaveNdot[b].push(nDot);
+        concaveEdgeCount[a]++;
+        concaveEdgeCount[b]++;
+      }
+    }
+
+    for (let f = 0; f < faceCount; f++) {
+      faceIsInner[f] = faceDot[f] < 0 ? 1 : 0;
+    }
+
+    let promotionCount = 0;
+    const bfsQueue = [];
+    for (let f = 0; f < faceCount; f++) {
+      if (faceIsInner[f]) bfsQueue.push(f);
+    }
+
+    while (bfsQueue.length) {
+      const src = bfsQueue.pop();
+      for (let i = 0; i < concaveAdj[src].length; i++) {
+        const tgt = concaveAdj[src][i];
+        if (faceIsInner[tgt] || faceDot[tgt] >= 0.85) continue;
+        faceIsInner[tgt] = 1;
+        promotionCount++;
+        bfsQueue.push(tgt);
+      }
+    }
+
+    if (faceCount && promotionCount / faceCount > 0.15) {
+      console.warn(
+        `[Preview] Concave-edge BFS promoted ${((promotionCount / faceCount) * 100).toFixed(1)}% — reverting to baseline`
+      );
+      promotionCount = 0;
+      for (let f = 0; f < faceCount; f++) {
+        faceIsInner[f] = faceDot[f] < 0 ? 1 : 0;
+      }
+    }
+
+    const componentId = new Int32Array(faceCount).fill(-1);
+    let numComponents = 0;
+    for (let f = 0; f < faceCount; f++) {
+      if (componentId[f] >= 0) continue;
+      const cid = numComponents++;
+      const queue = [f];
+      componentId[f] = cid;
+      while (queue.length) {
+        const cur = queue.pop();
+        for (const neighbor of smoothAdj[cur]) {
+          if (componentId[neighbor] >= 0) continue;
+          componentId[neighbor] = cid;
+          queue.push(neighbor);
+        }
+      }
+    }
+
+    const compInnerCount = new Uint32Array(numComponents);
+    const compFaceCount = new Uint32Array(numComponents);
+    for (let f = 0; f < faceCount; f++) {
+      compFaceCount[componentId[f]]++;
+      if (faceIsInner[f]) compInnerCount[componentId[f]]++;
+    }
+
+    for (let f = 0; f < faceCount; f++) {
+      const cid = componentId[f];
+      const majorityInner = compInnerCount[cid] * 2 > compFaceCount[cid];
+      faceIsInner[f] = majorityInner ? 1 : 0;
+    }
+
+    const isInner = new Float32Array(vertCount);
+    for (let f = 0; f < faceCount; f++) {
+      const val = faceIsInner[f];
+      isInner[f * 3] = val;
+      isInner[f * 3 + 1] = val;
+      isInner[f * 3 + 2] = val;
+    }
+
+    geometry.setAttribute('aIsInner', new Float32BufferAttribute(isInner, 1));
+  }
+
+  /**
+   * Configure a MeshPhongMaterial for two-sided face coloring that
+   * approximates desktop OpenSCAD's F5 back-face rendering.
+   *
+   * Uses gl_FrontFacing combined with the CPU-side aIsInner attribute
+   * (set by _classifyInnerFaces) to identify cavity/cutout faces.
+   *
+   * @param {MeshPhongMaterial} material
+   * @param {number} backfaceHex - e.g. 0x9dcb51
+   */
+  _applyBackfaceColoring(material, backfaceHex) {
+    material.side = DoubleSide;
+
+    material.onBeforeCompile = (shader) => {
+      shader.uniforms.backfaceColor = {
+        value: new Color(backfaceHex),
+      };
+
+      shader.vertexShader = shader.vertexShader.replace(
+        'varying vec3 vViewPosition;',
+        'varying vec3 vViewPosition;\nattribute float aIsInner;\nvarying float vIsInner;'
+      );
+      shader.vertexShader = shader.vertexShader.replace(
+        'vViewPosition = - mvPosition.xyz;',
+        'vViewPosition = - mvPosition.xyz;\nvIsInner = aIsInner;'
+      );
+
+      shader.fragmentShader = shader.fragmentShader.replace(
+        'uniform float opacity;',
+        'uniform float opacity;\nuniform vec3 backfaceColor;\nvarying float vIsInner;'
+      );
+
+      shader.fragmentShader = shader.fragmentShader.replace(
+        'vec4 diffuseColor = vec4( diffuse, opacity );',
+        'bool isBack = !gl_FrontFacing || vIsInner > 0.5;\nvec4 diffuseColor = vec4( isBack ? backfaceColor : diffuse, opacity );'
+      );
+
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <color_fragment>',
+        '#include <color_fragment>\nif ( isBack ) diffuseColor = vec4( backfaceColor, opacity );'
+      );
+
+      material.userData.backfaceColorUniform = shader.uniforms.backfaceColor;
+    };
+
+    material.customProgramCacheKey = () => 'backface-coloring-v7';
   }
 
   /**
@@ -1157,6 +1451,12 @@ export class PreviewManager {
         geometry.computeVertexNormals();
         geometry.center();
 
+        try {
+          this._classifyInnerFaces(geometry);
+        } catch (e) {
+          console.warn('[Preview] Face classification failed, using default coloring:', e);
+        }
+
         // Apply auto-bed if enabled (place object on Z=0 build plate)
         if (this.autoBedEnabled) {
           this.applyAutoBed(geometry);
@@ -1166,9 +1466,10 @@ export class PreviewManager {
         const material = new MeshPhongMaterial({
           color: parseInt(this._resolveModelColor().slice(1), 16),
           specular: 0x000000,
-          shininess: 30,
+          shininess: DESKTOP_SHININESS,
           flatShading: false,
         });
+        this._applyBackfaceColoring(material, this._resolveModelBackColor());
 
         this.mesh = new Mesh(geometry, material);
         this.scene.add(this.mesh);
@@ -1189,6 +1490,7 @@ export class PreviewManager {
         if (this._postLoadHook) {
           this._postLoadHook();
         }
+        this._firePostLoadListeners();
 
         if (this.measurementsEnabled) {
           this.showMeasurements();
@@ -1381,6 +1683,14 @@ export class PreviewManager {
         geometry.computeVertexNormals();
         geometry.center();
 
+        if (!hasColors) {
+          try {
+            this._classifyInnerFaces(geometry);
+          } catch (e) {
+            console.warn('[Preview] Face classification failed, using default coloring:', e);
+          }
+        }
+
         if (this.autoBedEnabled) {
           this.applyAutoBed(geometry);
         }
@@ -1399,21 +1709,25 @@ export class PreviewManager {
             ? new MeshPhongMaterial({
                 vertexColors: true,
                 specular: 0x000000,
-                shininess: 30,
+                shininess: DESKTOP_SHININESS,
                 flatShading: false,
               })
             : new MeshPhongMaterial({
                 color: parseInt(this._resolveModelColor().slice(1), 16),
                 specular: 0x000000,
-                shininess: 30,
+                shininess: DESKTOP_SHININESS,
                 flatShading: false,
               });
+          this._applyBackfaceColoring(
+            normalMaterial,
+            this._resolveModelBackColor()
+          );
 
           const highlightGeometry = geometry.clone();
           const highlightMaterial = new MeshPhongMaterial({
             color: parseInt(debugHighlight.hex.replace('#', ''), 16),
             specular: 0x000000,
-            shininess: 30,
+            shininess: DESKTOP_SHININESS,
             flatShading: false,
             transparent: true,
             opacity: debugHighlight.opacity,
@@ -1438,15 +1752,19 @@ export class PreviewManager {
             ? new MeshPhongMaterial({
                 vertexColors: true,
                 specular: 0x000000,
-                shininess: 30,
+                shininess: DESKTOP_SHININESS,
                 flatShading: false,
               })
             : new MeshPhongMaterial({
                 color: parseInt(this._resolveModelColor().slice(1), 16),
                 specular: 0x000000,
-                shininess: 30,
+                shininess: DESKTOP_SHININESS,
                 flatShading: false,
               });
+          this._applyBackfaceColoring(
+            material,
+            this._resolveModelBackColor()
+          );
           this.mesh = new Mesh(geometry, material);
         }
         this.scene.add(this.mesh);
@@ -1467,6 +1785,7 @@ export class PreviewManager {
         if (this._postLoadHook) {
           this._postLoadHook();
         }
+        this._firePostLoadListeners();
         if (this.measurementsEnabled) {
           this.showMeasurements();
         }
@@ -4021,6 +4340,31 @@ export class PreviewManager {
    */
   clearPostLoadHook() {
     this._postLoadHook = null;
+  }
+
+  /**
+   * Register a listener invoked after every loadSTL / loadOFF completion.
+   * Unlike setPostLoadHook (single-slot), multiple listeners can coexist.
+   * @param {Function} fn
+   */
+  addPostLoadListener(fn) {
+    if (typeof fn === 'function') this._postLoadListeners.push(fn);
+  }
+
+  /** @param {Function} fn */
+  removePostLoadListener(fn) {
+    this._postLoadListeners = this._postLoadListeners.filter((l) => l !== fn);
+  }
+
+  /** @private Fire all registered post-load listeners. */
+  _firePostLoadListeners() {
+    for (const fn of this._postLoadListeners) {
+      try {
+        fn();
+      } catch (e) {
+        console.error('[Preview] post-load listener error:', e);
+      }
+    }
   }
 
   // --- Model Appearance Controls ---

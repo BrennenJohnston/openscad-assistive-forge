@@ -274,6 +274,48 @@ If your model uses `include` or `use` statements:
 - ZIP archives: 20 MB maximum
 - These limits prevent browser memory issues
 
+### SVG Preparation
+
+When you upload an SVG file (or select one from the gallery), the app analyzes it to determine whether it needs preparation for OpenSCAD. OpenSCAD imports SVG as 2D geometry, so multi-element SVGs need to be combined into a single compound path using boolean operations (union for foreground shapes, difference for holes).
+
+**What happens automatically:**
+
+1. The SVG is analyzed for complexity (number of elements, fills, strokes, transforms)
+2. A status badge appears next to the file input:
+   - **SVG Ready** (green): Single-element SVG or successfully auto-prepared
+   - **Needs review** (amber): Multiple elements detected — the editor opens for you to review
+   - **Unsupported features** (red): Gradients, clip-paths, or other features that cannot be flattened
+3. Simple SVGs are auto-prepared silently. Complex or ambiguous SVGs open the preparation editor
+
+**The SVG Preparation Editor:**
+
+The editor shows a side-by-side view of your source SVG and the prepared result. Below the previews, an object list shows each detected shape with its assigned role:
+
+- **Foreground**: Becomes solid geometry in the final shape
+- **Hole**: Subtracted from the foreground (creates cutouts)
+- **Ignore**: Dropped from the output entirely
+
+Every role change updates the prepared result preview in real time, so you can see exactly what your changes do before applying.
+
+**Editor controls:**
+
+| Action | How |
+|--------|-----|
+| Change a role | Click a radio button or use arrow keys in the radio group |
+| See the effect | The prepared result updates instantly |
+| Apply changes | Click "Apply prepared SVG" |
+| Keep the original | Click "Keep original" (bypasses preparation) |
+| Reset roles | Click "Reset" to return to auto-classification |
+| Expand to fullscreen | Click the fullscreen button (top-right) |
+| Exit fullscreen | Press `Escape` or click the fullscreen button again |
+| Close the editor | Press `Escape` or click the close button |
+
+**Warnings:**
+
+The editor surfaces warnings for unsupported features. For example, stroked paths (paths with only a `stroke` and no `fill`) cannot participate in boolean operations and are flagged with a warning badge. These elements are automatically set to "Ignore."
+
+Your role assignments and prepared output are saved with the project, so reopening a saved project restores exactly where you left off.
+
 ---
 
 ## Image Measurement

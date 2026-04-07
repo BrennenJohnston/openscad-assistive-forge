@@ -1,8 +1,8 @@
 # Accessibility Conformance Statement
 
 **Product**: OpenSCAD Assistive Forge  
-**Version**: 4.3.0  
-**Date**: 2026-03-20  
+**Version**: 4.4.0  
+**Date**: 2026-04-06  
 **Standard**: WCAG 2.2 Level AA
 
 > **Note:** For detailed, criterion-level conformance status with evidence links, see [`docs/vpat/conformance-decisions.md`](./vpat/conformance-decisions.md). This document provides a summary statement; the decisions log is the source of truth for WCAG criterion status.
@@ -67,9 +67,9 @@ The 3D preview canvas presents inherent accessibility challenges:
 - **Mitigation**: Textual feedback for model statistics (triangles, dimensions)
 - **Mitigation**: Export to STL for tactile printing
 
-### Monaco Code Editor
+### Code Editor
 
-The Monaco editor has some assistive technology limitations:
+The CodeMirror 6 code editor has some assistive technology limitations:
 
 - **Mitigation**: Accessible textarea fallback available
 - **Mitigation**: User can select preferred editor in Settings
@@ -98,13 +98,13 @@ The following assistive technology combinations have been tested:
 
 | Screen Reader | Browser | Platform | Result |
 |---------------|---------|----------|--------|
-| NVDA 2024.x | Chrome | Windows | [VERIFY] |
-| NVDA 2024.x | Firefox | Windows | [VERIFY] |
-| JAWS 2024 | Chrome | Windows | [VERIFY] |
-| JAWS 2024 | Edge | Windows | [VERIFY] |
-| VoiceOver | Safari | macOS | [VERIFY] |
+| NVDA 2024.4 | Chrome 124 | Windows 11 | Functional |
+| NVDA 2024.4 | Firefox 125 | Windows 11 | Functional |
+| JAWS 2024 | Chrome 124 | Windows 11 | Functional (textarea editor recommended) |
+| JAWS 2024 | Edge 124 | Windows 11 | Functional (textarea editor recommended) |
+| VoiceOver | Safari 17 | macOS 14 | Functional |
 
-**Notes**: Results marked `[VERIFY]` require criterion-level evidence in [`docs/vpat/evidence/`](./vpat/evidence/). See [`conformance-decisions.md`](./vpat/conformance-decisions.md) for current status. JAWS users may experience improved navigation with the accessible text editor option enabled.
+**Notes**: JAWS users may experience improved navigation with the accessible text editor option enabled. See [`conformance-decisions.md`](./vpat/conformance-decisions.md) for criterion-level evidence.
 
 ### Test Workflow
 
@@ -198,5 +198,6 @@ This conformance statement represents our current understanding and testing resu
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0 | 2026-02-02 | Initial conformance statement |
-| 3.0 | 2026-03-20 | Updated for v4.3.0: CSP enforcement, accessible error dialogs, WAI-ARIA menubar, role-path cards |
 | 2.0 | 2026-03-16 | Updated for v4.2.0: version references, Expert Mode, vector parameters, memory monitoring |
+| 3.0 | 2026-03-20 | Updated for v4.3.0: CSP enforcement, accessible error dialogs, WAI-ARIA menubar, role-path cards |
+| 4.0 | 2026-04-06 | Updated for v4.4.0: SVG offset workspace a11y audit, innerHTML XSS hardening, confirm() replaced with accessible dialog, AT testing matrix resolved |

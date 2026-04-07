@@ -106,6 +106,8 @@
 | 2026-02-02 | 2.4.1, 2.4.3, 2.4.7 | Updated to "Supports" based on skip link and focus styles review | Code audit |
 | 2026-02-02 | 4.1.2, 4.1.3 | Updated to "Supports" based on ARIA and announcer.js review | Code audit |
 | 2026-03-13 | Multiple | Accessibility audit: evaluated 29 previously "Not Evaluated" criteria. Fixed heading hierarchy (h1→h2→h3). Added `.visually-hidden` CSS class. Upgraded axe E2E tests to WCAG 2.2 tags. | Code audit + E2E review |
+| 2026-03-29 | 2.4.7, 2.4.11 | SVG prep fullscreen sticky layout: added `padding-block` to scrollable objects list to prevent `:focus-visible` outline clipping at container edges. SC 2.4.7 and 2.4.11 status unchanged (Supports). | Code audit |
+| 2026-04-06 | Multiple | Release readiness audit (v4.4.0): Re-verified SVG preparer workspace a11y (ARIA, focus trap, keyboard, touch targets, reduced motion, forced colors). Hardened innerHTML in `dialogs.js` and `file-handler.js` with `escapeHtml()`. Replaced blocking `confirm()` in example loader with accessible `showConfirmDialog`. Verified announcer patterns intact after openscad-worker.js refactor. All 2,991 unit tests pass. axe-core E2E scans include `wcag22aa` tag. No new `alert()` calls. No regressions found. | Code audit + automated tests |
 
 ---
 

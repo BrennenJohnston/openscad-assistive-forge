@@ -143,6 +143,49 @@ export const FLAGS = {
     userConfigurable: true,
     killSwitch: false,
   },
+  image_import: {
+    id: 'image_import',
+    name: 'Image Import (SVG)',
+    description:
+      'Enable SVG file import for engraving and 2D geometry in parametric models via the existing file parameter pipeline',
+    default: true,
+    rollout: 100,
+    userConfigurable: true,
+    killSwitch: false,
+  },
+  svg_preparer: {
+    id: 'svg_preparer',
+    name: 'SVG Preparer',
+    description:
+      'Transform multi-element SVGs into OpenSCAD-compatible compound-path SVGs using boolean operations',
+    default: true,
+    rollout: 100,
+    userConfigurable: true,
+    killSwitch: false,
+  },
+  svg_path_offset: {
+    id: 'svg_path_offset',
+    name: 'SVG Path Offset',
+    description:
+      'Per-element offset controls in the SVG prep editor for adjusting path insets/outsets before boolean flatten',
+    default: true,
+    rollout: 100,
+    userConfigurable: true,
+    killSwitch: false,
+    requires: ['svg_preparer'],
+  },
+  project_presets: {
+    id: 'project_presets',
+    name: 'Project-Native Presets',
+    description:
+      'Use the loaded SCAD project sidecar JSON as the preset source of truth ' +
+      'instead of auto-importing into localStorage. Separates project-native ' +
+      'and user-saved presets in the dropdown.',
+    default: false,
+    rollout: 0,
+    userConfigurable: false,
+    killSwitch: false,
+  },
 };
 
 // Storage key for user preferences

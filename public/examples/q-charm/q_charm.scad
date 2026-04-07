@@ -1,55 +1,325 @@
-// Q Charm — DXF Profile Extrusion
-// C-shaped charm extruded from a 2D DXF side profile.
-// Dimensions: ~22 mm long × 20 mm wide × 8.5 mm tall
-// Orientation: profile vertical (XZ plane), large surface area facing up.
+// Bracelet Clip Charm — Parametric C-Clip Bracelet Charm
+// C-shaped clip-on charm for silicone bracelets with customizable design.
+// Profile stands vertically; the outer surface faces up for engraving.
+// Concept inspired by Nasif Zaman's image-to-OpenSCAD proof-of-concept.
+// AAC bracelet charm prior art by Duy Do (UW WOOF3D): thingiverse.com/thing:7153594
 // License: CC0 (Public Domain)
 
-/* [Dimensions] */
-// Extrusion width (Y axis depth)
-extrude_width = 20; // [10:1:40]
+/* [Design] */
+// Image file for the design (SVG, PNG, or JPG — raster images auto-convert to SVG; use simple single-path SVGs for best results)
+design_file = ""; // [file:svg,png,jpg]
+
+// Depth of engraving (or height of raised design)
+engrave_depth = 0.8; // [0.2:0.1:3.0]
+
+// Design style on the charm surface
+design_style = "raised"; // [raised, engraved]
+
+// Scale the design relative to the charm face (percentage)
+design_scale = 60; // [20:5:150]
+
+// Offset to thicken SVG lines for FDM printability (0 = off; 0.6 = recommended for 0.4mm nozzle)
+design_offset = 0; // [0:0.2:1.5]
+
+// Left (−) / right (+) position offset for design
+design_left_right = 0; // [-10:0.5:10]
+
+// Down (−) / up (+) position offset for design
+design_up_down = 0; // [-10:0.5:10]
+
+// Rotation angle for design (degrees, counter-clockwise)
+design_rotation = 0; // [-180:5:180]
+
+/* [Design Layer 2] */
+// Image file for the second design (leave empty for none)
+design_file_2 = ""; // [file:svg,png,jpg]
+
+// Design style for second design
+design_style_2 = "raised"; // [raised, engraved]
+
+// Scale the second design relative to the charm face (percentage)
+design_scale_2 = 40; // [20:5:150]
+
+// Left (−) / right (+) position offset for second design
+design_2_left_right = 0; // [-10:0.5:10]
+
+// Down (−) / up (+) position offset for second design
+design_2_up_down = 0; // [-10:0.5:10]
+
+// Rotation angle for second design (degrees, counter-clockwise)
+design_rotation_2 = 0; // [-180:5:180]
+
+// Thickness offset for second design (height relative to the charm surface)
+design_2_thickness = 0; // [-3:0.1:3]
+
+/* [Text] */
+// Text or number to display on the charm face (leave empty for none)
+text_content = "";
+
+// Depth of text engraving (or height of raised text)
+text_depth = 0.8; // [0.2:0.1:2]
+
+// Text style on the charm surface
+text_style = "raised"; // [raised, engraved]
+
+// Text height in mm
+text_size = 5; // [3:0.5:12]
+
+// Left (−) / right (+) position offset for text
+text_left_right = 6; // [-10:0.5:10]
+
+// Down (−) / up (+) position offset for text
+text_up_down = 5.5; // [-10:0.5:10]
+
+// Rotation angle for text (degrees, counter-clockwise)
+text_rotation = 90; // [-180:5:180]
+
+/* [Fit] */
+// Length of the charm along the bracelet (Y axis)
+charm_length = 22; // [10:1:40]
+
+// Overall height of the C-clip profile
+charm_height = 8.65; // [6:0.5:15]
+
+// Wall and material thickness
+charm_thickness = 2.75; // [2.25:0.25:4]
+
+// Width of the inner bracelet channel
+bracelet_width = 15; // [10:1:25]
+
+// Shift the gap opening left (−) or right (+) for asymmetric legs
+gap_offset = 2; // [-4:0.5:4]
+
+// Width of the bottom opening (gap between the C-clip legs)
+gap_width = 3; // [2:0.5:8]
 
 /* [Rounding] */
-// Edge rounding radius (0 = sharp edges)
+// Side edge rounding radius (0 = sharp side edges)
 edge_radius = 1.0; // [0:0.25:3]
 
-// Round only the long extrusion edges (faster) or all edges
-sidesonly = true; // [true, false]
+// All-edges rounding radius including top and bottom faces (0 = off; overrides side-only when active — slower render)
+all_edges_radius = 0; // [0:0.25:3]
+
+// Outer corner radius — rounds the 4 outer corners of the C-clip cross-section (0 = sharp corners)
+profile_corner_radius = 2; // [0:0.5:4]
+
+// Inner corner radius — rounds the 4 inner channel corners (0 = sharp corners)
+inner_corner_radius = 1; // [0:0.25:3]
+
+/* [Attachment] */
+// Optional attachment at one end of the charm
+attachment_type = "none"; // [none, keychain_hole, bail_loop, lanyard_slot]
+
+// Hole diameter (for keychain hole and lanyard slot sizing)
+hole_diameter = 4; // [2:0.5:8]
+
+// Bail loop wire thickness
+bail_thickness = 2; // [1:0.5:4]
+
+// Bail loop inner radius
+bail_inner_radius = 3; // [2:0.5:6]
+
+// Horizontal position offset for attachment (X axis)
+attachment_x = 0; // [-10:0.5:10]
+
+// Position offset along the bracelet width (Y axis)
+attachment_y = 0; // [-10:0.5:10]
+
+// Vertical position offset for attachment (Z axis)
+attachment_z = 0; // [-5:0.5:5]
+
+// Cutout depth — 0 cuts through entire height; positive values cut partially from the top surface
+attachment_depth = 0; // [0:0.5:10]
 
 /* [Quality] */
 $fn = 64; // [24:8:128]
 
 /* [Hidden] */
-dxf_file = "q_Charm_L.dxf";
-z_offset = 3;
+min_inner_height = 1.5;
+effective_thickness = min(charm_thickness, (charm_height - min_inner_height) / 2);
+inner_height = max(min_inner_height, charm_height - 2 * effective_thickness);
+safe_edge_radius = min(edge_radius, min(effective_thickness, inner_height, gap_width) / 2);
+safe_all_edges = min(all_edges_radius, min(effective_thickness, inner_height, gap_width, charm_length) / 2 - 0.1);
+safe_icr = min(inner_corner_radius, inner_height / 2 - 0.1, gap_width / 2 - 0.1);
+outer_width = bracelet_width + 2 * effective_thickness;
+outer_height = charm_height;
+z_offset = outer_height / 2;
+profile_center_x = 0;
+profile_max_y = outer_height / 2;
+charm_top_z = outer_height;
+design_ref_dim = 14;
+design_size = design_ref_dim * design_scale / 100;
+design_size_2 = design_ref_dim * design_scale_2 / 100;
+total_top_z = charm_top_z
+    + max(
+        (design_style == "raised") ? engrave_depth : 0,
+        (design_file_2 != "" && design_style_2 == "raised") ? max(0, engrave_depth + design_2_thickness) : 0,
+        (text_content != "" && text_style == "raised") ? text_depth : 0
+    );
 
-module q_charm() {
+module profile_2d() {
+    max_gap_shift = (bracelet_width - gap_width) / 2 - 1;
+    safe_gap_offset = max(-max_gap_shift, min(gap_offset, max_gap_shift));
+    difference() {
+        offset(r = profile_corner_radius)
+            square([outer_width - 2 * profile_corner_radius,
+                    outer_height - 2 * profile_corner_radius], center = true);
+        if (safe_icr > 0) {
+            gap_ext = 10;
+            offset(r = safe_icr) offset(r = -safe_icr)
+                union() {
+                    square([bracelet_width, inner_height], center = true);
+                    translate([safe_gap_offset, -outer_height / 2 + (effective_thickness - gap_ext) / 2])
+                        square([gap_width, effective_thickness + gap_ext], center = true);
+                }
+        } else {
+            polygon([
+                [-gap_width/2 + safe_gap_offset, -outer_height/2 - 0.1],
+                [-gap_width/2 + safe_gap_offset, -outer_height/2 + effective_thickness],
+                [-bracelet_width/2,              -outer_height/2 + effective_thickness],
+                [-bracelet_width/2,               outer_height/2 - effective_thickness],
+                [ bracelet_width/2,               outer_height/2 - effective_thickness],
+                [ bracelet_width/2,              -outer_height/2 + effective_thickness],
+                [ gap_width/2 + safe_gap_offset, -outer_height/2 + effective_thickness],
+                [ gap_width/2 + safe_gap_offset, -outer_height/2 - 0.1]
+            ]);
+        }
+    }
+}
+
+module charm_body() {
     translate([0, 0, z_offset])
         rotate([90, 0, 0]) {
-            if (edge_radius > 0 && sidesonly) {
-                // Cylinder kernel: rounds the long edges running along the
-                // extrusion axis while keeping the profile outline crisp.
-                minkowski() {
-                    linear_extrude(height = extrude_width, center = true)
-                        offset(r = -edge_radius)
-                            import(dxf_file);
-                    cylinder(r = edge_radius, h = 0.01, center = true);
-                }
-            } else if (edge_radius > 0) {
-                // Sphere kernel: rounds every edge uniformly.
+            if (safe_all_edges > 0) {
                 minkowski() {
                     linear_extrude(
-                        height = extrude_width - 2 * edge_radius,
+                        height = charm_length - 2 * safe_all_edges,
                         center = true
                     )
-                        offset(r = -edge_radius)
-                            import(dxf_file);
-                    sphere(r = edge_radius);
+                        offset(r = -safe_all_edges)
+                            profile_2d();
+                    sphere(r = safe_all_edges, $fn = min($fn, 30));
+                }
+            } else if (safe_edge_radius > 0) {
+                minkowski() {
+                    linear_extrude(height = charm_length, center = true)
+                        offset(r = -safe_edge_radius)
+                            profile_2d();
+                    cylinder(r = safe_edge_radius, h = 0.01, center = true, $fn = min($fn, 30));
                 }
             } else {
-                linear_extrude(height = extrude_width, center = true)
-                    import(dxf_file);
+                linear_extrude(height = charm_length, center = true)
+                    profile_2d();
             }
         }
 }
 
-q_charm();
+// SVG limitation: OpenSCAD import() renders all filled SVG elements as solid
+// geometry. Multi-element SVGs that rely on color layering (e.g., white shapes
+// over black to simulate cutouts) will appear solid. Use single-path SVGs or
+// the SVG preparer tool (F-11, planned) for compound designs.
+module design_2d() {
+    if (design_file != "") {
+        translate([-design_up_down, design_left_right])
+            rotate([0, 0, design_rotation + 90])
+                offset(r = design_offset)
+                    resize([design_size, 0], auto = true)
+                        import(design_file, center = true);
+    }
+}
+
+module design_2d_layer2() {
+    if (design_file_2 != "") {
+        translate([-design_2_up_down, design_2_left_right])
+            rotate([0, 0, design_rotation_2 + 90])
+                offset(r = design_offset)
+                    resize([design_size_2, 0], auto = true)
+                        import(design_file_2, center = true);
+    }
+}
+
+module text_2d() {
+    if (text_content != "") {
+        translate([-text_up_down, text_left_right])
+            rotate([0, 0, text_rotation])
+                text(text_content, size = text_size,
+                     font = "Liberation Sans",
+                     halign = "center", valign = "center");
+    }
+}
+
+module attachment_cutout() {
+    cut_h = attachment_depth > 0 ? attachment_depth + 0.02 : total_top_z + 0.02;
+    cut_z = attachment_depth > 0 ? total_top_z - attachment_depth : -0.01;
+    if (attachment_type == "keychain_hole") {
+        margin = hole_diameter / 2 + 1;
+        translate([profile_center_x + attachment_x,
+                   charm_length / 2 - margin + attachment_y,
+                   cut_z + attachment_z])
+            cylinder(d = hole_diameter, h = cut_h);
+    } else if (attachment_type == "lanyard_slot") {
+        slot_width = hole_diameter * 2;
+        r = hole_diameter / 4;
+        margin = hole_diameter / 2 + 1;
+        translate([profile_center_x + attachment_x,
+                   charm_length / 2 - margin + attachment_y,
+                   cut_z + attachment_z])
+            linear_extrude(height = cut_h)
+                hull() {
+                    translate([-(slot_width / 2 - r), 0]) circle(r = r);
+                    translate([ (slot_width / 2 - r), 0]) circle(r = r);
+                }
+    }
+}
+
+module bail_loop() {
+    if (attachment_type == "bail_loop") {
+        translate([attachment_x, charm_length / 2 + attachment_y, z_offset + attachment_z])
+            rotate([0, 90, 0])
+                rotate_extrude(angle = 180, $fn = 32)
+                    translate([bail_inner_radius, 0, 0])
+                        circle(d = bail_thickness);
+    }
+}
+
+module q_charm() {
+    difference() {
+        union() {
+            charm_body();
+            bail_loop();
+            if (design_style == "raised") {
+                translate([profile_center_x, 0, charm_top_z])
+                    linear_extrude(height = engrave_depth)
+                        design_2d();
+            }
+            if (design_file_2 != "" && design_style_2 == "raised") {
+                translate([profile_center_x, 0, charm_top_z + design_2_thickness])
+                    linear_extrude(height = engrave_depth)
+                        design_2d_layer2();
+            }
+            if (text_content != "" && text_style == "raised") {
+                translate([profile_center_x, 0, charm_top_z])
+                    linear_extrude(height = text_depth)
+                        text_2d();
+            }
+        }
+        if (design_style != "raised") {
+            translate([profile_center_x, 0, charm_top_z - engrave_depth])
+                linear_extrude(height = engrave_depth + 0.01)
+                    design_2d();
+        }
+        if (design_file_2 != "" && design_style_2 != "raised") {
+            translate([profile_center_x, 0, charm_top_z - engrave_depth + design_2_thickness])
+                linear_extrude(height = engrave_depth + 0.01)
+                    design_2d_layer2();
+        }
+        if (text_content != "" && text_style != "raised") {
+            translate([profile_center_x, 0, charm_top_z - text_depth])
+                linear_extrude(height = text_depth + 0.01)
+                    text_2d();
+        }
+        attachment_cutout();
+    }
+}
+
+rotate([0, 0, -90]) q_charm();

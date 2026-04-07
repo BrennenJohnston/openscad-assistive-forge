@@ -9,7 +9,16 @@
 
 import { stateManager } from './state.js';
 import { extractParameters } from './parser.js';
-import { renderParameterUI } from './ui-generator.js';
+import {
+  renderParameterUI,
+  setGalleryOptions,
+  clearGalleryOptions,
+  setFileUploadListener,
+  appendUserSvgToGallery,
+  getGalleryParamNames,
+  getSvgPrepMetadata,
+  setSvgPrepMetadata,
+} from './ui-generator.js';
 import {
   extractZipFiles,
   validateZipFile,
@@ -39,7 +48,12 @@ import { getErrorLogPanel, ERROR_LOG_TYPE } from './error-log-panel.js';
 import * as SharedImageStore from './shared-image-store.js';
 import { getAppPrefKey } from './storage-keys.js';
 import { importProjectFromFiles } from './storage-manager.js';
-import { showMissingDependenciesDialog } from './dialogs.js';
+import {
+  addProjectFile,
+  getProjectFiles,
+} from './saved-projects-manager.js';
+import { showMissingDependenciesDialog, showConfirmDialog } from './dialogs.js';
+import { escapeHtml } from './html-utils.js';
 import { announceError as _announceError } from './announcer.js';
 import { showErrorModal, showErrorToast } from './error-translator.js';
 import { closeTutorial } from './tutorial-sandbox.js';
@@ -47,8 +61,76 @@ import {
   sanitizeUrlParams,
   applyToolbarModeVisibility,
 } from './hfm-controller.js';
+import { isEnabled } from './feature-flags.js';
+import { prepareSvg, needsPreparation } from './svg-preparer.js';
 
 const STORAGE_KEY_MODEL_COLOR = getAppPrefKey('model-color');
+
+let currentExampleKey = null;
+
+/**
+ * Reverse-lookup an example key from EXAMPLE_DEFINITIONS by file name.
+ * @param {string} fileName - e.g. 'q_charm.scad'
+ * @returns {string|null} Example key or null
+ */
+function findExampleKeyByFileName(fileName) {
+  if (!fileName) return null;
+  for (const [key, def] of Object.entries(EXAMPLE_DEFINITIONS)) {
+    if (def.name === fileName) return key;
+  }
+  return null;
+}
+
+/**
+ * Fetch an example's manifest and register its SVG gallery options.
+ * Extracted from loadExampleByKey for reuse during saved-project restore.
+ * @param {string} exampleKey - Key into EXAMPLE_DEFINITIONS
+ */
+async function restoreGalleryFromManifest(exampleKey) {
+  const example = EXAMPLE_DEFINITIONS[exampleKey];
+  if (!example?.manifest) return;
+
+  try {
+    const manifestResponse = await fetch(example.manifest);
+    if (!manifestResponse.ok) return;
+    const manifestData = await manifestResponse.json();
+    const libs = Array.isArray(manifestData.svgLibrary)
+      ? manifestData.svgLibrary
+      : manifestData.svgLibrary
+        ? [manifestData.svgLibrary]
+        : [];
+    const fileUrlMap = {};
+    if (example.additionalFiles) {
+      for (const fp of example.additionalFiles) {
+        fileUrlMap[fp.split('/').pop()] = fp;
+      }
+    }
+    const exampleDir = example.path.substring(
+      0,
+      example.path.lastIndexOf('/')
+    );
+    for (const lib of libs) {
+      if (lib?.options?.length > 0) {
+        const galleryOpts = lib.options.map((opt) => ({
+          file: opt.file,
+          label: opt.label,
+          url:
+            fileUrlMap[opt.file.split('/').pop()] ||
+            `${exampleDir}/${opt.file}`,
+        }));
+        setGalleryOptions(lib.paramName, galleryOpts);
+        console.log(
+          `[Gallery] SVG gallery: ${galleryOpts.length} designs for "${lib.paramName}"`
+        );
+      }
+    }
+  } catch (err) {
+    console.warn(
+      '[Gallery] Failed to restore gallery from manifest:',
+      err.message
+    );
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Example definitions
@@ -82,6 +164,65 @@ export const EXAMPLE_DEFINITIONS = {
   'honeycomb-grid': {
     path: '/examples/honeycomb-grid/honeycomb_grid.scad',
     name: 'honeycomb_grid.scad',
+  },
+  'logo-plate': {
+    path: '/examples/logo-plate/logo_plate.scad',
+    name: 'logo_plate.scad',
+    description: 'Logo Plate (SVG Import)',
+  },
+  'nasif-charm-maker': {
+    path: '/examples/nasif-charm-maker/nasif_charm_maker.scad',
+    name: 'nasif_charm_maker.scad',
+    description: 'Charm Customizer',
+    manifest: '/examples/nasif-charm-maker/manifest.json',
+    additionalFiles: [
+      '/examples/nasif-charm-maker/svg-library/heart.svg',
+      '/examples/nasif-charm-maker/svg-library/star.svg',
+      '/examples/nasif-charm-maker/svg-library/paw.svg',
+      '/examples/nasif-charm-maker/svg-library/lightning.svg',
+      '/examples/nasif-charm-maker/svg-library/music-note.svg',
+      '/examples/nasif-charm-maker/svg-library/smiley.svg',
+      '/examples/nasif-charm-maker/svg-library/moon.svg',
+      '/examples/nasif-charm-maker/svg-library/flower.svg',
+      '/examples/nasif-charm-maker/svg-library/diamond.svg',
+      '/examples/nasif-charm-maker/svg-library/crown.svg',
+      '/examples/nasif-charm-maker/svg-library/leaf.svg',
+      '/examples/nasif-charm-maker/svg-library/sun.svg',
+    ],
+  },
+  'q-charm': {
+    path: '/examples/q-charm/q_charm.scad',
+    name: 'q_charm.scad',
+    description: 'Bracelet Clip Charm',
+    manifest: '/examples/q-charm/manifest.json',
+    additionalFiles: [
+      '/examples/q-charm/q_Charm_L.dxf',
+      '/examples/q-charm/presets/large-charm.json',
+      '/examples/q-charm/presets/small-charm.json',
+      '/examples/nasif-charm-maker/svg-library/smiley.svg',
+      '/examples/nasif-charm-maker/svg-library/heart.svg',
+      '/examples/nasif-charm-maker/svg-library/star.svg',
+      '/examples/nasif-charm-maker/svg-library/paw.svg',
+      '/examples/nasif-charm-maker/svg-library/lightning.svg',
+      '/examples/nasif-charm-maker/svg-library/music-note.svg',
+      '/examples/nasif-charm-maker/svg-library/moon.svg',
+      '/examples/nasif-charm-maker/svg-library/flower.svg',
+      '/examples/nasif-charm-maker/svg-library/diamond.svg',
+      '/examples/nasif-charm-maker/svg-library/crown.svg',
+      '/examples/nasif-charm-maker/svg-library/leaf.svg',
+      '/examples/nasif-charm-maker/svg-library/sun.svg',
+    ],
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Program definitions — group related examples under a single umbrella
+// ---------------------------------------------------------------------------
+
+export const PROGRAM_DEFINITIONS = {
+  'charm-customizer': {
+    label: 'Charm Customizer',
+    examples: ['nasif-charm-maker', 'q-charm', 'logo-plate'],
   },
 };
 
@@ -156,6 +297,7 @@ export function showProcessingOverlay(message, opts = {}) {
  * @param {Function} deps.getAutoPreviewController - Returns current AutoPreviewController (may be null)
  * @param {Function} deps.getAutoPreviewEnabled - Returns whether auto-preview is enabled
  * @param {Function} deps.setCurrentSavedProjectId - Sets current saved project ID
+ * @param {Function} deps.getCurrentSavedProjectId - Gets current saved project ID
  * @param {Function} deps.setPresetCompanionMap - Sets preset companion map
  * @param {Function} deps.getFileSizeLimits - Returns FILE_SIZE_LIMITS object
  * @param {Function} deps.getValidateFileUpload - Returns validateFileUpload validator
@@ -191,6 +333,7 @@ export function initFileHandler({
   getAutoPreviewController,
   getAutoPreviewEnabled,
   setCurrentSavedProjectId,
+  getCurrentSavedProjectId,
   setPresetCompanionMap,
   getFileSizeLimits,
   getValidateFileUpload,
@@ -255,15 +398,15 @@ export function initFileHandler({
         .map(
           (p, i) =>
             `<label class="import-mode-option">
-              <input type="radio" name="scadFile" value="${p}"${i === 0 ? ' checked' : ''} />
-              <span>${p.split('/').pop()}</span>
+              <input type="radio" name="scadFile" value="${escapeHtml(p)}"${i === 0 ? ' checked' : ''} />
+              <span>${escapeHtml(p.split('/').pop())}</span>
             </label>`
         )
         .join('');
 
       dialog.innerHTML = `
         <form method="dialog" class="import-mode-form">
-          <h3 id="scadSelectTitle" class="import-mode-title">${prompt}</h3>
+          <h3 id="scadSelectTitle" class="import-mode-title">${escapeHtml(prompt)}</h3>
           <fieldset class="import-mode-fieldset">
             <legend class="import-mode-legend">Select main .scad file</legend>
             ${optionsHtml}
@@ -412,6 +555,10 @@ export function initFileHandler({
     originalFileNameArg = null
   ) {
     if (!file && !content) return;
+
+    if (source !== 'example' && source !== 'program-example') {
+      currentExampleKey = null;
+    }
 
     const rawFileName =
       typeof file?.name === 'string' && file.name.trim().length > 0
@@ -689,6 +836,13 @@ export function initFileHandler({
       forceClearPresetSelection();
       setPresetCompanionMap(null);
 
+      if (isEnabled('project_presets')) {
+        stateManager.setState({
+          projectPresets: null,
+          projectPresetIdentity: null,
+        });
+      }
+
       let previewManager = getPreviewManager();
       if (previewManager) {
         previewManager.setReferenceOverlaySource({
@@ -794,6 +948,15 @@ export function initFileHandler({
 
       renderLibraryUI(detectedLibraries);
 
+      if (source === 'saved') {
+        const exampleKey =
+          file?.sourceExampleKey || findExampleKeyByFileName(fileName);
+        if (exampleKey) {
+          clearGalleryOptions();
+          await restoreGalleryFromManifest(exampleKey);
+        }
+      }
+
       const parametersContainer = document.getElementById(
         'parametersContainer'
       );
@@ -860,67 +1023,70 @@ export function initFileHandler({
           paramSchema[pName] = { type: pDef.type || 'string' };
         }
 
-        for (const [filePath, fileContentStr] of projectFiles.entries()) {
-          if (
-            filePath.toLowerCase().endsWith('.json') &&
-            !filePath.toLowerCase().endsWith('.scad')
-          ) {
-            try {
-              console.log(`[ZIP] Auto-importing presets from: ${filePath}`);
-              console.debug(
-                `[ZIP] JSON content preview (first 200 chars): ${fileContentStr.substring(0, 200)}`
-              );
-              const hiddenParamNamesForImport = Object.keys(
-                extracted.hiddenParameters || {}
-              );
-              const importResult = presetManager.importPreset(
-                fileContentStr,
-                originalFileName,
-                paramSchema,
-                hiddenParamNamesForImport
-              );
-              if (importResult.success && importResult.imported > 0) {
-                autoImportedCount += importResult.imported;
-                console.log(
-                  `[ZIP] Auto-imported ${importResult.imported} preset(s) from ${filePath}`
-                );
-                console.debug(`[ZIP] Import result details:`, importResult);
-              } else if (!importResult.success) {
+        if (isEnabled('project_presets')) {
+          const parsedProjectPresets = {};
+          const sidecarFiles = [];
+
+          for (const [filePath, fileContentStr] of projectFiles.entries()) {
+            if (
+              filePath.toLowerCase().endsWith('.json') &&
+              !filePath.toLowerCase().endsWith('.scad')
+            ) {
+              try {
+                const data = JSON.parse(fileContentStr);
+                if (
+                  data &&
+                  typeof data === 'object' &&
+                  typeof data.parameterSets === 'object' &&
+                  Object.keys(data.parameterSets).length > 0
+                ) {
+                  sidecarFiles.push(filePath);
+                  for (const [name, params] of Object.entries(
+                    data.parameterSets
+                  )) {
+                    if (name === 'design default values') continue;
+                    if (!params || typeof params !== 'object') continue;
+                    parsedProjectPresets[name] = params;
+                  }
+                  console.log(
+                    `[Project Presets] Parsed ${Object.keys(data.parameterSets).length} preset(s) from ${filePath}`
+                  );
+                }
+              } catch (jsonError) {
                 console.warn(
-                  `[ZIP] Failed to auto-import presets from ${filePath}:`,
-                  importResult.error
+                  `[Project Presets] Error parsing presets from ${filePath}:`,
+                  jsonError.message
                 );
               }
-            } catch (jsonError) {
-              console.warn(
-                `[ZIP] Error auto-importing presets from ${filePath}:`,
-                jsonError.message
-              );
             }
           }
-        }
 
-        if (autoImportedCount > 0) {
-          const companionCount = Array.from(projectFiles.keys()).filter(
-            (p) =>
-              !p.toLowerCase().endsWith('.scad') &&
-              !p.toLowerCase().endsWith('.json')
-          ).length;
-          const companionText =
-            companionCount > 0
-              ? ` + ${companionCount} companion file${companionCount > 1 ? 's' : ''}`
-              : '';
-          updateStatus(
-            `Loaded: ${fileName}${companionText} + ${autoImportedCount} preset${autoImportedCount > 1 ? 's' : ''}`
-          );
-          updatePresetDropdown();
+          const presetCount = Object.keys(parsedProjectPresets).length;
+          if (presetCount > 0) {
+            stateManager.setState({
+              projectPresets: parsedProjectPresets,
+              projectPresetIdentity: {
+                mainFilePath: mainFilePath || fileName,
+                sidecarFiles,
+                loadedAt: Date.now(),
+              },
+            });
+            autoImportedCount = presetCount;
 
-          const importedPresets =
-            presetManager.getPresetsForModel(originalFileName);
-          if (importedPresets.length > 0) {
-            const parameterSetsForMap = Object.fromEntries(
-              importedPresets.map((p) => [p.name, p.parameters])
+            const companionCount = Array.from(projectFiles.keys()).filter(
+              (p) =>
+                !p.toLowerCase().endsWith('.scad') &&
+                !p.toLowerCase().endsWith('.json')
+            ).length;
+            const companionText =
+              companionCount > 0
+                ? ` + ${companionCount} companion file${companionCount > 1 ? 's' : ''}`
+                : '';
+            updateStatus(
+              `Loaded: ${fileName}${companionText} + ${presetCount} preset${presetCount > 1 ? 's' : ''}`
             );
+            updatePresetDropdown();
+
             const scadRefs = detectRequiredCompanionFiles(fileContent);
             const companionTargets = [
               ...new Set(
@@ -941,16 +1107,110 @@ export function initFileHandler({
             });
             const newMap = buildPresetCompanionMap(
               projectFiles,
-              parameterSetsForMap,
+              parsedProjectPresets,
               { companionTargets }
             );
             setPresetCompanionMap(newMap);
             console.log(
-              `[ZIP] Built preset companion map for ${newMap.size} presets` +
+              `[Project Presets] Built companion map for ${newMap.size} presets` +
                 (companionTargets.length > 0
                   ? ` (generic targets: ${companionTargets.join(', ')})`
                   : ' (legacy path)')
             );
+          }
+        } else {
+          for (const [filePath, fileContentStr] of projectFiles.entries()) {
+            if (
+              filePath.toLowerCase().endsWith('.json') &&
+              !filePath.toLowerCase().endsWith('.scad')
+            ) {
+              try {
+                console.log(`[ZIP] Auto-importing presets from: ${filePath}`);
+                console.debug(
+                  `[ZIP] JSON content preview (first 200 chars): ${fileContentStr.substring(0, 200)}`
+                );
+                const hiddenParamNamesForImport = Object.keys(
+                  extracted.hiddenParameters || {}
+                );
+                const importResult = presetManager.importPreset(
+                  fileContentStr,
+                  originalFileName,
+                  paramSchema,
+                  hiddenParamNamesForImport
+                );
+                if (importResult.success && importResult.imported > 0) {
+                  autoImportedCount += importResult.imported;
+                  console.log(
+                    `[ZIP] Auto-imported ${importResult.imported} preset(s) from ${filePath}`
+                  );
+                  console.debug(`[ZIP] Import result details:`, importResult);
+                } else if (!importResult.success) {
+                  console.warn(
+                    `[ZIP] Failed to auto-import presets from ${filePath}:`,
+                    importResult.error
+                  );
+                }
+              } catch (jsonError) {
+                console.warn(
+                  `[ZIP] Error auto-importing presets from ${filePath}:`,
+                  jsonError.message
+                );
+              }
+            }
+          }
+
+          if (autoImportedCount > 0) {
+            const companionCount = Array.from(projectFiles.keys()).filter(
+              (p) =>
+                !p.toLowerCase().endsWith('.scad') &&
+                !p.toLowerCase().endsWith('.json')
+            ).length;
+            const companionText =
+              companionCount > 0
+                ? ` + ${companionCount} companion file${companionCount > 1 ? 's' : ''}`
+                : '';
+            updateStatus(
+              `Loaded: ${fileName}${companionText} + ${autoImportedCount} preset${autoImportedCount > 1 ? 's' : ''}`
+            );
+            updatePresetDropdown();
+
+            const importedPresets =
+              presetManager.getPresetsForModel(originalFileName);
+            if (importedPresets.length > 0) {
+              const parameterSetsForMap = Object.fromEntries(
+                importedPresets.map((p) => [p.name, p.parameters])
+              );
+              const scadRefs = detectRequiredCompanionFiles(fileContent);
+              const companionTargets = [
+                ...new Set(
+                  (scadRefs?.files || [])
+                    .filter(
+                      (f) =>
+                        f.required &&
+                        (f.type === 'include' || f.type === 'import')
+                    )
+                    .map((f) => f.path.split('/').pop())
+                ),
+              ].filter((basename) => {
+                let count = 0;
+                for (const key of projectFiles.keys()) {
+                  if (key.split('/').pop() === basename) count++;
+                }
+                return count > 1;
+              });
+              const newMap = buildPresetCompanionMap(
+                projectFiles,
+                parameterSetsForMap,
+                { companionTargets }
+              );
+              setPresetCompanionMap(newMap);
+              console.log(
+                `[ZIP] Built preset companion map for ${newMap.size} presets` +
+                  (companionTargets.length > 0
+                    ? ` (generic targets: ${companionTargets.join(', ')})`
+                    : ' (legacy path)')
+              );
+            }
           }
         }
       }
@@ -1084,8 +1344,9 @@ export function initFileHandler({
             const hasSavedColor = localStorage.getItem(STORAGE_KEY_MODEL_COLOR);
             if (modelColorPicker && !hasSavedColor) {
               const themeKey = highContrast ? `${activeTheme}-hc` : activeTheme;
+              // Match PREVIEW_COLORS from preview.js (Cornfield gold [OBSERVED])
               const PREVIEW_COLORS = {
-                light: 0x2196f3,
+                light: 0xf9d72c,
                 dark: 0x4d9fff,
                 'light-hc': 0x0052cc,
                 'dark-hc': 0x66b3ff,
@@ -1166,10 +1427,30 @@ export function initFileHandler({
         }
       }
 
-      if (source === 'user') {
+      if (source === 'saved') {
+        const savedProjectId = getCurrentSavedProjectId?.();
+        if (savedProjectId) {
+          try {
+            await loadUserSvgsIntoGallery(savedProjectId);
+          } catch (error) {
+            console.warn(
+              '[Saved Projects] Failed to restore user SVGs:',
+              error
+            );
+          }
+        }
+      } else if (source === 'user' || source === 'program-example') {
         try {
           const state = stateManager.getState();
-          await getSavedProjectsUI().showSaveProjectPrompt(state);
+          const promptState = currentExampleKey
+            ? { ...state, sourceExampleKey: currentExampleKey }
+            : state;
+          const promptResult =
+            await getSavedProjectsUI().showSaveProjectPrompt(promptState);
+
+          if (promptResult?.saved && promptResult.projectId) {
+            await loadUserSvgsIntoGallery(promptResult.projectId);
+          }
         } catch (error) {
           console.error('[Saved Projects] Error showing save prompt:', error);
         }
@@ -1209,9 +1490,11 @@ export function initFileHandler({
 
     const state = stateManager.getState();
     if (state.uploadedFile) {
-      if (!confirm('Load example? This will replace the current file.')) {
-        return;
-      }
+      const confirmed = await showConfirmDialog({
+        title: 'Load example',
+        message: 'This will replace the current file. Continue?',
+      });
+      if (!confirmed) return;
     }
 
     try {
@@ -1287,12 +1570,20 @@ export function initFileHandler({
         console.log(`[Example] Total files in package: ${exProjectFiles.size}`);
       }
 
+      currentExampleKey = exampleKey;
+      clearGalleryOptions();
+      await restoreGalleryFromManifest(exampleKey);
+
+      const isProgramExample = Object.values(PROGRAM_DEFINITIONS).some(
+        (prog) => prog.examples.includes(exampleKey)
+      );
+
       handleFile(
         { name: example.name },
         exampleContent,
         exProjectFiles,
         exMainFilePath,
-        'example'
+        isProgramExample ? 'program-example' : 'example'
       );
     } catch (error) {
       console.error('Failed to load example:', error);
@@ -1308,6 +1599,122 @@ export function initFileHandler({
   }
 
   // ------------------------------------------------------------------
+  // F-26: Save user-uploaded SVGs to project and update gallery
+  // ------------------------------------------------------------------
+
+  setFileUploadListener(async (paramName, fileObj) => {
+    const projectId = getCurrentSavedProjectId?.();
+    if (!projectId || !fileObj.data) return;
+
+    try {
+      let svgText = fileObj.data.startsWith('data:')
+        ? atob(fileObj.data.split(',')[1])
+        : fileObj.data;
+
+      if (isEnabled('svg_preparer') && needsPreparation(svgText)) {
+        try {
+          svgText = prepareSvg(svgText);
+        } catch (prepErr) {
+          console.warn(
+            '[SVG Upload] Preparation failed, storing original:',
+            prepErr
+          );
+        }
+      }
+
+      await addProjectFile({
+        projectId,
+        path: `svg-uploads/${fileObj.name}`,
+        kind: 'image',
+        textContent: svgText,
+        mimeType: 'image/svg+xml',
+      });
+
+      const prepMeta = getSvgPrepMetadata(fileObj.name);
+      if (prepMeta) {
+        await addProjectFile({
+          projectId,
+          path: `svg-prep-metadata/${fileObj.name}.json`,
+          kind: 'json',
+          textContent: JSON.stringify(prepMeta),
+          mimeType: 'application/json',
+        });
+      }
+
+      appendUserSvgToGallery(paramName, {
+        file: fileObj.name,
+        label: fileObj.name.replace(/\.svg$/i, '').replace(/[-_]/g, ' '),
+        url: fileObj.data,
+        userUpload: true,
+      });
+
+      console.log(
+        `[SVG Upload] Saved to project ${projectId}: ${fileObj.name}`
+      );
+    } catch (err) {
+      console.warn('[SVG Upload] Failed to save to project:', err);
+    }
+  });
+
+  /**
+   * Load user-uploaded SVGs from a project's file store into the gallery.
+   * @param {string} projectId
+   */
+  async function loadUserSvgsIntoGallery(projectId) {
+    try {
+      const files = await getProjectFiles(projectId);
+      const svgFiles = files.filter(
+        (f) => f.path.startsWith('svg-uploads/') && f.textContent
+      );
+      const metaFiles = files.filter(
+        (f) => f.path.startsWith('svg-prep-metadata/') && f.textContent
+      );
+
+      for (const mf of metaFiles) {
+        try {
+          const metadata = JSON.parse(mf.textContent);
+          const svgFileName = mf.path
+            .replace('svg-prep-metadata/', '')
+            .replace(/\.json$/, '');
+          setSvgPrepMetadata(svgFileName, metadata);
+        } catch {
+          // ignore malformed metadata
+        }
+      }
+
+      for (const f of svgFiles) {
+        const fileName = f.path.replace('svg-uploads/', '');
+        const dataUrl =
+          'data:image/svg+xml;base64,' + btoa(f.textContent);
+
+        const svgParams = getGalleryParamNames();
+
+        for (const paramName of svgParams) {
+          appendUserSvgToGallery(paramName, {
+            file: fileName,
+            label: fileName.replace(/\.svg$/i, '').replace(/[-_]/g, ' '),
+            url: dataUrl,
+            userUpload: true,
+          });
+        }
+      }
+
+      if (svgFiles.length > 0) {
+        console.log(
+          `[SVG Upload] Loaded ${svgFiles.length} user SVG(s) from project ${projectId}`
+        );
+      }
+      if (metaFiles.length > 0) {
+        console.log(
+          `[SVG Upload] Restored ${metaFiles.length} SVG prep metadata record(s)`
+        );
+      }
+    } catch (err) {
+      console.warn('[SVG Upload] Failed to load user SVGs:', err);
+    }
+  }
+
+  // ------------------------------------------------------------------
   // Public API
   // ------------------------------------------------------------------
 
@@ -1317,5 +1724,6 @@ export function initFileHandler({
     loadExampleByKey,
     /** @internal Exposed for folder picker wiring in main.js */
     collectFilesFromDir: _collectFilesFromDir,
+    getCurrentExampleKey: () => currentExampleKey,
   };
 }

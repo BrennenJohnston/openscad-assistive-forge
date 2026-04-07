@@ -604,6 +604,268 @@ test.describe('Preset Workflow', () => {
   })
 })
 
+// ── Project-Native Presets (project_presets flag) ─────────────────────────────
+// These tests exercise the project-native preset source split when the
+// project_presets feature flag is enabled via URL override.
+
+import path from 'path'
+import fs from 'fs'
+import JSZip from 'jszip'
+
+const PROJECT_PRESETS_FLAG = 'flag_project_presets=true'
+
+/**
+ * Create a ZIP bundle with a SCAD file and sidecar JSON containing presets.
+ * @param {string} scadName  Main .scad filename
+ * @param {string} jsonName  Sidecar .json filename
+ * @param {Object} parameterSets  Preset parameter sets
+ * @param {Object} [options]
+ * @param {string} [options.zipBaseName]  Base name for the temp ZIP file
+ * @param {Map<string,string>} [options.extraFiles]  Additional files to include
+ * @returns {Promise<string>}  Path to the created ZIP file
+ */
+async function createProjectZip(scadName, jsonName, parameterSets, options = {}) {
+  const zip = new JSZip()
+  const scad = `// Test project
+include <openings_and_additions.txt>
+/* [Settings] */
+width = 100; // [50:200]
+height = 50; // [20:100]
+cube([width, height, 10]);
+`
+  zip.file(scadName, scad)
+  zip.file(jsonName, JSON.stringify({ parameterSets, fileFormatVersion: '1' }))
+  zip.file('openings_and_additions.txt', 'screen_openings = [];')
+
+  if (options.extraFiles) {
+    for (const [name, content] of options.extraFiles) {
+      zip.file(name, content)
+    }
+  }
+
+  const buffer = await zip.generateAsync({ type: 'nodebuffer' })
+  const outputDir = path.join(process.cwd(), 'test-results')
+  await fs.promises.mkdir(outputDir, { recursive: true })
+  const baseName = options.zipBaseName || 'project-preset-test'
+  const zipPath = path.join(outputDir, `${baseName}-${Date.now()}.zip`)
+  await fs.promises.writeFile(zipPath, buffer)
+  return zipPath
+}
+
+/**
+ * Upload a ZIP via the hidden file input, waiting for WASM and parameter load.
+ */
+async function uploadProjectZip(page, zipPath) {
+  const fileInput = page.locator('#fileInput')
+  await fileInput.waitFor({ state: 'attached', timeout: 10000 })
+  await fileInput.setInputFiles(zipPath)
+
+  await page.locator('#mainInterface').waitFor({ state: 'visible', timeout: 60000 })
+  await page.waitForSelector('.param-control', { state: 'attached', timeout: 20000 })
+
+  try {
+    const notNowBtn = page.locator('#saveProjectNotNow')
+    await notNowBtn.waitFor({ state: 'visible', timeout: 3000 })
+    await notNowBtn.click()
+    await page.waitForTimeout(300)
+  } catch {
+    // Modal didn't appear
+  }
+}
+
+test.describe('Project-Native Presets (project_presets flag)', () => {
+  test.describe.configure({ timeout: 150_000 })
+
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.clear()
+      localStorage.setItem('openscad-forge-first-visit-seen', 'true')
+    })
+    await page.goto(`/?${PROJECT_PRESETS_FLAG}`)
+    await page.waitForSelector('body[data-wasm-ready="true"]', {
+      state: 'attached',
+      timeout: 120_000,
+    })
+  })
+
+  test('same project under different ZIP names yields identical project-native presets', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
+
+    const presets = {
+      'design default values': {},
+      'Config Alpha': { width: '120', height: '60' },
+      'Config Beta': { width: '180', height: '90' },
+    }
+
+    const zip1 = await createProjectZip('model.scad', 'model.json', presets, {
+      zipBaseName: 'zip-name-A',
+    })
+
+    await uploadProjectZip(page, zip1)
+    await page.evaluate(() => {
+      const d = document.getElementById('presetControls')
+      if (d && !d.open) d.open = true
+    })
+    await page.waitForTimeout(500)
+
+    const optionsFirst = await getPresetOptions(page)
+    const projectPresetsFirst = optionsFirst.filter(
+      (o) => o.includes('Config Alpha') || o.includes('Config Beta')
+    )
+
+    expect(projectPresetsFirst).toHaveLength(2)
+
+    await page.goto(`/?${PROJECT_PRESETS_FLAG}`)
+    await page.waitForSelector('body[data-wasm-ready="true"]', {
+      state: 'attached',
+      timeout: 120_000,
+    })
+
+    const zip2 = await createProjectZip('model.scad', 'model.json', presets, {
+      zipBaseName: 'zip-name-B',
+    })
+
+    await uploadProjectZip(page, zip2)
+    await page.evaluate(() => {
+      const d = document.getElementById('presetControls')
+      if (d && !d.open) d.open = true
+    })
+    await page.waitForTimeout(500)
+
+    const optionsSecond = await getPresetOptions(page)
+    const projectPresetsSecond = optionsSecond.filter(
+      (o) => o.includes('Config Alpha') || o.includes('Config Beta')
+    )
+
+    expect(projectPresetsSecond).toEqual(projectPresetsFirst)
+  })
+
+  test('stale project-native presets do not survive project reload', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
+
+    const presetsA = {
+      'design default values': {},
+      'Stale Preset': { width: '100' },
+      'Also Stale': { width: '200' },
+    }
+
+    const zipA = await createProjectZip('model.scad', 'model.json', presetsA, {
+      zipBaseName: 'stale-test-A',
+    })
+    await uploadProjectZip(page, zipA)
+    await page.evaluate(() => {
+      const d = document.getElementById('presetControls')
+      if (d && !d.open) d.open = true
+    })
+    await page.waitForTimeout(500)
+
+    let options = await getPresetOptions(page)
+    expect(options.some((o) => o.includes('Stale Preset'))).toBe(true)
+
+    const presetsB = {
+      'design default values': {},
+      'Fresh Preset': { width: '999' },
+    }
+
+    const zipB = await createProjectZip('model2.scad', 'model2.json', presetsB, {
+      zipBaseName: 'stale-test-B',
+    })
+    await uploadProjectZip(page, zipB)
+    await page.evaluate(() => {
+      const d = document.getElementById('presetControls')
+      if (d && !d.open) d.open = true
+    })
+    await page.waitForTimeout(500)
+
+    options = await getPresetOptions(page)
+    expect(options.some((o) => o.includes('Stale Preset'))).toBe(false)
+    expect(options.some((o) => o.includes('Also Stale'))).toBe(false)
+    expect(options.some((o) => o.includes('Fresh Preset'))).toBe(true)
+  })
+
+  test('selecting a project-native preset keeps the selection visible', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
+
+    const presets = {
+      'design default values': {},
+      'Selection Test': { width: '150', height: '75' },
+    }
+
+    const zipPath = await createProjectZip('model.scad', 'model.json', presets, {
+      zipBaseName: 'selection-test',
+    })
+    await uploadProjectZip(page, zipPath)
+    await page.evaluate(() => {
+      const d = document.getElementById('presetControls')
+      if (d && !d.open) d.open = true
+    })
+    await page.waitForTimeout(500)
+
+    const selected = await selectPreset(page, 'Selection Test')
+    if (!selected) {
+      test.skip()
+      return
+    }
+
+    await page.waitForTimeout(1000)
+
+    const label = await getSelectedPresetLabel(page)
+    expect(label).toContain('Selection Test')
+  })
+
+  test('user-saved presets in localStorage survive project reload', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
+
+    const presets = {
+      'design default values': {},
+      'Project Preset': { width: '100' },
+    }
+
+    const zipPath = await createProjectZip('model.scad', 'model.json', presets, {
+      zipBaseName: 'user-survive-test',
+    })
+    await uploadProjectZip(page, zipPath)
+    await page.evaluate(() => {
+      const d = document.getElementById('presetControls')
+      if (d && !d.open) d.open = true
+    })
+    await page.waitForTimeout(500)
+
+    const addBtn = page.locator('#addPresetBtn, button[aria-label*="Add preset"]')
+    if (!(await addBtn.isVisible({ timeout: 5000 }).catch(() => false))) {
+      test.skip()
+      return
+    }
+
+    await addBtn.click()
+    const modal = page.locator('.preset-modal')
+    await modal.waitFor({ state: 'visible', timeout: 5000 })
+    const nameInput = modal.locator('#presetName, input[placeholder*="preset"]').first()
+    await nameInput.waitFor({ state: 'visible', timeout: 5000 })
+    await nameInput.fill('My Saved Preset')
+    await page.locator('button[type="submit"]:has-text("Save")').first().click()
+    await page.waitForSelector('.preset-modal', { state: 'detached', timeout: 5000 })
+    await page.waitForTimeout(500)
+
+    let options = await getPresetOptions(page)
+    expect(options.some((o) => o.includes('My Saved Preset'))).toBe(true)
+
+    const zip2 = await createProjectZip('model.scad', 'model.json', presets, {
+      zipBaseName: 'user-survive-reload',
+    })
+    await uploadProjectZip(page, zip2)
+    await page.evaluate(() => {
+      const d = document.getElementById('presetControls')
+      if (d && !d.open) d.open = true
+    })
+    await page.waitForTimeout(500)
+
+    options = await getPresetOptions(page)
+    expect(options.some((o) => o.includes('My Saved Preset'))).toBe(true)
+    expect(options.some((o) => o.includes('Project Preset'))).toBe(true)
+  })
+})
+
 // ── Searchable Combobox variant ───────────────────────────────────────────────
 // These tests exercise the same preset workflow with the searchable_combobox
 // feature flag enabled via URL override (?flag_searchable_combobox=true).

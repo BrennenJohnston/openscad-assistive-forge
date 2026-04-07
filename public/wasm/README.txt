@@ -3,9 +3,10 @@ OpenSCAD WASM Files
 
 This directory contains the official OpenSCAD WebAssembly build with Manifold support.
 
-Source: https://files.openscad.org/playground/
-Build: OpenSCAD-2025.03.25.wasm24456-WebAssembly-web.zip
-Build Date: March 25, 2025
+Source: https://files.openscad.org/snapshots/
+Build: OpenSCAD-2026.04.03-WebAssembly-web.zip
+Build Date: April 3, 2026
+Previous Build: OpenSCAD-2025.03.25.wasm24456 (March 25, 2025)
 License: GPL-2.0-or-later (see COPYING in repository root)
 
 Contents:

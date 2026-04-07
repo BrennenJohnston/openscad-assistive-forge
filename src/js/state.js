@@ -576,6 +576,17 @@ const initialState = {
   enabledLibraries: [], // Libraries currently enabled
   // Manifest origin tracking (set when project loaded via ?manifest= link)
   manifestOrigin: null, // { url, name, author, loadedAt } or null
+  // Path to the main .scad file within the project (set by handleFile)
+  mainFilePath: null,
+  // Project-native presets from sidecar JSON (behind project_presets flag)
+  // { presetName: { param: value, ... }, ... } or null when unused
+  projectPresets: null,
+  // Identity of the currently loaded project presets (for staleness checks)
+  // { mainFilePath: string, sidecarFiles: string[], loadedAt: number } or null
+  projectPresetIdentity: null,
+  // Project-scoped companion alias map (behind project_presets flag)
+  // Map<presetName, { aliases|openingsPath, resolution }> or null
+  projectCompanionMap: null,
 };
 
 export const stateManager = new StateManager(initialState);

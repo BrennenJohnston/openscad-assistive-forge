@@ -26,51 +26,18 @@ import {
   hexToRgb,
   normalizeHexColor,
 } from '../../src/js/color-utils.js';
-import { isNonPreviewable, RENDER_STATE } from '../../src/js/render-intent.js';
-
-// ── Inlined buildDefineArgs for testability (worker module excluded from vitest)
-// Mirrors src/worker/openscad-worker.js:1050–1126. Keep in sync.
-function buildDefineArgs(parameters, paramTypes = {}) {
-  if (!parameters || Object.keys(parameters).length === 0) return [];
-  const args = [];
-  for (const [key, value] of Object.entries(parameters)) {
-    if (value === null || value === undefined) continue;
-    let formattedValue;
-    if (typeof value === 'string') {
-      const lowerValue = value.toLowerCase();
-      const isBooleanParam = paramTypes[key] === 'boolean';
-      if (isBooleanParam && (lowerValue === 'true' || lowerValue === 'yes')) {
-        formattedValue = 'true';
-      } else if (
-        isBooleanParam &&
-        (lowerValue === 'false' || lowerValue === 'no')
-      ) {
-        formattedValue = 'false';
-      } else if (/^#?[0-9A-Fa-f]{6}$/.test(value)) {
-        const rgb = hexToRgb(value);
-        formattedValue = `[${rgb[0]},${rgb[1]},${rgb[2]}]`;
-      } else if (
-        (paramTypes[key] === 'integer' || paramTypes[key] === 'number') &&
-        value.trim() !== '' &&
-        !isNaN(Number(value))
-      ) {
-        formattedValue = String(Number(value));
-      } else {
-        const escaped = value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-        formattedValue = `"${escaped}"`;
-      }
-    } else if (typeof value === 'number') {
-      formattedValue = String(value);
-    } else if (typeof value === 'boolean') {
-      formattedValue = value ? 'true' : 'false';
-    } else {
-      formattedValue = JSON.stringify(value);
-    }
-    args.push('-D');
-    args.push(`${key}=${formattedValue}`);
-  }
-  return args;
-}
+import {
+  isNonPreviewable,
+  RENDER_STATE,
+  resolve2DExportIntent,
+} from '../../src/js/render-intent.js';
+import {
+  buildDefineArgs,
+  formatScadValue,
+  serializeScadVector,
+  detectColorParamLiteralStyle,
+  escapeRegExp,
+} from '../../src/js/scad-param-formatter.js';
 
 // ── Synthetic OFF / COFF data ───────────────────────────────────────────────
 
@@ -1399,5 +1366,757 @@ describe('Phase 1: Multi-color COFF parser probe (loadOFF extraction)', () => {
       const vertexCount = result.positions.length / 3;
       expect(result.colors.length).toBe(vertexCount * 3);
     });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 1 Audit: Effective parameter pipeline trace for shelf/grid presets
+//
+// Validates that the parameter pipeline (resolve2DExportIntent → buildDefineArgs)
+// produces the expected serialization for concrete preset values taken from
+// keyguard_v75.json. Anchored to the Phase 1 completion record in the
+// keyguard_geometry_parity plan.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('Phase 1 Audit: shelf/grid preset pipeline trace', () => {
+  const SHELF_PRESET_FOCUS = {
+    mounting_method: 'Shelf',
+    shelf_thickness: '3',
+    shelf_depth: '4',
+    shelf_corner_radius: '10',
+    have_a_case: 'yes',
+    have_a_keyguard_frame: 'no',
+    smoothness_of_circles_and_arcs: '40',
+    generate: 'keyguard',
+    type_of_keyguard: '3D-Printed',
+    use_Laser_Cutting_best_practices: 'yes',
+  };
+
+  const GRID_PRESET_FOCUS = {
+    mounting_method: 'Slide-in Tabs',
+    number_of_rows: '6',
+    number_of_columns: '10',
+    cell_width_in_mm: '18',
+    cell_height_in_mm: '20',
+    top_padding: '1',
+    bottom_padding: '1',
+    left_padding: '0',
+    right_padding: '0',
+    type_of_tablet: 'iPad 9th generation',
+    orientation: 'landscape',
+    unit_of_measure_for_screen: 'mm',
+    smoothness_of_circles_and_arcs: '40',
+    generate: 'keyguard',
+    type_of_keyguard: '3D-Printed',
+  };
+
+  const SHELF_PARAM_TYPES = {
+    mounting_method: 'string',
+    shelf_thickness: 'number',
+    shelf_depth: 'number',
+    shelf_corner_radius: 'integer',
+    have_a_case: 'string',
+    have_a_keyguard_frame: 'string',
+    smoothness_of_circles_and_arcs: 'integer',
+    generate: 'string',
+    type_of_keyguard: 'string',
+    use_Laser_Cutting_best_practices: 'string',
+  };
+
+  const GRID_PARAM_TYPES = {
+    mounting_method: 'string',
+    number_of_rows: 'integer',
+    number_of_columns: 'integer',
+    cell_width_in_mm: 'integer',
+    cell_height_in_mm: 'integer',
+    top_padding: 'number',
+    bottom_padding: 'number',
+    left_padding: 'number',
+    right_padding: 'number',
+    type_of_tablet: 'string',
+    orientation: 'string',
+    unit_of_measure_for_screen: 'string',
+    smoothness_of_circles_and_arcs: 'integer',
+    generate: 'string',
+    type_of_keyguard: 'string',
+  };
+
+  describe('resolve2DExportIntent passthrough for 3D export', () => {
+    it('shelf preset is unchanged for STL format', () => {
+      const result = resolve2DExportIntent(SHELF_PRESET_FOCUS, null, 'stl');
+      expect(result).toBe(SHELF_PRESET_FOCUS);
+    });
+
+    it('grid preset is unchanged for STL format', () => {
+      const result = resolve2DExportIntent(GRID_PRESET_FOCUS, null, 'stl');
+      expect(result).toBe(GRID_PRESET_FOCUS);
+    });
+  });
+
+  describe('buildDefineArgs numeric coercion for shelf preset', () => {
+    it('emits shelf_thickness as unquoted number', () => {
+      const args = buildDefineArgs(SHELF_PRESET_FOCUS, SHELF_PARAM_TYPES);
+      expect(args).toContain('shelf_thickness=3');
+    });
+
+    it('emits shelf_depth as unquoted number', () => {
+      const args = buildDefineArgs(SHELF_PRESET_FOCUS, SHELF_PARAM_TYPES);
+      expect(args).toContain('shelf_depth=4');
+    });
+
+    it('emits shelf_corner_radius as unquoted number', () => {
+      const args = buildDefineArgs(SHELF_PRESET_FOCUS, SHELF_PARAM_TYPES);
+      expect(args).toContain('shelf_corner_radius=10');
+    });
+
+    it('emits mounting_method as quoted string', () => {
+      const args = buildDefineArgs(SHELF_PRESET_FOCUS, SHELF_PARAM_TYPES);
+      expect(args).toContain('mounting_method="Shelf"');
+    });
+
+    it('emits have_a_case as quoted string (not boolean)', () => {
+      const args = buildDefineArgs(SHELF_PRESET_FOCUS, SHELF_PARAM_TYPES);
+      expect(args).toContain('have_a_case="yes"');
+    });
+
+    it('emits smoothness_of_circles_and_arcs as unquoted number', () => {
+      const args = buildDefineArgs(SHELF_PRESET_FOCUS, SHELF_PARAM_TYPES);
+      expect(args).toContain('smoothness_of_circles_and_arcs=40');
+    });
+  });
+
+  describe('buildDefineArgs numeric coercion for grid preset', () => {
+    it('emits number_of_rows as unquoted number', () => {
+      const args = buildDefineArgs(GRID_PRESET_FOCUS, GRID_PARAM_TYPES);
+      expect(args).toContain('number_of_rows=6');
+    });
+
+    it('emits number_of_columns as unquoted number', () => {
+      const args = buildDefineArgs(GRID_PRESET_FOCUS, GRID_PARAM_TYPES);
+      expect(args).toContain('number_of_columns=10');
+    });
+
+    it('emits cell_width_in_mm as unquoted number', () => {
+      const args = buildDefineArgs(GRID_PRESET_FOCUS, GRID_PARAM_TYPES);
+      expect(args).toContain('cell_width_in_mm=18');
+    });
+
+    it('emits cell_height_in_mm as unquoted number', () => {
+      const args = buildDefineArgs(GRID_PRESET_FOCUS, GRID_PARAM_TYPES);
+      expect(args).toContain('cell_height_in_mm=20');
+    });
+
+    it('emits padding values as unquoted numbers', () => {
+      const args = buildDefineArgs(GRID_PRESET_FOCUS, GRID_PARAM_TYPES);
+      expect(args).toContain('top_padding=1');
+      expect(args).toContain('bottom_padding=1');
+      expect(args).toContain('left_padding=0');
+      expect(args).toContain('right_padding=0');
+    });
+
+    it('emits type_of_tablet as quoted string', () => {
+      const args = buildDefineArgs(GRID_PRESET_FOCUS, GRID_PARAM_TYPES);
+      expect(args).toContain('type_of_tablet="iPad 9th generation"');
+    });
+
+    it('emits orientation as quoted string', () => {
+      const args = buildDefineArgs(GRID_PRESET_FOCUS, GRID_PARAM_TYPES);
+      expect(args).toContain('orientation="landscape"');
+    });
+  });
+
+  describe('buildDefineArgs with wrong paramType (divergence risk)', () => {
+    it('would quote shelf_thickness if paramType were string (documenting the risk)', () => {
+      const wrongTypes = { ...SHELF_PARAM_TYPES, shelf_thickness: 'string' };
+      const args = buildDefineArgs(SHELF_PRESET_FOCUS, wrongTypes);
+      expect(args).toContain('shelf_thickness="3"');
+    });
+
+    it('would quote number_of_rows if paramType were string', () => {
+      const wrongTypes = { ...GRID_PARAM_TYPES, number_of_rows: 'string' };
+      const args = buildDefineArgs(GRID_PRESET_FOCUS, wrongTypes);
+      expect(args).toContain('number_of_rows="6"');
+    });
+
+    it('would quote smoothness_of_circles_and_arcs if paramType were string', () => {
+      const wrongTypes = { ...SHELF_PARAM_TYPES, smoothness_of_circles_and_arcs: 'string' };
+      const args = buildDefineArgs(SHELF_PRESET_FOCUS, wrongTypes);
+      expect(args).toContain('smoothness_of_circles_and_arcs="40"');
+    });
+
+    it('would quote cell_width_in_mm if paramType were string', () => {
+      const wrongTypes = { ...GRID_PARAM_TYPES, cell_width_in_mm: 'string' };
+      const args = buildDefineArgs(GRID_PRESET_FOCUS, wrongTypes);
+      expect(args).toContain('cell_width_in_mm="18"');
+    });
+  });
+
+  describe('buildDefineArgs integer vs number type equivalence (regression guard)', () => {
+    it('integer and number types produce identical output for shelf_corner_radius', () => {
+      const withInteger = buildDefineArgs(
+        { shelf_corner_radius: '10' },
+        { shelf_corner_radius: 'integer' },
+      );
+      const withNumber = buildDefineArgs(
+        { shelf_corner_radius: '10' },
+        { shelf_corner_radius: 'number' },
+      );
+      expect(withInteger).toEqual(withNumber);
+      expect(withInteger).toContain('shelf_corner_radius=10');
+    });
+
+    it('integer and number types produce identical output for smoothness_of_circles_and_arcs', () => {
+      const withInteger = buildDefineArgs(
+        { smoothness_of_circles_and_arcs: '40' },
+        { smoothness_of_circles_and_arcs: 'integer' },
+      );
+      const withNumber = buildDefineArgs(
+        { smoothness_of_circles_and_arcs: '40' },
+        { smoothness_of_circles_and_arcs: 'number' },
+      );
+      expect(withInteger).toEqual(withNumber);
+      expect(withInteger).toContain('smoothness_of_circles_and_arcs=40');
+    });
+
+    it('integer and number types produce identical output for number_of_rows', () => {
+      const withInteger = buildDefineArgs(
+        { number_of_rows: '6' },
+        { number_of_rows: 'integer' },
+      );
+      const withNumber = buildDefineArgs(
+        { number_of_rows: '6' },
+        { number_of_rows: 'number' },
+      );
+      expect(withInteger).toEqual(withNumber);
+      expect(withInteger).toContain('number_of_rows=6');
+    });
+
+    it('integer type handles decimal string values by coercing to number', () => {
+      const args = buildDefineArgs(
+        { top_padding: '1.5' },
+        { top_padding: 'integer' },
+      );
+      expect(args).toContain('top_padding=1.5');
+    });
+  });
+
+  describe('Geometry Fix Regression: desktop reference parity (Phase 2 baseline)', () => {
+    // Desktop reference data from docs/audit/testing-round-7/reference-data/cli-extracts/nightly/
+    // These fixtures are inlined to keep the test self-contained (same pattern as buildDefineArgs above).
+    const DESKTOP_REFERENCES = {
+      '3d-printed-keyguard': {
+        scenarioId: '3d-printed-keyguard',
+        parameters: { generate: 'keyguard', type_of_keyguard: '3D-Printed' },
+        geometry: { vertices: 5978, facets: 12016 },
+        exports: { stl_bytes: 3394047 },
+        openscadVersion: '2026.01.03',
+        backend: 'Manifold',
+      },
+      'laser-cut-keyguard': {
+        scenarioId: 'laser-cut-keyguard',
+        parameters: { generate: 'keyguard', type_of_keyguard: 'Laser-Cut' },
+        geometry: { vertices: 3288, facets: 6636 },
+        exports: { stl_bytes: 1912770 },
+        openscadVersion: '2026.01.03',
+        backend: 'Manifold',
+      },
+      'keyguard-frame-multicolor': {
+        scenarioId: 'keyguard-frame-multicolor',
+        parameters: {
+          type_of_keyguard: '3D-Printed',
+          generate: 'keyguard frame',
+          show_keyguard_with_frame: 'yes',
+          have_a_keyguard_frame: 'yes',
+        },
+        geometry: { vertices: 6981, facets: 14118 },
+        exports: { stl_bytes: 3940675 },
+        openscadVersion: '2026.01.03',
+        backend: 'Manifold',
+      },
+    };
+
+    function findMatchingReference(params) {
+      if (!params) return null;
+      for (const ref of Object.values(DESKTOP_REFERENCES)) {
+        const allMatch = Object.entries(ref.parameters).every(
+          ([key, value]) => params[key] === value
+        );
+        if (allMatch) return ref;
+      }
+      return null;
+    }
+
+    function withinTolerance(actual, reference, tolerancePct) {
+      const delta = Math.abs(actual - reference) / reference;
+      return delta <= tolerancePct / 100;
+    }
+
+    describe('reference data structure validation', () => {
+      it('all reference entries have required geometry fields', () => {
+        for (const [id, ref] of Object.entries(DESKTOP_REFERENCES)) {
+          expect(ref.scenarioId).toBe(id);
+          expect(ref.geometry.vertices).toBeGreaterThan(0);
+          expect(ref.geometry.facets).toBeGreaterThan(0);
+          expect(ref.exports.stl_bytes).toBeGreaterThan(0);
+          expect(ref.openscadVersion).toBe('2026.01.03');
+          expect(ref.backend).toBe('Manifold');
+        }
+      });
+
+      it('all reference entries have parameter sets for matching', () => {
+        for (const ref of Object.values(DESKTOP_REFERENCES)) {
+          expect(ref.parameters).toBeDefined();
+          expect(Object.keys(ref.parameters).length).toBeGreaterThan(0);
+        }
+      });
+
+      it('facet count is always even (triangulated mesh has paired faces)', () => {
+        for (const ref of Object.values(DESKTOP_REFERENCES)) {
+          expect(ref.geometry.facets % 2).toBe(0);
+        }
+      });
+    });
+
+    describe('reference matching logic', () => {
+      it('matches 3D-printed keyguard by generate + type_of_keyguard', () => {
+        const match = findMatchingReference({
+          generate: 'keyguard',
+          type_of_keyguard: '3D-Printed',
+        });
+        expect(match).not.toBeNull();
+        expect(match.scenarioId).toBe('3d-printed-keyguard');
+        expect(match.geometry.facets).toBe(12016);
+      });
+
+      it('matches laser-cut keyguard by generate + type_of_keyguard', () => {
+        const match = findMatchingReference({
+          generate: 'keyguard',
+          type_of_keyguard: 'Laser-Cut',
+        });
+        expect(match).not.toBeNull();
+        expect(match.scenarioId).toBe('laser-cut-keyguard');
+      });
+
+      it('matches keyguard-frame-multicolor by all four parameters', () => {
+        const match = findMatchingReference({
+          type_of_keyguard: '3D-Printed',
+          generate: 'keyguard frame',
+          show_keyguard_with_frame: 'yes',
+          have_a_keyguard_frame: 'yes',
+        });
+        expect(match).not.toBeNull();
+        expect(match.scenarioId).toBe('keyguard-frame-multicolor');
+      });
+
+      it('returns null for unrecognized parameter combinations', () => {
+        expect(findMatchingReference({ generate: 'unknown' })).toBeNull();
+      });
+
+      it('returns null for null input', () => {
+        expect(findMatchingReference(null)).toBeNull();
+      });
+
+      it('does not match when only a subset of required params is present', () => {
+        const match = findMatchingReference({
+          type_of_keyguard: '3D-Printed',
+          generate: 'keyguard frame',
+          // Missing show_keyguard_with_frame and have_a_keyguard_frame
+        });
+        // Should NOT match keyguard-frame-multicolor since only 2 of 4 params present.
+        // May match 3d-printed-keyguard since generate='keyguard frame' != 'keyguard'.
+        expect(match?.scenarioId).not.toBe('keyguard-frame-multicolor');
+      });
+    });
+
+    describe('tolerance comparison utility', () => {
+      it('accepts values within tolerance', () => {
+        expect(withinTolerance(11000, 12016, 10)).toBe(true);
+        expect(withinTolerance(12016, 12016, 10)).toBe(true);
+        expect(withinTolerance(12500, 12016, 10)).toBe(true);
+      });
+
+      it('rejects values outside tolerance', () => {
+        expect(withinTolerance(9000, 12016, 10)).toBe(false);
+        expect(withinTolerance(14000, 12016, 10)).toBe(false);
+      });
+    });
+
+    describe('Phase 2 observed baseline recording', () => {
+      // OBSERVED (browser runtime, 2026-04-03): compareGeometry() at RENDER_QUALITY.FULL
+      // reported 10,348 triangles for the default 3D-printed keyguard preset.
+      // Desktop Nightly reference: 12,016 facets.
+      // Delta: -1,668 (-13.9%) — outside 10% tolerance.
+      // This was measured with WASM build OpenSCAD-2025.03.25 (pre-Phase 4 update).
+      const BROWSER_BASELINE_PRE_PHASE4 = 10348;
+      const DESKTOP_REFERENCE_FACETS = 12016;
+
+      it('baseline delta is recorded as -13.9% (outside 10% tolerance)', () => {
+        const delta =
+          (BROWSER_BASELINE_PRE_PHASE4 - DESKTOP_REFERENCE_FACETS) /
+          DESKTOP_REFERENCE_FACETS;
+        expect(delta).toBeCloseTo(-0.139, 2);
+        expect(withinTolerance(BROWSER_BASELINE_PRE_PHASE4, DESKTOP_REFERENCE_FACETS, 10)).toBe(false);
+      });
+
+      it('a hypothetical 11,000-triangle result would be within 10% tolerance', () => {
+        expect(withinTolerance(11000, DESKTOP_REFERENCE_FACETS, 10)).toBe(true);
+      });
+
+      it('desktop reference for 3D-printed keyguard is 5,978 vertices / 12,016 facets', () => {
+        const ref = DESKTOP_REFERENCES['3d-printed-keyguard'];
+        expect(ref.geometry.vertices).toBe(5978);
+        expect(ref.geometry.facets).toBe(12016);
+      });
+    });
+  });
+
+  describe('end-to-end 2D export pipeline for grid preset', () => {
+    const GRID_2D_EXPORT_SCHEMA = {
+      parameters: {
+        generate: {
+          enum: [
+            { value: 'keyguard', label: '3d printed keyguard' },
+            { value: 'first layer for SVG/DXF file', label: 'first layer for SVG/DXF file' },
+          ],
+        },
+        type_of_keyguard: {
+          enum: ['3D-Printed', 'Laser-Cut'],
+        },
+        use_Laser_Cutting_best_practices: {
+          enum: ['yes', 'no'],
+        },
+      },
+    };
+
+    it('resolve2DExportIntent adjusts grid preset for SVG export', () => {
+      const resolved = resolve2DExportIntent(
+        { ...GRID_PRESET_FOCUS },
+        GRID_2D_EXPORT_SCHEMA,
+        'svg',
+      );
+      expect(resolved.generate).toBe('first layer for SVG/DXF file');
+      expect(resolved.type_of_keyguard).toBe('Laser-Cut');
+      expect(resolved.use_Laser_Cutting_best_practices).toBe('yes');
+    });
+
+    it('resolve2DExportIntent preserves non-adjusted grid parameters', () => {
+      const resolved = resolve2DExportIntent(
+        { ...GRID_PRESET_FOCUS },
+        GRID_2D_EXPORT_SCHEMA,
+        'svg',
+      );
+      expect(resolved.number_of_rows).toBe('6');
+      expect(resolved.number_of_columns).toBe('10');
+      expect(resolved.cell_width_in_mm).toBe('18');
+      expect(resolved.cell_height_in_mm).toBe('20');
+      expect(resolved.mounting_method).toBe('Slide-in Tabs');
+      expect(resolved.orientation).toBe('landscape');
+    });
+
+    it('buildDefineArgs serializes resolved grid 2D export params correctly', () => {
+      const resolved = resolve2DExportIntent(
+        { ...GRID_PRESET_FOCUS },
+        GRID_2D_EXPORT_SCHEMA,
+        'svg',
+      );
+      const args = buildDefineArgs(resolved, GRID_PARAM_TYPES);
+
+      expect(args).toContain('generate="first layer for SVG/DXF file"');
+      expect(args).toContain('type_of_keyguard="Laser-Cut"');
+      expect(args).toContain('use_Laser_Cutting_best_practices="yes"');
+      expect(args).toContain('number_of_rows=6');
+      expect(args).toContain('number_of_columns=10');
+      expect(args).toContain('cell_width_in_mm=18');
+      expect(args).toContain('cell_height_in_mm=20');
+      expect(args).toContain('top_padding=1');
+      expect(args).toContain('bottom_padding=1');
+      expect(args).toContain('left_padding=0');
+      expect(args).toContain('right_padding=0');
+      expect(args).toContain('orientation="landscape"');
+      expect(args).toContain('mounting_method="Slide-in Tabs"');
+      expect(args).toContain('smoothness_of_circles_and_arcs=40');
+    });
+
+    it('buildDefineArgs serializes shelf preset with parser-accurate types', () => {
+      const args = buildDefineArgs(SHELF_PRESET_FOCUS, SHELF_PARAM_TYPES);
+
+      expect(args).toContain('mounting_method="Shelf"');
+      expect(args).toContain('shelf_thickness=3');
+      expect(args).toContain('shelf_depth=4');
+      expect(args).toContain('shelf_corner_radius=10');
+      expect(args).toContain('have_a_case="yes"');
+      expect(args).toContain('have_a_keyguard_frame="no"');
+      expect(args).toContain('smoothness_of_circles_and_arcs=40');
+      expect(args).toContain('generate="keyguard"');
+      expect(args).toContain('type_of_keyguard="3D-Printed"');
+    });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 4: Serialization Parity — shared formatScadValue regression tests
+//
+// Validates that the single formatting function (scad-param-formatter.js)
+// produces identical output for all code paths: buildDefineArgs (-D flags),
+// _applyOverrides (source replacement), parametersToScad (source prepend),
+// and dumpRenderArgs (diagnostic logging).
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('Phase 4: formatScadValue parity — yes/no string enums', () => {
+  it('preserves "yes" as quoted string when paramType is string', () => {
+    expect(formatScadValue('have_a_case', 'yes', { have_a_case: 'string' })).toBe('"yes"');
+  });
+
+  it('preserves "no" as quoted string when paramType is string', () => {
+    expect(formatScadValue('have_a_case', 'no', { have_a_case: 'string' })).toBe('"no"');
+  });
+
+  it('converts "yes" to boolean true when paramType is boolean', () => {
+    expect(formatScadValue('MW_version', 'yes', { MW_version: 'boolean' })).toBe('true');
+  });
+
+  it('converts "no" to boolean false when paramType is boolean', () => {
+    expect(formatScadValue('MW_version', 'no', { MW_version: 'boolean' })).toBe('false');
+  });
+
+  it('converts "true" to boolean true when paramType is boolean', () => {
+    expect(formatScadValue('flag', 'true', { flag: 'boolean' })).toBe('true');
+  });
+
+  it('converts "false" to boolean false when paramType is boolean', () => {
+    expect(formatScadValue('flag', 'false', { flag: 'boolean' })).toBe('false');
+  });
+
+  it('preserves "yes" as quoted string when paramType is unknown/missing', () => {
+    expect(formatScadValue('expose_home_button', 'yes', {})).toBe('"yes"');
+    expect(formatScadValue('expose_home_button', 'yes')).toBe('"yes"');
+  });
+
+  it('preserves "no" as quoted string when paramType is unknown/missing', () => {
+    expect(formatScadValue('expose_upper_message_bar', 'no', {})).toBe('"no"');
+  });
+
+  it('preserves "Yes"/"No" (capitalized) as quoted strings for string type', () => {
+    expect(formatScadValue('param', 'Yes', { param: 'string' })).toBe('"Yes"');
+    expect(formatScadValue('param', 'No', { param: 'string' })).toBe('"No"');
+  });
+
+  it('converts "Yes"/"No" (capitalized) to booleans for boolean type', () => {
+    expect(formatScadValue('param', 'Yes', { param: 'boolean' })).toBe('true');
+    expect(formatScadValue('param', 'No', { param: 'boolean' })).toBe('false');
+  });
+});
+
+describe('Phase 4: formatScadValue parity — numeric-string coercion', () => {
+  it('emits unquoted number for integer-typed string "40"', () => {
+    expect(formatScadValue('smoothness', '40', { smoothness: 'integer' })).toBe('40');
+  });
+
+  it('emits unquoted number for number-typed string "3.5"', () => {
+    expect(formatScadValue('thickness', '3.5', { thickness: 'number' })).toBe('3.5');
+  });
+
+  it('emits unquoted 0 for number-typed string "0"', () => {
+    expect(formatScadValue('padding', '0', { padding: 'number' })).toBe('0');
+  });
+
+  it('emits quoted string for numeric-looking value when type is string', () => {
+    expect(formatScadValue('label', '42', { label: 'string' })).toBe('"42"');
+  });
+
+  it('emits quoted string for numeric-looking value when type is missing', () => {
+    expect(formatScadValue('label', '42', {})).toBe('"42"');
+  });
+
+  it('emits unquoted number for native number value regardless of type', () => {
+    expect(formatScadValue('width', 100, { width: 'integer' })).toBe('100');
+    expect(formatScadValue('width', 100, { width: 'string' })).toBe('100');
+    expect(formatScadValue('width', 100, {})).toBe('100');
+  });
+
+  it('handles negative numeric strings', () => {
+    expect(formatScadValue('offset', '-5', { offset: 'number' })).toBe('-5');
+  });
+
+  it('handles float with leading zero', () => {
+    expect(formatScadValue('scale', '0.5', { scale: 'number' })).toBe('0.5');
+  });
+
+  it('does not coerce non-numeric strings for integer type', () => {
+    expect(formatScadValue('param', 'abc', { param: 'integer' })).toBe('"abc"');
+  });
+
+  it('does not coerce empty string for integer type', () => {
+    expect(formatScadValue('param', '', { param: 'integer' })).toBe('""');
+  });
+
+  it('does not coerce whitespace-only string for number type', () => {
+    expect(formatScadValue('param', '   ', { param: 'number' })).toBe('"   "');
+  });
+});
+
+describe('Phase 4: formatScadValue parity — edge cases', () => {
+  it('returns null for null value', () => {
+    expect(formatScadValue('key', null)).toBeNull();
+  });
+
+  it('returns null for undefined value', () => {
+    expect(formatScadValue('key', undefined)).toBeNull();
+  });
+
+  it('formats native boolean true', () => {
+    expect(formatScadValue('flag', true)).toBe('true');
+  });
+
+  it('formats native boolean false', () => {
+    expect(formatScadValue('flag', false)).toBe('false');
+  });
+
+  it('formats array values as OpenSCAD vectors', () => {
+    expect(formatScadValue('pos', [1, 2, 3])).toBe('[1,2,3]');
+  });
+
+  it('formats nested arrays as nested OpenSCAD vectors', () => {
+    expect(formatScadValue('matrix', [[1, 2], [3, 4]])).toBe('[[1,2],[3,4]]');
+  });
+
+  it('formats file parameter objects using filename', () => {
+    const fileParam = { data: new ArrayBuffer(8), name: 'image.png' };
+    expect(formatScadValue('surface_file', fileParam)).toBe('"image.png"');
+  });
+
+  it('escapes backslashes and quotes in string values', () => {
+    expect(formatScadValue('label', 'hello "world"', { label: 'string' })).toBe('"hello \\"world\\""');
+    expect(formatScadValue('path', 'C:\\Users', { path: 'string' })).toBe('"C:\\\\Users"');
+  });
+});
+
+describe('Phase 4: buildDefineArgs and formatScadValue produce identical output', () => {
+  const LWFL_PARAMS = {
+    expose_home_button: 'yes',
+    expose_upper_message_bar: 'no',
+    smoothness_of_circles_and_arcs: '40',
+    shelf_thickness: '3',
+    generate: 'keyguard',
+    type_of_keyguard: '3D-Printed',
+    have_a_case: 'yes',
+    have_a_keyguard_frame: 'no',
+    keyguard_color: '#FF0000',
+  };
+
+  const LWFL_TYPES = {
+    expose_home_button: 'string',
+    expose_upper_message_bar: 'string',
+    smoothness_of_circles_and_arcs: 'integer',
+    shelf_thickness: 'number',
+    generate: 'string',
+    type_of_keyguard: 'string',
+    have_a_case: 'string',
+    have_a_keyguard_frame: 'string',
+    keyguard_color: 'string',
+  };
+
+  it('each -D arg matches formatScadValue output for the same key', () => {
+    const args = buildDefineArgs(LWFL_PARAMS, LWFL_TYPES);
+    for (let i = 0; i < args.length; i += 2) {
+      const assignment = args[i + 1];
+      const eqIdx = assignment.indexOf('=');
+      const key = assignment.substring(0, eqIdx);
+      const argValue = assignment.substring(eqIdx + 1);
+      const directValue = formatScadValue(key, LWFL_PARAMS[key], LWFL_TYPES);
+      expect(argValue).toBe(directValue);
+    }
+  });
+
+  it('string enum "yes" is quoted in -D args (not converted to boolean)', () => {
+    const args = buildDefineArgs(LWFL_PARAMS, LWFL_TYPES);
+    expect(args).toContain('expose_home_button="yes"');
+    expect(args).toContain('have_a_case="yes"');
+  });
+
+  it('string enum "no" is quoted in -D args (not converted to boolean)', () => {
+    const args = buildDefineArgs(LWFL_PARAMS, LWFL_TYPES);
+    expect(args).toContain('expose_upper_message_bar="no"');
+    expect(args).toContain('have_a_keyguard_frame="no"');
+  });
+
+  it('numeric string coerced to unquoted number in -D args', () => {
+    const args = buildDefineArgs(LWFL_PARAMS, LWFL_TYPES);
+    expect(args).toContain('smoothness_of_circles_and_arcs=40');
+    expect(args).toContain('shelf_thickness=3');
+  });
+
+  it('plain strings remain quoted in -D args', () => {
+    const args = buildDefineArgs(LWFL_PARAMS, LWFL_TYPES);
+    expect(args).toContain('generate="keyguard"');
+    expect(args).toContain('type_of_keyguard="3D-Printed"');
+  });
+});
+
+describe('Phase 4: serializeScadVector', () => {
+  it('serializes flat array', () => {
+    expect(serializeScadVector([1, 2, 3])).toBe('[1,2,3]');
+  });
+
+  it('serializes nested array', () => {
+    expect(serializeScadVector([[0, 0], [10, 20]])).toBe('[[0,0],[10,20]]');
+  });
+
+  it('serializes empty array', () => {
+    expect(serializeScadVector([])).toBe('[]');
+  });
+
+  it('serializes deeply nested array', () => {
+    expect(serializeScadVector([[[1]]])).toBe('[[[1]]]');
+  });
+
+  it('handles mixed types in array', () => {
+    expect(serializeScadVector([1, 'a', true])).toBe('[1,a,true]');
+  });
+});
+
+describe('Phase 4: detectColorParamLiteralStyle', () => {
+  it('detects string-style color with #', () => {
+    const scad = 'keyguard_color = "#FF0000"; // [#FF0000, #00FF00]';
+    const result = detectColorParamLiteralStyle(scad, 'keyguard_color');
+    expect(result.style).toBe('string');
+    expect(result.hasHashPrefix).toBe(true);
+  });
+
+  it('detects string-style color without #', () => {
+    const scad = 'frame_color = "FF0000";';
+    const result = detectColorParamLiteralStyle(scad, 'frame_color');
+    expect(result.style).toBe('string');
+    expect(result.hasHashPrefix).toBe(false);
+  });
+
+  it('detects vector-style color', () => {
+    const scad = 'my_color = [1, 0, 0];';
+    const result = detectColorParamLiteralStyle(scad, 'my_color');
+    expect(result.style).toBe('vector');
+  });
+
+  it('returns unknown for missing parameter', () => {
+    const scad = 'other_param = 42;';
+    const result = detectColorParamLiteralStyle(scad, 'missing_param');
+    expect(result.style).toBe('unknown');
+  });
+
+  it('returns unknown for null/empty inputs', () => {
+    expect(detectColorParamLiteralStyle(null, 'key').style).toBe('unknown');
+    expect(detectColorParamLiteralStyle('', 'key').style).toBe('unknown');
+    expect(detectColorParamLiteralStyle('code', null).style).toBe('unknown');
+  });
+});
+
+describe('Phase 4: escapeRegExp', () => {
+  it('escapes regex special characters', () => {
+    expect(escapeRegExp('foo.bar')).toBe('foo\\.bar');
+    expect(escapeRegExp('a+b')).toBe('a\\+b');
+    expect(escapeRegExp('[test]')).toBe('\\[test\\]');
+  });
+
+  it('passes through plain strings unchanged', () => {
+    expect(escapeRegExp('simple_key')).toBe('simple_key');
   });
 });

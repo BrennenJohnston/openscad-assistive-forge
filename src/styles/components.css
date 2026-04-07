@@ -3205,6 +3205,13 @@ summary:focus-visible,
   font-style: italic;
 }
 
+.param-hint {
+  display: block;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  margin-top: var(--space-2xs);
+}
+
 .param-control label {
   display: block;
   font-weight: 500;
@@ -7291,6 +7298,96 @@ body.first-visit-blocking #app {
   transform: translateY(1px);
 }
 
+/* File preview thumbnail (raster image uploads) */
+.file-preview-thumbnail {
+  max-width: 80px;
+  max-height: 80px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  object-fit: contain;
+}
+
+/* SVG Gallery Picker */
+.svg-gallery {
+  width: 100%;
+  margin-bottom: var(--space-sm);
+}
+
+.svg-gallery-heading {
+  display: block;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-xs);
+  font-weight: 500;
+}
+
+.svg-gallery-listbox {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+  gap: var(--space-xs);
+  padding: var(--space-xs);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-md);
+  background: var(--color-bg-secondary);
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.svg-gallery-listbox:focus {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.svg-gallery-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: var(--space-xs);
+  border: 2px solid transparent;
+  border-radius: var(--border-radius-sm);
+  background: var(--color-bg);
+  cursor: pointer;
+  transition: border-color var(--motion-fast), background-color var(--motion-fast);
+  min-height: 44px;
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+
+.svg-gallery-option:hover {
+  border-color: var(--color-accent);
+  background: var(--color-bg);
+}
+
+.svg-gallery-option:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 1px;
+}
+
+.svg-gallery-option--active,
+.svg-gallery-option[aria-selected='true'] {
+  border-color: var(--color-accent);
+  background: var(--color-accent-bg, var(--color-bg));
+  box-shadow: 0 0 0 1px var(--color-accent);
+}
+
+.svg-gallery-thumb {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+}
+
+.svg-gallery-label {
+  font-size: var(--font-size-xs, 0.7rem);
+  text-align: center;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
 /* High Contrast Mode */
 [data-high-contrast='true'] .file-upload-button {
   border: 2px solid currentColor;
@@ -7302,6 +7399,31 @@ body.first-visit-blocking #app {
 
 [data-high-contrast='true'] .file-clear-button {
   border: 2px solid currentColor;
+}
+
+[data-high-contrast='true'] .svg-gallery-option {
+  border-width: 3px;
+}
+
+[data-high-contrast='true'] .svg-gallery-option--active,
+[data-high-contrast='true'] .svg-gallery-option[aria-selected='true'] {
+  border-color: currentColor;
+  outline: 2px solid currentColor;
+}
+
+/* Dark Theme SVG Gallery Visibility */
+:root[data-theme='dark'] .svg-gallery-thumb {
+  filter: invert(1);
+}
+
+:root[data-high-contrast='true'][data-theme='dark'] .svg-gallery-thumb {
+  filter: invert(1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .svg-gallery-thumb {
+    filter: invert(1);
+  }
 }
 
 /* Responsive */
@@ -7320,6 +7442,11 @@ body.first-visit-blocking #app {
 
   .file-clear-button {
     width: auto;
+  }
+
+  .svg-gallery-listbox {
+    grid-template-columns: repeat(auto-fill, minmax(56px, 1fr));
+    max-height: 160px;
   }
 }
 
@@ -7341,7 +7468,8 @@ body.first-visit-blocking #app {
   .color-picker,
   .color-hex-input,
   .file-upload-button,
-  .file-clear-button {
+  .file-clear-button,
+  .svg-gallery-option {
     transition: none;
   }
 }
@@ -8474,7 +8602,7 @@ body.first-visit-blocking #app {
   border-radius: var(--border-radius-sm);
   color: var(--color-text-primary); /* Ensure this adapts to theme */
   cursor: pointer;
-  opacity: 0;
+  opacity: 0.6;
   transition:
     opacity var(--motion-base),
     color var(--motion-base),
@@ -8502,6 +8630,10 @@ body.first-visit-blocking #app {
   opacity: 1;
   color: var(--color-text-primary);
   border-color: var(--color-accent);
+}
+
+:root[data-high-contrast='true'] .param-reset-btn {
+  opacity: 1;
 }
 
 /* High Contrast Mode */
@@ -9591,6 +9723,10 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   }
 
+  .role-paths-grid--collapsed {
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  }
+
   .spotlights-list {
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   }
@@ -9608,6 +9744,38 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
   color: var(--color-text-secondary);
   margin: 0 0 var(--space-xs) 0;
   line-height: 1.4;
+}
+
+.role-path-meta a {
+  color: var(--color-accent-fg);
+  text-decoration: underline;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 2px;
+  border-radius: 2px;
+  transition: color var(--motion-base), text-decoration-color var(--motion-base);
+}
+
+.role-path-meta a:hover {
+  color: var(--color-accent-hover);
+  text-decoration-thickness: 2.5px;
+}
+
+.role-path-meta a:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+@supports not selector(:focus-visible) {
+
+  .role-path-meta a:focus {
+    outline: 3px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+}
+
+.role-path-meta a[target='_blank']::after {
+  content: '\2009\2197';
+  font-size: 0.85em;
 }
 
 .role-path-details {
@@ -9653,6 +9821,11 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
   grid-template-columns: 1fr;
   gap: var(--space-lg);
   margin-bottom: var(--space-xl);
+}
+
+.role-paths-grid--collapsed {
+  margin-top: var(--space-lg);
+  margin-bottom: 0;
 }
 
 .role-path-card {
@@ -9726,6 +9899,30 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
   font-weight: 600;
   /* Force 44px even on desktop to meet WCAG 2.5.8 AAA for primary CTAs */
   min-height: 44px;
+}
+
+.charm-variant-selector {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.charm-variant-selector label {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--color-text-primary);
+}
+
+.charm-variant-select {
+  flex: 1;
+  min-height: 36px;
+  padding: var(--space-xs) var(--space-sm);
+  font-size: var(--font-size-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
 }
 
 .btn-role-learn {
@@ -10929,6 +11126,14 @@ body.tutorial-body-locked {
   border-width: 4px;
 }
 
+[data-high-contrast='true'] .role-path-meta a {
+  text-decoration-thickness: 2px;
+}
+
+[data-high-contrast='true'] .role-path-meta a:hover {
+  text-decoration-thickness: 3px;
+}
+
 [data-high-contrast='true'] .spotlight-link {
   border-width: 2px;
 }
@@ -11615,6 +11820,10 @@ body.tutorial-body-locked {
     border-color: GrayText !important;
   }
 
+  .param-reset-btn {
+    opacity: 1;
+  }
+
   /* Drawer toggle buttons */
   .preview-drawer-toggle-btn,
   .actions-drawer-toggle {
@@ -11925,6 +12134,16 @@ body.tutorial-body-locked {
   .role-path-card:focus-within {
     border: 3px solid Highlight !important;
     box-shadow: none;
+  }
+
+  .role-path-meta a {
+    color: LinkText;
+    text-decoration: underline;
+    forced-color-adjust: none;
+  }
+
+  .role-path-meta a:hover {
+    color: ActiveText;
   }
 
   .spotlight-link {
@@ -13231,5 +13450,635 @@ body.tutorial-body-locked {
   .preset-search-input,
   .preset-search-clear {
     transition: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   SVG Preparation Workspace
+   Inline editor component with dual preview, object list, and fullscreen.
+   Replaces the old .svg-preparer-* modal. Follows the .measure-fullscreen
+   pattern for fullscreen expansion.
+   --------------------------------------------------------------------------- */
+
+/* ── Region shell ────────────────────────────────────────────────────────── */
+.svg-prep-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-md);
+  background: var(--color-bg-primary);
+  padding: var(--space-md);
+  transition: box-shadow var(--motion-fast) ease;
+}
+
+/* ── Header ──────────────────────────────────────────────────────────────── */
+.svg-prep-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.svg-prep-header h3 {
+  margin: 0;
+  font-size: var(--font-size-lg);
+  color: var(--color-text-primary);
+  flex: 1;
+  min-width: 0;
+}
+
+.svg-prep-fullscreen-btn,
+.svg-prep-close-btn {
+  min-width: var(--size-touch-target);
+  min-height: var(--size-touch-target);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-lg);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background-color var(--motion-fast) ease;
+}
+
+.svg-prep-fullscreen-btn:hover,
+.svg-prep-close-btn:hover {
+  background: var(--color-hover-bg);
+}
+
+.svg-prep-fullscreen-btn:focus-visible,
+.svg-prep-close-btn:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+/* ── Dual preview panes ──────────────────────────────────────────────────── */
+.svg-prep-previews {
+  display: flex;
+  gap: var(--space-md);
+}
+
+.svg-prep-source-pane,
+.svg-prep-result-pane {
+  flex: 1;
+  min-width: 0;
+  min-height: 160px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  padding: var(--space-sm);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.svg-prep-source-pane svg,
+.svg-prep-result-pane svg {
+  width: 100%;
+  height: 100%;
+  max-height: 300px;
+}
+
+.svg-prep-source-pane [data-prep-highlight] {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+/* ── Zoom controls ───────────────────────────────────────────────────────── */
+.svg-prep-zoom-controls {
+  display: flex;
+  gap: var(--space-xs);
+  margin-top: var(--space-xs);
+  align-self: center;
+}
+
+.svg-prep-zoom-controls button {
+  min-width: var(--size-touch-target);
+  min-height: var(--size-touch-target);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  transition: background-color var(--motion-fast) ease;
+}
+
+.svg-prep-zoom-controls button:hover {
+  background: var(--color-hover-bg);
+}
+
+.svg-prep-zoom-controls button:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+/* ── Object list ─────────────────────────────────────────────────────────── */
+.svg-prep-objects {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.svg-prep-object {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-bg-primary);
+  min-height: var(--size-touch-target);
+  transition: background-color var(--motion-fast) ease;
+}
+
+.svg-prep-object:hover {
+  background: var(--color-hover-bg);
+}
+
+.svg-prep-object:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.svg-prep-object:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.svg-prep-swatch {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+.svg-prep-object-name {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.svg-prep-role-group {
+  display: inline-flex;
+  gap: var(--space-sm);
+  border: 0;
+  padding: 0;
+  margin: 0 0 0 auto;
+}
+
+.svg-prep-role-group label {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  min-height: var(--size-touch-target);
+}
+
+.svg-prep-role-group input[type='radio'] {
+  flex-shrink: 0;
+  accent-color: var(--color-accent);
+}
+
+.svg-prep-object-warning {
+  flex-shrink: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-warning-text);
+}
+
+/* ── Offset input (per-element) ─────────────────────────────────────────── */
+.svg-prep-object .svg-prep-offset-input {
+  width: 60px;
+  flex-shrink: 0;
+  padding: var(--space-2xs) var(--space-xs);
+  text-align: right;
+  font-size: var(--font-size-sm);
+  min-height: var(--size-touch-target);
+  transition: border-color var(--motion-fast) ease;
+}
+
+.svg-prep-offset-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Design width input (header) ────────────────────────────────────────── */
+.svg-prep-design-width {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.svg-prep-design-width[hidden] {
+  display: none;
+}
+
+.svg-prep-design-width label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.svg-prep-design-width .svg-prep-design-width-input {
+  width: 60px;
+  padding: var(--space-2xs) var(--space-xs);
+  text-align: right;
+  font-size: var(--font-size-sm);
+  min-height: var(--size-touch-target);
+}
+
+.svg-prep-design-width-unit {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+/* ── Warning summary ─────────────────────────────────────────────────────── */
+.svg-prep-warnings ul {
+  margin: 0;
+  padding-left: 1.2em;
+  font-size: var(--font-size-sm);
+  color: var(--color-warning-text);
+  line-height: 1.5;
+}
+
+/* ── Footer ──────────────────────────────────────────────────────────────── */
+.svg-prep-footer {
+  display: flex;
+  gap: var(--space-sm);
+  justify-content: flex-end;
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--color-border-light);
+  flex-wrap: wrap;
+}
+
+/* ── Status card (inline beside file input) ──────────────────────────────── */
+.svg-prep-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+  font-size: var(--font-size-sm);
+  padding: var(--space-xs) 0;
+}
+
+.svg-prep-status-badge {
+  font-weight: 600;
+}
+
+.svg-prep-status-badge[data-level='ready'] {
+  color: var(--color-success-text);
+}
+
+.svg-prep-status-badge[data-level='review'] {
+  color: var(--color-warning-text);
+}
+
+.svg-prep-status-badge[data-level='unsupported'] {
+  color: var(--color-error-text);
+}
+
+.svg-prep-status-warnings {
+  margin: var(--space-xs) 0 0;
+  padding-left: 1.2em;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+/* ── Fullscreen expansion (follows .measure-fullscreen pattern) ──────────── */
+.svg-prep-workspace.svg-prep-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-index-modal, 1000);
+  background: var(--color-bg-primary);
+  padding: var(--space-lg);
+  padding-top: calc(var(--space-lg) + env(safe-area-inset-top, 0px));
+  padding-bottom: calc(var(--space-lg) + env(safe-area-inset-bottom, 0px));
+  border: 0;
+  border-radius: 0;
+  overflow: hidden;
+  height: 100%;
+  width: 100%;
+}
+
+.svg-prep-workspace.svg-prep-fullscreen .svg-prep-header {
+  flex-shrink: 0;
+}
+
+.svg-prep-workspace.svg-prep-fullscreen .svg-prep-previews {
+  flex: 0 0 33vh;
+  flex: 0 0 33dvh;
+  max-height: 45vh;
+  min-height: 120px;
+  overflow: hidden;
+}
+
+.svg-prep-workspace.svg-prep-fullscreen .svg-prep-source-pane,
+.svg-prep-workspace.svg-prep-fullscreen .svg-prep-result-pane {
+  min-height: 0;
+}
+
+.svg-prep-workspace.svg-prep-fullscreen .svg-prep-source-pane svg,
+.svg-prep-workspace.svg-prep-fullscreen .svg-prep-result-pane svg {
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  object-fit: contain;
+}
+
+.svg-prep-workspace.svg-prep-fullscreen .svg-prep-objects {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scroll-padding-block: var(--space-sm);
+  padding-block: var(--space-xs);
+}
+
+.svg-prep-workspace.svg-prep-fullscreen .svg-prep-warnings {
+  flex-shrink: 0;
+}
+
+.svg-prep-workspace.svg-prep-fullscreen .svg-prep-footer {
+  flex-shrink: 0;
+}
+
+@media (max-height: 500px) {
+  .svg-prep-workspace.svg-prep-fullscreen .svg-prep-previews {
+    flex: 0 0 25vh;
+    flex: 0 0 25dvh;
+    max-height: 35vh;
+  }
+}
+
+.svg-prep-fullscreen-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--z-index-modal, 1000) - 1);
+  background: rgba(12, 12, 12, 0.55);
+  backdrop-filter: blur(6px);
+}
+
+.svg-prep-fullscreen-backdrop.hidden {
+  display: none;
+}
+
+/* ── Responsive: narrow fullscreen (compact padding + stacked previews) ─── */
+@media (max-width: 540px) {
+  .svg-prep-workspace.svg-prep-fullscreen {
+    padding: var(--space-sm);
+    padding-top: calc(var(--space-sm) + env(safe-area-inset-top, 0px));
+    padding-bottom: calc(var(--space-sm) + env(safe-area-inset-bottom, 0px));
+  }
+
+  .svg-prep-workspace.svg-prep-fullscreen .svg-prep-previews {
+    flex-direction: column;
+  }
+
+  .svg-prep-workspace.svg-prep-fullscreen .svg-prep-header {
+    flex-wrap: wrap;
+  }
+
+  .svg-prep-workspace.svg-prep-fullscreen .svg-prep-header h3 {
+    width: 100%;
+    font-size: var(--font-size-base);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+/* ── Responsive: stack panes on narrow viewports (non-fullscreen only) ──── */
+@media (max-width: 540px) {
+
+  .svg-prep-workspace:not(.svg-prep-fullscreen) .svg-prep-previews {
+    flex-direction: column;
+  }
+
+  .svg-prep-workspace:not(.svg-prep-fullscreen) .svg-prep-source-pane,
+  .svg-prep-workspace:not(.svg-prep-fullscreen) .svg-prep-result-pane {
+    min-height: 120px;
+  }
+
+  .svg-prep-workspace:not(.svg-prep-fullscreen) .svg-prep-header {
+    flex-wrap: wrap;
+  }
+
+  .svg-prep-workspace:not(.svg-prep-fullscreen) .svg-prep-header h3 {
+    width: 100%;
+    font-size: var(--font-size-base);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .svg-prep-role-group {
+    flex-wrap: wrap;
+    gap: var(--space-xs);
+  }
+}
+
+/* ── High contrast override ──────────────────────────────────────────────── */
+:root[data-high-contrast='true'] .svg-prep-workspace {
+  border-width: 2px;
+}
+
+:root[data-high-contrast='true'] .svg-prep-object {
+  border-width: 2px;
+}
+
+:root[data-high-contrast='true'] .svg-prep-swatch {
+  border-width: 2px;
+}
+
+:root[data-high-contrast='true'] .svg-prep-source-pane,
+:root[data-high-contrast='true'] .svg-prep-result-pane {
+  border-width: 2px;
+}
+
+:root[data-high-contrast='true'] .svg-prep-role-group input[type='radio'] {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+:root[data-high-contrast='true'] .svg-prep-offset-input {
+  border-width: 2px;
+}
+
+:root[data-high-contrast='true'] .svg-prep-design-width-input {
+  border-width: 2px;
+}
+
+/* ── Dark Theme SVG Visibility ──────────────────────────────────────────── */
+:root[data-theme='dark'] .svg-prep-source-pane svg,
+:root[data-theme='dark'] .svg-prep-result-pane svg {
+  filter: invert(1);
+}
+
+:root[data-high-contrast='true'][data-theme='dark'] .svg-prep-source-pane svg,
+:root[data-high-contrast='true'][data-theme='dark'] .svg-prep-result-pane svg {
+  filter: invert(1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .svg-prep-source-pane svg,
+  :root:not([data-theme='light']) .svg-prep-result-pane svg {
+    filter: invert(1);
+  }
+}
+
+/* ── Reduced Motion ──────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+
+  .svg-prep-workspace {
+    transition: none;
+  }
+
+  .svg-prep-object {
+    transition: none;
+  }
+
+  .svg-prep-fullscreen-btn,
+  .svg-prep-close-btn,
+  .svg-prep-zoom-controls button {
+    transition: none;
+  }
+
+  .svg-prep-fullscreen-backdrop {
+    backdrop-filter: none;
+  }
+
+  .svg-prep-offset-input {
+    transition: none;
+  }
+}
+
+/* ── Forced Colors Mode (Windows High Contrast) ─────────────────────────── */
+@media (forced-colors: active) {
+
+  .svg-prep-workspace {
+    border: 2px solid ButtonText;
+    background: Canvas;
+    color: CanvasText;
+    forced-color-adjust: none;
+  }
+
+  .svg-prep-object {
+    border: 1px solid ButtonText;
+    background: Canvas;
+    color: CanvasText;
+    forced-color-adjust: none;
+  }
+
+  .svg-prep-object:hover {
+    border-color: Highlight;
+    background: Canvas;
+  }
+
+  .svg-prep-object:focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+
+  .svg-prep-swatch {
+    border: 2px solid ButtonText;
+  }
+
+  .svg-prep-source-pane,
+  .svg-prep-result-pane {
+    border: 2px solid ButtonText;
+    background: Canvas;
+  }
+
+  .svg-prep-source-pane [data-prep-highlight] {
+    outline: 3px solid Highlight;
+  }
+
+  .svg-prep-role-group label {
+    color: CanvasText;
+  }
+
+  .svg-prep-object-name {
+    color: CanvasText;
+  }
+
+  .svg-prep-header h3 {
+    color: CanvasText;
+  }
+
+  .svg-prep-fullscreen-btn,
+  .svg-prep-close-btn {
+    border: 2px solid ButtonText;
+    background: Canvas;
+    color: CanvasText;
+  }
+
+  .svg-prep-fullscreen-backdrop {
+    background: Canvas;
+    backdrop-filter: none;
+  }
+
+  .svg-prep-status-badge {
+    color: CanvasText;
+  }
+
+  .svg-prep-warnings ul {
+    color: CanvasText;
+  }
+
+  .svg-prep-offset-input {
+    border: 1px solid ButtonText;
+    background: Canvas;
+    color: CanvasText;
+    -webkit-text-fill-color: CanvasText;
+  }
+
+  .svg-prep-offset-input:focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+
+  .svg-prep-offset-input:disabled {
+    opacity: 1;
+    color: GrayText;
+    -webkit-text-fill-color: GrayText;
+  }
+
+  .svg-prep-design-width-input {
+    border: 1px solid ButtonText;
+    background: Canvas;
+    color: CanvasText;
+    -webkit-text-fill-color: CanvasText;
+  }
+
+  .svg-prep-design-width-input:focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+
+  .svg-prep-design-width label {
+    color: CanvasText;
+  }
+
+  .svg-prep-design-width-unit {
+    color: CanvasText;
   }
 }

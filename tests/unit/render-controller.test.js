@@ -637,7 +637,32 @@ describe('Capability Detection', () => {
     
     const caps = controller.getCapabilities()
     expect(caps.hasManifold).toBe(false)
+    expect(caps.hasRenderColorsFlag).toBe(false)
     expect(caps.version).toBe('unknown')
+  })
+
+  it('propagates hasRenderColorsFlag from READY payload', () => {
+    const controller = new RenderController()
+    const capabilities = {
+      hasManifold: true,
+      hasFastCSG: false,
+      hasLazyUnion: false,
+      hasRenderColorsFlag: true,
+      hasBinarySTL: true,
+      version: '2024.01.01'
+    }
+
+    controller.handleMessage({
+      type: 'READY',
+      payload: { wasmInitDurationMs: 1000, capabilities }
+    })
+
+    expect(controller.getCapabilities().hasRenderColorsFlag).toBe(true)
+  })
+
+  it('defaults hasRenderColorsFlag to false in getCapabilities() before init', () => {
+    const controller = new RenderController()
+    expect(controller.getCapabilities().hasRenderColorsFlag).toBe(false)
   })
   
   it('calls capability callback when capabilities detected', () => {
@@ -652,6 +677,74 @@ describe('Capability Detection', () => {
     })
     
     expect(callback).toHaveBeenCalledWith(capabilities)
+  })
+})
+
+describe('callMain --help first-render corruption fix', () => {
+  it('sets _moduleUsed after first init (no cachedCapabilities) so proactive restart fires', () => {
+    const controller = new RenderController()
+    controller._moduleUsed = false
+
+    // Simulate init() without cachedCapabilities (first page load)
+    controller._initUsedCachedCapabilities = false
+
+    controller.handleMessage({
+      type: 'READY',
+      payload: {
+        wasmInitDurationMs: 500,
+        capabilities: { hasManifold: true, hasFastCSG: false, hasLazyUnion: false, hasBinarySTL: true, version: '2025.03' }
+      }
+    })
+
+    expect(controller._moduleUsed).toBe(true)
+  })
+
+  it('does NOT set _moduleUsed after restart init (with cachedCapabilities)', () => {
+    const controller = new RenderController()
+    controller._moduleUsed = false
+
+    // Simulate init() with cachedCapabilities (worker restart)
+    controller._initUsedCachedCapabilities = true
+
+    controller.handleMessage({
+      type: 'READY',
+      payload: {
+        wasmInitDurationMs: 200,
+        capabilities: { hasManifold: true, hasFastCSG: false, hasLazyUnion: false, hasBinarySTL: true, version: '2025.03' }
+      }
+    })
+
+    expect(controller._moduleUsed).toBe(false)
+  })
+
+  it('proactive restart fires before first render when _moduleUsed is true from init', async () => {
+    const controller = new RenderController()
+    controller.worker = { postMessage: vi.fn() }
+    controller.ready = true
+    controller._moduleUsed = true
+
+    const restartSpy = vi.fn().mockImplementation(async () => {
+      controller._moduleUsed = false
+      controller.ready = true
+    })
+    controller.restart = restartSpy
+
+    const renderPromise = controller.render('cube(1);', {})
+
+    await Promise.resolve()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(restartSpy).toHaveBeenCalled()
+
+    if (controller.currentRequest) {
+      controller.handleMessage({
+        type: 'COMPLETE',
+        payload: { requestId: controller.currentRequest.id, data: new ArrayBuffer(1), stats: { triangles: 1 } }
+      })
+    }
+
+    await renderPromise
   })
 })
 
@@ -801,6 +894,292 @@ describe('Restart serialization', () => {
     for (const call of initCalls) {
       expect(call.cachedCapabilities).toEqual(caps)
     }
+  })
+})
+
+describe('Geometry Fix Regression: callMain first-render corruption (Phase 1)', () => {
+  it('first init without cachedCapabilities triggers restart before first render completes', async () => {
+    const controller = new RenderController()
+    controller._initUsedCachedCapabilities = false
+
+    const detectedCaps = {
+      hasManifold: true,
+      hasFastCSG: false,
+      hasLazyUnion: false,
+      hasBinarySTL: true,
+      version: '2026.04',
+    }
+
+    controller.handleMessage({
+      type: 'READY',
+      payload: { wasmInitDurationMs: 400, capabilities: detectedCaps },
+    })
+
+    expect(controller._moduleUsed).toBe(true)
+    expect(controller.capabilities).toEqual(detectedCaps)
+
+    controller.worker = { postMessage: vi.fn() }
+
+    const restartCalls = []
+    controller.restart = vi.fn().mockImplementation(async () => {
+      restartCalls.push({ cachedCapabilities: controller.capabilities })
+      controller._moduleUsed = false
+      controller.ready = true
+    })
+
+    const renderPromise = controller.render('cube(1);', {})
+    await Promise.resolve()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(controller.restart).toHaveBeenCalled()
+    expect(restartCalls[0].cachedCapabilities).toEqual(detectedCaps)
+
+    if (controller.currentRequest) {
+      controller.handleMessage({
+        type: 'COMPLETE',
+        payload: {
+          requestId: controller.currentRequest.id,
+          data: new ArrayBuffer(1),
+          stats: { triangles: 1 },
+        },
+      })
+    }
+    await renderPromise
+  })
+
+  it('restart init with cachedCapabilities does NOT trigger a second restart before render', async () => {
+    const controller = new RenderController()
+    controller._initUsedCachedCapabilities = true
+
+    controller.handleMessage({
+      type: 'READY',
+      payload: {
+        wasmInitDurationMs: 200,
+        capabilities: {
+          hasManifold: true,
+          hasFastCSG: false,
+          hasLazyUnion: false,
+          hasBinarySTL: true,
+          version: '2026.04',
+        },
+      },
+    })
+
+    expect(controller._moduleUsed).toBe(false)
+
+    controller.worker = { postMessage: vi.fn() }
+    controller.restart = vi.fn()
+
+    const renderPromise = controller.render('cube(1);', {})
+    await Promise.resolve()
+
+    expect(controller.restart).not.toHaveBeenCalled()
+
+    if (controller.currentRequest) {
+      controller.handleMessage({
+        type: 'COMPLETE',
+        payload: {
+          requestId: controller.currentRequest.id,
+          data: new ArrayBuffer(1),
+          stats: { triangles: 1 },
+        },
+      })
+    }
+    await renderPromise
+  })
+
+  it('capabilities survive the restart cycle and are available for subsequent renders', async () => {
+    const controller = new RenderController()
+    const caps = {
+      hasManifold: true,
+      hasFastCSG: false,
+      hasLazyUnion: true,
+      hasBinarySTL: true,
+      version: '2026.04',
+    }
+
+    controller.handleMessage({
+      type: 'READY',
+      payload: { wasmInitDurationMs: 300, capabilities: caps },
+    })
+    expect(controller.capabilities).toEqual(caps)
+
+    const initSpy = vi.fn().mockResolvedValue(undefined)
+    controller.terminate = vi.fn()
+    controller.init = initSpy
+    controller.startHealthMonitoring = vi.fn()
+
+    await controller.restart()
+
+    expect(initSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ cachedCapabilities: caps })
+    )
+
+    expect(controller.capabilities).toEqual(caps)
+  })
+})
+
+describe('Preview/Full Render Parity (Phase 5)', () => {
+  it('renderPreview and renderFull both pass paramTypes to the worker', async () => {
+    const controller = new RenderController()
+    controller.worker = { postMessage: vi.fn() }
+    controller.ready = true
+
+    const paramTypes = { expose_home_button: 'string', MW_version: 'boolean' }
+
+    const previewPromise = controller.renderPreview('cube(1);', { w: 10 }, { paramTypes })
+    await Promise.resolve()
+    const previewReqId = controller.currentRequest.id
+    controller.handleMessage({
+      type: 'COMPLETE',
+      payload: { requestId: previewReqId, data: new ArrayBuffer(1), stats: { triangles: 1 } }
+    })
+    await previewPromise
+
+    const previewPayload = controller.worker.postMessage.mock.calls[0][0].payload
+    expect(previewPayload.paramTypes).toEqual(paramTypes)
+
+    controller._moduleUsed = false
+
+    const fullPromise = controller.renderFull('cube(1);', { w: 10 }, { paramTypes })
+    await Promise.resolve()
+    await Promise.resolve()
+    await Promise.resolve()
+    const fullReqId = controller.currentRequest.id
+    controller.handleMessage({
+      type: 'COMPLETE',
+      payload: { requestId: fullReqId, data: new ArrayBuffer(1), stats: { triangles: 1 } }
+    })
+    await fullPromise
+
+    const renderCalls = controller.worker.postMessage.mock.calls
+      .filter(c => c[0]?.type === 'RENDER')
+    expect(renderCalls).toHaveLength(2)
+    expect(renderCalls[1][0].payload.paramTypes).toEqual(paramTypes)
+  })
+
+  it('renderPreview and renderFull both pass libraries to the worker', async () => {
+    const controller = new RenderController()
+    controller.worker = { postMessage: vi.fn() }
+    controller.ready = true
+
+    const libs = [{ id: 'MCAD', path: '/libraries/MCAD' }]
+
+    const previewPromise = controller.renderPreview('cube(1);', {}, { libraries: libs })
+    await Promise.resolve()
+    controller.handleMessage({
+      type: 'COMPLETE',
+      payload: { requestId: controller.currentRequest.id, data: new ArrayBuffer(1), stats: { triangles: 1 } }
+    })
+    await previewPromise
+
+    controller._moduleUsed = false
+
+    const fullPromise = controller.renderFull('cube(1);', {}, { libraries: libs })
+    await Promise.resolve()
+    await Promise.resolve()
+    await Promise.resolve()
+    controller.handleMessage({
+      type: 'COMPLETE',
+      payload: { requestId: controller.currentRequest.id, data: new ArrayBuffer(1), stats: { triangles: 1 } }
+    })
+    await fullPromise
+
+    const renderCalls = controller.worker.postMessage.mock.calls
+      .filter(c => c[0]?.type === 'RENDER')
+    expect(renderCalls).toHaveLength(2)
+    expect(renderCalls[0][0].payload.libraries).toEqual(libs)
+    expect(renderCalls[1][0].payload.libraries).toEqual(libs)
+  })
+
+  it('renderPreview and renderFull both pass files and mainFile to the worker', async () => {
+    const controller = new RenderController()
+    controller.worker = { postMessage: vi.fn() }
+    controller.ready = true
+
+    const files = new Map([['main.scad', 'cube(1);'], ['openings.txt', 'data']])
+
+    const previewPromise = controller.renderPreview('cube(1);', {}, { files, mainFile: 'main.scad' })
+    await Promise.resolve()
+    controller.handleMessage({
+      type: 'COMPLETE',
+      payload: { requestId: controller.currentRequest.id, data: new ArrayBuffer(1), stats: { triangles: 1 } }
+    })
+    await previewPromise
+
+    controller._moduleUsed = false
+
+    const fullPromise = controller.renderFull('cube(1);', {}, { files, mainFile: 'main.scad' })
+    await Promise.resolve()
+    await Promise.resolve()
+    await Promise.resolve()
+    controller.handleMessage({
+      type: 'COMPLETE',
+      payload: { requestId: controller.currentRequest.id, data: new ArrayBuffer(1), stats: { triangles: 1 } }
+    })
+    await fullPromise
+
+    const renderCalls = controller.worker.postMessage.mock.calls
+      .filter(c => c[0]?.type === 'RENDER')
+    expect(renderCalls).toHaveLength(2)
+    expect(renderCalls[0][0].payload.files).toEqual({ 'main.scad': 'cube(1);', 'openings.txt': 'data' })
+    expect(renderCalls[1][0].payload.files).toEqual(renderCalls[0][0].payload.files)
+    expect(renderCalls[0][0].payload.mainFile).toBe('main.scad')
+    expect(renderCalls[1][0].payload.mainFile).toBe('main.scad')
+  })
+
+  it('renderPreview and renderFull both pass outputFormat consistently', async () => {
+    const controller = new RenderController()
+    controller.worker = { postMessage: vi.fn() }
+    controller.ready = true
+
+    const previewPromise = controller.renderPreview('cube(1);', {}, { outputFormat: 'off' })
+    await Promise.resolve()
+    controller.handleMessage({
+      type: 'COMPLETE',
+      payload: { requestId: controller.currentRequest.id, data: new ArrayBuffer(1), stats: { triangles: 1 } }
+    })
+    await previewPromise
+
+    controller._moduleUsed = false
+
+    const fullPromise = controller.renderFull('cube(1);', {}, { outputFormat: 'off' })
+    await Promise.resolve()
+    await Promise.resolve()
+    await Promise.resolve()
+    controller.handleMessage({
+      type: 'COMPLETE',
+      payload: { requestId: controller.currentRequest.id, data: new ArrayBuffer(1), stats: { triangles: 1 } }
+    })
+    await fullPromise
+
+    const renderCalls = controller.worker.postMessage.mock.calls
+      .filter(c => c[0]?.type === 'RENDER')
+    expect(renderCalls).toHaveLength(2)
+    expect(renderCalls[0][0].payload.outputFormat).toBe('off')
+    expect(renderCalls[1][0].payload.outputFormat).toBe('off')
+  })
+
+  it('applyQualitySettings returns identical output for FULL and DESKTOP_DEFAULT with same params', () => {
+    const controller = new RenderController()
+    const params = { $fn: 64, $fa: 6, $fs: 1 }
+
+    const fullAdjusted = controller.applyQualitySettings(params, RENDER_QUALITY.FULL)
+    const desktopAdjusted = controller.applyQualitySettings(params, RENDER_QUALITY.DESKTOP_DEFAULT)
+
+    expect(fullAdjusted).toEqual(desktopAdjusted)
+  })
+
+  it('PREVIEW quality caps $fn but FULL does not, demonstrating the parity gap', () => {
+    const controller = new RenderController()
+    const params = { $fn: 200 }
+
+    const previewAdjusted = controller.applyQualitySettings(params, RENDER_QUALITY.PREVIEW)
+    const fullAdjusted = controller.applyQualitySettings(params, RENDER_QUALITY.FULL)
+
+    expect(previewAdjusted.$fn).toBe(96)
+    expect(fullAdjusted.$fn).toBe(200)
   })
 })
 

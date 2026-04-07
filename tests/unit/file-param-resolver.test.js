@@ -18,6 +18,8 @@ import {
   decodeDataUrl,
   sanitizeFileName,
   resolveFileParams,
+  isRasterImageFile,
+  RASTER_IMAGE_EXTENSIONS,
 } from '../../src/js/file-param-resolver.js';
 
 // ---------------------------------------------------------------------------
@@ -28,6 +30,75 @@ function toDataUrl(text, mimeType = 'text/plain') {
   const base64 = btoa(text);
   return `data:${mimeType};base64,${base64}`;
 }
+
+// ---------------------------------------------------------------------------
+// isRasterImageFile
+// ---------------------------------------------------------------------------
+
+describe('isRasterImageFile', () => {
+  it('returns true for .png files', () => {
+    expect(isRasterImageFile('logo.png')).toBe(true);
+  });
+
+  it('returns true for .jpg files', () => {
+    expect(isRasterImageFile('photo.jpg')).toBe(true);
+  });
+
+  it('returns true for .jpeg files', () => {
+    expect(isRasterImageFile('photo.jpeg')).toBe(true);
+  });
+
+  it('returns true for .bmp files', () => {
+    expect(isRasterImageFile('image.bmp')).toBe(true);
+  });
+
+  it('returns true for .gif files', () => {
+    expect(isRasterImageFile('anim.gif')).toBe(true);
+  });
+
+  it('is case-insensitive', () => {
+    expect(isRasterImageFile('LOGO.PNG')).toBe(true);
+    expect(isRasterImageFile('photo.JPG')).toBe(true);
+  });
+
+  it('returns false for .svg files', () => {
+    expect(isRasterImageFile('icon.svg')).toBe(false);
+  });
+
+  it('returns false for .dxf files', () => {
+    expect(isRasterImageFile('part.dxf')).toBe(false);
+  });
+
+  it('returns false for null', () => {
+    expect(isRasterImageFile(null)).toBe(false);
+  });
+
+  it('returns false for empty string', () => {
+    expect(isRasterImageFile('')).toBe(false);
+  });
+
+  it('returns false for undefined', () => {
+    expect(isRasterImageFile(undefined)).toBe(false);
+  });
+
+  it('returns false for non-string values', () => {
+    expect(isRasterImageFile(42)).toBe(false);
+  });
+});
+
+describe('RASTER_IMAGE_EXTENSIONS', () => {
+  it('includes png, jpg, jpeg, bmp, gif', () => {
+    expect(RASTER_IMAGE_EXTENSIONS).toContain('png');
+    expect(RASTER_IMAGE_EXTENSIONS).toContain('jpg');
+    expect(RASTER_IMAGE_EXTENSIONS).toContain('jpeg');
+    expect(RASTER_IMAGE_EXTENSIONS).toContain('bmp');
+    expect(RASTER_IMAGE_EXTENSIONS).toContain('gif');
+  });
+
+  it('does not include svg', () => {
+    expect(RASTER_IMAGE_EXTENSIONS).not.toContain('svg');
+  });
+});
 
 // ---------------------------------------------------------------------------
 // isFileParamValue

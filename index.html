@@ -490,7 +490,7 @@
               role="region"
               aria-labelledby="features-heading"
             >
-              <h2 id="features-heading">Discover Features</h2>
+              <h2 id="features-heading">Get Started</h2>
               <div class="role-paths-grid">
                 <!-- Beginners Start Here (only visible tutorial for now) -->
                 <div class="role-path-card">
@@ -527,150 +527,44 @@
                   </div>
                 </div>
                 <div class="role-path-card">
-                  <h3 class="role-path-title">Explore Features</h3>
+                  <h3 class="role-path-title">Charm Customizer</h3>
+                  <p class="role-path-meta">
+                    Creative project &bull; customize &amp; 3D print &bull;
+                    by <a href="https://github.com/Znasif" target="_blank" rel="noopener noreferrer">Nasif Zaman<span class="sr-only"> (opens in new tab)</span></a>,
+                    <a href="https://www.thingiverse.com/thing:7153594" target="_blank" rel="noopener noreferrer">Duy Do<span class="sr-only"> (opens in new tab)</span></a> (UW WOOF3D),
+                    &amp; <a href="https://create.uw.edu/adaptive-solutions-mini-hackathon/" target="_blank" rel="noopener noreferrer">HuskyADAPT<span class="sr-only"> (opens in new tab)</span></a>
+                  </p>
                   <p class="role-path-description">
-                    Prefer to browse? Open Help for examples and deeper
-                    guidance.
+                    Design wearable charms, pendants, and logo plates
+                    with engraved or raised icons. Includes Bracelet Clip Charms
+                    that clip onto silicone bracelets.
                   </p>
                   <details class="role-path-details">
-                    <summary>Common tasks</summary>
-                    <ul class="role-path-tips" aria-label="Common tasks">
-                      <li>Enable libraries and resolve dependencies</li>
-                      <li>Save and reuse presets for repeatable settings</li>
-                      <li>Export files and work with ZIP projects</li>
+                    <summary>What you can make</summary>
+                    <ul class="role-path-tips" aria-label="What you can make">
+                      <li>Bracelet Clip Charms &mdash; C-clip charms that snap onto silicone bracelets</li>
+                      <li>Flat pendants in circle, square, hex, or oval shapes</li>
+                      <li>Logo plates from any SVG image</li>
+                      <li>Upload your own design or pick from the built-in library</li>
                     </ul>
                   </details>
                   <div class="role-path-actions">
+                    <div class="charm-variant-selector">
+                      <label for="charmVariantSelect">Shape</label>
+                      <select id="charmVariantSelect" class="charm-variant-select">
+                        <option value="q-charm">Bracelet Clip Charm</option>
+                        <option value="nasif-charm-maker">Flat Pendant</option>
+                        <option value="logo-plate">Logo Plate (SVG Import)</option>
+                      </select>
+                    </div>
                     <button type="button"
-                      class="btn btn-outline btn-role-learn"
-                      data-feature-tab="libraries"
-                      aria-label="Open Help: Libraries"
+                      class="btn btn-primary btn-role-try"
+                      id="openCharmMakerBtn"
+                      data-example="q-charm"
+                      data-role="creators"
+                      aria-label="Open Charm Customizer"
                     >
-                      Open Help & Examples
-                    </button>
-                  </div>
-                </div>
-                <div class="role-path-card">
-                  <h3 class="role-path-title">Advanced Makers</h3>
-                  <p class="role-path-description">
-                    Work with multi-file projects, libraries, and advanced
-                    OpenSCAD features.
-                  </p>
-                  <details class="role-path-details">
-                    <summary>Key capabilities</summary>
-                    <ul class="role-path-tips" aria-label="Key capabilities">
-                      <li>Upload ZIP files with include/use dependencies</li>
-                      <li>Enable MCAD, BOSL2, and other libraries</li>
-                      <li>Export in multiple formats (STL, OBJ, 3MF, SVG, DXF)</li>
-                      <li>Save and manage projects with companion files</li>
-                    </ul>
-                  </details>
-                  <div class="role-path-actions">
-                    <button type="button"
-                      class="btn btn-outline btn-role-learn"
-                      data-feature-tab="libraries"
-                      aria-label="Open Help: Libraries"
-                    >
-                      Open Help: Libraries
-                    </button>
-                  </div>
-                </div>
-                <div class="role-path-card">
-                  <h3 class="role-path-title">Keyboard-Only Users</h3>
-                  <p class="role-path-description">
-                    Complete the full workflow without a mouse using predictable
-                    keyboard controls.
-                  </p>
-                  <details class="role-path-details">
-                    <summary>Navigation highlights</summary>
-                    <ul class="role-path-tips" aria-label="Navigation highlights">
-                      <li>Tab through parameters in logical order</li>
-                      <li>Undo / Redo with Ctrl+Z / Ctrl+Y</li>
-                      <li>Skip-to-content link at screen top</li>
-                      <li>Arrow keys navigate toolbar menus</li>
-                    </ul>
-                  </details>
-                  <div class="role-path-actions">
-                    <button type="button"
-                      class="btn btn-outline btn-role-learn"
-                      data-feature-tab="accessibility"
-                      aria-label="Open Help: Accessibility"
-                    >
-                      Open Help: Accessibility
-                    </button>
-                  </div>
-                </div>
-                <div class="role-path-card">
-                  <h3 class="role-path-title">Low Vision Users</h3>
-                  <p class="role-path-description">
-                    Use high-contrast themes, large touch targets, and visible
-                    focus indicators.
-                  </p>
-                  <details class="role-path-details">
-                    <summary>Visual aids</summary>
-                    <ul class="role-path-tips" aria-label="Visual aids">
-                      <li>Toggle High Contrast mode via the HC button</li>
-                      <li>Switch between light and dark themes</li>
-                      <li>All interactive controls meet 44×44 px touch targets</li>
-                      <li>Visible focus rings on every focusable element</li>
-                    </ul>
-                  </details>
-                  <div class="role-path-actions">
-                    <button type="button"
-                      class="btn btn-outline btn-role-learn"
-                      data-feature-tab="accessibility"
-                      aria-label="Open Help: Accessibility"
-                    >
-                      Open Help: Accessibility
-                    </button>
-                  </div>
-                </div>
-                <div class="role-path-card">
-                  <h3 class="role-path-title">Voice Input Users</h3>
-                  <p class="role-path-description">
-                    Control the app with voice commands using stable, speakable
-                    button names.
-                  </p>
-                  <details class="role-path-details">
-                    <summary>Voice-friendly features</summary>
-                    <ul class="role-path-tips" aria-label="Voice-friendly features">
-                      <li>Say button labels: "Click Generate", "Click Help"</li>
-                      <li>Every control has a unique, speakable name</li>
-                      <li>Toolbar menus open with "Click File", "Click View"</li>
-                    </ul>
-                  </details>
-                  <div class="role-path-actions">
-                    <button type="button"
-                      class="btn btn-outline btn-role-learn"
-                      data-feature-tab="accessibility"
-                      aria-label="Open Help: Accessibility"
-                    >
-                      Open Help: Accessibility
-                    </button>
-                  </div>
-                </div>
-                <div class="role-path-card">
-                  <h3 class="role-path-title">Screen Reader Users</h3>
-                  <p class="role-path-description">
-                    Customize models with clear status announcements and
-                    full keyboard-only workflow.
-                  </p>
-                  <details class="role-path-details">
-                    <summary>Assistive-tech features</summary>
-                    <ul class="role-path-tips" aria-label="Assistive-tech features">
-                      <li>Live region announces parameter changes and render status</li>
-                      <li>ARIA landmarks for quick navigation between sections</li>
-                      <li>Plain-language error messages instead of raw alerts</li>
-                      <li>Accessible modal dialogs with focus management</li>
-                    </ul>
-                  </details>
-                  <div class="role-path-actions">
-                    <button type="button"
-                      class="btn btn-outline btn-role-learn"
-                      data-feature-tab="accessibility"
-                      aria-label="Open Help: Accessibility"
-                    >
-                      Open Help: Accessibility
+                      Open Charm Customizer
                     </button>
                   </div>
                 </div>
@@ -682,7 +576,7 @@
               >
                 <summary class="spotlights-summary">
                   <span class="spotlights-summary-title"
-                    >Accessibility Highlights</span
+                    >Explore Features &amp; Accessibility</span
                   >
                   <span class="sr-only"
                     >Expand to learn more about accessibility features</span
@@ -691,7 +585,7 @@
                 <div
                   class="spotlights-body"
                   role="group"
-                  aria-label="Accessibility highlights details"
+                  aria-label="Explore features and accessibility details"
                 >
                   <p class="spotlights-intro">
                     Built around accessibility patterns commonly seen in open
@@ -773,6 +667,156 @@
                       </a>
                     </li>
                   </ul>
+                  <div class="role-paths-grid role-paths-grid--collapsed">
+                    <div class="role-path-card">
+                      <h3 class="role-path-title">Explore Features</h3>
+                      <p class="role-path-description">
+                        Prefer to browse? Open Help for examples and deeper
+                        guidance.
+                      </p>
+                      <details class="role-path-details">
+                        <summary>Common tasks</summary>
+                        <ul class="role-path-tips" aria-label="Common tasks">
+                          <li>Enable libraries and resolve dependencies</li>
+                          <li>Save and reuse presets for repeatable settings</li>
+                          <li>Export files and work with ZIP projects</li>
+                        </ul>
+                      </details>
+                      <div class="role-path-actions">
+                        <button type="button"
+                          class="btn btn-outline btn-role-learn"
+                          data-feature-tab="libraries"
+                          aria-label="Open Help: Libraries"
+                        >
+                          Open Help & Examples
+                        </button>
+                      </div>
+                    </div>
+                    <div class="role-path-card">
+                      <h3 class="role-path-title">Advanced Makers</h3>
+                      <p class="role-path-description">
+                        Work with multi-file projects, libraries, and advanced
+                        OpenSCAD features.
+                      </p>
+                      <details class="role-path-details">
+                        <summary>Key capabilities</summary>
+                        <ul class="role-path-tips" aria-label="Key capabilities">
+                          <li>Upload ZIP files with include/use dependencies</li>
+                          <li>Enable MCAD, BOSL2, and other libraries</li>
+                          <li>Export in multiple formats (STL, OBJ, 3MF, SVG, DXF)</li>
+                          <li>Save and manage projects with companion files</li>
+                        </ul>
+                      </details>
+                      <div class="role-path-actions">
+                        <button type="button"
+                          class="btn btn-outline btn-role-learn"
+                          data-feature-tab="libraries"
+                          aria-label="Open Help: Libraries"
+                        >
+                          Open Help: Libraries
+                        </button>
+                      </div>
+                    </div>
+                    <div class="role-path-card">
+                      <h3 class="role-path-title">Keyboard-Only Users</h3>
+                      <p class="role-path-description">
+                        Complete the full workflow without a mouse using predictable
+                        keyboard controls.
+                      </p>
+                      <details class="role-path-details">
+                        <summary>Navigation highlights</summary>
+                        <ul class="role-path-tips" aria-label="Navigation highlights">
+                          <li>Tab through parameters in logical order</li>
+                          <li>Undo / Redo with Ctrl+Z / Ctrl+Y</li>
+                          <li>Skip-to-content link at screen top</li>
+                          <li>Arrow keys navigate toolbar menus</li>
+                        </ul>
+                      </details>
+                      <div class="role-path-actions">
+                        <button type="button"
+                          class="btn btn-outline btn-role-learn"
+                          data-feature-tab="accessibility"
+                          aria-label="Open Help: Accessibility"
+                        >
+                          Open Help: Accessibility
+                        </button>
+                      </div>
+                    </div>
+                    <div class="role-path-card">
+                      <h3 class="role-path-title">Low Vision Users</h3>
+                      <p class="role-path-description">
+                        Use high-contrast themes, large touch targets, and visible
+                        focus indicators.
+                      </p>
+                      <details class="role-path-details">
+                        <summary>Visual aids</summary>
+                        <ul class="role-path-tips" aria-label="Visual aids">
+                          <li>Toggle High Contrast mode via the HC button</li>
+                          <li>Switch between light and dark themes</li>
+                          <li>All interactive controls meet 44×44 px touch targets</li>
+                          <li>Visible focus rings on every focusable element</li>
+                        </ul>
+                      </details>
+                      <div class="role-path-actions">
+                        <button type="button"
+                          class="btn btn-outline btn-role-learn"
+                          data-feature-tab="accessibility"
+                          aria-label="Open Help: Accessibility"
+                        >
+                          Open Help: Accessibility
+                        </button>
+                      </div>
+                    </div>
+                    <div class="role-path-card">
+                      <h3 class="role-path-title">Voice Input Users</h3>
+                      <p class="role-path-description">
+                        Control the app with voice commands using stable, speakable
+                        button names.
+                      </p>
+                      <details class="role-path-details">
+                        <summary>Voice-friendly features</summary>
+                        <ul class="role-path-tips" aria-label="Voice-friendly features">
+                          <li>Say button labels: "Click Generate", "Click Help"</li>
+                          <li>Every control has a unique, speakable name</li>
+                          <li>Toolbar menus open with "Click File", "Click View"</li>
+                        </ul>
+                      </details>
+                      <div class="role-path-actions">
+                        <button type="button"
+                          class="btn btn-outline btn-role-learn"
+                          data-feature-tab="accessibility"
+                          aria-label="Open Help: Accessibility"
+                        >
+                          Open Help: Accessibility
+                        </button>
+                      </div>
+                    </div>
+                    <div class="role-path-card">
+                      <h3 class="role-path-title">Screen Reader Users</h3>
+                      <p class="role-path-description">
+                        Customize models with clear status announcements and
+                        full keyboard-only workflow.
+                      </p>
+                      <details class="role-path-details">
+                        <summary>Assistive-tech features</summary>
+                        <ul class="role-path-tips" aria-label="Assistive-tech features">
+                          <li>Live region announces parameter changes and render status</li>
+                          <li>ARIA landmarks for quick navigation between sections</li>
+                          <li>Plain-language error messages instead of raw alerts</li>
+                          <li>Accessible modal dialogs with focus management</li>
+                        </ul>
+                      </details>
+                      <div class="role-path-actions">
+                        <button type="button"
+                          class="btn btn-outline btn-role-learn"
+                          data-feature-tab="accessibility"
+                          aria-label="Open Help: Accessibility"
+                        >
+                          Open Help: Accessibility
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </details>
             </div>

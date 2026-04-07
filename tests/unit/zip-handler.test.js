@@ -1,4 +1,7 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, beforeAll, vi } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { resolve, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import {
   validateZipFile,
   scanIncludes,
@@ -11,6 +14,8 @@ import {
   applyCompanionAliases,
   getOverlaySvgTarget,
   findFirstOverlayAsset,
+  matchesBrand,
+  parsePresetParts,
 } from '../../src/js/zip-handler.js'
 import JSZip from 'jszip'
 
@@ -709,8 +714,79 @@ describe('ZIP Handler', () => {
     })
   })
 
+  describe('buildPresetCompanionMap — keyguard case/app hierarchy', () => {
+    const ANDNARY_CASE_PATH =
+      'Cases and App Specifics/iPad 10,11/Andnary-equivalent Case/openings_and_additions.txt'
+
+    const KEYGUARD_FIXTURE = new Map([
+      ['main.scad', '// keyguard'],
+      ['openings_and_additions.txt', 'root default'],
+      [ANDNARY_CASE_PATH, 'andnary case-level'],
+      [
+        'Cases and App Specifics/iPad 10,11/Andnary-equivalent Case/Grid VocoChat/openings_and_additions.txt',
+        'andnary grid vocochat',
+      ],
+      [
+        'Cases and App Specifics/iPad 10,11/Andnary-equivalent Case/LWFL/openings_and_additions.txt',
+        'andnary lwfl',
+      ],
+      [
+        'Cases and App Specifics/iPad 10,11/Andnary-equivalent Case/P2G/openings_and_additions.txt',
+        'andnary p2g',
+      ],
+      [
+        'Cases and App Specifics/iPad 10,11/SUPCASE-equivalent Case/openings_and_additions.txt',
+        'supcase case-level',
+      ],
+      [
+        'Cases and App Specifics/iPad 10,11/SUPCASE-equivalent Case/TouchChat/openings_and_additions.txt',
+        'supcase touchchat',
+      ],
+    ])
+
+    it('should resolve preset to app-specific path when app subfolder name is a unique token match', () => {
+      const map = buildPresetCompanionMap(KEYGUARD_FIXTURE, {
+        'iPad 10,11 - Andnary - P2G': {},
+      })
+      expect(map.get('iPad 10,11 - Andnary - P2G').openingsPath).toBe(
+        'Cases and App Specifics/iPad 10,11/Andnary-equivalent Case/P2G/openings_and_additions.txt'
+      )
+    })
+
+    it('should fall back to case-level path when preset app has no dedicated subfolder', () => {
+      const map = buildPresetCompanionMap(KEYGUARD_FIXTURE, {
+        'iPad 10,11 - Andnary - Grid SC 50': {},
+      })
+      expect(
+        map.get('iPad 10,11 - Andnary - Grid SC 50').openingsPath
+      ).toBe(ANDNARY_CASE_PATH)
+    })
+
+    it('should prefer case-level path when app tokens cause ties among deeper paths', () => {
+      const filesWithoutGrid = new Map(KEYGUARD_FIXTURE)
+      filesWithoutGrid.delete(
+        'Cases and App Specifics/iPad 10,11/Andnary-equivalent Case/Grid VocoChat/openings_and_additions.txt'
+      )
+      const map = buildPresetCompanionMap(filesWithoutGrid, {
+        'iPad 10,11 - Andnary - Grid SC 50': {},
+      })
+      expect(
+        map.get('iPad 10,11 - Andnary - Grid SC 50').openingsPath
+      ).toBe(ANDNARY_CASE_PATH)
+    })
+
+    it('should resolve app-specific preset across case brands', () => {
+      const map = buildPresetCompanionMap(KEYGUARD_FIXTURE, {
+        'iPad 10,11 - SUPCASE - TouchChat': {},
+      })
+      expect(map.get('iPad 10,11 - SUPCASE - TouchChat').openingsPath).toBe(
+        'Cases and App Specifics/iPad 10,11/SUPCASE-equivalent Case/TouchChat/openings_and_additions.txt'
+      )
+    })
+  })
+
   describe('applyCompanionAliases', () => {
-    it('should set root-level openings key from mapped nested path', () => {
+    it('should preserve existing root-level openings key (not replace with nested)', () => {
       const files = new Map([
         ['main.scad', '// scad'],
         ['openings_and_additions.txt', 'default openings'],
@@ -721,12 +797,13 @@ describe('ZIP Handler', () => {
         svgPath: null,
       }
       const result = applyCompanionAliases(files, mapping)
-      expect(result.get('openings_and_additions.txt')).toBe('preset openings')
+      expect(result.get('openings_and_additions.txt')).toBe('default openings')
     })
 
-    it('should set root-level default.svg from mapped SVG path', () => {
+    it('should preserve existing root-level default.svg (not replace with nested)', () => {
       const files = new Map([
         ['main.scad', '// scad'],
+        ['default.svg', '<svg>placeholder</svg>'],
         ['SVG files/iPad/App/icon.svg', '<svg>app icon</svg>'],
       ])
       const mapping = {
@@ -734,13 +811,14 @@ describe('ZIP Handler', () => {
         svgPath: 'SVG files/iPad/App/icon.svg',
       }
       const result = applyCompanionAliases(files, mapping)
-      expect(result.get('default.svg')).toBe('<svg>app icon</svg>')
+      expect(result.get('default.svg')).toBe('<svg>placeholder</svg>')
     })
 
-    it('should set both alias keys when mapping has both paths', () => {
+    it('should preserve both existing root keys when mapping has both paths', () => {
       const files = new Map([
         ['main.scad', '// scad'],
         ['openings_and_additions.txt', 'default'],
+        ['default.svg', '<svg>placeholder</svg>'],
         ['Cases/iPad/TC/openings_and_additions.txt', 'tc openings'],
         ['SVG files/iPad/TC/screen.svg', '<svg>tc</svg>'],
       ])
@@ -749,8 +827,8 @@ describe('ZIP Handler', () => {
         svgPath: 'SVG files/iPad/TC/screen.svg',
       }
       const result = applyCompanionAliases(files, mapping)
-      expect(result.get('openings_and_additions.txt')).toBe('tc openings')
-      expect(result.get('default.svg')).toBe('<svg>tc</svg>')
+      expect(result.get('openings_and_additions.txt')).toBe('default')
+      expect(result.get('default.svg')).toBe('<svg>placeholder</svg>')
     })
 
     it('should not mutate the original Map', () => {
@@ -796,6 +874,7 @@ describe('ZIP Handler', () => {
       const files = new Map([
         ['main.scad', '// scad'],
         ['openings_and_additions.txt', 'default'],
+        ['default.svg', '<svg>placeholder</svg>'],
         ['Cases/A/openings_and_additions.txt', 'preset A'],
         ['Cases/B/openings_and_additions.txt', 'preset B'],
         ['SVG files/A/icon.svg', '<svg>a</svg>'],
@@ -805,15 +884,16 @@ describe('ZIP Handler', () => {
         svgPath: 'SVG files/A/icon.svg',
       }
       const result = applyCompanionAliases(files, mapping)
-      expect(result.size).toBe(files.size + 1)
+      expect(result.size).toBe(files.size)
       expect(result.get('Cases/B/openings_and_additions.txt')).toBe('preset B')
       expect(result.get('Cases/A/openings_and_additions.txt')).toBe('preset A')
     })
 
-    it('should integrate with buildPresetCompanionMap output', () => {
+    it('should preserve root keys in integration with buildPresetCompanionMap', () => {
       const files = new Map([
         ['main.scad', '// scad'],
         ['openings_and_additions.txt', 'root default'],
+        ['default.svg', '<svg>placeholder</svg>'],
         ['Cases/AlphaTab/TouchChat/openings_and_additions.txt', 'at tc'],
         ['Cases/AlphaTab/Snap/openings_and_additions.txt', 'at snap'],
         ['SVG files/AlphaTab/TouchChat/icon.svg', '<svg>at tc</svg>'],
@@ -826,20 +906,89 @@ describe('ZIP Handler', () => {
       const companionMap = buildPresetCompanionMap(files, parameterSets)
       const tcMapping = companionMap.get('AlphaTab TouchChat')
       const tcResult = applyCompanionAliases(files, tcMapping)
-      expect(tcResult.get('openings_and_additions.txt')).toBe('at tc')
-      expect(tcResult.get('default.svg')).toBe('<svg>at tc</svg>')
+      expect(tcResult.get('openings_and_additions.txt')).toBe('root default')
+      expect(tcResult.get('default.svg')).toBe('<svg>placeholder</svg>')
 
       const snapMapping = companionMap.get('AlphaTab Snap')
       const snapResult = applyCompanionAliases(files, snapMapping)
-      expect(snapResult.get('openings_and_additions.txt')).toBe('at snap')
-      expect(snapResult.get('default.svg')).toBe('<svg>at snap</svg>')
+      expect(snapResult.get('openings_and_additions.txt')).toBe('root default')
+      expect(snapResult.get('default.svg')).toBe('<svg>placeholder</svg>')
+    })
+  })
+
+  describe('applyCompanionAliases — root key creation guard (KI-012 regression)', () => {
+    it('should CREATE root openings key when project has no root-level openings file', () => {
+      const files = new Map([
+        ['main.scad', 'include <openings_and_additions.txt>'],
+        ['Cases/iPad/LWFL/openings_and_additions.txt', 'lwfl openings'],
+        ['Cases/iPad/P2G/openings_and_additions.txt', 'p2g openings'],
+      ])
+      const mapping = {
+        openingsPath: 'Cases/iPad/LWFL/openings_and_additions.txt',
+        svgPath: null,
+      }
+      const result = applyCompanionAliases(files, mapping)
+      expect(result.has('openings_and_additions.txt')).toBe(true)
+      expect(result.get('openings_and_additions.txt')).toBe('lwfl openings')
+    })
+
+    it('should CREATE root default.svg when project has no root-level SVG', () => {
+      const files = new Map([
+        ['main.scad', 'import("default.svg")'],
+        ['SVG files/iPad/App/icon.svg', '<svg>app icon</svg>'],
+      ])
+      const mapping = {
+        openingsPath: null,
+        svgPath: 'SVG files/iPad/App/icon.svg',
+      }
+      const result = applyCompanionAliases(files, mapping)
+      expect(result.has('default.svg')).toBe(true)
+      expect(result.get('default.svg')).toBe('<svg>app icon</svg>')
+    })
+
+    it('should NOT replace existing root keys — preserve original content (KI-012 fix)', () => {
+      const files = new Map([
+        ['main.scad', 'include <openings_and_additions.txt>'],
+        ['openings_and_additions.txt', 'default content'],
+        ['default.svg', '<svg>placeholder</svg>'],
+        ['Cases/iPad/LWFL/openings_and_additions.txt', 'lwfl openings'],
+        ['SVG files/iPad/LWFL/screen.svg', '<svg>lwfl</svg>'],
+      ])
+      const mapping = {
+        openingsPath: 'Cases/iPad/LWFL/openings_and_additions.txt',
+        svgPath: 'SVG files/iPad/LWFL/screen.svg',
+      }
+      const result = applyCompanionAliases(files, mapping)
+      expect(result.get('openings_and_additions.txt')).toBe('default content')
+      expect(result.get('default.svg')).toBe('<svg>placeholder</svg>')
+    })
+
+    it('should CREATE root openings from resolved path when no root key exists (Bug A/B scenario)', () => {
+      const files = new Map([
+        ['keyguard_v75.scad', 'include <openings_and_additions.txt>'],
+        ['Cases and App Specifics/iPad 10,11/Andnary-equivalent Case/LWFL/openings_and_additions.txt', 'andnary lwfl'],
+        ['Cases and App Specifics/iPad 10,11/Andnary-equivalent Case/P2G/openings_and_additions.txt', 'andnary p2g'],
+      ])
+      const mapping = {
+        openingsPath: 'Cases and App Specifics/iPad 10,11/Andnary-equivalent Case/LWFL/openings_and_additions.txt',
+        svgPath: null,
+      }
+      const result = applyCompanionAliases(files, mapping)
+      expect(result.size).toBe(files.size + 1)
+      expect(result.has('openings_and_additions.txt')).toBe(true)
+      expect(result.get('openings_and_additions.txt')).toBe('andnary lwfl')
+      for (const [key, value] of files) {
+        expect(result.get(key)).toBe(value)
+      }
     })
   })
 
   describe('applyCompanionAliases — generic aliases', () => {
-    it('should apply generic aliases from mapping.aliases', () => {
+    it('should preserve existing root keys with generic aliases (not replace)', () => {
       const files = new Map([
         ['main.scad', '// scad'],
+        ['config.txt', 'default config'],
+        ['logo.svg', '<svg>default</svg>'],
         ['data/config.txt', 'preset data'],
         ['assets/logo.svg', '<svg>logo</svg>'],
       ])
@@ -850,8 +999,8 @@ describe('ZIP Handler', () => {
         },
       }
       const result = applyCompanionAliases(files, mapping)
-      expect(result.get('config.txt')).toBe('preset data')
-      expect(result.get('logo.svg')).toBe('<svg>logo</svg>')
+      expect(result.get('config.txt')).toBe('default config')
+      expect(result.get('logo.svg')).toBe('<svg>default</svg>')
     })
 
     it('should skip aliases when source path is missing', () => {
@@ -873,9 +1022,10 @@ describe('ZIP Handler', () => {
       expect(files.has('data.txt')).toBe(false)
     })
 
-    it('should prefer generic aliases over legacy format', () => {
+    it('should prefer generic aliases over legacy format (root key preserved)', () => {
       const files = new Map([
         ['main.scad', '// scad'],
+        ['custom.txt', 'default custom'],
         ['nested/custom.txt', 'custom content'],
         ['other/openings_and_additions.txt', 'should not be used'],
       ])
@@ -884,13 +1034,15 @@ describe('ZIP Handler', () => {
         openingsPath: 'other/openings_and_additions.txt',
       }
       const result = applyCompanionAliases(files, mapping)
-      expect(result.get('custom.txt')).toBe('custom content')
+      expect(result.get('custom.txt')).toBe('default custom')
       expect(result.has('openings_and_additions.txt')).toBe(false)
     })
 
-    it('should resolve a non-keyguard project without magic filenames', () => {
+    it('should preserve root keys for non-keyguard project without magic filenames', () => {
       const files = new Map([
         ['main.scad', 'include <settings.txt>\nimport("pattern.svg")'],
+        ['settings.txt', 'default settings'],
+        ['pattern.svg', '<svg>default</svg>'],
         ['presets/A/settings.txt', 'preset A settings'],
         ['presets/B/settings.txt', 'preset B settings'],
         ['assets/A/pattern.svg', '<svg>A</svg>'],
@@ -904,10 +1056,91 @@ describe('ZIP Handler', () => {
         svgAliasTarget: 'pattern.svg',
       }
       const result = applyCompanionAliases(files, mapping)
-      expect(result.get('settings.txt')).toBe('preset A settings')
-      expect(result.get('pattern.svg')).toBe('<svg>A</svg>')
+      expect(result.get('settings.txt')).toBe('default settings')
+      expect(result.get('pattern.svg')).toBe('<svg>default</svg>')
       expect(result.has('default.svg')).toBe(false)
       expect(result.has('openings_and_additions.txt')).toBe(false)
+    })
+  })
+
+  describe('applyCompanionAliases — create-only semantics (KI-012 inversion)', () => {
+    it('generic: should CREATE root key when target does not exist (Structure B)', () => {
+      const files = new Map([
+        ['main.scad', 'include <config.txt>'],
+        ['presets/Alpha/config.txt', 'alpha config'],
+      ])
+      const mapping = {
+        aliases: { 'config.txt': 'presets/Alpha/config.txt' },
+      }
+      const result = applyCompanionAliases(files, mapping)
+      expect(result.has('config.txt')).toBe(true)
+      expect(result.get('config.txt')).toBe('alpha config')
+    })
+
+    it('generic: should NOT replace root key when target already exists (Structure A)', () => {
+      const files = new Map([
+        ['main.scad', 'include <config.txt>'],
+        ['config.txt', 'default config'],
+        ['presets/Alpha/config.txt', 'alpha config'],
+      ])
+      const mapping = {
+        aliases: { 'config.txt': 'presets/Alpha/config.txt' },
+      }
+      const result = applyCompanionAliases(files, mapping)
+      expect(result.get('config.txt')).toBe('default config')
+    })
+
+    it('legacy: should CREATE root openings when target does not exist', () => {
+      const files = new Map([
+        ['main.scad', 'include <openings_and_additions.txt>'],
+        ['Cases/iPad/LWFL/openings_and_additions.txt', 'lwfl openings'],
+      ])
+      const mapping = {
+        openingsPath: 'Cases/iPad/LWFL/openings_and_additions.txt',
+        svgPath: null,
+      }
+      const result = applyCompanionAliases(files, mapping)
+      expect(result.has('openings_and_additions.txt')).toBe(true)
+      expect(result.get('openings_and_additions.txt')).toBe('lwfl openings')
+    })
+
+    it('legacy: should NOT replace root openings when target already exists', () => {
+      const files = new Map([
+        ['main.scad', 'include <openings_and_additions.txt>'],
+        ['openings_and_additions.txt', 'original content'],
+        ['Cases/iPad/LWFL/openings_and_additions.txt', 'lwfl openings'],
+      ])
+      const mapping = {
+        openingsPath: 'Cases/iPad/LWFL/openings_and_additions.txt',
+        svgPath: null,
+      }
+      const result = applyCompanionAliases(files, mapping)
+      expect(result.get('openings_and_additions.txt')).toBe('original content')
+    })
+
+    it('integration: buildPresetCompanionMap + applyCompanionAliases with Structure B (no root file)', () => {
+      const files = new Map([
+        ['main.scad', 'include <data.txt>'],
+        ['presets/Alpha/data.txt', 'alpha data'],
+        ['presets/Beta/data.txt', 'beta data'],
+      ])
+      const parameterSets = {
+        'Alpha Work': {},
+        'Beta Work': {},
+      }
+      const companionMap = buildPresetCompanionMap(files, parameterSets, {
+        companionTargets: ['data.txt'],
+      })
+
+      const alphaMapping = companionMap.get('Alpha Work')
+      const alphaResult = applyCompanionAliases(files, alphaMapping)
+      expect(alphaResult.has('data.txt')).toBe(true)
+      expect(alphaResult.get('data.txt')).toBe('alpha data')
+
+      const betaMapping = companionMap.get('Beta Work')
+      const betaResult = applyCompanionAliases(files, betaMapping)
+      expect(betaResult.has('data.txt')).toBe(true)
+      expect(betaResult.get('data.txt')).toBe('beta data')
     })
   })
 
@@ -981,9 +1214,10 @@ describe('ZIP Handler', () => {
       expect(result.aliases).toBeUndefined()
     })
 
-    it('should integrate generic map with applyCompanionAliases', () => {
+    it('should preserve root keys in generic integration with applyCompanionAliases', () => {
       const files = makeFiles([
         ['main.scad', 'include <data.txt>'],
+        ['data.txt', 'default data'],
         ['presets/Alpha/data.txt', 'alpha data'],
         ['presets/Beta/data.txt', 'beta data'],
         ['assets/diagram.svg', '<svg>shared</svg>'],
@@ -998,13 +1232,13 @@ describe('ZIP Handler', () => {
 
       const alphaMapping = companionMap.get('Alpha Work')
       const alphaResult = applyCompanionAliases(files, alphaMapping)
-      expect(alphaResult.get('data.txt')).toBe('alpha data')
+      expect(alphaResult.get('data.txt')).toBe('default data')
       expect(alphaResult.has('openings_and_additions.txt')).toBe(false)
       expect(alphaResult.has('default.svg')).toBe(false)
 
       const betaMapping = companionMap.get('Beta Work')
       const betaResult = applyCompanionAliases(files, betaMapping)
-      expect(betaResult.get('data.txt')).toBe('beta data')
+      expect(betaResult.get('data.txt')).toBe('default data')
     })
   })
 
@@ -1092,6 +1326,1005 @@ describe('ZIP Handler', () => {
         ['assets/sub/logo.svg', '<svg/>'],
       ])
       expect(findFirstOverlayAsset(files)).toBe('assets/sub/logo.svg')
+    })
+  })
+
+  describe('matchesBrand', () => {
+    it('should match brand name to equivalent case folder', () => {
+      expect(matchesBrand('Andnary-equivalent Case', 'Andnary')).toBe(true)
+    })
+
+    it('should handle double-space in folder name', () => {
+      expect(matchesBrand('SUPCASE-equivalent  Case', 'SUPCASE')).toBe(true)
+    })
+
+    it('should match multi-word brand with whitespace normalization', () => {
+      expect(matchesBrand('SP LTROP-equivalent Case', 'SP LTROP')).toBe(true)
+    })
+
+    it('should be case-insensitive', () => {
+      expect(matchesBrand('LTROP-equivalent Case', 'ltrop')).toBe(true)
+    })
+
+    it('should not match different brands', () => {
+      expect(matchesBrand('LTROP-equivalent Case', 'SP LTROP')).toBe(false)
+    })
+
+    it('should not confuse SP LTROP with LTROP', () => {
+      expect(matchesBrand('SP LTROP-equivalent Case', 'LTROP')).toBe(false)
+    })
+
+    it('should match bare folder name without -equivalent Case suffix', () => {
+      expect(matchesBrand('Fintie', 'Fintie')).toBe(true)
+    })
+
+    it('should handle extra whitespace in brand', () => {
+      expect(matchesBrand('SP LTROP-equivalent Case', 'SP  LTROP')).toBe(true)
+    })
+  })
+
+  // Phase 1 — failure-mode tests (expected to FAIL against current code)
+
+  describe('buildPresetCompanionMap — failure mode: sibling substring ambiguity', () => {
+    const SIBLING_FIXTURE = new Map([
+      ['main.scad', '// keyguard'],
+      ['openings_and_additions.txt', 'root default'],
+      [
+        'Cases and App Specifics/iPad 10,11/Andnary-equivalent Case/openings_and_additions.txt',
+        'andnary case-level',
+      ],
+      [
+        'Cases and App Specifics/iPad 10,11/Andnary-equivalent Case/LWFL/openings_and_additions.txt',
+        'andnary lwfl',
+      ],
+      [
+        'Cases and App Specifics/iPad 10,11/Andnary-equivalent Case/LWFL-VI/openings_and_additions.txt',
+        'andnary lwfl-vi',
+      ],
+    ])
+
+    it('should resolve LWFL preset to LWFL path, not LWFL-VI sibling', () => {
+      const map = buildPresetCompanionMap(SIBLING_FIXTURE, {
+        'iPad 10,11 - Andnary - LWFL': {},
+      })
+      expect(map.get('iPad 10,11 - Andnary - LWFL').openingsPath).toBe(
+        'Cases and App Specifics/iPad 10,11/Andnary-equivalent Case/LWFL/openings_and_additions.txt'
+      )
+    })
+
+    it('should still resolve LWFL-VI preset correctly when both siblings exist', () => {
+      const map = buildPresetCompanionMap(SIBLING_FIXTURE, {
+        'iPad 10,11 - Andnary - LWFL-VI': {},
+      })
+      expect(map.get('iPad 10,11 - Andnary - LWFL-VI').openingsPath).toBe(
+        'Cases and App Specifics/iPad 10,11/Andnary-equivalent Case/LWFL-VI/openings_and_additions.txt'
+      )
+    })
+  })
+
+  describe('buildPresetCompanionMap — failure mode: cross-brand token bleed', () => {
+    const BRAND_CONFUSION_FIXTURE = new Map([
+      ['main.scad', '// keyguard'],
+      ['openings_and_additions.txt', 'root default'],
+      [
+        'Cases and App Specifics/iPad 7,8,9/LTROP-equivalent Case/openings_and_additions.txt',
+        'ltrop case-level',
+      ],
+      [
+        'Cases and App Specifics/iPad 7,8,9/LTROP-equivalent Case/LWFL-VI/openings_and_additions.txt',
+        'ltrop lwfl-vi',
+      ],
+      [
+        'Cases and App Specifics/iPad 7,8,9/SP LTROP-equivalent Case/openings_and_additions.txt',
+        'sp ltrop case-level',
+      ],
+      [
+        'Cases and App Specifics/iPad 7,8,9/SP LTROP-equivalent Case/LWFL-VI/openings_and_additions.txt',
+        'sp ltrop lwfl-vi',
+      ],
+    ])
+
+    it('should resolve SP LTROP preset to SP LTROP path, not LTROP', () => {
+      const map = buildPresetCompanionMap(BRAND_CONFUSION_FIXTURE, {
+        'iPad 7,8,9 - SP LTROP - LWFL-VI': {},
+      })
+      expect(map.get('iPad 7,8,9 - SP LTROP - LWFL-VI').openingsPath).toBe(
+        'Cases and App Specifics/iPad 7,8,9/SP LTROP-equivalent Case/LWFL-VI/openings_and_additions.txt'
+      )
+    })
+
+    it('should not map app tokens from wrong brand when brands share app subfolders', () => {
+      const files = new Map([
+        ['main.scad', '// keyguard'],
+        ['openings_and_additions.txt', 'root default'],
+        [
+          'Cases and App Specifics/iPad 10,11/Andnary-equivalent Case/openings_and_additions.txt',
+          'andnary case-level',
+        ],
+        [
+          'Cases and App Specifics/iPad 10,11/Andnary-equivalent Case/Grid VocoChat/openings_and_additions.txt',
+          'andnary grid vocochat',
+        ],
+        [
+          'Cases and App Specifics/iPad 10,11/SUPCASE-equivalent Case/openings_and_additions.txt',
+          'supcase case-level',
+        ],
+      ])
+      const map = buildPresetCompanionMap(files, {
+        'iPad 10,11 - SUPCASE - Grid SC 50': {},
+      })
+      expect(map.get('iPad 10,11 - SUPCASE - Grid SC 50').openingsPath).toBe(
+        'Cases and App Specifics/iPad 10,11/SUPCASE-equivalent Case/openings_and_additions.txt'
+      )
+    })
+  })
+
+  describe('buildPresetCompanionMap — failure mode: LTROP mount-type ambiguity', () => {
+    const MOUNT_TYPE_FIXTURE = new Map([
+      ['main.scad', '// keyguard'],
+      ['openings_and_additions.txt', 'root default'],
+      [
+        'Cases and App Specifics/iPad 7,8,9/LTROP-equivalent Case/Keyguard Frame/openings_and_additions.txt',
+        'ltrop keyguard frame mount-level',
+      ],
+      [
+        'Cases and App Specifics/iPad 7,8,9/LTROP-equivalent Case/Keyguard Frame/LWFL-VI/openings_and_additions.txt',
+        'ltrop keyguard frame lwfl-vi',
+      ],
+      [
+        'Cases and App Specifics/iPad 7,8,9/LTROP-equivalent Case/No Mount and Slide-in or Raised Tabs/openings_and_additions.txt',
+        'ltrop no mount mount-level',
+      ],
+      [
+        'Cases and App Specifics/iPad 7,8,9/LTROP-equivalent Case/No Mount and Slide-in or Raised Tabs/LWFL-VI/openings_and_additions.txt',
+        'ltrop no mount lwfl-vi',
+      ],
+    ])
+
+    it('should resolve app-level path deterministically when mount-type is ambiguous', () => {
+      const map = buildPresetCompanionMap(MOUNT_TYPE_FIXTURE, {
+        'iPad 7,8,9 - LTROP - LWFL-VI': {},
+      })
+      const result = map.get('iPad 7,8,9 - LTROP - LWFL-VI')
+      expect(result.openingsPath).not.toBeNull()
+      expect(result.openingsPath).toMatch(/LWFL-VI\/openings_and_additions\.txt$/)
+      expect(result.resolution).toBe('unique')
+    })
+
+    it('should produce a deterministic result across repeated calls', () => {
+      const presets = { 'iPad 7,8,9 - LTROP - LWFL-VI': {} }
+      const first = buildPresetCompanionMap(MOUNT_TYPE_FIXTURE, presets)
+      const second = buildPresetCompanionMap(MOUNT_TYPE_FIXTURE, presets)
+      expect(first.get('iPad 7,8,9 - LTROP - LWFL-VI').openingsPath).toBe(
+        second.get('iPad 7,8,9 - LTROP - LWFL-VI').openingsPath
+      )
+    })
+  })
+
+  describe('buildPresetCompanionMap — compound word normalization gap', () => {
+    it('should resolve VocoChat compound word to Voco Chat folder path', () => {
+      const files = new Map([
+        ['main.scad', '// keyguard'],
+        ['openings_and_additions.txt', 'root default'],
+        [
+          'Cases and App Specifics/iPad mini 6,7/Andnary-equivalent Case/openings_and_additions.txt',
+          'andnary case-level',
+        ],
+        [
+          'Cases and App Specifics/iPad mini 6,7/Andnary-equivalent Case/Voco Chat/openings_and_additions.txt',
+          'andnary voco chat',
+        ],
+      ])
+      const map = buildPresetCompanionMap(files, {
+        'iPad mini 6,7 - Andnary - VocoChat': {},
+      })
+      expect(map.get('iPad mini 6,7 - Andnary - VocoChat').openingsPath).toBe(
+        'Cases and App Specifics/iPad mini 6,7/Andnary-equivalent Case/Voco Chat/openings_and_additions.txt'
+      )
+    })
+  })
+
+  describe('buildPresetCompanionMap — LWFL family regression', () => {
+    const LWFL_FAMILY_FIXTURE = new Map([
+      ['main.scad', '// keyguard'],
+      ['openings_and_additions.txt', 'root default'],
+      // Andnary brand: LWFL at app-level (no mount-type layer)
+      [
+        'Cases and App Specifics/iPad 10,11/Andnary-equivalent Case/openings_and_additions.txt',
+        'andnary case-level',
+      ],
+      [
+        'Cases and App Specifics/iPad 10,11/Andnary-equivalent Case/LWFL/openings_and_additions.txt',
+        'andnary lwfl',
+      ],
+      [
+        'Cases and App Specifics/iPad 10,11/Andnary-equivalent Case/LWFL-VI/openings_and_additions.txt',
+        'andnary lwfl-vi',
+      ],
+      [
+        'Cases and App Specifics/iPad 10,11/Andnary-equivalent Case/P2G/openings_and_additions.txt',
+        'andnary p2g',
+      ],
+      // LTROP brand: 3-level hierarchy with mount types
+      [
+        'Cases and App Specifics/iPad 7,8,9/LTROP-equivalent Case/Keyguard Frame/openings_and_additions.txt',
+        'ltrop kf mount-level',
+      ],
+      [
+        'Cases and App Specifics/iPad 7,8,9/LTROP-equivalent Case/Keyguard Frame/LWFL/openings_and_additions.txt',
+        'ltrop kf lwfl',
+      ],
+      [
+        'Cases and App Specifics/iPad 7,8,9/LTROP-equivalent Case/Keyguard Frame/LWFL-VI/openings_and_additions.txt',
+        'ltrop kf lwfl-vi',
+      ],
+      [
+        'Cases and App Specifics/iPad 7,8,9/LTROP-equivalent Case/No Mount and Slide-in or Raised Tabs/openings_and_additions.txt',
+        'ltrop nm mount-level',
+      ],
+      [
+        'Cases and App Specifics/iPad 7,8,9/LTROP-equivalent Case/No Mount and Slide-in or Raised Tabs/LWFL/openings_and_additions.txt',
+        'ltrop nm lwfl',
+      ],
+      [
+        'Cases and App Specifics/iPad 7,8,9/LTROP-equivalent Case/No Mount and Slide-in or Raised Tabs/LWFL-VI/openings_and_additions.txt',
+        'ltrop nm lwfl-vi',
+      ],
+      // SP LTROP brand: same structure
+      [
+        'Cases and App Specifics/iPad 7,8,9/SP LTROP-equivalent Case/Keyguard Frame/openings_and_additions.txt',
+        'sp ltrop kf mount-level',
+      ],
+      [
+        'Cases and App Specifics/iPad 7,8,9/SP LTROP-equivalent Case/Keyguard Frame/LWFL-VI/openings_and_additions.txt',
+        'sp ltrop kf lwfl-vi',
+      ],
+      [
+        'Cases and App Specifics/iPad 7,8,9/SP LTROP-equivalent Case/No Mount and Slide-in or Raised Tabs/openings_and_additions.txt',
+        'sp ltrop nm mount-level',
+      ],
+      [
+        'Cases and App Specifics/iPad 7,8,9/SP LTROP-equivalent Case/No Mount and Slide-in or Raised Tabs/LWFL-VI/openings_and_additions.txt',
+        'sp ltrop nm lwfl-vi',
+      ],
+    ])
+
+    it('should resolve Andnary LWFL to exact LWFL path, not LWFL-VI sibling', () => {
+      const map = buildPresetCompanionMap(LWFL_FAMILY_FIXTURE, {
+        'iPad 10,11 - Andnary - LWFL': {},
+      })
+      const entry = map.get('iPad 10,11 - Andnary - LWFL')
+      expect(entry.openingsPath).toBe(
+        'Cases and App Specifics/iPad 10,11/Andnary-equivalent Case/LWFL/openings_and_additions.txt'
+      )
+      expect(entry.resolution).toBe('unique')
+    })
+
+    it('should resolve Andnary LWFL-VI to exact LWFL-VI path', () => {
+      const map = buildPresetCompanionMap(LWFL_FAMILY_FIXTURE, {
+        'iPad 10,11 - Andnary - LWFL-VI': {},
+      })
+      const entry = map.get('iPad 10,11 - Andnary - LWFL-VI')
+      expect(entry.openingsPath).toBe(
+        'Cases and App Specifics/iPad 10,11/Andnary-equivalent Case/LWFL-VI/openings_and_additions.txt'
+      )
+      expect(entry.resolution).toBe('unique')
+    })
+
+    it('should resolve LTROP LWFL deterministically to app-level path despite mount-type ambiguity', () => {
+      const map = buildPresetCompanionMap(LWFL_FAMILY_FIXTURE, {
+        'iPad 7,8,9 - LTROP - LWFL': {},
+      })
+      const entry = map.get('iPad 7,8,9 - LTROP - LWFL')
+      expect(entry.openingsPath).not.toBeNull()
+      expect(entry.openingsPath).toMatch(/LWFL\/openings_and_additions\.txt$/)
+      expect(entry.openingsPath).not.toMatch(/LWFL-VI/)
+      expect(entry.resolution).toBe('unique')
+    })
+
+    it('should resolve LTROP LWFL-VI deterministically to app-level path despite mount-type ambiguity', () => {
+      const map = buildPresetCompanionMap(LWFL_FAMILY_FIXTURE, {
+        'iPad 7,8,9 - LTROP - LWFL-VI': {},
+      })
+      const entry = map.get('iPad 7,8,9 - LTROP - LWFL-VI')
+      expect(entry.openingsPath).not.toBeNull()
+      expect(entry.openingsPath).toMatch(/LWFL-VI\/openings_and_additions\.txt$/)
+      expect(entry.resolution).toBe('unique')
+    })
+
+    it('should resolve SP LTROP LWFL-VI without cross-brand bleed', () => {
+      const map = buildPresetCompanionMap(LWFL_FAMILY_FIXTURE, {
+        'iPad 7,8,9 - SP LTROP - LWFL-VI': {},
+      })
+      const entry = map.get('iPad 7,8,9 - SP LTROP - LWFL-VI')
+      expect(entry.openingsPath).not.toBeNull()
+      expect(entry.openingsPath).toContain('SP LTROP-equivalent Case')
+      expect(entry.openingsPath).toMatch(/LWFL-VI\/openings_and_additions\.txt$/)
+      expect(entry.resolution).toBe('unique')
+    })
+
+    it('should resolve all LWFL family presets simultaneously without interference', () => {
+      const presets = {
+        'iPad 10,11 - Andnary - LWFL': {},
+        'iPad 10,11 - Andnary - LWFL-VI': {},
+        'iPad 10,11 - Andnary - P2G': {},
+        'iPad 7,8,9 - LTROP - LWFL': {},
+        'iPad 7,8,9 - LTROP - LWFL-VI': {},
+        'iPad 7,8,9 - SP LTROP - LWFL-VI': {},
+      }
+      const map = buildPresetCompanionMap(LWFL_FAMILY_FIXTURE, presets)
+
+      expect(map.get('iPad 10,11 - Andnary - LWFL').openingsPath).toContain('Andnary')
+      expect(map.get('iPad 10,11 - Andnary - LWFL').openingsPath).toMatch(/\/LWFL\//)
+      expect(map.get('iPad 10,11 - Andnary - LWFL-VI').openingsPath).toMatch(/\/LWFL-VI\//)
+      expect(map.get('iPad 10,11 - Andnary - P2G').openingsPath).toMatch(/\/P2G\//)
+      expect(map.get('iPad 7,8,9 - LTROP - LWFL').openingsPath).toContain('LTROP')
+      expect(map.get('iPad 7,8,9 - LTROP - LWFL').openingsPath).toMatch(/\/LWFL\//)
+      expect(map.get('iPad 7,8,9 - LTROP - LWFL-VI').openingsPath).toContain('LTROP-equivalent Case')
+      expect(map.get('iPad 7,8,9 - SP LTROP - LWFL-VI').openingsPath).toContain('SP LTROP')
+
+      for (const [, entry] of map) {
+        expect(entry.resolution).toBe('unique')
+      }
+    })
+
+    it('should produce deterministic results across repeated calls for mount-type-ambiguous presets', () => {
+      const presets = {
+        'iPad 7,8,9 - LTROP - LWFL': {},
+        'iPad 7,8,9 - LTROP - LWFL-VI': {},
+      }
+      const first = buildPresetCompanionMap(LWFL_FAMILY_FIXTURE, presets)
+      const second = buildPresetCompanionMap(LWFL_FAMILY_FIXTURE, presets)
+
+      expect(first.get('iPad 7,8,9 - LTROP - LWFL').openingsPath).toBe(
+        second.get('iPad 7,8,9 - LTROP - LWFL').openingsPath
+      )
+      expect(first.get('iPad 7,8,9 - LTROP - LWFL-VI').openingsPath).toBe(
+        second.get('iPad 7,8,9 - LTROP - LWFL-VI').openingsPath
+      )
+    })
+  })
+
+  describe('buildPresetCompanionMap — "x" token word filter parity', () => {
+    const X_TOKEN_FIXTURE = new Map([
+      ['main.scad', '// keyguard'],
+      ['openings_and_additions.txt', 'root default'],
+      [
+        'Cases and App Specifics/iPad 7,8,9/LTROP-equivalent Case/Keyguard Frame/openings_and_additions.txt',
+        'ltrop kf mount-level',
+      ],
+      [
+        'Cases and App Specifics/iPad 7,8,9/LTROP-equivalent Case/Keyguard Frame/TD Snap 8 x 10/openings_and_additions.txt',
+        'ltrop kf td snap 8x10',
+      ],
+      [
+        'Cases and App Specifics/iPad 7,8,9/LTROP-equivalent Case/Keyguard Frame/TD Snap 5 x 5/openings_and_additions.txt',
+        'ltrop kf td snap 5x5',
+      ],
+    ])
+
+    it('should resolve "TD Snap 8 x 10" to app-level path, not mount-type ancestor', () => {
+      const map = buildPresetCompanionMap(X_TOKEN_FIXTURE, {
+        'iPad 7,8,9 - LTROP - TD Snap 8 x 10': {},
+      })
+      const entry = map.get('iPad 7,8,9 - LTROP - TD Snap 8 x 10')
+      expect(entry.openingsPath).toBe(
+        'Cases and App Specifics/iPad 7,8,9/LTROP-equivalent Case/Keyguard Frame/TD Snap 8 x 10/openings_and_additions.txt'
+      )
+      expect(entry.resolution).toBe('unique')
+    })
+
+    it('should resolve "TD Snap 5 x 5" to app-level path, not mount-type ancestor', () => {
+      const map = buildPresetCompanionMap(X_TOKEN_FIXTURE, {
+        'iPad 7,8,9 - LTROP - TD Snap 5 x 5': {},
+      })
+      const entry = map.get('iPad 7,8,9 - LTROP - TD Snap 5 x 5')
+      expect(entry.openingsPath).toBe(
+        'Cases and App Specifics/iPad 7,8,9/LTROP-equivalent Case/Keyguard Frame/TD Snap 5 x 5/openings_and_additions.txt'
+      )
+      expect(entry.resolution).toBe('unique')
+    })
+  })
+
+  describe('parsePresetParts', () => {
+    it('should parse "iPad 10,11 - Andnary - LWFL" into { tablet, brand, app }', () => {
+      const result = parsePresetParts('iPad 10,11 - Andnary - LWFL')
+      expect(result).toEqual({ tablet: 'iPad 10,11', brand: 'Andnary', app: 'LWFL' })
+    })
+
+    it('should parse "iPad 7,8,9 - SP LTROP - LWFL-VI" with multi-word brand', () => {
+      const result = parsePresetParts('iPad 7,8,9 - SP LTROP - LWFL-VI')
+      expect(result).toEqual({ tablet: 'iPad 7,8,9', brand: 'SP LTROP', app: 'LWFL-VI' })
+    })
+
+    it('should handle hyphenated app names without splitting on inner hyphens', () => {
+      const result = parsePresetParts('iPad mini 6,7 - Fintie - LWFL-VI')
+      expect(result).toEqual({ tablet: 'iPad mini 6,7', brand: 'Fintie', app: 'LWFL-VI' })
+    })
+
+    it('should return null for names without " - " separator', () => {
+      expect(parsePresetParts('AlphaTab TouchChat')).toBeNull()
+      expect(parsePresetParts('SingleWord')).toBeNull()
+    })
+
+    it('should handle names with only tablet and brand (2 parts, no app)', () => {
+      const result = parsePresetParts('iPad 10,11 - Andnary')
+      expect(result).toEqual({ tablet: 'iPad 10,11', brand: 'Andnary', app: null })
+    })
+  })
+
+  describe('companionTargets — generic alias pipeline regression', () => {
+    it('should produce correct { aliases, svgAliasTarget } shape and apply through full pipeline', () => {
+      const files = new Map([
+        ['main.scad', 'include <openings_and_additions.txt>'],
+        ['openings_and_additions.txt', 'default placeholder'],
+        ['screen.svg', '<svg>default</svg>'],
+        ['Cases/iPad 10/BrandA/TouchChat/openings_and_additions.txt', 'tc openings'],
+        ['Cases/iPad 10/BrandA/Snap/openings_and_additions.txt', 'snap openings'],
+        ['SVG files/iPad 10/BrandA/TouchChat/screen.svg', '<svg>tc</svg>'],
+        ['SVG files/iPad 10/BrandA/Snap/screen.svg', '<svg>snap</svg>'],
+      ])
+      const parameterSets = {
+        'iPad 10 BrandA TouchChat': {},
+        'iPad 10 BrandA Snap': {},
+      }
+      const companionMap = buildPresetCompanionMap(files, parameterSets, {
+        companionTargets: ['openings_and_additions.txt'],
+      })
+
+      const tcMapping = companionMap.get('iPad 10 BrandA TouchChat')
+      expect(tcMapping.aliases).toBeDefined()
+      expect(tcMapping.aliases['openings_and_additions.txt']).toBe(
+        'Cases/iPad 10/BrandA/TouchChat/openings_and_additions.txt'
+      )
+      expect(tcMapping.svgAliasTarget).toBe('screen.svg')
+      expect(tcMapping.aliases['screen.svg']).toBe(
+        'SVG files/iPad 10/BrandA/TouchChat/screen.svg'
+      )
+
+      const applied = applyCompanionAliases(files, tcMapping)
+      expect(applied.get('openings_and_additions.txt')).toBe('default placeholder')
+      expect(applied.get('screen.svg')).toBe('<svg>default</svg>')
+
+      const svgTarget = getOverlaySvgTarget(tcMapping)
+      expect(svgTarget).toBe('screen.svg')
+    })
+  })
+
+  describe('buildPresetCompanionMap — resolution diagnostics', () => {
+    function makeFiles(entries) {
+      return new Map(entries)
+    }
+
+    it('should tag uniquely resolved presets with resolution: unique', () => {
+      const files = makeFiles([
+        ['main.scad', '// scad'],
+        ['Cases/AlphaTab/TouchChat/openings_and_additions.txt', 'at tc'],
+        ['Cases/AlphaTab/Snap/openings_and_additions.txt', 'at snap'],
+      ])
+      const map = buildPresetCompanionMap(files, {
+        'AlphaTab TouchChat': {},
+        'AlphaTab Snap': {},
+      })
+      expect(map.get('AlphaTab TouchChat').resolution).toBe('unique')
+      expect(map.get('AlphaTab Snap').resolution).toBe('unique')
+    })
+
+    it('should resolve LTROP LWFL-VI as unique via app-name match (not ancestor-fallback)', () => {
+      const files = makeFiles([
+        ['main.scad', '// keyguard'],
+        ['openings_and_additions.txt', 'root default'],
+        ['Cases/iPad 7,8,9/LTROP-equivalent Case/Keyguard Frame/openings_and_additions.txt', 'ltrop kf'],
+        ['Cases/iPad 7,8,9/LTROP-equivalent Case/Keyguard Frame/LWFL-VI/openings_and_additions.txt', 'ltrop kf lwfl-vi'],
+        ['Cases/iPad 7,8,9/LTROP-equivalent Case/No Mount and Slide-in or Raised Tabs/openings_and_additions.txt', 'ltrop nm'],
+        ['Cases/iPad 7,8,9/LTROP-equivalent Case/No Mount and Slide-in or Raised Tabs/LWFL-VI/openings_and_additions.txt', 'ltrop nm lwfl-vi'],
+      ])
+      const map = buildPresetCompanionMap(files, {
+        'iPad 7,8,9 - LTROP - LWFL-VI': {},
+      })
+      const entry = map.get('iPad 7,8,9 - LTROP - LWFL-VI')
+      expect(entry.openingsPath).not.toBeNull()
+      expect(entry.openingsPath).toMatch(/LWFL-VI\/openings_and_additions\.txt$/)
+      expect(entry.resolution).toBe('unique')
+    })
+
+    it('should tag ambiguous presets when scores are tied with no ancestor', () => {
+      const files = makeFiles([
+        ['main.scad', '// scad'],
+        ['Cases/Alpha/openings_and_additions.txt', 'alpha'],
+        ['Cases/Beta/openings_and_additions.txt', 'beta'],
+      ])
+      const map = buildPresetCompanionMap(files, { 'Cases Device': {} })
+      expect(map.get('Cases Device').resolution).toBe('ambiguous')
+    })
+
+    it('should include resolution field in generic companionTargets path', () => {
+      const files = makeFiles([
+        ['main.scad', '// scad'],
+        ['presets/Alpha/config.txt', 'alpha config'],
+        ['presets/Beta/config.txt', 'beta config'],
+      ])
+      const map = buildPresetCompanionMap(files, {
+        'Alpha Preset': {},
+        'Beta Preset': {},
+      }, { companionTargets: ['config.txt'] })
+
+      expect(map.get('Alpha Preset').resolution).toBe('unique')
+      expect(map.get('Beta Preset').resolution).toBe('unique')
+    })
+
+    it('should tag generic path entries as ambiguous when target cannot resolve', () => {
+      const files = makeFiles([
+        ['main.scad', '// scad'],
+        ['Cases/Alpha/openings_and_additions.txt', 'alpha'],
+        ['Cases/Beta/openings_and_additions.txt', 'beta'],
+      ])
+      const map = buildPresetCompanionMap(files, { 'Cases Device': {} }, {
+        companionTargets: ['openings_and_additions.txt'],
+      })
+      expect(map.get('Cases Device').resolution).toBe('ambiguous')
+    })
+  })
+
+  describe('buildPresetCompanionMap — ZIP-name independence and alias isolation', () => {
+    it('companion map is identical regardless of the ZIP container name', () => {
+      const files = new Map([
+        ['main.scad', '// scad'],
+        ['openings_and_additions.txt', 'root default'],
+        ['Cases/BrandA/AppX/openings_and_additions.txt', 'brand-a appx'],
+        ['Cases/BrandA/AppY/openings_and_additions.txt', 'brand-a appy'],
+      ])
+      const parameterSets = {
+        'BrandA AppX': {},
+        'BrandA AppY': {},
+      }
+
+      const mapFromZip1 = buildPresetCompanionMap(files, parameterSets)
+      const mapFromZip2 = buildPresetCompanionMap(files, parameterSets)
+
+      expect(mapFromZip1.get('BrandA AppX').openingsPath)
+        .toBe(mapFromZip2.get('BrandA AppX').openingsPath)
+      expect(mapFromZip1.get('BrandA AppY').openingsPath)
+        .toBe(mapFromZip2.get('BrandA AppY').openingsPath)
+    })
+
+    it('no alias state bleeds between separate buildPresetCompanionMap calls', () => {
+      const filesA = new Map([
+        ['main.scad', '// scad'],
+        ['Cases/BrandA/App1/openings_and_additions.txt', 'brand-a app1'],
+        ['Cases/BrandA/App2/openings_and_additions.txt', 'brand-a app2'],
+      ])
+      const filesB = new Map([
+        ['main.scad', '// scad'],
+        ['Cases/BrandB/App3/openings_and_additions.txt', 'brand-b app3'],
+        ['Cases/BrandB/App4/openings_and_additions.txt', 'brand-b app4'],
+      ])
+
+      const mapA = buildPresetCompanionMap(filesA, { 'BrandA App1': {} })
+      const mapB = buildPresetCompanionMap(filesB, { 'BrandB App3': {} })
+
+      expect(mapA.has('BrandA App1')).toBe(true)
+      expect(mapA.has('BrandB App3')).toBe(false)
+      expect(mapB.has('BrandB App3')).toBe(true)
+      expect(mapB.has('BrandA App1')).toBe(false)
+
+      expect(mapB.get('BrandB App3').openingsPath)
+        .toBe('Cases/BrandB/App3/openings_and_additions.txt')
+    })
+
+    it('separate project loads produce independent companion maps', () => {
+      const sharedFiles = new Map([
+        ['main.scad', '// scad'],
+        ['Cases/Tab1/Brand1/openings_and_additions.txt', 'tab1-brand1'],
+        ['Cases/Tab2/Brand2/openings_and_additions.txt', 'tab2-brand2'],
+      ])
+
+      const presetsLoad1 = { 'Tab1 Brand1': {} }
+      const presetsLoad2 = { 'Tab2 Brand2': {} }
+
+      const map1 = buildPresetCompanionMap(sharedFiles, presetsLoad1)
+      const map2 = buildPresetCompanionMap(sharedFiles, presetsLoad2)
+
+      expect(map1.get('Tab1 Brand1').openingsPath)
+        .toBe('Cases/Tab1/Brand1/openings_and_additions.txt')
+      expect(map1.has('Tab2 Brand2')).toBe(false)
+
+      expect(map2.get('Tab2 Brand2').openingsPath)
+        .toBe('Cases/Tab2/Brand2/openings_and_additions.txt')
+      expect(map2.has('Tab1 Brand1')).toBe(false)
+    })
+  })
+
+  describe('buildPresetCompanionMap — real stakeholder naming pattern assertions', () => {
+    const __test_dirname = dirname(fileURLToPath(import.meta.url))
+
+    let parameterSets
+
+    beforeAll(() => {
+      const jsonPath = resolve(
+        __test_dirname,
+        '../fixtures/keyguard-v75/keyguard_v75.json'
+      )
+      const data = JSON.parse(readFileSync(jsonPath, 'utf8'))
+      parameterSets = data.parameterSets
+    })
+
+    it('Fintie presets for different tablet models resolve to distinct paths', () => {
+      const files = new Map([
+        ['main.scad', '// keyguard'],
+        ['openings_and_additions.txt', 'root'],
+        ['Cases and App Specifics/iPad 7,8,9/Fintie-equivalent Case/openings_and_additions.txt', 'fintie 789'],
+        ['Cases and App Specifics/iPad 7,8,9/Fintie-equivalent Case/TouchChat/openings_and_additions.txt', 'fintie 789 tc'],
+        ['Cases and App Specifics/iPad 10,11/Fintie-equivalent Case/openings_and_additions.txt', 'fintie 1011'],
+        ['Cases and App Specifics/iPad 10,11/Fintie-equivalent Case/TouchChat/openings_and_additions.txt', 'fintie 1011 tc'],
+      ])
+
+      const map = buildPresetCompanionMap(files, {
+        'iPad 7,8,9 - Fintie - TouchChat': {},
+        'iPad 10,11 - Fintie - TouchChat': {},
+      })
+
+      expect(map.get('iPad 7,8,9 - Fintie - TouchChat').openingsPath)
+        .toBe('Cases and App Specifics/iPad 7,8,9/Fintie-equivalent Case/TouchChat/openings_and_additions.txt')
+      expect(map.get('iPad 10,11 - Fintie - TouchChat').openingsPath)
+        .toBe('Cases and App Specifics/iPad 10,11/Fintie-equivalent Case/TouchChat/openings_and_additions.txt')
+    })
+
+    it('Andnary case-level fallback works when app has no subfolder', () => {
+      const files = new Map([
+        ['main.scad', '// keyguard'],
+        ['openings_and_additions.txt', 'root'],
+        ['Cases and App Specifics/iPad 10,11/Andnary-equivalent Case/openings_and_additions.txt', 'andnary case-level'],
+        ['Cases and App Specifics/iPad 10,11/Andnary-equivalent Case/LWFL/openings_and_additions.txt', 'andnary lwfl'],
+      ])
+
+      const map = buildPresetCompanionMap(files, {
+        'iPad 10,11 - Andnary - Grid SC 50': {},
+      })
+
+      expect(map.get('iPad 10,11 - Andnary - Grid SC 50').openingsPath)
+        .toBe('Cases and App Specifics/iPad 10,11/Andnary-equivalent Case/openings_and_additions.txt')
+    })
+
+    it('all 292 preset names from the stakeholder fixture are parseable by parsePresetParts', () => {
+      const presetNames = Object.keys(parameterSets).filter(
+        (n) => n !== 'design default values'
+      )
+      expect(presetNames).toHaveLength(292)
+
+      for (const name of presetNames) {
+        const parts = parsePresetParts(name)
+        expect(parts).not.toBeNull()
+        expect(parts.tablet).toBeTruthy()
+        expect(parts.brand).toBeTruthy()
+      }
+    })
+
+    it('stakeholder presets contain expected tablet model variety', () => {
+      const presetNames = Object.keys(parameterSets).filter(
+        (n) => n !== 'design default values'
+      )
+      const tablets = new Set(
+        presetNames.map((n) => parsePresetParts(n)?.tablet).filter(Boolean)
+      )
+
+      expect(tablets.has('iPad 7,8,9')).toBe(true)
+      expect(tablets.has('iPad 10,11')).toBe(true)
+      expect(tablets.has('iPad mini 6,7')).toBe(true)
+      expect(tablets.size).toBeGreaterThanOrEqual(3)
+    })
+
+    it('stakeholder presets contain expected brand variety', () => {
+      const presetNames = Object.keys(parameterSets).filter(
+        (n) => n !== 'design default values'
+      )
+      const brands = new Set(
+        presetNames.map((n) => parsePresetParts(n)?.brand).filter(Boolean)
+      )
+
+      expect(brands.has('Fintie')).toBe(true)
+      expect(brands.has('Andnary')).toBe(true)
+      expect(brands.has('SUPCASE')).toBe(true)
+      expect(brands.has('LTROP')).toBe(true)
+      expect(brands.has('SP LTROP')).toBe(true)
+      expect(brands.size).toBeGreaterThanOrEqual(5)
+    })
+  })
+
+  describe('buildPresetCompanionMap — Phase 7: full 292-preset validation', () => {
+    const __test_dirname = dirname(fileURLToPath(import.meta.url))
+
+    const MOUNT_TYPES = [
+      'Keyguard Frame',
+      'No Mount and Slide-in or Raised Tabs',
+    ]
+
+    const LTROP_AMBIGUOUS_APPS = new Set([
+      'LWFL-VI',
+      'P2G 6 x 10',
+      'P2G 7 x 11',
+      'Proloquo',
+      'Grid Voco Chat',
+      'Grid Super Core 30',
+      'Grid Super Core 30 max rails',
+      'Grid Super Core 50',
+      'TC WordPower 42',
+      'TC WordPower 42 - lg wnd',
+      'TC WordPower 60',
+      'TC WordPower 60 - lg wnd',
+      'TC WordPower 80',
+      'TC WordPower 80 - lg wnd',
+      'TC WordPower 108',
+      'TC WordPower 108 - lg wnd',
+      'TC WordPower 108 (merged)',
+      'TC WordPower 108 (merged) - lg wnd',
+    ])
+
+    function buildKeyguardFileTree(presetNames) {
+      const files = new Map()
+      files.set('keyguard_v75.scad', 'include <openings_and_additions.txt>')
+      files.set('openings_and_additions.txt', 'root default')
+
+      const combos = new Map()
+      for (const name of presetNames) {
+        const parts = parsePresetParts(name)
+        if (!parts) continue
+        const key = `${parts.tablet}|${parts.brand}`
+        if (!combos.has(key)) combos.set(key, new Set())
+        if (parts.app) combos.get(key).add(parts.app)
+      }
+
+      for (const [key, apps] of combos.entries()) {
+        const [tablet, brand] = key.split('|')
+        const isLTROP = brand === 'LTROP' && tablet === 'iPad 7,8,9'
+        const brandFolder =
+          brand === 'SUPCASE' && tablet === 'iPad mini 6,7'
+            ? 'SUPCASE-equivalent  Case'
+            : `${brand}-equivalent Case`
+        const base = `Cases and App Specifics/${tablet}/${brandFolder}`
+
+        if (isLTROP) {
+          for (const mt of MOUNT_TYPES) {
+            files.set(
+              `${base}/${mt}/openings_and_additions.txt`,
+              `${brand} ${mt} mount-level`
+            )
+            for (const app of apps) {
+              if (LTROP_AMBIGUOUS_APPS.has(app)) {
+                files.set(
+                  `${base}/${mt}/${app}/openings_and_additions.txt`,
+                  `${brand} ${mt} ${app}`
+                )
+              } else if (mt === MOUNT_TYPES[0]) {
+                files.set(
+                  `${base}/${mt}/${app}/openings_and_additions.txt`,
+                  `${brand} ${mt} ${app}`
+                )
+              }
+            }
+          }
+        } else {
+          files.set(`${base}/openings_and_additions.txt`, `${brand} case-level`)
+          for (const app of apps) {
+            files.set(
+              `${base}/${app}/openings_and_additions.txt`,
+              `${brand} ${app}`
+            )
+          }
+        }
+      }
+
+      return files
+    }
+
+    function categorise(map, presetNames) {
+      let unique = 0
+      let heuristic = 0
+      let unmapped = 0
+      const unmappedNames = []
+      const heuristicNames = []
+
+      for (const name of presetNames) {
+        const entry = map.get(name)
+        const path = entry?.openingsPath ?? entry?.aliases?.['openings_and_additions.txt'] ?? null
+        if (!path) {
+          unmapped++
+          unmappedNames.push(name)
+          continue
+        }
+        const dir = path.substring(0, path.lastIndexOf('/'))
+        const lastSeg = dir.split('/').pop()
+        const isLTROPPath = path.includes('LTROP-equivalent Case')
+        if (isLTROPPath && MOUNT_TYPES.includes(lastSeg)) {
+          heuristic++
+          heuristicNames.push(name)
+        } else {
+          unique++
+        }
+      }
+
+      return { unique, heuristic, unmapped, unmappedNames, heuristicNames }
+    }
+
+    let presetNames
+    let parameterSets
+    let fileTree
+
+    beforeAll(() => {
+      const jsonPath = resolve(
+        __test_dirname,
+        '../fixtures/keyguard-v75/keyguard_v75.json'
+      )
+      const data = JSON.parse(readFileSync(jsonPath, 'utf8'))
+      parameterSets = data.parameterSets
+      presetNames = Object.keys(parameterSets).filter(
+        (n) => n !== 'design default values'
+      )
+      fileTree = buildKeyguardFileTree(presetNames)
+    })
+
+    it('should have 292 presets in the fixture', () => {
+      expect(presetNames).toHaveLength(292)
+    })
+
+    // Validated thresholds (actual: 292 unique, 0 heuristic, 0 unmapped):
+    //
+    // Two companion-resolution improvements eliminated all 22 former
+    // ancestor-fallback heuristic defaults:
+    //
+    // 1. extraSegmentsMatchTokens word filter parity: single-char non-digit
+    //    words (e.g. "x" in "TD Snap 5 x 5") are now skipped, matching the
+    //    tokeniser's own filter. Recovers 3 presets whose single-winner
+    //    ancestor check was failing due to unmatched "x".
+    //
+    // 2. App-name exact-match tie-breaker: when tied candidates span
+    //    different intermediate folders (e.g. mount types) but the preset has
+    //    a parsed app name, prefer candidates whose leaf folder tokenizes to
+    //    the same set as the app name. Recovers 19 LTROP presets whose
+    //    app-level paths tied across mount types.
+
+    it('should resolve 290+ uniquely via legacy path', () => {
+      const map = buildPresetCompanionMap(fileTree, parameterSets)
+      const { unique, heuristic, unmapped, unmappedNames, heuristicNames } =
+        categorise(map, presetNames)
+
+      console.log(
+        `[Phase 7 Legacy] Unique: ${unique}, Heuristic: ${heuristic}, ` +
+          `Unmapped: ${unmapped} / ${presetNames.length}`
+      )
+      if (unmappedNames.length > 0) {
+        console.log('[Phase 7 Legacy] Unmapped:', unmappedNames)
+      }
+      if (heuristicNames.length > 0) {
+        console.log('[Phase 7 Legacy] Heuristic:', heuristicNames)
+      }
+
+      expect(unique).toBeGreaterThanOrEqual(290)
+      expect(unmapped).toBe(0)
+    })
+
+    it('should resolve 290+ uniquely via generic companionTargets path', () => {
+      const map = buildPresetCompanionMap(fileTree, parameterSets, {
+        companionTargets: ['openings_and_additions.txt'],
+      })
+      const { unique, heuristic, unmapped, unmappedNames } =
+        categorise(map, presetNames)
+
+      console.log(
+        `[Phase 7 Generic] Unique: ${unique}, Heuristic: ${heuristic}, ` +
+          `Unmapped: ${unmapped} / ${presetNames.length}`
+      )
+      if (unmappedNames.length > 0) {
+        console.log('[Phase 7 Generic] Unmapped:', unmappedNames)
+      }
+
+      expect(unique).toBeGreaterThanOrEqual(290)
+      expect(unmapped).toBe(0)
+    })
+
+    it('should produce correct { aliases, svgAliasTarget } shape from generic path', () => {
+      const map = buildPresetCompanionMap(fileTree, parameterSets, {
+        companionTargets: ['openings_and_additions.txt'],
+      })
+
+      for (const name of presetNames) {
+        const entry = map.get(name)
+        expect(entry).toBeDefined()
+        expect(entry).toHaveProperty('aliases')
+        expect(entry).toHaveProperty('svgAliasTarget')
+        expect(typeof entry.aliases).toBe('object')
+      }
+    })
+
+    it('should produce consistent counts between legacy and generic paths', () => {
+      const legacyMap = buildPresetCompanionMap(fileTree, parameterSets)
+      const genericMap = buildPresetCompanionMap(fileTree, parameterSets, {
+        companionTargets: ['openings_and_additions.txt'],
+      })
+
+      const legacy = categorise(legacyMap, presetNames)
+      const generic = categorise(genericMap, presetNames)
+
+      expect(generic.unique).toBe(legacy.unique)
+      expect(generic.heuristic).toBe(legacy.heuristic)
+      expect(generic.unmapped).toBe(legacy.unmapped)
+    })
+
+    it('should resolve all presets without heuristic defaults after companion-resolution hardening', () => {
+      const map = buildPresetCompanionMap(fileTree, parameterSets)
+      const { unique, heuristic, heuristicNames } = categorise(
+        map,
+        presetNames
+      )
+
+      expect(unique).toBe(presetNames.length)
+      expect(heuristic).toBe(0)
+      expect(heuristicNames).toHaveLength(0)
+    })
+
+    it('should include a resolution field on every entry (legacy path)', () => {
+      const map = buildPresetCompanionMap(fileTree, parameterSets)
+
+      for (const name of presetNames) {
+        const entry = map.get(name)
+        expect(entry).toBeDefined()
+        expect(entry).toHaveProperty('resolution')
+        expect(['unique', 'ancestor-fallback', 'ambiguous']).toContain(entry.resolution)
+      }
+    })
+
+    it('should include a resolution field on every entry (generic path)', () => {
+      const map = buildPresetCompanionMap(fileTree, parameterSets, {
+        companionTargets: ['openings_and_additions.txt'],
+      })
+
+      for (const name of presetNames) {
+        const entry = map.get(name)
+        expect(entry).toBeDefined()
+        expect(entry).toHaveProperty('resolution')
+        expect(['unique', 'ancestor-fallback', 'ambiguous']).toContain(entry.resolution)
+      }
+    })
+
+    it('should report consistent resolution counts between legacy and generic paths', () => {
+      const legacyMap = buildPresetCompanionMap(fileTree, parameterSets)
+      const genericMap = buildPresetCompanionMap(fileTree, parameterSets, {
+        companionTargets: ['openings_and_additions.txt'],
+      })
+
+      const legacyCounts = { unique: 0, 'ancestor-fallback': 0, ambiguous: 0 }
+      const genericCounts = { unique: 0, 'ancestor-fallback': 0, ambiguous: 0 }
+
+      for (const name of presetNames) {
+        legacyCounts[legacyMap.get(name).resolution]++
+        genericCounts[genericMap.get(name).resolution]++
+      }
+
+      expect(genericCounts.unique).toBe(legacyCounts.unique)
+      expect(genericCounts['ancestor-fallback']).toBe(legacyCounts['ancestor-fallback'])
+      expect(genericCounts.ambiguous).toBe(legacyCounts.ambiguous)
+
+      console.log(
+        `[Phase 7 Resolution] Unique: ${legacyCounts.unique}, ` +
+          `Ancestor-fallback: ${legacyCounts['ancestor-fallback']}, ` +
+          `Ambiguous: ${legacyCounts.ambiguous}`
+      )
+    })
+
+    it('should resolve all LTROP presets as unique after app-name tie-breaking', () => {
+      const map = buildPresetCompanionMap(fileTree, parameterSets)
+
+      const ltropPresets = presetNames.filter((n) => {
+        const parts = parsePresetParts(n)
+        return parts?.brand === 'LTROP'
+      })
+      expect(ltropPresets.length).toBeGreaterThan(0)
+
+      for (const name of ltropPresets) {
+        const entry = map.get(name)
+        expect(entry.resolution).toBe('unique')
+        expect(entry.openingsPath).not.toBeNull()
+      }
     })
   })
 })

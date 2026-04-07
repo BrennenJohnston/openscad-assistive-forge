@@ -13,6 +13,25 @@
  */
 
 /**
+ * Raster image extensions recognized for PNG-to-SVG conversion.
+ * Used by the UI layer to decide whether to auto-convert before mounting.
+ */
+export const RASTER_IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'bmp', 'gif'];
+
+/**
+ * Check if a filename has a raster image extension.
+ * Worker-safe (pure string operation, no DOM dependency).
+ *
+ * @param {string} fileName
+ * @returns {boolean}
+ */
+export function isRasterImageFile(fileName) {
+  if (!fileName || typeof fileName !== 'string') return false;
+  const ext = fileName.split('.').pop().toLowerCase();
+  return RASTER_IMAGE_EXTENSIONS.includes(ext);
+}
+
+/**
  * Check whether a parameter value is a file object from the UI.
  *
  * File params arrive as { name: string, data: string (data-URL), ... }
