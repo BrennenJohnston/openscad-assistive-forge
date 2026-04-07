@@ -12,6 +12,8 @@ import {
   polygonToPath,
   offsetPath,
   mmToSvgUnits,
+  adaptiveSampleCount,
+  chaikinSmooth,
 } from '../../src/js/svg-offset.js';
 
 const SQUARE_PATH = 'M10,10 L90,10 L90,90 L10,90 Z';
@@ -49,9 +51,10 @@ describe('pathToPolygon', () => {
     expect(points).toHaveLength(64);
   });
 
-  it('defaults to 128 sample points', () => {
+  it('defaults to adaptive sample count when no count provided', () => {
     const points = pathToPolygon(SQUARE_PATH);
-    expect(points).toHaveLength(128);
+    expect(points.length).toBeGreaterThanOrEqual(256);
+    expect(points.length).toBeLessThanOrEqual(2048);
   });
 
   it('sample points lie within the path bounding box', () => {
@@ -274,5 +277,108 @@ describe('mmToSvgUnits', () => {
     const result = mmToSvgUnits(-0.5, 100, 14);
     expect(result).toBeLessThan(0);
     expect(result).toBeCloseTo((-0.5 * 100) / 14, 3);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// adaptiveSampleCount
+// ---------------------------------------------------------------------------
+
+describe('adaptiveSampleCount', () => {
+  it('returns at least 256 for short paths', () => {
+    expect(adaptiveSampleCount(10)).toBe(256);
+    expect(adaptiveSampleCount(100)).toBe(256);
+  });
+
+  it('scales with path length', () => {
+    expect(adaptiveSampleCount(500)).toBe(1000);
+    expect(adaptiveSampleCount(300)).toBe(600);
+  });
+
+  it('caps at 2048 for very long paths', () => {
+    expect(adaptiveSampleCount(5000)).toBe(2048);
+    expect(adaptiveSampleCount(10000)).toBe(2048);
+  });
+
+  it('returns 256 for zero length', () => {
+    expect(adaptiveSampleCount(0)).toBe(256);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// chaikinSmooth
+// ---------------------------------------------------------------------------
+
+describe('chaikinSmooth', () => {
+  const square = [
+    { x: 0, y: 0 },
+    { x: 10, y: 0 },
+    { x: 10, y: 10 },
+    { x: 0, y: 10 },
+  ];
+
+  it('increases point count (each iteration roughly doubles)', () => {
+    const smoothed = chaikinSmooth(square, 1);
+    expect(smoothed.length).toBe(square.length * 2);
+  });
+
+  it('multiple iterations increase point count further', () => {
+    const s1 = chaikinSmooth(square, 1);
+    const s2 = chaikinSmooth(square, 2);
+    expect(s2.length).toBeGreaterThan(s1.length);
+  });
+
+  it('output points lie within the convex hull of input', () => {
+    const smoothed = chaikinSmooth(square, 2);
+    for (const pt of smoothed) {
+      expect(pt.x).toBeGreaterThanOrEqual(-0.01);
+      expect(pt.x).toBeLessThanOrEqual(10.01);
+      expect(pt.y).toBeGreaterThanOrEqual(-0.01);
+      expect(pt.y).toBeLessThanOrEqual(10.01);
+    }
+  });
+
+  it('returns input unchanged for fewer than 3 points', () => {
+    const two = [{ x: 0, y: 0 }, { x: 1, y: 1 }];
+    expect(chaikinSmooth(two, 2)).toBe(two);
+  });
+
+  it('returns input unchanged for null input', () => {
+    expect(chaikinSmooth(null, 2)).toBeNull();
+  });
+
+  it('zero iterations returns the original points', () => {
+    const result = chaikinSmooth(square, 0);
+    expect(result).toBe(square);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// offsetPath — smoothing options
+// ---------------------------------------------------------------------------
+
+describe('offsetPath smoothing', () => {
+  it('smooth=false produces output with fewer points than smooth=true', () => {
+    const unsmoothed = offsetPath(SQUARE_PATH, 5, { smooth: false, sampleCount: 64 });
+    const smoothed = offsetPath(SQUARE_PATH, 5, { smooth: true, sampleCount: 64 });
+
+    const countLs = (d) => (d.match(/L/g) || []).length;
+    expect(countLs(smoothed)).toBeGreaterThan(countLs(unsmoothed));
+  });
+
+  it('accepts custom smoothIterations', () => {
+    const s1 = offsetPath(SQUARE_PATH, 5, { smooth: true, smoothIterations: 1, sampleCount: 64 });
+    const s3 = offsetPath(SQUARE_PATH, 5, { smooth: true, smoothIterations: 3, sampleCount: 64 });
+
+    const countLs = (d) => (d.match(/L/g) || []).length;
+    expect(countLs(s3)).toBeGreaterThan(countLs(s1));
+  });
+
+  it('smooth=true is the default behavior', () => {
+    const defaultResult = offsetPath(SQUARE_PATH, 5, { sampleCount: 64 });
+    const explicitSmooth = offsetPath(SQUARE_PATH, 5, { smooth: true, sampleCount: 64 });
+
+    const countLs = (d) => (d.match(/L/g) || []).length;
+    expect(countLs(defaultResult)).toBe(countLs(explicitSmooth));
   });
 });

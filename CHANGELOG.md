@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **q_charm.scad parameter naming** — renamed positional parameters to plain-language labels for Customizer clarity: `design_x`/`design_y` → `design_left_right`/`design_up_down`, `text_x`/`text_y` → `text_left_right`/`text_up_down`, `design_x_2`/`design_y_2` → `design_2_left_right`/`design_2_up_down`, `design_z_2` → `design_2_thickness`
+- **q_charm.scad section order** — reordered Customizer tabs to Design → Design Layer 2 → Text → Fit → Rounding → Attachment → Quality, placing creative controls before fit adjustments
+- **q_charm.scad default values** — updated Fit defaults to better match standard silicone bracelets (`charm_length` 22, `charm_height` 8.65, `charm_thickness` 2.75, `bracelet_width` 15, `gap_offset` 2, `gap_width` 3); raised design scale max from 95 → 150
+- **Preset JSONs** — updated `large-charm.json` and `small-charm.json` to match renamed parameters
+- **SVG offset quality** — adaptive sample count (256–2048 based on path length) replaces fixed 128-point default; Chaikin corner-cutting smoothing applied to offset output for smoother curves; uses `ClipperOffset` API directly
+
+### Fixed
+
+- **SVG editor fullscreen portaling** — fullscreen mode now reparents root and backdrop to `document.body` to escape ancestor `transform`/`will-change` containing blocks (e.g. drawer panels)
+- **SVG editor fullscreen preview sizing** — preview panes use `dvh` units with fallback, `min-height`, and `object-fit: contain` for consistent sizing across viewports
+- **SVG editor header overflow** — narrow viewports (≤540px) wrap header controls and truncate the title with ellipsis, in both fullscreen and inline modes
+
 ---
 
 ## [4.4.0] - 2026-04-06

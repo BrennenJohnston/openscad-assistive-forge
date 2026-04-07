@@ -5,25 +5,6 @@
 // AAC bracelet charm prior art by Duy Do (UW WOOF3D): thingiverse.com/thing:7153594
 // License: CC0 (Public Domain)
 
-/* [Fit] */
-// Length of the charm along the bracelet (Y axis)
-charm_length = 20; // [10:1:40]
-
-// Overall height of the C-clip profile
-charm_height = 8.5; // [6:0.5:15]
-
-// Wall and material thickness
-charm_thickness = 3; // [2.25:0.25:4]
-
-// Width of the inner bracelet channel
-bracelet_width = 14; // [10:1:25]
-
-// Shift the gap opening left (−) or right (+) for asymmetric legs
-gap_offset = 0; // [-4:0.5:4]
-
-// Width of the bottom opening (gap between the C-clip legs)
-gap_width = 4; // [2:0.5:8]
-
 /* [Design] */
 // Image file for the design (SVG, PNG, or JPG — raster images auto-convert to SVG; use simple single-path SVGs for best results)
 design_file = ""; // [file:svg,png,jpg]
@@ -35,63 +16,82 @@ engrave_depth = 0.8; // [0.2:0.1:3.0]
 design_style = "raised"; // [raised, engraved]
 
 // Scale the design relative to the charm face (percentage)
-design_scale = 60; // [20:5:95]
+design_scale = 60; // [20:5:150]
 
 // Offset to thicken SVG lines for FDM printability (0 = off; 0.6 = recommended for 0.4mm nozzle)
 design_offset = 0; // [0:0.2:1.5]
 
-// Horizontal position offset for design
-design_x = 0; // [-10:0.5:10]
+// Left (−) / right (+) position offset for design
+design_left_right = 0; // [-10:0.5:10]
 
-// Vertical position offset for design
-design_y = 0; // [-10:0.5:10]
+// Down (−) / up (+) position offset for design
+design_up_down = 0; // [-10:0.5:10]
 
 // Rotation angle for design (degrees, counter-clockwise)
 design_rotation = 0; // [-180:5:180]
 
 /* [Design Layer 2] */
-// Second image file for layered designs (leave empty for none)
+// Image file for the second design (leave empty for none)
 design_file_2 = ""; // [file:svg,png,jpg]
 
+// Design style for second design
+design_style_2 = "raised"; // [raised, engraved]
+
 // Scale the second design relative to the charm face (percentage)
-design_scale_2 = 40; // [20:5:95]
+design_scale_2 = 40; // [20:5:150]
 
-// Horizontal position offset for second design
-design_x_2 = 0; // [-10:0.5:10]
+// Left (−) / right (+) position offset for second design
+design_2_left_right = 0; // [-10:0.5:10]
 
-// Vertical position offset for second design
-design_y_2 = 0; // [-10:0.5:10]
+// Down (−) / up (+) position offset for second design
+design_2_up_down = 0; // [-10:0.5:10]
 
 // Rotation angle for second design (degrees, counter-clockwise)
 design_rotation_2 = 0; // [-180:5:180]
 
-// Z-offset for second design layer (adjust height relative to the charm surface)
-design_z_2 = 0; // [-3:0.1:3]
-
-// Design style for second layer
-design_style_2 = "raised"; // [raised, engraved]
+// Thickness offset for second design (height relative to the charm surface)
+design_2_thickness = 0; // [-3:0.1:3]
 
 /* [Text] */
 // Text or number to display on the charm face (leave empty for none)
 text_content = "";
 
+// Depth of text engraving (or height of raised text)
+text_depth = 0.8; // [0.2:0.1:2]
+
+// Text style on the charm surface
+text_style = "raised"; // [raised, engraved]
+
 // Text height in mm
 text_size = 5; // [3:0.5:12]
 
-// Horizontal position offset from center
-text_x = -5.5; // [-10:0.5:10]
+// Left (−) / right (+) position offset for text
+text_left_right = 6; // [-10:0.5:10]
 
-// Vertical position offset from center
-text_y = 6; // [-10:0.5:10]
-
-// Depth of text engraving (or height of raised text)
-text_depth = 0.8; // [0.2:0.1:2]
+// Down (−) / up (+) position offset for text
+text_up_down = 5.5; // [-10:0.5:10]
 
 // Rotation angle for text (degrees, counter-clockwise)
 text_rotation = 90; // [-180:5:180]
 
-// Text style on the charm surface
-text_style = "raised"; // [raised, engraved]
+/* [Fit] */
+// Length of the charm along the bracelet (Y axis)
+charm_length = 22; // [10:1:40]
+
+// Overall height of the C-clip profile
+charm_height = 8.65; // [6:0.5:15]
+
+// Wall and material thickness
+charm_thickness = 2.75; // [2.25:0.25:4]
+
+// Width of the inner bracelet channel
+bracelet_width = 15; // [10:1:25]
+
+// Shift the gap opening left (−) or right (+) for asymmetric legs
+gap_offset = 2; // [-4:0.5:4]
+
+// Width of the bottom opening (gap between the C-clip legs)
+gap_width = 3; // [2:0.5:8]
 
 /* [Rounding] */
 // Side edge rounding radius (0 = sharp side edges)
@@ -153,7 +153,7 @@ design_size_2 = design_ref_dim * design_scale_2 / 100;
 total_top_z = charm_top_z
     + max(
         (design_style == "raised") ? engrave_depth : 0,
-        (design_file_2 != "" && design_style_2 == "raised") ? max(0, engrave_depth + design_z_2) : 0,
+        (design_file_2 != "" && design_style_2 == "raised") ? max(0, engrave_depth + design_2_thickness) : 0,
         (text_content != "" && text_style == "raised") ? text_depth : 0
     );
 
@@ -220,7 +220,7 @@ module charm_body() {
 // the SVG preparer tool (F-11, planned) for compound designs.
 module design_2d() {
     if (design_file != "") {
-        translate([-design_y, design_x])
+        translate([-design_up_down, design_left_right])
             rotate([0, 0, design_rotation + 90])
                 offset(r = design_offset)
                     resize([design_size, 0], auto = true)
@@ -230,7 +230,7 @@ module design_2d() {
 
 module design_2d_layer2() {
     if (design_file_2 != "") {
-        translate([-design_y_2, design_x_2])
+        translate([-design_2_up_down, design_2_left_right])
             rotate([0, 0, design_rotation_2 + 90])
                 offset(r = design_offset)
                     resize([design_size_2, 0], auto = true)
@@ -240,7 +240,7 @@ module design_2d_layer2() {
 
 module text_2d() {
     if (text_content != "") {
-        translate([text_x, text_y])
+        translate([-text_up_down, text_left_right])
             rotate([0, 0, text_rotation])
                 text(text_content, size = text_size,
                      font = "Liberation Sans",
@@ -293,7 +293,7 @@ module q_charm() {
                         design_2d();
             }
             if (design_file_2 != "" && design_style_2 == "raised") {
-                translate([profile_center_x, 0, charm_top_z + design_z_2])
+                translate([profile_center_x, 0, charm_top_z + design_2_thickness])
                     linear_extrude(height = engrave_depth)
                         design_2d_layer2();
             }
@@ -309,7 +309,7 @@ module q_charm() {
                     design_2d();
         }
         if (design_file_2 != "" && design_style_2 != "raised") {
-            translate([profile_center_x, 0, charm_top_z - engrave_depth + design_z_2])
+            translate([profile_center_x, 0, charm_top_z - engrave_depth + design_2_thickness])
                 linear_extrude(height = engrave_depth + 0.01)
                     design_2d_layer2();
         }

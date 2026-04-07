@@ -53,10 +53,10 @@ describe('q_charm.scad parser integration', () => {
 
     const groupIds = parsed.groups.map((g) => g.id);
     const expectedGroups = [
-      'Fit',
       'Design',
       'Design Layer 2',
       'Text',
+      'Fit',
       'Rounding',
       'Attachment',
       'Quality',
@@ -71,7 +71,7 @@ describe('q_charm.scad parser integration', () => {
     parsed = extractParameters(scadContent);
 
     expect(parsed.parameters.charm_length).toBeDefined();
-    expect(parsed.parameters.charm_length.default).toBe(20);
+    expect(parsed.parameters.charm_length.default).toBe(22);
     expect(parsed.parameters.charm_length.minimum).toBe(10);
     expect(parsed.parameters.charm_length.maximum).toBe(40);
 
@@ -86,23 +86,23 @@ describe('q_charm.scad parser integration', () => {
     parsed = extractParameters(scadContent);
 
     expect(parsed.parameters.charm_height).toBeDefined();
-    expect(parsed.parameters.charm_height.default).toBe(8.5);
+    expect(parsed.parameters.charm_height.default).toBe(8.65);
 
     expect(parsed.parameters.charm_thickness).toBeDefined();
-    expect(parsed.parameters.charm_thickness.default).toBe(3);
+    expect(parsed.parameters.charm_thickness.default).toBe(2.75);
     expect(parsed.parameters.charm_thickness.minimum).toBe(2.25);
     expect(parsed.parameters.charm_thickness.maximum).toBe(4);
 
     expect(parsed.parameters.bracelet_width).toBeDefined();
-    expect(parsed.parameters.bracelet_width.default).toBe(14);
+    expect(parsed.parameters.bracelet_width.default).toBe(15);
 
     expect(parsed.parameters.gap_offset).toBeDefined();
-    expect(parsed.parameters.gap_offset.default).toBe(0);
+    expect(parsed.parameters.gap_offset.default).toBe(2);
     expect(parsed.parameters.gap_offset.minimum).toBe(-4);
     expect(parsed.parameters.gap_offset.maximum).toBe(4);
 
     expect(parsed.parameters.gap_width).toBeDefined();
-    expect(parsed.parameters.gap_width.default).toBe(4);
+    expect(parsed.parameters.gap_width.default).toBe(3);
     expect(parsed.parameters.gap_width.minimum).toBe(2);
     expect(parsed.parameters.gap_width.maximum).toBe(8);
   });
@@ -124,21 +124,24 @@ describe('q_charm.scad parser integration', () => {
     expect(parsed.parameters.design_offset.maximum).toBe(1.5);
   });
 
-  it('extracts design_x and design_y position parameters (Phase 7)', () => {
+  it('extracts design_left_right and design_up_down position parameters (Phase 7)', () => {
     scadContent = readFileSync(scadPath, 'utf-8');
     parsed = extractParameters(scadContent);
 
-    expect(parsed.parameters.design_x).toBeDefined();
-    expect(parsed.parameters.design_x.default).toBe(0);
-    expect(parsed.parameters.design_x.minimum).toBe(-10);
-    expect(parsed.parameters.design_x.maximum).toBe(10);
-    expect(parsed.parameters.design_x.group).toBe('Design');
+    expect(parsed.parameters.design_left_right).toBeDefined();
+    expect(parsed.parameters.design_left_right.default).toBe(0);
+    expect(parsed.parameters.design_left_right.minimum).toBe(-10);
+    expect(parsed.parameters.design_left_right.maximum).toBe(10);
+    expect(parsed.parameters.design_left_right.group).toBe('Design');
 
-    expect(parsed.parameters.design_y).toBeDefined();
-    expect(parsed.parameters.design_y.default).toBe(0);
-    expect(parsed.parameters.design_y.minimum).toBe(-10);
-    expect(parsed.parameters.design_y.maximum).toBe(10);
-    expect(parsed.parameters.design_y.group).toBe('Design');
+    expect(parsed.parameters.design_up_down).toBeDefined();
+    expect(parsed.parameters.design_up_down.default).toBe(0);
+    expect(parsed.parameters.design_up_down.minimum).toBe(-10);
+    expect(parsed.parameters.design_up_down.maximum).toBe(10);
+    expect(parsed.parameters.design_up_down.group).toBe('Design');
+
+    expect(parsed.parameters.design_x).toBeUndefined();
+    expect(parsed.parameters.design_y).toBeUndefined();
   });
 
   it('extracts design_rotation parameter for SVG rotation', () => {
@@ -200,10 +203,12 @@ describe('q_charm.scad parser integration', () => {
 
     expect(parsed.parameters.text_content).toBeDefined();
     expect(parsed.parameters.text_size).toBeDefined();
-    expect(parsed.parameters.text_x).toBeDefined();
-    expect(parsed.parameters.text_x.default).toBe(-5.5);
-    expect(parsed.parameters.text_y).toBeDefined();
-    expect(parsed.parameters.text_y.default).toBe(6);
+    expect(parsed.parameters.text_left_right).toBeDefined();
+    expect(parsed.parameters.text_left_right.default).toBe(6);
+    expect(parsed.parameters.text_up_down).toBeDefined();
+    expect(parsed.parameters.text_up_down.default).toBe(5.5);
+    expect(parsed.parameters.text_x).toBeUndefined();
+    expect(parsed.parameters.text_y).toBeUndefined();
     expect(parsed.parameters.text_depth).toBeDefined();
     expect(parsed.parameters.text_style).toBeDefined();
     expect(parsed.parameters.text_style.default).toBe('raised');
@@ -246,14 +251,18 @@ describe('q_charm.scad parser integration', () => {
 
     expect(parsed.parameters.design_file_2).toBeDefined();
     expect(parsed.parameters.design_scale_2).toBeDefined();
-    expect(parsed.parameters.design_x_2).toBeDefined();
-    expect(parsed.parameters.design_y_2).toBeDefined();
+    expect(parsed.parameters.design_2_left_right).toBeDefined();
+    expect(parsed.parameters.design_2_up_down).toBeDefined();
     expect(parsed.parameters.design_style_2).toBeDefined();
 
-    expect(parsed.parameters.design_z_2).toBeDefined();
-    expect(parsed.parameters.design_z_2.default).toBe(0);
-    expect(parsed.parameters.design_z_2.minimum).toBe(-3);
-    expect(parsed.parameters.design_z_2.maximum).toBe(3);
+    expect(parsed.parameters.design_2_thickness).toBeDefined();
+    expect(parsed.parameters.design_2_thickness.default).toBe(0);
+    expect(parsed.parameters.design_2_thickness.minimum).toBe(-3);
+    expect(parsed.parameters.design_2_thickness.maximum).toBe(3);
+
+    expect(parsed.parameters.design_x_2).toBeUndefined();
+    expect(parsed.parameters.design_y_2).toBeUndefined();
+    expect(parsed.parameters.design_z_2).toBeUndefined();
 
     expect(parsed.parameters.design_rotation_2).toBeDefined();
     expect(parsed.parameters.design_rotation_2.default).toBe(0);

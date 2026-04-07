@@ -928,6 +928,11 @@ export function createSvgPrepWorkspace(containerEl) {
     isFullscreen = true;
     previousFocusEl = document.activeElement;
 
+    // Portal: reparent root and backdrop to document.body to escape
+    // any ancestor transform/will-change containing blocks (e.g. drawer).
+    document.body.appendChild(refs.backdrop);
+    document.body.appendChild(root);
+
     root.classList.add('svg-prep-fullscreen');
     refs.backdrop.classList.remove('hidden');
     refs.backdrop.setAttribute('aria-hidden', 'false');
@@ -953,6 +958,10 @@ export function createSvgPrepWorkspace(containerEl) {
     refs.backdrop.classList.add('hidden');
     refs.backdrop.setAttribute('aria-hidden', 'true');
     refs.fullscreenBtn.setAttribute('aria-label', 'Open fullscreen');
+
+    // Portal: move root and backdrop back to original container
+    containerEl.appendChild(refs.backdrop);
+    containerEl.appendChild(root);
 
     if (fullscreenTrap) {
       fullscreenTrap.deactivate();

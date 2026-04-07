@@ -474,6 +474,41 @@ describe('createSvgPrepWorkspace', () => {
       ws.destroy();
     });
 
+    it('portals root and backdrop to document.body on openFullscreen', () => {
+      const ws = createSvgPrepWorkspace(container);
+      ws.open(SIMPLE_SVG, makeAnalysis(1));
+      ws.openFullscreen();
+
+      expect(ws._root.parentNode).toBe(document.body);
+      expect(ws._refs.backdrop.parentNode).toBe(document.body);
+
+      ws.destroy();
+    });
+
+    it('returns root and backdrop to container on closeFullscreen', () => {
+      const ws = createSvgPrepWorkspace(container);
+      ws.open(SIMPLE_SVG, makeAnalysis(1));
+      ws.openFullscreen();
+      ws.closeFullscreen();
+
+      expect(ws._root.parentNode).toBe(container);
+      expect(ws._refs.backdrop.parentNode).toBe(container);
+
+      ws.destroy();
+    });
+
+    it('close() returns portalled elements to container', () => {
+      const ws = createSvgPrepWorkspace(container);
+      ws.open(SIMPLE_SVG, makeAnalysis(1));
+      ws.openFullscreen();
+      ws.close();
+
+      expect(ws._root.parentNode).toBe(container);
+      expect(ws._refs.backdrop.parentNode).toBe(container);
+
+      ws.destroy();
+    });
+
     it('creates a focus trap on openFullscreen', () => {
       const ws = createSvgPrepWorkspace(container);
       ws.open(SIMPLE_SVG, makeAnalysis(1));

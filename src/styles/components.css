@@ -13784,9 +13784,11 @@ body.tutorial-body-locked {
 }
 
 .svg-prep-workspace.svg-prep-fullscreen .svg-prep-previews {
-  flex: 0 0 auto;
+  flex: 0 0 33vh;
+  flex: 0 0 33dvh;
   max-height: 45vh;
-  min-height: 0;
+  min-height: 120px;
+  overflow: hidden;
 }
 
 .svg-prep-workspace.svg-prep-fullscreen .svg-prep-source-pane,
@@ -13796,7 +13798,10 @@ body.tutorial-body-locked {
 
 .svg-prep-workspace.svg-prep-fullscreen .svg-prep-source-pane svg,
 .svg-prep-workspace.svg-prep-fullscreen .svg-prep-result-pane svg {
+  width: 100%;
+  height: 100%;
   max-height: none;
+  object-fit: contain;
 }
 
 .svg-prep-workspace.svg-prep-fullscreen .svg-prep-objects {
@@ -13818,6 +13823,8 @@ body.tutorial-body-locked {
 
 @media (max-height: 500px) {
   .svg-prep-workspace.svg-prep-fullscreen .svg-prep-previews {
+    flex: 0 0 25vh;
+    flex: 0 0 25dvh;
     max-height: 35vh;
   }
 }
@@ -13845,6 +13852,18 @@ body.tutorial-body-locked {
   .svg-prep-workspace.svg-prep-fullscreen .svg-prep-previews {
     flex-direction: column;
   }
+
+  .svg-prep-workspace.svg-prep-fullscreen .svg-prep-header {
+    flex-wrap: wrap;
+  }
+
+  .svg-prep-workspace.svg-prep-fullscreen .svg-prep-header h3 {
+    width: 100%;
+    font-size: var(--font-size-base);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 }
 
 /* ── Responsive: stack panes on narrow viewports (non-fullscreen only) ──── */
@@ -13857,6 +13876,18 @@ body.tutorial-body-locked {
   .svg-prep-workspace:not(.svg-prep-fullscreen) .svg-prep-source-pane,
   .svg-prep-workspace:not(.svg-prep-fullscreen) .svg-prep-result-pane {
     min-height: 120px;
+  }
+
+  .svg-prep-workspace:not(.svg-prep-fullscreen) .svg-prep-header {
+    flex-wrap: wrap;
+  }
+
+  .svg-prep-workspace:not(.svg-prep-fullscreen) .svg-prep-header h3 {
+    width: 100%;
+    font-size: var(--font-size-base);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .svg-prep-role-group {
