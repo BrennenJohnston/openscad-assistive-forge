@@ -180,6 +180,17 @@ body {
   letter-spacing: 0.5px;
 }
 
+@media (max-width: 480px) {
+  .contrast-label {
+    display: none;
+  }
+
+  .contrast-toggle {
+    width: 44px;
+    padding: var(--space-sm);
+  }
+}
+
 /* High contrast mode active state */
 :root[data-high-contrast='true'] .contrast-toggle {
   background: var(--color-hover-bg);
