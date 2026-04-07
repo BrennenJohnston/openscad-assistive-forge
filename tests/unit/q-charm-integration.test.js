@@ -56,6 +56,7 @@ describe('q_charm.scad parser integration', () => {
       'Design',
       'Design Layer 2',
       'Text',
+      'Text Layer 2',
       'Fit',
       'Rounding',
       'Attachment',
@@ -269,6 +270,37 @@ describe('q_charm.scad parser integration', () => {
     expect(parsed.parameters.design_rotation_2.minimum).toBe(-180);
     expect(parsed.parameters.design_rotation_2.maximum).toBe(180);
     expect(parsed.parameters.design_rotation_2.group).toBe('Design Layer 2');
+  });
+
+  it('extracts Text Layer 2 parameters', () => {
+    scadContent = readFileSync(scadPath, 'utf-8');
+    parsed = extractParameters(scadContent);
+
+    expect(parsed.parameters.text_content_2).toBeDefined();
+    expect(parsed.parameters.text_content_2.default).toBe('');
+    expect(parsed.parameters.text_content_2.group).toBe('Text Layer 2');
+
+    expect(parsed.parameters.text_depth_2).toBeDefined();
+    expect(parsed.parameters.text_style_2).toBeDefined();
+    expect(parsed.parameters.text_style_2.default).toBe('raised');
+    expect(parsed.parameters.text_size_2).toBeDefined();
+    expect(parsed.parameters.text_size_2.default).toBe(5);
+
+    expect(parsed.parameters.text_2_left_right).toBeDefined();
+    expect(parsed.parameters.text_2_left_right.default).toBe(-6);
+    expect(parsed.parameters.text_2_up_down).toBeDefined();
+    expect(parsed.parameters.text_2_up_down.default).toBe(5.5);
+
+    expect(parsed.parameters.text_rotation_2).toBeDefined();
+    expect(parsed.parameters.text_rotation_2.default).toBe(90);
+    expect(parsed.parameters.text_rotation_2.minimum).toBe(-180);
+    expect(parsed.parameters.text_rotation_2.maximum).toBe(180);
+    expect(parsed.parameters.text_rotation_2.group).toBe('Text Layer 2');
+
+    expect(parsed.parameters.text_2_thickness).toBeDefined();
+    expect(parsed.parameters.text_2_thickness.default).toBe(0);
+    expect(parsed.parameters.text_2_thickness.minimum).toBe(-3);
+    expect(parsed.parameters.text_2_thickness.maximum).toBe(3);
   });
 
   it('has at least 20 user-facing parameters', () => {

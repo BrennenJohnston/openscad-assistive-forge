@@ -31,6 +31,29 @@ Output is in `dist/`.
 | Build output directory | `dist` |
 | Node version | 18 or 20 |
 
+### Fonts for `text()` Support
+
+The OpenSCAD `text()` function requires Liberation Sans/Mono TTF fonts at
+runtime. These fonts are **gitignored** (`public/fonts/*.ttf`) and must be
+downloaded before each build.
+
+A `prebuild` npm lifecycle hook runs automatically before every `npm run build`:
+
+```json
+"prebuild": "node scripts/download-wasm.js --strict"
+```
+
+This downloads the 4 required Liberation font files from GitHub releases into
+`public/fonts/`, which Vite then copies to `dist/fonts/`. The script
+short-circuits if fonts are already present (fast file-existence check).
+
+**Requirements:**
+- The build environment must have outbound HTTPS access to `github.com`
+- In `--strict` mode, the build **fails** if any font is missing (preventing
+  silent deployment of a broken `text()` function)
+- For local development, `npm run setup-wasm` downloads fonts without
+  `--strict` (lenient — proceeds even if fonts fail to download)
+
 ### 3. Deploy (Cloudflare Git Integration)
 
 This repo uses Cloudflare's built-in GitHub integration. Pushes to `main`
@@ -369,6 +392,25 @@ Keep a ZIP of the last known-good `dist/` folder. In emergency:
 1. Verify WASM files exist: `ls dist/wasm/openscad-official/`
 2. Check CORS headers on WASM response
 3. Check console for specific error message
+
+### `text()` Function Not Working
+
+**Cause:** Liberation font TTF files are missing from `dist/fonts/`.
+
+**Diagnosis:**
+1. Open DevTools Network tab, filter by `.ttf`
+2. Check if font requests return `Content-Type: font/ttf` (not `text/html`)
+3. If fonts return HTML content, the SPA `_redirects` rule is masking a 404
+
+**Fix:**
+1. Ensure the `prebuild` hook is present in `package.json`
+2. Verify the build environment has outbound HTTPS to `github.com`
+3. Rebuild: `npm run build` (the `prebuild` hook downloads fonts automatically)
+4. Check `dist/fonts/` contains the 4 TTF files:
+   - `LiberationSans-Regular.ttf`
+   - `LiberationSans-Bold.ttf`
+   - `LiberationSans-Italic.ttf`
+   - `LiberationMono-Regular.ttf`
 
 ### CSP Violations
 

@@ -555,8 +555,14 @@ async function mountFonts() {
     'LiberationMono-Regular.ttf',
   ];
 
+  // Valid TrueType fonts start with these 4 magic bytes (scalar type = 0x00010000).
+  // If the server returns HTML (e.g. SPA _redirects masking a 404), the first bytes
+  // will be ASCII (0x3C for '<') instead.
+  const TTF_MAGIC = [0x00, 0x01, 0x00, 0x00];
+
   let mounted = 0;
   let failed = 0;
+  let corruptCount = 0;
 
   for (const fontFile of fonts) {
     try {
@@ -570,6 +576,20 @@ async function mountFonts() {
       }
 
       const fontData = await response.arrayBuffer();
+      const headerBytes = new Uint8Array(fontData.slice(0, 4));
+      const isTTF = TTF_MAGIC.every((b, i) => headerBytes[i] === b);
+
+      if (!isTTF) {
+        console.warn(
+          `[Worker] Font ${fontFile} has invalid TTF header ` +
+          `(got ${Array.from(headerBytes).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' ')}). ` +
+          `The server may be returning HTML instead of the font file.`
+        );
+        corruptCount++;
+        failed++;
+        continue;
+      }
+
       FS.writeFile(`${fontPath}/${fontFile}`, new Uint8Array(fontData));
       if (import.meta.env.DEV) console.log(`[Worker] Mounted font: ${fontFile}`);
       mounted++;
@@ -589,6 +609,18 @@ async function mountFonts() {
     console.warn(
       '[Worker] No fonts mounted - text() function may not work correctly'
     );
+    self.postMessage({
+      type: 'WARNING',
+      payload: {
+        code: 'NO_FONTS',
+        message:
+          'No fonts were loaded — the text() function will not render correctly.' +
+          (corruptCount > 0
+            ? ' Font files appear to be corrupted (HTML served instead of TTF). Check deployment.'
+            : ''),
+        severity: 'warning',
+      },
+    });
   }
 }
 

@@ -17,10 +17,15 @@ import { createGunzip } from 'zlib';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-// Liberation Fonts — stable releases/download/ URL (not the fragile /files/ attachment URL)
-// Previous URL used the /files/7261482/ pattern which is a GitHub comment attachment
-// with no stability guarantee. This URL is a proper tagged release download.
-const FONTS_RELEASE_URL = 'https://github.com/liberationfonts/liberation-fonts/releases/download/2.1.5/liberation-fonts-ttf-2.1.5.tar.gz';
+// --strict mode: when passed, missing fonts cause a non-zero exit code.
+// Used by the `prebuild` hook to fail the build if fonts are unavailable.
+const strictMode = process.argv.includes('--strict');
+
+// Liberation Fonts — GitHub file attachment from the 2.1.5 release page.
+// This project publishes archives as release body attachments (not proper release
+// assets), so the only valid URL uses the /files/<id>/ pattern.
+// Source: https://github.com/liberationfonts/liberation-fonts/releases/tag/2.1.5
+const FONTS_RELEASE_URL = 'https://github.com/liberationfonts/liberation-fonts/files/7261482/liberation-fonts-ttf-2.1.5.tar.gz';
 
 // SHA-256 checksum of the font archive for integrity verification
 // Computed from the official release artifact
@@ -344,8 +349,33 @@ async function setup() {
   // Download fonts
   await downloadFonts(fontsDir);
 
+  // Verify all required fonts are present after download.
+  // In --strict mode (used by prebuild hook), missing fonts fail the build.
+  const missingAfterSetup = REQUIRED_FONTS.filter(
+    f => !existsSync(join(fontsDir, f))
+  );
+
+  if (missingAfterSetup.length > 0) {
+    const list = missingAfterSetup.join(', ');
+    if (strictMode) {
+      console.error('');
+      console.error(`✗ STRICT MODE: ${missingAfterSetup.length} required font(s) missing: ${list}`);
+      console.error('  The build cannot proceed without fonts for text() support.');
+      console.error('  Ensure outbound HTTPS access to github.com is available.');
+      process.exitCode = 1;
+      return;
+    }
+    console.warn(`⚠ ${missingAfterSetup.length} font(s) missing: ${list}`);
+    console.warn('  text() function will not work correctly without fonts.');
+  }
+
   console.log('');
   console.log('Setup complete! Run "npm run dev" to start the application.');
 }
 
-setup().catch(console.error);
+setup().catch((err) => {
+  console.error(err);
+  if (strictMode) {
+    process.exitCode = 1;
+  }
+});

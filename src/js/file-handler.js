@@ -1488,12 +1488,20 @@ export function initFileHandler({
       // tutorial module may not be initialized
     }
 
+    if (closeFeaturesGuideModal) {
+      const featuresGuideModal =
+        document.getElementById('featuresGuideModal');
+      if (featuresGuideModal) {
+        closeModal(featuresGuideModal);
+      }
+    }
+
     const state = stateManager.getState();
     if (state.uploadedFile) {
-      const confirmed = await showConfirmDialog({
-        title: 'Load example',
-        message: 'This will replace the current file. Continue?',
-      });
+      const confirmed = await showConfirmDialog(
+        'This will replace the current file. Continue?',
+        'Load example'
+      );
       if (!confirmed) return;
     }
 
@@ -1501,14 +1509,6 @@ export function initFileHandler({
       updateStatus('Loading example...');
       const response = await fetch(example.path);
       if (!response.ok) throw new Error('Failed to fetch example');
-
-      if (closeFeaturesGuideModal) {
-        const featuresGuideModal =
-          document.getElementById('featuresGuideModal');
-        if (featuresGuideModal) {
-          closeModal(featuresGuideModal);
-        }
-      }
 
       if (example.path.toLowerCase().endsWith('.zip')) {
         const blob = await response.blob();

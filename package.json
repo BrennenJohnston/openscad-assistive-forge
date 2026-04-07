@@ -17,6 +17,7 @@
   },
   "scripts": {
     "dev": "vite",
+    "prebuild": "node scripts/download-wasm.js --strict && node scripts/setup-libraries.js",
     "build": "vite build",
     "preview": "vite preview",
     "setup-wasm": "node scripts/download-wasm.js",

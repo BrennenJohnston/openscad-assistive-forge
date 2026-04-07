@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **SVG editor fullscreen portaling** — fullscreen mode now reparents root and backdrop to `document.body` to escape ancestor `transform`/`will-change` containing blocks (e.g. drawer panels)
 - **SVG editor fullscreen preview sizing** — preview panes use `dvh` units with fallback, `min-height`, and `object-fit: contain` for consistent sizing across viewports
 - **SVG editor header overflow** — narrow viewports (≤540px) wrap header controls and truncate the title with ellipsis, in both fullscreen and inline modes
+- **Example loader UX** — features guide modal now closes before the confirm dialog appears, preventing modal overlap when loading examples over existing files
+- **Prebuild step** — `setup-libraries` added to `prebuild` script so library bundles are fetched automatically during `npm run build`
 
 ---
 
@@ -1033,6 +1035,7 @@ Multi-variant comparison system for side-by-side parameter testing.
 - **v4.1.0** (2026-01-27): Security hardening, saved projects, documentation overhaul
 - **v4.2.0** (2026-03-16): Expert Mode, vector parameters, memory management, desktop parity, Alt View
 - **v4.3.0** (2026-03-20): Architecture decomposition, CSP enforcement, accessible errors, menubar, CI stabilization
+- **v4.4.0** (2026-04-06): SVG offset, companion hardening, project-native presets, KI-012 resolution, WASM update
 
 ## Version Scheme
 

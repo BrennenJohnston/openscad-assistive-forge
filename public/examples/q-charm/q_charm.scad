@@ -74,6 +74,31 @@ text_up_down = 5.5; // [-10:0.5:10]
 // Rotation angle for text (degrees, counter-clockwise)
 text_rotation = 90; // [-180:5:180]
 
+/* [Text Layer 2] */
+// Second text line to display on the charm face (leave empty for none)
+text_content_2 = "";
+
+// Depth of second text engraving (or height of raised text)
+text_depth_2 = 0.8; // [0.2:0.1:2]
+
+// Text style for second text
+text_style_2 = "raised"; // [raised, engraved]
+
+// Text height in mm for second text
+text_size_2 = 5; // [3:0.5:12]
+
+// Left (-) / right (+) position offset for second text
+text_2_left_right = -6; // [-10:0.5:10]
+
+// Down (-) / up (+) position offset for second text
+text_2_up_down = 5.5; // [-10:0.5:10]
+
+// Rotation angle for second text (degrees, counter-clockwise)
+text_rotation_2 = 90; // [-180:5:180]
+
+// Thickness offset for second text (height relative to the charm surface)
+text_2_thickness = 0; // [-3:0.1:3]
+
 /* [Fit] */
 // Length of the charm along the bracelet (Y axis)
 charm_length = 22; // [10:1:40]
@@ -154,7 +179,8 @@ total_top_z = charm_top_z
     + max(
         (design_style == "raised") ? engrave_depth : 0,
         (design_file_2 != "" && design_style_2 == "raised") ? max(0, engrave_depth + design_2_thickness) : 0,
-        (text_content != "" && text_style == "raised") ? text_depth : 0
+        (text_content != "" && text_style == "raised") ? text_depth : 0,
+        (text_content_2 != "" && text_style_2 == "raised") ? max(0, text_depth_2 + text_2_thickness) : 0
     );
 
 module profile_2d() {
@@ -248,6 +274,16 @@ module text_2d() {
     }
 }
 
+module text_2d_layer2() {
+    if (text_content_2 != "") {
+        translate([-text_2_up_down, text_2_left_right])
+            rotate([0, 0, text_rotation_2])
+                text(text_content_2, size = text_size_2,
+                     font = "Liberation Sans",
+                     halign = "center", valign = "center");
+    }
+}
+
 module attachment_cutout() {
     cut_h = attachment_depth > 0 ? attachment_depth + 0.02 : total_top_z + 0.02;
     cut_z = attachment_depth > 0 ? total_top_z - attachment_depth : -0.01;
@@ -302,6 +338,11 @@ module q_charm() {
                     linear_extrude(height = text_depth)
                         text_2d();
             }
+            if (text_content_2 != "" && text_style_2 == "raised") {
+                translate([profile_center_x, 0, charm_top_z + text_2_thickness])
+                    linear_extrude(height = text_depth_2)
+                        text_2d_layer2();
+            }
         }
         if (design_style != "raised") {
             translate([profile_center_x, 0, charm_top_z - engrave_depth])
@@ -317,6 +358,11 @@ module q_charm() {
             translate([profile_center_x, 0, charm_top_z - text_depth])
                 linear_extrude(height = text_depth + 0.01)
                     text_2d();
+        }
+        if (text_content_2 != "" && text_style_2 != "raised") {
+            translate([profile_center_x, 0, charm_top_z - text_depth_2 + text_2_thickness])
+                linear_extrude(height = text_depth_2 + 0.01)
+                    text_2d_layer2();
         }
         attachment_cutout();
     }
