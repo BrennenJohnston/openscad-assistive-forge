@@ -45,6 +45,21 @@ Validated against:
 9. Use the environment tool for validation: prefer `[CONFIGURE: e.g., pixi run <task>]`; if unavailable, use the matching `[CONFIGURE: e.g., npm run <task>]` command.
 10. Use one suggested `ai-at-playbook` prompt per chat if a prompt is listed. Do not stack multiple prompts in the same session.
 
+## Hallucination safeguards
+
+[CONFIGURE: Add safeguards appropriate to this plan's domain. These are
+mandatory for plans involving UI/layout assertions, browser behavior, triage
+decisions, or any phase where the AI might assert behavior from code reading
+rather than runtime evidence. See `templates/build-plan-executor-prompt.md`
+for the plan file requirements that reference this section.]
+
+Recommended baseline safeguards (adapt to your plan):
+
+1. Every code claim must cite a file path and line number. Do not describe code behavior from memory.
+2. Distinguish between OBSERVED (read in this session), INFERRED (deduced from patterns), and UNVERIFIED (carried from prior context or assumed).
+3. Do not assert browser rendering or runtime behavior from code reading alone — verify through test execution.
+4. If you are unsure whether a file has changed since a prior session, re-read it.
+
 ## Fresh chat opener
 
 Copy this into a new chat at the start of each phase:
@@ -117,6 +132,7 @@ A phase is only complete when every applicable item below is done:
 - Implement only: [CONFIGURE: single sentence describing the narrowest change]
 - Validation focus: [CONFIGURE: single sentence describing how to verify]
 - Do not widen into: [CONFIGURE: name the most likely scope escape vectors]
+- Fallback gate: [CONFIGURE: what to do if the primary approach hits a roadblock — e.g., reduce scope, use progressive enhancement, split into sub-phases]
 - Pause rule: once validation passes, mark Phase 1 complete and end the chat
 
 ### Phase 2 -- [CONFIGURE: short name] (`[CONFIGURE: issue ref if applicable]`)
@@ -126,6 +142,7 @@ A phase is only complete when every applicable item below is done:
 - Implement only: [CONFIGURE: narrowest change]
 - Validation focus: [CONFIGURE: verification method]
 - Do not widen into: [CONFIGURE: scope fences]
+- Fallback gate: [CONFIGURE: degradation path if primary approach fails]
 - Pause rule: once validation passes, mark Phase 2 complete and end the chat
 
 ### Phase 3 -- [CONFIGURE: short name] (`[CONFIGURE: issue ref if applicable]`)
@@ -135,6 +152,7 @@ A phase is only complete when every applicable item below is done:
 - Implement only: [CONFIGURE: narrowest change]
 - Validation focus: [CONFIGURE: verification method]
 - Do not widen into: [CONFIGURE: scope fences]
+- Fallback gate: [CONFIGURE: degradation path if primary approach fails]
 - Pause rule: once validation passes, mark Phase 3 complete and end the chat
 
 ## Deferred follow-on work
