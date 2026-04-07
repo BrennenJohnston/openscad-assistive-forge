@@ -3744,12 +3744,19 @@ details summary:focus,
     justify-content: flex-start;
   }
 
-  /* Logo container - minimal, no extra space */
+  /* Logo container - shrinkable so title truncates before buttons overflow */
   :root .header-branding {
-    flex: 0 0 auto;
-    min-width: auto;
+    flex: 0 1 auto;
+    min-width: 0;
     gap: 0;
     order: 1;
+    overflow: hidden;
+  }
+
+  :root .header-branding-text h1 {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   /* Logo matches button size (44px) */
