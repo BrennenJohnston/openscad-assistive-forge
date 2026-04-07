@@ -18,7 +18,7 @@ This is a single-maintainer project. This file is here so I don’t have to answ
 - **ZIP multi-file support** for `include` / `use` with hardened companion file resolution
 - **SVG preparation workspace** with path offset, role assignment, and fullscreen editing
 - **Presets / undo / sharing** workflows with project-native preset support and numeric sorting
-- **Test coverage** exists (2,991 unit tests + e2e suite)
+- **Test coverage** exists (3,013 unit tests + e2e suite)
 
 ## Known rough edges
 
