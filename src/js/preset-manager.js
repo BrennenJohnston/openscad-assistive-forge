@@ -155,7 +155,8 @@ export function migrateFromLegacyStorage(options = {}) {
         };
         localStorage.setItem(STORAGE_KEYS.backup, JSON.stringify(backupData));
         result.backupCreated = true;
-        if (import.meta.env.DEV) console.log('[PresetManager] Created backup of legacy presets');
+        if (import.meta.env.DEV)
+          console.log('[PresetManager] Created backup of legacy presets');
       } catch (error) {
         result.errors.push(`Backup failed: ${error.message}`);
         // Continue with migration anyway
@@ -242,7 +243,8 @@ export function migrateFromLegacyStorage(options = {}) {
 export function dismissMigrationOffer() {
   try {
     localStorage.setItem(STORAGE_KEYS.migrationFlag, 'true');
-    if (import.meta.env.DEV) console.log('[PresetManager] Migration offer dismissed');
+    if (import.meta.env.DEV)
+      console.log('[PresetManager] Migration offer dismissed');
   } catch {
     // Non-critical
   }
@@ -254,7 +256,8 @@ export function dismissMigrationOffer() {
 function resetMigrationFlag() {
   try {
     localStorage.removeItem(STORAGE_KEYS.migrationFlag);
-    if (import.meta.env.DEV) console.log('[PresetManager] Migration flag reset');
+    if (import.meta.env.DEV)
+      console.log('[PresetManager] Migration flag reset');
   } catch {
     // Non-critical
   }
@@ -1034,7 +1037,8 @@ export class PresetManager {
       }
 
       if (isOpenSCADNativeFormat(data)) {
-        if (import.meta.env.DEV) console.log('[PresetManager] Detected OpenSCAD native format');
+        if (import.meta.env.DEV)
+          console.log('[PresetManager] Detected OpenSCAD native format');
         return this.importOpenSCADNativePresets(
           data,
           modelName,
@@ -1044,7 +1048,8 @@ export class PresetManager {
       }
 
       if (isForgeFormat(data)) {
-        if (import.meta.env.DEV) console.log('[PresetManager] Detected Forge format');
+        if (import.meta.env.DEV)
+          console.log('[PresetManager] Detected Forge format');
         return this.importForgePresets(
           data,
           paramSchema,
@@ -1285,7 +1290,8 @@ export class PresetManager {
 
         imported++;
         results.push(result);
-        if (import.meta.env.DEV) console.log(`[PresetManager] Imported preset: "${presetName}"`);
+        if (import.meta.env.DEV)
+          console.log(`[PresetManager] Imported preset: "${presetName}"`);
       } catch (error) {
         console.warn(
           `[PresetManager] Skipped preset "${presetName}":`,
@@ -1447,7 +1453,8 @@ export class PresetManager {
   clearPresets(modelName = null) {
     if (modelName) {
       delete this.presets[modelName];
-      if (import.meta.env.DEV) console.log(`Cleared presets for model: ${modelName}`);
+      if (import.meta.env.DEV)
+        console.log(`Cleared presets for model: ${modelName}`);
     } else {
       this.presets = {};
       if (import.meta.env.DEV) console.log('Cleared all presets');

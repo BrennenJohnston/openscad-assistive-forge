@@ -720,7 +720,8 @@ export function createSvgPrepWorkspace(containerEl) {
   }
 
   function handleOffsetChange(e) {
-    const match = e.target.name && e.target.name.match(/^svg-prep-offset-(\d+)$/);
+    const match =
+      e.target.name && e.target.name.match(/^svg-prep-offset-(\d+)$/);
     if (!match) return;
     const idx = parseInt(match[1], 10);
     offsets[idx] = parseFloat(e.target.value) || 0;
@@ -753,8 +754,7 @@ export function createSvgPrepWorkspace(containerEl) {
       close();
     } else if (btn.dataset.action === 'keep') {
       currentResult = null;
-      if (currentCallbacks.onKeepOriginal)
-        currentCallbacks.onKeepOriginal();
+      if (currentCallbacks.onKeepOriginal) currentCallbacks.onKeepOriginal();
       close();
     } else if (btn.dataset.action === 'reset') {
       if (currentAnalysis) {
@@ -988,7 +988,8 @@ export function createSvgPrepWorkspace(containerEl) {
 
   function destroy() {
     if (isOpen) close();
-    if (refs.backdrop.parentNode) refs.backdrop.parentNode.removeChild(refs.backdrop);
+    if (refs.backdrop.parentNode)
+      refs.backdrop.parentNode.removeChild(refs.backdrop);
     if (root.parentNode) root.parentNode.removeChild(root);
   }
 

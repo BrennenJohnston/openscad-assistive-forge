@@ -48,10 +48,7 @@ import { getErrorLogPanel, ERROR_LOG_TYPE } from './error-log-panel.js';
 import * as SharedImageStore from './shared-image-store.js';
 import { getAppPrefKey } from './storage-keys.js';
 import { importProjectFromFiles } from './storage-manager.js';
-import {
-  addProjectFile,
-  getProjectFiles,
-} from './saved-projects-manager.js';
+import { addProjectFile, getProjectFiles } from './saved-projects-manager.js';
 import { showMissingDependenciesDialog, showConfirmDialog } from './dialogs.js';
 import { escapeHtml } from './html-utils.js';
 import { announceError as _announceError } from './announcer.js';
@@ -105,10 +102,7 @@ async function restoreGalleryFromManifest(exampleKey) {
         fileUrlMap[fp.split('/').pop()] = fp;
       }
     }
-    const exampleDir = example.path.substring(
-      0,
-      example.path.lastIndexOf('/')
-    );
+    const exampleDir = example.path.substring(0, example.path.lastIndexOf('/'));
     for (const lib of libs) {
       if (lib?.options?.length > 0) {
         const galleryOpts = lib.options.map((opt) => ({
@@ -509,7 +503,10 @@ export function initFileHandler({
       );
     } else {
       dismissOverlay();
-      showErrorToast({ title: 'No .scad Files', message: 'No OpenSCAD (.scad) files found in the selected folder.' });
+      showErrorToast({
+        title: 'No .scad Files',
+        message: 'No OpenSCAD (.scad) files found in the selected folder.',
+      });
       return;
     }
 
@@ -534,7 +531,10 @@ export function initFileHandler({
           await savedProjectsUI.loadSavedProject(result.id);
         }
       } else {
-        showErrorToast({ title: 'Folder Import Failed', message: result.error });
+        showErrorToast({
+          title: 'Folder Import Failed',
+          message: result.error,
+        });
       }
     } catch (err) {
       dismissOverlay();
@@ -625,7 +625,10 @@ export function initFileHandler({
       if (isZip && !content && !extractedFiles) {
         const validation = validateZipFile(file);
         if (!validation.valid) {
-          showErrorToast({ title: 'Invalid ZIP File', message: validation.error });
+          showErrorToast({
+            title: 'Invalid ZIP File',
+            message: validation.error,
+          });
           return;
         }
 
@@ -719,8 +722,7 @@ export function initFileHandler({
           updateStatus('Failed to extract ZIP file');
           showErrorModal({
             title: 'ZIP Extraction Failed',
-            message:
-              'Could not extract files from the uploaded ZIP archive.',
+            message: 'Could not extract files from the uploaded ZIP archive.',
             suggestion:
               'Verify the ZIP file is not corrupted and contains valid .scad files.',
             technical: error.message,
@@ -732,7 +734,10 @@ export function initFileHandler({
       const FILE_SIZE_LIMITS = getFileSizeLimits();
       if (file.size > FILE_SIZE_LIMITS.SCAD_FILE) {
         const limitMB = FILE_SIZE_LIMITS.SCAD_FILE / (1024 * 1024);
-        showErrorToast({ title: 'File Too Large', message: `File size exceeds the ${limitMB} MB limit.` });
+        showErrorToast({
+          title: 'File Too Large',
+          message: `File size exceeds the ${limitMB} MB limit.`,
+        });
         return;
       }
     }
@@ -853,7 +858,9 @@ export function initFileHandler({
         previewManager.setOverlayEnabled(false);
       }
       const overlayToggle = document.getElementById('overlayToggle');
-      const overlaySourceSelect = document.getElementById('overlaySourceSelect');
+      const overlaySourceSelect = document.getElementById(
+        'overlaySourceSelect'
+      );
       if (overlayToggle) overlayToggle.checked = false;
       if (overlaySourceSelect) overlaySourceSelect.value = '';
 
@@ -1002,7 +1009,10 @@ export function initFileHandler({
 
       getFileActionsController().trackOpen(fileName);
 
-      getOverlayGridCtrl().applyHiddenGroups(parametersContainer, extracted?.modelName || fileName);
+      getOverlayGridCtrl().applyHiddenGroups(
+        parametersContainer,
+        extracted?.modelName || fileName
+      );
 
       getOverlayGridCtrl().autoApplyScreenDimensionsFromParams(currentValues);
 
@@ -1295,7 +1305,8 @@ export function initFileHandler({
         syncPreviewModelColorOverride();
         syncPreviewAppearanceOverride();
 
-        const measurementsToggle = document.getElementById('measurementsToggle');
+        const measurementsToggle =
+          document.getElementById('measurementsToggle');
         if (measurementsToggle) {
           measurementsToggle.checked = previewManager.measurementsEnabled;
         }
@@ -1489,8 +1500,7 @@ export function initFileHandler({
     }
 
     if (closeFeaturesGuideModal) {
-      const featuresGuideModal =
-        document.getElementById('featuresGuideModal');
+      const featuresGuideModal = document.getElementById('featuresGuideModal');
       if (featuresGuideModal) {
         closeModal(featuresGuideModal);
       }
@@ -1520,7 +1530,12 @@ export function initFileHandler({
       }
 
       const exampleContent = await response.text();
-      console.log('Example loaded:', example.name, exampleContent.length, 'bytes');
+      console.log(
+        'Example loaded:',
+        example.name,
+        exampleContent.length,
+        'bytes'
+      );
 
       let exProjectFiles = null;
       let exMainFilePath = null;
@@ -1574,8 +1589,8 @@ export function initFileHandler({
       clearGalleryOptions();
       await restoreGalleryFromManifest(exampleKey);
 
-      const isProgramExample = Object.values(PROGRAM_DEFINITIONS).some(
-        (prog) => prog.examples.includes(exampleKey)
+      const isProgramExample = Object.values(PROGRAM_DEFINITIONS).some((prog) =>
+        prog.examples.includes(exampleKey)
       );
 
       handleFile(
@@ -1684,8 +1699,7 @@ export function initFileHandler({
 
       for (const f of svgFiles) {
         const fileName = f.path.replace('svg-uploads/', '');
-        const dataUrl =
-          'data:image/svg+xml;base64,' + btoa(f.textContent);
+        const dataUrl = 'data:image/svg+xml;base64,' + btoa(f.textContent);
 
         const svgParams = getGalleryParamNames();
 

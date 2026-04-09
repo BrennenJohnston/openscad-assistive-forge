@@ -13,14 +13,8 @@
     "smiley.svg",
     "heart.svg",
     "star.svg",
-    "paw.svg",
     "lightning.svg",
-    "music-note.svg",
-    "moon.svg",
-    "flower.svg",
-    "diamond.svg",
     "crown.svg",
-    "leaf.svg",
     "sun.svg"
   ],
   "svgLibrary": [
@@ -30,14 +24,8 @@
         { "file": "smiley.svg", "label": "Smiley face" },
         { "file": "heart.svg", "label": "Heart" },
         { "file": "star.svg", "label": "Star" },
-        { "file": "paw.svg", "label": "Paw print" },
         { "file": "lightning.svg", "label": "Lightning bolt" },
-        { "file": "music-note.svg", "label": "Music note" },
-        { "file": "moon.svg", "label": "Crescent moon" },
-        { "file": "flower.svg", "label": "Flower" },
-        { "file": "diamond.svg", "label": "Diamond" },
         { "file": "crown.svg", "label": "Crown" },
-        { "file": "leaf.svg", "label": "Leaf" },
         { "file": "sun.svg", "label": "Sun" }
       ]
     },
@@ -47,14 +35,8 @@
         { "file": "smiley.svg", "label": "Smiley face" },
         { "file": "heart.svg", "label": "Heart" },
         { "file": "star.svg", "label": "Star" },
-        { "file": "paw.svg", "label": "Paw print" },
         { "file": "lightning.svg", "label": "Lightning bolt" },
-        { "file": "music-note.svg", "label": "Music note" },
-        { "file": "moon.svg", "label": "Crescent moon" },
-        { "file": "flower.svg", "label": "Flower" },
-        { "file": "diamond.svg", "label": "Diamond" },
         { "file": "crown.svg", "label": "Crown" },
-        { "file": "leaf.svg", "label": "Leaf" },
         { "file": "sun.svg", "label": "Sun" }
       ]
     }

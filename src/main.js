@@ -27,14 +27,8 @@ import {
   RENDER_QUALITY,
   estimateRenderTime,
 } from './js/render-controller.js';
-import {
-  escapeHtml,
-  isValidServiceWorkerMessage,
-} from './js/html-utils.js';
-import {
-  getQualityPreset,
-  COMPLEXITY_TIER,
-} from './js/quality-tiers.js';
+import { escapeHtml, isValidServiceWorkerMessage } from './js/html-utils.js';
+import { getQualityPreset, COMPLEXITY_TIER } from './js/quality-tiers.js';
 import { getThreeModule } from './js/preview.js';
 import { normalizeHexColor } from './js/color-utils.js';
 import { buildDefineArgs as formatBuildDefineArgs } from './js/scad-param-formatter.js';
@@ -937,7 +931,8 @@ async function initApp() {
     showProcessingOverlay,
     handleFile: (...args) => fileHandler.handleFile(...args),
     updateStatus,
-    updateCompanionSaveButton: (...args) => companionFilesCtrl.updateCompanionSaveButton(...args),
+    updateCompanionSaveButton: (...args) =>
+      companionFilesCtrl.updateCompanionSaveButton(...args),
     downloadSingleProject,
     setCurrentSavedProjectId: (id) => {
       currentSavedProjectId = id;
@@ -1410,15 +1405,26 @@ async function initApp() {
             );
             const files = [];
             try {
-              await fileHandler.collectFilesFromDir(dirHandle, dirHandle.name, files);
+              await fileHandler.collectFilesFromDir(
+                dirHandle,
+                dirHandle.name,
+                files
+              );
             } catch (collectErr) {
               dismissOverlay();
-              showErrorToast({ title: 'Folder Read Error', message: collectErr.message });
+              showErrorToast({
+                title: 'Folder Read Error',
+                message: collectErr.message,
+              });
               return;
             }
             if (files.length === 0) {
               dismissOverlay();
-              showErrorToast({ title: 'Empty Folder', message: 'No files found in the selected folder. The folder may be empty.' });
+              showErrorToast({
+                title: 'Empty Folder',
+                message:
+                  'No files found in the selected folder. The folder may be empty.',
+              });
               return;
             }
             dismissOverlay();
@@ -1429,7 +1435,10 @@ async function initApp() {
               updateStatus('Folder selection cancelled');
               return;
             }
-            showErrorToast({ title: 'Folder Import Error', message: err.message });
+            showErrorToast({
+              title: 'Folder Import Error',
+              message: err.message,
+            });
           }
         } else {
           // Fallback to webkitdirectory input
@@ -1449,7 +1458,10 @@ async function initApp() {
           await fileHandler.handleFolderImport(files);
           importFolderInput.value = '';
         } catch (err) {
-          showErrorToast({ title: 'Folder Import Error', message: err.message });
+          showErrorToast({
+            title: 'Folder Import Error',
+            message: err.message,
+          });
         }
       });
     }
@@ -4159,7 +4171,6 @@ async function initApp() {
     });
   }
 
-
   // Wire model color picker and override toggle
   const modelColorPicker = document.getElementById('modelColorPicker');
   const modelColorReset = document.getElementById('modelColorReset');
@@ -4767,10 +4778,14 @@ async function initApp() {
   // Initialize file handler controller (extracted from main.js)
   fileHandler = initFileHandler({
     getPreviewManager: () => previewManager,
-    setPreviewManager: (pm) => { previewManager = pm; },
+    setPreviewManager: (pm) => {
+      previewManager = pm;
+    },
     getAutoPreviewController: () => autoPreviewController,
     getAutoPreviewEnabled: () => autoPreviewEnabled,
-    setCurrentSavedProjectId: (id) => { currentSavedProjectId = id; },
+    setCurrentSavedProjectId: (id) => {
+      currentSavedProjectId = id;
+    },
     getCurrentSavedProjectId: () => currentSavedProjectId,
     setPresetCompanionMap: (map) => {
       presetCompanionMap = map;
@@ -4891,7 +4906,13 @@ async function initApp() {
       );
 
       // Process the embedded content using handleFile
-      fileHandler.handleFile({ name: fileName }, scadContent, null, null, 'example');
+      fileHandler.handleFile(
+        { name: fileName },
+        scadContent,
+        null,
+        null,
+        'example'
+      );
 
       return true;
     } catch (e) {
@@ -5149,7 +5170,9 @@ async function initApp() {
   );
 
   if (textFileEditorApply) {
-    textFileEditorApply.addEventListener('click', () => companionFilesCtrl.applyTextFileEditorChanges());
+    textFileEditorApply.addEventListener('click', () =>
+      companionFilesCtrl.applyTextFileEditorChanges()
+    );
   }
 
   // Ctrl+S / Cmd+S keyboard shortcut to save and apply changes
@@ -6621,7 +6644,9 @@ if (rounded) {
     const expertCollapseBtn = document.getElementById('expertModeCollapseBtn');
     if (expertCollapseBtn) {
       expertCollapseBtn.addEventListener('click', () => {
-        const isCollapsed = expertModePanel.classList.toggle('expert-mode-collapsed');
+        const isCollapsed = expertModePanel.classList.toggle(
+          'expert-mode-collapsed'
+        );
         expertCollapseBtn.setAttribute('aria-expanded', String(!isCollapsed));
         expertCollapseBtn.setAttribute(
           'aria-label',
@@ -6634,38 +6659,57 @@ if (rounded) {
     }
 
     // Mobile: touch-drag resize on the bottom-sheet handle
-    const dragHandle = expertModePanel.querySelector('.expert-mode-drag-handle');
+    const dragHandle = expertModePanel.querySelector(
+      '.expert-mode-drag-handle'
+    );
     if (dragHandle) {
       let dragStartY = 0;
       let dragStartHeight = 0;
 
-      dragHandle.addEventListener('touchstart', (e) => {
-        const paramPanel = expertModePanel.closest('.param-panel');
-        if (!paramPanel) return;
-        dragStartY = e.touches[0].clientY;
-        dragStartHeight = paramPanel.offsetHeight;
-        paramPanel.style.transition = 'none';
-        e.preventDefault();
-      }, { passive: false });
+      dragHandle.addEventListener(
+        'touchstart',
+        (e) => {
+          const paramPanel = expertModePanel.closest('.param-panel');
+          if (!paramPanel) return;
+          dragStartY = e.touches[0].clientY;
+          dragStartHeight = paramPanel.offsetHeight;
+          paramPanel.style.transition = 'none';
+          e.preventDefault();
+        },
+        { passive: false }
+      );
 
-      dragHandle.addEventListener('touchmove', (e) => {
-        const paramPanel = expertModePanel.closest('.param-panel');
-        if (!paramPanel) return;
-        const deltaY = dragStartY - e.touches[0].clientY;
-        const maxH = window.innerHeight * 0.7;
-        const minH = 48;
-        const newHeight = Math.min(maxH, Math.max(minH, dragStartHeight + deltaY));
-        paramPanel.style.maxHeight = `${newHeight}px`;
-        // Auto-uncollapse when dragging past minimum
-        if (newHeight > 80 && expertModePanel.classList.contains('expert-mode-collapsed')) {
-          expertModePanel.classList.remove('expert-mode-collapsed');
-          if (expertCollapseBtn) {
-            expertCollapseBtn.setAttribute('aria-expanded', 'true');
-            expertCollapseBtn.setAttribute('aria-label', 'Collapse code editor');
+      dragHandle.addEventListener(
+        'touchmove',
+        (e) => {
+          const paramPanel = expertModePanel.closest('.param-panel');
+          if (!paramPanel) return;
+          const deltaY = dragStartY - e.touches[0].clientY;
+          const maxH = window.innerHeight * 0.7;
+          const minH = 48;
+          const newHeight = Math.min(
+            maxH,
+            Math.max(minH, dragStartHeight + deltaY)
+          );
+          paramPanel.style.maxHeight = `${newHeight}px`;
+          // Auto-uncollapse when dragging past minimum
+          if (
+            newHeight > 80 &&
+            expertModePanel.classList.contains('expert-mode-collapsed')
+          ) {
+            expertModePanel.classList.remove('expert-mode-collapsed');
+            if (expertCollapseBtn) {
+              expertCollapseBtn.setAttribute('aria-expanded', 'true');
+              expertCollapseBtn.setAttribute(
+                'aria-label',
+                'Collapse code editor'
+              );
+            }
           }
-        }
-        e.preventDefault();
-      }, { passive: false });
+          e.preventDefault();
+        },
+        { passive: false }
+      );
 
       dragHandle.addEventListener('touchend', () => {
         const paramPanel = expertModePanel.closest('.param-panel');
@@ -8085,7 +8129,8 @@ if (rounded) {
             showErrorModal({
               title: `${currentFormat.toUpperCase()} Export Issue`,
               message: `The "${actualGenerateValue}" setting is selected, but the rendering engine could not produce 2D geometry. This can happen due to browser-based rendering limitations with complex models.`,
-              suggestion: 'Re-generate, or export the 3D model as STL and use desktop OpenSCAD for SVG/DXF export.',
+              suggestion:
+                'Re-generate, or export the 3D model as STL and use desktop OpenSCAD for SVG/DXF export.',
             });
           } else {
             showDependencyGuidanceModal({
@@ -8161,7 +8206,10 @@ if (rounded) {
       const state = stateManager.getState();
 
       if (!state.uploadedFile) {
-        showErrorToast({ title: 'No File Loaded', message: 'Upload a .scad or .zip file first.' });
+        showErrorToast({
+          title: 'No File Loaded',
+          message: 'Upload a .scad or .zip file first.',
+        });
         return;
       }
 
@@ -8283,7 +8331,10 @@ if (rounded) {
     publishProjectBtn.addEventListener('click', () => {
       const state = stateManager.getState();
       if (!state.uploadedFile) {
-        showErrorToast({ title: 'No File Loaded', message: 'Upload a .scad or .zip file first.' });
+        showErrorToast({
+          title: 'No File Loaded',
+          message: 'Upload a .scad or .zip file first.',
+        });
         return;
       }
 
@@ -8536,12 +8587,18 @@ if (rounded) {
     const state = stateManager.getState();
 
     if (!state.uploadedFile) {
-      showErrorToast({ title: 'No File Loaded', message: 'Upload a .scad or .zip file first.' });
+      showErrorToast({
+        title: 'No File Loaded',
+        message: 'Upload a .scad or .zip file first.',
+      });
       return;
     }
 
     if (renderQueue.isAtMaxCapacity()) {
-      showErrorToast({ title: 'Queue Full', message: 'The render queue is full (maximum 20 jobs).' });
+      showErrorToast({
+        title: 'Queue Full',
+        message: 'The render queue is full (maximum 20 jobs).',
+      });
       return;
     }
 
@@ -8613,7 +8670,10 @@ if (rounded) {
   // Clear All button
   clearQueueBtn?.addEventListener('click', () => {
     if (renderQueue.isQueueProcessing()) {
-      showErrorToast({ title: 'Queue Busy', message: 'Cannot clear the queue while processing is in progress.' });
+      showErrorToast({
+        title: 'Queue Busy',
+        message: 'Cannot clear the queue while processing is in progress.',
+      });
       return;
     }
 
@@ -8791,7 +8851,10 @@ if (rounded) {
     const state = stateManager.getState();
 
     if (!state.uploadedFile) {
-      showErrorToast({ title: 'No File Loaded', message: 'Upload a .scad or .zip file first.' });
+      showErrorToast({
+        title: 'No File Loaded',
+        message: 'Upload a .scad or .zip file first.',
+      });
       return;
     }
 
@@ -9183,7 +9246,8 @@ if (rounded) {
     let companionMapping = null;
     if (_isEnabled('project_presets') && preset.source === 'project') {
       const projState = stateManager.getState();
-      companionMapping = projState.projectCompanionMap?.get(preset.name) ?? null;
+      companionMapping =
+        projState.projectCompanionMap?.get(preset.name) ?? null;
     } else if (!_isEnabled('project_presets')) {
       companionMapping = presetCompanionMap?.get(preset.name) ?? null;
     }
@@ -9209,12 +9273,16 @@ if (rounded) {
       for (const [target, source] of Object.entries(companionMapping.aliases)) {
         const content = aliasedFiles.get(target);
         if (content != null) {
-          const snippet = typeof content === 'string'
-            ? content.slice(0, 120).replace(/\n/g, '\\n')
-            : `<binary ${content.byteLength ?? content.length} bytes>`;
+          const snippet =
+            typeof content === 'string'
+              ? content.slice(0, 120).replace(/\n/g, '\\n')
+              : `<binary ${content.byteLength ?? content.length} bytes>`;
           _diagCompanion[`mounted:${target}`] = {
             source,
-            sizeBytes: typeof content === 'string' ? content.length : (content.byteLength ?? 0),
+            sizeBytes:
+              typeof content === 'string'
+                ? content.length
+                : (content.byteLength ?? 0),
             preview: snippet,
           };
         }
@@ -9222,12 +9290,16 @@ if (rounded) {
     } else if (companionMapping?.openingsPath) {
       const content = aliasedFiles.get('openings_and_additions.txt');
       if (content != null) {
-        const snippet = typeof content === 'string'
-          ? content.slice(0, 120).replace(/\n/g, '\\n')
-          : `<binary ${content.byteLength ?? content.length} bytes>`;
+        const snippet =
+          typeof content === 'string'
+            ? content.slice(0, 120).replace(/\n/g, '\\n')
+            : `<binary ${content.byteLength ?? content.length} bytes>`;
         _diagCompanion['mounted:openings_and_additions.txt'] = {
           source: companionMapping.openingsPath,
-          sizeBytes: typeof content === 'string' ? content.length : (content.byteLength ?? 0),
+          sizeBytes:
+            typeof content === 'string'
+              ? content.length
+              : (content.byteLength ?? 0),
           preview: snippet,
         };
       }
@@ -9284,7 +9356,8 @@ if (rounded) {
       if (overlaySourceSelect) {
         overlaySourceSelect.value = svgTarget;
       }
-      overlayGridCtrl.loadOverlayFromProjectFile(svgTarget)
+      overlayGridCtrl
+        .loadOverlayFromProjectFile(svgTarget)
         .then(() => {
           // SVG 96 DPI size applied; SCAD case-opening / screen dims override.
           overlayGridCtrl.autoApplyScreenDimensionsFromParams(mergedParams);
@@ -9494,7 +9567,10 @@ if (rounded) {
     const state = stateManager.getState();
 
     if (!state.uploadedFile) {
-      showErrorToast({ title: 'No Model Loaded', message: 'Upload a model before saving a preset.' });
+      showErrorToast({
+        title: 'No Model Loaded',
+        message: 'Upload a model before saving a preset.',
+      });
       return;
     }
 
@@ -9558,7 +9634,10 @@ if (rounded) {
         ?.value.trim();
 
       if (!name) {
-        showErrorToast({ title: 'Name Required', message: 'Please enter a preset name.' });
+        showErrorToast({
+          title: 'Name Required',
+          message: 'Please enter a preset name.',
+        });
         return;
       }
 
@@ -9700,7 +9779,10 @@ if (rounded) {
     const state = stateManager.getState();
 
     if (!state.uploadedFile) {
-      showErrorToast({ title: 'No Model Loaded', message: 'Upload a model before managing presets.' });
+      showErrorToast({
+        title: 'No Model Loaded',
+        message: 'Upload a model before managing presets.',
+      });
       return;
     }
 
@@ -10011,7 +10093,8 @@ if (rounded) {
               if (!hasValidContent) {
                 showErrorToast({
                   title: 'Invalid Import Data',
-                  message: 'The selected file(s) contain no valid preset data. Import cancelled to protect your existing designs.',
+                  message:
+                    'The selected file(s) contain no valid preset data. Import cancelled to protect your existing designs.',
                 });
                 return;
               }
@@ -11135,7 +11218,10 @@ if (rounded) {
   resetGroupBtn?.addEventListener('click', () => {
     const state = stateManager.getState();
     if (!state.schema || !state.schema.groups) {
-      showErrorToast({ title: 'No Model Loaded', message: 'Upload a model with parameter groups first.' });
+      showErrorToast({
+        title: 'No Model Loaded',
+        message: 'Upload a model with parameter groups first.',
+      });
       return;
     }
 
@@ -11211,7 +11297,10 @@ if (rounded) {
   viewParamsJsonBtn?.addEventListener('click', () => {
     const state = stateManager.getState();
     if (!state.uploadedFile) {
-      showErrorToast({ title: 'No File Loaded', message: 'Upload a .scad or .zip file first.' });
+      showErrorToast({
+        title: 'No File Loaded',
+        message: 'Upload a .scad or .zip file first.',
+      });
       return;
     }
 
@@ -11251,7 +11340,10 @@ if (rounded) {
   exportChangedBtn?.addEventListener('click', () => {
     const state = stateManager.getState();
     if (!state.uploadedFile || !state.schema) {
-      showErrorToast({ title: 'No File Loaded', message: 'Upload a .scad or .zip file first.' });
+      showErrorToast({
+        title: 'No File Loaded',
+        message: 'Upload a .scad or .zip file first.',
+      });
       return;
     }
 
@@ -12152,18 +12244,12 @@ if (typeof window !== 'undefined') {
           console.log(
             `[GeomDiag] === Desktop Reference (${ref.scenarioId}) ===`
           );
-          console.log(
-            `  OpenSCAD: ${ref.openscadVersion} (${ref.backend})`
-          );
-          console.log(
-            `  Triangles (facets): ${refTriangles.toLocaleString()}`
-          );
+          console.log(`  OpenSCAD: ${ref.openscadVersion} (${ref.backend})`);
+          console.log(`  Triangles (facets): ${refTriangles.toLocaleString()}`);
           console.log(
             `  Unique vertices (OFF format): ${refVertices.toLocaleString()}`
           );
-          console.log(
-            `  STL size: ${refStlBytes.toLocaleString()} bytes`
-          );
+          console.log(`  STL size: ${refStlBytes.toLocaleString()} bytes`);
 
           console.log('[GeomDiag] === Comparison ===');
           console.log(
@@ -12323,14 +12409,12 @@ if (typeof window !== 'undefined') {
       }
 
       const rawSource =
-        autoPreviewController?.currentScadContent ||
-        state.uploadedFile.content;
+        autoPreviewController?.currentScadContent || state.uploadedFile.content;
 
       let source;
       let label;
       if (injected) {
-        const hasColorCalls =
-          AutoPreviewController.scadUsesColor(rawSource);
+        const hasColorCalls = AutoPreviewController.scadUsesColor(rawSource);
         const cleaned = hasColorCalls
           ? AutoPreviewController.stripColorCalls(rawSource)
           : rawSource;
@@ -12382,10 +12466,8 @@ if (typeof window !== 'undefined') {
       const csgBypass =
         localStorage.getItem('openscad-forge-debug-no-csg-colors') !== null;
       const rawSource =
-        autoPreviewController?.currentScadContent ||
-        state.uploadedFile.content;
-      const hasColorCalls =
-        AutoPreviewController.scadUsesColor(rawSource);
+        autoPreviewController?.currentScadContent || state.uploadedFile.content;
+      const hasColorCalls = AutoPreviewController.scadUsesColor(rawSource);
       const colorPassthroughEnabled = isFlagEnabled('color_passthrough');
       const caps = renderController?.getCapabilities?.() || {};
       const supportsRenderColors = Boolean(
@@ -12434,8 +12516,7 @@ if (typeof window !== 'undefined') {
       console.log('[RenderArgsDiag] Engine capabilities:', caps);
 
       const scadSource =
-        autoPreviewController?.currentScadContent ||
-        state.uploadedFile.content;
+        autoPreviewController?.currentScadContent || state.uploadedFile.content;
       const exactDefineArgs = formatBuildDefineArgs(
         parameters,
         paramTypes,
@@ -12446,7 +12527,9 @@ if (typeof window !== 'undefined') {
         const assignment = exactDefineArgs[i + 1] || '';
         const key = assignment.split('=')[0];
         const type = paramTypes[key] || 'unknown';
-        paramSummary.push(`  ${exactDefineArgs[i]} ${assignment}  (type: ${type})`);
+        paramSummary.push(
+          `  ${exactDefineArgs[i]} ${assignment}  (type: ${type})`
+        );
       }
       if (sourceOverrides) {
         console.log(
@@ -12473,13 +12556,23 @@ if (typeof window !== 'undefined') {
         : parameters;
       const previewOverridesActive = previewParams !== parameters;
 
-      console.log('[RenderArgsDiag] Preview quality key:', previewInfo.qualityKey);
-      console.log('[RenderArgsDiag] Preview quality preset:', previewInfo.quality);
-      console.log('[RenderArgsDiag] Auto-preview overrides active:', previewOverridesActive);
+      console.log(
+        '[RenderArgsDiag] Preview quality key:',
+        previewInfo.qualityKey
+      );
+      console.log(
+        '[RenderArgsDiag] Preview quality preset:',
+        previewInfo.quality
+      );
+      console.log(
+        '[RenderArgsDiag] Auto-preview overrides active:',
+        previewOverridesActive
+      );
       if (previewOverridesActive) {
         const diffs = {};
         for (const [k, v] of Object.entries(previewParams)) {
-          if (parameters[k] !== v) diffs[k] = { original: parameters[k], preview: v };
+          if (parameters[k] !== v)
+            diffs[k] = { original: parameters[k], preview: v };
         }
         console.log('[RenderArgsDiag] Preview parameter overrides:', diffs);
       }
@@ -12488,22 +12581,30 @@ if (typeof window !== 'undefined') {
       const manifoldPref = localStorage.getItem(
         'openscad-forge-manifold-engine'
       );
-      const useManifold = manifoldPref === null ? true : manifoldPref !== 'false';
-      console.log('[RenderArgsDiag] Backend:', useManifold ? 'Manifold' : 'CGAL');
+      const useManifold =
+        manifoldPref === null ? true : manifoldPref !== 'false';
+      console.log(
+        '[RenderArgsDiag] Backend:',
+        useManifold ? 'Manifold' : 'CGAL'
+      );
 
       // Companion / project file summary
       const projectFiles = state.projectFiles;
       const companionSummary = [];
       if (projectFiles && projectFiles.size > 0) {
         for (const [name, content] of projectFiles.entries()) {
-          const size = typeof content === 'string'
-            ? content.length
-            : (content?.byteLength ?? content?.length ?? 0);
+          const size =
+            typeof content === 'string'
+              ? content.length
+              : (content?.byteLength ?? content?.length ?? 0);
           companionSummary.push({ name, sizeBytes: size });
         }
       }
       console.log('[RenderArgsDiag] Mounted project files:', companionSummary);
-      console.log('[RenderArgsDiag] Main file path:', state.mainFilePath || '(single file)');
+      console.log(
+        '[RenderArgsDiag] Main file path:',
+        state.mainFilePath || '(single file)'
+      );
 
       // Auto-preview controller state
       const autoPreviewInfo = autoPreviewController

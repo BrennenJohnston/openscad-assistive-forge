@@ -210,12 +210,14 @@
 }
 
 /* Checked indicator for menuitemcheckbox */
-.menu-item-btn[role='menuitemcheckbox'][aria-checked='true'] .menu-item-label::before {
+.menu-item-btn[role='menuitemcheckbox'][aria-checked='true']
+  .menu-item-label::before {
   content: '✓ ';
 }
 
 /* Checked indicator for menuitemradio */
-.menu-item-btn[role='menuitemradio'][aria-checked='true'] .menu-item-label::before {
+.menu-item-btn[role='menuitemradio'][aria-checked='true']
+  .menu-item-label::before {
   content: '● ';
 }
 

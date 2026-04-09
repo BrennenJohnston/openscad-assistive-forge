@@ -66,7 +66,6 @@ const STORAGE_KEY_LOD_WARNING_DISMISSED = getAppPrefKey(
 /** Default grid config — 220×220mm matches popular mid-range FDM printers (Creality K1C, FlashForge Adventurer 5M Pro) */
 const DEFAULT_GRID_CONFIG = { widthMm: 220, heightMm: 220 };
 
-
 export function isThreeJsLoaded() {
   return true;
 }
@@ -369,18 +368,12 @@ export class PreviewManager {
     // Camera must be in the scene graph for child lights to render
     this.scene.add(this.camera);
 
-    this.directionalLight1 = new DirectionalLight(
-      0xffffff,
-      piDirectional
-    );
+    this.directionalLight1 = new DirectionalLight(0xffffff, piDirectional);
     this.directionalLight1.position.set(-1, 1, 1);
     this.camera.add(this.directionalLight1);
     this.camera.add(this.directionalLight1.target);
 
-    this.directionalLight2 = new DirectionalLight(
-      0xffffff,
-      piDirectional
-    );
+    this.directionalLight2 = new DirectionalLight(0xffffff, piDirectional);
     this.directionalLight2.position.set(1, -1, -1);
     this.camera.add(this.directionalLight2);
     this.camera.add(this.directionalLight2.target);
@@ -718,8 +711,12 @@ export class PreviewManager {
     const faceCy = new Float32Array(faceCount);
     const faceCz = new Float32Array(faceCount);
 
-    let minX = Infinity, minY = Infinity, minZ = Infinity;
-    let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+    let minX = Infinity,
+      minY = Infinity,
+      minZ = Infinity;
+    let maxX = -Infinity,
+      maxY = -Infinity,
+      maxZ = -Infinity;
     for (let i = 0; i < pos.length; i += 3) {
       if (pos[i] < minX) minX = pos[i];
       if (pos[i] > maxX) maxX = pos[i];
@@ -748,7 +745,9 @@ export class PreviewManager {
       faceCy[f] = cy;
       faceCz[f] = cz;
 
-      const rcx = cx - mcx, rcy = cy - mcy, rcz = cz - mcz;
+      const rcx = cx - mcx,
+        rcy = cy - mcy,
+        rcz = cz - mcz;
       const cLen = Math.sqrt(rcx * rcx + rcy * rcy + rcz * rcz) || 1;
       const nLen = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
       faceDot[f] =
@@ -790,15 +789,11 @@ export class PreviewManager {
 
       const l1 =
         Math.sqrt(
-          faceNx[a] * faceNx[a] +
-            faceNy[a] * faceNy[a] +
-            faceNz[a] * faceNz[a]
+          faceNx[a] * faceNx[a] + faceNy[a] * faceNy[a] + faceNz[a] * faceNz[a]
         ) || 1;
       const l2 =
         Math.sqrt(
-          faceNx[b] * faceNx[b] +
-            faceNy[b] * faceNy[b] +
-            faceNz[b] * faceNz[b]
+          faceNx[b] * faceNx[b] + faceNy[b] * faceNy[b] + faceNz[b] * faceNz[b]
         ) || 1;
       const nDot =
         (faceNx[a] / l1) * (faceNx[b] / l2) +
@@ -1454,7 +1449,10 @@ export class PreviewManager {
         try {
           this._classifyInnerFaces(geometry);
         } catch (e) {
-          console.warn('[Preview] Face classification failed, using default coloring:', e);
+          console.warn(
+            '[Preview] Face classification failed, using default coloring:',
+            e
+          );
         }
 
         // Apply auto-bed if enabled (place object on Z=0 build plate)
@@ -1675,10 +1673,7 @@ export class PreviewManager {
           new Float32BufferAttribute(positions, 3)
         );
         if (hasColors && colors.length === positions.length) {
-          geometry.setAttribute(
-            'color',
-            new Float32BufferAttribute(colors, 3)
-          );
+          geometry.setAttribute('color', new Float32BufferAttribute(colors, 3));
         }
         geometry.computeVertexNormals();
         geometry.center();
@@ -1687,7 +1682,10 @@ export class PreviewManager {
           try {
             this._classifyInnerFaces(geometry);
           } catch (e) {
-            console.warn('[Preview] Face classification failed, using default coloring:', e);
+            console.warn(
+              '[Preview] Face classification failed, using default coloring:',
+              e
+            );
           }
         }
 
@@ -1735,10 +1733,7 @@ export class PreviewManager {
           });
 
           const normalMesh = new Mesh(geometry, normalMaterial);
-          const highlightMesh = new Mesh(
-            highlightGeometry,
-            highlightMaterial
-          );
+          const highlightMesh = new Mesh(highlightGeometry, highlightMaterial);
           highlightMesh.userData.isHighlightOverlay = true;
           highlightMesh.renderOrder = 1;
 
@@ -1761,10 +1756,7 @@ export class PreviewManager {
                 shininess: DESKTOP_SHININESS,
                 flatShading: false,
               });
-          this._applyBackfaceColoring(
-            material,
-            this._resolveModelBackColor()
-          );
+          this._applyBackfaceColoring(material, this._resolveModelBackColor());
           this.mesh = new Mesh(geometry, material);
         }
         this.scene.add(this.mesh);
@@ -2403,10 +2395,7 @@ export class PreviewManager {
     if (!this.controls) return;
 
     const camera = this.getActiveCamera();
-    const right = new Vector3().setFromMatrixColumn(
-      camera.matrixWorld,
-      0
-    );
+    const right = new Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
     const up = new Vector3().setFromMatrixColumn(camera.matrixWorld, 1);
 
     const panOffset = new Vector3()
@@ -4167,10 +4156,7 @@ export class PreviewManager {
    * @param {number} color - Line color
    */
   addDimensionExtensionLine(from, to, z, color) {
-    const points = [
-      new Vector3(from.x, from.y, z),
-      new Vector3(to.x, to.y, z),
-    ];
+    const points = [new Vector3(from.x, from.y, z), new Vector3(to.x, to.y, z)];
     const geometry = new BufferGeometry().setFromPoints(points);
     const material = new LineBasicMaterial({
       color: color,
@@ -4628,9 +4614,7 @@ export class PreviewManager {
 
     // Remove elements that can embed arbitrary HTML or external content
     for (const el of [
-      ...svg.querySelectorAll(
-        'script, foreignObject, iframe, embed, object'
-      ),
+      ...svg.querySelectorAll('script, foreignObject, iframe, embed, object'),
     ]) {
       el.remove();
     }
@@ -4638,9 +4622,7 @@ export class PreviewManager {
     // Block <use> elements with external references (SSRF / data exfiltration)
     for (const useEl of [...svg.querySelectorAll('use')]) {
       const href =
-        useEl.getAttribute('href') ||
-        useEl.getAttribute('xlink:href') ||
-        '';
+        useEl.getAttribute('href') || useEl.getAttribute('xlink:href') || '';
       const val = href.trim().toLowerCase();
       if (
         val.startsWith('http:') ||

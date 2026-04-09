@@ -466,7 +466,11 @@ export class ComparisonView {
       await this.comparisonController.renderAllVariants();
     } catch (error) {
       console.error('Failed to render all variants:', error);
-      showErrorToast({ title: 'Render Incomplete', message: 'Some variants failed to render. Check the console for details.' });
+      showErrorToast({
+        title: 'Render Incomplete',
+        message:
+          'Some variants failed to render. Check the console for details.',
+      });
     } finally {
       if (btn) {
         btn.disabled = false;
@@ -518,7 +522,10 @@ export class ComparisonView {
   handleDownloadVariant(variantId) {
     const variant = this.comparisonController.getVariant(variantId);
     if (!variant || !variant.stl) {
-      showErrorToast({ title: 'No STL Available', message: 'No STL data is available for this variant.' });
+      showErrorToast({
+        title: 'No STL Available',
+        message: 'No STL data is available for this variant.',
+      });
       return;
     }
 

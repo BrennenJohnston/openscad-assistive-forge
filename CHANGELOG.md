@@ -10,9 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **q_charm.scad parameter naming** — renamed positional parameters to plain-language labels for Customizer clarity: `design_x`/`design_y` → `design_left_right`/`design_up_down`, `text_x`/`text_y` → `text_left_right`/`text_up_down`, `design_x_2`/`design_y_2` → `design_2_left_right`/`design_2_up_down`, `design_z_2` → `design_2_thickness`
+- **q_charm.scad Fit parameter rename** — `charm_length` → `charm_width` (Y-axis dimension along bracelet), `bracelet_width` → `charm_length` (inner channel width); labels now match physical meaning
+- **q_charm.scad Rounding parameter rename** — `all_edges_radius` → `side_edge_radius` with new default 2.5 (was 0); description clarified to "rounds the edges along the side profile"
+- **q_charm.scad edge rounding algorithm** — replaced `minkowski()` sphere/cylinder rounding with stepped `linear_extrude` + `offset()` approach via new `edge_rounded_profile()` module for significantly faster renders
 - **q_charm.scad section order** — reordered Customizer tabs to Design → Design Layer 2 → Text → Fit → Rounding → Attachment → Quality, placing creative controls before fit adjustments
-- **q_charm.scad default values** — updated Fit defaults to better match standard silicone bracelets (`charm_length` 22, `charm_height` 8.65, `charm_thickness` 2.75, `bracelet_width` 15, `gap_offset` 2, `gap_width` 3); raised design scale max from 95 → 150
-- **Preset JSONs** — updated `large-charm.json` and `small-charm.json` to match renamed parameters
+- **q_charm.scad default values** — updated Fit defaults to better match standard silicone bracelets (`charm_width` 22, `charm_height` 8.65, `charm_thickness` 2.75, `charm_length` 15, `gap_offset` 2, `gap_width` 3); raised design scale max from 95 → 150
+- **Preset JSONs** — updated `large-charm.json` and `small-charm.json` to match renamed parameters and new `side_edge_radius` default
+- **q-charm SVG library** — trimmed manifest to only reference SVG files that exist on disk (removed 6 placeholder entries)
 - **SVG offset quality** — adaptive sample count (256–2048 based on path length) replaces fixed 128-point default; Chaikin corner-cutting smoothing applied to offset output for smoother curves; uses `ClipperOffset` API directly
 
 ### Fixed

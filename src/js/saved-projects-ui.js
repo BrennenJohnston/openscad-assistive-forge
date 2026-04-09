@@ -619,12 +619,18 @@ export function initSavedProjectsUI({
   async function showProjectFileManager(projectId) {
     const project = await getProject(projectId);
     if (!project) {
-      showErrorToast({ title: 'Not Found', message: 'The requested project could not be found.' });
+      showErrorToast({
+        title: 'Not Found',
+        message: 'The requested project could not be found.',
+      });
       return;
     }
 
     if (project.kind !== 'zip' || !project.projectFiles) {
-      showErrorToast({ title: 'Not Available', message: 'File management is only available for ZIP projects.' });
+      showErrorToast({
+        title: 'Not Available',
+        message: 'File management is only available for ZIP projects.',
+      });
       return;
     }
 
@@ -913,7 +919,10 @@ export function initSavedProjectsUI({
             (p) => p.startsWith(newPrefix) && !p.startsWith(oldPrefix)
           );
           if (conflict) {
-            showErrorToast({ title: 'Name Conflict', message: `Folder "${safeName}" already exists.` });
+            showErrorToast({
+              title: 'Name Conflict',
+              message: `Folder "${safeName}" already exists.`,
+            });
             return;
           }
 
@@ -1160,7 +1169,10 @@ export function initSavedProjectsUI({
               );
               renderFmView();
             } else {
-              showErrorToast({ title: 'Add Files Failed', message: result.error });
+              showErrorToast({
+                title: 'Add Files Failed',
+                message: result.error,
+              });
             }
           }
         });
@@ -1184,7 +1196,10 @@ export function initSavedProjectsUI({
           p.startsWith(newFolderPrefix)
         );
         if (exists) {
-          showErrorToast({ title: 'Name Conflict', message: `Folder "${safeName}" already exists.` });
+          showErrorToast({
+            title: 'Name Conflict',
+            message: `Folder "${safeName}" already exists.`,
+          });
           return;
         }
 
@@ -1201,7 +1216,10 @@ export function initSavedProjectsUI({
           stateManager.announceChange(`Created folder "${safeName}"`);
           renderFmView();
         } else {
-          showErrorToast({ title: 'Create Folder Failed', message: result.error });
+          showErrorToast({
+            title: 'Create Folder Failed',
+            message: result.error,
+          });
         }
       });
     }
@@ -1262,7 +1280,10 @@ export function initSavedProjectsUI({
     try {
       const project = await getProject(projectId);
       if (!project) {
-        showErrorToast({ title: 'Not Found', message: 'The requested project could not be found.' });
+        showErrorToast({
+          title: 'Not Found',
+          message: 'The requested project could not be found.',
+        });
         return;
       }
 
@@ -1278,9 +1299,12 @@ export function initSavedProjectsUI({
         if (!confirmed) return;
       }
 
-      dismissOverlay = showProcessingOverlay(`Loading "${project.name}"\u2026`, {
-        hint: 'Large projects may take a moment to open.',
-      });
+      dismissOverlay = showProcessingOverlay(
+        `Loading "${project.name}"\u2026`,
+        {
+          hint: 'Large projects may take a moment to open.',
+        }
+      );
 
       // Yield to allow the browser to paint the overlay before heavy work begins
       await new Promise((r) => setTimeout(r, 0));
@@ -1346,7 +1370,8 @@ export function initSavedProjectsUI({
       showErrorModal({
         title: 'Project Load Failed',
         message: 'The saved project could not be loaded.',
-        suggestion: 'The project data may be corrupted. Try deleting and re-saving it.',
+        suggestion:
+          'The project data may be corrupted. Try deleting and re-saving it.',
         technical: error.message,
       });
     }
@@ -1504,8 +1529,7 @@ export function initSavedProjectsUI({
           showErrorModal({
             title: 'Save Failed',
             message: 'The project could not be saved.',
-            suggestion:
-              'Check available browser storage space and try again.',
+            suggestion: 'Check available browser storage space and try again.',
             technical: result.error,
           });
         }
@@ -1523,9 +1547,7 @@ export function initSavedProjectsUI({
 
         const projectName = nameInput.value.trim() || fileName;
         const existingProjects = await listSavedProjects();
-        const duplicate = existingProjects.find(
-          (p) => p.name === projectName
-        );
+        const duplicate = existingProjects.find((p) => p.name === projectName);
 
         if (duplicate) {
           duplicateNameSpan.textContent = projectName;
@@ -1570,7 +1592,10 @@ export function initSavedProjectsUI({
     try {
       const project = await getProject(projectId);
       if (!project) {
-        showErrorToast({ title: 'Not Found', message: 'The requested project could not be found.' });
+        showErrorToast({
+          title: 'Not Found',
+          message: 'The requested project could not be found.',
+        });
         return;
       }
 
@@ -1631,7 +1656,10 @@ export function initSavedProjectsUI({
         const notes = notesTextarea.value.trim();
 
         if (!name) {
-          showErrorToast({ title: 'Name Required', message: 'Project name cannot be empty.' });
+          showErrorToast({
+            title: 'Name Required',
+            message: 'Project name cannot be empty.',
+          });
           return;
         }
 
@@ -1684,7 +1712,10 @@ export function initSavedProjectsUI({
     try {
       const project = await getProject(projectId);
       if (!project) {
-        showErrorToast({ title: 'Not Found', message: 'The requested project could not be found.' });
+        showErrorToast({
+          title: 'Not Found',
+          message: 'The requested project could not be found.',
+        });
         return;
       }
 

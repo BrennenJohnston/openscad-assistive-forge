@@ -8,7 +8,13 @@
  */
 
 import { getPointAtLength, getTotalLength } from 'svg-path-commander';
-import { Clipper, ClipperOffset, Paths64, JoinType, EndType } from 'clipper2-js';
+import {
+  Clipper,
+  ClipperOffset,
+  Paths64,
+  JoinType,
+  EndType,
+} from 'clipper2-js';
 
 const SCALE = 1000;
 
@@ -89,7 +95,7 @@ export function chaikinSmooth(points, iterations = 2) {
       const p1 = current[(i + 1) % len];
       next.push(
         { x: 0.75 * p0.x + 0.25 * p1.x, y: 0.75 * p0.y + 0.25 * p1.y },
-        { x: 0.25 * p0.x + 0.75 * p1.x, y: 0.25 * p0.y + 0.75 * p1.y },
+        { x: 0.25 * p0.x + 0.75 * p1.x, y: 0.25 * p0.y + 0.75 * p1.y }
       );
     }
     current = next;

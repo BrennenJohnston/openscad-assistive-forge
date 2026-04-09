@@ -789,7 +789,7 @@ export class AutoPreviewController {
           }
           if (firstChildEnd === -1 && depth === 1) {
             const rest = cleaned.slice(i + 1).trimStart();
-            if (!(/^else\b/.test(rest))) {
+            if (!/^else\b/.test(rest)) {
               firstChildEnd = i + 1;
             }
           }
@@ -1160,7 +1160,8 @@ export class AutoPreviewController {
     if (previewOverridesActive) {
       const diffs = {};
       for (const [k, v] of Object.entries(previewParameters)) {
-        if (parameters[k] !== v) diffs[k] = { original: parameters[k], preview: v };
+        if (parameters[k] !== v)
+          diffs[k] = { original: parameters[k], preview: v };
       }
       if (Object.keys(diffs).length > 0) {
         console.log('[AutoPreview Diag] Preview parameter overrides:', diffs);
@@ -1257,8 +1258,13 @@ export class AutoPreviewController {
       // isn't visually useful. Re-render with color() calls stripped so the
       // Manifold CSG engine assigns per-operation face colors instead.
       let activeResult = result;
-      const useAuthorColors = hasColorCalls && colorPassthroughEnabled && !csgColorsInjected;
-      if ((result.format || 'stl') === 'off' && useAuthorColors && !noCsgColors) {
+      const useAuthorColors =
+        hasColorCalls && colorPassthroughEnabled && !csgColorsInjected;
+      if (
+        (result.format || 'stl') === 'off' &&
+        useAuthorColors &&
+        !noCsgColors
+      ) {
         const uniqueColors = AutoPreviewController.countUniqueOFFColors(
           result.stl
         );
@@ -1618,10 +1624,7 @@ export class AutoPreviewController {
         renderOptions
       );
     } catch (renderErr) {
-      if (
-        csgColorsInjected &&
-        AutoPreviewController.isParserError(renderErr)
-      ) {
+      if (csgColorsInjected && AutoPreviewController.isParserError(renderErr)) {
         console.warn(
           '[AutoPreview] CSG color injection produced invalid SCAD — ' +
             'retrying with original source'
@@ -1641,7 +1644,8 @@ export class AutoPreviewController {
       console.log('[AutoPreview] Full render using OFF format');
     }
 
-    const useAuthorColors = hasColorCalls && colorPassthroughEnabled && !csgColorsInjected;
+    const useAuthorColors =
+      hasColorCalls && colorPassthroughEnabled && !csgColorsInjected;
     if (
       !noCsgColors &&
       useAuthorColors &&

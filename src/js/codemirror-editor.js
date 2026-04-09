@@ -21,8 +21,17 @@ import {
   drawSelection,
   Decoration,
 } from '@codemirror/view';
-import { EditorState, Compartment, StateEffect, StateField } from '@codemirror/state';
-import { StreamLanguage, syntaxHighlighting, HighlightStyle } from '@codemirror/language';
+import {
+  EditorState,
+  Compartment,
+  StateEffect,
+  StateField,
+} from '@codemirror/state';
+import {
+  StreamLanguage,
+  syntaxHighlighting,
+  HighlightStyle,
+} from '@codemirror/language';
 import { tags } from '@lezer/highlight';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { autocompletion } from '@codemirror/autocomplete';
@@ -31,24 +40,89 @@ import { highlightSelectionMatches, searchKeymap } from '@codemirror/search';
 // ─── OpenSCAD token lists (ported from textarea-editor.js / monaco-editor.js) ──
 
 const SCAD_KEYWORDS = new Set([
-  'module', 'function', 'if', 'else', 'for', 'let', 'each',
-  'intersection_for', 'assert', 'echo', 'include', 'use',
+  'module',
+  'function',
+  'if',
+  'else',
+  'for',
+  'let',
+  'each',
+  'intersection_for',
+  'assert',
+  'echo',
+  'include',
+  'use',
 ]);
 
 const SCAD_BUILTINS = new Set([
-  'cube', 'sphere', 'cylinder', 'polyhedron', 'circle', 'square',
-  'polygon', 'text', 'linear_extrude', 'rotate_extrude', 'surface',
-  'import', 'union', 'difference', 'intersection', 'hull', 'minkowski',
-  'translate', 'rotate', 'scale', 'mirror', 'multmatrix', 'color',
-  'offset', 'resize', 'projection', 'render', 'children',
+  'cube',
+  'sphere',
+  'cylinder',
+  'polyhedron',
+  'circle',
+  'square',
+  'polygon',
+  'text',
+  'linear_extrude',
+  'rotate_extrude',
+  'surface',
+  'import',
+  'union',
+  'difference',
+  'intersection',
+  'hull',
+  'minkowski',
+  'translate',
+  'rotate',
+  'scale',
+  'mirror',
+  'multmatrix',
+  'color',
+  'offset',
+  'resize',
+  'projection',
+  'render',
+  'children',
 ]);
 
 const SCAD_FUNCTIONS = new Set([
-  'abs', 'sign', 'sin', 'cos', 'tan', 'acos', 'asin', 'atan', 'atan2',
-  'floor', 'round', 'ceil', 'ln', 'log', 'pow', 'sqrt', 'exp', 'rands',
-  'min', 'max', 'concat', 'lookup', 'str', 'chr', 'ord', 'search',
-  'version', 'version_num', 'len', 'norm', 'cross',
-  'is_undef', 'is_bool', 'is_num', 'is_string', 'is_list', 'is_function',
+  'abs',
+  'sign',
+  'sin',
+  'cos',
+  'tan',
+  'acos',
+  'asin',
+  'atan',
+  'atan2',
+  'floor',
+  'round',
+  'ceil',
+  'ln',
+  'log',
+  'pow',
+  'sqrt',
+  'exp',
+  'rands',
+  'min',
+  'max',
+  'concat',
+  'lookup',
+  'str',
+  'chr',
+  'ord',
+  'search',
+  'version',
+  'version_num',
+  'len',
+  'norm',
+  'cross',
+  'is_undef',
+  'is_bool',
+  'is_num',
+  'is_string',
+  'is_list',
+  'is_function',
 ]);
 
 const SCAD_CONSTANTS = new Set(['true', 'false', 'undef', 'PI']);
@@ -83,7 +157,10 @@ const openscadStreamLanguage = StreamLanguage.define({
       return 'string';
     }
 
-    if (stream.match(/\d+\.?\d*(?:[eE][+-]?\d+)?/) || stream.match(/\.\d+(?:[eE][+-]?\d+)?/)) {
+    if (
+      stream.match(/\d+\.?\d*(?:[eE][+-]?\d+)?/) ||
+      stream.match(/\.\d+(?:[eE][+-]?\d+)?/)
+    ) {
       return 'number';
     }
 
@@ -118,7 +195,11 @@ const lightHighlightStyle = HighlightStyle.define([
   { tag: tags.function(tags.variableName), color: '#795E26' },
   { tag: tags.bool, color: '#0070C1' },
   { tag: tags.null, color: '#0070C1' },
-  { tag: tags.special(tags.variableName), color: '#001080', fontStyle: 'italic' },
+  {
+    tag: tags.special(tags.variableName),
+    color: '#001080',
+    fontStyle: 'italic',
+  },
   { tag: tags.comment, color: '#008000', fontStyle: 'italic' },
   { tag: tags.blockComment, color: '#008000', fontStyle: 'italic' },
   { tag: tags.string, color: '#A31515' },
@@ -132,7 +213,11 @@ const darkHighlightStyle = HighlightStyle.define([
   { tag: tags.function(tags.variableName), color: '#DCDCAA' },
   { tag: tags.bool, color: '#4FC1FF' },
   { tag: tags.null, color: '#4FC1FF' },
-  { tag: tags.special(tags.variableName), color: '#9CDCFE', fontStyle: 'italic' },
+  {
+    tag: tags.special(tags.variableName),
+    color: '#9CDCFE',
+    fontStyle: 'italic',
+  },
   { tag: tags.comment, color: '#6A9955', fontStyle: 'italic' },
   { tag: tags.blockComment, color: '#6A9955', fontStyle: 'italic' },
   { tag: tags.string, color: '#CE9178' },
@@ -161,26 +246,29 @@ const lightEditorTheme = EditorView.theme({
   },
 });
 
-const darkEditorTheme = EditorView.theme({
-  '&': {
-    backgroundColor: '#1E1E1E',
-    color: '#D4D4D4',
+const darkEditorTheme = EditorView.theme(
+  {
+    '&': {
+      backgroundColor: '#1E1E1E',
+      color: '#D4D4D4',
+    },
+    '.cm-gutters': {
+      backgroundColor: '#1E1E1E',
+      color: '#858585',
+      borderRight: '1px solid #333',
+    },
+    '.cm-activeLineGutter': {
+      color: '#C6C6C6',
+    },
+    '&.cm-focused .cm-selectionBackground, .cm-selectionBackground': {
+      backgroundColor: '#264F78',
+    },
+    '.cm-activeLine': {
+      backgroundColor: '#ffffff0a',
+    },
   },
-  '.cm-gutters': {
-    backgroundColor: '#1E1E1E',
-    color: '#858585',
-    borderRight: '1px solid #333',
-  },
-  '.cm-activeLineGutter': {
-    color: '#C6C6C6',
-  },
-  '&.cm-focused .cm-selectionBackground, .cm-selectionBackground': {
-    backgroundColor: '#264F78',
-  },
-  '.cm-activeLine': {
-    backgroundColor: '#ffffff0a',
-  },
-}, { dark: true });
+  { dark: true }
+);
 
 // ─── Autocomplete for OpenSCAD ──────────────────────────────────────────────
 
@@ -361,7 +449,9 @@ export class CodeMirrorEditor {
     if (!this._view) return;
     this._view.dispatch({
       effects: [
-        this._themeCompartment.reconfigure(isDark ? darkEditorTheme : lightEditorTheme),
+        this._themeCompartment.reconfigure(
+          isDark ? darkEditorTheme : lightEditorTheme
+        ),
         this._highlightCompartment.reconfigure(
           syntaxHighlighting(isDark ? darkHighlightStyle : lightHighlightStyle)
         ),

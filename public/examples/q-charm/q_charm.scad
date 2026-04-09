@@ -100,8 +100,8 @@ text_rotation_2 = 90; // [-180:5:180]
 text_2_thickness = 0; // [-3:0.1:3]
 
 /* [Fit] */
-// Length of the charm along the bracelet (Y axis)
-charm_length = 22; // [10:1:40]
+// Width of the charm along the bracelet (Y axis)
+charm_width = 22; // [10:1:40]
 
 // Overall height of the C-clip profile
 charm_height = 8.65; // [6:0.5:15]
@@ -109,8 +109,8 @@ charm_height = 8.65; // [6:0.5:15]
 // Wall and material thickness
 charm_thickness = 2.75; // [2.25:0.25:4]
 
-// Width of the inner bracelet channel
-bracelet_width = 15; // [10:1:25]
+// Length of the inner bracelet channel
+charm_length = 15; // [10:1:25]
 
 // Shift the gap opening left (−) or right (+) for asymmetric legs
 gap_offset = 2; // [-4:0.5:4]
@@ -122,8 +122,8 @@ gap_width = 3; // [2:0.5:8]
 // Side edge rounding radius (0 = sharp side edges)
 edge_radius = 1.0; // [0:0.25:3]
 
-// All-edges rounding radius including top and bottom faces (0 = off; overrides side-only when active — slower render)
-all_edges_radius = 0; // [0:0.25:3]
+// Side edge radius — rounds the edges along the side profile of the charm (0 = off)
+side_edge_radius = 2.5; // [0:0.25:3]
 
 // Outer corner radius — rounds the 4 outer corners of the C-clip cross-section (0 = sharp corners)
 profile_corner_radius = 2; // [0:0.5:4]
@@ -164,9 +164,9 @@ min_inner_height = 1.5;
 effective_thickness = min(charm_thickness, (charm_height - min_inner_height) / 2);
 inner_height = max(min_inner_height, charm_height - 2 * effective_thickness);
 safe_edge_radius = min(edge_radius, min(effective_thickness, inner_height, gap_width) / 2);
-safe_all_edges = min(all_edges_radius, min(effective_thickness, inner_height, gap_width, charm_length) / 2 - 0.1);
+safe_side_edge = min(side_edge_radius, min(effective_thickness, inner_height, gap_width, charm_width) / 2 - 0.1);
 safe_icr = min(inner_corner_radius, inner_height / 2 - 0.1, gap_width / 2 - 0.1);
-outer_width = bracelet_width + 2 * effective_thickness;
+outer_width = charm_length + 2 * effective_thickness;
 outer_height = charm_height;
 z_offset = outer_height / 2;
 profile_center_x = 0;
@@ -184,7 +184,7 @@ total_top_z = charm_top_z
     );
 
 module profile_2d() {
-    max_gap_shift = (bracelet_width - gap_width) / 2 - 1;
+    max_gap_shift = (charm_length - gap_width) / 2 - 1;
     safe_gap_offset = max(-max_gap_shift, min(gap_offset, max_gap_shift));
     difference() {
         offset(r = profile_corner_radius)
@@ -194,7 +194,7 @@ module profile_2d() {
             gap_ext = 10;
             offset(r = safe_icr) offset(r = -safe_icr)
                 union() {
-                    square([bracelet_width, inner_height], center = true);
+                    square([charm_length, inner_height], center = true);
                     translate([safe_gap_offset, -outer_height / 2 + (effective_thickness - gap_ext) / 2])
                         square([gap_width, effective_thickness + gap_ext], center = true);
                 }
@@ -202,10 +202,10 @@ module profile_2d() {
             polygon([
                 [-gap_width/2 + safe_gap_offset, -outer_height/2 - 0.1],
                 [-gap_width/2 + safe_gap_offset, -outer_height/2 + effective_thickness],
-                [-bracelet_width/2,              -outer_height/2 + effective_thickness],
-                [-bracelet_width/2,               outer_height/2 - effective_thickness],
-                [ bracelet_width/2,               outer_height/2 - effective_thickness],
-                [ bracelet_width/2,              -outer_height/2 + effective_thickness],
+                [-charm_length/2,              -outer_height/2 + effective_thickness],
+                [-charm_length/2,               outer_height/2 - effective_thickness],
+                [ charm_length/2,               outer_height/2 - effective_thickness],
+                [ charm_length/2,              -outer_height/2 + effective_thickness],
                 [ gap_width/2 + safe_gap_offset, -outer_height/2 + effective_thickness],
                 [ gap_width/2 + safe_gap_offset, -outer_height/2 - 0.1]
             ]);
@@ -213,28 +213,47 @@ module profile_2d() {
     }
 }
 
+module edge_rounded_profile(er) {
+    if (er > 0)
+        offset(r = er) offset(r = -er) profile_2d();
+    else
+        profile_2d();
+}
+
 module charm_body() {
     translate([0, 0, z_offset])
         rotate([90, 0, 0]) {
-            if (safe_all_edges > 0) {
-                minkowski() {
-                    linear_extrude(
-                        height = charm_length - 2 * safe_all_edges,
-                        center = true
-                    )
-                        offset(r = -safe_all_edges)
-                            profile_2d();
-                    sphere(r = safe_all_edges, $fn = min($fn, 30));
+            if (safe_side_edge > 0) {
+                steps = max(4, min(round($fn / 8), 12));
+                body_h = charm_width - 2 * safe_side_edge;
+
+                if (body_h > 0)
+                    linear_extrude(height = body_h, center = true)
+                        edge_rounded_profile(safe_edge_radius);
+
+                for (i = [0 : steps - 1]) {
+                    a  = 90 * i / steps;
+                    a2 = 90 * (i + 1) / steps;
+                    z0    = safe_side_edge * sin(a);
+                    sh    = safe_side_edge * (sin(a2) - sin(a)) + 0.01;
+                    inset = safe_side_edge * (1 - cos(a));
+
+                    translate([0, 0, body_h / 2 + z0])
+                        linear_extrude(height = sh)
+                            offset(r = -inset)
+                                edge_rounded_profile(safe_edge_radius);
+
+                    mirror([0, 0, 1])
+                        translate([0, 0, body_h / 2 + z0])
+                            linear_extrude(height = sh)
+                                offset(r = -inset)
+                                    edge_rounded_profile(safe_edge_radius);
                 }
             } else if (safe_edge_radius > 0) {
-                minkowski() {
-                    linear_extrude(height = charm_length, center = true)
-                        offset(r = -safe_edge_radius)
-                            profile_2d();
-                    cylinder(r = safe_edge_radius, h = 0.01, center = true, $fn = min($fn, 30));
-                }
+                linear_extrude(height = charm_width, center = true)
+                    edge_rounded_profile(safe_edge_radius);
             } else {
-                linear_extrude(height = charm_length, center = true)
+                linear_extrude(height = charm_width, center = true)
                     profile_2d();
             }
         }
@@ -290,7 +309,7 @@ module attachment_cutout() {
     if (attachment_type == "keychain_hole") {
         margin = hole_diameter / 2 + 1;
         translate([profile_center_x + attachment_x,
-                   charm_length / 2 - margin + attachment_y,
+                   charm_width / 2 - margin + attachment_y,
                    cut_z + attachment_z])
             cylinder(d = hole_diameter, h = cut_h);
     } else if (attachment_type == "lanyard_slot") {
@@ -298,7 +317,7 @@ module attachment_cutout() {
         r = hole_diameter / 4;
         margin = hole_diameter / 2 + 1;
         translate([profile_center_x + attachment_x,
-                   charm_length / 2 - margin + attachment_y,
+                   charm_width / 2 - margin + attachment_y,
                    cut_z + attachment_z])
             linear_extrude(height = cut_h)
                 hull() {
@@ -310,7 +329,7 @@ module attachment_cutout() {
 
 module bail_loop() {
     if (attachment_type == "bail_loop") {
-        translate([attachment_x, charm_length / 2 + attachment_y, z_offset + attachment_z])
+        translate([attachment_x, charm_width / 2 + attachment_y, z_offset + attachment_z])
             rotate([0, 90, 0])
                 rotate_extrude(angle = 180, $fn = 32)
                     translate([bail_inner_radius, 0, 0])
