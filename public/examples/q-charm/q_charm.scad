@@ -107,7 +107,7 @@ charm_width = 22; // [10:1:40]
 charm_height = 8.65; // [6:0.5:15]
 
 // Wall and material thickness
-charm_thickness = 2.75; // [2.25:0.25:4]
+charm_thickness = 2.25; // [1.25:0.25:4]
 
 // Length of the inner bracelet channel
 charm_length = 15; // [10:1:25]

@@ -8,7 +8,7 @@
     "parameters": {
       "charm_width": 16,
       "charm_height": 6.5,
-      "charm_thickness": 2.5,
+      "charm_thickness": 2.25,
       "charm_length": 12,
       "gap_offset": 1,
       "gap_width": 4,
