@@ -90,23 +90,19 @@ test.describe('Accessibility Compliance (WCAG 2.2 AA)', () => {
   
   test('should have proper heading hierarchy', async ({ page }) => {
     await page.goto('/')
-    
-    // Get all headings
-    const headings = await page.locator('h1, h2, h3, h4, h5, h6').all()
-    
-    // Should have at least one heading
+    await page.waitForLoadState('networkidle')
+
+    const headings = await page.evaluate(() =>
+      Array.from(document.querySelectorAll('h1, h2, h3, h4, h5, h6')).map(el => ({
+        tag: el.tagName,
+        text: el.textContent.trim().substring(0, 80),
+      }))
+    )
+
     expect(headings.length).toBeGreaterThan(0)
-    
-    // First heading should be h1
-    const firstHeading = await headings[0].evaluate(el => el.tagName)
-    expect(firstHeading).toBe('H1')
-    
-    console.log('Heading structure:', await Promise.all(
-      headings.map(async h => await h.evaluate(el => ({ 
-        tag: el.tagName, 
-        text: el.textContent 
-      })))
-    ))
+    expect(headings[0].tag).toBe('H1')
+
+    console.log('Heading structure:', headings)
   })
   
   test('should have skip link for keyboard users', async ({ page }) => {

@@ -110,7 +110,12 @@ function resolveColorToHex(fillValue) {
  * @param {number} [sampleCount=64] - Number of sample points along the path
  * @returns {string} Filled outline path `d` string
  */
-export function strokeToFill(pathData, strokeWidth, lineCap = 'butt', sampleCount = 64) {
+export function strokeToFill(
+  pathData,
+  strokeWidth,
+  lineCap = 'butt',
+  sampleCount = 64
+) {
   const totalLen = getTotalLength(pathData);
   if (totalLen === 0 || strokeWidth <= 0) return pathData;
 
@@ -156,7 +161,8 @@ export function strokeToFill(pathData, strokeWidth, lineCap = 'butt', sampleCoun
     let ex = endPt.x - prevPt.x;
     let ey = endPt.y - prevPt.y;
     const el = Math.sqrt(ex * ex + ey * ey) || 1;
-    ex /= el; ey /= el;
+    ex /= el;
+    ey /= el;
     d += ` L${r(lastL.x + ex * half)},${r(lastL.y + ey * half)}`;
     d += ` L${r(lastR.x + ex * half)},${r(lastR.y + ey * half)}`;
   }
@@ -177,7 +183,8 @@ export function strokeToFill(pathData, strokeWidth, lineCap = 'butt', sampleCoun
     let sx = startPt.x - nextPt.x;
     let sy = startPt.y - nextPt.y;
     const sl = Math.sqrt(sx * sx + sy * sy) || 1;
-    sx /= sl; sy /= sl;
+    sx /= sl;
+    sy /= sl;
     d += ` L${r(firstR.x + sx * half)},${r(firstR.y + sy * half)}`;
     d += ` L${r(firstL.x + sx * half)},${r(firstL.y + sy * half)}`;
   }
@@ -365,8 +372,7 @@ export function classifyElements(elements, options = {}) {
     let role;
     const fillLower = (el.fill || '').toLowerCase();
     const hasFill = fillLower !== 'none' && fillLower !== 'transparent';
-    const hasStroke =
-      el.stroke !== '' && el.stroke.toLowerCase() !== 'none';
+    const hasStroke = el.stroke !== '' && el.stroke.toLowerCase() !== 'none';
 
     if (!hasFill && hasStroke) {
       if (strokeHandling === 'convert') {
@@ -374,8 +380,12 @@ export function classifyElements(elements, options = {}) {
         const cap = el.element.getAttribute('stroke-linecap') || 'butt';
         const expandedPath = strokeToFill(el.pathData, sw, cap);
         const strokeColor = resolveColorToHex(el.stroke);
-        const strokeLum = strokeColor !== null ? parseLuminance(strokeColor) : null;
-        role = (strokeLum !== null && strokeLum > luminanceThreshold) ? 'hole' : 'foreground';
+        const strokeLum =
+          strokeColor !== null ? parseLuminance(strokeColor) : null;
+        role =
+          strokeLum !== null && strokeLum > luminanceThreshold
+            ? 'hole'
+            : 'foreground';
         return { ...el, pathData: expandedPath, role, strokeConverted: true };
       }
       role = strokeHandling;
@@ -591,7 +601,7 @@ export function analyzeSvg(svgString) {
       elements: [],
       warnings: [
         `This SVG has ${renderElements.length} elements — the maximum is ${MAX_ELEMENT_COUNT}. ` +
-        'Simplify the SVG in a vector editor (e.g., merge paths, remove hidden layers) before importing.',
+          'Simplify the SVG in a vector editor (e.g., merge paths, remove hidden layers) before importing.',
       ],
       unsupportedFeatures: [],
       recommendation: 'reject',
@@ -609,8 +619,7 @@ export function analyzeSvg(svgString) {
     const hasStroke = el.stroke !== '' && el.stroke.toLowerCase() !== 'none';
     return (fill === 'none' || fill === 'transparent') && hasStroke;
   });
-  const singleElement =
-    (filledElements.length + strokedOnlyElements.length) <= 1;
+  const singleElement = filledElements.length + strokedOnlyElements.length <= 1;
 
   // A compound path is a single DOM <path> whose d attribute was decomposed
   // into multiple subpaths. It's already OpenSCAD-compatible and doesn't
@@ -636,7 +645,9 @@ export function analyzeSvg(svgString) {
     if (el.strokeConverted) {
       elWarnings.push('Stroked path \u2014 converted to filled outline');
     } else if (fillLower === 'none' && hasStroke) {
-      elWarnings.push('Stroked path \u2014 not supported for boolean operations');
+      elWarnings.push(
+        'Stroked path \u2014 not supported for boolean operations'
+      );
     }
     if (fillLower.startsWith('url(')) {
       elWarnings.push(
@@ -664,9 +675,7 @@ export function analyzeSvg(svgString) {
 
   // Global warnings
   if (defsCount.value > 0) {
-    warnings.push(
-      `${defsCount.value} element(s) inside <defs> skipped`
-    );
+    warnings.push(`${defsCount.value} element(s) inside <defs> skipped`);
   }
 
   const convertedCount = elements.filter((el) => el.strokeConverted).length;

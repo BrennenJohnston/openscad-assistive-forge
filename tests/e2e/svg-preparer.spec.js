@@ -93,16 +93,19 @@ test.describe('SVG Preparer — Asset Verification', () => {
     }
   })
 
-  test('Bracelet Clip Charm manifest references SVG library with 12 options', async ({ page }) => {
+  test('Bracelet Clip Charm manifest references SVG library with 2 params and 6 options each', async ({ page }) => {
     const response = await page.request.get('/examples/q-charm/manifest.json')
     expect(response.ok()).toBe(true)
     const manifest = await response.json()
     expect(manifest.svgLibrary).toBeDefined()
-    expect(manifest.svgLibrary.length).toBeGreaterThan(0)
+    expect(manifest.svgLibrary.length).toBe(2)
 
     const designOptions = manifest.svgLibrary[0].options
-    expect(designOptions.length).toBe(12)
+    expect(designOptions.length).toBe(6)
     expect(designOptions[0].file).toBe('smiley.svg')
+
+    const designOptions2 = manifest.svgLibrary[1].options
+    expect(designOptions2.length).toBe(6)
   })
 })
 

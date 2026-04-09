@@ -67,14 +67,14 @@ describe('q_charm.scad parser integration', () => {
     }
   });
 
-  it('extracts charm_length in Fit group (renamed from extrude_width)', () => {
+  it('extracts charm_width in Fit group (renamed from charm_length)', () => {
     scadContent = readFileSync(scadPath, 'utf-8');
     parsed = extractParameters(scadContent);
 
-    expect(parsed.parameters.charm_length).toBeDefined();
-    expect(parsed.parameters.charm_length.default).toBe(22);
-    expect(parsed.parameters.charm_length.minimum).toBe(10);
-    expect(parsed.parameters.charm_length.maximum).toBe(40);
+    expect(parsed.parameters.charm_width).toBeDefined();
+    expect(parsed.parameters.charm_width.default).toBe(22);
+    expect(parsed.parameters.charm_width.minimum).toBe(10);
+    expect(parsed.parameters.charm_width.maximum).toBe(40);
 
     expect(parsed.parameters.extrude_width).toBeUndefined();
 
@@ -90,12 +90,12 @@ describe('q_charm.scad parser integration', () => {
     expect(parsed.parameters.charm_height.default).toBe(8.65);
 
     expect(parsed.parameters.charm_thickness).toBeDefined();
-    expect(parsed.parameters.charm_thickness.default).toBe(2.75);
-    expect(parsed.parameters.charm_thickness.minimum).toBe(2.25);
+    expect(parsed.parameters.charm_thickness.default).toBe(2.25);
+    expect(parsed.parameters.charm_thickness.minimum).toBe(1.25);
     expect(parsed.parameters.charm_thickness.maximum).toBe(4);
 
-    expect(parsed.parameters.bracelet_width).toBeDefined();
-    expect(parsed.parameters.bracelet_width.default).toBe(15);
+    expect(parsed.parameters.charm_length).toBeDefined();
+    expect(parsed.parameters.charm_length.default).toBe(15);
 
     expect(parsed.parameters.gap_offset).toBeDefined();
     expect(parsed.parameters.gap_offset.default).toBe(2);
@@ -179,10 +179,10 @@ describe('q_charm.scad parser integration', () => {
     expect(parsed.parameters.edge_radius.minimum).toBe(0);
     expect(parsed.parameters.edge_radius.maximum).toBe(3);
 
-    expect(parsed.parameters.all_edges_radius).toBeDefined();
-    expect(parsed.parameters.all_edges_radius.default).toBe(0);
-    expect(parsed.parameters.all_edges_radius.minimum).toBe(0);
-    expect(parsed.parameters.all_edges_radius.maximum).toBe(3);
+    expect(parsed.parameters.side_edge_radius).toBeDefined();
+    expect(parsed.parameters.side_edge_radius.default).toBe(2.5);
+    expect(parsed.parameters.side_edge_radius.minimum).toBe(0);
+    expect(parsed.parameters.side_edge_radius.maximum).toBe(3);
 
     expect(parsed.parameters.profile_corner_radius).toBeDefined();
     expect(parsed.parameters.profile_corner_radius.default).toBe(2);

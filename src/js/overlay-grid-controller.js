@@ -1122,7 +1122,9 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
     syncGridOpacitySlider();
 
     // Restore overlay opacity
-    const savedOverlayOpacity = localStorage.getItem(STORAGE_KEY_OVERLAY_OPACITY);
+    const savedOverlayOpacity = localStorage.getItem(
+      STORAGE_KEY_OVERLAY_OPACITY
+    );
     if (savedOverlayOpacity) {
       const opacity = parseInt(savedOverlayOpacity, 10);
       if (!isNaN(opacity) && opacity >= 0 && opacity <= 100) {

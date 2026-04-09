@@ -7,10 +7,7 @@
  */
 
 import { stateManager } from './state.js';
-import {
-  downloadFile,
-  generateFilename,
-} from './download.js';
+import { downloadFile, generateFilename } from './download.js';
 import { getToolbarMenuController } from './toolbar-menu-controller.js';
 import { getUIModeController } from './ui-mode-controller.js';
 import {
@@ -95,7 +92,10 @@ export function exportFormatFromMenu(format) {
   const state = stateManager.getState();
   const outputData = state.generatedOutput?.data || state.stl;
   if (!outputData) {
-    showErrorToast({ title: 'No Rendered Model', message: 'No rendered model to export. Run Render first.' });
+    showErrorToast({
+      title: 'No Rendered Model',
+      message: 'No rendered model to export. Run Render first.',
+    });
     return;
   }
   const stateFormat = (
@@ -1216,7 +1216,10 @@ function _handleUnlock() {
  * @param {Function} deps.getDisplayOptionsController - Returns DisplayOptionsController
  * @returns {Object} Controller API
  */
-export function initHfmController({ getPreviewManager, getDisplayOptionsController }) {
+export function initHfmController({
+  getPreviewManager,
+  getDisplayOptionsController,
+}) {
   _getPreviewManager = getPreviewManager;
   _getDisplayOptionsController = getDisplayOptionsController;
 

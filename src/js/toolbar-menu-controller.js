@@ -908,7 +908,9 @@ export class ToolbarMenuController {
     );
     return Array.from(all).filter((el) => {
       const closestMenu = el.closest('[role="menu"]');
-      return closestMenu === submenuUl && el.getAttribute('aria-disabled') !== 'true';
+      return (
+        closestMenu === submenuUl && el.getAttribute('aria-disabled') !== 'true'
+      );
     });
   }
 

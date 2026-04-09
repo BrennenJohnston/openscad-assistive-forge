@@ -1009,8 +1009,6 @@ export class RenderController {
               '[RenderController] Worker restart failed (first attempt) — retrying once:',
               restartErr
             );
-            // BUG-A fix: retry the restart once before falling back to the existing worker.
-            // The first attempt may fail if the worker is in a half-terminated state.
             try {
               await this.restart();
               console.log(

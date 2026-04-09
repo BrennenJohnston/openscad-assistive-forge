@@ -496,7 +496,10 @@ export class ConsolePanel {
   async copyToClipboard() {
     const text = this.exportLog();
     if (!text) {
-      showErrorToast({ title: 'Nothing to Copy', message: 'No console output to copy.' });
+      showErrorToast({
+        title: 'Nothing to Copy',
+        message: 'No console output to copy.',
+      });
       return;
     }
 
@@ -527,7 +530,10 @@ export class ConsolePanel {
   downloadLog() {
     const text = this.exportLog();
     if (!text) {
-      showErrorToast({ title: 'Nothing to Download', message: 'No console output to download.' });
+      showErrorToast({
+        title: 'Nothing to Download',
+        message: 'No console output to download.',
+      });
       return;
     }
 

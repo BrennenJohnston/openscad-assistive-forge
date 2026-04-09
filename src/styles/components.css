@@ -184,7 +184,6 @@ summary:focus-visible,
 }
 
 @media (prefers-reduced-motion: reduce) {
-
   .forge-disclosure summary,
   .forge-disclosure summary::after {
     transition: none;
@@ -358,7 +357,6 @@ summary:focus-visible,
 }
 
 @media (prefers-reduced-motion: reduce) {
-
   #collapseParamPanelBtn svg {
     transition: none;
   }
@@ -371,7 +369,6 @@ summary:focus-visible,
 
 /* Desktop only - hide collapse button on mobile (drawer toggle is used instead) */
 @media (max-width: 767px) {
-
   .param-panel .btn-collapse-panel {
     display: none;
   }
@@ -386,7 +383,6 @@ summary:focus-visible,
 }
 
 @media (max-width: 767px) {
-
   .mobile-only {
     display: inline-flex;
   }
@@ -401,7 +397,6 @@ summary:focus-visible,
 }
 
 @media (max-width: 767px) {
-
   #mobileDrawerToggle {
     display: inline-flex;
   }
@@ -409,7 +404,6 @@ summary:focus-visible,
 
 /* Hide label on very small screens for space efficiency */
 @media (max-width: 360px) {
-
   #mobileDrawerToggle .btn-label {
     display: none;
   }
@@ -488,7 +482,6 @@ summary:focus-visible,
 }
 
 @media (prefers-reduced-motion: reduce) {
-
   .preview-drawer-toggle-btn.btn-collapse-panel svg {
     transition: none;
   }
@@ -508,7 +501,6 @@ summary:focus-visible,
 }
 
 @media (max-width: 767px) {
-
   .actions-drawer-toggle {
     display: flex;
     align-items: center;
@@ -555,7 +547,6 @@ summary:focus-visible,
 
   /* Respect reduced motion */
   @media (prefers-reduced-motion: reduce) {
-
     .actions-toggle-arrow {
       transition: none;
     }
@@ -629,7 +620,6 @@ summary:focus-visible,
 }
 
 @media (forced-colors: active) {
-
   .upload-panel {
     border: 2px solid CanvasText;
   }
@@ -722,7 +712,6 @@ summary:focus-visible,
 }
 
 @media (forced-colors: active) {
-
   #importFolderBtn {
     border: 1px solid ButtonText;
     color: ButtonText;
@@ -1013,7 +1002,6 @@ summary:focus-visible,
 
 /* Mobile responsive adjustments */
 @media (max-width: 767px) {
-
   .saved-projects-panel {
     /* Reduce padding on mobile for more content space */
     padding: var(--space-md);
@@ -1044,7 +1032,6 @@ summary:focus-visible,
 
 /* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
-
   .saved-project-card {
     transition: none;
   }
@@ -1424,7 +1411,6 @@ summary:focus-visible,
 
 /* Forced colors (Windows High Contrast) */
 @media (forced-colors: active) {
-
   .preset-import-mode-dialog,
   .import-mode-dialog {
     border: 1px solid ButtonText;
@@ -1765,7 +1751,6 @@ summary:focus-visible,
 
 /* Forced Colors Mode (Windows High Contrast) - File Manager */
 @media (forced-colors: active) {
-
   .file-manager-item {
     border-color: CanvasText;
     color: CanvasText;
@@ -1826,7 +1811,6 @@ summary:focus-visible,
 
 /* Mobile responsive adjustments for folder tree */
 @media (max-width: 767px) {
-
   .saved-projects-header {
     flex-direction: column;
     align-items: stretch;
@@ -1862,7 +1846,6 @@ summary:focus-visible,
 }
 
 @media (prefers-reduced-motion: reduce) {
-
   .folder-header,
   .folder-expand-icon,
   .folder-actions {
@@ -2033,7 +2016,6 @@ summary:focus-visible,
 }
 
 @media (forced-colors: active) {
-
   .grid-color-picker {
     border: 1px solid ButtonText;
     forced-color-adjust: none;
@@ -2103,7 +2085,6 @@ summary:focus-visible,
 
 /* Forced Colors Mode */
 @media (forced-colors: active) {
-
   .grid-preset-select,
   .grid-dim-input {
     border: 1px solid ButtonText;
@@ -2164,7 +2145,6 @@ summary:focus-visible,
 
 /* Forced Colors Mode */
 @media (forced-colors: active) {
-
   .grid-preset-name-input {
     border: 1px solid ButtonText;
     background: Field;
@@ -2312,7 +2292,6 @@ summary:focus-visible,
 }
 
 @media (max-width: 767px) {
-
   .preview-settings {
     grid-template-columns: 1fr;
     gap: var(--space-sm);
@@ -2321,7 +2300,6 @@ summary:focus-visible,
 }
 
 @media (pointer: fine) and (min-width: 768px) {
-
   .preview-settings {
     gap: var(--space-sm);
   }
@@ -3062,7 +3040,6 @@ summary:focus-visible,
   min-height: var(--size-touch-target);
 }
 @media (prefers-reduced-motion: reduce) {
-
   .measure-fullscreen-backdrop {
     backdrop-filter: none;
   }
@@ -3088,7 +3065,6 @@ summary:focus-visible,
 
 /* Forced Colors Mode (Windows High Contrast) - Measurement Tool */
 @media (forced-colors: active) {
-
   .measure-canvas {
     border-color: ButtonText;
   }
@@ -3130,7 +3106,6 @@ summary:focus-visible,
 
 /* Responsive: measurement tool rows on narrow screens */
 @media (max-width: 767px) {
-
   .measure-toolbar {
     flex-wrap: wrap;
   }
@@ -3192,7 +3167,6 @@ summary:focus-visible,
 
 /* Reduced motion: instant show/hide */
 @media (prefers-reduced-motion: reduce) {
-
   .param-control {
     transition: none;
   }
@@ -3384,7 +3358,6 @@ body.high-contrast .param-tooltip {
 
 /* Dark Mode Adjustments for Tooltips */
 @media (prefers-color-scheme: dark) {
-
   .param-tooltip {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
   }
@@ -3392,7 +3365,6 @@ body.high-contrast .param-tooltip {
 
 /* Mobile Adjustments for Tooltips */
 @media (max-width: 767px) {
-
   .param-tooltip {
     position: fixed;
     left: 16px;
@@ -3497,7 +3469,6 @@ body.high-contrast .param-tooltip {
 
 /* High contrast mode - enhanced visibility */
 @media (prefers-contrast: more) {
-
   .slider-spinbox {
     border-width: 2px;
     border-color: var(--color-text);
@@ -3529,7 +3500,6 @@ body.high-contrast .param-tooltip {
 
 /* Mobile responsiveness - stack on small screens */
 @media (max-width: 480px) {
-
   .slider-container {
     flex-wrap: wrap;
   }
@@ -3572,7 +3542,6 @@ body.high-contrast .param-tooltip {
    Without wrapping, "(default: ...)" can consume the row and collapse
    the number input to a few pixels. */
 @media (max-width: 767px) {
-
   .number-input-container {
     flex-wrap: wrap;
     align-items: flex-start;
@@ -3865,7 +3834,6 @@ select:focus-visible {
 
 /* Forced Colors (Windows High Contrast) for Processing Overlay */
 @media (forced-colors: active) {
-
   .processing-overlay {
     background: Canvas;
     color: CanvasText;
@@ -4127,7 +4095,6 @@ select:focus-visible {
 
 /* Responsive adjustments */
 @media (prefers-reduced-motion: reduce) {
-
   .preview-state-indicator.state-pending,
   .preview-state-indicator.state-rendering,
   .preview-container.preview-rendering {
@@ -4201,7 +4168,6 @@ select:focus-visible {
 
 /* Dark mode scrollbar contrast */
 @media (prefers-color-scheme: dark) {
-
   :root:not([data-theme='light']) .preset-modal-content,
   :root:not([data-theme='light']) .file-tree {
     scrollbar-color: var(--color-border) transparent;
@@ -4480,7 +4446,6 @@ select:focus-visible {
 }
 
 @media (prefers-reduced-motion: reduce) {
-
   .format-2d-guidance.guidance-enter {
     animation: none;
   }
@@ -4849,7 +4814,6 @@ select:focus-visible {
 
 /* Reduced-motion: remove dropdown fade/transition if we add one later */
 @media (prefers-reduced-motion: reduce) {
-
   .preset-combobox-input-wrap,
   .preset-combobox-chevron {
     transition: none;
@@ -4876,7 +4840,6 @@ select:focus-visible {
 
 /* Forced Colors Mode (Windows High Contrast) */
 @media (forced-colors: active) {
-
   .preset-combobox-input-wrap {
     border: 1px solid ButtonText;
     forced-color-adjust: none;
@@ -4964,7 +4927,6 @@ select:focus-visible {
 @supports not (
   (backdrop-filter: blur(6px)) or (-webkit-backdrop-filter: blur(6px))
 ) {
-
   .modal-overlay {
     background: rgba(12, 12, 12, 0.7);
   }
@@ -5354,7 +5316,6 @@ body.first-visit-blocking #app {
 }
 
 @media (forced-colors: active) {
-
   .panel-help-btn {
     forced-color-adjust: auto;
     border-color: ButtonText;
@@ -5577,7 +5538,6 @@ body.first-visit-blocking #app {
 
 /* Mobile responsiveness */
 @media (max-width: 480px) {
-
   .console-controls {
     flex-direction: column;
     align-items: flex-start;
@@ -5940,7 +5900,6 @@ body.first-visit-blocking #app {
 }
 
 @media (max-width: 767px) {
-
   .preset-modal {
     padding: var(--space-sm);
     padding-top: calc(var(--space-sm) + env(safe-area-inset-top, 0px));
@@ -6024,7 +5983,6 @@ body.first-visit-blocking #app {
 
 /* Mobile: stack dimensions vertically */
 @media (max-width: 767px) {
-
   .dimensions-list {
     grid-template-columns: 1fr;
   }
@@ -6083,7 +6041,6 @@ body.first-visit-blocking #app {
 
 /* WebKit scrollbar dark mode contrast */
 @media (prefers-color-scheme: dark) {
-
   :root:not([data-theme='light']) .comparison-grid::-webkit-scrollbar-thumb {
     background-color: var(--color-border);
   }
@@ -6104,7 +6061,6 @@ body.first-visit-blocking #app {
 
 /* Dark mode scrollbar contrast (Firefox) */
 @media (prefers-color-scheme: dark) {
-
   :root:not([data-theme='light']) .comparison-grid {
     scrollbar-color: var(--color-border) transparent;
   }
@@ -6274,14 +6230,12 @@ body.first-visit-blocking #app {
 
 /* Responsive Design */
 @media (max-width: 1200px) {
-
   .comparison-grid {
     grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
   }
 }
 
 @media (max-width: 767px) {
-
   .comparison-header {
     flex-direction: column;
     align-items: flex-start;
@@ -6335,7 +6289,6 @@ body.first-visit-blocking #app {
 
 /* Reduced Motion - Comparison View (global reduced-motion handled in variables.css) */
 @media (prefers-reduced-motion: reduce) {
-
   .variant-card {
     transition: none;
   }
@@ -6547,7 +6500,6 @@ body.first-visit-blocking #app {
 
 /* Responsive Design */
 @media (max-width: 767px) {
-
   .library-item {
     padding: var(--space-xs);
   }
@@ -6567,7 +6519,6 @@ body.first-visit-blocking #app {
 
 /* Reduced Motion */
 @media (prefers-reduced-motion: reduce) {
-
   .library-summary,
   .library-item {
     transition: none;
@@ -6902,7 +6853,6 @@ body.first-visit-blocking #app {
 
 /* Forced-colors (Windows High Contrast) */
 @media (forced-colors: active) {
-
   .file-nav-breadcrumbs {
     border-color: CanvasText;
     background: Canvas;
@@ -6930,7 +6880,6 @@ body.first-visit-blocking #app {
 
 /* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
-
   .file-nav-breadcrumb-btn,
   .file-nav-folder-row {
     transition: none;
@@ -7149,7 +7098,6 @@ body.first-visit-blocking #app {
 
 /* Responsive */
 @media (max-width: 767px) {
-
   .color-picker-container {
     flex-wrap: wrap;
   }
@@ -7348,7 +7296,9 @@ body.first-visit-blocking #app {
   border-radius: var(--border-radius-sm);
   background: var(--color-bg);
   cursor: pointer;
-  transition: border-color var(--motion-fast), background-color var(--motion-fast);
+  transition:
+    border-color var(--motion-fast),
+    background-color var(--motion-fast);
   min-height: 44px;
   font-family: inherit;
   font-size: inherit;
@@ -7428,7 +7378,6 @@ body.first-visit-blocking #app {
 
 /* Responsive */
 @media (max-width: 767px) {
-
   .file-upload-container {
     flex-direction: column;
     align-items: stretch;
@@ -7451,7 +7400,6 @@ body.first-visit-blocking #app {
 }
 
 @media (max-height: 720px) {
-
   .upload-zone {
     padding: var(--space-lg);
   }
@@ -7463,7 +7411,6 @@ body.first-visit-blocking #app {
 
 /* Reduced Motion */
 @media (prefers-reduced-motion: reduce) {
-
   .color-preview,
   .color-picker,
   .color-hex-input,
@@ -7567,7 +7514,6 @@ body.first-visit-blocking #app {
 
 /* Mobile responsive vector layout */
 @media (max-width: 480px) {
-
   .vector-inputs {
     flex-direction: column;
   }
@@ -7614,7 +7560,6 @@ body.first-visit-blocking #app {
 
 /* Reduced motion for vector controls */
 @media (prefers-reduced-motion: reduce) {
-
   .vector-input {
     transition: none;
   }
@@ -7872,7 +7817,6 @@ body.first-visit-blocking #app {
 
 /* Responsive */
 @media (max-width: 767px) {
-
   .queue-controls {
     padding: var(--space-sm);
   }
@@ -7906,7 +7850,6 @@ body.first-visit-blocking #app {
 
 /* Reduced Motion */
 @media (prefers-reduced-motion: reduce) {
-
   .queue-item {
     transition: none;
   }
@@ -7965,7 +7908,6 @@ body.first-visit-blocking #app {
 }
 
 @media (forced-colors: active) {
-
   .color-legend {
     border: 1px solid ButtonText;
     background: Canvas;
@@ -8086,7 +8028,6 @@ body.first-visit-blocking #app {
 
 /* Reduced Motion */
 @media (prefers-reduced-motion: reduce) {
-
   .lod-warning {
     animation: none;
   }
@@ -8094,7 +8035,6 @@ body.first-visit-blocking #app {
 
 /* Mobile Responsive */
 @media (max-width: 480px) {
-
   .lod-warning {
     max-width: 95%;
     padding: var(--space-sm);
@@ -8189,7 +8129,6 @@ body.first-visit-blocking #app {
 
 /* Mobile Responsive */
 @media (max-width: 480px) {
-
   .memory-warning {
     max-width: calc(100% - 2 * var(--space-sm));
     bottom: calc(var(--space-sm) + env(safe-area-inset-bottom, 0px));
@@ -8203,7 +8142,6 @@ body.first-visit-blocking #app {
 
 /* Reduced Motion */
 @media (prefers-reduced-motion: reduce) {
-
   .memory-warning {
     animation: none;
   }
@@ -8348,7 +8286,6 @@ body.first-visit-blocking #app {
 
 /* Reduced Motion */
 @media (prefers-reduced-motion: reduce) {
-
   .memory-status-badge[data-state='critical'],
   .memory-status-badge[data-state='emergency'] {
     animation: none;
@@ -8659,7 +8596,6 @@ body.first-visit-blocking #app {
 
 /* Mobile Responsive */
 @media (max-width: 767px) {
-
   .modal-source {
     height: 90vh;
     max-width: 100%;
@@ -8789,7 +8725,6 @@ body.first-visit-blocking #app {
 
 /* Mobile responsive */
 @media (max-width: 767px) {
-
   .modal-console {
     height: 90vh;
     max-width: 100%;
@@ -8911,7 +8846,6 @@ body.first-visit-blocking #app {
 
 /* Reduced Motion for WASM Loading */
 @media (prefers-reduced-motion: reduce) {
-
   .wasm-loading-progress-fill.indeterminate {
     animation: none;
     width: 50% !important;
@@ -9364,7 +9298,6 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
 
 /* Mobile: adjust panel position when modal is open */
 @media (max-width: 767px) {
-
   body:has(#featuresGuideModal:not(.hidden)) .tutorial-panel {
     bottom: 0 !important;
     left: 0 !important;
@@ -9378,7 +9311,6 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
 
 /* Responsive adjustments */
 @media (max-width: 767px) {
-
   .features-guide-body {
     max-height: 80vh;
     max-height: 80dvh;
@@ -9610,7 +9542,6 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
 
 /* Mobile Responsive */
 @media (max-width: 767px) {
-
   .camera-controls {
     bottom: calc(var(--space-sm) + env(safe-area-inset-bottom, 0px));
     right: var(--space-sm);
@@ -9634,7 +9565,6 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
 
 /* Reduced Motion */
 @media (prefers-reduced-motion: reduce) {
-
   .camera-control-btn {
     transition: none;
   }
@@ -9714,7 +9644,6 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
 
 /* Responsive for feature cards */
 @media (min-width: 768px) {
-
   .features-overview {
     padding: var(--space-lg);
   }
@@ -9752,7 +9681,9 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
   text-decoration-thickness: 1.5px;
   text-underline-offset: 2px;
   border-radius: 2px;
-  transition: color var(--motion-base), text-decoration-color var(--motion-base);
+  transition:
+    color var(--motion-base),
+    text-decoration-color var(--motion-base);
 }
 
 .role-path-meta a:hover {
@@ -9766,7 +9697,6 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
 }
 
 @supports not selector(:focus-visible) {
-
   .role-path-meta a:focus {
     outline: 3px solid var(--color-focus);
     outline-offset: 2px;
@@ -9810,7 +9740,6 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
 }
 
 @media (prefers-reduced-motion: reduce) {
-
   .role-path-details > summary::before {
     transition: none;
   }
@@ -9981,7 +9910,6 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
 }
 
 @media (prefers-reduced-motion: reduce) {
-
   .spotlights-summary::before {
     transition: none;
   }
@@ -10054,7 +9982,6 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
 }
 
 @supports not selector(:focus-visible) {
-
   .spotlight-link:focus {
     outline: 3px solid var(--color-focus);
     outline-offset: 2px;
@@ -10062,7 +9989,6 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
 }
 
 @media (max-width: 767px) {
-
   .accessibility-spotlights {
     padding: var(--space-md);
   }
@@ -10135,7 +10061,6 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
 
 /* Use dynamic viewport height on modern browsers */
 @supports (max-height: 100dvh) {
-
   .tutorial-panel {
     max-height: calc(100dvh - 32px);
   }
@@ -10344,7 +10269,6 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
 
 /* Small-height viewport adjustments for tutorial panel */
 @media (max-height: 640px) {
-
   .tutorial-panel {
     max-height: calc(100vh - 16px);
     max-height: calc(100dvh - 16px);
@@ -10388,7 +10312,6 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
 
 /* Even smaller viewport - mobile portrait with zoom */
 @media (max-height: 520px) {
-
   .tutorial-panel {
     max-height: calc(100vh - 8px);
     max-height: calc(100dvh - 8px);
@@ -10590,7 +10513,6 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
 }
 
 @media (forced-colors: active) {
-
   .tutorial-keyboard-hint kbd {
     border: 1px solid ButtonText;
   }
@@ -10887,7 +10809,6 @@ body:has(#featuresGuideModal .modal-content.tutorial-target-highlight)
 
 /* Forced Colors Mode (Windows High Contrast) - Tutorial buttons */
 @media (forced-colors: active) {
-
   .tutorial-btn-back,
   .tutorial-btn-next {
     border: 2px solid ButtonText !important;
@@ -10923,7 +10844,6 @@ body:has(#featuresGuideModal .modal-content.tutorial-target-highlight)
 
 /* Enhanced Contrast Mode (prefers-contrast: more) - Tutorial */
 @media (prefers-contrast: more) {
-
   .tutorial-btn-back,
   .tutorial-btn-next {
     border-width: 2px;
@@ -10951,7 +10871,6 @@ body:has(#featuresGuideModal .modal-content.tutorial-target-highlight)
 
 /* Reduced Transparency Mode */
 @media (prefers-reduced-transparency: reduce) {
-
   .tutorial-backdrop {
     backdrop-filter: none !important;
     fill: var(--color-overlay-solid, rgba(0, 0, 0, 0.85)) !important;
@@ -10965,7 +10884,6 @@ body:has(#featuresGuideModal .modal-content.tutorial-target-highlight)
 
 /* Reduced Motion */
 @media (prefers-reduced-motion: reduce) {
-
   .tutorial-overlay,
   .tutorial-panel,
   .tutorial-spotlight-cutout,
@@ -10989,7 +10907,6 @@ body:has(#featuresGuideModal .modal-content.tutorial-target-highlight)
    When a target is highlighted, allow JS positioning so the panel can move
    out of the way instead of covering the control. */
 @media (max-width: 600px) {
-
   .tutorial-panel:not(.tutorial-panel-positioned) {
     position: fixed;
     bottom: 0;
@@ -11024,7 +10941,6 @@ body:has(#featuresGuideModal .modal-content.tutorial-target-highlight)
 
 /* Landscape on notched devices */
 @media (orientation: landscape) and (max-height: 500px) {
-
   .tutorial-panel {
     max-width: calc(
       100vw - env(safe-area-inset-left) - env(safe-area-inset-right) -
@@ -11037,7 +10953,6 @@ body:has(#featuresGuideModal .modal-content.tutorial-target-highlight)
 
 /* Touch device optimizations */
 @media (pointer: coarse) {
-
   .tutorial-btn-back,
   .tutorial-btn-next {
     min-height: 44px;
@@ -11098,7 +11013,6 @@ body.tutorial-body-locked {
 
 /* Print styles - hide tutorial completely */
 @media print {
-
   .tutorial-overlay,
   .tutorial-backdrop,
   .tutorial-panel,
@@ -11110,7 +11024,6 @@ body.tutorial-body-locked {
 
 /* Inverted colors support (iOS/macOS Smart Invert) */
 @media (inverted-colors: inverted) {
-
   .tutorial-backdrop,
   .tutorial-panel {
     filter: invert(0); /* Prevent double-inversion */
@@ -11140,7 +11053,6 @@ body.tutorial-body-locked {
 
 /* Responsive: Stack cards on mobile */
 @media (max-width: 767px) {
-
   .role-paths-grid {
     grid-template-columns: 1fr;
   }
@@ -11152,7 +11064,6 @@ body.tutorial-body-locked {
 
 /* Reduced motion: Disable transitions */
 @media (prefers-reduced-motion: reduce) {
-
   .role-path-card {
     transition: none;
   }
@@ -11381,7 +11292,6 @@ body.tutorial-body-locked {
 
 /* Hide button text on small screens, show only icons */
 @media (max-width: 600px) {
-
   .workflow-actions .btn-text {
     display: none;
   }
@@ -11746,7 +11656,6 @@ body.tutorial-body-locked {
 
 /* Mobile responsive */
 @media (max-width: 767px) {
-
   .param-search-row {
     flex-direction: column;
   }
@@ -11783,7 +11692,6 @@ body.tutorial-body-locked {
 
 /* Reduced motion */
 @media (forced-colors: active) {
-
   /* Skip link must be visible */
   .skip-link {
     background: ButtonFace;
@@ -12354,7 +12262,6 @@ body.tutorial-body-locked {
 
 /* High Contrast Mode */
 @media (prefers-contrast: more) {
-
   .storage-panel {
     border-width: 3px;
   }
@@ -12366,7 +12273,6 @@ body.tutorial-body-locked {
 
 /* Forced Colors Mode (Windows High Contrast) */
 @media (forced-colors: active) {
-
   .storage-panel {
     border: 2px solid CanvasText;
   }
@@ -12383,7 +12289,6 @@ body.tutorial-body-locked {
 
 /* Mobile Responsive */
 @media (max-width: 767px) {
-
   .storage-panel {
     padding: var(--space-sm);
   }
@@ -12397,7 +12302,6 @@ body.tutorial-body-locked {
 
 /* Reduced Motion */
 @media (prefers-reduced-motion: reduce) {
-
   .storage-meter-fill {
     transition: none;
   }
@@ -12605,7 +12509,6 @@ body.tutorial-body-locked {
 
 /* Mobile Responsive */
 @media (max-width: 600px) {
-
   .shortcut-item {
     flex-direction: column;
     align-items: flex-start;
@@ -12632,7 +12535,6 @@ body.tutorial-body-locked {
 
 /* High Contrast Mode */
 @media (prefers-contrast: more) {
-
   .shortcut-key-btn {
     border-width: 3px;
   }
@@ -12644,7 +12546,6 @@ body.tutorial-body-locked {
 
 /* Forced Colors Mode (Windows High Contrast) */
 @media (forced-colors: active) {
-
   .shortcut-key-btn {
     border: 2px solid ButtonBorder;
   }
@@ -12663,7 +12564,6 @@ body.tutorial-body-locked {
 
 /* Reduced Motion */
 @media (prefers-reduced-motion: reduce) {
-
   .shortcut-key-btn.capturing {
     animation: none;
   }
@@ -13108,7 +13008,6 @@ body.tutorial-body-locked {
 
 /* Forced Colors Mode (Windows High Contrast) */
 @media (forced-colors: active) {
-
   .mode-toggle-btn {
     border: 2px solid ButtonText !important;
   }
@@ -13199,7 +13098,6 @@ body.tutorial-body-locked {
 /* Mobile Responsive */
 
 @media (max-width: 600px) {
-
   .textarea-line-numbers {
     width: 40px;
     min-width: 40px;
@@ -13319,7 +13217,6 @@ body.tutorial-body-locked {
 
 /* Reduced Motion */
 @media (prefers-reduced-motion: reduce) {
-
   .mode-toggle-btn,
   .editor-dirty-indicator {
     transition: none;
@@ -13446,7 +13343,6 @@ body.tutorial-body-locked {
 }
 
 @media (prefers-reduced-motion: reduce) {
-
   .preset-search-input,
   .preset-search-clear {
     transition: none;
@@ -13868,7 +13764,6 @@ body.tutorial-body-locked {
 
 /* ── Responsive: stack panes on narrow viewports (non-fullscreen only) ──── */
 @media (max-width: 540px) {
-
   .svg-prep-workspace:not(.svg-prep-fullscreen) .svg-prep-previews {
     flex-direction: column;
   }
@@ -13947,7 +13842,6 @@ body.tutorial-body-locked {
 
 /* ── Reduced Motion ──────────────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
-
   .svg-prep-workspace {
     transition: none;
   }
@@ -13973,7 +13867,6 @@ body.tutorial-body-locked {
 
 /* ── Forced Colors Mode (Windows High Contrast) ─────────────────────────── */
 @media (forced-colors: active) {
-
   .svg-prep-workspace {
     border: 2px solid ButtonText;
     background: Canvas;

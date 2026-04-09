@@ -54,7 +54,8 @@ export const FLAGS = {
   codemirror_editor: {
     id: 'codemirror_editor',
     name: 'Advanced Code Editor (CodeMirror)',
-    description: 'Use CodeMirror 6 editor with syntax highlighting instead of simple textarea',
+    description:
+      'Use CodeMirror 6 editor with syntax highlighting instead of simple textarea',
     default: true,
     rollout: 100,
     userConfigurable: true,

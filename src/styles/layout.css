@@ -4353,7 +4353,8 @@ details summary:focus,
   }
 
   /* Preview panel needs bottom spacing so content isn't hidden behind the sheet */
-  .main-interface:has(.expert-mode-panel.active:not(.expert-mode-collapsed)) .preview-panel {
+  .main-interface:has(.expert-mode-panel.active:not(.expert-mode-collapsed))
+    .preview-panel {
     padding-bottom: calc(40vh + var(--actions-bar-collapsed-offset, 0px));
   }
 
@@ -4363,7 +4364,8 @@ details summary:focus,
 
   /* Dark mode shadow */
   @media (prefers-color-scheme: dark) {
-    :root:not([data-theme='light']) .param-panel:has(.expert-mode-panel.active) {
+    :root:not([data-theme='light'])
+      .param-panel:has(.expert-mode-panel.active) {
       box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.4);
     }
   }

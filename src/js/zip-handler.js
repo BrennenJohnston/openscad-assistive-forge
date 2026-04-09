@@ -618,12 +618,11 @@ export function buildPresetCompanionMap(files, parameterSets, options = {}) {
       return tied.every(
         (b) =>
           b === a ||
-          b.path
-            .substring(0, b.path.lastIndexOf('/'))
-            .startsWith(aDir + '/')
+          b.path.substring(0, b.path.lastIndexOf('/')).startsWith(aDir + '/')
       );
     });
-    if (ancestor) return { path: ancestor.path, resolution: 'ancestor-fallback' };
+    if (ancestor)
+      return { path: ancestor.path, resolution: 'ancestor-fallback' };
 
     // Sibling tie — filter by extra-segment token matching.
     // Compute the common ancestor directory of all tied candidates, then
@@ -646,7 +645,8 @@ export function buildPresetCompanionMap(files, parameterSets, options = {}) {
       const matched = tied.filter((s) =>
         extraSegmentsMatchTokens(syntheticParent, s.path, tokens)
       );
-      if (matched.length === 1) return { path: matched[0].path, resolution: 'unique' };
+      if (matched.length === 1)
+        return { path: matched[0].path, resolution: 'unique' };
       if (matched.length > 1) {
         matched.sort(
           (a, b) => a.path.split('/').length - b.path.split('/').length
@@ -703,7 +703,10 @@ export function buildPresetCompanionMap(files, parameterSets, options = {}) {
           a.path.split('/').length - b.path.split('/').length ||
           a.path.localeCompare(b.path)
       );
-      return { path: ancestorFallbacks[0].path, resolution: 'ancestor-fallback' };
+      return {
+        path: ancestorFallbacks[0].path,
+        resolution: 'ancestor-fallback',
+      };
     }
 
     return { path: null, resolution: 'ambiguous' };
@@ -712,10 +715,7 @@ export function buildPresetCompanionMap(files, parameterSets, options = {}) {
   // Find the nearest (deepest) scored candidate whose directory is a
   // proper ancestor of the winner's directory.
   function findAncestorCandidate(winner, scored) {
-    const winnerDir = winner.path.substring(
-      0,
-      winner.path.lastIndexOf('/')
-    );
+    const winnerDir = winner.path.substring(0, winner.path.lastIndexOf('/'));
     if (!winnerDir) return null;
 
     let best = null;
@@ -736,10 +736,7 @@ export function buildPresetCompanionMap(files, parameterSets, options = {}) {
   // appears in the preset tokens. Uses the same normalization as
   // scorePath so that e.g. "-equivalent Case" is stripped.
   function extraSegmentsMatchTokens(parentPath, childPath, tokens) {
-    const parentDir = parentPath.substring(
-      0,
-      parentPath.lastIndexOf('/')
-    );
+    const parentDir = parentPath.substring(0, parentPath.lastIndexOf('/'));
     const childDir = childPath.substring(0, childPath.lastIndexOf('/'));
     const extra = childDir.substring(parentDir.length + 1);
     const words = extra
@@ -774,10 +771,17 @@ export function buildPresetCompanionMap(files, parameterSets, options = {}) {
       for (const target of companionTargets) {
         const candidates = aliasableBasenames.get(target);
         if (candidates) {
-          const bestResult = pickBest(filterByBrand(candidates, brand), tokens, parts);
+          const bestResult = pickBest(
+            filterByBrand(candidates, brand),
+            tokens,
+            parts
+          );
           if (bestResult.path) {
             aliases[target] = bestResult.path;
-            if (bestResult.resolution === 'ancestor-fallback' && entryResolution === 'unique') {
+            if (
+              bestResult.resolution === 'ancestor-fallback' &&
+              entryResolution === 'unique'
+            ) {
               entryResolution = 'ancestor-fallback';
             }
           } else {
@@ -795,7 +799,11 @@ export function buildPresetCompanionMap(files, parameterSets, options = {}) {
         aliases[basename] = svgPaths[0];
         svgAliasTarget = basename;
       } else if (svgPaths.length > 1) {
-        const svgResult = pickBest(filterByBrand(svgPaths, brand), tokens, parts);
+        const svgResult = pickBest(
+          filterByBrand(svgPaths, brand),
+          tokens,
+          parts
+        );
         if (svgResult.path) {
           const basename = svgResult.path.split('/').pop();
           aliases[basename] = svgResult.path;
@@ -803,7 +811,11 @@ export function buildPresetCompanionMap(files, parameterSets, options = {}) {
         }
       }
 
-      result.set(presetName, { aliases, svgAliasTarget, resolution: entryResolution });
+      result.set(presetName, {
+        aliases,
+        svgAliasTarget,
+        resolution: entryResolution,
+      });
     } else {
       // LEGACY-ONLY COMPATIBILITY PATH:
       // Keep keyguard-shaped fallback mapping for stakeholder archives that do
@@ -834,7 +846,11 @@ export function buildPresetCompanionMap(files, parameterSets, options = {}) {
       if (svgPaths.length === 1) {
         svgPath = svgPaths[0];
       } else if (svgPaths.length > 1) {
-        const svgResult = pickBest(filterByBrand(svgPaths, brand), tokens, parts);
+        const svgResult = pickBest(
+          filterByBrand(svgPaths, brand),
+          tokens,
+          parts
+        );
         svgPath = svgResult.path;
         if (!svgPath) {
           console.warn(
@@ -843,7 +859,11 @@ export function buildPresetCompanionMap(files, parameterSets, options = {}) {
         }
       }
 
-      result.set(presetName, { openingsPath, svgPath, resolution: entryResolution });
+      result.set(presetName, {
+        openingsPath,
+        svgPath,
+        resolution: entryResolution,
+      });
     }
   }
 
@@ -878,7 +898,10 @@ export function buildPresetCompanionMap(files, parameterSets, options = {}) {
     const fallbackNames = [...result.entries()]
       .filter(([, v]) => v.resolution === 'ancestor-fallback')
       .map(([n]) => n);
-    console.debug('[PresetCompanionMap] Ancestor-fallback presets:', fallbackNames);
+    console.debug(
+      '[PresetCompanionMap] Ancestor-fallback presets:',
+      fallbackNames
+    );
   }
   if (diagCounts.ambiguous > 0) {
     const ambiguousNames = [...result.entries()]
@@ -917,7 +940,11 @@ export function applyCompanionAliases(projectFiles, companionMapping) {
           `[CompanionAlias] Creating "${aliasTarget}" from "${sourcePath}" (target was missing)`
         );
         result.set(aliasTarget, result.get(sourcePath));
-      } else if (sourcePath && result.has(sourcePath) && result.has(aliasTarget)) {
+      } else if (
+        sourcePath &&
+        result.has(sourcePath) &&
+        result.has(aliasTarget)
+      ) {
         console.debug(
           `[CompanionAlias] Skipping "${aliasTarget}" — root key already exists, preserving original`
         );

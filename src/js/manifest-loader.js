@@ -674,9 +674,7 @@ export async function loadManifest(manifestUrl, { onProgress } = {}) {
           }
         }
       } catch {
-        console.warn(
-          `[Manifest] Could not parse preset file: ${file.path}`
-        );
+        console.warn(`[Manifest] Could not parse preset file: ${file.path}`);
       }
     }
   }
