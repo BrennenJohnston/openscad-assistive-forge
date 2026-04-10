@@ -12,6 +12,27 @@ import path from 'path'
 const isCI = !!process.env.CI
 const MOBILE_BREAKPOINT = 768
 
+/**
+ * WebKit on macOS CI intermittently rejects page.goto() with
+ * "Provisional navigation canceled". Retry up to 3 times with a short
+ * back-off so a single transient failure doesn't sink the whole suite.
+ */
+async function safeGoto(page, url, opts = {}) {
+  const maxAttempts = 3
+  for (let i = 1; i <= maxAttempts; i++) {
+    try {
+      await page.goto(url, opts)
+      return
+    } catch (err) {
+      const transient =
+        /provisional navigation canceled/i.test(err.message) ||
+        /net::ERR_ABORTED/i.test(err.message)
+      if (!transient || i === maxAttempts) throw err
+      await page.waitForTimeout(500 * i)
+    }
+  }
+}
+
 const VIEWPORTS = [
   { label: 'tiny-portrait', width: 320, height: 568, hasTouch: true },
   { label: 'phone-portrait', width: 375, height: 812, hasTouch: true },
@@ -36,7 +57,7 @@ async function loadSampleFile(page) {
     timeout: 120_000,
   })
 
-  await page.goto('/')
+  await safeGoto(page, '/')
   await wasmReady
 
   const fixturePath = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad')
@@ -71,7 +92,7 @@ for (const vp of VIEWPORTS) {
 
     // ── Surface 1: App shell ────────────────────────────────────────────
     test('app shell — no overflow, #app fills viewport, header visible', async ({ page }) => {
-      await page.goto('/')
+      await safeGoto(page, '/')
 
       await checkNoHorizontalOverflow(page)
 
@@ -90,7 +111,7 @@ for (const vp of VIEWPORTS) {
     test('welcome screen — upload zone visible and tappable, example buttons accessible', async ({
       page,
     }) => {
-      await page.goto('/')
+      await safeGoto(page, '/')
 
       const uploadZone = page.locator('#uploadZone, .upload-zone').first()
       await expect(uploadZone).toBeVisible()
@@ -114,7 +135,7 @@ for (const vp of VIEWPORTS) {
 
     // ── Surface 3: Header ───────────────────────────────────────────────
     test('header — controls within viewport, proper title variant', async ({ page }) => {
-      await page.goto('/')
+      await safeGoto(page, '/')
 
       const header = page.locator('.app-header')
       await expect(header).toBeVisible()
@@ -233,7 +254,7 @@ for (const vp of VIEWPORTS) {
         predicate: (msg) => msg.text().includes('OpenSCAD WASM ready'),
         timeout: 120_000,
       })
-      await page.goto('/?example=q-charm&flag_svg_preparer=true')
+      await safeGoto(page, '/?example=q-charm&flag_svg_preparer=true')
       await wasmReady
 
       await page.waitForSelector('.param-control', { timeout: 30_000 })
@@ -297,7 +318,7 @@ for (const vp of VIEWPORTS) {
 
     // ── Surface 9: Modals/dialogs ───────────────────────────────────────
     test('modals/dialogs — fit within viewport, dismissible', async ({ page }) => {
-      await page.goto('/')
+      await safeGoto(page, '/')
 
       // Open the keyboard shortcuts modal (no WASM needed)
       const shortcutsBtn = page.locator('#shortcutsToggle')
