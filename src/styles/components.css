@@ -3711,6 +3711,22 @@ select:focus-visible {
   height: 20px;
 }
 
+/* HC Dark: explicit colors for WebKit where var() chains may not resolve
+   synchronously after data-theme mutations (track ≠ thumb ≥ 30 channel diff). */
+:root[data-high-contrast='true'][data-theme='dark']
+  .toggle-switch
+  input[type='checkbox'] {
+  background-color: var(--color-text-primary, #edeef0);
+  border-color: var(--color-text-primary, #edeef0);
+}
+
+:root[data-high-contrast='true'][data-theme='dark']
+  .toggle-switch
+  input[type='checkbox']::before {
+  background-color: var(--color-bg-primary, #111113);
+  border-color: var(--color-text-primary, #edeef0);
+}
+
 :root[data-high-contrast='true'] .toggle-switch input[type='checkbox']:checked {
   background-color: var(--color-success);
   border-color: var(--color-success);

@@ -1366,7 +1366,11 @@ test.describe('Color System and Theme Accessibility', () => {
     ]
 
     for (const state of themeStates) {
-      const result = await page.evaluate((cfg) => {
+      // Set theme attributes in one call, then read styles in a separate call.
+      // This allows the MutationObserver (which syncs Radix color-scale
+      // inline vars) to fire between the two evaluations — WebKit needs
+      // the variables on :root before getComputedStyle returns real values.
+      await page.evaluate((cfg) => {
         const root = document.documentElement
         root.setAttribute('data-theme', cfg.theme)
         if (cfg.hc) {
@@ -1390,9 +1394,14 @@ test.describe('Color System and Theme Accessibility', () => {
           wrapper.appendChild(input)
           document.body.appendChild(wrapper)
         }
-        const input = wrapper.querySelector('input')
-        input.checked = false
+        wrapper.querySelector('input').checked = false
+      }, state)
 
+      // Allow one animation frame for style recalculation + MutationObserver
+      await page.evaluate(() => new Promise((r) => requestAnimationFrame(r)))
+
+      const result = await page.evaluate(() => {
+        const input = document.querySelector('#_test-toggle-wrapper input')
         const trackStyle = getComputedStyle(input)
         const thumbStyle = getComputedStyle(input, '::before')
 
@@ -1400,11 +1409,14 @@ test.describe('Color System and Theme Accessibility', () => {
           trackBg: trackStyle.backgroundColor,
           thumbBg: thumbStyle.backgroundColor,
         }
-      }, state)
+      })
 
       const parseRgb = (str) => {
-        const m = str.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/)
-        return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null
+        const m = str.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/)
+        if (!m) return null
+        // Treat fully transparent (alpha 0) as unresolved
+        if (m[4] !== undefined && Number(m[4]) === 0) return null
+        return [Number(m[1]), Number(m[2]), Number(m[3])]
       }
 
       const trackRgb = parseRgb(result.trackBg)
