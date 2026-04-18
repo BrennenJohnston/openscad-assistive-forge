@@ -7,6 +7,7 @@ Everything you need to use, develop, or deploy OpenSCAD Assistive Forge.
 If you just want to customize models, start here:
 
 - [Getting Started](./guides/GETTING_STARTED.md) -- your first five minutes with the app
+- [Run Offline (Install as a Desktop App)](./guides/RUN_OFFLINE_GUIDE.md) -- PWA install on Chrome / Edge, offline use, workshop checklist, group-policy force-install
 - [Standard Mode Guide](./guides/STANDARD_MODE_GUIDE.md) -- parameter types, presets, image measurement, reference overlay
 - [Expert Mode Guide](./guides/EXPERT_MODE_GUIDE.md) -- code editing for power users
 - [Accessibility Guide](./guides/ACCESSIBILITY_GUIDE.md) -- keyboard, screen reader, high contrast
@@ -34,6 +35,7 @@ If you're setting up the project for development or thinking about forking:
 
 - [Deployment Guide](./DEPLOYMENT.md) -- Cloudflare Pages, nginx, Apache
 - [Security Admin Guide](./SECURITY_ADMIN_GUIDE.md) -- CSP, headers, compliance
+- [IT Approval Guide](./guides/IT_APPROVAL_GUIDE.md) -- hand to security teams for allowlisting and enterprise deployment
 - [Rollback Runbook](./ROLLBACK_RUNBOOK.md) -- production rollback procedures
 
 ---
