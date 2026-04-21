@@ -1225,42 +1225,28 @@ body {
   font-size: 0.9em;
 }
 
-.memory-text {
+.memory-text,
+.memory-mb {
   font-family: var(--font-family-mono);
   min-width: 50px;
 }
 
-.memory-bar {
-  width: 40px;
-  height: 6px;
-  background: var(--color-bg-tertiary);
-  border-radius: 3px;
-  overflow: hidden;
-}
+/*
+ * BR-4: removed .memory-bar / .memory-bar-fill rules. We previously rendered
+ * a faux progressbar whose percent was (heapBytes / 1 GB) * 100, but the
+ * WASM runtime does not expose a real memory limit. The indicator now shows
+ * an absolute MB value only; the warning/critical classes still color the
+ * text when the absolute heap exceeds the threshold.
+ */
 
-.memory-bar-fill {
-  height: 100%;
-  background: var(--color-accent);
-  transition:
-    width var(--motion-slow) ease,
-    background-color var(--motion-slow) ease;
-  border-radius: 3px;
-}
-
-/* Warning state (75%+ usage) */
-.memory-indicator.warning .memory-bar-fill {
-  background: var(--color-warning, #ffc107);
-}
-
+/* Warning state (~819 MB+ allocated) */
+.memory-indicator.warning .memory-mb,
 .memory-indicator.warning .memory-text {
   color: var(--color-warning, #ffc107);
 }
 
-/* Critical state (90%+ usage) */
-.memory-indicator.critical .memory-bar-fill {
-  background: var(--color-error, #dc3545);
-}
-
+/* Critical state (~950 MB+ allocated) */
+.memory-indicator.critical .memory-mb,
 .memory-indicator.critical .memory-text {
   color: var(--color-error, #dc3545);
 }
@@ -1276,15 +1262,6 @@ body {
 @media (forced-colors: active) {
   .memory-indicator {
     border-left-color: CanvasText;
-  }
-
-  .memory-bar {
-    border: 1px solid CanvasText;
-    background: Canvas;
-  }
-
-  .memory-bar-fill {
-    background: Highlight;
   }
 }
 

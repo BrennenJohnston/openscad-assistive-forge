@@ -3083,7 +3083,7 @@ async function initApp() {
       // Set up memory warning callback
       renderController.setMemoryWarningCallback((memoryInfo) => {
         console.warn(
-          `[Memory] High usage: ${memoryInfo.usedMB}MB / ${memoryInfo.limitMB}MB (${memoryInfo.percent}%)`
+          `[Memory] High usage: ${memoryInfo.usedMB} MB allocated to the OpenSCAD engine`
         );
         // Update memory indicator
         updateMemoryIndicator(memoryInfo);
@@ -3311,7 +3311,7 @@ async function initApp() {
         <span class="memory-warning-icon">⚠️</span>
         <div class="memory-warning-text">
           <strong>High Memory Usage</strong>
-          <p>Memory: ${memoryInfo.usedMB}MB / ${memoryInfo.limitMB}MB (${memoryInfo.percent}%)</p>
+          <p>Memory allocated to the OpenSCAD engine: ${memoryInfo.usedMB} MB</p>
           <p class="memory-warning-hint">
             This warning is about the OpenSCAD engine’s allocated memory (it may stay high until the engine is restarted).
             If you also see an error like “produces no geometry”, fix that first—memory may not be the cause.
@@ -3418,42 +3418,34 @@ async function initApp() {
   function updateMemoryIndicator(memoryInfo) {
     const indicator = document.getElementById('memoryIndicator');
     const text = document.getElementById('memoryText');
-    const barFill = document.getElementById('memoryBarFill');
-    const bar = document.getElementById('memoryBar');
 
     if (!indicator || !memoryInfo) return;
 
     indicator.classList.remove('hidden');
 
+    const usedMB = memoryInfo.usedMB || 0;
     if (text) {
-      text.textContent = `${memoryInfo.usedMB || 0}MB`;
+      text.textContent = `${usedMB} MB`;
     }
 
-    const percent = memoryInfo.percent || 0;
-    if (barFill) {
-      barFill.style.width = `${Math.min(percent, 100)}%`;
-    }
-    if (bar) {
-      bar.setAttribute('aria-valuenow', percent);
-    }
-
+    // BR-4: no fictional percent. Warning state is driven by an absolute-MB
+    // threshold so the indicator turns "warning" only when the WASM heap
+    // buffer is genuinely large. The MemoryMonitor decides the badge
+    // separately via memoryInfo.usedMB.
     indicator.classList.remove('warning', 'critical');
-    if (percent >= 90) {
+    if (usedMB >= 950) {
       indicator.classList.add('critical');
-    } else if (percent >= 75) {
+    } else if (usedMB >= 819) {
       indicator.classList.add('warning');
     }
 
-    const tips = [];
-    if (percent >= 90) {
-      tips.push('Memory very high - consider refreshing');
-    } else if (percent >= 75) {
-      tips.push('Memory usage elevated');
+    const tips = [`${usedMB} MB allocated to the OpenSCAD engine`];
+    if (usedMB >= 950) {
+      tips.unshift('Memory very high — consider refreshing');
+    } else if (usedMB >= 819) {
+      tips.unshift('Memory usage elevated');
     }
-    if (memoryInfo.limitMB) {
-      tips.push(`${memoryInfo.usedMB}MB of ~${memoryInfo.limitMB}MB`);
-    }
-    indicator.title = tips.join('\n') || 'WASM memory usage';
+    indicator.title = tips.join('\n');
   }
 
   // memoryPollInterval is now declared at the top of initApp() to avoid TDZ

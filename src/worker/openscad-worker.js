@@ -2106,52 +2106,35 @@ let heapBeforeRenderMB = 0;
  */
 function checkMemoryBeforeRender(requestId) {
   if (!openscadModule || !openscadModule.HEAP8) {
-    return { percent: 0, warning: false };
+    return { usedMB: 0, warning: false };
   }
-  // Get WASM heap info - note HEAP8.length is allocated size, not usage
+  // Get WASM heap info - note HEAP8.length is allocated buffer size, not usage.
+  // HEAP8.length == buffer.byteLength, so a percent-of-limit number would be
+  // meaningless. We warn based on absolute heap size only.
   const heapAllocatedBytes = openscadModule.HEAP8.length;
-  const heapAllocatedMB = Math.round(heapAllocatedBytes / 1024 / 1024);
+  const usedMB = Math.round(heapAllocatedBytes / 1024 / 1024);
 
   // Record baseline for growth calculation
-  heapBeforeRenderMB = heapAllocatedMB;
+  heapBeforeRenderMB = usedMB;
 
-  // NOTE: We can only measure the allocated heap size, not actual usage.
-  // HEAP8.length == buffer.byteLength, so percentage-based checks are meaningless.
-  // Instead, warn based on absolute heap size (e.g., warn when heap > 1GB).
-  const usedMB = heapAllocatedMB;
-  const limitMB = MEMORY_WARNING_THRESHOLD_MB;
-
-  if (heapAllocatedMB >= MEMORY_WARNING_THRESHOLD_MB) {
+  if (usedMB >= MEMORY_WARNING_THRESHOLD_MB) {
     self.postMessage({
       type: 'WARNING',
       payload: {
         requestId,
         code: 'HIGH_MEMORY',
-        message: `Memory allocation is high (${usedMB}MB). Complex models may fail. Consider refreshing the page to free memory.`,
+        message: `Memory allocation is high (${usedMB} MB). Complex models may fail. Consider refreshing the page to free memory.`,
         severity: 'warning',
         memoryUsage: {
           used: heapAllocatedBytes,
-          limit: limitMB * 1024 * 1024,
-          percent: Math.round((usedMB / limitMB) * 100),
           usedMB,
-          limitMB,
         },
       },
     });
-    return {
-      percent: Math.round((usedMB / limitMB) * 100),
-      warning: true,
-      usedMB,
-      limitMB,
-    };
+    return { usedMB, warning: true };
   }
 
-  return {
-    percent: Math.round((usedMB / limitMB) * 100),
-    warning: false,
-    usedMB,
-    limitMB,
-  };
+  return { usedMB, warning: false };
 }
 
 /**
@@ -2175,9 +2158,7 @@ async function render(payload) {
     // Check memory usage before starting render
     const memCheck = checkMemoryBeforeRender(requestId);
     if (memCheck.warning) {
-      console.warn(
-        `[Worker] High memory usage: ${memCheck.usedMB}MB (${memCheck.percent}%)`
-      );
+      console.warn(`[Worker] High memory usage: ${memCheck.usedMB}MB`);
     }
 
     self.postMessage({
@@ -2683,33 +2664,29 @@ function getMemoryUsage() {
   if (!openscadModule || !openscadModule.HEAP8) {
     return {
       used: 0,
-      limit: MEMORY_WARNING_THRESHOLD_MB * 1024 * 1024,
-      percent: 0,
+      usedMB: 0,
       available: true,
       growthMB: 0,
     };
   }
 
-  // IMPORTANT: heapTotalBytes is the ALLOCATED heap size, not actual used memory.
-  // WASM linear memory grows in 64KB pages; once grown it never shrinks.
-  // We use the warning threshold (1GB) as the "limit" for reporting purposes.
+  // IMPORTANT: heapTotalBytes is the ALLOCATED heap-buffer size, not actual
+  // used bytes. WASM linear memory grows in 64KB pages; once grown it never
+  // shrinks. There is no `limit` value available from the WASM runtime, so
+  // we deliberately do NOT publish a percent/limit (BR-4: drop the
+  // fictional memory percentage). Consumers should use the absolute
+  // `usedMB` and the worker's own HIGH_MEMORY warning instead.
   const heapTotalBytes = openscadModule.HEAP8.length;
   const heapTotalMB = Math.round(heapTotalBytes / 1024 / 1024);
-  const used = heapTotalBytes;
-  const limit = MEMORY_WARNING_THRESHOLD_MB * 1024 * 1024;
-  const percent = Math.round((used / limit) * 100);
 
   // Growth since last render start (helps detect memory leaks between renders)
   const growthMB =
     heapBeforeRenderMB > 0 ? heapTotalMB - heapBeforeRenderMB : 0;
 
   return {
-    used,
-    limit,
-    percent,
-    available: true,
+    used: heapTotalBytes,
     usedMB: heapTotalMB,
-    limitMB: MEMORY_WARNING_THRESHOLD_MB,
+    available: true,
     growthMB,
   };
 }

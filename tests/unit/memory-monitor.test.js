@@ -230,6 +230,26 @@ describe('MemoryMonitor', () => {
 
       expect(onWarning).toHaveBeenCalled();
     });
+
+    // BR-4: the worker no longer publishes a `percent` or `limit` field on
+    // its MEMORY_USAGE payload because the WASM runtime does not expose a
+    // memory limit (HEAP8.length is the allocated buffer size, not used
+    // bytes). updateFromWorker must tolerate the new shape — `heapPercent`
+    // falls back to 0 — and still produce a usable sample for state
+    // evaluation based on the absolute MB value.
+    it('should accept worker payload without percent or limit (BR-4)', () => {
+      const result = monitor.updateFromWorker({
+        used: 150 * 1024 * 1024,
+        usedMB: 150,
+      });
+
+      expect(monitor.history).toHaveLength(1);
+      const sample = monitor.getLatestSample();
+      expect(sample.heapMB).toBe(150);
+      expect(sample.heapPercent).toBe(0);
+      // 150 MB is above the 100 MB warning threshold for this monitor
+      expect(result).toBe(MemoryState.WARNING);
+    });
   });
 
   describe('getStats', () => {

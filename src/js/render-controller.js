@@ -273,12 +273,12 @@ export function estimateRenderTime(scadContent, parameters = {}) {
 }
 
 /**
- * Memory warning threshold (percentage of 1GB warning threshold)
- * Since we can only measure allocated heap size (not actual usage),
- * the worker reports percent as (heapMB / 1024MB) * 100.
- * 80% of 1GB = 819MB, which is a reasonable warning threshold.
+ * Memory warning threshold in MB.
+ * Since we can only measure the allocated heap-buffer size (not actual
+ * usage), this is an absolute-MB threshold rather than a percent. ~819 MB
+ * matches the previous "80% of 1 GB" heuristic.
  */
-const MEMORY_WARNING_THRESHOLD = 80;
+const MEMORY_WARNING_THRESHOLD_MB = 819;
 
 export class RenderController {
   /**
@@ -684,13 +684,11 @@ export class RenderController {
 
       case 'MEMORY_USAGE':
         this.memoryUsage = payload;
-        console.log(
-          `[RenderController] Memory: ${payload.usedMB}MB / ${payload.limitMB}MB (${payload.percent}%)`
-        );
+        console.log(`[RenderController] Memory: ${payload.usedMB} MB`);
 
-        // Trigger warning callback if above threshold
+        // Trigger warning callback if above absolute-MB threshold
         if (
-          payload.percent >= MEMORY_WARNING_THRESHOLD &&
+          (payload.usedMB || 0) >= MEMORY_WARNING_THRESHOLD_MB &&
           this.onMemoryWarning
         ) {
           this.onMemoryWarning(payload);

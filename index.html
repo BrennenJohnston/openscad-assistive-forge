@@ -3437,7 +3437,13 @@
                     class="preview-status-stats"
                     id="previewStatusStats"
                   ></span>
-                  <!-- Memory usage indicator -->
+                  <!--
+                    BR-4: WASM memory indicator — absolute MB only.
+                    The previous percentage progressbar implied a known
+                    "limit" which the WASM runtime does not expose;
+                    HEAP8.length is the allocated buffer size, not used
+                    bytes. We now show just the MB value.
+                  -->
                   <span
                     class="memory-indicator hidden"
                     id="memoryIndicator"
@@ -3445,17 +3451,7 @@
                     aria-live="polite"
                   >
                     <span class="memory-icon" aria-hidden="true">💾</span>
-                    <span class="memory-text" id="memoryText">--</span>
-                    <span
-                      class="memory-bar"
-                      id="memoryBar"
-                      role="progressbar"
-                      aria-valuemin="0"
-                      aria-valuemax="100"
-                      aria-valuenow="0"
-                    >
-                      <span class="memory-bar-fill" id="memoryBarFill"></span>
-                    </span>
+                    <span class="memory-mb" id="memoryText">-- MB</span>
                   </span>
                   <!-- Alt adjust info (visible only in mono variant when alt view is enabled) -->
                   <span
