@@ -2302,7 +2302,7 @@ async function initApp() {
     ];
   });
 
-  // Initialize design panel controller (Flush Caches, Display AST, Check Validity, Geometry Info)
+  // Initialize design panel controller (Flush Caches, Display Parameters, Check Validity, Geometry Info)
   const designPanelController = getDesignPanelController({
     getPreviewManager: () => previewManager,
     getWorker: () => renderController?.worker || null,
@@ -2394,7 +2394,7 @@ async function initApp() {
       },
       {
         type: 'action',
-        label: 'Display AST\u2026',
+        label: 'Display Parameters\u2026',
         shortcutAction: 'showAST',
         enabled: hasFile,
         tooltip: hasFile ? undefined : 'Open a file first',
