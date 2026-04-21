@@ -485,7 +485,7 @@ From the project root:
 - `node .audit-scratch/file-anatomy.mjs <path-to-js> [...]` regenerates the per-file structure tables in `.audit-scratch/anatomy/`.
 - `node .audit-scratch/css-anatomy.mjs <path-to-css> [...]` does the same for CSS section banners.
 - `Get-Content <file> | Measure-Object -Line` returns the **non-empty** line count (matches baseline numbers).
-- For physical line counts that match this phase's tables: PowerShell — `([System.IO.File]::ReadAllText($p) -split "`n").Length`; Bash — `wc -l <file>` (off by one when file ends without a newline).
+- For physical line counts that match this phase's tables: PowerShell — ``([System.IO.File]::ReadAllText($p) -split "`n").Length``; Bash — `wc -l <file>` (off by one when file ends without a newline).
 
 ---
 

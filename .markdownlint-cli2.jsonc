@@ -12,6 +12,7 @@
     "**/public/fonts/**",
     "TEST_REPORT.md",
     "docs/OPENSCAD_LANGUAGE_REFERENCE.md",
-    "**/.volkswitch/**"
+    "**/.volkswitch/**",
+    "**/.audit-scratch/**"
   ]
 }
