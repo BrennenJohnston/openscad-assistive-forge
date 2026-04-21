@@ -53,5 +53,8 @@ docs/audit/ki-012-investigation/_wasm-backup/
 # Developer scratch / temp files
 _em_temp/
 
+# CI runner logs downloaded for local triage (e.g. WebKit GitHub Actions logs)
+webkit-logs*.txt
+
 # CAD-to-parametric sub-project (lives on feat/cad-to-parametric only)
 forge-cad-to-parametric/

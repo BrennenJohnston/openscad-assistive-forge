@@ -1,0 +1,544 @@
+# Import graph (src/) — generated 2026-04-18T02:46:52.188Z
+
+## Files with most importers (god-module candidates)
+
+22	src/js/announcer.js
+19	src/js/storage-keys.js
+10	src/js/feature-flags.js
+10	src/js/html-utils.js
+6	src/js/state.js
+6	src/js/modal-manager.js
+6	src/js/error-translator.js
+5	src/js/color-utils.js
+5	src/js/download.js
+5	src/js/zip-handler.js
+5	src/js/saved-projects-manager.js
+5	src/js/focus-trap.js
+5	src/js/ui-mode-controller.js
+5	src/js/validation-schemas.js
+4	src/js/library-manager.js
+4	src/js/shared-image-store.js
+4	src/js/validation-constants.js
+3	src/js/preview.js
+3	src/js/svg-preparer.js
+2	src/js/render-intent.js
+2	src/js/render-controller.js
+2	src/js/parser.js
+2	src/js/ui-generator.js
+2	src/js/quality-tiers.js
+2	src/js/auto-preview-controller.js
+2	src/js/preset-manager.js
+2	src/js/theme-manager.js
+2	src/js/companion-files-controller.js
+2	src/js/error-log-panel.js
+2	src/js/storage-manager.js
+2	src/js/dialogs.js
+2	src/js/tutorial-sandbox.js
+2	src/js/hfm-controller.js
+2	src/js/toolbar-menu-controller.js
+2	src/js/unit-sync.js
+2	src/js/svg-offset.js
+2	src/js/image-import.js
+2	src/js/keyboard-config.js
+2	src/js/param-detail-controller.js
+2	src/js/file-param-resolver.js
+2	src/js/scad-param-formatter.js
+1	src/js/dependency-checker.js
+1	src/js/workflow-progress.js
+1	src/js/_hfm.js
+1	src/js/svg-preparer-workspace.js
+1	src/js/_hfm-lut.js
+1	src/js/_hfm-paint.js
+1	src/js/manifest-loader.js
+1	src/js/console-panel.js
+1	src/js/comparison-controller.js
+1	src/js/comparison-view.js
+1	src/js/render-queue.js
+1	src/js/drawer-controller.js
+1	src/js/preview-settings-drawer.js
+1	src/js/camera-panel-controller.js
+1	src/js/_seq.js
+1	src/js/gamepad-controller.js
+1	src/js/searchable-combobox.js
+1	src/js/csp-reporter.js
+1	src/js/image-measurement.js
+1	src/js/mode-manager.js
+1	src/js/overlay-grid-controller.js
+1	src/js/saved-projects-ui.js
+1	src/js/file-actions-controller.js
+1	src/js/edit-actions-controller.js
+1	src/js/design-panel-controller.js
+1	src/js/display-options-controller.js
+1	src/js/editor-state-manager.js
+1	src/js/textarea-editor.js
+1	src/js/codemirror-editor.js
+1	src/js/file-handler.js
+1	src/js/memory-monitor.js
+1	src/styles/main.css
+
+## Files with most fan-out (most outbound imports)
+
+62	src/main.js
+27	src/js/file-handler.js
+9	src/js/companion-files-controller.js
+8	src/js/hfm-controller.js
+8	src/js/saved-projects-ui.js
+8	src/js/ui-generator.js
+5	src/js/auto-preview-controller.js
+5	src/js/overlay-grid-controller.js
+5	src/js/svg-preparer-workspace.js
+3	src/js/comparison-view.js
+3	src/js/image-measurement.js
+3	src/js/preview.js
+3	src/js/state.js
+3	src/js/storage-manager.js
+3	src/js/tutorial-sandbox.js
+2	src/js/animation-controller.js
+2	src/js/camera-panel-controller.js
+2	src/js/console-panel.js
+2	src/js/design-panel-controller.js
+2	src/js/dialogs.js
+2	src/js/display-options-controller.js
+2	src/js/edit-actions-controller.js
+2	src/js/file-actions-controller.js
+2	src/js/library-manager.js
+2	src/js/manifest-loader.js
+2	src/js/mode-manager.js
+2	src/js/param-detail-controller.js
+2	src/js/saved-projects-manager.js
+2	src/js/svg-preparer.js
+2	src/js/toolbar-menu-controller.js
+2	src/js/ui-mode-controller.js
+2	src/js/validation-schemas.js
+2	src/js/zip-handler.js
+2	src/js/_hfm.js
+2	src/worker/openscad-worker.js
+1	src/js/csp-reporter.js
+1	src/js/drawer-controller.js
+1	src/js/error-log-panel.js
+1	src/js/error-translator.js
+1	src/js/keyboard-config.js
+1	src/js/memory-monitor.js
+1	src/js/modal-manager.js
+1	src/js/parser.js
+1	src/js/preset-manager.js
+1	src/js/preview-settings-drawer.js
+1	src/js/render-controller.js
+1	src/js/scad-param-formatter.js
+1	src/js/theme-manager.js
+0	src/js/announcer.js
+0	src/js/codemirror-editor.js
+
+## External package usage frequency
+
+2	jszip
+2	svg-path-commander
+1	@codemirror/view
+1	@codemirror/state
+1	@codemirror/language
+1	@lezer/highlight
+1	@codemirror/commands
+1	@codemirror/autocomplete
+1	@codemirror/search
+1	imagetracerjs
+1	three
+1	three/examples/jsm/controls/OrbitControls.js
+1	three/examples/jsm/loaders/STLLoader.js
+1	_fallback_mesh.stl
+1	@github/combobox-nav
+1	clipper2-js
+1	path-bool
+1	@radix-ui/colors
+1	ajv
+1	split.js
+
+## Orphans (no importers from src/) - candidates for entry/dead-code
+
+ORPHAN	src/js/animation-controller.js
+ORPHAN	src/js/schema-generator.js
+ORPHAN	src/main.js
+ORPHAN	src/worker/openscad-worker.js
+
+## Adjacency list (file -> imports)
+
+### src/js/_hfm-lut.js
+
+### src/js/_hfm-paint.js
+
+### src/js/_hfm.js
+  -> src/js/_hfm-lut.js
+  -> src/js/_hfm-paint.js
+
+### src/js/_seq.js
+
+### src/js/animation-controller.js
+  -> src/js/storage-keys.js
+  -> src/js/announcer.js
+
+### src/js/announcer.js
+
+### src/js/auto-preview-controller.js
+  -> src/js/color-utils.js
+  -> src/js/storage-keys.js
+  -> src/js/feature-flags.js
+  -> src/js/render-intent.js
+  -> src/js/render-controller.js
+
+### src/js/camera-panel-controller.js
+  -> src/js/announcer.js
+  -> src/js/storage-keys.js
+
+### src/js/codemirror-editor.js
+  ext-> @codemirror/view
+  ext-> @codemirror/state
+  ext-> @codemirror/language
+  ext-> @lezer/highlight
+  ext-> @codemirror/commands
+  ext-> @codemirror/autocomplete
+  ext-> @codemirror/search
+
+### src/js/color-utils.js
+
+### src/js/companion-files-controller.js
+  -> src/js/state.js
+  -> src/js/html-utils.js
+  -> src/js/download.js
+  -> src/js/modal-manager.js
+  -> src/js/zip-handler.js
+  -> src/js/saved-projects-manager.js
+  -> src/js/library-manager.js
+  -> src/js/storage-keys.js
+  -> src/js/shared-image-store.js
+
+### src/js/comparison-controller.js
+
+### src/js/comparison-view.js
+  -> src/js/preview.js
+  -> src/js/html-utils.js
+  -> src/js/error-translator.js
+
+### src/js/console-panel.js
+  -> src/js/announcer.js
+  -> src/js/error-translator.js
+
+### src/js/csp-reporter.js
+  -> src/js/feature-flags.js
+
+### src/js/dependency-checker.js
+
+### src/js/design-panel-controller.js
+  -> src/js/announcer.js
+  -> src/js/modal-manager.js
+
+### src/js/dialogs.js
+  -> src/js/modal-manager.js
+  -> src/js/html-utils.js
+
+### src/js/display-options-controller.js
+  -> src/js/storage-keys.js
+  -> src/js/announcer.js
+
+### src/js/download.js
+
+### src/js/drawer-controller.js
+  -> src/js/focus-trap.js
+
+### src/js/edit-actions-controller.js
+  -> src/js/storage-keys.js
+  -> src/js/announcer.js
+
+### src/js/editor-state-manager.js
+
+### src/js/error-log-panel.js
+  -> src/js/announcer.js
+
+### src/js/error-translator.js
+  -> src/js/announcer.js
+
+### src/js/feature-flags.js
+
+### src/js/file-actions-controller.js
+  -> src/js/storage-keys.js
+  -> src/js/announcer.js
+
+### src/js/file-handler.js
+  -> src/js/state.js
+  -> src/js/parser.js
+  -> src/js/ui-generator.js
+  -> src/js/zip-handler.js
+  -> src/js/dependency-checker.js
+  -> src/js/quality-tiers.js
+  -> src/js/preview.js
+  -> src/js/auto-preview-controller.js
+  -> src/js/library-manager.js
+  -> src/js/preset-manager.js
+  -> src/js/modal-manager.js
+  -> src/js/theme-manager.js
+  -> src/js/ui-mode-controller.js
+  -> src/js/companion-files-controller.js
+  -> src/js/error-log-panel.js
+  -> src/js/shared-image-store.js
+  -> src/js/storage-keys.js
+  -> src/js/storage-manager.js
+  -> src/js/saved-projects-manager.js
+  -> src/js/dialogs.js
+  -> src/js/html-utils.js
+  -> src/js/announcer.js
+  -> src/js/error-translator.js
+  -> src/js/tutorial-sandbox.js
+  -> src/js/hfm-controller.js
+  -> src/js/feature-flags.js
+  -> src/js/svg-preparer.js
+
+### src/js/file-param-resolver.js
+
+### src/js/focus-trap.js
+
+### src/js/gamepad-controller.js
+
+### src/js/hfm-controller.js
+  -> src/js/state.js
+  -> src/js/download.js
+  -> src/js/toolbar-menu-controller.js
+  -> src/js/ui-mode-controller.js
+  -> src/js/workflow-progress.js
+  -> src/js/storage-keys.js
+  -> src/js/error-translator.js
+  -> src/js/_hfm.js
+
+### src/js/html-utils.js
+
+### src/js/image-import.js
+  ext-> imagetracerjs
+
+### src/js/image-measurement.js
+  -> src/js/announcer.js
+  -> src/js/focus-trap.js
+  -> src/js/unit-sync.js
+
+### src/js/keyboard-config.js
+  -> src/js/html-utils.js
+
+### src/js/library-manager.js
+  -> src/js/storage-keys.js
+  -> src/js/validation-schemas.js
+
+### src/js/manifest-loader.js
+  -> src/js/zip-handler.js
+  -> src/js/feature-flags.js
+
+### src/js/memory-monitor.js
+  -> src/js/feature-flags.js
+
+### src/js/modal-manager.js
+  -> src/js/focus-trap.js
+
+### src/js/mode-manager.js
+  -> src/js/feature-flags.js
+  -> src/js/announcer.js
+
+### src/js/overlay-grid-controller.js
+  -> src/js/state.js
+  -> src/js/announcer.js
+  -> src/js/html-utils.js
+  -> src/js/shared-image-store.js
+  -> src/js/storage-keys.js
+
+### src/js/param-detail-controller.js
+  -> src/js/storage-keys.js
+  -> src/js/announcer.js
+
+### src/js/parser.js
+  -> src/js/library-manager.js
+
+### src/js/preset-manager.js
+  -> src/js/validation-schemas.js
+
+### src/js/preview-settings-drawer.js
+  -> src/js/storage-keys.js
+
+### src/js/preview.js
+  -> src/js/color-utils.js
+  -> src/js/announcer.js
+  -> src/js/storage-keys.js
+  ext-> three
+  ext-> three/examples/jsm/controls/OrbitControls.js
+  ext-> three/examples/jsm/loaders/STLLoader.js
+
+### src/js/quality-tiers.js
+
+### src/js/render-controller.js
+  -> src/js/storage-keys.js
+  ext-> _fallback_mesh.stl
+
+### src/js/render-intent.js
+
+### src/js/render-queue.js
+
+### src/js/saved-projects-manager.js
+  -> src/js/validation-schemas.js
+  -> src/js/validation-constants.js
+
+### src/js/saved-projects-ui.js
+  -> src/js/state.js
+  -> src/js/html-utils.js
+  -> src/js/download.js
+  -> src/js/modal-manager.js
+  -> src/js/zip-handler.js
+  -> src/js/saved-projects-manager.js
+  -> src/js/ui-mode-controller.js
+  -> src/js/error-translator.js
+
+### src/js/scad-param-formatter.js
+  -> src/js/color-utils.js
+
+### src/js/schema-generator.js
+
+### src/js/searchable-combobox.js
+  ext-> @github/combobox-nav
+
+### src/js/shared-image-store.js
+
+### src/js/state.js
+  -> src/js/announcer.js
+  -> src/js/storage-keys.js
+  -> src/js/validation-schemas.js
+
+### src/js/storage-keys.js
+
+### src/js/storage-manager.js
+  -> src/js/html-utils.js
+  -> src/js/storage-keys.js
+  -> src/js/saved-projects-manager.js
+  ext-> jszip
+
+### src/js/svg-offset.js
+  ext-> svg-path-commander
+  ext-> clipper2-js
+
+### src/js/svg-preparer-workspace.js
+  -> src/js/focus-trap.js
+  -> src/js/announcer.js
+  -> src/js/svg-preparer.js
+  -> src/js/svg-offset.js
+  -> src/js/feature-flags.js
+
+### src/js/svg-preparer.js
+  -> src/js/image-import.js
+  -> src/js/svg-offset.js
+  ext-> svg-path-commander
+  ext-> path-bool
+
+### src/js/textarea-editor.js
+
+### src/js/theme-manager.js
+  -> src/js/storage-keys.js
+  ext-> @radix-ui/colors
+
+### src/js/toolbar-menu-controller.js
+  -> src/js/keyboard-config.js
+  -> src/js/announcer.js
+
+### src/js/tutorial-sandbox.js
+  -> src/js/focus-trap.js
+  -> src/js/ui-mode-controller.js
+  -> src/js/announcer.js
+
+### src/js/ui-generator.js
+  -> src/js/download.js
+  -> src/js/announcer.js
+  -> src/js/param-detail-controller.js
+  -> src/js/file-param-resolver.js
+  -> src/js/image-import.js
+  -> src/js/feature-flags.js
+  -> src/js/svg-preparer.js
+  -> src/js/svg-preparer-workspace.js
+
+### src/js/ui-mode-controller.js
+  -> src/js/feature-flags.js
+  -> src/js/announcer.js
+
+### src/js/unit-sync.js
+
+### src/js/validation-constants.js
+
+### src/js/validation-schemas.js
+  -> src/js/validation-constants.js
+  -> src/js/color-utils.js
+  ext-> ajv
+
+### src/js/workflow-progress.js
+
+### src/js/zip-handler.js
+  -> src/js/html-utils.js
+  -> src/js/validation-constants.js
+  ext-> jszip
+
+### src/main.js
+  -> src/js/parser.js
+  -> src/js/ui-generator.js
+  -> src/js/state.js
+  -> src/js/download.js
+  -> src/js/render-controller.js
+  -> src/js/html-utils.js
+  -> src/js/quality-tiers.js
+  -> src/js/preview.js
+  -> src/js/color-utils.js
+  -> src/js/scad-param-formatter.js
+  -> src/js/auto-preview-controller.js
+  -> src/js/feature-flags.js
+  -> src/js/render-intent.js
+  -> src/js/zip-handler.js
+  -> src/js/manifest-loader.js
+  -> src/js/console-panel.js
+  -> src/js/error-log-panel.js
+  -> src/js/theme-manager.js
+  -> src/js/preset-manager.js
+  -> src/js/comparison-controller.js
+  -> src/js/comparison-view.js
+  -> src/js/library-manager.js
+  -> src/js/render-queue.js
+  -> src/js/modal-manager.js
+  -> src/js/error-translator.js
+  -> src/js/storage-manager.js
+  -> src/js/tutorial-sandbox.js
+  -> src/js/drawer-controller.js
+  -> src/js/preview-settings-drawer.js
+  -> src/js/camera-panel-controller.js
+  -> src/js/_seq.js
+  -> src/js/gamepad-controller.js
+  -> src/js/keyboard-config.js
+  -> src/js/searchable-combobox.js
+  -> src/js/companion-files-controller.js
+  -> src/js/csp-reporter.js
+  -> src/js/storage-keys.js
+  -> src/js/image-measurement.js
+  -> src/js/shared-image-store.js
+  -> src/js/unit-sync.js
+  -> src/js/announcer.js
+  -> src/js/mode-manager.js
+  -> src/js/ui-mode-controller.js
+  -> src/js/toolbar-menu-controller.js
+  -> src/js/param-detail-controller.js
+  -> src/js/overlay-grid-controller.js
+  -> src/js/saved-projects-ui.js
+  -> src/js/file-actions-controller.js
+  -> src/js/edit-actions-controller.js
+  -> src/js/design-panel-controller.js
+  -> src/js/display-options-controller.js
+  -> src/js/editor-state-manager.js
+  -> src/js/textarea-editor.js
+  -> src/js/codemirror-editor.js
+  -> src/js/dialogs.js
+  -> src/js/hfm-controller.js
+  -> src/js/file-handler.js
+  -> src/js/memory-monitor.js
+  -> src/js/saved-projects-manager.js
+  -> src/js/validation-constants.js
+  -> src/js/validation-schemas.js
+  -> src/styles/main.css
+  ext-> split.js
+
+### src/worker/openscad-worker.js
+  -> src/js/file-param-resolver.js
+  -> src/js/scad-param-formatter.js
