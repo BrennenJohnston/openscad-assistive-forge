@@ -11201,6 +11201,52 @@ if (rounded) {
     resetBtn?.click();
   });
 
+  // Expand all / Collapse all (F5).
+  // Setting `.open` programmatically fires the <details> 'toggle' event
+  // which is already wired in ui-generator.js to persist per-file state,
+  // so these handlers stay deliberately tiny.
+  const expandAllGroupsBtn = document.getElementById('expandAllGroupsBtn');
+  const collapseAllGroupsBtn = document.getElementById('collapseAllGroupsBtn');
+  /** @param {boolean} open */
+  const setAllParamGroupsOpen = (open) => {
+    const parametersContainer =
+      document.getElementById('parametersContainer');
+    if (!parametersContainer) return;
+    const groups = parametersContainer.querySelectorAll('details.param-group');
+    if (groups.length === 0) {
+      announceImmediate('No parameter groups to update');
+      return;
+    }
+    groups.forEach((d) => {
+      if (d.open !== open) d.open = open;
+    });
+    if (open) {
+      // Per F5 acceptance criteria: focus the first parameter when
+      // Expand-all is activated to give keyboard users a clear next
+      // landing spot.
+      const firstControl =
+        /** @type {HTMLElement|null} */ (
+          parametersContainer.querySelector(
+            '.param-control input, .param-control select, .param-control textarea, .param-control button'
+          )
+        );
+      if (firstControl && typeof firstControl.focus === 'function') {
+        firstControl.focus();
+      }
+    }
+    announceImmediate(
+      open
+        ? `Expanded ${groups.length} parameter groups`
+        : `Collapsed ${groups.length} parameter groups`
+    );
+  };
+  expandAllGroupsBtn?.addEventListener('click', () =>
+    setAllParamGroupsOpen(true)
+  );
+  collapseAllGroupsBtn?.addEventListener('click', () =>
+    setAllParamGroupsOpen(false)
+  );
+
   // Reset Group Button
   const resetGroupBtn = document.getElementById('resetGroupBtn');
   const resetGroupSelector = document.getElementById('resetGroupSelector');

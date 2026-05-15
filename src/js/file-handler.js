@@ -18,6 +18,7 @@ import {
   getGalleryParamNames,
   getSvgPrepMetadata,
   setSvgPrepMetadata,
+  setCustomizerFileId,
 } from './ui-generator.js';
 import {
   extractZipFiles,
@@ -967,6 +968,11 @@ export function initFileHandler({
       const parametersContainer = document.getElementById(
         'parametersContainer'
       );
+      // F5: tell the Customizer pane which file is active so per-file
+      // expand/collapse state persists across reloads. The first render
+      // pulls that state from localStorage; if none exists, all groups
+      // start collapsed (matches the stakeholder spec).
+      setCustomizerFileId(fileName);
       const currentValues = renderParameterUI(
         extracted,
         parametersContainer,
@@ -980,7 +986,9 @@ export function initFileHandler({
           updatePrimaryActionButton();
           updateColorLegend();
           getCompanionFilesCtrl().syncOverlayWithScreenshotParam(values);
-        }
+        },
+        null,
+        { useStoredState: true }
       );
 
       stateManager.setState({

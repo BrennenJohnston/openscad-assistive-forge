@@ -11,6 +11,51 @@ import { convertPngToSvg, validateImageDimensions } from './image-import.js';
 import { isEnabled } from './feature-flags.js';
 import { prepareSvg, needsPreparation, analyzeSvg } from './svg-preparer.js';
 import { createSvgPrepWorkspace } from './svg-preparer-workspace.js';
+import {
+  loadOpenGroupIds,
+  saveOpenGroupIds,
+} from './customizer-group-state.js';
+
+// Active fileId for the Customizer pane. Set when a project is loaded
+// so subsequent group toggles (including programmatic Expand/Collapse
+// All) can persist per-file state without every re-render call site
+// needing to know about it. F5.
+let _activeCustomizerFileId = null;
+
+/**
+ * Tell the Customizer pane which project file is currently active.
+ * Set to `null` to disable per-file persistence (e.g. on welcome screen).
+ *
+ * @param {string|null} fileId
+ */
+export function setCustomizerFileId(fileId) {
+  _activeCustomizerFileId =
+    typeof fileId === 'string' && fileId.length > 0 ? fileId : null;
+}
+
+/**
+ * @returns {string|null}
+ */
+export function getCustomizerFileId() {
+  return _activeCustomizerFileId;
+}
+
+/**
+ * Read the currently-expanded group IDs from a Customizer container.
+ * Useful when a re-render needs to preserve user-driven UI state.
+ *
+ * @param {HTMLElement|null} container
+ * @returns {Set<string>}
+ */
+export function getOpenGroupIdsFromDOM(container) {
+  const out = new Set();
+  if (!container) return out;
+  const groups = container.querySelectorAll('details.param-group');
+  groups.forEach((d) => {
+    if (d.open && d.dataset.groupId) out.add(d.dataset.groupId);
+  });
+  return out;
+}
 
 /**
  * Format a parameter name for display (replaces underscores with spaces)
@@ -2524,19 +2569,59 @@ function createRawControl(param, onChange) {
 }
 
 /**
- * Render parameter UI from extracted parameters
+ * Render parameter UI from extracted parameters.
+ *
+ * F5 group-collapse semantics:
+ *   1. If `options.openGroupIds` is supplied, those exact groups render
+ *      expanded and everything else collapses. Pass an empty Set to
+ *      force "all collapsed" explicitly.
+ *   2. Otherwise, if `options.useStoredState` is true, the per-file
+ *      remembered state (loaded from localStorage via the active fileId)
+ *      is used. This is the "first render after file load" path.
+ *   3. Otherwise, the current DOM state of the container is preserved
+ *      (so a theme change / preset apply / dependency re-render keeps
+ *      the user's expand/collapse choices intact).
+ *   4. If none of the above yields any groups, the default is
+ *      "all collapsed" (F5 spec, stakeholder feedback 2026-05-15).
+ *
+ * Group toggles are persisted automatically when an active fileId has
+ * been set via {@link setCustomizerFileId}.
+ *
  * @param {Object} extractedParams - Output from extractParameters()
  * @param {HTMLElement} container - Container to render into
  * @param {Function} onChange - Called when parameter changes
  * @param {Object} [initialValues] - Optional initial values to override defaults
+ * @param {Object} [options]
+ * @param {Set<string>|null} [options.openGroupIds]
+ * @param {boolean}          [options.useStoredState]
+ * @param {(groupId: string, isOpen: boolean) => void} [options.onGroupToggle]
  * @returns {Object} Current parameter values
  */
 export function renderParameterUI(
   extractedParams,
   container,
   onChange,
-  initialValues = null
+  initialValues = null,
+  options = {}
 ) {
+  const {
+    openGroupIds = null,
+    useStoredState = false,
+    onGroupToggle = null,
+  } = options || {};
+
+  // Resolve which groups should be open before we wipe the container.
+  let resolvedOpenIds;
+  if (openGroupIds instanceof Set) {
+    resolvedOpenIds = openGroupIds;
+  } else if (useStoredState && _activeCustomizerFileId) {
+    resolvedOpenIds =
+      loadOpenGroupIds(_activeCustomizerFileId) ?? new Set();
+  } else {
+    // Preserve the user's current expand/collapse state across an
+    // automatic re-render (theme change, preset apply, etc.).
+    resolvedOpenIds = getOpenGroupIdsFromDOM(container);
+  }
   container.innerHTML = '';
 
   const { groups, parameters } = extractedParams;
@@ -2594,9 +2679,6 @@ export function renderParameterUI(
   // Populate the jump-to-group dropdown (all groups visible)
   populateGroupJumpSelect(sortedGroups);
 
-  // Track if first group has been rendered (for auto-open)
-  let isFirstGroup = true;
-
   // Render each group
   sortedGroups.forEach((group, index) => {
     const groupParams = paramsByGroup[group.id] || [];
@@ -2616,11 +2698,24 @@ export function renderParameterUI(
 
     const details = document.createElement('details');
     details.className = 'param-group forge-disclosure';
-    // Open first group by default for better discoverability (WCAG/COGA)
-    details.open = isFirstGroup;
-    isFirstGroup = false;
-    // Add data attribute for jump-to navigation
+    details.open = resolvedOpenIds.has(group.id);
     details.dataset.groupId = group.id;
+
+    // Persist per-file group state on every user toggle (F5). The
+    // <details> 'toggle' event fires for both user clicks and our own
+    // programmatic Expand/Collapse-All flips, so a single listener
+    // covers both cases.
+    details.addEventListener('toggle', () => {
+      if (_activeCustomizerFileId) {
+        saveOpenGroupIds(
+          _activeCustomizerFileId,
+          getOpenGroupIdsFromDOM(container)
+        );
+      }
+      if (typeof onGroupToggle === 'function') {
+        onGroupToggle(group.id, details.open);
+      }
+    });
 
     // Tag group with its settings level classification (metadata only, all groups visible)
     const simple = isSimpleGroup(group, sortedGroups, index);
