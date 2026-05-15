@@ -3777,6 +3777,7 @@ async function initApp() {
   const measurementsToggle = document.getElementById('measurementsToggle');
   const gridToggle = document.getElementById('gridToggle');
   const autoBedToggle = document.getElementById('autoBedToggle');
+  const zoomToCursorToggle = document.getElementById('zoomToCursorToggle');
   const dimensionsDisplay = document.getElementById('dimensionsDisplay');
   // Note: outputFormatSelect and formatInfo already declared above
 
@@ -4079,6 +4080,21 @@ async function initApp() {
         }
       }
       console.log(`[App] Auto-bed ${enabled ? 'enabled' : 'disabled'}`);
+    });
+  }
+
+  // Wire zoom-to-cursor toggle (F17): mouse-wheel zoom focal point
+  if (zoomToCursorToggle) {
+    zoomToCursorToggle.addEventListener('change', () => {
+      const enabled = zoomToCursorToggle.checked;
+      if (previewManager) {
+        previewManager.toggleZoomToCursor(enabled);
+      }
+      announceImmediate(
+        enabled
+          ? 'Mouse-wheel zoom now follows the cursor'
+          : 'Mouse-wheel zoom now centres on the orbit target'
+      );
     });
   }
 

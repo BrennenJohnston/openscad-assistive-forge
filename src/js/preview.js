@@ -57,6 +57,7 @@ const STORAGE_KEY_CUSTOM_GRID_PRESETS = getAppPrefKey('custom-grid-presets');
 const STORAGE_KEY_GRID_COLOR = getAppPrefKey('grid-color');
 const STORAGE_KEY_GRID_OPACITY = getAppPrefKey('grid-opacity');
 const STORAGE_KEY_AUTO_BED = getAppPrefKey('auto-bed');
+const STORAGE_KEY_ZOOM_TO_CURSOR = getAppPrefKey('zoom-to-cursor');
 const STORAGE_KEY_CAMERA_COLLAPSED = getAppPrefKey('camera-controls-collapsed');
 const STORAGE_KEY_CAMERA_POSITION = getAppPrefKey('camera-controls-position');
 const STORAGE_KEY_LOD_WARNING_DISMISSED = getAppPrefKey(
@@ -233,6 +234,11 @@ export class PreviewManager {
     // Auto-bed: place object on Z=0 build plate
     this.autoBedEnabled = this.loadAutoBedPreference();
 
+    // Mouse-wheel zoom focal point: when true, zoom centers on the
+    // cursor; when false, zoom centers on the orbit target. Default
+    // true matches stakeholder expectation (F17, "zoom toward cursor").
+    this.zoomToCursorEnabled = this.loadZoomToCursorPreference();
+
     // Rotation centering: temporarily center object at origin for better rotation
     this.autoBedOffset = 0; // Z offset applied by auto-bed
     this.rotationCenteringEnabled = false; // Whether rotation centering is active
@@ -406,6 +412,7 @@ export class PreviewManager {
       this.controls.screenSpacePanning = true;
       this.controls.minDistance = 10;
       this.controls.maxDistance = 1000;
+      this.controls.zoomToCursor = this.zoomToCursorEnabled;
 
       this.setupKeyboardControls();
       this.setupCameraControls();
@@ -3160,6 +3167,58 @@ export class PreviewManager {
       localStorage.setItem(STORAGE_KEY_AUTO_BED, enabled ? 'true' : 'false');
     } catch (error) {
       console.warn('[Preview] Could not save auto-bed preference:', error);
+    }
+  }
+
+  /**
+   * Toggle mouse-wheel zoom-to-cursor behaviour. When enabled, scrolling
+   * over the preview zooms toward the pointer position; when disabled,
+   * zoom is centred on the orbit target (the previous default).
+   * Keyboard zoom (`+` / `-`) is unaffected.
+   *
+   * @param {boolean} enabled
+   */
+  toggleZoomToCursor(enabled) {
+    this.zoomToCursorEnabled = !!enabled;
+    if (this.controls) {
+      this.controls.zoomToCursor = this.zoomToCursorEnabled;
+    }
+    this.saveZoomToCursorPreference(this.zoomToCursorEnabled);
+  }
+
+  /**
+   * Load zoom-to-cursor preference from localStorage.
+   * Defaults to true so first-time users get the modern behaviour
+   * the stakeholder asked for in F17.
+   * @returns {boolean}
+   */
+  loadZoomToCursorPreference() {
+    try {
+      const pref = localStorage.getItem(STORAGE_KEY_ZOOM_TO_CURSOR);
+      return pref === null ? true : pref === 'true';
+    } catch (error) {
+      console.warn(
+        '[Preview] Could not load zoom-to-cursor preference:',
+        error
+      );
+      return true;
+    }
+  }
+
+  /**
+   * @param {boolean} enabled
+   */
+  saveZoomToCursorPreference(enabled) {
+    try {
+      localStorage.setItem(
+        STORAGE_KEY_ZOOM_TO_CURSOR,
+        enabled ? 'true' : 'false'
+      );
+    } catch (error) {
+      console.warn(
+        '[Preview] Could not save zoom-to-cursor preference:',
+        error
+      );
     }
   }
 
