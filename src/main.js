@@ -2456,6 +2456,12 @@ async function initApp() {
       },
       {
         type: 'toggle',
+        label: 'Show Axis Markings (mm)',
+        checked: displayOptionsController.get('axisMarks'),
+        handler: () => displayOptionsController.toggle('axisMarks'),
+      },
+      {
+        type: 'toggle',
         label: 'Show Crosshairs',
         checked: displayOptionsController.get('crosshairs'),
         handler: () => displayOptionsController.toggle('crosshairs'),

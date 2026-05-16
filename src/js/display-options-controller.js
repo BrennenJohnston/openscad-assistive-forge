@@ -13,6 +13,7 @@
 
 import { getAppPrefKey } from './storage-keys.js';
 import { announceImmediate } from './announcer.js';
+import { buildAxisTickOverlay } from './axis-tick-overlay.js';
 
 const PREF_PREFIX = 'display-';
 const DEFAULTS = {
@@ -20,11 +21,20 @@ const DEFAULTS = {
   edges: false,
   crosshairs: false,
   wireframe: false,
+  axisMarks: false,
 };
 
 /**
- * @typedef {'axes'|'edges'|'crosshairs'|'wireframe'} DisplayOption
+ * @typedef {'axes'|'edges'|'crosshairs'|'wireframe'|'axisMarks'} DisplayOption
  */
+
+const HUMAN_LABELS = {
+  axes: 'Axes',
+  edges: 'Edges',
+  crosshairs: 'Crosshairs',
+  wireframe: 'Wireframe',
+  axisMarks: 'Axis distance markings',
+};
 
 /**
  * DisplayOptionsController manages visual helper toggles in the 3D
@@ -49,6 +59,8 @@ export class DisplayOptionsController {
     this._edgesOverlay = null;
     /** @type {Object|null} Three.js Group for crosshair lines */
     this._crosshairGroup = null;
+    /** @type {{ group: Object, dispose: () => void }|null} Axis tick overlay (F20) */
+    this._axisTickOverlay = null;
   }
 
   init() {
@@ -62,6 +74,8 @@ export class DisplayOptionsController {
   /**
    * Subscribe to PreviewManager's post-load event so overlays
    * (edges, wireframe) are rebuilt whenever a model is loaded.
+   * Also subscribe to theme changes so the axis tick overlay (F20)
+   * refreshes its label color in light/dark/HC/forced-colors modes.
    * @private
    */
   _registerPostLoadListener() {
@@ -69,6 +83,10 @@ export class DisplayOptionsController {
     if (pm?.addPostLoadListener) {
       this._boundRefresh = () => this.refreshOverlays();
       pm.addPostLoadListener(this._boundRefresh);
+    }
+    if (pm?.addThemeChangeListener) {
+      this._boundThemeRefresh = () => this.refreshThemeSensitiveOverlays();
+      pm.addThemeChangeListener(this._boundThemeRefresh);
     }
   }
 
@@ -92,7 +110,9 @@ export class DisplayOptionsController {
     this._savePref(option, enabled);
     this._apply(option);
     this._syncCheckbox(option);
-    const label = option.charAt(0).toUpperCase() + option.slice(1);
+    const label =
+      HUMAN_LABELS[option] ||
+      option.charAt(0).toUpperCase() + option.slice(1);
     announceImmediate(`${label} ${enabled ? 'shown' : 'hidden'}`);
   }
 
@@ -108,6 +128,19 @@ export class DisplayOptionsController {
   refreshOverlays() {
     this._apply('edges');
     this._apply('wireframe');
+  }
+
+  /**
+   * Re-apply theme-sensitive overlays. The axis tick overlay reads its
+   * color from the active theme's `--color-text-primary` token at
+   * build time, so a theme switch needs a rebuild to stay legible.
+   */
+  refreshThemeSensitiveOverlays() {
+    if (this.state.axisMarks) {
+      // Rebuild from scratch so the new theme color is applied.
+      this._tearDownAxisTickOverlay();
+      this._apply('axisMarks');
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -194,7 +227,51 @@ export class DisplayOptionsController {
       case 'wireframe':
         this._applyWireframe(pm);
         break;
+      case 'axisMarks':
+        this._applyAxisMarks(pm);
+        break;
     }
+  }
+
+  _applyAxisMarks(pm) {
+    const T = this.getThree();
+    if (!T) return;
+
+    if (this.state.axisMarks) {
+      if (!this._axisTickOverlay) {
+        try {
+          this._axisTickOverlay = buildAxisTickOverlay(T, {
+            themeKey: pm.currentTheme,
+          });
+        } catch (err) {
+          console.warn(
+            '[DisplayOptions] Failed to build axis tick overlay:',
+            err
+          );
+          return;
+        }
+      }
+      const group = this._axisTickOverlay.group;
+      if (group && !pm.scene.getObjectByName(group.name)) {
+        pm.scene.add(group);
+      }
+    } else {
+      this._tearDownAxisTickOverlay();
+    }
+  }
+
+  _tearDownAxisTickOverlay() {
+    if (!this._axisTickOverlay) return;
+    const pm = this.getPreviewManager();
+    if (pm?.scene && this._axisTickOverlay.group) {
+      pm.scene.remove(this._axisTickOverlay.group);
+    }
+    try {
+      this._axisTickOverlay.dispose?.();
+    } catch (err) {
+      console.warn('[DisplayOptions] Axis tick overlay dispose error:', err);
+    }
+    this._axisTickOverlay = null;
   }
 
   _applyAxes(pm) {
@@ -283,15 +360,20 @@ export class DisplayOptionsController {
     if (pm?.removePostLoadListener && this._boundRefresh) {
       pm.removePostLoadListener(this._boundRefresh);
     }
+    if (pm?.removeThemeChangeListener && this._boundThemeRefresh) {
+      pm.removeThemeChangeListener(this._boundThemeRefresh);
+    }
     if (pm?.scene) {
       if (this._axesHelper) pm.scene.remove(this._axesHelper);
       if (this._edgesOverlay) pm.scene.remove(this._edgesOverlay);
       if (this._crosshairGroup) pm.scene.remove(this._crosshairGroup);
     }
+    this._tearDownAxisTickOverlay();
     this._axesHelper = null;
     this._edgesOverlay = null;
     this._crosshairGroup = null;
     this._boundRefresh = null;
+    this._boundThemeRefresh = null;
   }
 }
 
