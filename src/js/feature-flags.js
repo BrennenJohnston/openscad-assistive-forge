@@ -187,6 +187,26 @@ export const FLAGS = {
     userConfigurable: false,
     killSwitch: false,
   },
+  // F35 Phase A — persistent two-way sync with a folder on disk via the
+  // File System Access API. Chromium-only, gated dark by default until
+  // Spike S1 has been verified on real Chrome / Edge instances. Phase B
+  // (file-change watcher / F14) and Phase C (write-back) extend this.
+  // See `.cursor/plans/volkswitch_2026-05-15_feedback_triage_a7bd79c7.plan.md`.
+  local_folder_sync: {
+    id: 'local_folder_sync',
+    name: 'Persistent Local Folder Sync (Chromium only)',
+    description:
+      'Connect the Forge to a folder on disk via the File System Access API; ' +
+      'the connection is remembered across reloads with a single one-click ' +
+      'permission re-grant per session. Hidden on browsers that do not ' +
+      'support showDirectoryPicker (Firefox / Safari today). ' +
+      'Phase A: connect / disconnect / persist. Phase B (auto-rerun on ' +
+      'external edits) and Phase C (write-back) ship behind separate flags.',
+    default: false,
+    rollout: 0,
+    userConfigurable: true,
+    killSwitch: false,
+  },
 };
 
 // Storage key for user preferences

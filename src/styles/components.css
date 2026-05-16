@@ -1071,6 +1071,41 @@ summary:focus-visible,
   gap: var(--space-xs);
 }
 
+/* F35 Phase A — folder-sync status pill */
+.folder-sync-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex-wrap: wrap;
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-bg-secondary);
+  margin-top: var(--space-xs);
+  font-size: 0.9em;
+}
+
+.folder-sync-status[data-state='connected'] {
+  border-color: var(--color-success);
+}
+
+.folder-sync-status[data-state='pending-restore'] {
+  border-color: var(--color-warning);
+}
+
+.folder-sync-status[data-state='denied'] {
+  border-color: var(--color-error);
+}
+
+.folder-sync-status-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.folder-sync-status .btn {
+  flex: 0 0 auto;
+}
+
 /* Folder Breadcrumbs */
 .folder-breadcrumbs {
   margin-bottom: var(--space-md);

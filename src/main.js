@@ -190,6 +190,7 @@ import {
   showProcessingOverlay,
   initFileHandler,
 } from './js/file-handler.js';
+import { getFolderSyncController } from './js/folder-sync-controller.js';
 import {
   initMemoryMonitor,
   getMemoryMonitor as _getMemoryMonitor,
@@ -1470,6 +1471,161 @@ async function initApp() {
   // _collectFilesFromDir moved to file-handler.js
 
   // handleFolderImport moved to file-handler.js
+
+  // ── F35 Phase A: Persistent local-folder sync (Chromium only) ───────────
+  //
+  // Hidden by default. Reveals only when:
+  //   1. The local_folder_sync feature flag is on (defaults OFF until
+  //      Spike S1 has been verified on Chrome / Edge), AND
+  //   2. The runtime exposes showDirectoryPicker (Chromium today).
+  //
+  // The connect / restore flows reuse the existing file-handler folder
+  // walker so the loaded files behave identically to a snapshot import;
+  // Phase A only adds persistence of the directory handle. Phase B
+  // (file-watcher / F14) and Phase C (write-back) build on this.
+  const folderSyncCtrl = getFolderSyncController();
+  if (_isEnabled('local_folder_sync') && folderSyncCtrl.isSupported()) {
+    const connectBtn = document.getElementById('connectFolderBtn');
+    const statusEl = document.getElementById('folderSyncStatus');
+    const statusText = document.getElementById('folderSyncStatusText');
+    const restoreBtn = document.getElementById('folderSyncRestoreBtn');
+    const disconnectBtn = document.getElementById('folderSyncDisconnectBtn');
+
+    if (connectBtn) connectBtn.hidden = false;
+
+    /**
+     * Reflect controller state into the status pill + buttons. Called
+     * via `subscribe()` so this stays the single source of truth.
+     */
+    function _syncFolderUi(state, handle) {
+      if (!statusEl || !statusText) return;
+      const name = handle?.name ?? '';
+      switch (state) {
+        case 'connected':
+          statusEl.hidden = false;
+          statusEl.dataset.state = 'connected';
+          statusText.textContent = `Connected to "${name}"`;
+          if (restoreBtn) restoreBtn.hidden = true;
+          if (disconnectBtn) disconnectBtn.hidden = false;
+          if (connectBtn) connectBtn.hidden = true;
+          break;
+        case 'pending-restore':
+          statusEl.hidden = false;
+          statusEl.dataset.state = 'pending-restore';
+          statusText.textContent =
+            `"${name}" — click Reconnect to re-grant permission for this session`;
+          if (restoreBtn) restoreBtn.hidden = false;
+          if (disconnectBtn) disconnectBtn.hidden = false;
+          if (connectBtn) connectBtn.hidden = true;
+          break;
+        case 'denied':
+          statusEl.hidden = false;
+          statusEl.dataset.state = 'denied';
+          statusText.textContent =
+            `"${name}" — permission was denied. Click Reconnect to try again, or Disconnect to forget.`;
+          if (restoreBtn) restoreBtn.hidden = false;
+          if (disconnectBtn) disconnectBtn.hidden = false;
+          if (connectBtn) connectBtn.hidden = true;
+          break;
+        case 'idle':
+        default:
+          statusEl.hidden = true;
+          statusEl.dataset.state = 'idle';
+          statusText.textContent = '';
+          if (restoreBtn) restoreBtn.hidden = true;
+          if (disconnectBtn) disconnectBtn.hidden = true;
+          if (connectBtn) connectBtn.hidden = false;
+          break;
+      }
+    }
+
+    folderSyncCtrl.subscribe(_syncFolderUi);
+
+    /**
+     * After connect / restore succeeds, walk the folder and hand the
+     * collected files to the existing snapshot loader. Keeps Phase A
+     * file-loading semantics identical to the cross-browser flow so
+     * everything downstream (parser, schema, presets, render) is
+     * unchanged.
+     */
+    async function _loadFromConnectedFolder(handle) {
+      const dismissOverlay = showProcessingOverlay(
+        `Reading folder "${handle.name}"\u2026`,
+        'Scanning files and subfolders. Please do not close or refresh the page.'
+      );
+      const files = [];
+      try {
+        await fileHandler.collectFilesFromDir(handle, handle.name, files);
+        if (files.length === 0) {
+          dismissOverlay();
+          showErrorToast({
+            title: 'Empty Folder',
+            message:
+              'No files found in the connected folder. The folder may be empty.',
+          });
+          return;
+        }
+        dismissOverlay();
+        await fileHandler.handleFolderImport(files);
+      } catch (err) {
+        dismissOverlay();
+        showErrorToast({
+          title: 'Folder Read Error',
+          message: err?.message ?? String(err),
+        });
+      }
+    }
+
+    connectBtn?.addEventListener('click', async () => {
+      const result = await folderSyncCtrl.connect();
+      if (result.ok && result.handle) {
+        announceImmediate(`Connected to folder ${result.folderName}`);
+        await _loadFromConnectedFolder(result.handle);
+      } else if (result.reason === 'cancelled') {
+        updateStatus('Folder connection cancelled');
+      } else if (result.reason === 'permission-denied') {
+        updateStatus('Folder connection denied — permission required', 'warning');
+      } else if (result.reason === 'unsupported') {
+        // Defensive: should not happen because the button is hidden.
+        updateStatus(
+          'This browser does not support persistent folder access',
+          'warning'
+        );
+      } else {
+        updateStatus(`Could not connect to folder: ${result.reason}`, 'error');
+      }
+    });
+
+    restoreBtn?.addEventListener('click', async () => {
+      const result = await folderSyncCtrl.restoreFromStored();
+      if (result.ok && result.handle) {
+        announceImmediate(`Reconnected to folder ${result.folderName}`);
+        await _loadFromConnectedFolder(result.handle);
+      } else if (result.reason === 'permission-denied') {
+        updateStatus(
+          'Reconnect denied — folder remains pending until permission is granted',
+          'warning'
+        );
+      } else if (result.reason === 'no-stored-handle') {
+        updateStatus('No stored folder to reconnect to');
+      } else {
+        updateStatus(`Could not reconnect: ${result.reason}`, 'error');
+      }
+    });
+
+    disconnectBtn?.addEventListener('click', async () => {
+      await folderSyncCtrl.disconnect();
+      announceImmediate('Disconnected from folder');
+      updateStatus('Disconnected from folder');
+    });
+
+    // Probe IDB for a previously-stored handle. Does NOT call
+    // requestPermission (no user gesture yet); just transitions to
+    // `pending-restore` so the UI shows the Reconnect prompt.
+    folderSyncCtrl.hydrateFromStorage().catch((err) => {
+      console.warn('[App] folder-sync hydrate failed:', err);
+    });
+  }
 
   // _promptScadSelection moved to file-handler.js
 
