@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>F35 Spike S1 — directory-handle persistence</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family:
+          system-ui,
+          -apple-system,
+          Segoe UI,
+          sans-serif;
+        line-height: 1.5;
+      }
+      body {
+        max-width: 50rem;
+        margin: 2rem auto;
+        padding: 0 1rem;
+      }
+      h1 {
+        font-size: 1.4rem;
+        margin: 0 0 0.5rem;
+      }
+      .lede {
+        margin: 0 0 1.5rem;
+        color: #555;
+      }
+      .panel {
+        border: 1px solid currentColor;
+        border-radius: 6px;
+        padding: 0.75rem 1rem;
+        margin: 1rem 0;
+      }
+      .status dl {
+        display: grid;
+        grid-template-columns: max-content 1fr;
+        gap: 0.25rem 1rem;
+        margin: 0;
+      }
+      .status dt {
+        font-weight: 600;
+      }
+      .status dd {
+        margin: 0;
+        font-family:
+          ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          Consolas,
+          monospace;
+      }
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+      }
+      button {
+        font: inherit;
+        padding: 0.4rem 0.9rem;
+        border: 1px solid currentColor;
+        background: transparent;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      #log {
+        max-height: 24rem;
+        overflow: auto;
+        font-family:
+          ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          Consolas,
+          monospace;
+        font-size: 0.85rem;
+        white-space: pre-wrap;
+        background: #0001;
+        padding: 0.5rem 0.75rem;
+        border-radius: 4px;
+      }
+      .log-error {
+        color: #b00020;
+      }
+      .log-warn {
+        color: #8a6d00;
+      }
+      .log-ok {
+        color: #006a2c;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>F35 Spike S1 — <code>FileSystemDirectoryHandle</code> persistence</h1>
+    <p class="lede">
+      Verifies whether a persisted directory handle survives a page reload
+      AND a service-worker update with at most one permission prompt per
+      session. Pass / fail criteria are in the
+      <a href="README.md"><code>README.md</code></a>.
+    </p>
+
+    <section class="panel status" aria-labelledby="status-heading">
+      <h2 id="status-heading" style="font-size: 1rem; margin-top: 0">
+        Status
+      </h2>
+      <dl>
+        <dt>FSA support</dt>
+        <dd id="status-fsa">checking…</dd>
+        <dt>IndexedDB support</dt>
+        <dd id="status-idb">checking…</dd>
+        <dt>Stored handle</dt>
+        <dd id="status-handle">none</dd>
+        <dt>Permission</dt>
+        <dd id="status-permission">unknown</dd>
+        <dt>Service worker</dt>
+        <dd id="status-sw">none</dd>
+      </dl>
+    </section>
+
+    <section class="panel" aria-labelledby="actions-heading">
+      <h2 id="actions-heading" style="font-size: 1rem; margin-top: 0">
+        Actions
+      </h2>
+      <div class="actions">
+        <button id="pick-btn">Pick folder</button>
+        <button id="restore-btn">Restore handle</button>
+        <button id="list-btn">List files</button>
+        <button id="forget-btn">Forget handle</button>
+        <button id="sw-register-btn">Register SW v1</button>
+        <button id="sw-bump-btn">Bump SW (cache-bust)</button>
+        <button id="copy-log-btn">Copy log</button>
+        <button id="clear-log-btn">Clear log</button>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="log-heading">
+      <h2 id="log-heading" style="font-size: 1rem; margin-top: 0">Log</h2>
+      <pre id="log" aria-live="polite" aria-atomic="false"></pre>
+    </section>
+
+    <script type="module" src="./spike.js"></script>
+  </body>
+</html>
