@@ -309,7 +309,9 @@ async function initApp() {
 
   // Initialize Milestone 0 Foundation systems early
   // Feature flags: Enable controlled rollout of new features
-  debugFlags(); // Log flag states for debugging
+  if (import.meta.env.DEV) {
+    debugFlags(); // Log flag states for debugging (dev only)
+  }
 
   // CSP Reporter: Monitor Content-Security-Policy violations
   initCSPReporter();
