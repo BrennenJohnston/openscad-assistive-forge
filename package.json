@@ -107,8 +107,8 @@
   },
   "overrides": {
     "minimatch": "^10.2.1",
-    "@angular/common": "19.2.20",
-    "@angular/core": "19.2.20",
+    "@angular/common": "20.3.25",
+    "@angular/core": "20.3.25",
     "basic-ftp": "^5.3.0"
   }
 }
