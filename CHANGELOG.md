@@ -7,8 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`aria-keyshortcuts` on shortcut-bearing controls** — new `keyboard-shortcuts-binder.js` annotates the render/download button, camera views, theme/expert-mode toggles, and more with WAI-ARIA shortcut syntax so screen-reader users can discover F6/F7/Control+E etc.; re-applies when shortcuts are re-mapped
+- **Safe localStorage helpers** — `safeGetItem`/`safeSetItem`/`safeRemoveItem` in `storage-keys.js` (with quota/security-error tests) replace ad-hoc try/catch across main.js, preview, camera, overlay, and settings controllers
+- **Storage-key snapshot test** — every exported `STORAGE_KEY_*` string is frozen by a unit test so user data cannot be orphaned by accidental key renames
+- **Error-translation parity corpus** — 19-entry raw-stderr corpus freezes worker and main-thread classifications (BR-5 safety net)
+- **CI: css-variable-audit** — the semantic-tokens/mono-variant audit now runs in the unit-tests job
+
 ### Changed
 
+- **Error translation honors worker codes (BR-5)** — the main thread resolves worker-classified errors by `code` via `TRANSLATIONS_BY_CODE` instead of re-matching prose, so errors like `UNKNOWN_MODULE` or `OUT_OF_MEMORY` show specific guidance instead of "Something Went Wrong"
+- **WASM init progress is honestly indeterminate** — hardcoded 5→95% milestones replaced with an indeterminate bar plus stage messages; render-time estimates are labeled "estimated" and suppressed entirely at low confidence
+- **Focus trap consolidation** — the error modal uses the shared `createFocusTrap` (selector now includes `summary`); guided-tour stub and permanently disabled View-menu toggles removed
+- **Mirror tests eliminated** — cli-manifest, svg-validation, dxf-postprocess, missing-file-warnings, image-companion-mounting, saved-projects-load, color-contrast, and resolve-2d-export tests now import the real implementations (new shared modules under `src/worker/`) instead of "keep in sync" copies
+- **Storage keys centralized** — `STORAGE_KEY_*` constants, `PRESET_SORT_KEY`, WASM crash flags, and the KI-012 debug-toggle keys live in `storage-keys.js`; KI-012 checks go through `isDebugPrefEnabled()`
+- **Helper dedup** — shared `perf-metrics.js` replaces the copy-pasted metrics append blocks; `RENDER_QUALITY` DRAFT/MEDIUM/HIGH derive from `QUALITY_TIERS`; intentionally-different sanitizers/formatters are documented in place
 - **q_charm.scad parameter naming** — renamed positional parameters to plain-language labels for Customizer clarity: `design_x`/`design_y` → `design_left_right`/`design_up_down`, `text_x`/`text_y` → `text_left_right`/`text_up_down`, `design_x_2`/`design_y_2` → `design_2_left_right`/`design_2_up_down`, `design_z_2` → `design_2_thickness`
 - **q_charm.scad Fit parameter rename** — `charm_length` → `charm_width` (Y-axis dimension along bracelet), `bracelet_width` → `charm_length` (inner channel width); labels now match physical meaning
 - **q_charm.scad Rounding parameter rename** — `all_edges_radius` → `side_edge_radius` with new default 2.5 (was 0); description clarified to "rounds the edges along the side profile"
@@ -21,6 +35,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Recovery mode CodeMirror disable was a no-op** — it wrote a localStorage key the flag system never read; now uses `setUserPreference('codemirror_editor', false)`
+- **`escapeHtml` attribute injection** — the shared helper now escapes quotes (all five significant characters); console-panel filenames interpolated into `data-file="…"` can no longer break out of the attribute; duplicate escape implementations removed
+- **Stale version strings** — startup log derives from `__APP_VERSION__` (was hardcoded v4.1.0); sw.js drops its stale version comment
+- **A11Y quick wins** — features-note contrast token (AA in dark mode), zero Nu HTML validator errors in index.html, `prefers-reduced-transparency` now covers all modal/drawer/tooltip surfaces, stale `aria-valuenow` removed from the overlay opacity slider
+- **Dead code removed** — 16 unused symbols, the orphaned `animation-controller.js` and `schema-generator.js` modules, and the dead `tutorialProgress` localStorage migration
+- **Test-runner hygiene** — storage mocks install at setup module scope, eliminating the `--localstorage-file` warnings and `localStorage.getItem is not a function` stderr leaks; e2e fake-pass `expect(true)` assertions replaced with real assertions or honest skips
 - **SVG editor fullscreen portaling** — fullscreen mode now reparents root and backdrop to `document.body` to escape ancestor `transform`/`will-change` containing blocks (e.g. drawer panels)
 - **SVG editor fullscreen preview sizing** — preview panes use `dvh` units with fallback, `min-height`, and `object-fit: contain` for consistent sizing across viewports
 - **SVG editor header overflow** — narrow viewports (≤540px) wrap header controls and truncate the title with ellipsis, in both fullscreen and inline modes
