@@ -4647,7 +4647,9 @@ async function initApp() {
               return;
             }
 
-            const friendly = translateError(error?.message || String(error));
+            const friendly = translateError(error?.message || String(error), {
+              code: error?.code,
+            });
             updateStatus(`Preview failed: ${friendly.title}`, 'error');
             _announceError(`Preview failed: ${friendly.title}`);
           }
@@ -8084,8 +8086,10 @@ if (rounded) {
         }
       }
 
-      // Use COGA-compliant friendly error translation
-      const friendlyError = translateError(error.message);
+      // Use COGA-compliant friendly error translation (code-first, BR-5)
+      const friendlyError = translateError(error.message, {
+        code: error.code,
+      });
       updateStatus(`Error: ${friendlyError.title}`);
       _announceError(
         `Error: ${friendlyError.title}. ${friendlyError.explanation}`

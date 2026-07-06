@@ -217,6 +217,149 @@ const ERROR_PATTERNS = [
 ];
 
 /**
+ * Rich translations keyed on the render worker's error codes (BR-5).
+ *
+ * The worker classifies raw stderr into { message, code, raw } using
+ * src/worker/error-translations.js; passing that code to translateError()
+ * resolves the classification directly instead of re-matching the worker's
+ * prose against ERROR_PATTERNS (which previously downgraded several
+ * worker-classified errors to the generic fallback).
+ *
+ * INTERNAL_ERROR and RENDER_FAILED are deliberately absent: they are
+ * catch-all codes whose message text may still match a specific legacy
+ * pattern, so they fall through to the regex path.
+ */
+export const TRANSLATIONS_BY_CODE = {
+  SYNTAX_ERROR: {
+    title: 'Code Problem Found',
+    explanation: "There's a typo or missing character in the model code.",
+    suggestion:
+      'Check for missing semicolons, brackets, or parentheses in your OpenSCAD file.',
+  },
+  TIMEOUT: {
+    title: 'Taking Too Long',
+    explanation: 'The model is taking too long to generate.',
+    suggestion:
+      'Reduce $fn values, simplify the model, or try the "Fast" preview quality setting.',
+  },
+  OUT_OF_MEMORY: {
+    title: 'Model Too Complex',
+    explanation: 'This model requires more memory than available.',
+    suggestion:
+      'Try reducing complexity: lower $fn values, simpler shapes, or fewer operations.',
+  },
+  UNKNOWN_MODULE: {
+    title: 'Missing Module',
+    explanation: 'The model uses a module that could not be found.',
+    suggestion:
+      'Check include/use statements and enable any required libraries in the Libraries panel.',
+  },
+  UNKNOWN_FUNCTION: {
+    title: 'Unknown Function',
+    explanation:
+      "The model uses a function that OpenSCAD doesn't recognize.",
+    suggestion:
+      "This might be from a library that's not enabled. Check the Libraries panel.",
+  },
+  UNDEFINED_VARIABLE: {
+    title: 'Missing Variable',
+    explanation: "The model references a variable that doesn't exist.",
+    suggestion:
+      'Make sure all parameter names are spelled correctly and defined before use.',
+  },
+  NON_MANIFOLD_WARNING: {
+    title: 'Geometry Warning',
+    explanation:
+      'The model has geometry issues (non-manifold edges). It may still render but could cause problems for 3D printing.',
+    suggestion:
+      'Check for overlapping or touching surfaces and adjust dimensions slightly to avoid exact coincidence.',
+  },
+  NO_GEOMETRY: {
+    title: 'No Shapes Found',
+    explanation: 'The model does not produce any geometry.',
+    suggestion:
+      'Make sure the code creates at least one shape (cube, sphere, etc.) and that top-level shapes are not all disabled.',
+  },
+  EMPTY_GEOMETRY: {
+    title: 'Empty Result',
+    explanation: 'This parameter combination produces no geometry.',
+    suggestion:
+      'Check that the selected options are compatible — some combinations intentionally produce empty output.',
+  },
+  MODEL_IS_2D: {
+    title: '2D Model Detected',
+    explanation:
+      'Your model produces 2D geometry (using projection() or 2D primitives). ' +
+      '2D models cannot be previewed in the 3D viewer.',
+    suggestion:
+      'To export: select SVG or DXF output format, then click Generate. ' +
+      'To preview in 3D: adjust your model parameters to produce 3D geometry.',
+  },
+  MODEL_NOT_2D: {
+    title: '2D Output Required',
+    explanation:
+      'Your model produces 3D geometry, but SVG/DXF export requires 2D output.',
+    suggestion:
+      'Enable "use Laser Cutting best practices" or ensure your model uses projection() to produce 2D geometry.',
+  },
+  UNSUPPORTED_CONFIG: {
+    title: 'Unsupported Option Combination',
+    explanation:
+      'This combination of options is not supported by the model.',
+    suggestion:
+      'Check the "generate" setting and related options for conflicting choices.',
+  },
+  FILE_NOT_FOUND: {
+    title: 'Missing File',
+    explanation: 'A file referenced by the model could not be found.',
+    suggestion:
+      'Check include/use paths and file names. If using a ZIP project, ensure all referenced files are included.',
+  },
+  RECURSION: {
+    title: 'Infinite Recursion',
+    explanation: 'The model has a module or function that calls itself forever.',
+    suggestion:
+      'Check recursive module or function calls for a missing termination condition.',
+  },
+  CGAL_ASSERTION: {
+    title: 'Known Browser Engine Limitation',
+    explanation:
+      'This model uses a geometry feature (likely projection() or roof()) that triggers ' +
+      'a known crash in the browser-based rendering engine (CGAL + WebAssembly).',
+    suggestion:
+      'Remove or simplify projection()/roof() calls. This is a known upstream issue — ' +
+      'the same model may work in desktop OpenSCAD.',
+  },
+  WASM_ABORT: {
+    title: 'Rendering Engine Crashed',
+    explanation:
+      'The browser rendering engine encountered a fatal error and stopped. ' +
+      'This often happens with projection() or roof() functions.',
+    suggestion:
+      'Try removing projection()/roof() calls, or simplify the geometry. ' +
+      'The engine will restart automatically for your next render.',
+  },
+  WASM_UNREACHABLE: {
+    title: 'Rendering Engine Error',
+    explanation:
+      'The rendering engine hit an internal error (unreachable code path). ' +
+      'This is typically caused by projection() or roof() in the browser engine.',
+    suggestion:
+      'Simplify the model or remove projection()/roof() functions. ' +
+      'Desktop OpenSCAD may handle this model better.',
+  },
+  WASM_OOB: {
+    title: 'Memory Access Error',
+    explanation:
+      'The rendering engine tried to access memory outside its bounds. ' +
+      'This can happen with very complex models or certain geometry operations.',
+    suggestion:
+      'Reduce model complexity (lower $fn), remove minkowski() operations, ' +
+      'or simplify boolean operations.',
+  },
+};
+
+/**
  * Default fallback for unknown errors
  */
 const DEFAULT_ERROR = {
@@ -227,11 +370,29 @@ const DEFAULT_ERROR = {
 };
 
 /**
- * Translate a technical error message to user-friendly language
+ * Translate a technical error message to user-friendly language.
+ *
+ * When the error carries a worker classification code (BR-5), the rich
+ * TRANSLATIONS_BY_CODE entry wins; the legacy regex path over the message
+ * text remains the fallback for uncoded errors and catch-all codes.
+ *
  * @param {string} technicalError - The raw error message from OpenSCAD
+ * @param {Object} [options]
+ * @param {string} [options.code] - Worker error code (error.code from the
+ *   render pipeline)
  * @returns {Object} User-friendly error object with title, explanation, suggestion
  */
-export function translateError(technicalError) {
+export function translateError(technicalError, { code } = {}) {
+  if (code && TRANSLATIONS_BY_CODE[code]) {
+    return {
+      ...TRANSLATIONS_BY_CODE[code],
+      technical:
+        typeof technicalError === 'string' && technicalError
+          ? technicalError
+          : 'No error details available',
+    };
+  }
+
   if (!technicalError || typeof technicalError !== 'string') {
     return {
       ...DEFAULT_ERROR,
