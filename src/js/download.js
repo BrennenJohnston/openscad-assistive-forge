@@ -144,6 +144,13 @@ export function downloadSTL(arrayBuffer, filename) {
 
 /**
  * Format file size for display
+ *
+ * NOT interchangeable with storage-manager.js formatBytes: this one always
+ * shows one decimal ("1.0 KB"), tops out at MB, and does no input
+ * validation; formatBytes strips trailing zeros ("1 KB"), scales to YB,
+ * and returns "Unknown" for invalid input. Callers rely on each display
+ * format, so both are kept.
+ *
  * @param {number} bytes - Size in bytes
  * @returns {string} Formatted size
  */
@@ -154,8 +161,15 @@ export function formatFileSize(bytes) {
 }
 
 /**
- * Sanitize a string for safe use as a filename.
+ * Sanitize a string for safe use as a DOWNLOAD filename.
  * Preserves original case and spaces while removing filesystem-unsafe characters.
+ *
+ * Intentionally separate from the two sanitizeFileName helpers:
+ * file-param-resolver.js guards the worker virtual FS (path traversal,
+ * basename extraction), and storage-manager.js replaces unsafe characters
+ * with underscores for project-file paths. Outputs differ for the same
+ * input, so they must not be merged.
+ *
  * @param {string} name - Raw name to sanitize
  * @returns {string} Safe filename without extension (falls back to 'preset-export' if empty)
  */

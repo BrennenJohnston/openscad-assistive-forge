@@ -4,11 +4,12 @@
  */
 
 import {
-  STORAGE_KEY_PERF_METRICS,
-  STORAGE_KEY_METRICS_LOG,
   STORAGE_KEY_LAZY_UNION,
   STORAGE_KEY_MANIFOLD_ENGINE as STORAGE_KEY_MANIFOLD,
 } from './storage-keys.js';
+import { isPerfMetricsEnabled, appendPerfMetric } from './perf-metrics.js';
+
+import { QUALITY_TIERS, COMPLEXITY_TIER } from './quality-tiers.js';
 
 // Re-export quality tier system for convenience
 export {
@@ -22,6 +23,9 @@ export {
   getTierPresets,
   formatPresetDescription,
 } from './quality-tiers.js';
+
+/** STANDARD-tier presets that several RENDER_QUALITY entries mirror. */
+const STANDARD_TIER = QUALITY_TIERS[COMPLEXITY_TIER.STANDARD];
 
 /**
  * Legacy render quality presets (for backwards compatibility)
@@ -38,18 +42,17 @@ export {
  */
 export const RENDER_QUALITY = {
   /**
-   * Draft quality - very fast preview for any model
+   * Draft quality - very fast preview for any model.
+   * Numbers mirror STANDARD preview-low exactly, so derive them.
    */
   DRAFT: {
+    ...STANDARD_TIER.preview.low,
     name: 'draft',
-    maxFn: 32,
-    forceFn: false, // No need to force with Manifold speed
-    minFa: 12,
-    minFs: 2,
-    timeoutMs: 8000, // Reduced from 20s
   },
   /**
-   * Low quality - fast exports, coarse tessellation
+   * Low quality - fast exports, coarse tessellation.
+   * No exact QUALITY_TIERS counterpart (minFa 10 / 15s timeout are unique
+   * to this preset) — keep literal.
    */
   LOW: {
     name: 'low',
@@ -64,6 +67,7 @@ export const RENDER_QUALITY = {
    * Targets approximately 50% triangle count vs full render:
    * - For STANDARD models (export-medium $fn=192): $fn=96 gives ~50%
    * - For COMPLEX models: $fn=96 capped by their lower limits, still rounded
+   * Close to STANDARD export-low but with a tighter 12s timeout — keep literal.
    */
   PREVIEW: {
     name: 'preview',
@@ -74,30 +78,23 @@ export const RENDER_QUALITY = {
     timeoutMs: 12000,
   },
   /**
-   * Medium quality - community standard (STANDARD tier)
+   * Medium quality - community standard (STANDARD tier export-medium).
    */
   MEDIUM: {
+    ...STANDARD_TIER.export.medium,
     name: 'medium',
-    maxFn: 192,
-    forceFn: false,
-    minFa: 4,
-    minFs: 0.75,
-    timeoutMs: 30000, // Reduced from 60s
   },
   /**
-   * High quality - community high standard (STANDARD tier)
+   * High quality - community high standard (STANDARD tier export-high).
    */
   HIGH: {
+    ...STANDARD_TIER.export.high,
     name: 'high',
-    maxFn: 360,
-    forceFn: false,
-    minFa: 1,
-    minFs: 0.25,
-    timeoutMs: 45000, // Reduced from 90s
   },
   /**
    * Desktop-equivalent - respects model's settings (OpenSCAD defaults)
-   * Matches native OpenSCAD behavior: $fn, $fa, $fs from model
+   * Matches native OpenSCAD behavior: $fn, $fa, $fs from model.
+   * maxFn: null has no QUALITY_TIERS counterpart — keep literal.
    */
   DESKTOP_DEFAULT: {
     name: 'desktop',
@@ -608,32 +605,15 @@ export class RenderController {
           this.currentRequest = null;
 
           // Collect performance metrics if enabled
-          const metricsEnabled =
-            localStorage.getItem(STORAGE_KEY_PERF_METRICS) === 'true';
-          if (metricsEnabled && payload.timing) {
-            try {
-              const metrics = JSON.parse(
-                localStorage.getItem(STORAGE_KEY_METRICS_LOG) || '[]'
-              );
-              metrics.push({
-                timestamp: Date.now(),
-                renderMs: payload.timing.renderMs || 0,
-                wasmInitMs: payload.timing.wasmInitMs || 0,
-                cached: false,
-              });
-
-              // Keep last 100 entries
-              while (metrics.length > 100) {
-                metrics.shift();
-              }
-
-              localStorage.setItem(
-                STORAGE_KEY_METRICS_LOG,
-                JSON.stringify(metrics)
-              );
+          if (isPerfMetricsEnabled() && payload.timing) {
+            const ok = appendPerfMetric({
+              timestamp: Date.now(),
+              renderMs: payload.timing.renderMs || 0,
+              wasmInitMs: payload.timing.wasmInitMs || 0,
+              cached: false,
+            });
+            if (ok) {
               console.log('[Perf] Render timing:', payload.timing);
-            } catch (error) {
-              console.warn('[Perf] Failed to log metrics:', error);
             }
           }
 

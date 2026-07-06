@@ -8,10 +8,7 @@ import {
   DEBUG_HIGHLIGHT_HEX,
   DEBUG_HIGHLIGHT_OPACITY,
 } from './color-utils.js';
-import {
-  STORAGE_KEY_PERF_METRICS,
-  STORAGE_KEY_METRICS_LOG,
-} from './storage-keys.js';
+import { isPerfMetricsEnabled, appendPerfMetric } from './perf-metrics.js';
 import { isEnabled as isFlagEnabled } from './feature-flags.js';
 import { isNonPreviewable, is2DGenerateValue } from './render-intent.js';
 import { RENDER_QUALITY } from './render-controller.js';
@@ -550,33 +547,16 @@ export class AutoPreviewController {
       };
 
       // Collect performance metrics if enabled
-      const metricsEnabled =
-        localStorage.getItem(STORAGE_KEY_PERF_METRICS) === 'true';
-      if (metricsEnabled) {
-        try {
-          const metrics = JSON.parse(
-            localStorage.getItem(STORAGE_KEY_METRICS_LOG) || '[]'
-          );
-          metrics.push({
-            timestamp: Date.now(),
-            renderMs: 0, // Cached, no render time
-            wasmInitMs: 0,
-            cached: true,
-            parseMs: timing.parseMs || 0,
-          });
-
-          // Keep last 100 entries
-          while (metrics.length > 100) {
-            metrics.shift();
-          }
-
-          localStorage.setItem(
-            STORAGE_KEY_METRICS_LOG,
-            JSON.stringify(metrics)
-          );
+      if (isPerfMetricsEnabled()) {
+        const ok = appendPerfMetric({
+          timestamp: Date.now(),
+          renderMs: 0, // Cached, no render time
+          wasmInitMs: 0,
+          cached: true,
+          parseMs: timing.parseMs || 0,
+        });
+        if (ok) {
           console.log('[Perf] Cache hit');
-        } catch (error) {
-          console.warn('[Perf] Failed to log cached metrics:', error);
         }
       }
 
