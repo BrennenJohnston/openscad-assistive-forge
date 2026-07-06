@@ -225,6 +225,31 @@ export const PROGRAM_DEFINITIONS = {
 // ---------------------------------------------------------------------------
 
 /**
+ * Extension guard for handleFile: decide whether an upload may proceed.
+ *
+ * Only actual file uploads — a real File object with no pre-loaded
+ * content — are extension-checked. Saved projects and manifest loads pass
+ * synthetic { name } objects (whose name can be a display name like
+ * "My Tablet Keyguard Designer" with no extension) or pre-loaded content,
+ * and must never be blocked. Regression guard for the bug where this
+ * check sat outside the isActualFileUpload branch.
+ *
+ * Exported for unit testing.
+ *
+ * @param {File|{name: string}|null} file - Upload argument as passed to handleFile
+ * @param {string|null} content - Pre-loaded content (null for real uploads)
+ * @param {string} fileName - Resolved display/file name
+ * @returns {boolean} True when handleFile should continue processing
+ */
+export function shouldProcessFile(file, content, fileName) {
+  if (!file) return true;
+  const isActualFileUpload = !content && file instanceof File;
+  if (!isActualFileUpload) return true;
+  const fileNameLower = fileName.toLowerCase();
+  return fileNameLower.endsWith('.zip') || fileNameLower.endsWith('.scad');
+}
+
+/**
  * Show a full-screen processing overlay for long operations.
  *
  * IMPORTANT: This overlay renders at z-index 10000, which is ABOVE all
@@ -573,18 +598,17 @@ export function initFileHandler({
     if (file) {
       const fileNameLower = fileName.toLowerCase();
       const isZip = fileNameLower.endsWith('.zip');
-      const isScad = fileNameLower.endsWith('.scad');
       const isActualFileUpload = !content && file instanceof File;
 
-      if (isActualFileUpload) {
-        if (!isZip && !isScad) {
-          showErrorToast({
-            title: 'Invalid File Type',
-            message: 'Please upload a .scad or .zip file.',
-          });
-          return;
-        }
+      if (!shouldProcessFile(file, content, fileName)) {
+        showErrorToast({
+          title: 'Invalid File Type',
+          message: 'Please upload a .scad or .zip file.',
+        });
+        return;
+      }
 
+      if (isActualFileUpload) {
         const validateFileUpload = getValidateFileUpload();
         const FILE_SIZE_LIMITS = getFileSizeLimits();
 

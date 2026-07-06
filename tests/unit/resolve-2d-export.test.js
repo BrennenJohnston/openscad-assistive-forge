@@ -1,15 +1,17 @@
 /**
  * Unit tests for resolve2DExportIntent (src/js/render-intent.js) and the
- * buildDefineArgs numeric-coercion path (src/worker/openscad-worker.js).
+ * buildDefineArgs numeric-coercion path (src/js/scad-param-formatter.js —
+ * the shared implementation the worker imports).
  *
- * Phase 3: tests now import the shared render-intent module directly instead
- * of maintaining inlined copies of the resolve logic.
+ * Phase 3: tests import the shared modules directly instead of maintaining
+ * inlined copies of the logic.
  *
  * @license GPL-3.0-or-later
  */
 
 import { describe, it, expect, vi } from 'vitest';
 import { resolve2DExportIntent } from '../../src/js/render-intent.js';
+import { buildDefineArgs } from '../../src/js/scad-param-formatter.js';
 
 const resolve2DExportParameters = resolve2DExportIntent;
 
@@ -311,51 +313,9 @@ describe('resolve2DExportParameters — schema with no enum', () => {
   });
 });
 
-// ─── Inlined testable copy of buildDefineArgs (src/worker/openscad-worker.js) ─
-// Mirrors the numeric-coercion path added in Phase 1 of the round-4+5 bugfix
-// queue. Keep in sync with openscad-worker.js buildDefineArgs if the
-// implementation changes.
-function buildDefineArgs(parameters, paramTypes = {}) {
-  if (!parameters || Object.keys(parameters).length === 0) return [];
-  const args = [];
-  for (const [key, value] of Object.entries(parameters)) {
-    if (value === null || value === undefined) continue;
-    let formattedValue;
-    if (typeof value === 'string') {
-      const lowerValue = value.toLowerCase();
-      const isBooleanParam = paramTypes[key] === 'boolean';
-      if (isBooleanParam && (lowerValue === 'true' || lowerValue === 'yes')) {
-        formattedValue = 'true';
-      } else if (isBooleanParam && (lowerValue === 'false' || lowerValue === 'no')) {
-        formattedValue = 'false';
-      } else if (/^#?[0-9A-Fa-f]{6}$/.test(value)) {
-        formattedValue = `"${value}"`;
-      } else if (
-        (paramTypes[key] === 'integer' || paramTypes[key] === 'number') &&
-        value.trim() !== '' &&
-        !isNaN(Number(value))
-      ) {
-        formattedValue = String(Number(value));
-      } else {
-        const escaped = value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-        formattedValue = `"${escaped}"`;
-      }
-    } else if (typeof value === 'number') {
-      formattedValue = String(value);
-    } else if (typeof value === 'boolean') {
-      formattedValue = value ? 'true' : 'false';
-    } else if (Array.isArray(value)) {
-      formattedValue = JSON.stringify(value);
-    } else {
-      formattedValue = JSON.stringify(value);
-    }
-    args.push('-D');
-    args.push(`${key}=${formattedValue}`);
-  }
-  return args;
-}
-
 // ─── buildDefineArgs: numeric-coercion tests ─────────────────────────────────
+// buildDefineArgs is the real shared implementation from
+// src/js/scad-param-formatter.js (imported above).
 
 describe('buildDefineArgs — numeric paramType coercion (Phase 1 regression)', () => {
   it('emits unquoted integer when paramType is integer and value is a numeric string', () => {

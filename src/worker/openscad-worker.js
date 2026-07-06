@@ -23,7 +23,7 @@
  * - Threaded WASM for multi-core parallelism (requires SharedArrayBuffer)
  */
 
-import { resolveFileParams, decodeDataUrl } from '../js/file-param-resolver.js';
+import { resolveFileParams } from '../js/file-param-resolver.js';
 import {
   escapeRegExp,
   formatScadValue,
@@ -32,6 +32,7 @@ import {
 import { validateSVGOutput } from './svg-validation.js';
 import { postProcessDXF } from './dxf-postprocess.js';
 import { generateMissingFileWarnings } from './missing-file-warnings.js';
+import { resolveMountContent } from './mount-content.js';
 
 // Official WASM is loaded dynamically in initWASM() from /wasm/openscad-official/
 
@@ -848,26 +849,19 @@ async function mountFiles(files, options = {}) {
     const resolvedPath = baseDir ? `${baseDir}/${filePath}` : filePath;
 
     try {
-      // S-013: Image companion files arrive as data-URL strings from the UI
-      // (e.g. "data:image/png;base64,..."). Emscripten FS.writeFile would
-      // store the literal text — not the binary image — making surface()
-      // and import() fail. Decode to Uint8Array so the WASM engine receives
-      // valid binary content.
-      let fsContent = content;
-      if (typeof content === 'string' && content.startsWith('data:')) {
-        try {
-          fsContent = decodeDataUrl(content);
-          if (import.meta.env.DEV) {
-            console.log(
-              `[Worker FS] Decoded data URL for: ${resolvedPath} (${fsContent.byteLength} binary bytes)`
-            );
-          }
-        } catch (decodeErr) {
+      // S-013: data-URL companion files (images) are decoded to binary
+      // before mounting — see ./mount-content.js (shared with unit tests).
+      const fsContent = resolveMountContent(content, {
+        onDecodeError: (decodeErr) =>
           console.warn(
             `[Worker FS] Failed to decode data URL for ${resolvedPath}, mounting as text:`,
             decodeErr.message
-          );
-        }
+          ),
+      });
+      if (import.meta.env.DEV && fsContent !== content) {
+        console.log(
+          `[Worker FS] Decoded data URL for: ${resolvedPath} (${fsContent.byteLength} binary bytes)`
+        );
       }
       FS.writeFile(resolvedPath, fsContent);
       mountedFiles.set(resolvedPath, fsContent);
