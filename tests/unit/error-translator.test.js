@@ -234,10 +234,75 @@ describe('Error Translator', () => {
         message: 'Problem',
       });
 
-      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+      // Real keydowns target the focused element inside the modal and bubble
+      // up to the overlay, where the shared focus trap handles them.
+      const okBtn = document.querySelector(
+        '.friendly-error-modal-footer .btn-primary'
+      );
+      okBtn.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+      );
 
       await promise;
       expect(document.querySelector('[data-testid="friendly-error-modal"]')).toBeNull();
+    });
+
+    test('Tab cycles focus within the error modal', async () => {
+      // jsdom has no layout, so give elements a nonzero size for the
+      // focus trap's visibility filtering.
+      const originalOffsetWidth = Object.getOwnPropertyDescriptor(
+        HTMLElement.prototype,
+        'offsetWidth'
+      );
+      Object.defineProperty(HTMLElement.prototype, 'offsetWidth', {
+        configurable: true,
+        get() {
+          return 100;
+        },
+      });
+
+      try {
+        const promise = showErrorModal({
+          title: 'Error',
+          message: 'Problem',
+          technical: 'stack trace here',
+        });
+
+        const closeBtn = document.querySelector('.friendly-error-modal-close');
+        const okBtn = document.querySelector(
+          '.friendly-error-modal-footer .btn-primary'
+        );
+
+        // Tab from the last focusable (OK) wraps to the first (close button)
+        okBtn.focus();
+        okBtn.dispatchEvent(
+          new KeyboardEvent('keydown', { key: 'Tab', bubbles: true })
+        );
+        expect(document.activeElement).toBe(closeBtn);
+
+        // Shift+Tab from the first focusable wraps back to the last (OK)
+        closeBtn.dispatchEvent(
+          new KeyboardEvent('keydown', {
+            key: 'Tab',
+            shiftKey: true,
+            bubbles: true,
+          })
+        );
+        expect(document.activeElement).toBe(okBtn);
+
+        okBtn.click();
+        await promise;
+      } finally {
+        if (originalOffsetWidth) {
+          Object.defineProperty(
+            HTMLElement.prototype,
+            'offsetWidth',
+            originalOffsetWidth
+          );
+        } else {
+          delete HTMLElement.prototype.offsetWidth;
+        }
+      }
     });
 
     test('should resolve when clicking the overlay backdrop', async () => {

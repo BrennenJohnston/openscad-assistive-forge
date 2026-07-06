@@ -5,6 +5,7 @@
  */
 
 import { announceError } from './announcer.js';
+import { createFocusTrap } from './focus-trap.js';
 
 /**
  * Common OpenSCAD error patterns and their user-friendly translations
@@ -448,9 +449,11 @@ export function showErrorModal({ title, message, suggestion, technical }) {
     okBtn.textContent = 'OK';
     footer.appendChild(okBtn);
 
+    const trap = createFocusTrap(overlay, { onEscape: () => cleanup() });
+
     const cleanup = () => {
+      trap.deactivate();
       overlay.remove();
-      document.removeEventListener('keydown', keyHandler);
       resolve();
     };
 
@@ -460,36 +463,9 @@ export function showErrorModal({ title, message, suggestion, technical }) {
       if (e.target === overlay) cleanup();
     });
 
-    const keyHandler = (e) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        cleanup();
-        return;
-      }
-      if (e.key === 'Tab') {
-        const focusable = overlay.querySelectorAll(
-          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"]), summary'
-        );
-        if (focusable.length === 0) return;
-        const first = focusable[0];
-        const last = focusable[focusable.length - 1];
-        if (e.shiftKey) {
-          if (document.activeElement === first) {
-            e.preventDefault();
-            last.focus();
-          }
-        } else {
-          if (document.activeElement === last) {
-            e.preventDefault();
-            first.focus();
-          }
-        }
-      }
-    };
-    document.addEventListener('keydown', keyHandler);
-
     document.body.appendChild(overlay);
     okBtn.focus();
+    trap.activate({ initialFocus: okBtn });
 
     announceError(`Error: ${title}. ${message}`);
   });
