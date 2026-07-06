@@ -158,6 +158,10 @@ test.describe('Keyguard SVG Export', () => {
     await expect(format2dGuidance).toBeHidden({ timeout: 2000 });
   });
 
+  // Re-enable attempt 2026-07-05 (review remediation): fails locally with
+  // "TimeoutError: page.waitForEvent: Timeout 60000ms exceeded while waiting
+  // for event 'download'" — the Generate click never produces a download in
+  // this flow. Needs product/test-flow investigation before re-enabling.
   test.skip('should export valid SVG from simple 2D model', async ({ page }) => {
     test.skip(isCI, 'WASM rendering is slow/unreliable in CI');
     
@@ -206,6 +210,10 @@ test.describe('Keyguard SVG Export', () => {
     expect(hasGeometry).toBe(true);
   });
 
+  // Re-enable attempt 2026-07-05 (review remediation): fails locally in the
+  // upload phase — '.file-tree, .project-files' never becomes visible after
+  // the ZIP upload (same pre-existing failure as zip-workflow.spec.js on
+  // develop). Needs product/test-flow investigation before re-enabling.
   test.skip('should export valid SVG from keyguard with Laser-Cut settings', async ({ page }) => {
     test.skip(isCI, 'WASM rendering is slow/unreliable in CI');
     
@@ -474,6 +482,10 @@ test.describe('Parameter Switching Stability', () => {
 });
 
 test.describe('OpenSCAD Output Exposure', () => {
+  // Re-enable attempt 2026-07-05 (review remediation): fails locally at the
+  // console-panel assertion — the panel text never contains
+  // "E2E TEST MESSAGE 123" after upload + render. Needs product/test-flow
+  // investigation before re-enabling.
   test.skip('should display echo output from OpenSCAD', async ({ page }) => {
     test.skip(isCI, 'WASM rendering is slow/unreliable in CI');
     

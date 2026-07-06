@@ -23,6 +23,13 @@ playwright-report/
 # Lighthouse reports
 localhost_*.report.html
 .lighthouseci/
+lighthouse-*.json
+
+# Local debug screenshots
+screenshot-*.png
+
+# Font working directory used by scripts/download-wasm.js
+.temp-fonts/
 
 # Editor workspace files
 *.code-workspace

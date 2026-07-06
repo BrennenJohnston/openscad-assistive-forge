@@ -2,7 +2,7 @@
 
 **Project**: OpenSCAD Assistive Forge  
 **Current version**: 4.4.0  
-**Last updated**: 2026-04-06  
+**Last updated**: 2026-07-05  
 
 This is a single-maintainer project. This file is here so I don’t have to answer “is it abandoned?” and “what’s next?” in every issue thread.
 
@@ -18,7 +18,7 @@ This is a single-maintainer project. This file is here so I don’t have to answ
 - **ZIP multi-file support** for `include` / `use` with hardened companion file resolution
 - **SVG preparation workspace** with path offset, role assignment, and fullscreen editing
 - **Presets / undo / sharing** workflows with project-native preset support and numeric sorting
-- **Test coverage** exists (3,013 unit tests + e2e suite)
+- **Test coverage** exists (3,061 unit tests + e2e suite)
 
 ## Known rough edges
 

@@ -3,13 +3,14 @@
  * @license GPL-3.0-or-later
  */
 
-import { getAppPrefKey } from './storage-keys.js';
+import {
+  STORAGE_KEY_LAZY_UNION,
+  STORAGE_KEY_MANIFOLD_ENGINE as STORAGE_KEY_MANIFOLD,
+  isDebugPrefEnabled,
+} from './storage-keys.js';
+import { isPerfMetricsEnabled, appendPerfMetric } from './perf-metrics.js';
 
-// Storage keys using standardized naming convention
-const STORAGE_KEY_PERF_METRICS = getAppPrefKey('perf-metrics');
-const STORAGE_KEY_METRICS_LOG = getAppPrefKey('metrics-log');
-const STORAGE_KEY_LAZY_UNION = getAppPrefKey('lazy-union');
-const STORAGE_KEY_MANIFOLD = getAppPrefKey('manifold-engine');
+import { QUALITY_TIERS, COMPLEXITY_TIER } from './quality-tiers.js';
 
 // Re-export quality tier system for convenience
 export {
@@ -23,6 +24,9 @@ export {
   getTierPresets,
   formatPresetDescription,
 } from './quality-tiers.js';
+
+/** STANDARD-tier presets that several RENDER_QUALITY entries mirror. */
+const STANDARD_TIER = QUALITY_TIERS[COMPLEXITY_TIER.STANDARD];
 
 /**
  * Legacy render quality presets (for backwards compatibility)
@@ -39,18 +43,17 @@ export {
  */
 export const RENDER_QUALITY = {
   /**
-   * Draft quality - very fast preview for any model
+   * Draft quality - very fast preview for any model.
+   * Numbers mirror STANDARD preview-low exactly, so derive them.
    */
   DRAFT: {
+    ...STANDARD_TIER.preview.low,
     name: 'draft',
-    maxFn: 32,
-    forceFn: false, // No need to force with Manifold speed
-    minFa: 12,
-    minFs: 2,
-    timeoutMs: 8000, // Reduced from 20s
   },
   /**
-   * Low quality - fast exports, coarse tessellation
+   * Low quality - fast exports, coarse tessellation.
+   * No exact QUALITY_TIERS counterpart (minFa 10 / 15s timeout are unique
+   * to this preset) — keep literal.
    */
   LOW: {
     name: 'low',
@@ -65,6 +68,7 @@ export const RENDER_QUALITY = {
    * Targets approximately 50% triangle count vs full render:
    * - For STANDARD models (export-medium $fn=192): $fn=96 gives ~50%
    * - For COMPLEX models: $fn=96 capped by their lower limits, still rounded
+   * Close to STANDARD export-low but with a tighter 12s timeout — keep literal.
    */
   PREVIEW: {
     name: 'preview',
@@ -75,30 +79,23 @@ export const RENDER_QUALITY = {
     timeoutMs: 12000,
   },
   /**
-   * Medium quality - community standard (STANDARD tier)
+   * Medium quality - community standard (STANDARD tier export-medium).
    */
   MEDIUM: {
+    ...STANDARD_TIER.export.medium,
     name: 'medium',
-    maxFn: 192,
-    forceFn: false,
-    minFa: 4,
-    minFs: 0.75,
-    timeoutMs: 30000, // Reduced from 60s
   },
   /**
-   * High quality - community high standard (STANDARD tier)
+   * High quality - community high standard (STANDARD tier export-high).
    */
   HIGH: {
+    ...STANDARD_TIER.export.high,
     name: 'high',
-    maxFn: 360,
-    forceFn: false,
-    minFa: 1,
-    minFs: 0.25,
-    timeoutMs: 45000, // Reduced from 90s
   },
   /**
    * Desktop-equivalent - respects model's settings (OpenSCAD defaults)
-   * Matches native OpenSCAD behavior: $fn, $fa, $fs from model
+   * Matches native OpenSCAD behavior: $fn, $fa, $fs from model.
+   * maxFn: null has no QUALITY_TIERS counterpart — keep literal.
    */
   DESKTOP_DEFAULT: {
     name: 'desktop',
@@ -404,9 +401,9 @@ export class RenderController {
       };
 
       try {
-        // Report start of initialization
+        // Report start of initialization (indeterminate — no real measurement)
         if (onProgress) {
-          onProgress(0, 'Starting OpenSCAD engine...');
+          onProgress(-1, 'Starting OpenSCAD engine...');
         }
 
         // Create worker (inline URL keeps Vite worker bundling intact).
@@ -447,9 +444,9 @@ export class RenderController {
           failInit(initError);
         };
 
-        // Report WASM download starting
+        // Report WASM download starting (indeterminate)
         if (onProgress) {
-          onProgress(5, 'Loading WASM module (~15-30MB)...');
+          onProgress(-1, 'Loading WASM module (~15-30MB)...');
         }
 
         // Send init message
@@ -585,10 +582,9 @@ export class RenderController {
       case 'PROGRESS':
         // Handle init progress (requestId === 'init')
         if (payload.requestId === 'init' && onInitProgress) {
-          // Map init progress: 0-100 based on stages
-          // Worker sends 0% at start, we map to reasonable progress
-          const initPercent = Math.min(90, payload.percent + 10); // 10-90% during init
-          onInitProgress(initPercent, payload.message);
+          // Init progress is indeterminate (percent: -1) — pass through
+          // untouched so the UI shows stage messages without fake numbers.
+          onInitProgress(payload.percent, payload.message);
         } else if (this.currentRequest && this.currentRequest.onProgress) {
           this.currentRequest.onProgress(payload.percent, payload.message);
         }
@@ -610,32 +606,15 @@ export class RenderController {
           this.currentRequest = null;
 
           // Collect performance metrics if enabled
-          const metricsEnabled =
-            localStorage.getItem(STORAGE_KEY_PERF_METRICS) === 'true';
-          if (metricsEnabled && payload.timing) {
-            try {
-              const metrics = JSON.parse(
-                localStorage.getItem(STORAGE_KEY_METRICS_LOG) || '[]'
-              );
-              metrics.push({
-                timestamp: Date.now(),
-                renderMs: payload.timing.renderMs || 0,
-                wasmInitMs: payload.timing.wasmInitMs || 0,
-                cached: false,
-              });
-
-              // Keep last 100 entries
-              while (metrics.length > 100) {
-                metrics.shift();
-              }
-
-              localStorage.setItem(
-                STORAGE_KEY_METRICS_LOG,
-                JSON.stringify(metrics)
-              );
+          if (isPerfMetricsEnabled() && payload.timing) {
+            const ok = appendPerfMetric({
+              timestamp: Date.now(),
+              renderMs: payload.timing.renderMs || 0,
+              wasmInitMs: payload.timing.wasmInitMs || 0,
+              cached: false,
+            });
+            if (ok) {
               console.log('[Perf] Render timing:', payload.timing);
-            } catch (error) {
-              console.warn('[Perf] Failed to log metrics:', error);
             }
           }
 
@@ -1082,9 +1061,7 @@ export class RenderController {
           // Default is OFF. Only enable if user explicitly opts in via settings.
           // If exposing a UI toggle, add warning: "Lazy union may produce incorrect
           // geometry (wrong difference/union results). Use for preview speed only."
-          const useSourceOverrides =
-            localStorage.getItem('openscad-forge-debug-source-overrides') !==
-            null;
+          const useSourceOverrides = isDebugPrefEnabled('sourceOverrides');
           const renderOptions = {
             enableLazyUnion:
               localStorage.getItem(STORAGE_KEY_LAZY_UNION) === 'true',

@@ -94,6 +94,11 @@ export function decodeDataUrl(dataUrl) {
  * Sanitize a filename for safe use in the virtual filesystem.
  * Rejects path traversal and strips directory prefixes.
  *
+ * Intentionally separate from download.js sanitizeFilename (download-name
+ * cosmetics) and storage-manager.js sanitizeFileName (underscore
+ * substitution for project paths): this one is a security guard for the
+ * worker FS and must keep its traversal/basename semantics.
+ *
  * @param {string} rawName
  * @returns {string}
  */

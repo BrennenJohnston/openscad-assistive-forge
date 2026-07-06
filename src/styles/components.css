@@ -9024,7 +9024,8 @@ body.first-visit-blocking #app {
 .features-note {
   margin: var(--space-sm) 0 0 0;
   font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
+  /* -secondary (not -muted): muted fails WCAG AA contrast (4.44:1) in dark mode */
+  color: var(--color-text-secondary);
   font-style: italic;
 }
 
@@ -10885,7 +10886,10 @@ body:has(#featuresGuideModal .modal-content.tutorial-target-highlight)
   }
 }
 
-/* Reduced Transparency Mode */
+/* Reduced Transparency Mode
+   A11Y-3: cover every translucent surface, not just the tutorial.
+   Scrims use the same near-opaque token/fallback as the tutorial backdrop;
+   content surfaces get fully solid background tokens. */
 @media (prefers-reduced-transparency: reduce) {
   .tutorial-backdrop {
     backdrop-filter: none !important;
@@ -10895,6 +10899,38 @@ body:has(#featuresGuideModal .modal-content.tutorial-target-highlight)
   .tutorial-panel {
     background: var(--color-bg-primary) !important;
     border-width: 2px;
+  }
+
+  /* Modal / drawer / fullscreen scrims */
+  .modal-overlay,
+  .measure-fullscreen-backdrop,
+  .svg-prep-fullscreen-backdrop,
+  .processing-overlay,
+  .friendly-error-modal,
+  .drawer-backdrop {
+    background: var(--color-overlay-solid, rgba(0, 0, 0, 0.85)) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  .preset-import-mode-dialog::backdrop,
+  .import-mode-dialog::backdrop {
+    background: var(--color-overlay-solid, rgba(0, 0, 0, 0.85)) !important;
+  }
+
+  /* Translucent content surfaces become fully solid */
+  .preview-status-bar,
+  .preview-info-section.keyboard-visible,
+  .camera-focus-exit-btn {
+    background: var(--color-bg-primary) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  .camera-drawer {
+    background: var(--color-bg-secondary) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
   }
 }
 

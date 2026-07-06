@@ -526,16 +526,6 @@ async function deserializeURLParams() {
 }
 
 /**
- * Get shareable URL for current parameters
- * @param {Object} params - Parameters object
- * @returns {string} Full URL with parameters
- */
-function getShareableURL(params) {
-  const hash = serializeURLParams(params);
-  return `${window.location.origin}${window.location.pathname}${hash}`;
-}
-
-/**
  * Check if localStorage is available and working
  * @returns {boolean} True if localStorage is available
  */
@@ -557,7 +547,6 @@ const initialState = {
   parameters: {},
   defaults: {},
   rendering: false,
-  renderProgress: 0,
   lastRenderTime: null,
   // Format-agnostic generated output record.
   // { data: ArrayBuffer|string, format: string, stats: Object, paramsHash: string }

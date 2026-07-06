@@ -12,7 +12,7 @@
  * @license GPL-3.0-or-later
  */
 
-import { getAppPrefKey } from './storage-keys.js';
+import { getAppPrefKey, safeGetItem, safeSetItem } from './storage-keys.js';
 import { announceImmediate } from './announcer.js';
 
 const STORAGE_KEY = getAppPrefKey('param-detail-level');
@@ -58,13 +58,9 @@ function applyLevel(level) {
  * @returns {DetailLevel}
  */
 function loadLevel() {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved && VALID_LEVELS.includes(/** @type {DetailLevel} */ (saved))) {
-      return /** @type {DetailLevel} */ (saved);
-    }
-  } catch {
-    // Fall through to default
+  const saved = safeGetItem(STORAGE_KEY);
+  if (saved && VALID_LEVELS.includes(/** @type {DetailLevel} */ (saved))) {
+    return /** @type {DetailLevel} */ (saved);
   }
   return DEFAULT_LEVEL;
 }
@@ -74,13 +70,7 @@ function loadLevel() {
  * @param {DetailLevel} level
  */
 function saveLevel(level) {
-  try {
-    localStorage.setItem(STORAGE_KEY, level);
-  } catch (error) {
-    if (error.name === 'QuotaExceededError') {
-      console.warn('[ParamDetail] localStorage quota exceeded');
-    }
-  }
+  safeSetItem(STORAGE_KEY, level);
 }
 
 /**
@@ -106,14 +96,6 @@ function setDetailLevel(level, options = {}) {
       clearDelayMs: 3000,
     });
   }
-}
-
-/**
- * Get the current detail level.
- * @returns {DetailLevel}
- */
-function getDetailLevel() {
-  return currentLevel;
 }
 
 /**

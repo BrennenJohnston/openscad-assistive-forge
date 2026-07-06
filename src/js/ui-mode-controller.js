@@ -83,7 +83,8 @@ const PANEL_REGISTRY = [
   // editTools panel removed — now in Edit toolbar menu
   // designTools panel removed — now in Design toolbar menu
   // displayOptions panel removed — toggles now in View toolbar menu
-  // animationPanel removed from UI pending full debug; AnimationController preserved in animation-controller.js
+  // animationPanel removed from UI pending full debug (controller deleted;
+  // recoverable from git history if animation support returns)
   {
     id: 'toolbarMenuFile',
     label: 'Toolbar: File',
@@ -800,11 +801,4 @@ export function getUIModeController(options = {}) {
     instance = new UIModeController(options);
   }
   return instance;
-}
-
-/**
- * Reset UIModeController singleton (for testing)
- */
-function resetUIModeController() {
-  instance = null;
 }

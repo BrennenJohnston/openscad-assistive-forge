@@ -34,11 +34,6 @@ test.describe('Theme Switching', () => {
 
   test('should toggle between light and dark themes', async ({ page }) => {
     const themeButton = page.locator('#themeToggle')
-    
-    if (!(await themeButton.isVisible())) {
-      test.skip()
-      return
-    }
 
     // Get initial theme
     const initialTheme = await page.evaluate(() => document.documentElement.getAttribute('data-theme'))
@@ -69,11 +64,6 @@ test.describe('Theme Switching', () => {
 
   test('should apply theme-specific colors', async ({ page }) => {
     const themeButton = page.locator('#themeToggle')
-    
-    if (!(await themeButton.isVisible())) {
-      test.skip()
-      return
-    }
 
     // Switch to dark theme
     const currentTheme = await page.evaluate(() => document.documentElement.getAttribute('data-theme'))
@@ -108,43 +98,38 @@ test.describe('Theme Switching', () => {
 
   test('should have high contrast mode option', async ({ page }) => {
     const highContrastToggle = page.locator('input[type="checkbox"][aria-label*="contrast"], button[aria-label*="High Contrast"], label:has-text("High Contrast")')
-    
-    // High contrast is a nice-to-have feature
-    if (await highContrastToggle.isVisible()) {
-      // If it exists, test it
-      const isCheckbox = await highContrastToggle.evaluate(el => el.type === 'checkbox')
-      
-      if (isCheckbox) {
-        const initialState = await highContrastToggle.isChecked()
-        
-        await highContrastToggle.click()
-        await page.waitForTimeout(300)
 
-        const newState = await highContrastToggle.isChecked()
-        expect(newState).not.toBe(initialState)
+    // High contrast may be exposed through the theme cycle instead of a
+    // discrete control — skip honestly rather than fake-passing.
+    test.skip(
+      !(await highContrastToggle.isVisible()),
+      'No discrete high-contrast control in this UI (theme cycle covers HC)'
+    )
 
-        // Verify high-contrast attribute applied
-        const hasHighContrast = await page.evaluate(() => 
-          document.documentElement.hasAttribute('data-high-contrast')
-        )
-        
-        if (newState) {
-          expect(hasHighContrast).toBe(true)
-        }
+    const isCheckbox = await highContrastToggle.evaluate(el => el.type === 'checkbox')
+
+    if (isCheckbox) {
+      const initialState = await highContrastToggle.isChecked()
+
+      await highContrastToggle.click()
+      await page.waitForTimeout(300)
+
+      const newState = await highContrastToggle.isChecked()
+      expect(newState).not.toBe(initialState)
+
+      // Verify high-contrast attribute applied
+      const hasHighContrast = await page.evaluate(() =>
+        document.documentElement.hasAttribute('data-high-contrast')
+      )
+
+      if (newState) {
+        expect(hasHighContrast).toBe(true)
       }
-    } else {
-      // Test passes even if high contrast doesn't exist
-      expect(true).toBe(true)
     }
   })
 
   test('should persist theme choice across page reloads', async ({ page }) => {
     const themeButton = page.locator('#themeToggle')
-    
-    if (!(await themeButton.isVisible())) {
-      test.skip()
-      return
-    }
 
     // Set to a specific theme
     await themeButton.click()
@@ -169,11 +154,6 @@ test.describe('Theme Switching', () => {
 
   test('should update all UI elements when theme changes', async ({ page }) => {
     const themeButton = page.locator('#themeToggle')
-    
-    if (!(await themeButton.isVisible())) {
-      test.skip()
-      return
-    }
 
     // Get theme attribute (more reliable than computed colors)
     const themeBefore = await page.evaluate(() => 
@@ -197,11 +177,6 @@ test.describe('Theme Switching', () => {
 
   test('should have accessible focus indicators in all themes', async ({ page }) => {
     const themeButton = page.locator('#themeToggle')
-    
-    if (!(await themeButton.isVisible())) {
-      test.skip()
-      return
-    }
 
     const checkFocusIndicator = async () => {
       const firstButton = page.locator('button').first()
@@ -277,11 +252,6 @@ test.describe('Theme Switching', () => {
 
   test('should announce theme changes to screen readers', async ({ page }) => {
     const themeButton = page.locator('#themeToggle')
-    
-    if (!(await themeButton.isVisible())) {
-      test.skip()
-      return
-    }
 
     // Check for live region or status element
     const liveRegions = await page.locator('[role="status"], [aria-live]').count()
@@ -293,11 +263,6 @@ test.describe('Theme Switching', () => {
 
   test('should maintain theme when loading different examples', async ({ page }) => {
     const themeButton = page.locator('#themeToggle')
-    
-    if (!(await themeButton.isVisible())) {
-      test.skip()
-      return
-    }
 
     // Set theme
     await themeButton.click()
@@ -324,11 +289,6 @@ test.describe('Theme Switching', () => {
 
   test('should cycle through all available themes', async ({ page }) => {
     const themeButton = page.locator('#themeToggle')
-    
-    if (!(await themeButton.isVisible())) {
-      test.skip()
-      return
-    }
 
     const themes = new Set()
     const maxClicks = 5
@@ -380,10 +340,6 @@ test.describe('Mono / Alt View Theme Switching', () => {
     })
 
     const themeButton = page.locator('#themeToggle')
-    if (!(await themeButton.isVisible())) {
-      test.skip()
-      return
-    }
 
     const themeBefore = await page.evaluate(() =>
       document.documentElement.getAttribute('data-theme'),

@@ -13,6 +13,75 @@
 import { describe, it, expect } from 'vitest';
 import Color from 'colorjs.io';
 import { amber, green, red, slate, slateDark, teal, yellow } from '@radix-ui/colors';
+import { readFileSync } from 'fs';
+import { resolve as resolvePath, dirname } from 'path';
+import { fileURLToPath } from 'url';
+
+// ---------------------------------------------------------------------------
+// Token extraction — read the real stylesheets at test time so these tests
+// fail when the CSS changes (no "keep in sync" mirrored hex values).
+// ---------------------------------------------------------------------------
+
+const stylesDir = resolvePath(
+  dirname(fileURLToPath(import.meta.url)),
+  '../../src/styles'
+);
+const variablesCss = readFileSync(
+  resolvePath(stylesDir, 'variables.css'),
+  'utf-8'
+);
+const variantCss = readFileSync(resolvePath(stylesDir, 'variant.css'), 'utf-8');
+
+/**
+ * Extract the custom-property map from the first CSS rule whose selector
+ * starts with the given text. Values are raw declaration strings.
+ * @param {string} css - Stylesheet source
+ * @param {string} selectorStart - Start of the selector to locate
+ * @returns {Record<string, string>} Map of --token-name -> value
+ */
+function extractBlockTokens(css, selectorStart) {
+  const selIdx = css.indexOf(selectorStart);
+  if (selIdx === -1) {
+    throw new Error(`Selector not found in stylesheet: ${selectorStart}`);
+  }
+  const braceIdx = css.indexOf('{', selIdx);
+  let depth = 0;
+  let end = -1;
+  for (let i = braceIdx; i < css.length; i++) {
+    if (css[i] === '{') depth++;
+    else if (css[i] === '}') {
+      depth--;
+      if (depth === 0) {
+        end = i;
+        break;
+      }
+    }
+  }
+  const block = css.slice(braceIdx + 1, end);
+  const tokens = {};
+  for (const m of block.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)) {
+    tokens[m[1]] = m[2].trim();
+  }
+  return tokens;
+}
+
+// High-contrast theme tokens (variables.css)
+const hcLight = extractBlockTokens(
+  variablesCss,
+  ":root[data-high-contrast='true'][data-theme='light']"
+);
+const hcDark = extractBlockTokens(
+  variablesCss,
+  ":root[data-high-contrast='true'][data-theme='dark']"
+);
+
+// Mono variant tokens (variant.css): green phosphor (default/dark) and
+// amber phosphor (light)
+const monoGreen = extractBlockTokens(variantCss, ":root[data-ui-variant='mono']");
+const monoAmber = extractBlockTokens(
+  variantCss,
+  ":root[data-ui-variant='mono'][data-theme='light']"
+);
 
 /**
  * Calculate WCAG 2.x contrast ratio between two colors
@@ -172,15 +241,15 @@ describe('Color Contrast - Dark Mode (Normal Theme)', () => {
 });
 
 describe('Color Contrast - High Contrast Light Mode (AAA Target)', () => {
-  const bg = '#ffffff';
-  const text = '#000000';
-  // Keep in sync with `src/styles/variables.css` high contrast light mode tokens
-  const accent = '#003d99';
-  const success = '#08651a';
-  const info = '#005b61';
-  const error = '#b30000';
-  const warning = '#664700';
-  const border = '#000000';
+  // Tokens read from variables.css at test time
+  const bg = hcLight['--color-bg-primary'];
+  const text = hcLight['--color-text-primary'];
+  const accent = hcLight['--color-accent'];
+  const success = hcLight['--color-success'];
+  const info = hcLight['--color-info'];
+  const error = hcLight['--color-error'];
+  const warning = hcLight['--color-warning'];
+  const border = hcLight['--color-border'];
 
   it('primary text meets WCAG AAA', () => {
     const ratio = getContrastRatio(text, bg);
@@ -226,14 +295,15 @@ describe('Color Contrast - High Contrast Light Mode (AAA Target)', () => {
 });
 
 describe('Color Contrast - High Contrast Dark Mode (AAA Target)', () => {
-  const bg = '#000000';
-  const text = '#ffffff';
-  const accent = '#66b3ff';
-  const success = '#66ff66';
-  const info = '#44d9e6';
-  const error = '#ff6666';
-  const warning = '#ffcc00';
-  const border = '#ffffff';
+  // Tokens read from variables.css at test time
+  const bg = hcDark['--color-bg-primary'];
+  const text = hcDark['--color-text-primary'];
+  const accent = hcDark['--color-accent'];
+  const success = hcDark['--color-success'];
+  const info = hcDark['--color-info'];
+  const error = hcDark['--color-error'];
+  const warning = hcDark['--color-warning'];
+  const border = hcDark['--color-border'];
 
   it('primary text meets WCAG AAA', () => {
     const ratio = getContrastRatio(text, bg);
@@ -371,10 +441,10 @@ describe('Button Variants - All Themes', () => {
   });
   
   describe('High Contrast Mode Buttons', () => {
-    const bgHCLight = '#ffffff';
-    const textHCLight = '#000000';
-    const bgHCDark = '#000000';
-    const textHCDark = '#ffffff';
+    const bgHCLight = hcLight['--color-bg-primary'];
+    const textHCLight = hcLight['--color-text-primary'];
+    const bgHCDark = hcDark['--color-bg-primary'];
+    const textHCDark = hcDark['--color-text-primary'];
     
     it('button text meets WCAG AAA in HC light mode', () => {
       const ratio = getContrastRatio(textHCLight, bgHCLight);
@@ -414,10 +484,10 @@ describe('Drawer Headers - All Themes', () => {
   });
   
   describe('High Contrast Drawer Headers', () => {
-    const bgHCLight = '#e0e0e0';
-    const textHCLight = '#000000';
-    const bgHCDark = '#1a1a1a';
-    const textHCDark = '#ffffff';
+    const bgHCLight = hcLight['--color-bg-tertiary'];
+    const textHCLight = hcLight['--color-text-primary'];
+    const bgHCDark = hcDark['--color-bg-secondary'];
+    const textHCDark = hcDark['--color-text-primary'];
     
     it('drawer title meets WCAG AAA in HC light mode', () => {
       const ratio = getContrastRatio(textHCLight, bgHCLight);
@@ -457,10 +527,10 @@ describe('Mobile Header Controls - All Themes', () => {
   });
   
   describe('High Contrast Mobile Header', () => {
-    const bgHCLight = '#ffffff';
-    const textHCLight = '#000000';
-    const bgHCDark = '#000000';
-    const textHCDark = '#ffffff';
+    const bgHCLight = hcLight['--color-bg-primary'];
+    const textHCLight = hcLight['--color-text-primary'];
+    const bgHCDark = hcDark['--color-bg-primary'];
+    const textHCDark = hcDark['--color-text-primary'];
     
     it('header controls meet WCAG AAA in HC light mode', () => {
       const ratio = getContrastRatio(textHCLight, bgHCLight);
@@ -496,13 +566,19 @@ describe('Camera Drawer Arrow - Mobile All Themes', () => {
     });
     
     it('camera arrow meets WCAG AAA in high contrast light', () => {
-      const ratio = getContrastRatio('#000000', '#f0f0f0');
+      const ratio = getContrastRatio(
+        hcLight['--color-text-primary'],
+        hcLight['--color-bg-secondary']
+      );
       expect(ratio).toBeGreaterThanOrEqual(7.0);
       expect(meetsWCAG_AAA(ratio)).toBe(true);
     });
     
     it('camera arrow meets WCAG AAA in high contrast dark', () => {
-      const ratio = getContrastRatio('#ffffff', '#1a1a1a');
+      const ratio = getContrastRatio(
+        hcDark['--color-text-primary'],
+        hcDark['--color-bg-secondary']
+      );
       expect(ratio).toBeGreaterThanOrEqual(7.0);
       expect(meetsWCAG_AAA(ratio)).toBe(true);
     });
@@ -589,17 +665,19 @@ describe('Tutorial Button Contrast - CRITICAL ACCESSIBILITY FIX', () => {
   
   describe('High Contrast Mode Tutorial Buttons', () => {
     it('Back button meets WCAG AAA (>= 7:1) in HC light mode', () => {
-      const bgHCLight = '#e0e0e0';
-      const textHCLight = '#000000';
-      const ratio = getContrastRatio(textHCLight, bgHCLight);
+      const ratio = getContrastRatio(
+        hcLight['--color-text-primary'],
+        hcLight['--color-bg-tertiary']
+      );
       expect(ratio).toBeGreaterThanOrEqual(7.0);
       expect(meetsWCAG_AAA(ratio)).toBe(true);
     });
     
     it('Back button meets WCAG AAA (>= 7:1) in HC dark mode', () => {
-      const bgHCDark = '#1a1a1a';
-      const textHCDark = '#ffffff';
-      const ratio = getContrastRatio(textHCDark, bgHCDark);
+      const ratio = getContrastRatio(
+        hcDark['--color-text-primary'],
+        hcDark['--color-bg-secondary']
+      );
       expect(ratio).toBeGreaterThanOrEqual(7.0);
       expect(meetsWCAG_AAA(ratio)).toBe(true);
     });
@@ -641,9 +719,8 @@ describe('Selected Tab Indicator - All Themes', () => {
   });
 
   describe('High Contrast Light Mode Tab Indicator', () => {
-    // --color-accent-fg = #003d99 in HC light mode (same as --color-accent)
-    const indicatorColor = '#003d99';
-    const tabBg = '#ffffff'; // --color-bg-primary in HC light mode
+    const indicatorColor = hcLight['--color-accent-fg'];
+    const tabBg = hcLight['--color-bg-primary'];
 
     it('selected tab indicator meets 7:1 in HC light mode', () => {
       const ratio = getContrastRatio(indicatorColor, tabBg);
@@ -653,9 +730,8 @@ describe('Selected Tab Indicator - All Themes', () => {
   });
 
   describe('High Contrast Dark Mode Tab Indicator', () => {
-    // --color-accent-fg = #66b3ff in HC dark mode (same as --color-accent)
-    const indicatorColor = '#66b3ff';
-    const tabBg = '#000000'; // --color-bg-primary in HC dark mode
+    const indicatorColor = hcDark['--color-accent-fg'];
+    const tabBg = hcDark['--color-bg-primary'];
 
     it('selected tab indicator meets 7:1 in HC dark mode', () => {
       const ratio = getContrastRatio(indicatorColor, tabBg);
@@ -699,9 +775,8 @@ describe('Pressed Button State - All Themes', () => {
   });
 
   describe('High Contrast Light Mode Pressed Button', () => {
-    // HC light: --color-accent = #003d99, --color-accent-text = #ffffff
-    const iconColor = '#ffffff';
-    const buttonBg = '#003d99';
+    const iconColor = hcLight['--color-accent-text'];
+    const buttonBg = hcLight['--color-accent'];
 
     it('pressed button icon meets 7:1 in HC light mode', () => {
       const ratio = getContrastRatio(iconColor, buttonBg);
@@ -711,9 +786,8 @@ describe('Pressed Button State - All Themes', () => {
   });
 
   describe('High Contrast Dark Mode Pressed Button', () => {
-    // HC dark: --color-accent = #66b3ff, --color-accent-text = #000000
-    const iconColor = '#000000';
-    const buttonBg = '#66b3ff';
+    const iconColor = hcDark['--color-accent-text'];
+    const buttonBg = hcDark['--color-accent'];
 
     it('pressed button icon meets 7:1 in HC dark mode', () => {
       const ratio = getContrastRatio(iconColor, buttonBg);
@@ -725,20 +799,21 @@ describe('Pressed Button State - All Themes', () => {
 
 describe('Color Contrast - Mono Green Phosphor (Dark Theme)', () => {
   /*
-   * Mono green variant: all UI elements rendered in green phosphor (#00ff00)
-   * on a pure black (#000000) background, simulating a classic terminal.
-   * Color values sourced from src/styles/variant.css :root[data-ui-variant='mono'].
+   * Mono green variant: all UI elements rendered in green phosphor on a
+   * pure black background, simulating a classic terminal. Token values are
+   * read from src/styles/variant.css :root[data-ui-variant='mono'] at
+   * test time.
    */
-  const bg = '#000000';
-  const textPrimary = '#00ff00';
-  const textSecondary = '#00cc00';
-  const textTertiary = '#009900';
-  const accent = '#00ff00';
-  const accentHover = '#33ff33';
-  const accentText = '#000000';
-  const border = '#00ff00';
-  const borderLight = '#009900';
-  const focus = '#00ff00';
+  const bg = monoGreen['--color-bg-primary'];
+  const textPrimary = monoGreen['--color-text-primary'];
+  const textSecondary = monoGreen['--color-text-secondary'];
+  const textTertiary = monoGreen['--color-text-tertiary'];
+  const accent = monoGreen['--color-accent'];
+  const accentHover = monoGreen['--color-accent-hover'];
+  const accentText = monoGreen['--color-accent-text'];
+  const border = monoGreen['--color-border'];
+  const borderLight = monoGreen['--color-border-light'];
+  const focus = monoGreen['--color-focus'];
 
   it('primary text (#00ff00) on black meets WCAG AA', () => {
     const ratio = getContrastRatio(textPrimary, bg);
@@ -806,21 +881,21 @@ describe('Color Contrast - Mono Green Phosphor (Dark Theme)', () => {
 
 describe('Color Contrast - Mono Amber Phosphor (Light Theme)', () => {
   /*
-   * Mono amber variant: all UI elements rendered in amber (#ffb000)
-   * on a pure black (#000000) background, simulating a DOS P3 monitor.
-   * Color values sourced from src/styles/variant.css
-   * :root[data-ui-variant='mono'][data-theme='light'].
+   * Mono amber variant: all UI elements rendered in amber on a pure black
+   * background, simulating a DOS P3 monitor. Token values are read from
+   * src/styles/variant.css :root[data-ui-variant='mono'][data-theme='light']
+   * at test time.
    */
-  const bg = '#000000';
-  const textPrimary = '#ffb000';
-  const textSecondary = '#cc8c00';
-  const textTertiary = '#997200';
-  const accent = '#ffb000';
-  const accentHover = '#ffc333';
-  const accentText = '#000000';
-  const border = '#ffb000';
-  const borderLight = '#997200';
-  const focus = '#ffb000';
+  const bg = monoAmber['--color-bg-primary'];
+  const textPrimary = monoAmber['--color-text-primary'];
+  const textSecondary = monoAmber['--color-text-secondary'];
+  const textTertiary = monoAmber['--color-text-tertiary'];
+  const accent = monoAmber['--color-accent'];
+  const accentHover = monoAmber['--color-accent-hover'];
+  const accentText = monoAmber['--color-accent-text'];
+  const border = monoAmber['--color-border'];
+  const borderLight = monoAmber['--color-border-light'];
+  const focus = monoAmber['--color-focus'];
 
   it('primary text (#ffb000) on black meets WCAG AA', () => {
     const ratio = getContrastRatio(textPrimary, bg);

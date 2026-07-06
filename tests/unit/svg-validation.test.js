@@ -1,79 +1,15 @@
 /**
- * Unit tests for SVG validation (validateSVGOutput in openscad-worker.js).
+ * Unit tests for SVG validation (validateSVGOutput).
  *
- * Because validateSVGOutput is a module-scoped (non-exported) function inside a
- * Web Worker, we test its logic here using an inlined copy of the function.
- * Keep this copy in sync with openscad-worker.js if the implementation changes.
+ * Imports the real implementation from src/worker/svg-validation.js — the
+ * shared module the render worker uses — so these tests fail when the
+ * production logic changes.
  *
  * @license GPL-3.0-or-later
  */
 
 import { describe, it, expect } from 'vitest';
-
-// ─── Inlined testable copy of validateSVGOutput ─────────────────────────────
-// Mirrors openscad-worker.js validateSVGOutput; runs in a Node.js/Vitest env.
-function validateSVGOutput(content) {
-  if (!content || content.length < 50) {
-    return {
-      valid: false,
-      error:
-        'SVG output is empty or too small. Your model may not produce 2D geometry. ' +
-        'Ensure your model uses projection() or 2D primitives, and that your parameter settings produce visible geometry.',
-    };
-  }
-
-  if (!/<svg[\s>]/i.test(content)) {
-    return {
-      valid: false,
-      error:
-        'Invalid SVG output - missing <svg> element. The OpenSCAD render may have failed silently.',
-    };
-  }
-
-  const geometricElements = [
-    '<path',
-    '<polygon',
-    '<polyline',
-    '<line',
-    '<rect',
-    '<circle',
-    '<ellipse',
-    '<g>',
-  ];
-
-  const hasGeometry = geometricElements.some((el) =>
-    content.toLowerCase().includes(el.toLowerCase())
-  );
-
-  if (!hasGeometry) {
-    return {
-      valid: false,
-      error:
-        'SVG contains no geometry (no paths, polygons, or shapes). ' +
-        'Your 3D model may not include any 2D projection. ' +
-        'Ensure your model uses projection() or is configured for 2D output.',
-    };
-  }
-
-  const viewBoxMatch = content.match(/viewBox="([^"]+)"/);
-  if (viewBoxMatch) {
-    const parts = viewBoxMatch[1].split(/\s+/).map(parseFloat);
-    if (parts.length >= 4) {
-      const width = parts[2];
-      const height = parts[3];
-      if ((width === 0 && height === 0) || (width < 0.001 && height < 0.001)) {
-        return {
-          valid: false,
-          error:
-            'SVG has zero-size viewBox (no visible geometry). ' +
-            'Your model configuration may be producing empty output.',
-        };
-      }
-    }
-  }
-
-  return { valid: true };
-}
+import { validateSVGOutput } from '../../src/worker/svg-validation.js';
 
 // ─── Test fixtures ──────────────────────────────────────────────────────────
 

@@ -4,15 +4,20 @@
  */
 
 /**
- * Escape HTML special characters to prevent XSS attacks
+ * Escape HTML special characters to prevent XSS attacks.
+ * Escapes all five significant characters (& < > " ') so the result is
+ * safe in both element content and quoted attribute values.
  * @param {string} text - Text to escape
  * @returns {string} - Escaped HTML string
  */
 export function escapeHtml(text) {
   if (text == null || text === '') return '';
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 /**

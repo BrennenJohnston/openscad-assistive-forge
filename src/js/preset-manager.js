@@ -251,19 +251,6 @@ export function dismissMigrationOffer() {
 }
 
 /**
- * Reset migration flag (for testing or re-offering migration)
- */
-function resetMigrationFlag() {
-  try {
-    localStorage.removeItem(STORAGE_KEYS.migrationFlag);
-    if (import.meta.env.DEV)
-      console.log('[PresetManager] Migration flag reset');
-  } catch {
-    // Non-critical
-  }
-}
-
-/**
  * Detect if JSON data is in OpenSCAD native format (parameterSets)
  * OpenSCAD native format: { parameterSets: {...}, fileFormatVersion: "1" }
  * Note: fileFormatVersion may be missing in some older exports

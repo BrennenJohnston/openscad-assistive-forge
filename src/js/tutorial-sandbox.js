@@ -58,6 +58,8 @@ let wasAutoMinimized = false; // Track whether current minimized state was autom
 let isSettingUpStep = false; // Guard flag to prevent drawer observer interference during step setup
 
 const MAX_CONSECUTIVE_FAILURES = 3;
+// sessionStorage-scoped by design: progress should survive a reload within
+// the same tab but not persist across browser sessions.
 const TUTORIAL_STORAGE_KEY = 'tutorialProgress';
 const TUTORIAL_PROGRESS_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
 
@@ -3614,28 +3616,6 @@ export function closeTutorial(completed = false) {
   announceToScreenReader(
     `Tutorial closed at step ${currentStep} of ${stepsTotal}.`
   );
-}
-
-/**
- * Check if a tutorial is currently active
- * @public
- * @returns {boolean}
- * @note Currently not used internally, but exported as part of the public API
- *       for potential external use or future features
- */
-function isTutorialActive() {
-  return !!activeTutorial;
-}
-
-/**
- * Get the current tutorial ID
- * @public
- * @returns {string|null}
- * @note Currently not used internally, but exported as part of the public API
- *       for potential external use or future features
- */
-function getCurrentTutorialId() {
-  return activeTutorial ? activeTutorial.id : null;
 }
 
 /**

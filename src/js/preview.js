@@ -42,26 +42,26 @@ import {
   announceCameraAction as announceCamera,
   announceImmediate,
 } from './announcer.js';
-import { getAppPrefKey } from './storage-keys.js';
+import {
+  STORAGE_KEY_MEASUREMENTS,
+  STORAGE_KEY_GRID,
+  STORAGE_KEY_GRID_SIZE,
+  STORAGE_KEY_CUSTOM_GRID_PRESETS,
+  STORAGE_KEY_GRID_COLOR,
+  STORAGE_KEY_GRID_OPACITY,
+  STORAGE_KEY_AUTO_BED,
+  STORAGE_KEY_CAMERA_COLLAPSED,
+  STORAGE_KEY_CAMERA_POSITION,
+  STORAGE_KEY_LOD_WARNING_DISMISSED,
+  safeGetItem,
+  safeSetItem,
+  safeRemoveItem,
+} from './storage-keys.js';
 
 // Disable Three.js color management to match desktop OpenSCAD's
 // non-linear-aware OpenGL pipeline. OpenSCAD passes sRGB colors
 // directly through lighting without linearization or gamma correction.
 ColorManagement.enabled = false;
-
-// Storage keys using standardized naming convention
-const STORAGE_KEY_MEASUREMENTS = getAppPrefKey('measurements');
-const STORAGE_KEY_GRID = getAppPrefKey('grid');
-const STORAGE_KEY_GRID_SIZE = getAppPrefKey('grid-size');
-const STORAGE_KEY_CUSTOM_GRID_PRESETS = getAppPrefKey('custom-grid-presets');
-const STORAGE_KEY_GRID_COLOR = getAppPrefKey('grid-color');
-const STORAGE_KEY_GRID_OPACITY = getAppPrefKey('grid-opacity');
-const STORAGE_KEY_AUTO_BED = getAppPrefKey('auto-bed');
-const STORAGE_KEY_CAMERA_COLLAPSED = getAppPrefKey('camera-controls-collapsed');
-const STORAGE_KEY_CAMERA_POSITION = getAppPrefKey('camera-controls-position');
-const STORAGE_KEY_LOD_WARNING_DISMISSED = getAppPrefKey(
-  'lod-warning-dismissed'
-);
 
 /** Default grid config — 220×220mm matches popular mid-range FDM printers (Creality K1C, FlashForge Adventurer 5M Pro) */
 const DEFAULT_GRID_CONFIG = { widthMm: 220, heightMm: 220 };
@@ -1876,11 +1876,7 @@ export class PreviewManager {
    * The preference is stored in localStorage and survives page reloads.
    */
   dismissLODWarningPermanently() {
-    try {
-      localStorage.setItem(STORAGE_KEY_LOD_WARNING_DISMISSED, 'true');
-    } catch {
-      /* private browsing / quota — fall back silently */
-    }
+    safeSetItem(STORAGE_KEY_LOD_WARNING_DISMISSED, 'true');
     this.hideLODWarning();
     console.log('[Preview] LOD warning permanently dismissed by user');
   }
@@ -1889,22 +1885,14 @@ export class PreviewManager {
    * @returns {boolean} Whether the user has permanently dismissed LOD warnings.
    */
   isLODWarningPermanentlyDismissed() {
-    try {
-      return localStorage.getItem(STORAGE_KEY_LOD_WARNING_DISMISSED) === 'true';
-    } catch {
-      return false;
-    }
+    return safeGetItem(STORAGE_KEY_LOD_WARNING_DISMISSED) === 'true';
   }
 
   /**
    * Re-enable LOD warnings after a previous permanent dismiss.
    */
   resetLODWarningDismissal() {
-    try {
-      localStorage.removeItem(STORAGE_KEY_LOD_WARNING_DISMISSED);
-    } catch {
-      /* ignore */
-    }
+    safeRemoveItem(STORAGE_KEY_LOD_WARNING_DISMISSED);
     console.log('[Preview] LOD warning dismissal reset');
   }
 
@@ -2655,13 +2643,7 @@ export class PreviewManager {
    * @returns {boolean} Preference value
    */
   loadMeasurementPreference() {
-    try {
-      const pref = localStorage.getItem(STORAGE_KEY_MEASUREMENTS);
-      return pref === 'true';
-    } catch (error) {
-      console.warn('[Preview] Could not load measurement preference:', error);
-      return false;
-    }
+    return safeGetItem(STORAGE_KEY_MEASUREMENTS) === 'true';
   }
 
   /**
@@ -2669,14 +2651,7 @@ export class PreviewManager {
    * @param {boolean} enabled - Measurement enabled state
    */
   saveMeasurementPreference(enabled) {
-    try {
-      localStorage.setItem(
-        STORAGE_KEY_MEASUREMENTS,
-        enabled ? 'true' : 'false'
-      );
-    } catch (error) {
-      console.warn('[Preview] Could not save measurement preference:', error);
-    }
+    safeSetItem(STORAGE_KEY_MEASUREMENTS, enabled ? 'true' : 'false');
   }
 
   /**
@@ -2699,14 +2674,9 @@ export class PreviewManager {
    * @returns {boolean} Preference value (defaults to true)
    */
   loadGridPreference() {
-    try {
-      const pref = localStorage.getItem(STORAGE_KEY_GRID);
-      // Default to true (grid visible) if not set
-      return pref === null ? true : pref === 'true';
-    } catch (error) {
-      console.warn('[Preview] Could not load grid preference:', error);
-      return true;
-    }
+    const pref = safeGetItem(STORAGE_KEY_GRID);
+    // Default to true (grid visible) if not set
+    return pref === null ? true : pref === 'true';
   }
 
   /**
@@ -2714,11 +2684,7 @@ export class PreviewManager {
    * @param {boolean} enabled - Grid enabled state
    */
   saveGridPreference(enabled) {
-    try {
-      localStorage.setItem(STORAGE_KEY_GRID, enabled ? 'true' : 'false');
-    } catch (error) {
-      console.warn('[Preview] Could not save grid preference:', error);
-    }
+    safeSetItem(STORAGE_KEY_GRID, enabled ? 'true' : 'false');
   }
 
   /**
@@ -2797,12 +2763,8 @@ export class PreviewManager {
    * @returns {string|null}
    */
   loadGridColorPreference() {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY_GRID_COLOR);
-      if (raw && /^#[0-9a-f]{6}$/i.test(raw)) return raw;
-    } catch (_) {
-      // fall through
-    }
+    const raw = safeGetItem(STORAGE_KEY_GRID_COLOR);
+    if (raw && /^#[0-9a-f]{6}$/i.test(raw)) return raw;
     return null;
   }
 
@@ -2811,14 +2773,10 @@ export class PreviewManager {
    * @param {string|null} hex
    */
   saveGridColorPreference(hex) {
-    try {
-      if (hex) {
-        localStorage.setItem(STORAGE_KEY_GRID_COLOR, hex);
-      } else {
-        localStorage.removeItem(STORAGE_KEY_GRID_COLOR);
-      }
-    } catch (error) {
-      console.warn('[Preview] Could not save grid color preference:', error);
+    if (hex) {
+      safeSetItem(STORAGE_KEY_GRID_COLOR, hex);
+    } else {
+      safeRemoveItem(STORAGE_KEY_GRID_COLOR);
     }
   }
 
@@ -2855,14 +2813,10 @@ export class PreviewManager {
    * @returns {number} 10–100 (default 100)
    */
   loadGridOpacityPreference() {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY_GRID_OPACITY);
-      if (raw !== null) {
-        const val = parseInt(raw, 10);
-        if (!Number.isNaN(val) && val >= 10 && val <= 100) return val;
-      }
-    } catch (_) {
-      // fall through
+    const raw = safeGetItem(STORAGE_KEY_GRID_OPACITY);
+    if (raw !== null) {
+      const val = parseInt(raw, 10);
+      if (!Number.isNaN(val) && val >= 10 && val <= 100) return val;
     }
     return 100;
   }
@@ -2872,14 +2826,10 @@ export class PreviewManager {
    * @param {number|null} value - null removes the key (revert to default 100)
    */
   saveGridOpacityPreference(value) {
-    try {
-      if (value !== null && value !== undefined && value !== 100) {
-        localStorage.setItem(STORAGE_KEY_GRID_OPACITY, String(value));
-      } else {
-        localStorage.removeItem(STORAGE_KEY_GRID_OPACITY);
-      }
-    } catch (error) {
-      console.warn('[Preview] Could not save grid opacity preference:', error);
+    if (value !== null && value !== undefined && value !== 100) {
+      safeSetItem(STORAGE_KEY_GRID_OPACITY, String(value));
+    } else {
+      safeRemoveItem(STORAGE_KEY_GRID_OPACITY);
     }
   }
 
@@ -2956,7 +2906,8 @@ export class PreviewManager {
    */
   loadGridSizePreference() {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY_GRID_SIZE);
+      // try/catch retained for JSON.parse of possibly-corrupt values
+      const raw = safeGetItem(STORAGE_KEY_GRID_SIZE);
       if (raw) {
         const parsed = JSON.parse(raw);
         if (
@@ -2978,11 +2929,7 @@ export class PreviewManager {
    * @param {{ widthMm: number, heightMm: number }} config
    */
   saveGridSizePreference(config) {
-    try {
-      localStorage.setItem(STORAGE_KEY_GRID_SIZE, JSON.stringify(config));
-    } catch (error) {
-      console.warn('[Preview] Could not save grid size:', error);
-    }
+    safeSetItem(STORAGE_KEY_GRID_SIZE, JSON.stringify(config));
   }
 
   /**
@@ -3034,7 +2981,8 @@ export class PreviewManager {
    */
   loadCustomGridPresets() {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY_CUSTOM_GRID_PRESETS);
+      // try/catch retained for JSON.parse of possibly-corrupt values
+      const raw = safeGetItem(STORAGE_KEY_CUSTOM_GRID_PRESETS);
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) return parsed;
@@ -3086,15 +3034,12 @@ export class PreviewManager {
 
     existing.push({ name: trimmedName, widthMm: w, heightMm: h });
 
-    try {
-      localStorage.setItem(
-        STORAGE_KEY_CUSTOM_GRID_PRESETS,
-        JSON.stringify(existing)
-      );
-    } catch (error) {
+    if (
+      !safeSetItem(STORAGE_KEY_CUSTOM_GRID_PRESETS, JSON.stringify(existing))
+    ) {
       return {
         success: false,
-        error: `Could not save preset: ${error.message}`,
+        error: 'Could not save preset: storage unavailable or full.',
       };
     }
 
@@ -3111,15 +3056,7 @@ export class PreviewManager {
     const next = existing.filter((p) => p.name !== name);
     if (next.length === existing.length) return false;
 
-    try {
-      localStorage.setItem(
-        STORAGE_KEY_CUSTOM_GRID_PRESETS,
-        JSON.stringify(next)
-      );
-      return true;
-    } catch (_) {
-      return false;
-    }
+    return safeSetItem(STORAGE_KEY_CUSTOM_GRID_PRESETS, JSON.stringify(next));
   }
 
   /**
@@ -3141,14 +3078,9 @@ export class PreviewManager {
    * @returns {boolean} Preference value (defaults to true - most users want this)
    */
   loadAutoBedPreference() {
-    try {
-      const pref = localStorage.getItem(STORAGE_KEY_AUTO_BED);
-      // Default to true (auto-bed enabled) if not set
-      return pref === null ? true : pref === 'true';
-    } catch (error) {
-      console.warn('[Preview] Could not load auto-bed preference:', error);
-      return true;
-    }
+    const pref = safeGetItem(STORAGE_KEY_AUTO_BED);
+    // Default to true (auto-bed enabled) if not set
+    return pref === null ? true : pref === 'true';
   }
 
   /**
@@ -3156,11 +3088,7 @@ export class PreviewManager {
    * @param {boolean} enabled - Auto-bed enabled state
    */
   saveAutoBedPreference(enabled) {
-    try {
-      localStorage.setItem(STORAGE_KEY_AUTO_BED, enabled ? 'true' : 'false');
-    } catch (error) {
-      console.warn('[Preview] Could not save auto-bed preference:', error);
-    }
+    safeSetItem(STORAGE_KEY_AUTO_BED, enabled ? 'true' : 'false');
   }
 
   /**

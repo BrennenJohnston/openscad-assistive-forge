@@ -9,7 +9,7 @@ import { stateManager } from './state.js';
 import { announceImmediate } from './announcer.js';
 import { escapeHtml } from './html-utils.js';
 import * as SharedImageStore from './shared-image-store.js';
-import { getAppPrefKey } from './storage-keys.js';
+import { getAppPrefKey, safeGetItem, safeSetItem } from './storage-keys.js';
 
 const STORAGE_KEY_OVERLAY_ENABLED = getAppPrefKey('overlay-enabled');
 const STORAGE_KEY_OVERLAY_OPACITY = getAppPrefKey('overlay-opacity');
@@ -437,18 +437,15 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
 
     function loadHidden() {
       try {
-        return new Set(JSON.parse(localStorage.getItem(HIDDEN_KEY) || '[]'));
+        // try/catch retained for JSON.parse of possibly-corrupt values
+        return new Set(JSON.parse(safeGetItem(HIDDEN_KEY, '[]')));
       } catch {
         return new Set();
       }
     }
 
     function saveHidden(set) {
-      try {
-        localStorage.setItem(HIDDEN_KEY, JSON.stringify([...set]));
-      } catch (_) {
-        /* storage full */
-      }
+      safeSetItem(HIDDEN_KEY, JSON.stringify([...set]));
     }
 
     function refreshShowAll() {

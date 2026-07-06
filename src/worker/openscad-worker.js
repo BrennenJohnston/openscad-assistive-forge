@@ -23,12 +23,17 @@
  * - Threaded WASM for multi-core parallelism (requires SharedArrayBuffer)
  */
 
-import { resolveFileParams, decodeDataUrl } from '../js/file-param-resolver.js';
+import { resolveFileParams } from '../js/file-param-resolver.js';
 import {
   escapeRegExp,
   formatScadValue,
   buildDefineArgs,
 } from '../js/scad-param-formatter.js';
+import { validateSVGOutput } from './svg-validation.js';
+import { postProcessDXF } from './dxf-postprocess.js';
+import { generateMissingFileWarnings } from './missing-file-warnings.js';
+import { resolveMountContent } from './mount-content.js';
+import { translateWorkerError } from './error-translations.js';
 
 // Official WASM is loaded dynamically in initWASM() from /wasm/openscad-official/
 
@@ -96,188 +101,8 @@ async function ensureOpenSCADModule() {
   return openscadModule;
 }
 
-/**
- * Error message translations for common OpenSCAD errors
- * Maps error patterns to user-friendly messages
- */
-const ERROR_TRANSLATIONS = [
-  {
-    pattern: /Parser error/i,
-    message:
-      'Syntax error in your OpenSCAD file. Check for missing semicolons, brackets, or parentheses.',
-    code: 'SYNTAX_ERROR',
-  },
-  {
-    pattern: /Rendering cancelled|timeout/i,
-    message:
-      'Render was stopped because it was taking too long. Try reducing complexity (lower $fn value) or simplifying your design.',
-    code: 'TIMEOUT',
-  },
-  {
-    pattern: /out of memory|memory allocation failed|OOM/i,
-    message:
-      'This model is too complex for browser rendering. Try lowering $fn, reducing boolean operations, or simplifying the design.',
-    code: 'OUT_OF_MEMORY',
-  },
-  {
-    pattern: /Unknown module/i,
-    message:
-      'Your model uses a module that could not be found. Check include/use statements and ensure library files are loaded.',
-    code: 'UNKNOWN_MODULE',
-  },
-  {
-    pattern: /Unknown function/i,
-    message:
-      'Your model uses a function that could not be found. Check for typos or missing library includes.',
-    code: 'UNKNOWN_FUNCTION',
-  },
-  {
-    pattern: /Undefined variable/i,
-    message:
-      'A variable in your model is not defined. Check for typos in variable names.',
-    code: 'UNDEFINED_VARIABLE',
-  },
-  {
-    pattern: /WARNING: Object may not be a valid 2-manifold/i,
-    message:
-      'The model has geometry issues (non-manifold). It may still render but could cause problems for 3D printing.',
-    code: 'NON_MANIFOLD_WARNING',
-  },
-  {
-    pattern: /No top[ -]?level geometry/i,
-    message:
-      'Your model does not produce any geometry. Make sure you have at least one shape (cube, sphere, etc.) in your code.',
-    code: 'NO_GEOMETRY',
-  },
-  {
-    // IMPORTANT: Detect empty geometry from OpenSCAD console output
-    pattern: /Current top[ -]?level object is empty/i,
-    message:
-      'This configuration produces no geometry. Check that the selected options are compatible — some parameter combinations may result in empty output.',
-    code: 'EMPTY_GEOMETRY',
-  },
-  {
-    pattern: /MODEL_NOT_2D|Current top level object is not a 2D object/i,
-    message:
-      'Your model produces 3D geometry but SVG/DXF export requires 2D output. ' +
-      'Enable "use Laser Cutting best practices" or ensure your model uses projection() to produce 2D geometry.',
-    code: 'MODEL_NOT_2D',
-  },
-  {
-    // Detect "not supported" ECHO messages from OpenSCAD models
-    pattern: /is not supported for/i,
-    message:
-      'This combination of options is not supported. Please check the "generate" setting and related options.',
-    code: 'UNSUPPORTED_CONFIG',
-  },
-  {
-    pattern: /Cannot open file/i,
-    message:
-      'A file referenced in your model could not be found. Check include/use paths and file names.',
-    code: 'FILE_NOT_FOUND',
-  },
-  {
-    pattern: /Recursion detected|Stack overflow/i,
-    message:
-      'Your model has infinite recursion. Check recursive module or function calls.',
-    code: 'RECURSION',
-  },
-  // CGAL assertion failures — root cause of projection()/roof() crashes in WASM
-  // See: openscad-wasm#6, openscad#6582, CGAL#7560
-  {
-    pattern: /CGAL assertion|CGAL_assertion|CGAL ERROR|CGAL precondition/i,
-    message:
-      'This model uses a geometry feature (projection/roof) that has a known issue in the browser engine. ' +
-      'Try simplifying the design or removing projection()/roof() calls. ' +
-      'This is a known upstream limitation (CGAL + WebAssembly).',
-    code: 'CGAL_ASSERTION',
-  },
-  // Emscripten abort — typically triggered by unrecoverable CGAL/C++ errors
-  {
-    pattern: /Aborted\(|abort\(|Emscripten.*abort/i,
-    message:
-      'The rendering engine encountered a fatal error and stopped. ' +
-      'This often happens with projection() or roof() functions. ' +
-      'Try removing these functions or simplifying your design.',
-    code: 'WASM_ABORT',
-  },
-  // WASM RuntimeError: unreachable — compiled trap instruction hit
-  {
-    pattern: /RuntimeError:\s*unreachable/i,
-    message:
-      'The rendering engine hit an internal error (unreachable code). ' +
-      'This is typically caused by projection() or roof() in the browser engine. ' +
-      'Try simplifying the model or removing these functions.',
-    code: 'WASM_UNREACHABLE',
-  },
-  // WASM RuntimeError: memory access out of bounds
-  {
-    pattern: /RuntimeError:\s*memory access out of bounds/i,
-    message:
-      'The rendering engine ran out of accessible memory. ' +
-      'Try reducing model complexity (lower $fn), removing minkowski() operations, or simplifying boolean operations.',
-    code: 'WASM_OOB',
-  },
-  {
-    pattern: /\b\d{6,}\b/, // Match long numeric error codes (like 1101176)
-    message:
-      'An internal rendering error occurred. Try reloading the page and rendering again.',
-    code: 'INTERNAL_ERROR',
-  },
-];
-
-/**
- * Translate raw OpenSCAD error to user-friendly message
- * @param {string|Error|Object} rawError - Raw error from OpenSCAD (can be string, Error, or object)
- * @returns {{message: string, code: string, raw: string}} Translated error info
- */
-function translateError(rawError) {
-  // Handle various error types to avoid "[object Object]"
-  let errorStr;
-  if (typeof rawError === 'string') {
-    errorStr = rawError;
-  } else if (rawError instanceof Error) {
-    errorStr = rawError.message || rawError.toString();
-  } else if (rawError && typeof rawError === 'object') {
-    // Try to extract a meaningful message from the object
-    errorStr =
-      rawError.message ||
-      rawError.error ||
-      rawError.msg ||
-      JSON.stringify(rawError).substring(0, 500);
-  } else {
-    errorStr = String(rawError);
-  }
-
-  for (const { pattern, message, code } of ERROR_TRANSLATIONS) {
-    if (pattern.test(errorStr)) {
-      return { message, code, raw: errorStr };
-    }
-  }
-
-  // Fallback: return a cleaned up version of the error
-  // Remove internal paths and technical details that aren't helpful
-  const cleaned = errorStr
-    .replace(/\/tmp\/[^\s]+/g, 'your model')
-    .replace(/at line \d+/g, '')
-    .trim();
-
-  // If the error is very short or just a number, provide a generic message
-  if (cleaned.length < 10 || /^\d+$/.test(cleaned)) {
-    return {
-      message:
-        'An error occurred while rendering. Please check your model syntax and try again.',
-      code: 'RENDER_FAILED',
-      raw: errorStr,
-    };
-  }
-
-  return {
-    message: `Rendering error: ${cleaned}`,
-    code: 'RENDER_FAILED',
-    raw: errorStr,
-  };
-}
+// Error classification (ERROR_TRANSLATIONS / translateWorkerError) lives in
+// ./error-translations.js (shared with unit tests).
 
 /**
  * Initialize OpenSCAD WASM
@@ -293,11 +118,13 @@ async function initWASM(baseUrl = '', cachedCapabilities = null) {
     if (import.meta.env.DEV)
       console.log('[Worker] Asset base URL:', assetBaseUrl);
 
+    // Init progress is indeterminate (percent: -1): stage milestones are not
+    // tied to any real measurement, so only the stage message is honest.
     self.postMessage({
       type: 'PROGRESS',
       payload: {
         requestId: 'init',
-        percent: 5,
+        percent: -1,
         message: 'Loading official OpenSCAD WASM with Manifold...',
       },
     });
@@ -382,7 +209,7 @@ async function initWASM(baseUrl = '', cachedCapabilities = null) {
       type: 'PROGRESS',
       payload: {
         requestId: 'init',
-        percent: 20,
+        percent: -1,
         message: 'Initializing WebAssembly module...',
       },
     });
@@ -421,7 +248,7 @@ async function initWASM(baseUrl = '', cachedCapabilities = null) {
       type: 'PROGRESS',
       payload: {
         requestId: 'init',
-        percent: 50,
+        percent: -1,
         message: 'Waiting for WebAssembly to be ready...',
       },
     });
@@ -440,7 +267,7 @@ async function initWASM(baseUrl = '', cachedCapabilities = null) {
       type: 'PROGRESS',
       payload: {
         requestId: 'init',
-        percent: 75,
+        percent: -1,
         message: 'Loading fonts for text() support...',
       },
     });
@@ -465,7 +292,7 @@ async function initWASM(baseUrl = '', cachedCapabilities = null) {
         type: 'PROGRESS',
         payload: {
           requestId: 'init',
-          percent: 85,
+          percent: -1,
           message: 'Checking rendering capabilities...',
         },
       });
@@ -480,7 +307,7 @@ async function initWASM(baseUrl = '', cachedCapabilities = null) {
       type: 'PROGRESS',
       payload: {
         requestId: 'init',
-        percent: 95,
+        percent: -1,
         message: 'Finalizing initialization...',
       },
     });
@@ -843,26 +670,19 @@ async function mountFiles(files, options = {}) {
     const resolvedPath = baseDir ? `${baseDir}/${filePath}` : filePath;
 
     try {
-      // S-013: Image companion files arrive as data-URL strings from the UI
-      // (e.g. "data:image/png;base64,..."). Emscripten FS.writeFile would
-      // store the literal text — not the binary image — making surface()
-      // and import() fail. Decode to Uint8Array so the WASM engine receives
-      // valid binary content.
-      let fsContent = content;
-      if (typeof content === 'string' && content.startsWith('data:')) {
-        try {
-          fsContent = decodeDataUrl(content);
-          if (import.meta.env.DEV) {
-            console.log(
-              `[Worker FS] Decoded data URL for: ${resolvedPath} (${fsContent.byteLength} binary bytes)`
-            );
-          }
-        } catch (decodeErr) {
+      // S-013: data-URL companion files (images) are decoded to binary
+      // before mounting — see ./mount-content.js (shared with unit tests).
+      const fsContent = resolveMountContent(content, {
+        onDecodeError: (decodeErr) =>
           console.warn(
             `[Worker FS] Failed to decode data URL for ${resolvedPath}, mounting as text:`,
             decodeErr.message
-          );
-        }
+          ),
+      });
+      if (import.meta.env.DEV && fsContent !== content) {
+        console.log(
+          `[Worker FS] Decoded data URL for: ${resolvedPath} (${fsContent.byteLength} binary bytes)`
+        );
       }
       FS.writeFile(resolvedPath, fsContent);
       mountedFiles.set(resolvedPath, fsContent);
@@ -893,40 +713,8 @@ async function mountFiles(files, options = {}) {
   };
 }
 
-/**
- * Scan SCAD source for include/use directives and return desktop-format
- * warnings for any referenced files that cannot be found.
- *
- * Desktop OpenSCAD emits "WARNING: Can't open include file ..." when a
- * referenced companion file is missing. The WASM build silently ignores
- * missing includes. This function generates equivalent synthetic warnings
- * so the user sees actionable feedback in the console panel.
- *
- * @param {string} scadContent - Raw SCAD source code
- * @param {(filename: string) => boolean} fileExistsFn - Returns true if the
- *   referenced filename can be resolved in the virtual filesystem
- * @returns {string[]} Array of desktop-format warning strings
- */
-function generateMissingFileWarnings(scadContent, fileExistsFn) {
-  const warnings = [];
-  const seen = new Set();
-  const directiveRegex = /(?:include|use)\s*(?:<([^>]+)>|"([^"]+)")/g;
-  let match;
-
-  while ((match = directiveRegex.exec(scadContent)) !== null) {
-    const refFile = (match[1] || match[2]).trim();
-    if (!refFile || seen.has(refFile)) continue;
-    seen.add(refFile);
-
-    if (!fileExistsFn(refFile)) {
-      warnings.push(
-        `WARNING: Can't open include file '${refFile}', import file '${refFile}'.`
-      );
-    }
-  }
-
-  return warnings;
-}
+// generateMissingFileWarnings lives in ./missing-file-warnings.js (shared
+// with unit tests).
 
 /**
  * Clear all mounted files from virtual filesystem
@@ -1626,77 +1414,7 @@ function validate2DOutput(outputBuffer, format) {
   return { valid: true };
 }
 
-/**
- * Validate SVG output
- * @param {string} content - SVG content as string
- * @returns {{valid: boolean, error?: string}}
- */
-function validateSVGOutput(content) {
-  // Check minimum length
-  if (!content || content.length < 50) {
-    return {
-      valid: false,
-      error:
-        'SVG output is empty or too small. Your model may not produce 2D geometry. ' +
-        'Ensure your model uses projection() or 2D primitives, and that your parameter settings produce visible geometry.',
-    };
-  }
-
-  // Check for SVG root element
-  if (!/<svg[\s>]/i.test(content)) {
-    return {
-      valid: false,
-      error:
-        'Invalid SVG output - missing <svg> element. The OpenSCAD render may have failed silently.',
-    };
-  }
-
-  // Check for at least one geometric element
-  const geometricElements = [
-    '<path',
-    '<polygon',
-    '<polyline',
-    '<line',
-    '<rect',
-    '<circle',
-    '<ellipse',
-    '<g>',
-  ];
-
-  const hasGeometry = geometricElements.some((el) =>
-    content.toLowerCase().includes(el.toLowerCase())
-  );
-
-  if (!hasGeometry) {
-    return {
-      valid: false,
-      error:
-        'SVG contains no geometry (no paths, polygons, or shapes). ' +
-        'Your 3D model may not include any 2D projection. ' +
-        'Ensure your model uses projection() or is configured for 2D output.',
-    };
-  }
-
-  // Check for completely empty viewBox or very small content
-  const viewBoxMatch = content.match(/viewBox="([^"]+)"/);
-  if (viewBoxMatch) {
-    const parts = viewBoxMatch[1].split(/\s+/).map(parseFloat);
-    if (parts.length >= 4) {
-      const width = parts[2];
-      const height = parts[3];
-      if ((width === 0 && height === 0) || (width < 0.001 && height < 0.001)) {
-        return {
-          valid: false,
-          error:
-            'SVG has zero-size viewBox (no visible geometry). ' +
-            'Your model configuration may be producing empty output.',
-        };
-      }
-    }
-  }
-
-  return { valid: true };
-}
+// validateSVGOutput lives in ./svg-validation.js (shared with unit tests).
 
 /**
  * Validate DXF output
@@ -1786,307 +1504,7 @@ function validateDXFOutput(content) {
   return { valid: true };
 }
 
-/**
- * Post-process DXF output from OpenSCAD WASM to fix known compatibility issues.
- *
- * The OpenSCAD WASM binary (based on development snapshots post-2022) exports DXF files
- * using LWPOLYLINE entities with R14+ subclass markers, but declares version AC1006 (R10).
- * This hybrid format is rejected by most CAD software (AutoCAD, CorelDRAW, Adobe Illustrator,
- * Xometry, SendCutSend, LibreCAD, NanoCAD, SketchUp -- see issue #4268).
- *
- * Simply changing the version number is NOT enough (confirmed by multiple users in #4268).
- * The only universally compatible approach is to convert LWPOLYLINE entities back to
- * individual LINE segments -- the format used by the working 2021.01 stable release.
- *
- * This post-processor:
- *   1. Removes the broken HEADER section entirely (R12 DXF doesn't require one)
- *   2. Preserves the TABLES section (LTYPE, LAYER, STYLE) as-is
- *   3. Converts each LWPOLYLINE to a series of LINE entities
- *   4. Preserves any non-LWPOLYLINE entities unchanged
- *   5. Produces a clean, headerless DXF compatible with all tested applications
- *
- * Reference: github.com/openscad/openscad/issues/4268
- *            github.com/openscad/openscad/pull/6599
- *
- * @param {ArrayBuffer} outputBuffer - Raw DXF output from WASM
- * @returns {ArrayBuffer} Post-processed DXF as ArrayBuffer
- */
-function postProcessDXF(outputBuffer) {
-  const decoder = new TextDecoder('utf-8');
-  const content = decoder.decode(outputBuffer);
-  const normalized = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-  const rawLines = normalized.split('\n');
-
-  // Parse DXF into group-code/value pairs
-  const pairs = [];
-  for (let i = 0; i + 1 < rawLines.length; i += 2) {
-    pairs.push({
-      code: rawLines[i].trim(),
-      value: rawLines[i + 1].trim(),
-    });
-  }
-
-  // Identify section boundaries
-  // Sections are: 0/SECTION, 2/<name>, ..., 0/ENDSEC
-  const sections = []; // {name, startIdx, endIdx}
-  for (let i = 0; i < pairs.length; i++) {
-    if (
-      pairs[i].code === '0' &&
-      pairs[i].value === 'SECTION' &&
-      i + 1 < pairs.length &&
-      pairs[i + 1].code === '2'
-    ) {
-      const name = pairs[i + 1].value;
-      // Find matching ENDSEC
-      for (let j = i + 2; j < pairs.length; j++) {
-        if (pairs[j].code === '0' && pairs[j].value === 'ENDSEC') {
-          sections.push({ name, startIdx: i, endIdx: j });
-          break;
-        }
-      }
-    }
-  }
-
-  // Extract EXTMIN/EXTMAX from HEADER for optional re-use
-  const headerSection = sections.find((s) => s.name === 'HEADER');
-  let extMin = null,
-    extMax = null;
-  if (headerSection) {
-    for (let i = headerSection.startIdx; i <= headerSection.endIdx; i++) {
-      if (pairs[i].code === '9' && pairs[i].value === '$EXTMIN') {
-        extMin = { x: 0, y: 0 };
-        for (
-          let j = i + 1;
-          j <= headerSection.endIdx &&
-          pairs[j].code !== '9' &&
-          pairs[j].code !== '0';
-          j++
-        ) {
-          if (pairs[j].code === '10') extMin.x = parseFloat(pairs[j].value);
-          if (pairs[j].code === '20') extMin.y = parseFloat(pairs[j].value);
-        }
-      }
-      if (pairs[i].code === '9' && pairs[i].value === '$EXTMAX') {
-        extMax = { x: 0, y: 0 };
-        for (
-          let j = i + 1;
-          j <= headerSection.endIdx &&
-          pairs[j].code !== '9' &&
-          pairs[j].code !== '0';
-          j++
-        ) {
-          if (pairs[j].code === '10') extMax.x = parseFloat(pairs[j].value);
-          if (pairs[j].code === '20') extMax.y = parseFloat(pairs[j].value);
-        }
-      }
-    }
-  }
-
-  // Parse LWPOLYLINE entities from the ENTITIES section
-  const entitiesSection = sections.find((s) => s.name === 'ENTITIES');
-  const parsedEntities = []; // Each is {type, layer, pairs} or {type:'LWPOLYLINE', layer, vertices, closed}
-
-  if (entitiesSection) {
-    let i = entitiesSection.startIdx + 2; // Skip 0/SECTION and 2/ENTITIES
-    while (i <= entitiesSection.endIdx) {
-      if (pairs[i].code === '0' && pairs[i].value === 'ENDSEC') break;
-      if (pairs[i].code === '0') {
-        const entityType = pairs[i].value;
-        i++; // Move past the 0/EntityType pair
-
-        // Collect all pairs until next 0-code (next entity or ENDSEC)
-        const entityPairs = [];
-        while (i <= entitiesSection.endIdx && pairs[i].code !== '0') {
-          entityPairs.push(pairs[i]);
-          i++;
-        }
-
-        if (entityType === 'LWPOLYLINE') {
-          // Parse LWPOLYLINE into vertices
-          let layer = '0';
-          let closed = false;
-          const vertices = [];
-          let currentX = null;
-
-          for (const ep of entityPairs) {
-            if (ep.code === '8') layer = ep.value;
-            if (ep.code === '70') closed = (parseInt(ep.value) & 1) !== 0;
-            if (ep.code === '10') {
-              if (currentX !== null && vertices.length > 0) {
-                // Previous vertex didn't get a Y -- shouldn't happen, but guard
-              }
-              currentX = parseFloat(ep.value);
-            }
-            if (ep.code === '20') {
-              if (currentX !== null) {
-                vertices.push({ x: currentX, y: parseFloat(ep.value) });
-                currentX = null;
-              }
-            }
-          }
-          parsedEntities.push({ type: 'LWPOLYLINE', layer, vertices, closed });
-        } else {
-          // Keep other entity types as raw pairs
-          parsedEntities.push({
-            type: entityType,
-            layer: '0',
-            rawPairs: entityPairs,
-          });
-        }
-      } else {
-        i++;
-      }
-    }
-  }
-
-  // Build clean DXF output with minimal R12 header for Adobe Illustrator compatibility.
-  // Illustrator requires a HEADER section with $ACADVER to interpret geometry correctly;
-  // without it, Illustrator falls back to text rendering (confirmed by @peterzieba in #4268).
-  const out = [];
-
-  // Helper: round a coordinate to 6 decimal places to avoid floating-point noise
-  // in downstream tools (LibreCAD, Inkscape, etc.).  BUG-D fix.
-  function roundCoord(v) {
-    const n = parseFloat(v);
-    if (!Number.isFinite(n)) return v;
-    // Use toPrecision(10) then parseFloat to strip trailing zeros
-    return parseFloat(n.toFixed(6));
-  }
-
-  // Coordinate group codes that should be rounded (X/Y/Z for both start and end points)
-  const COORD_CODES = new Set([
-    '10',
-    '11',
-    '12',
-    '20',
-    '21',
-    '22',
-    '30',
-    '31',
-    '32',
-  ]);
-
-  // Helper to emit a group code/value pair with proper DXF formatting
-  // Group codes are right-justified in a 3-char field; values on the next line
-  function emit(code, value) {
-    out.push(String(code).padStart(3));
-    const codeStr = String(code).trim();
-    if (COORD_CODES.has(codeStr) && typeof value === 'number') {
-      out.push(String(roundCoord(value)));
-    } else {
-      out.push(String(value));
-    }
-  }
-
-  // HEADER section -- minimal R12-compatible header
-  // AC1009 = R12, the most universally supported DXF version.
-  // Only LINE entities are used, which are fully R12 compatible.
-  emit(0, 'SECTION');
-  emit(2, 'HEADER');
-  emit(9, '$ACADVER');
-  emit(1, 'AC1009');
-  if (extMin && extMax) {
-    emit(9, '$EXTMIN');
-    emit(10, extMin.x);
-    emit(20, extMin.y);
-    emit(9, '$EXTMAX');
-    emit(10, extMax.x);
-    emit(20, extMax.y);
-  }
-  emit(0, 'ENDSEC');
-
-  // TABLES section -- copy from original, stripping any subclass markers
-  const tablesSection = sections.find((s) => s.name === 'TABLES');
-  if (tablesSection) {
-    emit(0, 'SECTION');
-    emit(2, 'TABLES');
-    for (let i = tablesSection.startIdx + 2; i < tablesSection.endIdx; i++) {
-      // Skip subclass markers (group code 100) -- not valid for R12
-      if (pairs[i].code === '100') continue;
-      emit(pairs[i].code, pairs[i].value);
-    }
-    emit(0, 'ENDSEC');
-  }
-
-  // ENTITIES section -- convert LWPOLYLINE to LINE, keep others
-  emit(0, 'SECTION');
-  emit(2, 'ENTITIES');
-
-  // BUG-D fix: deduplicate LINE segments to prevent doubled geometry.
-  // Some WASM DXF outputs contain identical LINE entities for coincident edges.
-  // We track line segments by a canonical key (min endpoint first for order-independence).
-  const seenLineKeys = new Set();
-  function makeLineKey(x1, y1, x2, y2) {
-    const r = roundCoord;
-    const a = `${r(x1)},${r(y1)}`;
-    const b = `${r(x2)},${r(y2)}`;
-    return a < b ? `${a}|${b}` : `${b}|${a}`;
-  }
-
-  for (const entity of parsedEntities) {
-    if (entity.type === 'LWPOLYLINE') {
-      const verts = entity.vertices;
-      if (verts.length < 2) continue;
-
-      const segmentCount = entity.closed ? verts.length : verts.length - 1;
-      for (let s = 0; s < segmentCount; s++) {
-        const p1 = verts[s];
-        const p2 = verts[(s + 1) % verts.length];
-        const key = makeLineKey(p1.x, p1.y, p2.x, p2.y);
-        if (seenLineKeys.has(key)) continue;
-        seenLineKeys.add(key);
-        emit(0, 'LINE');
-        emit(8, entity.layer);
-        emit(10, p1.x);
-        emit(20, p1.y);
-        emit(11, p2.x);
-        emit(21, p2.y);
-      }
-    } else if (entity.type === 'LINE') {
-      // Deduplicate passthrough LINE entities too
-      const rawPairs = entity.rawPairs || [];
-      let x1 = null,
-        y1 = null,
-        x2 = null,
-        y2 = null,
-        _layer = '0';
-      for (const ep of rawPairs) {
-        if (ep.code === '8') _layer = ep.value;
-        if (ep.code === '10') x1 = parseFloat(ep.value);
-        if (ep.code === '20') y1 = parseFloat(ep.value);
-        if (ep.code === '11') x2 = parseFloat(ep.value);
-        if (ep.code === '21') y2 = parseFloat(ep.value);
-      }
-      if (x1 !== null && y1 !== null && x2 !== null && y2 !== null) {
-        const key = makeLineKey(x1, y1, x2, y2);
-        if (seenLineKeys.has(key)) continue;
-        seenLineKeys.add(key);
-      }
-      emit(0, 'LINE');
-      for (const ep of rawPairs) {
-        if (ep.code === '100') continue;
-        emit(ep.code, ep.value);
-      }
-    } else {
-      // Emit non-LWPOLYLINE entities as-is (skip subclass markers)
-      emit(0, entity.type);
-      for (const ep of entity.rawPairs || []) {
-        if (ep.code === '100') continue; // Strip subclass markers
-        emit(ep.code, ep.value);
-      }
-    }
-  }
-
-  emit(0, 'ENDSEC');
-
-  // EOF
-  emit(0, 'EOF');
-
-  const result = out.join('\n') + '\n';
-
-  const encoder = new TextEncoder();
-  return encoder.encode(result).buffer;
-}
+// postProcessDXF lives in ./dxf-postprocess.js (shared with unit tests).
 
 /**
  * Memory warning threshold - use absolute size instead of percentage
@@ -2544,7 +1962,7 @@ async function render(payload) {
 
     // Translate error to user-friendly message
     // Pass the entire error object to translateError which now handles all types
-    const translated = translateError(error);
+    const translated = translateWorkerError(error);
 
     // Include captured OpenSCAD console output in details so the UI can provide
     // actionable guidance (e.g., which toggle/parameter to change).

@@ -37,6 +37,7 @@ import Combobox from '@github/combobox-nav';
  * @param {ComboboxOption[]} [opts.options] - Initial option list
  * @param {string} [opts.placeholder] - Input placeholder text
  * @param {string} [opts.inputId] - id attribute for the input (for <label> association)
+ * @param {string} [opts.ariaLabel] - Accessible name for the input (use when no <label> exists)
  * @param {boolean} [opts.disabled] - Start in disabled state
  * @returns {ComboboxAPI}
  */
@@ -45,6 +46,7 @@ export function initSearchableCombobox({
   options: initialOptions = [],
   placeholder = 'Search or select…',
   inputId = '',
+  ariaLabel = '',
   disabled = false,
 }) {
   // ── DOM skeleton ────────────────────────────────────────────────────────────
@@ -61,6 +63,7 @@ export function initSearchableCombobox({
   input.autocomplete = 'off';
   input.spellcheck = false;
   if (inputId) input.id = inputId;
+  if (ariaLabel) input.setAttribute('aria-label', ariaLabel);
 
   const chevronBtn = document.createElement('button');
   chevronBtn.type = 'button';
