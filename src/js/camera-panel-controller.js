@@ -11,7 +11,11 @@
  */
 
 import { announceImmediate } from './announcer.js';
-import { getDrawerStateKey } from './storage-keys.js';
+import {
+  getDrawerStateKey,
+  safeGetItem,
+  safeSetItem,
+} from './storage-keys.js';
 
 // Storage keys using standardized naming convention
 const STORAGE_KEY_COLLAPSED = getDrawerStateKey('camera');
@@ -35,28 +39,18 @@ export function initCameraPanelController(options = {}) {
   let isCollapsed = loadCollapsedState();
 
   /**
-   * Load collapsed state from localStorage
+   * Load collapsed state from localStorage (defaults to collapsed)
    */
   function loadCollapsedState() {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_COLLAPSED);
-      // Default to collapsed (true) if not set
-      return saved === null ? true : saved === 'true';
-    } catch (e) {
-      console.warn('[CameraPanel] Could not load state:', e);
-      return true;
-    }
+    const saved = safeGetItem(STORAGE_KEY_COLLAPSED);
+    return saved === null ? true : saved === 'true';
   }
 
   /**
    * Save collapsed state to localStorage
    */
   function saveCollapsedState(collapsed) {
-    try {
-      localStorage.setItem(STORAGE_KEY_COLLAPSED, String(collapsed));
-    } catch (e) {
-      console.warn('[CameraPanel] Could not save state:', e);
-    }
+    safeSetItem(STORAGE_KEY_COLLAPSED, String(collapsed));
   }
 
   /**
@@ -550,25 +544,16 @@ function initMobileCameraDrawer() {
     return;
   }
 
-  // Load saved state from localStorage
-  let isMobileCollapsed = true;
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY_MOBILE_COLLAPSED);
-    // Default to collapsed (true) if not set
-    isMobileCollapsed = saved === null ? true : saved === 'true';
-  } catch (e) {
-    console.warn('[CameraDrawer] Could not load state:', e);
-  }
+  // Load saved state from localStorage (defaults to collapsed)
+  const savedMobileState = safeGetItem(STORAGE_KEY_MOBILE_COLLAPSED);
+  let isMobileCollapsed =
+    savedMobileState === null ? true : savedMobileState === 'true';
 
   /**
    * Save collapsed state to localStorage
    */
   function saveState(collapsed) {
-    try {
-      localStorage.setItem(STORAGE_KEY_MOBILE_COLLAPSED, String(collapsed));
-    } catch (e) {
-      console.warn('[CameraDrawer] Could not save state:', e);
-    }
+    safeSetItem(STORAGE_KEY_MOBILE_COLLAPSED, String(collapsed));
   }
 
   /**
