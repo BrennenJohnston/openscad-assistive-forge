@@ -1,9 +1,9 @@
 /**
- * Unit tests for generateMissingFileWarnings (openscad-worker.js).
+ * Unit tests for generateMissingFileWarnings.
  *
- * Because generateMissingFileWarnings is a module-scoped (non-exported)
- * function inside a Web Worker, we test its logic here using an inlined copy.
- * Keep this copy in sync with openscad-worker.js if the implementation changes.
+ * Imports the real implementation from src/worker/missing-file-warnings.js —
+ * the shared module the render worker uses — so these tests fail when the
+ * production logic changes.
  *
  * Phase 4 (S-012): Synthetic missing-file warnings that match desktop
  * OpenSCAD's "WARNING: Can't open include file ..." format.
@@ -12,29 +12,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-
-// ─── Inlined testable copy of generateMissingFileWarnings ───────────────────
-// Mirrors openscad-worker.js generateMissingFileWarnings; runs in Node.js/Vitest.
-function generateMissingFileWarnings(scadContent, fileExistsFn) {
-  const warnings = [];
-  const seen = new Set();
-  const directiveRegex = /(?:include|use)\s*(?:<([^>]+)>|"([^"]+)")/g;
-  let match;
-
-  while ((match = directiveRegex.exec(scadContent)) !== null) {
-    const refFile = (match[1] || match[2]).trim();
-    if (!refFile || seen.has(refFile)) continue;
-    seen.add(refFile);
-
-    if (!fileExistsFn(refFile)) {
-      warnings.push(
-        `WARNING: Can't open include file '${refFile}', import file '${refFile}'.`
-      );
-    }
-  }
-
-  return warnings;
-}
+import { generateMissingFileWarnings } from '../../src/worker/missing-file-warnings.js';
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
