@@ -3742,13 +3742,18 @@ async function initApp() {
   }
 
   /**
-   * Show render time estimate to user
+   * Show render time estimate to user.
+   * Low-confidence estimates suppress the number — complex models are
+   * too unpredictable for a specific figure to be honest.
    * @param {Object} estimate - Result from estimateRenderTime()
    */
   function showRenderEstimate(estimate) {
     if (!estimate || estimate.seconds < 5) return; // Only show for longer renders
 
-    let message = `Estimated render time: ~${estimate.seconds}s`;
+    let message =
+      estimate.confidence === 'low'
+        ? 'Complex model — rendering may take a while'
+        : `Estimated render time: ~${estimate.seconds}s`;
     if (estimate.warning) {
       message += ` ⚠️ ${estimate.warning}`;
     }
@@ -7828,13 +7833,17 @@ if (rounded) {
 
       updatePreviewStateUI(PREVIEW_STATE.RENDERING);
 
-      // Show render time estimate for complex models
+      // Show render time estimate for complex models. Low-confidence
+      // estimates suppress the number (too unpredictable to be honest).
       const estimate = estimateRenderTime(
         state.uploadedFile.content,
         state.parameters
       );
       if (estimate.seconds >= 5 || estimate.warning) {
-        const estimateMsg = `Generating ${formatName}... (est. ~${estimate.seconds}s)`;
+        const estimateMsg =
+          estimate.confidence === 'low'
+            ? `Generating ${formatName}... (complex model — may take a while)`
+            : `Generating ${formatName}... (estimated ~${estimate.seconds}s)`;
         if (estimate.warning) {
           console.warn('[Render] Complexity warning:', estimate.warning);
         }
