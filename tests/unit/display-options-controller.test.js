@@ -23,6 +23,11 @@ import {
 
 vi.mock('../../src/js/storage-keys.js', () => ({
   getAppPrefKey: (key) => `test-${key}`,
+  safeGetItem: (key) => localStorage.getItem(key),
+  safeSetItem: (key, value) => {
+    localStorage.setItem(key, value);
+    return true;
+  },
 }));
 
 vi.mock('../../src/js/announcer.js', () => ({

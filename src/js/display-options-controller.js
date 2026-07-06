@@ -11,7 +11,11 @@
  * @license GPL-3.0-or-later
  */
 
-import { getAppPrefKey } from './storage-keys.js';
+import {
+  getAppPrefKey,
+  safeGetItem,
+  safeSetItem,
+} from './storage-keys.js';
 import { announceImmediate } from './announcer.js';
 
 const PREF_PREFIX = 'display-';
@@ -116,22 +120,14 @@ export class DisplayOptionsController {
 
   _loadPreferences() {
     for (const key of Object.keys(DEFAULTS)) {
-      try {
-        const saved = localStorage.getItem(getAppPrefKey(PREF_PREFIX + key));
-        if (saved !== null) this.state[key] = saved === 'true';
-      } catch {
-        /* ignore */
-      }
+      const saved = safeGetItem(getAppPrefKey(PREF_PREFIX + key));
+      if (saved !== null) this.state[key] = saved === 'true';
     }
   }
 
   /** @param {string} key @param {boolean} val */
   _savePref(key, val) {
-    try {
-      localStorage.setItem(getAppPrefKey(PREF_PREFIX + key), String(val));
-    } catch {
-      /* quota — acceptable */
-    }
+    safeSetItem(getAppPrefKey(PREF_PREFIX + key), String(val));
   }
 
   // ---------------------------------------------------------------------------

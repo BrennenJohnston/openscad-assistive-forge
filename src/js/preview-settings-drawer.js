@@ -6,7 +6,11 @@
  * @license GPL-3.0-or-later
  */
 
-import { getDrawerStateKey } from './storage-keys.js';
+import {
+  getDrawerStateKey,
+  safeGetItem,
+  safeSetItem,
+} from './storage-keys.js';
 
 // Storage key using standardized naming convention
 const STORAGE_KEY_DRAWER_COLLAPSED = getDrawerStateKey('preview-settings');
@@ -32,13 +36,9 @@ export function initPreviewSettingsDrawer(options = {}) {
    * Returns null if not set (use default behavior)
    */
   const loadCollapsedState = () => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_DRAWER_COLLAPSED);
-      if (saved !== null) {
-        return saved === 'true';
-      }
-    } catch (e) {
-      console.warn('Could not load drawer state:', e);
+    const saved = safeGetItem(STORAGE_KEY_DRAWER_COLLAPSED);
+    if (saved !== null) {
+      return saved === 'true';
     }
     return null; // Not set, use default
   };
@@ -47,11 +47,7 @@ export function initPreviewSettingsDrawer(options = {}) {
    * Save collapsed state to localStorage
    */
   const saveCollapsedState = (collapsed) => {
-    try {
-      localStorage.setItem(STORAGE_KEY_DRAWER_COLLAPSED, String(collapsed));
-    } catch (e) {
-      console.warn('Could not save drawer state:', e);
-    }
+    safeSetItem(STORAGE_KEY_DRAWER_COLLAPSED, String(collapsed));
   };
 
   /**

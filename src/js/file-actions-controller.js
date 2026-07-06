@@ -8,7 +8,11 @@
  * @license GPL-3.0-or-later
  */
 
-import { getAppPrefKey } from './storage-keys.js';
+import {
+  getAppPrefKey,
+  safeGetItem,
+  safeSetItem,
+} from './storage-keys.js';
 import { announceImmediate } from './announcer.js';
 
 const RECENT_FILES_KEY = getAppPrefKey('recent-files');
@@ -108,7 +112,8 @@ export class FileActionsController {
 
   _loadRecent() {
     try {
-      const stored = localStorage.getItem(RECENT_FILES_KEY);
+      // try/catch retained for JSON.parse of possibly-corrupt values
+      const stored = safeGetItem(RECENT_FILES_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed)) {
@@ -121,11 +126,7 @@ export class FileActionsController {
   }
 
   _saveRecent() {
-    try {
-      localStorage.setItem(RECENT_FILES_KEY, JSON.stringify(this.recentFiles));
-    } catch {
-      // quota exceeded — acceptable
-    }
+    safeSetItem(RECENT_FILES_KEY, JSON.stringify(this.recentFiles));
   }
 
   _renderRecentList() {
