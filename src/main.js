@@ -10426,19 +10426,14 @@ if (rounded) {
     });
   }
 
-  // Welcome screen role path "Learn More" buttons
+  // Welcome screen role path "Learn More" buttons — each opens the
+  // Features Guide on the tab named in its data-feature-tab attribute.
   const roleLearnButtons = document.querySelectorAll('.btn-role-learn');
   roleLearnButtons.forEach((btn) => {
     btn.addEventListener('click', () => {
-      // Check what type of action to take
       if (btn.dataset.featureTab) {
-        // Open Features Guide to specific tab
         openFeaturesGuide({ tab: btn.dataset.featureTab });
-      } else if (btn.dataset.tour) {
-        // Open guided tour
-        openGuidedTour(btn.dataset.tour);
-      } else if (btn.dataset.doc) {
-        // Open documentation (for now, just open Features Guide)
+      } else {
         openFeaturesGuide();
       }
     });
@@ -11414,22 +11409,6 @@ if (rounded) {
   });
 
   // ========== END ADVANCED MENU ==========
-
-  // ========== GUIDED TOURS ==========
-
-  /**
-   * Open a minimal guided tour modal (for Welcome screen role paths)
-   * Tours are skippable, focus-safe, and respect prefers-reduced-motion
-   * @param {string} tourType - Type of tour ('screen-reader', 'voice-input', 'intro')
-   */
-  function openGuidedTour(tourType) {
-    // TODO: Implement guided tours in a separate task
-    // For now, fall back to opening the Features Guide
-    console.log('[Guided Tours] Tour requested:', tourType);
-    openFeaturesGuide();
-  }
-
-  // ========== END GUIDED TOURS ==========
 
   // ========== FEATURES GUIDE MODAL ==========
 
