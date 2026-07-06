@@ -951,11 +951,12 @@
                 class="hidden"
                 aria-hidden="true"
               />
-              <!-- Hidden folder input (shown when folder_import flag + webkitdirectory support) -->
+              <!-- Hidden folder input (shown when folder_import flag + webkitdirectory
+                   support; the non-standard webkitdirectory attribute is set by JS
+                   during init to keep the static HTML valid) -->
               <input
                 type="file"
                 id="importFolderInput"
-                webkitdirectory
                 class="hidden"
                 aria-hidden="true"
               />
@@ -1776,9 +1777,6 @@
                         value="100"
                         aria-labelledby="overlayOpacityLabel"
                         aria-describedby="overlayOpacityHelp"
-                        aria-valuemin="0"
-                        aria-valuemax="100"
-                        aria-valuenow="100"
                       />
                       <span class="slider-value" id="overlayOpacityValue"
                         >100%</span
@@ -2427,10 +2425,8 @@
                     class="preset-combobox-container"
                     hidden
                   >
-                    <label for="presetComboboxInput" class="sr-only"
-                      >Select preset</label
-                    >
-                    <!-- initSearchableCombobox() populates this container -->
+                    <!-- initSearchableCombobox() populates this container;
+                         the input's accessible name comes from its ariaLabel option -->
                   </div>
                   <!-- Legacy: native select (hidden when searchable_combobox flag is on) -->
                   <div class="preset-selector" id="presetSelector">
@@ -2562,16 +2558,12 @@
               <div
                 id="parametersContainer"
                 class="parameters-container"
-                aria-labelledby="parameters-heading"
                 data-tutorial-target="parameters-container"
               >
                 <!-- Parameters will be dynamically generated here -->
               </div>
               <!-- Output Format Selector -->
-              <div
-                class="output-format-section"
-                aria-label="Output format selection"
-              >
+              <div class="output-format-section">
                 <label for="outputFormat" class="output-format-label"
                   >Output:</label
                 >
@@ -2679,7 +2671,9 @@
                   <span
                     class="editor-dirty-indicator"
                     id="editorDirtyIndicator"
+                    role="img"
                     aria-label="Unsaved changes"
+                    aria-hidden="true"
                   ></span>
                 </span>
                 <div class="expert-mode-actions">
@@ -2829,6 +2823,7 @@
                   ></div>
                   <div
                     class="preview-settings-panel"
+                    role="group"
                     aria-label="Preview settings"
                   >
                     <div class="preview-settings-header">
@@ -3141,9 +3136,6 @@
                               value="0.5"
                               aria-labelledby="rotationSpeedLabel"
                               aria-describedby="rotationSpeedHelp"
-                              aria-valuemin="0.1"
-                              aria-valuemax="3"
-                              aria-valuenow="0.5"
                             />
                             <span class="slider-value" id="rotationSpeedValue"
                               >0.5°/s</span
@@ -3699,6 +3691,7 @@
                     <span
                       class="console-badge hidden"
                       id="consoleBadge"
+                      role="img"
                       aria-label="New console output available"
                       >!</span
                     >
@@ -5904,6 +5897,7 @@
               class="console-output"
               id="consoleOutput"
               tabindex="0"
+              role="region"
               aria-label="Console output text"
             >
 No console output yet. Generate a model to see output.</pre
@@ -6132,6 +6126,7 @@ No console output yet. Generate a model to see output.</pre
               id="publishManifestOutput"
               class="publish-manifest-code"
               tabindex="0"
+              role="region"
               aria-label="Generated manifest JSON"
             ></pre>
             <button type="button"

@@ -1392,6 +1392,11 @@ async function initApp() {
     const importFolderInput = document.getElementById('importFolderInput');
 
     if (importFolderBtn) importFolderBtn.hidden = false;
+    // webkitdirectory is non-standard, so it is applied here (behind the
+    // feature detection above) instead of in the static HTML.
+    if (importFolderInput) {
+      importFolderInput.setAttribute('webkitdirectory', '');
+    }
 
     if (importFolderBtn && importFolderInput) {
       importFolderBtn.addEventListener('click', async () => {
@@ -6580,11 +6585,12 @@ if (rounded) {
      */
     function updateDirtyIndicator() {
       if (editorDirtyIndicator && editorStateManager) {
-        if (editorStateManager.getIsDirty()) {
-          editorDirtyIndicator.classList.add('visible');
-        } else {
-          editorDirtyIndicator.classList.remove('visible');
-        }
+        const isDirty = editorStateManager.getIsDirty();
+        editorDirtyIndicator.classList.toggle('visible', isDirty);
+        // The dot is hidden via opacity, which does NOT remove it from the
+        // accessibility tree — keep aria-hidden in sync so screen readers
+        // only encounter "Unsaved changes" when it is actually shown.
+        editorDirtyIndicator.setAttribute('aria-hidden', String(!isDirty));
       }
     }
 
@@ -10378,6 +10384,7 @@ if (rounded) {
         container: comboContainer,
         placeholder: 'Search presets…',
         inputId: 'presetComboboxInput',
+        ariaLabel: 'Select preset',
         disabled: true,
       });
 
