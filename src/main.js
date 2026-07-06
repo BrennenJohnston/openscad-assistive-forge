@@ -2605,22 +2605,6 @@ async function initApp() {
           }
         },
       },
-      { type: 'separator' },
-      // -- Toolbar toggles --
-      {
-        type: 'toggle',
-        label: 'Hide Editor toolbar',
-        disabled: true,
-        tooltip:
-          'Not yet implemented \u2014 panels can be shown or hidden via the Window menu',
-      },
-      {
-        type: 'toggle',
-        label: 'Hide 3D View toolbar',
-        disabled: true,
-        tooltip:
-          'Not yet implemented \u2014 panels can be shown or hidden via the Window menu',
-      },
     ];
   });
 
