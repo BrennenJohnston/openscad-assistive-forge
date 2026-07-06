@@ -82,6 +82,36 @@ describe('storage-keys exported constants', () => {
     const values = Object.values(EXPECTED_KEYS);
     expect(new Set(values).size).toBe(values.length);
   });
+
+  it('DEBUG_PREFS keys match the KI-012 documented strings exactly', () => {
+    expect(storageKeys.DEBUG_PREFS).toEqual({
+      previewParity: 'openscad-forge-debug-preview-parity',
+      desktopQuality: 'openscad-forge-debug-desktop-quality',
+      noCsgColors: 'openscad-forge-debug-no-csg-colors',
+      sourceOverrides: 'openscad-forge-debug-source-overrides',
+    });
+  });
+});
+
+describe('isDebugPrefEnabled', () => {
+  it('is presence-based: any stored value activates the toggle', () => {
+    localStorage.removeItem(storageKeys.DEBUG_PREFS.desktopQuality);
+    expect(storageKeys.isDebugPrefEnabled('desktopQuality')).toBe(false);
+
+    localStorage.setItem(storageKeys.DEBUG_PREFS.desktopQuality, '1');
+    expect(storageKeys.isDebugPrefEnabled('desktopQuality')).toBe(true);
+
+    // Non-'1' values count too — presence is what matters
+    localStorage.setItem(storageKeys.DEBUG_PREFS.desktopQuality, 'false');
+    expect(storageKeys.isDebugPrefEnabled('desktopQuality')).toBe(true);
+
+    localStorage.removeItem(storageKeys.DEBUG_PREFS.desktopQuality);
+    expect(storageKeys.isDebugPrefEnabled('desktopQuality')).toBe(false);
+  });
+
+  it('returns false for unknown toggle names', () => {
+    expect(storageKeys.isDebugPrefEnabled('nonsense')).toBe(false);
+  });
 });
 
 describe('storage-keys helpers', () => {

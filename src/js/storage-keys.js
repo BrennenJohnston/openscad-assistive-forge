@@ -335,6 +335,37 @@ export const STORAGE_KEY_WASM_INIT_COMPLETED =
   'openscad-forge-wasm-init-completed';
 
 // ============================================================================
+// Developer debug toggles (KI-012)
+// ============================================================================
+
+/**
+ * Developer debug-toggle keys. Presence-based: storing ANY value under a
+ * key activates the toggle; removing the key deactivates it. The key
+ * strings are documented in docs/KNOWN_ISSUES.md (KI-012) and must not
+ * change.
+ */
+export const DEBUG_PREFS = Object.freeze({
+  previewParity: 'openscad-forge-debug-preview-parity',
+  desktopQuality: 'openscad-forge-debug-desktop-quality',
+  noCsgColors: 'openscad-forge-debug-no-csg-colors',
+  sourceOverrides: 'openscad-forge-debug-source-overrides',
+});
+
+/**
+ * Whether a developer debug toggle is active (KI-012).
+ *
+ * @param {'previewParity'|'desktopQuality'|'noCsgColors'|'sourceOverrides'} name
+ * @returns {boolean} True when any value is stored under the toggle's key
+ */
+export function isDebugPrefEnabled(name) {
+  const key = DEBUG_PREFS[name];
+  if (!key) return false;
+  return (
+    typeof localStorage !== 'undefined' && localStorage.getItem(key) !== null
+  );
+}
+
+// ============================================================================
 // HFM (Alt View) persistent settings
 // ============================================================================
 

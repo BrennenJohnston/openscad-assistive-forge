@@ -116,6 +116,8 @@ import { initCompanionFilesController } from './js/companion-files-controller.js
 import { initCSPReporter } from './js/csp-reporter.js';
 import {
   migrateStorageKeys,
+  DEBUG_PREFS,
+  isDebugPrefEnabled,
   STORAGE_KEY_AUTO_PREVIEW_ENABLED,
   STORAGE_KEY_PREVIEW_QUALITY,
   STORAGE_KEY_RECOVERY_SOURCE,
@@ -3906,9 +3908,7 @@ async function initApp() {
       return parameters;
     }
 
-    const parityBypass =
-      typeof localStorage !== 'undefined' &&
-      localStorage.getItem('openscad-forge-debug-preview-parity') !== null;
+    const parityBypass = isDebugPrefEnabled('previewParity');
     if (parityBypass) {
       console.log(
         '[PreviewParity] Bypassing auto-preview overrides — ' +
@@ -12273,8 +12273,8 @@ if (typeof window !== 'undefined') {
     },
 
     toggleCsgBypass(enable) {
-      const key = 'openscad-forge-debug-no-csg-colors';
-      const wasEnabled = localStorage.getItem(key) !== null;
+      const key = DEBUG_PREFS.noCsgColors;
+      const wasEnabled = isDebugPrefEnabled('noCsgColors');
       const nowEnabled = enable !== undefined ? Boolean(enable) : !wasEnabled;
 
       if (nowEnabled) {
@@ -12298,8 +12298,8 @@ if (typeof window !== 'undefined') {
     },
 
     toggleDesktopQuality(enable) {
-      const key = 'openscad-forge-debug-desktop-quality';
-      const wasEnabled = localStorage.getItem(key) !== null;
+      const key = DEBUG_PREFS.desktopQuality;
+      const wasEnabled = isDebugPrefEnabled('desktopQuality');
       const nowEnabled = enable !== undefined ? Boolean(enable) : !wasEnabled;
 
       if (nowEnabled) {
@@ -12323,8 +12323,8 @@ if (typeof window !== 'undefined') {
     },
 
     toggleSourceOverrides(enable) {
-      const key = 'openscad-forge-debug-source-overrides';
-      const wasEnabled = localStorage.getItem(key) !== null;
+      const key = DEBUG_PREFS.sourceOverrides;
+      const wasEnabled = isDebugPrefEnabled('sourceOverrides');
       const nowEnabled = enable !== undefined ? Boolean(enable) : !wasEnabled;
 
       if (nowEnabled) {
@@ -12349,12 +12349,9 @@ if (typeof window !== 'undefined') {
     },
 
     getToggles() {
-      const csgBypass =
-        localStorage.getItem('openscad-forge-debug-no-csg-colors') !== null;
-      const desktopQuality =
-        localStorage.getItem('openscad-forge-debug-desktop-quality') !== null;
-      const sourceOverrides =
-        localStorage.getItem('openscad-forge-debug-source-overrides') !== null;
+      const csgBypass = isDebugPrefEnabled('noCsgColors');
+      const desktopQuality = isDebugPrefEnabled('desktopQuality');
+      const sourceOverrides = isDebugPrefEnabled('sourceOverrides');
       const toggles = {
         csgBypass,
         desktopQuality,
@@ -12397,8 +12394,7 @@ if (typeof window !== 'undefined') {
         label = 'original';
       }
 
-      const csgBypass =
-        localStorage.getItem('openscad-forge-debug-no-csg-colors') !== null;
+      const csgBypass = isDebugPrefEnabled('noCsgColors');
 
       console.log(`[ExportDiag] Source type: ${label}`);
       console.log(`[ExportDiag] CSG bypass active: ${csgBypass}`);
@@ -12435,8 +12431,7 @@ if (typeof window !== 'undefined') {
       const parameters = state.parameters || {};
       const paramTypes = state.paramTypes || {};
 
-      const csgBypass =
-        localStorage.getItem('openscad-forge-debug-no-csg-colors') !== null;
+      const csgBypass = isDebugPrefEnabled('noCsgColors');
       const rawSource =
         autoPreviewController?.currentScadContent || state.uploadedFile.content;
       const hasColorCalls = AutoPreviewController.scadUsesColor(rawSource);
@@ -12469,8 +12464,7 @@ if (typeof window !== 'undefined') {
         '[RenderArgsDiag] Preview output format:',
         previewOutputFormat
       );
-      const sourceOverrides =
-        localStorage.getItem('openscad-forge-debug-source-overrides') !== null;
+      const sourceOverrides = isDebugPrefEnabled('sourceOverrides');
       console.log('[RenderArgsDiag] CSG bypass:', csgBypass);
       console.log(
         '[RenderArgsDiag] Source overrides (bake params into SCAD):',

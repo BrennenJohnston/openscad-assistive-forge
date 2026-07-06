@@ -9,6 +9,7 @@ import {
   DEBUG_HIGHLIGHT_OPACITY,
 } from './color-utils.js';
 import { isPerfMetricsEnabled, appendPerfMetric } from './perf-metrics.js';
+import { isDebugPrefEnabled } from './storage-keys.js';
 import { isEnabled as isFlagEnabled } from './feature-flags.js';
 import { isNonPreviewable, is2DGenerateValue } from './render-intent.js';
 import { RENDER_QUALITY } from './render-controller.js';
@@ -119,9 +120,7 @@ export class AutoPreviewController {
    * @returns {{quality: Object|null, qualityKey: string}}
    */
   resolvePreviewQualityInfo(parameters) {
-    const forceDesktopQuality =
-      typeof localStorage !== 'undefined' &&
-      localStorage.getItem('openscad-forge-debug-desktop-quality') !== null;
+    const forceDesktopQuality = isDebugPrefEnabled('desktopQuality');
     if (forceDesktopQuality) {
       return { quality: RENDER_QUALITY.DESKTOP_DEFAULT, qualityKey: 'desktop' };
     }
@@ -1089,9 +1088,7 @@ export class AutoPreviewController {
     let scadForPreview = this.currentScadContent;
     let filesForPreview = this.projectFiles;
     let csgColorsInjected = false;
-    const noCsgColors =
-      typeof localStorage !== 'undefined' &&
-      localStorage.getItem('openscad-forge-debug-no-csg-colors') !== null;
+    const noCsgColors = isDebugPrefEnabled('noCsgColors');
 
     if (noCsgColors) {
       previewOutputFormat = 'stl';
@@ -1115,15 +1112,11 @@ export class AutoPreviewController {
       previewOutputFormat = useColorPassthrough ? 'off' : 'stl';
     }
 
-    const sourceOverridesActive =
-      typeof localStorage !== 'undefined' &&
-      localStorage.getItem('openscad-forge-debug-source-overrides') !== null;
+    const sourceOverridesActive = isDebugPrefEnabled('sourceOverrides');
 
     // Ground-truth diagnostics for LWFL geometry debugging (Phase 1)
     const previewOverridesActive = previewParameters !== parameters;
-    const parityDiagActive =
-      typeof localStorage !== 'undefined' &&
-      localStorage.getItem('openscad-forge-debug-preview-parity') !== null;
+    const parityDiagActive = isDebugPrefEnabled('previewParity');
     console.log('[AutoPreview Diag] Render dispatch:', {
       qualityKey,
       qualityName: quality?.name ?? 'model-default',
@@ -1533,9 +1526,7 @@ export class AutoPreviewController {
     let scadContentForRender = this.currentScadContent;
     let filesForRender = this.projectFiles;
     let csgColorsInjected = false;
-    const noCsgColors =
-      typeof localStorage !== 'undefined' &&
-      localStorage.getItem('openscad-forge-debug-no-csg-colors') !== null;
+    const noCsgColors = isDebugPrefEnabled('noCsgColors');
 
     if (noCsgColors) {
       fullOutputFormat = undefined;
@@ -1559,9 +1550,7 @@ export class AutoPreviewController {
       fullOutputFormat = useColorPassthrough ? 'off' : undefined;
     }
 
-    const fullSourceOverridesActive =
-      typeof localStorage !== 'undefined' &&
-      localStorage.getItem('openscad-forge-debug-source-overrides') !== null;
+    const fullSourceOverridesActive = isDebugPrefEnabled('sourceOverrides');
 
     const renderOptions = {
       files: filesForRender,
@@ -1582,9 +1571,7 @@ export class AutoPreviewController {
       );
     }
 
-    const fullParityDiag =
-      typeof localStorage !== 'undefined' &&
-      localStorage.getItem('openscad-forge-debug-preview-parity') !== null;
+    const fullParityDiag = isDebugPrefEnabled('previewParity');
     if (fullParityDiag) {
       console.log('[PreviewParity] Full render config:', {
         qualityKey,

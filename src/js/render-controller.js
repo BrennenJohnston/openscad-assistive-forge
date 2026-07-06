@@ -6,6 +6,7 @@
 import {
   STORAGE_KEY_LAZY_UNION,
   STORAGE_KEY_MANIFOLD_ENGINE as STORAGE_KEY_MANIFOLD,
+  isDebugPrefEnabled,
 } from './storage-keys.js';
 import { isPerfMetricsEnabled, appendPerfMetric } from './perf-metrics.js';
 
@@ -1060,9 +1061,7 @@ export class RenderController {
           // Default is OFF. Only enable if user explicitly opts in via settings.
           // If exposing a UI toggle, add warning: "Lazy union may produce incorrect
           // geometry (wrong difference/union results). Use for preview speed only."
-          const useSourceOverrides =
-            localStorage.getItem('openscad-forge-debug-source-overrides') !==
-            null;
+          const useSourceOverrides = isDebugPrefEnabled('sourceOverrides');
           const renderOptions = {
             enableLazyUnion:
               localStorage.getItem(STORAGE_KEY_LAZY_UNION) === 'true',
