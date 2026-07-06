@@ -9024,7 +9024,8 @@ body.first-visit-blocking #app {
 .features-note {
   margin: var(--space-sm) 0 0 0;
   font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
+  /* -secondary (not -muted): muted fails WCAG AA contrast (4.44:1) in dark mode */
+  color: var(--color-text-secondary);
   font-style: italic;
 }
 
