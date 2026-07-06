@@ -303,7 +303,7 @@ let currentSavedProjectId = null;
 
 // Initialize app
 async function initApp() {
-  console.log('OpenSCAD Assistive Forge v4.1.0');
+  console.log(`OpenSCAD Assistive Forge v${__APP_VERSION__}`);
   console.log('Initializing...');
 
   // Initialize Milestone 0 Foundation systems early
