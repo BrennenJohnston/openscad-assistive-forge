@@ -175,8 +175,6 @@ import { getFileActionsController } from './js/file-actions-controller.js';
 import { getEditActionsController } from './js/edit-actions-controller.js';
 import { getDesignPanelController } from './js/design-panel-controller.js';
 import { getDisplayOptionsController } from './js/display-options-controller.js';
-// Animation controller import preserved for future development — see ./js/animation-controller.js
-// import { getAnimationController } from './js/animation-controller.js';
 import { getEditorStateManager } from './js/editor-state-manager.js';
 import { TextareaEditor } from './js/textarea-editor.js';
 import { CodeMirrorEditor } from './js/codemirror-editor.js';
@@ -2770,8 +2768,6 @@ async function initApp() {
       },
     ];
   });
-
-  // Animation controller ($t) initialization removed from UI wiring — see animation-controller.js for future re-integration
 
   // Listen for "Save to Project" events from UI preferences panel
   document.addEventListener('ui-mode-save-to-project', (e) => {
