@@ -8,14 +8,13 @@ import {
   DEBUG_HIGHLIGHT_HEX,
   DEBUG_HIGHLIGHT_OPACITY,
 } from './color-utils.js';
-import { getAppPrefKey } from './storage-keys.js';
+import {
+  STORAGE_KEY_PERF_METRICS,
+  STORAGE_KEY_METRICS_LOG,
+} from './storage-keys.js';
 import { isEnabled as isFlagEnabled } from './feature-flags.js';
 import { isNonPreviewable, is2DGenerateValue } from './render-intent.js';
 import { RENDER_QUALITY } from './render-controller.js';
-
-// Storage keys using standardized naming convention
-const STORAGE_KEY_PERF_METRICS = getAppPrefKey('perf-metrics');
-const STORAGE_KEY_METRICS_LOG = getAppPrefKey('metrics-log');
 
 /**
  * Preview state constants

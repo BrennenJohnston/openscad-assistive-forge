@@ -266,6 +266,75 @@ export function getAppPrefKey(feature) {
 }
 
 // ============================================================================
+// Centralized STORAGE_KEY_* constants (audit Q4)
+// ============================================================================
+// Key strings must NEVER change — renaming a key orphans users' saved data.
+// tests/unit/storage-keys.test.js snapshots every exported key value to
+// guard against accidental renames.
+// ============================================================================
+
+// --- App preferences (main.js) ---
+export const STORAGE_KEY_AUTO_PREVIEW_ENABLED = getAppPrefKey(
+  'auto-preview-enabled'
+);
+export const STORAGE_KEY_PREVIEW_QUALITY = getAppPrefKey(
+  'preview-quality-mode'
+);
+export const STORAGE_KEY_RECOVERY_SOURCE = getAppPrefKey('recovery-source');
+export const STORAGE_KEY_RECOVERY_TIMESTAMP = getAppPrefKey(
+  'recovery-timestamp'
+);
+export const STORAGE_KEY_STATUS_BAR = getAppPrefKey('status-bar');
+export const STORAGE_KEY_MODEL_COLOR = getAppPrefKey('model-color');
+export const STORAGE_KEY_MODEL_COLOR_ENABLED = getAppPrefKey(
+  'model-color-enabled'
+);
+export const STORAGE_KEY_MODEL_OPACITY = getAppPrefKey('model-opacity');
+export const STORAGE_KEY_BRIGHTNESS = getAppPrefKey('brightness');
+export const STORAGE_KEY_CONTRAST = getAppPrefKey('contrast');
+export const STORAGE_KEY_MODEL_APPEARANCE_ENABLED = getAppPrefKey(
+  'model-appearance-enabled'
+);
+export const STORAGE_KEY_PARAM_PANEL_COLLAPSED = getDrawerStateKey(
+  'parameters'
+);
+export const STORAGE_KEY_LAYOUT_SIZES = getAppPrefKey('layout-sizes');
+
+// --- Preview settings (preview.js) ---
+export const STORAGE_KEY_MEASUREMENTS = getAppPrefKey('measurements');
+export const STORAGE_KEY_GRID = getAppPrefKey('grid');
+export const STORAGE_KEY_GRID_SIZE = getAppPrefKey('grid-size');
+export const STORAGE_KEY_CUSTOM_GRID_PRESETS = getAppPrefKey(
+  'custom-grid-presets'
+);
+export const STORAGE_KEY_GRID_COLOR = getAppPrefKey('grid-color');
+export const STORAGE_KEY_GRID_OPACITY = getAppPrefKey('grid-opacity');
+export const STORAGE_KEY_AUTO_BED = getAppPrefKey('auto-bed');
+export const STORAGE_KEY_CAMERA_COLLAPSED = getAppPrefKey(
+  'camera-controls-collapsed'
+);
+export const STORAGE_KEY_CAMERA_POSITION = getAppPrefKey(
+  'camera-controls-position'
+);
+export const STORAGE_KEY_LOD_WARNING_DISMISSED = getAppPrefKey(
+  'lod-warning-dismissed'
+);
+
+// --- Render metrics and engine toggles (render/auto-preview controllers) ---
+export const STORAGE_KEY_PERF_METRICS = getAppPrefKey('perf-metrics');
+export const STORAGE_KEY_METRICS_LOG = getAppPrefKey('metrics-log');
+export const STORAGE_KEY_LAZY_UNION = getAppPrefKey('lazy-union');
+export const STORAGE_KEY_MANIFOLD_ENGINE = getAppPrefKey('manifold-engine');
+
+// --- Preset dropdown sort order ---
+export const PRESET_SORT_KEY = 'openscad-forge-preset-sort';
+
+// --- WASM crash-detection flags (set before/after init; cleared on recovery) ---
+export const STORAGE_KEY_WASM_INIT_STARTED = 'openscad-forge-wasm-init-started';
+export const STORAGE_KEY_WASM_INIT_COMPLETED =
+  'openscad-forge-wasm-init-completed';
+
+// ============================================================================
 // HFM (Alt View) persistent settings
 // ============================================================================
 

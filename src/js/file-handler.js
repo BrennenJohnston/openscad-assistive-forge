@@ -46,7 +46,6 @@ import {
 } from './companion-files-controller.js';
 import { getErrorLogPanel, ERROR_LOG_TYPE } from './error-log-panel.js';
 import * as SharedImageStore from './shared-image-store.js';
-import { getAppPrefKey } from './storage-keys.js';
 import { importProjectFromFiles } from './storage-manager.js';
 import { addProjectFile, getProjectFiles } from './saved-projects-manager.js';
 import { showMissingDependenciesDialog, showConfirmDialog } from './dialogs.js';
@@ -60,8 +59,7 @@ import {
 } from './hfm-controller.js';
 import { isEnabled } from './feature-flags.js';
 import { prepareSvg, needsPreparation } from './svg-preparer.js';
-
-const STORAGE_KEY_MODEL_COLOR = getAppPrefKey('model-color');
+import { STORAGE_KEY_MODEL_COLOR } from './storage-keys.js';
 
 let currentExampleKey = null;
 

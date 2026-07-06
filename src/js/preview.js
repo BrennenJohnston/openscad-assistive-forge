@@ -42,26 +42,23 @@ import {
   announceCameraAction as announceCamera,
   announceImmediate,
 } from './announcer.js';
-import { getAppPrefKey } from './storage-keys.js';
+import {
+  STORAGE_KEY_MEASUREMENTS,
+  STORAGE_KEY_GRID,
+  STORAGE_KEY_GRID_SIZE,
+  STORAGE_KEY_CUSTOM_GRID_PRESETS,
+  STORAGE_KEY_GRID_COLOR,
+  STORAGE_KEY_GRID_OPACITY,
+  STORAGE_KEY_AUTO_BED,
+  STORAGE_KEY_CAMERA_COLLAPSED,
+  STORAGE_KEY_CAMERA_POSITION,
+  STORAGE_KEY_LOD_WARNING_DISMISSED,
+} from './storage-keys.js';
 
 // Disable Three.js color management to match desktop OpenSCAD's
 // non-linear-aware OpenGL pipeline. OpenSCAD passes sRGB colors
 // directly through lighting without linearization or gamma correction.
 ColorManagement.enabled = false;
-
-// Storage keys using standardized naming convention
-const STORAGE_KEY_MEASUREMENTS = getAppPrefKey('measurements');
-const STORAGE_KEY_GRID = getAppPrefKey('grid');
-const STORAGE_KEY_GRID_SIZE = getAppPrefKey('grid-size');
-const STORAGE_KEY_CUSTOM_GRID_PRESETS = getAppPrefKey('custom-grid-presets');
-const STORAGE_KEY_GRID_COLOR = getAppPrefKey('grid-color');
-const STORAGE_KEY_GRID_OPACITY = getAppPrefKey('grid-opacity');
-const STORAGE_KEY_AUTO_BED = getAppPrefKey('auto-bed');
-const STORAGE_KEY_CAMERA_COLLAPSED = getAppPrefKey('camera-controls-collapsed');
-const STORAGE_KEY_CAMERA_POSITION = getAppPrefKey('camera-controls-position');
-const STORAGE_KEY_LOD_WARNING_DISMISSED = getAppPrefKey(
-  'lod-warning-dismissed'
-);
 
 /** Default grid config — 220×220mm matches popular mid-range FDM printers (Creality K1C, FlashForge Adventurer 5M Pro) */
 const DEFAULT_GRID_CONFIG = { widthMm: 220, heightMm: 220 };

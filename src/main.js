@@ -116,8 +116,23 @@ import { initCompanionFilesController } from './js/companion-files-controller.js
 import { initCSPReporter } from './js/csp-reporter.js';
 import {
   migrateStorageKeys,
-  getAppPrefKey,
-  getDrawerStateKey,
+  STORAGE_KEY_AUTO_PREVIEW_ENABLED,
+  STORAGE_KEY_PREVIEW_QUALITY,
+  STORAGE_KEY_RECOVERY_SOURCE,
+  STORAGE_KEY_RECOVERY_TIMESTAMP,
+  STORAGE_KEY_STATUS_BAR,
+  STORAGE_KEY_MODEL_COLOR,
+  STORAGE_KEY_MODEL_COLOR_ENABLED,
+  STORAGE_KEY_MODEL_OPACITY,
+  STORAGE_KEY_BRIGHTNESS,
+  STORAGE_KEY_CONTRAST,
+  STORAGE_KEY_MODEL_APPEARANCE_ENABLED,
+  STORAGE_KEY_PARAM_PANEL_COLLAPSED,
+  STORAGE_KEY_LAYOUT_SIZES,
+  STORAGE_KEY_MANIFOLD_ENGINE,
+  STORAGE_KEY_WASM_INIT_STARTED,
+  STORAGE_KEY_WASM_INIT_COMPLETED,
+  PRESET_SORT_KEY,
 } from './js/storage-keys.js';
 import {
   initImageMeasurement,
@@ -138,23 +153,7 @@ import {
   onScaleChange,
 } from './js/unit-sync.js';
 
-// Storage keys using standardized naming convention
-const STORAGE_KEY_AUTO_PREVIEW_ENABLED = getAppPrefKey('auto-preview-enabled');
-const STORAGE_KEY_PREVIEW_QUALITY = getAppPrefKey('preview-quality-mode');
-const STORAGE_KEY_RECOVERY_SOURCE = getAppPrefKey('recovery-source');
-const STORAGE_KEY_RECOVERY_TIMESTAMP = getAppPrefKey('recovery-timestamp');
-const STORAGE_KEY_STATUS_BAR = getAppPrefKey('status-bar');
-// Overlay, grid, and auto-rotate storage keys moved to overlay-grid-controller.js
-const STORAGE_KEY_MODEL_COLOR = getAppPrefKey('model-color');
-const STORAGE_KEY_MODEL_COLOR_ENABLED = getAppPrefKey('model-color-enabled');
-const STORAGE_KEY_MODEL_OPACITY = getAppPrefKey('model-opacity');
-const STORAGE_KEY_BRIGHTNESS = getAppPrefKey('brightness');
-const STORAGE_KEY_CONTRAST = getAppPrefKey('contrast');
-const STORAGE_KEY_MODEL_APPEARANCE_ENABLED = getAppPrefKey(
-  'model-appearance-enabled'
-);
-const STORAGE_KEY_PARAM_PANEL_COLLAPSED = getDrawerStateKey('parameters');
-const STORAGE_KEY_LAYOUT_SIZES = getAppPrefKey('layout-sizes');
+// Storage keys are centralized in ./js/storage-keys.js (audit Q4)
 import {
   announce as _announce,
   announceImmediate,
@@ -325,16 +324,16 @@ async function initApp() {
   // Crash detection: If WASM init started but never completed, we may have crashed.
   // The flag is set before WASM init and cleared after success.
   const wasmCrashDetected =
-    localStorage.getItem('openscad-forge-wasm-init-started') === 'true' &&
-    localStorage.getItem('openscad-forge-wasm-init-completed') !== 'true';
+    localStorage.getItem(STORAGE_KEY_WASM_INIT_STARTED) === 'true' &&
+    localStorage.getItem(STORAGE_KEY_WASM_INIT_COMPLETED) !== 'true';
 
   if (wasmCrashDetected && !isRecoveryMode) {
     console.warn(
       '[Recovery] Detected unclean WASM shutdown — offering recovery mode'
     );
     // Clear the flags so we don't loop
-    localStorage.removeItem('openscad-forge-wasm-init-started');
-    localStorage.removeItem('openscad-forge-wasm-init-completed');
+    localStorage.removeItem(STORAGE_KEY_WASM_INIT_STARTED);
+    localStorage.removeItem(STORAGE_KEY_WASM_INIT_COMPLETED);
     // Auto-enter recovery mode
     window.location.href = window.location.pathname + '?recovery=true';
     return; // stop initialization
@@ -354,8 +353,8 @@ async function initApp() {
     setUserPreference('codemirror_editor', false);
 
     // Clean up crash detection flags
-    localStorage.removeItem('openscad-forge-wasm-init-started');
-    localStorage.removeItem('openscad-forge-wasm-init-completed');
+    localStorage.removeItem(STORAGE_KEY_WASM_INIT_STARTED);
+    localStorage.removeItem(STORAGE_KEY_WASM_INIT_COMPLETED);
 
     // Check for recovery data
     const recoverySource = localStorage.getItem(STORAGE_KEY_RECOVERY_SOURCE);
@@ -3144,8 +3143,8 @@ async function initApp() {
         // Set crash detection flag BEFORE WASM init.
         // If the page crashes during init, the flag remains set and
         // recovery mode will auto-activate on next load.
-        localStorage.setItem('openscad-forge-wasm-init-started', 'true');
-        localStorage.removeItem('openscad-forge-wasm-init-completed');
+        localStorage.setItem(STORAGE_KEY_WASM_INIT_STARTED, 'true');
+        localStorage.removeItem(STORAGE_KEY_WASM_INIT_COMPLETED);
 
         const assetBaseUrl = new URL(
           import.meta.env.BASE_URL,
@@ -3165,7 +3164,7 @@ async function initApp() {
         wasmInitialized = true;
 
         // Clear crash detection flag — WASM init succeeded
-        localStorage.setItem('openscad-forge-wasm-init-completed', 'true');
+        localStorage.setItem(STORAGE_KEY_WASM_INIT_COMPLETED, 'true');
 
         // Start worker health monitoring
         renderController.startHealthMonitoring();
@@ -4108,7 +4107,6 @@ async function initApp() {
   // ============================================================================
   const manifoldEngineToggle = document.getElementById('manifoldEngineToggle');
   const manifoldEngineHint = document.getElementById('manifoldEngineHint');
-  const STORAGE_KEY_MANIFOLD_ENGINE = 'openscad-forge-manifold-engine';
 
   if (manifoldEngineToggle) {
     // Initialize from localStorage (default to true for performance)
@@ -9015,7 +9013,7 @@ if (rounded) {
   // "design default values" -- always first in preset dropdown (desktop OpenSCAD parity)
   // Virtual preset ID for the immutable defaults entry (not stored in PresetManager)
   const DESIGN_DEFAULTS_ID = '__design_defaults__';
-  const PRESET_SORT_KEY = 'openscad-forge-preset-sort';
+  // PRESET_SORT_KEY imported from storage-keys.js
 
   // Searchable combobox instance (non-null only when searchable_combobox flag is on)
   let _presetCombobox = null;
@@ -12552,9 +12550,7 @@ if (typeof window !== 'undefined') {
       }
 
       // Backend info
-      const manifoldPref = localStorage.getItem(
-        'openscad-forge-manifold-engine'
-      );
+      const manifoldPref = localStorage.getItem(STORAGE_KEY_MANIFOLD_ENGINE);
       const useManifold =
         manifoldPref === null ? true : manifoldPref !== 'false';
       console.log(

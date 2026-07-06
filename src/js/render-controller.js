@@ -3,13 +3,12 @@
  * @license GPL-3.0-or-later
  */
 
-import { getAppPrefKey } from './storage-keys.js';
-
-// Storage keys using standardized naming convention
-const STORAGE_KEY_PERF_METRICS = getAppPrefKey('perf-metrics');
-const STORAGE_KEY_METRICS_LOG = getAppPrefKey('metrics-log');
-const STORAGE_KEY_LAZY_UNION = getAppPrefKey('lazy-union');
-const STORAGE_KEY_MANIFOLD = getAppPrefKey('manifold-engine');
+import {
+  STORAGE_KEY_PERF_METRICS,
+  STORAGE_KEY_METRICS_LOG,
+  STORAGE_KEY_LAZY_UNION,
+  STORAGE_KEY_MANIFOLD_ENGINE as STORAGE_KEY_MANIFOLD,
+} from './storage-keys.js';
 
 // Re-export quality tier system for convenience
 export {
