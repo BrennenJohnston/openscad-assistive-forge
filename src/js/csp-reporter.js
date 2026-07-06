@@ -83,14 +83,6 @@ export function initCSPReporter() {
 }
 
 /**
- * Get all logged violations
- * @returns {CSPViolation[]} Array of violations
- */
-function getViolations() {
-  return [...violationLog];
-}
-
-/**
  * Get violation count by directive
  * @returns {Object} Map of directive -> count
  */
@@ -100,21 +92,6 @@ function getViolationStats() {
     stats[v.directive] = (stats[v.directive] || 0) + 1;
   }
   return stats;
-}
-
-/**
- * Clear violation log
- */
-function clearViolations() {
-  violationLog.length = 0;
-}
-
-/**
- * Check if any violations have occurred
- * @returns {boolean}
- */
-function hasViolations() {
-  return violationLog.length > 0;
 }
 
 /**

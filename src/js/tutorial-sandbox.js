@@ -3619,28 +3619,6 @@ export function closeTutorial(completed = false) {
 }
 
 /**
- * Check if a tutorial is currently active
- * @public
- * @returns {boolean}
- * @note Currently not used internally, but exported as part of the public API
- *       for potential external use or future features
- */
-function isTutorialActive() {
-  return !!activeTutorial;
-}
-
-/**
- * Get the current tutorial ID
- * @public
- * @returns {string|null}
- * @note Currently not used internally, but exported as part of the public API
- *       for potential external use or future features
- */
-function getCurrentTutorialId() {
-  return activeTutorial ? activeTutorial.id : null;
-}
-
-/**
  * Announce a message to screen readers
  * @param {string} message - Message to announce
  */

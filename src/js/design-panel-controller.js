@@ -232,10 +232,3 @@ export function getDesignPanelController(options = {}) {
   }
   return instance;
 }
-
-/**
- * Reset singleton (for testing).
- */
-function resetDesignPanelController() {
-  instance = null;
-}

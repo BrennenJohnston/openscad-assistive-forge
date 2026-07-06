@@ -3476,14 +3476,6 @@ async function initApp() {
     }, 10000);
   }
 
-  // Prefixed with _ to indicate intentionally unused (reserved for future cleanup)
-  function _stopMemoryPolling() {
-    if (memoryPollInterval) {
-      clearInterval(memoryPollInterval);
-      memoryPollInterval = null;
-    }
-  }
-
   function handleConfigDependencyError(error) {
     const code = error?.code;
     const msg = error?.message || '';

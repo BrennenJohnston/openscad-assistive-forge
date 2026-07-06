@@ -150,7 +150,6 @@ export function strokeToFill(
   }
 
   if (lineCap === 'round') {
-    const endL = left[left.length - 1];
     const endR = right[right.length - 1];
     d += ` A${r(half)},${r(half)} 0 0,1 ${r(endR.x)},${r(endR.y)}`;
   } else if (lineCap === 'square') {
@@ -173,7 +172,6 @@ export function strokeToFill(
 
   if (lineCap === 'round') {
     const startL = left[0];
-    const startR = right[0];
     d += ` A${r(half)},${r(half)} 0 0,1 ${r(startL.x)},${r(startL.y)}`;
   } else if (lineCap === 'square') {
     const firstL = left[0];

@@ -109,14 +109,6 @@ function setDetailLevel(level, options = {}) {
 }
 
 /**
- * Get the current detail level.
- * @returns {DetailLevel}
- */
-function getDetailLevel() {
-  return currentLevel;
-}
-
-/**
  * Re-apply the current detail level to the DOM.
  * Call after parameters are re-rendered.
  */
