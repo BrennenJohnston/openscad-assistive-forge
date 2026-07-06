@@ -9,7 +9,7 @@
  * @license GPL-3.0-or-later
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import * as storageKeys from '../../src/js/storage-keys.js';
 
 /**
@@ -111,6 +111,66 @@ describe('isDebugPrefEnabled', () => {
 
   it('returns false for unknown toggle names', () => {
     expect(storageKeys.isDebugPrefEnabled('nonsense')).toBe(false);
+  });
+});
+
+describe('safeGetItem / safeSetItem / safeRemoveItem', () => {
+  // localStorage methods are the vi.fn-based mocks from tests/setup.js;
+  // mockImplementationOnce lets a single call throw and then reverts to
+  // the working implementation automatically.
+  afterEach(() => {
+    vi.restoreAllMocks();
+    localStorage.removeItem('safe-test-key');
+  });
+
+  it('reads stored values and applies the fallback for missing keys', () => {
+    localStorage.setItem('safe-test-key', 'value');
+    expect(storageKeys.safeGetItem('safe-test-key')).toBe('value');
+    expect(storageKeys.safeGetItem('missing-key', 'fallback')).toBe('fallback');
+    expect(storageKeys.safeGetItem('missing-key')).toBeNull();
+  });
+
+  it('returns the fallback and warns when getItem throws (SecurityError)', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    localStorage.getItem.mockImplementationOnce(() => {
+      throw new DOMException('denied', 'SecurityError');
+    });
+
+    expect(storageKeys.safeGetItem('any-key', 'fb')).toBe('fb');
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('any-key'),
+      expect.any(DOMException)
+    );
+  });
+
+  it('returns false and warns when setItem throws (QuotaExceededError)', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    localStorage.setItem.mockImplementationOnce(() => {
+      throw new DOMException('quota', 'QuotaExceededError');
+    });
+
+    expect(storageKeys.safeSetItem('any-key', 'v')).toBe(false);
+    expect(warnSpy).toHaveBeenCalled();
+  });
+
+  it('suppresses the warning when silent is set', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    localStorage.getItem.mockImplementationOnce(() => {
+      throw new DOMException('denied', 'SecurityError');
+    });
+
+    expect(storageKeys.safeGetItem('k', null, { silent: true })).toBeNull();
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  it('safeRemoveItem returns true on success and false on failure', () => {
+    expect(storageKeys.safeRemoveItem('safe-test-key')).toBe(true);
+
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    localStorage.removeItem.mockImplementationOnce(() => {
+      throw new DOMException('denied', 'SecurityError');
+    });
+    expect(storageKeys.safeRemoveItem('safe-test-key')).toBe(false);
   });
 });
 

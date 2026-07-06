@@ -118,6 +118,8 @@ import {
   migrateStorageKeys,
   DEBUG_PREFS,
   isDebugPrefEnabled,
+  safeGetItem,
+  safeSetItem,
   STORAGE_KEY_AUTO_PREVIEW_ENABLED,
   STORAGE_KEY_PREVIEW_QUALITY,
   STORAGE_KEY_RECOVERY_SOURCE,
@@ -535,18 +537,11 @@ async function initApp() {
     .getElementById('memoryBannerReload')
     ?.addEventListener('click', () => {
       // Save current state to localStorage before reload
-      try {
-        const currentCode =
-          document.getElementById('openscadSource')?.value || '';
-        if (currentCode) {
-          localStorage.setItem(STORAGE_KEY_RECOVERY_SOURCE, currentCode);
-          localStorage.setItem(
-            STORAGE_KEY_RECOVERY_TIMESTAMP,
-            Date.now().toString()
-          );
-        }
-      } catch (e) {
-        console.error('[Memory] Failed to save recovery state:', e);
+      const currentCode =
+        document.getElementById('openscadSource')?.value || '';
+      if (currentCode) {
+        safeSetItem(STORAGE_KEY_RECOVERY_SOURCE, currentCode);
+        safeSetItem(STORAGE_KEY_RECOVERY_TIMESTAMP, Date.now().toString());
       }
       // Reload in recovery mode
       window.location.href = window.location.pathname + '?recovery=true';
@@ -2800,19 +2795,10 @@ async function initApp() {
 
       // Fallback path: keep the legacy localStorage key in sync for one release
       // so that projects loaded before this change still have preferences available.
-      try {
-        const key = `openscad-forge-ui-prefs-${modelName}`;
-        localStorage.setItem(key, JSON.stringify(prefs));
+      const uiPrefsKey = `openscad-forge-ui-prefs-${modelName}`;
+      if (safeSetItem(uiPrefsKey, JSON.stringify(prefs))) {
         console.log(`[App] UI preferences saved for project: ${modelName}`);
         updateStatus('UI preferences saved to project');
-      } catch (error) {
-        if (error.name === 'QuotaExceededError') {
-          console.warn(
-            '[App] localStorage quota exceeded — UI prefs not saved'
-          );
-        } else {
-          console.warn('[App] Could not save UI preferences:', error);
-        }
       }
     } else {
       updateStatus('Load a project first to save preferences');
@@ -6339,15 +6325,9 @@ if (rounded) {
     // (Storage key defined at module level as STORAGE_KEY_PARAM_PANEL_COLLAPSED)
     let isCollapsed = false;
 
-    try {
-      const savedState = localStorage.getItem(
-        STORAGE_KEY_PARAM_PANEL_COLLAPSED
-      );
-      if (savedState === 'true' && window.innerWidth >= 768) {
-        isCollapsed = true;
-      }
-    } catch (e) {
-      console.warn('Could not access localStorage:', e);
+    const savedState = safeGetItem(STORAGE_KEY_PARAM_PANEL_COLLAPSED);
+    if (savedState === 'true' && window.innerWidth >= 768) {
+      isCollapsed = true;
     }
 
     // Apply initial state
@@ -6400,14 +6380,7 @@ if (rounded) {
       }
 
       // Persist state
-      try {
-        localStorage.setItem(
-          STORAGE_KEY_PARAM_PANEL_COLLAPSED,
-          String(isCollapsed)
-        );
-      } catch (e) {
-        console.warn('Could not save to localStorage:', e);
-      }
+      safeSetItem(STORAGE_KEY_PARAM_PANEL_COLLAPSED, String(isCollapsed));
 
       // Trigger preview resize after transition
       setTimeout(() => {
@@ -6762,7 +6735,7 @@ if (rounded) {
     // Load saved split sizes
     let initialSizes = [40, 60]; // Default: 40% params, 60% preview
     try {
-      const savedSizes = localStorage.getItem(STORAGE_KEY_LAYOUT_SIZES);
+      const savedSizes = safeGetItem(STORAGE_KEY_LAYOUT_SIZES);
       if (savedSizes) {
         const parsed = JSON.parse(savedSizes);
         if (Array.isArray(parsed) && parsed.length === 2) {
@@ -6770,6 +6743,7 @@ if (rounded) {
         }
       }
     } catch (e) {
+      // JSON.parse failed on a corrupt value — keep defaults
       console.warn('Could not load split sizes:', e);
     }
 
@@ -6807,14 +6781,7 @@ if (rounded) {
         onDragEnd: (sizes) => {
           document.body.classList.remove('split-dragging');
           // Persist sizes
-          try {
-            localStorage.setItem(
-              STORAGE_KEY_LAYOUT_SIZES,
-              JSON.stringify(sizes)
-            );
-          } catch (e) {
-            console.warn('Could not save split sizes:', e);
-          }
+          safeSetItem(STORAGE_KEY_LAYOUT_SIZES, JSON.stringify(sizes));
 
           // Final resize after drag
           if (previewManager) {
@@ -6919,14 +6886,10 @@ if (rounded) {
                 splitInstance.setSizes([newParamSize, newPreviewSize]);
 
                 // Save to localStorage
-                try {
-                  localStorage.setItem(
-                    STORAGE_KEY_LAYOUT_SIZES,
-                    JSON.stringify([newParamSize, newPreviewSize])
-                  );
-                } catch (err) {
-                  console.warn('Could not save split sizes:', err);
-                }
+                safeSetItem(
+                  STORAGE_KEY_LAYOUT_SIZES,
+                  JSON.stringify([newParamSize, newPreviewSize])
+                );
 
                 // Update ARIA values
                 updateAriaValues();
@@ -7360,27 +7323,12 @@ if (rounded) {
 
       if (!toggleBtn || !drawer) return;
 
-      // Load saved state
-      const loadState = () => {
-        try {
-          const saved = localStorage.getItem(STORAGE_KEY);
-          return saved === 'expanded';
-        } catch (e) {
-          console.warn('Could not load actions drawer state:', e);
-          return false; // Default collapsed
-        }
-      };
+      // Load saved state (default collapsed)
+      const loadState = () => safeGetItem(STORAGE_KEY) === 'expanded';
 
       // Save state
       const saveState = (isExpanded) => {
-        try {
-          localStorage.setItem(
-            STORAGE_KEY,
-            isExpanded ? 'expanded' : 'collapsed'
-          );
-        } catch (e) {
-          console.warn('Could not save actions drawer state:', e);
-        }
+        safeSetItem(STORAGE_KEY, isExpanded ? 'expanded' : 'collapsed');
       };
 
       // Set initial state
@@ -10301,11 +10249,7 @@ if (rounded) {
   const presetDropdownSort = document.getElementById('presetDropdownSort');
   if (presetDropdownSort) {
     presetDropdownSort.addEventListener('change', () => {
-      try {
-        localStorage.setItem(PRESET_SORT_KEY, presetDropdownSort.value);
-      } catch (_) {
-        /* localStorage overflow — continue with in-memory value */
-      }
+      safeSetItem(PRESET_SORT_KEY, presetDropdownSort.value);
       updatePresetDropdown();
       const label =
         presetDropdownSort.options[presetDropdownSort.selectedIndex]?.text ||

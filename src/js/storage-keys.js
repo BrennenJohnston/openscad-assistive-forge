@@ -335,6 +335,79 @@ export const STORAGE_KEY_WASM_INIT_COMPLETED =
   'openscad-forge-wasm-init-completed';
 
 // ============================================================================
+// Safe localStorage access (audit Q3)
+// ============================================================================
+// localStorage throws in several legitimate situations (private browsing,
+// storage quota exceeded, third-party-cookie lockdown). These wrappers give
+// call sites one consistent, non-throwing behavior with an audit trail via
+// console.warn instead of dozens of ad-hoc try/catch blocks.
+// ============================================================================
+
+/**
+ * Read a localStorage value without throwing.
+ *
+ * @param {string} key - Storage key
+ * @param {string|null} [fallback=null] - Returned when the key is absent or
+ *   storage is unavailable
+ * @param {Object} [options]
+ * @param {boolean} [options.silent=false] - Suppress the console.warn (for
+ *   hot paths where a warn per read would be noisy)
+ * @returns {string|null}
+ */
+export function safeGetItem(key, fallback = null, { silent = false } = {}) {
+  try {
+    const value = localStorage.getItem(key);
+    return value === null ? fallback : value;
+  } catch (error) {
+    if (!silent) {
+      console.warn(`[Storage] Failed to read ${key}:`, error);
+    }
+    return fallback;
+  }
+}
+
+/**
+ * Write a localStorage value without throwing.
+ *
+ * @param {string} key - Storage key
+ * @param {string} value - Value to store
+ * @param {Object} [options]
+ * @param {boolean} [options.silent=false] - Suppress the console.warn
+ * @returns {boolean} True when the write succeeded
+ */
+export function safeSetItem(key, value, { silent = false } = {}) {
+  try {
+    localStorage.setItem(key, value);
+    return true;
+  } catch (error) {
+    if (!silent) {
+      console.warn(`[Storage] Failed to write ${key}:`, error);
+    }
+    return false;
+  }
+}
+
+/**
+ * Remove a localStorage key without throwing.
+ *
+ * @param {string} key - Storage key
+ * @param {Object} [options]
+ * @param {boolean} [options.silent=false] - Suppress the console.warn
+ * @returns {boolean} True when the removal succeeded
+ */
+export function safeRemoveItem(key, { silent = false } = {}) {
+  try {
+    localStorage.removeItem(key);
+    return true;
+  } catch (error) {
+    if (!silent) {
+      console.warn(`[Storage] Failed to remove ${key}:`, error);
+    }
+    return false;
+  }
+}
+
+// ============================================================================
 // Developer debug toggles (KI-012)
 // ============================================================================
 
