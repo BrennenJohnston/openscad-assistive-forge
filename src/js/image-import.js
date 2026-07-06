@@ -15,6 +15,7 @@
  */
 
 import ImageTracer from 'imagetracerjs';
+import { hexToRgb } from './color-utils.js';
 
 /**
  * Hard and soft limits for image pixel counts.
@@ -139,13 +140,9 @@ export function parseLuminance(fillString) {
   }
 
   if (fillString.startsWith('#')) {
-    let hex = fillString.slice(1);
-    if (hex.length === 3)
-      hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
-    const r = parseInt(hex.substring(0, 2), 16);
-    const g = parseInt(hex.substring(2, 4), 16);
-    const b = parseInt(hex.substring(4, 6), 16);
-    if (!isNaN(r) && !isNaN(g) && !isNaN(b)) {
+    const rgb = hexToRgb(fillString);
+    if (rgb) {
+      const [r, g, b] = rgb;
       return 0.299 * r + 0.587 * g + 0.114 * b;
     }
   }
