@@ -22,9 +22,18 @@ describe('Modal Manager', () => {
     document.body.style.overflow = ''
     originalRaf = global.requestAnimationFrame
     global.requestAnimationFrame = (cb) => cb()
+    // closeModal schedules a real 50ms focus-retry timer (WebKit workaround).
+    // Fake setTimeout so the timer cannot outlive the test file and fire
+    // after jsdom teardown ("document is not defined" uncaught exceptions
+    // observed on CI). Only setTimeout/clearTimeout are faked so the
+    // synchronous requestAnimationFrame mock above stays in effect.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
   })
 
   afterEach(() => {
+    // Flush the pending focus-retry timer while jsdom is still alive.
+    vi.runOnlyPendingTimers()
+    vi.useRealTimers()
     global.requestAnimationFrame = originalRaf
   })
 
