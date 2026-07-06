@@ -14,6 +14,8 @@
  * @license GPL-3.0-or-later
  */
 
+import { escapeHtml } from './html-utils.js';
+
 const SCAD_TOKENS = {
   keywords: [
     'module',
@@ -464,10 +466,12 @@ export class TextareaEditor {
    * @private
    */
   _highlightCode(code) {
-    let html = this._escapeHtml(code);
+    // escapeHtml() encodes quotes as &quot; / &#39;, so string literals are
+    // matched via their escaped forms below.
+    let html = escapeHtml(code);
 
     html = html.replace(
-      /"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g,
+      /&quot;(?:(?!&quot;)[^\\]|\\.)*&quot;|&#39;(?:(?!&#39;)[^\\]|\\.)*&#39;/g,
       '<span class="hl-string">$&</span>'
     );
 
@@ -477,8 +481,9 @@ export class TextareaEditor {
       '<span class="hl-comment">$&</span>'
     );
 
+    // (?<!&#) prevents matching the "39" inside &#39; apostrophe entities
     html = html.replace(
-      /\b-?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?\b/g,
+      /(?<!&#)\b-?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?\b/g,
       '<span class="hl-number">$&</span>'
     );
 
@@ -526,19 +531,6 @@ export class TextareaEditor {
     }
 
     return html;
-  }
-
-  /**
-   * Escape HTML special characters
-   * @param {string} text
-   * @returns {string}
-   * @private
-   */
-  _escapeHtml(text) {
-    return text
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
   }
 
   /**
