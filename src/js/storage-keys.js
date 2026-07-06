@@ -90,7 +90,9 @@ export const KEY_MIGRATIONS = {
   previewQualityMode: 'openscad-forge-preview-quality-mode',
   'recovery-source': 'openscad-forge-recovery-source',
   'recovery-timestamp': 'openscad-forge-recovery-timestamp',
-  tutorialProgress: 'openscad-forge-tutorial-progress',
+  // Note: tutorialProgress is intentionally NOT migrated — the tutorial
+  // stores progress in sessionStorage (see tutorial-sandbox.js), not
+  // localStorage, so a localStorage migration would never find it.
 };
 
 /**

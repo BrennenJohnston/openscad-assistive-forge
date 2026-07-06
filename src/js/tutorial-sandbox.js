@@ -58,6 +58,8 @@ let wasAutoMinimized = false; // Track whether current minimized state was autom
 let isSettingUpStep = false; // Guard flag to prevent drawer observer interference during step setup
 
 const MAX_CONSECUTIVE_FAILURES = 3;
+// sessionStorage-scoped by design: progress should survive a reload within
+// the same tab but not persist across browser sessions.
 const TUTORIAL_STORAGE_KEY = 'tutorialProgress';
 const TUTORIAL_PROGRESS_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
 
