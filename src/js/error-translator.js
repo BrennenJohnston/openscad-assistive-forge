@@ -256,8 +256,7 @@ export const TRANSLATIONS_BY_CODE = {
   },
   UNKNOWN_FUNCTION: {
     title: 'Unknown Function',
-    explanation:
-      "The model uses a function that OpenSCAD doesn't recognize.",
+    explanation: "The model uses a function that OpenSCAD doesn't recognize.",
     suggestion:
       "This might be from a library that's not enabled. Check the Libraries panel.",
   },
@@ -304,8 +303,7 @@ export const TRANSLATIONS_BY_CODE = {
   },
   UNSUPPORTED_CONFIG: {
     title: 'Unsupported Option Combination',
-    explanation:
-      'This combination of options is not supported by the model.',
+    explanation: 'This combination of options is not supported by the model.',
     suggestion:
       'Check the "generate" setting and related options for conflicting choices.',
   },
@@ -317,7 +315,8 @@ export const TRANSLATIONS_BY_CODE = {
   },
   RECURSION: {
     title: 'Infinite Recursion',
-    explanation: 'The model has a module or function that calls itself forever.',
+    explanation:
+      'The model has a module or function that calls itself forever.',
     suggestion:
       'Check recursive module or function calls for a missing termination condition.',
   },

@@ -6,11 +6,7 @@
  * @license GPL-3.0-or-later
  */
 
-import {
-  getDrawerStateKey,
-  safeGetItem,
-  safeSetItem,
-} from './storage-keys.js';
+import { getDrawerStateKey, safeGetItem, safeSetItem } from './storage-keys.js';
 
 // Storage key using standardized naming convention
 const STORAGE_KEY_DRAWER_COLLAPSED = getDrawerStateKey('preview-settings');

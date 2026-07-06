@@ -12,11 +12,7 @@
  * @license GPL-3.0-or-later
  */
 
-import {
-  getAppPrefKey,
-  safeGetItem,
-  safeSetItem,
-} from './storage-keys.js';
+import { getAppPrefKey, safeGetItem, safeSetItem } from './storage-keys.js';
 import { announceImmediate } from './announcer.js';
 
 const STORAGE_KEY = getAppPrefKey('param-detail-level');

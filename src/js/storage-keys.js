@@ -281,9 +281,8 @@ export const STORAGE_KEY_PREVIEW_QUALITY = getAppPrefKey(
   'preview-quality-mode'
 );
 export const STORAGE_KEY_RECOVERY_SOURCE = getAppPrefKey('recovery-source');
-export const STORAGE_KEY_RECOVERY_TIMESTAMP = getAppPrefKey(
-  'recovery-timestamp'
-);
+export const STORAGE_KEY_RECOVERY_TIMESTAMP =
+  getAppPrefKey('recovery-timestamp');
 export const STORAGE_KEY_STATUS_BAR = getAppPrefKey('status-bar');
 export const STORAGE_KEY_MODEL_COLOR = getAppPrefKey('model-color');
 export const STORAGE_KEY_MODEL_COLOR_ENABLED = getAppPrefKey(
@@ -295,9 +294,8 @@ export const STORAGE_KEY_CONTRAST = getAppPrefKey('contrast');
 export const STORAGE_KEY_MODEL_APPEARANCE_ENABLED = getAppPrefKey(
   'model-appearance-enabled'
 );
-export const STORAGE_KEY_PARAM_PANEL_COLLAPSED = getDrawerStateKey(
-  'parameters'
-);
+export const STORAGE_KEY_PARAM_PANEL_COLLAPSED =
+  getDrawerStateKey('parameters');
 export const STORAGE_KEY_LAYOUT_SIZES = getAppPrefKey('layout-sizes');
 
 // --- Preview settings (preview.js) ---

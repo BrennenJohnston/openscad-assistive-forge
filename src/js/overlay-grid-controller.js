@@ -9,11 +9,7 @@ import { stateManager } from './state.js';
 import { announceImmediate } from './announcer.js';
 import { escapeHtml } from './html-utils.js';
 import * as SharedImageStore from './shared-image-store.js';
-import {
-  getAppPrefKey,
-  safeGetItem,
-  safeSetItem,
-} from './storage-keys.js';
+import { getAppPrefKey, safeGetItem, safeSetItem } from './storage-keys.js';
 
 const STORAGE_KEY_OVERLAY_ENABLED = getAppPrefKey('overlay-enabled');
 const STORAGE_KEY_OVERLAY_OPACITY = getAppPrefKey('overlay-opacity');

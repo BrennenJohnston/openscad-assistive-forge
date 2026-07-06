@@ -8,11 +8,7 @@
  * @license GPL-3.0-or-later
  */
 
-import {
-  getAppPrefKey,
-  safeGetItem,
-  safeSetItem,
-} from './storage-keys.js';
+import { getAppPrefKey, safeGetItem, safeSetItem } from './storage-keys.js';
 import { announceImmediate } from './announcer.js';
 
 const RECENT_FILES_KEY = getAppPrefKey('recent-files');

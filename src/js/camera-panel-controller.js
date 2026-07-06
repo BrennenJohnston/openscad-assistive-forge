@@ -11,11 +11,7 @@
  */
 
 import { announceImmediate } from './announcer.js';
-import {
-  getDrawerStateKey,
-  safeGetItem,
-  safeSetItem,
-} from './storage-keys.js';
+import { getDrawerStateKey, safeGetItem, safeSetItem } from './storage-keys.js';
 
 // Storage keys using standardized naming convention
 const STORAGE_KEY_COLLAPSED = getDrawerStateKey('camera');
