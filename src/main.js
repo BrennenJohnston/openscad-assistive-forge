@@ -107,6 +107,7 @@ import {
 import {
   isEnabled as _isEnabled,
   debugFlags,
+  setUserPreference,
   FLAGS as _FLAGS,
 } from './js/feature-flags.js';
 import { initSearchableCombobox } from './js/searchable-combobox.js';
@@ -349,7 +350,7 @@ async function initApp() {
     localStorage.setItem(STORAGE_KEY_PREVIEW_QUALITY, 'fast');
     // Disable CodeMirror in recovery mode to reduce memory footprint.
     // The user can re-enable it manually from settings after recovery.
-    localStorage.setItem('openscad-forge-flag-codemirror_editor', 'false');
+    setUserPreference('codemirror_editor', false);
 
     // Clean up crash detection flags
     localStorage.removeItem('openscad-forge-wasm-init-started');

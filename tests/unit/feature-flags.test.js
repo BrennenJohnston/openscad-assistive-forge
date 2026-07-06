@@ -134,6 +134,17 @@ describe('Feature Flags', () => {
 
       expect(isEnabled('expert_mode')).toBe(true);
     });
+
+    it('should disable codemirror_editor via setUserPreference (recovery mode path)', () => {
+      // Recovery mode disables CodeMirror through setUserPreference —
+      // this guards against regressing to a raw localStorage key no one reads.
+      expect(isEnabled('codemirror_editor')).toBe(true);
+
+      const result = setUserPreference('codemirror_editor', false);
+
+      expect(result).toBe(true);
+      expect(isEnabled('codemirror_editor')).toBe(false);
+    });
   });
 
   describe('URL overrides', () => {
