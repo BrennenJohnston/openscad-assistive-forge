@@ -104,6 +104,7 @@ import {
   keyboardConfig,
   initShortcutsModal,
 } from './js/keyboard-config.js';
+import { applyAriaKeyshortcuts } from './js/keyboard-shortcuts-binder.js';
 import {
   isEnabled as _isEnabled,
   debugFlags,
@@ -922,6 +923,13 @@ async function initApp() {
 
   // Initialize configurable keyboard shortcuts
   initKeyboardShortcuts();
+
+  // Advertise shortcuts to assistive technology (MC-1) and keep the
+  // attributes current when the user re-maps a shortcut.
+  applyAriaKeyshortcuts(keyboardConfig.getAllShortcuts());
+  keyboardConfig.addChangeListener((shortcuts) =>
+    applyAriaKeyshortcuts(shortcuts)
+  );
 
   // Initialize saved projects UI controller
   // updateCompanionSaveButton is wrapped because companionFilesCtrl is
