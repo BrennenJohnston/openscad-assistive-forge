@@ -3158,7 +3158,7 @@ async function initApp() {
         await renderController.init({
           assetBaseUrl,
           onProgress: (percent, message) => {
-            console.log(`[WASM Init] ${percent}% - ${message}`);
+            console.log(`[WASM Init] ${message}`);
             updateWasmLoadingProgress(wasmLoadingOverlay, percent, message);
           },
         });
@@ -3221,6 +3221,10 @@ async function initApp() {
     overlay.setAttribute('aria-live', 'polite');
     overlay.setAttribute('aria-label', 'Loading OpenSCAD engine');
 
+    overlay.setAttribute('aria-busy', 'true');
+
+    // Init progress is indeterminate — stage messages only, no percentages
+    // (the worker has no real measurement to report).
     overlay.innerHTML = `
       <div class="wasm-loading-content">
         <div class="wasm-loading-spinner">
@@ -3230,9 +3234,9 @@ async function initApp() {
         <p class="wasm-loading-message">Initializing...</p>
         <div class="wasm-loading-progress-container">
           <div class="wasm-loading-progress-bar">
-            <div class="wasm-loading-progress-fill" style="width: 0%"></div>
+            <div class="wasm-loading-progress-fill indeterminate"></div>
           </div>
-          <span class="wasm-loading-progress-text">0%</span>
+          <span class="wasm-loading-progress-text"></span>
         </div>
         <p class="wasm-loading-hint">This may take a moment on first load (~15-30MB download)</p>
       </div>

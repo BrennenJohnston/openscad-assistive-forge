@@ -404,9 +404,9 @@ export class RenderController {
       };
 
       try {
-        // Report start of initialization
+        // Report start of initialization (indeterminate — no real measurement)
         if (onProgress) {
-          onProgress(0, 'Starting OpenSCAD engine...');
+          onProgress(-1, 'Starting OpenSCAD engine...');
         }
 
         // Create worker (inline URL keeps Vite worker bundling intact).
@@ -447,9 +447,9 @@ export class RenderController {
           failInit(initError);
         };
 
-        // Report WASM download starting
+        // Report WASM download starting (indeterminate)
         if (onProgress) {
-          onProgress(5, 'Loading WASM module (~15-30MB)...');
+          onProgress(-1, 'Loading WASM module (~15-30MB)...');
         }
 
         // Send init message
@@ -585,10 +585,9 @@ export class RenderController {
       case 'PROGRESS':
         // Handle init progress (requestId === 'init')
         if (payload.requestId === 'init' && onInitProgress) {
-          // Map init progress: 0-100 based on stages
-          // Worker sends 0% at start, we map to reasonable progress
-          const initPercent = Math.min(90, payload.percent + 10); // 10-90% during init
-          onInitProgress(initPercent, payload.message);
+          // Init progress is indeterminate (percent: -1) — pass through
+          // untouched so the UI shows stage messages without fake numbers.
+          onInitProgress(payload.percent, payload.message);
         } else if (this.currentRequest && this.currentRequest.onProgress) {
           this.currentRequest.onProgress(payload.percent, payload.message);
         }

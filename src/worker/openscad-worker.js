@@ -293,11 +293,13 @@ async function initWASM(baseUrl = '', cachedCapabilities = null) {
     if (import.meta.env.DEV)
       console.log('[Worker] Asset base URL:', assetBaseUrl);
 
+    // Init progress is indeterminate (percent: -1): stage milestones are not
+    // tied to any real measurement, so only the stage message is honest.
     self.postMessage({
       type: 'PROGRESS',
       payload: {
         requestId: 'init',
-        percent: 5,
+        percent: -1,
         message: 'Loading official OpenSCAD WASM with Manifold...',
       },
     });
@@ -382,7 +384,7 @@ async function initWASM(baseUrl = '', cachedCapabilities = null) {
       type: 'PROGRESS',
       payload: {
         requestId: 'init',
-        percent: 20,
+        percent: -1,
         message: 'Initializing WebAssembly module...',
       },
     });
@@ -421,7 +423,7 @@ async function initWASM(baseUrl = '', cachedCapabilities = null) {
       type: 'PROGRESS',
       payload: {
         requestId: 'init',
-        percent: 50,
+        percent: -1,
         message: 'Waiting for WebAssembly to be ready...',
       },
     });
@@ -440,7 +442,7 @@ async function initWASM(baseUrl = '', cachedCapabilities = null) {
       type: 'PROGRESS',
       payload: {
         requestId: 'init',
-        percent: 75,
+        percent: -1,
         message: 'Loading fonts for text() support...',
       },
     });
@@ -465,7 +467,7 @@ async function initWASM(baseUrl = '', cachedCapabilities = null) {
         type: 'PROGRESS',
         payload: {
           requestId: 'init',
-          percent: 85,
+          percent: -1,
           message: 'Checking rendering capabilities...',
         },
       });
@@ -480,7 +482,7 @@ async function initWASM(baseUrl = '', cachedCapabilities = null) {
       type: 'PROGRESS',
       payload: {
         requestId: 'init',
-        percent: 95,
+        percent: -1,
         message: 'Finalizing initialization...',
       },
     });
