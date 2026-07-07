@@ -36,7 +36,27 @@ I treat accessibility bugs as "real bugs". A few highlights:
 
 More detail lives in `docs/guides/ACCESSIBILITY_GUIDE.md`.
 
-## Run locally
+## Install as a desktop app (offline use)
+
+You don't need to install anything to use this -- but you can. Visit the live
+demo, click your browser's install icon (right side of the address bar in
+Chrome or Edge), and you have a desktop app that lives in your Start menu /
+Applications folder and works fully offline. No installer file, no admin
+rights, no IT executable approval needed.
+
+See `docs/guides/RUN_OFFLINE_GUIDE.md` for full instructions, including a
+"before you travel" workshop checklist and a Chrome / Edge group-policy
+snippet for IT-managed devices.
+
+## For organizations and IT teams
+
+If your IT or security team needs to evaluate the site before they will
+allowlist it, hand them `docs/guides/IT_APPROVAL_GUIDE.md`. It covers the
+CSP and other response headers verbatim, the (very short) data-handling
+story, exact network requirements, supply-chain controls, accessibility
+conformance, and a copy-paste approval checklist.
+
+## Develop locally
 
 ```bash
 git clone https://github.com/BrennenJohnston/openscad-assistive-forge.git
