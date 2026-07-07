@@ -41,7 +41,6 @@ export default defineConfig({
         'src/js/image-measurement.js',
         // Alt-view canvas rendering internals — require real browser/canvas; tested via E2E
         'src/js/_hfm.js',
-        'src/js/_hfm-lut.js',
         // Input sequence detector (easter egg) — event-driven, tested via E2E
         'src/js/_seq.js'
       ],

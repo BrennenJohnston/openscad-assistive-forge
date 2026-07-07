@@ -3029,14 +3029,12 @@ details summary:focus,
     gap: var(--space-xs);
   }
 
-  .camera-drawer-section.camera-drawer-contrast,
-  .camera-drawer-section.camera-drawer-font-scale {
+  .camera-drawer-section.hfm-slider-section {
     grid-column: 1 / -1;
     align-items: stretch;
   }
 
-  .camera-drawer-section.camera-drawer-contrast .slider-container,
-  .camera-drawer-section.camera-drawer-font-scale .slider-container {
+  .camera-drawer-section.hfm-slider-section .slider-container {
     width: 100%;
   }
 

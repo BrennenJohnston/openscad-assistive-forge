@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Alt View on-demand rendering** — the ASCII conversion now runs only when the camera moves, auto-rotate is active, or a setting changes (dirty-flag + `invalidate()` API with a 1 Hz self-healing fallback tick), dropping idle Alt View cost from a continuous ~30 fps conversion loop to near zero
+- **Alt View glyph atlas** — glyphs are pre-rendered once into a phosphor-tinted atlas (from `--color-accent`) and painted with `drawImage` blits at device-pixel resolution; shape vectors are computed from the same atlas bitmap so glyphs align with their vectors, descenders no longer overflow rows, and output is crisp on HiDPI displays
+- **Alt View Afterglow slider** — a third slider (0–100%) joins Contrast and Font Size in the camera panel and mobile drawer; hidden under `prefers-reduced-motion`
+- **Alt View unlock announcement** — unlocking the easter egg now announces itself to screen-reader users via the live region
+- **CRT power-on animation** — a one-shot ~300 ms scale-in/brightness flash plays when Alt View is enabled (skipped under `prefers-reduced-motion`)
+
 - **SVG transform baking** — `transform` attributes (including nested `<g>` chains) are composed via the new `transformation-matrix` dependency and baked into path data during parsing, so rotated/translated/scaled shapes keep their position through preparation instead of collapsing to the origin; unparseable transforms produce a per-element warning and route to the editor
 - **Unicode-safe SVG encoding** — new `svg-text-encoding.js` (`svgToDataUrl`/`dataUrlToText`) replaces raw `btoa`/`atob` at every SVG encode/decode site, so SVGs with accented characters, CJK text, or emoji no longer throw `InvalidCharacterError`
 - **SVG editor role color-coding** — a translucent tint layer color-codes every shape by its assigned role (printed / cut-out / ignored), with a header toggle, a three-chip legend, and "Original" / "Will print as" pane captions
@@ -23,6 +29,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Alt View engine follows the researched pipeline** — the 1.77M-entry precomputed lookup table (`_hfm-lut.js`, ~250 ms rebuild on every font-metric change) is replaced by a lazily-filled cache (`_hfm-lookup.js`); the directional-contrast neighborhood now maps each internal sample to a small local set of external samples (crisper edges); sampling drops from 34 to 16 taps per cell using bilinear-downscale area averaging; per-cell brightness colors are removed in favor of a single phosphor color per theme (glyph density carries the lightness signal) with an optional CSS bloom on the overlay canvas
+- **Alt View controller simplified** — device auto-calibration and browser-zoom compensation (~300 lines of overlapping adaptive systems) are removed; first-enable defaults are plain (contrast 100%, size 100%, glow 0%) with saved values honored; setting writes to localStorage are debounced; the Contrast/Font Size sliders now actually appear while Alt View is enabled (their `setEnabled` previously ignored its argument); status bar text tightened to `[ALT VIEW] EDGE 100% · SIZE 100% · GLOW 0%`
+- **Relocated non-theme exports out of `hfm-controller.js`** — `sanitizeUrlParams` → `file-param-resolver.js`, `exportFormatFromMenu` → `file-actions-controller.js`, `applyToolbarModeVisibility` → `toolbar-menu-controller.js`
+- **Mono scanline overlay layering** — the CRT scanline pseudo-element drops from z-index 9999 to 900 so modals and toasts render above it, and no longer pins a permanent GPU layer via `will-change`
 - **Simple SVGs bypass flattening (lossless by default)** — when every element is dark/foreground with no transforms-gone-wrong, gradients, or clip-paths, the original file is used as-is (OpenSCAD unions overlapping shapes natively); multi-shape designs like Paw, Sun, and Music note no longer lose parts to a destructive union
 - **"Needs review" no longer swaps in a prepared file silently** — when the analyzer recommends the editor, the original SVG is used until the user explicitly clicks Apply; closing the editor (Escape or ×) now counts as "Keep original"
 - **SVG prep metadata no longer persists the analysis object** — live DOM references made restored `prepAnalysis` objects crash the editor; the raw SVG is re-analyzed on project restore instead
@@ -45,6 +55,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Theme switch while Alt View is enabled** — the theme listener passed the raw light/dark theme to the preview instead of the mono-aware key, flipping the WebGL scene to a bright background and muddying the ASCII output; it now uses `detectTheme()` and re-tints the glyph atlas on theme change
+- **Emoji-swap button accessible names** — controls whose emoji labels are swapped for bracketed text in the mono variant now carry explicit `aria-label`s (unlock-limits toggle, features-guide example buttons, accessibility-guide link), so screen readers hear one stable name instead of emoji + bracket concatenation
 - **Charm Customizer default design import** — `nasif_charm_maker.scad` referenced `svg-library/heart.svg`, a path that never matched the mounted basename, so first render always warned "Can't open file"; the SCAD default and manifest gallery options now use basenames, `design_2d()` guards against an empty `design_file`, and the gallery pre-selects the default design
 - **SVG editor area highlight rebuilt** — hovering an object row now draws the shape's actual path into an SVG overlay (replacing a dead CSS attribute-selector approach that never rendered), so highlights work for all shapes including individual subpaths of compound paths
 - **`style="fill:…"` and inherited paints respected** — fill/stroke are resolved from the inline `style` attribute and ancestor elements per SVG precedence, so Inkscape/Illustrator exports classify correctly instead of every shape defaulting to "black"

@@ -1,56 +1,95 @@
 /**
  * @license GPL-3.0-or-later
  */
-// Canvas-based character painter module
+// Canvas painter for the alternate ASCII view.
 //
-// Replaces the <pre> textContent overlay with a <canvas> element so each
-// character can be drawn with an individual phosphor colour derived from
-// the source image luminance at that cell's centre.
+// Glyphs are pre-rendered once into a single-row atlas tinted with the
+// current phosphor color (--color-accent), then painted per frame with
+// drawImage blits. The atlas is the single source of truth for glyph
+// placement: shape vectors are computed from the same bitmap that gets
+// painted, so glyphs always align with the shapes they were matched
+// against.
+
+/** Printable ASCII 32-126 (95 glyphs) — stakeholder directive: ASCII only. */
+export const GLYPH_COUNT = 95;
+export const FIRST_CHAR_CODE = 32;
+/** Atlas index of the space character (blank cell — skipped when painting). */
+export const SPACE_INDEX = 0;
 
 /**
- * Detect whether the current mono theme is the amber (light) variant.
+ * Read the phosphor color from the active theme.
+ * Green (#00ff00) in the dark variant, amber (#ffb000) in light — both are
+ * carried by --color-accent under [data-ui-variant='mono'].
  *
- * Phase 1 guarantees `data-theme` is always 'light' or 'dark' (never absent),
- * but we fall back to the system color-scheme preference defensively in case
- * the attribute is read before theme-manager initializes.
- *
- * @returns {boolean}
+ * @returns {string} CSS color
  */
-function _isAmberTheme() {
-  const attr = document.documentElement.getAttribute('data-theme');
-  if (attr === 'light' || attr === 'dark') return attr === 'light';
-  return !window.matchMedia('(prefers-color-scheme: dark)').matches;
+export function getPhosphorColor() {
+  try {
+    const val = getComputedStyle(document.documentElement)
+      .getPropertyValue('--color-accent')
+      .trim();
+    if (val) return val;
+  } catch (_) {
+    // getComputedStyle unavailable (headless test environment)
+  }
+  return '#00ff00';
 }
 
 /**
- * Map a source-image luminance value [0, 1] to a phosphor colour string.
- * Green theme : authentic P31 phosphor (pure green channel)
- * Amber theme : authentic P3 phosphor (warm amber — #FFB000 at full brightness)
+ * Build a glyph atlas: one offscreen canvas containing all 95 printable
+ * ASCII glyphs in a single row, each centered in its own cell and tinted
+ * with the given color.
  *
- * A small minimum luminance floor (0.08) keeps dark cells subtly visible so
- * the overlay does not produce invisible blank spots.
+ * Cells are sized at device-pixel resolution (charW/charH are CSS px,
+ * multiplied by dpr) so painting is a 1:1 blit on HiDPI displays.
  *
- * @param {number} lum - perceived luminance in [0, 1]
- * @param {boolean} amber - true for amber phosphor, false for green
- * @returns {string} CSS colour string
+ * @param {Object} opts
+ * @param {string} opts.fontFamily
+ * @param {number} opts.fontSizePx - font size in CSS px
+ * @param {number} opts.charW - character cell width in CSS px
+ * @param {number} opts.charH - character cell height in CSS px
+ * @param {number} opts.dpr - device pixel ratio (clamp before calling)
+ * @param {string} opts.color - phosphor tint color
+ * @returns {{ canvas: HTMLCanvasElement, cellW: number, cellH: number,
+ *             dpr: number, color: string }}
  */
-function _phosphorColor(lum, amber) {
-  const l = Math.max(0.08, lum); // floor prevents invisible dark chars
-  if (amber) {
-    // #FFB000 at full: rgb(255, 176, 0)
-    return `rgb(${Math.round(l * 255)},${Math.round(l * 176)},0)`;
+export function buildGlyphAtlas({
+  fontFamily,
+  fontSizePx,
+  charW,
+  charH,
+  dpr,
+  color,
+}) {
+  const cellW = Math.max(1, Math.round(charW * dpr));
+  const cellH = Math.max(1, Math.round(charH * dpr));
+
+  const canvas = document.createElement('canvas');
+  canvas.width = GLYPH_COUNT * cellW;
+  canvas.height = cellH;
+
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = color;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = `${fontSizePx * dpr}px ${fontFamily}`;
+
+  for (let i = 0; i < GLYPH_COUNT; i++) {
+    const ch = String.fromCharCode(FIRST_CHAR_CODE + i);
+    ctx.fillText(ch, i * cellW + cellW / 2, cellH / 2);
   }
-  return `rgb(0,${Math.round(l * 255)},0)`;
+
+  return { canvas, cellW, cellH, dpr, color };
 }
 
 /**
  * Create and attach an accessible, pointer-transparent <canvas> overlay
- * positioned to cover the preview container identically to the old <pre>.
+ * positioned to cover the preview container.
  *
- * Also creates a second off-screen persistence canvas used by §4d afterglow.
- * If the persistence canvas cannot be created (e.g. memory pressure) the
- * returned `persistCanvas`/`persistCtx` will be null — `paintFrame` degrades
- * gracefully to hard-clear in that case.
+ * Also creates an off-screen persistence canvas used by the optional
+ * afterglow effect. If it cannot be created the returned persistCanvas /
+ * persistCtx are null and paintFrame degrades to hard-clear.
  *
  * @param {HTMLElement} container - the preview container element
  * @returns {{
@@ -63,6 +102,7 @@ function _phosphorColor(lum, amber) {
 export function createOverlay(container) {
   const canvas = document.createElement('canvas');
   canvas.setAttribute('aria-hidden', 'true');
+  canvas.className = 'hfm-overlay-canvas';
   canvas.style.cssText = `
     position: absolute;
     inset: 0;
@@ -95,103 +135,61 @@ export function createOverlay(container) {
 }
 
 /**
- * Resize the overlay canvas (and optional persistence canvas) to match new
- * container dimensions. Should be called whenever the container resizes.
+ * Resize the overlay canvas (and optional persistence canvas) with a
+ * DPR-aware backing store: the bitmap is cssW*dpr x cssH*dpr while the
+ * element is styled at CSS size, keeping glyphs crisp on HiDPI displays.
  *
  * @param {HTMLCanvasElement} canvas
- * @param {number} width - container pixel width
- * @param {number} height - container pixel height
+ * @param {number} cssW - container width in CSS px
+ * @param {number} cssH - container height in CSS px
+ * @param {number} dpr - device pixel ratio (clamp before calling)
  * @param {HTMLCanvasElement|null} [persistCanvas]
  */
-export function resizeOverlay(canvas, width, height, persistCanvas) {
-  canvas.width = width;
-  canvas.height = height;
+export function resizeOverlay(canvas, cssW, cssH, dpr, persistCanvas) {
+  const w = Math.max(1, Math.round(cssW * dpr));
+  const h = Math.max(1, Math.round(cssH * dpr));
+  canvas.width = w;
+  canvas.height = h;
+  if (canvas.style) {
+    canvas.style.width = `${cssW}px`;
+    canvas.style.height = `${cssH}px`;
+  }
   if (persistCanvas) {
-    persistCanvas.width = width;
-    persistCanvas.height = height;
+    persistCanvas.width = w;
+    persistCanvas.height = h;
   }
 }
 
 /**
- * Sample per-cell phosphor colour strings from the downsampled source image.
+ * Paint one frame of ASCII art by blitting glyphs from the atlas.
  *
- * Reads the average luminance at each cell's centre pixel from the flat
- * Uint8ClampedArray returned by ctx.getImageData().data.
+ * Blank cells (space) are skipped — typically most of the frame. Destination
+ * coordinates are truncated to integers to keep glyph edges crisp.
  *
- * @param {Uint8ClampedArray} imgData - RGBA pixel data from the sample canvas
- * @param {number} imgW - width of the sample canvas in pixels
- * @param {number} cellW - cell width in sample-canvas pixels
- * @param {number} cellH - cell height in sample-canvas pixels
+ * Afterglow: when persistCanvas/persistCtx are provided and persistFade > 0,
+ * the previous frame is composited on top at persistFade opacity and the
+ * combined result is copied back for the next frame. Degrades gracefully to
+ * hard-clear when the persistence canvas is unavailable.
+ *
+ * @param {CanvasRenderingContext2D} ctx - overlay 2D context (DPR-sized)
+ * @param {Int16Array|number[]} glyphIndices - flat [row * cols + col] atlas indices
  * @param {number} cols
  * @param {number} rows
- * @param {boolean} [amber] - true for amber phosphor (defaults to theme detection)
- * @returns {string[]} flat array [row * cols + col] of css colour strings
- */
-export const QUANT_LEVELS = 32;
-const _QUANT_STEP = 1 / QUANT_LEVELS;
-
-export function sampleColors(imgData, imgW, cellW, cellH, cols, rows, amber) {
-  const useAmber = amber !== undefined ? amber : _isAmberTheme();
-  const colors = new Array(rows * cols);
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      const px = Math.min(imgW - 1, Math.round((c + 0.5) * cellW));
-      const py = Math.min(
-        // imgH is implied by imgData.length / (imgW * 4)
-        imgData.length / (imgW * 4) - 1,
-        Math.round((r + 0.5) * cellH)
-      );
-      const idx = (py * imgW + px) * 4;
-      // perceived luminance (ITU-R BT.709)
-      const lum =
-        (0.2126 * imgData[idx] +
-          0.7152 * imgData[idx + 1] +
-          0.0722 * imgData[idx + 2]) /
-        255;
-      // Quantize to QUANT_LEVELS discrete levels to collapse ~5K unique colors to ≤32
-      const qLum = Math.round(lum / _QUANT_STEP) * _QUANT_STEP;
-      colors[r * cols + c] = _phosphorColor(qLum, useAmber);
-    }
-  }
-  return colors;
-}
-
-/**
- * Paint one frame of ASCII art onto the canvas.
- *
- * Each character in `chars` is rendered with the pre-computed phosphor colour
- * from the corresponding entry in `colors`. Assumes canvas dimensions have
- * already been set to (cols * charW) × (rows * charH) via resizeOverlay().
- *
- * §4d Phosphor afterglow: when `persistCanvas`/`persistCtx` are provided and
- * `persistFade` > 0, the previous frame stored in `persistCanvas` is composited
- * on top of the new frame at `persistFade` opacity, producing the characteristic
- * cool-retro-term trail. The result is then copied back to `persistCanvas`.
- *
- * Degrades gracefully: if `persistCanvas` is null, falls back to the original
- * hard-clear behaviour regardless of `persistFade`.
- *
- * @param {CanvasRenderingContext2D} ctx
- * @param {string[]} chars - flat array [row * cols + col] of single characters
- * @param {string[]} colors - flat array of CSS colour strings (same indexing)
- * @param {number} cols
- * @param {number} rows
- * @param {number} charW - character cell width in overlay pixels
- * @param {number} charH - character cell height in overlay pixels
- * @param {string} fontStr - full CSS font string, e.g. '10px ui-monospace'
- * @param {HTMLCanvasElement|null} [persistCanvas] - off-screen persistence canvas
+ * @param {{ canvas: HTMLCanvasElement, cellW: number, cellH: number, dpr: number }} atlas
+ * @param {number} charW - character cell width in CSS px
+ * @param {number} charH - character cell height in CSS px
+ * @param {HTMLCanvasElement|null} [persistCanvas]
  * @param {CanvasRenderingContext2D|null} [persistCtx]
- * @param {number} [persistFade=0] - blending factor 0 (no trail) → 1 (never fades)
+ * @param {number} [persistFade=0] - 0 (no trail) to 1 (never fades)
  */
 export function paintFrame(
   ctx,
-  chars,
-  colors,
+  glyphIndices,
   cols,
   rows,
+  atlas,
   charW,
   charH,
-  fontStr,
   persistCanvas,
   persistCtx,
   persistFade
@@ -201,39 +199,38 @@ export function paintFrame(
       ? Math.max(0, Math.min(1, persistFade))
       : 0;
 
-  // 1. Draw new frame
-  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-  ctx.font = fontStr;
-  ctx.textBaseline = 'top';
+  const { canvas: atlasCanvas, cellW, cellH, dpr } = atlas;
+  const stepX = charW * dpr;
+  const stepY = charH * dpr;
 
-  // Group cells by color to minimize fillStyle switches (≤QUANT_LEVELS changes vs ~5K)
-  const colorGroups = new Map();
-  for (let i = 0; i < chars.length; i++) {
-    const color = colors[i];
-    let group = colorGroups.get(color);
-    if (!group) {
-      group = [];
-      colorGroups.set(color, group);
-    }
-    group.push(i);
-  }
-  for (const [color, indices] of colorGroups) {
-    ctx.fillStyle = color;
-    for (const i of indices) {
-      const col = i % cols;
-      const row = (i / cols) | 0;
-      ctx.fillText(chars[i], (col * charW) | 0, (row * charH) | 0);
+  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+
+  for (let row = 0; row < rows; row++) {
+    const base = row * cols;
+    const dy = (row * stepY) | 0;
+    for (let col = 0; col < cols; col++) {
+      const idx = glyphIndices[base + col];
+      if (idx === SPACE_INDEX) continue;
+      ctx.drawImage(
+        atlasCanvas,
+        idx * cellW,
+        0,
+        cellW,
+        cellH,
+        (col * stepX) | 0,
+        dy,
+        cellW,
+        cellH
+      );
     }
   }
 
   if (fade > 0) {
-    // 2. Composite previous persistence frame on top at fade opacity
     const prevAlpha = ctx.globalAlpha;
     ctx.globalAlpha = fade;
     ctx.drawImage(persistCanvas, 0, 0);
     ctx.globalAlpha = prevAlpha;
 
-    // 3. Copy combined result back to persistence canvas for next frame
     persistCtx.clearRect(0, 0, persistCanvas.width, persistCanvas.height);
     persistCtx.drawImage(ctx.canvas, 0, 0);
   }

@@ -170,11 +170,17 @@ import { getModeManager } from './js/mode-manager.js';
 // UI Mode Controller - Basic/Advanced interface layout switching
 import { getUIModeController } from './js/ui-mode-controller.js';
 // Toolbar Menu Controller - File|Edit|Design|View|Window|Help menu bar
-import { getToolbarMenuController } from './js/toolbar-menu-controller.js';
+import {
+  getToolbarMenuController,
+  applyToolbarModeVisibility,
+} from './js/toolbar-menu-controller.js';
 import { initParamDetailController } from './js/param-detail-controller.js';
 import { initOverlayGridController } from './js/overlay-grid-controller.js';
 import { initSavedProjectsUI } from './js/saved-projects-ui.js';
-import { getFileActionsController } from './js/file-actions-controller.js';
+import {
+  getFileActionsController,
+  exportFormatFromMenu,
+} from './js/file-actions-controller.js';
 import { getEditActionsController } from './js/edit-actions-controller.js';
 import { getDesignPanelController } from './js/design-panel-controller.js';
 import { getDisplayOptionsController } from './js/display-options-controller.js';
@@ -182,11 +188,7 @@ import { getEditorStateManager } from './js/editor-state-manager.js';
 import { TextareaEditor } from './js/textarea-editor.js';
 import { CodeMirrorEditor } from './js/codemirror-editor.js';
 import { showConfirmDialog } from './js/dialogs.js';
-import {
-  initHfmController,
-  exportFormatFromMenu,
-  applyToolbarModeVisibility,
-} from './js/hfm-controller.js';
+import { initHfmController } from './js/hfm-controller.js';
 import {
   EXAMPLE_DEFINITIONS,
   PROGRAM_DEFINITIONS,

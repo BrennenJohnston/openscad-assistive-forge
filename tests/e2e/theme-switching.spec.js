@@ -468,3 +468,63 @@ test.describe('Mono / Alt View Theme Switching', () => {
     expect(attrs.variant).toBeNull()
   })
 })
+
+test.describe('Alt View unlock flow (?hfm=unlock)', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/?hfm=unlock')
+    await expect(page.locator('h1')).toBeVisible()
+  })
+
+  test('injects the Alt View toggle and toggles the mono variant', async ({ page }) => {
+    const toggle = page.locator('#_hfmToggle')
+    await expect(toggle).toBeVisible()
+    await expect(toggle).toHaveAttribute('aria-pressed', 'false')
+
+    // Enable Alt View
+    await toggle.click()
+    await expect(toggle).toHaveAttribute('aria-pressed', 'true')
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          document.documentElement.getAttribute('data-ui-variant')
+        )
+      )
+      .toBe('mono')
+
+    // Disable Alt View
+    await toggle.click()
+    await expect(toggle).toHaveAttribute('aria-pressed', 'false')
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          document.documentElement.getAttribute('data-ui-variant')
+        )
+      )
+      .toBe(null)
+  })
+
+  test('theme toggle while mono keeps the variant and a black preview scene', async ({ page }) => {
+    const toggle = page.locator('#_hfmToggle')
+    await expect(toggle).toBeVisible()
+    await toggle.click()
+    await expect(toggle).toHaveAttribute('aria-pressed', 'true')
+
+    // Switch theme while Alt View is enabled
+    await page.locator('#themeToggle').click()
+    await page.waitForTimeout(500)
+
+    const state = await page.evaluate(() => {
+      const root = document.documentElement
+      return {
+        variant: root.getAttribute('data-ui-variant'),
+        bodyBg: window.getComputedStyle(document.body).backgroundColor,
+      }
+    })
+
+    // Regression for the theme-switch-while-mono bug: variant must survive
+    // and the mono palette (black background) must stay in effect.
+    expect(state.variant).toBe('mono')
+    const rgb = state.bodyBg.match(/\d+/g)?.map(Number) ?? []
+    expect(rgb[0] + rgb[1] + rgb[2]).toBeLessThan(200)
+  })
+})

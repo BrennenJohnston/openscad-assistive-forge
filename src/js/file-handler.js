@@ -53,10 +53,8 @@ import { escapeHtml } from './html-utils.js';
 import { announceError as _announceError } from './announcer.js';
 import { showErrorModal, showErrorToast } from './error-translator.js';
 import { closeTutorial } from './tutorial-sandbox.js';
-import {
-  sanitizeUrlParams,
-  applyToolbarModeVisibility,
-} from './hfm-controller.js';
+import { sanitizeUrlParams } from './file-param-resolver.js';
+import { applyToolbarModeVisibility } from './toolbar-menu-controller.js';
 import { isEnabled } from './feature-flags.js';
 import { prepareSvg, needsPreparation } from './svg-preparer.js';
 import { svgToDataUrl, dataUrlToText } from './svg-text-encoding.js';
@@ -1371,7 +1369,9 @@ export function initFileHandler({
         themeManager.addListener((theme, activeTheme, highContrast) => {
           const pm = getPreviewManager();
           if (pm) {
-            pm.updateTheme(activeTheme, highContrast);
+            // detectTheme() returns mono-aware keys, keeping the WebGL scene
+            // black while Alt View is active (activeTheme is only light/dark).
+            pm.updateTheme(pm.detectTheme(), highContrast);
 
             const modelColorPicker =
               document.getElementById('modelColorPicker');
@@ -1396,6 +1396,7 @@ export function initFileHandler({
           const root = document.documentElement;
           if (root.getAttribute('data-ui-variant') === 'mono') {
             getHfmCtrl().refreshVariantAssets();
+            getHfmCtrl().onThemeChanged();
           }
         });
       }

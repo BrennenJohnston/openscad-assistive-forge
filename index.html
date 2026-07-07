@@ -2277,7 +2277,10 @@
                   <!-- Parameter Limits Override -->
                   <div class="advanced-section">
                     <label class="advanced-toggle">
-                      <input type="checkbox" id="unlockLimitsToggle" />
+                      <input type="checkbox"
+                        id="unlockLimitsToggle"
+                        aria-label="Unlock Parameter Limits"
+                      />
                       <span>🔓 Unlock Parameter Limits</span>
                     </label>
                     <p class="advanced-hint">
@@ -5048,6 +5051,7 @@
                 class="btn btn-primary"
                 data-example="library-test"
                 data-feature-example="true"
+                aria-label="Load Library Test Example"
               >
                 📚 Load Library Test Example
               </button>
@@ -5111,6 +5115,7 @@
                 class="btn btn-primary"
                 data-example="colored-box"
                 data-feature-example="true"
+                aria-label="Load Colored Box Example"
               >
                 🎨 Load Colored Box Example
               </button>
@@ -5303,6 +5308,7 @@
                 class="btn btn-primary"
                 data-example="multi-file-box"
                 data-feature-example="true"
+                aria-label="Load Multi-file ZIP Example"
               >
                 🧩 Load Multi-file ZIP Example
               </button>
@@ -5541,6 +5547,7 @@
                 href="https://github.com/BrennenJohnston/openscad-assistive-forge/blob/main/docs/guides/ACCESSIBILITY_GUIDE.md"
                 target="_blank"
                 rel="noopener noreferrer"
+                aria-label="Full Accessibility Guide (opens in new tab)"
               >
                 📘 Full Accessibility Guide (opens in new tab)
               </a>
@@ -5593,15 +5600,23 @@
             <ul class="features-list">
               <li>
                 Each cell is sampled at 6 internal points to create a "shape
-                signature"
+                signature"; directional and per-cell contrast enhancement
+                sharpens edges
               </li>
               <li>
                 Characters are matched by finding the glyph whose shape vector
-                is closest
+                is closest, using a lazily-filled lookup cache (computed on
+                first use, instant afterwards)
               </li>
               <li>
-                Per-cell and directional contrast enhancement improves edge
-                definition
+                Glyphs render in a single phosphor color (green or amber) from
+                a pre-tinted glyph atlas — character density carries the
+                brightness signal, just like a real terminal
+              </li>
+              <li>
+                Rendering is on-demand: the ASCII conversion only runs when the
+                camera moves or a setting changes, so an idle preview costs
+                almost nothing
               </li>
               <li>
                 Based on research into shape-vector ASCII rendering (credited in
@@ -5634,7 +5649,8 @@
               </div>
             </div>
             <p class="altview-adjust-legend">
-              <strong>When Pan Adjust is ON:</strong> ▲/▼ = Edge ±, ◄/► = Size ±
+              <strong>When Pan Adjust is ON:</strong> ▲/▼ = Edge ±, ◄/► = Size
+              ±, Shift+▲/▼ = Glow ±
             </p>
             <h4>Auto-Rotate (Rotate D-pad center)</h4>
             <ul class="features-list">
@@ -5654,7 +5670,7 @@
                 parameters
               </li>
             </ul>
-            <h4>Edge &amp; Size Adjustment</h4>
+            <h4>Edge, Size &amp; Glow Adjustment</h4>
             <p>
               When Pan Adjust is ON, the D-pad arrows control rendering
               parameters:
@@ -5676,33 +5692,43 @@
                 <strong>Left arrow</strong> – Decrease Size (smaller characters,
                 more columns)
               </li>
+              <li>
+                <strong>Shift + Up/Down</strong> – Adjust Glow (phosphor
+                afterglow trail; off by default)
+              </li>
             </ul>
             <p>
-              Edge range: 0.5–4.0 &nbsp;|&nbsp; Size range: 0.5–2.5
-              &nbsp;(defaults vary by device)
+              Edge range: 50%–400% &nbsp;|&nbsp; Size range: 50%–250%
+              &nbsp;|&nbsp; Glow range: 0%–100% &nbsp;(all default to plain
+              values: Edge 100%, Size 100%, Glow 0%)
+            </p>
+            <h4>Sliders</h4>
+            <p>
+              While Alt View is enabled, three sliders — Alt View Contrast,
+              Alt View Font Size, and Alt View Afterglow — appear in the
+              camera panel (and the mobile camera drawer). They mirror the
+              D-pad adjustments and stay in sync with them. The Afterglow
+              slider is hidden when your system requests reduced motion.
             </p>
             <h4>Status Bar</h4>
             <p>
-              When Alt View is active, the status bar shows current Edge and
-              Size values. Example:
-              <code>[ALT VIEW] Edge: 1.8 | Size: 1.0</code>
+              When Alt View is active, the status bar shows current values.
+              Example:
+              <code>[ALT VIEW] EDGE 100% · SIZE 100% · GLOW 0%</code>
             </p>
             <h4>Tips</h4>
             <ul class="features-list">
               <li>
-                Alt View auto-calibrates Edge and Size based on your viewport
-                size and device type
+                Double-click the Pan Adjust toggle to reset Edge, Size, and
+                Glow to their defaults
               </li>
               <li>
-                Mobile devices default to larger characters for readability
+                Your adjustments are saved and restored the next time you
+                enable Alt View
               </li>
               <li>
-                High-DPI displays can handle more detail (smaller characters,
-                sharper edges)
-              </li>
-              <li>
-                The sliders in the preview settings panel provide the same
-                adjustments as the D-pad
+                The sliders and the D-pad provide the same adjustments — use
+                whichever you prefer
               </li>
             </ul>
           </div>

@@ -289,6 +289,11 @@
     transform: none;
   }
 
+  :root[data-ui-variant='mono'] .hfm-overlay-canvas {
+    filter: none;
+    animation: none;
+  }
+
   :root[data-ui-variant='mono'] .panel-header,
   :root[data-ui-variant='mono'] .echo-drawer-label,
   :root[data-ui-variant='mono'] .preview-status-bar,
@@ -625,30 +630,6 @@
     border-radius: 0 !important;
   }
 
-  /* Alt Pan Toggle in mobile drawer — !important overrides layout.css drawer styles.
-     See also: desktop .alt-pan-toggle block below (outside this media query). */
-  :root[data-ui-variant='mono'] .alt-pan-toggle {
-    background: var(--color-bg-tertiary) !important;
-    border: 1px solid var(--color-accent) !important;
-    color: var(--color-accent) !important;
-    border-radius: 0 !important;
-  }
-
-  :root[data-ui-variant='mono'] .alt-pan-toggle svg {
-    stroke: var(--color-accent) !important;
-  }
-
-  :root[data-ui-variant='mono'] .alt-pan-toggle[aria-pressed='true'],
-  :root[data-ui-variant='mono'] .alt-pan-toggle.active {
-    background: var(--color-accent) !important;
-    color: var(--color-accent-text) !important;
-    border-color: var(--color-accent) !important;
-  }
-
-  :root[data-ui-variant='mono'] .alt-pan-toggle[aria-pressed='true'] svg,
-  :root[data-ui-variant='mono'] .alt-pan-toggle.active svg {
-    stroke: var(--color-accent-text) !important;
-  }
 }
 
 /* Preview status bar */
@@ -866,8 +847,10 @@
   background: var(--color-bg-primary);
 }
 
-/* Alt Pan adjust toggle button in Pan D-pad center (desktop).
-   See also: mobile drawer .alt-pan-toggle block inside @media (max-width: 767px) above. */
+/* Alt Pan adjust toggle button in Pan D-pad center — shared by the desktop
+   panel and the mobile drawer. variant.css loads after layout.css, so these
+   selectors win the cascade against the .camera-drawer-btn rules at equal or
+   lower specificity; no !important copies are needed. */
 :root[data-ui-variant='mono'] .alt-pan-toggle {
   background: var(--color-bg-tertiary);
   border: 1px solid var(--color-accent);
@@ -1307,8 +1290,8 @@
  * Approaches cool-retro-term aesthetic through pure CSS.
  *
  * Performance notes:
- *   - Scanline and vignette pseudo-elements use will-change: transform /
- *     position: fixed to hint GPU compositing.
+ *   - Scanline and vignette pseudo-elements are static overlays (fixed /
+ *     absolute) with no will-change, so no permanent GPU layer is pinned.
  *   - text-shadow is limited to key UI text, not applied globally.
  *   - All effects are gated behind prefers-reduced-motion and forced-colors.
  * ======================================== */
@@ -1345,12 +1328,15 @@
  * renders unobstructed without any selector restructuring.
  * Fixed position keeps scanlines viewport-locked regardless of scroll.
  * ---------------------------------------- */
+/* z-index 900 keeps the CRT glass below modal dialogs (z 1000+) and toasts
+ * (10000) so overlaid UI stays readable. No will-change: the overlay is
+ * static, and pinning a permanent viewport-sized GPU layer costs memory. */
 :root[data-ui-variant='mono'] body::after {
   content: '';
   position: fixed;
   inset: 0;
   pointer-events: none;
-  z-index: 9999;
+  z-index: 900;
   background-image: repeating-linear-gradient(
     to bottom,
     transparent 0px,
@@ -1358,7 +1344,6 @@
     var(--crt-scanline-color) 2px,
     var(--crt-scanline-color) 4px
   );
-  will-change: transform;
 }
 
 /* ----------------------------------------
@@ -1388,13 +1373,49 @@
     transparent 48%,
     var(--crt-vignette-color) 100%
   );
-  will-change: transform;
 }
 
 :root[data-ui-variant='mono'] .preview-container canvas {
   transform: scale(1);
   transform-origin: center center;
   will-change: transform;
+}
+
+/* ----------------------------------------
+ * 4d. ASCII overlay canvas: phosphor bloom + CRT power-on
+ *
+ * Bloom: a subtle drop-shadow on the ASCII canvas only restores the phosphor
+ * depth that per-cell brightness colors used to fake — glyph density is the
+ * lightness signal, bloom adds the glow.
+ *
+ * Power-on: one-shot ~300 ms vertical scale-in + brightness flash applied by
+ * the engine when Alt View is enabled. Both effects are disabled under
+ * prefers-reduced-motion and forced-colors below.
+ * ---------------------------------------- */
+:root[data-ui-variant='mono'] .hfm-overlay-canvas {
+  filter: drop-shadow(
+    0 0 3px color-mix(in srgb, var(--color-accent) 50%, transparent)
+  );
+}
+
+@keyframes crt-power-on {
+  0% {
+    transform: scaleY(0.005);
+    filter: brightness(4);
+  }
+  60% {
+    transform: scaleY(1.02);
+    filter: brightness(1.6);
+  }
+  100% {
+    transform: scaleY(1);
+    filter: brightness(1);
+  }
+}
+
+:root[data-ui-variant='mono'] .hfm-overlay-canvas.crt-power-on {
+  animation: crt-power-on 300ms ease-out;
+  transform-origin: center center;
 }
 
 /* ----------------------------------------
@@ -1446,6 +1467,11 @@
 
   :root[data-ui-variant='mono'] .preview-container canvas {
     transform: none;
+  }
+
+  :root[data-ui-variant='mono'] .hfm-overlay-canvas {
+    filter: none;
+    animation: none;
   }
 
   :root[data-ui-variant='mono'] .panel-header,

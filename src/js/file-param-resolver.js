@@ -32,6 +32,65 @@ export function isRasterImageFile(fileName) {
 }
 
 /**
+ * Sanitize URL parameters against extracted schema.
+ * @param {Object|null} extracted - Parsed schema from extractParameters()
+ * @param {Object} urlParams - Raw URL parameter values
+ * @returns {{ sanitized: Object, adjustments: Object }}
+ */
+export function sanitizeUrlParams(extracted, urlParams) {
+  const sanitized = {};
+  const adjustments = {};
+
+  for (const [key, value] of Object.entries(urlParams || {})) {
+    const schema = extracted?.parameters?.[key];
+    if (!schema) {
+      adjustments[key] = { reason: 'unknown-param', value };
+      continue;
+    }
+
+    if (Array.isArray(schema.enum)) {
+      if (!schema.enum.includes(value)) {
+        adjustments[key] = { reason: 'enum', value, allowed: schema.enum };
+        continue;
+      }
+      sanitized[key] = value;
+      continue;
+    }
+
+    if (typeof value === 'number') {
+      let nextValue = value;
+      if (schema.minimum !== undefined && nextValue < schema.minimum) {
+        adjustments[key] = {
+          reason: 'min',
+          value,
+          minimum: schema.minimum,
+          maximum: schema.maximum,
+        };
+        nextValue = schema.minimum;
+      }
+      if (schema.maximum !== undefined && nextValue > schema.maximum) {
+        adjustments[key] = {
+          reason: 'max',
+          value,
+          minimum: schema.minimum,
+          maximum: schema.maximum,
+        };
+        nextValue = schema.maximum;
+      }
+      if (schema.type === 'integer') {
+        nextValue = Math.round(nextValue);
+      }
+      sanitized[key] = nextValue;
+      continue;
+    }
+
+    sanitized[key] = value;
+  }
+
+  return { sanitized, adjustments };
+}
+
+/**
  * Check whether a parameter value is a file object from the UI.
  *
  * File params arrive as { name: string, data: string (data-URL), ... }
