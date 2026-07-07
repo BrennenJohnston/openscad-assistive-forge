@@ -245,6 +245,7 @@ export class PreviewManager {
     this._resizeHook = null;
     this._postLoadHook = null; // Called after STL is loaded
     this._postLoadListeners = []; // Multi-listener post-load event
+    this._themeChangeListeners = []; // Multi-listener theme-change event (F20)
 
     // Reference overlay (screenshot/SVG image plane under the model)
     this.referenceOverlay = null; // THREE.Mesh for the overlay plane
@@ -573,6 +574,10 @@ export class PreviewManager {
     if (this.measurementsEnabled && this.mesh) {
       this.showMeasurements();
     }
+
+    // Notify any theme-sensitive overlays (e.g. axis tick labels) so
+    // they can rebuild themselves with the new foreground color.
+    this._fireThemeChangeListeners();
 
     console.log(`[Preview] Theme updated to ${themeKey}`);
   }
@@ -4277,6 +4282,34 @@ export class PreviewManager {
         fn();
       } catch (e) {
         console.error('[Preview] post-load listener error:', e);
+      }
+    }
+  }
+
+  /**
+   * Register a listener invoked after every theme change. Used by
+   * theme-sensitive overlays (e.g. axis distance markings) so they
+   * can rebuild their textures with the new foreground color.
+   * @param {Function} fn
+   */
+  addThemeChangeListener(fn) {
+    if (typeof fn === 'function') this._themeChangeListeners.push(fn);
+  }
+
+  /** @param {Function} fn */
+  removeThemeChangeListener(fn) {
+    this._themeChangeListeners = this._themeChangeListeners.filter(
+      (l) => l !== fn
+    );
+  }
+
+  /** @private Fire all registered theme-change listeners. */
+  _fireThemeChangeListeners() {
+    for (const fn of this._themeChangeListeners) {
+      try {
+        fn();
+      } catch (e) {
+        console.error('[Preview] theme-change listener error:', e);
       }
     }
   }

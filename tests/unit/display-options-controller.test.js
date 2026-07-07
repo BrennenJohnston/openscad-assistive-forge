@@ -263,3 +263,224 @@ describe('DisplayOptionsController — post-load listener registration', () => {
     expect(() => ctrl.init()).not.toThrow();
   });
 });
+
+// ============================================================================
+// F20 — axis distance markings overlay
+// ============================================================================
+
+function makeFatThreeMock() {
+  // Extends the slim mock used above with the classes axis-tick-overlay
+  // needs (Group, BufferGeometry, sprite plumbing).
+  const base = createMockThree();
+  class MockGroup {
+    constructor() {
+      this.children = [];
+      this.name = '';
+      this.userData = {};
+      this.renderOrder = 0;
+    }
+    add(o) {
+      this.children.push(o);
+    }
+    remove(o) {
+      this.children = this.children.filter((c) => c !== o);
+    }
+  }
+  class MockBufferGeometry {
+    constructor() {
+      this.attributes = {};
+      this.dispose = vi.fn();
+    }
+    setAttribute(name, attr) {
+      this.attributes[name] = attr;
+    }
+  }
+  class MockFloat32BufferAttribute {
+    constructor(array, itemSize) {
+      this.array = Float32Array.from(array);
+      this.itemSize = itemSize;
+    }
+  }
+  class MockLineBasicMaterial {
+    constructor(opts = {}) {
+      Object.assign(this, opts);
+      this.dispose = vi.fn();
+    }
+  }
+  class MockLineSegmentsPair {
+    constructor(geometry, material) {
+      this.geometry = geometry;
+      this.material = material;
+      this.name = '';
+    }
+  }
+  class MockSpriteMaterial {
+    constructor(opts = {}) {
+      Object.assign(this, opts);
+      this.dispose = vi.fn();
+    }
+  }
+  class MockSprite {
+    constructor(material) {
+      this.material = material;
+      this.position = {
+        x: 0,
+        y: 0,
+        z: 0,
+        set(x, y, z) {
+          this.x = x;
+          this.y = y;
+          this.z = z;
+        },
+      };
+      this.scale = {
+        x: 1,
+        y: 1,
+        z: 1,
+        set(x, y, z) {
+          this.x = x;
+          this.y = y;
+          this.z = z;
+        },
+      };
+      this.userData = {};
+      this.geometry = { dispose: vi.fn() };
+    }
+  }
+  class MockCanvasTexture {
+    constructor(canvas) {
+      this.image = canvas;
+      this.needsUpdate = false;
+      this.dispose = vi.fn();
+    }
+  }
+  return {
+    ...base,
+    Group: MockGroup,
+    BufferGeometry: MockBufferGeometry,
+    Float32BufferAttribute: MockFloat32BufferAttribute,
+    LineBasicMaterial: MockLineBasicMaterial,
+    LineSegments: MockLineSegmentsPair,
+    SpriteMaterial: MockSpriteMaterial,
+    Sprite: MockSprite,
+    CanvasTexture: MockCanvasTexture,
+  };
+}
+
+function makePreviewManagerWithThemeListeners(mesh) {
+  const base = createMockPreviewManager(mesh);
+  const themeListeners = [];
+  return {
+    ...base,
+    addThemeChangeListener: vi.fn((fn) => themeListeners.push(fn)),
+    removeThemeChangeListener: vi.fn((fn) => {
+      const i = themeListeners.indexOf(fn);
+      if (i >= 0) themeListeners.splice(i, 1);
+    }),
+    _testThemeListeners: themeListeners,
+  };
+}
+
+describe('DisplayOptionsController — axis distance markings (F20)', () => {
+  let ctrl;
+  let mockThree;
+  let mockPm;
+  const mockMesh = {
+    geometry: createMockGeometry(),
+    material: createMockMaterial(),
+    position: { copy: vi.fn(), x: 0, y: 0, z: 0 },
+    rotation: { copy: vi.fn(), x: 0, y: 0, z: 0 },
+    scale: { copy: vi.fn(), x: 1, y: 1, z: 1 },
+  };
+
+  beforeEach(() => {
+    resetDisplayOptionsController();
+    localStorage.clear();
+    document.body.innerHTML = '';
+    mockThree = makeFatThreeMock();
+    mockPm = makePreviewManagerWithThemeListeners(mockMesh);
+    ctrl = new DisplayOptionsController({
+      getPreviewManager: () => mockPm,
+      getThree: () => mockThree,
+    });
+    ctrl.init();
+  });
+
+  it('starts with axisMarks disabled by default', () => {
+    expect(ctrl.get('axisMarks')).toBe(false);
+    expect(ctrl._axisTickOverlay).toBeNull();
+  });
+
+  it('enabling axisMarks builds the tick overlay group and adds it to the scene', () => {
+    ctrl.set('axisMarks', true);
+    expect(ctrl._axisTickOverlay).not.toBeNull();
+    const group = ctrl._axisTickOverlay.group;
+    expect(group.name).toBe('__axisTickOverlay');
+    expect(mockPm.scene.add).toHaveBeenCalledWith(group);
+  });
+
+  it('disabling axisMarks tears the overlay back down', () => {
+    ctrl.set('axisMarks', true);
+    const group = ctrl._axisTickOverlay.group;
+    ctrl.set('axisMarks', false);
+    expect(ctrl._axisTickOverlay).toBeNull();
+    expect(mockPm.scene.remove).toHaveBeenCalledWith(group);
+  });
+
+  it('toggling persists state to localStorage just like the other display options', () => {
+    ctrl.set('axisMarks', true);
+    expect(localStorage.getItem('test-display-axisMarks')).toBe('true');
+    ctrl.set('axisMarks', false);
+    expect(localStorage.getItem('test-display-axisMarks')).toBe('false');
+  });
+
+  it('refreshThemeSensitiveOverlays rebuilds the overlay so labels pick up new theme color', () => {
+    ctrl.set('axisMarks', true);
+    const firstOverlay = ctrl._axisTickOverlay;
+    expect(firstOverlay).not.toBeNull();
+
+    ctrl.refreshThemeSensitiveOverlays();
+    const secondOverlay = ctrl._axisTickOverlay;
+    expect(secondOverlay).not.toBeNull();
+    expect(secondOverlay).not.toBe(firstOverlay);
+  });
+
+  it('refreshThemeSensitiveOverlays is a no-op when axisMarks is off', () => {
+    expect(ctrl.get('axisMarks')).toBe(false);
+    expect(() => ctrl.refreshThemeSensitiveOverlays()).not.toThrow();
+    expect(ctrl._axisTickOverlay).toBeNull();
+  });
+
+  it('init() registers a theme-change listener on the preview manager', () => {
+    expect(mockPm.addThemeChangeListener).toHaveBeenCalledTimes(1);
+    expect(mockPm._testThemeListeners.length).toBe(1);
+  });
+
+  it('theme-change listener triggers a rebuild when axisMarks is on', () => {
+    ctrl.set('axisMarks', true);
+    const listener = mockPm._testThemeListeners[0];
+    const firstOverlay = ctrl._axisTickOverlay;
+
+    listener();
+
+    expect(ctrl._axisTickOverlay).not.toBeNull();
+    expect(ctrl._axisTickOverlay).not.toBe(firstOverlay);
+  });
+
+  it('dispose() removes the axis tick overlay from the scene', () => {
+    ctrl.set('axisMarks', true);
+    const group = ctrl._axisTickOverlay.group;
+
+    ctrl.dispose();
+
+    expect(mockPm.scene.remove).toHaveBeenCalledWith(group);
+    expect(ctrl._axisTickOverlay).toBeNull();
+  });
+
+  it('dispose() unsubscribes the theme-change listener', () => {
+    const listener = mockPm._testThemeListeners[0];
+    ctrl.dispose();
+    expect(mockPm.removeThemeChangeListener).toHaveBeenCalledWith(listener);
+    expect(mockPm._testThemeListeners).toHaveLength(0);
+  });
+});
