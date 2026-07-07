@@ -906,6 +906,63 @@
                     </svg>
                     <span class="btn-text">Import Folder</span>
                   </button>
+                  <!-- Connect Folder button (F35 Phase A) — Chromium-only.
+                       Hidden by default; shown when local_folder_sync flag is on
+                       AND showDirectoryPicker is available. -->
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-outline"
+                    id="connectFolderBtn"
+                    aria-label="Connect to a folder on disk for persistent two-way access"
+                    title="Connect to a folder (Chromium only)"
+                    hidden
+                  >
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+                    </svg>
+                    <span class="btn-text">Connect Folder</span>
+                  </button>
+                </div>
+                <!-- Folder-sync status pill (F35 Phase A). Hidden until the
+                     controller fires its first state change. aria-live so
+                     connection / restore / disconnect events are announced. -->
+                <div
+                  class="folder-sync-status"
+                  id="folderSyncStatus"
+                  role="status"
+                  aria-live="polite"
+                  hidden
+                >
+                  <span class="folder-sync-status-text" id="folderSyncStatusText"></span>
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-outline"
+                    id="folderSyncRestoreBtn"
+                    aria-label="Reconnect to the previously-connected folder"
+                    hidden
+                  >
+                    Reconnect
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-outline"
+                    id="folderSyncDisconnectBtn"
+                    aria-label="Disconnect from the connected folder"
+                    hidden
+                  >
+                    Disconnect
+                  </button>
                 </div>
               </div>
               <p class="saved-projects-description">
