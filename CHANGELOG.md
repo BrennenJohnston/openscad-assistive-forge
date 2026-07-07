@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **SVG transform baking** — `transform` attributes (including nested `<g>` chains) are composed via the new `transformation-matrix` dependency and baked into path data during parsing, so rotated/translated/scaled shapes keep their position through preparation instead of collapsing to the origin; unparseable transforms produce a per-element warning and route to the editor
+- **Unicode-safe SVG encoding** — new `svg-text-encoding.js` (`svgToDataUrl`/`dataUrlToText`) replaces raw `btoa`/`atob` at every SVG encode/decode site, so SVGs with accented characters, CJK text, or emoji no longer throw `InvalidCharacterError`
+- **SVG editor role color-coding** — a translucent tint layer color-codes every shape by its assigned role (printed / cut-out / ignored), with a header toggle, a three-chip legend, and "Original" / "Will print as" pane captions
+- **SVG editor compound-path mode** — subpaths of a single compound `<path>` get Include/Exclude radios and "Subpath N" labels instead of the meaningless Foreground/Hole/Ignore triad
+- **Unit test coverage for the SVG pipeline** — 12-design charm library sweep, transform-baking geometry checks, style/inherited-fill resolution, flatten fallback behavior, unicode round-trips, overlay highlighting, and compound-mode editor tests
+
 - **`aria-keyshortcuts` on shortcut-bearing controls** — new `keyboard-shortcuts-binder.js` annotates the render/download button, camera views, theme/expert-mode toggles, and more with WAI-ARIA shortcut syntax so screen-reader users can discover F6/F7/Control+E etc.; re-applies when shortcuts are re-mapped
 - **Safe localStorage helpers** — `safeGetItem`/`safeSetItem`/`safeRemoveItem` in `storage-keys.js` (with quota/security-error tests) replace ad-hoc try/catch across main.js, preview, camera, overlay, and settings controllers
 - **Storage-key snapshot test** — every exported `STORAGE_KEY_*` string is frozen by a unit test so user data cannot be orphaned by accidental key renames
@@ -17,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Simple SVGs bypass flattening (lossless by default)** — when every element is dark/foreground with no transforms-gone-wrong, gradients, or clip-paths, the original file is used as-is (OpenSCAD unions overlapping shapes natively); multi-shape designs like Paw, Sun, and Music note no longer lose parts to a destructive union
+- **"Needs review" no longer swaps in a prepared file silently** — when the analyzer recommends the editor, the original SVG is used until the user explicitly clicks Apply; closing the editor (Escape or ×) now counts as "Keep original"
+- **SVG prep metadata no longer persists the analysis object** — live DOM references made restored `prepAnalysis` objects crash the editor; the raw SVG is re-analyzed on project restore instead
+- **SVG status card copy** — pass-through reads "Using original (N shapes) — OpenSCAD merges these automatically", auto-prepare reads "Simplified N shapes for 3D printing", and flatten fallback warnings are surfaced on the card
 - **Error translation honors worker codes (BR-5)** — the main thread resolves worker-classified errors by `code` via `TRANSLATIONS_BY_CODE` instead of re-matching prose, so errors like `UNKNOWN_MODULE` or `OUT_OF_MEMORY` show specific guidance instead of "Something Went Wrong"
 - **WASM init progress is honestly indeterminate** — hardcoded 5→95% milestones replaced with an indeterminate bar plus stage messages; render-time estimates are labeled "estimated" and suppressed entirely at low confidence
 - **Focus trap consolidation** — the error modal uses the shared `createFocusTrap` (selector now includes `summary`); guided-tour stub and permanently disabled View-menu toggles removed
@@ -35,6 +45,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Charm Customizer default design import** — `nasif_charm_maker.scad` referenced `svg-library/heart.svg`, a path that never matched the mounted basename, so first render always warned "Can't open file"; the SCAD default and manifest gallery options now use basenames, `design_2d()` guards against an empty `design_file`, and the gallery pre-selects the default design
+- **SVG editor area highlight rebuilt** — hovering an object row now draws the shape's actual path into an SVG overlay (replacing a dead CSS attribute-selector approach that never rendered), so highlights work for all shapes including individual subpaths of compound paths
+- **`style="fill:…"` and inherited paints respected** — fill/stroke are resolved from the inline `style` attribute and ancestor elements per SVG precedence, so Inkscape/Illustrator exports classify correctly instead of every shape defaulting to "black"
+- **SVG flattening crash-hardened** — each boolean union/difference is individually guarded; shapes that fail to merge are appended verbatim with a warning instead of crashing the pipeline or silently dropping geometry
+- **SVG uploads detected by `.svg` extension** — files served with a generic MIME type (common on Windows) are now recognized as SVGs
+- **SVG editor QoL** — Apply is disabled (with a hint) when no shapes are included; preview failures show an inline "original will be kept" message instead of a blank pane; viewBox is derived from `width`/`height` when missing so zoom controls work; result-pane zoom survives preview re-renders; the editor auto-expands to fullscreen on narrow screens; selecting a new design dismisses a stale editor without firing its callbacks
 - **Recovery mode CodeMirror disable was a no-op** — it wrote a localStorage key the flag system never read; now uses `setUserPreference('codemirror_editor', false)`
 - **`escapeHtml` attribute injection** — the shared helper now escapes quotes (all five significant characters); console-panel filenames interpolated into `data-file="…"` can no longer break out of the attribute; duplicate escape implementations removed
 - **Stale version strings** — startup log derives from `__APP_VERSION__` (was hardcoded v4.1.0); sw.js drops its stale version comment

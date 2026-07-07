@@ -13463,10 +13463,47 @@ body.tutorial-body-locked {
   outline-offset: 2px;
 }
 
+/* ── Roles toggle (header) ───────────────────────────────────────────────── */
+.svg-prep-roles-toggle {
+  flex-shrink: 0;
+  min-height: var(--size-touch-target);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  padding: var(--space-2xs) var(--space-sm);
+  cursor: pointer;
+}
+
+.svg-prep-roles-toggle[aria-pressed='true'] {
+  background: var(--color-hover-bg);
+  border-color: var(--color-accent);
+}
+
+.svg-prep-roles-toggle:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
 /* ── Dual preview panes ──────────────────────────────────────────────────── */
 .svg-prep-previews {
   display: flex;
   gap: var(--space-md);
+}
+
+.svg-prep-pane-wrap {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+}
+
+.svg-prep-pane-caption {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-secondary);
 }
 
 .svg-prep-source-pane,
@@ -13493,9 +13530,89 @@ body.tutorial-body-locked {
   max-height: 300px;
 }
 
-.svg-prep-source-pane [data-prep-highlight] {
-  outline: 2px solid var(--color-focus);
-  outline-offset: 2px;
+/* Hover/focus highlight overlay (drawn as SVG paths, works everywhere) */
+.svg-prep-overlay,
+.svg-prep-role-layer {
+  pointer-events: none;
+}
+
+.svg-prep-highlight-path {
+  fill: var(--color-focus);
+  fill-opacity: 0.35;
+  stroke: var(--color-focus);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+/* Always-visible role color-coding */
+.svg-prep-role-path {
+  vector-effect: non-scaling-stroke;
+}
+
+.svg-prep-role--foreground {
+  fill: var(--color-success-text);
+  fill-opacity: 0.25;
+  stroke: var(--color-success-text);
+  stroke-width: 1;
+}
+
+.svg-prep-role--hole {
+  fill: var(--color-error-text);
+  fill-opacity: 0.3;
+  stroke: var(--color-error-text);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
+}
+
+.svg-prep-role--ignore {
+  fill: var(--color-text-secondary);
+  fill-opacity: 0.12;
+  stroke: var(--color-text-secondary);
+  stroke-width: 1;
+  stroke-opacity: 0.4;
+}
+
+/* ── Role legend ─────────────────────────────────────────────────────────── */
+.svg-prep-legend {
+  display: flex;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.svg-prep-legend[hidden] {
+  display: none;
+}
+
+.svg-prep-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs);
+}
+
+.svg-prep-legend-chip {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.svg-prep-legend-chip--foreground {
+  background: var(--color-success-text);
+  opacity: 0.55;
+}
+
+.svg-prep-legend-chip--hole {
+  background: var(--color-error-text);
+  opacity: 0.55;
+  border: 1px dashed var(--color-error-text);
+}
+
+.svg-prep-legend-chip--ignore {
+  background: var(--color-text-secondary);
+  opacity: 0.35;
 }
 
 /* ── Zoom controls ───────────────────────────────────────────────────────── */
@@ -13673,9 +13790,33 @@ body.tutorial-body-locked {
   display: flex;
   gap: var(--space-sm);
   justify-content: flex-end;
+  align-items: center;
   padding-top: var(--space-sm);
   border-top: 1px solid var(--color-border-light);
   flex-wrap: wrap;
+}
+
+.svg-prep-apply-hint {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.svg-prep-apply-hint[hidden] {
+  display: none;
+}
+
+.svg-prep-footer button[data-action='apply']:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Result preview error message ────────────────────────────────────────── */
+.svg-prep-result-error {
+  margin: 0;
+  padding: var(--space-sm);
+  font-size: var(--font-size-sm);
+  color: var(--color-error-text);
+  text-align: center;
 }
 
 /* ── Status card (inline beside file input) ──────────────────────────────── */
@@ -13702,6 +13843,17 @@ body.tutorial-body-locked {
 
 .svg-prep-status-badge[data-level='unsupported'] {
   color: var(--color-error-text);
+}
+
+.svg-prep-status-badge[data-level='error'] {
+  color: var(--color-error-text);
+}
+
+.svg-prep-status-guidance {
+  margin: var(--space-xs) 0 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  flex-basis: 100%;
 }
 
 .svg-prep-status-warnings {
@@ -13874,6 +14026,31 @@ body.tutorial-body-locked {
   border-width: 2px;
 }
 
+:root[data-high-contrast='true'] .svg-prep-highlight-path {
+  fill-opacity: 0.5;
+  stroke-width: 3;
+}
+
+:root[data-high-contrast='true'] .svg-prep-role--foreground {
+  fill-opacity: 0.4;
+  stroke-width: 2;
+}
+
+:root[data-high-contrast='true'] .svg-prep-role--hole {
+  fill-opacity: 0.45;
+  stroke-width: 2.5;
+}
+
+:root[data-high-contrast='true'] .svg-prep-role--ignore {
+  fill-opacity: 0.25;
+  stroke-opacity: 0.8;
+  stroke-width: 2;
+}
+
+:root[data-high-contrast='true'] .svg-prep-legend-chip {
+  border: 2px solid var(--color-border);
+}
+
 /* ── Dark Theme SVG Visibility ──────────────────────────────────────────── */
 :root[data-theme='dark'] .svg-prep-source-pane svg,
 :root[data-theme='dark'] .svg-prep-result-pane svg {
@@ -13953,8 +14130,10 @@ body.tutorial-body-locked {
     background: Canvas;
   }
 
-  .svg-prep-source-pane [data-prep-highlight] {
-    outline: 3px solid Highlight;
+  .svg-prep-highlight-path {
+    fill: Highlight;
+    fill-opacity: 0.4;
+    stroke: Highlight;
   }
 
   .svg-prep-role-group label {

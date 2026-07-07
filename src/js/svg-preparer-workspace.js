@@ -23,30 +23,23 @@ import { isEnabled } from './feature-flags.js';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
 const ROLE_OPTIONS = [
   { value: 'foreground', label: 'Foreground' },
   { value: 'hole', label: 'Hole' },
   { value: 'ignore', label: 'Ignore' },
 ];
 
-const SHAPE_TAGS_SET = new Set([
-  'path',
-  'polygon',
-  'polyline',
-  'line',
-  'circle',
-  'ellipse',
-  'rect',
-]);
+// Compound paths only distinguish included vs excluded subpaths —
+// "Hole" is meaningless because subpaths are concatenated, not subtracted.
+const COMPOUND_ROLE_OPTIONS = [
+  { value: 'foreground', label: 'Include' },
+  { value: 'ignore', label: 'Exclude' },
+];
 
-const NON_RENDERING_SCOPES = new Set([
-  'defs',
-  'clippath',
-  'mask',
-  'symbol',
-  'marker',
-  'pattern',
-]);
+/** Viewport width below which the editor opens fullscreen automatically. */
+const AUTO_FULLSCREEN_MAX_WIDTH = 768;
 
 // ── Utility functions ────────────────────────────────────────────────────────
 
@@ -94,25 +87,23 @@ function swatchColor(el) {
   return '#000000';
 }
 
-function isInNonRenderingScope(element) {
-  let parent = element.parentElement;
-  while (parent) {
-    if (NON_RENDERING_SCOPES.has(parent.tagName.toLowerCase())) return true;
-    parent = parent.parentElement;
-  }
-  return false;
-}
-
 function extractSvgMeta(svgString) {
   const parser = new DOMParser();
   const doc = parser.parseFromString(svgString, 'image/svg+xml');
   const svg = doc.querySelector('svg');
   if (!svg) return { viewBox: '', width: '', height: '' };
-  return {
-    viewBox: svg.getAttribute('viewBox') || '',
-    width: svg.getAttribute('width') || '',
-    height: svg.getAttribute('height') || '',
-  };
+
+  const width = svg.getAttribute('width') || '';
+  const height = svg.getAttribute('height') || '';
+  let viewBox = svg.getAttribute('viewBox') || '';
+  if (!viewBox) {
+    // Derive a viewBox from width/height (units stripped) so zoom
+    // controls and mm offsets keep working on viewBox-less SVGs.
+    const w = parseFloat(width);
+    const h = parseFloat(height);
+    if (w > 0 && h > 0) viewBox = `0 0 ${w} ${h}`;
+  }
+  return { viewBox, width, height };
 }
 
 function parseViewBox(str) {
@@ -150,6 +141,12 @@ function buildWorkspaceDom() {
   title.id = 'svg-prep-title';
   title.textContent = 'SVG Preparation Editor';
 
+  const rolesToggleBtn = document.createElement('button');
+  rolesToggleBtn.className = 'svg-prep-roles-toggle btn btn-ghost';
+  rolesToggleBtn.type = 'button';
+  rolesToggleBtn.textContent = 'Show roles';
+  rolesToggleBtn.setAttribute('aria-pressed', 'true');
+
   const fullscreenBtn = document.createElement('button');
   fullscreenBtn.className = 'svg-prep-fullscreen-btn';
   fullscreenBtn.setAttribute('aria-label', 'Open fullscreen');
@@ -182,11 +179,24 @@ function buildWorkspaceDom() {
   designWidthLabel.append(designWidthInput, ' ', designWidthUnit);
   designWidthGroup.appendChild(designWidthLabel);
 
-  header.append(title, designWidthGroup, fullscreenBtn, closeBtn);
+  header.append(
+    title,
+    designWidthGroup,
+    rolesToggleBtn,
+    fullscreenBtn,
+    closeBtn
+  );
 
   // Dual preview panes
   const previews = document.createElement('div');
   previews.className = 'svg-prep-previews';
+
+  const sourcePaneWrap = document.createElement('div');
+  sourcePaneWrap.className = 'svg-prep-pane-wrap';
+
+  const sourceCaption = document.createElement('span');
+  sourceCaption.className = 'svg-prep-pane-caption';
+  sourceCaption.textContent = 'Original';
 
   const sourcePane = document.createElement('div');
   sourcePane.className = 'svg-prep-source-pane';
@@ -195,6 +205,14 @@ function buildWorkspaceDom() {
 
   const sourceZoom = buildZoomControls('source');
   sourcePane.appendChild(sourceZoom);
+  sourcePaneWrap.append(sourceCaption, sourcePane);
+
+  const resultPaneWrap = document.createElement('div');
+  resultPaneWrap.className = 'svg-prep-pane-wrap';
+
+  const resultCaption = document.createElement('span');
+  resultCaption.className = 'svg-prep-pane-caption';
+  resultCaption.textContent = 'Will print as';
 
   const resultPane = document.createElement('div');
   resultPane.className = 'svg-prep-result-pane';
@@ -203,8 +221,26 @@ function buildWorkspaceDom() {
 
   const resultZoom = buildZoomControls('result');
   resultPane.appendChild(resultZoom);
+  resultPaneWrap.append(resultCaption, resultPane);
 
-  previews.append(sourcePane, resultPane);
+  previews.append(sourcePaneWrap, resultPaneWrap);
+
+  // Role color legend (shown under the source pane)
+  const legendRow = document.createElement('div');
+  legendRow.className = 'svg-prep-legend';
+  [
+    { role: 'foreground', label: 'Printed shape' },
+    { role: 'hole', label: 'Cut-out (hole)' },
+    { role: 'ignore', label: 'Ignored' },
+  ].forEach(({ role, label }) => {
+    const chipWrap = document.createElement('span');
+    chipWrap.className = 'svg-prep-legend-item';
+    const chip = document.createElement('span');
+    chip.className = `svg-prep-legend-chip svg-prep-legend-chip--${role}`;
+    chip.setAttribute('aria-hidden', 'true');
+    chipWrap.append(chip, document.createTextNode(label));
+    legendRow.appendChild(chipWrap);
+  });
 
   // Object list
   const objects = document.createElement('div');
@@ -227,6 +263,11 @@ function buildWorkspaceDom() {
   applyBtn.dataset.action = 'apply';
   applyBtn.textContent = 'Apply prepared SVG';
 
+  const applyHint = document.createElement('span');
+  applyHint.className = 'svg-prep-apply-hint';
+  applyHint.textContent = 'No shapes included';
+  applyHint.hidden = true;
+
   const keepBtn = document.createElement('button');
   keepBtn.className = 'btn btn-secondary';
   keepBtn.dataset.action = 'keep';
@@ -237,14 +278,14 @@ function buildWorkspaceDom() {
   resetBtn.dataset.action = 'reset';
   resetBtn.textContent = 'Reset';
 
-  footer.append(applyBtn, keepBtn, resetBtn);
+  footer.append(applyBtn, applyHint, keepBtn, resetBtn);
 
   // Fullscreen backdrop (hidden by default)
   const backdrop = document.createElement('div');
   backdrop.className = 'svg-prep-fullscreen-backdrop hidden';
   backdrop.setAttribute('aria-hidden', 'true');
 
-  root.append(header, previews, objects, warnings, footer);
+  root.append(header, previews, legendRow, objects, warnings, footer);
 
   return {
     root,
@@ -253,17 +294,22 @@ function buildWorkspaceDom() {
       title,
       designWidthGroup,
       designWidthInput,
+      rolesToggleBtn,
       fullscreenBtn,
       closeBtn,
       previews,
       sourcePane,
       resultPane,
+      sourceCaption,
+      resultCaption,
+      legendRow,
       sourceZoom,
       resultZoom,
       objects,
       warnings,
       footer,
       applyBtn,
+      applyHint,
       keepBtn,
       resetBtn,
       backdrop,
@@ -306,18 +352,24 @@ function buildZoomControls(pane) {
  * @param {HTMLElement} listEl - The .svg-prep-objects container
  * @param {Array} elements - Elements from analyzeSvg().elements
  * @param {HTMLElement} liveRegion - ARIA live region for announcements
- * @returns {string[]} Initial role assignments
+ * @param {boolean} [isCompound=false] - Compound-path mode (Include/Exclude)
+ * @returns {{roles: string[], offsets: number[]}} Initial assignments
  */
-function populateObjectList(listEl, elements, liveRegion) {
+function populateObjectList(listEl, elements, liveRegion, isCompound = false) {
   listEl.innerHTML = '';
   const roles = [];
   const offsets = [];
   const offsetEnabled = isEnabled('svg_path_offset');
+  const roleOptions = isCompound ? COMPOUND_ROLE_OPTIONS : ROLE_OPTIONS;
 
   elements.forEach((el, i) => {
-    const name = describeElement(el.element, i);
+    const name = isCompound
+      ? `Subpath ${i + 1}`
+      : describeElement(el.element, i);
     const color = swatchColor(el);
-    const role = el.autoRole || 'ignore';
+    let role = el.autoRole || 'ignore';
+    // Compound subpaths are either included or excluded
+    if (isCompound && role !== 'ignore') role = 'foreground';
     roles.push(role);
     offsets.push(0);
 
@@ -348,7 +400,7 @@ function populateObjectList(listEl, elements, liveRegion) {
     legend.textContent = `Role for ${name}`;
     fieldset.appendChild(legend);
 
-    ROLE_OPTIONS.forEach(({ value, label }) => {
+    roleOptions.forEach(({ value, label }) => {
       const lbl = document.createElement('label');
       const radio = document.createElement('input');
       radio.type = 'radio';
@@ -452,6 +504,11 @@ export function createSvgPrepWorkspace(containerEl) {
   let resultZoomCleanup = null;
   let highlightCleanup = null;
   let offsetDebounceTimer = null;
+  // True once Apply or Keep original has fired; closing without either
+  // triggers the keep-original callback so the original is never silently
+  // replaced by an auto-prepared version.
+  let resolved = false;
+  let rolesVisible = true;
 
   // ARIA live region for role-change and preview announcements
   const liveRegion = document.createElement('div');
@@ -471,20 +528,51 @@ export function createSvgPrepWorkspace(containerEl) {
     const svg = doc.querySelector('svg');
     if (!svg) return null;
 
-    const allShapes = Array.from(svg.querySelectorAll('*')).filter((el) =>
-      SHAPE_TAGS_SET.has(el.tagName.toLowerCase())
-    );
-    let renderIdx = 0;
-    for (const shape of allShapes) {
-      if (!isInNonRenderingScope(shape)) {
-        shape.setAttribute('data-prep-index', String(renderIdx));
-        renderIdx++;
-      }
+    const imported = document.importNode(svg, true);
+
+    // Ensure a usable viewBox for zoom controls on viewBox-less SVGs
+    if (!imported.getAttribute('viewBox') && currentSvgMeta?.viewBox) {
+      imported.setAttribute('viewBox', currentSvgMeta.viewBox);
     }
 
-    const imported = document.importNode(svg, true);
+    // Role tint layer below the hover-highlight overlay; both draw on top
+    // of the artwork and are purely decorative.
+    const roleLayer = document.createElementNS(SVG_NS, 'g');
+    roleLayer.setAttribute('class', 'svg-prep-role-layer');
+    roleLayer.setAttribute('aria-hidden', 'true');
+    imported.appendChild(roleLayer);
+
+    const overlay = document.createElementNS(SVG_NS, 'g');
+    overlay.setAttribute('class', 'svg-prep-overlay');
+    overlay.setAttribute('aria-hidden', 'true');
+    imported.appendChild(overlay);
+
     refs.sourcePane.insertBefore(imported, refs.sourceZoom);
     return imported;
+  }
+
+  function clearSvgGroup(group) {
+    while (group.firstChild) group.removeChild(group.firstChild);
+  }
+
+  /**
+   * Render one translucent tint path per descriptor, color-coded by its
+   * current role, into the role layer of the source pane.
+   */
+  function renderRoleLayer() {
+    const layer = refs.sourcePane.querySelector('.svg-prep-role-layer');
+    if (!layer) return;
+    clearSvgGroup(layer);
+    if (!rolesVisible || !currentAnalysis) return;
+
+    (currentAnalysis.elements || []).forEach((el, i) => {
+      if (!el.pathData) return;
+      const role = roles[i] || 'ignore';
+      const p = document.createElementNS(SVG_NS, 'path');
+      p.setAttribute('d', el.pathData);
+      p.setAttribute('class', `svg-prep-role-path svg-prep-role--${role}`);
+      layer.appendChild(p);
+    });
   }
 
   /**
@@ -507,59 +595,97 @@ export function createSvgPrepWorkspace(containerEl) {
     return `<svg ${attrs}><path d="${compoundD}" fill="black" fill-rule="evenodd"/></svg>`;
   }
 
+  function setApplyEnabled(enabled) {
+    refs.applyBtn.disabled = !enabled;
+    refs.applyBtn.setAttribute('aria-disabled', String(!enabled));
+    refs.applyHint.hidden = enabled;
+  }
+
+  function clearResultError() {
+    const err = refs.resultPane.querySelector('.svg-prep-result-error');
+    if (err) err.remove();
+  }
+
+  function showResultError(message) {
+    clearResultError();
+    const err = document.createElement('p');
+    err.className = 'svg-prep-result-error';
+    err.textContent = message;
+    refs.resultPane.insertBefore(err, refs.resultZoom);
+  }
+
   function updateResultPreview() {
     if (!currentAnalysis || !currentSvgMeta) return;
 
+    // Preserve the user's zoom level across preview re-renders
     const existingSvg = refs.resultPane.querySelector('svg');
+    const previousViewBox = existingSvg
+      ? existingSvg.getAttribute('viewBox')
+      : null;
     if (existingSvg) existingSvg.remove();
+    clearResultError();
 
-    const roleOverrides = {};
-    roles.forEach((role, i) => {
-      roleOverrides[i] = role;
-    });
+    try {
+      const roleOverrides = {};
+      roles.forEach((role, i) => {
+        roleOverrides[i] = role;
+      });
 
-    const classified = classifyElements(currentAnalysis.elements, {
-      roleOverrides,
-    });
+      const classified = classifyElements(currentAnalysis.elements, {
+        roleOverrides,
+      });
 
-    const vb = parseViewBox(currentSvgMeta.viewBox);
-    const vbWidth = vb ? vb.w : 0;
-    const designWidthMm = parseFloat(refs.designWidthInput.value) || 14;
-    const svgOffsets = offsets.map((mm) =>
-      mmToSvgUnits(mm, vbWidth, designWidthMm)
-    );
-    const withOffsets = applyPerPathOffsets(classified, svgOffsets);
+      const vb = parseViewBox(currentSvgMeta.viewBox);
+      const vbWidth = vb ? vb.w : 0;
+      const designWidthMm = parseFloat(refs.designWidthInput.value) || 14;
+      const svgOffsets = offsets.map((mm) =>
+        mmToSvgUnits(mm, vbWidth, designWidthMm)
+      );
+      const withOffsets = applyPerPathOffsets(classified, svgOffsets);
 
-    const isCompound = currentAnalysis.isCompoundPathOnly;
-    const resultSvgString = isCompound
-      ? concatenateSubpaths(withOffsets, currentSvgMeta)
-      : flattenToCompoundPath(withOffsets, currentSvgMeta);
+      const isCompound = currentAnalysis.isCompoundPathOnly;
+      const resultSvgString = isCompound
+        ? concatenateSubpaths(withOffsets, currentSvgMeta)
+        : flattenToCompoundPath(withOffsets, currentSvgMeta);
 
-    if (!resultSvgString) {
+      if (!resultSvgString) {
+        currentResult = null;
+        setApplyEnabled(false);
+        liveRegion.textContent = 'No foreground elements \u2014 preview empty';
+        return;
+      }
+
+      currentResult = resultSvgString;
+      setApplyEnabled(true);
+
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(resultSvgString, 'image/svg+xml');
+      const svg = doc.querySelector('svg');
+      if (!svg) return;
+
+      const imported = document.importNode(svg, true);
+      if (previousViewBox) imported.setAttribute('viewBox', previousViewBox);
+      refs.resultPane.insertBefore(imported, refs.resultZoom);
+
+      const fgCount = withOffsets.filter(
+        (el) => el.role !== 'ignore' && el.pathData
+      ).length;
+      const ignoredCount = withOffsets.filter(
+        (el) => el.role === 'ignore'
+      ).length;
+      liveRegion.textContent = isCompound
+        ? `Preview updated \u2014 ${fgCount} subpaths included, ${ignoredCount} ignored`
+        : `Preview updated \u2014 ${fgCount} foreground, ${withOffsets.filter((el) => el.role === 'hole' && el.pathData).length} holes`;
+    } catch (err) {
+      console.error('[SVG Prep] Preview failed:', err);
       currentResult = null;
-      liveRegion.textContent = 'No foreground elements \u2014 preview empty';
-      return;
+      setApplyEnabled(false);
+      showResultError(
+        'Preview failed for this combination \u2014 original will be kept'
+      );
+      liveRegion.textContent =
+        'Preview failed for this combination \u2014 original will be kept';
     }
-
-    currentResult = resultSvgString;
-
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(resultSvgString, 'image/svg+xml');
-    const svg = doc.querySelector('svg');
-    if (!svg) return;
-
-    const imported = document.importNode(svg, true);
-    refs.resultPane.insertBefore(imported, refs.resultZoom);
-
-    const fgCount = withOffsets.filter(
-      (el) => el.role !== 'ignore' && el.pathData
-    ).length;
-    const ignoredCount = withOffsets.filter(
-      (el) => el.role === 'ignore'
-    ).length;
-    liveRegion.textContent = isCompound
-      ? `Preview updated \u2014 ${fgCount} subpaths included, ${ignoredCount} ignored`
-      : `Preview updated \u2014 ${fgCount} foreground, ${withOffsets.filter((el) => el.role === 'hole' && el.pathData).length} holes`;
   }
 
   function setupPaneZoom(pane, zoomEl, naturalVBStr) {
@@ -638,22 +764,34 @@ export function createSvgPrepWorkspace(containerEl) {
   }
 
   function setupObjectHighlighting() {
+    // Highlight paths are drawn into an overlay <g> keyed by the
+    // descriptor's own pathData (viewBox coordinates, transforms baked),
+    // so indexes always match the object list — including subpaths of
+    // compound paths — and rendering works in every browser.
+    function getOverlay() {
+      return refs.sourcePane.querySelector('.svg-prep-overlay');
+    }
+
     function highlight(e) {
       const item = e.target.closest('.svg-prep-object');
       if (!item) return;
-      const el = refs.sourcePane.querySelector(
-        `[data-prep-index="${item.dataset.index}"]`
-      );
-      if (el) el.setAttribute('data-prep-highlight', '');
+      const overlay = getOverlay();
+      if (!overlay || !currentAnalysis) return;
+      clearSvgGroup(overlay);
+      const idx = parseInt(item.dataset.index, 10);
+      const el = currentAnalysis.elements?.[idx];
+      if (!el || !el.pathData) return;
+      const p = document.createElementNS(SVG_NS, 'path');
+      p.setAttribute('d', el.pathData);
+      p.setAttribute('class', 'svg-prep-highlight-path');
+      overlay.appendChild(p);
     }
 
     function unhighlight(e) {
       const item = e.target.closest('.svg-prep-object');
       if (!item) return;
-      const el = refs.sourcePane.querySelector(
-        `[data-prep-index="${item.dataset.index}"]`
-      );
-      if (el) el.removeAttribute('data-prep-highlight');
+      const overlay = getOverlay();
+      if (overlay) clearSvgGroup(overlay);
     }
 
     refs.objects.addEventListener('mouseover', highlight);
@@ -674,6 +812,7 @@ export function createSvgPrepWorkspace(containerEl) {
     if (srcSvg) srcSvg.remove();
     const resSvg = refs.resultPane.querySelector('svg');
     if (resSvg) resSvg.remove();
+    clearResultError();
   }
 
   // ── Event handlers ─────────────────────────────────────────────────────
@@ -716,7 +855,18 @@ export function createSvgPrepWorkspace(containerEl) {
       }
     }
 
+    renderRoleLayer();
     updateResultPreview();
+  }
+
+  function handleRolesToggle() {
+    rolesVisible = !rolesVisible;
+    refs.rolesToggleBtn.setAttribute('aria-pressed', String(rolesVisible));
+    refs.legendRow.hidden = !rolesVisible;
+    renderRoleLayer();
+    liveRegion.textContent = rolesVisible
+      ? 'Role colors shown'
+      : 'Role colors hidden';
   }
 
   function handleOffsetChange(e) {
@@ -750,15 +900,24 @@ export function createSvgPrepWorkspace(containerEl) {
     if (!btn) return;
 
     if (btn.dataset.action === 'apply') {
+      if (!currentResult) return;
+      resolved = true;
       if (currentCallbacks.onApply) currentCallbacks.onApply(currentResult);
       close();
     } else if (btn.dataset.action === 'keep') {
       currentResult = null;
+      resolved = true;
       if (currentCallbacks.onKeepOriginal) currentCallbacks.onKeepOriginal();
       close();
     } else if (btn.dataset.action === 'reset') {
       if (currentAnalysis) {
-        roles = currentAnalysis.elements.map((el) => el.autoRole || 'ignore');
+        roles = currentAnalysis.elements.map((el) => {
+          let role = el.autoRole || 'ignore';
+          if (currentAnalysis.isCompoundPathOnly && role !== 'ignore') {
+            role = 'foreground';
+          }
+          return role;
+        });
         offsets = currentAnalysis.elements.map(() => 0);
         const items = refs.objects.querySelectorAll('.svg-prep-object');
         items.forEach((item, i) => {
@@ -776,6 +935,7 @@ export function createSvgPrepWorkspace(containerEl) {
           const nameText = nameSpan ? nameSpan.textContent : `Element ${i + 1}`;
           item.setAttribute('aria-label', `${nameText}, role: ${role}`);
         });
+        renderRoleLayer();
         updateResultPreview();
       }
       liveRegion.textContent = 'Roles reset to auto-classification';
@@ -827,9 +987,13 @@ export function createSvgPrepWorkspace(containerEl) {
   }
 
   function open(svgString, analysis, callbacks = {}) {
-    if (isOpen) close();
+    if (isOpen) dismiss();
 
     isOpen = true;
+    resolved = false;
+    rolesVisible = true;
+    refs.rolesToggleBtn.setAttribute('aria-pressed', 'true');
+    refs.legendRow.hidden = false;
     root.hidden = false;
 
     currentCallbacks = callbacks;
@@ -840,7 +1004,8 @@ export function createSvgPrepWorkspace(containerEl) {
     const populated = populateObjectList(
       refs.objects,
       analysis.elements || [],
-      liveRegion
+      liveRegion,
+      Boolean(analysis.isCompoundPathOnly)
     );
     roles = populated.roles;
     offsets = populated.offsets;
@@ -855,6 +1020,7 @@ export function createSvgPrepWorkspace(containerEl) {
     renderWarnings(refs.warnings, analysis.warnings || []);
 
     renderSourcePane();
+    renderRoleLayer();
     updateResultPreview();
 
     sourceZoomCleanup = setupPaneZoom(
@@ -874,15 +1040,31 @@ export function createSvgPrepWorkspace(containerEl) {
     refs.objects.addEventListener('input', handleOffsetChange);
     refs.designWidthInput.addEventListener('input', handleDesignWidthChange);
     refs.footer.addEventListener('click', handleFooterClick);
+    refs.rolesToggleBtn.addEventListener('click', handleRolesToggle);
     refs.closeBtn.addEventListener('click', close);
     refs.fullscreenBtn.addEventListener('click', toggleFullscreen);
     refs.backdrop.addEventListener('click', closeFullscreen);
 
     announce('SVG Preparation Editor opened');
+
+    // Small screens: the inline editor is cramped, expand automatically
+    if (
+      typeof window !== 'undefined' &&
+      window.innerWidth < AUTO_FULLSCREEN_MAX_WIDTH
+    ) {
+      openFullscreen();
+    }
   }
 
   function close() {
     if (!isOpen) return;
+
+    // Closing without Apply/Keep counts as keeping the original
+    if (!resolved) {
+      resolved = true;
+      currentResult = null;
+      if (currentCallbacks.onKeepOriginal) currentCallbacks.onKeepOriginal();
+    }
 
     if (isFullscreen) closeFullscreen();
     isOpen = false;
@@ -915,6 +1097,7 @@ export function createSvgPrepWorkspace(containerEl) {
     refs.objects.removeEventListener('input', handleOffsetChange);
     refs.designWidthInput.removeEventListener('input', handleDesignWidthChange);
     refs.footer.removeEventListener('click', handleFooterClick);
+    refs.rolesToggleBtn.removeEventListener('click', handleRolesToggle);
     refs.closeBtn.removeEventListener('click', close);
     refs.fullscreenBtn.removeEventListener('click', toggleFullscreen);
     refs.backdrop.removeEventListener('click', closeFullscreen);
@@ -986,8 +1169,18 @@ export function createSvgPrepWorkspace(containerEl) {
     return currentResult;
   }
 
+  /**
+   * Close programmatically without firing the keep-original callback.
+   * Used when a new file replaces the one being edited.
+   */
+  function dismiss() {
+    if (!isOpen) return;
+    resolved = true;
+    close();
+  }
+
   function destroy() {
-    if (isOpen) close();
+    if (isOpen) dismiss();
     if (refs.backdrop.parentNode)
       refs.backdrop.parentNode.removeChild(refs.backdrop);
     if (root.parentNode) root.parentNode.removeChild(root);
@@ -996,6 +1189,7 @@ export function createSvgPrepWorkspace(containerEl) {
   return {
     open,
     close,
+    dismiss,
     getResult,
     getRoleOverrides,
     getOffsetOverrides,

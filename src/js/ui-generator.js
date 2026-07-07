@@ -11,6 +11,7 @@ import { convertPngToSvg, validateImageDimensions } from './image-import.js';
 import { isEnabled } from './feature-flags.js';
 import { prepareSvg, needsPreparation, analyzeSvg } from './svg-preparer.js';
 import { createSvgPrepWorkspace } from './svg-preparer-workspace.js';
+import { svgToDataUrl, dataUrlToText } from './svg-text-encoding.js';
 
 /**
  * Format a parameter name for display (replaces underscores with spaces)
@@ -148,7 +149,7 @@ export function getSvgPrepMetadata(fileName) {
  * Store SVG preparation metadata for a given filename.
  * Pass null to clear metadata for the file.
  * @param {string} fileName
- * @param {{rawSvg: string, preparedSvg: string|null, prepOverrides: string[]|null, prepOffsets: number[]|null, prepAnalysis: Object|null}|null} metadata
+ * @param {{rawSvg: string, preparedSvg: string|null, prepOverrides: string[]|null, prepOffsets: number[]|null}|null} metadata
  */
 export function setSvgPrepMetadata(fileName, metadata) {
   if (metadata) {
@@ -251,7 +252,7 @@ export function appendUserSvgToGallery(paramName, svgOpt) {
         const toUse = isEnabled('svg_preparer')
           ? svgText
           : maybePrepareForOpenScad(svgText);
-        const svgDataUrl = 'data:image/svg+xml;base64,' + btoa(toUse);
+        const svgDataUrl = svgToDataUrl(toUse);
         announceChange(`Selected design: ${svgOpt.label}`);
         onSelectFn(paramDef.name, {
           name: svgOpt.file.split('/').pop(),
@@ -1708,7 +1709,7 @@ function createSvgGallery(options, param, onSelect) {
         const toUse = isEnabled('svg_preparer')
           ? svgText
           : maybePrepareForOpenScad(svgText);
-        const svgDataUrl = 'data:image/svg+xml;base64,' + btoa(toUse);
+        const svgDataUrl = svgToDataUrl(toUse);
         announceChange(`Selected design: ${opt.label}`);
         onSelect(param.name, {
           name: opt.file.split('/').pop(),
@@ -1724,12 +1725,24 @@ function createSvgGallery(options, param, onSelect) {
       });
   }
 
+  // Pre-select the option matching the parameter's current default so
+  // users can see which design is loaded.
+  const defaultBasename = String(param.default || '')
+    .split('/')
+    .pop();
+
   options.forEach((opt, index) => {
     const option = document.createElement('button');
     option.type = 'button';
     option.className = 'svg-gallery-option';
     option.setAttribute('role', 'option');
-    option.setAttribute('aria-selected', 'false');
+    const isDefault =
+      defaultBasename !== '' && opt.file.split('/').pop() === defaultBasename;
+    if (isDefault) {
+      option.classList.add('svg-gallery-option--active');
+      activeIndex = index;
+    }
+    option.setAttribute('aria-selected', String(isDefault));
     option.id = `gallery-${param.name}-${index}`;
     option.title = opt.label;
 
@@ -1750,6 +1763,13 @@ function createSvgGallery(options, param, onSelect) {
 
     listbox.appendChild(option);
   });
+
+  if (activeIndex >= 0) {
+    listbox.setAttribute(
+      'aria-activedescendant',
+      `gallery-${param.name}-${activeIndex}`
+    );
+  }
 
   // Arrow key navigation within the listbox
   listbox.addEventListener('keydown', (e) => {
@@ -1897,7 +1917,7 @@ function createFileControl(param, onChange) {
     return editBtn;
   }
 
-  function updateStatusCard(analysis) {
+  function updateStatusCard(analysis, extraWarnings = null) {
     statusCard.innerHTML = '';
     const badge = document.createElement('span');
     badge.className = 'svg-prep-status-badge';
@@ -1905,12 +1925,14 @@ function createFileControl(param, onChange) {
 
     if (analysis.recommendation === 'pass_through') {
       badge.textContent =
-        count > 1 ? `SVG Ready (${count} subpaths)` : 'SVG Ready';
+        count > 1
+          ? `Using original (${count} shapes) \u2014 OpenSCAD merges these automatically`
+          : 'SVG Ready';
       badge.dataset.level = 'ready';
       statusCard.appendChild(badge);
       statusCard.appendChild(createStatusEditButton());
     } else if (analysis.recommendation === 'auto_prepare') {
-      badge.textContent = `SVG Ready (${count} elements)`;
+      badge.textContent = `Simplified ${count} shapes for 3D printing`;
       badge.dataset.level = 'ready';
       statusCard.appendChild(badge);
       statusCard.appendChild(createStatusEditButton());
@@ -1947,6 +1969,17 @@ function createFileControl(param, onChange) {
         statusCard.appendChild(guidance);
       }
     }
+
+    if (extraWarnings && extraWarnings.length > 0) {
+      const ul = document.createElement('ul');
+      ul.className = 'svg-prep-status-warnings';
+      extraWarnings.forEach((w) => {
+        const li = document.createElement('li');
+        li.textContent = w;
+        ul.appendChild(li);
+      });
+      statusCard.appendChild(ul);
+    }
   }
 
   function handleEditorApply(result) {
@@ -1959,10 +1992,9 @@ function createFileControl(param, onChange) {
         preparedSvg: result,
         prepOverrides: overrides,
         prepOffsets: offsetOverrides,
-        prepAnalysis: currentSvgAnalysis,
       });
     }
-    const svgDataUrl = 'data:image/svg+xml;base64,' + btoa(result);
+    const svgDataUrl = svgToDataUrl(result);
     const fileObj = {
       name: currentFileName || 'prepared.svg',
       size: result.length,
@@ -1982,10 +2014,9 @@ function createFileControl(param, onChange) {
         preparedSvg: null,
         prepOverrides: null,
         prepOffsets: null,
-        prepAnalysis: currentSvgAnalysis,
       });
     }
-    const svgDataUrl = 'data:image/svg+xml;base64,' + btoa(currentRawSvg);
+    const svgDataUrl = svgToDataUrl(currentRawSvg);
     const fileObj = {
       name: currentFileName || 'original.svg',
       size: currentRawSvg.length,
@@ -1993,6 +2024,7 @@ function createFileControl(param, onChange) {
       data: svgDataUrl,
     };
     onChange(param.name, fileObj);
+    if (fileUploadListener) fileUploadListener(param.name, fileObj);
     announceChange('Keeping original SVG');
   }
 
@@ -2006,6 +2038,11 @@ function createFileControl(param, onChange) {
   function processSvgForOpenScad(rawSvgText) {
     currentRawSvg = rawSvgText;
 
+    // Picking a new design must never leave a stale editor open.
+    // dismiss() skips the keep-original callback — the old file is
+    // being replaced, not kept.
+    if (workspace) workspace.dismiss();
+
     if (!isEnabled('svg_preparer')) {
       statusCard.style.display = 'none';
       currentSvgAnalysis = null;
@@ -2017,7 +2054,9 @@ function createFileControl(param, onChange) {
         ? getSvgPrepMetadata(currentFileName)
         : null;
       if (stored && stored.rawSvg === rawSvgText) {
-        currentSvgAnalysis = stored.prepAnalysis || analyzeSvg(rawSvgText);
+        // Always re-analyze: persisted analyses lose their DOM references
+        // through JSON serialization and crash the editor on restore.
+        currentSvgAnalysis = analyzeSvg(rawSvgText);
         updateStatusCard(currentSvgAnalysis);
         statusCard.style.display = '';
         return stored.preparedSvg || rawSvgText;
@@ -2040,14 +2079,23 @@ function createFileControl(param, onChange) {
         return rawSvgText;
       }
 
-      const prepared = prepareSvg(rawSvgText);
+      if (analysis.recommendation === 'open_editor') {
+        // Keep the original until the user explicitly applies a
+        // prepared version from the editor.
+        if (workspace) {
+          workspace.open(rawSvgText, analysis, {
+            onApply: handleEditorApply,
+            onKeepOriginal: handleEditorKeep,
+          });
+          announceChange('SVG needs review \u2014 editor opened');
+        }
+        return rawSvgText;
+      }
 
-      if (analysis.recommendation === 'open_editor' && workspace) {
-        workspace.open(rawSvgText, analysis, {
-          onApply: handleEditorApply,
-          onKeepOriginal: handleEditorKeep,
-        });
-        announceChange('SVG needs review \u2014 editor opened');
+      const prepWarnings = [];
+      const prepared = prepareSvg(rawSvgText, { warningsOut: prepWarnings });
+      if (prepWarnings.length > 0) {
+        updateStatusCard(analysis, prepWarnings);
       }
 
       return prepared;
@@ -2124,7 +2172,7 @@ function createFileControl(param, onChange) {
           const svgName = file.name.replace(/\.[^.]+$/, '.svg');
           currentFileName = svgName;
           const processedSvg = processSvgForOpenScad(svgString);
-          const svgDataUrl = 'data:image/svg+xml;base64,' + btoa(processedSvg);
+          const svgDataUrl = svgToDataUrl(processedSvg);
 
           fileInfo.textContent = `${svgName} (converted from ${file.name})`;
           fileInfo.title = svgName;
@@ -2167,12 +2215,15 @@ function createFileControl(param, onChange) {
         type: file.type,
         data: dataUrl,
       };
-      if (file.type === 'image/svg+xml') {
-        const rawSvgText = atob(dataUrl.split(',')[1]);
+      const isSvgFile =
+        file.type === 'image/svg+xml' ||
+        file.name.toLowerCase().endsWith('.svg');
+      if (isSvgFile) {
+        const rawSvgText = dataUrlToText(dataUrl);
         currentFileName = file.name;
         const processed = processSvgForOpenScad(rawSvgText);
         if (processed !== rawSvgText) {
-          uploadedFileObj.data = 'data:image/svg+xml;base64,' + btoa(processed);
+          uploadedFileObj.data = svgToDataUrl(processed);
           uploadedFileObj.size = processed.length;
         }
       } else {
@@ -2182,7 +2233,7 @@ function createFileControl(param, onChange) {
         statusCard.style.display = 'none';
       }
       onChange(param.name, uploadedFileObj);
-      if (fileUploadListener && file.type === 'image/svg+xml') {
+      if (fileUploadListener && isSvgFile) {
         fileUploadListener(param.name, uploadedFileObj);
       }
     };
@@ -2201,7 +2252,7 @@ function createFileControl(param, onChange) {
     fileInfo.className = 'file-info';
     clearButton.style.display = 'none';
     statusCard.style.display = 'none';
-    if (workspace) workspace.close();
+    if (workspace) workspace.dismiss();
     currentRawSvg = null;
     currentFileName = null;
     currentSvgAnalysis = null;
@@ -2220,7 +2271,7 @@ function createFileControl(param, onChange) {
         currentFileName = fileObj.name;
         const processed = processSvgForOpenScad(rawSvg);
         if (processed !== rawSvg) {
-          fileObj.data = 'data:image/svg+xml;base64,' + btoa(processed);
+          fileObj.data = svgToDataUrl(processed);
           fileObj.size = processed.length;
         }
       } else {

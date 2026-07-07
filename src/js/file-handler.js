@@ -59,6 +59,7 @@ import {
 } from './hfm-controller.js';
 import { isEnabled } from './feature-flags.js';
 import { prepareSvg, needsPreparation } from './svg-preparer.js';
+import { svgToDataUrl, dataUrlToText } from './svg-text-encoding.js';
 import { STORAGE_KEY_MODEL_COLOR } from './storage-keys.js';
 
 let currentExampleKey = null;
@@ -1645,7 +1646,7 @@ export function initFileHandler({
 
     try {
       let svgText = fileObj.data.startsWith('data:')
-        ? atob(fileObj.data.split(',')[1])
+        ? dataUrlToText(fileObj.data)
         : fileObj.data;
 
       if (isEnabled('svg_preparer') && needsPreparation(svgText)) {
@@ -1721,7 +1722,7 @@ export function initFileHandler({
 
       for (const f of svgFiles) {
         const fileName = f.path.replace('svg-uploads/', '');
-        const dataUrl = 'data:image/svg+xml;base64,' + btoa(f.textContent);
+        const dataUrl = svgToDataUrl(f.textContent);
 
         const svgParams = getGalleryParamNames();
 

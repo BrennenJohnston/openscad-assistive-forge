@@ -21,7 +21,7 @@ corner_radius = 4; // [0:0.5:15]
 
 /* [Design] */
 // Image file for the design (SVG, PNG, or JPG — raster images auto-convert to SVG)
-design_file = "svg-library/heart.svg"; // [file:svg,png,jpg]
+design_file = "heart.svg"; // [file:svg,png,jpg]
 
 // Engraving depth (or raise height)
 engrave_depth = 0.8; // [0.2:0.1:3.0]
@@ -98,8 +98,10 @@ module charm_body() {
 }
 
 module design_2d() {
-    resize([design_w, 0], auto = true)
-        import(design_file, center = true);
+    if (design_file != "") {
+        resize([design_w, 0], auto = true)
+            import(design_file, center = true);
+    }
 }
 
 module border_ring() {

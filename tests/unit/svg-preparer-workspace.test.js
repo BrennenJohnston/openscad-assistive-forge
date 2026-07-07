@@ -874,15 +874,19 @@ describe('Phase 3: source pane rendering', () => {
     ws.destroy();
   });
 
-  it('tags render-scope elements with data-prep-index', () => {
+  it('appends role-layer and highlight-overlay groups to the source SVG', () => {
     const ws = createSvgPrepWorkspace(container);
     ws.open(SIMPLE_SVG, makeAnalysis(1));
 
-    const tagged = ws._root.querySelector(
-      '.svg-prep-source-pane [data-prep-index="0"]'
-    );
-    expect(tagged).toBeTruthy();
-    expect(tagged.tagName.toLowerCase()).toBe('circle');
+    const sourceSvg = ws._root.querySelector('.svg-prep-source-pane svg');
+    const roleLayer = sourceSvg.querySelector('g.svg-prep-role-layer');
+    const overlay = sourceSvg.querySelector('g.svg-prep-overlay');
+    expect(roleLayer).toBeTruthy();
+    expect(overlay).toBeTruthy();
+    expect(roleLayer.getAttribute('aria-hidden')).toBe('true');
+    expect(overlay.getAttribute('aria-hidden')).toBe('true');
+    // Overlay draws on top: it must be the last child
+    expect(sourceSvg.lastElementChild).toBe(overlay);
 
     ws.destroy();
   });
@@ -1016,23 +1020,27 @@ describe('Phase 3: role change updates result preview', () => {
   });
 });
 
-describe('Phase 3: object list highlighting', () => {
-  it('adds data-prep-highlight on object mouseover', () => {
+describe('Phase 3: object list highlighting (overlay paths)', () => {
+  function getOverlay(ws) {
+    return ws._root.querySelector('.svg-prep-source-pane .svg-prep-overlay');
+  }
+
+  it('inserts a highlight path into the overlay on object mouseover', () => {
     const ws = createSvgPrepWorkspace(container);
-    ws.open(SIMPLE_SVG, makeAnalysis(1));
+    const analysis = makeAnalysis(1);
+    ws.open(SIMPLE_SVG, analysis);
 
     const item = ws._root.querySelector('.svg-prep-object');
     item.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
 
-    const highlighted = ws._root.querySelector(
-      '.svg-prep-source-pane [data-prep-highlight]'
-    );
-    expect(highlighted).toBeTruthy();
+    const highlight = getOverlay(ws).querySelector('.svg-prep-highlight-path');
+    expect(highlight).toBeTruthy();
+    expect(highlight.getAttribute('d')).toBe(analysis.elements[0].pathData);
 
     ws.destroy();
   });
 
-  it('removes data-prep-highlight on object mouseout', () => {
+  it('clears the overlay on object mouseout', () => {
     const ws = createSvgPrepWorkspace(container);
     ws.open(SIMPLE_SVG, makeAnalysis(1));
 
@@ -1040,30 +1048,26 @@ describe('Phase 3: object list highlighting', () => {
     item.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
     item.dispatchEvent(new MouseEvent('mouseout', { bubbles: true }));
 
-    const highlighted = ws._root.querySelector(
-      '.svg-prep-source-pane [data-prep-highlight]'
-    );
-    expect(highlighted).toBeFalsy();
+    expect(getOverlay(ws).children.length).toBe(0);
 
     ws.destroy();
   });
 
-  it('adds data-prep-highlight on object focusin', () => {
+  it('inserts a highlight path on object focusin', () => {
     const ws = createSvgPrepWorkspace(container);
     ws.open(SIMPLE_SVG, makeAnalysis(1));
 
     const item = ws._root.querySelector('.svg-prep-object');
     item.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
 
-    const highlighted = ws._root.querySelector(
-      '.svg-prep-source-pane [data-prep-highlight]'
-    );
-    expect(highlighted).toBeTruthy();
+    expect(
+      getOverlay(ws).querySelector('.svg-prep-highlight-path')
+    ).toBeTruthy();
 
     ws.destroy();
   });
 
-  it('removes data-prep-highlight on object focusout', () => {
+  it('clears the overlay on object focusout', () => {
     const ws = createSvgPrepWorkspace(container);
     ws.open(SIMPLE_SVG, makeAnalysis(1));
 
@@ -1071,11 +1075,141 @@ describe('Phase 3: object list highlighting', () => {
     item.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
     item.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
 
-    const highlighted = ws._root.querySelector(
-      '.svg-prep-source-pane [data-prep-highlight]'
-    );
-    expect(highlighted).toBeFalsy();
+    expect(getOverlay(ws).children.length).toBe(0);
 
+    ws.destroy();
+  });
+
+  it('highlights the exact subpath d for each row (indexes never diverge)', () => {
+    const ws = createSvgPrepWorkspace(container);
+    const analysis = makeAnalysis(3);
+    ws.open(SIMPLE_SVG, analysis);
+
+    const items = ws._root.querySelectorAll('.svg-prep-object');
+    items[2].dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+
+    const highlight = getOverlay(ws).querySelector('.svg-prep-highlight-path');
+    expect(highlight.getAttribute('d')).toBe(analysis.elements[2].pathData);
+
+    ws.destroy();
+  });
+
+  it('compound path: row N highlights subpath N of the single DOM element', () => {
+    // Single <path> with 3 M subpaths, expanded into 3 descriptors that
+    // all reference the same DOM element.
+    const compoundSvg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+      '<path d="M10,10 L20,10 L20,20 Z M40,40 L50,40 L50,50 Z M70,70 L80,70 L80,80 Z" fill="black"/>' +
+      '</svg>';
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(compoundSvg, 'image/svg+xml');
+    const pathEl = doc.querySelector('path');
+    const subpaths = [
+      'M10,10 L20,10 L20,20 Z',
+      'M40,40 L50,40 L50,50 Z',
+      'M70,70 L80,70 L80,80 Z',
+    ];
+    const analysis = {
+      status: 'ready',
+      confidence: 1,
+      elements: subpaths.map((d, i) => ({
+        element: pathEl,
+        pathData: d,
+        fill: 'black',
+        stroke: '',
+        luminance: 0,
+        autoRole: 'foreground',
+        subpathIndex: i,
+        warnings: [],
+      })),
+      warnings: [],
+      unsupportedFeatures: [],
+      recommendation: 'pass_through',
+      singleElement: false,
+      isCompoundPathOnly: true,
+    };
+
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(compoundSvg, analysis);
+
+    const items = ws._root.querySelectorAll('.svg-prep-object');
+    expect(items.length).toBe(3);
+
+    items[1].dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+    const highlight = getOverlay(ws).querySelector('.svg-prep-highlight-path');
+    expect(highlight.getAttribute('d')).toBe(subpaths[1]);
+
+    ws.destroy();
+  });
+});
+
+describe('role color-coding layer and legend', () => {
+  it('renders one role path per descriptor with role classes', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(2));
+
+    const layer = ws._root.querySelector('.svg-prep-role-layer');
+    const paths = layer.querySelectorAll('.svg-prep-role-path');
+    expect(paths.length).toBe(2);
+    expect(paths[0].classList.contains('svg-prep-role--foreground')).toBe(
+      true
+    );
+    expect(paths[1].classList.contains('svg-prep-role--hole')).toBe(true);
+
+    ws.destroy();
+  });
+
+  it('updates the role layer when a role radio changes', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(2));
+
+    const items = ws._root.querySelectorAll('.svg-prep-object');
+    const radios = items[1].querySelectorAll('input[type="radio"]');
+    const ignoreRadio = Array.from(radios).find((r) => r.value === 'ignore');
+    ignoreRadio.checked = true;
+    ignoreRadio.dispatchEvent(new Event('change', { bubbles: true }));
+
+    const layer = ws._root.querySelector('.svg-prep-role-layer');
+    const paths = layer.querySelectorAll('.svg-prep-role-path');
+    expect(paths[1].classList.contains('svg-prep-role--ignore')).toBe(true);
+
+    ws.destroy();
+  });
+
+  it('header toggle hides the role layer and legend', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(2));
+
+    const toggle = ws._root.querySelector('.svg-prep-roles-toggle');
+    expect(toggle.getAttribute('aria-pressed')).toBe('true');
+
+    toggle.click();
+
+    expect(toggle.getAttribute('aria-pressed')).toBe('false');
+    const layer = ws._root.querySelector('.svg-prep-role-layer');
+    expect(layer.children.length).toBe(0);
+    expect(ws._refs.legendRow.hidden).toBe(true);
+
+    toggle.click();
+    expect(layer.children.length).toBe(2);
+    expect(ws._refs.legendRow.hidden).toBe(false);
+
+    ws.destroy();
+  });
+
+  it('renders a three-chip legend row', () => {
+    const ws = createSvgPrepWorkspace(container);
+    const chips = ws._root.querySelectorAll('.svg-prep-legend-chip');
+    expect(chips.length).toBe(3);
+    ws.destroy();
+  });
+
+  it('shows visible pane captions', () => {
+    const ws = createSvgPrepWorkspace(container);
+    const captions = ws._root.querySelectorAll('.svg-prep-pane-caption');
+    expect(captions.length).toBe(2);
+    expect(captions[0].textContent).toBe('Original');
+    expect(captions[1].textContent).toBe('Will print as');
     ws.destroy();
   });
 });
@@ -1326,8 +1460,8 @@ describe('Phase 4a: Keep original fires onKeepOriginal callback', () => {
   });
 });
 
-describe('Phase 4a: Escape / close button do not fire callbacks', () => {
-  it('Escape does not fire onApply or onKeepOriginal', () => {
+describe('Phase 4a: Escape / close button keep the original', () => {
+  it('Escape fires onKeepOriginal (close without Apply = keep original)', () => {
     const onApply = vi.fn();
     const onKeepOriginal = vi.fn();
     const ws = createSvgPrepWorkspace(container);
@@ -1338,12 +1472,13 @@ describe('Phase 4a: Escape / close button do not fire callbacks', () => {
     );
 
     expect(onApply).not.toHaveBeenCalled();
-    expect(onKeepOriginal).not.toHaveBeenCalled();
+    expect(onKeepOriginal).toHaveBeenCalledTimes(1);
+    expect(ws.getResult()).toBeNull();
 
     ws.destroy();
   });
 
-  it('close button does not fire onApply or onKeepOriginal', () => {
+  it('close button fires onKeepOriginal but never onApply', () => {
     const onApply = vi.fn();
     const onKeepOriginal = vi.fn();
     const ws = createSvgPrepWorkspace(container);
@@ -1352,7 +1487,291 @@ describe('Phase 4a: Escape / close button do not fire callbacks', () => {
     ws._root.querySelector('.svg-prep-close-btn').click();
 
     expect(onApply).not.toHaveBeenCalled();
+    expect(onKeepOriginal).toHaveBeenCalledTimes(1);
+
+    ws.destroy();
+  });
+
+  it('close after Apply does not fire onKeepOriginal', () => {
+    const onKeepOriginal = vi.fn();
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1), { onKeepOriginal });
+
+    ws._root.querySelector('[data-action="apply"]').click();
+
     expect(onKeepOriginal).not.toHaveBeenCalled();
+
+    ws.destroy();
+  });
+
+  it('Keep original fires onKeepOriginal exactly once (not again on close)', () => {
+    const onKeepOriginal = vi.fn();
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1), { onKeepOriginal });
+
+    ws._root.querySelector('[data-action="keep"]').click();
+
+    expect(onKeepOriginal).toHaveBeenCalledTimes(1);
+
+    ws.destroy();
+  });
+
+  it('dismiss() closes without firing onKeepOriginal', () => {
+    const onKeepOriginal = vi.fn();
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1), { onKeepOriginal });
+
+    ws.dismiss();
+
+    expect(onKeepOriginal).not.toHaveBeenCalled();
+    expect(ws._root.hidden).toBe(true);
+
+    ws.destroy();
+  });
+});
+
+describe('Apply button disabled state', () => {
+  it('disables Apply and shows the hint when nothing is included', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1));
+
+    const applyBtn = ws._root.querySelector('[data-action="apply"]');
+    expect(applyBtn.disabled).toBe(false);
+
+    const radios = ws._root.querySelectorAll('input[type="radio"]');
+    const ignoreRadio = Array.from(radios).find((r) => r.value === 'ignore');
+    ignoreRadio.checked = true;
+    ignoreRadio.dispatchEvent(new Event('change', { bubbles: true }));
+
+    expect(applyBtn.disabled).toBe(true);
+    expect(applyBtn.getAttribute('aria-disabled')).toBe('true');
+    expect(ws._refs.applyHint.hidden).toBe(false);
+
+    ws.destroy();
+  });
+
+  it('re-enables Apply when the preview becomes non-empty again', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1));
+
+    const radios = ws._root.querySelectorAll('input[type="radio"]');
+    const ignoreRadio = Array.from(radios).find((r) => r.value === 'ignore');
+    const fgRadio = Array.from(radios).find((r) => r.value === 'foreground');
+
+    ignoreRadio.checked = true;
+    ignoreRadio.dispatchEvent(new Event('change', { bubbles: true }));
+    fgRadio.checked = true;
+    fgRadio.dispatchEvent(new Event('change', { bubbles: true }));
+
+    const applyBtn = ws._root.querySelector('[data-action="apply"]');
+    expect(applyBtn.disabled).toBe(false);
+    expect(ws._refs.applyHint.hidden).toBe(true);
+
+    ws.destroy();
+  });
+
+  it('clicking a disabled-state Apply does not fire onApply', () => {
+    const onApply = vi.fn();
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(1), { onApply });
+
+    const radios = ws._root.querySelectorAll('input[type="radio"]');
+    const ignoreRadio = Array.from(radios).find((r) => r.value === 'ignore');
+    ignoreRadio.checked = true;
+    ignoreRadio.dispatchEvent(new Event('change', { bubbles: true }));
+
+    ws._root.querySelector('[data-action="apply"]').click();
+    expect(onApply).not.toHaveBeenCalled();
+    expect(ws._root.hidden).toBe(false);
+
+    ws.destroy();
+  });
+});
+
+describe('compound-path mode (Include/Exclude)', () => {
+  function makeCompoundAnalysis() {
+    const compoundSvg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+      '<path d="M10,10 L20,10 L20,20 Z M40,40 L50,40 L50,50 Z" fill="black"/>' +
+      '</svg>';
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(compoundSvg, 'image/svg+xml');
+    const pathEl = doc.querySelector('path');
+    return {
+      svg: compoundSvg,
+      analysis: {
+        status: 'ready',
+        confidence: 1,
+        elements: [
+          'M10,10 L20,10 L20,20 Z',
+          'M40,40 L50,40 L50,50 Z',
+        ].map((d, i) => ({
+          element: pathEl,
+          pathData: d,
+          fill: 'black',
+          stroke: '',
+          luminance: 0,
+          autoRole: 'foreground',
+          subpathIndex: i,
+          warnings: [],
+        })),
+        warnings: [],
+        unsupportedFeatures: [],
+        recommendation: 'pass_through',
+        singleElement: false,
+        isCompoundPathOnly: true,
+      },
+    };
+  }
+
+  it('renders only Include/Exclude radios for compound paths', () => {
+    const { svg, analysis } = makeCompoundAnalysis();
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(svg, analysis);
+
+    const item = ws._root.querySelector('.svg-prep-object');
+    const radios = item.querySelectorAll('input[type="radio"]');
+    expect(radios.length).toBe(2);
+    const values = Array.from(radios).map((r) => r.value);
+    expect(values).toEqual(['foreground', 'ignore']);
+
+    const labels = Array.from(item.querySelectorAll('fieldset label')).map(
+      (l) => l.textContent
+    );
+    expect(labels).toEqual(['Include', 'Exclude']);
+
+    ws.destroy();
+  });
+
+  it('labels rows "Subpath N" in compound mode', () => {
+    const { svg, analysis } = makeCompoundAnalysis();
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(svg, analysis);
+
+    const names = Array.from(
+      ws._root.querySelectorAll('.svg-prep-object-name')
+    ).map((n) => n.textContent);
+    expect(names).toEqual(['Subpath 1', 'Subpath 2']);
+
+    ws.destroy();
+  });
+
+  it('excluding a subpath removes it from the result', () => {
+    const { svg, analysis } = makeCompoundAnalysis();
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(svg, analysis);
+
+    const items = ws._root.querySelectorAll('.svg-prep-object');
+    const excludeRadio = Array.from(
+      items[1].querySelectorAll('input[type="radio"]')
+    ).find((r) => r.value === 'ignore');
+    excludeRadio.checked = true;
+    excludeRadio.dispatchEvent(new Event('change', { bubbles: true }));
+
+    const result = ws.getResult();
+    expect(result).toContain('M10,10');
+    expect(result).not.toContain('M40,40');
+
+    ws.destroy();
+  });
+});
+
+describe('viewBox fallback and zoom preservation', () => {
+  it('derives a viewBox from width/height when absent', () => {
+    const noVbSvg =
+      '<svg xmlns="http://www.w3.org/2000/svg" width="200mm" height="100mm">' +
+      '<circle cx="50" cy="50" r="40" fill="black"/></svg>';
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(noVbSvg, makeAnalysis(1));
+
+    const sourceSvg = ws._root.querySelector('.svg-prep-source-pane svg');
+    expect(sourceSvg.getAttribute('viewBox')).toBe('0 0 200 100');
+
+    // Zoom controls work because the derived viewBox exists
+    const zoomInBtn = ws._root.querySelector(
+      '.svg-prep-source-pane .svg-prep-zoom-in'
+    );
+    zoomInBtn.click();
+    const [, , w] = sourceSvg
+      .getAttribute('viewBox')
+      .split(/[\s,]+/)
+      .map(Number);
+    expect(w).toBeLessThan(200);
+
+    ws.destroy();
+  });
+
+  it('preserves result pane zoom across preview re-renders', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(2));
+
+    const zoomInBtn = ws._root.querySelector(
+      '.svg-prep-result-pane .svg-prep-zoom-in'
+    );
+    zoomInBtn.click();
+
+    const zoomedVB = ws._root
+      .querySelector('.svg-prep-result-pane svg')
+      .getAttribute('viewBox');
+
+    // Trigger a preview re-render via a role change
+    const items = ws._root.querySelectorAll('.svg-prep-object');
+    const fgRadio = Array.from(
+      items[1].querySelectorAll('input[type="radio"]')
+    ).find((r) => r.value === 'foreground');
+    fgRadio.checked = true;
+    fgRadio.dispatchEvent(new Event('change', { bubbles: true }));
+
+    const newSvg = ws._root.querySelector('.svg-prep-result-pane svg');
+    expect(newSvg.getAttribute('viewBox')).toBe(zoomedVB);
+
+    ws.destroy();
+  });
+});
+
+describe('preview error handling', () => {
+  it('shows an inline error instead of dying when preview generation throws', () => {
+    const ws = createSvgPrepWorkspace(container);
+    ws.open(SIMPLE_SVG, makeAnalysis(2));
+
+    // Force the next preview render to explode mid-pipeline
+    const RealDOMParser = globalThis.DOMParser;
+    globalThis.DOMParser = class {
+      parseFromString() {
+        throw new Error('boom');
+      }
+    };
+
+    try {
+      const items = ws._root.querySelectorAll('.svg-prep-object');
+      const fgRadio = Array.from(
+        items[1].querySelectorAll('input[type="radio"]')
+      ).find((r) => r.value === 'foreground');
+      fgRadio.checked = true;
+      expect(() =>
+        fgRadio.dispatchEvent(new Event('change', { bubbles: true }))
+      ).not.toThrow();
+    } finally {
+      globalThis.DOMParser = RealDOMParser;
+    }
+
+    const errorMsg = ws._root.querySelector('.svg-prep-result-error');
+    expect(errorMsg).toBeTruthy();
+    expect(errorMsg.textContent).toMatch(/original will be kept/i);
+
+    const applyBtn = ws._root.querySelector('[data-action="apply"]');
+    expect(applyBtn.disabled).toBe(true);
+
+    // Recovering: a valid change re-renders and clears the error
+    const items = ws._root.querySelectorAll('.svg-prep-object');
+    const holeRadio = Array.from(
+      items[1].querySelectorAll('input[type="radio"]')
+    ).find((r) => r.value === 'hole');
+    holeRadio.checked = true;
+    holeRadio.dispatchEvent(new Event('change', { bubbles: true }));
+
+    expect(ws._root.querySelector('.svg-prep-result-error')).toBeFalsy();
+    expect(applyBtn.disabled).toBe(false);
 
     ws.destroy();
   });
