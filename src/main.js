@@ -182,6 +182,7 @@ import {
   exportFormatFromMenu,
 } from './js/file-actions-controller.js';
 import { getEditActionsController } from './js/edit-actions-controller.js';
+import { copyPresetName } from './js/copy-preset-name.js';
 import { getDesignPanelController } from './js/design-panel-controller.js';
 import { getDisplayOptionsController } from './js/display-options-controller.js';
 import { getEditorStateManager } from './js/editor-state-manager.js';
@@ -9111,6 +9112,17 @@ if (rounded) {
           ? 'Delete current preset'
           : 'Select a preset first to delete';
     }
+
+    // Copy preset name button (F30): enabled whenever something is selected,
+    // including the immutable "design default values" entry (the spec asks for
+    // the exact visible name to be copied, regardless of mutability).
+    const copyPresetNameBtn = document.getElementById('copyPresetNameBtn');
+    if (copyPresetNameBtn) {
+      copyPresetNameBtn.disabled = !hasPresetSelected;
+      copyPresetNameBtn.title = hasPresetSelected
+        ? 'Copy preset name'
+        : 'Select a preset first to copy its name';
+    }
   }
 
   function clearPresetSelection(currentValues = null) {
@@ -10256,6 +10268,36 @@ if (rounded) {
 
   // Manage button: Import/export modal
   managePresetsBtn.addEventListener('click', showManagePresetsModal);
+
+  // Copy preset name button (F30): copies the visible label of the
+  // currently-selected preset to the clipboard with a polite SR
+  // announcement. Works for the immutable "design default values"
+  // entry too — copies the exact displayed string verbatim.
+  const copyPresetNameBtn = document.getElementById('copyPresetNameBtn');
+  if (copyPresetNameBtn) {
+    copyPresetNameBtn.addEventListener('click', async () => {
+      const selected = presetSelect?.options[presetSelect.selectedIndex];
+      const name = selected?.text?.trim();
+      if (!presetSelect?.value || !name) {
+        updateStatus('Select a preset first to copy its name', 'warning');
+        return;
+      }
+
+      const result = await copyPresetName(name);
+      if (result.ok) {
+        announceImmediate(`Copied "${name}" to clipboard`);
+        updateStatus(`Copied "${name}" to clipboard`, 'success');
+      } else {
+        // Non-blocking: leave the name visible in the status bar so the
+        // user can select it manually. Avoids a blocking modal for what
+        // is otherwise a minor convenience action.
+        updateStatus(
+          `Could not copy automatically. Preset name: ${name}`,
+          'warning'
+        );
+      }
+    });
+  }
 
   // Preset sort control: re-sort dropdown when sort order changes
   const presetDropdownSort = document.getElementById('presetDropdownSort');
