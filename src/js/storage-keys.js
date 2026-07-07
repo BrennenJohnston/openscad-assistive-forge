@@ -308,6 +308,7 @@ export const STORAGE_KEY_CUSTOM_GRID_PRESETS = getAppPrefKey(
 export const STORAGE_KEY_GRID_COLOR = getAppPrefKey('grid-color');
 export const STORAGE_KEY_GRID_OPACITY = getAppPrefKey('grid-opacity');
 export const STORAGE_KEY_AUTO_BED = getAppPrefKey('auto-bed');
+export const STORAGE_KEY_ZOOM_TO_CURSOR = getAppPrefKey('zoom-to-cursor');
 export const STORAGE_KEY_CAMERA_COLLAPSED = getAppPrefKey(
   'camera-controls-collapsed'
 );
