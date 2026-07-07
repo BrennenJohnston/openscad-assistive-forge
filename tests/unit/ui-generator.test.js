@@ -1539,3 +1539,141 @@ describe('UI Generator', () => {
     })
   })
 })
+
+import { setCustomizerFileId, getOpenGroupIdsFromDOM } from '../../src/js/ui-generator.js'
+
+describe('UI Generator — F5 group collapse defaults', () => {
+  let container
+  const threeGroupSchema = () => ({
+    groups: [
+      { id: 'Tablet', label: 'Tablet', order: 0 },
+      { id: 'Grid Info', label: 'Grid Info', order: 1 },
+      { id: 'Mounting', label: 'Mounting', order: 2 }
+    ],
+    parameters: {
+      width: { name: 'width', order: 0, group: 'Tablet', type: 'number', default: 100, uiType: 'input' },
+      cell_size: { name: 'cell_size', order: 0, group: 'Grid Info', type: 'number', default: 24, uiType: 'input' },
+      mount_kind: { name: 'mount_kind', order: 0, group: 'Mounting', type: 'string', default: 'velcro', uiType: 'input' }
+    }
+  })
+
+  beforeEach(() => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    localStorage.clear()
+    setCustomizerFileId(null)
+  })
+
+  afterEach(() => {
+    if (container?.parentNode) document.body.removeChild(container)
+    setCustomizerFileId(null)
+    localStorage.clear()
+  })
+
+  it('collapses every group on a fresh render with no stored state', () => {
+    renderParameterUI(threeGroupSchema(), container, vi.fn(), {})
+    const details = container.querySelectorAll('details.param-group')
+    expect(details.length).toBe(3)
+    details.forEach(d => expect(d.open).toBe(false))
+  })
+
+  it('renders only the explicit openGroupIds when provided', () => {
+    renderParameterUI(threeGroupSchema(), container, vi.fn(), {}, {
+      openGroupIds: new Set(['Grid Info'])
+    })
+    const byGroup = Array.from(
+      container.querySelectorAll('details.param-group')
+    ).reduce((acc, d) => {
+      acc[d.dataset.groupId] = d.open
+      return acc
+    }, {})
+    expect(byGroup).toEqual({
+      'Tablet': false,
+      'Grid Info': true,
+      'Mounting': false
+    })
+  })
+
+  it('treats an explicit empty Set as "all collapsed"', () => {
+    renderParameterUI(threeGroupSchema(), container, vi.fn(), {}, {
+      openGroupIds: new Set()
+    })
+    container.querySelectorAll('details.param-group').forEach(d =>
+      expect(d.open).toBe(false)
+    )
+  })
+
+  it('uses stored state when useStoredState is true and a fileId is active', () => {
+    setCustomizerFileId('keyguard.scad')
+    localStorage.setItem(
+      'openscad-forge-customizer-groups-keyguard.scad',
+      JSON.stringify({ open: ['Tablet', 'Mounting'] })
+    )
+    renderParameterUI(threeGroupSchema(), container, vi.fn(), {}, {
+      useStoredState: true
+    })
+    const open = getOpenGroupIdsFromDOM(container)
+    expect([...open].sort()).toEqual(['Mounting', 'Tablet'])
+  })
+
+  it('falls back to all-collapsed when useStoredState is true but nothing is stored', () => {
+    setCustomizerFileId('keyguard.scad')
+    renderParameterUI(threeGroupSchema(), container, vi.fn(), {}, {
+      useStoredState: true
+    })
+    container.querySelectorAll('details.param-group').forEach(d =>
+      expect(d.open).toBe(false)
+    )
+  })
+
+  it('preserves the current DOM open state on a re-render with no options', () => {
+    renderParameterUI(threeGroupSchema(), container, vi.fn(), {}, {
+      openGroupIds: new Set(['Grid Info'])
+    })
+    expect(getOpenGroupIdsFromDOM(container).has('Grid Info')).toBe(true)
+
+    renderParameterUI(threeGroupSchema(), container, vi.fn(), {})
+    expect([...getOpenGroupIdsFromDOM(container)]).toEqual(['Grid Info'])
+  })
+
+  it('persists user toggles to localStorage when a fileId is active', () => {
+    setCustomizerFileId('keyguard.scad')
+    renderParameterUI(threeGroupSchema(), container, vi.fn(), {}, {
+      useStoredState: true
+    })
+
+    const tablet = container.querySelector('details.param-group[data-group-id="Tablet"]')
+    tablet.open = true
+    tablet.dispatchEvent(new Event('toggle'))
+
+    const raw = localStorage.getItem(
+      'openscad-forge-customizer-groups-keyguard.scad'
+    )
+    expect(raw).not.toBeNull()
+    expect(JSON.parse(raw).open).toEqual(['Tablet'])
+  })
+
+  it('does not persist toggles when no fileId is active', () => {
+    setCustomizerFileId(null)
+    renderParameterUI(threeGroupSchema(), container, vi.fn(), {})
+    const tablet = container.querySelector('details.param-group[data-group-id="Tablet"]')
+    tablet.open = true
+    tablet.dispatchEvent(new Event('toggle'))
+    expect(localStorage.length).toBe(0)
+  })
+
+  it('forwards toggles to the optional onGroupToggle callback', () => {
+    const cb = vi.fn()
+    renderParameterUI(threeGroupSchema(), container, vi.fn(), {}, {
+      onGroupToggle: cb
+    })
+    const tablet = container.querySelector('details.param-group[data-group-id="Tablet"]')
+    tablet.open = true
+    tablet.dispatchEvent(new Event('toggle'))
+    expect(cb).toHaveBeenCalledWith('Tablet', true)
+  })
+
+  it('getOpenGroupIdsFromDOM returns an empty set on a null container', () => {
+    expect(getOpenGroupIdsFromDOM(null).size).toBe(0)
+  })
+})
