@@ -2436,6 +2436,33 @@ details summary:focus,
   padding: var(--space-xl);
 }
 
+/* Notice shown when WebGL context creation fails (3D canvas disabled) */
+.preview-webgl-error {
+  max-width: 32rem;
+  padding: var(--space-xl);
+  color: var(--color-text-primary);
+}
+
+.preview-webgl-error h3 {
+  margin: 0 0 var(--space-sm);
+}
+
+.preview-webgl-error p {
+  margin: 0 0 var(--space-sm);
+  color: var(--color-text-secondary);
+}
+
+.preview-webgl-error ul {
+  margin: 0;
+  padding-left: var(--space-lg);
+  color: var(--color-text-secondary);
+  text-align: left;
+}
+
+.preview-webgl-error li {
+  margin-bottom: var(--space-xs);
+}
+
 /* Rendered 2D SVG preview surface */
 .rendered-2d-preview {
   display: flex;

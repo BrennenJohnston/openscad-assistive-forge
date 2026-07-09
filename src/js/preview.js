@@ -338,6 +338,12 @@ export class PreviewManager {
     // Create renderer — WebGL may be unavailable in headless browsers.
     // When that happens, geometry parsing (loadOFF / loadSTL) still works;
     // only the visual canvas is disabled.
+    //
+    // IMPORTANT: three is pinned to ^0.162.0 because r163 removed WebGL 1
+    // support. Browsers with WebGL 2 disabled (Firefox hardware blocklist,
+    // privacy-hardened profiles) can still render via the WebGL 1 fallback
+    // in r162. Do not upgrade three past 0.162.x without an alternative
+    // fallback for those users.
     try {
       this.renderer = new WebGLRenderer({ antialias: true });
       this.renderer.outputColorSpace = LinearSRGBColorSpace;
@@ -355,6 +361,7 @@ export class PreviewManager {
         webglError.message
       );
       this.renderer = null;
+      this._showWebGLUnavailableNotice();
     }
 
     // Lighting matched to desktop OpenSCAD's GLView::setupLight().
@@ -503,6 +510,53 @@ export class PreviewManager {
     const rendererStatus = this.renderer ? 'WebGL' : 'no-renderer (headless)';
     console.log(
       `[Preview] Three.js scene initialized (theme: ${this.currentTheme}, renderer: ${rendererStatus})`
+    );
+  }
+
+  /**
+   * Show a user-visible notice in the preview container when WebGL context
+   * creation fails. Without this, the pane is silently blank (init() clears
+   * the container, and the headless fallback only logs to the console).
+   *
+   * Note: three is pinned to ^0.162 (the last release that falls back to
+   * WebGL 1) so the preview works even where WebGL 2 is disabled. This
+   * notice only appears when WebGL is entirely unavailable.
+   */
+  _showWebGLUnavailableNotice() {
+    if (this.container.querySelector('.preview-webgl-error')) return;
+
+    const notice = document.createElement('div');
+    notice.className = 'preview-webgl-error';
+    notice.setAttribute('role', 'alert');
+
+    const heading = document.createElement('h3');
+    heading.textContent = '3D preview unavailable';
+
+    const reason = document.createElement('p');
+    reason.textContent =
+      'Your browser blocked WebGL, which is required to display the 3D model. ' +
+      'Rendering and exporting (STL, 3MF, etc.) still work normally.';
+
+    const howToFix = document.createElement('p');
+    howToFix.textContent = 'To enable the 3D preview:';
+
+    const steps = document.createElement('ul');
+    const stepTexts = [
+      'Make sure hardware acceleration is enabled in your browser settings.',
+      'In Firefox: open about:config and check that "webgl.disabled" is false.',
+      'Privacy-hardening extensions or profiles may also block WebGL — try allowing it for this site.',
+    ];
+    for (const text of stepTexts) {
+      const li = document.createElement('li');
+      li.textContent = text;
+      steps.appendChild(li);
+    }
+
+    notice.append(heading, reason, howToFix, steps);
+    this.container.appendChild(notice);
+
+    announceImmediate(
+      '3D preview unavailable: WebGL is disabled in this browser. Rendering and export still work.'
     );
   }
 
