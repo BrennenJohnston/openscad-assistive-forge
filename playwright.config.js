@@ -16,8 +16,14 @@ export default defineConfig({
   
   // Global timeout: 10min CI (2 workers + retries), 30min local (1 worker on Windows)
   // Firefox/WebKit projects override per-test timeout to 90s (see below).
+  // PW_GLOBAL_TIMEOUT allows slow CI jobs (WebKit on macOS regularly needs
+  // 9-11min wall time) to raise the ceiling without affecting other jobs.
   timeout: 60000,
-  globalTimeout: isCI ? 600000 : 1800000,
+  globalTimeout: process.env.PW_GLOBAL_TIMEOUT
+    ? Number(process.env.PW_GLOBAL_TIMEOUT)
+    : isCI
+      ? 600000
+      : 1800000,
   
   // Prevent terminal hang issues
   outputDir: './test-results',
