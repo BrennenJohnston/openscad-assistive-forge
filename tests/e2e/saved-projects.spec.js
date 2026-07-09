@@ -130,6 +130,18 @@ test.describe('Saved Projects', () => {
     await expect(page.locator('#welcomeScreen')).not.toBeVisible();
     
     // Check that parameter controls are rendered
+    // F5: parameter groups render collapsed by default, so expand them
+    // before asserting the controls inside are visible.
+    await page
+      .locator('.param-group')
+      .first()
+      .waitFor({ state: 'attached', timeout: 15000 });
+    await page.evaluate(() => {
+      document.querySelectorAll('details.param-group').forEach((group) => {
+        group.open = true;
+      });
+    });
+
     await expect(
       page.locator('.param-group input[type="range"], .param-group input[type="number"]').first()
     ).toBeVisible({ timeout: 15000 });
