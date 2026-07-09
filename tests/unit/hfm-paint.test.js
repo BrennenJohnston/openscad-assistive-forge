@@ -1,5 +1,12 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { paintFrame, resizeOverlay, sampleColors, QUANT_LEVELS } from '../../src/js/_hfm-paint.js'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import {
+  paintFrame,
+  resizeOverlay,
+  buildGlyphAtlas,
+  getPhosphorColor,
+  GLYPH_COUNT,
+  SPACE_INDEX,
+} from '../../src/js/_hfm-paint.js'
 
 function createMockCtx(canvasWidth = 100, canvasHeight = 80) {
   const canvas = { width: canvasWidth, height: canvasHeight }
@@ -9,6 +16,7 @@ function createMockCtx(canvasWidth = 100, canvasHeight = 80) {
     fillText: vi.fn(),
     drawImage: vi.fn(),
     font: '',
+    textAlign: '',
     textBaseline: '',
     fillStyle: '',
     globalAlpha: 1,
@@ -27,19 +35,83 @@ function createMockPersistCtx() {
   }
 }
 
-function buildGrid(cols, rows) {
-  const total = cols * rows
-  const chars = new Array(total).fill('A')
-  const colors = new Array(total).fill('rgb(0,255,0)')
-  return { chars, colors }
+function createMockAtlas({ cellW = 12, cellH = 24, dpr = 1 } = {}) {
+  return {
+    canvas: { width: GLYPH_COUNT * cellW, height: cellH },
+    cellW,
+    cellH,
+    dpr,
+    color: '#00ff00',
+  }
 }
 
-function buildGridMultiColor(cols, rows, colorList) {
-  const total = cols * rows
-  const chars = new Array(total).fill('A')
-  const colors = Array.from({ length: total }, (_, i) => colorList[i % colorList.length])
-  return { chars, colors }
+/** Flat glyph-index grid filled with a single index. */
+function buildGrid(cols, rows, index) {
+  return new Int16Array(cols * rows).fill(index)
 }
+
+describe('buildGlyphAtlas', () => {
+  let origGetContext
+  let atlasCtx
+
+  beforeEach(() => {
+    origGetContext = HTMLCanvasElement.prototype.getContext
+    HTMLCanvasElement.prototype.getContext = function () {
+      atlasCtx = createMockCtx()
+      atlasCtx.canvas = this
+      atlasCtx.getImageData = vi.fn(() => ({ data: new Uint8ClampedArray(4) }))
+      return atlasCtx
+    }
+  })
+
+  afterEach(() => {
+    HTMLCanvasElement.prototype.getContext = origGetContext
+  })
+
+  it('sizes cells at device-pixel resolution', () => {
+    const atlas = buildGlyphAtlas({
+      fontFamily: 'monospace',
+      fontSizePx: 10,
+      charW: 6,
+      charH: 12,
+      dpr: 2,
+      color: '#00ff00',
+    })
+
+    expect(atlas.cellW).toBe(12)
+    expect(atlas.cellH).toBe(24)
+    expect(atlas.canvas.width).toBe(GLYPH_COUNT * 12)
+    expect(atlas.canvas.height).toBe(24)
+    expect(atlas.dpr).toBe(2)
+  })
+
+  it('renders all 95 printable ASCII glyphs centered with the tint color', () => {
+    buildGlyphAtlas({
+      fontFamily: 'monospace',
+      fontSizePx: 10,
+      charW: 6,
+      charH: 12,
+      dpr: 1,
+      color: '#ffb000',
+    })
+
+    expect(atlasCtx.fillText).toHaveBeenCalledTimes(GLYPH_COUNT)
+    expect(atlasCtx.fillStyle).toBe('#ffb000')
+    expect(atlasCtx.textAlign).toBe('center')
+    expect(atlasCtx.textBaseline).toBe('middle')
+
+    // First glyph (space) at the center of cell 0; last glyph (~) at cell 94
+    expect(atlasCtx.fillText).toHaveBeenCalledWith(' ', 3, 6)
+    expect(atlasCtx.fillText).toHaveBeenCalledWith('~', 94 * 6 + 3, 6)
+  })
+})
+
+describe('getPhosphorColor', () => {
+  it('falls back to green when --color-accent is not defined', () => {
+    // jsdom getComputedStyle returns '' for undefined custom properties
+    expect(getPhosphorColor()).toBe('#00ff00')
+  })
+})
 
 describe('paintFrame', () => {
   let ctx
@@ -48,68 +120,84 @@ describe('paintFrame', () => {
     ctx = createMockCtx()
   })
 
-  it('calls clearRect and fillText rows*cols times without persistence', () => {
+  it('clears once and blits one glyph per non-space cell', () => {
     const cols = 4
     const rows = 3
-    const { chars, colors } = buildGrid(cols, rows)
+    const atlas = createMockAtlas()
+    const glyphs = buildGrid(cols, rows, 33) // 'A'
 
-    paintFrame(ctx, chars, colors, cols, rows, 10, 12, '10px mono', null, null, 0)
+    paintFrame(ctx, glyphs, cols, rows, atlas, 10, 12, null, null, 0)
 
     expect(ctx.clearRect).toHaveBeenCalledOnce()
-    expect(ctx.fillText).toHaveBeenCalledTimes(cols * rows)
+    expect(ctx.drawImage).toHaveBeenCalledTimes(cols * rows)
   })
 
-  it('sets font and textBaseline before drawing', () => {
-    const { chars, colors } = buildGrid(2, 2)
+  it('skips blank (space) cells entirely', () => {
+    const cols = 4
+    const rows = 3
+    const atlas = createMockAtlas()
+    const glyphs = buildGrid(cols, rows, SPACE_INDEX)
+    glyphs[5] = 33 // a single visible glyph
 
-    paintFrame(ctx, chars, colors, 2, 2, 10, 12, '14px monospace', null, null, 0)
+    paintFrame(ctx, glyphs, cols, rows, atlas, 10, 12, null, null, 0)
 
-    expect(ctx.font).toBe('14px monospace')
-    expect(ctx.textBaseline).toBe('top')
+    expect(ctx.drawImage).toHaveBeenCalledTimes(1)
   })
 
-  it('draws each character at the correct grid position', () => {
+  it('selects the source rect from the atlas by glyph index', () => {
+    const cols = 2
+    const rows = 1
+    const atlas = createMockAtlas({ cellW: 12, cellH: 24 })
+    const glyphs = new Int16Array([33, 65]) // 'A' and 'a'
+
+    paintFrame(ctx, glyphs, cols, rows, atlas, 10, 12, null, null, 0)
+
+    const calls = ctx.drawImage.mock.calls
+    expect(calls[0][0]).toBe(atlas.canvas)
+    // (atlas, sx, sy, sw, sh, dx, dy, dw, dh)
+    expect(calls[0].slice(1, 5)).toEqual([33 * 12, 0, 12, 24])
+    expect(calls[1].slice(1, 5)).toEqual([65 * 12, 0, 12, 24])
+  })
+
+  it('paints destinations at integer coordinates even with fractional metrics', () => {
     const cols = 3
     const rows = 2
-    const charW = 8
-    const charH = 16
-    const { chars, colors } = buildGrid(cols, rows)
+    const atlas = createMockAtlas({ cellW: 13, cellH: 27, dpr: 1.5 })
+    const glyphs = buildGrid(cols, rows, 2)
 
-    paintFrame(ctx, chars, colors, cols, rows, charW, charH, '10px mono', null, null, 0)
+    paintFrame(ctx, glyphs, cols, rows, atlas, 8.7, 15.3, null, null, 0)
 
-    expect(ctx.fillText).toHaveBeenCalledWith('A', 0, 0)
-    expect(ctx.fillText).toHaveBeenCalledWith('A', charW, 0)
-    expect(ctx.fillText).toHaveBeenCalledWith('A', 2 * charW, 0)
-    expect(ctx.fillText).toHaveBeenCalledWith('A', 0, charH)
-  })
-
-  it('truncates fractional charW/charH to integer pixel positions', () => {
-    const cols = 3
-    const rows = 2
-    const charW = 8.7
-    const charH = 15.3
-    const { chars, colors } = buildGrid(cols, rows)
-
-    paintFrame(ctx, chars, colors, cols, rows, charW, charH, '10px mono', null, null, 0)
-
-    // Every fillText call must receive integer x and y coordinates
-    for (const call of ctx.fillText.mock.calls) {
-      const [, x, y] = call
-      expect(x).toBe(Math.trunc(x))
-      expect(y).toBe(Math.trunc(y))
+    for (const call of ctx.drawImage.mock.calls) {
+      const [, , , , , dx, dy] = call
+      expect(Number.isInteger(dx)).toBe(true)
+      expect(Number.isInteger(dy)).toBe(true)
     }
-    expect(ctx.fillText).toHaveBeenCalledTimes(cols * rows)
+    expect(ctx.drawImage).toHaveBeenCalledTimes(cols * rows)
+  })
+
+  it('scales destination steps by the atlas dpr', () => {
+    const cols = 2
+    const rows = 1
+    const atlas = createMockAtlas({ cellW: 20, cellH: 24, dpr: 2 })
+    const glyphs = new Int16Array([1, 1])
+
+    paintFrame(ctx, glyphs, cols, rows, atlas, 10, 12, null, null, 0)
+
+    const calls = ctx.drawImage.mock.calls
+    expect(calls[0][5]).toBe(0)
+    expect(calls[1][5]).toBe(20) // col 1 * charW 10 * dpr 2
   })
 
   it('composites persistence canvas when persistFade > 0', () => {
     const cols = 2
     const rows = 2
-    const { chars, colors } = buildGrid(cols, rows)
+    const atlas = createMockAtlas()
+    const glyphs = buildGrid(cols, rows, 33)
     const persistCanvas = createMockPersistCanvas()
     const persistCtx = createMockPersistCtx()
 
     paintFrame(
-      ctx, chars, colors, cols, rows, 10, 12, '10px mono',
+      ctx, glyphs, cols, rows, atlas, 10, 12,
       persistCanvas, persistCtx, 0.85
     )
 
@@ -123,16 +211,17 @@ describe('paintFrame', () => {
   it('does not enter persistence branch when persistFade is 0', () => {
     const cols = 2
     const rows = 2
-    const { chars, colors } = buildGrid(cols, rows)
+    const atlas = createMockAtlas()
+    const glyphs = buildGrid(cols, rows, 33)
     const persistCanvas = createMockPersistCanvas()
     const persistCtx = createMockPersistCtx()
 
     paintFrame(
-      ctx, chars, colors, cols, rows, 10, 12, '10px mono',
+      ctx, glyphs, cols, rows, atlas, 10, 12,
       persistCanvas, persistCtx, 0
     )
 
-    expect(ctx.drawImage).not.toHaveBeenCalled()
+    expect(ctx.drawImage).not.toHaveBeenCalledWith(persistCanvas, 0, 0)
     expect(persistCtx.drawImage).not.toHaveBeenCalled()
     expect(persistCtx.clearRect).not.toHaveBeenCalled()
   })
@@ -140,68 +229,32 @@ describe('paintFrame', () => {
   it('degrades gracefully when persistCanvas is null', () => {
     const cols = 2
     const rows = 2
-    const { chars, colors } = buildGrid(cols, rows)
+    const atlas = createMockAtlas()
+    const glyphs = buildGrid(cols, rows, 33)
 
     expect(() => {
-      paintFrame(
-        ctx, chars, colors, cols, rows, 10, 12, '10px mono',
-        null, null, 0.85
-      )
+      paintFrame(ctx, glyphs, cols, rows, atlas, 10, 12, null, null, 0.85)
     }).not.toThrow()
 
-    expect(ctx.drawImage).not.toHaveBeenCalled()
-    expect(ctx.fillText).toHaveBeenCalledTimes(cols * rows)
+    // only atlas blits, no persistence composite
+    expect(ctx.drawImage).toHaveBeenCalledTimes(cols * rows)
   })
 
   it('degrades gracefully when persistCtx is null but persistCanvas is provided', () => {
     const cols = 2
     const rows = 2
-    const { chars, colors } = buildGrid(cols, rows)
+    const atlas = createMockAtlas()
+    const glyphs = buildGrid(cols, rows, 33)
     const persistCanvas = createMockPersistCanvas()
 
     expect(() => {
       paintFrame(
-        ctx, chars, colors, cols, rows, 10, 12, '10px mono',
+        ctx, glyphs, cols, rows, atlas, 10, 12,
         persistCanvas, null, 0.85
       )
     }).not.toThrow()
 
-    expect(ctx.drawImage).not.toHaveBeenCalled()
-  })
-
-  it('sets fillStyle no more than QUANT_LEVELS times for a fully-unique-color grid', () => {
-    const cols = 4
-    const rows = 4
-    // Build a grid where every cell has a distinct color string (worst case for batching)
-    const total = cols * rows
-    const chars = new Array(total).fill('A')
-    // 16 unique colors — still within QUANT_LEVELS (32)
-    const colors = Array.from({ length: total }, (_, i) => `rgb(0,${i * 16},0)`)
-
-    const fillStyleValues = []
-    Object.defineProperty(ctx, 'fillStyle', {
-      get() { return fillStyleValues.at(-1) ?? '' },
-      set(v) { fillStyleValues.push(v) },
-      configurable: true,
-    })
-
-    paintFrame(ctx, chars, colors, cols, rows, 10, 12, '10px mono', null, null, 0)
-
-    // Each unique color should be set exactly once (color-grouped batching)
-    const uniqueColors = new Set(colors)
-    expect(fillStyleValues.length).toBe(uniqueColors.size)
-    expect(fillStyleValues.length).toBeLessThanOrEqual(QUANT_LEVELS)
-  })
-
-  it('draws all characters regardless of color-grouped draw order', () => {
-    const cols = 3
-    const rows = 2
-    const colorList = ['rgb(0,128,0)', 'rgb(0,200,0)', 'rgb(0,64,0)']
-    const { chars, colors } = buildGridMultiColor(cols, rows, colorList)
-
-    paintFrame(ctx, chars, colors, cols, rows, 8, 16, '10px mono', null, null, 0)
-
-    expect(ctx.fillText).toHaveBeenCalledTimes(cols * rows)
+    expect(ctx.drawImage).not.toHaveBeenCalledWith(persistCanvas, 0, 0)
   })
 })
 
@@ -220,122 +273,65 @@ describe('persistence canvas clearing', () => {
     const ctx = createMockCtx()
     const cols = 3
     const rows = 2
-    const { chars, colors } = buildGrid(cols, rows)
+    const atlas = createMockAtlas()
+    const glyphs = buildGrid(cols, rows, 33)
     const persistCanvas = createMockPersistCanvas()
     const persistCtx = createMockPersistCtx()
 
     paintFrame(
-      ctx, chars, colors, cols, rows, 10, 12, '10px mono',
+      ctx, glyphs, cols, rows, atlas, 10, 12,
       persistCanvas, persistCtx, 0.85
     )
 
-    // After paintFrame with persistence, the persist canvas should have been updated
     expect(persistCtx.clearRect).toHaveBeenCalledOnce()
     expect(persistCtx.drawImage).toHaveBeenCalledWith(ctx.canvas, 0, 0)
-
-    // Now simulate clearing persistence (as clearPersistence would)
-    persistCtx.clearRect.mockClear()
-    persistCtx.clearRect(0, 0, persistCanvas.width, persistCanvas.height)
-    expect(persistCtx.clearRect).toHaveBeenCalledWith(0, 0, 100, 80)
   })
 })
 
 describe('resizeOverlay', () => {
-  it('sets width and height on the primary canvas', () => {
-    const canvas = { width: 0, height: 0 }
-    resizeOverlay(canvas, 800, 600, null)
-
-    expect(canvas.width).toBe(800)
-    expect(canvas.height).toBe(600)
-  })
-
-  it('sets width and height on both canvases when persistCanvas is provided', () => {
-    const canvas = { width: 0, height: 0 }
-    const persistCanvas = { width: 0, height: 0 }
-
-    resizeOverlay(canvas, 1024, 768, persistCanvas)
-
-    expect(canvas.width).toBe(1024)
-    expect(canvas.height).toBe(768)
-    expect(persistCanvas.width).toBe(1024)
-    expect(persistCanvas.height).toBe(768)
-  })
-
-  it('does not modify persistCanvas when it is null', () => {
-    const canvas = { width: 0, height: 0 }
-
-    expect(() => {
-      resizeOverlay(canvas, 640, 480, null)
-    }).not.toThrow()
-
-    expect(canvas.width).toBe(640)
-    expect(canvas.height).toBe(480)
-  })
-
-  it('does not modify persistCanvas when it is undefined', () => {
-    const canvas = { width: 0, height: 0 }
-
-    expect(() => {
-      resizeOverlay(canvas, 640, 480, undefined)
-    }).not.toThrow()
-
-    expect(canvas.width).toBe(640)
-    expect(canvas.height).toBe(480)
-  })
-})
-
-describe('sampleColors', () => {
-  function make1x1White() {
-    return new Uint8ClampedArray([255, 255, 255, 255])
+  function mockCanvas() {
+    return { width: 0, height: 0, style: {} }
   }
 
-  it('returns green phosphor when amber param is explicitly false', () => {
-    const colors = sampleColors(make1x1White(), 1, 1, 1, 1, 1, false)
-    expect(colors).toHaveLength(1)
-    expect(colors[0]).toMatch(/^rgb\(0,\d+,0\)$/)
+  it('sets a DPR-scaled backing store with CSS-sized element styles', () => {
+    const canvas = mockCanvas()
+    resizeOverlay(canvas, 800, 600, 2, null)
+
+    expect(canvas.width).toBe(1600)
+    expect(canvas.height).toBe(1200)
+    expect(canvas.style.width).toBe('800px')
+    expect(canvas.style.height).toBe('600px')
   })
 
-  it('returns amber phosphor when amber param is explicitly true', () => {
-    const colors = sampleColors(make1x1White(), 1, 1, 1, 1, 1, true)
-    expect(colors).toHaveLength(1)
-    expect(colors[0]).toMatch(/^rgb\(\d+,\d+,0\)$/)
-    expect(colors[0]).not.toMatch(/^rgb\(0,/)
+  it('keeps backing store equal to CSS size at dpr 1', () => {
+    const canvas = mockCanvas()
+    resizeOverlay(canvas, 640, 480, 1, null)
+
+    expect(canvas.width).toBe(640)
+    expect(canvas.height).toBe(480)
   })
 
-  it('detects amber from data-theme="light" when amber param is omitted', () => {
-    document.documentElement.setAttribute('data-theme', 'light')
-    const colors = sampleColors(make1x1White(), 1, 1, 1, 1, 1)
-    expect(colors[0]).toMatch(/^rgb\(\d+,\d+,0\)$/)
-    expect(colors[0]).not.toMatch(/^rgb\(0,/)
-    document.documentElement.removeAttribute('data-theme')
+  it('sizes the persistence canvas to match the backing store', () => {
+    const canvas = mockCanvas()
+    const persistCanvas = { width: 0, height: 0 }
+
+    resizeOverlay(canvas, 1024, 768, 1.5, persistCanvas)
+
+    expect(canvas.width).toBe(1536)
+    expect(canvas.height).toBe(1152)
+    expect(persistCanvas.width).toBe(1536)
+    expect(persistCanvas.height).toBe(1152)
   })
 
-  it('detects green from data-theme="dark" when amber param is omitted', () => {
-    document.documentElement.setAttribute('data-theme', 'dark')
-    const colors = sampleColors(make1x1White(), 1, 1, 1, 1, 1)
-    expect(colors[0]).toMatch(/^rgb\(0,\d+,0\)$/)
-    document.documentElement.removeAttribute('data-theme')
-  })
+  it('does not modify persistCanvas when it is null or undefined', () => {
+    const canvas = mockCanvas()
 
-  it('falls back to system preference when data-theme is absent', () => {
-    document.documentElement.removeAttribute('data-theme')
-    const colors = sampleColors(make1x1White(), 1, 1, 1, 1, 1)
-    expect(colors).toHaveLength(1)
-    // In JSDOM, matchMedia defaults to not matching (prefers-color-scheme: dark)
-    // → system is light → amber
-    expect(colors[0]).toMatch(/^rgb\(\d+,\d+,0\)$/)
-  })
+    expect(() => {
+      resizeOverlay(canvas, 640, 480, 1, null)
+      resizeOverlay(canvas, 640, 480, 1, undefined)
+    }).not.toThrow()
 
-  it('produces correct grid dimensions for multi-cell grids', () => {
-    const w = 4
-    const h = 3
-    const data = new Uint8ClampedArray(w * h * 4)
-    for (let i = 0; i < data.length; i += 4) {
-      data[i] = 128; data[i + 1] = 128; data[i + 2] = 128; data[i + 3] = 255
-    }
-    const cols = 2
-    const rows = 3
-    const colors = sampleColors(data, w, w / cols, h / rows, cols, rows, false)
-    expect(colors).toHaveLength(cols * rows)
+    expect(canvas.width).toBe(640)
+    expect(canvas.height).toBe(480)
   })
 })

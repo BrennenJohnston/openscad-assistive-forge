@@ -8,7 +8,7 @@
  * @license GPL-3.0-or-later
  */
 
-import { getAppPrefKey } from './storage-keys.js';
+import { getAppPrefKey, safeGetItem, safeSetItem } from './storage-keys.js';
 import { announceImmediate } from './announcer.js';
 
 const FONT_SIZE_KEY = getAppPrefKey('editor-font-size');
@@ -222,25 +222,17 @@ export class EditActionsController {
   }
 
   _loadFontSize() {
-    try {
-      const saved = localStorage.getItem(FONT_SIZE_KEY);
-      if (saved) {
-        const val = parseInt(saved, 10);
-        if (!isNaN(val) && val >= MIN_FONT_SIZE && val <= MAX_FONT_SIZE) {
-          this.fontSize = val;
-        }
+    const saved = safeGetItem(FONT_SIZE_KEY);
+    if (saved) {
+      const val = parseInt(saved, 10);
+      if (!isNaN(val) && val >= MIN_FONT_SIZE && val <= MAX_FONT_SIZE) {
+        this.fontSize = val;
       }
-    } catch {
-      // ignore
     }
   }
 
   _saveFontSize() {
-    try {
-      localStorage.setItem(FONT_SIZE_KEY, String(this.fontSize));
-    } catch {
-      // quota exceeded — acceptable
-    }
+    safeSetItem(FONT_SIZE_KEY, String(this.fontSize));
   }
 
   _updateFontSizeDisplay() {
@@ -305,11 +297,4 @@ export function getEditActionsController(options = {}) {
     instance = new EditActionsController(options);
   }
   return instance;
-}
-
-/**
- * Reset singleton (for testing).
- */
-function resetEditActionsController() {
-  instance = null;
 }

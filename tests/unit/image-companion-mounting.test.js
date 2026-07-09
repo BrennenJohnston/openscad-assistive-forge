@@ -6,14 +6,19 @@
  * must decode these to Uint8Array before writing to the Emscripten FS, so that
  * OpenSCAD surface() and import() see valid binary content.
  *
- * Since mountFiles() is module-scoped inside the worker, we test the
- * underlying logic units (decodeDataUrl, detection heuristic) directly.
+ * Imports the real detection/resolution logic from
+ * src/worker/mount-content.js — the shared module mountFiles() uses — so
+ * these tests fail when the production logic changes.
  *
  * @license GPL-3.0-or-later
  */
 
 import { describe, it, expect } from 'vitest';
 import { decodeDataUrl } from '../../src/js/file-param-resolver.js';
+import {
+  isDataUrl,
+  resolveMountContent,
+} from '../../src/worker/mount-content.js';
 
 // Minimal PNG: 1x1 transparent pixel (89 50 4E 47 … header)
 const TINY_PNG_BASE64 =
@@ -32,12 +37,8 @@ const PNG_MAGIC = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 const JPEG_MAGIC = [0xff, 0xd8, 0xff];
 
 // ---------------------------------------------------------------------------
-// Data URL detection heuristic (mirrors mountFiles logic)
+// Data URL detection heuristic (real implementation from mount-content.js)
 // ---------------------------------------------------------------------------
-
-function isDataUrl(content) {
-  return typeof content === 'string' && content.startsWith('data:');
-}
 
 describe('Image companion file data URL detection', () => {
   it('detects PNG data URL', () => {
@@ -104,38 +105,31 @@ describe('Image data URL decode produces valid binary', () => {
 });
 
 // ---------------------------------------------------------------------------
-// mountFiles decode-or-passthrough logic (inlined from worker)
+// mountFiles decode-or-passthrough logic (real implementation)
 // ---------------------------------------------------------------------------
-
-function resolveContent(content) {
-  if (typeof content === 'string' && content.startsWith('data:')) {
-    return decodeDataUrl(content);
-  }
-  return content;
-}
 
 describe('mountFiles content resolution', () => {
   it('decodes PNG data URL to binary Uint8Array', () => {
-    const result = resolveContent(TINY_PNG_DATA_URL);
+    const result = resolveMountContent(TINY_PNG_DATA_URL);
     expect(result).toBeInstanceOf(Uint8Array);
     expect(result[0]).toBe(0x89);
   });
 
   it('passes through plain text (SCAD code) unchanged', () => {
     const scad = 'include <utils.scad>\ncube(10);';
-    const result = resolveContent(scad);
+    const result = resolveMountContent(scad);
     expect(result).toBe(scad);
   });
 
   it('passes through text .dat heightmap content unchanged', () => {
     const dat = '0 0 0 0\n0 1 1 0\n0 1 1 0\n0 0 0 0\n';
-    const result = resolveContent(dat);
+    const result = resolveMountContent(dat);
     expect(result).toBe(dat);
   });
 
   it('passes through Uint8Array content unchanged', () => {
     const binary = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
-    const result = resolveContent(binary);
+    const result = resolveMountContent(binary);
     expect(result).toBe(binary);
   });
 });
@@ -186,7 +180,7 @@ describe('Image mounting edge cases', () => {
 
   it('text files starting with "data" are not mistaken for data URLs', () => {
     const textContent = 'data points:\n1.0 2.0 3.0\n4.0 5.0 6.0';
-    const result = resolveContent(textContent);
+    const result = resolveMountContent(textContent);
     expect(typeof result).toBe('string');
     expect(result).toBe(textContent);
   });

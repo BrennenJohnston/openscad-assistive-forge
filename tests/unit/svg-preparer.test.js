@@ -29,6 +29,7 @@ import {
   analyzeSvg,
   strokeToFill,
   applyPerPathOffsets,
+  getEffectivePaint,
 } from '../../src/js/svg-preparer.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -712,13 +713,13 @@ describe('needsPreparation', () => {
     expect(needsPreparation(svg)).toBe(true);
   });
 
-  it('counts elements with no fill attr as filled (SVG default)', () => {
+  it('all-dark multi-element SVGs pass through (OpenSCAD unions natively)', () => {
     const svg =
       '<svg xmlns="http://www.w3.org/2000/svg">' +
       '<circle cx="10" cy="10" r="5"/>' +
       '<circle cx="20" cy="20" r="5"/>' +
       '</svg>';
-    expect(needsPreparation(svg)).toBe(true);
+    expect(needsPreparation(svg)).toBe(false);
   });
 });
 
@@ -1587,17 +1588,17 @@ describe('analyzeSvg', () => {
   });
 
   describe('transforms', () => {
-    it('reduces confidence when transforms are present', () => {
+    it('does not penalize confidence when transforms bake successfully', () => {
       const svg =
         '<svg xmlns="http://www.w3.org/2000/svg">' +
         '<rect x="0" y="0" width="20" height="20" fill="black" transform="rotate(45 10 10)"/>' +
         '<circle cx="50" cy="50" r="15" fill="white"/>' +
         '</svg>';
       const result = analyzeSvg(svg);
-      expect(result.confidence).toBeLessThan(1.0);
+      expect(result.confidence).toBe(1.0);
     });
 
-    it('per-element warning on transformed element', () => {
+    it('no per-element warning when the transform was baked', () => {
       const svg =
         '<svg xmlns="http://www.w3.org/2000/svg">' +
         '<rect x="0" y="0" width="20" height="20" fill="black" transform="rotate(45 10 10)"/>' +
@@ -1605,7 +1606,23 @@ describe('analyzeSvg', () => {
       const result = analyzeSvg(svg);
       expect(
         result.elements[0].warnings.some((w) => w.includes('transform'))
+      ).toBe(false);
+    });
+
+    it('warns and reduces confidence when a transform cannot be parsed', () => {
+      const svg =
+        '<svg xmlns="http://www.w3.org/2000/svg">' +
+        '<rect x="0" y="0" width="20" height="20" fill="black" transform="bogus(1,2)"/>' +
+        '<circle cx="50" cy="50" r="15" fill="white"/>' +
+        '</svg>';
+      const result = analyzeSvg(svg);
+      expect(
+        result.elements[0].warnings.some((w) =>
+          w.includes('could not be baked')
+        )
       ).toBe(true);
+      expect(result.confidence).toBeLessThan(1.0);
+      expect(result.recommendation).toBe('open_editor');
     });
   });
 
@@ -1665,11 +1682,26 @@ describe('analyzeSvg', () => {
   });
 
   describe('similar luminance (ambiguous classification)', () => {
-    it('reduces confidence when all filled elements have similar luminance', () => {
+    it('does not penalize all-dark (all-foreground) SVGs — they pass through', () => {
       const svg =
         '<svg xmlns="http://www.w3.org/2000/svg">' +
         '<circle cx="20" cy="20" r="10" fill="black"/>' +
         '<circle cx="50" cy="20" r="10" fill="black"/>' +
+        '</svg>';
+      const result = analyzeSvg(svg);
+      expect(result.confidence).toBe(1.0);
+      expect(result.recommendation).toBe('pass_through');
+      expect(
+        result.warnings.some((w) => w.includes('similar luminance'))
+      ).toBe(false);
+    });
+
+    it('reduces confidence for similar luminance when roles are mixed', () => {
+      // Both fills are bright (holes) — similar luminance, not all-foreground
+      const svg =
+        '<svg xmlns="http://www.w3.org/2000/svg">' +
+        '<circle cx="20" cy="20" r="10" fill="#eeeeee"/>' +
+        '<circle cx="50" cy="20" r="10" fill="#ffffff"/>' +
         '</svg>';
       const result = analyzeSvg(svg);
       expect(result.confidence).toBeLessThan(1.0);
@@ -1884,5 +1916,249 @@ describe('applyPerPathOffsets', () => {
     expect(result[1].pathData).toBe(classified[1].pathData);
     expect(result[0].role).toBe('foreground');
     expect(result[1].role).toBe('hole');
+  });
+});
+
+// ===========================================================================
+// Overhaul — transform baking
+// ===========================================================================
+
+describe('transform baking in parseSvgElements', () => {
+  /** Extract min/max x from a path d string's numeric pairs. */
+  function pathBounds(d) {
+    const nums = (d.match(/-?[\d.]+/g) || []).map(Number);
+    const xs = nums.filter((_, i) => i % 2 === 0);
+    const ys = nums.filter((_, i) => i % 2 === 1);
+    return {
+      xMin: Math.min(...xs),
+      xMax: Math.max(...xs),
+      yMin: Math.min(...ys),
+      yMax: Math.max(...ys),
+    };
+  }
+
+  it('bakes a translate() into the path coordinates', () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg">' +
+      '<rect x="0" y="0" width="10" height="10" fill="black" transform="translate(40,50)"/>' +
+      '</svg>';
+    const [el] = parseSvgElements(svg);
+    const b = pathBounds(el.pathData);
+    expect(b.xMin).toBeCloseTo(40, 0);
+    expect(b.xMax).toBeCloseTo(50, 0);
+    expect(b.yMin).toBeCloseTo(50, 0);
+    expect(b.yMax).toBeCloseTo(60, 0);
+  });
+
+  it('bakes a rotate() about a point', () => {
+    // 90° rotation about (10,10): corner (0,0) maps to (20,0)
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg">' +
+      '<rect x="0" y="0" width="20" height="20" fill="black" transform="rotate(90 10 10)"/>' +
+      '</svg>';
+    const [el] = parseSvgElements(svg);
+    const b = pathBounds(el.pathData);
+    // Square rotated 90° about its center occupies the same bounds
+    expect(b.xMin).toBeCloseTo(0, 0);
+    expect(b.xMax).toBeCloseTo(20, 0);
+  });
+
+  it('bakes a matrix() transform', () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg">' +
+      '<rect x="0" y="0" width="10" height="10" fill="black" transform="matrix(2 0 0 2 5 5)"/>' +
+      '</svg>';
+    const [el] = parseSvgElements(svg);
+    const b = pathBounds(el.pathData);
+    expect(b.xMin).toBeCloseTo(5, 0);
+    expect(b.xMax).toBeCloseTo(25, 0);
+  });
+
+  it('bakes nested <g> transforms outermost-first', () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg">' +
+      '<g transform="translate(100,0)">' +
+      '<g transform="scale(2)">' +
+      '<rect x="0" y="0" width="10" height="10" fill="black"/>' +
+      '</g></g>' +
+      '</svg>';
+    const [el] = parseSvgElements(svg);
+    const b = pathBounds(el.pathData);
+    // scale(2) then translate(100,0): x ∈ [100, 120]
+    expect(b.xMin).toBeCloseTo(100, 0);
+    expect(b.xMax).toBeCloseTo(120, 0);
+  });
+
+  it('keeps original path data when the transform is unparseable', () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg">' +
+      '<rect x="0" y="0" width="10" height="10" fill="black" transform="bogus(3)"/>' +
+      '</svg>';
+    const [el] = parseSvgElements(svg);
+    expect(el.transformBakeFailed).toBe(true);
+    const b = pathBounds(el.pathData);
+    expect(b.xMin).toBeCloseTo(0, 0);
+    expect(b.xMax).toBeCloseTo(10, 0);
+  });
+
+  it('transformed shapes survive the full prepareSvg pipeline in place', () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+      '<rect x="0" y="0" width="100" height="100" fill="black"/>' +
+      '<circle cx="0" cy="0" r="10" fill="white" transform="translate(50,50)"/>' +
+      '</svg>';
+    const result = prepareSvg(svg);
+    const dMatch = result.match(/d="([^"]+)"/);
+    expect(dMatch).not.toBeNull();
+    // The hole must be cut at (50,50), not at the origin
+    const b = pathBounds(dMatch[1]);
+    expect(b.xMin).toBeGreaterThanOrEqual(-1);
+    const mCount = (dMatch[1].match(/M/g) || []).length;
+    expect(mCount).toBe(2);
+  });
+});
+
+// ===========================================================================
+// Overhaul — style attribute fills and inheritance
+// ===========================================================================
+
+describe('getEffectivePaint / style fills', () => {
+  it('reads fill from the style attribute', () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg">' +
+      '<circle cx="10" cy="10" r="5" style="fill:#ffffff"/>' +
+      '</svg>';
+    const [el] = parseSvgElements(svg);
+    expect(el.fill).toBe('#ffffff');
+    expect(el.luminance).toBeCloseTo(255, 0);
+  });
+
+  it('style attribute wins over the presentation attribute', () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg">' +
+      '<circle cx="10" cy="10" r="5" fill="black" style="fill: white"/>' +
+      '</svg>';
+    const [el] = parseSvgElements(svg);
+    expect(el.fill).toBe('white');
+  });
+
+  it('inherits fill from an ancestor <g>', () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg">' +
+      '<g fill="white"><circle cx="10" cy="10" r="5"/></g>' +
+      '</svg>';
+    const [el] = parseSvgElements(svg);
+    expect(el.fill).toBe('white');
+  });
+
+  it('inherits stroke from an ancestor style attribute', () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg">' +
+      '<g style="stroke: red"><line x1="0" y1="0" x2="10" y2="10" fill="none"/></g>' +
+      '</svg>';
+    const [el] = parseSvgElements(svg);
+    expect(el.stroke).toBe('red');
+  });
+
+  it('classifies style-filled white shapes as holes', () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg">' +
+      '<circle cx="50" cy="50" r="40" fill="black"/>' +
+      '<circle cx="50" cy="50" r="15" style="fill:#fff"/>' +
+      '</svg>';
+    const classified = classifyElements(parseSvgElements(svg));
+    expect(classified[0].role).toBe('foreground');
+    expect(classified[1].role).toBe('hole');
+  });
+
+  it('getEffectivePaint returns null when unset anywhere', () => {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(
+      '<svg xmlns="http://www.w3.org/2000/svg"><circle cx="1" cy="1" r="1"/></svg>',
+      'image/svg+xml'
+    );
+    const circle = doc.querySelector('circle');
+    expect(getEffectivePaint(circle, 'fill')).toBeNull();
+    expect(getEffectivePaint(circle, 'stroke')).toBeNull();
+  });
+});
+
+// ===========================================================================
+// Overhaul — flatten hardening
+// ===========================================================================
+
+describe('flattenToCompoundPath hardening', () => {
+  it('never throws on malformed path data and keeps valid geometry', () => {
+    const classified = [
+      { pathData: 'M10,10 L90,10 L90,90 L10,90 Z', role: 'foreground' },
+      { pathData: 'not a path', role: 'foreground' },
+      { pathData: 'M20,20 L40,20 L40,40 Z', role: 'foreground' },
+    ];
+    const warnings = [];
+    const result = flattenToCompoundPath(
+      classified,
+      { viewBox: '0 0 100 100' },
+      warnings
+    );
+    expect(result).toContain('<path');
+    // The unmergeable shape is appended verbatim, not dropped
+    expect(result).toContain('not a path');
+    expect(warnings.length).toBeGreaterThan(0);
+    expect(warnings[0]).toMatch(/could not be merged/);
+  });
+
+  it('appends holes verbatim when the difference operation fails', () => {
+    const classified = [
+      { pathData: 'M10,10 L90,10 L90,90 L10,90 Z', role: 'foreground' },
+      { pathData: 'garbage hole', role: 'hole' },
+    ];
+    const warnings = [];
+    const result = flattenToCompoundPath(
+      classified,
+      { viewBox: '0 0 100 100' },
+      warnings
+    );
+    expect(result).toContain('<path');
+    expect(result).toContain('garbage hole');
+  });
+
+  it('keeps all pieces when a difference splits the foreground', () => {
+    // A horizontal white bar cuts the black square into two pieces
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+      '<rect x="10" y="10" width="80" height="80" fill="black"/>' +
+      '<rect x="0" y="45" width="100" height="10" fill="white"/>' +
+      '</svg>';
+    const result = prepareSvg(svg);
+    const dMatch = result.match(/d="([^"]+)"/);
+    expect(dMatch).not.toBeNull();
+    const mCount = (dMatch[1].match(/M/g) || []).length;
+    expect(mCount).toBeGreaterThanOrEqual(2);
+
+    const nums = (dMatch[1].match(/-?[\d.]+/g) || []).map(Number);
+    const ys = nums.filter((_, i) => i % 2 === 1);
+    // Both the top piece (y≈10) and bottom piece (y≈90) must survive
+    expect(Math.min(...ys)).toBeLessThan(20);
+    expect(Math.max(...ys)).toBeGreaterThan(80);
+  });
+
+  it('music-note.svg flattens without throwing in the editor path', () => {
+    const musicNote = readFileSync(join(SVG_DIR, 'music-note.svg'), 'utf-8');
+    const elements = parseSvgElements(musicNote);
+    const classified = classifyElements(elements);
+    const warnings = [];
+    let result;
+    expect(() => {
+      result = flattenToCompoundPath(
+        classified,
+        { viewBox: '0 0 100 100' },
+        warnings
+      );
+    }).not.toThrow();
+    expect(result).toContain('<path');
+    // All three shapes must be present in the output
+    const dMatch = result.match(/d="([^"]+)"/);
+    const mCount = (dMatch[1].match(/M/g) || []).length;
+    expect(mCount).toBeGreaterThanOrEqual(2);
   });
 });

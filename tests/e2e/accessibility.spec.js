@@ -224,6 +224,31 @@ test.describe('Accessibility Compliance (WCAG 2.2 AA)', () => {
       test.skip()
     }
   })
+
+  // BR-4: the memory indicator no longer announces a fictional percentage.
+  // The previous role="progressbar" with aria-valuenow="47" was a lie —
+  // the underlying number was (heapBytes / 1 GB) * 100, not a real fraction
+  // of any limit. The indicator now exposes only the absolute MB value.
+  test('memory indicator should not advertise a fake percent (BR-4)', async ({ page }) => {
+    await page.goto('/')
+    await page.waitForLoadState('networkidle')
+
+    const indicator = page.locator('#memoryIndicator')
+    await expect(indicator).toHaveCount(1)
+    await expect(indicator).not.toHaveAttribute('role', 'progressbar')
+
+    // The progressbar wrapper has been removed entirely.
+    await expect(page.locator('#memoryBar')).toHaveCount(0)
+    await expect(page.locator('#memoryBarFill')).toHaveCount(0)
+
+    // No element inside the indicator may carry aria-valuenow / valuemin /
+    // valuemax — those are exclusively for true progress/scrollbar/slider
+    // semantics and would re-introduce the percentage falsehood.
+    const valueAttrCount = await indicator
+      .locator('[aria-valuenow], [aria-valuemin], [aria-valuemax]')
+      .count()
+    expect(valueAttrCount).toBe(0)
+  })
 })
 
 test.describe('New Accessibility Features (WCAG 2.2)', () => {

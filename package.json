@@ -103,11 +103,13 @@
     "path-bool": "^0.0.7",
     "split.js": "^1.6.5",
     "svg-path-commander": "^2.1.11",
-    "three": "^0.182.0"
+    "three": "^0.162.0",
+    "transformation-matrix": "^3.1.0"
   },
   "overrides": {
     "minimatch": "^10.2.1",
-    "@angular/common": "19.2.20",
-    "@angular/core": "19.2.20"
+    "@angular/common": "20.3.25",
+    "@angular/core": "20.3.25",
+    "basic-ftp": "^5.3.0"
   }
 }

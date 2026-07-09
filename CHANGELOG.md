@@ -7,8 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Alt View on-demand rendering** — the ASCII conversion now runs only when the camera moves, auto-rotate is active, or a setting changes (dirty-flag + `invalidate()` API with a 1 Hz self-healing fallback tick), dropping idle Alt View cost from a continuous ~30 fps conversion loop to near zero
+- **Alt View glyph atlas** — glyphs are pre-rendered once into a phosphor-tinted atlas (from `--color-accent`) and painted with `drawImage` blits at device-pixel resolution; shape vectors are computed from the same atlas bitmap so glyphs align with their vectors, descenders no longer overflow rows, and output is crisp on HiDPI displays
+- **Alt View Afterglow slider** — a third slider (0–100%) joins Contrast and Font Size in the camera panel and mobile drawer; hidden under `prefers-reduced-motion`
+- **Alt View unlock announcement** — unlocking the easter egg now announces itself to screen-reader users via the live region
+- **CRT power-on animation** — a one-shot ~300 ms scale-in/brightness flash plays when Alt View is enabled (skipped under `prefers-reduced-motion`)
+
+- **SVG transform baking** — `transform` attributes (including nested `<g>` chains) are composed via the new `transformation-matrix` dependency and baked into path data during parsing, so rotated/translated/scaled shapes keep their position through preparation instead of collapsing to the origin; unparseable transforms produce a per-element warning and route to the editor
+- **Unicode-safe SVG encoding** — new `svg-text-encoding.js` (`svgToDataUrl`/`dataUrlToText`) replaces raw `btoa`/`atob` at every SVG encode/decode site, so SVGs with accented characters, CJK text, or emoji no longer throw `InvalidCharacterError`
+- **SVG editor role color-coding** — a translucent tint layer color-codes every shape by its assigned role (printed / cut-out / ignored), with a header toggle, a three-chip legend, and "Original" / "Will print as" pane captions
+- **SVG editor compound-path mode** — subpaths of a single compound `<path>` get Include/Exclude radios and "Subpath N" labels instead of the meaningless Foreground/Hole/Ignore triad
+- **Unit test coverage for the SVG pipeline** — 12-design charm library sweep, transform-baking geometry checks, style/inherited-fill resolution, flatten fallback behavior, unicode round-trips, overlay highlighting, and compound-mode editor tests
+
+- **`aria-keyshortcuts` on shortcut-bearing controls** — new `keyboard-shortcuts-binder.js` annotates the render/download button, camera views, theme/expert-mode toggles, and more with WAI-ARIA shortcut syntax so screen-reader users can discover F6/F7/Control+E etc.; re-applies when shortcuts are re-mapped
+- **Safe localStorage helpers** — `safeGetItem`/`safeSetItem`/`safeRemoveItem` in `storage-keys.js` (with quota/security-error tests) replace ad-hoc try/catch across main.js, preview, camera, overlay, and settings controllers
+- **Storage-key snapshot test** — every exported `STORAGE_KEY_*` string is frozen by a unit test so user data cannot be orphaned by accidental key renames
+- **Error-translation parity corpus** — 19-entry raw-stderr corpus freezes worker and main-thread classifications (BR-5 safety net)
+- **CI: css-variable-audit** — the semantic-tokens/mono-variant audit now runs in the unit-tests job
+
 ### Changed
 
+- **Alt View engine follows the researched pipeline** — the 1.77M-entry precomputed lookup table (`_hfm-lut.js`, ~250 ms rebuild on every font-metric change) is replaced by a lazily-filled cache (`_hfm-lookup.js`); the directional-contrast neighborhood now maps each internal sample to a small local set of external samples (crisper edges); sampling drops from 34 to 16 taps per cell using bilinear-downscale area averaging; per-cell brightness colors are removed in favor of a single phosphor color per theme (glyph density carries the lightness signal) with an optional CSS bloom on the overlay canvas
+- **Alt View controller simplified** — device auto-calibration and browser-zoom compensation (~300 lines of overlapping adaptive systems) are removed; first-enable defaults are plain (contrast 100%, size 100%, glow 0%) with saved values honored; setting writes to localStorage are debounced; the Contrast/Font Size sliders now actually appear while Alt View is enabled (their `setEnabled` previously ignored its argument); status bar text tightened to `[ALT VIEW] EDGE 100% · SIZE 100% · GLOW 0%`
+- **Relocated non-theme exports out of `hfm-controller.js`** — `sanitizeUrlParams` → `file-param-resolver.js`, `exportFormatFromMenu` → `file-actions-controller.js`, `applyToolbarModeVisibility` → `toolbar-menu-controller.js`
+- **Mono scanline overlay layering** — the CRT scanline pseudo-element drops from z-index 9999 to 900 so modals and toasts render above it, and no longer pins a permanent GPU layer via `will-change`
+- **Simple SVGs bypass flattening (lossless by default)** — when every element is dark/foreground with no transforms-gone-wrong, gradients, or clip-paths, the original file is used as-is (OpenSCAD unions overlapping shapes natively); multi-shape designs like Paw, Sun, and Music note no longer lose parts to a destructive union
+- **"Needs review" no longer swaps in a prepared file silently** — when the analyzer recommends the editor, the original SVG is used until the user explicitly clicks Apply; closing the editor (Escape or ×) now counts as "Keep original"
+- **SVG prep metadata no longer persists the analysis object** — live DOM references made restored `prepAnalysis` objects crash the editor; the raw SVG is re-analyzed on project restore instead
+- **SVG status card copy** — pass-through reads "Using original (N shapes) — OpenSCAD merges these automatically", auto-prepare reads "Simplified N shapes for 3D printing", and flatten fallback warnings are surfaced on the card
+- **Error translation honors worker codes (BR-5)** — the main thread resolves worker-classified errors by `code` via `TRANSLATIONS_BY_CODE` instead of re-matching prose, so errors like `UNKNOWN_MODULE` or `OUT_OF_MEMORY` show specific guidance instead of "Something Went Wrong"
+- **WASM init progress is honestly indeterminate** — hardcoded 5→95% milestones replaced with an indeterminate bar plus stage messages; render-time estimates are labeled "estimated" and suppressed entirely at low confidence
+- **Focus trap consolidation** — the error modal uses the shared `createFocusTrap` (selector now includes `summary`); guided-tour stub and permanently disabled View-menu toggles removed
+- **Mirror tests eliminated** — cli-manifest, svg-validation, dxf-postprocess, missing-file-warnings, image-companion-mounting, saved-projects-load, color-contrast, and resolve-2d-export tests now import the real implementations (new shared modules under `src/worker/`) instead of "keep in sync" copies
+- **Storage keys centralized** — `STORAGE_KEY_*` constants, `PRESET_SORT_KEY`, WASM crash flags, and the KI-012 debug-toggle keys live in `storage-keys.js`; KI-012 checks go through `isDebugPrefEnabled()`
+- **Helper dedup** — shared `perf-metrics.js` replaces the copy-pasted metrics append blocks; `RENDER_QUALITY` DRAFT/MEDIUM/HIGH derive from `QUALITY_TIERS`; intentionally-different sanitizers/formatters are documented in place
 - **q_charm.scad parameter naming** — renamed positional parameters to plain-language labels for Customizer clarity: `design_x`/`design_y` → `design_left_right`/`design_up_down`, `text_x`/`text_y` → `text_left_right`/`text_up_down`, `design_x_2`/`design_y_2` → `design_2_left_right`/`design_2_up_down`, `design_z_2` → `design_2_thickness`
 - **q_charm.scad Fit parameter rename** — `charm_length` → `charm_width` (Y-axis dimension along bracelet), `bracelet_width` → `charm_length` (inner channel width); labels now match physical meaning
 - **q_charm.scad Rounding parameter rename** — `all_edges_radius` → `side_edge_radius` with new default 2.5 (was 0); description clarified to "rounds the edges along the side profile"
@@ -21,6 +55,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **3D preview blank in browsers without WebGL 2** — the three.js upgrade from r160 to r182 (Jan 2026 dependency bump) silently dropped WebGL 1 support (removed upstream in r163), so Firefox profiles with WebGL 2 unavailable (hardware blocklist, `webgl.enable-webgl2=false`, privacy hardening) got an empty preview pane while everything else worked; three is now pinned to `^0.162.0`, the last release that falls back to a WebGL 1 context. If WebGL is entirely unavailable, the preview pane now shows an accessible explanatory notice instead of failing silently with only a console warning
+- **Theme switch while Alt View is enabled** — the theme listener passed the raw light/dark theme to the preview instead of the mono-aware key, flipping the WebGL scene to a bright background and muddying the ASCII output; it now uses `detectTheme()` and re-tints the glyph atlas on theme change
+- **Emoji-swap button accessible names** — controls whose emoji labels are swapped for bracketed text in the mono variant now carry explicit `aria-label`s (unlock-limits toggle, features-guide example buttons, accessibility-guide link), so screen readers hear one stable name instead of emoji + bracket concatenation
+- **Charm Customizer default design import** — `nasif_charm_maker.scad` referenced `svg-library/heart.svg`, a path that never matched the mounted basename, so first render always warned "Can't open file"; the SCAD default and manifest gallery options now use basenames, `design_2d()` guards against an empty `design_file`, and the gallery pre-selects the default design
+- **SVG editor area highlight rebuilt** — hovering an object row now draws the shape's actual path into an SVG overlay (replacing a dead CSS attribute-selector approach that never rendered), so highlights work for all shapes including individual subpaths of compound paths
+- **`style="fill:…"` and inherited paints respected** — fill/stroke are resolved from the inline `style` attribute and ancestor elements per SVG precedence, so Inkscape/Illustrator exports classify correctly instead of every shape defaulting to "black"
+- **SVG flattening crash-hardened** — each boolean union/difference is individually guarded; shapes that fail to merge are appended verbatim with a warning instead of crashing the pipeline or silently dropping geometry
+- **SVG uploads detected by `.svg` extension** — files served with a generic MIME type (common on Windows) are now recognized as SVGs
+- **SVG editor QoL** — Apply is disabled (with a hint) when no shapes are included; preview failures show an inline "original will be kept" message instead of a blank pane; viewBox is derived from `width`/`height` when missing so zoom controls work; result-pane zoom survives preview re-renders; the editor auto-expands to fullscreen on narrow screens; selecting a new design dismisses a stale editor without firing its callbacks
+- **Recovery mode CodeMirror disable was a no-op** — it wrote a localStorage key the flag system never read; now uses `setUserPreference('codemirror_editor', false)`
+- **`escapeHtml` attribute injection** — the shared helper now escapes quotes (all five significant characters); console-panel filenames interpolated into `data-file="…"` can no longer break out of the attribute; duplicate escape implementations removed
+- **Stale version strings** — startup log derives from `__APP_VERSION__` (was hardcoded v4.1.0); sw.js drops its stale version comment
+- **A11Y quick wins** — features-note contrast token (AA in dark mode), zero Nu HTML validator errors in index.html, `prefers-reduced-transparency` now covers all modal/drawer/tooltip surfaces, stale `aria-valuenow` removed from the overlay opacity slider
+- **Dead code removed** — 16 unused symbols, the orphaned `animation-controller.js` and `schema-generator.js` modules, and the dead `tutorialProgress` localStorage migration
+- **Test-runner hygiene** — storage mocks install at setup module scope, eliminating the `--localstorage-file` warnings and `localStorage.getItem is not a function` stderr leaks; e2e fake-pass `expect(true)` assertions replaced with real assertions or honest skips
 - **SVG editor fullscreen portaling** — fullscreen mode now reparents root and backdrop to `document.body` to escape ancestor `transform`/`will-change` containing blocks (e.g. drawer panels)
 - **SVG editor fullscreen preview sizing** — preview panes use `dvh` units with fallback, `min-height`, and `object-fit: contain` for consistent sizing across viewports
 - **SVG editor header overflow** — narrow viewports (≤540px) wrap header controls and truncate the title with ellipsis, in both fullscreen and inline modes

@@ -237,18 +237,15 @@ test.describe('ZIP Upload Workflow', () => {
     
     await uploadZipProject(page)
 
-    // Look for project info/stats display
+    // Look for project info/stats display. Stats are optional UI — skip
+    // honestly when absent rather than fake-passing.
     const statsArea = page.locator('.project-stats, .project-info, .file-tree-header')
-    
-    // This is optional - not all implementations show stats
-    if (await statsArea.isVisible()) {
-      const statsText = await statsArea.textContent()
-      
-      // Should show some useful information
-      expect(statsText.length).toBeGreaterThan(0)
-    }
-    
-    // Test passes either way - stats display is a nice-to-have
-    expect(true).toBe(true)
+    test.skip(
+      !(await statsArea.first().isVisible()),
+      'Stats display is optional UI and not present'
+    )
+
+    const statsText = await statsArea.first().textContent()
+    expect(statsText.length).toBeGreaterThan(0)
   })
 })

@@ -157,6 +157,10 @@ export async function checkStorageQuota(bytesToSave = 0) {
 
 /**
  * Format bytes to human-readable string
+ *
+ * NOT interchangeable with download.js formatFileSize — see the note there
+ * (different rounding display, unit range, and invalid-input handling).
+ *
  * @param {number} bytes
  * @returns {string}
  */
@@ -1261,7 +1265,13 @@ async function buildFolderPath(folderId, folders) {
 }
 
 /**
- * Sanitize a file/folder name for use in paths
+ * Sanitize a file/folder name for use in project-file paths.
+ *
+ * Intentionally separate from download.js sanitizeFilename (removes unsafe
+ * characters entirely, caps length) and file-param-resolver.js
+ * sanitizeFileName (virtual-FS traversal guard): this one substitutes
+ * underscores so names stay visually distinct in the file manager.
+ *
  * @param {string} name - Name to sanitize
  * @returns {string}
  */

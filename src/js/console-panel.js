@@ -11,6 +11,7 @@
 
 import { announceError, announceImmediate } from './announcer.js';
 import { showErrorToast } from './error-translator.js';
+import { escapeHtml } from './html-utils.js';
 
 /**
  * Console entry types
@@ -424,14 +425,14 @@ export class ConsolePanel {
     const typeClass = `console-entry--${entry.type}`;
     const typeLabel = entry.type.toUpperCase();
 
-    const safeMessage = this.escapeHtml(entry.message);
+    const safeMessage = escapeHtml(entry.message);
 
     const entryRole =
       entry.type === 'warning' || entry.type === 'error' ? 'alert' : 'listitem';
 
     const hasLocation = entry.line !== null && this.onNavigate;
     const lineLink = hasLocation
-      ? ` <button type="button" class="console-line-link" data-file="${this.escapeHtml(entry.file || '')}" data-line="${entry.line}" aria-label="Go to line ${entry.line}">:${entry.line}</button>`
+      ? ` <button type="button" class="console-line-link" data-file="${escapeHtml(entry.file || '')}" data-line="${entry.line}" aria-label="Go to line ${entry.line}">:${entry.line}</button>`
       : '';
 
     return `
@@ -441,17 +442,6 @@ export class ConsolePanel {
         <span class="console-message">${safeMessage}${lineLink}</span>
       </div>
     `;
-  }
-
-  /**
-   * Escape HTML special characters
-   * @param {string} str - String to escape
-   * @returns {string} Escaped string
-   */
-  escapeHtml(str) {
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
   }
 
   /**

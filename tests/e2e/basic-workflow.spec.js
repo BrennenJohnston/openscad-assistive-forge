@@ -172,6 +172,18 @@ test.describe('Basic Workflow - Upload → Customize → Download', () => {
     })
 
     // And that parameters rendered (indicates extraction succeeded).
+    // F5: parameter groups render collapsed by default, so expand them
+    // before asserting the controls inside are visible.
+    await page
+      .locator('.param-group')
+      .first()
+      .waitFor({ state: 'attached', timeout: 10000 })
+    await page.evaluate(() => {
+      document.querySelectorAll('details.param-group').forEach((group) => {
+        group.open = true
+      })
+    })
+
     await expect(
       page
         .locator('.param-group input[type="range"], .param-group input[type="number"]')

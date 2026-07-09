@@ -12,6 +12,10 @@ export default [
         ...globals.es2021,
         // `globals` packages vary; support both keys defensively.
         ...(globals.worker || globals.webworker || {}),
+        // Build-time constants injected by Vite's `define` (vite.config.js)
+        __APP_VERSION__: 'readonly',
+        __BUILD_TIME__: 'readonly',
+        __COMMIT_SHA__: 'readonly',
       },
     },
     rules: {

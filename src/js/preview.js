@@ -42,26 +42,27 @@ import {
   announceCameraAction as announceCamera,
   announceImmediate,
 } from './announcer.js';
-import { getAppPrefKey } from './storage-keys.js';
+import {
+  STORAGE_KEY_MEASUREMENTS,
+  STORAGE_KEY_GRID,
+  STORAGE_KEY_GRID_SIZE,
+  STORAGE_KEY_CUSTOM_GRID_PRESETS,
+  STORAGE_KEY_GRID_COLOR,
+  STORAGE_KEY_GRID_OPACITY,
+  STORAGE_KEY_AUTO_BED,
+  STORAGE_KEY_ZOOM_TO_CURSOR,
+  STORAGE_KEY_CAMERA_COLLAPSED,
+  STORAGE_KEY_CAMERA_POSITION,
+  STORAGE_KEY_LOD_WARNING_DISMISSED,
+  safeGetItem,
+  safeSetItem,
+  safeRemoveItem,
+} from './storage-keys.js';
 
 // Disable Three.js color management to match desktop OpenSCAD's
 // non-linear-aware OpenGL pipeline. OpenSCAD passes sRGB colors
 // directly through lighting without linearization or gamma correction.
 ColorManagement.enabled = false;
-
-// Storage keys using standardized naming convention
-const STORAGE_KEY_MEASUREMENTS = getAppPrefKey('measurements');
-const STORAGE_KEY_GRID = getAppPrefKey('grid');
-const STORAGE_KEY_GRID_SIZE = getAppPrefKey('grid-size');
-const STORAGE_KEY_CUSTOM_GRID_PRESETS = getAppPrefKey('custom-grid-presets');
-const STORAGE_KEY_GRID_COLOR = getAppPrefKey('grid-color');
-const STORAGE_KEY_GRID_OPACITY = getAppPrefKey('grid-opacity');
-const STORAGE_KEY_AUTO_BED = getAppPrefKey('auto-bed');
-const STORAGE_KEY_CAMERA_COLLAPSED = getAppPrefKey('camera-controls-collapsed');
-const STORAGE_KEY_CAMERA_POSITION = getAppPrefKey('camera-controls-position');
-const STORAGE_KEY_LOD_WARNING_DISMISSED = getAppPrefKey(
-  'lod-warning-dismissed'
-);
 
 /** Default grid config — 220×220mm matches popular mid-range FDM printers (Creality K1C, FlashForge Adventurer 5M Pro) */
 const DEFAULT_GRID_CONFIG = { widthMm: 220, heightMm: 220 };
@@ -233,6 +234,11 @@ export class PreviewManager {
     // Auto-bed: place object on Z=0 build plate
     this.autoBedEnabled = this.loadAutoBedPreference();
 
+    // Mouse-wheel zoom focal point: when true, zoom centers on the
+    // cursor; when false, zoom centers on the orbit target. Default
+    // true matches stakeholder expectation (F17, "zoom toward cursor").
+    this.zoomToCursorEnabled = this.loadZoomToCursorPreference();
+
     // Rotation centering: temporarily center object at origin for better rotation
     this.autoBedOffset = 0; // Z offset applied by auto-bed
     this.rotationCenteringEnabled = false; // Whether rotation centering is active
@@ -245,6 +251,7 @@ export class PreviewManager {
     this._resizeHook = null;
     this._postLoadHook = null; // Called after STL is loaded
     this._postLoadListeners = []; // Multi-listener post-load event
+    this._themeChangeListeners = []; // Multi-listener theme-change event (F20)
 
     // Reference overlay (screenshot/SVG image plane under the model)
     this.referenceOverlay = null; // THREE.Mesh for the overlay plane
@@ -331,6 +338,12 @@ export class PreviewManager {
     // Create renderer — WebGL may be unavailable in headless browsers.
     // When that happens, geometry parsing (loadOFF / loadSTL) still works;
     // only the visual canvas is disabled.
+    //
+    // IMPORTANT: three is pinned to ^0.162.0 because r163 removed WebGL 1
+    // support. Browsers with WebGL 2 disabled (Firefox hardware blocklist,
+    // privacy-hardened profiles) can still render via the WebGL 1 fallback
+    // in r162. Do not upgrade three past 0.162.x without an alternative
+    // fallback for those users.
     try {
       this.renderer = new WebGLRenderer({ antialias: true });
       this.renderer.outputColorSpace = LinearSRGBColorSpace;
@@ -348,6 +361,7 @@ export class PreviewManager {
         webglError.message
       );
       this.renderer = null;
+      this._showWebGLUnavailableNotice();
     }
 
     // Lighting matched to desktop OpenSCAD's GLView::setupLight().
@@ -406,6 +420,7 @@ export class PreviewManager {
       this.controls.screenSpacePanning = true;
       this.controls.minDistance = 10;
       this.controls.maxDistance = 1000;
+      this.controls.zoomToCursor = this.zoomToCursorEnabled;
 
       this.setupKeyboardControls();
       this.setupCameraControls();
@@ -499,6 +514,53 @@ export class PreviewManager {
   }
 
   /**
+   * Show a user-visible notice in the preview container when WebGL context
+   * creation fails. Without this, the pane is silently blank (init() clears
+   * the container, and the headless fallback only logs to the console).
+   *
+   * Note: three is pinned to ^0.162 (the last release that falls back to
+   * WebGL 1) so the preview works even where WebGL 2 is disabled. This
+   * notice only appears when WebGL is entirely unavailable.
+   */
+  _showWebGLUnavailableNotice() {
+    if (this.container.querySelector('.preview-webgl-error')) return;
+
+    const notice = document.createElement('div');
+    notice.className = 'preview-webgl-error';
+    notice.setAttribute('role', 'alert');
+
+    const heading = document.createElement('h3');
+    heading.textContent = '3D preview unavailable';
+
+    const reason = document.createElement('p');
+    reason.textContent =
+      'Your browser blocked WebGL, which is required to display the 3D model. ' +
+      'Rendering and exporting (STL, 3MF, etc.) still work normally.';
+
+    const howToFix = document.createElement('p');
+    howToFix.textContent = 'To enable the 3D preview:';
+
+    const steps = document.createElement('ul');
+    const stepTexts = [
+      'Make sure hardware acceleration is enabled in your browser settings.',
+      'In Firefox: open about:config and check that "webgl.disabled" is false.',
+      'Privacy-hardening extensions or profiles may also block WebGL — try allowing it for this site.',
+    ];
+    for (const text of stepTexts) {
+      const li = document.createElement('li');
+      li.textContent = text;
+      steps.appendChild(li);
+    }
+
+    notice.append(heading, reason, howToFix, steps);
+    this.container.appendChild(notice);
+
+    announceImmediate(
+      '3D preview unavailable: WebGL is disabled in this browser. Rendering and export still work.'
+    );
+  }
+
+  /**
    * Detect current theme from document
    * @returns {string} 'light' | 'dark' | 'light-hc' | 'dark-hc' | 'mono' | 'mono-light' | 'mono-hc' | 'mono-light-hc'
    */
@@ -573,6 +635,10 @@ export class PreviewManager {
     if (this.measurementsEnabled && this.mesh) {
       this.showMeasurements();
     }
+
+    // Notify any theme-sensitive overlays (e.g. axis tick labels) so
+    // they can rebuild themselves with the new foreground color.
+    this._fireThemeChangeListeners();
 
     console.log(`[Preview] Theme updated to ${themeKey}`);
   }
@@ -1876,11 +1942,7 @@ export class PreviewManager {
    * The preference is stored in localStorage and survives page reloads.
    */
   dismissLODWarningPermanently() {
-    try {
-      localStorage.setItem(STORAGE_KEY_LOD_WARNING_DISMISSED, 'true');
-    } catch {
-      /* private browsing / quota — fall back silently */
-    }
+    safeSetItem(STORAGE_KEY_LOD_WARNING_DISMISSED, 'true');
     this.hideLODWarning();
     console.log('[Preview] LOD warning permanently dismissed by user');
   }
@@ -1889,22 +1951,14 @@ export class PreviewManager {
    * @returns {boolean} Whether the user has permanently dismissed LOD warnings.
    */
   isLODWarningPermanentlyDismissed() {
-    try {
-      return localStorage.getItem(STORAGE_KEY_LOD_WARNING_DISMISSED) === 'true';
-    } catch {
-      return false;
-    }
+    return safeGetItem(STORAGE_KEY_LOD_WARNING_DISMISSED) === 'true';
   }
 
   /**
    * Re-enable LOD warnings after a previous permanent dismiss.
    */
   resetLODWarningDismissal() {
-    try {
-      localStorage.removeItem(STORAGE_KEY_LOD_WARNING_DISMISSED);
-    } catch {
-      /* ignore */
-    }
+    safeRemoveItem(STORAGE_KEY_LOD_WARNING_DISMISSED);
     console.log('[Preview] LOD warning dismissal reset');
   }
 
@@ -2655,13 +2709,7 @@ export class PreviewManager {
    * @returns {boolean} Preference value
    */
   loadMeasurementPreference() {
-    try {
-      const pref = localStorage.getItem(STORAGE_KEY_MEASUREMENTS);
-      return pref === 'true';
-    } catch (error) {
-      console.warn('[Preview] Could not load measurement preference:', error);
-      return false;
-    }
+    return safeGetItem(STORAGE_KEY_MEASUREMENTS) === 'true';
   }
 
   /**
@@ -2669,14 +2717,7 @@ export class PreviewManager {
    * @param {boolean} enabled - Measurement enabled state
    */
   saveMeasurementPreference(enabled) {
-    try {
-      localStorage.setItem(
-        STORAGE_KEY_MEASUREMENTS,
-        enabled ? 'true' : 'false'
-      );
-    } catch (error) {
-      console.warn('[Preview] Could not save measurement preference:', error);
-    }
+    safeSetItem(STORAGE_KEY_MEASUREMENTS, enabled ? 'true' : 'false');
   }
 
   /**
@@ -2699,14 +2740,9 @@ export class PreviewManager {
    * @returns {boolean} Preference value (defaults to true)
    */
   loadGridPreference() {
-    try {
-      const pref = localStorage.getItem(STORAGE_KEY_GRID);
-      // Default to true (grid visible) if not set
-      return pref === null ? true : pref === 'true';
-    } catch (error) {
-      console.warn('[Preview] Could not load grid preference:', error);
-      return true;
-    }
+    const pref = safeGetItem(STORAGE_KEY_GRID);
+    // Default to true (grid visible) if not set
+    return pref === null ? true : pref === 'true';
   }
 
   /**
@@ -2714,11 +2750,7 @@ export class PreviewManager {
    * @param {boolean} enabled - Grid enabled state
    */
   saveGridPreference(enabled) {
-    try {
-      localStorage.setItem(STORAGE_KEY_GRID, enabled ? 'true' : 'false');
-    } catch (error) {
-      console.warn('[Preview] Could not save grid preference:', error);
-    }
+    safeSetItem(STORAGE_KEY_GRID, enabled ? 'true' : 'false');
   }
 
   /**
@@ -2797,12 +2829,8 @@ export class PreviewManager {
    * @returns {string|null}
    */
   loadGridColorPreference() {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY_GRID_COLOR);
-      if (raw && /^#[0-9a-f]{6}$/i.test(raw)) return raw;
-    } catch (_) {
-      // fall through
-    }
+    const raw = safeGetItem(STORAGE_KEY_GRID_COLOR);
+    if (raw && /^#[0-9a-f]{6}$/i.test(raw)) return raw;
     return null;
   }
 
@@ -2811,14 +2839,10 @@ export class PreviewManager {
    * @param {string|null} hex
    */
   saveGridColorPreference(hex) {
-    try {
-      if (hex) {
-        localStorage.setItem(STORAGE_KEY_GRID_COLOR, hex);
-      } else {
-        localStorage.removeItem(STORAGE_KEY_GRID_COLOR);
-      }
-    } catch (error) {
-      console.warn('[Preview] Could not save grid color preference:', error);
+    if (hex) {
+      safeSetItem(STORAGE_KEY_GRID_COLOR, hex);
+    } else {
+      safeRemoveItem(STORAGE_KEY_GRID_COLOR);
     }
   }
 
@@ -2855,14 +2879,10 @@ export class PreviewManager {
    * @returns {number} 10–100 (default 100)
    */
   loadGridOpacityPreference() {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY_GRID_OPACITY);
-      if (raw !== null) {
-        const val = parseInt(raw, 10);
-        if (!Number.isNaN(val) && val >= 10 && val <= 100) return val;
-      }
-    } catch (_) {
-      // fall through
+    const raw = safeGetItem(STORAGE_KEY_GRID_OPACITY);
+    if (raw !== null) {
+      const val = parseInt(raw, 10);
+      if (!Number.isNaN(val) && val >= 10 && val <= 100) return val;
     }
     return 100;
   }
@@ -2872,14 +2892,10 @@ export class PreviewManager {
    * @param {number|null} value - null removes the key (revert to default 100)
    */
   saveGridOpacityPreference(value) {
-    try {
-      if (value !== null && value !== undefined && value !== 100) {
-        localStorage.setItem(STORAGE_KEY_GRID_OPACITY, String(value));
-      } else {
-        localStorage.removeItem(STORAGE_KEY_GRID_OPACITY);
-      }
-    } catch (error) {
-      console.warn('[Preview] Could not save grid opacity preference:', error);
+    if (value !== null && value !== undefined && value !== 100) {
+      safeSetItem(STORAGE_KEY_GRID_OPACITY, String(value));
+    } else {
+      safeRemoveItem(STORAGE_KEY_GRID_OPACITY);
     }
   }
 
@@ -2956,7 +2972,8 @@ export class PreviewManager {
    */
   loadGridSizePreference() {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY_GRID_SIZE);
+      // try/catch retained for JSON.parse of possibly-corrupt values
+      const raw = safeGetItem(STORAGE_KEY_GRID_SIZE);
       if (raw) {
         const parsed = JSON.parse(raw);
         if (
@@ -2978,11 +2995,7 @@ export class PreviewManager {
    * @param {{ widthMm: number, heightMm: number }} config
    */
   saveGridSizePreference(config) {
-    try {
-      localStorage.setItem(STORAGE_KEY_GRID_SIZE, JSON.stringify(config));
-    } catch (error) {
-      console.warn('[Preview] Could not save grid size:', error);
-    }
+    safeSetItem(STORAGE_KEY_GRID_SIZE, JSON.stringify(config));
   }
 
   /**
@@ -3034,7 +3047,8 @@ export class PreviewManager {
    */
   loadCustomGridPresets() {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY_CUSTOM_GRID_PRESETS);
+      // try/catch retained for JSON.parse of possibly-corrupt values
+      const raw = safeGetItem(STORAGE_KEY_CUSTOM_GRID_PRESETS);
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) return parsed;
@@ -3086,15 +3100,12 @@ export class PreviewManager {
 
     existing.push({ name: trimmedName, widthMm: w, heightMm: h });
 
-    try {
-      localStorage.setItem(
-        STORAGE_KEY_CUSTOM_GRID_PRESETS,
-        JSON.stringify(existing)
-      );
-    } catch (error) {
+    if (
+      !safeSetItem(STORAGE_KEY_CUSTOM_GRID_PRESETS, JSON.stringify(existing))
+    ) {
       return {
         success: false,
-        error: `Could not save preset: ${error.message}`,
+        error: 'Could not save preset: storage unavailable or full.',
       };
     }
 
@@ -3111,15 +3122,7 @@ export class PreviewManager {
     const next = existing.filter((p) => p.name !== name);
     if (next.length === existing.length) return false;
 
-    try {
-      localStorage.setItem(
-        STORAGE_KEY_CUSTOM_GRID_PRESETS,
-        JSON.stringify(next)
-      );
-      return true;
-    } catch (_) {
-      return false;
-    }
+    return safeSetItem(STORAGE_KEY_CUSTOM_GRID_PRESETS, JSON.stringify(next));
   }
 
   /**
@@ -3141,14 +3144,9 @@ export class PreviewManager {
    * @returns {boolean} Preference value (defaults to true - most users want this)
    */
   loadAutoBedPreference() {
-    try {
-      const pref = localStorage.getItem(STORAGE_KEY_AUTO_BED);
-      // Default to true (auto-bed enabled) if not set
-      return pref === null ? true : pref === 'true';
-    } catch (error) {
-      console.warn('[Preview] Could not load auto-bed preference:', error);
-      return true;
-    }
+    const pref = safeGetItem(STORAGE_KEY_AUTO_BED);
+    // Default to true (auto-bed enabled) if not set
+    return pref === null ? true : pref === 'true';
   }
 
   /**
@@ -3156,10 +3154,58 @@ export class PreviewManager {
    * @param {boolean} enabled - Auto-bed enabled state
    */
   saveAutoBedPreference(enabled) {
+    safeSetItem(STORAGE_KEY_AUTO_BED, enabled ? 'true' : 'false');
+  }
+
+  /**
+   * Toggle mouse-wheel zoom-to-cursor behaviour. When enabled, scrolling
+   * over the preview zooms toward the pointer position; when disabled,
+   * zoom is centred on the orbit target (the previous default).
+   * Keyboard zoom (`+` / `-`) is unaffected.
+   *
+   * @param {boolean} enabled
+   */
+  toggleZoomToCursor(enabled) {
+    this.zoomToCursorEnabled = !!enabled;
+    if (this.controls) {
+      this.controls.zoomToCursor = this.zoomToCursorEnabled;
+    }
+    this.saveZoomToCursorPreference(this.zoomToCursorEnabled);
+  }
+
+  /**
+   * Load zoom-to-cursor preference from localStorage.
+   * Defaults to true so first-time users get the modern behaviour
+   * the stakeholder asked for in F17.
+   * @returns {boolean}
+   */
+  loadZoomToCursorPreference() {
     try {
-      localStorage.setItem(STORAGE_KEY_AUTO_BED, enabled ? 'true' : 'false');
+      const pref = localStorage.getItem(STORAGE_KEY_ZOOM_TO_CURSOR);
+      return pref === null ? true : pref === 'true';
     } catch (error) {
-      console.warn('[Preview] Could not save auto-bed preference:', error);
+      console.warn(
+        '[Preview] Could not load zoom-to-cursor preference:',
+        error
+      );
+      return true;
+    }
+  }
+
+  /**
+   * @param {boolean} enabled
+   */
+  saveZoomToCursorPreference(enabled) {
+    try {
+      localStorage.setItem(
+        STORAGE_KEY_ZOOM_TO_CURSOR,
+        enabled ? 'true' : 'false'
+      );
+    } catch (error) {
+      console.warn(
+        '[Preview] Could not save zoom-to-cursor preference:',
+        error
+      );
     }
   }
 
@@ -4349,6 +4395,34 @@ export class PreviewManager {
         fn();
       } catch (e) {
         console.error('[Preview] post-load listener error:', e);
+      }
+    }
+  }
+
+  /**
+   * Register a listener invoked after every theme change. Used by
+   * theme-sensitive overlays (e.g. axis distance markings) so they
+   * can rebuild their textures with the new foreground color.
+   * @param {Function} fn
+   */
+  addThemeChangeListener(fn) {
+    if (typeof fn === 'function') this._themeChangeListeners.push(fn);
+  }
+
+  /** @param {Function} fn */
+  removeThemeChangeListener(fn) {
+    this._themeChangeListeners = this._themeChangeListeners.filter(
+      (l) => l !== fn
+    );
+  }
+
+  /** @private Fire all registered theme-change listeners. */
+  _fireThemeChangeListeners() {
+    for (const fn of this._themeChangeListeners) {
+      try {
+        fn();
+      } catch (e) {
+        console.error('[Preview] theme-change listener error:', e);
       }
     }
   }

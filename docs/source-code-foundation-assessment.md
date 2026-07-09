@@ -32,11 +32,11 @@ Several "Design" menu items are currently implemented with approximations becaus
 
 | Feature | Current approximation | True implementation (custom WASM) |
 |---|---|---|
-| **Display AST** | `parser.js` re-parses annotation comments to extract parameter metadata | WASM-level AST export via added Emscripten binding |
-| **CSG Tree / Products** | Not implemented (menu item disabled) | OpenSCAD's `--export-ast` / CSG-tree output mode |
-| **Check Validity** | Geometry heuristic: count vertices/triangles via Three.js mesh | CGAL manifold check already performed during render |
-| **Geometry Info** | Three.js bounding-box calculation after STL import | WASM callback provides precise dimensions with no re-import |
-| **Memory usage** | Estimated from JS heap; no WASM heap visibility | `malloc_usable_size` or Emscripten `getTotalMemory()` bindings |
+| **Display Parameters** | `parser.js` re-parses annotation comments to extract parameter metadata; menu label was previously "Display AST" but the modal shows the parameter dictionary, not an abstract syntax tree | WASM-level AST export via added Emscripten binding (would enable a true AST view alongside the parameter schema) |
+| **CSG Tree / Products** | Not implemented as an inline display; `.csg` export is available via the export menu (`src/js/download.js:54-60`, served by the worker at `src/worker/openscad-worker.js:1242`) | OpenSCAD's `--export-ast` / CSG-tree output rendered inline in the UI |
+| **Check Validity** | Geometry heuristic: count vertices and triangles via the Three.js mesh. The previous "vertex count not a multiple of 3" check was unreachable because Three.js always produces position arrays whose length is a multiple of 9 (3 vertices × 3 coords per triangle) and was removed in BR-2. | CGAL manifold check already performed during render |
+| **Geometry Info** | Three.js bounding-box calculation after STL import; the "Volume" row was renamed to "Bounding Box Volume" in BR-3 because the value is `sizeX * sizeY * sizeZ`, not the true mesh volume | WASM callback provides precise dimensions and true mesh volume with no re-import |
+| **Memory usage** | The worker reads `Module.HEAP8.length` (`src/worker/openscad-worker.js:2118-2123`), which reports the size of the Emscripten-allocated linear-memory buffer rather than the bytes actually in use; the previous percent-of-limit indicator was removed in BR-4 because no `limit` value is available | `malloc_usable_size` or Emscripten `getTotalMemory()` bindings to report true used bytes plus an enforced limit |
 | **Progress callbacks** | Placeholder spinner with no percentage | `EMSCRIPTEN_KEEPALIVE` progress hook during CSG evaluation |
 
 ### 2.2 New Capabilities Not Currently Possible

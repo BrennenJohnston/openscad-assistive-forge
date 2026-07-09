@@ -906,6 +906,63 @@
                     </svg>
                     <span class="btn-text">Import Folder</span>
                   </button>
+                  <!-- Connect Folder button (F35 Phase A) — Chromium-only.
+                       Hidden by default; shown when local_folder_sync flag is on
+                       AND showDirectoryPicker is available. -->
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-outline"
+                    id="connectFolderBtn"
+                    aria-label="Connect to a folder on disk for persistent two-way access"
+                    title="Connect to a folder (Chromium only)"
+                    hidden
+                  >
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+                    </svg>
+                    <span class="btn-text">Connect Folder</span>
+                  </button>
+                </div>
+                <!-- Folder-sync status pill (F35 Phase A). Hidden until the
+                     controller fires its first state change. aria-live so
+                     connection / restore / disconnect events are announced. -->
+                <div
+                  class="folder-sync-status"
+                  id="folderSyncStatus"
+                  role="status"
+                  aria-live="polite"
+                  hidden
+                >
+                  <span class="folder-sync-status-text" id="folderSyncStatusText"></span>
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-outline"
+                    id="folderSyncRestoreBtn"
+                    aria-label="Reconnect to the previously-connected folder"
+                    hidden
+                  >
+                    Reconnect
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-outline"
+                    id="folderSyncDisconnectBtn"
+                    aria-label="Disconnect from the connected folder"
+                    hidden
+                  >
+                    Disconnect
+                  </button>
                 </div>
               </div>
               <p class="saved-projects-description">
@@ -951,11 +1008,12 @@
                 class="hidden"
                 aria-hidden="true"
               />
-              <!-- Hidden folder input (shown when folder_import flag + webkitdirectory support) -->
+              <!-- Hidden folder input (shown when folder_import flag + webkitdirectory
+                   support; the non-standard webkitdirectory attribute is set by JS
+                   during init to keep the static HTML valid) -->
               <input
                 type="file"
                 id="importFolderInput"
-                webkitdirectory
                 class="hidden"
                 aria-hidden="true"
               />
@@ -1776,9 +1834,6 @@
                         value="100"
                         aria-labelledby="overlayOpacityLabel"
                         aria-describedby="overlayOpacityHelp"
-                        aria-valuemin="0"
-                        aria-valuemax="100"
-                        aria-valuenow="100"
                       />
                       <span class="slider-value" id="overlayOpacityValue"
                         >100%</span
@@ -2279,7 +2334,10 @@
                   <!-- Parameter Limits Override -->
                   <div class="advanced-section">
                     <label class="advanced-toggle">
-                      <input type="checkbox" id="unlockLimitsToggle" />
+                      <input type="checkbox"
+                        id="unlockLimitsToggle"
+                        aria-label="Unlock Parameter Limits"
+                      />
                       <span>🔓 Unlock Parameter Limits</span>
                     </label>
                     <p class="advanced-hint">
@@ -2427,10 +2485,8 @@
                     class="preset-combobox-container"
                     hidden
                   >
-                    <label for="presetComboboxInput" class="sr-only"
-                      >Select preset</label
-                    >
-                    <!-- initSearchableCombobox() populates this container -->
+                    <!-- initSearchableCombobox() populates this container;
+                         the input's accessible name comes from its ariaLabel option -->
                   </div>
                   <!-- Legacy: native select (hidden when searchable_combobox flag is on) -->
                   <div class="preset-selector" id="presetSelector">
@@ -2478,6 +2534,28 @@
                       >
                         −
                       </button>
+                      <button type="button"
+                        id="copyPresetNameBtn"
+                        class="btn btn-sm btn-icon"
+                        aria-label="Copy preset name to clipboard"
+                        title="Copy preset name"
+                        disabled
+                      >
+                        <svg
+                          width="16"
+                          height="16"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          aria-hidden="true"
+                        >
+                          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                        </svg>
+                      </button>
                     </div>
                     <button type="button"
                       id="managePresetsBtn"
@@ -2510,6 +2588,30 @@
                 >
                   Reset All
                 </button>
+                <div
+                  class="customizer-group-toggles"
+                  role="group"
+                  aria-label="Expand or collapse all parameter groups"
+                >
+                  <button
+                    type="button"
+                    id="expandAllGroupsBtn"
+                    class="btn btn-sm btn-outline"
+                    aria-label="Expand all parameter groups"
+                    title="Expand all groups"
+                  >
+                    Expand all
+                  </button>
+                  <button
+                    type="button"
+                    id="collapseAllGroupsBtn"
+                    class="btn btn-sm btn-outline"
+                    aria-label="Collapse all parameter groups"
+                    title="Collapse all groups"
+                  >
+                    Collapse all
+                  </button>
+                </div>
               </div>
               <!-- Parameter Search and Navigation (C2: Cognitive load reduction) -->
               <div class="param-search-section" id="paramSearchSection">
@@ -2562,16 +2664,12 @@
               <div
                 id="parametersContainer"
                 class="parameters-container"
-                aria-labelledby="parameters-heading"
                 data-tutorial-target="parameters-container"
               >
                 <!-- Parameters will be dynamically generated here -->
               </div>
               <!-- Output Format Selector -->
-              <div
-                class="output-format-section"
-                aria-label="Output format selection"
-              >
+              <div class="output-format-section">
                 <label for="outputFormat" class="output-format-label"
                   >Output:</label
                 >
@@ -2679,7 +2777,9 @@
                   <span
                     class="editor-dirty-indicator"
                     id="editorDirtyIndicator"
+                    role="img"
                     aria-label="Unsaved changes"
+                    aria-hidden="true"
                   ></span>
                 </span>
                 <div class="expert-mode-actions">
@@ -2829,6 +2929,7 @@
                   ></div>
                   <div
                     class="preview-settings-panel"
+                    role="group"
                     aria-label="Preview settings"
                   >
                     <div class="preview-settings-header">
@@ -2962,6 +3063,22 @@
                         <span id="autoBedHelp" class="sr-only"
                           >Automatically place models on the build plate at Z
                           equals zero</span
+                        >
+                        <label class="toggle-switch">
+                          <input
+                            type="checkbox"
+                            id="zoomToCursorToggle"
+                            checked
+                            aria-describedby="zoomToCursorHelp"
+                          />
+                          <span class="toggle-label"
+                            >Zoom toward mouse cursor</span
+                          >
+                        </label>
+                        <span id="zoomToCursorHelp" class="sr-only"
+                          >When enabled, scrolling the mouse wheel zooms toward
+                          the pointer location instead of the orbit centre.
+                          Keyboard zoom shortcuts are unaffected.</span
                         >
                         <div
                           class="preview-setting-group"
@@ -3141,9 +3258,6 @@
                               value="0.5"
                               aria-labelledby="rotationSpeedLabel"
                               aria-describedby="rotationSpeedHelp"
-                              aria-valuemin="0.1"
-                              aria-valuemax="3"
-                              aria-valuenow="0.5"
                             />
                             <span class="slider-value" id="rotationSpeedValue"
                               >0.5°/s</span
@@ -3437,7 +3551,13 @@
                     class="preview-status-stats"
                     id="previewStatusStats"
                   ></span>
-                  <!-- Memory usage indicator -->
+                  <!--
+                    BR-4: WASM memory indicator — absolute MB only.
+                    The previous percentage progressbar implied a known
+                    "limit" which the WASM runtime does not expose;
+                    HEAP8.length is the allocated buffer size, not used
+                    bytes. We now show just the MB value.
+                  -->
                   <span
                     class="memory-indicator hidden"
                     id="memoryIndicator"
@@ -3445,17 +3565,7 @@
                     aria-live="polite"
                   >
                     <span class="memory-icon" aria-hidden="true">💾</span>
-                    <span class="memory-text" id="memoryText">--</span>
-                    <span
-                      class="memory-bar"
-                      id="memoryBar"
-                      role="progressbar"
-                      aria-valuemin="0"
-                      aria-valuemax="100"
-                      aria-valuenow="0"
-                    >
-                      <span class="memory-bar-fill" id="memoryBarFill"></span>
-                    </span>
+                    <span class="memory-mb" id="memoryText">-- MB</span>
                   </span>
                   <!-- Alt adjust info (visible only in mono variant when alt view is enabled) -->
                   <span
@@ -3703,6 +3813,7 @@
                     <span
                       class="console-badge hidden"
                       id="consoleBadge"
+                      role="img"
                       aria-label="New console output available"
                       >!</span
                     >
@@ -5059,6 +5170,7 @@
                 class="btn btn-primary"
                 data-example="library-test"
                 data-feature-example="true"
+                aria-label="Load Library Test Example"
               >
                 📚 Load Library Test Example
               </button>
@@ -5122,6 +5234,7 @@
                 class="btn btn-primary"
                 data-example="colored-box"
                 data-feature-example="true"
+                aria-label="Load Colored Box Example"
               >
                 🎨 Load Colored Box Example
               </button>
@@ -5314,6 +5427,7 @@
                 class="btn btn-primary"
                 data-example="multi-file-box"
                 data-feature-example="true"
+                aria-label="Load Multi-file ZIP Example"
               >
                 🧩 Load Multi-file ZIP Example
               </button>
@@ -5552,6 +5666,7 @@
                 href="https://github.com/BrennenJohnston/openscad-assistive-forge/blob/main/docs/guides/ACCESSIBILITY_GUIDE.md"
                 target="_blank"
                 rel="noopener noreferrer"
+                aria-label="Full Accessibility Guide (opens in new tab)"
               >
                 📘 Full Accessibility Guide (opens in new tab)
               </a>
@@ -5604,15 +5719,23 @@
             <ul class="features-list">
               <li>
                 Each cell is sampled at 6 internal points to create a "shape
-                signature"
+                signature"; directional and per-cell contrast enhancement
+                sharpens edges
               </li>
               <li>
                 Characters are matched by finding the glyph whose shape vector
-                is closest
+                is closest, using a lazily-filled lookup cache (computed on
+                first use, instant afterwards)
               </li>
               <li>
-                Per-cell and directional contrast enhancement improves edge
-                definition
+                Glyphs render in a single phosphor color (green or amber) from
+                a pre-tinted glyph atlas — character density carries the
+                brightness signal, just like a real terminal
+              </li>
+              <li>
+                Rendering is on-demand: the ASCII conversion only runs when the
+                camera moves or a setting changes, so an idle preview costs
+                almost nothing
               </li>
               <li>
                 Based on research into shape-vector ASCII rendering (credited in
@@ -5645,7 +5768,8 @@
               </div>
             </div>
             <p class="altview-adjust-legend">
-              <strong>When Pan Adjust is ON:</strong> ▲/▼ = Edge ±, ◄/► = Size ±
+              <strong>When Pan Adjust is ON:</strong> ▲/▼ = Edge ±, ◄/► = Size
+              ±, Shift+▲/▼ = Glow ±
             </p>
             <h4>Auto-Rotate (Rotate D-pad center)</h4>
             <ul class="features-list">
@@ -5665,7 +5789,7 @@
                 parameters
               </li>
             </ul>
-            <h4>Edge &amp; Size Adjustment</h4>
+            <h4>Edge, Size &amp; Glow Adjustment</h4>
             <p>
               When Pan Adjust is ON, the D-pad arrows control rendering
               parameters:
@@ -5687,33 +5811,43 @@
                 <strong>Left arrow</strong> – Decrease Size (smaller characters,
                 more columns)
               </li>
+              <li>
+                <strong>Shift + Up/Down</strong> – Adjust Glow (phosphor
+                afterglow trail; off by default)
+              </li>
             </ul>
             <p>
-              Edge range: 0.5–4.0 &nbsp;|&nbsp; Size range: 0.5–2.5
-              &nbsp;(defaults vary by device)
+              Edge range: 50%–400% &nbsp;|&nbsp; Size range: 50%–250%
+              &nbsp;|&nbsp; Glow range: 0%–100% &nbsp;(all default to plain
+              values: Edge 100%, Size 100%, Glow 0%)
+            </p>
+            <h4>Sliders</h4>
+            <p>
+              While Alt View is enabled, three sliders — Alt View Contrast,
+              Alt View Font Size, and Alt View Afterglow — appear in the
+              camera panel (and the mobile camera drawer). They mirror the
+              D-pad adjustments and stay in sync with them. The Afterglow
+              slider is hidden when your system requests reduced motion.
             </p>
             <h4>Status Bar</h4>
             <p>
-              When Alt View is active, the status bar shows current Edge and
-              Size values. Example:
-              <code>[ALT VIEW] Edge: 1.8 | Size: 1.0</code>
+              When Alt View is active, the status bar shows current values.
+              Example:
+              <code>[ALT VIEW] EDGE 100% · SIZE 100% · GLOW 0%</code>
             </p>
             <h4>Tips</h4>
             <ul class="features-list">
               <li>
-                Alt View auto-calibrates Edge and Size based on your viewport
-                size and device type
+                Double-click the Pan Adjust toggle to reset Edge, Size, and
+                Glow to their defaults
               </li>
               <li>
-                Mobile devices default to larger characters for readability
+                Your adjustments are saved and restored the next time you
+                enable Alt View
               </li>
               <li>
-                High-DPI displays can handle more detail (smaller characters,
-                sharper edges)
-              </li>
-              <li>
-                The sliders in the preview settings panel provide the same
-                adjustments as the D-pad
+                The sliders and the D-pad provide the same adjustments — use
+                whichever you prefer
               </li>
             </ul>
           </div>
@@ -5908,6 +6042,7 @@
               class="console-output"
               id="consoleOutput"
               tabindex="0"
+              role="region"
               aria-label="Console output text"
             >
 No console output yet. Generate a model to see output.</pre
@@ -6136,6 +6271,7 @@ No console output yet. Generate a model to see output.</pre
               id="publishManifestOutput"
               class="publish-manifest-code"
               tabindex="0"
+              role="region"
               aria-label="Generated manifest JSON"
             ></pre>
             <button type="button"

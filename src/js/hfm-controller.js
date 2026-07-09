@@ -1,171 +1,17 @@
 /**
  * HFM/Alt View Controller
  * Manages the hidden-feature-mode (HFM) alternate ASCII art view, variant
- * theming, zoom compensation, pan-adjust controls, and related toolbar/export
- * utilities. Extracted from main.js for maintainability.
+ * theming, and pan-adjust controls. Extracted from main.js for
+ * maintainability.
  * @license GPL-3.0-or-later
  */
 
-import { stateManager } from './state.js';
-import { downloadFile, generateFilename } from './download.js';
-import { getToolbarMenuController } from './toolbar-menu-controller.js';
-import { getUIModeController } from './ui-mode-controller.js';
-import {
-  showWorkflowProgress,
-  hideWorkflowProgress,
-} from './workflow-progress.js';
 import {
   STORAGE_KEY_HFM_CONTRAST_SCALE,
   STORAGE_KEY_HFM_FONT_SCALE,
   STORAGE_KEY_HFM_PERSIST_FADE,
 } from './storage-keys.js';
-import { showErrorToast } from './error-translator.js';
-
-// ---------------------------------------------------------------------------
-// Standalone utilities (no HFM state dependency)
-// ---------------------------------------------------------------------------
-
-/**
- * Sanitize URL parameters against extracted schema.
- * @param {Object|null} extracted - Parsed schema from extractParameters()
- * @param {Object} urlParams - Raw URL parameter values
- * @returns {{ sanitized: Object, adjustments: Object }}
- */
-export function sanitizeUrlParams(extracted, urlParams) {
-  const sanitized = {};
-  const adjustments = {};
-
-  for (const [key, value] of Object.entries(urlParams || {})) {
-    const schema = extracted?.parameters?.[key];
-    if (!schema) {
-      adjustments[key] = { reason: 'unknown-param', value };
-      continue;
-    }
-
-    if (Array.isArray(schema.enum)) {
-      if (!schema.enum.includes(value)) {
-        adjustments[key] = { reason: 'enum', value, allowed: schema.enum };
-        continue;
-      }
-      sanitized[key] = value;
-      continue;
-    }
-
-    if (typeof value === 'number') {
-      let nextValue = value;
-      if (schema.minimum !== undefined && nextValue < schema.minimum) {
-        adjustments[key] = {
-          reason: 'min',
-          value,
-          minimum: schema.minimum,
-          maximum: schema.maximum,
-        };
-        nextValue = schema.minimum;
-      }
-      if (schema.maximum !== undefined && nextValue > schema.maximum) {
-        adjustments[key] = {
-          reason: 'max',
-          value,
-          minimum: schema.minimum,
-          maximum: schema.maximum,
-        };
-        nextValue = schema.maximum;
-      }
-      if (schema.type === 'integer') {
-        nextValue = Math.round(nextValue);
-      }
-      sanitized[key] = nextValue;
-      continue;
-    }
-
-    sanitized[key] = value;
-  }
-
-  return { sanitized, adjustments };
-}
-
-/**
- * Export the current render result in the given format from a toolbar menu action.
- * @param {string} format - Format key from OUTPUT_FORMATS (e.g. 'stl', 'obj')
- */
-export function exportFormatFromMenu(format) {
-  const state = stateManager.getState();
-  const outputData = state.generatedOutput?.data || state.stl;
-  if (!outputData) {
-    showErrorToast({
-      title: 'No Rendered Model',
-      message: 'No rendered model to export. Run Render first.',
-    });
-    return;
-  }
-  const stateFormat = (
-    state.generatedOutput?.format ||
-    state.outputFormat ||
-    'stl'
-  ).toLowerCase();
-  if (stateFormat !== format) {
-    showErrorToast({
-      title: 'Format Mismatch',
-      message: `The current render is ${stateFormat.toUpperCase()}. To export as ${format.toUpperCase()}, change the output format and click Generate first.`,
-    });
-    return;
-  }
-  const filename = generateFilename(
-    state.uploadedFile?.name || 'model',
-    state.parameters || {},
-    format
-  );
-  downloadFile(outputData, filename, format);
-}
-
-/**
- * Apply toolbar bar / workflow progress mutual exclusion based on UI mode.
- * @param {'basic'|'advanced'} mode
- */
-export function applyToolbarModeVisibility(mode) {
-  const controller = getToolbarMenuController();
-
-  const mainInterfaceEl = document.getElementById('mainInterface');
-  const mainInterfaceVisible =
-    mainInterfaceEl && !mainInterfaceEl.classList.contains('hidden');
-
-  if (!mainInterfaceVisible) {
-    controller.hide();
-    hideWorkflowProgress();
-    return;
-  }
-
-  showWorkflowProgress();
-
-  if (mode === 'advanced') {
-    controller.show();
-  } else {
-    const uiMode = getUIModeController();
-    const registry = uiMode.getRegistry();
-    const menuIdMap = {
-      toolbarMenuFile: 'file',
-      toolbarMenuEdit: 'edit',
-      toolbarMenuDesign: 'design',
-      toolbarMenuView: 'view',
-      toolbarMenuWindow: 'window',
-      toolbarMenuHelp: 'help',
-    };
-
-    const visibleMenuIds = registry
-      .filter((p) => p.id in menuIdMap)
-      .filter((p) => {
-        const el = document.getElementById(`${menuIdMap[p.id]}MenuBtn`);
-        return el && !el.classList.contains('ui-mode-hidden');
-      })
-      .map((p) => menuIdMap[p.id]);
-
-    if (visibleMenuIds.length > 0) {
-      controller.setVisibleMenus(visibleMenuIds);
-    } else {
-      controller.hide();
-    }
-  }
-}
+import { announce } from './announcer.js';
 
 // ---------------------------------------------------------------------------
 // HFM / Alt View state (module-level singleton)
@@ -176,6 +22,7 @@ let _hfmAltView = null;
 let _hfmInitPromise = null;
 let _hfmEnabled = false;
 let _hfmPendingEnable = false;
+let _hfmSettingsLoaded = false;
 
 const _HFM_CONTRAST_RANGE = { min: 0.5, max: 4.0, step: 0.05, default: 1 };
 let _hfmContrastScale = _HFM_CONTRAST_RANGE.default;
@@ -187,17 +34,11 @@ let _hfmFontScaleControls = null;
 
 const _HFM_PERSIST_FADE_RANGE = { min: 0, max: 1, step: 0.05, default: 0 };
 let _hfmPersistFade = _HFM_PERSIST_FADE_RANGE.default;
+let _hfmPersistFadeControls = null;
 
-const _HFM_ZOOM_EPSILON = 0.02;
-let _hfmZoomBaseline = null;
-let _hfmZoomListening = false;
-let _hfmZoomHandling = false;
 let _hfmPanAdjustEnabled = false;
 let _hfmPanToggleButtons = null;
 let _hfmMotionListener = null;
-
-let _hfmCalibrated = false;
-let _hfmCalibratedDevice = '';
 
 // Late-bound dependencies set via initHfmController
 let _getPreviewManager = () => null;
@@ -215,16 +56,35 @@ function _isLightThemeActive() {
   return !window.matchMedia('(prefers-color-scheme: dark)').matches;
 }
 
-function _formatHfmContrastValue(scale) {
-  return `${Math.round(scale * 100)}%`;
+function _prefersReducedMotion() {
+  return (
+    typeof window !== 'undefined' &&
+    window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+  );
 }
 
-function _formatHfmFontScaleValue(scale) {
-  return `${Math.round(scale * 100)}%`;
-}
-
-function _formatHfmPersistFadeValue(value) {
+function _formatPercent(value) {
   return `${Math.round(value * 100)}%`;
+}
+
+// Debounced localStorage writes so pan-adjust taps don't write per press.
+const _SAVE_DEBOUNCE_MS = 200;
+const _saveTimers = new Map();
+
+function _debouncedSave(key, value) {
+  const existing = _saveTimers.get(key);
+  if (existing) clearTimeout(existing);
+  _saveTimers.set(
+    key,
+    setTimeout(() => {
+      _saveTimers.delete(key);
+      try {
+        localStorage.setItem(key, String(value));
+      } catch (error) {
+        console.warn(`[Alt View] Could not save setting (${key}):`, error);
+      }
+    }, _SAVE_DEBOUNCE_MS)
+  );
 }
 
 function _updateHfmStatusBar() {
@@ -241,17 +101,14 @@ function _updateHfmStatusBar() {
     return;
   }
 
-  const edge = _formatHfmContrastValue(_hfmContrastScale);
-  const size = _formatHfmFontScaleValue(_hfmFontScale);
-  const glow = _formatHfmPersistFadeValue(_hfmPersistFade);
-
   let displayText;
-  const deviceInfo = _hfmCalibratedDevice ? ` [${_hfmCalibratedDevice}]` : '';
-
   if (_hfmPanAdjustEnabled) {
-    displayText = `[ALT ADJUST]${deviceInfo} Edge: ${edge} (Up/Down) | Size: ${size} (Left/Right) | Glow: ${glow} (Shift+Up/Down)`;
+    displayText = '[ALT ADJUST] \u25B2\u25BC edge \u00B7 \u25C4\u25BA size \u00B7 Shift+\u25B2\u25BC glow';
   } else {
-    displayText = `[ALT VIEW]${deviceInfo} Edge: ${edge} | Size: ${size} | Glow: ${glow}`;
+    const edge = _formatPercent(_hfmContrastScale);
+    const size = _formatPercent(_hfmFontScale);
+    const glow = _formatPercent(_hfmPersistFade);
+    displayText = `[ALT VIEW] EDGE ${edge} \u00B7 SIZE ${size} \u00B7 GLOW ${glow}`;
   }
 
   altAdjustEl.textContent = displayText;
@@ -264,9 +121,9 @@ function _syncHfmPanToggleUi() {
     _hfmPanToggleButtons?.mobile,
   ].filter(Boolean);
 
-  const edge = _formatHfmContrastValue(_hfmContrastScale);
-  const size = _formatHfmFontScaleValue(_hfmFontScale);
-  const glow = _formatHfmPersistFadeValue(_hfmPersistFade);
+  const edge = _formatPercent(_hfmContrastScale);
+  const size = _formatPercent(_hfmFontScale);
+  const glow = _formatPercent(_hfmPersistFade);
 
   btns.forEach((btn) => {
     btn.setAttribute('aria-pressed', _hfmPanAdjustEnabled ? 'true' : 'false');
@@ -291,106 +148,10 @@ function _setHfmPanAdjustEnabled(enabled) {
   if (_hfmEnabled) {
     _initHfmContrastControls().setEnabled(!_hfmPanAdjustEnabled);
     _initHfmFontScaleControls().setEnabled(!_hfmPanAdjustEnabled);
+    _initHfmPersistFadeControls().setEnabled(!_hfmPanAdjustEnabled);
   }
 
   _syncHfmPanToggleUi();
-}
-
-// ---------------------------------------------------------------------------
-// Calibration
-// ---------------------------------------------------------------------------
-
-function _calibrateHfmSettings() {
-  const dpr = window.devicePixelRatio || 1;
-  const isTouchDevice =
-    'ontouchstart' in window || navigator.maxTouchPoints > 0;
-
-  const previewContainer = document.getElementById('previewContainer');
-  const containerWidth = previewContainer?.clientWidth || window.innerWidth;
-  const containerHeight = previewContainer?.clientHeight || window.innerHeight;
-  const containerArea = containerWidth * containerHeight;
-
-  const isMobile =
-    isTouchDevice && Math.min(containerWidth, containerHeight) < 500;
-  const isTablet = isTouchDevice && !isMobile;
-  const isHighDpi = dpr >= 1.5;
-  const isVeryHighDpi = dpr >= 2.5;
-
-  const isSmallViewport = containerArea < 200000;
-  const isMediumViewport = containerArea >= 200000 && containerArea < 500000;
-  const isLargeViewport = containerArea >= 500000;
-
-  let sizeScale = 1.0;
-  if (isMobile) {
-    sizeScale = 1.4;
-    if (isVeryHighDpi) sizeScale = 1.2;
-  } else if (isTablet) {
-    sizeScale = 1.15;
-    if (isHighDpi) sizeScale = 1.0;
-  } else if (isSmallViewport) {
-    sizeScale = 1.1;
-  } else if (isMediumViewport) {
-    sizeScale = 1.0;
-    if (isHighDpi) sizeScale = 0.9;
-  } else if (isLargeViewport) {
-    sizeScale = 0.9;
-    if (isHighDpi) sizeScale = 0.8;
-    if (isVeryHighDpi) sizeScale = 0.75;
-  }
-
-  let edgeScale = 1.0;
-  if (isMobile) {
-    edgeScale = 0.85;
-  } else if (isTablet) {
-    edgeScale = 0.95;
-  } else if (isSmallViewport) {
-    edgeScale = 0.9;
-  } else if (isMediumViewport) {
-    edgeScale = 1.0;
-    if (isHighDpi) edgeScale = 1.1;
-  } else if (isLargeViewport) {
-    edgeScale = 1.15;
-    if (isHighDpi) edgeScale = 1.25;
-    if (isVeryHighDpi) edgeScale = 1.35;
-  }
-
-  edgeScale = Math.max(
-    _HFM_CONTRAST_RANGE.min,
-    Math.min(_HFM_CONTRAST_RANGE.max, edgeScale)
-  );
-  sizeScale = Math.max(
-    _HFM_FONT_SCALE_RANGE.min,
-    Math.min(_HFM_FONT_SCALE_RANGE.max, sizeScale)
-  );
-
-  let deviceCategory;
-  if (isMobile) {
-    deviceCategory = isVeryHighDpi ? 'Mobile HD' : 'Mobile';
-  } else if (isTablet) {
-    deviceCategory = isHighDpi ? 'Tablet HD' : 'Tablet';
-  } else if (isSmallViewport) {
-    deviceCategory = 'Compact';
-  } else if (isMediumViewport) {
-    deviceCategory = isHighDpi ? 'Desktop HD' : 'Desktop';
-  } else {
-    deviceCategory = isVeryHighDpi
-      ? 'Large HD'
-      : isHighDpi
-        ? 'Large HD'
-        : 'Large';
-  }
-
-  console.log('[Alt View] Auto-calibration:', {
-    viewport: `${containerWidth}x${containerHeight}`,
-    dpr,
-    deviceCategory,
-    calibrated: {
-      edge: `${Math.round(edgeScale * 100)}%`,
-      size: `${Math.round(sizeScale * 100)}%`,
-    },
-  });
-
-  return { edgeScale, sizeScale, deviceCategory };
 }
 
 function _resetHfmSettings() {
@@ -401,82 +162,11 @@ function _resetHfmSettings() {
   } catch (_) {
     // Storage unavailable
   }
-  _hfmCalibrated = false;
-  const calibrated = _calibrateHfmSettings();
-  _applyHfmContrastScale(calibrated.edgeScale);
-  _applyHfmFontScale(calibrated.sizeScale);
-  _hfmPersistFade = _HFM_PERSIST_FADE_RANGE.default;
-  _applyHfmPersistFade(_hfmPersistFade);
-  _hfmCalibratedDevice = calibrated.deviceCategory;
-  _hfmCalibrated = true;
-  console.log(
-    '[Alt View] Settings reset to auto-calibrated defaults:',
-    calibrated
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Zoom tracking
-// ---------------------------------------------------------------------------
-
-function _getHfmZoomLevel() {
-  const dpr = Number.isFinite(window.devicePixelRatio)
-    ? window.devicePixelRatio
-    : 1;
-  const vvScale =
-    window.visualViewport && Number.isFinite(window.visualViewport.scale)
-      ? window.visualViewport.scale
-      : 1;
-  return Math.max(0.1, dpr * vvScale);
-}
-
-function _setHfmZoomBaseline() {
-  _hfmZoomBaseline = {
-    zoom: _getHfmZoomLevel(),
-    contrastScale: _hfmContrastScale,
-    fontScale: _hfmFontScale,
-  };
-}
-
-function _applyHfmZoomCompensation() {
-  if (!_hfmEnabled || !_hfmZoomBaseline) return;
-  const currentZoom = _getHfmZoomLevel();
-  const baseZoom = _hfmZoomBaseline.zoom || 1;
-  if (!Number.isFinite(currentZoom) || !Number.isFinite(baseZoom)) return;
-  if (Math.abs(currentZoom - baseZoom) < _HFM_ZOOM_EPSILON) return;
-
-  const factor = baseZoom / currentZoom;
-  _hfmZoomHandling = true;
-  _applyHfmContrastScale(_hfmZoomBaseline.contrastScale * factor, {
-    setBaseline: false,
-  });
-  _applyHfmFontScale(_hfmZoomBaseline.fontScale * factor, {
-    setBaseline: false,
-  });
-  _hfmZoomHandling = false;
-}
-
-function _handleHfmZoomChange() {
-  _applyHfmZoomCompensation();
-}
-
-function _enableHfmZoomTracking() {
-  if (_hfmZoomListening) return;
-  _hfmZoomListening = true;
-  window.addEventListener('resize', _handleHfmZoomChange);
-  if (window.visualViewport) {
-    window.visualViewport.addEventListener('resize', _handleHfmZoomChange);
-    window.visualViewport.addEventListener('scroll', _handleHfmZoomChange);
-  }
-}
-
-function _disableHfmZoomTracking() {
-  if (!_hfmZoomListening) return;
-  _hfmZoomListening = false;
-  window.removeEventListener('resize', _handleHfmZoomChange);
-  if (window.visualViewport) {
-    window.visualViewport.removeEventListener('resize', _handleHfmZoomChange);
-    window.visualViewport.removeEventListener('scroll', _handleHfmZoomChange);
+  _applyHfmContrastScale(_HFM_CONTRAST_RANGE.default);
+  _applyHfmFontScale(_HFM_FONT_SCALE_RANGE.default);
+  _applyHfmPersistFade(_HFM_PERSIST_FADE_RANGE.default);
+  if (import.meta.env.DEV) {
+    console.log('[Alt View] Settings reset to defaults');
   }
 }
 
@@ -484,8 +174,7 @@ function _disableHfmZoomTracking() {
 // Contrast / font / persist-fade apply helpers
 // ---------------------------------------------------------------------------
 
-function _applyHfmContrastScale(scale, options = {}) {
-  const { setBaseline = true } = options;
+function _applyHfmContrastScale(scale) {
   const raw = Number(scale);
   const next = Number.isFinite(raw) ? raw : _HFM_CONTRAST_RANGE.default;
   const clamped = Math.max(
@@ -496,31 +185,17 @@ function _applyHfmContrastScale(scale, options = {}) {
 
   if (_hfmAltView?.setContrastScale) {
     _hfmAltView.setContrastScale(clamped);
+    _hfmAltView.invalidate?.();
   }
 
   _hfmContrastControls?.sync?.(clamped);
   _syncHfmPanToggleUi();
-  if (setBaseline && !_hfmZoomHandling) {
-    _setHfmZoomBaseline();
-  }
-
-  try {
-    localStorage.setItem(STORAGE_KEY_HFM_CONTRAST_SCALE, String(clamped));
-  } catch (error) {
-    if (error.name === 'QuotaExceededError') {
-      console.warn(
-        '[Alt View] localStorage quota exceeded \u2014 contrast scale not saved'
-      );
-    } else {
-      console.warn('[Alt View] Could not save contrast scale:', error);
-    }
-  }
+  _debouncedSave(STORAGE_KEY_HFM_CONTRAST_SCALE, clamped);
 
   return clamped;
 }
 
-function _applyHfmFontScale(scale, options = {}) {
-  const { setBaseline = true } = options;
+function _applyHfmFontScale(scale) {
   const raw = Number(scale);
   const next = Number.isFinite(raw) ? raw : _HFM_FONT_SCALE_RANGE.default;
   const clamped = Math.max(
@@ -531,25 +206,12 @@ function _applyHfmFontScale(scale, options = {}) {
 
   if (_hfmAltView?.setFontScale) {
     _hfmAltView.setFontScale(clamped);
+    _hfmAltView.invalidate?.();
   }
 
   _hfmFontScaleControls?.sync?.(clamped);
   _syncHfmPanToggleUi();
-  if (setBaseline && !_hfmZoomHandling) {
-    _setHfmZoomBaseline();
-  }
-
-  try {
-    localStorage.setItem(STORAGE_KEY_HFM_FONT_SCALE, String(clamped));
-  } catch (error) {
-    if (error.name === 'QuotaExceededError') {
-      console.warn(
-        '[Alt View] localStorage quota exceeded \u2014 font scale not saved'
-      );
-    } else {
-      console.warn('[Alt View] Could not save font scale:', error);
-    }
-  }
+  _debouncedSave(STORAGE_KEY_HFM_FONT_SCALE, clamped);
 
   return clamped;
 }
@@ -565,36 +227,40 @@ function _applyHfmPersistFade(value) {
 
   if (_hfmAltView?.setPersistFade) {
     _hfmAltView.setPersistFade(clamped);
+    _hfmAltView.invalidate?.();
   }
 
+  _hfmPersistFadeControls?.sync?.(clamped);
   _syncHfmPanToggleUi();
-
-  try {
-    localStorage.setItem(STORAGE_KEY_HFM_PERSIST_FADE, String(clamped));
-  } catch (error) {
-    if (error.name === 'QuotaExceededError') {
-      console.warn(
-        '[Alt View] localStorage quota exceeded \u2014 persist fade not saved'
-      );
-    } else {
-      console.warn('[Alt View] Could not save persist fade:', error);
-    }
-  }
+  _debouncedSave(STORAGE_KEY_HFM_PERSIST_FADE, clamped);
 
   return clamped;
 }
 
 // ---------------------------------------------------------------------------
-// Slider controls (contrast / font scale)
+// Slider controls (contrast / font scale / afterglow)
 // ---------------------------------------------------------------------------
 
-function _initHfmContrastControls() {
-  if (_hfmContrastControls) return _hfmContrastControls;
-
+/**
+ * Build a pair of Alt View slider sections (desktop camera panel + mobile
+ * drawer) and return a { setEnabled, sync } controls object.
+ *
+ * setEnabled(true) shows the sections while Alt View is on; setEnabled(false)
+ * hides them entirely so they never appear in the standard UI.
+ *
+ * @param {Object} cfg
+ * @param {string} cfg.idBase - DOM id base, e.g. '_hfmContrast'
+ * @param {string} cfg.titleText - section heading
+ * @param {{min:number,max:number,step:number}} cfg.range
+ * @param {() => number} cfg.getValue
+ * @param {(value:number) => void} cfg.onInput
+ * @returns {{ setEnabled: Function, sync: Function }}
+ */
+function _buildHfmSliderControls({ idBase, titleText, range, getValue, onInput }) {
   const inputs = [];
   const valueEls = [];
   const sections = [];
-  const formatValue = (value) => _formatHfmContrastValue(value);
+  const formatValue = _formatPercent;
 
   const buildSection = ({
     container,
@@ -602,9 +268,8 @@ function _initHfmContrastControls() {
     sectionClass,
     titleClass,
     inputId,
-    titleText,
   }) => {
-    if (!container || document.getElementById(inputId)) return null;
+    if (!container || document.getElementById(inputId)) return;
 
     const section = document.createElement('div');
     section.className = sectionClass;
@@ -620,16 +285,16 @@ function _initHfmContrastControls() {
     const input = document.createElement('input');
     input.type = 'range';
     input.id = inputId;
-    input.min = String(_HFM_CONTRAST_RANGE.min);
-    input.max = String(_HFM_CONTRAST_RANGE.max);
-    input.step = String(_HFM_CONTRAST_RANGE.step);
-    input.value = String(_hfmContrastScale);
+    input.min = String(range.min);
+    input.max = String(range.max);
+    input.step = String(range.step);
+    input.value = String(getValue());
     input.setAttribute('aria-labelledby', title.id);
 
     const valueEl = document.createElement('span');
     valueEl.className = 'slider-value';
     valueEl.id = `${inputId}-value`;
-    valueEl.textContent = formatValue(_hfmContrastScale);
+    valueEl.textContent = formatValue(getValue());
 
     sliderContainer.appendChild(input);
     sliderContainer.appendChild(valueEl);
@@ -647,10 +312,8 @@ function _initHfmContrastControls() {
     sections.push(section);
 
     input.addEventListener('input', () => {
-      _applyHfmContrastScale(parseFloat(input.value));
+      onInput(parseFloat(input.value));
     });
-
-    return section;
   };
 
   const panelBody = document.getElementById('cameraPanelBody');
@@ -659,29 +322,28 @@ function _initHfmContrastControls() {
   buildSection({
     container: panelBody,
     insertBefore: panelInsertBefore,
-    sectionClass: 'camera-control-section hfm-contrast-section',
+    sectionClass: `camera-control-section hfm-slider-section ${idBase}-section`,
     titleClass: 'camera-control-section-title',
-    inputId: '_hfmContrast',
-    titleText: 'Alt View Contrast',
+    inputId: idBase,
   });
 
   const drawerBody = document.getElementById('cameraDrawerBody');
   buildSection({
     container: drawerBody,
     insertBefore: null,
-    sectionClass: 'camera-drawer-section camera-drawer-contrast',
+    sectionClass: `camera-drawer-section hfm-slider-section ${idBase}-drawer-section`,
     titleClass: 'camera-drawer-section-title',
-    inputId: '_hfmContrastMobile',
-    titleText: 'Alt View Contrast',
+    inputId: `${idBase}Mobile`,
   });
 
-  _hfmContrastControls = {
-    setEnabled(_isEnabled) {
+  const controls = {
+    setEnabled(isEnabled) {
+      const show = Boolean(isEnabled);
       sections.forEach((section) => {
-        section.style.display = 'none';
+        section.style.display = show ? '' : 'none';
       });
       inputs.forEach((input) => {
-        input.disabled = true;
+        input.disabled = !show;
       });
     },
     sync(value) {
@@ -699,127 +361,61 @@ function _initHfmContrastControls() {
     },
   };
 
-  _hfmContrastControls.setEnabled(false);
-  _hfmContrastControls.sync(_hfmContrastScale);
+  controls.setEnabled(false);
+  controls.sync(getValue());
 
+  return controls;
+}
+
+function _initHfmContrastControls() {
+  if (_hfmContrastControls) return _hfmContrastControls;
+  _hfmContrastControls = _buildHfmSliderControls({
+    idBase: '_hfmContrast',
+    titleText: 'Alt View Contrast',
+    range: _HFM_CONTRAST_RANGE,
+    getValue: () => _hfmContrastScale,
+    onInput: (value) => _applyHfmContrastScale(value),
+  });
   return _hfmContrastControls;
 }
 
 function _initHfmFontScaleControls() {
   if (_hfmFontScaleControls) return _hfmFontScaleControls;
-
-  const inputs = [];
-  const valueEls = [];
-  const sections = [];
-  const formatValue = (value) => _formatHfmFontScaleValue(value);
-
-  const buildSection = ({
-    container,
-    insertBefore,
-    sectionClass,
-    titleClass,
-    inputId,
-    titleText,
-  }) => {
-    if (!container || document.getElementById(inputId)) return null;
-
-    const section = document.createElement('div');
-    section.className = sectionClass;
-
-    const title = document.createElement('h3');
-    title.className = titleClass;
-    title.id = `${inputId}-label`;
-    title.textContent = titleText;
-
-    const sliderContainer = document.createElement('div');
-    sliderContainer.className = 'slider-container';
-
-    const input = document.createElement('input');
-    input.type = 'range';
-    input.id = inputId;
-    input.min = String(_HFM_FONT_SCALE_RANGE.min);
-    input.max = String(_HFM_FONT_SCALE_RANGE.max);
-    input.step = String(_HFM_FONT_SCALE_RANGE.step);
-    input.value = String(_hfmFontScale);
-    input.setAttribute('aria-labelledby', title.id);
-
-    const valueEl = document.createElement('span');
-    valueEl.className = 'slider-value';
-    valueEl.id = `${inputId}-value`;
-    valueEl.textContent = formatValue(_hfmFontScale);
-
-    sliderContainer.appendChild(input);
-    sliderContainer.appendChild(valueEl);
-    section.appendChild(title);
-    section.appendChild(sliderContainer);
-
-    if (insertBefore) {
-      container.insertBefore(section, insertBefore);
-    } else {
-      container.appendChild(section);
-    }
-
-    inputs.push(input);
-    valueEls.push(valueEl);
-    sections.push(section);
-
-    input.addEventListener('input', () => {
-      _applyHfmFontScale(parseFloat(input.value));
-    });
-
-    return section;
-  };
-
-  const panelBody = document.getElementById('cameraPanelBody');
-  const panelInsertBefore =
-    panelBody?.querySelector('.camera-shortcuts-help') ?? null;
-  buildSection({
-    container: panelBody,
-    insertBefore: panelInsertBefore,
-    sectionClass: 'camera-control-section hfm-font-scale-section',
-    titleClass: 'camera-control-section-title',
-    inputId: '_hfmFontScale',
+  _hfmFontScaleControls = _buildHfmSliderControls({
+    idBase: '_hfmFontScale',
     titleText: 'Alt View Font Size',
+    range: _HFM_FONT_SCALE_RANGE,
+    getValue: () => _hfmFontScale,
+    onInput: (value) => _applyHfmFontScale(value),
   });
+  return _hfmFontScaleControls;
+}
 
-  const drawerBody = document.getElementById('cameraDrawerBody');
-  buildSection({
-    container: drawerBody,
-    insertBefore: null,
-    sectionClass: 'camera-drawer-section camera-drawer-font-scale',
-    titleClass: 'camera-drawer-section-title',
-    inputId: '_hfmFontScaleMobile',
-    titleText: 'Alt View Font Size',
+function _initHfmPersistFadeControls() {
+  if (_hfmPersistFadeControls) return _hfmPersistFadeControls;
+  const base = _buildHfmSliderControls({
+    idBase: '_hfmPersistFade',
+    titleText: 'Alt View Afterglow',
+    range: _HFM_PERSIST_FADE_RANGE,
+    getValue: () => _hfmPersistFade,
+    onInput: (value) => _applyHfmPersistFade(value),
   });
-
-  _hfmFontScaleControls = {
-    setEnabled(_isEnabled) {
-      sections.forEach((section) => {
-        section.style.display = 'none';
-      });
-      inputs.forEach((input) => {
-        input.disabled = true;
-      });
+  // Afterglow is motion; hide the slider entirely under reduced-motion.
+  _hfmPersistFadeControls = {
+    setEnabled(isEnabled) {
+      base.setEnabled(isEnabled && !_prefersReducedMotion());
     },
     sync(value) {
-      const formatted = formatValue(value);
-      const rawValue = value.toFixed(2);
-      inputs.forEach((input) => {
-        if (input.value !== rawValue) {
-          input.value = rawValue;
-        }
-        input.setAttribute('aria-valuetext', formatted);
-      });
-      valueEls.forEach((el) => {
-        el.textContent = formatted;
-      });
+      base.sync(value);
     },
   };
+  return _hfmPersistFadeControls;
+}
 
-  _hfmFontScaleControls.setEnabled(false);
-  _hfmFontScaleControls.sync(_hfmFontScale);
-
-  return _hfmFontScaleControls;
+function _setHfmSlidersEnabled(enabled) {
+  _initHfmContrastControls().setEnabled(enabled);
+  _initHfmFontScaleControls().setEnabled(enabled);
+  _initHfmPersistFadeControls().setEnabled(enabled);
 }
 
 // ---------------------------------------------------------------------------
@@ -875,6 +471,50 @@ function _setAssetsForVariant(enabled) {
 // Alt view enable / disable (requires previewManager)
 // ---------------------------------------------------------------------------
 
+function _loadSavedHfmSettings() {
+  if (_hfmSettingsLoaded) return;
+  _hfmSettingsLoaded = true;
+
+  let savedContrast = null;
+  let savedFont = null;
+  let savedPersistFade = null;
+  try {
+    savedContrast = localStorage.getItem(STORAGE_KEY_HFM_CONTRAST_SCALE);
+    savedFont = localStorage.getItem(STORAGE_KEY_HFM_FONT_SCALE);
+    savedPersistFade = localStorage.getItem(STORAGE_KEY_HFM_PERSIST_FADE);
+  } catch (_) {
+    // Private browsing or storage unavailable
+  }
+
+  const parsedContrast =
+    savedContrast !== null ? parseFloat(savedContrast) : NaN;
+  const parsedFont = savedFont !== null ? parseFloat(savedFont) : NaN;
+  const parsedPersistFade =
+    savedPersistFade !== null ? parseFloat(savedPersistFade) : NaN;
+
+  if (
+    Number.isFinite(parsedContrast) &&
+    parsedContrast >= _HFM_CONTRAST_RANGE.min &&
+    parsedContrast <= _HFM_CONTRAST_RANGE.max
+  ) {
+    _hfmContrastScale = parsedContrast;
+  }
+  if (
+    Number.isFinite(parsedFont) &&
+    parsedFont >= _HFM_FONT_SCALE_RANGE.min &&
+    parsedFont <= _HFM_FONT_SCALE_RANGE.max
+  ) {
+    _hfmFontScale = parsedFont;
+  }
+  if (
+    Number.isFinite(parsedPersistFade) &&
+    parsedPersistFade >= _HFM_PERSIST_FADE_RANGE.min &&
+    parsedPersistFade <= _HFM_PERSIST_FADE_RANGE.max
+  ) {
+    _hfmPersistFade = parsedPersistFade;
+  }
+}
+
 async function _enableAltViewWithPreview(toggleBtn) {
   const previewManager = _getPreviewManager();
   if (!previewManager) return;
@@ -893,6 +533,9 @@ async function _enableAltViewWithPreview(toggleBtn) {
   const motionMql = window.matchMedia('(prefers-reduced-motion: reduce)');
   _hfmMotionListener = (event) => {
     _hfmAltView?.setReducedMotion(event.matches);
+    _initHfmPersistFadeControls().setEnabled(
+      _hfmEnabled && !_hfmPanAdjustEnabled
+    );
     if (event.matches) {
       _hfmPersistFade = 0;
       _updateHfmStatusBar();
@@ -913,62 +556,12 @@ async function _enableAltViewWithPreview(toggleBtn) {
   };
   motionMql.addEventListener('change', _hfmMotionListener);
 
-  if (!_hfmCalibrated) {
-    let savedContrast = null;
-    let savedFont = null;
-    let savedPersistFade = null;
-    try {
-      savedContrast = localStorage.getItem(STORAGE_KEY_HFM_CONTRAST_SCALE);
-      savedFont = localStorage.getItem(STORAGE_KEY_HFM_FONT_SCALE);
-      savedPersistFade = localStorage.getItem(STORAGE_KEY_HFM_PERSIST_FADE);
-    } catch (_) {
-      // Private browsing or storage unavailable
-    }
-
-    const parsedContrast =
-      savedContrast !== null ? parseFloat(savedContrast) : NaN;
-    const parsedFont = savedFont !== null ? parseFloat(savedFont) : NaN;
-    const parsedPersistFade =
-      savedPersistFade !== null ? parseFloat(savedPersistFade) : NaN;
-
-    const contrastValid =
-      Number.isFinite(parsedContrast) &&
-      parsedContrast >= _HFM_CONTRAST_RANGE.min &&
-      parsedContrast <= _HFM_CONTRAST_RANGE.max;
-    const fontValid =
-      Number.isFinite(parsedFont) &&
-      parsedFont >= _HFM_FONT_SCALE_RANGE.min &&
-      parsedFont <= _HFM_FONT_SCALE_RANGE.max;
-    const persistFadeValid =
-      Number.isFinite(parsedPersistFade) &&
-      parsedPersistFade >= _HFM_PERSIST_FADE_RANGE.min &&
-      parsedPersistFade <= _HFM_PERSIST_FADE_RANGE.max;
-
-    if (contrastValid && fontValid) {
-      _hfmContrastScale = parsedContrast;
-      _hfmFontScale = parsedFont;
-      _hfmCalibratedDevice = '';
-      _hfmCalibrated = true;
-    } else {
-      const calibrated = _calibrateHfmSettings();
-      _hfmContrastScale = contrastValid ? parsedContrast : calibrated.edgeScale;
-      _hfmFontScale = fontValid ? parsedFont : calibrated.sizeScale;
-      _hfmCalibratedDevice = calibrated.deviceCategory;
-      _hfmCalibrated = true;
-    }
-
-    _hfmPersistFade = persistFadeValid
-      ? parsedPersistFade
-      : _HFM_PERSIST_FADE_RANGE.default;
-  }
+  _loadSavedHfmSettings();
 
   _applyHfmContrastScale(_hfmContrastScale);
   _applyHfmFontScale(_hfmFontScale);
   _applyHfmPersistFade(_hfmPersistFade);
-  _setHfmZoomBaseline();
-  _enableHfmZoomTracking();
-  _initHfmContrastControls().setEnabled(true);
-  _initHfmFontScaleControls().setEnabled(true);
+  _setHfmSlidersEnabled(true);
 
   if (previewManager?.mesh && previewManager.enableRotationCentering) {
     previewManager.enableRotationCentering();
@@ -979,12 +572,14 @@ async function _enableAltViewWithPreview(toggleBtn) {
       previewManager.enableRotationCentering();
     }
     _getDisplayOptionsController().refreshOverlays();
+    _hfmAltView?.invalidate?.();
   });
 
   previewManager.setRenderOverride(() => _hfmAltView.render());
-  previewManager.setResizeHook(({ width, height }) =>
-    _hfmAltView.resize(width, height)
-  );
+  previewManager.setResizeHook(({ width, height }) => {
+    _hfmAltView.resize(width, height);
+    _hfmAltView.invalidate?.();
+  });
 
   root.setAttribute('data-ui-variant', 'mono');
 
@@ -993,6 +588,9 @@ async function _enableAltViewWithPreview(toggleBtn) {
     newTheme,
     root.getAttribute('data-high-contrast') === 'true'
   );
+  // The mono palette is applied above after the variant attribute flips, so
+  // rebuild the glyph atlas against the final --color-accent value.
+  _hfmAltView.rebuildGlyphs?.();
 
   previewManager.handleResize?.();
   toggleBtn?.setAttribute('aria-pressed', 'true');
@@ -1047,10 +645,7 @@ function _disableAltViewWithPreview(toggleBtn) {
     _hfmPanToggleButtons.desktop.style.display = 'none';
   if (_hfmPanToggleButtons?.mobile)
     _hfmPanToggleButtons.mobile.style.display = 'none';
-  _initHfmContrastControls().setEnabled(false);
-  _initHfmFontScaleControls().setEnabled(false);
-  _disableHfmZoomTracking();
-  _hfmZoomBaseline = null;
+  _setHfmSlidersEnabled(false);
 
   _updateHfmStatusBar();
 }
@@ -1060,7 +655,6 @@ function _disableAltViewWithPreview(toggleBtn) {
 // ---------------------------------------------------------------------------
 
 function _injectAltToggle() {
-  const previewManager = _getPreviewManager();
   const themeToggle = document.getElementById('themeToggle');
   if (!themeToggle) return;
   if (document.getElementById('_hfmToggle')) return;
@@ -1147,6 +741,11 @@ function _injectAltToggle() {
     const isCurrentlyEnabled =
       toggleBtn.getAttribute('aria-pressed') === 'true';
 
+    // Resolve fresh on every click: the toggle can be injected on the welcome
+    // screen (before any preview exists) and must pick up the preview manager
+    // created later when a model loads.
+    const previewManager = _getPreviewManager();
+
     if (!previewManager) {
       if (!isCurrentlyEnabled) {
         _setAssetsForVariant(true);
@@ -1171,9 +770,7 @@ function _injectAltToggle() {
 
   if (_hfmEnabled) {
     toggleBtn.setAttribute('aria-pressed', 'true');
-    _initHfmContrastControls().setEnabled(true);
-    _initHfmFontScaleControls().setEnabled(true);
-    _enableHfmZoomTracking();
+    _setHfmSlidersEnabled(true);
     if (_hfmPanToggleButtons?.desktop)
       _hfmPanToggleButtons.desktop.style.display = 'flex';
     if (_hfmPanToggleButtons?.mobile)
@@ -1191,6 +788,10 @@ function _handleUnlock() {
   document.querySelectorAll('[data-hfm-gated]').forEach((el) => {
     el.hidden = false;
   });
+
+  announce(
+    'Alt View unlocked. A new toggle appeared next to the theme button.'
+  );
 
   const container = document.getElementById('previewContainer');
   if (container) {
@@ -1230,6 +831,18 @@ export function initHfmController({
 
     refreshVariantAssets() {
       _setAssetsForVariant(true);
+    },
+
+    /**
+     * Notify the controller that the app theme changed while Alt View may be
+     * active. Rebuilds the glyph atlas so the phosphor tint (green/amber)
+     * follows the new theme.
+     */
+    onThemeChanged() {
+      if (_hfmEnabled && _hfmAltView) {
+        _hfmAltView.rebuildGlyphs?.();
+        _hfmAltView.invalidate?.();
+      }
     },
 
     injectAltToggle: _injectAltToggle,
@@ -1276,37 +889,37 @@ export function initHfmController({
         const next = _applyHfmPersistFade(
           _hfmPersistFade + _HFM_PERSIST_FADE_RANGE.step
         );
-        return `Alt view afterglow: ${_formatHfmPersistFadeValue(next)}`;
+        return `Alt view afterglow: ${_formatPercent(next)}`;
       }
       if (shiftKey && direction === 'down') {
         const next = _applyHfmPersistFade(
           _hfmPersistFade - _HFM_PERSIST_FADE_RANGE.step
         );
-        return `Alt view afterglow: ${_formatHfmPersistFadeValue(next)}`;
+        return `Alt view afterglow: ${_formatPercent(next)}`;
       }
       if (direction === 'up') {
         const next = _applyHfmContrastScale(
           _hfmContrastScale + _HFM_CONTRAST_RANGE.step
         );
-        return `Alt view contrast: ${_formatHfmContrastValue(next)}`;
+        return `Alt view contrast: ${_formatPercent(next)}`;
       }
       if (direction === 'down') {
         const next = _applyHfmContrastScale(
           _hfmContrastScale - _HFM_CONTRAST_RANGE.step
         );
-        return `Alt view contrast: ${_formatHfmContrastValue(next)}`;
+        return `Alt view contrast: ${_formatPercent(next)}`;
       }
       if (direction === 'left') {
         const next = _applyHfmFontScale(
           _hfmFontScale - _HFM_FONT_SCALE_RANGE.step
         );
-        return `Alt view font size: ${_formatHfmFontScaleValue(next)}`;
+        return `Alt view font size: ${_formatPercent(next)}`;
       }
       if (direction === 'right') {
         const next = _applyHfmFontScale(
           _hfmFontScale + _HFM_FONT_SCALE_RANGE.step
         );
-        return `Alt view font size: ${_formatHfmFontScaleValue(next)}`;
+        return `Alt view font size: ${_formatPercent(next)}`;
       }
       return true;
     },

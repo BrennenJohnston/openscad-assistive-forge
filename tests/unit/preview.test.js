@@ -114,6 +114,82 @@ describe('PreviewManager', () => {
     })
   })
 
+  describe('Zoom-to-cursor Preference (F17)', () => {
+    it('defaults to true when no preference is stored', () => {
+      const manager = new PreviewManager(container)
+      expect(manager.zoomToCursorEnabled).toBe(true)
+      expect(manager.loadZoomToCursorPreference()).toBe(true)
+    })
+
+    it('respects a stored false preference', () => {
+      localStorage.setItem('openscad-forge-zoom-to-cursor', 'false')
+      const manager = new PreviewManager(container)
+      expect(manager.zoomToCursorEnabled).toBe(false)
+      expect(manager.loadZoomToCursorPreference()).toBe(false)
+    })
+
+    it('persists toggle changes to localStorage', () => {
+      const manager = new PreviewManager(container)
+      manager.toggleZoomToCursor(false)
+      expect(localStorage.getItem('openscad-forge-zoom-to-cursor')).toBe('false')
+      expect(manager.zoomToCursorEnabled).toBe(false)
+
+      manager.toggleZoomToCursor(true)
+      expect(localStorage.getItem('openscad-forge-zoom-to-cursor')).toBe('true')
+      expect(manager.zoomToCursorEnabled).toBe(true)
+    })
+
+    it('coerces non-boolean inputs', () => {
+      const manager = new PreviewManager(container)
+      manager.toggleZoomToCursor(0)
+      expect(manager.zoomToCursorEnabled).toBe(false)
+      manager.toggleZoomToCursor(1)
+      expect(manager.zoomToCursorEnabled).toBe(true)
+    })
+
+    it('mirrors the toggle into the OrbitControls instance when present', () => {
+      // jsdom has no WebGL, so PreviewManager.init() never builds real
+      // OrbitControls. Stub the property bag the live code writes to and
+      // verify the toggle keeps it in sync.
+      const manager = new PreviewManager(container)
+      manager.controls = { zoomToCursor: true }
+
+      manager.toggleZoomToCursor(false)
+      expect(manager.controls.zoomToCursor).toBe(false)
+
+      manager.toggleZoomToCursor(true)
+      expect(manager.controls.zoomToCursor).toBe(true)
+    })
+
+    it('is a no-op on controls when controls have not been created yet', () => {
+      const manager = new PreviewManager(container)
+      manager.controls = null
+      expect(() => manager.toggleZoomToCursor(false)).not.toThrow()
+      expect(manager.zoomToCursorEnabled).toBe(false)
+    })
+
+    it('handles localStorage errors gracefully when loading', () => {
+      const manager = new PreviewManager(container)
+      const originalGetItem = localStorage.getItem
+      localStorage.getItem = vi.fn(() => { throw new Error('Storage error') })
+
+      // Falls back to the default-on behaviour even when storage is unreadable.
+      expect(manager.loadZoomToCursorPreference()).toBe(true)
+
+      localStorage.getItem = originalGetItem
+    })
+
+    it('handles localStorage errors gracefully when saving', () => {
+      const manager = new PreviewManager(container)
+      const originalSetItem = localStorage.setItem
+      localStorage.setItem = vi.fn(() => { throw new Error('Storage error') })
+
+      expect(() => manager.saveZoomToCursorPreference(false)).not.toThrow()
+
+      localStorage.setItem = originalSetItem
+    })
+  })
+
   describe('Color Override', () => {
     it('applies color overrides when a mesh is present and override enabled', () => {
       const manager = new PreviewManager(container)

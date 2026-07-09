@@ -104,9 +104,11 @@ import {
   keyboardConfig,
   initShortcutsModal,
 } from './js/keyboard-config.js';
+import { applyAriaKeyshortcuts } from './js/keyboard-shortcuts-binder.js';
 import {
   isEnabled as _isEnabled,
   debugFlags,
+  setUserPreference,
   FLAGS as _FLAGS,
 } from './js/feature-flags.js';
 import { initSearchableCombobox } from './js/searchable-combobox.js';
@@ -114,8 +116,27 @@ import { initCompanionFilesController } from './js/companion-files-controller.js
 import { initCSPReporter } from './js/csp-reporter.js';
 import {
   migrateStorageKeys,
-  getAppPrefKey,
-  getDrawerStateKey,
+  DEBUG_PREFS,
+  isDebugPrefEnabled,
+  safeGetItem,
+  safeSetItem,
+  STORAGE_KEY_AUTO_PREVIEW_ENABLED,
+  STORAGE_KEY_PREVIEW_QUALITY,
+  STORAGE_KEY_RECOVERY_SOURCE,
+  STORAGE_KEY_RECOVERY_TIMESTAMP,
+  STORAGE_KEY_STATUS_BAR,
+  STORAGE_KEY_MODEL_COLOR,
+  STORAGE_KEY_MODEL_COLOR_ENABLED,
+  STORAGE_KEY_MODEL_OPACITY,
+  STORAGE_KEY_BRIGHTNESS,
+  STORAGE_KEY_CONTRAST,
+  STORAGE_KEY_MODEL_APPEARANCE_ENABLED,
+  STORAGE_KEY_PARAM_PANEL_COLLAPSED,
+  STORAGE_KEY_LAYOUT_SIZES,
+  STORAGE_KEY_MANIFOLD_ENGINE,
+  STORAGE_KEY_WASM_INIT_STARTED,
+  STORAGE_KEY_WASM_INIT_COMPLETED,
+  PRESET_SORT_KEY,
 } from './js/storage-keys.js';
 import {
   initImageMeasurement,
@@ -136,23 +157,7 @@ import {
   onScaleChange,
 } from './js/unit-sync.js';
 
-// Storage keys using standardized naming convention
-const STORAGE_KEY_AUTO_PREVIEW_ENABLED = getAppPrefKey('auto-preview-enabled');
-const STORAGE_KEY_PREVIEW_QUALITY = getAppPrefKey('preview-quality-mode');
-const STORAGE_KEY_RECOVERY_SOURCE = getAppPrefKey('recovery-source');
-const STORAGE_KEY_RECOVERY_TIMESTAMP = getAppPrefKey('recovery-timestamp');
-const STORAGE_KEY_STATUS_BAR = getAppPrefKey('status-bar');
-// Overlay, grid, and auto-rotate storage keys moved to overlay-grid-controller.js
-const STORAGE_KEY_MODEL_COLOR = getAppPrefKey('model-color');
-const STORAGE_KEY_MODEL_COLOR_ENABLED = getAppPrefKey('model-color-enabled');
-const STORAGE_KEY_MODEL_OPACITY = getAppPrefKey('model-opacity');
-const STORAGE_KEY_BRIGHTNESS = getAppPrefKey('brightness');
-const STORAGE_KEY_CONTRAST = getAppPrefKey('contrast');
-const STORAGE_KEY_MODEL_APPEARANCE_ENABLED = getAppPrefKey(
-  'model-appearance-enabled'
-);
-const STORAGE_KEY_PARAM_PANEL_COLLAPSED = getDrawerStateKey('parameters');
-const STORAGE_KEY_LAYOUT_SIZES = getAppPrefKey('layout-sizes');
+// Storage keys are centralized in ./js/storage-keys.js (audit Q4)
 import {
   announce as _announce,
   announceImmediate,
@@ -165,31 +170,33 @@ import { getModeManager } from './js/mode-manager.js';
 // UI Mode Controller - Basic/Advanced interface layout switching
 import { getUIModeController } from './js/ui-mode-controller.js';
 // Toolbar Menu Controller - File|Edit|Design|View|Window|Help menu bar
-import { getToolbarMenuController } from './js/toolbar-menu-controller.js';
+import {
+  getToolbarMenuController,
+  applyToolbarModeVisibility,
+} from './js/toolbar-menu-controller.js';
 import { initParamDetailController } from './js/param-detail-controller.js';
 import { initOverlayGridController } from './js/overlay-grid-controller.js';
 import { initSavedProjectsUI } from './js/saved-projects-ui.js';
-import { getFileActionsController } from './js/file-actions-controller.js';
+import {
+  getFileActionsController,
+  exportFormatFromMenu,
+} from './js/file-actions-controller.js';
 import { getEditActionsController } from './js/edit-actions-controller.js';
+import { copyPresetName } from './js/copy-preset-name.js';
 import { getDesignPanelController } from './js/design-panel-controller.js';
 import { getDisplayOptionsController } from './js/display-options-controller.js';
-// Animation controller import preserved for future development — see ./js/animation-controller.js
-// import { getAnimationController } from './js/animation-controller.js';
 import { getEditorStateManager } from './js/editor-state-manager.js';
 import { TextareaEditor } from './js/textarea-editor.js';
 import { CodeMirrorEditor } from './js/codemirror-editor.js';
 import { showConfirmDialog } from './js/dialogs.js';
-import {
-  initHfmController,
-  exportFormatFromMenu,
-  applyToolbarModeVisibility,
-} from './js/hfm-controller.js';
+import { initHfmController } from './js/hfm-controller.js';
 import {
   EXAMPLE_DEFINITIONS,
   PROGRAM_DEFINITIONS,
   showProcessingOverlay,
   initFileHandler,
 } from './js/file-handler.js';
+import { getFolderSyncController } from './js/folder-sync-controller.js';
 import {
   initMemoryMonitor,
   getMemoryMonitor as _getMemoryMonitor,
@@ -302,12 +309,14 @@ let currentSavedProjectId = null;
 
 // Initialize app
 async function initApp() {
-  console.log('OpenSCAD Assistive Forge v4.1.0');
+  console.log(`OpenSCAD Assistive Forge v${__APP_VERSION__}`);
   console.log('Initializing...');
 
   // Initialize Milestone 0 Foundation systems early
   // Feature flags: Enable controlled rollout of new features
-  debugFlags(); // Log flag states for debugging
+  if (import.meta.env.DEV) {
+    debugFlags(); // Log flag states for debugging (dev only)
+  }
 
   // CSP Reporter: Monitor Content-Security-Policy violations
   initCSPReporter();
@@ -323,16 +332,16 @@ async function initApp() {
   // Crash detection: If WASM init started but never completed, we may have crashed.
   // The flag is set before WASM init and cleared after success.
   const wasmCrashDetected =
-    localStorage.getItem('openscad-forge-wasm-init-started') === 'true' &&
-    localStorage.getItem('openscad-forge-wasm-init-completed') !== 'true';
+    localStorage.getItem(STORAGE_KEY_WASM_INIT_STARTED) === 'true' &&
+    localStorage.getItem(STORAGE_KEY_WASM_INIT_COMPLETED) !== 'true';
 
   if (wasmCrashDetected && !isRecoveryMode) {
     console.warn(
       '[Recovery] Detected unclean WASM shutdown — offering recovery mode'
     );
     // Clear the flags so we don't loop
-    localStorage.removeItem('openscad-forge-wasm-init-started');
-    localStorage.removeItem('openscad-forge-wasm-init-completed');
+    localStorage.removeItem(STORAGE_KEY_WASM_INIT_STARTED);
+    localStorage.removeItem(STORAGE_KEY_WASM_INIT_COMPLETED);
     // Auto-enter recovery mode
     window.location.href = window.location.pathname + '?recovery=true';
     return; // stop initialization
@@ -349,11 +358,11 @@ async function initApp() {
     localStorage.setItem(STORAGE_KEY_PREVIEW_QUALITY, 'fast');
     // Disable CodeMirror in recovery mode to reduce memory footprint.
     // The user can re-enable it manually from settings after recovery.
-    localStorage.setItem('openscad-forge-flag-codemirror_editor', 'false');
+    setUserPreference('codemirror_editor', false);
 
     // Clean up crash detection flags
-    localStorage.removeItem('openscad-forge-wasm-init-started');
-    localStorage.removeItem('openscad-forge-wasm-init-completed');
+    localStorage.removeItem(STORAGE_KEY_WASM_INIT_STARTED);
+    localStorage.removeItem(STORAGE_KEY_WASM_INIT_COMPLETED);
 
     // Check for recovery data
     const recoverySource = localStorage.getItem(STORAGE_KEY_RECOVERY_SOURCE);
@@ -532,18 +541,11 @@ async function initApp() {
     .getElementById('memoryBannerReload')
     ?.addEventListener('click', () => {
       // Save current state to localStorage before reload
-      try {
-        const currentCode =
-          document.getElementById('openscadSource')?.value || '';
-        if (currentCode) {
-          localStorage.setItem(STORAGE_KEY_RECOVERY_SOURCE, currentCode);
-          localStorage.setItem(
-            STORAGE_KEY_RECOVERY_TIMESTAMP,
-            Date.now().toString()
-          );
-        }
-      } catch (e) {
-        console.error('[Memory] Failed to save recovery state:', e);
+      const currentCode =
+        document.getElementById('openscadSource')?.value || '';
+      if (currentCode) {
+        safeSetItem(STORAGE_KEY_RECOVERY_SOURCE, currentCode);
+        safeSetItem(STORAGE_KEY_RECOVERY_TIMESTAMP, Date.now().toString());
       }
       // Reload in recovery mode
       window.location.href = window.location.pathname + '?recovery=true';
@@ -921,6 +923,13 @@ async function initApp() {
 
   // Initialize configurable keyboard shortcuts
   initKeyboardShortcuts();
+
+  // Advertise shortcuts to assistive technology (MC-1) and keep the
+  // attributes current when the user re-maps a shortcut.
+  applyAriaKeyshortcuts(keyboardConfig.getAllShortcuts());
+  keyboardConfig.addChangeListener((shortcuts) =>
+    applyAriaKeyshortcuts(shortcuts)
+  );
 
   // Initialize saved projects UI controller
   // updateCompanionSaveButton is wrapped because companionFilesCtrl is
@@ -1391,6 +1400,11 @@ async function initApp() {
     const importFolderInput = document.getElementById('importFolderInput');
 
     if (importFolderBtn) importFolderBtn.hidden = false;
+    // webkitdirectory is non-standard, so it is applied here (behind the
+    // feature detection above) instead of in the static HTML.
+    if (importFolderInput) {
+      importFolderInput.setAttribute('webkitdirectory', '');
+    }
 
     if (importFolderBtn && importFolderInput) {
       importFolderBtn.addEventListener('click', async () => {
@@ -1470,6 +1484,161 @@ async function initApp() {
   // _collectFilesFromDir moved to file-handler.js
 
   // handleFolderImport moved to file-handler.js
+
+  // ── F35 Phase A: Persistent local-folder sync (Chromium only) ───────────
+  //
+  // Hidden by default. Reveals only when:
+  //   1. The local_folder_sync feature flag is on (defaults OFF until
+  //      Spike S1 has been verified on Chrome / Edge), AND
+  //   2. The runtime exposes showDirectoryPicker (Chromium today).
+  //
+  // The connect / restore flows reuse the existing file-handler folder
+  // walker so the loaded files behave identically to a snapshot import;
+  // Phase A only adds persistence of the directory handle. Phase B
+  // (file-watcher / F14) and Phase C (write-back) build on this.
+  const folderSyncCtrl = getFolderSyncController();
+  if (_isEnabled('local_folder_sync') && folderSyncCtrl.isSupported()) {
+    const connectBtn = document.getElementById('connectFolderBtn');
+    const statusEl = document.getElementById('folderSyncStatus');
+    const statusText = document.getElementById('folderSyncStatusText');
+    const restoreBtn = document.getElementById('folderSyncRestoreBtn');
+    const disconnectBtn = document.getElementById('folderSyncDisconnectBtn');
+
+    if (connectBtn) connectBtn.hidden = false;
+
+    /**
+     * Reflect controller state into the status pill + buttons. Called
+     * via `subscribe()` so this stays the single source of truth.
+     */
+    function _syncFolderUi(state, handle) {
+      if (!statusEl || !statusText) return;
+      const name = handle?.name ?? '';
+      switch (state) {
+        case 'connected':
+          statusEl.hidden = false;
+          statusEl.dataset.state = 'connected';
+          statusText.textContent = `Connected to "${name}"`;
+          if (restoreBtn) restoreBtn.hidden = true;
+          if (disconnectBtn) disconnectBtn.hidden = false;
+          if (connectBtn) connectBtn.hidden = true;
+          break;
+        case 'pending-restore':
+          statusEl.hidden = false;
+          statusEl.dataset.state = 'pending-restore';
+          statusText.textContent =
+            `"${name}" — click Reconnect to re-grant permission for this session`;
+          if (restoreBtn) restoreBtn.hidden = false;
+          if (disconnectBtn) disconnectBtn.hidden = false;
+          if (connectBtn) connectBtn.hidden = true;
+          break;
+        case 'denied':
+          statusEl.hidden = false;
+          statusEl.dataset.state = 'denied';
+          statusText.textContent =
+            `"${name}" — permission was denied. Click Reconnect to try again, or Disconnect to forget.`;
+          if (restoreBtn) restoreBtn.hidden = false;
+          if (disconnectBtn) disconnectBtn.hidden = false;
+          if (connectBtn) connectBtn.hidden = true;
+          break;
+        case 'idle':
+        default:
+          statusEl.hidden = true;
+          statusEl.dataset.state = 'idle';
+          statusText.textContent = '';
+          if (restoreBtn) restoreBtn.hidden = true;
+          if (disconnectBtn) disconnectBtn.hidden = true;
+          if (connectBtn) connectBtn.hidden = false;
+          break;
+      }
+    }
+
+    folderSyncCtrl.subscribe(_syncFolderUi);
+
+    /**
+     * After connect / restore succeeds, walk the folder and hand the
+     * collected files to the existing snapshot loader. Keeps Phase A
+     * file-loading semantics identical to the cross-browser flow so
+     * everything downstream (parser, schema, presets, render) is
+     * unchanged.
+     */
+    async function _loadFromConnectedFolder(handle) {
+      const dismissOverlay = showProcessingOverlay(
+        `Reading folder "${handle.name}"\u2026`,
+        'Scanning files and subfolders. Please do not close or refresh the page.'
+      );
+      const files = [];
+      try {
+        await fileHandler.collectFilesFromDir(handle, handle.name, files);
+        if (files.length === 0) {
+          dismissOverlay();
+          showErrorToast({
+            title: 'Empty Folder',
+            message:
+              'No files found in the connected folder. The folder may be empty.',
+          });
+          return;
+        }
+        dismissOverlay();
+        await fileHandler.handleFolderImport(files);
+      } catch (err) {
+        dismissOverlay();
+        showErrorToast({
+          title: 'Folder Read Error',
+          message: err?.message ?? String(err),
+        });
+      }
+    }
+
+    connectBtn?.addEventListener('click', async () => {
+      const result = await folderSyncCtrl.connect();
+      if (result.ok && result.handle) {
+        announceImmediate(`Connected to folder ${result.folderName}`);
+        await _loadFromConnectedFolder(result.handle);
+      } else if (result.reason === 'cancelled') {
+        updateStatus('Folder connection cancelled');
+      } else if (result.reason === 'permission-denied') {
+        updateStatus('Folder connection denied — permission required', 'warning');
+      } else if (result.reason === 'unsupported') {
+        // Defensive: should not happen because the button is hidden.
+        updateStatus(
+          'This browser does not support persistent folder access',
+          'warning'
+        );
+      } else {
+        updateStatus(`Could not connect to folder: ${result.reason}`, 'error');
+      }
+    });
+
+    restoreBtn?.addEventListener('click', async () => {
+      const result = await folderSyncCtrl.restoreFromStored();
+      if (result.ok && result.handle) {
+        announceImmediate(`Reconnected to folder ${result.folderName}`);
+        await _loadFromConnectedFolder(result.handle);
+      } else if (result.reason === 'permission-denied') {
+        updateStatus(
+          'Reconnect denied — folder remains pending until permission is granted',
+          'warning'
+        );
+      } else if (result.reason === 'no-stored-handle') {
+        updateStatus('No stored folder to reconnect to');
+      } else {
+        updateStatus(`Could not reconnect: ${result.reason}`, 'error');
+      }
+    });
+
+    disconnectBtn?.addEventListener('click', async () => {
+      await folderSyncCtrl.disconnect();
+      announceImmediate('Disconnected from folder');
+      updateStatus('Disconnected from folder');
+    });
+
+    // Probe IDB for a previously-stored handle. Does NOT call
+    // requestPermission (no user gesture yet); just transitions to
+    // `pending-restore` so the UI shows the Reconnect prompt.
+    folderSyncCtrl.hydrateFromStorage().catch((err) => {
+      console.warn('[App] folder-sync hydrate failed:', err);
+    });
+  }
 
   // _promptScadSelection moved to file-handler.js
 
@@ -2302,7 +2471,7 @@ async function initApp() {
     ];
   });
 
-  // Initialize design panel controller (Flush Caches, Display AST, Check Validity, Geometry Info)
+  // Initialize design panel controller (Flush Caches, Display Parameters, Check Validity, Geometry Info)
   const designPanelController = getDesignPanelController({
     getPreviewManager: () => previewManager,
     getWorker: () => renderController?.worker || null,
@@ -2394,7 +2563,7 @@ async function initApp() {
       },
       {
         type: 'action',
-        label: 'Display AST\u2026',
+        label: 'Display Parameters\u2026',
         shortcutAction: 'showAST',
         enabled: hasFile,
         tooltip: hasFile ? undefined : 'Open a file first',
@@ -2453,6 +2622,12 @@ async function initApp() {
         shortcutAction: 'toggleAxes',
         checked: displayOptionsController.get('axes'),
         handler: () => displayOptionsController.toggle('axes'),
+      },
+      {
+        type: 'toggle',
+        label: 'Show Axis Markings (mm)',
+        checked: displayOptionsController.get('axisMarks'),
+        handler: () => displayOptionsController.toggle('axisMarks'),
       },
       {
         type: 'toggle',
@@ -2590,22 +2765,6 @@ async function initApp() {
             previewManager.toggleProjection();
           }
         },
-      },
-      { type: 'separator' },
-      // -- Toolbar toggles --
-      {
-        type: 'toggle',
-        label: 'Hide Editor toolbar',
-        disabled: true,
-        tooltip:
-          'Not yet implemented \u2014 panels can be shown or hidden via the Window menu',
-      },
-      {
-        type: 'toggle',
-        label: 'Hide 3D View toolbar',
-        disabled: true,
-        tooltip:
-          'Not yet implemented \u2014 panels can be shown or hidden via the Window menu',
       },
     ];
   });
@@ -2771,8 +2930,6 @@ async function initApp() {
     ];
   });
 
-  // Animation controller ($t) initialization removed from UI wiring — see animation-controller.js for future re-integration
-
   // Listen for "Save to Project" events from UI preferences panel
   document.addEventListener('ui-mode-save-to-project', (e) => {
     const prefs = e.detail?.uiPreferences;
@@ -2803,19 +2960,10 @@ async function initApp() {
 
       // Fallback path: keep the legacy localStorage key in sync for one release
       // so that projects loaded before this change still have preferences available.
-      try {
-        const key = `openscad-forge-ui-prefs-${modelName}`;
-        localStorage.setItem(key, JSON.stringify(prefs));
+      const uiPrefsKey = `openscad-forge-ui-prefs-${modelName}`;
+      if (safeSetItem(uiPrefsKey, JSON.stringify(prefs))) {
         console.log(`[App] UI preferences saved for project: ${modelName}`);
         updateStatus('UI preferences saved to project');
-      } catch (error) {
-        if (error.name === 'QuotaExceededError') {
-          console.warn(
-            '[App] localStorage quota exceeded — UI prefs not saved'
-          );
-        } else {
-          console.warn('[App] Could not save UI preferences:', error);
-        }
       }
     } else {
       updateStatus('Load a project first to save preferences');
@@ -3083,7 +3231,7 @@ async function initApp() {
       // Set up memory warning callback
       renderController.setMemoryWarningCallback((memoryInfo) => {
         console.warn(
-          `[Memory] High usage: ${memoryInfo.usedMB}MB / ${memoryInfo.limitMB}MB (${memoryInfo.percent}%)`
+          `[Memory] High usage: ${memoryInfo.usedMB} MB allocated to the OpenSCAD engine`
         );
         // Update memory indicator
         updateMemoryIndicator(memoryInfo);
@@ -3148,8 +3296,8 @@ async function initApp() {
         // Set crash detection flag BEFORE WASM init.
         // If the page crashes during init, the flag remains set and
         // recovery mode will auto-activate on next load.
-        localStorage.setItem('openscad-forge-wasm-init-started', 'true');
-        localStorage.removeItem('openscad-forge-wasm-init-completed');
+        localStorage.setItem(STORAGE_KEY_WASM_INIT_STARTED, 'true');
+        localStorage.removeItem(STORAGE_KEY_WASM_INIT_COMPLETED);
 
         const assetBaseUrl = new URL(
           import.meta.env.BASE_URL,
@@ -3160,7 +3308,7 @@ async function initApp() {
         await renderController.init({
           assetBaseUrl,
           onProgress: (percent, message) => {
-            console.log(`[WASM Init] ${percent}% - ${message}`);
+            console.log(`[WASM Init] ${message}`);
             updateWasmLoadingProgress(wasmLoadingOverlay, percent, message);
           },
         });
@@ -3169,7 +3317,7 @@ async function initApp() {
         wasmInitialized = true;
 
         // Clear crash detection flag — WASM init succeeded
-        localStorage.setItem('openscad-forge-wasm-init-completed', 'true');
+        localStorage.setItem(STORAGE_KEY_WASM_INIT_COMPLETED, 'true');
 
         // Start worker health monitoring
         renderController.startHealthMonitoring();
@@ -3223,6 +3371,10 @@ async function initApp() {
     overlay.setAttribute('aria-live', 'polite');
     overlay.setAttribute('aria-label', 'Loading OpenSCAD engine');
 
+    overlay.setAttribute('aria-busy', 'true');
+
+    // Init progress is indeterminate — stage messages only, no percentages
+    // (the worker has no real measurement to report).
     overlay.innerHTML = `
       <div class="wasm-loading-content">
         <div class="wasm-loading-spinner">
@@ -3232,9 +3384,9 @@ async function initApp() {
         <p class="wasm-loading-message">Initializing...</p>
         <div class="wasm-loading-progress-container">
           <div class="wasm-loading-progress-bar">
-            <div class="wasm-loading-progress-fill" style="width: 0%"></div>
+            <div class="wasm-loading-progress-fill indeterminate"></div>
           </div>
-          <span class="wasm-loading-progress-text">0%</span>
+          <span class="wasm-loading-progress-text"></span>
         </div>
         <p class="wasm-loading-hint">This may take a moment on first load (~15-30MB download)</p>
       </div>
@@ -3311,7 +3463,7 @@ async function initApp() {
         <span class="memory-warning-icon">⚠️</span>
         <div class="memory-warning-text">
           <strong>High Memory Usage</strong>
-          <p>Memory: ${memoryInfo.usedMB}MB / ${memoryInfo.limitMB}MB (${memoryInfo.percent}%)</p>
+          <p>Memory allocated to the OpenSCAD engine: ${memoryInfo.usedMB} MB</p>
           <p class="memory-warning-hint">
             This warning is about the OpenSCAD engine’s allocated memory (it may stay high until the engine is restarted).
             If you also see an error like “produces no geometry”, fix that first—memory may not be the cause.
@@ -3418,42 +3570,34 @@ async function initApp() {
   function updateMemoryIndicator(memoryInfo) {
     const indicator = document.getElementById('memoryIndicator');
     const text = document.getElementById('memoryText');
-    const barFill = document.getElementById('memoryBarFill');
-    const bar = document.getElementById('memoryBar');
 
     if (!indicator || !memoryInfo) return;
 
     indicator.classList.remove('hidden');
 
+    const usedMB = memoryInfo.usedMB || 0;
     if (text) {
-      text.textContent = `${memoryInfo.usedMB || 0}MB`;
+      text.textContent = `${usedMB} MB`;
     }
 
-    const percent = memoryInfo.percent || 0;
-    if (barFill) {
-      barFill.style.width = `${Math.min(percent, 100)}%`;
-    }
-    if (bar) {
-      bar.setAttribute('aria-valuenow', percent);
-    }
-
+    // BR-4: no fictional percent. Warning state is driven by an absolute-MB
+    // threshold so the indicator turns "warning" only when the WASM heap
+    // buffer is genuinely large. The MemoryMonitor decides the badge
+    // separately via memoryInfo.usedMB.
     indicator.classList.remove('warning', 'critical');
-    if (percent >= 90) {
+    if (usedMB >= 950) {
       indicator.classList.add('critical');
-    } else if (percent >= 75) {
+    } else if (usedMB >= 819) {
       indicator.classList.add('warning');
     }
 
-    const tips = [];
-    if (percent >= 90) {
-      tips.push('Memory very high - consider refreshing');
-    } else if (percent >= 75) {
-      tips.push('Memory usage elevated');
+    const tips = [`${usedMB} MB allocated to the OpenSCAD engine`];
+    if (usedMB >= 950) {
+      tips.unshift('Memory very high — consider refreshing');
+    } else if (usedMB >= 819) {
+      tips.unshift('Memory usage elevated');
     }
-    if (memoryInfo.limitMB) {
-      tips.push(`${memoryInfo.usedMB}MB of ~${memoryInfo.limitMB}MB`);
-    }
-    indicator.title = tips.join('\n') || 'WASM memory usage';
+    indicator.title = tips.join('\n');
   }
 
   // memoryPollInterval is now declared at the top of initApp() to avoid TDZ
@@ -3478,14 +3622,6 @@ async function initApp() {
         }
       }
     }, 10000);
-  }
-
-  // Prefixed with _ to indicate intentionally unused (reserved for future cleanup)
-  function _stopMemoryPolling() {
-    if (memoryPollInterval) {
-      clearInterval(memoryPollInterval);
-      memoryPollInterval = null;
-    }
   }
 
   function handleConfigDependencyError(error) {
@@ -3748,13 +3884,18 @@ async function initApp() {
   }
 
   /**
-   * Show render time estimate to user
+   * Show render time estimate to user.
+   * Low-confidence estimates suppress the number — complex models are
+   * too unpredictable for a specific figure to be honest.
    * @param {Object} estimate - Result from estimateRenderTime()
    */
   function showRenderEstimate(estimate) {
     if (!estimate || estimate.seconds < 5) return; // Only show for longer renders
 
-    let message = `Estimated render time: ~${estimate.seconds}s`;
+    let message =
+      estimate.confidence === 'low'
+        ? 'Complex model — rendering may take a while'
+        : `Estimated render time: ~${estimate.seconds}s`;
     if (estimate.warning) {
       message += ` ⚠️ ${estimate.warning}`;
     }
@@ -3785,6 +3926,7 @@ async function initApp() {
   const measurementsToggle = document.getElementById('measurementsToggle');
   const gridToggle = document.getElementById('gridToggle');
   const autoBedToggle = document.getElementById('autoBedToggle');
+  const zoomToCursorToggle = document.getElementById('zoomToCursorToggle');
   const dimensionsDisplay = document.getElementById('dimensionsDisplay');
   // Note: outputFormatSelect and formatInfo already declared above
 
@@ -3918,9 +4060,7 @@ async function initApp() {
       return parameters;
     }
 
-    const parityBypass =
-      typeof localStorage !== 'undefined' &&
-      localStorage.getItem('openscad-forge-debug-preview-parity') !== null;
+    const parityBypass = isDebugPrefEnabled('previewParity');
     if (parityBypass) {
       console.log(
         '[PreviewParity] Bypassing auto-preview overrides — ' +
@@ -4090,6 +4230,21 @@ async function initApp() {
     });
   }
 
+  // Wire zoom-to-cursor toggle (F17): mouse-wheel zoom focal point
+  if (zoomToCursorToggle) {
+    zoomToCursorToggle.addEventListener('change', () => {
+      const enabled = zoomToCursorToggle.checked;
+      if (previewManager) {
+        previewManager.toggleZoomToCursor(enabled);
+      }
+      announceImmediate(
+        enabled
+          ? 'Mouse-wheel zoom now follows the cursor'
+          : 'Mouse-wheel zoom now centres on the orbit target'
+      );
+    });
+  }
+
   // Wire status bar toggle
   const statusBarToggle = document.getElementById('statusBarToggle');
   if (statusBarToggle && previewStatusBar) {
@@ -4119,7 +4274,6 @@ async function initApp() {
   // ============================================================================
   const manifoldEngineToggle = document.getElementById('manifoldEngineToggle');
   const manifoldEngineHint = document.getElementById('manifoldEngineHint');
-  const STORAGE_KEY_MANIFOLD_ENGINE = 'openscad-forge-manifold-engine';
 
   if (manifoldEngineToggle) {
     // Initialize from localStorage (default to true for performance)
@@ -4674,7 +4828,9 @@ async function initApp() {
               return;
             }
 
-            const friendly = translateError(error?.message || String(error));
+            const friendly = translateError(error?.message || String(error), {
+              code: error?.code,
+            });
             updateStatus(`Preview failed: ${friendly.title}`, 'error');
             _announceError(`Preview failed: ${friendly.title}`);
           }
@@ -6352,15 +6508,9 @@ if (rounded) {
     // (Storage key defined at module level as STORAGE_KEY_PARAM_PANEL_COLLAPSED)
     let isCollapsed = false;
 
-    try {
-      const savedState = localStorage.getItem(
-        STORAGE_KEY_PARAM_PANEL_COLLAPSED
-      );
-      if (savedState === 'true' && window.innerWidth >= 768) {
-        isCollapsed = true;
-      }
-    } catch (e) {
-      console.warn('Could not access localStorage:', e);
+    const savedState = safeGetItem(STORAGE_KEY_PARAM_PANEL_COLLAPSED);
+    if (savedState === 'true' && window.innerWidth >= 768) {
+      isCollapsed = true;
     }
 
     // Apply initial state
@@ -6413,14 +6563,7 @@ if (rounded) {
       }
 
       // Persist state
-      try {
-        localStorage.setItem(
-          STORAGE_KEY_PARAM_PANEL_COLLAPSED,
-          String(isCollapsed)
-        );
-      } catch (e) {
-        console.warn('Could not save to localStorage:', e);
-      }
+      safeSetItem(STORAGE_KEY_PARAM_PANEL_COLLAPSED, String(isCollapsed));
 
       // Trigger preview resize after transition
       setTimeout(() => {
@@ -6587,11 +6730,12 @@ if (rounded) {
      */
     function updateDirtyIndicator() {
       if (editorDirtyIndicator && editorStateManager) {
-        if (editorStateManager.getIsDirty()) {
-          editorDirtyIndicator.classList.add('visible');
-        } else {
-          editorDirtyIndicator.classList.remove('visible');
-        }
+        const isDirty = editorStateManager.getIsDirty();
+        editorDirtyIndicator.classList.toggle('visible', isDirty);
+        // The dot is hidden via opacity, which does NOT remove it from the
+        // accessibility tree — keep aria-hidden in sync so screen readers
+        // only encounter "Unsaved changes" when it is actually shown.
+        editorDirtyIndicator.setAttribute('aria-hidden', String(!isDirty));
       }
     }
 
@@ -6774,7 +6918,7 @@ if (rounded) {
     // Load saved split sizes
     let initialSizes = [40, 60]; // Default: 40% params, 60% preview
     try {
-      const savedSizes = localStorage.getItem(STORAGE_KEY_LAYOUT_SIZES);
+      const savedSizes = safeGetItem(STORAGE_KEY_LAYOUT_SIZES);
       if (savedSizes) {
         const parsed = JSON.parse(savedSizes);
         if (Array.isArray(parsed) && parsed.length === 2) {
@@ -6782,6 +6926,7 @@ if (rounded) {
         }
       }
     } catch (e) {
+      // JSON.parse failed on a corrupt value — keep defaults
       console.warn('Could not load split sizes:', e);
     }
 
@@ -6819,14 +6964,7 @@ if (rounded) {
         onDragEnd: (sizes) => {
           document.body.classList.remove('split-dragging');
           // Persist sizes
-          try {
-            localStorage.setItem(
-              STORAGE_KEY_LAYOUT_SIZES,
-              JSON.stringify(sizes)
-            );
-          } catch (e) {
-            console.warn('Could not save split sizes:', e);
-          }
+          safeSetItem(STORAGE_KEY_LAYOUT_SIZES, JSON.stringify(sizes));
 
           // Final resize after drag
           if (previewManager) {
@@ -6931,14 +7069,10 @@ if (rounded) {
                 splitInstance.setSizes([newParamSize, newPreviewSize]);
 
                 // Save to localStorage
-                try {
-                  localStorage.setItem(
-                    STORAGE_KEY_LAYOUT_SIZES,
-                    JSON.stringify([newParamSize, newPreviewSize])
-                  );
-                } catch (err) {
-                  console.warn('Could not save split sizes:', err);
-                }
+                safeSetItem(
+                  STORAGE_KEY_LAYOUT_SIZES,
+                  JSON.stringify([newParamSize, newPreviewSize])
+                );
 
                 // Update ARIA values
                 updateAriaValues();
@@ -7372,27 +7506,12 @@ if (rounded) {
 
       if (!toggleBtn || !drawer) return;
 
-      // Load saved state
-      const loadState = () => {
-        try {
-          const saved = localStorage.getItem(STORAGE_KEY);
-          return saved === 'expanded';
-        } catch (e) {
-          console.warn('Could not load actions drawer state:', e);
-          return false; // Default collapsed
-        }
-      };
+      // Load saved state (default collapsed)
+      const loadState = () => safeGetItem(STORAGE_KEY) === 'expanded';
 
       // Save state
       const saveState = (isExpanded) => {
-        try {
-          localStorage.setItem(
-            STORAGE_KEY,
-            isExpanded ? 'expanded' : 'collapsed'
-          );
-        } catch (e) {
-          console.warn('Could not save actions drawer state:', e);
-        }
+        safeSetItem(STORAGE_KEY, isExpanded ? 'expanded' : 'collapsed');
       };
 
       // Set initial state
@@ -7833,13 +7952,17 @@ if (rounded) {
 
       updatePreviewStateUI(PREVIEW_STATE.RENDERING);
 
-      // Show render time estimate for complex models
+      // Show render time estimate for complex models. Low-confidence
+      // estimates suppress the number (too unpredictable to be honest).
       const estimate = estimateRenderTime(
         state.uploadedFile.content,
         state.parameters
       );
       if (estimate.seconds >= 5 || estimate.warning) {
-        const estimateMsg = `Generating ${formatName}... (est. ~${estimate.seconds}s)`;
+        const estimateMsg =
+          estimate.confidence === 'low'
+            ? `Generating ${formatName}... (complex model — may take a while)`
+            : `Generating ${formatName}... (estimated ~${estimate.seconds}s)`;
         if (estimate.warning) {
           console.warn('[Render] Complexity warning:', estimate.warning);
         }
@@ -8144,8 +8267,10 @@ if (rounded) {
         }
       }
 
-      // Use COGA-compliant friendly error translation
-      const friendlyError = translateError(error.message);
+      // Use COGA-compliant friendly error translation (code-first, BR-5)
+      const friendlyError = translateError(error.message, {
+        code: error.code,
+      });
       updateStatus(`Error: ${friendlyError.title}`);
       _announceError(
         `Error: ${friendlyError.title}. ${friendlyError.explanation}`
@@ -9021,7 +9146,7 @@ if (rounded) {
   // "design default values" -- always first in preset dropdown (desktop OpenSCAD parity)
   // Virtual preset ID for the immutable defaults entry (not stored in PresetManager)
   const DESIGN_DEFAULTS_ID = '__design_defaults__';
-  const PRESET_SORT_KEY = 'openscad-forge-preset-sort';
+  // PRESET_SORT_KEY imported from storage-keys.js
 
   // Searchable combobox instance (non-null only when searchable_combobox flag is on)
   let _presetCombobox = null;
@@ -9158,6 +9283,17 @@ if (rounded) {
         : hasPresetSelected
           ? 'Delete current preset'
           : 'Select a preset first to delete';
+    }
+
+    // Copy preset name button (F30): enabled whenever something is selected,
+    // including the immutable "design default values" entry (the spec asks for
+    // the exact visible name to be copied, regardless of mutability).
+    const copyPresetNameBtn = document.getElementById('copyPresetNameBtn');
+    if (copyPresetNameBtn) {
+      copyPresetNameBtn.disabled = !hasPresetSelected;
+      copyPresetNameBtn.title = hasPresetSelected
+        ? 'Copy preset name'
+        : 'Select a preset first to copy its name';
     }
   }
 
@@ -10305,15 +10441,41 @@ if (rounded) {
   // Manage button: Import/export modal
   managePresetsBtn.addEventListener('click', showManagePresetsModal);
 
+  // Copy preset name button (F30): copies the visible label of the
+  // currently-selected preset to the clipboard with a polite SR
+  // announcement. Works for the immutable "design default values"
+  // entry too — copies the exact displayed string verbatim.
+  const copyPresetNameBtn = document.getElementById('copyPresetNameBtn');
+  if (copyPresetNameBtn) {
+    copyPresetNameBtn.addEventListener('click', async () => {
+      const selected = presetSelect?.options[presetSelect.selectedIndex];
+      const name = selected?.text?.trim();
+      if (!presetSelect?.value || !name) {
+        updateStatus('Select a preset first to copy its name', 'warning');
+        return;
+      }
+
+      const result = await copyPresetName(name);
+      if (result.ok) {
+        announceImmediate(`Copied "${name}" to clipboard`);
+        updateStatus(`Copied "${name}" to clipboard`, 'success');
+      } else {
+        // Non-blocking: leave the name visible in the status bar so the
+        // user can select it manually. Avoids a blocking modal for what
+        // is otherwise a minor convenience action.
+        updateStatus(
+          `Could not copy automatically. Preset name: ${name}`,
+          'warning'
+        );
+      }
+    });
+  }
+
   // Preset sort control: re-sort dropdown when sort order changes
   const presetDropdownSort = document.getElementById('presetDropdownSort');
   if (presetDropdownSort) {
     presetDropdownSort.addEventListener('change', () => {
-      try {
-        localStorage.setItem(PRESET_SORT_KEY, presetDropdownSort.value);
-      } catch (_) {
-        /* localStorage overflow — continue with in-memory value */
-      }
+      safeSetItem(PRESET_SORT_KEY, presetDropdownSort.value);
       updatePresetDropdown();
       const label =
         presetDropdownSort.options[presetDropdownSort.selectedIndex]?.text ||
@@ -10385,6 +10547,7 @@ if (rounded) {
         container: comboContainer,
         placeholder: 'Search presets…',
         inputId: 'presetComboboxInput',
+        ariaLabel: 'Select preset',
         disabled: true,
       });
 
@@ -10418,19 +10581,14 @@ if (rounded) {
     });
   }
 
-  // Welcome screen role path "Learn More" buttons
+  // Welcome screen role path "Learn More" buttons — each opens the
+  // Features Guide on the tab named in its data-feature-tab attribute.
   const roleLearnButtons = document.querySelectorAll('.btn-role-learn');
   roleLearnButtons.forEach((btn) => {
     btn.addEventListener('click', () => {
-      // Check what type of action to take
       if (btn.dataset.featureTab) {
-        // Open Features Guide to specific tab
         openFeaturesGuide({ tab: btn.dataset.featureTab });
-      } else if (btn.dataset.tour) {
-        // Open guided tour
-        openGuidedTour(btn.dataset.tour);
-      } else if (btn.dataset.doc) {
-        // Open documentation (for now, just open Features Guide)
+      } else {
         openFeaturesGuide();
       }
     });
@@ -11209,6 +11367,52 @@ if (rounded) {
     resetBtn?.click();
   });
 
+  // Expand all / Collapse all (F5).
+  // Setting `.open` programmatically fires the <details> 'toggle' event
+  // which is already wired in ui-generator.js to persist per-file state,
+  // so these handlers stay deliberately tiny.
+  const expandAllGroupsBtn = document.getElementById('expandAllGroupsBtn');
+  const collapseAllGroupsBtn = document.getElementById('collapseAllGroupsBtn');
+  /** @param {boolean} open */
+  const setAllParamGroupsOpen = (open) => {
+    const parametersContainer =
+      document.getElementById('parametersContainer');
+    if (!parametersContainer) return;
+    const groups = parametersContainer.querySelectorAll('details.param-group');
+    if (groups.length === 0) {
+      announceImmediate('No parameter groups to update');
+      return;
+    }
+    groups.forEach((d) => {
+      if (d.open !== open) d.open = open;
+    });
+    if (open) {
+      // Per F5 acceptance criteria: focus the first parameter when
+      // Expand-all is activated to give keyboard users a clear next
+      // landing spot.
+      const firstControl =
+        /** @type {HTMLElement|null} */ (
+          parametersContainer.querySelector(
+            '.param-control input, .param-control select, .param-control textarea, .param-control button'
+          )
+        );
+      if (firstControl && typeof firstControl.focus === 'function') {
+        firstControl.focus();
+      }
+    }
+    announceImmediate(
+      open
+        ? `Expanded ${groups.length} parameter groups`
+        : `Collapsed ${groups.length} parameter groups`
+    );
+  };
+  expandAllGroupsBtn?.addEventListener('click', () =>
+    setAllParamGroupsOpen(true)
+  );
+  collapseAllGroupsBtn?.addEventListener('click', () =>
+    setAllParamGroupsOpen(false)
+  );
+
   // Reset Group Button
   const resetGroupBtn = document.getElementById('resetGroupBtn');
   const resetGroupSelector = document.getElementById('resetGroupSelector');
@@ -11406,22 +11610,6 @@ if (rounded) {
   });
 
   // ========== END ADVANCED MENU ==========
-
-  // ========== GUIDED TOURS ==========
-
-  /**
-   * Open a minimal guided tour modal (for Welcome screen role paths)
-   * Tours are skippable, focus-safe, and respect prefers-reduced-motion
-   * @param {string} tourType - Type of tour ('screen-reader', 'voice-input', 'intro')
-   */
-  function openGuidedTour(tourType) {
-    // TODO: Implement guided tours in a separate task
-    // For now, fall back to opening the Features Guide
-    console.log('[Guided Tours] Tour requested:', tourType);
-    openFeaturesGuide();
-  }
-
-  // ========== END GUIDED TOURS ==========
 
   // ========== FEATURES GUIDE MODAL ==========
 
@@ -12301,8 +12489,8 @@ if (typeof window !== 'undefined') {
     },
 
     toggleCsgBypass(enable) {
-      const key = 'openscad-forge-debug-no-csg-colors';
-      const wasEnabled = localStorage.getItem(key) !== null;
+      const key = DEBUG_PREFS.noCsgColors;
+      const wasEnabled = isDebugPrefEnabled('noCsgColors');
       const nowEnabled = enable !== undefined ? Boolean(enable) : !wasEnabled;
 
       if (nowEnabled) {
@@ -12326,8 +12514,8 @@ if (typeof window !== 'undefined') {
     },
 
     toggleDesktopQuality(enable) {
-      const key = 'openscad-forge-debug-desktop-quality';
-      const wasEnabled = localStorage.getItem(key) !== null;
+      const key = DEBUG_PREFS.desktopQuality;
+      const wasEnabled = isDebugPrefEnabled('desktopQuality');
       const nowEnabled = enable !== undefined ? Boolean(enable) : !wasEnabled;
 
       if (nowEnabled) {
@@ -12351,8 +12539,8 @@ if (typeof window !== 'undefined') {
     },
 
     toggleSourceOverrides(enable) {
-      const key = 'openscad-forge-debug-source-overrides';
-      const wasEnabled = localStorage.getItem(key) !== null;
+      const key = DEBUG_PREFS.sourceOverrides;
+      const wasEnabled = isDebugPrefEnabled('sourceOverrides');
       const nowEnabled = enable !== undefined ? Boolean(enable) : !wasEnabled;
 
       if (nowEnabled) {
@@ -12377,12 +12565,9 @@ if (typeof window !== 'undefined') {
     },
 
     getToggles() {
-      const csgBypass =
-        localStorage.getItem('openscad-forge-debug-no-csg-colors') !== null;
-      const desktopQuality =
-        localStorage.getItem('openscad-forge-debug-desktop-quality') !== null;
-      const sourceOverrides =
-        localStorage.getItem('openscad-forge-debug-source-overrides') !== null;
+      const csgBypass = isDebugPrefEnabled('noCsgColors');
+      const desktopQuality = isDebugPrefEnabled('desktopQuality');
+      const sourceOverrides = isDebugPrefEnabled('sourceOverrides');
       const toggles = {
         csgBypass,
         desktopQuality,
@@ -12425,8 +12610,7 @@ if (typeof window !== 'undefined') {
         label = 'original';
       }
 
-      const csgBypass =
-        localStorage.getItem('openscad-forge-debug-no-csg-colors') !== null;
+      const csgBypass = isDebugPrefEnabled('noCsgColors');
 
       console.log(`[ExportDiag] Source type: ${label}`);
       console.log(`[ExportDiag] CSG bypass active: ${csgBypass}`);
@@ -12463,8 +12647,7 @@ if (typeof window !== 'undefined') {
       const parameters = state.parameters || {};
       const paramTypes = state.paramTypes || {};
 
-      const csgBypass =
-        localStorage.getItem('openscad-forge-debug-no-csg-colors') !== null;
+      const csgBypass = isDebugPrefEnabled('noCsgColors');
       const rawSource =
         autoPreviewController?.currentScadContent || state.uploadedFile.content;
       const hasColorCalls = AutoPreviewController.scadUsesColor(rawSource);
@@ -12497,8 +12680,7 @@ if (typeof window !== 'undefined') {
         '[RenderArgsDiag] Preview output format:',
         previewOutputFormat
       );
-      const sourceOverrides =
-        localStorage.getItem('openscad-forge-debug-source-overrides') !== null;
+      const sourceOverrides = isDebugPrefEnabled('sourceOverrides');
       console.log('[RenderArgsDiag] CSG bypass:', csgBypass);
       console.log(
         '[RenderArgsDiag] Source overrides (bake params into SCAD):',
@@ -12578,9 +12760,7 @@ if (typeof window !== 'undefined') {
       }
 
       // Backend info
-      const manifoldPref = localStorage.getItem(
-        'openscad-forge-manifold-engine'
-      );
+      const manifoldPref = localStorage.getItem(STORAGE_KEY_MANIFOLD_ENGINE);
       const useManifold =
         manifoldPref === null ? true : manifoldPref !== 'false';
       console.log(

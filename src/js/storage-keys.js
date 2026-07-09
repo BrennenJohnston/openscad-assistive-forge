@@ -90,7 +90,9 @@ export const KEY_MIGRATIONS = {
   previewQualityMode: 'openscad-forge-preview-quality-mode',
   'recovery-source': 'openscad-forge-recovery-source',
   'recovery-timestamp': 'openscad-forge-recovery-timestamp',
-  tutorialProgress: 'openscad-forge-tutorial-progress',
+  // Note: tutorialProgress is intentionally NOT migrated — the tutorial
+  // stores progress in sessionStorage (see tutorial-sandbox.js), not
+  // localStorage, so a localStorage migration would never find it.
 };
 
 /**
@@ -261,6 +263,178 @@ export function getDrawerSizeKey(drawerName, dimension) {
  */
 export function getAppPrefKey(feature) {
   return `openscad-forge-${feature}`;
+}
+
+// ============================================================================
+// Centralized STORAGE_KEY_* constants (audit Q4)
+// ============================================================================
+// Key strings must NEVER change — renaming a key orphans users' saved data.
+// tests/unit/storage-keys.test.js snapshots every exported key value to
+// guard against accidental renames.
+// ============================================================================
+
+// --- App preferences (main.js) ---
+export const STORAGE_KEY_AUTO_PREVIEW_ENABLED = getAppPrefKey(
+  'auto-preview-enabled'
+);
+export const STORAGE_KEY_PREVIEW_QUALITY = getAppPrefKey(
+  'preview-quality-mode'
+);
+export const STORAGE_KEY_RECOVERY_SOURCE = getAppPrefKey('recovery-source');
+export const STORAGE_KEY_RECOVERY_TIMESTAMP =
+  getAppPrefKey('recovery-timestamp');
+export const STORAGE_KEY_STATUS_BAR = getAppPrefKey('status-bar');
+export const STORAGE_KEY_MODEL_COLOR = getAppPrefKey('model-color');
+export const STORAGE_KEY_MODEL_COLOR_ENABLED = getAppPrefKey(
+  'model-color-enabled'
+);
+export const STORAGE_KEY_MODEL_OPACITY = getAppPrefKey('model-opacity');
+export const STORAGE_KEY_BRIGHTNESS = getAppPrefKey('brightness');
+export const STORAGE_KEY_CONTRAST = getAppPrefKey('contrast');
+export const STORAGE_KEY_MODEL_APPEARANCE_ENABLED = getAppPrefKey(
+  'model-appearance-enabled'
+);
+export const STORAGE_KEY_PARAM_PANEL_COLLAPSED =
+  getDrawerStateKey('parameters');
+export const STORAGE_KEY_LAYOUT_SIZES = getAppPrefKey('layout-sizes');
+
+// --- Preview settings (preview.js) ---
+export const STORAGE_KEY_MEASUREMENTS = getAppPrefKey('measurements');
+export const STORAGE_KEY_GRID = getAppPrefKey('grid');
+export const STORAGE_KEY_GRID_SIZE = getAppPrefKey('grid-size');
+export const STORAGE_KEY_CUSTOM_GRID_PRESETS = getAppPrefKey(
+  'custom-grid-presets'
+);
+export const STORAGE_KEY_GRID_COLOR = getAppPrefKey('grid-color');
+export const STORAGE_KEY_GRID_OPACITY = getAppPrefKey('grid-opacity');
+export const STORAGE_KEY_AUTO_BED = getAppPrefKey('auto-bed');
+export const STORAGE_KEY_ZOOM_TO_CURSOR = getAppPrefKey('zoom-to-cursor');
+export const STORAGE_KEY_CAMERA_COLLAPSED = getAppPrefKey(
+  'camera-controls-collapsed'
+);
+export const STORAGE_KEY_CAMERA_POSITION = getAppPrefKey(
+  'camera-controls-position'
+);
+export const STORAGE_KEY_LOD_WARNING_DISMISSED = getAppPrefKey(
+  'lod-warning-dismissed'
+);
+
+// --- Render metrics and engine toggles (render/auto-preview controllers) ---
+export const STORAGE_KEY_PERF_METRICS = getAppPrefKey('perf-metrics');
+export const STORAGE_KEY_METRICS_LOG = getAppPrefKey('metrics-log');
+export const STORAGE_KEY_LAZY_UNION = getAppPrefKey('lazy-union');
+export const STORAGE_KEY_MANIFOLD_ENGINE = getAppPrefKey('manifold-engine');
+
+// --- Preset dropdown sort order ---
+export const PRESET_SORT_KEY = 'openscad-forge-preset-sort';
+
+// --- WASM crash-detection flags (set before/after init; cleared on recovery) ---
+export const STORAGE_KEY_WASM_INIT_STARTED = 'openscad-forge-wasm-init-started';
+export const STORAGE_KEY_WASM_INIT_COMPLETED =
+  'openscad-forge-wasm-init-completed';
+
+// ============================================================================
+// Safe localStorage access (audit Q3)
+// ============================================================================
+// localStorage throws in several legitimate situations (private browsing,
+// storage quota exceeded, third-party-cookie lockdown). These wrappers give
+// call sites one consistent, non-throwing behavior with an audit trail via
+// console.warn instead of dozens of ad-hoc try/catch blocks.
+// ============================================================================
+
+/**
+ * Read a localStorage value without throwing.
+ *
+ * @param {string} key - Storage key
+ * @param {string|null} [fallback=null] - Returned when the key is absent or
+ *   storage is unavailable
+ * @param {Object} [options]
+ * @param {boolean} [options.silent=false] - Suppress the console.warn (for
+ *   hot paths where a warn per read would be noisy)
+ * @returns {string|null}
+ */
+export function safeGetItem(key, fallback = null, { silent = false } = {}) {
+  try {
+    const value = localStorage.getItem(key);
+    return value === null ? fallback : value;
+  } catch (error) {
+    if (!silent) {
+      console.warn(`[Storage] Failed to read ${key}:`, error);
+    }
+    return fallback;
+  }
+}
+
+/**
+ * Write a localStorage value without throwing.
+ *
+ * @param {string} key - Storage key
+ * @param {string} value - Value to store
+ * @param {Object} [options]
+ * @param {boolean} [options.silent=false] - Suppress the console.warn
+ * @returns {boolean} True when the write succeeded
+ */
+export function safeSetItem(key, value, { silent = false } = {}) {
+  try {
+    localStorage.setItem(key, value);
+    return true;
+  } catch (error) {
+    if (!silent) {
+      console.warn(`[Storage] Failed to write ${key}:`, error);
+    }
+    return false;
+  }
+}
+
+/**
+ * Remove a localStorage key without throwing.
+ *
+ * @param {string} key - Storage key
+ * @param {Object} [options]
+ * @param {boolean} [options.silent=false] - Suppress the console.warn
+ * @returns {boolean} True when the removal succeeded
+ */
+export function safeRemoveItem(key, { silent = false } = {}) {
+  try {
+    localStorage.removeItem(key);
+    return true;
+  } catch (error) {
+    if (!silent) {
+      console.warn(`[Storage] Failed to remove ${key}:`, error);
+    }
+    return false;
+  }
+}
+
+// ============================================================================
+// Developer debug toggles (KI-012)
+// ============================================================================
+
+/**
+ * Developer debug-toggle keys. Presence-based: storing ANY value under a
+ * key activates the toggle; removing the key deactivates it. The key
+ * strings are documented in docs/KNOWN_ISSUES.md (KI-012) and must not
+ * change.
+ */
+export const DEBUG_PREFS = Object.freeze({
+  previewParity: 'openscad-forge-debug-preview-parity',
+  desktopQuality: 'openscad-forge-debug-desktop-quality',
+  noCsgColors: 'openscad-forge-debug-no-csg-colors',
+  sourceOverrides: 'openscad-forge-debug-source-overrides',
+});
+
+/**
+ * Whether a developer debug toggle is active (KI-012).
+ *
+ * @param {'previewParity'|'desktopQuality'|'noCsgColors'|'sourceOverrides'} name
+ * @returns {boolean} True when any value is stored under the toggle's key
+ */
+export function isDebugPrefEnabled(name) {
+  const key = DEBUG_PREFS[name];
+  if (!key) return false;
+  return (
+    typeof localStorage !== 'undefined' && localStorage.getItem(key) !== null
+  );
 }
 
 // ============================================================================

@@ -181,12 +181,11 @@ describe('RenderController', () => {
     const onMemoryWarning = vi.fn()
     controller.setMemoryWarningCallback(onMemoryWarning)
     
-    const memoryInfo = { 
-      used: 450 * 1024 * 1024, 
-      limit: 512 * 1024 * 1024, 
-      percent: 88,
-      usedMB: 450,
-      limitMB: 512
+    // BR-4: warning is now driven by absolute usedMB (>= 819) rather than
+    // a fictional percent-of-limit value.
+    const memoryInfo = {
+      used: 850 * 1024 * 1024,
+      usedMB: 850,
     }
     
     controller.handleMessage({
@@ -203,12 +202,9 @@ describe('RenderController', () => {
     const onMemoryWarning = vi.fn()
     controller.setMemoryWarningCallback(onMemoryWarning)
     
-    const memoryInfo = { 
-      used: 200 * 1024 * 1024, 
-      limit: 512 * 1024 * 1024, 
-      percent: 39,
+    const memoryInfo = {
+      used: 200 * 1024 * 1024,
       usedMB: 200,
-      limitMB: 512
     }
     
     controller.handleMessage({
@@ -225,12 +221,9 @@ describe('RenderController', () => {
     const memoryResolve = vi.fn()
     controller.memoryResolve = memoryResolve
     
-    const memoryInfo = { 
-      used: 200 * 1024 * 1024, 
-      limit: 512 * 1024 * 1024, 
-      percent: 39,
+    const memoryInfo = {
+      used: 200 * 1024 * 1024,
       usedMB: 200,
-      limitMB: 512
     }
     
     controller.handleMessage({
@@ -264,7 +257,19 @@ describe('RenderController', () => {
       payload: { requestId: 'init', percent: 50, message: 'Loading...' }
     }, onInitProgress)
     
-    expect(onInitProgress).toHaveBeenCalled()
+    expect(onInitProgress).toHaveBeenCalledWith(50, 'Loading...')
+  })
+
+  it('passes indeterminate init progress (-1) through untouched', () => {
+    const controller = new RenderController()
+    const onInitProgress = vi.fn()
+
+    controller.handleMessage({
+      type: 'PROGRESS',
+      payload: { requestId: 'init', percent: -1, message: 'Initializing WebAssembly module...' }
+    }, onInitProgress)
+
+    expect(onInitProgress).toHaveBeenCalledWith(-1, 'Initializing WebAssembly module...')
   })
 
   it('does not apply $fn cap when maxFn is null', () => {

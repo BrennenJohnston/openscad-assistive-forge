@@ -17,6 +17,11 @@
 
 import { keyboardConfig, formatShortcut } from './keyboard-config.js';
 import { announce } from './announcer.js';
+import { getUIModeController } from './ui-mode-controller.js';
+import {
+  showWorkflowProgress,
+  hideWorkflowProgress,
+} from './workflow-progress.js';
 
 /** Ordered menu identifiers matching the toolbar button order */
 const MENU_IDS = ['file', 'edit', 'design', 'view', 'window', 'help'];
@@ -1002,4 +1007,53 @@ export function getToolbarMenuController() {
  */
 export function resetToolbarMenuController() {
   _instance = null;
+}
+
+/**
+ * Apply toolbar bar / workflow progress mutual exclusion based on UI mode.
+ * @param {'basic'|'advanced'} mode
+ */
+export function applyToolbarModeVisibility(mode) {
+  const controller = getToolbarMenuController();
+
+  const mainInterfaceEl = document.getElementById('mainInterface');
+  const mainInterfaceVisible =
+    mainInterfaceEl && !mainInterfaceEl.classList.contains('hidden');
+
+  if (!mainInterfaceVisible) {
+    controller.hide();
+    hideWorkflowProgress();
+    return;
+  }
+
+  showWorkflowProgress();
+
+  if (mode === 'advanced') {
+    controller.show();
+  } else {
+    const uiMode = getUIModeController();
+    const registry = uiMode.getRegistry();
+    const menuIdMap = {
+      toolbarMenuFile: 'file',
+      toolbarMenuEdit: 'edit',
+      toolbarMenuDesign: 'design',
+      toolbarMenuView: 'view',
+      toolbarMenuWindow: 'window',
+      toolbarMenuHelp: 'help',
+    };
+
+    const visibleMenuIds = registry
+      .filter((p) => p.id in menuIdMap)
+      .filter((p) => {
+        const el = document.getElementById(`${menuIdMap[p.id]}MenuBtn`);
+        return el && !el.classList.contains('ui-mode-hidden');
+      })
+      .map((p) => menuIdMap[p.id]);
+
+    if (visibleMenuIds.length > 0) {
+      controller.setVisibleMenus(visibleMenuIds);
+    } else {
+      controller.hide();
+    }
+  }
 }

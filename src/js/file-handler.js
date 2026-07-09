@@ -18,6 +18,7 @@ import {
   getGalleryParamNames,
   getSvgPrepMetadata,
   setSvgPrepMetadata,
+  setCustomizerFileId,
 } from './ui-generator.js';
 import {
   extractZipFiles,
@@ -46,7 +47,6 @@ import {
 } from './companion-files-controller.js';
 import { getErrorLogPanel, ERROR_LOG_TYPE } from './error-log-panel.js';
 import * as SharedImageStore from './shared-image-store.js';
-import { getAppPrefKey } from './storage-keys.js';
 import { importProjectFromFiles } from './storage-manager.js';
 import { addProjectFile, getProjectFiles } from './saved-projects-manager.js';
 import { showMissingDependenciesDialog, showConfirmDialog } from './dialogs.js';
@@ -54,14 +54,12 @@ import { escapeHtml } from './html-utils.js';
 import { announceError as _announceError } from './announcer.js';
 import { showErrorModal, showErrorToast } from './error-translator.js';
 import { closeTutorial } from './tutorial-sandbox.js';
-import {
-  sanitizeUrlParams,
-  applyToolbarModeVisibility,
-} from './hfm-controller.js';
+import { sanitizeUrlParams } from './file-param-resolver.js';
+import { applyToolbarModeVisibility } from './toolbar-menu-controller.js';
 import { isEnabled } from './feature-flags.js';
 import { prepareSvg, needsPreparation } from './svg-preparer.js';
-
-const STORAGE_KEY_MODEL_COLOR = getAppPrefKey('model-color');
+import { svgToDataUrl, dataUrlToText } from './svg-text-encoding.js';
+import { STORAGE_KEY_MODEL_COLOR } from './storage-keys.js';
 
 let currentExampleKey = null;
 
@@ -223,6 +221,31 @@ export const PROGRAM_DEFINITIONS = {
 // ---------------------------------------------------------------------------
 // Standalone utility: processing overlay
 // ---------------------------------------------------------------------------
+
+/**
+ * Extension guard for handleFile: decide whether an upload may proceed.
+ *
+ * Only actual file uploads — a real File object with no pre-loaded
+ * content — are extension-checked. Saved projects and manifest loads pass
+ * synthetic { name } objects (whose name can be a display name like
+ * "My Tablet Keyguard Designer" with no extension) or pre-loaded content,
+ * and must never be blocked. Regression guard for the bug where this
+ * check sat outside the isActualFileUpload branch.
+ *
+ * Exported for unit testing.
+ *
+ * @param {File|{name: string}|null} file - Upload argument as passed to handleFile
+ * @param {string|null} content - Pre-loaded content (null for real uploads)
+ * @param {string} fileName - Resolved display/file name
+ * @returns {boolean} True when handleFile should continue processing
+ */
+export function shouldProcessFile(file, content, fileName) {
+  if (!file) return true;
+  const isActualFileUpload = !content && file instanceof File;
+  if (!isActualFileUpload) return true;
+  const fileNameLower = fileName.toLowerCase();
+  return fileNameLower.endsWith('.zip') || fileNameLower.endsWith('.scad');
+}
 
 /**
  * Show a full-screen processing overlay for long operations.
@@ -573,18 +596,17 @@ export function initFileHandler({
     if (file) {
       const fileNameLower = fileName.toLowerCase();
       const isZip = fileNameLower.endsWith('.zip');
-      const isScad = fileNameLower.endsWith('.scad');
       const isActualFileUpload = !content && file instanceof File;
 
-      if (isActualFileUpload) {
-        if (!isZip && !isScad) {
-          showErrorToast({
-            title: 'Invalid File Type',
-            message: 'Please upload a .scad or .zip file.',
-          });
-          return;
-        }
+      if (!shouldProcessFile(file, content, fileName)) {
+        showErrorToast({
+          title: 'Invalid File Type',
+          message: 'Please upload a .scad or .zip file.',
+        });
+        return;
+      }
 
+      if (isActualFileUpload) {
         const validateFileUpload = getValidateFileUpload();
         const FILE_SIZE_LIMITS = getFileSizeLimits();
 
@@ -967,6 +989,11 @@ export function initFileHandler({
       const parametersContainer = document.getElementById(
         'parametersContainer'
       );
+      // F5: tell the Customizer pane which file is active so per-file
+      // expand/collapse state persists across reloads. The first render
+      // pulls that state from localStorage; if none exists, all groups
+      // start collapsed (matches the stakeholder spec).
+      setCustomizerFileId(fileName);
       const currentValues = renderParameterUI(
         extracted,
         parametersContainer,
@@ -980,7 +1007,9 @@ export function initFileHandler({
           updatePrimaryActionButton();
           updateColorLegend();
           getCompanionFilesCtrl().syncOverlayWithScreenshotParam(values);
-        }
+        },
+        null,
+        { useStoredState: true }
       );
 
       stateManager.setState({
@@ -1323,6 +1352,12 @@ export function initFileHandler({
           autoBedToggle.checked = previewManager.autoBedEnabled;
         }
 
+        const zoomToCursorToggle =
+          document.getElementById('zoomToCursorToggle');
+        if (zoomToCursorToggle) {
+          zoomToCursorToggle.checked = previewManager.zoomToCursorEnabled;
+        }
+
         syncPreviewAppearanceOverride();
 
         const cameraPanelController = getCameraPanelController();
@@ -1348,7 +1383,9 @@ export function initFileHandler({
         themeManager.addListener((theme, activeTheme, highContrast) => {
           const pm = getPreviewManager();
           if (pm) {
-            pm.updateTheme(activeTheme, highContrast);
+            // detectTheme() returns mono-aware keys, keeping the WebGL scene
+            // black while Alt View is active (activeTheme is only light/dark).
+            pm.updateTheme(pm.detectTheme(), highContrast);
 
             const modelColorPicker =
               document.getElementById('modelColorPicker');
@@ -1373,6 +1410,7 @@ export function initFileHandler({
           const root = document.documentElement;
           if (root.getAttribute('data-ui-variant') === 'mono') {
             getHfmCtrl().refreshVariantAssets();
+            getHfmCtrl().onThemeChanged();
           }
         });
       }
@@ -1623,7 +1661,7 @@ export function initFileHandler({
 
     try {
       let svgText = fileObj.data.startsWith('data:')
-        ? atob(fileObj.data.split(',')[1])
+        ? dataUrlToText(fileObj.data)
         : fileObj.data;
 
       if (isEnabled('svg_preparer') && needsPreparation(svgText)) {
@@ -1699,7 +1737,7 @@ export function initFileHandler({
 
       for (const f of svgFiles) {
         const fileName = f.path.replace('svg-uploads/', '');
-        const dataUrl = 'data:image/svg+xml;base64,' + btoa(f.textContent);
+        const dataUrl = svgToDataUrl(f.textContent);
 
         const svgParams = getGalleryParamNames();
 

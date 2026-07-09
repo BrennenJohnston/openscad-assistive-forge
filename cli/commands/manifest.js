@@ -59,11 +59,13 @@ function walkDir(dir, base = dir) {
  * Apply the same main-file detection heuristics used by the app's zip-handler.
  * Re-implemented here to avoid pulling in browser-only zip-handler dependencies.
  *
+ * Exported for unit testing.
+ *
  * @param {string[]} scadFiles - List of .scad file paths (relative)
  * @param {Map<string, string>} [contentMap] - Optional map for annotation scanning
  * @returns {string|null}
  */
-function detectMainFile(scadFiles, contentMap = new Map()) {
+export function detectMainFile(scadFiles, contentMap = new Map()) {
   if (scadFiles.length === 0) return null;
   if (scadFiles.length === 1) return scadFiles[0];
 
@@ -110,11 +112,13 @@ function hasCustomizerAnnotations(content) {
  *  - Basename contains a known hint word
  *  - OR the JSON content has a "parameterSets" or "presets" top-level key
  *
+ * Exported for unit testing.
+ *
  * @param {string} filePath - Relative file path
  * @param {string} [content] - File content (optional; improves detection)
  * @returns {boolean}
  */
-function looksLikePresetFile(filePath, content) {
+export function looksLikePresetFile(filePath, content) {
   const name = basename(filePath, PRESET_EXT).toLowerCase();
   if (PRESET_NAME_HINTS.some((hint) => name.includes(hint))) return true;
 
@@ -137,16 +141,25 @@ function looksLikePresetFile(filePath, content) {
 /**
  * Build a forge-manifest.json object from a list of file paths and content.
  *
+ * Exported for unit testing.
+ *
  * @param {Object} opts
  * @param {string[]}            opts.allFiles   All relative file paths
- * @param {Map<string,string>}  opts.contentMap File path → content (may be empty for zip mode)
+ * @param {Map<string,string>}  [opts.contentMap] File path → content (may be empty for zip mode)
  * @param {string}              opts.name       Project name
  * @param {string}              opts.author     Author name
  * @param {boolean}             opts.zipMode    If true, generate a bundle-style manifest
  * @param {string}              [opts.zipName]  .zip filename (used when zipMode=true)
  * @returns {{ manifest: Object, mainFile: string|null, warnings: string[] }}
  */
-function buildManifest({ allFiles, contentMap, name, author, zipMode, zipName }) {
+export function buildManifest({
+  allFiles,
+  contentMap = new Map(),
+  name,
+  author,
+  zipMode,
+  zipName,
+}) {
   const warnings = [];
 
   // Categorise files

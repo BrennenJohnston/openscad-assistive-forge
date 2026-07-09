@@ -62,6 +62,17 @@ function createMockRenderer() {
   }
 }
 
+function createMockControls() {
+  const listeners = new Map()
+  return {
+    addEventListener: vi.fn((type, fn) => listeners.set(type, fn)),
+    removeEventListener: vi.fn((type) => listeners.delete(type)),
+    _fire(type) {
+      listeners.get(type)?.()
+    },
+  }
+}
+
 function createMockPreviewManager() {
   const perspCamera = { type: 'perspective' }
   const orthoCamera = { type: 'orthographic' }
@@ -75,11 +86,29 @@ function createMockPreviewManager() {
     scene,
     camera: perspCamera,
     container,
+    controls: createMockControls(),
+    isAutoRotateEnabled: vi.fn(() => false),
     getActiveCamera: vi.fn(() => activeCamera),
     _setActiveCamera(cam) { activeCamera = cam },
     _perspCamera: perspCamera,
     _orthoCamera: orthoCamera,
   }
+}
+
+/** Find the sampler context: the one that drew the WebGL canvas. */
+function findSamplerCtx(pm) {
+  return allContexts.find(c =>
+    c.drawImage.mock.calls.some(call => call[0] === pm.renderer.domElement)
+  )
+}
+
+/** Count sampling readbacks performed via the sampler context. */
+function samplingDrawCount(pm) {
+  const ctx = findSamplerCtx(pm)
+  if (!ctx) return 0
+  return ctx.drawImage.mock.calls.filter(
+    call => call[0] === pm.renderer.domElement
+  ).length
 }
 
 beforeEach(() => {
@@ -89,6 +118,7 @@ beforeEach(() => {
 
 afterEach(() => {
   removeCanvasMock()
+  vi.restoreAllMocks()
 })
 
 describe('initAltView — camera sync (Hypothesis G)', () => {
@@ -121,68 +151,210 @@ describe('initAltView — camera sync (Hypothesis G)', () => {
   })
 })
 
-describe('initAltView — sampler imageSmoothingEnabled (Hypothesis B)', () => {
-  it('sets imageSmoothingEnabled = false on the sample canvas context', async () => {
+describe('initAltView — sampler imageSmoothingEnabled', () => {
+  it('sets imageSmoothingEnabled = true on the sample canvas context (bilinear area-average)', async () => {
     vi.resetModules()
     const { initAltView } = await import('../../src/js/_hfm.js')
     const pm = createMockPreviewManager()
     const api = await initAltView(pm)
 
+    vi.spyOn(performance, 'now').mockReturnValue(10000)
     api.enable()
     api.render()
 
-    // Find the sampler context (created with willReadFrequently: true)
-    const samplerCtx = allContexts.find(c => c._creationOpts?.willReadFrequently === true)
+    const samplerCtx = findSamplerCtx(pm)
     expect(samplerCtx).toBeDefined()
-    expect(samplerCtx.imageSmoothingEnabled).toBe(false)
+    expect(samplerCtx.imageSmoothingEnabled).toBe(true)
 
     api.dispose()
   })
 })
 
-describe('initAltView — integer font metrics (Hypothesis C)', () => {
-  it('fillText receives integer pixel positions even with fractional charW/charH', async () => {
-    removeCanvasMock()
-    allContexts.length = 0
-    const fractionalOrigGetContext = HTMLCanvasElement.prototype.getContext
-    HTMLCanvasElement.prototype.getContext = function (type, opts) {
-      const ctx = createMockCanvasContext({
-        measureText: vi.fn(() => ({
-          width: 6.7,
-          actualBoundingBoxAscent: 8.3,
-          actualBoundingBoxDescent: 2.4,
-          actualBoundingBoxLeft: 0,
-          actualBoundingBoxRight: 6.7,
-        })),
-      })
-      ctx.canvas = this
-      ctx._creationOpts = opts || {}
-      allContexts.push(ctx)
-      return ctx
+describe('initAltView — integer paint destinations', () => {
+  it('any overlay drawImage blit receives integer destination coordinates', async () => {
+    vi.resetModules()
+    const { initAltView } = await import('../../src/js/_hfm.js')
+    const pm = createMockPreviewManager()
+    const api = await initAltView(pm)
+
+    vi.spyOn(performance, 'now').mockReturnValue(10000)
+    api.enable()
+    api.render()
+
+    // 9-arg drawImage calls are atlas blits: (atlas, sx, sy, sw, sh, dx, dy, dw, dh)
+    for (const ctx of allContexts) {
+      for (const call of ctx.drawImage.mock.calls) {
+        if (call.length === 9) {
+          expect(Number.isInteger(call[5])).toBe(true)
+          expect(Number.isInteger(call[6])).toBe(true)
+        }
+      }
     }
 
+    api.dispose()
+  })
+})
+
+describe('initAltView — render-on-demand scheduling', () => {
+  it('skips ASCII conversion when not dirty (no new sampling drawImage)', async () => {
+    vi.resetModules()
+    const { initAltView } = await import('../../src/js/_hfm.js')
+    const pm = createMockPreviewManager()
+    const api = await initAltView(pm)
+
+    const nowSpy = vi.spyOn(performance, 'now')
+
+    nowSpy.mockReturnValue(10000)
+    api.enable()
+    api.render()
+    expect(samplingDrawCount(pm)).toBe(1)
+
+    // Advance past the fps throttle but stay inside the 1 Hz fallback window
+    nowSpy.mockReturnValue(10100)
+    api.render()
+    expect(samplingDrawCount(pm)).toBe(1)
+
+    // WebGL scene still renders every frame
+    expect(pm.renderer.render).toHaveBeenCalledTimes(2)
+
+    api.dispose()
+  })
+
+  it('invalidate() re-enables conversion', async () => {
+    vi.resetModules()
+    const { initAltView } = await import('../../src/js/_hfm.js')
+    const pm = createMockPreviewManager()
+    const api = await initAltView(pm)
+
+    const nowSpy = vi.spyOn(performance, 'now')
+
+    nowSpy.mockReturnValue(10000)
+    api.enable()
+    api.render()
+    expect(samplingDrawCount(pm)).toBe(1)
+
+    nowSpy.mockReturnValue(10100)
+    api.render()
+    expect(samplingDrawCount(pm)).toBe(1)
+
+    api.invalidate()
+    nowSpy.mockReturnValue(10200)
+    api.render()
+    expect(samplingDrawCount(pm)).toBe(2)
+
+    api.dispose()
+  })
+
+  it('1 Hz fallback tick converts even without invalidation', async () => {
+    vi.resetModules()
+    const { initAltView } = await import('../../src/js/_hfm.js')
+    const pm = createMockPreviewManager()
+    const api = await initAltView(pm)
+
+    const nowSpy = vi.spyOn(performance, 'now')
+
+    nowSpy.mockReturnValue(10000)
+    api.enable()
+    api.render()
+    expect(samplingDrawCount(pm)).toBe(1)
+
+    // More than 1000 ms after the last conversion — fallback fires
+    nowSpy.mockReturnValue(11500)
+    api.render()
+    expect(samplingDrawCount(pm)).toBe(2)
+
+    api.dispose()
+  })
+
+  it('OrbitControls change event marks the frame dirty', async () => {
+    vi.resetModules()
+    const { initAltView } = await import('../../src/js/_hfm.js')
+    const pm = createMockPreviewManager()
+    const api = await initAltView(pm)
+
+    const nowSpy = vi.spyOn(performance, 'now')
+
+    nowSpy.mockReturnValue(10000)
+    api.enable()
+    expect(pm.controls.addEventListener).toHaveBeenCalledWith(
+      'change',
+      expect.any(Function)
+    )
+    api.render()
+    expect(samplingDrawCount(pm)).toBe(1)
+
+    pm.controls._fire('change')
+    nowSpy.mockReturnValue(10100)
+    api.render()
+    expect(samplingDrawCount(pm)).toBe(2)
+
+    api.dispose()
+  })
+
+  it('auto-rotate keeps conversion running every allowed frame', async () => {
+    vi.resetModules()
+    const { initAltView } = await import('../../src/js/_hfm.js')
+    const pm = createMockPreviewManager()
+    pm.isAutoRotateEnabled.mockReturnValue(true)
+    const api = await initAltView(pm)
+
+    const nowSpy = vi.spyOn(performance, 'now')
+
+    nowSpy.mockReturnValue(10000)
+    api.enable()
+    api.render()
+    expect(samplingDrawCount(pm)).toBe(1)
+
+    nowSpy.mockReturnValue(10100)
+    api.render()
+    expect(samplingDrawCount(pm)).toBe(2)
+
+    api.dispose()
+  })
+
+  it('disable() removes the controls change listener', async () => {
     vi.resetModules()
     const { initAltView } = await import('../../src/js/_hfm.js')
     const pm = createMockPreviewManager()
     const api = await initAltView(pm)
 
     api.enable()
-    api.render()
+    api.disable()
 
-    // Find the overlay context that received fillText calls
-    const overlayCtx = allContexts.find(c =>
-      c.fillText.mock.calls.length > 0 && !c._creationOpts?.willReadFrequently
+    expect(pm.controls.removeEventListener).toHaveBeenCalledWith(
+      'change',
+      expect.any(Function)
     )
-    if (overlayCtx) {
-      for (const call of overlayCtx.fillText.mock.calls) {
-        const [, x, y] = call
-        expect(Number.isInteger(x)).toBe(true)
-        expect(Number.isInteger(y)).toBe(true)
-      }
-    }
 
     api.dispose()
-    HTMLCanvasElement.prototype.getContext = fractionalOrigGetContext
-    installCanvasMock()
+  })
+})
+
+describe('initAltView — API surface', () => {
+  it('exposes invalidate() and rebuildGlyphs(), and no getEffectiveFps()', async () => {
+    vi.resetModules()
+    const { initAltView } = await import('../../src/js/_hfm.js')
+    const pm = createMockPreviewManager()
+    const api = await initAltView(pm)
+
+    expect(typeof api.invalidate).toBe('function')
+    expect(typeof api.rebuildGlyphs).toBe('function')
+    expect(api.getEffectiveFps).toBeUndefined()
+
+    api.dispose()
+  })
+
+  it('clamps contrast and font scale to their documented ranges', async () => {
+    vi.resetModules()
+    const { initAltView } = await import('../../src/js/_hfm.js')
+    const pm = createMockPreviewManager()
+    const api = await initAltView(pm)
+
+    expect(api.setContrastScale(99)).toBe(4.0)
+    expect(api.setContrastScale(0)).toBe(0.5)
+    expect(api.setFontScale(99)).toBe(2.5)
+    expect(api.setFontScale(0)).toBe(0.5)
+
+    api.dispose()
   })
 })

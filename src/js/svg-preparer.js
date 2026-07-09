@@ -17,12 +17,19 @@ import { parseLuminance } from './image-import.js';
 import {
   parsePathString,
   pathToAbsolute,
+  pathToCurve,
   pathToString,
   shapeToPathArray,
   splitPath,
   getPointAtLength,
   getTotalLength,
 } from 'svg-path-commander';
+import {
+  fromTransformAttribute,
+  fromDefinition,
+  compose,
+  applyToPoint,
+} from 'transformation-matrix';
 import { offsetPath } from './svg-offset.js';
 import {
   pathFromPathData,
@@ -150,7 +157,6 @@ export function strokeToFill(
   }
 
   if (lineCap === 'round') {
-    const endL = left[left.length - 1];
     const endR = right[right.length - 1];
     d += ` A${r(half)},${r(half)} 0 0,1 ${r(endR.x)},${r(endR.y)}`;
   } else if (lineCap === 'square') {
@@ -173,7 +179,6 @@ export function strokeToFill(
 
   if (lineCap === 'round') {
     const startL = left[0];
-    const startR = right[0];
     d += ` A${r(half)},${r(half)} 0 0,1 ${r(startL.x)},${r(startL.y)}`;
   } else if (lineCap === 'square') {
     const firstL = left[0];
@@ -257,6 +262,104 @@ function elementToPathData(element) {
 }
 
 /**
+ * Compose the transform matrices from an element and all its SVG ancestors.
+ * Outermost transforms are applied first (standard SVG semantics).
+ *
+ * @param {Element} element - SVG DOM element
+ * @returns {object|null} Composed affine matrix, or null if no transforms
+ *   or a transform attribute could not be parsed (caller should keep the
+ *   original path data and warn).
+ */
+function collectAncestorTransformMatrix(element) {
+  const transformStrings = [];
+  let node = element;
+  while (node && node.tagName && node.tagName.toLowerCase() !== 'svg') {
+    const t = node.getAttribute && node.getAttribute('transform');
+    if (t && t.trim()) transformStrings.unshift(t);
+    node = node.parentElement;
+  }
+  if (transformStrings.length === 0) return null;
+
+  const definitions = [];
+  for (const str of transformStrings) {
+    // fromTransformAttribute throws on malformed input
+    definitions.push(...fromDefinition(fromTransformAttribute(str)));
+  }
+  return compose(definitions);
+}
+
+/**
+ * Bake an element's own and inherited `transform` attributes into its
+ * path data so downstream boolean operations and previews see final
+ * coordinates.
+ *
+ * Arcs are first converted to cubic curves (pathToCurve) so affine
+ * matrices can be applied per coordinate pair safely.
+ *
+ * @param {Element} element - SVG DOM element the path came from
+ * @param {string} pathData - Path `d` string in local coordinates
+ * @returns {{pathData: string, baked: boolean, failed: boolean}}
+ */
+export function bakeElementTransforms(element, pathData) {
+  if (!pathData) return { pathData, baked: false, failed: false };
+
+  let matrix;
+  try {
+    matrix = collectAncestorTransformMatrix(element);
+  } catch {
+    return { pathData, baked: false, failed: true };
+  }
+  if (!matrix) return { pathData, baked: false, failed: false };
+
+  try {
+    const curve = pathToCurve(parsePathString(pathData));
+    const transformed = curve.map((seg) => {
+      const [cmd, ...nums] = seg;
+      if (cmd === 'Z' || cmd === 'z') return [cmd];
+      const out = [cmd];
+      for (let i = 0; i + 1 < nums.length; i += 2) {
+        const pt = applyToPoint(matrix, { x: nums[i], y: nums[i + 1] });
+        out.push(
+          Math.round(pt.x * 1000) / 1000,
+          Math.round(pt.y * 1000) / 1000
+        );
+      }
+      return out;
+    });
+    return { pathData: pathToString(transformed), baked: true, failed: false };
+  } catch {
+    return { pathData, baked: false, failed: true };
+  }
+}
+
+/**
+ * Resolve the effective paint (fill or stroke) for an element, honoring
+ * the presentation attribute, the inline `style` attribute, and inherited
+ * values from ancestor elements (e.g. `<g fill="red">`).
+ *
+ * @param {Element} element - SVG DOM element
+ * @param {'fill'|'stroke'} prop - Paint property to resolve
+ * @returns {string|null} Effective paint value, or null when unset anywhere
+ *   (callers apply the SVG defaults: black fill, no stroke)
+ */
+export function getEffectivePaint(element, prop) {
+  const styleRe = new RegExp(`(?:^|;)\\s*${prop}\\s*:\\s*([^;]+)`, 'i');
+  let node = element;
+  while (node && node.tagName && node.tagName.toLowerCase() !== 'svg') {
+    // style attribute wins over the presentation attribute at the same level
+    const styleAttr = node.getAttribute && node.getAttribute('style');
+    if (styleAttr) {
+      const m = styleAttr.match(styleRe);
+      if (m) return m[1].trim();
+    }
+    const attr = node.getAttribute && node.getAttribute(prop);
+    if (attr !== null && attr !== undefined && attr !== '') return attr;
+    node = node.parentElement;
+  }
+  return null;
+}
+
+/**
  * Split a compound path `d` attribute into individual subpath strings.
  * Uses svg-path-commander's parser so each returned subpath starts with an
  * absolute `M`, preserving coordinates when any subset is later concatenated.
@@ -311,11 +414,14 @@ export function parseSvgElements(svgString) {
 
   const result = [];
   for (const element of shapes) {
-    const pathData = elementToPathData(element);
-    const rawFill = element.getAttribute('fill');
-    const fill = rawFill || '';
-    const stroke = element.getAttribute('stroke') || '';
-    // SVG default fill is black when the attribute is absent
+    const rawPathData = elementToPathData(element);
+    const baking = bakeElementTransforms(element, rawPathData);
+    const pathData = baking.pathData;
+    // Resolve paint from attribute, style attribute, or ancestors
+    const rawFill = getEffectivePaint(element, 'fill');
+    const fill = rawFill ?? '';
+    const stroke = getEffectivePaint(element, 'stroke') ?? '';
+    // SVG default fill is black when unset anywhere in the tree
     const resolvedFill =
       rawFill === null ? '#000000' : resolveColorToHex(rawFill);
     const luminance =
@@ -331,10 +437,20 @@ export function parseSvgElements(svgString) {
           stroke,
           luminance,
           subpathIndex: idx,
+          transformBaked: baking.baked,
+          transformBakeFailed: baking.failed,
         });
       });
     } else {
-      result.push({ element, pathData, fill, stroke, luminance });
+      result.push({
+        element,
+        pathData,
+        fill,
+        stroke,
+        luminance,
+        transformBaked: baking.baked,
+        transformBakeFailed: baking.failed,
+      });
     }
   }
   return result;
@@ -431,14 +547,24 @@ export function applyPerPathOffsets(classifiedElements, offsets) {
  * holes from foreground via path-bool Difference. The result is a
  * single `<path>` element with evenodd-compatible winding.
  *
+ * Every boolean operation is individually guarded: if path-bool throws or
+ * returns nothing, the offending shape is appended verbatim to the compound
+ * path (evenodd rendering keeps holes working) and a warning is recorded.
+ * Geometry is never dropped and this function never throws on bad input.
+ *
  * @param {Array} classifiedElements - Output of classifyElements()
  * @param {object} [svgMeta] - SVG container attributes to preserve
  * @param {string} [svgMeta.viewBox]
  * @param {string} [svgMeta.width]
  * @param {string} [svgMeta.height]
+ * @param {string[]} [warningsOut] - Optional sink for merge-fallback warnings
  * @returns {string|null} SVG string with one <path>, or null if no foreground
  */
-export function flattenToCompoundPath(classifiedElements, svgMeta = {}) {
+export function flattenToCompoundPath(
+  classifiedElements,
+  svgMeta = {},
+  warningsOut = null
+) {
   const foreground = classifiedElements.filter(
     (el) => el.role === 'foreground' && el.pathData
   );
@@ -447,47 +573,96 @@ export function flattenToCompoundPath(classifiedElements, svgMeta = {}) {
   );
   if (foreground.length === 0) return null;
 
-  let fgPath = pathFromPathData(foreground[0].pathData);
+  // Keep all pieces a boolean op returns (differences can split shapes)
+  const joinPieces = (pieces) => pieces.map(pathToPathData).join(' ');
+
+  let fallbackCount = 0;
+
+  // Union all foreground shapes into one d string
+  let fgD = foreground[0].pathData;
+  const fgFallbacks = [];
   for (let i = 1; i < foreground.length; i++) {
-    const result = pathBoolean(
-      fgPath,
-      FillRule.EvenOdd,
-      pathFromPathData(foreground[i].pathData),
-      FillRule.EvenOdd,
-      PathBooleanOperation.Union
-    );
-    if (result.length > 0) fgPath = result[0];
+    try {
+      const result = pathBoolean(
+        pathFromPathData(fgD),
+        FillRule.EvenOdd,
+        pathFromPathData(foreground[i].pathData),
+        FillRule.EvenOdd,
+        PathBooleanOperation.Union
+      );
+      if (result.length > 0) {
+        fgD = joinPieces(result);
+      } else {
+        fgFallbacks.push(foreground[i].pathData);
+        fallbackCount++;
+      }
+    } catch {
+      fgFallbacks.push(foreground[i].pathData);
+      fallbackCount++;
+    }
   }
 
   const nativeHoles = holes.filter((el) => !el.strokeConverted);
   const convertedHoles = holes.filter((el) => el.strokeConverted);
 
+  // Union all hole shapes into one d string
+  const holeFallbacks = [];
   if (nativeHoles.length > 0) {
-    let holePath = pathFromPathData(nativeHoles[0].pathData);
+    let holeD = nativeHoles[0].pathData;
     for (let i = 1; i < nativeHoles.length; i++) {
-      const result = pathBoolean(
-        holePath,
-        FillRule.EvenOdd,
-        pathFromPathData(nativeHoles[i].pathData),
-        FillRule.EvenOdd,
-        PathBooleanOperation.Union
-      );
-      if (result.length > 0) holePath = result[0];
+      try {
+        const result = pathBoolean(
+          pathFromPathData(holeD),
+          FillRule.EvenOdd,
+          pathFromPathData(nativeHoles[i].pathData),
+          FillRule.EvenOdd,
+          PathBooleanOperation.Union
+        );
+        if (result.length > 0) {
+          holeD = joinPieces(result);
+        } else {
+          holeFallbacks.push(nativeHoles[i].pathData);
+          fallbackCount++;
+        }
+      } catch {
+        holeFallbacks.push(nativeHoles[i].pathData);
+        fallbackCount++;
+      }
     }
 
-    const result = pathBoolean(
-      fgPath,
-      FillRule.EvenOdd,
-      holePath,
-      FillRule.EvenOdd,
-      PathBooleanOperation.Difference
-    );
-    if (result.length > 0) fgPath = result[0];
+    // Subtract holes; on failure append them as evenodd subpaths instead
+    try {
+      const result = pathBoolean(
+        pathFromPathData(fgD),
+        FillRule.EvenOdd,
+        pathFromPathData(holeD),
+        FillRule.EvenOdd,
+        PathBooleanOperation.Difference
+      );
+      if (result.length > 0) {
+        fgD = joinPieces(result);
+      }
+    } catch {
+      holeFallbacks.push(holeD);
+      fallbackCount++;
+    }
   }
 
-  let compoundD = pathToPathData(fgPath);
+  let compoundD = fgD;
+  for (const d of fgFallbacks) {
+    compoundD += ' ' + d;
+  }
+  for (const d of holeFallbacks) {
+    compoundD += ' ' + d;
+  }
   for (const ch of convertedHoles) {
     compoundD += ' ' + ch.pathData;
+  }
+
+  if (fallbackCount > 0 && Array.isArray(warningsOut)) {
+    warningsOut.push(
+      `${fallbackCount} shape(s) could not be merged and were appended as-is`
+    );
   }
   const { viewBox, width, height } = svgMeta;
 
@@ -507,7 +682,8 @@ export function flattenToCompoundPath(classifiedElements, svgMeta = {}) {
  * pass through unchanged.
  *
  * @param {string} svgString - Complete SVG markup
- * @param {object} [options] - Passed to classifyElements()
+ * @param {object} [options] - Passed to classifyElements(). Additionally
+ *   supports `warningsOut` (string[]) to receive flatten fallback warnings.
  * @returns {string} Prepared SVG string (compound path or original)
  */
 export function prepareSvg(svgString, options = {}) {
@@ -526,7 +702,11 @@ export function prepareSvg(svgString, options = {}) {
 
   const elements = parseSvgElements(svgString);
   const classified = classifyElements(elements, options);
-  const result = flattenToCompoundPath(classified, svgMeta);
+  const result = flattenToCompoundPath(
+    classified,
+    svgMeta,
+    options.warningsOut || null
+  );
   return result || svgString;
 }
 
@@ -654,8 +834,10 @@ export function analyzeSvg(svgString) {
         'Gradient or pattern fill \u2014 cannot classify by luminance'
       );
     }
-    if (el.element.hasAttribute('transform')) {
-      elWarnings.push('Has transform \u2014 may affect visual stacking');
+    // Transforms are baked into pathData during parsing; only warn when
+    // baking failed and coordinates are still in local space.
+    if (el.transformBakeFailed) {
+      elWarnings.push('Has transform \u2014 could not be baked');
     }
     if (el.element.hasAttribute('clip-path')) {
       elWarnings.push('Has clip-path reference');
@@ -669,6 +851,7 @@ export function analyzeSvg(svgString) {
       luminance: el.luminance,
       autoRole: el.role,
       strokeConverted: el.strokeConverted || false,
+      subpathIndex: el.subpathIndex,
       warnings: elWarnings,
     };
   });
@@ -705,8 +888,21 @@ export function analyzeSvg(svgString) {
   );
   if (hasClipPaths) unsupportedFeatures.push('clip-path references');
 
+  // All-foreground SVGs need no flattening: OpenSCAD unions overlapping
+  // filled shapes natively, so passing the original through is lossless.
+  // Identical dark fills are unambiguous here, so no luminance penalty.
+  const allForeground =
+    elements.length > 0 &&
+    unsupportedFeatures.length === 0 &&
+    elements.every(
+      (el) =>
+        el.autoRole === 'foreground' &&
+        !el.strokeConverted &&
+        !el.transformBakeFailed
+    );
+
   // Confidence scoring — penalize ambiguous or unsupported scenarios
-  if (filledElements.length > 1) {
+  if (!allForeground && filledElements.length > 1) {
     const luminances = filledElements
       .filter((el) => el.luminance !== null)
       .map((el) => el.luminance);
@@ -723,19 +919,22 @@ export function analyzeSvg(svgString) {
   }
   if (hasGradients) confidence -= 0.2;
   if (hasClipPaths) confidence -= 0.1;
-  const hasTransforms = elements.some((el) =>
-    el.warnings.some((w) => w.includes('transform'))
+  const hasTransformFailures = elements.some((el) =>
+    el.warnings.some((w) => w.includes('could not be baked'))
   );
-  if (hasTransforms) confidence -= 0.1;
+  if (hasTransformFailures) confidence -= 0.1;
   confidence = Math.max(0, Math.min(1, confidence));
 
   // Status and recommendation
   let status, recommendation;
-  if (singleElement || isCompoundPathOnly) {
+  if (singleElement || isCompoundPathOnly || allForeground) {
     status = 'ready';
     recommendation = 'pass_through';
   } else if (unsupportedFeatures.length > 0) {
     status = 'unsupported';
+    recommendation = 'open_editor';
+  } else if (hasTransformFailures) {
+    status = 'needs_review';
     recommendation = 'open_editor';
   } else if (confidence >= 0.7) {
     status = 'ready';

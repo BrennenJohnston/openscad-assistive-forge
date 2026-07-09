@@ -1,6 +1,13 @@
 import { defineConfig } from 'vitest/config'
+import { readFileSync } from 'fs'
+
+const pkg = JSON.parse(readFileSync('./package.json', 'utf-8'))
 
 export default defineConfig({
+  define: {
+    // Mirror vite.config.js build-time constants for the test environment
+    __APP_VERSION__: JSON.stringify(pkg.version),
+  },
   test: {
     globals: true,
     environment: 'jsdom',
@@ -34,7 +41,6 @@ export default defineConfig({
         'src/js/image-measurement.js',
         // Alt-view canvas rendering internals — require real browser/canvas; tested via E2E
         'src/js/_hfm.js',
-        'src/js/_hfm-lut.js',
         // Input sequence detector (easter egg) — event-driven, tested via E2E
         'src/js/_seq.js'
       ],

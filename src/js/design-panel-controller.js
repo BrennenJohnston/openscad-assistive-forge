@@ -1,7 +1,7 @@
 /**
  * Design Panel Controller
  *
- * Provides Flush Caches, Display AST, Check Validity, and Geometry Info.
+ * Provides Flush Caches, Display Parameters, Check Validity, and Geometry Info.
  * Maps to the desktop OpenSCAD Design menu, adapted for the panel-based
  * web UI.  Actions that require a loaded model gracefully report "no model"
  * when the preview is empty.
@@ -59,7 +59,7 @@ export class DesignPanelController {
   }
 
   // ---------------------------------------------------------------------------
-  // Display AST
+  // Display Parameters
   // ---------------------------------------------------------------------------
 
   showAST() {
@@ -79,7 +79,7 @@ export class DesignPanelController {
 
     const text = JSON.stringify(params, null, 2);
     const { modal } = createModal({
-      ariaLabel: 'Parsed parameter AST',
+      ariaLabel: 'Parameter schema',
       className: 'design-ast-modal',
       closeOnOverlay: true,
       closeOnEscape: true,
@@ -87,7 +87,7 @@ export class DesignPanelController {
 
     const heading = document.createElement('h2');
     heading.className = 'design-ast-heading';
-    heading.textContent = 'Parsed Parameters (AST)';
+    heading.textContent = 'Parameter Schema';
 
     const pre = document.createElement('pre');
     pre.className = 'design-ast-content';
@@ -97,7 +97,7 @@ export class DesignPanelController {
     closeBtn.type = 'button';
     closeBtn.className = 'btn btn-primary design-ast-close';
     closeBtn.textContent = 'Close';
-    closeBtn.setAttribute('aria-label', 'Close AST view');
+    closeBtn.setAttribute('aria-label', 'Close parameter schema view');
     closeBtn.addEventListener('click', () => closeModal(modal));
 
     const body = modal.querySelector('.modal-body') || modal;
@@ -105,7 +105,9 @@ export class DesignPanelController {
     body.appendChild(pre);
     body.appendChild(closeBtn);
 
-    announceImmediate(`AST displayed with ${params.length} parameters`);
+    announceImmediate(
+      `Parameter schema displayed with ${params.length} parameters`
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -133,9 +135,6 @@ export class DesignPanelController {
     const issues = [];
     if (vertexCount === 0) issues.push('mesh has no vertices');
     if (triangleCount === 0) issues.push('mesh has no faces');
-    if (!geo.index && vertexCount % 3 !== 0) {
-      issues.push('vertex count is not a multiple of 3 (non-manifold)');
-    }
 
     const statusEl = document.getElementById('design-validity-status');
     if (issues.length === 0) {
@@ -184,7 +183,7 @@ export class DesignPanelController {
       ['Size X', `${dims.x} mm`],
       ['Size Y', `${dims.y} mm`],
       ['Size Z', `${dims.z} mm`],
-      ['Volume', `${dims.volume.toLocaleString()} mm³`],
+      ['Bounding Box Volume', `${dims.volume.toLocaleString()} mm³`],
       ['Triangles', dims.triangles.toLocaleString()],
     ];
 
@@ -232,11 +231,4 @@ export function getDesignPanelController(options = {}) {
     instance = new DesignPanelController(options);
   }
   return instance;
-}
-
-/**
- * Reset singleton (for testing).
- */
-function resetDesignPanelController() {
-  instance = null;
 }
