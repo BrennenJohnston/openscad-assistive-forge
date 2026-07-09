@@ -168,8 +168,17 @@ jobs:
           path: playwright-report/
           retention-days: 30
 
-  # Safari/WebKit E2E tests - non-blocking (flaky skip-link, modal focus, theme keyboard tests)
-  # Requires macOS runner for WebKit
+  # Safari/WebKit E2E tests - requires macOS runner for WebKit.
+  #
+  # continue-on-error is intentional (see issue #36): WebKit on macOS runners
+  # has historically flaky skip-link, modal focus, and theme keyboard tests,
+  # so this job is non-blocking to keep the Test Suite green while still
+  # surfacing WebKit regressions in the job logs/artifacts.
+  #
+  # PW_GLOBAL_TIMEOUT is raised to 15min for this job only: WebKit is the
+  # slowest browser in the matrix (~9-11min wall time on green runs), and the
+  # default 10min globalTimeout left ~0-60s of headroom, intermittently
+  # cutting off the trailing mobile tutorial tests (issue #36).
   e2e-tests-webkit:
     name: E2E Tests (Safari/WebKit)
     runs-on: macos-latest
@@ -202,6 +211,8 @@ jobs:
       
       - name: Run E2E tests (WebKit)
         run: npx playwright test --project=webkit
+        env:
+          PW_GLOBAL_TIMEOUT: '900000'
       
       - name: Upload Playwright report (WebKit)
         uses: actions/upload-artifact@v4

@@ -50,6 +50,43 @@ async function waitForTutorialOverlay(page) {
   })
 }
 
+/**
+ * Wait for the spotlight cutout to resolve and settle, or fall through after
+ * `timeoutMs` for steps that have no spotlight target. Polls instead of a
+ * fixed wait, so steps with a spotlight resolve in ~200ms rather than always
+ * burning the full timeout (issue #36: dead time pushed WebKit CI past its
+ * globalTimeout).
+ */
+async function waitForSpotlightSettled(page, timeoutMs = SPOTLIGHT_TIMEOUT_MS) {
+  const appeared = await page
+    .waitForFunction(
+      () => !!document.querySelector('.tutorial-spotlight, [class*="spotlight-cutout"]'),
+      { timeout: timeoutMs }
+    )
+    .then(() => true)
+    .catch(() => false)
+  if (!appeared) return // step has no spotlight target
+
+  // Wait for the spotlight rect to stop moving (position animation settled)
+  let prev = null
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    const rect = await getSpotlightRect(page)
+    if (
+      rect &&
+      prev &&
+      rect.x === prev.x &&
+      rect.y === prev.y &&
+      rect.width === prev.width &&
+      rect.height === prev.height
+    ) {
+      return
+    }
+    prev = rect
+    await page.waitForTimeout(100)
+  }
+}
+
 /** Get the spotlight cutout bounding rect (if any) */
 async function getSpotlightRect(page) {
   return page.evaluate(() => {
@@ -159,8 +196,8 @@ for (const vp of VIEWPORTS) {
         for (let i = 0; i < 5; i++) {
           const label = `${tutorialId}[${i}]`
 
-          // Wait for spotlight to appear (up to SPOTLIGHT_TIMEOUT_MS)
-          await page.waitForTimeout(SPOTLIGHT_TIMEOUT_MS)
+          // Wait for spotlight to resolve and settle (up to SPOTLIGHT_TIMEOUT_MS)
+          await waitForSpotlightSettled(page)
 
           await assertNoSpotlightPanelOverlap(page, label)
 
