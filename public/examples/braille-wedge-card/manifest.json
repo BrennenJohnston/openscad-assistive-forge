@@ -1,0 +1,59 @@
+{
+  "name": "Braille Card Customizer",
+  "description": "Type text and get a 3D-printable braille card. Translation to Unicode braille runs entirely on your device via liblouis; the card prints leaning back at 75 degrees with break-away support fins so the dots read directly off the printer.",
+  "version": "1.0.0",
+  "author": "Brennen Johnston",
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "main": "braille_wedge_card.scad",
+  "files": ["braille_wedge_card.scad"],
+  "program": "braille-card-customizer",
+  "brailleTranslation": {
+    "lineParams": [
+      "Line_1",
+      "Line_2",
+      "Line_3",
+      "Line_4",
+      "Line_5",
+      "Line_6",
+      "Line_7",
+      "Line_8",
+      "Line_9",
+      "Line_10",
+      "Line_11",
+      "Line_12",
+      "Line_13",
+      "Line_14",
+      "Line_15",
+      "Line_16",
+      "Line_17",
+      "Line_18",
+      "Line_19",
+      "Line_20"
+    ],
+    "tablesCatalog": "/liblouis/tables.json",
+    "defaultTable": "en-ueb-g1.ctb",
+    "capacityParams": {
+      "cardWidth": "card_face_width_mm",
+      "cardHeight": "card_face_height_mm",
+      "cellSpacing": "cell_spacing",
+      "lineSpacing": "line_spacing",
+      "gridColumns": "grid_columns",
+      "gridRows": "grid_rows",
+      "autoSize": "auto_size_card",
+      "autoSizeMargin": "auto_size_margin_mm"
+    }
+  },
+  "tags": [
+    "braille",
+    "accessibility",
+    "card",
+    "liblouis",
+    "tactile",
+    "assistive-technology"
+  ],
+  "inspired_by": {
+    "name": "Brennen Johnston",
+    "github": "BrennenJohnston",
+    "reference": "https://github.com/BrennenJohnston/braille-wedge-card-openscad"
+  }
+}

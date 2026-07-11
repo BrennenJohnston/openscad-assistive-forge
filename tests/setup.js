@@ -70,24 +70,29 @@ beforeAll(() => {
     unobserve() {}
   }
 
-  // Mock matchMedia
-  Object.defineProperty(window, 'matchMedia', {
-    writable: true,
-    value: vi.fn().mockImplementation(query => ({
-      matches: false,
-      media: query,
-      onchange: null,
-      addListener: vi.fn(),
-      removeListener: vi.fn(),
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-      dispatchEvent: vi.fn(),
-    })),
-  })
+  // Mock matchMedia (jsdom only — some suites opt into the node
+  // environment via @vitest-environment, where window does not exist)
+  if (typeof window !== 'undefined') {
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      value: vi.fn().mockImplementation(query => ({
+        matches: false,
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    })
+  }
 })
 
 // Clean up after each test
 afterEach(() => {
   vi.clearAllMocks()
-  document.body.innerHTML = ''
+  if (typeof document !== 'undefined') {
+    document.body.innerHTML = ''
+  }
 })

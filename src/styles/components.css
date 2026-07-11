@@ -14241,3 +14241,219 @@ body.tutorial-body-locked {
     color: CanvasText;
   }
 }
+
+/* ==========================================================================
+   Braille translation panel (Braille Card Customizer)
+   ========================================================================== */
+
+.braille-panel {
+  margin-bottom: var(--space-md);
+  padding: var(--space-md);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.braille-panel-heading {
+  margin: 0;
+  font-size: var(--font-size-base);
+  color: var(--color-text-primary);
+}
+
+.braille-panel-subheading {
+  margin: var(--space-sm) 0 0;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.braille-panel-label {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.braille-panel-help {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.braille-text-input {
+  width: 100%;
+  min-height: 4.5em;
+  padding: var(--space-sm);
+  font-family: inherit;
+  font-size: var(--font-size-base);
+  color: var(--color-text-primary);
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  resize: vertical;
+}
+
+.braille-panel-select {
+  min-height: 36px;
+  padding: var(--space-xs) var(--space-sm);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+}
+
+.braille-panel-number {
+  width: 5em;
+  min-height: 36px;
+  padding: var(--space-xs) var(--space-sm);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+}
+
+.braille-panel-unit {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.braille-panel-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.braille-panel-toggle-row label {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+}
+
+.braille-panel-field-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.braille-panel-field-row label {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.braille-panel-layout {
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  padding: var(--space-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.braille-panel-layout summary {
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.braille-preview {
+  padding: var(--space-sm);
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  overflow-x: auto;
+}
+
+.braille-preview-list {
+  margin: 0;
+  padding-left: var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.braille-preview-braille {
+  font-size: 1.4em;
+  letter-spacing: 0.1em;
+  color: var(--color-text-primary);
+  word-break: break-all;
+}
+
+.braille-preview-count {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.braille-preview-overflow {
+  color: var(--color-error-text);
+  font-weight: 600;
+}
+
+.braille-warnings {
+  padding: var(--space-sm);
+  background: var(--color-warning-bg);
+  border: 1px solid var(--color-warning);
+  border-radius: var(--border-radius-sm);
+  color: var(--color-warning-text);
+}
+
+.braille-warnings-list {
+  margin: 0;
+  padding-left: var(--space-lg);
+  font-size: var(--font-size-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.braille-card-pager {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.braille-pager-status {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.braille-pager-hint {
+  flex-basis: 100%;
+}
+
+/* High contrast */
+:root[data-high-contrast="true"] .braille-panel {
+  border-width: 2px;
+}
+
+:root[data-high-contrast="true"] .braille-warnings {
+  border-width: 2px;
+}
+
+/* Forced colors (Windows High Contrast) */
+@media (forced-colors: active) {
+  .braille-panel,
+  .braille-preview,
+  .braille-warnings,
+  .braille-panel-layout {
+    border: 1px solid CanvasText;
+    background: Canvas;
+    color: CanvasText;
+  }
+
+  .braille-text-input,
+  .braille-panel-select,
+  .braille-panel-number {
+    border: 1px solid ButtonText;
+    background: Canvas;
+    color: CanvasText;
+  }
+}
