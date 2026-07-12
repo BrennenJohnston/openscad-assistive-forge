@@ -50,29 +50,40 @@ describe('braille_charm.scad parser integration', () => {
 
   it('extracts the charm shape parameters', () => {
     const parsed = extractParameters(readScad());
-    expect(parsed.parameters.charm_shape.default).toBe('circle');
     expect(parsed.parameters.charm_width.default).toBe(30);
     expect(parsed.parameters.charm_thickness.default).toBe(3);
     expect(parsed.parameters.attachment_type.default).toBe('keychain_hole');
   });
 
-  it('offers the bracelet_clip shape with its own clip parameters', () => {
+  it('defaults to the bracelet_clip shape with its own clip parameters', () => {
     const parsed = extractParameters(readScad());
-    expect(parsed.parameters.charm_shape.enum.map((e) => e.value)).toContain(
-      'bracelet_clip'
-    );
+    expect(parsed.parameters.charm_shape.default).toBe('bracelet_clip');
+    expect(parsed.parameters.charm_shape.enum[0].value).toBe('bracelet_clip');
     // Clip fit parameters mirror the Bracelet Clip Charm (q_charm.scad)
     expect(parsed.parameters.clip_channel_length.default).toBe(15);
     expect(parsed.parameters.clip_height.default).toBe(22);
     expect(parsed.parameters.clip_profile_depth.default).toBe(8.65);
     expect(parsed.parameters.clip_wall_thickness.default).toBe(2.25);
     expect(parsed.parameters.clip_gap_width.default).toBe(3);
+    // Rounding mirrors q_charm's edge_radius / side_edge_radius defaults
+    expect(parsed.parameters.clip_edge_radius.default).toBe(1.0);
+    expect(parsed.parameters.clip_side_radius.default).toBe(2.5);
     // Clip params only show when the clip shape is selected
     expect(parsed.parameters.clip_height.dependency).toEqual({
       parameter: 'charm_shape',
       operator: '==',
       value: 'bracelet_clip',
     });
+  });
+
+  it('rotates the clip braille 90 degrees and centers it by default', () => {
+    const parsed = extractParameters(readScad());
+    expect(parsed.parameters.clip_braille_rotation.default).toBe(90);
+    expect(
+      parsed.parameters.clip_braille_rotation.enum.map((e) => Number(e.value))
+    ).toEqual([90, -90]);
+    expect(parsed.parameters.clip_braille_left_right.default).toBe(0);
+    expect(parsed.parameters.clip_braille_up_down.default).toBe(0);
   });
 
   it('defaults to angled printing with a flat first-layer contact strip', () => {
@@ -83,14 +94,16 @@ describe('braille_charm.scad parser integration', () => {
     ).toContain('Flat');
     expect(parsed.parameters.face_angle_deg.default).toBe(75);
     expect(parsed.parameters.support_fin.default).toBe('On');
-    expect(parsed.parameters.bed_contact_mm.default).toBe(1.0);
+    expect(parsed.parameters.bed_contact_mm.default).toBe(2.0);
   });
 
-  it('uses a slimmer support fin than the wedge card (smaller print volume)', () => {
+  it('uses a slimmer support fin than the wedge card with >= 3 bridges', () => {
     const parsed = extractParameters(readScad());
     expect(parsed.parameters.fin_thickness_mm.default).toBeLessThan(1.2);
-    expect(parsed.parameters.bridge_count.default).toBeLessThan(6);
+    expect(parsed.parameters.bridge_count.default).toBeGreaterThanOrEqual(3);
     expect(parsed.parameters.brim_width_mm.default).toBeLessThan(2.0);
+    // Taller charms auto-add bridges (~one per 10 mm of fin height)
+    expect(readScad()).toContain('effective_bridge_count');
   });
 
   it('keeps ADA-friendly rounded dot defaults (total height <= 0.9 mm)', () => {
@@ -148,6 +161,58 @@ describe('braille-charm manifest', () => {
     const manifest = readManifest();
     expect(manifest.inspired_by).toBeDefined();
     expect(typeof manifest.inspired_by.name).toBe('string');
+  });
+});
+
+describe('braille-charm bracelet clip presets', () => {
+  const PRESET_DIR = join(PUBLIC_DIR, 'examples/braille-charm/presets');
+  const presetFiles = ['large-charm.json', 'small-charm.json'];
+
+  it.each(presetFiles)('%s is a valid Forge preset for this model', (file) => {
+    const presetPath = join(PRESET_DIR, file);
+    expect(existsSync(presetPath)).toBe(true);
+    const data = JSON.parse(readFileSync(presetPath, 'utf-8'));
+    expect(data.type).toBe('openscad-preset');
+    expect(data.modelName).toBe('braille_charm.scad');
+    expect(typeof data.preset.name).toBe('string');
+
+    // Every preset parameter must exist in the SCAD schema
+    const parsed = extractParameters(readScad());
+    for (const paramName of Object.keys(data.preset.parameters)) {
+      expect(parsed.parameters[paramName], paramName).toBeDefined();
+    }
+    expect(data.preset.parameters.charm_shape).toBe('bracelet_clip');
+  });
+
+  it('mirrors the q-charm Large/Small preset sizes', () => {
+    const large = JSON.parse(
+      readFileSync(join(PRESET_DIR, 'large-charm.json'), 'utf-8')
+    ).preset.parameters;
+    const small = JSON.parse(
+      readFileSync(join(PRESET_DIR, 'small-charm.json'), 'utf-8')
+    ).preset.parameters;
+    // q-charm Large: width 22, height 8.65, length 15
+    expect(large.clip_height).toBe(22);
+    expect(large.clip_profile_depth).toBe(8.65);
+    expect(large.clip_channel_length).toBe(15);
+    // q-charm Small: width 16, height 6.5, length 12
+    expect(small.clip_height).toBe(16);
+    expect(small.clip_profile_depth).toBe(6.5);
+    expect(small.clip_channel_length).toBe(12);
+  });
+
+  it('manifest and registry ship the preset files', () => {
+    const manifest = readManifest();
+    expect(manifest.files).toContain('presets/large-charm.json');
+    expect(manifest.files).toContain('presets/small-charm.json');
+
+    const def = EXAMPLE_DEFINITIONS['braille-charm'];
+    expect(def.additionalFiles).toContain(
+      '/examples/braille-charm/presets/large-charm.json'
+    );
+    expect(def.additionalFiles).toContain(
+      '/examples/braille-charm/presets/small-charm.json'
+    );
   });
 });
 

@@ -1,11 +1,15 @@
 {
   "name": "Braille Charm",
-  "description": "A small charm, pendant, or zipper pull carrying one or two braille cells. Type a character or two and the translation to Unicode braille runs entirely on your device via liblouis. Every shape exports already oriented for printing: pendants lean back at 75 degrees on a flat contact strip with a slim break-away support fin (or print flat), and the bracelet_clip C-clip stands vertically with no supports at all.",
-  "version": "1.1.0",
+  "description": "A small charm carrying one or two braille cells; the default bracelet_clip shape snaps onto silicone bracelets and prints standing vertically with no supports, with the braille rotated to read along the band. Pendant shapes (circle, square, and more) lean back at 75 degrees on a flat contact strip with a slim break-away support fin, or print flat. Translation to Unicode braille runs entirely on your device via liblouis; Large and Small Charm presets match the original Bracelet Clip Charm.",
+  "version": "1.2.0",
   "author": "OpenSCAD Assistive Forge contributors",
   "license": "GPL-3.0-or-later",
   "main": "braille_charm.scad",
-  "files": ["braille_charm.scad"],
+  "files": [
+    "braille_charm.scad",
+    "presets/large-charm.json",
+    "presets/small-charm.json"
+  ],
   "program": "braille-card-customizer",
   "brailleTranslation": {
     "mode": "charm",

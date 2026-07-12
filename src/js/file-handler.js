@@ -210,6 +210,10 @@ export const EXAMPLE_DEFINITIONS = {
     name: 'braille_charm.scad',
     description: 'Braille Charm',
     manifest: '/examples/braille-charm/manifest.json',
+    additionalFiles: [
+      '/examples/braille-charm/presets/large-charm.json',
+      '/examples/braille-charm/presets/small-charm.json',
+    ],
   },
   'braille-sign': {
     path: '/examples/braille-sign/braille_sign.scad',
