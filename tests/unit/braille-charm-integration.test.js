@@ -56,14 +56,41 @@ describe('braille_charm.scad parser integration', () => {
     expect(parsed.parameters.attachment_type.default).toBe('keychain_hole');
   });
 
-  it('defaults to flat printing with the angled option available', () => {
+  it('offers the bracelet_clip shape with its own clip parameters', () => {
     const parsed = extractParameters(readScad());
-    expect(parsed.parameters.print_orientation.default).toBe('Flat');
+    expect(parsed.parameters.charm_shape.enum.map((e) => e.value)).toContain(
+      'bracelet_clip'
+    );
+    // Clip fit parameters mirror the Bracelet Clip Charm (q_charm.scad)
+    expect(parsed.parameters.clip_channel_length.default).toBe(15);
+    expect(parsed.parameters.clip_height.default).toBe(22);
+    expect(parsed.parameters.clip_profile_depth.default).toBe(8.65);
+    expect(parsed.parameters.clip_wall_thickness.default).toBe(2.25);
+    expect(parsed.parameters.clip_gap_width.default).toBe(3);
+    // Clip params only show when the clip shape is selected
+    expect(parsed.parameters.clip_height.dependency).toEqual({
+      parameter: 'charm_shape',
+      operator: '==',
+      value: 'bracelet_clip',
+    });
+  });
+
+  it('defaults to angled printing with a flat first-layer contact strip', () => {
+    const parsed = extractParameters(readScad());
+    expect(parsed.parameters.print_orientation.default).toBe('Angled');
     expect(
       parsed.parameters.print_orientation.enum.map((e) => e.value)
-    ).toContain('Angled');
+    ).toContain('Flat');
     expect(parsed.parameters.face_angle_deg.default).toBe(75);
     expect(parsed.parameters.support_fin.default).toBe('On');
+    expect(parsed.parameters.bed_contact_mm.default).toBe(1.0);
+  });
+
+  it('uses a slimmer support fin than the wedge card (smaller print volume)', () => {
+    const parsed = extractParameters(readScad());
+    expect(parsed.parameters.fin_thickness_mm.default).toBeLessThan(1.2);
+    expect(parsed.parameters.bridge_count.default).toBeLessThan(6);
+    expect(parsed.parameters.brim_width_mm.default).toBeLessThan(2.0);
   });
 
   it('keeps ADA-friendly rounded dot defaults (total height <= 0.9 mm)', () => {

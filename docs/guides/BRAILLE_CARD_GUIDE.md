@@ -20,7 +20,7 @@ Good uses:
 
 ## Opening the customizer
 
-- Welcome screen: **Braille Card Customizer** card → pick Braille Card, Braille Charm, or Braille Sign from the Tool dropdown → Open
+- Welcome screen: **Braille Card Customizer** card → pick a tool from the Tool dropdown (Braille Sign is preselected; Braille Card and Braille Charm are the other options) → Open
 - Direct links: `?example=braille-wedge-card`, `?example=braille-charm`, `?example=braille-sign`
 
 ## Using the translation panel
@@ -64,9 +64,12 @@ Note that the A4 and US Letter presets are larger than most consumer print beds 
 
 A charm face fits **one or two braille cells** — usually one or two letters, or one short Grade 2 contraction. A capital indicator counts as a cell, so "A" with Preserve capitals on uses both cells.
 
-- **Shapes**: circle, square, rounded rectangle, hexagon, oval; adjustable width/height/thickness and corner radius; optional raised border.
-- **Attachment**: keychain hole (default), bail loop, or none.
-- **Print orientation**: Flat (dots up, simplest) or **Angled** — the charm leans back at 75° with a central break-away support fin, snap-off bridges, and a built-in brim, for the crispest dots (same research-backed technique as the card). A bail loop prints poorly in Angled mode; use the keychain hole.
+Every shape exports **already oriented for printing** — no rotating in the slicer.
+
+- **Shapes**: circle, square, rounded rectangle, hexagon, oval, and **bracelet clip**; the pendant shapes have adjustable width/height/thickness and corner radius plus an optional raised border.
+- **Attachment**: keychain hole (default), bail loop, or none (pendant shapes only — the bracelet clip is its own attachment).
+- **Print orientation**: **Angled** (default) — the charm leans back at 75° with a central break-away support fin, snap-off bridges, and a built-in brim, for the crispest dots (same research-backed technique as the card, but slimmer: one thin fin with two bridges is enough for a charm-sized print). The leaning bottom edge is trimmed flat against the bed (`bed_contact_mm`, default 1 mm) so the first layer is a real contact strip rather than a knife edge. Flat mode (dots up) is still available. A bail loop prints poorly in Angled mode; use the keychain hole.
+- **Bracelet clip** (`charm_shape = bracelet_clip`): a C-shaped clip for silicone bracelets, adapted from the Charm Customizer's Bracelet Clip Charm. It always prints **standing vertically** — the C profile lies on the bed (a "C" seen from above) and the braille sits on the vertical outer wall, so the dots print crisply with **no support fin at all**. Channel length, clip height, profile depth, wall thickness, gap width/offset, and corner rounding are adjustable under the Bracelet Clip group; `print_orientation`, border, and attachment are ignored for this shape.
 - The panel warns when your text translates to more than 2 cells.
 
 ## Braille Sign
@@ -83,7 +86,7 @@ A two-part sign following the **2010 ADA Standards (section 703)** recommendatio
 
 ### Making a sign, step by step
 
-1. Open the sign tool (welcome screen → Braille Card Customizer → **Braille Sign** → Open, or `?example=braille-sign`).
+1. Open the sign tool (welcome screen → Braille Card Customizer → Open — **Braille Sign** is the preselected tool — or `?example=braille-sign`).
 2. Type the sign text into **Text to translate** — one line per message line (for example `Conference Room` then `101`). Long lines wrap onto new rows by themselves.
 3. Check the **Braille preview**: each braille row shows the words it contains underneath, the row summary reports how many rows each plate uses, and any fit problems appear as errors or warnings.
 4. Adjust parameters if needed (character height, sign width, border, print orientation) — with auto-fit on, the sign resizes to whatever you enter.
@@ -121,6 +124,6 @@ Translation runs in a Web Worker on your device using liblouis compiled to WebAs
 
 - Braille translation is powered by [liblouis](https://liblouis.io/), the open-source braille translator (LGPL-2.1-or-later; its JavaScript bindings are GPL-3.0; individual translation tables carry their own headers). The engine and tables are copied from the `liblouis` npm packages at build time by `scripts/setup-liblouis.js`, which also writes a `NOTICE.txt` alongside the deployed assets.
 - The card geometry is adapted from the [Braille Wedge Card STL Generator](https://github.com/BrennenJohnston/braille-wedge-card-openscad) (© 2024–2026 Brennen Johnston). Originally published under PolyForm Noncommercial 1.0.0, the example was **relicensed by the copyright holder to GPL-3.0-or-later** for the OpenSCAD Assistive Forge (2026); the SCAD header records the relicense.
-- The **Braille Charm** (GPL-3.0-or-later) combines the charm base from Nasif's Charm Maker (concept by Nasif Zaman, CC0) with the wedge card's braille dot system.
+- The **Braille Charm** (GPL-3.0-or-later) combines the charm base from Nasif's Charm Maker (concept by Nasif Zaman, CC0) with the wedge card's braille dot system; its bracelet clip shape is adapted from the Charm Customizer's Bracelet Clip Charm (CC0), whose design direction came from Duy Do's AAC bracelet charms (UW WOOF3D).
 - The **Braille Sign** (GPL-3.0-or-later) uses the wedge card's braille dot system and renders raised characters with the Liberation Sans font (SIL OFL).
 - Key references: [BANA size and spacing](https://brailleauthority.org/size-and-spacing-braille-characters), the CHI 2024 study on [3D-printed braille orientation](https://doi.org/10.1145/3613904.3642719), and the [2010 ADA Standards](https://archive.ada.gov/) section 703.

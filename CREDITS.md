@@ -108,7 +108,8 @@ Washington.
 **Duy Do**, working as part of the **UW WOOF3D** club at the University
 of Washington, created AAC charms with Boardmaker symbols designed to
 clip onto silicone bracelets. His original project files directly
-informed the Bracelet Clip Charm tool's design direction.
+informed the Bracelet Clip Charm tool's design direction (and, through
+it, the Braille Charm's `bracelet_clip` shape).
 
 - **Creator**: Duy Do
 - **Club**: UW WOOF3D (University of Washington)

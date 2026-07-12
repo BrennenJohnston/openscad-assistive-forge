@@ -110,7 +110,8 @@ test.describe('Welcome screen', () => {
 
     const openBtn = page.locator('#openBrailleCardBtn')
     await expect(openBtn).toBeVisible()
-    expect(await openBtn.getAttribute('data-example')).toBe('braille-wedge-card')
+    // Braille Sign is the default tool for the Braille Card Customizer card
+    expect(await openBtn.getAttribute('data-example')).toBe('braille-sign')
 
     const ariaLabel = await openBtn.getAttribute('aria-label')
     const textContent = await openBtn.textContent()

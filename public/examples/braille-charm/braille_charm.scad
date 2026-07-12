@@ -1,35 +1,47 @@
 // =============================================================================
 // Braille Charm — Parametric Braille Charm/Pendant Generator
 // =============================================================================
-// VERSION = 1.0.0 (OpenSCAD Assistive Forge)
+// VERSION = 1.1.0 (OpenSCAD Assistive Forge)
 // License: GPL-3.0-or-later
 //          https://www.gnu.org/licenses/gpl-3.0.html
 //
 // A small charm, pendant, or zipper pull carrying one or two braille cells.
 // The charm base (shapes, border, keychain hole / bail loop) is adapted from
-// Nasif's Charm Maker (concept by Nasif Zaman, CC0); the braille dot system
-// (ADA-friendly rounded/cone dots, Unicode braille decoding) is adapted from
-// the Braille Wedge Card STL Generator by Brennen Johnston
+// Nasif's Charm Maker (concept by Nasif Zaman, CC0); the bracelet_clip shape
+// is adapted from the Forge's Bracelet Clip Charm (q_charm.scad, CC0; AAC
+// bracelet charm prior art by Duy Do, UW WOOF3D,
+// thingiverse.com/thing:7153594); the braille dot system (ADA-friendly
+// rounded/cone dots, Unicode braille decoding) is adapted from the Braille
+// Wedge Card STL Generator by Brennen Johnston
 // (https://github.com/BrennenJohnston/braille-wedge-card-openscad,
 // GPL-3.0-or-later).
 //
-// PRINT ORIENTATIONS
-//  • Flat (default): the charm lies on the bed with the dots facing up.
-//    Simple and reliable; dot quality depends on your first layers.
-//  • Angled: the charm leans back at face_angle_deg (75 degrees = the angle
-//    CHI 2024 research found fastest and most comfortable to read, because
-//    near-vertical printing moves the layer seams off the finger-contact
-//    surface). A central break-away support fin stands behind the charm,
-//    joined by tiny snap-off bridges and grounded by a built-in brim, so the
-//    whole thing prints support-free as ONE fused STL. Snap the fin off
-//    after printing.
+// PRINT ORIENTATIONS — every shape exports already oriented for printing
+//  • Angled (default for the pendant shapes): the charm leans back at
+//    face_angle_deg (75 degrees = the angle CHI 2024 research found fastest
+//    and most comfortable to read, because near-vertical printing moves the
+//    layer seams off the finger-contact surface). The bottom edge is sunk
+//    bed_contact_mm into the bed and trimmed flat, so the first layer is a
+//    real contact strip instead of a knife edge. A single slim break-away
+//    support fin stands behind the charm, joined by tiny snap-off bridges
+//    and grounded by a built-in brim, so the whole thing prints support-free
+//    as ONE fused STL. Snap the fin off after printing.
+//  • Flat: the charm lies on the bed with the dots facing up. Simple and
+//    reliable; dot quality depends on your first layers.
+//  • bracelet_clip: always prints STANDING VERTICALLY — the C-clip profile
+//    lies on the bed (a "C" seen from above) and the braille face is a
+//    vertical wall, so the dots print crisply with NO support fin at all.
+//    print_orientation, border, and attachment are ignored for this shape
+//    (the clip is its own attachment).
 //
 // HOW TO USE (in the Forge, the Braille translation panel does step 1 for you)
 //  1. Put 1-2 Unicode braille characters in braille_chars (e.g. from
 //     https://www.branah.com/braille-translator - Unicode output, NOT ASCII).
-//  2. Pick charm_shape, size, border, and attachment.
+//  2. Pick charm_shape, size, border, and attachment. bracelet_clip has its
+//     own size controls under [Bracelet Clip].
 //  3. Pick print_orientation; for Angled, tune the fin under [Support Fin].
-//  4. Render (F6) -> File -> Export -> STL.
+//  4. Render (F6) -> File -> Export -> STL. Print as modeled — no rotation
+//     needed in the slicer.
 // =============================================================================
 
 /* [Braille Text] */
@@ -37,8 +49,8 @@
 braille_chars = "⠠⠁";
 
 /* [Charm Shape] */
-// Base shape of the charm
-charm_shape = "circle"; // [circle, square, rounded_rect, hexagon, oval]
+// Base shape of the charm. bracelet_clip is a C-clip for silicone bracelets that always prints standing vertically with no support fin.
+charm_shape = "circle"; // [circle, square, rounded_rect, hexagon, oval, bracelet_clip]
 // Width of the charm (mm)
 charm_width = 30; // [15:1:60]
 // Height of the charm (mm; ignored for circle, square, and hexagon)
@@ -47,6 +59,24 @@ charm_height = 30; // [15:1:60]
 charm_thickness = 3; // [1.5:0.5:8]
 // Corner rounding for square and rounded rectangle shapes (mm)
 corner_radius = 4; // [0:0.5:15]
+
+/* [Bracelet Clip] */
+// Length of the inner bracelet channel (mm) @depends(charm_shape==bracelet_clip)
+clip_channel_length = 15; // [10:1:25]
+// Clip height along the bracelet direction = the vertical print height (mm) @depends(charm_shape==bracelet_clip)
+clip_height = 22; // [10:1:40]
+// Front-to-back depth of the C-clip profile (mm) @depends(charm_shape==bracelet_clip)
+clip_profile_depth = 8.65; // [6:0.05:15]
+// Wall thickness of the clip (mm) @depends(charm_shape==bracelet_clip)
+clip_wall_thickness = 2.25; // [1.25:0.25:4]
+// Width of the opening between the clip legs (mm) @depends(charm_shape==bracelet_clip)
+clip_gap_width = 3; // [2:0.5:8]
+// Shift the gap opening left (-) / right (+) for asymmetric legs (mm) @depends(charm_shape==bracelet_clip)
+clip_gap_offset = 2; // [-4:0.5:4]
+// Outer corner rounding of the C profile (mm) @depends(charm_shape==bracelet_clip)
+clip_corner_radius = 2; // [0:0.5:4]
+// Inner channel corner rounding (mm) @depends(charm_shape==bracelet_clip)
+clip_inner_radius = 1; // [0:0.25:3]
 
 /* [Border] */
 // Add a raised border ring around the face
@@ -68,24 +98,31 @@ bail_thickness = 2; // [1:0.5:4]
 bail_inner_radius = 3; // [2:0.5:6]
 
 /* [Print Orientation] */
-// Flat = dots face up on the bed. Angled = the charm leans back at
-// face_angle_deg with a break-away support fin (best dot quality).
-print_orientation = "Flat"; // [Flat, Angled]
+// Angled (default) = the charm leans back at face_angle_deg with a break-away
+// support fin (best dot quality, prints as modeled). Flat = dots face up on
+// the bed. Ignored for bracelet_clip, which always prints vertically.
+print_orientation = "Angled"; // [Angled, Flat]
 // Face angle from the horizontal bed (deg) in Angled mode. 75 = CHI sweet spot.
 face_angle_deg = 75; // [60:1:90]
+// Flat first-layer contact strip (mm) in Angled mode: the leaning charm is
+// sunk this far into the bed and trimmed flat, so the bottom edge meets the
+// print surface with real area instead of a knife edge.
+bed_contact_mm = 1.0; // [0.2:0.1:3]
 
 /* [Support Fin (Angled)] */
 // Break-away support fin behind the leaning charm (Angled mode only). When
 // Off the bare leaning charm is exported (add slicer supports yourself).
+// Defaults are slimmer than the wedge card's: a charm is a much smaller
+// print, so one thin fin with two bridges is enough.
 support_fin = "On"; // [On, Off]
 // Horizontal gap between the charm's back face and the fin (mm)
 fin_offset_mm = 1.0; // [0.2:0.05:10]
 // Fin prism thickness along X (mm). Keep a multiple of nozzle width.
-fin_thickness_mm = 1.2; // [0.2:0.05:10]
+fin_thickness_mm = 0.8; // [0.2:0.05:10]
 // Fin height as a fraction of the leaning charm height
 fin_height_frac = 1.0; // [0.05:0.01:1]
 // Number of break-away bridges up the fin
-bridge_count = 4; // [1:1:20]
+bridge_count = 2; // [1:1:20]
 // Bridge size along X (mm)
 bridge_width_mm = 0.5; // [0.2:0.05:8]
 // Bridge size along Z (mm)
@@ -94,7 +131,7 @@ bridge_height_mm = 0.5; // [0.2:0.05:8]
 // connects during the print but snaps off clean.
 bridge_contact_mm = 0.3; // [0.1:0.05:3]
 // Built-in brim flange width around the fin base (mm; 0 = no brim)
-brim_width_mm = 2.0; // [0:0.25:25]
+brim_width_mm = 1.5; // [0:0.25:25]
 // Brim layer thickness (mm, ~1-2 layers)
 brim_thickness_mm = 0.2; // [0.1:0.05:3]
 
@@ -139,7 +176,10 @@ $fn = 64;
 // =============================================================================
 
 use_rounded_dots = (dot_shape == "Rounded");
-angled_on = (print_orientation == "Angled");
+// The bracelet clip always prints standing vertically (C profile on the bed,
+// braille on a vertical wall) — it needs no lean and no support fin.
+clip_on = (charm_shape == "bracelet_clip");
+angled_on = !clip_on && (print_orientation == "Angled");
 fin_on = angled_on && ((support_fin == "On") || (support_fin == true));
 
 quality_fn = (render_quality == "Low")    ? 24 :
@@ -174,13 +214,28 @@ n_cells = len(braille_chars);
 lean_height = shape_h * sin(face_angle_deg);
 lean_run    = shape_h * cos(face_angle_deg);
 // A leaned flat charm would touch the bed along a knife-edge line, so it is
-// sunk by BED_SINK and cut flat at z=0, giving the bottom edge a real
-// first-layer contact strip (~BED_SINK/sin(angle) wide).
-BED_SINK = 0.6;
+// sunk by bed_contact_mm and cut flat at z=0, giving the bottom edge a real
+// first-layer contact strip. For the plate-like shapes a sink of about
+// charm_thickness*cos(angle) already exposes the full plate cross-section
+// (~charm_thickness/sin(angle) deep) as first-layer area.
+BED_SINK = bed_contact_mm;
 // Lift so the lowest edge of the leaned charm rests on the bed (minus sink)
 lean_lift   = (shape_h / 2) * sin(face_angle_deg) - BED_SINK;
 // Y of the charm's BACK face (the z_local = 0 plane) at height z
 function charm_back_y(z) = (lean_lift - z) / tan(face_angle_deg);
+
+// Bracelet clip geometry (adapted from q_charm.scad). The C profile is drawn
+// in the XY plane — gap opening toward -Y, flat braille wall toward +Y — and
+// extruded straight up, so the exported STL already stands in its printing
+// orientation: a "C" seen from above, braille on a vertical wall.
+CLIP_MIN_INNER = 1.5;
+clip_wall_eff  = min(clip_wall_thickness, (clip_profile_depth - CLIP_MIN_INNER) / 2);
+clip_inner_d   = max(CLIP_MIN_INNER, clip_profile_depth - 2 * clip_wall_eff);
+clip_outer_w   = clip_channel_length + 2 * clip_wall_eff;
+clip_safe_ocr  = min(clip_corner_radius, clip_outer_w / 2 - 0.05, clip_profile_depth / 2 - 0.05);
+clip_safe_icr  = min(clip_inner_radius, clip_inner_d / 2 - 0.1, clip_gap_width / 2 - 0.1);
+// Flat span of the braille wall between the rounded outer corners
+clip_face_width = clip_outer_w - 2 * clip_safe_ocr;
 
 // =============================================================================
 // HELPER FUNCTIONS (braille decoding — shared with the wedge card)
@@ -321,9 +376,12 @@ module attachment_add() {
 // =============================================================================
 // Cells are laid out along +X and centred on the face; the attachment sits
 // above, so the dot block is nudged down slightly when a hole/bail is used.
-braille_y_offset = (attachment_type == "none") ? 0 : -hole_diameter / 4;
+braille_y_offset = (attachment_type == "none" || clip_on) ? 0 : -hole_diameter / 4;
 
-module face_braille_dots() {
+// The braille block in a face-local frame: +X = reading direction, +Y = up
+// the cell, +Z = out of the face, dot bases resting on the z = 0 plane
+// (embedded DOT_FACE_EMBED so the union genuinely fuses with the body).
+module braille_cells_local() {
     if (n_cells > 0) {
         for (i = [0 : n_cells - 1]) {
             x_cell = (i - (n_cells - 1) / 2) * cell_spacing;
@@ -332,14 +390,18 @@ module face_braille_dots() {
                 if (dots[d] == 1) {
                     dot_pos = dot_positions[d];
                     dot_x = x_cell + dot_col_x_offsets[dot_pos[1]];
-                    dot_y = braille_y_offset + dot_row_y_offsets[dot_pos[0]];
-                    translate([dot_x, dot_y,
-                               charm_thickness + dot_total_height / 2 - DOT_FACE_EMBED])
+                    dot_y = dot_row_y_offsets[dot_pos[0]];
+                    translate([dot_x, dot_y, dot_total_height / 2 - DOT_FACE_EMBED])
                         braille_dot_centered();
                 }
             }
         }
     }
+}
+
+module face_braille_dots() {
+    translate([0, braille_y_offset, charm_thickness])
+        braille_cells_local();
 }
 
 // =============================================================================
@@ -354,6 +416,54 @@ module flat_charm() {
             face_braille_dots();
         }
         attachment_cut();
+    }
+}
+
+// =============================================================================
+// BRACELET CLIP (adapted from the Bracelet Clip Charm, q_charm.scad)
+// =============================================================================
+// C-clip cross-section in the XY plane: a rounded outer rectangle minus the
+// bracelet channel and the gap through the -Y wall. The +Y wall stays solid
+// and carries the braille.
+module clip_profile_2d() {
+    max_gap_shift   = (clip_channel_length - clip_gap_width) / 2 - 1;
+    safe_gap_offset = max(-max_gap_shift, min(clip_gap_offset, max_gap_shift));
+    gap_ext = 10;
+    difference() {
+        offset(r = clip_safe_ocr)
+            square([clip_outer_w - 2 * clip_safe_ocr,
+                    clip_profile_depth - 2 * clip_safe_ocr], center = true);
+        // Channel + gap slot, optionally smoothed at the inner corners
+        offset(r = clip_safe_icr) offset(r = -clip_safe_icr)
+            union() {
+                square([clip_channel_length, clip_inner_d], center = true);
+                translate([safe_gap_offset,
+                           -clip_profile_depth / 2 + (clip_wall_eff - gap_ext) / 2])
+                    square([clip_gap_width, clip_wall_eff + gap_ext], center = true);
+            }
+    }
+}
+
+// Extruded straight up from the bed: no supports needed, the C is
+// self-supporting and the braille wall is vertical.
+module clip_body() {
+    linear_extrude(height = clip_height)
+        clip_profile_2d();
+}
+
+// Braille on the vertical +Y wall. rotate([90, 0, 180]) maps the face-local
+// frame (+X reading, +Y up, +Z out) to global (-X, +Z, +Y): to a viewer
+// standing at +Y the text reads left-to-right with row 1 at the top.
+module clip_braille_dots() {
+    translate([0, clip_profile_depth / 2, clip_height / 2])
+        rotate([90, 0, 180])
+            braille_cells_local();
+}
+
+module clip_charm() {
+    union() {
+        clip_body();
+        clip_braille_dots();
     }
 }
 
@@ -435,27 +545,46 @@ module support_structure() {
 // =============================================================================
 // CONSOLE DIAGNOSTICS
 // =============================================================================
-echo(str("Braille charm: ", n_cells, " cell(s) on a ", charm_shape, " ",
-         effective_width, " x ", effective_height, " mm face"));
+// Extent of the braille block on the face (widest dot geometry included)
+_dot_block_w = (n_cells - 1) * cell_spacing + dot_spacing + rounded_dot_base_diameter;
+_dot_block_h = 2 * dot_spacing + rounded_dot_base_diameter;
+
+echo(clip_on
+    ? str("Braille charm: ", n_cells, " cell(s) on a bracelet_clip, ",
+          clip_outer_w, " x ", clip_height, " mm vertical face")
+    : str("Braille charm: ", n_cells, " cell(s) on a ", charm_shape, " ",
+          effective_width, " x ", effective_height, " mm face"));
 if (n_cells > 2)
     echo(str("WARNING: braille_chars has ", n_cells,
              " cells but a charm face is designed for 1-2. Use fewer",
              " characters (a capital indicator counts as a cell)."));
 if (has_invalid_chars(braille_chars))
     echo("WARNING: braille_chars contains non-braille characters. Use Unicode braille (U+2800-U+28FF).");
-if (n_cells > 0 && (n_cells - 1) * cell_spacing + dot_spacing + rounded_dot_base_diameter
-        > effective_width - 2 * (add_border == "yes" ? border_width : 0))
+if (!clip_on && n_cells > 0 &&
+        _dot_block_w > effective_width - 2 * (add_border == "yes" ? border_width : 0))
     echo("WARNING: the braille block is wider than the charm face. Enlarge the charm or use fewer cells.");
+if (clip_on && n_cells > 0 && _dot_block_w > clip_face_width)
+    echo("WARNING: the braille block is wider than the clip's flat wall. Lengthen the channel, reduce the corner rounding, or use fewer cells.");
+if (clip_on && _dot_block_h > clip_height)
+    echo("WARNING: the braille cell is taller than the clip. Increase clip_height.");
+if (clip_on) {
+    echo("Bracelet clip: prints standing vertically as modeled - no supports, no fin.");
+    if (attachment_type != "none" || add_border == "yes" || print_orientation == "Flat")
+        echo("NOTE: bracelet_clip ignores print_orientation, add_border, and attachment_type (the clip is its own attachment).");
+}
 if (angled_on && attachment_type == "bail_loop")
     echo("NOTE: a bail loop prints poorly in Angled mode; keychain_hole is recommended.");
 if (angled_on)
     echo(str("Angled mode: ", face_angle_deg, " deg lean, height ", lean_height,
-             " mm", fin_on ? str(", ", bridge_count, " break-away bridges") : ", NO support fin"));
+             " mm, ", bed_contact_mm, " mm bed contact",
+             fin_on ? str(", ", bridge_count, " break-away bridges") : ", NO support fin"));
 
 // =============================================================================
-// MAIN RENDERING
+// MAIN RENDERING — every branch exports already oriented for printing
 // =============================================================================
-if (angled_on) {
+if (clip_on) {
+    clip_charm();
+} else if (angled_on) {
     union() {
         leaning_charm();
         if (fin_on) support_structure();
