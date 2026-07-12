@@ -110,39 +110,53 @@ export function splitWordAfterPunctuation(word) {
  * cells, breaking only at word boundaries. Words are joined by a single
  * braille blank cell. Pure and synchronous.
  *
- * @param {Array<{ braille: string, cells: number }>} words - Translated words
+ * Each word may carry its original (untranslated) `source` text; packed
+ * lines return the joined source alongside the braille so previews can
+ * show the print-language text under each braille line.
+ *
+ * @param {Array<{ braille: string, cells: number, source?: string }>} words
+ *   Translated words
  * @param {number} cellsPerLine - Line capacity in cells
- * @returns {string[]} Wrapped braille lines
+ * @returns {Array<{ braille: string, source: string }>} Wrapped lines
  */
 export function packWords(words, cellsPerLine) {
   const lines = [];
   let line = '';
   let lineCells = 0;
+  let lineSources = [];
 
   for (const word of words) {
     if (lineCells === 0) {
       line = word.braille;
       lineCells = word.cells;
+      lineSources = [word.source ?? ''];
       continue;
     }
     if (lineCells + 1 + word.cells <= cellsPerLine) {
       line += BRAILLE_SPACE + word.braille;
       lineCells += 1 + word.cells;
+      lineSources.push(word.source ?? '');
     } else {
-      lines.push(line);
+      lines.push({ braille: line, source: lineSources.join(' ') });
       line = word.braille;
       lineCells = word.cells;
+      lineSources = [word.source ?? ''];
     }
   }
-  if (lineCells > 0) lines.push(line);
+  if (lineCells > 0) {
+    lines.push({ braille: line, source: lineSources.join(' ') });
+  }
   return lines;
 }
 
 /**
  * Chunk wrapped lines into cards of at most `rowsPerCard` lines each.
- * @param {string[]} lines - Wrapped braille lines
+ * Sequential groups, blanks included — the SCAD All-cards layout mode
+ * mirrors this chunking exactly (see braille_wedge_card.scad), so any
+ * change here must be reflected there (covered by a parity unit test).
+ * @param {Array} lines - Wrapped lines (braille strings or line objects)
  * @param {number} rowsPerCard - Max rows on one card
- * @returns {string[][]} One entry per card
+ * @returns {Array<Array>} One entry per card
  */
 export function chunkIntoCards(lines, rowsPerCard) {
   if (lines.length === 0) return [[]];
@@ -172,8 +186,8 @@ export function chunkIntoCards(lines, rowsPerCard) {
  * @param {number} [opts.maxTotalLines=20] - Hard ceiling from the SCAD's
  *   Line_1..Line_N parameter count
  * @returns {Promise<{
- *   cards: string[][],
- *   allLines: string[],
+ *   cards: Array<Array<{ braille: string, source: string }>>,
+ *   allLines: Array<{ braille: string, source: string }>,
  *   warnings: Array<{ type: string, message: string }>,
  *   cellsPerLine: number,
  * }>}
@@ -197,7 +211,7 @@ export async function layoutBrailleText({
     if (trimmed === '') {
       // Preserve intentional blank lines between content (SCAD does too),
       // but let trailing blanks fall away naturally via later truncation.
-      wrapped.push('');
+      wrapped.push({ braille: '', source: '' });
       continue;
     }
 
@@ -212,7 +226,7 @@ export async function layoutBrailleText({
             `shorten the line, or reduce the margin.`,
         });
       }
-      wrapped.push(braille);
+      wrapped.push({ braille, source: trimmed });
       continue;
     }
 
@@ -222,7 +236,7 @@ export async function layoutBrailleText({
       const cells = countCells(braille);
 
       if (cells <= cellsPerLine) {
-        words.push({ braille, cells });
+        words.push({ braille, cells, source: sourceWord });
         continue;
       }
 
@@ -237,7 +251,7 @@ export async function layoutBrailleText({
             `line only holds ${cellsPerLine}. It cannot be divided ` +
             `automatically — shorten it, reduce the margin, or widen the card.`,
         });
-        words.push({ braille, cells });
+        words.push({ braille, cells, source: sourceWord });
         continue;
       }
 
@@ -246,7 +260,7 @@ export async function layoutBrailleText({
         const segBraille = await translate(segment);
         const segCells = countCells(segBraille);
         if (segCells > cellsPerLine) anySegmentTooLong = true;
-        words.push({ braille: segBraille, cells: segCells });
+        words.push({ braille: segBraille, cells: segCells, source: segment });
       }
       if (anySegmentTooLong) {
         warnings.push({
@@ -263,7 +277,7 @@ export async function layoutBrailleText({
   }
 
   // Drop trailing blank lines (they carry no content).
-  while (wrapped.length > 0 && wrapped[wrapped.length - 1] === '') {
+  while (wrapped.length > 0 && wrapped[wrapped.length - 1].braille === '') {
     wrapped.pop();
   }
 

@@ -1,0 +1,38 @@
+{
+  "name": "Braille Sign",
+  "description": "A two-part tactile sign: a letter plate with raised uppercase characters (ADA 703 defaults: 16 mm sans-serif, raised 0.8 mm) and a braille plate with the same text in braille below. The split raised border joins into one continuous frame when the plates are mounted together. ADA defaults are recommendations only — verify compliance before installing.",
+  "version": "1.0.0",
+  "author": "OpenSCAD Assistive Forge contributors",
+  "license": "GPL-3.0-or-later",
+  "main": "braille_sign.scad",
+  "files": ["braille_sign.scad"],
+  "program": "braille-card-customizer",
+  "brailleTranslation": {
+    "mode": "sign",
+    "lineParams": ["Line_1", "Line_2", "Line_3"],
+    "textParams": ["sign_text_1", "sign_text_2", "sign_text_3"],
+    "tablesCatalog": "/liblouis/tables.json",
+    "defaultTable": "en-ueb-g2.ctb",
+    "capacityParams": {
+      "cardWidth": "sign_width_mm",
+      "cardHeight": "braille_plate_height_mm",
+      "cellSpacing": "cell_spacing",
+      "lineSpacing": "line_spacing"
+    }
+  },
+  "tags": [
+    "braille",
+    "accessibility",
+    "sign",
+    "signage",
+    "ada",
+    "liblouis",
+    "tactile",
+    "assistive-technology"
+  ],
+  "inspired_by": {
+    "name": "Brennen Johnston (braille dot system)",
+    "github": "BrennenJohnston",
+    "reference": "https://github.com/BrennenJohnston/braille-wedge-card-openscad"
+  }
+}

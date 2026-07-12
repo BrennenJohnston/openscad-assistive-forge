@@ -1,0 +1,31 @@
+{
+  "name": "Braille Charm",
+  "description": "A small charm, pendant, or zipper pull carrying one or two braille cells. Type a character or two and the translation to Unicode braille runs entirely on your device via liblouis. Prints flat, or angled with a break-away support fin for the crispest dots.",
+  "version": "1.0.0",
+  "author": "OpenSCAD Assistive Forge contributors",
+  "license": "GPL-3.0-or-later",
+  "main": "braille_charm.scad",
+  "files": ["braille_charm.scad"],
+  "program": "braille-card-customizer",
+  "brailleTranslation": {
+    "mode": "charm",
+    "charParam": "braille_chars",
+    "maxCells": 2,
+    "tablesCatalog": "/liblouis/tables.json",
+    "defaultTable": "en-ueb-g1.ctb"
+  },
+  "tags": [
+    "braille",
+    "accessibility",
+    "charm",
+    "pendant",
+    "keychain",
+    "liblouis",
+    "tactile",
+    "assistive-technology"
+  ],
+  "inspired_by": {
+    "name": "Nasif Zaman (charm base) and Brennen Johnston (braille dot system)",
+    "reference": "https://github.com/BrennenJohnston/braille-wedge-card-openscad"
+  }
+}

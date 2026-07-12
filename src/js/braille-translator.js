@@ -132,7 +132,9 @@ export async function translateText(text, table, { preserveCaps = false } = {}) 
   let braille = cache.get(cacheKey);
   if (braille === undefined) {
     const result = await sendMessage('translate', { text: input, table });
-    braille = result.translation;
+    // liblouis emits ASCII spaces between words; the SCAD models expect
+    // the Unicode braille blank cell (U+2800) everywhere.
+    braille = result.translation.replace(/ /g, '\u2800');
     if (cache.size >= CACHE_MAX_ENTRIES) cache.clear();
     cache.set(cacheKey, braille);
   }

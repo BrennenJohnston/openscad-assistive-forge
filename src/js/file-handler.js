@@ -97,10 +97,12 @@ async function restoreGalleryFromManifest(exampleKey) {
     if (!manifestResponse.ok) return;
     const manifestData = await manifestResponse.json();
 
-    if (manifestData.brailleTranslation?.lineParams?.length > 0) {
-      pendingBrailleConfig = manifestData.brailleTranslation;
+    const braille = manifestData.brailleTranslation;
+    if (braille?.lineParams?.length > 0 || braille?.charParam) {
+      pendingBrailleConfig = braille;
       console.log(
-        `[Braille] Manifest declares braille translation (${pendingBrailleConfig.lineParams.length} line params)`
+        `[Braille] Manifest declares braille translation ` +
+          `(mode: ${braille.mode || 'card'})`
       );
     }
 
@@ -203,6 +205,18 @@ export const EXAMPLE_DEFINITIONS = {
     description: 'Braille Card Customizer',
     manifest: '/examples/braille-wedge-card/manifest.json',
   },
+  'braille-charm': {
+    path: '/examples/braille-charm/braille_charm.scad',
+    name: 'braille_charm.scad',
+    description: 'Braille Charm',
+    manifest: '/examples/braille-charm/manifest.json',
+  },
+  'braille-sign': {
+    path: '/examples/braille-sign/braille_sign.scad',
+    name: 'braille_sign.scad',
+    description: 'Braille Sign',
+    manifest: '/examples/braille-sign/manifest.json',
+  },
   'q-charm': {
     path: '/examples/q-charm/q_charm.scad',
     name: 'q_charm.scad',
@@ -239,7 +253,7 @@ export const PROGRAM_DEFINITIONS = {
   },
   'braille-card-customizer': {
     label: 'Braille Card Customizer',
-    examples: ['braille-wedge-card'],
+    examples: ['braille-wedge-card', 'braille-charm', 'braille-sign'],
   },
 };
 

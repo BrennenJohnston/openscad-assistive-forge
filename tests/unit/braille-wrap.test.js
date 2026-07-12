@@ -139,15 +139,19 @@ describe('splitWordAfterPunctuation', () => {
 });
 
 describe('packWords', () => {
-  const w = (cells) => ({ braille: '\u283F'.repeat(cells), cells });
+  const w = (cells, source = 'w') => ({
+    braille: '\u283F'.repeat(cells),
+    cells,
+    source,
+  });
 
   it('packs words greedily with one blank cell between', () => {
     // 3 + 1 + 3 = 7 <= 8, adding another 3+1 would be 11 > 8
     const lines = packWords([w(3), w(3), w(3)], 8);
     expect(lines).toHaveLength(2);
-    expect(countCells(lines[0])).toBe(7);
-    expect(lines[0]).toContain(BRAILLE_SPACE);
-    expect(countCells(lines[1])).toBe(3);
+    expect(countCells(lines[0].braille)).toBe(7);
+    expect(lines[0].braille).toContain(BRAILLE_SPACE);
+    expect(countCells(lines[1].braille)).toBe(3);
   });
 
   it('one word per line when words fill the line', () => {
@@ -157,6 +161,12 @@ describe('packWords', () => {
 
   it('returns empty array for no words', () => {
     expect(packWords([], 10)).toEqual([]);
+  });
+
+  it('joins each line\u2019s source words with spaces', () => {
+    const lines = packWords([w(3, 'one'), w(3, 'two'), w(3, 'three')], 8);
+    expect(lines[0].source).toBe('one two');
+    expect(lines[1].source).toBe('three');
   });
 });
 
@@ -173,6 +183,64 @@ describe('chunkIntoCards', () => {
   it('returns a single empty card for no lines', () => {
     expect(chunkIntoCards([], 4)).toEqual([[]]);
   });
+});
+
+describe('chunkIntoCards / SCAD All-cards parity', () => {
+  /**
+   * Mirror of the chunking math in braille_wedge_card.scad's All-cards
+   * mode: Line_1..Line_20 (padded with ''), content_rows = index of last
+   * non-empty line + 1, cards_count = max(1, ceil(content_rows /
+   * rows_per_card)), card k = lines[k*r .. min((k+1)*r, content_rows)-1].
+   * If the SCAD formula changes, change this mirror AND the SCAD together.
+   */
+  function scadCardChunks(lines, rowsPerCard, totalLineParams = 20) {
+    const all = Array.from(
+      { length: totalLineParams },
+      (_, i) => lines[i] ?? ''
+    );
+    const nonEmpty = all
+      .map((l, i) => (l.length > 0 ? i : -1))
+      .filter((i) => i >= 0);
+    const contentRows =
+      nonEmpty.length === 0 ? 0 : nonEmpty[nonEmpty.length - 1] + 1;
+    const cardsCount = Math.max(1, Math.ceil(contentRows / rowsPerCard));
+    const cards = [];
+    for (let k = 0; k < cardsCount; k++) {
+      const lo = k * rowsPerCard;
+      const hi = Math.min((k + 1) * rowsPerCard, contentRows);
+      cards.push(lo >= hi ? [] : all.slice(lo, hi));
+    }
+    return cards;
+  }
+
+  const CASES = [
+    { name: 'empty', lines: [] },
+    { name: 'single line', lines: ['⠁'] },
+    { name: 'exact multiple of rows', lines: ['⠁', '⠃', '⠉', '⠙'] },
+    { name: 'remainder chunk', lines: ['⠁', '⠃', '⠉', '⠙', '⠑'] },
+    {
+      name: 'interior blank lines preserved',
+      lines: ['⠁', '', '⠃', '', '', '⠉'],
+    },
+    {
+      name: 'blank line at a chunk boundary',
+      lines: ['⠁', '⠃', '', '⠉', '⠙'],
+    },
+    {
+      name: 'full 20 lines',
+      lines: Array.from({ length: 20 }, (_, i) => `⠿${i}`),
+    },
+  ];
+
+  for (const rowsPerCard of [1, 2, 4, 8, 20]) {
+    for (const { name, lines } of CASES) {
+      it(`matches chunkIntoCards (${name}, rows_per_card=${rowsPerCard})`, () => {
+        expect(scadCardChunks(lines, rowsPerCard)).toEqual(
+          chunkIntoCards(lines, rowsPerCard)
+        );
+      });
+    }
+  }
 });
 
 describe('layoutBrailleText', () => {
@@ -200,7 +268,8 @@ describe('layoutBrailleText', () => {
       text: 'hi yo',
     });
     expect(allLines).toHaveLength(1);
-    expect(countCells(allLines[0])).toBe(5); // 2 + 1 + 2
+    expect(countCells(allLines[0].braille)).toBe(5); // 2 + 1 + 2
+    expect(allLines[0].source).toBe('hi yo');
   });
 
   it('honors user newlines as hard breaks', async () => {
@@ -217,9 +286,9 @@ describe('layoutBrailleText', () => {
       text: 'hi\n\nyo',
     });
     expect(allLines).toEqual([
-      await stubTranslate('hi'),
-      '',
-      await stubTranslate('yo'),
+      { braille: await stubTranslate('hi'), source: 'hi' },
+      { braille: '', source: '' },
+      { braille: await stubTranslate('yo'), source: 'yo' },
     ]);
   });
 
@@ -307,6 +376,6 @@ describe('layoutBrailleText', () => {
     });
     // 5 capitals x 2 cells = 10 cells -> exactly one full line
     expect(allLines).toHaveLength(1);
-    expect(countCells(allLines[0])).toBe(10);
+    expect(countCells(allLines[0].braille)).toBe(10);
   });
 });

@@ -1,11 +1,13 @@
 // =============================================================================
 // Braille Wedge Card STL Generator (OpenSCAD)
 // =============================================================================
-// VERSION = 1.0.0 (OpenSCAD Assistive Forge web adaptation)
-// License: PolyForm Noncommercial 1.0.0
-//          https://polyformproject.org/licenses/noncommercial/1.0.0
+// VERSION = 1.1.0 (OpenSCAD Assistive Forge web adaptation)
+// License: GPL-3.0-or-later
+//          https://www.gnu.org/licenses/gpl-3.0.html
 // Source:  https://github.com/BrennenJohnston/braille-wedge-card-openscad
-// Copyright 2024-2025 Brennen Johnston
+// Copyright 2024-2026 Brennen Johnston
+// Relicensed by the copyright holder from PolyForm Noncommercial 1.0.0 to
+// GPL-3.0-or-later for the OpenSCAD Assistive Forge (2026).
 //
 // Web adaptation notes (Braille Card Customizer example):
 //  - show_warnings defaults to Off: the Forge's translation panel validates
@@ -44,16 +46,20 @@
 //  2. Paste pre-translated braille into Line_1..Line_20 in the Customizer.
 //  3. Pick dot_shape (Rounded is the ADA-friendly default; Cone is easier to
 //     print on some machines).
-//  4. Leave auto_size_card = On (the default) and the card face auto-sizes to
-//     fit your text plus a margin — the effective size is reported in the
-//     console (the Customizer sliders can't show computed values). Switch it
-//     Off to drive the manual width/height sliders instead.
+//  4. The card defaults to a manual 200 x 100 mm face. Set auto_size_card = On
+//     and the card face auto-sizes to fit your text plus a margin instead —
+//     the effective size is reported in the console (the Customizer sliders
+//     can't show computed values).
 //  5. Warnings (invalid characters, text too long, too many lines) appear as
 //     red 3D text in the F5 preview only — they are NEVER exported to the STL,
 //     and can be turned off under the [Warnings] tab.
 //  6. Tune support fins under [Support Fins] (anywhere from 2 edge fins up to
 //     hundreds), or set support_fins = Off to export the bare card.
-//  7. Render (F6) → File → Export → STL.
+//  7. When the text spans more than one card, set card_layout = "All cards"
+//     under [Multi-Card Layout] to print every card in one file: the lines are
+//     chunked into groups of rows_per_card and the cards are laid out behind
+//     one another with card_gap_mm between footprints.
+//  8. Render (F6) → File → Export → STL.
 //
 // =============================================================================
 // PRINT / SLICER GUIDANCE
@@ -143,13 +149,24 @@ Line_20 = "";
 
 /* [Card Size] */
 // Auto-size the card face to fit the braille text plus margins. Turn Off to use the manual width/height below.
-auto_size_card = "On"; // [On, Off]
+auto_size_card = "Off"; // [On, Off]
 // Margin between the braille block and the card edges when auto-sizing (mm)
 auto_size_margin_mm = 6;     // [2:0.5:20]
 // Manual face width (mm) - only used when auto_size_card = Off
-card_face_width_mm = 85;     // [40:1:300]
+card_face_width_mm = 200;    // [40:1:300]
 // Manual face height (mm) - only used when auto_size_card = Off
-card_face_height_mm = 55;    // [25:1:250]
+card_face_height_mm = 100;   // [25:1:250]
+
+/* [Multi-Card Layout] */
+// Render one card (the Line_N text as a single card) or chunk the lines into
+// groups of rows_per_card and print every card in one file, laid out front to
+// back on the bed.
+card_layout = "Single";      // [Single, All cards]
+// Braille rows on each card in All-cards mode (chunking mirrors the web
+// panel's card splitting: sequential groups, blank lines included).
+rows_per_card = 8;           // [1:1:20]
+// Gap between neighbouring card footprints in All-cards mode (mm)
+card_gap_mm = 5;             // [0:0.5:50]
 
 /* [Warnings] */
 // Show red 3D warning text above the card when input has problems. Warnings are preview-only and are NEVER exported to the STL.
@@ -200,9 +217,9 @@ card_thickness_mm = 1.5;     // [1:0.1:5]
 
 /* [Expert Mode - Braille Spacing] */
 // Text capacity in braille cells per row (ignored when auto_size_card = On)
-grid_columns = 11;           // [1:1:30]
+grid_columns = 26;           // [1:1:40]
 // Number of lines of braille (ignored when auto_size_card = On)
-grid_rows = 5;               // [1:1:20]
+grid_rows = 8;               // [1:1:20]
 // Horizontal spacing between cells (mm)
 cell_spacing = 7.0;          // [2:0.01:15]
 // Vertical spacing between lines (mm)
@@ -277,9 +294,25 @@ _nonempty_idx = [for (i = [0:len(_all_lines)-1]) if (len(_all_lines[i]) > 0) i];
 content_rows = len(_nonempty_idx) == 0 ? 0 : _nonempty_idx[len(_nonempty_idx) - 1] + 1;
 
 auto_size_on = (auto_size_card == "On");
+multi_card_on = (card_layout == "All cards");
+
+// Number of cards in All-cards mode. Chunking mirrors chunkIntoCards() in the
+// web app's braille-wrap.js EXACTLY: sequential groups of rows_per_card lines,
+// blank lines included, trailing blanks excluded (content_rows already stops
+// at the last non-empty line). Empty content still yields one (empty) card.
+cards_count = multi_card_on ? max(1, ceil(content_rows / rows_per_card)) : 1;
+
+// Lines belonging to card k (0-based) in All-cards mode.
+function card_lines(k) =
+    let(lo = k * rows_per_card, hi = min((k + 1) * rows_per_card, content_rows))
+    lo >= hi ? [] : [for (i = [lo : hi - 1]) _all_lines[i]];
+
 // In auto mode, grid capacity == content (so TEXT TOO LONG / TOO MANY LINES cannot occur)
+// In All-cards mode, each card's row capacity is rows_per_card by definition.
 effective_grid_columns = auto_size_on ? max(content_max_len, 1) : grid_columns;
-effective_grid_rows    = auto_size_on ? max(content_rows, 1)    : grid_rows;
+effective_grid_rows    = multi_card_on ? rows_per_card
+                       : auto_size_on  ? max(content_rows, 1)
+                       : grid_rows;
 
 // Total dot height above the face (used for seating dots on the face surface).
 dot_total_height = use_rounded_dots
@@ -305,9 +338,13 @@ active_dot_spacing   = dot_spacing;
 grid_width  = (active_grid_columns - 1) * active_cell_spacing;
 grid_height = (active_grid_rows - 1) * active_line_spacing;
 
-// Rendered content extent (what is actually drawn after capacity truncation)
+// Rendered content extent (what is actually drawn after capacity truncation).
+// In All-cards mode the shared face is sized for the TALLEST card (the widest
+// line anywhere already governs the columns), so every card matches.
 rendered_cols = min(content_max_len, active_grid_columns);
-rendered_rows = min(content_rows, active_grid_rows);
+rendered_rows = multi_card_on
+    ? min(content_rows, rows_per_card)
+    : min(content_rows, active_grid_rows);
 // Center-to-center extents of the rendered block; empty text falls back to capacity
 content_width  = (rendered_cols == 0) ? grid_width  : (rendered_cols - 1) * active_cell_spacing;
 content_height = (rendered_rows == 0) ? grid_height : (rendered_rows - 1) * active_line_spacing;
@@ -370,6 +407,21 @@ base_run    = effective_card_face_height_mm * cos(face_angle_deg);
 // front (reading) face runs from B=(base_run,0) up to C=(0,card_height); the back
 // face is that line shifted -card_thickness_mm in Y.
 function back_y(z) = base_run * (1 - z / card_height) - card_thickness_mm;
+
+// --- Multi-card footprint pitch ---------------------------------------------
+// One card's bed footprint along Y runs from the front bottom edge (y =
+// base_run) back to the card rear (y = -card_thickness_mm), extended by the
+// fin offset and brim flange when fins are on. In All-cards mode successive
+// cards step back along -Y by this depth plus card_gap_mm, so neighbouring
+// footprints are separated by exactly card_gap_mm.
+_footprint_back_y = fins_on
+    ? -card_thickness_mm - fin_offset_mm - brim_width_mm
+    : -card_thickness_mm;
+card_footprint_depth_mm = base_run - _footprint_back_y;
+card_pitch_mm = card_footprint_depth_mm + card_gap_mm;
+// Total bed depth used by the whole All-cards layout
+multi_total_depth_mm = cards_count * card_footprint_depth_mm
+                     + (cards_count - 1) * card_gap_mm;
 
 // =============================================================================
 // HELPER FUNCTIONS
@@ -606,35 +658,47 @@ module support_fins_all() {
 // (centred at 0), local +Y = down-the-slope (0 = face top, +grid_height = face
 // bottom), local +Z = outward. y_pos = vertical centre of a row in this frame.
 
-// Vertical centre of a braille row in face-local Y. row 0 = top. Centers the
-// rendered content block on the (effective) face; braille_y_adjust is an
-// additive nudge on top (default 0 = centered).
-function face_row_y(row) =
-    (effective_card_face_height_mm - content_height) / 2
+// Vertical centre of a braille row in face-local Y. row 0 = top. Centers a
+// content block of the given height on the (effective) face;
+// braille_y_adjust is an additive nudge on top (default 0 = centered).
+function face_row_y(row, block_height = content_height) =
+    (effective_card_face_height_mm - block_height) / 2
     + row * active_line_spacing
     + braille_y_adjust;
 
 // Horizontal centre of a grid column in face-local X. Lines are left-aligned
 // within the block; the block is centered by the longest line.
 // braille_x_adjust is an additive nudge on top (default 0 = centered).
-function face_col_x(col) =
-    -content_width/2 + col * active_cell_spacing + braille_x_adjust;
+function face_col_x(col, block_width = content_width) =
+    -block_width/2 + col * active_cell_spacing + braille_x_adjust;
 
-module place_face_dots_for_text() {
-    lines = _all_lines;
-    for (row = [0 : min(active_grid_rows - 1, len(lines) - 1)]) {
-        if (len(lines[row]) > 0) {
-            y_pos = face_row_y(row);
-            for (col = [0 : min(active_grid_columns - 1, len(lines[row]) - 1)]) {
-                x_cell = face_col_x(col);
-                dots = get_dot_pattern(lines[row][col]);
-                for (i = [0:5]) {
-                    if (dots[i] == 1) {
-                        dot_pos = dot_positions[i];
-                        dot_x = x_cell + dot_col_x_offsets[dot_pos[1]];
-                        dot_y = y_pos  + dot_row_y_offsets[dot_pos[0]];
-                        translate([dot_x, dot_y, dot_total_height / 2 - DOT_FACE_EMBED])
-                            braille_dot_centered();
+// Place raised dots for a list of braille lines, centred on the face. The
+// content metrics are computed from the given lines (so in All-cards mode
+// each card centres its OWN chunk exactly as it would render on its own),
+// while truncation still honours the shared grid capacity.
+module place_face_dots_for_lines(lines) {
+    if (len(lines) > 0) {
+        _ml = max([for (l = lines) len(l)]);
+        _ne = [for (i = [0:len(lines)-1]) if (len(lines[i]) > 0) i];
+        _rows = len(_ne) == 0 ? 0 : _ne[len(_ne) - 1] + 1;
+        _cols_r = min(_ml, active_grid_columns);
+        _rows_r = min(_rows, active_grid_rows);
+        _block_width  = (_cols_r == 0) ? grid_width  : (_cols_r - 1) * active_cell_spacing;
+        _block_height = (_rows_r == 0) ? grid_height : (_rows_r - 1) * active_line_spacing;
+        for (row = [0 : min(active_grid_rows - 1, len(lines) - 1)]) {
+            if (len(lines[row]) > 0) {
+                y_pos = face_row_y(row, _block_height);
+                for (col = [0 : min(active_grid_columns - 1, len(lines[row]) - 1)]) {
+                    x_cell = face_col_x(col, _block_width);
+                    dots = get_dot_pattern(lines[row][col]);
+                    for (i = [0:5]) {
+                        if (dots[i] == 1) {
+                            dot_pos = dot_positions[i];
+                            dot_x = x_cell + dot_col_x_offsets[dot_pos[1]];
+                            dot_y = y_pos  + dot_row_y_offsets[dot_pos[0]];
+                            translate([dot_x, dot_y, dot_total_height / 2 - DOT_FACE_EMBED])
+                                braille_dot_centered();
+                        }
                     }
                 }
             }
@@ -668,7 +732,8 @@ module warning_slot(k, msg) {
 module warnings_3d() {
     _invalid = len([for (l = _all_lines) if (has_invalid_chars(l)) 1]) > 0;
     _too_long = content_max_len > active_grid_columns;
-    _too_many = content_rows > active_grid_rows;
+    // In All-cards mode extra rows overflow onto more cards by design.
+    _too_many = !multi_card_on && content_rows > active_grid_rows;
     if (warnings_on && _invalid) warning_slot(0, "INVALID CHARACTERS");
     if (warnings_on && _too_long) warning_slot(1, "TEXT TOO LONG");
     if (warnings_on && _too_many) warning_slot(2, "TOO MANY LINES");
@@ -683,14 +748,13 @@ module warnings_3d() {
 // On this back-leaning face, face-local +X maps to the reader's LEFT, so the
 // raw layout would read right-to-left. The content is therefore mirrored in
 // face-local X so the finished card reads correctly left-to-right.
-module braille_card() {
+module braille_card(lines) {
     union() {
         card_body();
         // Raised dots on the outer face surface (mirrored to read L->R).
         face_transform()
             mirror([1, 0, 0])
-                place_face_dots_for_text();
-        warnings_3d();
+                place_face_dots_for_lines(lines);
     }
 }
 
@@ -701,6 +765,10 @@ echo(str("Content: ", content_rows, " lines, longest ", content_max_len, " cells
 echo(str("Card face (effective): ", effective_card_face_width_mm, " x ",
          effective_card_face_height_mm, " mm",
          auto_size_on ? " [auto-sized - manual sliders ignored]" : " [manual]"));
+if (multi_card_on)
+    echo(str("Multi-card layout: ", cards_count, " card(s) of up to ",
+             rows_per_card, " rows, ", card_gap_mm,
+             " mm apart; total bed depth ", multi_total_depth_mm, " mm"));
 
 // Print-bed sanity check (many consumer printers have ~220-256 mm beds)
 if (effective_card_face_width_mm > 250 || effective_card_face_height_mm > 250)
@@ -708,6 +776,10 @@ if (effective_card_face_width_mm > 250 || effective_card_face_height_mm > 250)
              effective_card_face_height_mm,
              " mm) may exceed common print beds. Shorten lines, reduce the",
              " margin, or split the text across multiple cards."));
+if (multi_card_on && multi_total_depth_mm > 250)
+    echo(str("WARNING: the All-cards layout needs ", multi_total_depth_mm,
+             " mm of bed depth, which may exceed common print beds. Reduce",
+             " card_gap_mm, raise rows_per_card, or print cards singly."));
 
 // Per-line invalid characters (actionable: where to re-translate)
 for (i = [0:len(_all_lines)-1])
@@ -722,10 +794,11 @@ for (i = [0:len(_all_lines)-1])
                  " cells but capacity is ", active_grid_columns,
                  ". Increase grid_columns, shorten the line, or set auto_size_card = On."));
 
-// Too many lines (manual mode)
-if (!auto_size_on && content_rows > active_grid_rows)
+// Too many lines (manual mode; All-cards mode overflows onto more cards)
+if (!auto_size_on && !multi_card_on && content_rows > active_grid_rows)
     echo(str("WARNING: text uses ", content_rows, " lines but grid_rows is ",
-             active_grid_rows, ". Increase grid_rows or set auto_size_card = On."));
+             active_grid_rows, ". Increase grid_rows, set auto_size_card = On,",
+             " or set card_layout = All cards."));
 
 // Support fin count feedback
 if (fins_on)
@@ -742,13 +815,20 @@ if (line_spacing < dot_spacing * 2 + _max_dot_dia)
 // =============================================================================
 // MAIN RENDERING
 // =============================================================================
-// The card (body + braille) is fused with the break-away support-fin structure
-// into a single solid so it slices as one print-ready object.
+// Each card (body + braille) is fused with its break-away support-fin
+// structure into a single solid so it slices as one print-ready object. In
+// All-cards mode the cards march back along -Y, one footprint plus
+// card_gap_mm apart, so the full set prints in one job.
 union() {
-    braille_card();
-    if (fins_on) {
-        support_fins_all();
+    for (k = [0 : cards_count - 1]) {
+        translate([0, -k * card_pitch_mm, 0]) {
+            braille_card(multi_card_on ? card_lines(k) : _all_lines);
+            if (fins_on) {
+                support_fins_all();
+            }
+        }
     }
+    warnings_3d();
 }
 
 // End of file

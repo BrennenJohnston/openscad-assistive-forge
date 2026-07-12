@@ -14395,21 +14395,84 @@ body.tutorial-body-locked {
   font-weight: 600;
 }
 
-.braille-warnings {
+/* Print-language source text shown under each braille preview line */
+.braille-preview-source {
+  display: block;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  word-break: break-word;
+}
+
+/* Severity-tiered translation messages (error = will not fit, warning =
+   informational). Severity is conveyed by text prefix + icon, never color
+   alone. */
+.braille-messages {
   padding: var(--space-sm);
+  border-radius: var(--border-radius-sm);
+}
+
+.braille-messages.braille-errors {
+  background: var(--color-error-bg);
+  border: 2px solid var(--color-error);
+  color: var(--color-error-text);
+}
+
+.braille-messages.braille-warnings {
   background: var(--color-warning-bg);
   border: 1px solid var(--color-warning);
-  border-radius: var(--border-radius-sm);
   color: var(--color-warning-text);
 }
 
-.braille-warnings-list {
+.braille-messages-list {
   margin: 0;
-  padding-left: var(--space-lg);
+  padding: 0;
+  list-style: none;
   font-size: var(--font-size-sm);
   display: flex;
   flex-direction: column;
   gap: var(--space-xs);
+}
+
+.braille-message {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-xs);
+}
+
+.braille-message-icon {
+  flex-shrink: 0;
+  margin-top: 0.15em;
+}
+
+/* Prominent multi-card notice (above the pager) */
+.braille-multi-card-notice {
+  padding: var(--space-md);
+  background: var(--color-info-bg, var(--color-bg-primary));
+  border: 2px solid var(--color-info, var(--color-border));
+  border-radius: var(--border-radius-md);
+  color: var(--color-info-text, var(--color-text-primary));
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.braille-multi-card-notice-body {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+}
+
+.braille-notice-icon {
+  flex-shrink: 0;
+  margin-top: 0.2em;
+  color: currentcolor;
+}
+
+.braille-multi-card-notice-text {
+  margin: 0;
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  color: currentcolor;
 }
 
 .braille-card-pager {
@@ -14434,7 +14497,8 @@ body.tutorial-body-locked {
   border-width: 2px;
 }
 
-:root[data-high-contrast="true"] .braille-warnings {
+:root[data-high-contrast="true"] .braille-messages,
+:root[data-high-contrast="true"] .braille-multi-card-notice {
   border-width: 2px;
 }
 
@@ -14442,10 +14506,20 @@ body.tutorial-body-locked {
 @media (forced-colors: active) {
   .braille-panel,
   .braille-preview,
-  .braille-warnings,
+  .braille-messages,
+  .braille-multi-card-notice,
   .braille-panel-layout {
     border: 1px solid CanvasText;
     background: Canvas;
+    color: CanvasText;
+  }
+
+  .braille-messages.braille-errors {
+    border: 2px solid CanvasText;
+  }
+
+  .braille-message-icon,
+  .braille-notice-icon {
     color: CanvasText;
   }
 

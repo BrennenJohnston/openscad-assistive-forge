@@ -63,15 +63,24 @@ describe('braille_wedge_card.scad parser integration', () => {
   it('extracts card size and spacing parameters used for capacity math', () => {
     const parsed = extractParameters(readScad());
 
+    // Manual 200x100 default: the panel's capacity math governs overflow.
     expect(parsed.parameters.auto_size_card).toBeDefined();
-    expect(parsed.parameters.auto_size_card.default).toBe('On');
+    expect(parsed.parameters.auto_size_card.default).toBe('Off');
     expect(parsed.parameters.auto_size_margin_mm.default).toBe(6);
-    expect(parsed.parameters.card_face_width_mm.default).toBe(85);
-    expect(parsed.parameters.card_face_height_mm.default).toBe(55);
+    expect(parsed.parameters.card_face_width_mm.default).toBe(200);
+    expect(parsed.parameters.card_face_height_mm.default).toBe(100);
     expect(parsed.parameters.cell_spacing.default).toBe(7.0);
     expect(parsed.parameters.line_spacing.default).toBe(10.0);
-    expect(parsed.parameters.grid_columns.default).toBe(11);
-    expect(parsed.parameters.grid_rows.default).toBe(5);
+    expect(parsed.parameters.grid_columns.default).toBe(26);
+    expect(parsed.parameters.grid_rows.default).toBe(8);
+  });
+
+  it('extracts the multi-card layout parameters', () => {
+    const parsed = extractParameters(readScad());
+    expect(parsed.parameters.card_layout).toBeDefined();
+    expect(parsed.parameters.card_layout.default).toBe('Single');
+    expect(parsed.parameters.rows_per_card.default).toBe(8);
+    expect(parsed.parameters.card_gap_mm.default).toBe(5);
   });
 
   it('has web-adapted defaults (warnings off, medium quality)', () => {
@@ -85,9 +94,10 @@ describe('braille_wedge_card.scad parser integration', () => {
     expect(parsed.parameters.support_fins.default).toBe('On');
   });
 
-  it('retains the upstream license header', () => {
+  it('carries the GPL-3.0-or-later relicense header with upstream attribution', () => {
     const content = readScad();
-    expect(content).toContain('PolyForm Noncommercial 1.0.0');
+    expect(content).toContain('GPL-3.0-or-later');
+    expect(content).toContain('Relicensed by the copyright holder');
     expect(content).toContain('braille-wedge-card-openscad');
   });
 });
@@ -137,6 +147,19 @@ describe('braille-wedge-card manifest', () => {
     for (const [role, paramName] of Object.entries(bt.capacityParams)) {
       expect(parsed.parameters[paramName], `${role} -> ${paramName}`).toBeDefined();
     }
+  });
+
+  it('brailleTranslation.multiCardParams reference real SCAD parameters', () => {
+    const bt = readManifest().brailleTranslation;
+    expect(bt.multiCardParams).toBeDefined();
+    const parsed = extractParameters(readScad());
+    for (const [role, paramName] of Object.entries(bt.multiCardParams)) {
+      expect(parsed.parameters[paramName], `${role} -> ${paramName}`).toBeDefined();
+    }
+  });
+
+  it('is relicensed GPL-3.0-or-later', () => {
+    expect(readManifest().license).toBe('GPL-3.0-or-later');
   });
 
   it('brailleTranslation declares the default table and catalog URL', () => {
