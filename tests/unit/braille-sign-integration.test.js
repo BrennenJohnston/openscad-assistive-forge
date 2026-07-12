@@ -6,7 +6,7 @@
  * - ADA 703 defaults (uppercase, 16 mm characters, 0.8 mm raise, 135%
  *   line spacing, Grade 2 braille default)
  * - manifest.json is well-formed, including the sign-mode
- *   brailleTranslation block with paired text/braille params
+ *   brailleTranslation block with raised-text + braille line params
  * - EXAMPLE_DEFINITIONS / PROGRAM_DEFINITIONS entries are consistent
  * - GPL-3.0-or-later licensing
  *
@@ -41,7 +41,7 @@ describe('braille_sign.scad parser integration', () => {
     expect(() => extractParameters(readScad())).not.toThrow();
   });
 
-  it('extracts paired raised-text and braille line parameters', () => {
+  it('extracts raised-text and braille line parameters', () => {
     const parsed = extractParameters(readScad());
     for (let i = 1; i <= 6; i++) {
       expect(parsed.parameters[`sign_text_${i}`], `sign_text_${i}`).toBeDefined();
@@ -126,7 +126,7 @@ describe('braille-sign manifest', () => {
     expect(readManifest().program).toBe('braille-card-customizer');
   });
 
-  it('declares sign-mode brailleTranslation with paired real params', () => {
+  it('declares sign-mode brailleTranslation with matching real params', () => {
     const bt = readManifest().brailleTranslation;
     expect(bt).toBeDefined();
     expect(bt.mode).toBe('sign');

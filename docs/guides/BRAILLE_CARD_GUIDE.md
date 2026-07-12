@@ -27,7 +27,7 @@ Good uses:
 
 The **Braille translation** panel sits above the regular parameter controls:
 
-1. **Text to translate** — type or paste plain text. Each new line starts a new braille line; long lines wrap automatically at word boundaries.
+1. **Text to translate** — type or paste plain text. Each new line starts a new braille line; long lines wrap automatically at word boundaries. (On the sign, the raised letters and the braille wrap independently — see Braille Sign below.)
 2. **Language and grade** — English UEB Grade 1 (uncontracted) is the default for cards and charms and the right choice for names, emails, and short contact details. Grade 2 (contracted) saves space but assumes fluent braille readers; it is the default for signs (matching ADA guidance). US (EBAE) tables are also available.
 3. **Preserve capital letters** — **on by default**, so the braille matches your text exactly. Every capital adds an indicator cell (1 extra cell per capital); turn it off to convert text to lowercase and save space (standard practice for space-limited labels and business cards). A warning appears when capitals were dropped.
 4. **Card size** — presets that set the width/height parameters directly: Default card 200 × 100 mm, Business card 89 × 51, Postcard 152 × 102, Greeting card 178 × 127 (5 × 7 in), A5 210 × 148, A4 297 × 210, US Letter 279 × 216. Picking a preset turns auto-sizing off; editing the width/height parameters directly flips the selector to Custom. Sizes larger than ~250 mm warn about common print-bed limits.
@@ -77,8 +77,18 @@ A two-part sign following the **2010 ADA Standards (section 703)** recommendatio
 - **Braille plate** (bottom): the same text in braille. Grade 2 (contracted) is the default table, per ADA 703.3. Prints **Angled** by default — leaning back at 75° with break-away support fins for the best dot quality, like the wedge card — or Flat. The letter plate always prints flat.
 - **Split raised border**: the letter plate carries the top + side border segments and the braille plate the bottom + sides, so the mounted pair forms one continuous tactile frame.
 - `sign_part` renders **Both** plates side by side on the bed (default), or each plate alone.
-- Up to **6 rows**: each line you type becomes a row of raised letters paired with its braille translation, and long lines **wrap automatically** onto new rows when either the letters or the braille would exceed the sign width. The preview shows the braille with the source text underneath.
+- Up to **6 rows** of each script, wrapped **independently**: long lines wrap onto new rows of raised letters automatically, and the braille reflows into its own rows to fill the sign width. Because 16 mm raised letters hold far fewer characters per row than 7 mm braille cells, the braille usually packs into fewer, fuller rows. Line breaks you type are kept as hard breaks in both scripts.
+- Independent wrapping is permitted by **ADA 703.3.2**, which places braille as one block below the entire text without requiring its line breaks to mirror the print rows. The preview lists the braille rows (with the words each row contains underneath) plus a summary of how many rows each plate uses.
 - **Auto-fit** (`auto_fit`, on by default): the sign grows to fit its content — plates get taller as rows are added, and wider if a single word needs more room than the set width. Turn it off to pin the exact size (overflowing content then triggers console warnings instead).
+
+### Making a sign, step by step
+
+1. Open the sign tool (welcome screen → Braille Card Customizer → **Braille Sign** → Open, or `?example=braille-sign`).
+2. Type the sign text into **Text to translate** — one line per message line (for example `Conference Room` then `101`). Long lines wrap onto new rows by themselves.
+3. Check the **Braille preview**: each braille row shows the words it contains underneath, the row summary reports how many rows each plate uses, and any fit problems appear as errors or warnings.
+4. Adjust parameters if needed (character height, sign width, border, print orientation) — with auto-fit on, the sign resizes to whatever you enter.
+5. Render and export. `sign_part` defaults to **Both**, so one STL holds the letter plate and the braille plate side by side; print it as modeled, no slicer supports.
+6. After printing, snap the support fins off the back of the braille plate (Angled mode). Mount the plates with the letters above the braille so the split border joins into one frame, keeping the braille at least 9.5 mm (3/8 in) below the raised text.
 
 > **ADA disclaimer:** the defaults follow the published 703 figures, but this tool does **not** guarantee compliance. Real signage has requirements the generator does not model — mounting height and location, visual contrast, glare, character width ratios, and the braille position at least 9.5 mm (3/8 in) below the raised text zone (mount the braille plate accordingly). Verify against the standard before installing.
 

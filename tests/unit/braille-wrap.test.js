@@ -17,6 +17,7 @@ import {
   packWords,
   chunkIntoCards,
   layoutBrailleText,
+  layoutSignText,
 } from '../../src/js/braille-wrap.js';
 
 /**
@@ -421,5 +422,152 @@ describe('layoutBrailleText', () => {
     // 5 capitals x 2 cells = 10 cells -> exactly one full line
     expect(allLines).toHaveLength(1);
     expect(countCells(allLines[0].braille)).toBe(10);
+  });
+});
+
+describe('layoutSignText', () => {
+  const baseOpts = {
+    translate: stubTranslate,
+    maxRows: 6,
+  };
+
+  it('packs braille rows independently of the letter rows', async () => {
+    // Letters hold 6 chars/row -> one word per row (4 rows). Braille
+    // holds 30 cells/row -> everything fits on one row (5+1+4+1+5+1+5).
+    const { textRows, brailleRows, warnings } = await layoutSignText({
+      ...baseOpts,
+      text: 'alpha beta gamma delta',
+      maxSourceChars: 6,
+      brailleCellsPerLine: 30,
+    });
+    expect(textRows.map((r) => r.source)).toEqual([
+      'alpha',
+      'beta',
+      'gamma',
+      'delta',
+    ]);
+    expect(brailleRows).toHaveLength(1);
+    expect(countCells(brailleRows[0].braille)).toBe(22);
+    expect(brailleRows[0].source).toBe('alpha beta gamma delta');
+    expect(warnings).toHaveLength(0);
+  });
+
+  it('keeps user newlines as hard breaks in both scripts', async () => {
+    const { textRows, brailleRows } = await layoutSignText({
+      ...baseOpts,
+      text: 'hi\nyo',
+      maxSourceChars: 20,
+      brailleCellsPerLine: 20,
+    });
+    expect(textRows.map((r) => r.source)).toEqual(['hi', 'yo']);
+    expect(brailleRows).toHaveLength(2);
+  });
+
+  it('preserves interior blank lines and drops trailing blanks', async () => {
+    const { textRows, brailleRows } = await layoutSignText({
+      ...baseOpts,
+      text: 'hi\n\nyo\n\n',
+      maxSourceChars: 20,
+      brailleCellsPerLine: 20,
+    });
+    expect(textRows.map((r) => r.source)).toEqual(['hi', '', 'yo']);
+    expect(brailleRows.map((r) => r.braille)).toEqual([
+      await stubTranslate('hi'),
+      '',
+      await stubTranslate('yo'),
+    ]);
+  });
+
+  it('derives braille capacity from the longest packed letter row', async () => {
+    let receivedChars = null;
+    await layoutSignText({
+      ...baseOpts,
+      text: 'alpha beta gamma delta',
+      maxSourceChars: 11,
+      brailleCellsPerLine: (longestRowChars) => {
+        receivedChars = longestRowChars;
+        return 30;
+      },
+    });
+    // Rows pack as 'alpha beta' (10) and 'gamma delta' (11).
+    expect(receivedChars).toBe(11);
+  });
+
+  it('drops overflow letter rows and reflows braille from the survivors only', async () => {
+    const { textRows, brailleRows, warnings } = await layoutSignText({
+      ...baseOpts,
+      text: 'alpha beta gamma delta',
+      maxSourceChars: 6,
+      brailleCellsPerLine: 30,
+      maxRows: 2,
+    });
+    expect(textRows.map((r) => r.source)).toEqual(['alpha', 'beta']);
+    // The braille plate must duplicate the letter plate: dropped words
+    // never appear in braille.
+    expect(brailleRows).toHaveLength(1);
+    expect(brailleRows[0].source).toBe('alpha beta');
+    expect(warnings.some((w) => w.type === 'too-many-lines')).toBe(true);
+  });
+
+  it('divides an over-long braille word after punctuation', async () => {
+    const { textRows, brailleRows, warnings } = await layoutSignText({
+      ...baseOpts,
+      text: 'name@example.com',
+      maxSourceChars: 100,
+      brailleCellsPerLine: 10,
+    });
+    // Letters fit on one row; the 16-cell braille divides into
+    // name@ / example. / com and packs onto three rows.
+    expect(textRows).toHaveLength(1);
+    expect(brailleRows).toHaveLength(3);
+    expect(warnings).toHaveLength(0);
+  });
+
+  it('warns about an unbreakable word longer than a braille row', async () => {
+    const { brailleRows, warnings } = await layoutSignText({
+      ...baseOpts,
+      text: 'abcdefghijkl',
+      maxSourceChars: 100,
+      brailleCellsPerLine: 10,
+    });
+    expect(warnings.some((w) => w.type === 'word-too-long')).toBe(true);
+    expect(brailleRows).toHaveLength(1); // kept as-is, overflowing
+  });
+
+  it('warns when a word exceeds the raised-letter row capacity', async () => {
+    const { warnings } = await layoutSignText({
+      ...baseOpts,
+      text: 'hello',
+      maxSourceChars: 4,
+      brailleCellsPerLine: 20,
+    });
+    expect(warnings.some((w) => w.type === 'word-too-long')).toBe(true);
+  });
+
+  it('returns empty rows for empty text', async () => {
+    const { textRows, brailleRows } = await layoutSignText({
+      ...baseOpts,
+      text: '',
+      maxSourceChars: 10,
+      brailleCellsPerLine: 20,
+    });
+    expect(textRows).toEqual([]);
+    expect(brailleRows).toEqual([]);
+  });
+
+  it('translates each distinct word once across both passes', async () => {
+    const calls = [];
+    const countingTranslate = async (t) => {
+      calls.push(t);
+      return stubTranslate(t);
+    };
+    await layoutSignText({
+      ...baseOpts,
+      translate: countingTranslate,
+      text: 'go go gadget',
+      maxSourceChars: 6,
+      brailleCellsPerLine: 30,
+    });
+    expect(calls.sort()).toEqual(['gadget', 'go']);
   });
 });

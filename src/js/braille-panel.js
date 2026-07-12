@@ -12,7 +12,8 @@
  * - "card"  (default): multi-line text -> wrapped Line_N params, card
  *   size presets, multi-card splitting, render-all-cards support.
  * - "charm": one short text -> a single braille param (1-2 cells).
- * - "sign":  up to N lines -> paired raised-text + braille Line params.
+ * - "sign":  raised-text rows + braille rows, wrapped independently
+ *   (braille packs denser; ADA 703.3.2 permits differing line breaks).
  *
  * The raw braille text inputs stay visible in the normal parameter panel,
  * so advanced users can still paste pre-translated braille manually.
@@ -27,7 +28,12 @@ import {
   getTables,
   disposeTranslator,
 } from './braille-translator.js';
-import { computeCapacity, layoutBrailleText, countCells } from './braille-wrap.js';
+import {
+  computeCapacity,
+  layoutBrailleText,
+  layoutSignText,
+  countCells,
+} from './braille-wrap.js';
 
 const DEBOUNCE_MS = 400;
 
@@ -93,8 +99,9 @@ let panel = null;
  * @param {string[]} [config.lineParams] - SCAD Line_N parameter names, in order
  * @param {string} [config.charParam] - Single braille param (charm mode)
  * @param {number} [config.maxCells=2] - Cell budget (charm mode)
- * @param {string[]} [config.textParams] - Raised-text params (sign mode),
- *   paired index-by-index with lineParams
+ * @param {string[]} [config.textParams] - Raised-text params (sign mode);
+ *   filled from the letter rows while lineParams get the independently
+ *   wrapped braille rows
  * @param {string} [config.tablesCatalog] - URL of tables.json
  * @param {string} [config.defaultTable] - Default liblouis table file
  * @param {Object} [config.capacityParams] - SCAD param names for capacity math
@@ -224,10 +231,11 @@ class BraillePanel {
         `counts against the limit.`;
     } else if (this.mode === 'sign') {
       textHelp.textContent =
-        `Translation runs on your device. Each line becomes a row of ` +
-        `raised letters paired with its braille translation; long lines ` +
-        `wrap onto new rows automatically — up to ` +
-        `${this.lineParams.length} rows, and the sign grows to fit.`;
+        `Translation runs on your device. Long lines wrap onto new rows ` +
+        `of raised letters automatically, and the braille below packs ` +
+        `its own rows to fill the sign width (ADA places braille in one ` +
+        `block below the text) — up to ${this.lineParams.length} rows ` +
+        `each, and the sign grows to fit.`;
     } else {
       textHelp.textContent =
         'Translation runs on your device. Each new line starts a new braille line; long lines wrap automatically.';
@@ -477,6 +485,18 @@ class BraillePanel {
     preview.setAttribute('aria-live', 'polite');
     section.appendChild(preview);
     this.refs.preview = preview;
+
+    if (this.mode === 'sign') {
+      // Letter rows and braille rows wrap independently in sign mode;
+      // this line reports both counts so the preview (braille rows) is
+      // not mistaken for the raised-letter layout.
+      const rowSummary = document.createElement('p');
+      rowSummary.className = 'braille-panel-help';
+      rowSummary.id = 'brailleSignRowSummary';
+      rowSummary.hidden = true;
+      section.appendChild(rowSummary);
+      this.refs.rowSummary = rowSummary;
+    }
   }
 
   buildMessageBoxes(section) {
@@ -883,15 +903,10 @@ class BraillePanel {
     const translate = this.makeTranslator(table, preserveCaps, untranslatable);
 
     const geometry = this.getGeometry();
-    const { cellsPerLine } = computeCapacity({
-      ...geometry,
-      maxRowsPerCard: maxLines,
-    });
 
-    // Each wrapped line is also a row of raised Latin letters, so the
-    // wrap engine gets a second capacity: how many print characters fit
-    // across the plate. Liberation Sans uppercase advances average
-    // ~0.94 x size per character (measured with textmetrics; the SCAD's
+    // Raised-letter row capacity: how many print characters fit across
+    // the plate. Liberation Sans uppercase advances average ~0.94 x size
+    // per character (measured with textmetrics; the SCAD's
     // CHAR_ADVANCE_FACTOR matches). The sign auto-fits its size to the
     // rows, so an unbreakable word wider than the set width is not an
     // error — the wrap capacity stretches to the longest word and the
@@ -908,15 +923,27 @@ class BraillePanel {
     const longestWordChars = [...longestWord].length;
     const maxSourceChars = Math.max(fitChars, longestWordChars);
 
-    const layout = await layoutBrailleText({
+    // Letter rows and braille rows wrap independently (ADA 703.3.2
+    // places braille as one block below the entire text; braille line
+    // breaks need not mirror the print rows). The braille capacity is
+    // derived from the final sign width: the set width, or wider when
+    // the longest letter row stretches it via auto-fit.
+    const layout = await layoutSignText({
       text,
       translate,
-      cellsPerLine,
-      rowsPerCard: maxLines,
-      autoWrap: true,
-      splitCards: false,
       maxSourceChars,
-      maxTotalLines: maxLines,
+      maxRows: maxLines,
+      brailleCellsPerLine: (longestRowChars) => {
+        const fitWidthMm = Math.max(
+          geometry.cardWidthMm,
+          longestRowChars * advanceMm + 2 * geometry.marginMm
+        );
+        return computeCapacity({
+          ...geometry,
+          cardWidthMm: fitWidthMm,
+          maxRowsPerCard: maxLines,
+        }).cellsPerLine;
+      },
     });
 
     if (seq !== this.layoutSeq) return;
@@ -942,14 +969,14 @@ class BraillePanel {
     }
     this.collectCommonWarnings(warnings, { untranslatable, preserveCaps, text });
 
-    const lines = layout.allLines;
-    this.cards = [lines];
-    this.allLines = lines;
-    this.cellsPerLine = layout.cellsPerLine;
+    this.cards = [layout.brailleRows];
+    this.allLines = layout.brailleRows;
+    this.cellsPerLine = layout.brailleCellsPerLine;
 
     this.renderMessages(warnings);
-    this.renderPreview(lines);
-    this.applySignToParams(lines);
+    this.renderPreview(layout.brailleRows);
+    this.renderSignRowSummary(layout);
+    this.applySignToParams(layout.textRows, layout.brailleRows);
     this.firstLayout = false;
   }
 
@@ -1212,31 +1239,58 @@ class BraillePanel {
   }
 
   /**
-   * Write paired raised-text + braille params for the sign.
-   * @param {Array<{ braille: string, source: string }>} lines
+   * Write the sign's raised-text and braille params. The two row lists
+   * wrap independently (braille packs denser), so they are indexed
+   * separately rather than paired.
+   * @param {Array<{ source: string }>} textRows - Raised-letter rows
+   * @param {Array<{ braille: string, source: string }>} brailleRows
    */
-  applySignToParams(lines) {
+  applySignToParams(textRows, brailleRows) {
     const updates = {};
     this.lineParams.forEach((paramName, i) => {
-      updates[paramName] = lines[i]?.braille ?? '';
+      updates[paramName] = brailleRows[i]?.braille ?? '';
     });
     this.textParams.forEach((paramName, i) => {
-      updates[paramName] = lines[i]?.source ?? '';
+      updates[paramName] = textRows[i]?.source ?? '';
     });
 
     const currentParams = stateManager.getState().parameters || {};
     const differs =
       this.lineParams.some(
         (name, i) =>
-          String(currentParams[name] ?? '') !== (lines[i]?.braille ?? '')
+          String(currentParams[name] ?? '') !== (brailleRows[i]?.braille ?? '')
       ) ||
       this.textParams.some(
         (name, i) =>
-          String(currentParams[name] ?? '') !== (lines[i]?.source ?? '')
+          String(currentParams[name] ?? '') !== (textRows[i]?.source ?? '')
       );
     this.writeParams(updates, {
       skipIfFirstLayout: this.firstLayout && !differs,
     });
+  }
+
+  /**
+   * Report how many rows each plate uses (sign mode). The preview lists
+   * the braille rows; without this line the letter layout would be
+   * invisible in the panel.
+   * @param {{ textRows: Array, brailleRows: Array }} layout
+   */
+  renderSignRowSummary(layout) {
+    const el = this.refs.rowSummary;
+    if (!el) return;
+    const textRows = layout.textRows.length;
+    const brailleRows = layout.brailleRows.length;
+    if (textRows === 0 && brailleRows === 0) {
+      el.textContent = '';
+      el.hidden = true;
+      return;
+    }
+    el.hidden = false;
+    el.textContent =
+      `Raised letters: ${textRows} row${textRows === 1 ? '' : 's'} — ` +
+      `braille: ${brailleRows} row${brailleRows === 1 ? '' : 's'}. ` +
+      `Braille rows fill the sign width independently of the letter rows ` +
+      `(ADA 703.3.2 places braille in one block below the text).`;
   }
 
   destroy() {

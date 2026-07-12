@@ -5,8 +5,8 @@
  * client-side liblouis translation (type text -> braille preview ->
  * Line_N params), card size presets, severity-tiered errors/warnings,
  * multi-card notice + pager + render-all mode, charm cell-budget warning,
- * sign paired text/braille params, and axe accessibility scans of the
- * panel in all three modes.
+ * sign raised-text + independently wrapped braille params, and axe
+ * accessibility scans of the panel in all three modes.
  *
  * @license GPL-3.0-or-later
  */
@@ -459,7 +459,7 @@ test.describe('Braille Charm workflow', () => {
 })
 
 test.describe('Braille Sign workflow', () => {
-  test('sign panel writes paired raised-text and braille params', async ({ page }) => {
+  test('sign panel writes raised-text and braille params', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
 
     await openBrailleExample(page, 'braille-sign')
@@ -522,11 +522,28 @@ test.describe('Braille Sign workflow', () => {
       .poll(async () => previewLines.count(), { timeout: 20000 })
       .toBeGreaterThan(1)
 
-    // Wrapped rows land in the paired raised-text params.
+    // Wrapped rows land in the raised-text params.
     const text2 = page.locator(
       '.param-control[data-param-name="sign_text_2"] input'
     )
     await expect(text2).not.toHaveValue('', { timeout: 10000 })
+
+    // Braille rows pack independently of the letter rows (ADA 703.3.2):
+    // braille cells are far narrower than 16 mm raised letters, so the
+    // braille reflows into fewer, fuller rows.
+    let textRowCount = 0
+    for (let i = 1; i <= 6; i++) {
+      const value = await page
+        .locator(`.param-control[data-param-name="sign_text_${i}"] input`)
+        .inputValue()
+      if (value !== '') textRowCount++
+    }
+    expect(await previewLines.count()).toBeLessThan(textRowCount)
+
+    // The row summary reports both counts.
+    await expect(page.locator('#brailleSignRowSummary')).toContainText(
+      'Raised letters'
+    )
   })
 
   test('sign panel has no axe violations', async ({ page }) => {
