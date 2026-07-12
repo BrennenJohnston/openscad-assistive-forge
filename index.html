@@ -572,6 +572,48 @@
                     </button>
                   </div>
                 </div>
+                <div class="role-path-card">
+                  <h3 class="role-path-title">Braille Card Customizer</h3>
+                  <p class="role-path-meta">
+                    Accessibility project &bull; customize &amp; 3D print &bull;
+                    based on the <a href="https://github.com/BrennenJohnston/braille-wedge-card-openscad" target="_blank" rel="noopener noreferrer">Braille Wedge Card generator<span class="sr-only"> (opens in new tab)</span></a>
+                  </p>
+                  <p class="role-path-description">
+                    Type text and get 3D-printable braille &mdash;
+                    translation runs on your device. Make cards that print
+                    leaning back with break-away supports, small braille
+                    charms, or two-part tactile signs with raised letters
+                    and braille.
+                  </p>
+                  <details class="role-path-details">
+                    <summary>What you can make</summary>
+                    <ul class="role-path-tips" aria-label="What you can make">
+                      <li>Braille business cards and contact cards &mdash; long text splits across cards or prints all at once</li>
+                      <li>Braille charms, pendants, and zipper pulls with 1&ndash;2 cells</li>
+                      <li>Two-part tactile signs: raised letters above, braille below (ADA-style defaults)</li>
+                      <li>Uncontracted or contracted (Grade 1 / Grade 2) braille</li>
+                    </ul>
+                  </details>
+                  <div class="role-path-actions">
+                    <div class="charm-variant-selector">
+                      <label for="brailleVariantSelect">Tool</label>
+                      <select id="brailleVariantSelect" class="charm-variant-select">
+                        <option value="braille-sign" selected>Braille Sign</option>
+                        <option value="braille-wedge-card">Braille Card</option>
+                        <option value="braille-charm">Braille Charm</option>
+                      </select>
+                    </div>
+                    <button type="button"
+                      class="btn btn-primary btn-role-try"
+                      id="openBrailleCardBtn"
+                      data-example="braille-sign"
+                      data-role="creators"
+                      aria-label="Open Braille Card Customizer"
+                    >
+                      Open Braille Card Customizer
+                    </button>
+                  </div>
+                </div>
               </div>
               <!-- Accessibility Spotlights -->
               <details

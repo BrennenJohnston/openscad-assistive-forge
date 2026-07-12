@@ -1,0 +1,36 @@
+{
+  "name": "Braille Charm",
+  "description": "A small charm carrying one or two braille cells; the default bracelet_clip shape snaps onto silicone bracelets and prints standing vertically with no supports, with the braille rotated to read along the band. Pendant shapes (circle, square, and more) lean back at 75 degrees on a flat contact strip with a slim break-away support fin, or print flat. Translation to Unicode braille runs entirely on your device via liblouis; Large and Small Charm presets match the original Bracelet Clip Charm.",
+  "version": "1.2.0",
+  "author": "OpenSCAD Assistive Forge contributors",
+  "license": "GPL-3.0-or-later",
+  "main": "braille_charm.scad",
+  "files": [
+    "braille_charm.scad",
+    "presets/large-charm.json",
+    "presets/small-charm.json"
+  ],
+  "program": "braille-card-customizer",
+  "brailleTranslation": {
+    "mode": "charm",
+    "charParam": "braille_chars",
+    "maxCells": 2,
+    "tablesCatalog": "/liblouis/tables.json",
+    "defaultTable": "en-ueb-g1.ctb"
+  },
+  "tags": [
+    "braille",
+    "accessibility",
+    "charm",
+    "pendant",
+    "keychain",
+    "bracelet",
+    "liblouis",
+    "tactile",
+    "assistive-technology"
+  ],
+  "inspired_by": {
+    "name": "Nasif Zaman (charm base), Duy Do / UW WOOF3D (bracelet clip), and Brennen Johnston (braille dot system)",
+    "reference": "https://github.com/BrennenJohnston/braille-wedge-card-openscad"
+  }
+}

@@ -5618,6 +5618,15 @@ if (rounded) {
     });
   }
 
+  // Wire braille variant selector the same way (card / charm / sign)
+  const brailleVariantSelect = document.getElementById('brailleVariantSelect');
+  const openBrailleCardBtn = document.getElementById('openBrailleCardBtn');
+  if (brailleVariantSelect && openBrailleCardBtn) {
+    brailleVariantSelect.addEventListener('change', () => {
+      openBrailleCardBtn.dataset.example = brailleVariantSelect.value;
+    });
+  }
+
   // =========================================
   // Deep-linking: URL parameter support for external website integration
   // Allows external sites to link directly to Forge with a specific example loaded

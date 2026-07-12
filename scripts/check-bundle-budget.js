@@ -19,8 +19,14 @@
  */
 
 import { readdirSync, statSync, readFileSync } from 'fs';
-import { join, basename, extname } from 'path';
+import { join, basename, extname, relative, sep } from 'path';
 import { gzipSync } from 'zlib';
+
+// Lazy-loaded static payloads fetched on demand at runtime, never part of
+// the initial page load (same rationale as the WASM binary exclusion).
+// liblouis/ holds the braille translation engine + tables loaded only by
+// the Braille Card Customizer's worker.
+const EXCLUDED_DIRS = ['liblouis'];
 
 // Budget definitions (in bytes)
 const BUDGETS = {
@@ -127,9 +133,13 @@ function checkBudgets(distPath) {
     return results;
   }
 
-  // Filter to assets (JS, CSS, HTML)
+  // Filter to assets (JS, CSS, HTML), excluding lazy-loaded static dirs
   const assetExtensions = ['.js', '.css', '.html', '.json'];
-  const assets = allFiles.filter((f) => assetExtensions.includes(extname(f)));
+  const assets = allFiles.filter((f) => {
+    if (!assetExtensions.includes(extname(f))) return false;
+    const topDir = relative(distPath, f).split(sep)[0];
+    return !EXCLUDED_DIRS.includes(topDir);
+  });
 
   // Calculate sizes
   const fileSizes = assets.map((filePath) => ({

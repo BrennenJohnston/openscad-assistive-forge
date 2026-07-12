@@ -60,8 +60,14 @@ import { isEnabled } from './feature-flags.js';
 import { prepareSvg, needsPreparation } from './svg-preparer.js';
 import { svgToDataUrl, dataUrlToText } from './svg-text-encoding.js';
 import { STORAGE_KEY_MODEL_COLOR } from './storage-keys.js';
+import { initBraillePanel, destroyBraillePanel } from './braille-panel.js';
 
 let currentExampleKey = null;
+
+// Set by restoreGalleryFromManifest when the example's manifest declares a
+// `brailleTranslation` block; consumed by handleFile after the parameter UI
+// renders (the panel writes Line_N params through the generated controls).
+let pendingBrailleConfig = null;
 
 /**
  * Reverse-lookup an example key from EXAMPLE_DEFINITIONS by file name.
@@ -82,6 +88,7 @@ function findExampleKeyByFileName(fileName) {
  * @param {string} exampleKey - Key into EXAMPLE_DEFINITIONS
  */
 async function restoreGalleryFromManifest(exampleKey) {
+  pendingBrailleConfig = null;
   const example = EXAMPLE_DEFINITIONS[exampleKey];
   if (!example?.manifest) return;
 
@@ -89,6 +96,16 @@ async function restoreGalleryFromManifest(exampleKey) {
     const manifestResponse = await fetch(example.manifest);
     if (!manifestResponse.ok) return;
     const manifestData = await manifestResponse.json();
+
+    const braille = manifestData.brailleTranslation;
+    if (braille?.lineParams?.length > 0 || braille?.charParam) {
+      pendingBrailleConfig = braille;
+      console.log(
+        `[Braille] Manifest declares braille translation ` +
+          `(mode: ${braille.mode || 'card'})`
+      );
+    }
+
     const libs = Array.isArray(manifestData.svgLibrary)
       ? manifestData.svgLibrary
       : manifestData.svgLibrary
@@ -182,6 +199,28 @@ export const EXAMPLE_DEFINITIONS = {
       '/examples/nasif-charm-maker/svg-library/sun.svg',
     ],
   },
+  'braille-wedge-card': {
+    path: '/examples/braille-wedge-card/braille_wedge_card.scad',
+    name: 'braille_wedge_card.scad',
+    description: 'Braille Card Customizer',
+    manifest: '/examples/braille-wedge-card/manifest.json',
+  },
+  'braille-charm': {
+    path: '/examples/braille-charm/braille_charm.scad',
+    name: 'braille_charm.scad',
+    description: 'Braille Charm',
+    manifest: '/examples/braille-charm/manifest.json',
+    additionalFiles: [
+      '/examples/braille-charm/presets/large-charm.json',
+      '/examples/braille-charm/presets/small-charm.json',
+    ],
+  },
+  'braille-sign': {
+    path: '/examples/braille-sign/braille_sign.scad',
+    name: 'braille_sign.scad',
+    description: 'Braille Sign',
+    manifest: '/examples/braille-sign/manifest.json',
+  },
   'q-charm': {
     path: '/examples/q-charm/q_charm.scad',
     name: 'q_charm.scad',
@@ -215,6 +254,10 @@ export const PROGRAM_DEFINITIONS = {
   'charm-customizer': {
     label: 'Charm Customizer',
     examples: ['nasif-charm-maker', 'q-charm', 'logo-plate'],
+  },
+  'braille-card-customizer': {
+    label: 'Braille Card Customizer',
+    examples: ['braille-wedge-card', 'braille-charm', 'braille-sign'],
   },
 };
 
@@ -581,6 +624,7 @@ export function initFileHandler({
 
     if (source !== 'example' && source !== 'program-example') {
       currentExampleKey = null;
+      pendingBrailleConfig = null;
     }
 
     const rawFileName =
@@ -1016,6 +1060,20 @@ export function initFileHandler({
         parameters: currentValues,
         defaults: { ...currentValues },
       });
+
+      // Braille Card Customizer: mount the translation panel above the
+      // parameter controls when the manifest declares brailleTranslation.
+      destroyBraillePanel();
+      if (pendingBrailleConfig) {
+        try {
+          initBraillePanel(pendingBrailleConfig);
+        } catch (brailleError) {
+          console.error(
+            '[Braille] Failed to initialize translation panel:',
+            brailleError
+          );
+        }
+      }
 
       try {
         const projectPrefsKey = `openscad-forge-ui-prefs-${fileName}`;
