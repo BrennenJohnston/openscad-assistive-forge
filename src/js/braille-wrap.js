@@ -114,32 +114,47 @@ export function splitWordAfterPunctuation(word) {
  * lines return the joined source alongside the braille so previews can
  * show the print-language text under each braille line.
  *
+ * When `maxSourceChars` is finite the packed source text (words joined by
+ * one space) is a second line-break constraint. Sign mode uses this: each
+ * wrapped line is also a row of raised Latin letters, which must fit the
+ * plate width just like the braille cells must.
+ *
  * @param {Array<{ braille: string, cells: number, source?: string }>} words
  *   Translated words
  * @param {number} cellsPerLine - Line capacity in cells
+ * @param {number} [maxSourceChars=Infinity] - Line capacity in source
+ *   (print-language) characters
  * @returns {Array<{ braille: string, source: string }>} Wrapped lines
  */
-export function packWords(words, cellsPerLine) {
+export function packWords(words, cellsPerLine, maxSourceChars = Infinity) {
   const lines = [];
   let line = '';
   let lineCells = 0;
+  let lineSrcLen = 0;
   let lineSources = [];
 
   for (const word of words) {
+    const srcLen = [...(word.source ?? '')].length;
     if (lineCells === 0) {
       line = word.braille;
       lineCells = word.cells;
+      lineSrcLen = srcLen;
       lineSources = [word.source ?? ''];
       continue;
     }
-    if (lineCells + 1 + word.cells <= cellsPerLine) {
+    if (
+      lineCells + 1 + word.cells <= cellsPerLine &&
+      lineSrcLen + 1 + srcLen <= maxSourceChars
+    ) {
       line += BRAILLE_SPACE + word.braille;
       lineCells += 1 + word.cells;
+      lineSrcLen += 1 + srcLen;
       lineSources.push(word.source ?? '');
     } else {
       lines.push({ braille: line, source: lineSources.join(' ') });
       line = word.braille;
       lineCells = word.cells;
+      lineSrcLen = srcLen;
       lineSources = [word.source ?? ''];
     }
   }
@@ -183,6 +198,9 @@ export function chunkIntoCards(lines, rowsPerCard) {
  *   false each user line is translated whole and only hard breaks apply
  * @param {boolean} [opts.splitCards=true] - Split overflow onto more cards;
  *   when false everything stays on one card and overflow warns
+ * @param {number} [opts.maxSourceChars=Infinity] - Additional per-line
+ *   capacity in source (print-language) characters; sign mode passes the
+ *   raised-letter row capacity here so wrapped lines fit both scripts
  * @param {number} [opts.maxTotalLines=20] - Hard ceiling from the SCAD's
  *   Line_1..Line_N parameter count
  * @returns {Promise<{
@@ -199,6 +217,7 @@ export async function layoutBrailleText({
   rowsPerCard,
   autoWrap = true,
   splitCards = true,
+  maxSourceChars = Infinity,
   maxTotalLines = 20,
 }) {
   const warnings = [];
@@ -234,6 +253,17 @@ export async function layoutBrailleText({
     for (const sourceWord of trimmed.split(/\s+/)) {
       const braille = await translate(sourceWord);
       const cells = countCells(braille);
+      const sourceChars = [...sourceWord].length;
+
+      if (sourceChars > maxSourceChars) {
+        warnings.push({
+          type: 'word-too-long',
+          message:
+            `"${truncateForMessage(sourceWord)}" is ${sourceChars} characters ` +
+            `but a row of raised letters only holds about ${maxSourceChars}. ` +
+            `Shorten it or widen the sign.`,
+        });
+      }
 
       if (cells <= cellsPerLine) {
         words.push({ braille, cells, source: sourceWord });
@@ -273,7 +303,7 @@ export async function layoutBrailleText({
       }
     }
 
-    wrapped.push(...packWords(words, cellsPerLine));
+    wrapped.push(...packWords(words, cellsPerLine, maxSourceChars));
   }
 
   // Drop trailing blank lines (they carry no content).
@@ -285,6 +315,8 @@ export async function layoutBrailleText({
   if (allLines.length > maxTotalLines) {
     warnings.push({
       type: 'too-many-lines',
+      needed: allLines.length,
+      available: maxTotalLines,
       message:
         `The text needs ${allLines.length} braille lines but only ` +
         `${maxTotalLines} are available. The extra lines were dropped.`,

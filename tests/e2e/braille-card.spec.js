@@ -492,16 +492,41 @@ test.describe('Braille Sign workflow', () => {
     await expect(line2).not.toHaveValue('', { timeout: 10000 })
   })
 
-  test('sign warns when more than 3 lines are entered', async ({ page }) => {
+  test('sign warns when more lines are entered than the sign holds', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
 
     await openBrailleExample(page, 'braille-sign')
 
-    await page.locator('#brailleTextInput').fill('one\ntwo\nthree\nfour')
+    await page
+      .locator('#brailleTextInput')
+      .fill('one\ntwo\nthree\nfour\nfive\nsix\nseven')
 
     const errors = page.locator('#brailleErrors')
     await expect(errors).toBeVisible({ timeout: 20000 })
-    await expect(errors).toContainText('holds 3 lines')
+    await expect(errors).toContainText('holds 6 lines')
+  })
+
+  test('sign wraps a long line onto additional rows', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
+
+    await openBrailleExample(page, 'braille-sign')
+
+    await page
+      .locator('#brailleTextInput')
+      .fill('WATAP Washington Assistive Technology Act Program')
+
+    // The single input line wraps onto multiple rows instead of
+    // overflowing the sign width.
+    const previewLines = page.locator('#braillePreview .braille-preview-line')
+    await expect
+      .poll(async () => previewLines.count(), { timeout: 20000 })
+      .toBeGreaterThan(1)
+
+    // Wrapped rows land in the paired raised-text params.
+    const text2 = page.locator(
+      '.param-control[data-param-name="sign_text_2"] input'
+    )
+    await expect(text2).not.toHaveValue('', { timeout: 10000 })
   })
 
   test('sign panel has no axe violations', async ({ page }) => {

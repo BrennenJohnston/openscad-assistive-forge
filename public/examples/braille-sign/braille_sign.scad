@@ -12,9 +12,9 @@
 //    minimum per 703.2.5), raised 0.8 mm (1/32 in per 703.2.1), 135% line
 //    spacing. Prints flat, letters up.
 //  • BRAILLE PLATE (bottom): the same text in braille (translate in the
-//    Forge panel, or paste Unicode braille into Line_1..Line_3). Prints
-//    flat, or leaning back at face_angle_deg with break-away support fins
-//    (the wedge-card technique) for the crispest dots.
+//    Forge panel, or paste Unicode braille into Line_1..Line_6). Prints
+//    leaning back at face_angle_deg with break-away support fins by
+//    default (the wedge-card technique, crispest dots), or Flat.
 //
 // SPLIT RAISED BORDER: the letter plate carries the top + side border
 // segments and the braille plate carries the bottom + side segments, so
@@ -41,6 +41,12 @@ sign_text_1 = "Room 101";
 sign_text_2 = "";
 // Third line of raised text
 sign_text_3 = "";
+// Fourth line of raised text
+sign_text_4 = "";
+// Fifth line of raised text
+sign_text_5 = "";
+// Sixth line of raised text
+sign_text_6 = "";
 
 /* [Text Input - Pre-Translated Braille] */
 // Braille for line 1 (Unicode braille, e.g. from branah.com/braille-translator)
@@ -49,15 +55,23 @@ Line_1 = "⠠⠗⠕⠕⠍⠀⠼⠁⠚⠁";
 Line_2 = "";
 // Braille for line 3
 Line_3 = "";
+// Braille for line 4
+Line_4 = "";
+// Braille for line 5
+Line_5 = "";
+// Braille for line 6
+Line_6 = "";
 
 /* [Sign Layout] */
 // Which part(s) to render. Both lays the two plates side by side on the bed.
 sign_part = "Both"; // [Both, Letter plate, Braille plate]
-// Width of the sign / both plates (mm)
+// Grow the sign automatically so every row of letters and braille fits (Yes), or keep the exact size below (No)
+auto_fit = "Yes";             // [Yes, No]
+// Width of the sign / both plates (mm). With auto_fit on this is the minimum.
 sign_width_mm = 160;          // [60:1:300]
-// Height of the letter plate (mm). Three 16 mm lines at 135% spacing need ~60 mm.
+// Height of the letter plate (mm). With auto_fit on this is the minimum.
 letter_plate_height_mm = 70;  // [30:1:200]
-// Height of the braille plate (mm)
+// Height of the braille plate (mm). With auto_fit on this is the minimum.
 braille_plate_height_mm = 40; // [25:1:150]
 // Thickness of both plates (mm)
 plate_thickness_mm = 3;       // [2:0.5:8]
@@ -85,9 +99,10 @@ border_width_mm = 2;          // [0.5:0.5:6]
 border_height_mm = 0.8;       // [0.2:0.1:2]
 
 /* [Braille Plate Orientation] */
-// Flat = dots face up on the bed. Angled = the plate leans back at
-// face_angle_deg with break-away support fins (best dot quality).
-print_orientation = "Flat";   // [Flat, Angled]
+// Angled (default) = the plate leans back at face_angle_deg with
+// break-away support fins (best dot quality, like the wedge card).
+// Flat = dots face up on the bed. The letter plate always prints flat.
+print_orientation = "Angled"; // [Flat, Angled]
 // Face angle from the horizontal bed (deg) in Angled mode. 75 = CHI sweet spot.
 face_angle_deg = 75;          // [60:1:90]
 
@@ -171,10 +186,12 @@ quality_fn = (render_quality == "Low")    ? 24 :
              (render_quality == "High")   ? 64 : 32;
 
 // Text content metrics
-_text_lines = [sign_text_1, sign_text_2, sign_text_3];
-_braille_lines = [Line_1, Line_2, Line_3];
-_text_nonempty = [for (i = [0:2]) if (len(_text_lines[i]) > 0) i];
-_braille_nonempty = [for (i = [0:2]) if (len(_braille_lines[i]) > 0) i];
+_text_lines = [sign_text_1, sign_text_2, sign_text_3,
+               sign_text_4, sign_text_5, sign_text_6];
+_braille_lines = [Line_1, Line_2, Line_3, Line_4, Line_5, Line_6];
+_line_count = len(_text_lines);
+_text_nonempty = [for (i = [0:_line_count-1]) if (len(_text_lines[i]) > 0) i];
+_braille_nonempty = [for (i = [0:_line_count-1]) if (len(_braille_lines[i]) > 0) i];
 text_rows    = len(_text_nonempty) == 0 ? 0 : _text_nonempty[len(_text_nonempty) - 1] + 1;
 braille_rows = len(_braille_nonempty) == 0 ? 0 : _braille_nonempty[len(_braille_nonempty) - 1] + 1;
 
@@ -192,11 +209,42 @@ braille_max_len = max([for (l = _braille_lines) len(l)]);
 braille_block_w = braille_max_len <= 1 ? 0 : (braille_max_len - 1) * cell_spacing;
 braille_block_h = braille_rows  <= 1 ? 0 : (braille_rows - 1) * line_spacing;
 
+// Effective sign size. In auto-fit mode (default) the plates grow so every
+// row of letters, braille dots, and the plate heights always fit — the
+// Forge panel wraps long text onto extra rows, and the sign follows.
+// Manual mode keeps the exact size set above. Uppercase Liberation Sans
+// advances average ~0.94 x size per character (measured with textmetrics);
+// the Forge panel wraps using the same estimate.
+auto_fit_on = (auto_fit == "Yes");
+_plate_pad = (border_on ? border_width_mm : 0) + 4;
+_dot_base_d = (dot_shape == "Rounded")
+    ? rounded_dot_base_diameter : cone_dot_base_diameter;
+CHAR_ADVANCE_FACTOR = 0.94;
+_est_text_w = text_rows == 0 ? 0
+    : max([for (l = _text_lines) len(display_text(l))])
+      * char_height_mm * CHAR_ADVANCE_FACTOR * letter_spacing;
+_braille_block_total_w = braille_max_len == 0 ? 0
+    : braille_block_w + dot_spacing + _dot_base_d;
+sign_w = auto_fit_on
+    ? max(sign_width_mm, _est_text_w + 2 * _plate_pad,
+          _braille_block_total_w + 2 * _plate_pad)
+    : sign_width_mm;
+_letter_block_h = text_rows == 0 ? 0
+    : (text_rows - 1) * text_line_pitch + char_height_mm;
+letter_plate_h = (auto_fit_on && text_rows > 0)
+    ? max(letter_plate_height_mm, _letter_block_h + 2 * _plate_pad)
+    : letter_plate_height_mm;
+_braille_block_total_h = braille_rows == 0 ? 0
+    : braille_block_h + 2 * dot_spacing + _dot_base_d;
+braille_plate_h = (auto_fit_on && braille_rows > 0)
+    ? max(braille_plate_height_mm, _braille_block_total_h + 2 * _plate_pad)
+    : braille_plate_height_mm;
+
 // Leaning-plate geometry (Angled mode; wedge-card technique). The braille
 // plate leans back at face_angle_deg; the reading face is the leaning edge
-// of length braille_plate_height_mm.
-bp_height   = braille_plate_height_mm * sin(face_angle_deg);
-bp_base_run = braille_plate_height_mm * cos(face_angle_deg);
+// of length braille_plate_h.
+bp_height   = braille_plate_h * sin(face_angle_deg);
+bp_base_run = braille_plate_h * cos(face_angle_deg);
 
 // =============================================================================
 // HELPER FUNCTIONS
@@ -314,12 +362,12 @@ module letter_plate() {
     union() {
         // Plate body
         linear_extrude(height = plate_thickness_mm)
-            square([sign_width_mm, letter_plate_height_mm], center = true);
+            square([sign_w, letter_plate_h], center = true);
         // Split border: top + sides
         if (border_on) {
             translate([0, 0, plate_thickness_mm])
                 linear_extrude(height = border_height_mm)
-                    split_border_2d(sign_width_mm, letter_plate_height_mm, "top");
+                    split_border_2d(sign_w, letter_plate_h, "top");
         }
         // Raised characters
         if (text_rows > 0) {
@@ -374,11 +422,11 @@ module braille_face_dots() {
 module braille_plate_flat() {
     union() {
         linear_extrude(height = plate_thickness_mm)
-            square([sign_width_mm, braille_plate_height_mm], center = true);
+            square([sign_w, braille_plate_h], center = true);
         if (border_on) {
             translate([0, 0, plate_thickness_mm])
                 linear_extrude(height = border_height_mm)
-                    split_border_2d(sign_width_mm, braille_plate_height_mm, "bottom");
+                    split_border_2d(sign_w, braille_plate_h, "bottom");
         }
         braille_face_dots();
     }
@@ -396,7 +444,7 @@ module braille_plate_flat() {
 // sunk by BED_SINK and cut flat at z=0, giving the bottom edge a real
 // first-layer contact strip.
 BED_SINK = 0.6;
-bp_lift = (braille_plate_height_mm / 2) * sin(face_angle_deg) - BED_SINK;
+bp_lift = (braille_plate_h / 2) * sin(face_angle_deg) - BED_SINK;
 // Actual top of the leaned plate above the bed (after the bed sink)
 bp_top = bp_height - BED_SINK;
 
@@ -407,9 +455,9 @@ module braille_plate_leaning() {
                 rotate([0, 0, 180])
                     braille_plate_flat();
         // Trim the sunk sliver below the bed -> flat first-layer strip
-        translate([0, 0, -braille_plate_height_mm])
-            cube([4 * sign_width_mm, 4 * braille_plate_height_mm,
-                  2 * braille_plate_height_mm], center = true);
+        translate([0, 0, -braille_plate_h])
+            cube([4 * sign_w, 4 * braille_plate_h,
+                  2 * braille_plate_h], center = true);
     }
 }
 
@@ -464,8 +512,8 @@ module bp_bridges(x) {
 
 function bp_fin_x_positions() =
     let(
-        half  = sign_width_mm / 2,
-        n     = max(1, floor(sign_width_mm / fin_interval_mm)),
+        half  = sign_w / 2,
+        n     = max(1, floor(sign_w / fin_interval_mm)),
         inner = [for (i = [0 : n]) -half + i * fin_interval_mm]
     )
     concat(
@@ -493,17 +541,20 @@ module braille_plate_angled() {
 // CONSOLE DIAGNOSTICS
 // =============================================================================
 echo(str("Braille sign: ", text_rows, " text line(s), ", braille_rows,
-         " braille line(s), ", sign_width_mm, " mm wide"));
-if (text_rows > 0 && (text_rows - 1) * text_line_pitch + char_height_mm
-        > letter_plate_height_mm - 2 * (border_on ? border_width_mm : 0))
-    echo("WARNING: the raised text block is taller than the letter plate. Raise letter_plate_height_mm or remove a line.");
-if (braille_rows > 0 && braille_block_h + 2 * dot_spacing + rounded_dot_base_diameter
-        > braille_plate_height_mm - 2 * (border_on ? border_width_mm : 0))
-    echo("WARNING: the braille block is taller than the braille plate. Raise braille_plate_height_mm or remove a line.");
-if (braille_max_len > 0 && braille_block_w + dot_spacing + rounded_dot_base_diameter
-        > sign_width_mm - 2 * (border_on ? border_width_mm : 0))
-    echo("WARNING: the braille block is wider than the sign. Widen the sign or shorten the line.");
-for (i = [0:2])
+         " braille line(s), ", sign_w, " mm wide, plates ",
+         letter_plate_h, " + ", braille_plate_h, " mm tall"));
+if (text_rows > 0 && _letter_block_h
+        > letter_plate_h - 2 * (border_on ? border_width_mm : 0))
+    echo("WARNING: the raised text block is taller than the letter plate. Turn on auto_fit, raise letter_plate_height_mm, or remove a line.");
+if (braille_rows > 0 && _braille_block_total_h
+        > braille_plate_h - 2 * (border_on ? border_width_mm : 0))
+    echo("WARNING: the braille block is taller than the braille plate. Turn on auto_fit, raise braille_plate_height_mm, or remove a line.");
+if (braille_max_len > 0 && _braille_block_total_w
+        > sign_w - 2 * (border_on ? border_width_mm : 0))
+    echo("WARNING: the braille block is wider than the sign. Turn on auto_fit, widen the sign, or shorten the line.");
+if (_est_text_w > sign_w - 2 * (border_on ? border_width_mm : 0))
+    echo("WARNING: a raised text line is probably wider than the sign. Turn on auto_fit, shorten the line, or widen the sign.");
+for (i = [0:_line_count-1])
     if (has_invalid_chars(_braille_lines[i]))
         echo(str("WARNING: braille Line_", i + 1, " contains non-braille characters. Use Unicode braille (U+2800-U+28FF)."));
 if (char_height_mm < 15.9)
@@ -516,14 +567,14 @@ echo("NOTE: ADA defaults are recommendations only - this tool does not guarantee
 // Both mode mirrors the final mounted arrangement on the bed: letter plate
 // above (+Y), braille plate below (-Y), part_gap_mm apart.
 if (show_letter_plate && show_braille_plate) {
-    translate([0, part_gap_mm / 2 + letter_plate_height_mm / 2, 0])
+    translate([0, part_gap_mm / 2 + letter_plate_h / 2, 0])
         letter_plate();
     if (angled_on) {
         // Front bed edge of the leaning assembly sits at -part_gap_mm/2
         translate([0, -part_gap_mm / 2 - bp_base_run / 2, 0])
             braille_plate_angled();
     } else {
-        translate([0, -part_gap_mm / 2 - braille_plate_height_mm / 2, 0])
+        translate([0, -part_gap_mm / 2 - braille_plate_h / 2, 0])
             braille_plate_flat();
     }
 } else if (show_letter_plate) {

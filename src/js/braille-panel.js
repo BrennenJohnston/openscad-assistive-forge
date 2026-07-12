@@ -80,6 +80,8 @@ const CAPACITY_WATCH_KEYS = [
   'cellSpacing',
   'lineSpacing',
   'autoSize',
+  'charHeight',
+  'letterSpacing',
 ];
 
 let panel = null;
@@ -222,9 +224,10 @@ class BraillePanel {
         `counts against the limit.`;
     } else if (this.mode === 'sign') {
       textHelp.textContent =
-        `Translation runs on your device. Each line becomes one row of ` +
-        `raised letters with its braille translation below — up to ` +
-        `${this.lineParams.length} lines.`;
+        `Translation runs on your device. Each line becomes a row of ` +
+        `raised letters paired with its braille translation; long lines ` +
+        `wrap onto new rows automatically — up to ` +
+        `${this.lineParams.length} rows, and the sign grows to fit.`;
     } else {
       textHelp.textContent =
         'Translation runs on your device. Each new line starts a new braille line; long lines wrap automatically.';
@@ -885,54 +888,64 @@ class BraillePanel {
       maxRowsPerCard: maxLines,
     });
 
-    // Each source line maps 1:1 to a raised-text row + braille row, so
-    // there is no auto-wrap in sign mode: a line either fits or warns.
-    const sourceLines = text
-      .replace(/\r\n?/g, '\n')
-      .split('\n')
-      .map((line) => line.trim());
-    while (sourceLines.length > 0 && sourceLines[sourceLines.length - 1] === '') {
-      sourceLines.pop();
+    // Each wrapped line is also a row of raised Latin letters, so the
+    // wrap engine gets a second capacity: how many print characters fit
+    // across the plate. Liberation Sans uppercase advances average
+    // ~0.94 x size per character (measured with textmetrics; the SCAD's
+    // CHAR_ADVANCE_FACTOR matches). The sign auto-fits its size to the
+    // rows, so an unbreakable word wider than the set width is not an
+    // error — the wrap capacity stretches to the longest word and the
+    // sign widens with it.
+    const charHeightMm = this.readNumericParam('charHeight', 16);
+    const letterSpacing = this.readNumericParam('letterSpacing', 1.1);
+    const advanceMm = charHeightMm * 0.94 * letterSpacing;
+    const usableWidthMm = geometry.cardWidthMm - 2 * geometry.marginMm;
+    const fitChars = Math.max(1, Math.floor(usableWidthMm / advanceMm));
+    let longestWord = '';
+    for (const word of text.split(/\s+/)) {
+      if ([...word].length > [...longestWord].length) longestWord = word;
     }
+    const longestWordChars = [...longestWord].length;
+    const maxSourceChars = Math.max(fitChars, longestWordChars);
 
-    const warnings = [];
-    if (sourceLines.length > maxLines) {
-      warnings.push({
-        type: 'too-many-lines',
-        message:
-          `The sign holds ${maxLines} lines but the text has ` +
-          `${sourceLines.length}. The extra lines were dropped — shorten ` +
-          `the text or split it across multiple signs.`,
-      });
-    }
-
-    const kept = sourceLines.slice(0, maxLines);
-    const lines = [];
-    for (const source of kept) {
-      const braille = source === '' ? '' : await translate(source);
-      lines.push({ braille, source });
-    }
+    const layout = await layoutBrailleText({
+      text,
+      translate,
+      cellsPerLine,
+      rowsPerCard: maxLines,
+      autoWrap: true,
+      splitCards: false,
+      maxSourceChars,
+      maxTotalLines: maxLines,
+    });
 
     if (seq !== this.layoutSeq) return;
 
+    const warnings = [...layout.warnings];
+    if (longestWordChars > fitChars) {
+      warnings.push({
+        type: 'sign-widened',
+        message:
+          `"${longestWord}" needs about ` +
+          `${Math.ceil(longestWordChars * advanceMm)} mm of raised ` +
+          `letters, more than the set sign width fits. With auto-fit on ` +
+          `(the default) the sign widens to match; otherwise widen ` +
+          `sign_width_mm or use a smaller character height.`,
+      });
+    }
+    const tooManyLines = warnings.find((w) => w.type === 'too-many-lines');
+    if (tooManyLines) {
+      tooManyLines.message =
+        `The sign holds ${maxLines} lines but the text needs ` +
+        `${tooManyLines.needed ?? 'more'}. The extra lines were dropped — ` +
+        `shorten the text or split it across multiple signs.`;
+    }
     this.collectCommonWarnings(warnings, { untranslatable, preserveCaps, text });
 
-    for (const [i, line] of lines.entries()) {
-      const cells = countCells(line.braille);
-      if (cells > cellsPerLine) {
-        warnings.push({
-          type: 'line-overflow',
-          message:
-            `Line ${i + 1} ("${line.source}") is ${cells} braille cells ` +
-            `but the sign fits ${cellsPerLine} per line. Shorten the line ` +
-            `or widen the sign.`,
-        });
-      }
-    }
-
+    const lines = layout.allLines;
     this.cards = [lines];
     this.allLines = lines;
-    this.cellsPerLine = cellsPerLine;
+    this.cellsPerLine = layout.cellsPerLine;
 
     this.renderMessages(warnings);
     this.renderPreview(lines);

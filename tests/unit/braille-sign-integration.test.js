@@ -43,7 +43,7 @@ describe('braille_sign.scad parser integration', () => {
 
   it('extracts paired raised-text and braille line parameters', () => {
     const parsed = extractParameters(readScad());
-    for (let i = 1; i <= 3; i++) {
+    for (let i = 1; i <= 6; i++) {
       expect(parsed.parameters[`sign_text_${i}`], `sign_text_${i}`).toBeDefined();
       expect(parsed.parameters[`Line_${i}`], `Line_${i}`).toBeDefined();
     }
@@ -51,6 +51,14 @@ describe('braille_sign.scad parser integration', () => {
     // "Room 101" in UEB (capital indicator, r-o-o-m, blank, numeric, 1-0-1)
     expect(parsed.parameters.Line_1.default).toBe(
       '\u2820\u2817\u2815\u2815\u280D\u2800\u283C\u2801\u281A\u2801'
+    );
+  });
+
+  it('auto-fits the sign to its rows by default', () => {
+    const parsed = extractParameters(readScad());
+    expect(parsed.parameters.auto_fit.default).toBe('Yes');
+    expect(parsed.parameters.auto_fit.enum.map((e) => e.value)).toContain(
+      'No'
     );
   });
 
@@ -83,12 +91,12 @@ describe('braille_sign.scad parser integration', () => {
     expect(total).toBeLessThanOrEqual(0.9);
   });
 
-  it('braille plate defaults to flat with the angled+fins option', () => {
+  it('braille plate defaults to angled with fins, with a Flat option', () => {
     const parsed = extractParameters(readScad());
-    expect(parsed.parameters.print_orientation.default).toBe('Flat');
+    expect(parsed.parameters.print_orientation.default).toBe('Angled');
     expect(
       parsed.parameters.print_orientation.enum.map((e) => e.value)
-    ).toContain('Angled');
+    ).toContain('Flat');
     expect(parsed.parameters.support_fins.default).toBe('On');
   });
 
@@ -122,8 +130,22 @@ describe('braille-sign manifest', () => {
     const bt = readManifest().brailleTranslation;
     expect(bt).toBeDefined();
     expect(bt.mode).toBe('sign');
-    expect(bt.lineParams).toEqual(['Line_1', 'Line_2', 'Line_3']);
-    expect(bt.textParams).toEqual(['sign_text_1', 'sign_text_2', 'sign_text_3']);
+    expect(bt.lineParams).toEqual([
+      'Line_1',
+      'Line_2',
+      'Line_3',
+      'Line_4',
+      'Line_5',
+      'Line_6',
+    ]);
+    expect(bt.textParams).toEqual([
+      'sign_text_1',
+      'sign_text_2',
+      'sign_text_3',
+      'sign_text_4',
+      'sign_text_5',
+      'sign_text_6',
+    ]);
     expect(bt.lineParams.length).toBe(bt.textParams.length);
 
     const parsed = extractParameters(readScad());

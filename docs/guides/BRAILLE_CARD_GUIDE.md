@@ -74,10 +74,11 @@ A charm face fits **one or two braille cells** — usually one or two letters, o
 A two-part sign following the **2010 ADA Standards (section 703)** recommendations:
 
 - **Letter plate** (top): raised uppercase characters (Liberation Sans, sans-serif), 16 mm character height (703.2.5 minimum is 5/8 in ≈ 15.9 mm), raised 0.8 mm (703.2.1: 1/32 in), 135% line spacing (703.2.8). Prints flat, letters up. Lowercase input is converted to uppercase by default (`force_uppercase`).
-- **Braille plate** (bottom): the same text in braille. Grade 2 (contracted) is the default table, per ADA 703.3. Prints flat, or **Angled** with break-away support fins for the best dot quality.
+- **Braille plate** (bottom): the same text in braille. Grade 2 (contracted) is the default table, per ADA 703.3. Prints **Angled** by default — leaning back at 75° with break-away support fins for the best dot quality, like the wedge card — or Flat. The letter plate always prints flat.
 - **Split raised border**: the letter plate carries the top + side border segments and the braille plate the bottom + sides, so the mounted pair forms one continuous tactile frame.
 - `sign_part` renders **Both** plates side by side on the bed (default), or each plate alone.
-- Up to **3 lines**: each line you type becomes one row of raised letters paired with its braille translation; the preview shows the braille with the source text underneath.
+- Up to **6 rows**: each line you type becomes a row of raised letters paired with its braille translation, and long lines **wrap automatically** onto new rows when either the letters or the braille would exceed the sign width. The preview shows the braille with the source text underneath.
+- **Auto-fit** (`auto_fit`, on by default): the sign grows to fit its content — plates get taller as rows are added, and wider if a single word needs more room than the set width. Turn it off to pin the exact size (overflowing content then triggers console warnings instead).
 
 > **ADA disclaimer:** the defaults follow the published 703 figures, but this tool does **not** guarantee compliance. Real signage has requirements the generator does not model — mounting height and location, visual contrast, glare, character width ratios, and the braille position at least 9.5 mm (3/8 in) below the raised text zone (mount the braille plate accordingly). Verify against the standard before installing.
 

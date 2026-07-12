@@ -9,15 +9,24 @@
   "program": "braille-card-customizer",
   "brailleTranslation": {
     "mode": "sign",
-    "lineParams": ["Line_1", "Line_2", "Line_3"],
-    "textParams": ["sign_text_1", "sign_text_2", "sign_text_3"],
+    "lineParams": ["Line_1", "Line_2", "Line_3", "Line_4", "Line_5", "Line_6"],
+    "textParams": [
+      "sign_text_1",
+      "sign_text_2",
+      "sign_text_3",
+      "sign_text_4",
+      "sign_text_5",
+      "sign_text_6"
+    ],
     "tablesCatalog": "/liblouis/tables.json",
     "defaultTable": "en-ueb-g2.ctb",
     "capacityParams": {
       "cardWidth": "sign_width_mm",
       "cardHeight": "braille_plate_height_mm",
       "cellSpacing": "cell_spacing",
-      "lineSpacing": "line_spacing"
+      "lineSpacing": "line_spacing",
+      "charHeight": "char_height_mm",
+      "letterSpacing": "letter_spacing"
     }
   },
   "tags": [

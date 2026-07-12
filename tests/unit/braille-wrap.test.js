@@ -168,6 +168,24 @@ describe('packWords', () => {
     expect(lines[0].source).toBe('one two');
     expect(lines[1].source).toBe('three');
   });
+
+  it('breaks on source-character capacity even when cells fit (sign mode)', () => {
+    // Braille fits 3 words per line (3+1+3+1+3 = 11 <= 20) but the source
+    // text "one two" is 7 chars and "one two three" would be 13 > 8.
+    const lines = packWords(
+      [w(3, 'one'), w(3, 'two'), w(3, 'three')],
+      20,
+      8
+    );
+    expect(lines).toHaveLength(2);
+    expect(lines[0].source).toBe('one two');
+    expect(lines[1].source).toBe('three');
+  });
+
+  it('ignores source capacity when maxSourceChars is omitted', () => {
+    const lines = packWords([w(3, 'one'), w(3, 'two'), w(3, 'three')], 20);
+    expect(lines).toHaveLength(1);
+  });
 });
 
 describe('chunkIntoCards', () => {
@@ -367,6 +385,32 @@ describe('layoutBrailleText', () => {
     });
     expect(allLines).toHaveLength(20);
     expect(warnings.some((w) => w.type === 'too-many-lines')).toBe(true);
+  });
+
+  it('wraps on source width for sign mode (raised letters constrain too)', async () => {
+    const { allLines, warnings } = await layoutBrailleText({
+      ...baseOpts,
+      cellsPerLine: 60,
+      maxTotalLines: 6,
+      maxSourceChars: 12,
+      text: 'WATAP Washington Assistive Technology Act Program',
+    });
+    // Every wrapped row's source text must fit the raised-letter capacity.
+    expect(allLines.length).toBeGreaterThan(1);
+    for (const line of allLines) {
+      expect(line.source.length).toBeLessThanOrEqual(12);
+    }
+    expect(warnings.some((w) => w.type === 'too-many-lines')).toBe(false);
+  });
+
+  it('warns when a single word exceeds the source-character capacity', async () => {
+    const { warnings } = await layoutBrailleText({
+      ...baseOpts,
+      cellsPerLine: 60,
+      maxSourceChars: 6,
+      text: 'Washington',
+    });
+    expect(warnings.some((w) => w.type === 'word-too-long')).toBe(true);
   });
 
   it('all-caps text still wraps correctly (capitals cost extra cells)', async () => {
