@@ -86,6 +86,17 @@ THE SOFTWARE.
 
 ---
 
+## liblouis (LGPL-2.1-or-later) and liblouis-js Bindings (GPL-3.0)
+
+The Braille Card Customizer translates text to Unicode braille entirely client-side using liblouis compiled to WebAssembly/asm.js, running in a Web Worker.
+
+**License**: LGPL-2.1-or-later (engine); GPL-3.0 (JavaScript bindings, `easy-api.js`); individual translation tables carry their own license headers (mostly LGPL-2.1-or-later)
+**Project**: https://liblouis.io/
+**Source Code**: https://github.com/liblouis/liblouis (engine), https://github.com/liblouis/liblouis-js (JS bindings)
+**Usage**: `scripts/setup-liblouis.js` copies the emscripten engine build and a curated set of UEB/US translation tables (with their full include closure) from the `liblouis` / `liblouis-build` npm packages into `public/liblouis/` (gitignored) at build time; `src/worker/liblouis-worker.js` loads them at runtime. A `NOTICE.txt` with attribution is written alongside the deployed assets.
+
+---
+
 ## clipper2-js (BSL-1.0)
 
 SVG path offset calculations use clipper2-js for polygon offsetting (Minkowski sum).

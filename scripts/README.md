@@ -20,6 +20,14 @@ Downloads OpenSCAD library bundles (MCAD, BOSL2, etc.) for use in the web app.
 npm run setup-libraries
 ```
 
+## setup-liblouis.js
+
+Copies the liblouis braille-translation engine (emscripten build) and a curated set of translation tables — including their full `include` closure — from `node_modules` into `public/liblouis/` for the Braille Card Customizer. Also writes a `tables.json` catalog for the UI and a `NOTICE.txt` with attribution. Runs automatically as part of `prebuild`.
+
+```bash
+npm run setup-liblouis
+```
+
 ## run-e2e-safe.js
 
 Wrapper for Playwright E2E tests that prevents terminal hangs on Windows.
