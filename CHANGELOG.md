@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+_No unreleased changes yet._
+
+---
+
+## [4.5.0] - 2026-07-12
+
+### Braille Toolset, SVG Pipeline Overhaul & Alt View Rework
+
+Feature release introducing the Braille Card Customizer tool family (card, charm, and sign with on-device liblouis translation), a rebuilt SVG import/preparation pipeline, a faster and simpler Alt View engine, a WebGL 1 fallback fix for the 3D preview, and watertight STL exports for the charm generators.
+
 ### Added
 
 - **Braille Card Customizer** — a new welcome-screen tool family: type plain text and get 3D-printable braille, with translation to Unicode braille running entirely on-device (liblouis compiled to WebAssembly in a Web Worker — text never leaves the browser). The **Braille translation** panel offers English UEB/US Grade 1 and Grade 2 tables, a preserve-capitals toggle (on by default), card-size and margin presets, BANA-style word wrapping with multi-card overflow splitting, a live braille preview with per-line cell counts and severity-tiered errors/warnings (alert vs status live regions), a keyboard card pager, and a render-all-cards mode; `scripts/setup-liblouis.js` (wired into `prebuild` and `pixi run setup`) copies the engine and curated tables with their full include closure into `public/liblouis/`. See `docs/guides/BRAILLE_CARD_GUIDE.md`
@@ -1101,6 +1111,7 @@ Multi-variant comparison system for side-by-side parameter testing.
 - **v4.2.0** (2026-03-16): Expert Mode, vector parameters, memory management, desktop parity, Alt View
 - **v4.3.0** (2026-03-20): Architecture decomposition, CSP enforcement, accessible errors, menubar, CI stabilization
 - **v4.4.0** (2026-04-06): SVG offset, companion hardening, project-native presets, KI-012 resolution, WASM update
+- **v4.5.0** (2026-07-12): Braille toolset (card/charm/sign), SVG pipeline overhaul, Alt View rework, WebGL 1 fallback fix
 
 ## Version Scheme
 

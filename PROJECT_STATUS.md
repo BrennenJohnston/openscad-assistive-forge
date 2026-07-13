@@ -1,8 +1,8 @@
 # Project status
 
 **Project**: OpenSCAD Assistive Forge  
-**Current version**: 4.4.0  
-**Last updated**: 2026-07-05  
+**Current version**: 4.5.0  
+**Last updated**: 2026-07-12  
 
 This is a single-maintainer project. This file is here so I don’t have to answer “is it abandoned?” and “what’s next?” in every issue thread.
 
@@ -10,15 +10,17 @@ This is a single-maintainer project. This file is here so I don’t have to answ
 
 - The web app works: upload a Customizer-enabled `.scad`, tweak params, preview, export.
 - It’s intentionally **client-side only** (no accounts, no uploads, no backend).
+- The welcome screen ships two ready-to-use tools: the **Charm Customizer** and the **Braille Card Customizer** (card / charm / sign, with on-device liblouis braille translation).
 - The CLI is included for developers who want to scaffold standalone customizers.
 
 ## What’s solid (things I’m pretty happy with)
 
 - **Accessibility-first UI**: keyboard, screen reader friendliness, high contrast / forced colors support
+- **Braille toolset**: type text, get printable braille — translation runs entirely in the browser
 - **ZIP multi-file support** for `include` / `use` with hardened companion file resolution
-- **SVG preparation workspace** with path offset, role assignment, and fullscreen editing
+- **SVG preparation workspace** with transform baking, path offset, role assignment, and fullscreen editing
 - **Presets / undo / sharing** workflows with project-native preset support and numeric sorting
-- **Test coverage** exists (3,061 unit tests + e2e suite)
+- **Test coverage** exists (3,408 unit tests + e2e suite)
 
 ## Known rough edges
 
