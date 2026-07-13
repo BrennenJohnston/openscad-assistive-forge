@@ -21,9 +21,23 @@ So this is my attempt at removing a few of those barriers and hopefully opening 
 - **Runs OpenSCAD in your browser** (WebAssembly in a Web Worker)
 - **Builds a parameter UI** from OpenSCAD Customizer annotations
 - **Previews the model** (Three.js) and lets you orbit/pan/zoom
-- **Exports** STL/OBJ/OFF/AMF/3MF
+- **Exports** STL/OBJ/OFF/AMF/3MF, plus SVG/DXF for laser cutting
 - **Supports multi-file projects** via `.zip` (for `include` / `use`)
 - **Keeps everything local** (no accounts, no uploads, no backend)
+
+## Built-in tools
+
+The welcome screen ships with ready-to-use customizers -- no `.scad` file needed:
+
+- **Braille Card Customizer** -- type plain text and get 3D-printable braille;
+  translation (Grade 1 / Grade 2) runs entirely on-device via liblouis compiled
+  to WebAssembly. Three variants: a card that prints leaning back at 75° with
+  break-away supports, a small charm/pendant/zipper pull, and a two-part
+  tactile sign with raised letters and braille (ADA-style defaults). See
+  `docs/guides/BRAILLE_CARD_GUIDE.md`.
+- **Charm Customizer** -- design wearable charms, pendants, and logo plates
+  with engraved or raised icons, including C-clip charms that snap onto
+  silicone bracelets. Import your own SVG or pick from the built-in library.
 
 ## Accessibility notes (the short version)
 
@@ -106,7 +120,8 @@ This project stands on a lot of good work:
 - OpenSCAD WASM builds (`https://github.com/openscad/openscad-wasm`)
 - OpenSCAD Playground (helpful reference UI) (`https://github.com/openscad/openscad-playground`)
 - Three.js (`https://threejs.org/`)
+- liblouis braille translator (`https://liblouis.io/`)
 - Tony Fast (`https://github.com/tonyfast`) -- expert accessibility feedback
 
-See `THIRD_PARTY_NOTICES.md` for the full list.
+See `CREDITS.md` and `THIRD_PARTY_NOTICES.md` for the full list.
 

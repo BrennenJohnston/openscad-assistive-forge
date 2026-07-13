@@ -1,5 +1,32 @@
 # Release Notes
 
+## v4.5.0 (2026-07-12)
+
+The Braille Card Customizer joins the welcome screen: type plain text and get 3D-printable braille, with translation running entirely on-device. This release also overhauls the SVG import pipeline, reworks the Alt View engine, restores the 3D preview on browsers without WebGL 2, and fixes non-watertight STL exports from the charm generators.
+
+### Highlights
+
+- **Braille Card Customizer**: A new tool family with three variants — **Braille Card** (prints leaning back at 75° with break-away supports), **Braille Charm** (pendants, keychain charms, and bracelet clips carrying 1–2 braille cells), and **Braille Sign** (two-part tactile sign with raised letters and Grade 2 braille, ADA section-703-style defaults)
+- **On-device braille translation**: liblouis compiled to WebAssembly runs in a Web Worker — English UEB/US Grade 1 and Grade 2 tables, BANA-style word wrapping, multi-card overflow splitting, and a live preview with per-line cell counts; text never leaves the browser
+- **Bracelet clip charm shape**: The Braille Charm defaults to a C-clip bracelet charm (q_charm lineage) that prints standing vertically so braille dots come out crisp with no support fin
+- **SVG pipeline overhaul**: Transform baking, Unicode-safe encoding, role color-coding in the editor, compound-path mode, lossless pass-through for simple SVGs, and inherited style/fill resolution
+- **Alt View rework**: Glyph atlas rendering, on-demand conversion (near-zero idle cost), a new Afterglow slider, and a simpler controller
+- **WebGL 1 fallback restored**: The 3D preview works again in browsers without WebGL 2 (three.js pinned to ^0.162.0); an accessible notice appears if WebGL is entirely unavailable
+- **Watertight charm STLs**: The Braille Charm and Charm Customizer border geometry is carved from one extrusion, so every shape/orientation/attachment combination exports a watertight single-body STL
+- **Accessibility**: `aria-keyshortcuts` on shortcut-bearing controls, severity-tiered braille preview announcements, accessible names for emoji-swapped buttons, and a screen-reader announcement when Alt View unlocks
+
+### Upgrade Notes
+
+This is a backward-compatible upgrade with no breaking changes:
+
+1. Clear browser cache (or accept the update prompt) for best experience
+2. All existing saved projects and presets remain compatible
+3. The braille tools are available from the welcome screen or via `?example=braille-wedge-card`, `?example=braille-charm`, and `?example=braille-sign`
+
+See [CHANGELOG.md](CHANGELOG.md) for the full list of changes.
+
+---
+
 ## v4.4.0 (2026-04-06)
 
 SVG path offset, hardened companion file resolution, project-native presets, developer diagnostics, and an updated OpenSCAD WASM binary. This release also resolves the KI-012 parameter-dropout bug and hardens innerHTML patterns against XSS.
