@@ -1,7 +1,7 @@
 {
   "name": "Charm Customizer",
   "description": "Create custom charms and pendants with engraved or raised designs. Upload your own SVG/PNG or pick from the built-in design library.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "OpenSCAD Assistive Forge contributors",
   "license": "CC0-1.0",
   "main": "nasif_charm_maker.scad",

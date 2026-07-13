@@ -1,7 +1,7 @@
 // =============================================================================
 // Braille Charm — Parametric Braille Charm/Pendant Generator
 // =============================================================================
-// VERSION = 1.2.0 (OpenSCAD Assistive Forge)
+// VERSION = 1.2.1 (OpenSCAD Assistive Forge)
 // License: GPL-3.0-or-later
 //          https://www.gnu.org/licenses/gpl-3.0.html
 //
@@ -355,20 +355,24 @@ module charm_base_2d() {
     }
 }
 
+// Body and raised border are carved from ONE extrusion: extruding a separate
+// border ring and stacking it on the body leaves the two outer walls
+// coincident, and on curved outlines the 2D difference()'s re-tessellation
+// exports T-junction open edges (non-watertight STL). Cutting the face
+// recess out of a single taller solid has no coincident surfaces at all.
 module charm_body() {
-    linear_extrude(height = charm_thickness)
-        charm_base_2d();
-}
-
-module border_ring() {
     if (add_border == "yes") {
-        translate([0, 0, charm_thickness])
-            linear_extrude(height = border_height)
-                difference() {
-                    charm_base_2d();
+        difference() {
+            linear_extrude(height = charm_thickness + border_height)
+                charm_base_2d();
+            translate([0, 0, charm_thickness])
+                linear_extrude(height = border_height + 1)
                     offset(r = -border_width)
                         charm_base_2d();
-                }
+        }
+    } else {
+        linear_extrude(height = charm_thickness)
+            charm_base_2d();
     }
 }
 
@@ -430,7 +434,6 @@ module flat_charm() {
     difference() {
         union() {
             charm_body();
-            border_ring();
             attachment_add();
             face_braille_dots();
         }
