@@ -11,7 +11,8 @@
 import { getAppPrefKey, safeGetItem, safeSetItem } from './storage-keys.js';
 import { announceImmediate } from './announcer.js';
 import { stateManager } from './state.js';
-import { downloadFile, generateFilename } from './download.js';
+import { downloadFile, resolveDownloadFilename } from './download.js';
+import { getBrailleDownloadName } from './braille-panel.js';
 import { showErrorToast } from './error-translator.js';
 
 const RECENT_FILES_KEY = getAppPrefKey('recent-files');
@@ -43,10 +44,11 @@ export function exportFormatFromMenu(format) {
     });
     return;
   }
-  const filename = generateFilename(
+  const filename = resolveDownloadFilename(
     state.uploadedFile?.name || 'model',
     state.parameters || {},
-    format
+    format,
+    getBrailleDownloadName()
   );
   downloadFile(outputData, filename, format);
 }

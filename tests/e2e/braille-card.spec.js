@@ -4,9 +4,10 @@
  * Covers: welcome-screen card + variant dropdown, deep-link loading,
  * client-side liblouis translation (type text -> braille preview ->
  * Line_N params), card size presets, severity-tiered errors/warnings,
- * multi-card notice + pager + render-all mode, charm cell-budget warning,
- * sign raised-text + independently wrapped braille params, and axe
- * accessibility scans of the panel in all three modes.
+ * multi-card notice + pager + render-all mode, per-character multi-charm
+ * mode (generate-all toggle + charm pager), sign raised-text +
+ * independently wrapped braille params, and axe accessibility scans of
+ * the panel in all three modes.
  *
  * @license GPL-3.0-or-later
  */
@@ -212,6 +213,9 @@ test.describe('Braille translation workflow (card)', () => {
 
     await openBrailleCard(page)
 
+    // Auto-size is the SCAD default, so the select starts on the auto option
+    await expect(page.locator('#brailleSizePreset')).toHaveValue('auto')
+
     await page.locator('#brailleSizePreset').selectOption('business')
 
     const widthInput = page.locator(
@@ -222,6 +226,16 @@ test.describe('Braille translation workflow (card)', () => {
       '.param-control[data-param-name="card_face_height_mm"] input[type="number"]'
     )
     await expect(heightInput.first()).toHaveValue('51', { timeout: 10000 })
+
+    // Choosing a size preset forces auto-size off
+    const autoSelect = page.locator(
+      '.param-control[data-param-name="auto_size_card"] select'
+    )
+    await expect(autoSelect).toHaveValue('Off', { timeout: 10000 })
+
+    // Picking the auto option turns it back on
+    await page.locator('#brailleSizePreset').selectOption('auto')
+    await expect(autoSelect).toHaveValue('On', { timeout: 10000 })
   })
 
   test('overflow produces the error alert when splitting is off', async ({ page }) => {
@@ -414,39 +428,99 @@ test.describe('Braille translation workflow (card)', () => {
 })
 
 test.describe('Braille Charm workflow', () => {
-  test('charm panel translates a short text into braille_chars', async ({ page }) => {
+  test('charm panel translates a single character into braille_chars', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
 
     await openBrailleExample(page, 'braille-charm')
 
-    // Charm mode: single-line input, no wrap/preset/pager controls
+    // Charm mode: single-line input, no size presets; the pager exists
+    // but stays hidden while there is only one charm
     await expect(page.locator('#brailleTextInput')).toBeVisible()
     await expect(page.locator('#brailleSizePreset')).toHaveCount(0)
-    await expect(page.locator('#brailleCardPager')).toHaveCount(0)
+    await expect(page.locator('#brailleCardPager')).toBeHidden()
 
-    await page.locator('#brailleTextInput').fill('hi')
+    await page.locator('#brailleTextInput').fill('h')
 
     const preview = page.locator('#braillePreview')
-    await expect(preview).toContainText('\u2813\u280A', { timeout: 20000 }) // ⠓⠊
-    await expect(preview.locator('.braille-preview-source')).toContainText('hi')
+    await expect(preview).toContainText('\u2813', { timeout: 20000 }) // ⠓
+    await expect(preview.locator('.braille-preview-source')).toContainText('h')
 
     const charInput = page.locator(
       '.param-control[data-param-name="braille_chars"] input'
     )
-    await expect(charInput).toHaveValue('\u2813\u280A', { timeout: 10000 })
+    await expect(charInput).toHaveValue('\u2813', { timeout: 10000 })
+
+    // Single charm stays in Single layout with no notice
+    await expect(page.locator('#brailleMultiCardNotice')).toBeHidden()
   })
 
-  test('charm warns when translation exceeds 2 cells', async ({ page }) => {
+  test('multi-character input makes one charm per character (generate all on by default)', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
 
     await openBrailleExample(page, 'braille-charm')
 
-    await page.locator('#brailleTextInput').fill('abc')
+    await page.locator('#brailleTextInput').fill('hi')
 
-    const errors = page.locator('#brailleErrors')
-    await expect(errors).toBeVisible({ timeout: 20000 })
-    await expect(errors).toContainText('3 braille cells')
-    await expect(errors).toContainText('fits 2')
+    // Notice reports one charm per character; the generate-all toggle is
+    // checked by default so the pager stays hidden
+    const notice = page.locator('#brailleMultiCardNotice')
+    await expect(notice).toBeVisible({ timeout: 20000 })
+    await expect(notice).toContainText('2 charms')
+    await expect(page.locator('#brailleRenderAll')).toBeChecked()
+    await expect(page.locator('#brailleCardPager')).toBeHidden()
+
+    // Each character's braille lands in its own Charm_N slot, the layout
+    // switches to All charms, and braille_chars mirrors the first charm
+    const layoutSelect = page.locator(
+      '.param-control[data-param-name="charm_layout"] select'
+    )
+    await expect(layoutSelect).toHaveValue('All charms', { timeout: 10000 })
+    await expect(
+      page.locator('.param-control[data-param-name="Charm_1"] input')
+    ).toHaveValue('\u2813', { timeout: 10000 }) // ⠓
+    await expect(
+      page.locator('.param-control[data-param-name="Charm_2"] input')
+    ).toHaveValue('\u280A', { timeout: 10000 }) // ⠊
+    await expect(
+      page.locator('.param-control[data-param-name="braille_chars"] input')
+    ).toHaveValue('\u2813')
+  })
+
+  test('turning generate-all off pages through charms one at a time', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
+
+    await openBrailleExample(page, 'braille-charm')
+
+    await page.locator('#brailleTextInput').fill('hi')
+
+    const renderAll = page.locator('#brailleRenderAll')
+    await expect(renderAll).toBeVisible({ timeout: 20000 })
+    await renderAll.uncheck()
+
+    // Pager appears, layout drops back to Single, braille_chars carries
+    // the charm being shown
+    const pager = page.locator('#brailleCardPager')
+    await expect(pager).toBeVisible()
+    await expect(page.locator('#braillePagerStatus')).toHaveText(
+      'Charm 1 of 2 — h'
+    )
+    const layoutSelect = page.locator(
+      '.param-control[data-param-name="charm_layout"] select'
+    )
+    await expect(layoutSelect).toHaveValue('Single', { timeout: 10000 })
+    const charInput = page.locator(
+      '.param-control[data-param-name="braille_chars"] input'
+    )
+    await expect(charInput).toHaveValue('\u2813', { timeout: 10000 }) // ⠓
+
+    // Pager is keyboard-operable: prev disabled on the first charm
+    await expect(page.locator('#braillePrevCard')).toBeDisabled()
+    await page.locator('#brailleNextCard').click()
+    await expect(page.locator('#braillePagerStatus')).toHaveText(
+      'Charm 2 of 2 — i'
+    )
+    await expect(charInput).toHaveValue('\u280A', { timeout: 10000 }) // ⠊
+    await expect(page.locator('#brailleNextCard')).toBeDisabled()
   })
 
   test('charm panel has no axe violations', async ({ page }) => {
@@ -454,7 +528,9 @@ test.describe('Braille Charm workflow', () => {
 
     await openBrailleExample(page, 'braille-charm')
     await page.locator('#brailleTextInput').fill('abc')
-    await expect(page.locator('#brailleErrors')).toBeVisible({ timeout: 20000 })
+    await expect(page.locator('#brailleMultiCardNotice')).toBeVisible({
+      timeout: 20000,
+    })
     await expectPanelAxeClean(page)
   })
 })

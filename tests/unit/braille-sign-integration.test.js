@@ -70,6 +70,12 @@ describe('braille_sign.scad parser integration', () => {
     expect(values).toContain('Braille plate');
   });
 
+  it('defaults to 1 mm plates (slider allows down to 1 mm)', () => {
+    const parsed = extractParameters(readScad());
+    expect(parsed.parameters.plate_thickness_mm.default).toBe(1);
+    expect(parsed.parameters.plate_thickness_mm.minimum).toBe(1);
+  });
+
   it('has ADA 703 lettering defaults', () => {
     const parsed = extractParameters(readScad());
     expect(parsed.parameters.force_uppercase.default).toBe('Yes');

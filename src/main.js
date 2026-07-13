@@ -18,10 +18,12 @@ import {
   downloadSTL,
   downloadFile,
   generateFilename,
+  resolveDownloadFilename,
   formatFileSize,
   sanitizeFilename,
   OUTPUT_FORMATS,
 } from './js/download.js';
+import { getBrailleDownloadName } from './js/braille-panel.js';
 import {
   RenderController,
   RENDER_QUALITY,
@@ -7891,10 +7893,11 @@ if (rounded) {
 
       if (fullSTL && outputFormat === 'stl') {
         // Use cached full quality STL
-        const filename = generateFilename(
+        const filename = resolveDownloadFilename(
           state.uploadedFile.name,
           state.parameters,
-          outputFormat
+          outputFormat,
+          getBrailleDownloadName()
         );
         downloadFile(fullSTL.stl, filename, outputFormat);
         updateStatus(`Downloaded: ${filename}`);
@@ -7910,10 +7913,11 @@ if (rounded) {
         return;
       }
 
-      const filename = generateFilename(
+      const filename = resolveDownloadFilename(
         state.uploadedFile.name,
         state.parameters,
-        outputFormat
+        outputFormat,
+        getBrailleDownloadName()
       );
 
       downloadFile(state.stl, filename, outputFormat);
@@ -8324,9 +8328,11 @@ if (rounded) {
       return;
     }
 
-    const filename = generateFilename(
+    const filename = resolveDownloadFilename(
       state.uploadedFile.name,
-      state.parameters
+      state.parameters,
+      'stl',
+      getBrailleDownloadName()
     );
 
     downloadSTL(state.stl, filename);

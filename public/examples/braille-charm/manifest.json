@@ -1,7 +1,7 @@
 {
   "name": "Braille Charm",
-  "description": "A small charm carrying one or two braille cells; the default bracelet_clip shape snaps onto silicone bracelets and prints standing vertically with no supports, with the braille rotated to read along the band. Pendant shapes (circle, square, and more) lean back at 75 degrees on a flat contact strip with a slim break-away support fin, or print flat. Translation to Unicode braille runs entirely on your device via liblouis; Large and Small Charm presets match the original Bracelet Clip Charm.",
-  "version": "1.2.1",
+  "description": "A small charm carrying one or two braille cells; the default bracelet_clip shape snaps onto silicone bracelets and prints standing vertically with no supports, with the braille rotated to read along the band. Pendant shapes (circle, square, and more) lean back at 75 degrees on a flat contact strip with a slim break-away support fin, or print flat. Type a word and each character becomes its own charm — render them all in one file or one at a time. Translation to Unicode braille runs entirely on your device via liblouis; Large and Small Charm presets match the original Bracelet Clip Charm.",
+  "version": "1.3.0",
   "author": "OpenSCAD Assistive Forge contributors",
   "license": "GPL-3.0-or-later",
   "main": "braille_charm.scad",
@@ -16,7 +16,25 @@
     "charParam": "braille_chars",
     "maxCells": 2,
     "tablesCatalog": "/liblouis/tables.json",
-    "defaultTable": "en-ueb-g1.ctb"
+    "defaultTable": "en-ueb-g1.ctb",
+    "multiCharmParams": {
+      "charmParams": [
+        "Charm_1",
+        "Charm_2",
+        "Charm_3",
+        "Charm_4",
+        "Charm_5",
+        "Charm_6",
+        "Charm_7",
+        "Charm_8",
+        "Charm_9",
+        "Charm_10",
+        "Charm_11",
+        "Charm_12"
+      ],
+      "charmLayout": "charm_layout",
+      "charmGap": "charm_gap_mm"
+    }
   },
   "tags": [
     "braille",

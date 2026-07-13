@@ -1,7 +1,7 @@
 // =============================================================================
 // Braille Sign — Two-Part Tactile Sign Generator (raised letters + braille)
 // =============================================================================
-// VERSION = 1.0.0 (OpenSCAD Assistive Forge)
+// VERSION = 1.1.0 (OpenSCAD Assistive Forge)
 // License: GPL-3.0-or-later
 //          https://www.gnu.org/licenses/gpl-3.0.html
 //
@@ -74,7 +74,7 @@ letter_plate_height_mm = 70;  // [30:1:200]
 // Height of the braille plate (mm). With auto_fit on this is the minimum.
 braille_plate_height_mm = 40; // [25:1:150]
 // Thickness of both plates (mm)
-plate_thickness_mm = 3;       // [2:0.5:8]
+plate_thickness_mm = 1;       // [1:0.5:8]
 // Gap between the two plates on the print bed in Both mode (mm)
 part_gap_mm = 8;              // [2:1:30]
 

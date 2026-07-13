@@ -55,6 +55,23 @@ describe('braille_charm.scad parser integration', () => {
     expect(parsed.parameters.attachment_type.default).toBe('keychain_hole');
   });
 
+  it('extracts the multi-charm layout parameters', () => {
+    const parsed = extractParameters(readScad());
+    expect(parsed.parameters.charm_layout).toBeDefined();
+    expect(parsed.parameters.charm_layout.default).toBe('Single');
+    expect(parsed.parameters.charm_layout.enum.map((e) => e.value)).toEqual([
+      'Single',
+      'All charms',
+    ]);
+    expect(parsed.parameters.charm_gap_mm.default).toBe(5);
+    for (let i = 1; i <= 12; i++) {
+      const param = parsed.parameters[`Charm_${i}`];
+      expect(param, `Charm_${i}`).toBeDefined();
+      expect(param.type).toBe('string');
+      expect(param.default).toBe('');
+    }
+  });
+
   it('defaults to the bracelet_clip shape with its own clip parameters', () => {
     const parsed = extractParameters(readScad());
     expect(parsed.parameters.charm_shape.default).toBe('bracelet_clip');
@@ -155,6 +172,21 @@ describe('braille-charm manifest', () => {
     const bt = readManifest().brailleTranslation;
     expect(bt.defaultTable).toBe('en-ueb-g1.ctb');
     expect(bt.tablesCatalog).toBe('/liblouis/tables.json');
+  });
+
+  it('declares multiCharmParams referencing real SCAD parameters', () => {
+    const bt = readManifest().brailleTranslation;
+    expect(bt.multiCharmParams).toBeDefined();
+    expect(bt.multiCharmParams.charmParams).toEqual(
+      Array.from({ length: 12 }, (_, i) => `Charm_${i + 1}`)
+    );
+
+    const parsed = extractParameters(readScad());
+    for (const name of bt.multiCharmParams.charmParams) {
+      expect(parsed.parameters[name], name).toBeDefined();
+    }
+    expect(parsed.parameters[bt.multiCharmParams.charmLayout]).toBeDefined();
+    expect(parsed.parameters[bt.multiCharmParams.charmGap]).toBeDefined();
   });
 
   it('has inspired_by attribution', () => {

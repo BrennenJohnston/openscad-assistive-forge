@@ -50,10 +50,12 @@ const MARGIN_PRESETS = [
 /**
  * Card size presets (landscape, mm). All within the SCAD slider ranges
  * (width 40-300, height 25-250). Selecting one writes the manual
- * width/height params and forces auto-size Off; manual edits to the
- * width/height sliders flip the select back to Custom.
+ * width/height params and forces auto-size Off; the auto option turns
+ * auto-size back On (the SCAD default); manual edits to the width/height
+ * sliders flip the select back to Custom.
  */
 const SIZE_PRESETS = [
+  { id: 'auto', label: 'Auto-size to fit text', width: null, height: null },
   { id: 'default', label: 'Default card (200 × 100 mm)', width: 200, height: 100 },
   { id: 'business', label: 'Business card (89 × 51 mm)', width: 89, height: 51 },
   { id: 'postcard', label: 'Postcard (152 × 102 mm)', width: 152, height: 102 },
@@ -107,6 +109,8 @@ let panel = null;
  * @param {Object} [config.capacityParams] - SCAD param names for capacity math
  * @param {Object} [config.multiCardParams] - SCAD param names for the
  *   All-cards layout mode (cardLayout, rowsPerCard)
+ * @param {Object} [config.multiCharmParams] - SCAD param names for the
+ *   All-charms layout mode (charmParams, charmLayout, charmGap)
  */
 export function initBraillePanel(config) {
   destroyBraillePanel();
@@ -127,6 +131,17 @@ export function isBraillePanelActive() {
   return panel !== null;
 }
 
+/**
+ * Friendly download base name for the current braille model, or null when
+ * the panel is not mounted or the mode has no friendly naming (callers
+ * then fall back to the standard hashed filename).
+ * @returns {string|null} e.g. "Braille Charm B" / "Braille Charms Brennen"
+ */
+export function getBrailleDownloadName() {
+  if (!panel || panel.mode !== 'charm') return null;
+  return panel.getCharmDownloadName();
+}
+
 class BraillePanel {
   constructor(config) {
     this.config = config;
@@ -137,6 +152,8 @@ class BraillePanel {
     this.textParams = config.textParams || [];
     this.capacityParams = config.capacityParams || {};
     this.multiCardParams = config.multiCardParams || {};
+    this.multiCharmParams = config.multiCharmParams || {};
+    this.charmParams = this.multiCharmParams.charmParams || [];
     this.defaultTable = config.defaultTable || 'en-ueb-g1.ctb';
     this.tablesCatalog = config.tablesCatalog || '/liblouis/tables.json';
 
@@ -149,6 +166,10 @@ class BraillePanel {
     this.cellsPerLine = 0;
     this.currentCard = 0;
     this.renderAll = false;
+    // Charm mode: one charm per character, generate-all ON by default
+    this.charms = [];
+    this.currentCharm = 0;
+    this.generateAll = true;
     this.isApplying = false;
     this.firstLayout = true;
     this.unsubscribe = null;
@@ -202,7 +223,7 @@ class BraillePanel {
     this.buildPreview(section);
     this.buildMessageBoxes(section);
 
-    if (this.mode === 'card') {
+    if (this.mode === 'card' || this.mode === 'charm') {
       this.buildMultiCardNotice(section);
       this.buildPager(section);
     }
@@ -225,10 +246,10 @@ class BraillePanel {
     textHelp.className = 'braille-panel-help';
     if (this.mode === 'charm') {
       textHelp.textContent =
-        `Translation runs on your device. A charm fits ${this.maxCells} ` +
-        `braille cells — usually one or two letters or one short ` +
-        `contraction. Each capital letter adds an indicator cell that ` +
-        `counts against the limit.`;
+        `Translation runs on your device. Each character becomes its own ` +
+        `charm — type a word to get one charm per letter. A charm face ` +
+        `fits ${this.maxCells} braille cells; a capital letter's ` +
+        `indicator cell shares its charm.`;
     } else if (this.mode === 'sign') {
       textHelp.textContent =
         `Translation runs on your device. Long lines wrap onto new rows ` +
@@ -331,7 +352,7 @@ class BraillePanel {
       opt.textContent = preset.label;
       sizeSelect.appendChild(opt);
     }
-    sizeSelect.value = 'default';
+    sizeSelect.value = 'auto';
     sizeSelect.addEventListener('change', () => this.applySizePreset());
     sizeRow.appendChild(sizeSelect);
     this.refs.sizeSelect = sizeSelect;
@@ -342,7 +363,7 @@ class BraillePanel {
     sizeHelp.id = 'brailleSizeHelp';
     sizeHelp.className = 'braille-panel-help';
     sizeHelp.textContent =
-      'Sets the card width and height parameters and turns auto-sizing off. Editing the width or height parameters directly switches this to Custom.';
+      'Auto-size (the default) grows the card to fit the text plus margin. A size preset sets the card width and height parameters and turns auto-sizing off. Editing the width or height parameters directly switches this to Custom.';
     section.appendChild(sizeHelp);
   }
 
@@ -543,15 +564,27 @@ class BraillePanel {
 
     notice.appendChild(noticeBody);
 
-    // Render-all toggle lives with the notice.
+    // Render-all toggle lives with the notice. In charm mode it is the
+    // "Generate all charms" toggle, ON by default.
+    const isCharm = this.mode === 'charm';
     const renderAllRow = document.createElement('div');
     renderAllRow.className = 'braille-panel-toggle-row';
     const renderAllInput = document.createElement('input');
     renderAllInput.type = 'checkbox';
     renderAllInput.id = 'brailleRenderAll';
-    renderAllInput.checked = false;
+    renderAllInput.checked = isCharm;
     renderAllInput.setAttribute('aria-describedby', 'brailleRenderAllHelp');
     renderAllInput.addEventListener('change', () => {
+      if (isCharm) {
+        this.generateAll = renderAllInput.checked;
+        this.showCharm(this.currentCharm, { announce: false });
+        stateManager.announceChange(
+          this.generateAll
+            ? 'Generate all charms turned on'
+            : 'Generate all charms turned off'
+        );
+        return;
+      }
       this.renderAll = renderAllInput.checked;
       this.showCard(this.currentCard, { announce: false });
       stateManager.announceChange(
@@ -565,15 +598,18 @@ class BraillePanel {
 
     const renderAllLabel = document.createElement('label');
     renderAllLabel.setAttribute('for', 'brailleRenderAll');
-    renderAllLabel.textContent = 'Render all cards in one file';
+    renderAllLabel.textContent = isCharm
+      ? 'Generate all charms'
+      : 'Render all cards in one file';
     renderAllRow.appendChild(renderAllLabel);
     notice.appendChild(renderAllRow);
 
     const renderAllHelp = document.createElement('p');
     renderAllHelp.id = 'brailleRenderAllHelp';
     renderAllHelp.className = 'braille-panel-help';
-    renderAllHelp.textContent =
-      'Lays every card out on the bed in a single model, separated by the card_gap_mm parameter. Large sets may exceed your print bed — check the total depth before printing.';
+    renderAllHelp.textContent = isCharm
+      ? 'Lays every charm out side by side in one model, separated by the charm_gap_mm parameter. Turn off to render and download one charm at a time.'
+      : 'Lays every card out on the bed in a single model, separated by the card_gap_mm parameter. Large sets may exceed your print bed — check the total depth before printing.';
     notice.appendChild(renderAllHelp);
 
     section.appendChild(notice);
@@ -581,6 +617,7 @@ class BraillePanel {
   }
 
   buildPager(section) {
+    const isCharm = this.mode === 'charm';
     const pager = document.createElement('div');
     pager.className = 'braille-card-pager';
     pager.id = 'brailleCardPager';
@@ -590,8 +627,12 @@ class BraillePanel {
     prevBtn.type = 'button';
     prevBtn.className = 'btn btn-secondary braille-pager-btn';
     prevBtn.id = 'braillePrevCard';
-    prevBtn.textContent = 'Previous card';
-    prevBtn.addEventListener('click', () => this.showCard(this.currentCard - 1));
+    prevBtn.textContent = isCharm ? 'Previous charm' : 'Previous card';
+    prevBtn.addEventListener('click', () =>
+      isCharm
+        ? this.showCharm(this.currentCharm - 1)
+        : this.showCard(this.currentCard - 1)
+    );
     pager.appendChild(prevBtn);
     this.refs.prevBtn = prevBtn;
 
@@ -606,8 +647,12 @@ class BraillePanel {
     nextBtn.type = 'button';
     nextBtn.className = 'btn btn-secondary braille-pager-btn';
     nextBtn.id = 'brailleNextCard';
-    nextBtn.textContent = 'Next card';
-    nextBtn.addEventListener('click', () => this.showCard(this.currentCard + 1));
+    nextBtn.textContent = isCharm ? 'Next charm' : 'Next card';
+    nextBtn.addEventListener('click', () =>
+      isCharm
+        ? this.showCharm(this.currentCharm + 1)
+        : this.showCard(this.currentCard + 1)
+    );
     pager.appendChild(nextBtn);
     this.refs.nextBtn = nextBtn;
 
@@ -695,10 +740,22 @@ class BraillePanel {
     });
   }
 
-  /** Match the size-preset select to the current width/height params. */
+  /**
+   * Match the size-preset select to the current params: the auto option
+   * while auto-sizing is on, otherwise the preset matching the manual
+   * width/height (or Custom).
+   */
   syncSizePresetFromParams() {
     const select = this.refs.sizeSelect;
     if (!select) return;
+    const autoSizeParam = this.capacityParams.autoSize;
+    if (autoSizeParam) {
+      const autoSize = stateManager.getState().parameters?.[autoSizeParam];
+      if (String(autoSize ?? '') === 'On') {
+        select.value = 'auto';
+        return;
+      }
+    }
     const width = this.readNumericParam('cardWidth', NaN);
     const height = this.readNumericParam('cardHeight', NaN);
     const match = SIZE_PRESETS.find(
@@ -711,7 +768,16 @@ class BraillePanel {
   applySizePreset() {
     const select = this.refs.sizeSelect;
     const preset = SIZE_PRESETS.find((p) => p.id === select.value);
-    if (!preset || preset.width === null) return;
+    if (!preset) return;
+
+    if (preset.id === 'auto') {
+      if (this.capacityParams.autoSize) {
+        this.writeParams({ [this.capacityParams.autoSize]: 'On' });
+        this.scheduleLayout(0);
+      }
+      return;
+    }
+    if (preset.width === null) return; // Custom: nothing to write
 
     const updates = {};
     if (this.capacityParams.cardWidth) {
@@ -862,33 +928,63 @@ class BraillePanel {
 
     const untranslatable = new Set();
     const translate = this.makeTranslator(table, preserveCaps, untranslatable);
-    const braille = text === '' ? '' : await translate(text);
+
+    // Each non-whitespace character becomes its own charm, translated
+    // individually (so "B" = capital indicator + b = 2 cells, within the
+    // per-charm cell budget).
+    const chars = [...text].filter((ch) => !/\s/u.test(ch));
+    const charms = [];
+    for (const ch of chars) {
+      charms.push({ braille: await translate(ch), source: ch });
+    }
 
     if (seq !== this.layoutSeq) return;
 
     const warnings = [];
     this.collectCommonWarnings(warnings, { untranslatable, preserveCaps, text });
 
-    const cells = countCells(braille);
-    if (cells > this.maxCells) {
+    // Per-charm cell budget check (each character carries its own charm)
+    const overflowing = charms.filter(
+      (c) => countCells(c.braille) > this.maxCells
+    );
+    if (overflowing.length > 0) {
+      const sample = overflowing
+        .slice(0, 3)
+        .map((c) => `"${c.source}" (${countCells(c.braille)} cells)`)
+        .join(', ');
       warnings.push({
         type: 'charm-overflow',
         message:
-          `"${text}" translates to ${cells} braille cells but the charm ` +
-          `fits ${this.maxCells}. Use fewer characters` +
+          `Each charm fits ${this.maxCells} braille cells, but ` +
+          `${sample} need${overflowing.length === 1 ? 's' : ''} more` +
           (preserveCaps && /\p{Lu}/u.test(text)
-            ? ', or turn off "Preserve capital letters" (each capital adds an indicator cell).'
+            ? '. Turning off "Preserve capital letters" saves the indicator cell each capital adds.'
             : '.'),
       });
     }
+    if (charms.length > this.charmParams.length && this.charmParams.length > 0) {
+      warnings.push({
+        type: 'charm-limit',
+        message:
+          `Only the first ${this.charmParams.length} charms can render in ` +
+          `one file; the remaining ` +
+          `${charms.length - this.charmParams.length} were dropped from ` +
+          `"Generate all charms". Turn the toggle off to page through and ` +
+          `render every charm separately.`,
+      });
+    }
 
-    this.cards = [[{ braille, source: text }]];
-    this.allLines = this.cards[0];
+    this.charms = charms;
+    this.cards = [charms];
+    this.allLines = charms;
     this.cellsPerLine = this.maxCells;
+    this.currentCharm = Math.min(
+      this.currentCharm,
+      Math.max(0, charms.length - 1)
+    );
 
     this.renderMessages(warnings);
-    this.renderPreview(this.cards[0]);
-    this.applyCharmToParams(braille);
+    this.showCharm(this.currentCharm, { announce: false });
     this.firstLayout = false;
   }
 
@@ -1001,6 +1097,31 @@ class BraillePanel {
     if (announce) {
       stateManager.announceChange(
         `Card ${this.currentCard + 1} of ${this.cards.length}`
+      );
+    }
+  }
+
+  /**
+   * Show one charm (charm mode). With generate-all on the preview lists
+   * every charm and the model renders them all; with it off the pager
+   * steps through charms one at a time (mirrors showCard()).
+   */
+  showCharm(index, { announce = true } = {}) {
+    this.currentCharm = Math.max(
+      0,
+      Math.min(index, Math.max(0, this.charms.length - 1))
+    );
+    const charm = this.charms[this.currentCharm];
+
+    this.renderMultiCharmUI();
+    const generateAll = this.charms.length > 1 && this.generateAll;
+    this.renderPreview(generateAll ? this.charms : charm ? [charm] : []);
+    this.applyCharmParams();
+
+    if (announce) {
+      stateManager.announceChange(
+        `Charm ${this.currentCharm + 1} of ${this.charms.length}` +
+          (charm?.source ? ` — ${charm.source}` : '')
       );
     }
   }
@@ -1118,6 +1239,47 @@ class BraillePanel {
   }
 
   /**
+   * Charm-mode counterpart of renderMultiCardUI(): the notice hosts the
+   * "Generate all charms" toggle and the pager steps through charms when
+   * the toggle is off. Unlike cards, the toggle keeps its state when the
+   * input shrinks to one charm (it is the mode default, not an opt-in).
+   */
+  renderMultiCharmUI() {
+    const multi = this.charms.length > 1;
+
+    this.refs.notice.hidden = !multi;
+    if (multi) {
+      this.refs.noticeText.textContent = this.generateAll
+        ? `Your text makes ${this.charms.length} charms — one per ` +
+          `character. All of them render side by side in one model.`
+        : `Your text makes ${this.charms.length} charms — one per ` +
+          `character. Use the pager below to render and download each ` +
+          `charm separately.`;
+      if (this.charms.length !== this.lastAnnouncedCards) {
+        stateManager.announceChange(
+          `Your text now makes ${this.charms.length} charms.`
+        );
+      }
+    }
+    this.lastAnnouncedCards = this.charms.length;
+
+    const showPager = multi && !this.generateAll;
+    this.refs.pager.hidden = !showPager;
+    if (showPager) {
+      const charm = this.charms[this.currentCharm];
+      this.refs.pagerStatus.textContent =
+        `Charm ${this.currentCharm + 1} of ${this.charms.length}` +
+        (charm?.source ? ` — ${charm.source}` : '');
+      this.refs.prevBtn.disabled = this.currentCharm === 0;
+      this.refs.nextBtn.disabled =
+        this.currentCharm === this.charms.length - 1;
+      this.refs.pagerHint.textContent =
+        `Each charm exports separately. Suggested file name: ` +
+        `${this.getCharmDownloadName() ?? 'Braille Charm'}.stl`;
+    }
+  }
+
+  /**
    * Write parameter updates through the standard parameter-change path
    * as a single undo step. Skips writes when nothing changed.
    * @param {Object<string, string>} updates - Param name -> value
@@ -1227,15 +1389,59 @@ class BraillePanel {
     this.writeParams(updates);
   }
 
-  /** Write the charm's braille characters param. */
-  applyCharmToParams(braille) {
+  /**
+   * Write the charm parameters. Generate-all writes charm_layout =
+   * "All charms" plus one Charm_N per character (extras cleared) and keeps
+   * braille_chars in sync with the first charm; otherwise charm_layout =
+   * "Single" and braille_chars carries the currently paged charm.
+   */
+  applyCharmParams() {
     if (!this.charParam) return;
+
+    const charms = this.charms;
+    const generateAll = charms.length > 1 && this.generateAll;
+
+    const updates = {};
+    updates[this.charParam] = generateAll
+      ? (charms[0]?.braille ?? '')
+      : (charms[this.currentCharm]?.braille ?? '');
+    if (this.multiCharmParams.charmLayout) {
+      updates[this.multiCharmParams.charmLayout] = generateAll
+        ? 'All charms'
+        : 'Single';
+    }
+    this.charmParams.forEach((paramName, i) => {
+      updates[paramName] = generateAll ? (charms[i]?.braille ?? '') : '';
+    });
+
+    // On the very first layout (prefilled text mirroring the SCAD
+    // defaults) leave the model untouched — avoids re-rendering the
+    // just-loaded example.
     const currentParams = stateManager.getState().parameters || {};
-    const differs = String(currentParams[this.charParam] ?? '') !== braille;
-    this.writeParams(
-      { [this.charParam]: braille },
-      { skipIfFirstLayout: this.firstLayout && !differs }
+    const differs = Object.entries(updates).some(
+      ([name, value]) => String(currentParams[name] ?? '') !== String(value)
     );
+    this.writeParams(updates, {
+      skipIfFirstLayout: this.firstLayout && !differs,
+    });
+  }
+
+  /**
+   * Friendly base name for downloads (charm mode): "Braille Charm B" for
+   * the single charm being shown, "Braille Charms Brennen" when every
+   * charm renders in one file. Null when there is nothing to name.
+   * @returns {string|null}
+   */
+  getCharmDownloadName() {
+    const charms = this.charms;
+    if (!charms || charms.length === 0) return null;
+    if (charms.length > 1 && this.generateAll) {
+      const word = this.refs.textarea?.value.trim() ?? '';
+      return word ? `Braille Charms ${word}` : 'Braille Charms';
+    }
+    const source =
+      charms[Math.min(this.currentCharm, charms.length - 1)]?.source ?? '';
+    return source ? `Braille Charm ${source}` : 'Braille Charm';
   }
 
   /**

@@ -30,7 +30,7 @@ The **Braille translation** panel sits above the regular parameter controls:
 1. **Text to translate** — type or paste plain text. Each new line starts a new braille line; long lines wrap automatically at word boundaries. (On the sign, the raised letters and the braille wrap independently — see Braille Sign below.)
 2. **Language and grade** — English UEB Grade 1 (uncontracted) is the default for cards and charms and the right choice for names, emails, and short contact details. Grade 2 (contracted) saves space but assumes fluent braille readers; it is the default for signs (matching ADA guidance). US (EBAE) tables are also available.
 3. **Preserve capital letters** — **on by default**, so the braille matches your text exactly. Every capital adds an indicator cell (1 extra cell per capital); turn it off to convert text to lowercase and save space (standard practice for space-limited labels and business cards). A warning appears when capitals were dropped.
-4. **Card size** — presets that set the width/height parameters directly: Default card 200 × 100 mm, Business card 89 × 51, Postcard 152 × 102, Greeting card 178 × 127 (5 × 7 in), A5 210 × 148, A4 297 × 210, US Letter 279 × 216. Picking a preset turns auto-sizing off; editing the width/height parameters directly flips the selector to Custom. Sizes larger than ~250 mm warn about common print-bed limits.
+4. **Card size** — **Auto-size to fit text** is the default: the card grows to fit the braille plus margin. The other options are fixed presets that set the width/height parameters directly: Default card 200 × 100 mm, Business card 89 × 51, Postcard 152 × 102, Greeting card 178 × 127 (5 × 7 in), A5 210 × 148, A4 297 × 210, US Letter 279 × 216. Picking a preset turns auto-sizing off; editing the width/height parameters directly flips the selector to Custom. Sizes larger than ~250 mm warn about common print-bed limits.
 5. **Layout options** — margin presets (Narrow 6 mm default, Standard 12.7 mm, Wide 25.4 mm, or custom), auto-wrap on/off, overflow splitting on/off, and max rows per card (default 8, matching the default 200 × 100 card).
 6. **Braille preview** — the translated braille with per-line cell counts against the computed line capacity, and the print-language source text under each braille line so you can verify the translation line by line.
 7. **Errors and warnings** — problems are split into two tiers, each marked with a text prefix and an icon (never color alone). **Errors** mean content will not fit or was cut (line overflow, too many rows, an undividable over-long word); **warnings** are informational (capitals dropped, untranslatable characters, oversized for common print beds).
@@ -54,7 +54,7 @@ If the name will not fit: remove the capital indicators first (turn off Preserve
 
 ## Card size and capacity
 
-The card defaults to a **manual 200 × 100 mm face** (26 cells per line, 8 rows with the default margin), so the panel's capacity math genuinely governs when text overflows. Pick a smaller preset (like Business card) for classic card stock, or set `auto_size_card` On in the Card Size group to let the card grow to fit the braille plus margin instead.
+The card **auto-sizes to fit the text plus margin by default** (`auto_size_card` On, 1 mm thick), so short labels come out as small cards instead of a mostly empty 200 × 100 mm face. Pick a fixed preset (like Business card) for classic card stock — that turns auto-sizing off and the manual 200 × 100 mm capacity math (26 cells per line, 8 rows with the default margin) governs when text overflows.
 
 The dot geometry defaults are ADA-friendly (rounded dots, total height ≤ 0.9 mm) and BANA-standard spacing (2.5 mm dot pitch, 7 mm cell pitch, 10 mm line pitch). They are adjustable under the Expert Mode groups.
 
@@ -62,7 +62,11 @@ Note that the A4 and US Letter presets are larger than most consumer print beds 
 
 ## Braille Charm
 
-A charm face fits **one or two braille cells** — usually one or two letters, or one short Grade 2 contraction. A capital indicator counts as a cell, so "A" with Preserve capitals on uses both cells.
+A charm face fits **one or two braille cells** — usually one letter (a capital indicator shares the face, so "A" with Preserve capitals on uses both cells) or one short Grade 2 contraction.
+
+**Each character becomes its own charm.** Type a word like "Brennen" and the panel makes seven charms, one per letter, each translated individually (whitespace is skipped). A notice reports the count, and the **Generate all charms** toggle — on by default — renders every charm in one model, laid out side by side and separated by the `charm_gap_mm` parameter (default 5 mm). Turn the toggle off to page through the charms with Previous/Next buttons ("Charm 2 of 7 — r") and render/download each one separately. Up to 12 charms fit in one file (`Charm_1`–`Charm_12` in the parameter panel); longer words can still be paged through one at a time. The raw `braille_chars` parameter stays visible, so advanced users can paste multi-cell Unicode braille for a single charm as before.
+
+Charm downloads get **friendly file names**: `Braille Charm B.stl` for a single charm (the character as you typed it) and `Braille Charms Brennen.stl` when generating all charms in one file.
 
 Every shape exports **already oriented for printing** — no rotating in the slicer.
 
@@ -70,7 +74,7 @@ Every shape exports **already oriented for printing** — no rotating in the sli
 - **Pendant shapes**: circle, square, rounded rectangle, hexagon, oval; adjustable width/height/thickness and corner radius plus an optional raised border.
 - **Attachment**: keychain hole (default), bail loop, or none (pendant shapes only — the bracelet clip is its own attachment).
 - **Print orientation** (pendant shapes): **Angled** (default) — the charm leans back at 75° with a central break-away support fin, snap-off bridges, and a built-in brim, for the crispest dots (same research-backed technique as the card, but slimmer). The fin uses at least 3 bridges and automatically adds about one more per 10 mm of height for taller charms. The leaning bottom edge is trimmed flat against the bed (`bed_contact_mm`, default 2 mm) so the first layer is a wide contact strip rather than a knife edge. Flat mode (dots up) is still available. A bail loop prints poorly in Angled mode; use the keychain hole.
-- The panel warns when your text translates to more than 2 cells.
+- The panel warns when any single charm's character translates to more than 2 cells, and when a word needs more than the 12 charm slots one file can hold.
 
 ## Braille Sign
 
