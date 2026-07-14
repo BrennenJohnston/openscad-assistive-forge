@@ -819,6 +819,13 @@ if (line_spacing < dot_spacing * 2 + _max_dot_dia)
 // structure into a single solid so it slices as one print-ready object. In
 // All-cards mode the cards march back along -Y, one footprint plus
 // card_gap_mm apart, so the full set prints in one job.
+//
+// The whole model is spun 180 deg about the vertical Z axis so the braille
+// reading face points toward the default front view (-Y) instead of away
+// from it. This is a pure rotation about the print's vertical axis, so bed
+// contact, the lean, and the support fins are all unchanged — it still
+// prints exactly as modeled.
+rotate([0, 0, 180])
 union() {
     for (k = [0 : cards_count - 1]) {
         translate([0, -k * card_pitch_mm, 0]) {

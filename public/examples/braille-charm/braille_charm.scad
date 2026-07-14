@@ -749,6 +749,13 @@ module oriented_charm(chars) {
 // In All-charms mode the charms march along +X, one footprint plus
 // charm_gap_mm apart, so the full set prints in one job. Single mode is
 // the k = 0 case (active_charms = [braille_chars]).
+//
+// The whole model is spun 180 deg about the vertical Z axis so the braille
+// reading face points toward the default front view (-Y) instead of away
+// from it. This is a pure rotation about the print's vertical axis, so bed
+// contact, the lean, and the support fin are all unchanged — it still
+// prints exactly as modeled.
+rotate([0, 0, 180])
 union() {
     for (k = [0 : charms_count - 1]) {
         translate([k * charm_pitch_mm, 0, 0])
