@@ -7,7 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-_No unreleased changes yet._
+### Added
+
+- **Braille Charm multi-charm mode** (Braille Charm 1.3.0) — each non-whitespace character of the typed text becomes its own charm, translated individually (a capital's indicator cell shares its charm). The new **Generate all charms** toggle (on by default) renders every charm side by side in one model, laid out along the bed and separated by the new `charm_gap_mm` parameter (default 5 mm), via `charm_layout = "All charms"` and twelve `Charm_1`–`Charm_12` slots; with the toggle off, a Previous/Next pager steps through the charms ("Charm 2 of 7 — r") and renders each one separately. The panel warns per charm when a character exceeds the 2-cell face budget, when a word needs more than the 12 in-file slots, and (in the SCAD console) when the combined layout exceeds ~250 mm of bed width. The raw `braille_chars` parameter still accepts pasted Unicode braille for a single charm
+- **Friendly braille-charm download names** — charm exports are named after their content instead of the hashed default: `Braille Charm B.stl` for a single charm (the character as typed) and `Braille Charms Brennen.stl` when generating all charms in one file; applies to the download button and all export-format menu items (new `resolveDownloadFilename` helper in `download.js`)
+
+### Changed
+
+- **Braille Card auto-sizes by default** (Braille Card 1.2.0) — `auto_size_card` now defaults On, so short labels come out as small cards that fit the text plus margin instead of a mostly empty 200 × 100 mm face; the panel's Card size select gains a matching **Auto-size to fit text** option (the new default) and syncs back to it whenever auto-sizing is on. Fixed presets (Business card, Postcard, …) still turn auto-sizing off and use the manual capacity math
+- **Thinner braille defaults** — the Braille Card's `card_thickness_mm` default drops 1.5 → 1 mm, and the Braille Sign's `plate_thickness_mm` (Braille Sign 1.1.0) drops 3 → 1 mm with the slider minimum lowered 2 → 1 mm, saving filament and print time on parts whose stiffness comes from the leaning print orientation
 
 ---
 

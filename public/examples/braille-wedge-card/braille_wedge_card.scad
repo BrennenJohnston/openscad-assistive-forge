@@ -1,7 +1,7 @@
 // =============================================================================
 // Braille Wedge Card STL Generator (OpenSCAD)
 // =============================================================================
-// VERSION = 1.1.0 (OpenSCAD Assistive Forge web adaptation)
+// VERSION = 1.2.0 (OpenSCAD Assistive Forge web adaptation)
 // License: GPL-3.0-or-later
 //          https://www.gnu.org/licenses/gpl-3.0.html
 // Source:  https://github.com/BrennenJohnston/braille-wedge-card-openscad
@@ -46,10 +46,10 @@
 //  2. Paste pre-translated braille into Line_1..Line_20 in the Customizer.
 //  3. Pick dot_shape (Rounded is the ADA-friendly default; Cone is easier to
 //     print on some machines).
-//  4. The card defaults to a manual 200 x 100 mm face. Set auto_size_card = On
-//     and the card face auto-sizes to fit your text plus a margin instead —
-//     the effective size is reported in the console (the Customizer sliders
-//     can't show computed values).
+//  4. The card face auto-sizes to fit your text plus a margin by default
+//     (auto_size_card = On) — the effective size is reported in the console
+//     (the Customizer sliders can't show computed values). Set
+//     auto_size_card = Off to use the manual width/height sliders instead.
 //  5. Warnings (invalid characters, text too long, too many lines) appear as
 //     red 3D text in the F5 preview only — they are NEVER exported to the STL,
 //     and can be turned off under the [Warnings] tab.
@@ -149,7 +149,7 @@ Line_20 = "";
 
 /* [Card Size] */
 // Auto-size the card face to fit the braille text plus margins. Turn Off to use the manual width/height below.
-auto_size_card = "Off"; // [On, Off]
+auto_size_card = "On"; // [On, Off]
 // Margin between the braille block and the card edges when auto-sizing (mm)
 auto_size_margin_mm = 6;     // [2:0.5:20]
 // Manual face width (mm) - only used when auto_size_card = Off
@@ -213,7 +213,7 @@ dot_shape = "Rounded"; // [Rounded, Cone]
 face_angle_deg = 75;         // [60:1:90]
 // Flat card thickness (mm). 1.5-2 mm prints rigid; thinner saves filament but
 // is whippier during the print.
-card_thickness_mm = 1.5;     // [1:0.1:5]
+card_thickness_mm = 1;       // [1:0.1:5]
 
 /* [Expert Mode - Braille Spacing] */
 // Text capacity in braille cells per row (ignored when auto_size_card = On)
@@ -819,6 +819,13 @@ if (line_spacing < dot_spacing * 2 + _max_dot_dia)
 // structure into a single solid so it slices as one print-ready object. In
 // All-cards mode the cards march back along -Y, one footprint plus
 // card_gap_mm apart, so the full set prints in one job.
+//
+// The whole model is spun 180 deg about the vertical Z axis so the braille
+// reading face points toward the default front view (-Y) instead of away
+// from it. This is a pure rotation about the print's vertical axis, so bed
+// contact, the lean, and the support fins are all unchanged — it still
+// prints exactly as modeled.
+rotate([0, 0, 180])
 union() {
     for (k = [0 : cards_count - 1]) {
         translate([0, -k * card_pitch_mm, 0]) {

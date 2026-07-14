@@ -63,9 +63,10 @@ describe('braille_wedge_card.scad parser integration', () => {
   it('extracts card size and spacing parameters used for capacity math', () => {
     const parsed = extractParameters(readScad());
 
-    // Manual 200x100 default: the panel's capacity math governs overflow.
+    // Auto-size on by default: the card grows to fit the text; the manual
+    // 200x100 sliders still govern the panel's capacity math.
     expect(parsed.parameters.auto_size_card).toBeDefined();
-    expect(parsed.parameters.auto_size_card.default).toBe('Off');
+    expect(parsed.parameters.auto_size_card.default).toBe('On');
     expect(parsed.parameters.auto_size_margin_mm.default).toBe(6);
     expect(parsed.parameters.card_face_width_mm.default).toBe(200);
     expect(parsed.parameters.card_face_height_mm.default).toBe(100);
@@ -73,6 +74,11 @@ describe('braille_wedge_card.scad parser integration', () => {
     expect(parsed.parameters.line_spacing.default).toBe(10.0);
     expect(parsed.parameters.grid_columns.default).toBe(26);
     expect(parsed.parameters.grid_rows.default).toBe(8);
+  });
+
+  it('defaults to a 1 mm card thickness', () => {
+    const parsed = extractParameters(readScad());
+    expect(parsed.parameters.card_thickness_mm.default).toBe(1);
   });
 
   it('extracts the multi-card layout parameters', () => {

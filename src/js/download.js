@@ -116,6 +116,30 @@ export function generateFilename(modelName, parameters, format = 'stl') {
 }
 
 /**
+ * Resolve the filename for a download: a friendly override base name when
+ * one is provided (sanitized, extension appended — no hash or date, so
+ * "Braille Charm B" becomes "Braille Charm B.stl"), otherwise the standard
+ * generated name.
+ * @param {string} modelName - Name of the model (fallback path)
+ * @param {Object} parameters - Parameter values (fallback path)
+ * @param {string} format - Output format (stl, obj, off, amf, 3mf)
+ * @param {string|null} [overrideName] - Friendly base name without extension
+ * @returns {string} Filename
+ */
+export function resolveDownloadFilename(
+  modelName,
+  parameters,
+  format = 'stl',
+  overrideName = null
+) {
+  if (overrideName) {
+    const extension = OUTPUT_FORMATS[format]?.extension || `.${format}`;
+    return sanitizeFilename(overrideName) + extension;
+  }
+  return generateFilename(modelName, parameters, format);
+}
+
+/**
  * Download file with specified format
  * @param {ArrayBuffer} arrayBuffer - File data
  * @param {string} filename - Filename

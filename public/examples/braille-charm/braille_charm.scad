@@ -1,7 +1,7 @@
 // =============================================================================
 // Braille Charm — Parametric Braille Charm/Pendant Generator
 // =============================================================================
-// VERSION = 1.2.1 (OpenSCAD Assistive Forge)
+// VERSION = 1.3.0 (OpenSCAD Assistive Forge)
 // License: GPL-3.0-or-later
 //          https://www.gnu.org/licenses/gpl-3.0.html
 //
@@ -43,13 +43,50 @@
 //  2. Pick charm_shape, size, border, and attachment. bracelet_clip has its
 //     own size controls under [Bracelet Clip].
 //  3. Pick print_orientation; for Angled, tune the fin under [Support Fin].
-//  4. Render (F6) -> File -> Export -> STL. Print as modeled — no rotation
+//  4. To print SEVERAL charms in one file (e.g. one charm per letter of a
+//     word), set charm_layout = "All charms" under [Multi-Charm Layout] and
+//     fill Charm_1..Charm_12 with the braille for each charm (empty slots
+//     are skipped). The charms are laid out side by side along X,
+//     charm_gap_mm apart. In the Forge the Braille translation panel fills
+//     these for you.
+//  5. Render (F6) -> File -> Export -> STL. Print as modeled — no rotation
 //     needed in the slicer.
 // =============================================================================
 
 /* [Braille Text] */
 // One or two Unicode braille characters (a capital indicator counts as a cell)
 braille_chars = "⠠⠁";
+
+/* [Multi-Charm Layout] */
+// Render one charm (braille_chars) or every non-empty Charm_N below in one
+// file, laid out side by side along X.
+charm_layout = "Single"; // [Single, All charms]
+// Gap between neighbouring charm footprints in All-charms mode (mm)
+charm_gap_mm = 5; // [0:0.5:50]
+// Braille for charm 1 in All-charms mode (empty = skipped)
+Charm_1 = "";
+// Braille for charm 2
+Charm_2 = "";
+// Braille for charm 3
+Charm_3 = "";
+// Braille for charm 4
+Charm_4 = "";
+// Braille for charm 5
+Charm_5 = "";
+// Braille for charm 6
+Charm_6 = "";
+// Braille for charm 7
+Charm_7 = "";
+// Braille for charm 8
+Charm_8 = "";
+// Braille for charm 9
+Charm_9 = "";
+// Braille for charm 10
+Charm_10 = "";
+// Braille for charm 11
+Charm_11 = "";
+// Braille for charm 12
+Charm_12 = "";
 
 /* [Charm Shape] */
 // Base shape of the charm. bracelet_clip (default) is a C-clip for silicone bracelets that always prints standing vertically with no support fin.
@@ -219,8 +256,6 @@ dot_total_height = use_rounded_dots
     : cone_dot_height;
 DOT_FACE_EMBED = 0.02;
 
-n_cells = len(braille_chars);
-
 // Leaning geometry (Angled mode). The charm is built flat, then rotated 180
 // degrees about Z and leaned back by rotate([-face_angle_deg, 0, 0]); this
 // keeps the braille reading left-to-right and the attachment at the top.
@@ -255,6 +290,34 @@ clip_safe_side = min(clip_side_radius,
                      min(clip_wall_eff, clip_inner_d, clip_gap_width, clip_height) / 2 - 0.1);
 // Flat span of the braille wall between the rounded outer corners
 clip_face_width = clip_outer_w - 2 * clip_safe_ocr;
+
+// Multi-charm layout: the non-empty Charm_N strings, or braille_chars when
+// charm_layout = Single (or when every Charm_N slot is empty).
+multi_charm_on = (charm_layout == "All charms");
+_charm_slots = [Charm_1, Charm_2, Charm_3, Charm_4, Charm_5, Charm_6,
+                Charm_7, Charm_8, Charm_9, Charm_10, Charm_11, Charm_12];
+_charm_values = [for (c = _charm_slots) if (len(c) > 0) c];
+active_charms = (multi_charm_on && len(_charm_values) > 0)
+    ? _charm_values
+    : [braille_chars];
+charms_count = len(active_charms);
+// Longest charm in braille cells (drives the shared width diagnostics)
+max_charm_cells = max([for (c = active_charms) len(c)]);
+
+// Bed footprint of ONE charm along X. The bracelet clip stands with its C
+// profile on the bed (clip_outer_w wide); pendant shapes span
+// effective_width, widened by the fin brim when the Angled support fin is
+// on (the fin is centred, so its brim only matters for very slim charms).
+charm_footprint_w = clip_on
+    ? clip_outer_w
+    : (fin_on ? max(effective_width, fin_thickness_mm + 2 * brim_width_mm)
+              : effective_width);
+// In All-charms mode successive charms step along +X by this pitch, so
+// neighbouring footprints are separated by exactly charm_gap_mm.
+charm_pitch_mm = charm_footprint_w + charm_gap_mm;
+// Total bed width used by the whole All-charms layout
+multi_total_width_mm = charms_count * charm_footprint_w
+                     + (charms_count - 1) * charm_gap_mm;
 
 // =============================================================================
 // HELPER FUNCTIONS (braille decoding — shared with the wedge card)
@@ -404,11 +467,14 @@ braille_y_offset = (attachment_type == "none" || clip_on) ? 0 : -hole_diameter /
 // The braille block in a face-local frame: +X = reading direction, +Y = up
 // the cell, +Z = out of the face, dot bases resting on the z = 0 plane
 // (embedded DOT_FACE_EMBED so the union genuinely fuses with the body).
-module braille_cells_local() {
-    if (n_cells > 0) {
-        for (i = [0 : n_cells - 1]) {
-            x_cell = (i - (n_cells - 1) / 2) * cell_spacing;
-            dots = get_dot_pattern(braille_chars[i]);
+// chars is the Unicode braille string for THIS charm (multi-charm mode
+// renders a different string per charm).
+module braille_cells_local(chars) {
+    cells = len(chars);
+    if (cells > 0) {
+        for (i = [0 : cells - 1]) {
+            x_cell = (i - (cells - 1) / 2) * cell_spacing;
+            dots = get_dot_pattern(chars[i]);
             for (d = [0:5]) {
                 if (dots[d] == 1) {
                     dot_pos = dot_positions[d];
@@ -422,20 +488,20 @@ module braille_cells_local() {
     }
 }
 
-module face_braille_dots() {
+module face_braille_dots(chars) {
     translate([0, braille_y_offset, charm_thickness])
-        braille_cells_local();
+        braille_cells_local(chars);
 }
 
 // =============================================================================
 // COMPLETE FLAT CHARM
 // =============================================================================
-module flat_charm() {
+module flat_charm(chars) {
     difference() {
         union() {
             charm_body();
             attachment_add();
-            face_braille_dots();
+            face_braille_dots(chars);
         }
         attachment_cut();
     }
@@ -513,19 +579,19 @@ module clip_body() {
 // the face, so the braille reads along the band when the clip is worn on a
 // bracelet; the left/right and up/down nudges move the block from its
 // centered default (positive = viewer's right / up).
-module clip_braille_dots() {
+module clip_braille_dots(chars) {
     translate([-clip_braille_left_right,
                clip_profile_depth / 2,
                clip_height / 2 + clip_braille_up_down])
         rotate([90, 0, 180])
             rotate([0, 0, clip_braille_rotation])
-                braille_cells_local();
+                braille_cells_local(chars);
 }
 
-module clip_charm() {
+module clip_charm(chars) {
     union() {
         clip_body();
-        clip_braille_dots();
+        clip_braille_dots(chars);
     }
 }
 
@@ -535,12 +601,12 @@ module clip_charm() {
 // The flat charm is rotated 180 deg about Z, leaned back by
 // rotate([-face_angle_deg, 0, 0]), and lifted onto the bed. Net effect:
 // braille reads left-to-right at face_angle_deg, attachment at the top.
-module leaning_charm() {
+module leaning_charm(chars) {
     difference() {
         translate([0, 0, lean_lift])
             rotate([-face_angle_deg, 0, 0])
                 rotate([0, 0, 180])
-                    flat_charm();
+                    flat_charm(chars);
         // Trim the sunk sliver below the bed -> flat first-layer strip
         translate([0, 0, -shape_h])
             cube([4 * effective_width, 4 * shape_h, 2 * shape_h], center = true);
@@ -613,27 +679,40 @@ module support_structure() {
 // =============================================================================
 // CONSOLE DIAGNOSTICS
 // =============================================================================
-// Extent of the braille block on the face (widest dot geometry included)
-_dot_block_w = (n_cells - 1) * cell_spacing + dot_spacing + rounded_dot_base_diameter;
+// Extent of the braille block on the face (widest dot geometry included);
+// in All-charms mode the longest charm string governs the fit checks.
+_dot_block_w = (max_charm_cells - 1) * cell_spacing + dot_spacing + rounded_dot_base_diameter;
 _dot_block_h = 2 * dot_spacing + rounded_dot_base_diameter;
 
 echo(clip_on
-    ? str("Braille charm: ", n_cells, " cell(s) on a bracelet_clip, ",
+    ? str("Braille charm: ", charms_count, " charm(s), up to ", max_charm_cells,
+          " cell(s) on a bracelet_clip, ",
           clip_outer_w, " x ", clip_height, " mm vertical face")
-    : str("Braille charm: ", n_cells, " cell(s) on a ", charm_shape, " ",
+    : str("Braille charm: ", charms_count, " charm(s), up to ", max_charm_cells,
+          " cell(s) on a ", charm_shape, " ",
           effective_width, " x ", effective_height, " mm face"));
-if (n_cells > 2)
-    echo(str("WARNING: braille_chars has ", n_cells,
-             " cells but a charm face is designed for 1-2. Use fewer",
-             " characters (a capital indicator counts as a cell)."));
-if (has_invalid_chars(braille_chars))
-    echo("WARNING: braille_chars contains non-braille characters. Use Unicode braille (U+2800-U+28FF).");
-if (!clip_on && n_cells > 0 &&
+if (multi_charm_on)
+    echo(str("Multi-charm layout: ", charms_count, " charm(s), ", charm_gap_mm,
+             " mm apart; total bed width ", multi_total_width_mm, " mm"));
+if (multi_charm_on && multi_total_width_mm > 250)
+    echo(str("WARNING: the All-charms layout needs ", multi_total_width_mm,
+             " mm of bed width, which may exceed common print beds. Reduce",
+             " charm_gap_mm or print charms singly."));
+for (c = active_charms) {
+    if (len(c) > 2)
+        echo(str("WARNING: \"", c, "\" has ", len(c),
+                 " cells but a charm face is designed for 1-2. Use fewer",
+                 " characters (a capital indicator counts as a cell)."));
+    if (has_invalid_chars(c))
+        echo(str("WARNING: \"", c, "\" contains non-braille characters.",
+                 " Use Unicode braille (U+2800-U+28FF)."));
+}
+if (!clip_on && max_charm_cells > 0 &&
         _dot_block_w > effective_width - 2 * (add_border == "yes" ? border_width : 0))
     echo("WARNING: the braille block is wider than the charm face. Enlarge the charm or use fewer cells.");
 // On the clip the braille is rotated 90 deg, so the cell run goes UP the
 // face (limited by clip_height) and the cell height goes ACROSS it.
-if (clip_on && n_cells > 0 && _dot_block_w > clip_height - 2 * abs(clip_braille_up_down))
+if (clip_on && max_charm_cells > 0 && _dot_block_w > clip_height - 2 * abs(clip_braille_up_down))
     echo("WARNING: the rotated braille block is taller than the clip. Increase clip_height or use fewer cells.");
 if (clip_on && _dot_block_h > clip_face_width - 2 * abs(clip_braille_left_right))
     echo("WARNING: the braille cell is wider than the clip's flat wall. Lengthen the channel or reduce the corner rounding.");
@@ -653,15 +732,35 @@ if (angled_on)
 // =============================================================================
 // MAIN RENDERING — every branch exports already oriented for printing
 // =============================================================================
-if (clip_on) {
-    clip_charm();
-} else if (angled_on) {
-    union() {
-        leaning_charm();
-        if (fin_on) support_structure();
+// One charm, in its print orientation, carrying the given braille string.
+module oriented_charm(chars) {
+    if (clip_on) {
+        clip_charm(chars);
+    } else if (angled_on) {
+        union() {
+            leaning_charm(chars);
+            if (fin_on) support_structure();
+        }
+    } else {
+        flat_charm(chars);
     }
-} else {
-    flat_charm();
+}
+
+// In All-charms mode the charms march along +X, one footprint plus
+// charm_gap_mm apart, so the full set prints in one job. Single mode is
+// the k = 0 case (active_charms = [braille_chars]).
+//
+// The whole model is spun 180 deg about the vertical Z axis so the braille
+// reading face points toward the default front view (-Y) instead of away
+// from it. This is a pure rotation about the print's vertical axis, so bed
+// contact, the lean, and the support fin are all unchanged — it still
+// prints exactly as modeled.
+rotate([0, 0, 180])
+union() {
+    for (k = [0 : charms_count - 1]) {
+        translate([k * charm_pitch_mm, 0, 0])
+            oriented_charm(active_charms[k]);
+    }
 }
 
 // End of file

@@ -1,7 +1,7 @@
 {
   "name": "Braille Card Customizer",
   "description": "Type text and get a 3D-printable braille card. Translation to Unicode braille runs entirely on your device via liblouis; the card prints leaning back at 75 degrees with break-away support fins so the dots read directly off the printer.",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "author": "Brennen Johnston",
   "license": "GPL-3.0-or-later",
   "main": "braille_wedge_card.scad",
