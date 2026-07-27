@@ -28,10 +28,13 @@
 // 9.5 mm (3/8 in) minimum below the raised text, and more). Verify
 // against the standard before installing.
 //
-// The braille dot system is adapted from the Braille Wedge Card STL
-// Generator by Brennen Johnston
-// (https://github.com/BrennenJohnston/braille-wedge-card-openscad,
-// GPL-3.0-or-later).
+// Upstream: the standalone desktop version of this generator is
+// Braille Sign STL Generator by Brennen Johnston
+// (https://github.com/BrennenJohnston/braille-sign-openscad). Its braille
+// dot system is in turn adapted from the Braille Wedge Card STL Generator
+// (https://github.com/BrennenJohnston/braille-wedge-card-openscad). Both are
+// PolyForm Noncommercial upstream; this Forge example is relicensed by the
+// copyright holder to GPL-3.0-or-later.
 // =============================================================================
 
 /* [Sign Text - Raised Letters] */

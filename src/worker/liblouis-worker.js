@@ -8,8 +8,9 @@
  * on-demand table loading uses synchronous XHR, which is deprecated on the
  * main thread.
  *
- * Adapted from the braille-card-and-cylinder-stl-generator project
- * (Copyright 2024-2025 Brennen Johnston, PolyForm Noncommercial 1.0.0).
+ * Adapted from the braille-cylinder-stl-generator project (formerly
+ * braille-card-and-cylinder-stl-generator; Copyright 2024-2026 Brennen
+ * Johnston, PolyForm Noncommercial 1.0.0).
  *
  * Message protocol (request → response, matched by id):
  *   { id, type: 'init' }

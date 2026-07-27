@@ -100,7 +100,8 @@
 //  [I] 2010 ADA Standards: https://archive.ada.gov/
 //
 //  Lineage: the braille dot geometry was adapted from the Braille Cylinder
-//  STL Generator (https://github.com/BrennenJohnston/braille-stl-generator-openscad),
+//  STL Generator
+//      (https://github.com/BrennenJohnston/braille-cylinder-stl-generator-openscad),
 //  then simplified for this standalone, directly-readable card project.
 // =============================================================================
 
