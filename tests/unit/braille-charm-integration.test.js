@@ -136,7 +136,7 @@ describe('braille_charm.scad parser integration', () => {
     const content = readScad();
     expect(content).toContain('GPL-3.0-or-later');
     expect(content).toContain('Nasif');
-    expect(content).toContain('braille-wedge-card-openscad');
+    expect(content).toContain('braille-charm-openscad');
   });
 });
 

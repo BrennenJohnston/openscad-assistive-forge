@@ -110,7 +110,7 @@ describe('braille_sign.scad parser integration', () => {
     const content = readScad();
     expect(content).toContain('GPL-3.0-or-later');
     expect(content).toContain('does NOT guarantee compliance');
-    expect(content).toContain('braille-wedge-card-openscad');
+    expect(content).toContain('braille-sign-openscad');
   });
 });
 

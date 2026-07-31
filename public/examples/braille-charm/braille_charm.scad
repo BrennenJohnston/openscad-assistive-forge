@@ -13,8 +13,13 @@
 // thingiverse.com/thing:7153594); the braille dot system (ADA-friendly
 // rounded/cone dots, Unicode braille decoding) is adapted from the Braille
 // Wedge Card STL Generator by Brennen Johnston
-// (https://github.com/BrennenJohnston/braille-wedge-card-openscad,
-// GPL-3.0-or-later).
+// (https://github.com/BrennenJohnston/braille-wedge-card-openscad).
+//
+// Upstream: the standalone desktop version of this generator is
+// Braille Charm STL Generator
+// (https://github.com/BrennenJohnston/braille-charm-openscad), PolyForm
+// Noncommercial; this Forge example is relicensed by the copyright holder to
+// GPL-3.0-or-later.
 //
 // PRINT ORIENTATIONS — every shape exports already oriented for printing
 //  • Angled (default for the pendant shapes): the charm leans back at

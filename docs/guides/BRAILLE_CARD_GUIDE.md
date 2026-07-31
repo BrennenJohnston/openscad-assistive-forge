@@ -127,7 +127,14 @@ Translation runs in a Web Worker on your device using liblouis compiled to WebAs
 ## Licensing and attribution
 
 - Braille translation is powered by [liblouis](https://liblouis.io/), the open-source braille translator (LGPL-2.1-or-later; its JavaScript bindings are GPL-3.0; individual translation tables carry their own headers). The engine and tables are copied from the `liblouis` npm packages at build time by `scripts/setup-liblouis.js`, which also writes a `NOTICE.txt` alongside the deployed assets.
-- The card geometry is adapted from the [Braille Wedge Card STL Generator](https://github.com/BrennenJohnston/braille-wedge-card-openscad) (© 2024–2026 Brennen Johnston). Originally published under PolyForm Noncommercial 1.0.0, the example was **relicensed by the copyright holder to GPL-3.0-or-later** for the OpenSCAD Assistive Forge (2026); the SCAD header records the relicense.
+- All three examples are adapted from Brennen Johnston's standalone desktop
+  generators (© 2024–2026). Each was originally published under PolyForm
+  Noncommercial 1.0.0 and **relicensed by the copyright holder to
+  GPL-3.0-or-later** for the OpenSCAD Assistive Forge (2026); each SCAD header
+  records the relicense. Upstream repos:
+  [braille-wedge-card-openscad](https://github.com/BrennenJohnston/braille-wedge-card-openscad),
+  [braille-sign-openscad](https://github.com/BrennenJohnston/braille-sign-openscad),
+  [braille-charm-openscad](https://github.com/BrennenJohnston/braille-charm-openscad).
 - The **Braille Charm** (GPL-3.0-or-later) combines the charm base from Nasif's Charm Maker (concept by Nasif Zaman, CC0) with the wedge card's braille dot system; its bracelet clip shape is adapted from the Charm Customizer's Bracelet Clip Charm (CC0), whose design direction came from Duy Do's AAC bracelet charms (UW WOOF3D).
 - The **Braille Sign** (GPL-3.0-or-later) uses the wedge card's braille dot system and renders raised characters with the Liberation Sans font (SIL OFL).
 - Key references: [BANA size and spacing](https://brailleauthority.org/size-and-spacing-braille-characters), the CHI 2024 study on [3D-printed braille orientation](https://doi.org/10.1145/3613904.3642719), and the [2010 ADA Standards](https://archive.ada.gov/) section 703.
