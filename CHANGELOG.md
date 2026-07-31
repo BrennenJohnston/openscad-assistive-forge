@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Braille Card auto-sizes by default** (Braille Card 1.2.0) — `auto_size_card` now defaults On, so short labels come out as small cards that fit the text plus margin instead of a mostly empty 200 × 100 mm face; the panel's Card size select gains a matching **Auto-size to fit text** option (the new default) and syncs back to it whenever auto-sizing is on. Fixed presets (Business card, Postcard, …) still turn auto-sizing off and use the manual capacity math
 - **Thinner braille defaults** — the Braille Card's `card_thickness_mm` default drops 1.5 → 1 mm, and the Braille Sign's `plate_thickness_mm` (Braille Sign 1.1.0) drops 3 → 1 mm with the slider minimum lowered 2 → 1 mm, saving filament and print time on parts whose stiffness comes from the leaning print orientation
 
+### Security
+
+- **Three high-severity transitive advisories patched, unblocking the CI Security Checks job.** `fast-uri` 3.1.3 → 3.1.4 ([GHSA-v2hh-gcrm-f6hx](https://github.com/advisories/GHSA-v2hh-gcrm-f6hx) — host confusion via a literal backslash authority delimiter) is the only one that ships, reaching the bundle through the `ajv` runtime dependency. The other two are build-time only: `postcss` 8.5.16 → 8.5.25 ([GHSA-r28c-9q8g-f849](https://github.com/advisories/GHSA-r28c-9q8g-f849) — path traversal in `sourceMappingURL` auto-loading) via `vite`, and `brace-expansion` 5.0.7 → 5.0.9 ([GHSA-mh99-v99m-4gvg](https://github.com/advisories/GHSA-mh99-v99m-4gvg) — denial of service via unbounded expansion) via `eslint` → `minimatch`. All three fixes land inside the semver ranges already declared in `package.json`, so the change is confined to `package-lock.json` and `npm audit --audit-level=high` passes again
+
 ---
 
 ## [4.5.0] - 2026-07-12
