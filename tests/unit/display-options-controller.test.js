@@ -1,9 +1,13 @@
 /**
  * Regression tests for show-edges overlay refresh behavior.
  *
- * The bug: when "Show Edges" was enabled, the edge overlay stayed at its
+ * Bug 1: when "Show Edges" was enabled, the edge overlay stayed at its
  * original geometry after parameter changes or project switches because
  * refreshOverlays() was never called after model loads in non-HFM paths.
+ *
+ * Bug 2 (desync): the overlay used to be scene-parented with a one-time
+ * copied transform, so any later mesh movement left it floating in the
+ * wrong place. It is now parented to the mesh itself.
  *
  * These tests verify that:
  *  1. refreshOverlays() rebuilds the edges overlay from the current mesh
@@ -11,6 +15,8 @@
  *  3. Toggling edges off properly removes the overlay
  *  4. init() registers a post-load listener so overlays auto-refresh
  *  5. dispose() unregisters the post-load listener
+ *  6. The overlay is a child of the mesh and uses the theme edge color
+ *  7. refreshThemeSensitiveOverlays() rebuilds the overlay on theme change
  *
  * @license GPL-3.0-or-later
  */
@@ -47,13 +53,14 @@ function createMockThree() {
     EdgesGeometry: vi.fn(function () {
       Object.assign(this, createMockGeometry());
     }),
-    LineBasicMaterial: vi.fn(function () {
-      Object.assign(this, createMockMaterial());
+    LineBasicMaterial: vi.fn(function (opts = {}) {
+      Object.assign(this, opts, createMockMaterial());
     }),
     LineSegments: vi.fn(function (geo, mat) {
       this.geometry = geo;
       this.material = mat;
       this.name = '';
+      this.parent = null;
       this.position = { copy: vi.fn() };
       this.rotation = { copy: vi.fn() };
       this.scale = { copy: vi.fn() };
@@ -64,12 +71,35 @@ function createMockThree() {
   };
 }
 
+/** Mesh mock with Object3D-style child management (edges parent here). */
+function createMockMesh() {
+  const mesh = {
+    geometry: createMockGeometry(),
+    material: createMockMaterial(),
+    children: [],
+    position: { copy: vi.fn(), x: 0, y: 0, z: 0 },
+    rotation: { copy: vi.fn(), x: 0, y: 0, z: 0 },
+    scale: { copy: vi.fn(), x: 1, y: 1, z: 1 },
+  };
+  mesh.add = vi.fn((obj) => {
+    mesh.children.push(obj);
+    obj.parent = mesh;
+  });
+  mesh.remove = vi.fn((obj) => {
+    const idx = mesh.children.indexOf(obj);
+    if (idx >= 0) mesh.children.splice(idx, 1);
+    obj.parent = null;
+  });
+  return mesh;
+}
+
 function createMockPreviewManager(mesh = null) {
   const children = [];
   const listeners = [];
   return {
     mesh,
     currentTheme: 'light',
+    getThemeEdgeColor: vi.fn(() => 0x020617),
     scene: {
       add: vi.fn((obj) => children.push(obj)),
       remove: vi.fn((obj) => {
@@ -92,19 +122,14 @@ describe('DisplayOptionsController — edge overlay refresh', () => {
   let ctrl;
   let mockThree;
   let mockPm;
-  const mockMesh = {
-    geometry: createMockGeometry(),
-    material: createMockMaterial(),
-    position: { copy: vi.fn(), x: 0, y: 0, z: 0 },
-    rotation: { copy: vi.fn(), x: 0, y: 0, z: 0 },
-    scale: { copy: vi.fn(), x: 1, y: 1, z: 1 },
-  };
+  let mockMesh;
 
   beforeEach(() => {
     resetDisplayOptionsController();
     localStorage.clear();
     document.body.innerHTML = '';
     mockThree = createMockThree();
+    mockMesh = createMockMesh();
     mockPm = createMockPreviewManager(mockMesh);
 
     ctrl = new DisplayOptionsController({
@@ -118,8 +143,41 @@ describe('DisplayOptionsController — edge overlay refresh', () => {
     ctrl.refreshOverlays();
 
     expect(mockThree.EdgesGeometry).toHaveBeenCalledWith(mockMesh.geometry, 15);
-    expect(mockPm.scene.add).toHaveBeenCalled();
     expect(ctrl._edgesOverlay).not.toBeNull();
+    expect(mockMesh.add).toHaveBeenCalledWith(ctrl._edgesOverlay);
+  });
+
+  it('parents the overlay to the mesh, not the scene (desync fix)', () => {
+    ctrl.state.edges = true;
+    ctrl.refreshOverlays();
+
+    expect(ctrl._edgesOverlay.parent).toBe(mockMesh);
+    expect(mockMesh.children).toContain(ctrl._edgesOverlay);
+    expect(mockPm.scene.add).not.toHaveBeenCalledWith(ctrl._edgesOverlay);
+    // No transform copying: the overlay inherits the mesh transform.
+    expect(ctrl._edgesOverlay.position.copy).not.toHaveBeenCalled();
+    expect(ctrl._edgesOverlay.rotation.copy).not.toHaveBeenCalled();
+    expect(ctrl._edgesOverlay.scale.copy).not.toHaveBeenCalled();
+  });
+
+  it('uses the theme edge color from the preview manager', () => {
+    ctrl.state.edges = true;
+    ctrl.refreshOverlays();
+
+    expect(mockPm.getThemeEdgeColor).toHaveBeenCalled();
+    expect(mockThree.LineBasicMaterial).toHaveBeenCalledWith({
+      color: 0x020617,
+    });
+  });
+
+  it('falls back to a fixed color when the pm lacks getThemeEdgeColor', () => {
+    delete mockPm.getThemeEdgeColor;
+    ctrl.state.edges = true;
+    ctrl.refreshOverlays();
+
+    expect(mockThree.LineBasicMaterial).toHaveBeenCalledWith({
+      color: 0x333333,
+    });
   });
 
   it('refreshOverlays() removes old overlay before creating a new one', () => {
@@ -133,7 +191,8 @@ describe('DisplayOptionsController — edge overlay refresh', () => {
 
     expect(firstOverlay.geometry.dispose).toHaveBeenCalled();
     expect(firstOverlay.material.dispose).toHaveBeenCalled();
-    expect(mockPm.scene.remove).toHaveBeenCalledWith(firstOverlay);
+    expect(firstOverlay.parent).toBeNull();
+    expect(mockMesh.children).not.toContain(firstOverlay);
     expect(secondOverlay).not.toBe(firstOverlay);
   });
 
@@ -145,38 +204,76 @@ describe('DisplayOptionsController — edge overlay refresh', () => {
     expect(mockThree.EdgesGeometry).not.toHaveBeenCalled();
   });
 
+  it('skips the overlay for group meshes without their own geometry', () => {
+    mockPm.mesh = { children: [], add: vi.fn() }; // debug-highlight Group
+    ctrl.state.edges = true;
+
+    expect(() => ctrl.refreshOverlays()).not.toThrow();
+    expect(ctrl._edgesOverlay).toBeNull();
+    expect(mockThree.EdgesGeometry).not.toHaveBeenCalled();
+  });
+
   it('refreshOverlays() picks up a new mesh geometry after model change', () => {
     ctrl.state.edges = true;
     ctrl.refreshOverlays();
 
-    const newGeometry = createMockGeometry();
-    mockPm.mesh = {
-      ...mockMesh,
-      geometry: newGeometry,
-    };
+    const newMesh = createMockMesh();
+    mockPm.mesh = newMesh;
 
     ctrl.refreshOverlays();
 
-    expect(mockThree.EdgesGeometry).toHaveBeenLastCalledWith(newGeometry, 15);
+    expect(mockThree.EdgesGeometry).toHaveBeenLastCalledWith(
+      newMesh.geometry,
+      15
+    );
+    expect(ctrl._edgesOverlay.parent).toBe(newMesh);
+  });
+
+  it('refreshThemeSensitiveOverlays() rebuilds the overlay with the new theme color', () => {
+    ctrl.state.edges = true;
+    ctrl.refreshOverlays();
+    const firstOverlay = ctrl._edgesOverlay;
+
+    mockPm.getThemeEdgeColor.mockReturnValue(0x0d1117);
+    ctrl.refreshThemeSensitiveOverlays();
+
+    expect(ctrl._edgesOverlay).not.toBe(firstOverlay);
+    expect(mockThree.LineBasicMaterial).toHaveBeenLastCalledWith({
+      color: 0x0d1117,
+    });
+  });
+
+  it('refreshThemeSensitiveOverlays() does not build edges when disabled', () => {
+    ctrl.state.edges = false;
+    ctrl.refreshThemeSensitiveOverlays();
+    expect(ctrl._edgesOverlay).toBeNull();
+    expect(mockThree.EdgesGeometry).not.toHaveBeenCalled();
+  });
+
+  it('dispose() detaches the overlay from the mesh', () => {
+    ctrl.state.edges = true;
+    ctrl.refreshOverlays();
+    const overlay = ctrl._edgesOverlay;
+
+    ctrl.dispose();
+
+    expect(overlay.parent).toBeNull();
+    expect(mockMesh.children).not.toContain(overlay);
+    expect(ctrl._edgesOverlay).toBeNull();
   });
 });
 
 describe('DisplayOptionsController — post-load listener registration', () => {
   let mockThree;
   let mockPm;
-  const mockMesh = {
-    geometry: createMockGeometry(),
-    material: createMockMaterial(),
-    position: { copy: vi.fn(), x: 0, y: 0, z: 0 },
-    rotation: { copy: vi.fn(), x: 0, y: 0, z: 0 },
-    scale: { copy: vi.fn(), x: 1, y: 1, z: 1 },
-  };
+  let mockMesh;
 
   beforeEach(() => {
     resetDisplayOptionsController();
     localStorage.clear();
     document.body.innerHTML = '';
     mockThree = createMockThree();
+    mockMesh = createMockMesh();
     mockPm = createMockPreviewManager(mockMesh);
   });
 
@@ -220,13 +317,16 @@ describe('DisplayOptionsController — post-load listener registration', () => {
     listener();
     const firstOverlay = ctrl._edgesOverlay;
 
-    const newGeometry = createMockGeometry();
-    mockPm.mesh = { ...mockMesh, geometry: newGeometry };
+    const newMesh = createMockMesh();
+    mockPm.mesh = newMesh;
 
     listener();
 
     expect(firstOverlay.geometry.dispose).toHaveBeenCalled();
-    expect(mockThree.EdgesGeometry).toHaveBeenLastCalledWith(newGeometry, 15);
+    expect(mockThree.EdgesGeometry).toHaveBeenLastCalledWith(
+      newMesh.geometry,
+      15
+    );
     expect(ctrl._edgesOverlay).not.toBe(firstOverlay);
   });
 
@@ -385,19 +485,14 @@ describe('DisplayOptionsController — axis distance markings (F20)', () => {
   let ctrl;
   let mockThree;
   let mockPm;
-  const mockMesh = {
-    geometry: createMockGeometry(),
-    material: createMockMaterial(),
-    position: { copy: vi.fn(), x: 0, y: 0, z: 0 },
-    rotation: { copy: vi.fn(), x: 0, y: 0, z: 0 },
-    scale: { copy: vi.fn(), x: 1, y: 1, z: 1 },
-  };
+  let mockMesh;
 
   beforeEach(() => {
     resetDisplayOptionsController();
     localStorage.clear();
     document.body.innerHTML = '';
     mockThree = makeFatThreeMock();
+    mockMesh = createMockMesh();
     mockPm = makePreviewManagerWithThemeListeners(mockMesh);
     ctrl = new DisplayOptionsController({
       getPreviewManager: () => mockPm,

@@ -133,9 +133,13 @@ export class DisplayOptionsController {
   /**
    * Re-apply theme-sensitive overlays. The axis tick overlay reads its
    * color from the active theme's `--color-text-primary` token at
-   * build time, so a theme switch needs a rebuild to stay legible.
+   * build time, and the edges overlay reads the theme's edge color from
+   * PREVIEW_COLORS, so a theme switch rebuilds both to stay legible.
    */
   refreshThemeSensitiveOverlays() {
+    if (this.state.edges) {
+      this._apply('edges');
+    }
     if (this.state.axisMarks) {
       // Rebuild from scratch so the new theme color is applied.
       this._tearDownAxisTickOverlay();
@@ -283,25 +287,33 @@ export class DisplayOptionsController {
 
   _applyEdges(pm) {
     const T = this.getThree();
-    if (this._edgesOverlay) {
-      pm.scene.remove(this._edgesOverlay);
-      this._edgesOverlay.geometry?.dispose();
-      this._edgesOverlay.material?.dispose();
-      this._edgesOverlay = null;
-    }
+    this._removeEdgesOverlay();
 
-    if (this.state.edges && pm.mesh && T) {
+    if (this.state.edges && pm.mesh?.geometry && T) {
       const edgesGeo = new T.EdgesGeometry(pm.mesh.geometry, 15);
       const mat = new T.LineBasicMaterial({
-        color: pm.currentTheme === 'dark' ? 0xaaaaaa : 0x333333,
+        color:
+          typeof pm.getThemeEdgeColor === 'function'
+            ? pm.getThemeEdgeColor()
+            : 0x333333,
       });
       this._edgesOverlay = new T.LineSegments(edgesGeo, mat);
       this._edgesOverlay.name = '__displayEdges';
-      this._edgesOverlay.position.copy(pm.mesh.position);
-      this._edgesOverlay.rotation.copy(pm.mesh.rotation);
-      this._edgesOverlay.scale.copy(pm.mesh.scale);
-      pm.scene.add(this._edgesOverlay);
+      // Parented to the mesh so it inherits every transform (recenter,
+      // auto-bed, rotation centering). It was previously scene-parented
+      // with a one-time copied transform and desynced whenever the mesh
+      // moved afterwards.
+      pm.mesh.add(this._edgesOverlay);
     }
+  }
+
+  /** Detach and dispose the edges overlay (parented to the mesh). */
+  _removeEdgesOverlay() {
+    if (!this._edgesOverlay) return;
+    this._edgesOverlay.parent?.remove(this._edgesOverlay);
+    this._edgesOverlay.geometry?.dispose();
+    this._edgesOverlay.material?.dispose();
+    this._edgesOverlay = null;
   }
 
   _applyCrosshairs(pm) {
@@ -357,12 +369,11 @@ export class DisplayOptionsController {
     }
     if (pm?.scene) {
       if (this._axesHelper) pm.scene.remove(this._axesHelper);
-      if (this._edgesOverlay) pm.scene.remove(this._edgesOverlay);
       if (this._crosshairGroup) pm.scene.remove(this._crosshairGroup);
     }
+    this._removeEdgesOverlay();
     this._tearDownAxisTickOverlay();
     this._axesHelper = null;
-    this._edgesOverlay = null;
     this._crosshairGroup = null;
     this._boundRefresh = null;
     this._boundThemeRefresh = null;
