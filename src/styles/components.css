@@ -2452,6 +2452,12 @@ summary:focus-visible,
   align-items: stretch;
 }
 
+.overlay-source-help-text {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary, var(--color-text-secondary));
+  line-height: 1.4;
+}
+
 .overlay-select {
   flex: 1;
   min-width: 0;
