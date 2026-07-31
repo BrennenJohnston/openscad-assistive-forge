@@ -3094,6 +3094,37 @@
                           >Adjust grid line visibility from 10 to 100
                           percent</span
                         >
+                        <!-- Edge Detail Limit -->
+                        <div class="preview-setting edge-budget-setting">
+                          <label for="edgeBudgetSelect" id="edgeBudgetLabel"
+                            >Edge detail limit</label
+                          >
+                          <select
+                            id="edgeBudgetSelect"
+                            aria-labelledby="edgeBudgetLabel"
+                            aria-describedby="edgeBudgetHelp edgeBudgetStatus"
+                          >
+                            <option value="25000">Low — 25,000 edges</option>
+                            <option value="75000" selected>
+                              Balanced — 75,000 edges
+                            </option>
+                            <option value="250000">
+                              High — 250,000 edges
+                            </option>
+                            <option value="0">Unlimited</option>
+                          </select>
+                          <span
+                            class="edge-budget-status"
+                            id="edgeBudgetStatus"
+                          ></span>
+                        </div>
+                        <span id="edgeBudgetHelp" class="sr-only"
+                          >Caps how many outline segments the Show Edges
+                          overlay draws on dense models. The longest, most
+                          structural edges are kept; short facet lines are
+                          dropped. Lower limits render faster and keep the
+                          model readable.</span
+                        >
                         <label class="toggle-switch">
                           <input
                             type="checkbox"

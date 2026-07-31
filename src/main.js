@@ -4955,6 +4955,7 @@ async function initApp() {
     getValidateFileUpload: () => validateFileUpload,
     getCameraPanelController: () => cameraPanelController,
     getOverlayGridCtrl: () => overlayGridCtrl,
+    getDisplayOptionsCtrl: getDisplayOptionsController,
     getCompanionFilesCtrl: () => companionFilesCtrl,
     getHfmCtrl: () => hfmCtrl,
     getSavedProjectsUI: () => savedProjectsUI,

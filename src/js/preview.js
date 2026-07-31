@@ -105,7 +105,11 @@ const LOD_CONFIG = {
  */
 // Cornfield front-face color: OpenSCAD src/glview/ColorMap.cc default ctor
 // OPENCSG_FACE_FRONT_COLOR = #F9D72C [OBSERVED]
-const CORNFIELD_FRONT_COLOR = 0xf9d72c;
+// Exported for reference/tests. Since 2026-07 the light theme no longer
+// uses the Cornfield pair directly: #f9d72c measures 1.3:1 against the
+// #f5f5f5 viewer background and fails WCAG 2.2 SC 1.4.11 (see
+// PREVIEW_COLORS below).
+export const CORNFIELD_FRONT_COLOR = 0xf9d72c;
 
 // Cornfield back-face (CUTOUT) color: OpenSCAD src/glview/ColorMap.cc default ctor
 // OPENCSG_FACE_BACK_COLOR = #9DCB51 [OBSERVED]
@@ -117,13 +121,26 @@ export const CORNFIELD_BACK_COLOR = 0x9dcb51;
 // for forward compatibility if specular is ever enabled.
 export const DESKTOP_SHININESS = 64;
 
-const PREVIEW_COLORS = {
+// The model is a non-text graphical object, so `model`/`modelBack` must
+// reach 3:1 against `background` (WCAG 2.2 SC 1.4.11). The `edges`
+// overlay lines render 1px wide, so per W3C Low Vision Task Force
+// guidance for thin strokes they are held to the 4.5:1 text threshold
+// against the model color they are drawn on. All ratios are enforced by
+// tests/unit/preview-colors-contrast.test.js.
+//
+// The light theme's model color was the desktop Cornfield front/back pair
+// (#f9d72c / #9dcb51) until 2026-07; those measured 1.3:1 and 1.7:1
+// against the #f5f5f5 background and failed SC 1.4.11, so they were
+// darkened in the same hues (3.5:1 / 3.8:1). Desktop parity for the
+// other themes was already [UNVERIFIED], so accessibility wins here.
+export const PREVIEW_COLORS = {
   light: {
     background: 0xf5f5f5,
     gridPrimary: 0xcccccc,
     gridSecondary: 0xe0e0e0,
-    model: CORNFIELD_FRONT_COLOR,
-    modelBack: CORNFIELD_BACK_COLOR,
+    model: 0x9a8200, // darkened Cornfield gold, 3.5:1 vs background
+    modelBack: 0x5a8a22, // darkened Cornfield green, 3.8:1 vs background
+    edges: 0x020617, // 5.4:1 vs model
     ambientLight: 0xffffff,
   },
   dark: {
@@ -132,6 +149,7 @@ const PREVIEW_COLORS = {
     gridSecondary: 0x2d2d2d,
     model: 0x4d9fff,
     modelBack: 0x3d8a44, // [UNVERIFIED] green tint for dark background
+    edges: 0x0d1117, // 7.0:1 vs model
     ambientLight: 0xffffff,
   },
   'light-hc': {
@@ -140,6 +158,7 @@ const PREVIEW_COLORS = {
     gridSecondary: 0x666666,
     model: 0x0052cc,
     modelBack: 0x338a33, // [UNVERIFIED] high-contrast green
+    edges: 0xffffff, // 6.8:1 vs model
     ambientLight: 0xffffff,
   },
   'dark-hc': {
@@ -148,6 +167,7 @@ const PREVIEW_COLORS = {
     gridSecondary: 0x999999,
     model: 0x66b3ff,
     modelBack: 0x66cc66, // [UNVERIFIED] high-contrast green for dark
+    edges: 0x000000, // 9.5:1 vs model
     ambientLight: 0xffffff,
   },
   // Green phosphor (dark theme mono variant)
@@ -157,6 +177,7 @@ const PREVIEW_COLORS = {
     gridSecondary: 0x00aa00,
     model: 0x00ff00,
     modelBack: 0x00aa00, // [UNVERIFIED] dimmer green for intensity distinction
+    edges: 0x003300, // 10.4:1 vs model, keeps the phosphor palette
     ambientLight: 0x00ff00,
   },
   // Amber phosphor (light theme mono variant)
@@ -166,6 +187,7 @@ const PREVIEW_COLORS = {
     gridSecondary: 0xcc8c00,
     model: 0xffb000,
     modelBack: 0xcc8c00, // [UNVERIFIED] dimmer amber for intensity distinction
+    edges: 0x332200, // 8.4:1 vs model, keeps the phosphor palette
     ambientLight: 0xffb000,
   },
   // Green phosphor high-contrast (wider grid contrast ratio)
@@ -175,6 +197,7 @@ const PREVIEW_COLORS = {
     gridSecondary: 0x003300,
     model: 0x33ff33,
     modelBack: 0x00cc00, // [UNVERIFIED] dimmer green phosphor HC
+    edges: 0x001a00, // 13.5:1 vs model
     ambientLight: 0x00ff00,
   },
   // Amber phosphor high-contrast (wider grid contrast ratio)
@@ -184,6 +207,7 @@ const PREVIEW_COLORS = {
     gridSecondary: 0x4d3500,
     model: 0xffc233,
     modelBack: 0xcc9a00, // [UNVERIFIED] dimmer amber phosphor HC
+    edges: 0x261a00, // 10.6:1 vs model
     ambientLight: 0xffb000,
   },
 };
@@ -746,6 +770,18 @@ export class PreviewManager {
     const themeColors =
       PREVIEW_COLORS[this.currentTheme] || PREVIEW_COLORS.light;
     return themeColors.modelBack;
+  }
+
+  /**
+   * Edge-overlay line color for the active theme. Used by the display
+   * options controller so the edges overlay stays legible (≥4.5:1
+   * against the model color) on every theme.
+   * @returns {number} 0xRRGGBB
+   */
+  getThemeEdgeColor() {
+    const themeColors =
+      PREVIEW_COLORS[this.currentTheme] || PREVIEW_COLORS.light;
+    return themeColors.edges;
   }
 
   /**
@@ -1526,12 +1562,18 @@ export class PreviewManager {
           this.applyAutoBed(geometry);
         }
 
-        // Create material using render-state-aware color resolution
+        // Create material using render-state-aware color resolution.
+        // polygonOffset pushes the shaded surface fractionally back in
+        // depth so the edges overlay (a mesh child) is not chewed up by
+        // z-fighting with the facets it traces.
         const material = new MeshPhongMaterial({
           color: parseInt(this._resolveModelColor().slice(1), 16),
           specular: 0x000000,
           shininess: DESKTOP_SHININESS,
           flatShading: false,
+          polygonOffset: true,
+          polygonOffsetFactor: 1,
+          polygonOffsetUnits: 1,
         });
         this._applyBackfaceColoring(material, this._resolveModelBackColor());
 
@@ -1775,12 +1817,18 @@ export class PreviewManager {
                 specular: 0x000000,
                 shininess: DESKTOP_SHININESS,
                 flatShading: false,
+                polygonOffset: true,
+                polygonOffsetFactor: 1,
+                polygonOffsetUnits: 1,
               })
             : new MeshPhongMaterial({
                 color: parseInt(this._resolveModelColor().slice(1), 16),
                 specular: 0x000000,
                 shininess: DESKTOP_SHININESS,
                 flatShading: false,
+                polygonOffset: true,
+                polygonOffsetFactor: 1,
+                polygonOffsetUnits: 1,
               });
           this._applyBackfaceColoring(
             normalMaterial,
@@ -1815,12 +1863,18 @@ export class PreviewManager {
                 specular: 0x000000,
                 shininess: DESKTOP_SHININESS,
                 flatShading: false,
+                polygonOffset: true,
+                polygonOffsetFactor: 1,
+                polygonOffsetUnits: 1,
               })
             : new MeshPhongMaterial({
                 color: parseInt(this._resolveModelColor().slice(1), 16),
                 specular: 0x000000,
                 shininess: DESKTOP_SHININESS,
                 flatShading: false,
+                polygonOffset: true,
+                polygonOffsetFactor: 1,
+                polygonOffsetUnits: 1,
               });
           this._applyBackfaceColoring(material, this._resolveModelBackColor());
           this.mesh = new Mesh(geometry, material);

@@ -34,6 +34,7 @@ vi.mock('../../src/js/braille-translator.js', () => {
       }
       return { braille, hadUntranslatable };
     }),
+    backTranslateText: vi.fn(async () => ''),
     getTables: vi.fn(async () => ({
       tables: [{ file: 'en-ueb-g1.ctb', label: 'English (UEB) Grade 1' }],
       defaultTable: 'en-ueb-g1.ctb',

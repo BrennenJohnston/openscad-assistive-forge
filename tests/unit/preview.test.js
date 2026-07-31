@@ -2147,19 +2147,19 @@ describe('PreviewManager', () => {
     describe('_resolveModelColor', () => {
       it('returns theme default when no state and no override (light)', () => {
         const color = manager._resolveModelColor()
-        expect(color).toBe('#f9d72c')
+        expect(color).toBe('#9a8200')
       })
 
       it('returns theme default regardless of renderState (light, preview)', () => {
         manager.renderState = 'preview'
         const color = manager._resolveModelColor()
-        expect(color).toBe('#f9d72c')
+        expect(color).toBe('#9a8200')
       })
 
       it('returns theme default regardless of renderState (light, laser)', () => {
         manager.renderState = 'laser'
         const color = manager._resolveModelColor()
-        expect(color).toBe('#f9d72c')
+        expect(color).toBe('#9a8200')
       })
 
       it('returns dark theme default regardless of renderState', () => {
@@ -2238,13 +2238,13 @@ describe('PreviewManager', () => {
         manager.colorOverride = '#abcdef'
         manager.colorOverrideEnabled = false
         const color = manager._resolveModelColor()
-        expect(color).toBe('#f9d72c')
+        expect(color).toBe('#9a8200')
       })
 
       it('falls back to theme default for unknown render state', () => {
         manager.renderState = 'unknown_state'
         const color = manager._resolveModelColor()
-        expect(color).toBe('#f9d72c')
+        expect(color).toBe('#9a8200')
       })
     })
 
@@ -2866,14 +2866,17 @@ describe('Visual Parity — desktop OpenSCAD alignment (Phase 5)', () => {
     })
   })
 
-  describe('Cornfield colorscheme (light theme default)', () => {
-    it('light theme model color resolves to Cornfield gold #f9d72c', () => {
+  // The light theme used Cornfield gold #f9d72c until 2026-07; it measures
+  // 1.3:1 against the #f5f5f5 background and fails WCAG 2.2 SC 1.4.11, so
+  // it was darkened in the same hue (see preview-colors-contrast.test.js).
+  describe('light theme default model color (darkened Cornfield gold)', () => {
+    it('light theme model color resolves to #9a8200', () => {
       manager.currentTheme = 'light'
       const color = manager._resolveModelColor()
-      expect(color).toBe('#f9d72c')
+      expect(color).toBe('#9a8200')
     })
 
-    it('color override takes priority over Cornfield default', () => {
+    it('color override takes priority over the theme default', () => {
       manager.currentTheme = 'light'
       manager.colorOverrideEnabled = true
       manager.colorOverride = '#ff0000'
@@ -2881,12 +2884,12 @@ describe('Visual Parity — desktop OpenSCAD alignment (Phase 5)', () => {
       expect(color).toBe('#ff0000')
     })
 
-    it('disabling color override reverts to Cornfield gold', () => {
+    it('disabling color override reverts to the theme default', () => {
       manager.currentTheme = 'light'
       manager.colorOverride = '#ff0000'
       manager.colorOverrideEnabled = false
       const color = manager._resolveModelColor()
-      expect(color).toBe('#f9d72c')
+      expect(color).toBe('#9a8200')
     })
   })
 
@@ -2902,16 +2905,16 @@ describe('Visual Parity — desktop OpenSCAD alignment (Phase 5)', () => {
       })
     })
 
-    it('light theme modelBack is Cornfield green 0x9dcb51', () => {
+    it('light theme modelBack is darkened Cornfield green 0x5a8a22', () => {
       manager.currentTheme = 'light'
-      expect(manager._resolveModelBackColor()).toBe(0x9dcb51)
+      expect(manager._resolveModelBackColor()).toBe(0x5a8a22)
     })
 
     it('back-face color is theme-driven (ignores color override)', () => {
       manager.currentTheme = 'light'
       manager.colorOverrideEnabled = true
       manager.colorOverride = '#ff0000'
-      expect(manager._resolveModelBackColor()).toBe(0x9dcb51)
+      expect(manager._resolveModelBackColor()).toBe(0x5a8a22)
     })
 
     it('back-face color differs from front-face model color for all themes', () => {
@@ -2926,7 +2929,7 @@ describe('Visual Parity — desktop OpenSCAD alignment (Phase 5)', () => {
 
     it('falls back to light theme modelBack for unknown theme', () => {
       manager.currentTheme = 'nonexistent'
-      expect(manager._resolveModelBackColor()).toBe(0x9dcb51)
+      expect(manager._resolveModelBackColor()).toBe(0x5a8a22)
     })
   })
 

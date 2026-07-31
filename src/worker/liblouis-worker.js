@@ -17,6 +17,8 @@
  *     → { id, type: 'init', result: { success, error? } }
  *   { id, type: 'translate', data: { text, table } }
  *     → { id, type: 'translate', result: { success, translation?, error? } }
+ *   { id, type: 'backTranslate', data: { braille, table } }
+ *     → { id, type: 'backTranslate', result: { success, text?, error? } }
  */
 
 /* global LiblouisEasyApi, liblouisBuild */
@@ -26,7 +28,7 @@ let liblouisReady = false;
 const recentLogs = [];
 
 const LIBLOUIS_BASE = '/liblouis/';
-const ALLOWED_TYPES = ['init', 'translate'];
+const ALLOWED_TYPES = ['init', 'translate', 'backTranslate'];
 // Table file names are catalog-driven; keep the worker defensive anyway.
 const TABLE_NAME_PATTERN = /^[\w.-]+$/;
 
@@ -92,6 +94,38 @@ function translate(text, table) {
   return result;
 }
 
+/**
+ * Braille → text. unicode.dis in the chain is what makes liblouis read
+ * the U+2800 block as braille cells rather than literal characters, so
+ * the same chain used for translation is used in reverse.
+ */
+function backTranslate(braille, table) {
+  if (!liblouisReady || !liblouisInstance) {
+    throw new Error('liblouis is not initialized');
+  }
+  if (!TABLE_NAME_PATTERN.test(table)) {
+    throw new Error(`Invalid table name: ${table}`);
+  }
+
+  const chain = `unicode.dis,${table}`;
+
+  let result;
+  try {
+    result = liblouisInstance.backTranslateString(chain, braille);
+  } catch (error) {
+    throw withLogTail(
+      new Error(`Back-translation crashed for table ${table}: ${error.message}`)
+    );
+  }
+
+  if (typeof result !== 'string') {
+    throw withLogTail(
+      new Error(`Back-translation failed for table ${table} (no output)`)
+    );
+  }
+  return result;
+}
+
 function withLogTail(error) {
   const tail = recentLogs.slice(-8).join('\n');
   if (tail) error.message += `\nRecent liblouis logs:\n${tail}`;
@@ -120,12 +154,18 @@ self.onmessage = (e) => {
   try {
     if (type === 'init') {
       self.postMessage({ id, type, result: initializeLiblouis() });
-    } else {
+    } else if (type === 'translate') {
       if (!data || typeof data.text !== 'string' || !data.table) {
         throw new Error('translate requires { text, table }');
       }
       const translation = translate(data.text, data.table);
       self.postMessage({ id, type, result: { success: true, translation } });
+    } else {
+      if (!data || typeof data.braille !== 'string' || !data.table) {
+        throw new Error('backTranslate requires { braille, table }');
+      }
+      const text = backTranslate(data.braille, data.table);
+      self.postMessage({ id, type, result: { success: true, text } });
     }
   } catch (error) {
     self.postMessage({

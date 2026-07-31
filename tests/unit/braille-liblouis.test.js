@@ -102,6 +102,58 @@ describe.skipIf(!assetsReady)(
         expect(out, `table ${table}`).toMatch(BRAILLE_ONLY);
       }
     });
+
+    // Back-translation drives the braille editor's "Translate to text"
+    // button and the download-name fallback (worker 'backTranslate' type).
+    describe('backTranslateString (braille -> text)', () => {
+      it('round-trips "hello" under en-ueb-g1', () => {
+        const braille = getLiblouis().translateString(
+          chain('en-ueb-g1.ctb'),
+          'hello'
+        );
+        const text = getLiblouis().backTranslateString(
+          chain('en-ueb-g1.ctb'),
+          braille
+        );
+        expect(text).toBe('hello');
+      });
+
+      it('round-trips a multi-word phrase under en-ueb-g1', () => {
+        const braille = getLiblouis().translateString(
+          chain('en-ueb-g1.ctb'),
+          'hello world'
+        );
+        const text = getLiblouis().backTranslateString(
+          chain('en-ueb-g1.ctb'),
+          braille
+        );
+        expect(text).toBe('hello world');
+      });
+
+      it('round-trips contracted Grade 2 braille', () => {
+        const braille = getLiblouis().translateString(
+          chain('en-ueb-g2.ctb'),
+          'world'
+        );
+        const text = getLiblouis().backTranslateString(
+          chain('en-ueb-g2.ctb'),
+          braille
+        );
+        expect(text).toBe('world');
+      });
+
+      it('round-trips capital letters (indicator cell)', () => {
+        const braille = getLiblouis().translateString(
+          chain('en-ueb-g1.ctb'),
+          'Hello'
+        );
+        const text = getLiblouis().backTranslateString(
+          chain('en-ueb-g1.ctb'),
+          braille
+        );
+        expect(text).toBe('Hello');
+      });
+    });
   }
 );
 
