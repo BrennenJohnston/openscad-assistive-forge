@@ -363,6 +363,7 @@ export function showProcessingOverlay(message, opts = {}) {
  * @param {Function} deps.getValidateFileUpload - Returns validateFileUpload validator
  * @param {Function} deps.getCameraPanelController - Returns camera panel controller (may be null)
  * @param {Function} deps.getOverlayGridCtrl - Returns overlay/grid controller instance
+ * @param {Function} deps.getDisplayOptionsCtrl - Returns display options controller instance
  * @param {Function} deps.getCompanionFilesCtrl - Returns companion files controller instance
  * @param {Function} deps.getHfmCtrl - Returns HFM controller instance
  * @param {Function} deps.getSavedProjectsUI - Returns saved projects UI controller
@@ -399,6 +400,7 @@ export function initFileHandler({
   getValidateFileUpload,
   getCameraPanelController,
   getOverlayGridCtrl,
+  getDisplayOptionsCtrl,
   getCompanionFilesCtrl,
   getHfmCtrl,
   getSavedProjectsUI,
@@ -1404,6 +1406,7 @@ export function initFileHandler({
         }
 
         getOverlayGridCtrl().connectPreviewManager(previewManager);
+        getDisplayOptionsCtrl().connectPreviewManager(previewManager);
 
         const autoBedToggle = document.getElementById('autoBedToggle');
         if (autoBedToggle) {
