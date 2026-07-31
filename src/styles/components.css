@@ -14367,6 +14367,40 @@ body.tutorial-body-locked {
   color: var(--color-text-primary);
 }
 
+/* Braille editor (card mode): editable Unicode braille field */
+.braille-panel-field-editor {
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  padding: var(--space-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.braille-panel-field-editor summary {
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.braille-field-input {
+  /* Braille cells are hard to hit-test at body size */
+  font-size: var(--font-size-lg);
+  line-height: 1.6;
+}
+
+.braille-translate-row {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.braille-field-status:empty {
+  display: none;
+}
+
 .braille-preview {
   padding: var(--space-sm);
   background: var(--color-bg-primary);
@@ -14514,7 +14548,8 @@ body.tutorial-body-locked {
   .braille-preview,
   .braille-messages,
   .braille-multi-card-notice,
-  .braille-panel-layout {
+  .braille-panel-layout,
+  .braille-panel-field-editor {
     border: 1px solid CanvasText;
     background: Canvas;
     color: CanvasText;

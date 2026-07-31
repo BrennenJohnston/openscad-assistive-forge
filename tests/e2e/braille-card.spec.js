@@ -278,8 +278,9 @@ test.describe('Braille translation workflow (card)', () => {
     const pager = page.locator('#brailleCardPager')
     await expect(pager).toBeVisible()
     await expect(page.locator('#braillePagerStatus')).toHaveText('Card 1 of 2')
+    // The hint shows the real friendly export name (first word of the text)
     await expect(page.locator('#braillePagerHint')).toContainText(
-      'braille-card-1-of-2.stl'
+      'Braille Card 1 of 2 line.stl'
     )
 
     // Pager is keyboard-operable: prev disabled on first card, next works
@@ -306,7 +307,7 @@ test.describe('Braille translation workflow (card)', () => {
     // Pager hides; the whole set is one model now
     await expect(page.locator('#brailleCardPager')).toBeHidden()
     await expect(page.locator('#brailleMultiCardNotice')).toContainText(
-      'braille-cards-all.stl'
+      'Braille Cards line.stl'
     )
 
     // card_layout switches to All cards
@@ -397,6 +398,119 @@ test.describe('Braille translation workflow (card)', () => {
     expect(indicatorClass).not.toContain('state-error')
   })
 
+  test('rows clamp is surfaced as a warning instead of a silent grid_rows reset', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
+
+    await openBrailleCard(page)
+
+    // Business card height (51 mm) fits 3 rows at the default 10 mm line
+    // spacing and 6 mm margin; the default Max rows per card is 8.
+    await page.locator('#brailleSizePreset').selectOption('business')
+    await page.locator('#brailleTextInput').fill('hello')
+
+    const warnings = page.locator('#brailleWarnings')
+    await expect(warnings).toBeVisible({ timeout: 20000 })
+    await expect(warnings).toContainText('fits 3 rows')
+
+    // grid_rows carries the clamped value...
+    const gridRowsInput = page.locator(
+      '.param-control[data-param-name="grid_rows"] input[type="number"]'
+    )
+    await expect(gridRowsInput.first()).toHaveValue('3', { timeout: 10000 })
+    // ...while Max rows per card keeps the user's requested value (sticky)
+    await expect(page.locator('#brailleMaxRows')).toHaveValue('8')
+  })
+
+  test('editing grid_rows directly syncs Max rows per card (two-way)', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
+
+    await openBrailleCard(page)
+    await page.locator('#brailleTextInput').fill('hello')
+    await expect(page.locator('#braillePreview')).toContainText(
+      '\u2813\u2811\u2807\u2807\u2815',
+      { timeout: 20000 }
+    )
+
+    // The raw grid_rows control lives inside a collapsed parameter
+    // group; expand it so the input is interactable.
+    await page
+      .locator('.param-control[data-param-name="grid_rows"]')
+      .waitFor({ state: 'attached', timeout: 10000 })
+    await page.evaluate(() => {
+      const control = document.querySelector(
+        '.param-control[data-param-name="grid_rows"]'
+      )
+      const group = control?.closest('details.param-group')
+      if (group) group.open = true
+    })
+
+    const gridRowsInput = page
+      .locator('.param-control[data-param-name="grid_rows"] input[type="number"]')
+      .first()
+    await gridRowsInput.fill('4')
+    await gridRowsInput.blur()
+
+    await expect(page.locator('#brailleMaxRows')).toHaveValue('4', {
+      timeout: 10000,
+    })
+    // The next layout keeps the user's value instead of resetting it
+    await expect(gridRowsInput).toHaveValue('4', { timeout: 10000 })
+  })
+
+  test('braille editor: translate to braille, verbatim use, and back-translation', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
+
+    await openBrailleCard(page)
+
+    await page.locator('#brailleTextInput').fill('hello')
+    await expect(page.locator('#braillePreview')).toContainText(
+      '\u2813\u2811\u2807\u2807\u2815',
+      { timeout: 20000 }
+    )
+
+    // Open the editor and fill it from the text
+    await page.locator('#brailleFieldEditor summary').click()
+    await page.locator('#brailleFieldFromText').click()
+    const field = page.locator('#brailleFieldInput')
+    await expect(field).toHaveValue('\u2813\u2811\u2807\u2807\u2815', {
+      timeout: 20000,
+    })
+    await expect(page.locator('#brailleFieldStatus')).toContainText(
+      'Filled from your text'
+    )
+
+    // Hand-edit the braille: the card now uses it exactly as written
+    await field.fill('\u2813\u2811\u2807\u2807\u2815\u2815')
+    const line1Input = page.locator(
+      '.param-control[data-param-name="Line_1"] input'
+    )
+    await expect(line1Input).toHaveValue(
+      '\u2813\u2811\u2807\u2807\u2815\u2815',
+      { timeout: 10000 }
+    )
+    const warnings = page.locator('#brailleWarnings')
+    await expect(warnings).toContainText('exactly as written')
+
+    // Back-translate the edited braille into the text box
+    await page.locator('#brailleFieldToText').click()
+    await expect(page.locator('#brailleTextInput')).toHaveValue('helloo', {
+      timeout: 20000,
+    })
+  })
+
+  test('braille editor rejects non-braille characters with an error', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
+
+    await openBrailleCard(page)
+
+    await page.locator('#brailleFieldEditor summary').click()
+    await page.locator('#brailleFieldInput').fill('\u2813hello')
+
+    const errors = page.locator('#brailleErrors')
+    await expect(errors).toBeVisible({ timeout: 20000 })
+    await expect(errors).toContainText('not a braille character')
+  })
+
   test('braille panel has no axe violations (normal + warning + error states)', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
 
@@ -407,6 +521,15 @@ test.describe('Braille translation workflow (card)', () => {
       { timeout: 20000 }
     )
     await expectPanelAxeClean(page)
+
+    // Braille editor open with content (verbatim mode + status live region)
+    await page.locator('#brailleFieldEditor summary').click()
+    await page.locator('#brailleFieldInput').fill('\u2813\u2811')
+    await expect(page.locator('#brailleWarnings')).toBeVisible({
+      timeout: 20000,
+    })
+    await expectPanelAxeClean(page)
+    await page.locator('#brailleFieldInput').fill('')
 
     // Warning tier visible (caps dropped)
     await page.locator('#brailleCapsToggle').uncheck()

@@ -149,6 +149,42 @@ export async function translateText(text, table, { preserveCaps = false } = {}) 
 }
 
 /**
+ * Back-translate Unicode braille to plain text via liblouis. Used by the
+ * braille editor's "Translate to text" button (so a braille reader can
+ * verify pasted braille) and to derive a friendly download name when
+ * braille is the only input.
+ *
+ * @param {string} braille - Unicode braille (U+2800–U+28FF; blank cells
+ *   and ASCII spaces both act as word separators)
+ * @param {string} table - liblouis table file name, e.g. 'en-ueb-g1.ctb'
+ * @returns {Promise<string>} Back-translated plain text
+ */
+export async function backTranslateText(braille, table) {
+  await ensureReady();
+
+  if (braille === '') return '';
+
+  // liblouis expects ASCII spaces between words; the models store the
+  // Unicode braille blank cell (U+2800) instead.
+  const input = braille.replace(/\u2800/g, ' ');
+
+  // 'bt' cannot collide with forward keys: those start with a table file
+  // name (always contains a dot).
+  const cacheKey = `bt\u0000${table}\u0000${input}`;
+  let text = cache.get(cacheKey);
+  if (text === undefined) {
+    const result = await sendMessage('backTranslate', {
+      braille: input,
+      table,
+    });
+    text = result.text;
+    if (cache.size >= CACHE_MAX_ENTRIES) cache.clear();
+    cache.set(cacheKey, text);
+  }
+  return text;
+}
+
+/**
  * Fetch the curated table catalog (cached).
  * @param {string} [catalogUrl='/liblouis/tables.json']
  * @returns {Promise<{ defaultTable: string, tables: Array<{file: string, label: string}> }>}

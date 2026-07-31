@@ -31,13 +31,35 @@ The **Braille translation** panel sits above the regular parameter controls:
 2. **Language and grade** — English UEB Grade 1 (uncontracted) is the default for cards and charms and the right choice for names, emails, and short contact details. Grade 2 (contracted) saves space but assumes fluent braille readers; it is the default for signs (matching ADA guidance). US (EBAE) tables are also available.
 3. **Preserve capital letters** — **on by default**, so the braille matches your text exactly. Every capital adds an indicator cell (1 extra cell per capital); turn it off to convert text to lowercase and save space (standard practice for space-limited labels and business cards). A warning appears when capitals were dropped.
 4. **Card size** — **Auto-size to fit text** is the default: the card grows to fit the braille plus margin. The other options are fixed presets that set the width/height parameters directly: Default card 200 × 100 mm, Business card 89 × 51, Postcard 152 × 102, Greeting card 178 × 127 (5 × 7 in), A5 210 × 148, A4 297 × 210, US Letter 279 × 216. Picking a preset turns auto-sizing off; editing the width/height parameters directly flips the selector to Custom. Sizes larger than ~250 mm warn about common print-bed limits.
-5. **Layout options** — margin presets (Narrow 6 mm default, Standard 12.7 mm, Wide 25.4 mm, or custom), auto-wrap on/off, overflow splitting on/off, and max rows per card (default 8, matching the default 200 × 100 card).
-6. **Braille preview** — the translated braille with per-line cell counts against the computed line capacity, and the print-language source text under each braille line so you can verify the translation line by line.
-7. **Errors and warnings** — problems are split into two tiers, each marked with a text prefix and an icon (never color alone). **Errors** mean content will not fit or was cut (line overflow, too many rows, an undividable over-long word); **warnings** are informational (capitals dropped, untranslatable characters, oversized for common print beds).
-8. **Multi-card notice and pager** — when text overflows one card, a prominent notice reports "Your text spans N cards" and the pager switches between them; each card renders and exports as its own STL (suggested names like `braille-card-1-of-2.stl`).
-9. **Render all cards in one file** — a toggle in the multi-card notice. When on, every wrapped line is written to the model at once and the SCAD lays the cards out front-to-back on the bed, separated by the `card_gap_mm` parameter (default 5 mm), so the whole set prints in one job (suggested name `braille-cards-all.stl`). Large sets can exceed your print bed — the console reports the total depth.
+5. **Layout options** — margin presets (Narrow 6 mm default, Standard 12.7 mm, Wide 25.4 mm, or custom), auto-wrap on/off, overflow splitting on/off, and max rows per card (default 8, matching the default 200 × 100 card). When the card height cannot fit the requested max rows, the panel keeps your requested value, uses what fits, and explains the limit in a warning (it also announces the change to screen readers) — editing the raw `grid_rows` parameter directly updates Max rows per card the same way, so the two never fight silently.
+6. **Braille editor (Unicode)** — a collapsible editor holding one line of Unicode braille per card row. Press **Translate to braille** to fill it from your text, then edit any cell — or paste braille straight in and press **Translate to text** to read it back in English. **Whenever the editor has content the card uses it exactly as written** (no liblouis pass); clear it to go back to translating the text above. See "Editing braille by hand" below.
+7. **Braille preview** — the translated braille with per-line cell counts against the computed line capacity, and the print-language source text under each braille line so you can verify the translation line by line.
+8. **Errors and warnings** — problems are split into two tiers, each marked with a text prefix and an icon (never color alone). **Errors** mean content will not fit or was cut (line overflow, too many rows, an undividable over-long word, non-braille characters in the braille editor); **warnings** are informational (capitals dropped, untranslatable characters, rows clamped by the card height, oversized for common print beds).
+9. **Multi-card notice and pager** — when text overflows one card, a prominent notice reports "Your text spans N cards" and the pager switches between them; each card renders and exports as its own STL (named like `Braille Card 1 of 2 hello.stl`).
+10. **Render all cards in one file** — a toggle in the multi-card notice. When on, every wrapped line is written to the model at once and the SCAD lays the cards out front-to-back on the bed, separated by the `card_gap_mm` parameter (default 5 mm), so the whole set prints in one job (named like `Braille Cards hello.stl`). Large sets can exceed your print bed — the console reports the total depth.
 
 The raw `Line_1`–`Line_20` parameters stay visible in the parameter panel below, so you can still paste pre-translated Unicode braille manually (the original wedge-card workflow).
+
+## Editing braille by hand
+
+The **Braille editor (Unicode)** in the card tool accepts braille characters only (U+2800–U+28FF, plus spaces which become blank cells), one line per card row. It has two states:
+
+- **Pristine** — the editor mirrors a translation (after Translate to braille), so editing the English text clears it; nothing you typed is lost.
+- **Hand-edited** — once you type or paste into the editor, it becomes the authority: the card embosses those cells exactly as written, the text box above is ignored (a warning says so), and only the Translate to braille button may overwrite it. Every fill and clear is announced through the editor's status line.
+
+Editor lines are validated against the line capacity, and overflow chunks onto additional cards exactly like translated text (the pager and Render-all-cards toggle work as usual). Non-braille characters produce a per-line error naming the offending character.
+
+### Phone numbers and UEB number signs
+
+Under UEB, a period or comma inside a number keeps numeric mode active, but a **hyphen or parenthesis ends it** — so `206-543-4779` correctly needs three number signs (15 cells) and may wrap to a second row. That is correct liblouis output, not a bug. Type the BANA form `206.543.4779` instead and it fits 13 cells with a single number sign. To remove or adjust cells by hand, use the braille editor.
+
+## Friendly download names
+
+Exports from all three tools are named after their content instead of the hashed default (which is still the fallback when there is nothing to name):
+
+- **Card**: `Braille Card hello.stl` (single card), `Braille Card 2 of 3 hello.stl` (paging), `Braille Cards hello.stl` (render-all). The word is the first word of your text; when braille pasted into the braille editor is the only input, it is **back-translated** on your device to recover a name.
+- **Charm**: `Braille Charm B.stl` / `Braille Charms Brennen.stl` (as before).
+- **Sign**: `Braille Sign Exit.stl`.
 
 ## What to put on a card (BANA guidance)
 
@@ -116,6 +138,7 @@ For preview speed in the browser, `render_quality` defaults to Medium; switch to
 
 - Every panel control is a native input with a visible label; the whole panel is a labeled region ("Braille translation").
 - The braille preview is a polite live region: it re-reads after you stop typing, without interrupting.
+- The braille editor's status line is a polite status region, so fills, clears, and hand-edit locks are announced as they happen; row-count clamps are announced through the shared live region.
 - Fit **errors** use an alert region (announced immediately); informational **warnings** and the multi-card notice use status regions (announced politely).
 - The card pager is two ordinary buttons plus a live status ("Card 1 of 2"); disabled states mark the ends.
 - All states render correctly in high-contrast and Windows forced-colors modes; severity is never conveyed by color alone.

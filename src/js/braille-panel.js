@@ -25,6 +25,7 @@ import { stateManager } from './state.js';
 import { setParameterValue } from './ui-generator.js';
 import {
   translateText,
+  backTranslateText,
   getTables,
   disposeTranslator,
 } from './braille-translator.js';
@@ -32,7 +33,9 @@ import {
   computeCapacity,
   layoutBrailleText,
   layoutSignText,
+  chunkIntoCards,
   countCells,
+  BRAILLE_SPACE,
 } from './braille-wrap.js';
 
 const DEBOUNCE_MS = 400;
@@ -78,8 +81,12 @@ const ERROR_TYPES = new Set([
   'too-many-lines',
   'capacity-overflow',
   'charm-overflow',
+  'braille-field-invalid',
   'engine-error',
 ]);
+
+/** Matches one character of the Unicode braille block. */
+const BRAILLE_CHAR_RE = /^[\u2800-\u28FF]$/;
 
 /** Geometry params that should trigger a re-wrap when edited directly. */
 const CAPACITY_WATCH_KEYS = [
@@ -87,6 +94,7 @@ const CAPACITY_WATCH_KEYS = [
   'cardHeight',
   'cellSpacing',
   'lineSpacing',
+  'gridRows',
   'autoSize',
   'charHeight',
   'letterSpacing',
@@ -133,13 +141,39 @@ export function isBraillePanelActive() {
 
 /**
  * Friendly download base name for the current braille model, or null when
- * the panel is not mounted or the mode has no friendly naming (callers
- * then fall back to the standard hashed filename).
- * @returns {string|null} e.g. "Braille Charm B" / "Braille Charms Brennen"
+ * the panel is not mounted or there is nothing to name (callers then fall
+ * back to the standard hashed filename).
+ * @returns {string|null} e.g. "Braille Charm B", "Braille Card 1 of 2
+ *   hello", "Braille Sign Exit"
  */
 export function getBrailleDownloadName() {
-  if (!panel || panel.mode !== 'charm') return null;
-  return panel.getCharmDownloadName();
+  if (!panel) return null;
+  if (panel.mode === 'charm') return panel.getCharmDownloadName();
+  if (panel.mode === 'card') return panel.getCardDownloadName();
+  if (panel.mode === 'sign') return panel.getSignDownloadName();
+  return null;
+}
+
+/**
+ * First word of a text usable in a file name: filesystem-unsafe
+ * characters stripped, capped at 30 characters. Empty string when the
+ * text has no usable word. (Adapted from the braille-cylinder project's
+ * sanitizeFilenameWord/firstWordOf pair.)
+ * @param {string} text - Multi-line plain text
+ * @returns {string}
+ */
+function firstFilenameWord(text) {
+  for (const line of (text || '').split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const word = trimmed
+      .split(/\s+/)[0]
+      .substring(0, 30)
+      .replace(/[^\w-]/g, '')
+      .replace(/^[-_]+|[-_]+$/g, '');
+    if (word) return word;
+  }
+  return '';
 }
 
 class BraillePanel {
@@ -174,7 +208,17 @@ class BraillePanel {
     this.firstLayout = true;
     this.unsubscribe = null;
     this.lastWatchedValues = null;
+    this.lastGridRowsParam = null;
     this.lastAnnouncedCards = 1;
+    this.lastRowClampAnnounced = null;
+    // Braille editor (card mode): pristine mirrors a translation and is
+    // cleared when the text changes; dirty means hand-edited (only the
+    // "Translate to braille" button may overwrite it).
+    this.fieldDirty = false;
+    // Back-translated first word for download names when braille is the
+    // only input (computed asynchronously, cached per first line).
+    this.fieldDownloadWord = null;
+    this.lastFieldWordSource = null;
   }
 
   // ------------------------------------------------------------------
@@ -216,6 +260,7 @@ class BraillePanel {
     this.buildCapsToggle(section);
 
     if (this.mode === 'card') {
+      this.buildBrailleField(section);
       this.buildSizePreset(section);
       this.buildLayoutOptions(section);
     }
@@ -276,9 +321,218 @@ class BraillePanel {
     textInput.id = 'brailleTextInput';
     textInput.className = 'braille-text-input';
     textInput.setAttribute('aria-describedby', 'brailleTextHelp');
-    textInput.addEventListener('input', () => this.scheduleLayout());
+    textInput.addEventListener('input', () => {
+      this.handleSourceTextEdited();
+      this.scheduleLayout();
+    });
     section.appendChild(textInput);
     this.refs.textarea = textInput;
+  }
+
+  /**
+   * Build the braille editor (card mode): an editable Unicode braille
+   * textarea with a dirty-state lock. Whenever it has content the card
+   * uses those cells exactly as written; "Translate to braille" fills it
+   * from the text above, "Translate to text" back-translates it so a
+   * braille reader can verify pasted braille. (Ported from the
+   * braille-cylinder project's Braille (Unicode) field.)
+   */
+  buildBrailleField(section) {
+    const details = document.createElement('details');
+    details.className = 'braille-panel-field-editor forge-disclosure';
+    details.id = 'brailleFieldEditor';
+    details.open = false;
+
+    const summary = document.createElement('summary');
+    summary.textContent = 'Braille editor (Unicode)';
+    details.appendChild(summary);
+
+    const help = document.createElement('p');
+    help.id = 'brailleFieldHelp';
+    help.className = 'braille-panel-help';
+    help.textContent =
+      'Accepts braille characters only (U+2800–U+28FF), one line per card ' +
+      'row. Press "Translate to braille" to fill this editor from your ' +
+      'text, then edit any cell you want to change — or paste braille ' +
+      'straight in and press "Translate to text" to read it back. ' +
+      'Whenever this editor has content the card uses it exactly as ' +
+      'written; clear it to go back to translating the text above.';
+    details.appendChild(help);
+
+    const toBrailleRow = document.createElement('div');
+    toBrailleRow.className = 'braille-translate-row';
+    const toBrailleBtn = document.createElement('button');
+    toBrailleBtn.type = 'button';
+    toBrailleBtn.className = 'btn btn-secondary braille-translate-btn';
+    toBrailleBtn.id = 'brailleFieldFromText';
+    toBrailleBtn.textContent = 'Translate to braille';
+    toBrailleBtn.setAttribute('aria-describedby', 'brailleFieldHelp');
+    toBrailleBtn.addEventListener('click', () => {
+      this.fillBrailleFieldFromText().catch((error) => {
+        this.setFieldStatus(`Translation failed: ${error.message}`);
+      });
+    });
+    toBrailleRow.appendChild(toBrailleBtn);
+    details.appendChild(toBrailleRow);
+
+    const fieldLabel = document.createElement('label');
+    fieldLabel.setAttribute('for', 'brailleFieldInput');
+    fieldLabel.className = 'braille-panel-label';
+    fieldLabel.textContent = 'Braille (Unicode) — one line per row';
+    details.appendChild(fieldLabel);
+
+    const field = document.createElement('textarea');
+    field.id = 'brailleFieldInput';
+    field.className = 'braille-text-input braille-field-input';
+    field.rows = 3;
+    field.setAttribute('lang', 'und-Brai');
+    field.setAttribute('autocomplete', 'off');
+    field.setAttribute('spellcheck', 'false');
+    field.setAttribute(
+      'aria-describedby',
+      'brailleFieldHelp brailleFieldStatus'
+    );
+    field.addEventListener('input', () => {
+      this.fieldDirty = field.value !== '';
+      this.setFieldStatus(
+        field.value === ''
+          ? 'Empty — the text above is translated instead.'
+          : 'Edited by hand — this braille is used exactly as written.'
+      );
+      this.scheduleLayout();
+    });
+    details.appendChild(field);
+    this.refs.fieldInput = field;
+
+    const toTextRow = document.createElement('div');
+    toTextRow.className = 'braille-translate-row';
+    const toTextBtn = document.createElement('button');
+    toTextBtn.type = 'button';
+    toTextBtn.className = 'btn btn-secondary braille-translate-btn';
+    toTextBtn.id = 'brailleFieldToText';
+    toTextBtn.textContent = 'Translate to text';
+    toTextBtn.setAttribute('aria-describedby', 'brailleFieldHelp');
+    toTextBtn.addEventListener('click', () => {
+      this.fillTextFromBrailleField().catch((error) => {
+        this.setFieldStatus(`Back-translation failed: ${error.message}`);
+      });
+    });
+    toTextRow.appendChild(toTextBtn);
+    details.appendChild(toTextRow);
+
+    // Visible status doubles as the live region, so screen readers hear
+    // fills/clears without a separate hidden announcer.
+    const status = document.createElement('p');
+    status.id = 'brailleFieldStatus';
+    status.className = 'braille-panel-help braille-field-status';
+    status.setAttribute('role', 'status');
+    details.appendChild(status);
+    this.refs.fieldStatus = status;
+
+    const numberNote = document.createElement('p');
+    numberNote.id = 'brailleNumberSignHelp';
+    numberNote.className = 'braille-panel-help';
+    numberNote.textContent =
+      'UEB number signs: a hyphen or parenthesis ends numeric mode, so ' +
+      '206-543-4779 correctly needs three number signs — that is correct ' +
+      'UEB output, not a bug. The BANA form 206.543.4779 keeps numeric ' +
+      'mode through the periods and needs only one. To adjust individual ' +
+      'cells by hand, use this editor.';
+    details.appendChild(numberNote);
+
+    section.appendChild(details);
+    this.refs.fieldEditor = details;
+  }
+
+  /** @returns {boolean} Whether the braille editor holds content (card mode) */
+  isBrailleFieldActive() {
+    return (
+      this.mode === 'card' && (this.refs.fieldInput?.value ?? '').trim() !== ''
+    );
+  }
+
+  /** Update the braille editor's visible status line (a live region). */
+  setFieldStatus(message) {
+    if (this.refs.fieldStatus) this.refs.fieldStatus.textContent = message;
+  }
+
+  /**
+   * Dirty-state lock: while the braille editor merely mirrors a
+   * translation (pristine), editing the source text clears it so the
+   * stale braille cannot silently win. Hand-edited braille stays the
+   * authority until the user clears it themselves.
+   */
+  handleSourceTextEdited() {
+    const field = this.refs.fieldInput;
+    if (!field || field.value === '' || this.fieldDirty) return;
+    field.value = '';
+    this.setFieldStatus(
+      'Braille editor cleared because the text changed — press ' +
+        '"Translate to braille" to refresh it.'
+    );
+  }
+
+  /**
+   * Fill the braille editor from the current text via the normal
+   * translate-and-wrap pipeline (one editor line per wrapped card row).
+   * Overwriting hand-edited content is allowed here — this button is the
+   * one deliberate way to do it — and announced via the status region.
+   */
+  async fillBrailleFieldFromText() {
+    const field = this.refs.fieldInput;
+    if (!field) return;
+
+    const seq = ++this.layoutSeq;
+    const table = this.refs.tableSelect.value || this.defaultTable;
+    const preserveCaps = this.refs.capsInput.checked;
+    const geometry = this.getGeometry();
+    const { cellsPerLine, rowsPerCard } = computeCapacity(geometry);
+
+    const untranslatable = new Set();
+    const translate = this.makeTranslator(table, preserveCaps, untranslatable);
+    const layout = await layoutBrailleText({
+      text: this.refs.textarea.value,
+      translate,
+      cellsPerLine,
+      rowsPerCard,
+      autoWrap: this.refs.wrapInput.checked,
+      splitCards: this.refs.splitInput.checked,
+      maxTotalLines: this.lineParams.length,
+    });
+    if (seq !== this.layoutSeq) return;
+
+    field.value = layout.allLines.map((line) => line.braille).join('\n');
+    this.fieldDirty = false;
+    const n = layout.allLines.length;
+    this.setFieldStatus(
+      `Filled from your text — ${n} braille line${n === 1 ? '' : 's'}. ` +
+        'Edits here are used exactly as written.'
+    );
+    this.scheduleLayout(0);
+  }
+
+  /**
+   * Back-translate the braille editor's lines into the text box so a
+   * braille reader can verify pasted braille. The braille stays the
+   * authority (the editor keeps its content and its dirty state).
+   */
+  async fillTextFromBrailleField() {
+    const field = this.refs.fieldInput;
+    if (!field) return;
+
+    const table = this.refs.tableSelect.value || this.defaultTable;
+    const lines = field.value.replace(/\r\n?/g, '\n').split('\n');
+    const texts = [];
+    for (const line of lines) {
+      texts.push(line.trim() === '' ? '' : await backTranslateText(line, table));
+    }
+    while (texts.length > 0 && texts[texts.length - 1] === '') texts.pop();
+
+    this.refs.textarea.value = texts.join('\n');
+    this.setFieldStatus(
+      'Text above updated from this braille. The braille stays in charge ' +
+        'until you clear this editor.'
+    );
   }
 
   buildTableSelect(section) {
@@ -718,7 +972,8 @@ class BraillePanel {
 
   /**
    * Re-wrap when the user edits card geometry directly in the parameter
-   * panel (width, height, spacing). Guarded against the panel's own writes.
+   * panel (width, height, spacing, grid rows). Guarded against the
+   * panel's own writes.
    */
   watchGeometryParams() {
     const readWatched = () => {
@@ -727,17 +982,50 @@ class BraillePanel {
         (key) => params[this.capacityParams[key]]
       ).join('\u0000');
     };
+    const readGridRows = () =>
+      String(
+        stateManager.getState().parameters?.[this.capacityParams.gridRows] ??
+          ''
+      );
     this.lastWatchedValues = readWatched();
+    this.lastGridRowsParam = readGridRows();
 
     this.unsubscribe = stateManager.subscribe(() => {
       if (this.isApplying) return;
       const next = readWatched();
-      if (next !== this.lastWatchedValues) {
-        this.lastWatchedValues = next;
-        this.syncSizePresetFromParams();
-        this.scheduleLayout();
+      if (next === this.lastWatchedValues) return;
+      this.lastWatchedValues = next;
+
+      // Two-way sync: a direct grid_rows edit updates "Max rows per
+      // card" (the user's intent) so the next layout honors it instead
+      // of silently writing the panel's old value back over it. Other
+      // geometry edits leave the intent untouched (sticky).
+      const nextGridRows = readGridRows();
+      if (nextGridRows !== this.lastGridRowsParam) {
+        this.lastGridRowsParam = nextGridRows;
+        this.syncRowsInputFromParam(nextGridRows);
       }
+
+      this.syncSizePresetFromParams();
+      this.scheduleLayout();
     });
+  }
+
+  /**
+   * Mirror a direct grid_rows parameter edit into the "Max rows per
+   * card" input (clamped to the input's 1..Line_N range).
+   * @param {string} rawValue - New grid_rows parameter value
+   */
+  syncRowsInputFromParam(rawValue) {
+    const rowsInput = this.refs.rowsInput;
+    if (!rowsInput) return;
+    const value = Math.floor(Number(rawValue));
+    if (!Number.isFinite(value) || value < 1) return;
+    const max = Number(rowsInput.max) || this.lineParams.length || 20;
+    const clamped = Math.min(value, max);
+    if (Number(rowsInput.value) !== clamped) {
+      rowsInput.value = String(clamped);
+    }
   }
 
   /**
@@ -831,6 +1119,41 @@ class BraillePanel {
     };
   }
 
+  /**
+   * Surface the rows clamp: when the card height cannot fit the
+   * requested "Max rows per card", computeCapacity() lowers the row
+   * count that gets written to grid_rows. That used to happen silently;
+   * now it lands in the warning tier and is announced once per distinct
+   * clamp. "Max rows per card" keeps the user's requested value (sticky
+   * intent), so the request takes effect again when the card grows.
+   * @param {Array<{ type: string, message: string }>} warnings
+   * @param {Object} geometry - getGeometry() result
+   * @param {number} rowsPerCard - Clamped row count from computeCapacity()
+   */
+  collectRowClampWarning(warnings, geometry, rowsPerCard) {
+    const requested = Math.max(1, Math.floor(geometry.maxRowsPerCard));
+    if (rowsPerCard >= requested) {
+      this.lastRowClampAnnounced = null;
+      return;
+    }
+    warnings.push({
+      type: 'rows-clamped',
+      message:
+        `"Max rows per card" is ${requested}, but the card height only ` +
+        `fits ${rowsPerCard} rows at the current line spacing and ` +
+        `margin, so the card uses ${rowsPerCard}. Pick a taller card ` +
+        `size preset, reduce the line spacing, or use a smaller margin ` +
+        `to fit more rows.`,
+    });
+    const key = `${requested}>${rowsPerCard}`;
+    if (this.lastRowClampAnnounced !== key) {
+      this.lastRowClampAnnounced = key;
+      stateManager.announceChange(
+        `Rows per card limited to ${rowsPerCard} by the card height.`
+      );
+    }
+  }
+
   collectCommonWarnings(warnings, { untranslatable, preserveCaps, text }) {
     if (untranslatable.size > 0) {
       const sample = [...untranslatable].slice(0, 3).join('", "');
@@ -853,6 +1176,13 @@ class BraillePanel {
   }
 
   async runCardLayout() {
+    // The braille editor wins whenever it has content: its lines are
+    // used exactly as written, with no liblouis pass.
+    if (this.isBrailleFieldActive()) return this.runBrailleFieldLayout();
+
+    this.fieldDownloadWord = null;
+    this.lastFieldWordSource = null;
+
     const seq = ++this.layoutSeq;
     const text = this.refs.textarea.value;
     const table = this.refs.tableSelect.value || this.defaultTable;
@@ -877,6 +1207,7 @@ class BraillePanel {
     if (seq !== this.layoutSeq) return; // superseded by newer input
 
     const warnings = [...layout.warnings];
+    this.collectRowClampWarning(warnings, geometry, rowsPerCard);
     this.collectCommonWarnings(warnings, { untranslatable, preserveCaps, text });
 
     // Explicit capacity-overflow error: the laid-out text exceeds the
@@ -918,6 +1249,171 @@ class BraillePanel {
     this.renderMessages(warnings);
     this.showCard(this.currentCard, { announce: false });
     this.firstLayout = false;
+  }
+
+  /**
+   * Card layout from the braille editor: the editor's lines are used
+   * verbatim (validated against the U+2800–U+28FF block and the line
+   * capacity, ASCII spaces mapped to blank cells) and chunked into
+   * cards exactly like translated text.
+   */
+  async runBrailleFieldLayout() {
+    const seq = ++this.layoutSeq;
+    const geometry = this.getGeometry();
+    const { cellsPerLine, rowsPerCard } = computeCapacity(geometry);
+
+    const warnings = [];
+    this.collectRowClampWarning(warnings, geometry, rowsPerCard);
+
+    const rawLines = this.refs.fieldInput.value
+      .replace(/\r\n?/g, '\n')
+      .split('\n');
+    while (rawLines.length > 0 && rawLines[rawLines.length - 1].trim() === '') {
+      rawLines.pop();
+    }
+
+    const lines = [];
+    rawLines.forEach((rawLine, i) => {
+      const invalid = [...rawLine].find(
+        (ch) => ch !== ' ' && !BRAILLE_CHAR_RE.test(ch)
+      );
+      if (invalid !== undefined) {
+        warnings.push({
+          type: 'braille-field-invalid',
+          message:
+            `Line ${i + 1} of the braille editor contains "${invalid}", ` +
+            `which is not a braille character. Only braille characters ` +
+            `(U+2800–U+28FF) and spaces are allowed — press "Translate ` +
+            `to braille" to convert text, or paste Unicode braille.`,
+        });
+      }
+      // ASCII spaces become blank cells; trailing blanks are trimmed so
+      // they do not count against the line capacity.
+      const braille = rawLine
+        .replace(/ /g, BRAILLE_SPACE)
+        .replace(/\u2800+$/, '');
+      const cells = countCells(braille);
+      if (cells > cellsPerLine) {
+        warnings.push({
+          type: 'line-overflow',
+          message:
+            `Line ${i + 1} of the braille editor is ${cells} cells but ` +
+            `the line capacity is ${cellsPerLine}. Move cells to another ` +
+            `row, pick a larger card size preset, or reduce the margin.`,
+        });
+      }
+      lines.push({ braille, source: '' });
+    });
+
+    // Non-braille characters block the parameter write entirely (the
+    // model keeps its previous content) — embossing garbage cells would
+    // be silent data corruption for a braille reader. The error tier
+    // explains exactly which line and character to fix.
+    if (warnings.some((w) => w.type === 'braille-field-invalid')) {
+      if (seq !== this.layoutSeq) return;
+      if (this.refs.fieldEditor) this.refs.fieldEditor.open = true;
+      this.renderMessages(warnings);
+      return;
+    }
+
+    let allLines = lines;
+    if (allLines.length > this.lineParams.length) {
+      warnings.push({
+        type: 'too-many-lines',
+        needed: allLines.length,
+        available: this.lineParams.length,
+        message:
+          `The braille editor has ${allLines.length} lines but only ` +
+          `${this.lineParams.length} are available. The extra lines were ` +
+          `dropped — shorten the braille or split it across files.`,
+      });
+      allLines = allLines.slice(0, this.lineParams.length);
+    }
+
+    let cards;
+    if (this.refs.splitInput.checked) {
+      cards = chunkIntoCards(allLines, rowsPerCard);
+    } else {
+      cards = [allLines];
+      if (allLines.length > rowsPerCard) {
+        warnings.push({
+          type: 'rows-overflow',
+          message:
+            `Only ${rowsPerCard} of ${allLines.length} braille lines fit ` +
+            `on this card. Turn on "Split overflow into additional ` +
+            `cards", raise "Max rows per card", or pick a larger card ` +
+            `size preset.`,
+        });
+      }
+    }
+
+    if (
+      geometry.cardWidthMm > BED_WARN_MM ||
+      geometry.cardHeightMm > BED_WARN_MM
+    ) {
+      warnings.push({
+        type: 'oversized-bed',
+        message:
+          `The current card size (${geometry.cardWidthMm} × ` +
+          `${geometry.cardHeightMm} mm) is larger than many printer beds ` +
+          `(about 220–250 mm). Check your printer's build area before printing.`,
+      });
+    }
+
+    warnings.push({
+      type: 'braille-field-active',
+      message:
+        'The braille editor has content, so the card uses that braille ' +
+        'exactly as written (the text box above is ignored until the ' +
+        'editor is cleared).',
+    });
+
+    if (seq !== this.layoutSeq) return;
+
+    this.cards = cards;
+    this.allLines = allLines;
+    this.cellsPerLine = cellsPerLine;
+    this.currentCard = Math.min(this.currentCard, this.cards.length - 1);
+
+    // Keep the editor visible while it drives the model.
+    if (this.refs.fieldEditor) this.refs.fieldEditor.open = true;
+
+    // Fire-and-forget: back-translate the first line for the friendly
+    // download name (braille-only input has no source text to name from).
+    this.updateFieldDownloadWord(allLines);
+
+    this.renderMessages(warnings);
+    this.showCard(this.currentCard, { announce: false });
+    this.firstLayout = false;
+  }
+
+  /**
+   * Cache a back-translated first word of the braille editor content for
+   * friendly download names. Async and best-effort: names fall back to
+   * "Braille Card" (and then the hashed default) when unavailable.
+   * @param {Array<{ braille: string }>} allLines
+   */
+  updateFieldDownloadWord(allLines) {
+    const first = allLines.find((line) => line.braille !== '');
+    if (!first) {
+      this.fieldDownloadWord = null;
+      this.lastFieldWordSource = null;
+      return;
+    }
+    if (first.braille === this.lastFieldWordSource) return;
+    this.lastFieldWordSource = first.braille;
+
+    const table = this.refs.tableSelect.value || this.defaultTable;
+    backTranslateText(first.braille, table)
+      .then((text) => {
+        // Ignore a stale result if the first line changed meanwhile.
+        if (this.lastFieldWordSource !== first.braille) return;
+        this.fieldDownloadWord = firstFilenameWord(text) || null;
+      })
+      .catch(() => {
+        if (this.lastFieldWordSource !== first.braille) return;
+        this.fieldDownloadWord = null;
+      });
   }
 
   async runCharmLayout() {
@@ -1228,13 +1724,13 @@ class BraillePanel {
       this.refs.prevBtn.disabled = this.currentCard === 0;
       this.refs.nextBtn.disabled = this.currentCard === this.cards.length - 1;
       this.refs.pagerHint.textContent =
-        `Each card exports separately. Suggested file name: ` +
-        `braille-card-${this.currentCard + 1}-of-${this.cards.length}.stl`;
+        `Each card exports separately. Downloads are named ` +
+        `${this.getCardDownloadName() ?? 'Braille Card'}.stl`;
     } else if (multi && this.renderAll) {
       this.refs.noticeText.textContent =
         `Rendering all ${this.cards.length} cards in one file, laid out ` +
-        `on the bed with a gap between cards. Suggested file name: ` +
-        `braille-cards-all.stl`;
+        `on the bed with a gap between cards. Downloads are named ` +
+        `${this.getCardDownloadName() ?? 'Braille Cards'}.stl`;
     }
   }
 
@@ -1316,6 +1812,9 @@ class BraillePanel {
       this.lastWatchedValues = CAPACITY_WATCH_KEYS.map(
         (key) => params[this.capacityParams[key]]
       ).join('\u0000');
+      this.lastGridRowsParam = String(
+        params[this.capacityParams.gridRows] ?? ''
+      );
     }
     return true;
   }
@@ -1442,6 +1941,46 @@ class BraillePanel {
     const source =
       charms[Math.min(this.currentCharm, charms.length - 1)]?.source ?? '';
     return source ? `Braille Charm ${source}` : 'Braille Charm';
+  }
+
+  /**
+   * Friendly base name for downloads (card mode): "Braille Card hello"
+   * for a single card, "Braille Card 2 of 3 hello" when paging,
+   * "Braille Cards hello" in render-all mode. The word comes from the
+   * source text, falling back to the cached back-translation when the
+   * braille editor is the only input. Null when there is no content
+   * (callers fall back to the hashed filename).
+   * @returns {string|null}
+   */
+  getCardDownloadName() {
+    const hasContent = (this.allLines || []).some(
+      (line) => (line.braille ?? '') !== ''
+    );
+    if (!hasContent) return null;
+
+    const word =
+      firstFilenameWord(this.refs.textarea?.value ?? '') ||
+      (this.isBrailleFieldActive() ? this.fieldDownloadWord : '') ||
+      '';
+    const suffix = word ? ` ${word}` : '';
+
+    if (this.cards.length > 1) {
+      return this.renderAll
+        ? `Braille Cards${suffix}`
+        : `Braille Card ${this.currentCard + 1} of ${this.cards.length}${suffix}`;
+    }
+    return `Braille Card${suffix}`;
+  }
+
+  /**
+   * Friendly base name for downloads (sign mode): "Braille Sign Exit"
+   * from the first word of the sign text. Null when there is no usable
+   * word (callers fall back to the hashed filename).
+   * @returns {string|null}
+   */
+  getSignDownloadName() {
+    const word = firstFilenameWord(this.refs.textarea?.value ?? '');
+    return word ? `Braille Sign ${word}` : null;
   }
 
   /**
