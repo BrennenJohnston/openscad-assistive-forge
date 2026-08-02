@@ -1,10 +1,11 @@
 /**
- * Card-mode behavior tests for the braille translation panel:
+ * Card- and sign-mode behavior tests for the braille translation panel:
  *
  * - Braille editor (Unicode): verbatim generation (U+2800–U+28FF
  *   validation, line-capacity checks, multi-card chunking), the
  *   dirty-state lock, and the Translate to braille / Translate to text
- *   buttons.
+ *   buttons. On a sign the editor drives the braille plate only, so the
+ *   raised letters must keep translating from the text box.
  * - grid_rows two-way sync with "Max rows per card", sticky user intent,
  *   and the announced rows clamp (no more silent grid_rows resets).
  * - Friendly download names for card and sign modes, including the
@@ -499,5 +500,154 @@ describe('braille panel sign mode — friendly download names', () => {
       expect(params().sign_text_1).toBe('');
     });
     expect(getBrailleDownloadName()).toBe(null);
+  });
+});
+
+describe('braille panel sign mode — braille editor (Unicode)', () => {
+  const SIGN_LINES = Array.from({ length: 6 }, (_, i) => `Line_${i + 1}`);
+  const SIGN_TEXTS = Array.from({ length: 6 }, (_, i) => `sign_text_${i + 1}`);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    document.body.innerHTML =
+      '<div id="app"><div id="parametersContainer"></div></div>';
+    // Mirrors public/examples/braille-sign/manifest.json plus the SCAD
+    // geometry defaults the parameter UI would expose.
+    const defaults = {
+      sign_width_mm: '160',
+      braille_plate_height_mm: '40',
+      cell_spacing: '6.2',
+      line_spacing: '10',
+      char_height_mm: '16',
+      letter_spacing: '1.1',
+      ...Object.fromEntries(SIGN_LINES.map((name) => [name, ''])),
+      ...Object.fromEntries(SIGN_TEXTS.map((name) => [name, ''])),
+    };
+    stateManager.setState({ parameters: { ...defaults }, defaults });
+    initBraillePanel({
+      mode: 'sign',
+      lineParams: SIGN_LINES,
+      textParams: SIGN_TEXTS,
+      tablesCatalog: '/liblouis/tables.json',
+      defaultTable: 'en-ueb-g2.ctb',
+      capacityParams: {
+        cardWidth: 'sign_width_mm',
+        cardHeight: 'braille_plate_height_mm',
+        cellSpacing: 'cell_spacing',
+        lineSpacing: 'line_spacing',
+        charHeight: 'char_height_mm',
+        letterSpacing: 'letter_spacing',
+      },
+    });
+  });
+
+  afterEach(() => {
+    destroyBraillePanel();
+    document.body.innerHTML = '';
+  });
+
+  it('mounts the editor collapsed, with sign-specific wording', () => {
+    const editor = document.getElementById('brailleFieldEditor');
+    expect(editor).not.toBeNull();
+    expect(editor.open).toBe(false);
+    expect(document.getElementById('brailleFieldFromText')).not.toBeNull();
+    expect(document.getElementById('brailleFieldToText')).not.toBeNull();
+    // The card copy talks about "card rows", which would be wrong here.
+    const help = document.getElementById('brailleFieldHelp').textContent;
+    expect(help).toContain('braille row');
+    expect(help).not.toContain('card');
+  });
+
+  it('uses editor content verbatim for the Line_N params (no translation)', async () => {
+    // ⠿ is not something the fake translator can produce, so finding it in
+    // Line_1 proves the editor bypassed liblouis.
+    await typeBraille('\u283F\u283F\u283F', () => {
+      expect(params().Line_1).toBe('\u283F\u283F\u283F');
+    });
+    expect(params().Line_2).toBe('');
+    const warnings = document.getElementById('brailleWarnings');
+    expect(warnings.hidden).toBe(false);
+    expect(warnings.textContent).toContain('exactly as written');
+    expect(document.getElementById('brailleFieldEditor').open).toBe(true);
+  });
+
+  it('leaves the raised letters translating from the text box', async () => {
+    await typeText('Exit now', () => {
+      expect(params().sign_text_1).toBe('Exit now');
+    });
+    // Hand-correcting the braille plate must not rewrite the printed word.
+    await typeBraille('\u283F\u283F', () => {
+      expect(params().Line_1).toBe('\u283F\u283F');
+    });
+    expect(params().sign_text_1).toBe('Exit now');
+  });
+
+  it('rejects non-braille characters with an error and blocks the write', async () => {
+    await typeBraille('\u2813\u2811', () => {
+      expect(params().Line_1).toBe('\u2813\u2811');
+    });
+    await typeBraille('hello', () => {
+      expect(document.getElementById('brailleErrors').textContent).toContain(
+        'not a braille character'
+      );
+    });
+    // The previous good braille survives rather than being overwritten
+    // with garbage cells.
+    expect(params().Line_1).toBe('\u2813\u2811');
+  });
+
+  it('drops rows past the sign\u2019s line count and says so', async () => {
+    // Truncation is a blocking problem, so it belongs in the error tier.
+    await typeBraille(
+      '\u2801\n\u2803\n\u2809\n\u2819\n\u2811\n\u280B\n\u281B',
+      () => {
+        expect(document.getElementById('brailleErrors').textContent).toContain(
+          'holds 6'
+        );
+      }
+    );
+    expect(params().Line_6).toBe('\u280B');
+  });
+
+  it('fills the editor from the text, then uses it verbatim', async () => {
+    await typeText('hello', () => {
+      expect(params().Line_1).toBe(word('hello'));
+    });
+
+    document.getElementById('brailleFieldFromText').click();
+    await vi.waitFor(
+      () => {
+        expect(document.getElementById('brailleFieldInput').value).toBe(
+          word('hello')
+        );
+      },
+      { timeout: 3000, interval: 25 }
+    );
+
+    // Editing one cell must reach the model untouched by translation.
+    await typeBraille(`${word('hello')}\u283F`, () => {
+      expect(params().Line_1).toBe(`${word('hello')}\u283F`);
+    });
+  });
+
+  it('clears the editor when the text changes while it is pristine', async () => {
+    document.getElementById('brailleFieldFromText').click();
+    await vi.waitFor(
+      () => {
+        expect(document.getElementById('brailleFieldInput').value).not.toBe('');
+      },
+      { timeout: 3000, interval: 25 }
+    );
+
+    await typeText('exit', () => {
+      expect(document.getElementById('brailleFieldInput').value).toBe('');
+    });
+    // Back to translating the text box.
+    await vi.waitFor(
+      () => {
+        expect(params().Line_1).toBe(word('exit'));
+      },
+      { timeout: 3000, interval: 25 }
+    );
   });
 });

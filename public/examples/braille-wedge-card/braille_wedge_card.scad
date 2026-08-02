@@ -1,7 +1,7 @@
 // =============================================================================
 // Braille Wedge Card STL Generator (OpenSCAD)
 // =============================================================================
-// VERSION = 1.2.0 (OpenSCAD Assistive Forge web adaptation)
+// VERSION = 1.2.1 (OpenSCAD Assistive Forge web adaptation)
 // License: GPL-3.0-or-later
 //          https://www.gnu.org/licenses/gpl-3.0.html
 // Source:  https://github.com/BrennenJohnston/braille-wedge-card-openscad
@@ -44,6 +44,8 @@
 //  1. Translate your text at https://www.branah.com/braille-translator
 //     (Grade 1 or Grade 2, Unicode Braille output — NOT ASCII Braille).
 //  2. Paste pre-translated braille into Line_1..Line_20 in the Customizer.
+//     Lines 1-8 are in the [Text Input] group; lines 9-20 are under
+//     [More Braille Lines (Advanced)].
 //  3. Pick dot_shape (Rounded is the ADA-friendly default; Cone is easier to
 //     print on some machines).
 //  4. The card face auto-sizes to fit your text plus a margin by default
@@ -123,6 +125,14 @@ Line_6 = "";
 Line_7 = "";
 // Line 8 of braille text
 Line_8 = "";
+
+/* [More Braille Lines (Advanced)] */
+// Lines 9 through 20, for cards taller than the default 8-row grid and for
+// multi-card runs (see [Multi-Card Layout]). The Customizer cannot add fields
+// on demand, so these live in their own tab rather than making you scroll past
+// twelve mostly-empty boxes to reach the rest of the settings. The parameter
+// names are unchanged, so presets and -D overrides work the same either way.
+// Raise grid_rows to match how many you fill when auto_size_card is Off.
 // Line 9 of braille text
 Line_9 = "";
 // Line 10 of braille text
@@ -281,8 +291,9 @@ quality_fn = (render_quality == "Low")    ? 24 :
 // --- Content metrics (actual typed text, not grid capacity) ---
 // _all_lines is the SINGLE SOURCE OF TRUTH for the text content. Every loop,
 // warning, and layout module iterates this list — never Line_N directly.
-// To extend beyond 20 lines: declare `Line_21 = "";` (etc.) in the text-input
-// section above, append it here, and raise the grid_rows slider max to match.
+// To extend beyond 20 lines: declare `Line_21 = "";` (etc.) in the
+// [More Braille Lines (Advanced)] section above, append it here, and raise the
+// grid_rows slider max to match.
 _all_lines = [Line_1,  Line_2,  Line_3,  Line_4,  Line_5,
               Line_6,  Line_7,  Line_8,  Line_9,  Line_10,
               Line_11, Line_12, Line_13, Line_14, Line_15,
