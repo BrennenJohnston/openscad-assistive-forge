@@ -373,6 +373,11 @@ export async function layoutBrailleText({
  *   capacity from the final auto-fit sign width
  * @param {number} opts.maxRows - Row ceiling for each plate (the SCAD's
  *   Line_N / sign_text_N parameter count)
+ * @param {boolean} [opts.skipBrailleRows=false] - Lay out the raised
+ *   letters only and return `brailleRows: []`. For the braille editor,
+ *   which supplies the braille plate's rows verbatim: translating text
+ *   whose output is about to be discarded would also raise cell-capacity
+ *   warnings about braille the sign is not going to carry.
  * @returns {Promise<{
  *   textRows: Array<{ source: string }>,
  *   brailleRows: Array<{ braille: string, source: string }>,
@@ -387,6 +392,7 @@ export async function layoutSignText({
   maxSourceChars,
   brailleCellsPerLine,
   maxRows,
+  skipBrailleRows = false,
 }) {
   const warnings = [];
 
@@ -407,7 +413,9 @@ export async function layoutSignText({
     }
     const words = [];
     for (const source of trimmed.split(/\s+/)) {
-      const braille = await translateCached(source);
+      // Pass 1 packs on source characters alone, so skipping the braille
+      // pass means no translation is needed at all.
+      const braille = skipBrailleRows ? '' : await translateCached(source);
       words.push({ source, braille, cells: countCells(braille) });
     }
     userLines.push(words);
@@ -487,6 +495,16 @@ export async function layoutSignText({
       ? brailleCellsPerLine(longestRowChars)
       : brailleCellsPerLine
   );
+
+  if (skipBrailleRows) {
+    return {
+      textRows: keptTextRows.map(({ source }) => ({ source })),
+      brailleRows: [],
+      warnings,
+      brailleCellsPerLine: cellsPerLine,
+      longestRowChars,
+    };
+  }
 
   // Regroup the surviving words by user line (hard breaks preserved;
   // blank user lines become their own empty groups).

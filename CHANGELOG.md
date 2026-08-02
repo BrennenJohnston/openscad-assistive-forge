@@ -9,6 +9,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Braille editor (Unicode) extended to the Braille Sign** (Braille Sign 1.2.0) — the
+  card tool's hand-editing panel now appears in the sign tool too, wired to the sign's
+  `Line_1`–`Line_6` braille parameters. On a sign it drives the **braille plate only**:
+  the raised letters keep wrapping from the text box, because ADA 703 treats the two as
+  separate plates and correcting a contraction by hand should not silently rewrite the
+  printed word above it. Braille beyond the sign's six rows is reported as an error and
+  dropped rather than truncated silently, and non-braille characters still block the
+  parameter write so the sign keeps its previous valid braille. "Translate to braille"
+  fills the editor from the same wrapping pass the sign would otherwise have rendered,
+  so what you edit is exactly what you were about to get. Charm mode is deliberately
+  excluded — one cell per character leaves no rows to edit. Adds a `skipBrailleRows`
+  option to `layoutSignText()` (letter rows only, no translation) so the editor path
+  cannot raise cell-capacity warnings about braille the sign is not going to carry, and
+  factors the editor's parsing and validation into a shared `parseBrailleField()` used
+  by both modes
+
+### Changed
+
+- **Braille Card example synced to wedge-card 1.2.1** — `Line_9`–`Line_20` moved into a
+  `[More Braille Lines (Advanced)]` Customizer group, so the parameter panel opens with
+  eight text fields (the `grid_rows` default) instead of twenty, and the settings below
+  them are reachable without scrolling past twelve empty boxes. Parameter names are
+  unchanged, so saved presets and the translation panel's writes are unaffected; the
+  group renders collapsed like every other group. Also corrects the example's stale
+  `VERSION` header
+
 - **Braille editor (Unicode) for the Braille Card** — a collapsible editor in the translation panel holds one line of editable Unicode braille per card row. "Translate to braille" fills it from the typed text through the normal wrap pipeline; "Translate to text" back-translates it on-device (new `backTranslate` message type in the liblouis worker + `backTranslateText()` in `braille-translator.js`) so a braille reader can verify pasted braille. Whenever the editor has content the card embosses it exactly as written — no liblouis pass — with per-line validation (braille block U+2800–U+28FF only, line capacity) and the same multi-card chunking, pager, and render-all handling as translated text. A dirty-state lock keeps hand-edited braille authoritative (editing the English text clears only pristine, translation-mirroring content), and every fill/clear is announced through a visible status live region. Ported from the braille-cylinder-stl-generator project. Includes a UEB number-sign help note (hyphens end numeric mode, so `206-543-4779` legitimately needs three number signs; the BANA form `206.543.4779` needs one) in the panel and `BRAILLE_CARD_GUIDE.md`
 - **Friendly download names for cards and signs** — card and sign exports join the charms in being named after their content: `Braille Card hello.stl`, `Braille Card 2 of 3 hello.stl` (paging), `Braille Cards hello.stl` (render-all), `Braille Sign Exit.stl`. When braille pasted into the braille editor is the only input, the first line is back-translated on-device to recover a name; the hashed default remains the fallback. The multi-card pager hint and render-all notice now show the real export name
 - **Edge detail limit** — a new select in the Preview Settings drawer caps how many segments the Show Edges overlay may draw: Low (25,000), Balanced (75,000, the default), High (250,000), or Unlimited. When a model exceeds the cap the overlay keeps the *longest* segments, so silhouettes and structural lines survive while the short tessellation facets that turn a dense keyguard into a solid dark mass are dropped. A readout under the select reports the result ("Showing 75,000 of 214,338 edges") after every rebuild, and the choice persists per app profile

@@ -259,8 +259,13 @@ class BraillePanel {
     this.buildTableSelect(section);
     this.buildCapsToggle(section);
 
-    if (this.mode === 'card') {
+    // The braille editor applies wherever the model carries braille rows
+    // the user might want to hand-correct. Charm mode is one cell per
+    // character with no rows to edit, so it stays out.
+    if (this.mode === 'card' || this.mode === 'sign') {
       this.buildBrailleField(section);
+    }
+    if (this.mode === 'card') {
       this.buildSizePreset(section);
       this.buildLayoutOptions(section);
     }
@@ -330,14 +335,20 @@ class BraillePanel {
   }
 
   /**
-   * Build the braille editor (card mode): an editable Unicode braille
-   * textarea with a dirty-state lock. Whenever it has content the card
-   * uses those cells exactly as written; "Translate to braille" fills it
-   * from the text above, "Translate to text" back-translates it so a
-   * braille reader can verify pasted braille. (Ported from the
-   * braille-cylinder project's Braille (Unicode) field.)
+   * Build the braille editor (card and sign modes): an editable Unicode
+   * braille textarea with a dirty-state lock. Whenever it has content
+   * the model uses those cells exactly as written; "Translate to
+   * braille" fills it from the text above, "Translate to text"
+   * back-translates it so a braille reader can verify pasted braille.
+   * (Ported from the braille-cylinder project's Braille (Unicode) field.)
+   *
+   * On a sign this drives the braille plate only — the raised letters
+   * keep coming from the text box, since ADA 703 treats the two as
+   * separate plates and a hand-corrected contraction should not silently
+   * rewrite the printed word above it.
    */
   buildBrailleField(section) {
+    const isSign = this.mode === 'sign';
     const details = document.createElement('details');
     details.className = 'braille-panel-field-editor forge-disclosure';
     details.id = 'brailleFieldEditor';
@@ -350,13 +361,21 @@ class BraillePanel {
     const help = document.createElement('p');
     help.id = 'brailleFieldHelp';
     help.className = 'braille-panel-help';
-    help.textContent =
-      'Accepts braille characters only (U+2800–U+28FF), one line per card ' +
-      'row. Press "Translate to braille" to fill this editor from your ' +
-      'text, then edit any cell you want to change — or paste braille ' +
-      'straight in and press "Translate to text" to read it back. ' +
-      'Whenever this editor has content the card uses it exactly as ' +
-      'written; clear it to go back to translating the text above.';
+    help.textContent = isSign
+      ? 'Accepts braille characters only (U+2800–U+28FF), one line per ' +
+        'braille row on the sign. Press "Translate to braille" to fill ' +
+        'this editor from your text, then edit any cell you want to ' +
+        'change — or paste braille straight in and press "Translate to ' +
+        'text" to read it back. Whenever this editor has content the ' +
+        'braille plate uses it exactly as written, while the raised ' +
+        'letters still come from the text above; clear it to go back to ' +
+        'translating.'
+      : 'Accepts braille characters only (U+2800–U+28FF), one line per card ' +
+        'row. Press "Translate to braille" to fill this editor from your ' +
+        'text, then edit any cell you want to change — or paste braille ' +
+        'straight in and press "Translate to text" to read it back. ' +
+        'Whenever this editor has content the card uses it exactly as ' +
+        'written; clear it to go back to translating the text above.';
     details.appendChild(help);
 
     const toBrailleRow = document.createElement('div');
@@ -378,7 +397,9 @@ class BraillePanel {
     const fieldLabel = document.createElement('label');
     fieldLabel.setAttribute('for', 'brailleFieldInput');
     fieldLabel.className = 'braille-panel-label';
-    fieldLabel.textContent = 'Braille (Unicode) — one line per row';
+    fieldLabel.textContent = isSign
+      ? 'Braille (Unicode) — one line per braille row'
+      : 'Braille (Unicode) — one line per row';
     details.appendChild(fieldLabel);
 
     const field = document.createElement('textarea');
@@ -444,10 +465,14 @@ class BraillePanel {
     this.refs.fieldEditor = details;
   }
 
-  /** @returns {boolean} Whether the braille editor holds content (card mode) */
+  /**
+   * @returns {boolean} Whether the braille editor exists for this mode and
+   *   holds content, in which case it overrides translation
+   */
   isBrailleFieldActive() {
     return (
-      this.mode === 'card' && (this.refs.fieldInput?.value ?? '').trim() !== ''
+      (this.mode === 'card' || this.mode === 'sign') &&
+      (this.refs.fieldInput?.value ?? '').trim() !== ''
     );
   }
 
@@ -483,27 +508,43 @@ class BraillePanel {
     if (!field) return;
 
     const seq = ++this.layoutSeq;
-    const table = this.refs.tableSelect.value || this.defaultTable;
-    const preserveCaps = this.refs.capsInput.checked;
-    const geometry = this.getGeometry();
-    const { cellsPerLine, rowsPerCard } = computeCapacity(geometry);
+    let rows;
 
-    const untranslatable = new Set();
-    const translate = this.makeTranslator(table, preserveCaps, untranslatable);
-    const layout = await layoutBrailleText({
-      text: this.refs.textarea.value,
-      translate,
-      cellsPerLine,
-      rowsPerCard,
-      autoWrap: this.refs.wrapInput.checked,
-      splitCards: this.refs.splitInput.checked,
-      maxTotalLines: this.lineParams.length,
-    });
-    if (seq !== this.layoutSeq) return;
+    if (this.mode === 'sign') {
+      // Clear first so the editor does not divert this pass down the
+      // verbatim path and refill itself from its own contents.
+      field.value = '';
+      const { layout } = await this.buildSignLayout();
+      if (seq !== this.layoutSeq) return;
+      rows = layout.brailleRows;
+    } else {
+      const table = this.refs.tableSelect.value || this.defaultTable;
+      const preserveCaps = this.refs.capsInput.checked;
+      const geometry = this.getGeometry();
+      const { cellsPerLine, rowsPerCard } = computeCapacity(geometry);
 
-    field.value = layout.allLines.map((line) => line.braille).join('\n');
+      const untranslatable = new Set();
+      const translate = this.makeTranslator(
+        table,
+        preserveCaps,
+        untranslatable
+      );
+      const layout = await layoutBrailleText({
+        text: this.refs.textarea.value,
+        translate,
+        cellsPerLine,
+        rowsPerCard,
+        autoWrap: this.refs.wrapInput.checked,
+        splitCards: this.refs.splitInput.checked,
+        maxTotalLines: this.lineParams.length,
+      });
+      if (seq !== this.layoutSeq) return;
+      rows = layout.allLines;
+    }
+
+    field.value = rows.map((line) => line.braille).join('\n');
     this.fieldDirty = false;
-    const n = layout.allLines.length;
+    const n = rows.length;
     this.setFieldStatus(
       `Filled from your text — ${n} braille line${n === 1 ? '' : 's'}. ` +
         'Edits here are used exactly as written.'
@@ -1265,45 +1306,9 @@ class BraillePanel {
     const warnings = [];
     this.collectRowClampWarning(warnings, geometry, rowsPerCard);
 
-    const rawLines = this.refs.fieldInput.value
-      .replace(/\r\n?/g, '\n')
-      .split('\n');
-    while (rawLines.length > 0 && rawLines[rawLines.length - 1].trim() === '') {
-      rawLines.pop();
-    }
-
-    const lines = [];
-    rawLines.forEach((rawLine, i) => {
-      const invalid = [...rawLine].find(
-        (ch) => ch !== ' ' && !BRAILLE_CHAR_RE.test(ch)
-      );
-      if (invalid !== undefined) {
-        warnings.push({
-          type: 'braille-field-invalid',
-          message:
-            `Line ${i + 1} of the braille editor contains "${invalid}", ` +
-            `which is not a braille character. Only braille characters ` +
-            `(U+2800–U+28FF) and spaces are allowed — press "Translate ` +
-            `to braille" to convert text, or paste Unicode braille.`,
-        });
-      }
-      // ASCII spaces become blank cells; trailing blanks are trimmed so
-      // they do not count against the line capacity.
-      const braille = rawLine
-        .replace(/ /g, BRAILLE_SPACE)
-        .replace(/\u2800+$/, '');
-      const cells = countCells(braille);
-      if (cells > cellsPerLine) {
-        warnings.push({
-          type: 'line-overflow',
-          message:
-            `Line ${i + 1} of the braille editor is ${cells} cells but ` +
-            `the line capacity is ${cellsPerLine}. Move cells to another ` +
-            `row, pick a larger card size preset, or reduce the margin.`,
-        });
-      }
-      lines.push({ braille, source: '' });
-    });
+    const { lines, warnings: fieldWarnings } =
+      this.parseBrailleField(cellsPerLine);
+    warnings.push(...fieldWarnings);
 
     // Non-braille characters block the parameter write entirely (the
     // model keeps its previous content) — embossing garbage cells would
@@ -1484,8 +1489,14 @@ class BraillePanel {
     this.firstLayout = false;
   }
 
-  async runSignLayout() {
-    const seq = ++this.layoutSeq;
+  /**
+   * Capacity math + wrapping for the sign, shared by the translated
+   * layout, the braille-editor layout, and the editor's "Translate to
+   * braille" button — so the rows the button writes are exactly the rows
+   * the sign would otherwise have rendered.
+   * @param {{ skipBrailleRows?: boolean }} [opts]
+   */
+  async buildSignLayout({ skipBrailleRows = false } = {}) {
     const text = this.refs.textarea.value;
     const table = this.refs.tableSelect.value || this.defaultTable;
     const preserveCaps = this.refs.capsInput.checked;
@@ -1536,7 +1547,39 @@ class BraillePanel {
           maxRowsPerCard: maxLines,
         }).cellsPerLine;
       },
+      skipBrailleRows,
     });
+
+    return {
+      layout,
+      text,
+      preserveCaps,
+      untranslatable,
+      maxLines,
+      fitChars,
+      longestWord,
+      longestWordChars,
+      advanceMm,
+    };
+  }
+
+  async runSignLayout() {
+    // The braille editor wins whenever it has content: its lines drive
+    // the braille plate verbatim, with no liblouis pass.
+    if (this.isBrailleFieldActive()) return this.runSignBrailleFieldLayout();
+
+    const seq = ++this.layoutSeq;
+    const {
+      layout,
+      text,
+      preserveCaps,
+      untranslatable,
+      maxLines,
+      fitChars,
+      longestWord,
+      longestWordChars,
+      advanceMm,
+    } = await this.buildSignLayout();
 
     if (seq !== this.layoutSeq) return;
 
@@ -1570,6 +1613,131 @@ class BraillePanel {
     this.renderSignRowSummary(layout);
     this.applySignToParams(layout.textRows, layout.brailleRows);
     this.firstLayout = false;
+  }
+
+  /**
+   * Sign layout from the braille editor: the editor's lines become the
+   * braille plate verbatim, while the raised letters are still wrapped
+   * from the text box. The two plates carry the same message but are
+   * authored separately, which is the point — a reader who corrects a
+   * contraction should not have the printed word above it change too.
+   */
+  async runSignBrailleFieldLayout() {
+    const seq = ++this.layoutSeq;
+    const { layout, text, preserveCaps, untranslatable, maxLines } =
+      await this.buildSignLayout({ skipBrailleRows: true });
+
+    if (seq !== this.layoutSeq) return;
+
+    const cellsPerLine = layout.brailleCellsPerLine;
+    const { lines, warnings } = this.parseBrailleField(cellsPerLine);
+    warnings.push(...layout.warnings);
+
+    // Non-braille characters block the parameter write entirely (the
+    // sign keeps its previous content) — embossing garbage cells would
+    // be silent data corruption for a braille reader.
+    if (warnings.some((w) => w.type === 'braille-field-invalid')) {
+      if (this.refs.fieldEditor) this.refs.fieldEditor.open = true;
+      this.renderMessages(warnings);
+      return;
+    }
+
+    let brailleRows = lines;
+    if (brailleRows.length > maxLines) {
+      warnings.push({
+        type: 'too-many-lines',
+        needed: brailleRows.length,
+        available: maxLines,
+        message:
+          `The braille editor has ${brailleRows.length} lines but the sign ` +
+          `holds ${maxLines}. The extra lines were dropped — shorten the ` +
+          `braille or split it across multiple signs.`,
+      });
+      brailleRows = brailleRows.slice(0, maxLines);
+    }
+
+    this.collectCommonWarnings(warnings, {
+      untranslatable,
+      preserveCaps,
+      text,
+    });
+    warnings.push({
+      type: 'braille-field-active',
+      message:
+        'The braille editor has content, so the braille plate uses that ' +
+        'braille exactly as written. The raised letters still come from ' +
+        'the text above; clear the editor to translate both again.',
+    });
+
+    this.cards = [brailleRows];
+    this.allLines = brailleRows;
+    this.cellsPerLine = cellsPerLine;
+
+    if (this.refs.fieldEditor) this.refs.fieldEditor.open = true;
+
+    this.renderMessages(warnings);
+    this.renderPreview(brailleRows);
+    this.renderSignRowSummary({ textRows: layout.textRows, brailleRows });
+    this.applySignToParams(layout.textRows, brailleRows);
+    this.firstLayout = false;
+  }
+
+  /**
+   * Read and validate the braille editor's content as rows.
+   *
+   * Only U+2800–U+28FF and ASCII spaces are accepted: anything else is
+   * reported per line and character so the user knows exactly what to
+   * fix. Spaces become blank cells, trailing blanks are trimmed so they
+   * do not count against the capacity, and lines over `cellsPerLine` are
+   * flagged (but still returned — the caller decides what to do).
+   *
+   * @param {number} cellsPerLine - Row capacity in braille cells
+   * @returns {{
+   *   lines: Array<{ braille: string, source: string }>,
+   *   warnings: Array<{ type: string, message: string }>,
+   * }}
+   */
+  parseBrailleField(cellsPerLine) {
+    const warnings = [];
+    const rawLines = this.refs.fieldInput.value
+      .replace(/\r\n?/g, '\n')
+      .split('\n');
+    while (rawLines.length > 0 && rawLines[rawLines.length - 1].trim() === '') {
+      rawLines.pop();
+    }
+
+    const lines = [];
+    rawLines.forEach((rawLine, i) => {
+      const invalid = [...rawLine].find(
+        (ch) => ch !== ' ' && !BRAILLE_CHAR_RE.test(ch)
+      );
+      if (invalid !== undefined) {
+        warnings.push({
+          type: 'braille-field-invalid',
+          message:
+            `Line ${i + 1} of the braille editor contains "${invalid}", ` +
+            `which is not a braille character. Only braille characters ` +
+            `(U+2800–U+28FF) and spaces are allowed — press "Translate ` +
+            `to braille" to convert text, or paste Unicode braille.`,
+        });
+      }
+      const braille = rawLine
+        .replace(/ /g, BRAILLE_SPACE)
+        .replace(/\u2800+$/, '');
+      const cells = countCells(braille);
+      if (cells > cellsPerLine) {
+        warnings.push({
+          type: 'line-overflow',
+          message:
+            `Line ${i + 1} of the braille editor is ${cells} cells but ` +
+            `the line capacity is ${cellsPerLine}. Move cells to another ` +
+            `row, pick a larger size, or reduce the margin.`,
+        });
+      }
+      lines.push({ braille, source: '' });
+    });
+
+    return { lines, warnings };
   }
 
   // ------------------------------------------------------------------

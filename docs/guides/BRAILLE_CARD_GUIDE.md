@@ -42,12 +42,14 @@ The raw `Line_1`–`Line_20` parameters stay visible in the parameter panel belo
 
 ## Editing braille by hand
 
-The **Braille editor (Unicode)** in the card tool accepts braille characters only (U+2800–U+28FF, plus spaces which become blank cells), one line per card row. It has two states:
+The **Braille editor (Unicode)** in the card and sign tools accepts braille characters only (U+2800–U+28FF, plus spaces which become blank cells), one line per row. It has two states:
 
 - **Pristine** — the editor mirrors a translation (after Translate to braille), so editing the English text clears it; nothing you typed is lost.
-- **Hand-edited** — once you type or paste into the editor, it becomes the authority: the card embosses those cells exactly as written, the text box above is ignored (a warning says so), and only the Translate to braille button may overwrite it. Every fill and clear is announced through the editor's status line.
+- **Hand-edited** — once you type or paste into the editor, it becomes the authority: the model embosses those cells exactly as written, the text box above is ignored for braille (a warning says so), and only the Translate to braille button may overwrite it. Every fill and clear is announced through the editor's status line.
 
-Editor lines are validated against the line capacity, and overflow chunks onto additional cards exactly like translated text (the pager and Render-all-cards toggle work as usual). Non-braille characters produce a per-line error naming the offending character.
+Editor lines are validated against the line capacity, and overflow chunks onto additional cards exactly like translated text (the pager and Render-all-cards toggle work as usual). Non-braille characters produce a per-line error naming the offending character, and block the write entirely so the model keeps its previous, valid braille rather than embossing garbage cells.
+
+**On a sign**, the editor drives the **braille plate only** — the raised letters keep wrapping from the text box. ADA 703 treats the two as separate plates, and correcting a contraction by hand should not silently rewrite the printed word above it. Braille beyond the sign's six rows is dropped with an error rather than truncated silently. Charm mode has no editor: one cell per character leaves no rows to edit.
 
 ### Phone numbers and UEB number signs
 
@@ -108,16 +110,18 @@ A two-part sign following the **2010 ADA Standards (section 703)** recommendatio
 - `sign_part` renders **Both** plates side by side on the bed (default), or each plate alone.
 - Up to **6 rows** of each script, wrapped **independently**: long lines wrap onto new rows of raised letters automatically, and the braille reflows into its own rows to fill the sign width. Because 16 mm raised letters hold far fewer characters per row than 7 mm braille cells, the braille usually packs into fewer, fuller rows. Line breaks you type are kept as hard breaks in both scripts.
 - Independent wrapping is permitted by **ADA 703.3.2**, which places braille as one block below the entire text without requiring its line breaks to mirror the print rows. The preview lists the braille rows (with the words each row contains underneath) plus a summary of how many rows each plate uses.
-- **Auto-fit** (`auto_fit`, on by default): the sign grows to fit its content — plates get taller as rows are added, and wider if a single word needs more room than the set width. Turn it off to pin the exact size (overflowing content then triggers console warnings instead).
+- **Auto-fit** (`auto_fit`, on by default): the sign grows to fit its content — plates get taller as rows are added, and wider if a single word needs more room than the set width. Turn it off to pin the exact size; overflowing content then triggers console warnings that report the measured size against the space available (for example `BRAILLE TOO WIDE: 242.1/156 mm`) and the value to raise the parameter to.
+- **Braille editor (Unicode)**: the same hand-editing panel the card tool has, wired to the braille plate. See "Editing braille by hand".
 
 ### Making a sign, step by step
 
 1. Open the sign tool (welcome screen → Braille Card Customizer → Open — **Braille Sign** is the preselected tool — or `?example=braille-sign`).
 2. Type the sign text into **Text to translate** — one line per message line (for example `Conference Room` then `101`). Long lines wrap onto new rows by themselves.
 3. Check the **Braille preview**: each braille row shows the words it contains underneath, the row summary reports how many rows each plate uses, and any fit problems appear as errors or warnings.
-4. Adjust parameters if needed (character height, sign width, border, print orientation) — with auto-fit on, the sign resizes to whatever you enter.
-5. Render and export. `sign_part` defaults to **Both**, so one STL holds the letter plate and the braille plate side by side; print it as modeled, no slicer supports.
-6. After printing, snap the support fins off the back of the braille plate (Angled mode). Mount the plates with the letters above the braille so the split border joins into one frame, keeping the braille at least 9.5 mm (3/8 in) below the raised text.
+4. To correct a contraction or paste braille you already have, open the **Braille editor (Unicode)** and edit the rows directly — see "Editing braille by hand". On a sign the editor drives the braille plate only; the raised letters keep coming from your text.
+5. Adjust parameters if needed (character height, sign width, border, print orientation) — with auto-fit on, the sign resizes to whatever you enter.
+6. Render and export. `sign_part` defaults to **Both**, so one STL holds the letter plate and the braille plate side by side; print it as modeled, no slicer supports.
+7. After printing, snap the support fins off the back of the braille plate (Angled mode). Mount the plates with the letters above the braille so the split border joins into one frame, keeping the braille at least 9.5 mm (3/8 in) below the raised text.
 
 > **ADA disclaimer:** the defaults follow the published 703 figures, but this tool does **not** guarantee compliance. Real signage has requirements the generator does not model — mounting height and location, visual contrast, glare, character width ratios, and the braille position at least 9.5 mm (3/8 in) below the raised text zone (mount the braille plate accordingly). Verify against the standard before installing.
 
