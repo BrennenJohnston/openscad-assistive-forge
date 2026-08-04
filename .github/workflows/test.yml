@@ -57,6 +57,48 @@ jobs:
           name: coverage-report
           path: coverage/
 
+  # WASM smoke gate - BLOCKING. The one e2e job with zero test.skip(isCI):
+  # boot + WASM init, upload, preview render, full-render STL bytes, and
+  # param-change re-render all run for real. If this job is red, the core
+  # pipeline is broken no matter what the other (heavily skipped) jobs say.
+  wasm-smoke:
+    name: WASM Smoke (blocking, no skips)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download OpenSCAD WASM files
+        run: npm run setup-wasm
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run WASM smoke suite
+        run: npx playwright test tests/e2e/wasm-smoke.spec.js --project=chromium
+        env:
+          # Real WASM renders with retries need more than the default
+          # 10-minute global ceiling.
+          PW_GLOBAL_TIMEOUT: '900000'
+
+      - name: Upload Playwright report (WASM smoke)
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report-wasm-smoke
+          path: playwright-report/
+          retention-days: 30
+
   e2e-tests-chromium:
     name: E2E Tests (Chromium)
     runs-on: ubuntu-latest
