@@ -30,6 +30,11 @@ import {
   PREVIEW_QUALITY_DEFAULT,
   estimateRenderTime,
 } from './js/render-controller.js';
+import {
+  loadProjectManifest,
+  getBuiltinManifest,
+  applyPreviewOverrides,
+} from './js/project-manifest.js';
 import { escapeHtml, isValidServiceWorkerMessage } from './js/html-utils.js';
 import { getQualityPreset, COMPLEXITY_TIER } from './js/quality-tiers.js';
 import { getThreeModule } from './js/preview.js';
@@ -4095,20 +4100,12 @@ async function initApp() {
       return parameters;
     }
 
-    const adjusted = { ...parameters };
-    if (Object.prototype.hasOwnProperty.call(adjusted, 'render_quality')) {
-      adjusted.render_quality = 'Low';
-    }
-    if (Object.prototype.hasOwnProperty.call(adjusted, 'cone_segments')) {
-      const raw = Number(adjusted.cone_segments);
-      if (Number.isFinite(raw)) {
-        adjusted.cone_segments = Math.max(8, Math.min(12, raw));
-      } else {
-        adjusted.cone_segments = 12;
-      }
-    }
-
-    return adjusted;
+    // Per-project forge.project.json wins; projects without one get the
+    // historical builtin keyguard/braille overrides (identical behavior).
+    const manifest =
+      loadProjectManifest(stateManager.getState()?.projectFiles) ??
+      getBuiltinManifest();
+    return applyPreviewOverrides(manifest, parameters, qualityKey);
   };
 
   const resolveAdaptiveQuality = (parameters) =>
