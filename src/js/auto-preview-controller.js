@@ -1495,11 +1495,15 @@ export class AutoPreviewController {
     const qualityKey = quality?.name ? `full-${quality.name}` : 'full';
     const cacheKey = this.getPreviewCacheKey(paramHash, qualityKey);
 
-    // Check if we already have full quality for these params
+    // Check if we already have full quality for these params.
+    // The format guard matters: renderFull() only ever resolves with STL
+    // for callers, but fullQualitySTL transiently holds OFF bytes between
+    // the colored render and the STL follow-up render.
     if (
       paramHash === this.fullRenderParamHash &&
       this.fullQualitySTL &&
-      this.fullQualityKey === qualityKey
+      this.fullQualityKey === qualityKey &&
+      (this.fullQualityFormat || 'stl') === 'stl'
     ) {
       return {
         stl: this.fullQualitySTL,
@@ -1757,10 +1761,21 @@ export class AutoPreviewController {
         this.fullQualityConsoleOutput = stlResult.consoleOutput || '';
         return stlResult;
       } catch (stlError) {
-        console.warn(
-          '[AutoPreview] STL follow-up render failed; download may use OFF data:',
-          stlError
+        // Never leave OFF bytes where the download path expects STL: clear
+        // the cached artifact entirely and fail loudly. Returning the OFF
+        // result here used to make the app silently save OFF bytes as .stl.
+        this.fullQualitySTL = null;
+        this.fullQualityFormat = null;
+        this.fullQualityStats = null;
+        this.fullQualityKey = null;
+        this.fullRenderParamHash = null;
+        this.fullQualityConsoleOutput = null;
+        const exportError = new Error(
+          `STL export render failed: ${stlError.message}`
         );
+        exportError.code = 'EXPORT_STL_FAILED';
+        exportError.cause = stlError;
+        throw exportError;
       }
     }
 
@@ -1882,7 +1897,11 @@ export class AutoPreviewController {
    */
   getCurrentFullSTL(parameters) {
     const paramHash = this.hashParams(parameters);
-    if (paramHash === this.fullRenderParamHash && this.fullQualitySTL) {
+    if (
+      paramHash === this.fullRenderParamHash &&
+      this.fullQualitySTL &&
+      (this.fullQualityFormat || 'stl') === 'stl'
+    ) {
       return {
         stl: this.fullQualitySTL,
         stats: this.fullQualityStats,

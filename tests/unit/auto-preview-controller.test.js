@@ -2730,4 +2730,115 @@ describe('AutoPreviewController', () => {
       logSpy.mockRestore()
     })
   })
+
+  describe('renderFull export integrity (A1: no OFF bytes as STL)', () => {
+    beforeEach(() => {
+      isFlagEnabled.mockReturnValue(false)
+      renderController.getCapabilities = vi.fn(() => ({
+        hasRenderColorsFlag: true,
+        hasManifold: true,
+      }))
+      previewManager.loadOFF = vi.fn().mockResolvedValue()
+      previewManager.setRenderState = vi.fn()
+      previewManager._getPrimaryGeometry = vi.fn(() => null)
+      controller.setScadContent('difference() { cube(20); cube(10); }')
+    })
+
+    afterEach(() => {
+      isFlagEnabled.mockReset()
+    })
+
+    it('throws EXPORT_STL_FAILED and clears the cached artifact when the STL follow-up render fails', async () => {
+      const offBytes = new TextEncoder().encode('OFF\n8 12 0\n').buffer
+      renderController.renderFull = vi.fn()
+        .mockResolvedValueOnce({
+          stl: offBytes,
+          format: 'off',
+          stats: { triangles: 0, size: 10 },
+          consoleOutput: '',
+        })
+        .mockRejectedValueOnce(new Error('worker crashed'))
+
+      const params = { width: 10 }
+      await expect(controller.renderFull(params)).rejects.toMatchObject({
+        code: 'EXPORT_STL_FAILED',
+      })
+
+      expect(controller.fullQualitySTL).toBeNull()
+      expect(controller.fullQualityFormat).toBeNull()
+      expect(controller.fullRenderParamHash).toBeNull()
+      expect(controller.getCurrentFullSTL(params)).toBeNull()
+      expect(controller.getCurrentFullOutput(params)).toBeNull()
+    })
+
+    it('returns the STL follow-up result when it succeeds after an OFF render', async () => {
+      const offBytes = new TextEncoder().encode('OFF\n8 12 0\n').buffer
+      const stlBytes = new ArrayBuffer(134)
+      renderController.renderFull = vi.fn()
+        .mockResolvedValueOnce({
+          stl: offBytes,
+          format: 'off',
+          stats: { triangles: 0, size: 10 },
+          consoleOutput: '',
+        })
+        .mockResolvedValueOnce({
+          stl: stlBytes,
+          format: 'stl',
+          stats: { triangles: 1, size: 134 },
+          consoleOutput: '',
+        })
+
+      const params = { width: 10 }
+      const result = await controller.renderFull(params)
+
+      expect(result.format).toBe('stl')
+      expect(result.stl).toBe(stlBytes)
+      expect(controller.getCurrentFullSTL(params)).toMatchObject({
+        stl: stlBytes,
+      })
+    })
+
+    it('getCurrentFullSTL returns null while the stored artifact is OFF-format', () => {
+      const params = { a: 1 }
+      controller.fullQualitySTL = new ArrayBuffer(8)
+      controller.fullQualityFormat = 'off'
+      controller.fullQualityStats = { triangles: 0, size: 8 }
+      controller.fullRenderParamHash = controller.hashParams(params)
+
+      expect(controller.getCurrentFullSTL(params)).toBeNull()
+      // The format-agnostic accessor still reports it, with its format.
+      expect(controller.getCurrentFullOutput(params)).toMatchObject({
+        format: 'off',
+      })
+    })
+
+    it('does not serve an OFF-format artifact from the renderFull cache fast-path', async () => {
+      const params = { a: 1 }
+      controller.fullQualitySTL = new ArrayBuffer(8)
+      controller.fullQualityFormat = 'off'
+      controller.fullQualityStats = { triangles: 0, size: 8 }
+      controller.fullRenderParamHash = controller.hashParams(params)
+      controller.fullQualityKey = 'full'
+
+      const stlBytes = new ArrayBuffer(134)
+      renderController.renderFull = vi.fn()
+        .mockResolvedValueOnce({
+          stl: new TextEncoder().encode('OFF\n8 12 0\n').buffer,
+          format: 'off',
+          stats: { triangles: 0, size: 10 },
+          consoleOutput: '',
+        })
+        .mockResolvedValueOnce({
+          stl: stlBytes,
+          format: 'stl',
+          stats: { triangles: 1, size: 134 },
+          consoleOutput: '',
+        })
+
+      const result = await controller.renderFull(params)
+
+      expect(result.cached).toBeUndefined()
+      expect(result.format).toBe('stl')
+    })
+  })
 })

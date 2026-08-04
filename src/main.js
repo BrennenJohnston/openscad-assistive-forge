@@ -254,6 +254,29 @@ function resolve2DExportParameters(parameters, schema, format) {
 
 // EXAMPLE_DEFINITIONS moved to file-handler.js
 
+/**
+ * Detect OFF/COFF geometry bytes masquerading as another format.
+ * Guards the STL download path: OFF starts with an ASCII "OFF"/"COFF"
+ * header line, while binary STL has an arbitrary 80-byte header and
+ * ASCII STL starts with "solid".
+ *
+ * @param {ArrayBuffer|Uint8Array|string} data - Rendered output bytes
+ * @returns {boolean} True if the data looks like an OFF/COFF file
+ */
+function looksLikeOffGeometry(data) {
+  if (!data) return false;
+  if (typeof data === 'string') return /^C?OFF\b/.test(data.slice(0, 5));
+  let bytes;
+  if (data instanceof Uint8Array) {
+    bytes = data.subarray(0, 5);
+  } else if (data instanceof ArrayBuffer) {
+    bytes = new Uint8Array(data, 0, Math.min(5, data.byteLength));
+  } else {
+    return false;
+  }
+  return /^C?OFF\b/.test(String.fromCharCode(...bytes));
+}
+
 // Feature detection
 function checkBrowserSupport() {
   const checks = {
@@ -8068,6 +8091,11 @@ if (rounded) {
 
       const outputData = result.data || result.stl;
       const resolvedFormat = result.format || outputFormat;
+      if (resolvedFormat === 'stl' && looksLikeOffGeometry(outputData)) {
+        throw new Error(
+          'Internal error: the renderer returned OFF geometry where STL was expected. Please try generating again.'
+        );
+      }
       stateManager.setState({
         generatedOutput: {
           data: outputData,
