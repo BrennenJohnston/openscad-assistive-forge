@@ -31,8 +31,8 @@ const LIBRARIES = {
     name: 'MCAD',
     repo: 'https://github.com/openscad/MCAD.git',
     branch: 'master',
-    // MCAD has no tagged releases; pin to a known-good commit
-    pin: null, // null = use branch HEAD (MCAD is stable/low-churn)
+    // MCAD has no tagged releases; pinned to the verified 2026-07-11 clone
+    pin: 'bd0a7ba3f042bfbced5ca1894b236cea08904e26', // 2021-10-25
     license: 'LGPL-2.1',
     description: 'Mechanical CAD library',
   },
@@ -40,8 +40,8 @@ const LIBRARIES = {
     name: 'BOSL2',
     repo: 'https://github.com/BelfrySCAD/BOSL2.git',
     branch: 'master',
-    // BOSL2 is actively evolving; pin to a known-good commit
-    pin: null, // TODO: pin to specific commit after first verified clone
+    // BOSL2 is actively evolving; pinned to the verified 2026-07-11 clone
+    pin: 'fbcdfdd511b6abfde93c43c8f85c2bd24ee7a02d', // 2026-06-29
     license: 'BSD-2-Clause',
     description: 'Belfry OpenSCAD Library v2',
   },
@@ -49,8 +49,9 @@ const LIBRARIES = {
     name: 'NopSCADlib',
     repo: 'https://github.com/nophead/NopSCADlib.git',
     branch: 'master',
-    // NopSCADlib has tagged releases — prefer tags when updating
-    pin: null, // TODO: pin to specific tag after first verified clone
+    // NopSCADlib has tagged releases — prefer tags when updating.
+    // Pinned to the verified 2026-07-11 clone commit.
+    pin: 'c9baa0ed0faa23e849141c3d8c6728545d6af910', // 2025-10-08
     license: 'GPL-3.0',
     description: 'Parts library for 3D printers',
   },
@@ -58,7 +59,7 @@ const LIBRARIES = {
     name: 'dotSCAD',
     repo: 'https://github.com/JustinSDK/dotSCAD.git',
     branch: 'master',
-    pin: null, // Low churn, low risk
+    pin: 'bb33edfd75cba0edbb7971606a077b9c69d0b7d2', // 2022-10-11, verified 2026-07-11 clone
     license: 'LGPL-3.0',
     description: 'Artistic patterns library',
   },
