@@ -38,6 +38,7 @@ import {
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { normalizeHexColor } from './color-utils.js';
+import { get2DStylePalette } from './state-colors.js';
 import {
   announceCameraAction as announceCamera,
   announceImmediate,
@@ -4849,20 +4850,7 @@ export class PreviewManager {
     const existing = svgEl.querySelector('style[data-forge-preview]');
     if (existing) return;
 
-    const palette =
-      mode === 'rendered'
-        ? {
-            fill: '#07D0A7',
-            stroke: '#FF0603',
-            strokeWidth: '0.5',
-            fillOpacity: '1',
-          }
-        : {
-            fill: '#7A9F7A',
-            stroke: '#7A9F7A',
-            strokeWidth: '0.25',
-            fillOpacity: '0.9',
-          };
+    const palette = get2DStylePalette(mode);
 
     const styleEl = document.createElementNS(ns, 'style');
     styleEl.setAttribute('data-forge-preview', 'true');

@@ -16,6 +16,7 @@ import {
   is2DGenerateValue,
   strip2DGenerateForFallback,
 } from './render-intent.js';
+import { build2DPreviewStyleTag } from './state-colors.js';
 import { RENDER_QUALITY } from './render-controller.js';
 
 /**
@@ -1663,15 +1664,11 @@ export class AutoPreviewController {
             ? result.stl
             : new TextDecoder().decode(result.stl || result.data);
 
-        // Pre-inject F5-draft parity styling into SVG before show2DPreview.
-        // Desktop OpenSCAD F5 preview for 2D first-layer: #7A9F7A sage green.
-        // Ref: Testing Round 7 color-codes.json preview_colors for laser-cut-first-layer.
-        const draftStyle =
-          '<style data-forge-preview="true">' +
-          'path,polygon,polyline,circle,ellipse,rect{fill:#7A9F7A;stroke:#7A9F7A;stroke-width:0.25;fill-opacity:0.9}' +
-          'line{stroke:#7A9F7A;stroke-width:0.25}' +
-          '</style>';
-        svgText = svgText.replace(/(<svg[^>]*>)/i, '$1' + draftStyle);
+        // Pre-inject F5-draft parity styling (see state-colors.js).
+        svgText = svgText.replace(
+          /(<svg[^>]*>)/i,
+          '$1' + build2DPreviewStyleTag('draft')
+        );
 
         if (typeof this.previewManager?.show2DPreviewAs3DPlane === 'function') {
           await this.previewManager.show2DPreviewAs3DPlane(svgText, {
@@ -1711,12 +1708,10 @@ export class AutoPreviewController {
               : new TextDecoder().decode(
                   fallbackResult.stl || fallbackResult.data
                 );
-          const draftFallbackStyle =
-            '<style data-forge-preview="true">' +
-            'path,polygon,polyline,circle,ellipse,rect{fill:#7A9F7A;stroke:#7A9F7A;stroke-width:0.25;fill-opacity:0.9}' +
-            'line{stroke:#7A9F7A;stroke-width:0.25}' +
-            '</style>';
-          svgText = svgText.replace(/(<svg[^>]*>)/i, '$1' + draftFallbackStyle);
+          svgText = svgText.replace(
+            /(<svg[^>]*>)/i,
+            '$1' + build2DPreviewStyleTag('draft')
+          );
           if (
             typeof this.previewManager?.show2DPreviewAs3DPlane === 'function'
           ) {

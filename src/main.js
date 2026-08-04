@@ -35,6 +35,7 @@ import {
   getBuiltinManifest,
   applyPreviewOverrides,
 } from './js/project-manifest.js';
+import { build2DPreviewStyleTag } from './js/state-colors.js';
 import { escapeHtml, isValidServiceWorkerMessage } from './js/html-utils.js';
 import { getQualityPreset, COMPLEXITY_TIER } from './js/quality-tiers.js';
 import { getThreeModule } from './js/preview.js';
@@ -2076,12 +2077,10 @@ async function initApp() {
           let svgText =
             typeof data === 'string' ? data : new TextDecoder().decode(data);
 
-          const renderStyle =
-            '<style data-forge-preview="true">' +
-            'path,polygon,polyline,circle,ellipse,rect{fill:#07D0A7;stroke:#FF0603;stroke-width:0.5;fill-opacity:1}' +
-            'line{stroke:#FF0603;stroke-width:0.5}' +
-            '</style>';
-          svgText = svgText.replace(/(<svg[^>]*>)/i, '$1' + renderStyle);
+          svgText = svgText.replace(
+            /(<svg[^>]*>)/i,
+            '$1' + build2DPreviewStyleTag('rendered')
+          );
 
           if (typeof previewManager.show2DPreviewAs3DPlane === 'function') {
             await previewManager.show2DPreviewAs3DPlane(svgText, {
@@ -8186,13 +8185,11 @@ if (rounded) {
               ? outputData
               : new TextDecoder().decode(outputData);
 
-          // Pre-inject F6-render parity styling: #07D0A7 teal fill, #FF0603 red outlines.
-          const renderStyle =
-            '<style data-forge-preview="true">' +
-            'path,polygon,polyline,circle,ellipse,rect{fill:#07D0A7;stroke:#FF0603;stroke-width:0.5;fill-opacity:1}' +
-            'line{stroke:#FF0603;stroke-width:0.5}' +
-            '</style>';
-          svgText = svgText.replace(/(<svg[^>]*>)/i, '$1' + renderStyle);
+          // Pre-inject F6-render parity styling (see state-colors.js).
+          svgText = svgText.replace(
+            /(<svg[^>]*>)/i,
+            '$1' + build2DPreviewStyleTag('rendered')
+          );
 
           if (typeof previewManager.show2DPreviewAs3DPlane === 'function') {
             await previewManager.show2DPreviewAs3DPlane(svgText, {
