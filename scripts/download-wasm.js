@@ -27,9 +27,11 @@ const strictMode = process.argv.includes('--strict');
 // Source: https://github.com/liberationfonts/liberation-fonts/releases/tag/2.1.5
 const FONTS_RELEASE_URL = 'https://github.com/liberationfonts/liberation-fonts/files/7261482/liberation-fonts-ttf-2.1.5.tar.gz';
 
-// SHA-256 checksum of the font archive for integrity verification
-// Computed from the official release artifact
-const FONTS_ARCHIVE_SHA256 = null; // Set after first verified download — see verifyChecksum()
+// SHA-256 checksum of the font archive for integrity verification.
+// Computed 2026-08-04 from the official release artifact at
+// FONTS_RELEASE_URL (liberation-fonts-ttf-2.1.5.tar.gz, 2,385,008 bytes).
+const FONTS_ARCHIVE_SHA256 =
+  '7191c669bf38899f73a2094ed00f7b800553364f90e2637010a69c0e268f25d0';
 
 // Required fonts from the archive
 const REQUIRED_FONTS = [
