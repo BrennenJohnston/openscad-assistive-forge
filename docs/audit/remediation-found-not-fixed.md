@@ -36,6 +36,10 @@ decides to drop it. Per project rules, none of these were fixed silently.
   behaviors (blank display, no spontaneous geometry). S-013 is companion
   file support.
 - **Fix shape:** diagnose each; candidates for the B32 skip-debt drawdown.
+- **Addendum (A9 baseline run, 2026-08-04):** also pre-existing on clean
+  tree: `responsive-audit.spec.js:249` "SVG editor fullscreen — opens,
+  fills viewport, closeable" fails at all 8 audited viewports (chromium,
+  local run; CI-skipped like the rest).
 
 ### F-3: `npm run build` dirties a tracked file
 
@@ -48,15 +52,19 @@ decides to drop it. Per project rules, none of these were fixed silently.
   tracking the generated manifest or make the script idempotent when
   nothing changed.
 
-### F-4: Deprecated color-mutation statics awaiting removal
+### F-4: Deprecated shims awaiting removal (with their legacy tests)
 
-- **Found during:** A2 (deliberate deferral), 2026-08-04
-- **Where:** `AutoPreviewController.injectCsgColors`, `stripColorCalls`,
-  `isParserError` (marked `@deprecated`), plus their direct unit tests
-  (`injectCsgColors`/`stripColorCalls` describe blocks) and the
-  `countUniqueOFFColors` helper (no production callers left).
-- **Fix shape:** delete methods + their pinned unit tests together in a
-  cleanup phase once no one wants the injection behavior back.
+- **Found during:** A2 and A9 (deliberate deferrals), 2026-08-04
+- **Where:**
+  - `AutoPreviewController.injectCsgColors`, `stripColorCalls`,
+    `isParserError` (marked `@deprecated`), their direct unit tests, and
+    the `countUniqueOFFColors` helper (no production callers left).
+  - `resolve2DExportIntent` in render-intent.js — deprecated wrapper over
+    `propose2DExportAdjustments` kept only for the legacy test files
+    (`resolve-2d-export.test.js`, `svg-export-workflow.test.js`,
+    `parity-harness.test.js`, `parity-probes.test.js`, ~50 call sites).
+- **Fix shape:** migrate/trim the legacy tests to the new APIs, then delete
+  the shims in one cleanup phase.
 
 ## Resolved
 

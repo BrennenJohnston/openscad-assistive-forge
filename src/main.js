@@ -45,7 +45,10 @@ import {
   PREVIEW_STATE,
 } from './js/auto-preview-controller.js';
 import { isEnabled as isFlagEnabled } from './js/feature-flags.js';
-import { resolve2DExportIntent, isNonPreviewable } from './js/render-intent.js';
+import {
+  propose2DExportAdjustments,
+  isNonPreviewable,
+} from './js/render-intent.js';
 import {
   applyCompanionAliases,
   getOverlaySvgTarget,
@@ -236,26 +239,32 @@ import Split from 'split.js';
  * @param {string} format - Output format ('svg' or 'dxf')
  * @returns {Object} Parameter object with 2D-compatible overrides applied
  */
-function resolve2DExportParameters(parameters, schema, format) {
-  const resolved = resolve2DExportIntent(parameters, schema, format);
-
-  if (resolved !== parameters) {
-    const adjustments = Object.entries(resolved).filter(
-      ([k, v]) => parameters[k] !== v
+function propose2DExportChanges(parameters, schema, format, projectFiles) {
+  const manifest = loadProjectManifest(projectFiles) ?? getBuiltinManifest();
+  const proposal = propose2DExportAdjustments(
+    parameters,
+    schema,
+    format,
+    manifest.export2D ?? null
+  );
+  if (proposal.changes.length > 0) {
+    console.debug(
+      '[resolve2D] Proposed 2D-export adjustments (applied only with user consent):',
+      proposal.changes
     );
-    if (adjustments.length > 0) {
-      console.debug(
-        '[resolve2D] Auto-adjusted parameters for 2D export:',
-        adjustments
-      );
-    } else {
-      console.debug(
-        '[resolve2D] No parameter adjustments needed for 2D export'
-      );
-    }
   }
+  return proposal;
+}
 
-  return resolved;
+/**
+ * Whether the user has consented to applying the proposed 2D-export
+ * parameter changes. The checkbox ships checked (the proposals are almost
+ * always what the user wants); unchecking exports with parameters exactly
+ * as configured.
+ */
+function is2DAdjustmentsConsented() {
+  const checkbox = document.getElementById('format2dAutoAdjustApply');
+  return checkbox ? checkbox.checked : true;
 }
 
 // EXAMPLE_DEFINITIONS moved to file-handler.js
@@ -1961,11 +1970,18 @@ async function initApp() {
 
     getToolbarMenuController().closeAll();
 
-    const renderParameters = resolve2DExportParameters(
+    // The format change above populated the consent panel; honor its
+    // checkbox (checked by default) rather than applying silently.
+    const proposal = propose2DExportChanges(
       state.parameters,
       state.schema,
-      format
+      format,
+      state.projectFiles
     );
+    const renderParameters =
+      proposal.changes.length > 0 && is2DAdjustmentsConsented()
+        ? proposal.resolvedParameters
+        : state.parameters;
 
     updateStatus(`Generating ${formatName}\u2026`);
 
@@ -3173,21 +3189,25 @@ async function initApp() {
               state?.parameters &&
               state?.schema
             ) {
-              const resolved = resolve2DExportParameters(
+              const proposal = propose2DExportChanges(
                 state.parameters,
                 state.schema,
-                format
+                format,
+                state.projectFiles
               );
-              const adjustments = Object.entries(resolved).filter(
-                ([k, v]) => state.parameters[k] !== v
-              );
-              if (adjustments.length > 0) {
-                autoAdjustList.innerHTML = adjustments
+              if (proposal.changes.length > 0) {
+                autoAdjustList.innerHTML = proposal.changes
                   .map(
-                    ([k, v]) =>
-                      `<li><code>${escapeHtml(k)}</code>: currently <em>${escapeHtml(String(state.parameters[k]))}</em> → will use <strong>${escapeHtml(String(v))}</strong></li>`
+                    (c) =>
+                      `<li><code>${escapeHtml(c.name)}</code>: currently <em>${escapeHtml(String(c.from))}</em> → will use <strong>${escapeHtml(String(c.to))}</strong></li>`
                   )
                   .join('');
+                // Fresh consent per export intent: re-check the box each
+                // time the proposal list is (re)shown.
+                const applyCheckbox = document.getElementById(
+                  'format2dAutoAdjustApply'
+                );
+                if (applyCheckbox) applyCheckbox.checked = true;
                 autoAdjustDiv.classList.remove('hidden');
               } else {
                 autoAdjustDiv.classList.add('hidden');
@@ -8046,13 +8066,19 @@ if (rounded) {
         // Direct render with specified format
         // Pass files/mainFile/libraries for multi-file projects
         const libsForRender = getEnabledLibrariesForRender();
-        // For 2D formats, use schema-aware parameter resolution so models that
-        // require a specific 'generate' (or equivalent) value produce 2D geometry.
-        const renderParameters = resolve2DExportParameters(
+        // For 2D formats, propose schema-aware parameter changes so models
+        // that require a specific 'generate' (or equivalent) value produce
+        // 2D geometry — applied only with the consent checkbox checked.
+        const proposal = propose2DExportChanges(
           state.parameters,
           state.schema,
-          outputFormat
+          outputFormat,
+          state.projectFiles
         );
+        const renderParameters =
+          proposal.changes.length > 0 && is2DAdjustmentsConsented()
+            ? proposal.resolvedParameters
+            : state.parameters;
         const renderOptions = {
           outputFormat,
           paramTypes: state.paramTypes || {},

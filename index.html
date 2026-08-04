@@ -2761,8 +2761,10 @@
                     <li>Click <strong>Download</strong> to save the SVG or DXF file</li>
                     <li>Open the file in your laser cutter software (e.g. LightBurn, LaserGRBL, Inkscape)</li>
                   </ol>
-                  <!-- Auto-adjustment notification: populated by main.js when
-                       resolve2DExportParameters() would change current params -->
+                  <!-- 2D-export change proposal: populated by main.js when
+                       propose2DExportChanges() suggests parameter changes.
+                       Changes apply only while the consent checkbox is
+                       checked — never silently. -->
                   <div
                     id="format2dAutoAdjust"
                     class="format-2d-auto-adjust hidden"
@@ -2770,12 +2772,23 @@
                     aria-live="polite"
                   >
                     <p class="auto-adjust-title">
-                      &#x2139;&#xFE0F; Parameters auto-adjusted for 2D export:
+                      &#x2139;&#xFE0F; Suggested parameter changes for 2D
+                      export:
                     </p>
                     <ul id="format2dAutoAdjustList" class="auto-adjust-list"></ul>
+                    <label class="auto-adjust-consent">
+                      <input
+                        type="checkbox"
+                        id="format2dAutoAdjustApply"
+                        checked
+                        aria-describedby="format2dAutoAdjustList"
+                      />
+                      Apply these changes for this export
+                    </label>
                     <p class="auto-adjust-note">
-                      These changes apply only during Generate — your current
-                      parameter values are not permanently modified.
+                      Applied only during Generate — your saved parameter
+                      values are not modified. Uncheck to export with your
+                      parameters exactly as configured.
                     </p>
                   </div>
                   <details class="guidance-details">
