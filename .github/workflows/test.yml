@@ -36,7 +36,10 @@ jobs:
       
       - name: Audit CSS variables
         run: npm run css-variable-audit
-      
+
+      - name: Validate HTML (vnu)
+        run: npm run validate:html
+
       - name: Run unit tests
         run: npm run test:run
       
@@ -283,7 +286,10 @@ jobs:
       
       - name: Build project
         run: npm run build
-      
+
+      - name: Validate built HTML (vnu)
+        run: npm run validate:html:built
+
       - name: Check bundle size (raw)
         run: |
           echo "Checking dist/ directory size..."
