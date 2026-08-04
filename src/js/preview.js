@@ -1755,6 +1755,28 @@ export class PreviewManager {
           }
         }
         if (hasColors && rawColors.length > 0) {
+          // Uniform inline colors carry no visual information (e.g. a
+          // colorless model rendered with --enable=render-colors, or a
+          // model wrapped in a single color() call). Drop them so the
+          // cavity classifier below can tint inner faces instead — this
+          // replaces the old strip-and-re-render fallback, which mutated
+          // the user's source and cost a second render.
+          const uniqueFaceColors = new Set();
+          for (let i = 0; i < rawColors.length; i += 9) {
+            uniqueFaceColors.add(
+              `${rawColors[i]},${rawColors[i + 1]},${rawColors[i + 2]}`
+            );
+            if (uniqueFaceColors.size > 1) break;
+          }
+          if (uniqueFaceColors.size <= 1) {
+            console.log(
+              '[Preview] OFF colors are uniform — using viewer-side cavity tinting'
+            );
+            hasColors = false;
+            rawColors.length = 0;
+          }
+        }
+        if (hasColors && rawColors.length > 0) {
           // Use global max across all inline colors to avoid first-face-black misdetection.
           colorScale = rawColorMax > 1 ? 1 / 255 : 1;
           for (let i = 0; i < rawColors.length; i += 3) {

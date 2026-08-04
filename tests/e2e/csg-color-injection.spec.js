@@ -1,12 +1,20 @@
 /**
- * CSG Color Injection — E2E Runtime Verification (Phase 6)
+ * CSG Face Coloring — E2E Runtime Verification (unmodified source)
  *
- * Verifies the full pipeline: SCAD without color() calls → injectCsgColors()
- * preprocessing → WASM OFF render with --enable=render-colors → loadOFF()
- * with per-face gold/green COFF colors → 3D preview with distinct hue groups.
+ * Verifies the post-KI-012 color pipeline: SCAD without color() calls renders
+ * UNMODIFIED (injectCsgColors() source mutation was removed because wrapping
+ * each difference() subtractor in its own color(){} scope corrupted geometry).
+ *
+ * On the current engine (OpenSCAD 2026.04.03 + Manifold), --enable=render-colors
+ * natively emits distinct per-CSG-operation face colors even for colorless
+ * source, so the OFF loads with hasColors=true — the injection was never
+ * needed for this. If a future engine emits absent/uniform colors instead,
+ * loadOFF() drops them and viewer-side cavity classification
+ * (_classifyInnerFaces) provides the two-tone rendering — either path must
+ * produce 2+ distinct hue groups on screen.
  *
  * Fixture: tests/fixtures/sample.scad — parametric box with difference(), no
- *          color() calls (the common case that triggers CSG color injection).
+ *          color() calls (the common case).
  *
  * @license GPL-3.0-or-later
  */
@@ -58,10 +66,10 @@ async function loadFixture(page, fixturePath) {
 
 /**
  * Sample a grid of pixels from the WebGL canvas and classify by hue.
- * Gold (#f9d72c after lighting) reads as warm yellow; green (#9dcb51)
- * reads as green. We detect both to confirm CSG color injection worked.
+ * With cavity tinting, outer faces render in the theme model color and
+ * inner/cavity faces in the theme back color — two distinct hue groups.
  */
-async function sampleCanvasCSGColors(page) {
+async function sampleCanvasHueGroups(page) {
   return page.evaluate(() => {
     return new Promise((resolve) => {
       requestAnimationFrame(() => {
@@ -91,13 +99,16 @@ async function sampleCanvasCSGColors(page) {
 
             meshPixels++;
 
-            // Gold (#f9d72c lit): R highest, G medium-high, B low
+            // Warm (gold/yellow/teal model color): R or B prominent vs green
             if (r > 80 && g > 60 && b < r * 0.6 && r > g * 0.9) {
-              seen.add('gold');
+              seen.add('warm');
             }
-            // Green (#9dcb51 lit): G highest channel
+            // Green (cavity/back color #9dcb51 lit): G highest channel
             else if (g > 60 && g > r * 1.05 && g > b * 1.2) {
               seen.add('green');
+            }
+            else {
+              seen.add('other');
             }
           }
         }
@@ -110,7 +121,7 @@ async function sampleCanvasCSGColors(page) {
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
-test.describe('CSG Color Injection Pipeline', () => {
+test.describe('CSG Face Coloring Pipeline (unmodified source)', () => {
   test.describe.configure({ timeout: 120_000 });
 
   test.beforeEach(async ({ page, browserName }) => {
@@ -121,7 +132,7 @@ test.describe('CSG Color Injection Pipeline', () => {
     });
   });
 
-  test('sample.scad (difference, no color calls) renders with hasColors=true', async ({ page }) => {
+  test('sample.scad (difference, no color calls) renders with distinct face colors', async ({ page }) => {
     const consoleMessages = [];
     page.on('console', (msg) => consoleMessages.push(msg.text()));
 
@@ -131,32 +142,38 @@ test.describe('CSG Color Injection Pipeline', () => {
       m.includes('[Preview]') || m.includes('[AutoPreview]') ||
       m.includes('[Preview Performance]'),
     );
-    console.log('=== CSG Injection Console Capture (sample.scad) ===');
+    console.log('=== Cavity Tinting Console Capture (sample.scad) ===');
     for (const log of relevantLogs) console.log(log);
     console.log('=== End Capture ===');
 
-    // Primary assertion: OFF was loaded with per-face colors
-    const hasColorsTrue = consoleMessages.some(m => m.includes('hasColors=true'));
+    // Primary assertion: the OFF output loaded. Native engine colors
+    // (hasColors=true on Manifold render-colors) and classification tinting
+    // (hasColors=false after uniform-drop) are both valid — what matters is
+    // that no source mutation was needed to get there.
+    const offLoaded = consoleMessages.find(m =>
+      m.includes('[Preview] OFF loaded') && m.includes('hasColors=')
+    );
     expect(
-      hasColorsTrue,
-      'loadOFF must report hasColors=true when CSG colors are injected',
+      offLoaded,
+      'preview must load OFF output for a colorless model on a render-colors engine',
     ).toBeTruthy();
 
-    // Secondary: pixel-level verification (soft, requires WebGL)
-    const colorResult = await sampleCanvasCSGColors(page);
-    console.log('CSG color pixel sample (sample.scad):', JSON.stringify(colorResult));
+    // Secondary: pixel-level verification (soft, requires WebGL) — either
+    // native CSG colors or cavity tinting must produce 2+ hue groups.
+    const colorResult = await sampleCanvasHueGroups(page);
+    console.log('Hue pixel sample (sample.scad):', JSON.stringify(colorResult));
 
     if (colorResult.meshPixels > 0) {
       expect.soft(
         colorResult.groups >= 2,
-        `Expected 2+ hue groups (gold+green), got ${colorResult.groups}: ${JSON.stringify(colorResult)}`,
+        `Expected 2+ hue groups (model+cavity), got ${colorResult.groups}: ${JSON.stringify(colorResult)}`,
       ).toBeTruthy();
     } else {
       console.log('WebGL not available or canvas empty — skipping pixel assertion');
     }
   });
 
-  test('benchmark_booleans.scad (top-level difference) renders with CSG colors', async ({ page }) => {
+  test('benchmark_booleans.scad (top-level difference) renders with distinct face colors', async ({ page }) => {
     const consoleMessages = [];
     page.on('console', (msg) => consoleMessages.push(msg.text()));
 
@@ -166,23 +183,25 @@ test.describe('CSG Color Injection Pipeline', () => {
       m.includes('[Preview]') || m.includes('[AutoPreview]') ||
       m.includes('[Preview Performance]'),
     );
-    console.log('=== CSG Injection Console Capture (benchmark_booleans.scad) ===');
+    console.log('=== Cavity Tinting Console Capture (benchmark_booleans.scad) ===');
     for (const log of relevantLogs) console.log(log);
     console.log('=== End Capture ===');
 
-    const hasColorsTrue = consoleMessages.some(m => m.includes('hasColors=true'));
+    const offLoaded = consoleMessages.find(m =>
+      m.includes('[Preview] OFF loaded') && m.includes('hasColors=')
+    );
     expect(
-      hasColorsTrue,
-      'loadOFF must report hasColors=true for benchmark_booleans.scad',
+      offLoaded,
+      'preview must load OFF output for a colorless model on a render-colors engine',
     ).toBeTruthy();
 
-    const colorResult = await sampleCanvasCSGColors(page);
-    console.log('CSG color pixel sample (benchmark_booleans.scad):', JSON.stringify(colorResult));
+    const colorResult = await sampleCanvasHueGroups(page);
+    console.log('Hue pixel sample (benchmark_booleans.scad):', JSON.stringify(colorResult));
 
     if (colorResult.meshPixels > 0) {
       expect.soft(
         colorResult.groups >= 2,
-        `Expected 2+ hue groups (gold+green), got ${colorResult.groups}: ${JSON.stringify(colorResult)}`,
+        `Expected 2+ hue groups (model+cavity), got ${colorResult.groups}: ${JSON.stringify(colorResult)}`,
       ).toBeTruthy();
     }
   });
