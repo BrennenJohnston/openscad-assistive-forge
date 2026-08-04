@@ -331,6 +331,51 @@ console.log('The official WASM files are vendored in the repository.');
 console.log('They include Manifold support for 5-30x faster CSG operations.');
 console.log('');
 
+/**
+ * Verify the vendored WASM engine files against the SHA-256 hashes
+ * recorded in INTEGRITY.json. In --strict mode a mismatch fails the build
+ * (corrupted or tampered engine files must never reach dist/).
+ */
+async function verifyWasmIntegrity(wasmDir) {
+  const integrityPath = join(wasmDir, 'INTEGRITY.json');
+  if (!existsSync(integrityPath)) {
+    const msg = 'WASM INTEGRITY.json missing — cannot verify engine files';
+    if (strictMode) throw new Error(msg);
+    console.warn(`⚠ ${msg}`);
+    return;
+  }
+
+  const integrity = JSON.parse(await readFile(integrityPath, 'utf8'));
+  const failures = [];
+
+  for (const [name, expected] of Object.entries(integrity.files || {})) {
+    if (!expected?.sha256) continue;
+    const filePath = join(wasmDir, name);
+    if (!existsSync(filePath)) {
+      failures.push(`${name}: file missing`);
+      continue;
+    }
+    const hash = createHash('sha256')
+      .update(await readFile(filePath))
+      .digest('hex');
+    if (hash !== expected.sha256) {
+      failures.push(
+        `${name}: SHA-256 mismatch (expected ${expected.sha256.slice(0, 16)}…, got ${hash.slice(0, 16)}…)`
+      );
+    }
+  }
+
+  if (failures.length > 0) {
+    const msg = `WASM engine integrity check FAILED — ${failures.join('; ')}`;
+    if (strictMode) throw new Error(msg);
+    console.warn(`⚠ ${msg}`);
+    return;
+  }
+  console.log(
+    `✓ WASM engine integrity verified (${integrity.build}, size + SHA-256)`
+  );
+}
+
 // Create directories and download fonts
 async function setup() {
   const publicWasmDir = join(__dirname, '..', 'public', 'wasm');
@@ -340,6 +385,8 @@ async function setup() {
     await mkdir(publicWasmDir, { recursive: true });
     console.log('✓ Created public/wasm/ directory');
   }
+
+  await verifyWasmIntegrity(join(publicWasmDir, 'openscad-official'));
 
   if (!existsSync(fontsDir)) {
     await mkdir(fontsDir, { recursive: true });

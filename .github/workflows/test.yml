@@ -102,6 +102,53 @@ jobs:
           path: playwright-report/
           retention-days: 30
 
+  # Geometry parity gate - BLOCKING. Renders the CI parity fixtures in
+  # headless Chromium via the app's own pipeline and compares against the
+  # committed golden manifest (scripts/parity/golden/) with hash-exact
+  # tolerance. Any change that alters exported geometry bytes fails here.
+  parity-check:
+    name: Geometry Parity (golden, blocking)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download OpenSCAD WASM files
+        run: npm run setup-wasm
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Start dev server
+        run: |
+          npm run dev &
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:5173 >/dev/null && break
+            sleep 2
+          done
+          curl -sf http://localhost:5173 >/dev/null
+
+      - name: Run golden parity comparison
+        run: npm run parity:ci
+
+      - name: Upload parity report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: parity-report
+          path: artifacts/parity/report.*
+          retention-days: 30
+
   e2e-tests-chromium:
     name: E2E Tests (Chromium)
     runs-on: ubuntu-latest
