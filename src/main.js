@@ -27,6 +27,7 @@ import { getBrailleDownloadName } from './js/braille-panel.js';
 import {
   RenderController,
   RENDER_QUALITY,
+  PREVIEW_QUALITY_DEFAULT,
   estimateRenderTime,
 } from './js/render-controller.js';
 import { escapeHtml, isValidServiceWorkerMessage } from './js/html-utils.js';
@@ -3976,7 +3977,7 @@ async function initApp() {
 
   // Auto-preview enabled by default (values initialized earlier)
   const getSelectedPreviewQualityMode = () => {
-    return previewQualitySelect?.value || 'balanced';
+    return previewQualitySelect?.value || PREVIEW_QUALITY_DEFAULT;
   };
 
   const getSelectedExportQualityMode = () => {
@@ -4169,8 +4170,14 @@ async function initApp() {
   }
 
   if (previewQualitySelect) {
-    if (previewQualitySelect.querySelector('option[value="auto"]')) {
-      previewQualitySelect.value = 'auto';
+    // Defensive re-assert of the shared default (index.html marks the same
+    // option selected; PREVIEW_QUALITY_DEFAULT is the single source).
+    if (
+      previewQualitySelect.querySelector(
+        `option[value="${PREVIEW_QUALITY_DEFAULT}"]`
+      )
+    ) {
+      previewQualitySelect.value = PREVIEW_QUALITY_DEFAULT;
     }
     applyPreviewQualityMode();
     previewQualitySelect.addEventListener('change', () => {

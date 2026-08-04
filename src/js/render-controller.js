@@ -10,12 +10,15 @@ import {
 } from './storage-keys.js';
 import { isPerfMetricsEnabled, appendPerfMetric } from './perf-metrics.js';
 
-import { QUALITY_TIERS, COMPLEXITY_TIER } from './quality-tiers.js';
-
-// Re-export quality tier system for convenience
+// Re-export quality tier system for convenience.
+// RENDER_QUALITY now lives in quality-tiers.js (single source of truth for
+// tessellation defaults); existing `import { RENDER_QUALITY } from
+// './render-controller.js'` sites keep working through this re-export.
 export {
   COMPLEXITY_TIER,
   QUALITY_TIERS,
+  RENDER_QUALITY,
+  PREVIEW_QUALITY_DEFAULT,
   HARDWARE_LEVEL,
   detectHardware,
   analyzeComplexity,
@@ -25,98 +28,7 @@ export {
   formatPresetDescription,
 } from './quality-tiers.js';
 
-/** STANDARD-tier presets that several RENDER_QUALITY entries mirror. */
-const STANDARD_TIER = QUALITY_TIERS[COMPLEXITY_TIER.STANDARD];
-
-/**
- * Legacy render quality presets (for backwards compatibility)
- *
- * NOTE: New code should use the adaptive quality tier system from quality-tiers.js
- * These presets are based on community standards for STANDARD complexity models.
- *
- * MANIFOLD OPTIMIZED: These values have been recalibrated for the Manifold
- * rendering backend, which is 10-100x faster than CGAL for boolean operations.
- *
- * For adaptive quality based on model complexity and hardware, use:
- * - getAdaptiveQualityConfig(scadContent, parameters)
- * - getQualityPreset(tier, hardwareLevel, qualityLevel, mode)
- */
-export const RENDER_QUALITY = {
-  /**
-   * Draft quality - very fast preview for any model.
-   * Numbers mirror STANDARD preview-low exactly, so derive them.
-   */
-  DRAFT: {
-    ...STANDARD_TIER.preview.low,
-    name: 'draft',
-  },
-  /**
-   * Low quality - fast exports, coarse tessellation.
-   * No exact QUALITY_TIERS counterpart (minFa 10 / 15s timeout are unique
-   * to this preset) — keep literal.
-   */
-  LOW: {
-    name: 'low',
-    maxFn: 48,
-    forceFn: false,
-    minFa: 10,
-    minFs: 2,
-    timeoutMs: 15000, // Reduced from 45s
-  },
-  /**
-   * Preview quality - balanced for interactive use (~50% of full quality)
-   * Targets approximately 50% triangle count vs full render:
-   * - For STANDARD models (export-medium $fn=192): $fn=96 gives ~50%
-   * - For COMPLEX models: $fn=96 capped by their lower limits, still rounded
-   * Close to STANDARD export-low but with a tighter 12s timeout — keep literal.
-   */
-  PREVIEW: {
-    name: 'preview',
-    maxFn: 96, // ~50% of STANDARD export-medium ($fn=192)
-    forceFn: false,
-    minFa: 8,
-    minFs: 1.5,
-    timeoutMs: 12000,
-  },
-  /**
-   * Medium quality - community standard (STANDARD tier export-medium).
-   */
-  MEDIUM: {
-    ...STANDARD_TIER.export.medium,
-    name: 'medium',
-  },
-  /**
-   * High quality - community high standard (STANDARD tier export-high).
-   */
-  HIGH: {
-    ...STANDARD_TIER.export.high,
-    name: 'high',
-  },
-  /**
-   * Desktop-equivalent - respects model's settings (OpenSCAD defaults)
-   * Matches native OpenSCAD behavior: $fn, $fa, $fs from model.
-   * maxFn: null has no QUALITY_TIERS counterpart — keep literal.
-   */
-  DESKTOP_DEFAULT: {
-    name: 'desktop',
-    maxFn: null,
-    forceFn: false,
-    minFa: 12,
-    minFs: 2,
-    timeoutMs: 30000, // Reduced from 60s
-  },
-  /**
-   * Full quality - for final export (respects model's settings)
-   */
-  FULL: {
-    name: 'full',
-    maxFn: null,
-    forceFn: false,
-    minFa: 12,
-    minFs: 2,
-    timeoutMs: 30000, // Reduced from 60s
-  },
-};
+import { RENDER_QUALITY } from './quality-tiers.js';
 
 /**
  * Estimate render time based on SCAD content complexity
