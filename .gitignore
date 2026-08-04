@@ -21,6 +21,9 @@ coverage/
 test-results/
 playwright-report/
 
+# Parity harness output (generated; goldens live in scripts/parity/golden/)
+artifacts/
+
 # Lighthouse reports
 localhost_*.report.html
 .lighthouseci/

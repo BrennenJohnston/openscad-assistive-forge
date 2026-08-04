@@ -251,3 +251,41 @@ metadata and timestamps. Only `bug-b-capture/` is used in this comparison.
 All three bundles show a consistent ~4% increase in desktop triangle counts vs WASM.
 This is attributable to the different Manifold engine versions (WASM build date
 unknown vs desktop 2026.01.03) and is not a concern for the comparison.
+
+---
+
+## RESOLUTION ADDENDUM (2026-08-04) — variance is tessellation-only, parity confirmed
+
+The parity harness (`npm run parity`, added on branch `remediation/track-1`)
+settled this question with dimensional measurements instead of triangle
+counts. WASM `OpenSCAD-2026.04.03` vs desktop Nightly `2026.01.03`
+(Manifold, byte-identical `-D` inputs via the app's own
+`scad-param-formatter.js`), 7 fixtures including all three keyguard-v75
+reference configurations and the braille charm:
+
+| Fixture | Volume Δ | BBox Δ | Facets Δ |
+|---|---|---|---|
+| cube-cyl-diff | 0.0000% | 0.0000 mm | 0% |
+| sphere-fn | 0.0000% | 0.0000 mm | 0% (hash-identical) |
+| keyguard-minimal | 0.0000% | 0.0000 mm | 0% (hash-identical) |
+| kv75-3d-printed | 0.0000% | 0.0000 mm | −4.46% (11478 vs 12014) |
+| kv75-laser-cut | 0.0000% | 0.0000 mm | −9.19% (6026 vs 6636) |
+| kv75-frame-multicolor | 0.0000% | 0.0000 mm | −3.95% (13560 vs 14118) |
+| braille-charm | 0.0000% | 0.0000 mm | 0% |
+
+Every fixture passes the `matched` tolerance profile (volume ≤ 0.1%,
+bbox ≤ 0.01 mm) even though the engines are different versions. The
+facet-count deficit has **zero dimensional impact** — it is Manifold
+tessellation bookkeeping, not missing or altered geometry. The planned
+WASM version bisect (`version-bisect-results.md`) is therefore
+unnecessary and was not executed.
+
+WASM output is also deterministic run-to-run (canonical SHA-256 of the
+triangle set matches across fresh renders), which is what allows the
+`golden` profile (`npm run parity:ci`) to gate CI on hash equality
+against `scripts/parity/golden/golden-manifest.json`.
+
+Note: these renders postdate the removal of `injectCsgColors()` source
+mutation (commit 52335d8) and the OFF-as-STL export fallback (d5a1f7d).
+The user-facing geometry corruption KI-012 tracked came from those
+pipeline defects, not from the WASM engine.

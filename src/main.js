@@ -12358,6 +12358,14 @@ function getEnabledLibrariesForRender() {
 
 // Desktop reference geometry from CLI extracts (OpenSCAD 2026.01.03 Nightly, Manifold backend).
 // Source: docs/audit/testing-round-7/reference-data/cli-extracts/nightly/
+//
+// Facet counts here are ENGINE-VERSION-SPECIFIC tessellation bookkeeping;
+// the parity harness proved volume/bbox are identical across engines while
+// facet counts differ by up to ~9% (see desktop-comparison-results.md
+// resolution addendum). Authoritative parity checking lives in
+// `npm run parity` (scripts/parity/), which compares dimensional metrics
+// with tolerances — this debug helper's ±10% triangle comparison remains
+// only as a quick in-browser sanity probe.
 const DESKTOP_REFERENCE_GEOMETRY = {
   '3d-printed-keyguard': {
     scenarioId: '3d-printed-keyguard',
