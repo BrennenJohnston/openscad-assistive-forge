@@ -318,6 +318,27 @@ export function classifyRenderState(parameters, schema, options = {}) {
 }
 
 /**
+ * Parameters for the projection fallback's 3D pass: drop a 2D-mode
+ * `generate` value so the model renders its default 3D geometry. Only
+ * `generate` is targeted — parameters that merely contain "svg" (like
+ * screenshot_file="default.svg") are untouched.
+ *
+ * @param {Object} parameters
+ * @returns {Object} Copy with a 2D-mode generate removed, or the original
+ */
+export function strip2DGenerateForFallback(parameters) {
+  if (
+    typeof parameters?.generate === 'string' &&
+    is2DGenerateValue(parameters.generate)
+  ) {
+    const stripped = { ...parameters };
+    delete stripped.generate;
+    return stripped;
+  }
+  return parameters;
+}
+
+/**
  * Check whether a generate-parameter value indicates a 2D export mode
  * (SVG, DXF, first-layer, etc.).
  *

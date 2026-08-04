@@ -11,7 +11,11 @@ import {
 import { isPerfMetricsEnabled, appendPerfMetric } from './perf-metrics.js';
 import { isDebugPrefEnabled } from './storage-keys.js';
 import { isEnabled as isFlagEnabled } from './feature-flags.js';
-import { isNonPreviewable, is2DGenerateValue } from './render-intent.js';
+import {
+  isNonPreviewable,
+  is2DGenerateValue,
+  strip2DGenerateForFallback,
+} from './render-intent.js';
 import { RENDER_QUALITY } from './render-controller.js';
 
 /**
@@ -1687,9 +1691,13 @@ export class AutoPreviewController {
       const msg = (svgError?.message || '').toLowerCase();
       if (svgError?.code === 'MODEL_NOT_2D' || msg.includes('not a 2d')) {
         try {
+          // Draft PREVIEW of the projected outline (on-screen only, no
+          // file leaves the app, so no consent dialog here). Strip the
+          // 2D-mode generate so the 3D pass renders the model's default
+          // geometry — render2DFallback no longer rewrites parameters.
           const fallbackResult = await this.renderController.render2DFallback(
             this.currentScadContent,
-            parameters,
+            strip2DGenerateForFallback(parameters),
             {
               outputFormat: 'svg',
               files: this.projectFiles,
