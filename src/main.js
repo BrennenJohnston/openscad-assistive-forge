@@ -12532,6 +12532,63 @@ if (typeof window !== 'undefined') {
       return { ...DESKTOP_REFERENCE_GEOMETRY };
     },
 
+    /**
+     * Headless render hook for the desktop-parity harness
+     * (scripts/parity/render-wasm.mjs). Renders arbitrary SCAD at FULL
+     * quality to binary STL without touching UI state — no project needs
+     * to be loaded.
+     *
+     * @param {Object} job
+     * @param {string} job.scadText - Main SCAD source
+     * @param {Object} [job.params] - Parameter values
+     * @param {Object} [job.paramTypes] - Schema types for formatting
+     * @param {Object} [job.files] - Companion files as { path: content }
+     * @param {string} [job.mainFile] - Main file path within files
+     * @returns {Promise<{base64Stl: string, stats: Object, consoleOutput: string}|{error: string}>}
+     */
+    async parityRender({
+      scadText,
+      params = {},
+      paramTypes = {},
+      files = null,
+      mainFile = null,
+    } = {}) {
+      if (!renderController || !renderController.ready) {
+        return { error: 'Render controller not ready. Initialize WASM first.' };
+      }
+      if (typeof scadText !== 'string' || scadText.length === 0) {
+        return { error: 'parityRender requires scadText' };
+      }
+      try {
+        const filesMap = files ? new Map(Object.entries(files)) : undefined;
+        const result = await renderController.renderFull(scadText, params, {
+          quality: RENDER_QUALITY.FULL,
+          outputFormat: 'stl',
+          paramTypes,
+          ...(filesMap ? { files: filesMap, mainFile } : {}),
+          libraries: [],
+        });
+
+        const bytes =
+          result.stl instanceof ArrayBuffer
+            ? new Uint8Array(result.stl)
+            : result.stl;
+        let binary = '';
+        const CHUNK = 0x8000;
+        for (let i = 0; i < bytes.length; i += CHUNK) {
+          binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+        }
+
+        return {
+          base64Stl: btoa(binary),
+          stats: result.stats || null,
+          consoleOutput: result.consoleOutput || '',
+        };
+      } catch (err) {
+        return { error: err?.message || String(err) };
+      }
+    },
+
     toggleCsgBypass(enable) {
       const key = DEBUG_PREFS.noCsgColors;
       const wasEnabled = isDebugPrefEnabled('noCsgColors');
