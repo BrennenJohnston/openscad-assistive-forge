@@ -54,7 +54,7 @@ export const DEFAULT_SHORTCUTS = {
   toggleParameters: {
     key: 'b',
     ctrl: true,
-    description: 'Toggle parameter panel',
+    description: 'Toggle Customizer panel',
   },
   resetView: {
     key: 'r',
@@ -370,7 +370,7 @@ export const SHORTCUT_CATEGORIES = {
     ],
   },
   parameters: {
-    label: 'Parameters',
+    label: 'Customizer',
     actions: ['resetAllParams', 'searchParams'],
   },
   theme: {

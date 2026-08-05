@@ -264,6 +264,21 @@ test.describe('Terminology - No Old Terms', () => {
   })
 })
 
+test.describe('Customizer terminology (C11)', () => {
+  test('the pane is named Customizer, not Parameters', async ({ page }) => {
+    await page.goto('/')
+
+    // The panel heading uses desktop OpenSCAD naming (id stays for
+    // aria-labelledby couplings; only the visible text changed)
+    await expect(page.locator('#parameters-heading')).toHaveText('Customizer')
+
+    // No aria-label may reference the old "parameters panel" pane name.
+    // Individual VALUES remain "parameters" by design (desktop-consistent).
+    await expect(page.locator('[aria-label*="parameters panel" i]')).toHaveCount(0)
+    await expect(page.locator('[title="Parameters"]')).toHaveCount(0)
+  })
+})
+
 test.describe('Accessibility Labels Terminology', () => {
   test('aria-labels use consistent terminology', async ({ page }) => {
     await page.goto('/')

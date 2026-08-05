@@ -62,7 +62,7 @@ export function initDrawerController() {
 
     // Update toggle button state
     toggleBtn.setAttribute('aria-expanded', 'true');
-    toggleBtn.setAttribute('aria-label', 'Close parameters panel');
+    toggleBtn.setAttribute('aria-label', 'Close customizer panel');
 
     // Show backdrop
     backdrop.classList.add('visible');
@@ -116,7 +116,7 @@ export function initDrawerController() {
 
     // Update toggle button state
     toggleBtn.setAttribute('aria-expanded', 'false');
-    toggleBtn.setAttribute('aria-label', 'Open parameters panel');
+    toggleBtn.setAttribute('aria-label', 'Open customizer panel');
 
     // Hide backdrop
     backdrop.classList.remove('visible');

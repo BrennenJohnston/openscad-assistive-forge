@@ -7270,7 +7270,7 @@ if (rounded) {
       collapseParamPanelBtn.setAttribute('aria-expanded', 'false');
       collapseParamPanelBtn.setAttribute(
         'aria-label',
-        'Expand parameters panel'
+        'Expand customizer panel'
       );
       collapseParamPanelBtn.title = 'Expand panel';
     }
@@ -7294,7 +7294,7 @@ if (rounded) {
         collapseParamPanelBtn.setAttribute('aria-expanded', 'false');
         collapseParamPanelBtn.setAttribute(
           'aria-label',
-          'Expand parameters panel'
+          'Expand customizer panel'
         );
         collapseParamPanelBtn.title = 'Expand panel';
 
@@ -7308,7 +7308,7 @@ if (rounded) {
         collapseParamPanelBtn.setAttribute('aria-expanded', 'true');
         collapseParamPanelBtn.setAttribute(
           'aria-label',
-          'Collapse parameters panel'
+          'Collapse customizer panel'
         );
         collapseParamPanelBtn.title = 'Collapse panel';
       }
@@ -7339,7 +7339,7 @@ if (rounded) {
           collapseParamPanelBtn.setAttribute('aria-expanded', 'true');
           collapseParamPanelBtn.setAttribute(
             'aria-label',
-            'Collapse parameters panel'
+            'Collapse customizer panel'
           );
           collapseParamPanelBtn.title = 'Collapse panel';
         }
@@ -7807,7 +7807,7 @@ if (rounded) {
             gutter.setAttribute('aria-valuemax', String(max));
             gutter.setAttribute(
               'aria-valuetext',
-              `Parameters: ${Math.round(sizes[0])}%, Preview: ${Math.round(sizes[1])}%`
+              `Customizer: ${Math.round(sizes[0])}%, Preview: ${Math.round(sizes[1])}%`
             );
           };
 
