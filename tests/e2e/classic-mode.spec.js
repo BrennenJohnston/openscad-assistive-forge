@@ -1,11 +1,12 @@
 import { test, expect } from '@playwright/test'
 import path from 'path'
 
-// Classic mode (desktop-OpenSCAD-style four-pane layout) — C4 acceptance.
+// Classic mode (desktop-OpenSCAD-style layout) — C4 acceptance.
 //
-// Classic is gated on the classic_mode feature flag (default off); these
-// tests enable it via the URL override. Mode switching goes through the
-// real UI: header toggle to Standard, then View > Interface Mode radios.
+// Classic is gated on the classic_mode feature flag (default ON since C4.6);
+// flag-off behavior is covered via the URL override. Mode switching goes
+// through the real UI: the header Classic toggle, the Simplified/Standard
+// switch, and View > Interface Mode radios.
 
 const FIXTURE = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad')
 
@@ -52,6 +53,103 @@ async function pickInterfaceMode(page, radioName) {
   await expect(radio).toBeVisible({ timeout: 5_000 })
   await radio.click()
 }
+
+test.describe('Classic header toggle (C1)', () => {
+  test('classic-header-toggle: always-visible button enters classic and returns to the remembered custom mode', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000)
+
+    await loadSampleProject(page)
+
+    const classicToggle = page.locator('#classicModeToggle')
+    await expect(classicToggle).toBeVisible()
+    await expect(classicToggle).toHaveAttribute('aria-pressed', 'false')
+
+    // Enter classic straight from the default Simplified mode
+    await classicToggle.click()
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'classic'
+    )
+    await expect(classicToggle).toHaveAttribute('aria-pressed', 'true')
+
+    // The View menu radio agrees with the header toggle
+    await page.locator('#viewMenuBtn').click()
+    await expect(
+      page.getByRole('menuitemradio', { name: /Classic/ })
+    ).toHaveAttribute('aria-checked', 'true')
+    await page.keyboard.press('Escape')
+
+    // Exiting returns to the mode the user came FROM (simplified, not standard)
+    await classicToggle.click()
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'simplified'
+    )
+    await expect(classicToggle).toHaveAttribute('aria-pressed', 'false')
+
+    // From Standard, the round-trip remembers standard
+    await switchToStandardMode(page)
+    await classicToggle.click()
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'classic'
+    )
+    await classicToggle.click()
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'standard'
+    )
+  })
+
+  test('classic mode persists across reload and exit still returns to the remembered mode', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000)
+
+    await loadSampleProject(page)
+    await switchToStandardMode(page)
+
+    const classicToggle = page.locator('#classicModeToggle')
+    await classicToggle.click()
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'classic'
+    )
+
+    await page.reload()
+    await page.waitForSelector('body[data-wasm-ready="true"]', {
+      state: 'attached',
+      timeout: WASM_READY_TIMEOUT,
+    })
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'classic'
+    )
+    await expect(classicToggle).toHaveAttribute('aria-pressed', 'true')
+
+    await classicToggle.click()
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'standard'
+    )
+  })
+
+  test('header toggle is hidden when the classic_mode flag is off', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000)
+
+    await page.goto('/?flag_classic_mode=false')
+    await page.waitForSelector('body[data-wasm-ready="true"]', {
+      state: 'attached',
+      timeout: WASM_READY_TIMEOUT,
+    })
+
+    await expect(page.locator('#classicModeToggle')).toHaveClass(/hidden/)
+  })
+})
 
 test.describe('Classic mode layout (C4)', () => {
   test('entering Classic moves console and presets into pane slots, exiting restores them', async ({

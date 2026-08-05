@@ -140,8 +140,9 @@ body {
   }
 }
 
-/* Contrast Toggle Button */
-.contrast-toggle {
+/* Contrast Toggle Button (shared by the header Classic toggle) */
+.contrast-toggle,
+.classic-toggle {
   /* Ensure strong separation from the accent header background across themes */
   background: var(--color-bg-primary);
   border: 1px solid var(--color-text-primary);
@@ -159,22 +160,53 @@ body {
   flex-shrink: 0;
 }
 
-.contrast-toggle:hover {
+.classic-toggle.hidden {
+  display: none;
+}
+
+.classic-toggle[aria-pressed='true'] {
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+  border-color: var(--color-accent);
+}
+
+.contrast-toggle:hover,
+.classic-toggle:hover {
   background: var(--color-hover-bg);
   transform: scale(1.05);
 }
 
+.classic-toggle[aria-pressed='true']:hover {
+  background: var(--color-accent-hover);
+}
+
 .contrast-toggle:focus,
-.contrast-toggle:focus-visible {
+.contrast-toggle:focus-visible,
+.classic-toggle:focus,
+.classic-toggle:focus-visible {
   outline: 3px solid var(--color-focus);
   outline-offset: 2px;
 }
 
-.contrast-toggle:active {
+.contrast-toggle:active,
+.classic-toggle:active {
   transform: scale(0.95);
 }
 
-.contrast-label {
+@media (prefers-reduced-motion: reduce) {
+  .contrast-toggle,
+  .classic-toggle,
+  .contrast-toggle:hover,
+  .classic-toggle:hover,
+  .contrast-toggle:active,
+  .classic-toggle:active {
+    transition: none;
+    transform: none;
+  }
+}
+
+.contrast-label,
+.classic-label {
   font-size: 0.875rem; /* Larger text (14px) for better contrast ratio */
   font-weight: 700;
   letter-spacing: 0.5px;
