@@ -199,6 +199,7 @@ import {
   getClassicLayoutController,
   collapseCustomizerGroups,
 } from './js/classic-layout-controller.js';
+import { initClassicStatusBar } from './js/classic-status-bar.js';
 import { FolderChangeWatcher } from './js/folder-change-watcher.js';
 import { FolderWriteBack } from './js/folder-write-back.js';
 // Toolbar Menu Controller - File|Edit|Design|View|Window|Help menu bar
@@ -7932,6 +7933,9 @@ if (rounded) {
       },
     });
 
+    // Classic window-bottom status bar (C8): mirrors the viewport overlay
+    initClassicStatusBar();
+
     // Classic Customizer bar (C7): titlebar ✕ + the Automatic Preview mirror.
     // All state flows through the real controls (#autoPreviewToggle), never
     // element-to-element side channels.
@@ -12277,6 +12281,11 @@ if (rounded) {
       .filter(Boolean);
   }
 
+  // Echo drawer fold state (C9): a fold the user chose survives re-renders
+  // with the same problems; only NEW warnings/errors force it back open.
+  let echoDrawerUserCollapsed = false;
+  let lastEchoImportantCount = 0;
+
   /**
    * Update the preview drawer to show ECHO, WARNING, and ERROR messages.
    * @param {{ type: 'echo'|'warning'|'error', text: string }[]} messages
@@ -12297,6 +12306,11 @@ if (rounded) {
       echoDrawer.classList.add('collapsed');
       echoDrawerLabel.textContent = 'No messages';
       echoMessagesEl.innerHTML = '';
+      echoDrawerUserCollapsed = false;
+      lastEchoImportantCount = 0;
+      document
+        .getElementById('echoDrawerToggle')
+        ?.setAttribute('aria-expanded', 'false');
       return;
     }
 
@@ -12333,18 +12347,29 @@ if (rounded) {
       })
       .join('\n');
 
-    // Show the drawer: always mark it visible so the badge/label appears,
-    // but only auto-expand (remove 'collapsed') when there are warnings or errors
+    // Show the drawer: always mark it visible so the badge/label appears.
+    // Auto-expand only when problems are present AND either the user has
+    // not folded it, or NEW problems arrived since their fold.
     echoDrawer.classList.add('visible');
-    if (warnCount > 0 || errorCount > 0) {
+    const importantCount = warnCount + errorCount;
+    if (
+      importantCount > 0 &&
+      (!echoDrawerUserCollapsed || importantCount > lastEchoImportantCount)
+    ) {
       echoDrawer.classList.remove('collapsed');
+      echoDrawerUserCollapsed = false;
     }
+    lastEchoImportantCount = importantCount;
 
-    const toggleBtn = document.getElementById('echoDrawerToggle');
-    if (toggleBtn) {
-      const isExpanded = warnCount > 0 || errorCount > 0;
-      toggleBtn.setAttribute('aria-expanded', String(isExpanded));
-    }
+    // aria mirrors the REAL state — the class and attribute are never
+    // written from different truths (the old code marked echo-only output
+    // aria-expanded=false while the content stayed visible).
+    document
+      .getElementById('echoDrawerToggle')
+      ?.setAttribute(
+        'aria-expanded',
+        String(!echoDrawer.classList.contains('collapsed'))
+      );
 
     // Build accessible announcement
     const summary = [];
@@ -12409,12 +12434,9 @@ if (rounded) {
 
   echoDrawerToggleBtn?.addEventListener('click', () => {
     if (!echoDrawerEl) return;
-    const isCollapsed = echoDrawerEl.classList.contains('collapsed');
-    echoDrawerEl.classList.toggle('collapsed');
-    echoDrawerToggleBtn.setAttribute(
-      'aria-expanded',
-      isCollapsed ? 'true' : 'false'
-    );
+    const collapsed = echoDrawerEl.classList.toggle('collapsed');
+    echoDrawerUserCollapsed = collapsed;
+    echoDrawerToggleBtn.setAttribute('aria-expanded', String(!collapsed));
   });
 
   // Echo drawer "View Full Console" button

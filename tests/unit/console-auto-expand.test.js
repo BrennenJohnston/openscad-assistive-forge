@@ -57,4 +57,42 @@ describe('ConsolePanel — auto-expand behavior', () => {
     panel.addOutput('ECHO: "info"\nERROR: critical failure');
     expect(panel.autoExpandPanel).toHaveBeenCalled();
   });
+
+  it('a user-collapsed panel is NOT reopened by WARNINGs (C9)', () => {
+    panel._userCollapsed = true;
+    panel.addOutput('WARNING: still the same problem');
+    expect(mockConsolePanel.open).toBe(false);
+  });
+
+  it('a user-collapsed panel IS reopened by ERRORs (C9)', () => {
+    panel._userCollapsed = true;
+    panel.addOutput('ERROR: hard failure');
+    expect(mockConsolePanel.open).toBe(true);
+    expect(panel._userCollapsed).toBe(false);
+  });
+
+  it('programmatic opens are not recorded as user intent (C9)', () => {
+    let toggleHandler = null;
+    mockConsolePanel.addEventListener = (event, handler) => {
+      if (event === 'toggle') toggleHandler = handler;
+    };
+    const listeningPanel = new ConsolePanel({ container: null, badge: null });
+    expect(typeof toggleHandler).toBe('function');
+
+    // Auto-expand fires the <details> toggle event; the guard must keep
+    // _userCollapsed untouched for our own open.
+    listeningPanel.addOutput('WARNING: first problem');
+    expect(mockConsolePanel.open).toBe(true);
+    toggleHandler();
+    expect(listeningPanel._userCollapsed).toBe(false);
+
+    // A real user close IS recorded
+    mockConsolePanel.open = false;
+    toggleHandler();
+    expect(listeningPanel._userCollapsed).toBe(true);
+
+    // ...and survives further WARNING output
+    listeningPanel.addOutput('WARNING: same problem again');
+    expect(mockConsolePanel.open).toBe(false);
+  });
 });

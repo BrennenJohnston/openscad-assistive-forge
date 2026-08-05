@@ -5046,6 +5046,22 @@
         aria-live="assertive"
         aria-atomic="true"
       ></div>
+      <!-- Classic window-bottom status bar (C8): mirrors the in-viewport
+           status overlay, which classic hides (so only one aria-live source
+           speaks). Slim by design — it is never focusable, so the 44px
+           touch-target rule does not apply (documented deviation). -->
+      <div
+        id="classicStatusBar"
+        class="classic-status-bar"
+        role="status"
+        aria-live="polite"
+      >
+        <span id="classicStatusText"></span>
+        <span class="classic-status-divider" aria-hidden="true">|</span>
+        <span id="classicStatusStats"></span>
+        <span class="classic-status-spacer" aria-hidden="true"></span>
+        <span id="classicStatusMemory"></span>
+      </div>
     </div>
     <!-- Render Queue Modal -->
     <div

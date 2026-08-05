@@ -370,3 +370,30 @@ body[data-ui-mode='classic'] .param-panel.collapsed {
   max-width: none !important;
   flex: initial !important;
 }
+
+/* ── Window-bottom status bar (C8) ─────────────────────────────────────── */
+.classic-status-bar {
+  display: none;
+}
+
+body[data-ui-mode='classic'] .classic-status-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: 28px;
+  padding: var(--space-xxs) var(--space-sm);
+  border-top: 1px solid var(--color-border);
+  background-color: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+body[data-ui-mode='classic'] .classic-status-spacer {
+  flex: 1;
+}
+
+/* The in-viewport overlay yields to the bottom bar in classic —
+   display:none also removes its aria-live region, so only the bar speaks */
+body[data-ui-mode='classic'] #previewStatusBar {
+  display: none !important;
+}

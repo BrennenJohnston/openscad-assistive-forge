@@ -317,6 +317,50 @@ test.describe('Classic mode layout (C4)', () => {
     )
     await axesToggle.click()
 
+    // Window-bottom status bar (C8): visible at the bottom, mirroring the
+    // hidden in-viewport overlay's text; only one aria-live status source
+    const statusBar = page.locator('#classicStatusBar')
+    await expect(statusBar).toBeVisible()
+    await expect(page.locator('#previewStatusBar')).toBeHidden()
+    const barBox = await statusBar.boundingBox()
+    const viewport = page.viewportSize()
+    expect(
+      barBox.y + barBox.height,
+      'status bar sits at the window bottom'
+    ).toBeGreaterThan(viewport.height * 0.8)
+    await expect
+      .poll(async () =>
+        page.locator('#classicStatusText').evaluate((el) => el.textContent)
+      )
+      .toBe(
+        await page
+          .locator('#previewStatusText')
+          .evaluate((el) => el.textContent)
+      )
+
+    // Console fold (C10): the titlebar button folds the console pane and
+    // the display pane grows into the freed row
+    const consoleFold = page.locator('#classicConsoleFoldBtn')
+    await expect(consoleFold).toBeVisible()
+    const displayBefore = await page
+      .locator('.preview-panel')
+      .boundingBox()
+    await consoleFold.click()
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-classic-console-collapsed',
+      'true'
+    )
+    await expect
+      .poll(
+        async () => (await page.locator('.preview-panel').boundingBox()).height
+      )
+      .toBeGreaterThan(displayBefore.height)
+    await consoleFold.click()
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-classic-console-collapsed',
+      'false'
+    )
+
     // Exit back to Standard: exact DOM restore, slots removed
     await pickInterfaceMode(page, 'Standard')
     await expect(page.locator('body')).toHaveAttribute(

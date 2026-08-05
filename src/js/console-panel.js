@@ -81,6 +81,19 @@ export class ConsolePanel {
     this.renderSection = 1;
     this._pendingSeparator = false;
 
+    // Auto-expand etiquette (C9): a panel the user closed stays closed for
+    // WARNINGs; only ERRORs force it back open. _programmaticOpen keeps our
+    // own open from being misread as a user action.
+    this._userCollapsed = false;
+    this._programmaticOpen = false;
+    const consolePanel = document.getElementById('consolePanel');
+    if (consolePanel && typeof consolePanel.addEventListener === 'function') {
+      consolePanel.addEventListener('toggle', () => {
+        if (this._programmaticOpen) return;
+        this._userCollapsed = !consolePanel.open;
+      });
+    }
+
     if (this.container) {
       this.initFilters();
       this._initViewTabs();
@@ -251,6 +264,7 @@ export class ConsolePanel {
     const lines = output.split('\n');
     const parsed = [];
     let hasWarningOrError = false;
+    let hasError = false;
 
     for (const line of lines) {
       const entry = this.parseLine(line);
@@ -261,6 +275,9 @@ export class ConsolePanel {
           entry.type === CONSOLE_ENTRY_TYPE.ERROR
         ) {
           hasWarningOrError = true;
+        }
+        if (entry.type === CONSOLE_ENTRY_TYPE.ERROR) {
+          hasError = true;
         }
       }
     }
@@ -286,7 +303,7 @@ export class ConsolePanel {
     this.render();
 
     if (hasWarningOrError) {
-      this.autoExpandPanel();
+      this.autoExpandPanel({ force: hasError });
     }
   }
 
@@ -317,12 +334,19 @@ export class ConsolePanel {
   }
 
   /**
-   * Auto-expand the console <details> panel when important messages arrive
+   * Auto-expand the console <details> panel when important messages arrive.
+   * Respects a user's manual collapse unless forced (errors always surface).
+   * @param {Object} [options]
+   * @param {boolean} [options.force] - Reopen even after a manual collapse
    */
-  autoExpandPanel() {
+  autoExpandPanel(options = {}) {
+    if (this._userCollapsed && !options.force) return;
     const consolePanel = document.getElementById('consolePanel');
     if (consolePanel && !consolePanel.open) {
+      this._programmaticOpen = true;
       consolePanel.open = true;
+      this._programmaticOpen = false;
+      if (options.force) this._userCollapsed = false;
       console.log(
         '[ConsolePanel] Auto-expanded: WARNING or ERROR message detected'
       );
