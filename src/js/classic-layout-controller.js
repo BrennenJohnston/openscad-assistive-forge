@@ -18,6 +18,21 @@
 
 import { getUIModeController } from './ui-mode-controller.js';
 
+/**
+ * Classic startup contract: the customizer opens with all parameter
+ * groups collapsed (desktop OpenSCAD behavior). Called on entering
+ * Classic mode and after a project loads while Classic is active.
+ * Setting `.open` fires the <details> 'toggle' event, so per-file
+ * group state persistence keeps working.
+ */
+export function collapseCustomizerGroups() {
+  document
+    .querySelectorAll('#parametersContainer details.param-group')
+    .forEach((group) => {
+      if (group.open) group.open = false;
+    });
+}
+
 const SLOT_DEFS = [
   {
     id: 'classicConsoleSlot',

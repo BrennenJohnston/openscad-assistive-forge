@@ -191,7 +191,10 @@ import {
 import { getModeManager } from './js/mode-manager.js';
 // UI Mode Controller - Simplified/Standard/Classic interface layout switching
 import { getUIModeController } from './js/ui-mode-controller.js';
-import { initClassicLayoutController } from './js/classic-layout-controller.js';
+import {
+  initClassicLayoutController,
+  collapseCustomizerGroups,
+} from './js/classic-layout-controller.js';
 // Toolbar Menu Controller - File|Edit|Design|View|Window|Help menu bar
 import {
   getToolbarMenuController,
@@ -7377,6 +7380,17 @@ if (rounded) {
     initClassicLayoutController({
       onEnter: () => {
         destroySplit();
+        // Startup contract: collapsed customizer groups, and a first
+        // preview with current values if nothing has rendered yet
+        collapseCustomizerGroups();
+        const classicState = stateManager.getState();
+        if (
+          classicState?.uploadedFile &&
+          !classicState.stl &&
+          autoPreviewController
+        ) {
+          autoPreviewController.onParameterChange(classicState.parameters);
+        }
         requestAnimationFrame(() => previewManager?.handleResize?.());
       },
       onExit: () => {

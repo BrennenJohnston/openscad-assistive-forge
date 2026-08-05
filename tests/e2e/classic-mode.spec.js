@@ -62,6 +62,15 @@ test.describe('Classic mode layout (C4)', () => {
     await loadSampleProject(page, { query: '?flag_classic_mode=true' })
     await switchToStandardMode(page)
 
+    // Open a parameter group so the Classic startup contract (all groups
+    // collapsed) is observable rather than trivially true
+    const firstGroup = page.locator('details.param-group').first()
+    await expect(firstGroup).toBeVisible({ timeout: 15_000 })
+    if (!(await firstGroup.evaluate((el) => el.open))) {
+      await firstGroup.locator('summary').click()
+    }
+    await expect(firstGroup).toHaveJSProperty('open', true)
+
     // Record the original DOM location of the panes to be moved
     const originalParents = await page.evaluate(() => ({
       console: document.getElementById('consolePanel')?.parentElement?.id,
@@ -88,6 +97,12 @@ test.describe('Classic mode layout (C4)', () => {
     // Display + customizer panes still present
     await expect(page.locator('.preview-panel')).toBeVisible()
     await expect(page.locator('#paramPanel')).toBeVisible()
+
+    // Startup contract: every customizer group is collapsed on entry
+    const openGroups = await page
+      .locator('#parametersContainer details.param-group[open]')
+      .count()
+    expect(openGroups, 'all param groups collapsed in Classic').toBe(0)
 
     // Exit back to Standard: exact DOM restore, slots removed
     await pickInterfaceMode(page, 'Standard')
