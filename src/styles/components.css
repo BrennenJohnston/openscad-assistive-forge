@@ -4561,6 +4561,16 @@ select:focus-visible {
   margin-bottom: var(--space-xs);
 }
 
+/* STL view-only mode: notice shown in place of parameter controls */
+.stl-view-notice {
+  margin: var(--space-md) 0;
+  padding: var(--space-sm) var(--space-md);
+  background: var(--color-bg-secondary, rgba(0, 0, 0, 0.03));
+  border-left: var(--space-xxs, 3px) solid var(--color-border, currentColor);
+  border-radius: var(--border-radius-xs);
+  color: var(--color-text-secondary);
+}
+
 .format-2d-auto-adjust .auto-adjust-consent {
   display: flex;
   align-items: center;

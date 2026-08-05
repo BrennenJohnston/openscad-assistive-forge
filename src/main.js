@@ -41,6 +41,10 @@ import {
   classifyDrop,
   describeAccepted,
 } from './js/upload-router.js';
+import {
+  setStlViewActive,
+  isStlViewActive,
+} from './js/stl-view-mode.js';
 import { escapeHtml, isValidServiceWorkerMessage } from './js/html-utils.js';
 import { getQualityPreset, COMPLEXITY_TIER } from './js/quality-tiers.js';
 import { getThreeModule } from './js/preview.js';
@@ -4914,6 +4918,24 @@ async function initApp() {
    * Also shows/hides the fallback download link.
    */
   function updatePrimaryActionButton() {
+    // STL view-only mode: nothing is renderable, so Generate must not
+    // present itself as available.
+    if (isStlViewActive()) {
+      primaryActionBtn.textContent = 'Generate';
+      primaryActionBtn.dataset.action = 'generate';
+      primaryActionBtn.disabled = true;
+      primaryActionBtn.dataset.stlViewDisabled = 'true';
+      primaryActionBtn.setAttribute(
+        'aria-label',
+        'Generate is unavailable while viewing an STL file. Open a .scad model to generate designs.'
+      );
+      downloadFallbackLink.classList.add('hidden');
+      return;
+    }
+    if (primaryActionBtn.dataset.stlViewDisabled) {
+      delete primaryActionBtn.dataset.stlViewDisabled;
+      primaryActionBtn.disabled = false;
+    }
     const state = stateManager.getState();
     const hasGeneratedFile = !!state.stl;
     const currentParamsHash = hashParams(state.parameters);
@@ -5403,12 +5425,7 @@ async function initApp() {
       }
 
       case DROP_KIND.STL:
-        // Replaced by the STL view-only mode in the next change.
-        showErrorToast({
-          title: 'STL Viewing Coming Soon',
-          message:
-            'Direct STL viewing is not available yet. Open a .scad model or a .zip project instead.',
-        });
+        await fileHandler.handleStlView(selection.files[0]);
         break;
 
       case DROP_KIND.PRESET_JSON: {
@@ -5567,6 +5584,13 @@ async function initApp() {
       if (confirmed) {
         // Reset file input
         fileInput.value = '';
+
+        // Leave STL view-only mode if it was active
+        setStlViewActive(false);
+        document
+          .getElementById('parametersContainer')
+          ?.querySelector('.stl-view-notice')
+          ?.remove();
 
         // Clear state (including preset selection so it doesn't survive reload)
         stateManager.setState({
