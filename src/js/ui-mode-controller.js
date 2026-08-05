@@ -161,6 +161,12 @@ export class UIModeController {
     /** @type {UIMode} */
     this.currentMode = 'simplified';
 
+    /**
+     * @type {'simplified'|'standard'} The custom mode to return to when the
+     * header Classic toggle switches back out of classic.
+     */
+    this._lastCustomMode = 'standard';
+
     /** @type {Function} */
     this.onModeChange = options.onModeChange || (() => {});
 
@@ -250,9 +256,14 @@ export class UIModeController {
       `[UIModeController] Switching from ${previousMode} to ${targetMode}`
     );
 
+    if (previousMode !== 'classic') {
+      this._lastCustomMode = previousMode;
+    }
+
     this.currentMode = targetMode;
     this.applyMode(targetMode);
     this._updateToggleButton();
+    this._updateClassicToggleButton();
     this._notifySubscribers(targetMode, previousMode);
     this.onModeChange(targetMode, previousMode);
 
@@ -278,6 +289,20 @@ export class UIModeController {
     const newMode =
       this.currentMode === 'simplified' ? 'standard' : 'simplified';
     this.switchMode(newMode);
+    return this.currentMode;
+  }
+
+  /**
+   * Toggle Classic mode from the always-visible header button: enter classic
+   * from any custom mode, or return to the custom mode the user came from.
+   * @returns {UIMode} New mode after toggle
+   */
+  toggleClassic() {
+    if (this.currentMode === 'classic') {
+      this.switchMode(this._lastCustomMode || 'standard');
+    } else {
+      this.switchMode('classic');
+    }
     return this.currentMode;
   }
 
@@ -587,6 +612,20 @@ export class UIModeController {
       document.body.dataset.uiMode = this.currentMode;
     }
 
+    // Header Classic toggle: wired BEFORE the basic_advanced_mode early
+    // return below — that flag gates the Simplified/Standard switch only
+    // and must never take the Classic entry point down with it.
+    const classicBtn = document.getElementById('classicModeToggle');
+    if (classicBtn) {
+      if (this.isClassicAvailable()) {
+        classicBtn.classList.remove('hidden');
+        classicBtn.addEventListener('click', () => this.toggleClassic());
+        this._updateClassicToggleButton();
+      } else {
+        classicBtn.classList.add('hidden');
+      }
+    }
+
     const btn = document.getElementById('uiModeToggle');
     if (!btn) return;
 
@@ -712,6 +751,23 @@ export class UIModeController {
   }
 
   /**
+   * Update the always-visible header Classic toggle's pressed state + labels
+   * @private
+   */
+  _updateClassicToggleButton() {
+    const btn = document.getElementById('classicModeToggle');
+    if (!btn) return;
+
+    const isClassic = this.currentMode === 'classic';
+    btn.setAttribute('aria-pressed', String(isClassic));
+    const label = isClassic
+      ? 'Exit Classic desktop layout'
+      : 'Switch to Classic desktop layout';
+    btn.setAttribute('aria-label', label);
+    btn.setAttribute('title', label);
+  }
+
+  /**
    * Move focus to an appropriate element after mode switch (WCAG 2.4.3)
    * @param {UIMode} mode
    * @private
@@ -774,6 +830,10 @@ export class UIModeController {
               ? 'standard'
               : normalized;
         }
+        const lastCustom = normalizeUiMode(prefs.lastCustomMode);
+        if (lastCustom === 'simplified' || lastCustom === 'standard') {
+          this._lastCustomMode = lastCustom;
+        }
       }
     } catch (error) {
       console.warn('[UIModeController] Could not load preferences:', error);
@@ -789,7 +849,11 @@ export class UIModeController {
     try {
       const stored = localStorage.getItem(UI_MODE_STORAGE_KEY);
       const existing = stored ? JSON.parse(stored) : {};
-      const prefs = { ...existing, mode: this.currentMode };
+      const prefs = {
+        ...existing,
+        mode: this.currentMode,
+        lastCustomMode: this._lastCustomMode,
+      };
       localStorage.setItem(UI_MODE_STORAGE_KEY, JSON.stringify(prefs));
     } catch (error) {
       if (error.name === 'QuotaExceededError') {

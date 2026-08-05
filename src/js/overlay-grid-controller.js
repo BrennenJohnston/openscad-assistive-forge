@@ -449,32 +449,58 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
     }
 
     function refreshShowAll() {
-      const existing = container.querySelector('.param-groups-show-all');
+      const existingBar = container.querySelector('.param-groups-hidden-bar');
       const hiddenGroups = container.querySelectorAll('.param-group[hidden]');
       const count = hiddenGroups.length;
       if (count === 0) {
-        existing?.remove();
+        existingBar?.remove();
         return;
       }
-      if (!existing) {
-        const link = document.createElement('button');
-        link.className = 'param-groups-show-all btn btn-sm btn-outline';
-        link.type = 'button';
-        link.setAttribute('aria-live', 'polite');
-        container.appendChild(link);
-        link.addEventListener('click', () => {
-          container.querySelectorAll('.param-group[hidden]').forEach((el) => {
-            el.removeAttribute('hidden');
-            const btn = el.querySelector('.param-group-hide-btn');
-            if (btn) btn.setAttribute('aria-pressed', 'false');
-          });
-          saveHidden(new Set());
-          refreshShowAll();
-          announceImmediate('All parameter groups shown');
-        });
+
+      const bar = existingBar || document.createElement('div');
+      if (!existingBar) {
+        bar.className = 'param-groups-hidden-bar';
+        container.appendChild(bar);
       }
-      container.querySelector('.param-groups-show-all').textContent =
-        `${count} group${count !== 1 ? 's' : ''} hidden — Show all`;
+      bar.textContent = '';
+
+      const showAll = document.createElement('button');
+      showAll.className = 'param-groups-show-all btn btn-sm btn-outline';
+      showAll.type = 'button';
+      showAll.textContent = `${count} group${count !== 1 ? 's' : ''} hidden — Show all`;
+      showAll.addEventListener('click', () => {
+        container.querySelectorAll('.param-group[hidden]').forEach((el) => {
+          el.removeAttribute('hidden');
+          const btn = el.querySelector('.param-group-hide-btn');
+          if (btn) btn.setAttribute('aria-pressed', 'false');
+        });
+        saveHidden(new Set());
+        refreshShowAll();
+        announceImmediate('All parameter groups shown');
+      });
+      bar.appendChild(showAll);
+
+      // Per-group restore chips (C12): one click brings back just that group
+      hiddenGroups.forEach((groupEl) => {
+        const label =
+          groupEl.querySelector('summary span')?.textContent?.trim() ||
+          groupEl.dataset.groupId;
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'param-group-show-chip btn btn-sm btn-outline';
+        chip.textContent = `Show ${label}`;
+        chip.addEventListener('click', () => {
+          groupEl.removeAttribute('hidden');
+          const btn = groupEl.querySelector('.param-group-hide-btn');
+          if (btn) btn.setAttribute('aria-pressed', 'false');
+          const hiddenSet = loadHidden();
+          hiddenSet.delete(groupEl.dataset.groupId);
+          saveHidden(hiddenSet);
+          refreshShowAll();
+          announceImmediate(`${label} group shown`);
+        });
+        bar.appendChild(chip);
+      });
     }
 
     const hidden = loadHidden();
@@ -502,7 +528,14 @@ export function initOverlayGridController({ getPreviewManager, updateStatus }) {
       hiddenSet.add(groupId);
       saveHidden(hiddenSet);
       refreshShowAll();
-      announceImmediate(`${groupLabel} group hidden`);
+      // The ✕ the user pressed just left the tree — land focus on the
+      // restore bar instead of letting it fall to <body>.
+      container
+        .querySelector('.param-groups-hidden-bar .param-groups-show-all')
+        ?.focus();
+      announceImmediate(
+        `${groupLabel} group hidden — use Show all groups to restore`
+      );
     });
   }
 

@@ -60,21 +60,32 @@ async function waitForPreviewReady(page) {
     /state-current/,
     { timeout: PREVIEW_TIMEOUT }
   )
-  // Stats read "12.3 KB | 1,234 triangles". The triangle count is 0 for
-  // OFF-format previews today (worker only counts triangles for text
-  // outputs — known display bug), so gate on non-zero output size here.
-  // Real triangle truth is asserted by the full-render test below via
-  // __forgeDebug.compareGeometry().
+  // Stats read "12.3 KB | 1,234 triangles". OFF previews (the render-colors
+  // default) now report a real triangle count parsed from the header (F-1),
+  // so both the size and the count must be non-zero for a 3D fixture.
   const statsText = await page.locator('#previewStatusStats').textContent()
   expect(statsText, 'preview stats should be populated').toMatch(/\d/)
   const size = Number.parseFloat(statsText)
   expect(size, `preview output size should be non-zero, got: "${statsText}"`).toBeGreaterThan(0)
+  const triangleMatch = statsText.match(/([\d,]+)\s+triangles/)
+  expect(triangleMatch, `stats should include a triangle count, got: "${statsText}"`).not.toBeNull()
+  const triangles = Number.parseInt(triangleMatch[1].replace(/,/g, ''), 10)
+  expect(triangles, `triangle count should be non-zero, got: "${statsText}"`).toBeGreaterThan(0)
   return statsText
 }
 
 test.describe('WASM smoke (never skipped)', () => {
   test('app boots and the WASM engine initializes', async ({ page }) => {
     test.setTimeout(240_000)
+
+    // The --help capability probe used to flood ~200 [OpenSCAD ERR] lines into
+    // the console on every cold start; a clean boot console is a hard gate.
+    const openscadErrLines = []
+    page.on('console', (msg) => {
+      if (msg.text().includes('[OpenSCAD ERR]')) {
+        openscadErrLines.push(msg.text())
+      }
+    })
 
     await page.goto('/')
     await expect(page.locator('h1')).toContainText('OpenSCAD', { timeout: 15_000 })
@@ -85,6 +96,11 @@ test.describe('WASM smoke (never skipped)', () => {
       state: 'attached',
       timeout: WASM_READY_TIMEOUT,
     })
+
+    expect(
+      openscadErrLines,
+      `boot console must not contain [OpenSCAD ERR] noise; got:\n${openscadErrLines.slice(0, 5).join('\n')}`
+    ).toHaveLength(0)
   })
 
   test('uploading a .scad renders a preview with geometry', async ({ page }) => {

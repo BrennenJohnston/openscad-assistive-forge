@@ -7,98 +7,91 @@ decides to drop it. Per project rules, none of these were fixed silently.
 
 ## Open
 
-### F-1: Preview status bar shows "0 triangles" for OFF-format previews
+### F-2 (remainder): two e2e defers, documented reasons
 
-- **Found during:** B1 (smoke suite), 2026-08-04
-- **Where:** `src/worker/openscad-worker.js:1827-1845`
-- **What:** The worker only counts triangles when the render output is a
-  *string*. OFF (and binary STL) outputs delivered as
-  ArrayBuffer/Uint8Array skip counting entirely, so `stats.triangles = 0`
-  flows to `#previewStatusStats` and users see "N KB | 0 triangles" on
-  most previews (the render-colors OFF path is the default).
-- **Fix shape:** parse the OFF header counts / derive binstl count from
-  `(byteLength - 84) / 50` in the worker. Small standalone patch.
+All other F-2 entries are resolved — see the per-test table under Resolved.
+Still deliberately deferred:
 
-### F-2: Four e2e tests fail on clean `develop` (masked by CI skips)
-
-- **Found during:** A2 verification (baseline stash run), 2026-08-04
-- **What:** These fail identically with and without the A2 changes, and
-  are invisible in CI because they carry `test.skip(isCI, ...)`:
-  - `tests/e2e/lwfl-parity-reproduction.spec.js:247` — baseline
-    diagnostic capture across four render modes
-  - `tests/e2e/parity-regression.spec.js` S-007 — viewport should clear
-    when `generate = Customizer Settings`
-  - `parity-regression.spec.js` S-008 — console panel interactions must
-    not trigger renders
-  - `parity-regression.spec.js` S-013 — `surface()` with a DAT text
-    heightmap companion should render geometry
-- **Why it matters:** S-007/S-008 are stakeholder-reported desktop-parity
-  behaviors (blank display, no spontaneous geometry). S-013 is companion
-  file support.
-- **Fix shape:** diagnose each; candidates for the B32 skip-debt drawdown.
-- **Addendum (A9 baseline run, 2026-08-04):** also pre-existing on clean
-  tree: `responsive-audit.spec.js:249` "SVG editor fullscreen — opens,
-  fills viewport, closeable" fails at all 8 audited viewports (chromium,
-  local run; CI-skipped like the rest).
-- **Addendum (B13 baseline run, 2026-08-04):** also pre-existing on clean
-  tree: `accessibility.spec.js:2348` "UI mode toggle switches to Advanced
-  mode and shows all panels" and `:2381` "all disclosure sections are
-  keyboard-operable" (chromium, local; CI-skipped).
-- **Addendum (C1.2 baseline run, 2026-08-04):** also pre-existing on clean
-  tree: `zip-workflow.spec.js:206` "accessible with keyboard navigation
-  for file tree" and `:235` "should show project statistics" (chromium,
-  local; CI-skipped).
-- **Addendum (C1.4 baseline run, 2026-08-04):** also pre-existing (fails
-  identically at pre-Track-5 commit ba5d4b1): `preset-workflow.spec.js:816`
-  "user-saved presets in localStorage survive project reload" — exercises
-  the dark `project_presets` feature; relevant to the Classic preset work,
-  where this behavior gets finished properly.
-- **Addendum (C3 baseline run, 2026-08-04):** also pre-existing on clean
-  tree (verified by stash run at commit af3e0f3): `accessibility.spec.js:2316`
-  "UI mode toggle exists and defaults to Basic mode" and
-  `expert-mode.spec.js:31` / `:94` / `:151` (all three Expert Mode smoke
-  tests fail waiting for `.param-control` to become visible — parameter
-  groups are collapsed `<details>` by default, same root cause the
-  wasm-smoke suite works around with `openFirstParamGroup()`). Chromium,
-  local; CI-skipped.
-
-### F-5: Preset import "Replace" mode calls a method that does not exist
-
-- **Found during:** C4.4 (copy-preset button hit the same trap), 2026-08-04
-- **What:** `src/main.js` (preset Import/Export → import → Replace mode)
-  calls `presetManager.getPresets(currentModelName)`, but `PresetManager`
-  only defines `getPresetsForModel()`. Choosing Replace mode throws
-  `TypeError: presetManager.getPresets is not a function` and the import
-  never runs. Merge and Import-as-copies modes are unaffected.
-- **Why it matters:** Replace-mode preset import is silently broken.
-- **Fix shape:** one-line rename to `getPresetsForModel`, plus an e2e or
-  unit test covering the Replace path.
-
-### F-3: `npm run build` dirties a tracked file
-
-- **Found during:** A2 (stray diff in working tree), 2026-08-04
-- **Where:** `public/libraries/manifest.json` (tracked) is rewritten by
-  the `setup-libraries.js` prebuild step (clonedAt/commit metadata churn).
-- **What:** every build leaves the working tree dirty, inviting accidental
-  commits of generated metadata.
-- **Fix shape:** revisit during B6 (library pinning) — either stop
-  tracking the generated manifest or make the script idempotent when
-  nothing changed.
-
-### F-4: Deprecated shims awaiting removal (with their legacy tests)
-
-- **Found during:** A2 and A9 (deliberate deferrals), 2026-08-04
-- **Where:**
-  - `AutoPreviewController.injectCsgColors`, `stripColorCalls`,
-    `isParserError` (marked `@deprecated`), their direct unit tests, and
-    the `countUniqueOFFColors` helper (no production callers left).
-  - `resolve2DExportIntent` in render-intent.js — deprecated wrapper over
-    `propose2DExportAdjustments` kept only for the legacy test files
-    (`resolve-2d-export.test.js`, `svg-export-workflow.test.js`,
-    `parity-harness.test.js`, `parity-probes.test.js`, ~50 call sites).
-- **Fix shape:** migrate/trim the legacy tests to the new APIs, then delete
-  the shims in one cleanup phase.
+- `tests/e2e/preset-workflow.spec.js:816` "user-saved presets in
+  localStorage survive project reload" — exercises the dark
+  `project_presets` feature (`feature-flags.js`, default false, rollout 0).
+  Lands when that flag's Classic preset work is finished; testing a dark
+  feature's persistence now would pin unfinished behavior.
+- `tests/e2e/lwfl-parity-reproduction.spec.js:247` — diagnostic harness, not
+  a regression gate; self-skips unless the gitignored
+  `.volkswitch/` keyguard bundle is present. Left as-is by design.
 
 ## Resolved
 
-*(move items here with the commit hash that fixed them)*
+### F-1: Preview status bar showed "0 triangles" for OFF-format previews
+**Fixed in `fd18e25`** (Round 2, B2). `src/worker/mesh-stats.js`
+`parseOffTriangleCount()` parses the OFF/COFF header from string,
+ArrayBuffer, or Uint8Array payloads (duck-typed; first 1KB decoded); the
+worker recovers the count for buffer-delivered OFF and wasm-smoke now
+REQUIRES a non-zero triangle count in the stats bar.
+
+### F-5: Preset import "Replace" mode called a method that does not exist
+**Fixed in `fd18e25`** (Round 2, B1). `presetManager.getPresetsForModel()`
+now used at the Replace-mode call site; a new preset-workflow e2e drives the
+manage-presets modal → Replace radio → filechooser and asserts no TypeError
+plus the imported design appearing in `#presetSelect`.
+
+### F-3: `npm run build` dirtied a tracked file
+**Fixed in `fd18e25`** (Round 2, B3). `scripts/setup-libraries.js`
+`manifestsEquivalent()` skips rewriting `public/libraries/manifest.json`
+when only the `generated`/`downloaded` timestamps differ. Verified: two
+consecutive builds leave `git status` clean.
+
+### F-4: Deprecated shims deleted (with their legacy tests migrated)
+**Fixed in the Round 2 B4 commit.** Deleted: `countUniqueOFFColors`,
+`stripColorCalls`, `injectCsgColors`, `isParserError`
+(auto-preview-controller.js), `resolve2DExportIntent` (render-intent.js),
+and the `injected` mode of the `__forgeDebug.exportScadSource()` console
+helper (its only remaining callers). The four legacy 2D-export test files
+keep exercising the proposal engine through a local
+`propose2DExportAdjustments(...).resolvedParameters` helper; the three
+auto-preview describe blocks that tested the deleted statics were removed.
+KEPT deliberately: `csg-color-injection.spec.js` (verifies the current
+post-KI-012 pipeline; its only shim reference was a comment),
+`stripCommentsAndStrings`, `scadUsesColor` (live callers).
+**Addendum resolved with it:** the dead `createFileTree` export in
+`zip-handler.js` (zero production callers — the root cause of the
+zip-workflow specs waiting on a `.file-tree` UI nothing renders) was also
+deleted with its orphaned unit describe. `buildNestedTree` /
+`countFilesRecursive` stay (live consumers).
+
+### F-2: e2e failures on clean develop — per-test dispositions
+All were **stale tests**, not app bugs; fixed across `fd18e25` (Round 2 B5)
+and the Round 2 B6 commit. No CI-skip flags were added or removed.
+
+| Test | Root cause | Disposition |
+|---|---|---|
+| expert-mode.spec.js :31/:94/:151 | `.param-control` waited `visible` while groups render as collapsed `<details>`; editor assertions targeted the textarea fallback instead of CodeMirror | fix-test (`state:'attached'`, `.cm-content` with textarea branch) — 3/3 green |
+| accessibility.spec.js :2316/:2348/:2381 | same collapsed-groups wait; Basic/Advanced naming from the two-mode era; save-project modal overlay blocked the toggle click | fix-test (attached waits, Simplified/Standard naming, modal dismissal, `body[data-ui-mode]` assert) — 4/4 green |
+| zip-workflow.spec.js :206/:235 (and, by the same root cause, the whole suite) | waits on `.file-tree`/`.project-files` that only the dead `createFileTree` ever produced; Companion Files section is registry-hidden in Simplified | fix-test (retarget `#projectFilesList .project-file-item`/`.main-file`/summary badge; switch to Standard first) — 5 passed / 4 honest skips |
+| responsive-audit.spec.js :249 (8 viewports) | collapsed-groups wait before the SVG flow | fix-test (attached wait) — now honestly skips via its gallery-absent guard instead of failing |
+| parity-regression S-007 | `selectOption({label: regex})` is invalid Playwright API (test always threw); control also sits in a collapsed group | fix-test — passes; blank-display behavior verified correct |
+| parity-regression S-008 | console summary is registry-hidden in Simplified; baseline taken before interactions | fix-test (switch to Standard, baseline after) — passes; no spontaneous renders |
+| parity-regression S-013 | test multi-set `#fileInput`, which is single-file since the unified upload (C1.2) | fix-test (companions zipped in-test, the real user flow) — passes; DAT companion renders |
+| basic-workflow.spec.js full-workflow (found during W3) | collapsed-groups wait + gating on the headless-unreliable `download` event | fix-test (open first group; gate on render completion, download event asserted when it fires) |
+
+Whole parity-regression suite: 13 passed / 1 honest skip, locally.
+
+### sw.js cache version was never injected
+**Fixed in `caff786`** (Round 2, H1). `generateBundle` could never see the
+public-dir-copied `sw.js`; injection moved to `closeBundle` via
+`scripts/inject-sw-version.js`, which throws (failing the build) if the file
+or token is missing or survives. `dist/sw.js` verified to carry the real
+version; the frozen `CACHE_NAME` that blocked activate-time purges is gone.
+
+### Startup `--help` capability probe flooded the console
+**Fixed in `caff786`** (Round 2, H2). Emscripten freezes print/printErr at
+module creation, so the old reassignment never worked; a worker-scope
+`capabilityProbeActive` flag mutes console mirroring during the probe while
+`openscadConsoleOutput` still feeds the capability parser. wasm-smoke's boot
+test now asserts a zero-`[OpenSCAD ERR]` console as a permanent gate.
+
+### Dead memory-banner quality lookups
+**Fixed in `8adf0ef`** (Round 2, Q2). The reduce-quality action targeted
+`#qualityPreset`/`#previewQualityMode`, which do not exist; it now drives
+the real `#exportQualitySelect`/`#previewQualitySelect`.

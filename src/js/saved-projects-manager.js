@@ -10,6 +10,7 @@ import {
   getValidationErrorMessage,
 } from './validation-schemas.js';
 import { STORAGE_LIMITS } from './validation-constants.js';
+import { clearFolderHandle } from './folder-handle-store.js';
 
 const DB_NAME = 'openscad-forge-saved-projects';
 const DB_VERSION = 2; // Bumped for v2 schema with folders, project files, assets
@@ -23,6 +24,8 @@ const SCHEMA_VERSION = 2; // Project schema version
 const LS_MAX_PROJECT_FILES_BYTES = 2 * 1024 * 1024; // 2 MB -- beyond this, LS stringify OOMs the tab
 const MAX_IDB_RETRY = 2; // Maximum retries when an InvalidStateError indicates a stale connection
 const LARGE_FILES_BATCH_SIZE = 50; // File count threshold above which projectFiles are written to PROJECT_FILES_STORE in batches
+const INLINE_PROJECT_FILES_MAX_BYTES = 8 * 1024 * 1024; // Serialized maps beyond this are batched regardless of file count
+const IDB_MAX_RECORD_BYTES = 100 * 1024 * 1024; // Conservative floor under Chromium's ~127MB per-value IndexedDB cap
 
 let db = null;
 let storageType = null; // 'indexeddb' or 'localstorage'
@@ -358,11 +361,71 @@ async function getFromIndexedDB() {
 }
 
 /**
+ * Thrown when a single project record would exceed the browser's per-value
+ * IndexedDB limit — Chromium rejects values past ~127MB with an opaque
+ * UnknownError, so we fail earlier with something actionable.
+ */
+export class StorageRecordTooLargeError extends Error {
+  constructor(estimatedBytes) {
+    const mb = Math.round(estimatedBytes / (1024 * 1024));
+    super(`Project record is too large for browser storage (~${mb} MB)`);
+    this.name = 'StorageRecordTooLargeError';
+    this.estimatedBytes = estimatedBytes;
+  }
+}
+
+function estimateRecordBytes(project) {
+  const len = (v) => (typeof v === 'string' ? v.length : 0);
+  return (
+    len(project.content) + len(project.projectFiles) + len(project.notes) + 4096
+  );
+}
+
+/**
+ * Surface a persistence failure to the UI layer. The listener in main.js
+ * turns this into a toast + status message + screen-reader announcement.
+ */
+function reportPersistenceFailure({ op, projectName, error }) {
+  console.error(`[Saved Projects] ${op} failed to persist:`, error);
+  try {
+    if (
+      typeof window !== 'undefined' &&
+      typeof window.dispatchEvent === 'function'
+    ) {
+      window.dispatchEvent(
+        new CustomEvent('storage-quota-exceeded', {
+          detail: {
+            source: 'saved-projects',
+            op,
+            projectName: projectName || null,
+            message:
+              error instanceof StorageRecordTooLargeError
+                ? `${error.message}. Use Connect Folder to work from your disk instead.`
+                : `Could not update the saved copy of "${projectName || 'this project'}". Your open design is unaffected. Free up space or re-save the project.`,
+          },
+        })
+      );
+    }
+  } catch (dispatchError) {
+    console.warn(
+      '[Saved Projects] Failed to dispatch storage event:',
+      dispatchError
+    );
+  }
+}
+
+/**
  * Save project to IndexedDB
  * @param {Object} project
  * @returns {Promise<void>}
+ * @throws {StorageRecordTooLargeError} when the record would exceed the
+ *   per-value cap — callers must not retry with the same payload
  */
 async function saveToIndexedDB(project) {
+  const estimatedBytes = estimateRecordBytes(project);
+  if (estimatedBytes > IDB_MAX_RECORD_BYTES) {
+    throw new StorageRecordTooLargeError(estimatedBytes);
+  }
   for (let attempt = 0; attempt < MAX_IDB_RETRY; attempt++) {
     if (!db) throw new Error('IndexedDB not initialized');
 
@@ -596,6 +659,41 @@ function saveToLocalStorage(projects) {
 }
 
 /**
+ * localStorage has a ~5-10MB quota and JSON.stringify on huge projectFiles
+ * strings OOMs the tab. Return a metadata-only copy when the serialized map
+ * exceeds the LS budget; the full data lives in IndexedDB.
+ */
+function stripLargeProjectFilesForLS(project) {
+  const pfLen =
+    typeof project.projectFiles === 'string' ? project.projectFiles.length : 0;
+  if (pfLen <= LS_MAX_PROJECT_FILES_BYTES) return project;
+  console.warn(
+    `[Saved Projects] Project files too large for localStorage (${(pfLen / 1024 / 1024).toFixed(1)}MB); keeping a metadata-only copy there`
+  );
+  return { ...project, projectFiles: null };
+}
+
+/**
+ * Fetch a project record exactly as stored — batched projects keep
+ * projectFiles: null and inline projects keep their JSON string. Metadata
+ * writes (touch/update) MUST use this instead of getProject(): re-inlining a
+ * hydrated 200-file map once produced a single 218MB put() that Chromium
+ * rejected, killing folder-project loads.
+ */
+async function getRawProjectRecord(id) {
+  if (storageType === 'indexeddb' && db) {
+    try {
+      const projects = await getFromIndexedDB();
+      const record = projects.find((p) => p.id === id);
+      if (record) return record;
+    } catch (error) {
+      console.error('[Saved Projects] Raw record read failed:', error);
+    }
+  }
+  return getFromLocalStorage().find((p) => p.id === id) || null;
+}
+
+/**
  * List all saved projects (metadata)
  * @returns {Promise<Array>} Array of project metadata sorted by lastLoadedAt desc
  */
@@ -675,6 +773,8 @@ export async function saveProject({
   forkedFrom = null,
   uiPreferences = null,
   sourceExampleKey = null,
+  folderRef = null,
+  fileSummary = null,
 }) {
   try {
     await ensureInitialized();
@@ -700,24 +800,34 @@ export async function saveProject({
 
     const now = Date.now();
 
+    // Folder-link projects are pointers: their contents live on disk behind
+    // the handle named by folderRef, never in this record.
+    const isFolderLink = kind === 'folder-link';
+
     // Normalise projectFiles to a plain object once so both the inline path
     // and the batched path share the same representation.
-    const filesObj = projectFiles
-      ? projectFiles instanceof Map
-        ? Object.fromEntries(projectFiles)
-        : projectFiles
-      : null;
+    const filesObj =
+      projectFiles && !isFolderLink
+        ? projectFiles instanceof Map
+          ? Object.fromEntries(projectFiles)
+          : projectFiles
+        : null;
     const fileCount = filesObj ? Object.keys(filesObj).length : 0;
+    const filesJson = filesObj ? JSON.stringify(filesObj) : null;
 
     // Use batched PROJECT_FILES_STORE writes for large imports (IndexedDB only).
     // Storing hundreds of file contents as one serialised JSON string in a single
-    // transaction risks a browser transaction-timeout or quota abort.
+    // transaction risks a browser transaction-timeout or quota abort — and a few
+    // big files can hit the per-value cap without ever crossing the file-count
+    // threshold, so byte size triggers batching too.
     const useBatchedStorage =
       storageType === 'indexeddb' &&
       db !== null &&
       db.objectStoreNames &&
       db.objectStoreNames.contains(PROJECT_FILES_STORE) &&
-      fileCount > LARGE_FILES_BATCH_SIZE;
+      (fileCount > LARGE_FILES_BATCH_SIZE ||
+        (filesJson !== null &&
+          filesJson.length > INLINE_PROJECT_FILES_MAX_BYTES));
 
     const project = {
       id: generateId('project'),
@@ -727,12 +837,10 @@ export async function saveProject({
       kind,
       mainFilePath,
       content,
-      projectFiles: useBatchedStorage
-        ? null
-        : filesObj
-          ? JSON.stringify(filesObj)
-          : null,
+      projectFiles: useBatchedStorage ? null : filesJson,
       ...(useBatchedStorage ? { largeFilesInStore: true } : {}),
+      folderRef: folderRef || null,
+      fileSummary: fileSummary || null,
       folderId: folderId, // v2: parent folder (null = root)
       overlayFiles: {}, // v2: overlay metadata
       presets: [], // v2: project-scoped presets metadata
@@ -771,20 +879,31 @@ export async function saveProject({
           );
         }
       } catch (indexedDbError) {
+        if (indexedDbError instanceof StorageRecordTooLargeError) {
+          reportPersistenceFailure({
+            op: 'saveProject',
+            projectName: project.name,
+            error: indexedDbError,
+          });
+          return { success: false, error: indexedDbError.message };
+        }
         console.error(
           '[Saved Projects] IndexedDB save failed:',
           indexedDbError
         );
         // Fall back to localStorage — strip projectFiles if too large to avoid OOM crash
-        const pfLen = project.projectFiles ? project.projectFiles.length : 0;
-        const projectForLS =
-          pfLen > LS_MAX_PROJECT_FILES_BYTES
-            ? { ...project, projectFiles: null }
-            : project;
-        if (pfLen > LS_MAX_PROJECT_FILES_BYTES) {
-          console.warn(
-            `[Saved Projects] IndexedDB failed and project files too large for LS fallback (${(pfLen / 1024 / 1024).toFixed(1)}MB). Saving metadata-only to localStorage.`
-          );
+        const projectForLS = stripLargeProjectFilesForLS(project);
+        const contentLost =
+          useBatchedStorage ||
+          projectForLS.projectFiles !== project.projectFiles;
+        if (contentLost) {
+          // The LS copy is metadata-only (batched or stripped contents never
+          // reach LS) — the user must know their files were not saved.
+          reportPersistenceFailure({
+            op: 'saveProject',
+            projectName: project.name,
+            error: indexedDbError,
+          });
         }
         const projects = getFromLocalStorage();
         projects.push(projectForLS);
@@ -801,24 +920,7 @@ export async function saveProject({
         const lsProjects = getFromLocalStorage();
         // Don't add duplicates
         if (!lsProjects.find((p) => p.id === project.id)) {
-          // localStorage has a ~5-10MB quota. Projects with large projectFiles
-          // (ZIP imports) exceed this limit and calling JSON.stringify on them
-          // causes an OOM tab crash (not a catchable JS exception). Strip
-          // projectFiles from the LS backup for large projects — the full data
-          // is preserved in IndexedDB.
-          const pfLen = project.projectFiles ? project.projectFiles.length : 0;
-          const projectForLS =
-            pfLen > LS_MAX_PROJECT_FILES_BYTES
-              ? { ...project, projectFiles: null }
-              : project;
-          if (pfLen > LS_MAX_PROJECT_FILES_BYTES) {
-            if (import.meta.env.DEV) {
-              console.log(
-                `[Saved Projects] Project files too large for LS backup (${(pfLen / 1024 / 1024).toFixed(1)}MB), saving metadata-only copy to localStorage`
-              );
-            }
-          }
-          lsProjects.push(projectForLS);
+          lsProjects.push(stripLargeProjectFilesForLS(project));
           saveToLocalStorage(lsProjects);
           if (import.meta.env.DEV)
             console.log('[Saved Projects] Backup copy saved to localStorage');
@@ -922,23 +1024,26 @@ export async function touchProject(id) {
   try {
     await ensureInitialized();
 
-    const project = await getProject(id);
-    if (!project) return false;
+    // Raw record only: getProject() would hydrate batched projectFiles into an
+    // object, and re-inlining that map here is what once pushed a 211-file
+    // folder project past Chromium's per-value cap. The stored shape (null for
+    // batched, JSON string for inline) is written back untouched.
+    const record = await getRawProjectRecord(id);
+    if (!record) return false;
 
-    project.lastLoadedAt = Date.now();
+    record.lastLoadedAt = Date.now();
 
-    if (storageType === 'indexeddb') {
-      // Re-serialize projectFiles if needed
-      if (project.projectFiles && typeof project.projectFiles === 'object') {
-        project.projectFiles = JSON.stringify(project.projectFiles);
-      }
+    let persisted = true;
+    if (storageType === 'indexeddb' && db) {
       try {
-        await saveToIndexedDB(project);
+        await saveToIndexedDB(record);
       } catch (indexedDbError) {
-        console.error(
-          '[Saved Projects] IndexedDB touch failed:',
-          indexedDbError
-        );
+        reportPersistenceFailure({
+          op: 'touchProject',
+          projectName: record.name,
+          error: indexedDbError,
+        });
+        persisted = false;
       }
     }
 
@@ -946,7 +1051,7 @@ export async function touchProject(id) {
     const lsProjects = getFromLocalStorage();
     const index = lsProjects.findIndex((p) => p.id === id);
     if (index >= 0) {
-      lsProjects[index].lastLoadedAt = project.lastLoadedAt;
+      lsProjects[index].lastLoadedAt = record.lastLoadedAt;
       try {
         saveToLocalStorage(lsProjects);
       } catch (lsError) {
@@ -957,7 +1062,7 @@ export async function touchProject(id) {
       }
     }
 
-    return true;
+    return persisted;
   } catch (error) {
     console.error('[Saved Projects] Error touching project:', error);
     return false;
@@ -965,14 +1070,20 @@ export async function touchProject(id) {
 }
 
 /**
- * Update project metadata (name, notes, projectFiles, and/or uiPreferences)
+ * Update project metadata (name, notes, projectFiles, content, uiPreferences,
+ * mainFilePath, and/or kind)
  * @param {Object} options
  * @param {string} options.id - Project ID
  * @param {string} [options.name] - New name
  * @param {string} [options.notes] - New notes
- * @param {string} [options.projectFiles] - New project files (JSON string)
+ * @param {Object|Map|string|null} [options.projectFiles] - New project files
+ *   map (object/Map) or pre-serialized JSON string; null clears
  * @param {string} [options.content] - New main file content
  * @param {Object|null} [options.uiPreferences] - Per-project UI preferences sidecar
+ * @param {string} [options.mainFilePath] - New main file path
+ * @param {string} [options.kind] - New project kind
+ * @param {string|null} [options.folderRef] - Handle-store key for folder-link projects
+ * @param {Object|null} [options.fileSummary] - {fileCount, totalBytes} snapshot
  * @returns {Promise<{success: boolean, error?: string}>}
  */
 export async function updateProject({
@@ -982,17 +1093,23 @@ export async function updateProject({
   projectFiles,
   content,
   uiPreferences,
+  mainFilePath,
+  kind,
+  folderRef,
+  fileSummary,
 }) {
   try {
     await ensureInitialized();
 
-    const project = await getProject(id);
-    if (!project) {
+    const record = await getRawProjectRecord(id);
+    if (!record) {
       return { success: false, error: 'Project not found' };
     }
 
+    const isFolderLink = record.kind === 'folder-link';
+
     if (name !== undefined) {
-      project.name = name;
+      record.name = name;
     }
     if (notes !== undefined) {
       if (notes.length > STORAGE_LIMITS.MAX_NOTES_LENGTH) {
@@ -1001,28 +1118,101 @@ export async function updateProject({
           error: `Notes exceed maximum length of ${STORAGE_LIMITS.MAX_NOTES_LENGTH} characters`,
         };
       }
-      project.notes = notes;
-    }
-    if (projectFiles !== undefined) {
-      project.projectFiles = projectFiles;
+      record.notes = notes;
     }
     if (content !== undefined) {
-      project.content = content;
-      project.savedAt = Date.now();
+      if (isFolderLink) {
+        // By design: folder-link contents live on disk; the flag-gated
+        // write-back path is the only writer.
+        if (import.meta.env.DEV) {
+          console.log(
+            '[Saved Projects] Ignoring content update for folder-link project'
+          );
+        }
+      } else {
+        record.content = content;
+        record.savedAt = Date.now();
+      }
     }
     if (uiPreferences !== undefined) {
-      project.uiPreferences = uiPreferences || null;
+      record.uiPreferences = uiPreferences || null;
+    }
+    if (mainFilePath !== undefined) {
+      record.mainFilePath = mainFilePath;
+    }
+    if (kind !== undefined) {
+      record.kind = kind;
+    }
+    if (folderRef !== undefined) {
+      record.folderRef = folderRef || null;
+    }
+    if (fileSummary !== undefined) {
+      record.fileSummary = fileSummary || null;
     }
 
-    const tempProject = { ...project };
-    if (
-      tempProject.projectFiles &&
-      typeof tempProject.projectFiles === 'object'
+    // Once a project is batched it stays batched — re-inlining a hydrated map
+    // as one record is what once exceeded Chromium's per-value cap.
+    let filesForBatchedStore = null;
+    if (projectFiles !== undefined && isFolderLink) {
+      if (import.meta.env.DEV) {
+        console.log(
+          '[Saved Projects] Ignoring projectFiles update for folder-link project'
+        );
+      }
+    } else if (projectFiles !== undefined) {
+      let filesObj =
+        projectFiles && typeof projectFiles === 'object'
+          ? projectFiles instanceof Map
+            ? Object.fromEntries(projectFiles)
+            : projectFiles
+          : null;
+      const filesJson =
+        typeof projectFiles === 'string'
+          ? projectFiles
+          : filesObj
+            ? JSON.stringify(filesObj)
+            : null;
+
+      const batchingAvailable =
+        storageType === 'indexeddb' &&
+        db !== null &&
+        db.objectStoreNames &&
+        db.objectStoreNames.contains(PROJECT_FILES_STORE);
+      const needsBatch =
+        record.largeFilesInStore === true ||
+        (filesObj !== null &&
+          Object.keys(filesObj).length > LARGE_FILES_BATCH_SIZE) ||
+        (filesJson !== null &&
+          filesJson.length > INLINE_PROJECT_FILES_MAX_BYTES);
+
+      if (filesJson !== null && batchingAvailable && needsBatch) {
+        if (!filesObj) {
+          try {
+            filesObj = JSON.parse(filesJson);
+          } catch {
+            return { success: false, error: 'projectFiles is not valid JSON' };
+          }
+        }
+        filesForBatchedStore = filesObj;
+        record.projectFiles = null;
+        record.largeFilesInStore = true;
+      } else {
+        record.projectFiles = filesJson;
+        if (filesJson === null && record.largeFilesInStore) {
+          // Explicit clear of a batched project's files.
+          filesForBatchedStore = {};
+          delete record.largeFilesInStore;
+        }
+      }
+    } else if (
+      record.largeFilesInStore &&
+      typeof record.projectFiles === 'string'
     ) {
-      tempProject.projectFiles = JSON.stringify(tempProject.projectFiles);
+      // Repair hybrid records produced by the old touch/update re-inline bug.
+      record.projectFiles = null;
     }
 
-    const valid = validateSavedProject(tempProject);
+    const valid = validateSavedProject(record);
     if (!valid) {
       const errorMsg = getValidationErrorMessage(validateSavedProject.errors);
       return {
@@ -1031,33 +1221,37 @@ export async function updateProject({
       };
     }
 
-    const projectToSave = { ...project };
-    if (
-      projectToSave.projectFiles &&
-      typeof projectToSave.projectFiles === 'object'
-    ) {
-      projectToSave.projectFiles = JSON.stringify(projectToSave.projectFiles);
-    }
-
     // Save updated project with dual-write
-    if (storageType === 'indexeddb') {
+    if (storageType === 'indexeddb' && db) {
       try {
-        await saveToIndexedDB(projectToSave);
+        if (filesForBatchedStore !== null) {
+          await deleteAllProjectFiles(id);
+          if (Object.keys(filesForBatchedStore).length > 0) {
+            await saveProjectFilesInBatches(id, filesForBatchedStore);
+          }
+        }
+        await saveToIndexedDB(record);
       } catch (indexedDbError) {
-        console.error(
-          '[Saved Projects] IndexedDB update failed:',
-          indexedDbError
-        );
+        reportPersistenceFailure({
+          op: 'updateProject',
+          projectName: record.name,
+          error: indexedDbError,
+        });
+        return {
+          success: false,
+          error: indexedDbError.message || 'Failed to persist project update',
+        };
       }
     }
 
     // Also update localStorage (dual-write)
     const lsProjects = getFromLocalStorage();
+    const lsRecord = stripLargeProjectFilesForLS(record);
     const index = lsProjects.findIndex((p) => p.id === id);
     if (index >= 0) {
-      lsProjects[index] = projectToSave;
+      lsProjects[index] = lsRecord;
     } else {
-      lsProjects.push(projectToSave);
+      lsProjects.push(lsRecord);
     }
     try {
       saveToLocalStorage(lsProjects);
@@ -1086,6 +1280,10 @@ export async function updateProject({
 export async function deleteProject(id) {
   try {
     await ensureInitialized();
+
+    // Read the record BEFORE deleting so a folder-link's handle key can be
+    // cleaned up afterwards.
+    const record = await getRawProjectRecord(id);
 
     // v2: Delete all project files and assets first
     try {
@@ -1123,6 +1321,12 @@ export async function deleteProject(id) {
         '[Saved Projects] localStorage delete failed:',
         lsError.message
       );
+    }
+
+    // Drop the folder-link's persisted directory handle so the folder-sync
+    // DB does not accumulate orphaned handles.
+    if (record && record.kind === 'folder-link' && record.folderRef) {
+      await clearFolderHandle({ key: record.folderRef });
     }
 
     return { success: true };

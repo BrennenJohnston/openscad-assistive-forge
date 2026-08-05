@@ -367,6 +367,69 @@ test.describe('Preset Workflow', () => {
     expect(await importButton.isEnabled()).toBe(true)
   })
 
+  test('Replace-mode import runs without TypeError and imports designs (F-5 regression)', async ({ page }) => {
+    test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
+
+    try {
+      await loadSimpleBoxExample(page)
+    } catch (error) {
+      console.log('Could not load preset fixture:', error.message)
+      test.skip()
+      return
+    }
+
+    const pageErrors = []
+    page.on('pageerror', (err) => pageErrors.push(err.message))
+    // Replace mode uses a native confirm() when user presets exist.
+    page.on('dialog', (dialog) => dialog.accept())
+
+    const manageBtn = page.locator('#managePresetsBtn')
+    if (!(await manageBtn.isVisible({ timeout: 3000 }).catch(() => false))) {
+      test.skip()
+      return
+    }
+    await manageBtn.click()
+
+    const importAction = page.locator('button[data-action="import"]')
+    await expect(importAction).toBeVisible({ timeout: 5000 })
+
+    const chooserPromise = page.waitForEvent('filechooser')
+    await importAction.click()
+
+    const modeDialog = page.locator('dialog.preset-import-mode-dialog')
+    await expect(modeDialog).toBeVisible({ timeout: 5000 })
+    // The Replace branch is the one that called the nonexistent
+    // presetManager.getPresets() and threw before ever importing.
+    await modeDialog.locator('input[name="importMode"][value="replace"]').check()
+    await modeDialog.locator('button[value="ok"]').click()
+
+    const chooser = await chooserPromise
+    await chooser.setFiles({
+      name: 'imported-presets.json',
+      mimeType: 'application/json',
+      buffer: Buffer.from(
+        JSON.stringify({
+          parameterSets: { 'Imported Preset': {} },
+          fileFormatVersion: '1',
+        })
+      ),
+    })
+
+    // Give the import handler time to parse and apply
+    await page.waitForTimeout(1500)
+
+    const getPresetsErrors = pageErrors.filter((m) => m.includes('getPresets'))
+    expect(
+      getPresetsErrors,
+      `Replace-mode import must not throw (was: TypeError presetManager.getPresets is not a function)`
+    ).toHaveLength(0)
+
+    const optionLabels = await page
+      .locator('#presetSelect')
+      .evaluate((el) => Array.from(el.options).map((o) => o.textContent.trim()))
+    expect(optionLabels.join('\n')).toContain('Imported Preset')
+  })
+
   test('should delete a preset', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI')
     

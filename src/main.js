@@ -110,6 +110,9 @@ import {
   exportProjectsBackup,
   exportSingleProject,
   importProjectsBackup,
+  linkProjectFromFiles,
+  readProjectFilesFromList,
+  findLinkedProjectForHandle,
 } from './js/storage-manager.js';
 // showWorkflowProgress / hideWorkflowProgress moved to hfm-controller.js (applyToolbarModeVisibility)
 import { startTutorial } from './js/tutorial-sandbox.js';
@@ -193,8 +196,10 @@ import { getModeManager } from './js/mode-manager.js';
 import { getUIModeController } from './js/ui-mode-controller.js';
 import {
   initClassicLayoutController,
+  getClassicLayoutController,
   collapseCustomizerGroups,
 } from './js/classic-layout-controller.js';
+import { initClassicStatusBar } from './js/classic-status-bar.js';
 import { FolderChangeWatcher } from './js/folder-change-watcher.js';
 import { FolderWriteBack } from './js/folder-write-back.js';
 // Toolbar Menu Controller - File|Edit|Design|View|Window|Help menu bar
@@ -234,6 +239,8 @@ import {
 import {
   initSavedProjectsDB,
   updateProject,
+  touchProject,
+  getProject,
   getSavedProjectsSummary as _getSavedProjectsSummary,
   clearAllSavedProjects as _clearAllSavedProjects,
   getStorageDiagnostics,
@@ -241,6 +248,10 @@ import {
   createFolder as _createFolder,
   moveFolder as _moveFolder,
 } from './js/saved-projects-manager.js';
+import {
+  loadFolderHandle,
+  saveFolderHandle,
+} from './js/folder-handle-store.js';
 import Split from 'split.js';
 
 /**
@@ -579,18 +590,17 @@ async function initApp() {
   document
     .getElementById('memoryBannerReduceFn')
     ?.addEventListener('click', () => {
-      // Reduce quality by switching to low quality mode
-      const qualitySelect = document.getElementById('qualityPreset');
-      if (qualitySelect) {
-        qualitySelect.value = 'low';
-        qualitySelect.dispatchEvent(new Event('change'));
+      // Reduce export quality to low
+      const exportQuality = document.getElementById('exportQualitySelect');
+      if (exportQuality) {
+        exportQuality.value = 'low';
+        exportQuality.dispatchEvent(new Event('change'));
       }
-      // Also reduce auto-preview quality
-      const previewQualitySelect =
-        document.getElementById('previewQualityMode');
-      if (previewQualitySelect) {
-        previewQualitySelect.value = 'fast';
-        previewQualitySelect.dispatchEvent(new Event('change'));
+      // Also reduce preview quality to fast
+      const previewQuality = document.getElementById('previewQualitySelect');
+      if (previewQuality) {
+        previewQuality.value = 'fast';
+        previewQuality.dispatchEvent(new Event('change'));
       }
       console.log('[Memory] Quality reduced to conserve memory');
     });
@@ -632,13 +642,15 @@ async function initApp() {
       window.location.href = window.location.pathname + '?recovery=true';
     });
 
-  // Listen for storage-quota-exceeded events dispatched by preset-manager
-  // when localStorage is full, so the user gets visible + audible feedback.
+  // Listen for storage-quota-exceeded events dispatched by preset-manager and
+  // saved-projects-manager when persistence fails, so the user gets visible +
+  // audible feedback instead of a console-only error.
   window.addEventListener('storage-quota-exceeded', (e) => {
     const msg =
       e.detail?.message || 'Storage is full. Data could not be saved.';
     updateStatus(msg, 'error');
     _announceError(msg);
+    showErrorToast({ title: 'Storage Problem', message: msg });
   });
 
   let statusArea = null;
@@ -656,7 +668,7 @@ async function initApp() {
   let currentPresetSignature = null;
   let isPresetDirty = false;
   let autoPreviewUserEnabled = true;
-  let previewQuality = RENDER_QUALITY.PREVIEW;
+  let previewQuality = RENDER_QUALITY.DESKTOP_DEFAULT;
 
   // CRITICAL: Declare DOM element variables early to avoid Temporal Dead Zone errors
   // These will be assigned actual values later when DOM queries are performed
@@ -688,7 +700,7 @@ async function initApp() {
   function setCanonicalProjectFiles(files) {
     canonicalProjectFiles = cloneProjectFiles(files);
   }
-  let previewQualityMode = 'auto';
+  let previewQualityMode = PREVIEW_QUALITY_DEFAULT;
 
   const AUTO_PREVIEW_FORCE_FAST_MS = 2 * 60 * 1000;
   // MANIFOLD OPTIMIZED: Raised threshold since Manifold renders much faster
@@ -1016,6 +1028,9 @@ async function initApp() {
   // updateCompanionSaveButton is wrapped because companionFilesCtrl is
   // created later (after DOM element queries); the wrapper defers safely
   // since savedProjectsUI only invokes it after user interaction.
+  // Set by the folder-sync section when folder_sync_watch is enabled; lets
+  // the folder-link card-load path start watching after it loads state.
+  let resumeFolderWatch = null;
   const savedProjectsUI = initSavedProjectsUI({
     showConfirmDialog,
     showProcessingOverlay,
@@ -1026,6 +1041,104 @@ async function initApp() {
     downloadSingleProject,
     setCurrentSavedProjectId: (id) => {
       currentSavedProjectId = id;
+    },
+    // Pointer-model load path: read a folder-link project's contents from
+    // disk via its stored handle. Defined here as a closure because the
+    // folder-sync controller/watcher live later in initApp — they are
+    // initialized long before any card's Load click can invoke this.
+    readLinkedFolder: async (project) => {
+      const syncCtrl = getFolderSyncController();
+      if (!syncCtrl.isSupported()) {
+        return {
+          ok: false,
+          reason: 'no-handle',
+          message: 'This browser cannot access local folders.',
+        };
+      }
+      if (!project.folderRef) {
+        return { ok: false, reason: 'no-handle' };
+      }
+      const handle = await loadFolderHandle({ key: project.folderRef });
+      if (!handle) {
+        return { ok: false, reason: 'no-handle' };
+      }
+      try {
+        let perm =
+          typeof handle.queryPermission === 'function'
+            ? await handle.queryPermission({ mode: 'readwrite' })
+            : 'prompt';
+        if (perm !== 'granted') {
+          if (typeof handle.requestPermission !== 'function') {
+            return { ok: false, reason: 'permission-denied' };
+          }
+          perm = await handle.requestPermission({ mode: 'readwrite' });
+        }
+        if (perm !== 'granted') {
+          return { ok: false, reason: 'permission-denied' };
+        }
+      } catch (permErr) {
+        return {
+          ok: false,
+          reason: 'permission-denied',
+          message: permErr?.message,
+        };
+      }
+      try {
+        const files = [];
+        await fileHandler.collectFilesFromDir(handle, handle.name, files);
+        if (files.length === 0) {
+          return {
+            ok: false,
+            reason: 'read-error',
+            message: 'The linked folder is empty.',
+          };
+        }
+        // The record stores a root-relative main path; disk paths carry the
+        // (possibly renamed) root folder prefix, so match by suffix and fall
+        // back to the selection prompt if the file moved.
+        let mainAbs =
+          files.find((f) =>
+            (f.webkitRelativePath || '').endsWith(`/${project.mainFilePath}`)
+          )?.webkitRelativePath || null;
+        if (!mainAbs) {
+          const selection = await fileHandler.prepareFolderSelection(files);
+          if (!selection) {
+            return {
+              ok: false,
+              reason: 'read-error',
+              message: 'No main .scad file was selected.',
+            };
+          }
+          mainAbs = selection.mainFilePath;
+        }
+        const read = await readProjectFilesFromList(files, mainAbs);
+        const mainRel = read.rootDir
+          ? mainAbs.replace(`${read.rootDir}/`, '')
+          : mainAbs;
+        if (mainRel !== project.mainFilePath) {
+          await updateProject({ id: project.id, mainFilePath: mainRel });
+        }
+        await syncCtrl.adoptHandle(handle);
+        const projectFilesMap = new Map(Object.entries(read.projectFiles));
+        return {
+          ok: true,
+          content: read.mainContent,
+          projectFiles: projectFilesMap.size > 0 ? projectFilesMap : null,
+          mainFilePath: projectFilesMap.size > 0 ? mainRel : null,
+          fileName: read.mainFile.name,
+          // Called by the UI after handleFile so the watcher snapshots the
+          // freshly-loaded state, not the pre-load one.
+          finishConnect: async () => {
+            if (resumeFolderWatch) await resumeFolderWatch();
+          },
+        };
+      } catch (readErr) {
+        return {
+          ok: false,
+          reason: 'read-error',
+          message: readErr?.message ?? String(readErr),
+        };
+      }
     },
   });
 
@@ -1674,7 +1787,68 @@ async function initApp() {
           return;
         }
         dismissOverlay();
-        await fileHandler.handleFolderImport(files);
+
+        const selection = await fileHandler.prepareFolderSelection(files);
+        if (!selection) return;
+
+        // Pointer model: persist the handle + a contentless folder-link
+        // record; the disk stays the source of truth (contents are re-read
+        // on every load, so browser storage caps no longer apply).
+        const existing = await findLinkedProjectForHandle(handle);
+        const folderRef =
+          existing?.folderRef ||
+          `fh-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+        await saveFolderHandle(handle, { key: folderRef });
+
+        const linkResult = await linkProjectFromFiles(
+          files,
+          selection.mainFilePath,
+          { folderRef, existingId: existing?.id || null }
+        );
+        if (!linkResult.success) {
+          showErrorToast({
+            title: 'Folder Link Failed',
+            message: linkResult.error,
+          });
+          return;
+        }
+
+        await touchProject(linkResult.id);
+        currentSavedProjectId = linkResult.id;
+
+        const projectFilesMap =
+          linkResult.projectFiles &&
+          Object.keys(linkResult.projectFiles).length > 0
+            ? new Map(Object.entries(linkResult.projectFiles))
+            : null;
+        await fileHandler.handleFile(
+          { name: linkResult.originalName },
+          linkResult.mainContent,
+          projectFilesMap,
+          projectFilesMap ? linkResult.mainRelPath : null,
+          'saved',
+          linkResult.projectName
+        );
+
+        // Apply per-project UI preferences from the record (same contract as
+        // loadSavedProject) \u2014 cheap now that folder-link records are tiny.
+        try {
+          const record = await getProject(linkResult.id);
+          if (record?.uiPreferences != null) {
+            getUIModeController().importPreferences(record.uiPreferences, {
+              applyImmediately: true,
+            });
+          }
+        } catch (prefsErr) {
+          console.warn(
+            '[FolderSync] Could not apply project UI preferences:',
+            prefsErr
+          );
+        }
+
+        await savedProjectsUI.renderSavedProjectsList();
+        updateStatus(`Connected folder loaded: ${linkResult.projectName}`);
+
         if (folderWatcher) {
           await folderWatcher.primeSnapshot();
           folderWatcher.start();
@@ -1735,6 +1909,11 @@ async function initApp() {
 
     // ── C5.2 (Phase B): watch the connected folder for external edits ──
     if (_isEnabled('folder_sync_watch')) {
+      resumeFolderWatch = async () => {
+        if (!folderWatcher) return;
+        await folderWatcher.primeSnapshot();
+        folderWatcher.start();
+      };
       folderWatcher = new FolderChangeWatcher({
         getHandle: () => folderSyncCtrl.getHandle(),
         getWatchPaths: () => {
@@ -2517,6 +2696,16 @@ async function initApp() {
       },
       { type: 'separator' },
       { type: 'submenu', label: 'Export', items: exportItems },
+      { type: 'separator' },
+      {
+        type: 'action',
+        label: 'Close',
+        enabled: hasFile,
+        tooltip: hasFile
+          ? 'Close the project and return to the start screen'
+          : 'Open a file first',
+        handler: () => document.getElementById('clearFileBtn')?.click(),
+      },
     ];
   });
 
@@ -2732,10 +2921,19 @@ async function initApp() {
     return [
       {
         type: 'toggle',
-        label: 'Automatic Reload and Preview (planned)',
-        disabled: true,
-        tooltip:
-          'Planned — arrives with live local-folder sync (edit files in your own editor and the model re-renders)',
+        label: 'Automatic Reload and Preview',
+        checked: Boolean(
+          document.getElementById('autoPreviewToggle')?.checked
+        ),
+        handler: () => {
+          // Single source: the existing auto-preview checkbox drives the
+          // controller; this item (and the Classic Customizer checkbox)
+          // proxy it so all three stay in sync.
+          const toggle = document.getElementById('autoPreviewToggle');
+          if (!toggle) return;
+          toggle.checked = !toggle.checked;
+          toggle.dispatchEvent(new Event('change'));
+        },
       },
       {
         type: 'action',
@@ -3014,6 +3212,50 @@ async function initApp() {
         },
       },
       { type: 'separator' },
+      // -- Preview Quality (proxies #previewQualitySelect, C4) --
+      (() => {
+        const select = document.getElementById('previewQualitySelect');
+        const options = select ? Array.from(select.options) : [];
+        return {
+          type: 'submenu',
+          label: 'Preview Quality',
+          items: options.map((opt) => ({
+            type: 'radio',
+            label: opt.textContent.trim(),
+            group: 'previewQuality',
+            value: opt.value,
+            checked: select?.value === opt.value,
+            onChange: () => {
+              if (!select) return;
+              select.value = opt.value;
+              select.dispatchEvent(new Event('change'));
+            },
+          })),
+        };
+      })(),
+      ...(document.body.dataset.uiMode === 'classic'
+        ? [
+            {
+              type: 'toggle',
+              label: 'Hide Toolbar',
+              checked: document.body.dataset.classicToolbarHidden === 'true',
+              handler: () => {
+                const hidden =
+                  document.body.dataset.classicToolbarHidden === 'true';
+                document.body.dataset.classicToolbarHidden = String(!hidden);
+                try {
+                  localStorage.setItem(
+                    'openscad-forge-classic-toolbar-hidden',
+                    String(!hidden)
+                  );
+                } catch {
+                  // Preference persistence is best-effort.
+                }
+              },
+            },
+          ]
+        : []),
+      { type: 'separator' },
       // -- Interface Mode Radio Group (Classic gated on classic_mode flag) --
       interfaceModeRadio('Simplified', 'simplified'),
       interfaceModeRadio('Standard', 'standard'),
@@ -3051,18 +3293,54 @@ async function initApp() {
 
     return [
       // -- Desktop-parity panel toggles --
-      panelToggle('codeEditor', 'Editor', 'toggleCodeEditor'),
+      (() => {
+        const classicLayout = getClassicLayoutController();
+        if (document.body.dataset.uiMode === 'classic' && classicLayout) {
+          return {
+            type: 'toggle',
+            label: 'Editor',
+            shortcutAction: 'toggleCodeEditor',
+            checked: classicLayout.isEditorVisible(),
+            handler: () => classicLayout.toggleEditor(),
+          };
+        }
+        return panelToggle('codeEditor', 'Editor', 'toggleCodeEditor');
+      })(),
       panelToggle('consoleOutput', 'Console', 'toggleConsole'),
-      {
-        type: 'toggle',
-        label: 'Customizer (planned)',
-        disabled: true,
-        tooltip:
-          'Planned \u2014 arrives with the desktop-style Classic layout. Use the collapse button on the parameters panel for now.',
-      },
+      (() => {
+        const inClassic = document.body.dataset.uiMode === 'classic';
+        const classicLayout = getClassicLayoutController();
+        const checked = inClassic
+          ? Boolean(classicLayout?.isCustomizerVisible())
+          : !document
+              .getElementById('paramPanel')
+              ?.classList.contains('collapsed');
+        return {
+          type: 'toggle',
+          label: 'Customizer',
+          checked,
+          handler: () => {
+            if (
+              document.body.dataset.uiMode === 'classic' &&
+              getClassicLayoutController()
+            ) {
+              getClassicLayoutController().toggleCustomizer();
+            } else {
+              document.getElementById('collapseParamPanelBtn')?.click();
+            }
+          },
+        };
+      })(),
       {
         type: 'action',
         label: 'Viewport-Control',
+        ...(document.body.dataset.uiMode === 'classic'
+          ? {
+              disabled: true,
+              tooltip:
+                'The camera panel is not part of the Classic layout \u2014 drag to orbit, or use the View menu and toolbar view buttons',
+            }
+          : {}),
         handler: () => {
           const panel = document.getElementById('cameraPanel');
           if (panel) {
@@ -4378,17 +4656,36 @@ async function initApp() {
   }
 
   if (previewQualitySelect) {
-    // Defensive re-assert of the shared default (index.html marks the same
-    // option selected; PREVIEW_QUALITY_DEFAULT is the single source).
+    // Restore the persisted choice; fall back to the shared default
+    // (PREVIEW_QUALITY_DEFAULT is the single source; index.html's `selected`
+    // only covers pre-JS paint). Recovery mode writes 'fast' to this key so a
+    // crashed session reboots at low cost — honoring it here is intended.
+    let savedQualityMode = null;
+    try {
+      savedQualityMode = localStorage.getItem(STORAGE_KEY_PREVIEW_QUALITY);
+    } catch {
+      // Private browsing / storage disabled — use the default.
+    }
+    const validQualityMode =
+      savedQualityMode &&
+      previewQualitySelect.querySelector(`option[value="${savedQualityMode}"]`)
+        ? savedQualityMode
+        : PREVIEW_QUALITY_DEFAULT;
     if (
-      previewQualitySelect.querySelector(
-        `option[value="${PREVIEW_QUALITY_DEFAULT}"]`
-      )
+      previewQualitySelect.querySelector(`option[value="${validQualityMode}"]`)
     ) {
-      previewQualitySelect.value = PREVIEW_QUALITY_DEFAULT;
+      previewQualitySelect.value = validQualityMode;
     }
     applyPreviewQualityMode();
     previewQualitySelect.addEventListener('change', () => {
+      try {
+        localStorage.setItem(
+          STORAGE_KEY_PREVIEW_QUALITY,
+          previewQualitySelect.value
+        );
+      } catch {
+        // Persistence is best-effort; the in-session mode still applies.
+      }
       applyPreviewQualityMode();
       if (autoPreviewController) {
         const state = stateManager.getState();
@@ -4408,6 +4705,39 @@ async function initApp() {
       applyExportQualityMode();
     });
   }
+
+  // Advisory instead of a silent downgrade: with the desktop-fidelity default,
+  // heavy models preview at full model quality — surface a one-shot hint that
+  // Performance (auto) exists. Auto mode adapts on its own and needs none.
+  let lastComplexityAdvisedFile = null;
+  function maybeShowComplexityAdvisory(state) {
+    if (previewQualityMode === 'auto') return;
+    const fileName = state.uploadedFile?.name || null;
+    if (!fileName || fileName === lastComplexityAdvisedFile) return;
+    const isComplex =
+      state.complexityTier === COMPLEXITY_TIER.COMPLEX ||
+      (state.complexityAnalysis?.warnings?.length ?? 0) > 0;
+    if (!isComplex) return;
+    lastComplexityAdvisedFile = fileName;
+    const advisoryMsg =
+      'This model is complex — Desktop-quality previews may be slow. ' +
+      'Switch Preview quality to "Performance (auto)" for faster previews.';
+    updateStatus(advisoryMsg, 'info');
+    announceImmediate(advisoryMsg);
+  }
+
+  // A fresh complexityAnalysis lands once per file load (file-handler sets it
+  // after the file is in state), so keying on it avoids advising a new file
+  // from the previous file's stale analysis.
+  stateManager.subscribe((state, prevState) => {
+    if (
+      state.uploadedFile &&
+      state.complexityAnalysis &&
+      state.complexityAnalysis !== prevState.complexityAnalysis
+    ) {
+      maybeShowComplexityAdvisory(state);
+    }
+  });
 
   // Wire measurements toggle
   if (measurementsToggle) {
@@ -6940,7 +7270,7 @@ if (rounded) {
       collapseParamPanelBtn.setAttribute('aria-expanded', 'false');
       collapseParamPanelBtn.setAttribute(
         'aria-label',
-        'Expand parameters panel'
+        'Expand customizer panel'
       );
       collapseParamPanelBtn.title = 'Expand panel';
     }
@@ -6964,7 +7294,7 @@ if (rounded) {
         collapseParamPanelBtn.setAttribute('aria-expanded', 'false');
         collapseParamPanelBtn.setAttribute(
           'aria-label',
-          'Expand parameters panel'
+          'Expand customizer panel'
         );
         collapseParamPanelBtn.title = 'Expand panel';
 
@@ -6978,7 +7308,7 @@ if (rounded) {
         collapseParamPanelBtn.setAttribute('aria-expanded', 'true');
         collapseParamPanelBtn.setAttribute(
           'aria-label',
-          'Collapse parameters panel'
+          'Collapse customizer panel'
         );
         collapseParamPanelBtn.title = 'Collapse panel';
       }
@@ -7009,7 +7339,7 @@ if (rounded) {
           collapseParamPanelBtn.setAttribute('aria-expanded', 'true');
           collapseParamPanelBtn.setAttribute(
             'aria-label',
-            'Collapse parameters panel'
+            'Collapse customizer panel'
           );
           collapseParamPanelBtn.title = 'Collapse panel';
         }
@@ -7053,6 +7383,31 @@ if (rounded) {
 
     // Expose modeManager globally for keyboard shortcut handler
     window._modeManager = modeManager;
+
+    // Classic-mode editor co-existence (C5): the desktop shell shows the
+    // editor pane ALONGSIDE the customizer, so entering classic must never
+    // route through modeManager's exclusive expert view (which hides
+    // #paramPanelBody). If expert mode was active, unwind it first so the
+    // param body is restored, then light the editor up inside its slot.
+    document.addEventListener('classic-editor-activate', () => {
+      if (
+        modeManager?.isExpertMode?.() &&
+        typeof modeManager.toggleMode === 'function'
+      ) {
+        modeManager.toggleMode();
+      }
+      if (!currentEditor) {
+        initExpertEditor();
+      } else if (currentEditor.setValue) {
+        const code = editorStateManager.getSource();
+        if (code) currentEditor.setValue(code);
+      }
+      expertModePanel.classList.add('classic-editor-active');
+    });
+
+    document.addEventListener('classic-editor-deactivate', () => {
+      expertModePanel.classList.remove('classic-editor-active');
+    });
 
     /**
      * Handle mode change between Standard and Expert
@@ -7452,7 +7807,7 @@ if (rounded) {
             gutter.setAttribute('aria-valuemax', String(max));
             gutter.setAttribute(
               'aria-valuetext',
-              `Parameters: ${Math.round(sizes[0])}%, Preview: ${Math.round(sizes[1])}%`
+              `Customizer: ${Math.round(sizes[0])}%, Preview: ${Math.round(sizes[1])}%`
             );
           };
 
@@ -7545,13 +7900,21 @@ if (rounded) {
       initSplit();
     }
 
-    // Classic four-pane layout (moves console/preset panes into grid slots)
+    // Classic desktop-shell layout (moves console/editor into grid slots,
+    // presets into the Customizer dock)
     initClassicLayoutController({
       onEnter: () => {
         destroySplit();
         // Startup contract: collapsed customizer groups, and a first
         // preview with current values if nothing has rendered yet
         collapseCustomizerGroups();
+        // Mirror the auto-preview state into the dock checkbox on entry
+        const classicAutoCheck = document.getElementById(
+          'classicAutoPreviewCheck'
+        );
+        if (classicAutoCheck && autoPreviewToggle) {
+          classicAutoCheck.checked = autoPreviewToggle.checked;
+        }
         const classicState = stateManager.getState();
         if (
           classicState?.uploadedFile &&
@@ -7570,11 +7933,53 @@ if (rounded) {
       },
     });
 
+    // Classic window-bottom status bar (C8): mirrors the viewport overlay
+    initClassicStatusBar();
+
+    // Classic Customizer bar (C7): titlebar ✕ + the Automatic Preview mirror.
+    // All state flows through the real controls (#autoPreviewToggle), never
+    // element-to-element side channels.
+    document
+      .getElementById('classicCustomizerCloseBtn')
+      ?.addEventListener('click', () => {
+        getClassicLayoutController()?.toggleCustomizer();
+      });
+    {
+      const classicAutoCheck = document.getElementById(
+        'classicAutoPreviewCheck'
+      );
+      if (classicAutoCheck && autoPreviewToggle) {
+        classicAutoCheck.checked = autoPreviewToggle.checked;
+        classicAutoCheck.addEventListener('change', () => {
+          if (autoPreviewToggle.checked !== classicAutoCheck.checked) {
+            autoPreviewToggle.checked = classicAutoCheck.checked;
+            autoPreviewToggle.dispatchEvent(new Event('change'));
+          }
+        });
+        autoPreviewToggle.addEventListener('change', () => {
+          classicAutoCheck.checked = autoPreviewToggle.checked;
+        });
+      }
+    }
+
     // Classic display strip (C4.5): snap views, axes/grid overlays, bed
     // size, Preview/Render — thin wrappers over the existing actions
-    const classicStrip = document.getElementById('classicDisplayStrip');
-    if (classicStrip) {
-      classicStrip.querySelectorAll('[data-classic-view]').forEach((btn) => {
+    // Classic icon toolbar (C6): thin wrappers over the same actions the
+    // menus drive — no new state anywhere.
+    const classicToolbar = document.getElementById('classicToolbar');
+    if (classicToolbar) {
+      // Restore the View > Hide Toolbar preference
+      try {
+        if (
+          localStorage.getItem('openscad-forge-classic-toolbar-hidden') ===
+          'true'
+        ) {
+          document.body.dataset.classicToolbarHidden = 'true';
+        }
+      } catch {
+        // Preference read is best-effort.
+      }
+      classicToolbar.querySelectorAll('[data-classic-view]').forEach((btn) => {
         btn.addEventListener('click', () => {
           if (!previewManager) return;
           previewManager.setCameraView(btn.dataset.classicView);
@@ -7589,6 +7994,81 @@ if (rounded) {
           previewManager.fitCameraToModel();
           announceCameraAction('View fitted to model');
         });
+
+      // File / Edit / Render groups proxy the same handlers as the menus
+      document
+        .getElementById('classicTbNewBtn')
+        ?.addEventListener('click', () => fileActionsController.onNew());
+      document
+        .getElementById('classicTbOpenBtn')
+        ?.addEventListener('click', () =>
+          document.getElementById('fileInput')?.click()
+        );
+      document
+        .getElementById('classicTbSaveBtn')
+        ?.addEventListener('click', () => fileActionsController.onSave());
+      document
+        .getElementById('classicTbUndoBtn')
+        ?.addEventListener('click', () =>
+          document.getElementById('undoBtn')?.click()
+        );
+      document
+        .getElementById('classicTbRedoBtn')
+        ?.addEventListener('click', () =>
+          document.getElementById('redoBtn')?.click()
+        );
+      document
+        .getElementById('classicTbExportStlBtn')
+        ?.addEventListener('click', () => exportFormatFromMenu('stl'));
+
+      // Projection pair mirrors the preview manager's actual mode
+      const perspBtn = document.getElementById('classicTbPerspectiveBtn');
+      const orthoBtn = document.getElementById('classicTbOrthogonalBtn');
+      const syncProjectionButtons = () => {
+        const mode = previewManager?.getProjectionMode?.() || 'perspective';
+        perspBtn?.setAttribute('aria-pressed', String(mode === 'perspective'));
+        orthoBtn?.setAttribute(
+          'aria-pressed',
+          String(mode === 'orthographic')
+        );
+      };
+      perspBtn?.addEventListener('click', () => {
+        if (
+          previewManager &&
+          previewManager.getProjectionMode?.() !== 'perspective'
+        ) {
+          previewManager.toggleProjection();
+        }
+        syncProjectionButtons();
+      });
+      orthoBtn?.addEventListener('click', () => {
+        if (
+          previewManager &&
+          previewManager.getProjectionMode?.() !== 'orthographic'
+        ) {
+          previewManager.toggleProjection();
+        }
+        syncProjectionButtons();
+      });
+
+      // Overlay toggles share displayOptionsController state
+      const wireOverlayToggle = (btnId, option) => {
+        const btn = document.getElementById(btnId);
+        if (!btn) return;
+        btn.setAttribute(
+          'aria-pressed',
+          String(displayOptionsController.get(option))
+        );
+        btn.addEventListener('click', () => {
+          displayOptionsController.toggle(option);
+          btn.setAttribute(
+            'aria-pressed',
+            String(displayOptionsController.get(option))
+          );
+        });
+      };
+      wireOverlayToggle('classicEdgesToggle', 'edges');
+      wireOverlayToggle('classicCrosshairsToggle', 'crosshairs');
 
       const classicAxesToggle = document.getElementById('classicAxesToggle');
       if (classicAxesToggle) {
@@ -7652,6 +8132,16 @@ if (rounded) {
             primaryActionBtn.click();
           }
         });
+
+      const classicTbCustomizerBtn = document.getElementById(
+        'classicTbCustomizerBtn'
+      );
+      classicTbCustomizerBtn?.addEventListener('click', () => {
+        const layout = getClassicLayoutController();
+        if (!layout) return;
+        const visible = layout.toggleCustomizer();
+        classicTbCustomizerBtn.setAttribute('aria-pressed', String(visible));
+      });
     }
 
     // Initialize mobile drawer controller
@@ -10774,7 +11264,8 @@ if (rounded) {
 
             // Replace mode: confirm and clear existing presets first
             if (importMode === 'replace' && currentModelName) {
-              const existing = presetManager.getPresets(currentModelName) || [];
+              const existing =
+                presetManager.getPresetsForModel(currentModelName) || [];
               const realCount = existing.filter(
                 (p) => p.id !== 'design-defaults'
               ).length;
@@ -11790,6 +12281,11 @@ if (rounded) {
       .filter(Boolean);
   }
 
+  // Echo drawer fold state (C9): a fold the user chose survives re-renders
+  // with the same problems; only NEW warnings/errors force it back open.
+  let echoDrawerUserCollapsed = false;
+  let lastEchoImportantCount = 0;
+
   /**
    * Update the preview drawer to show ECHO, WARNING, and ERROR messages.
    * @param {{ type: 'echo'|'warning'|'error', text: string }[]} messages
@@ -11810,6 +12306,11 @@ if (rounded) {
       echoDrawer.classList.add('collapsed');
       echoDrawerLabel.textContent = 'No messages';
       echoMessagesEl.innerHTML = '';
+      echoDrawerUserCollapsed = false;
+      lastEchoImportantCount = 0;
+      document
+        .getElementById('echoDrawerToggle')
+        ?.setAttribute('aria-expanded', 'false');
       return;
     }
 
@@ -11846,18 +12347,29 @@ if (rounded) {
       })
       .join('\n');
 
-    // Show the drawer: always mark it visible so the badge/label appears,
-    // but only auto-expand (remove 'collapsed') when there are warnings or errors
+    // Show the drawer: always mark it visible so the badge/label appears.
+    // Auto-expand only when problems are present AND either the user has
+    // not folded it, or NEW problems arrived since their fold.
     echoDrawer.classList.add('visible');
-    if (warnCount > 0 || errorCount > 0) {
+    const importantCount = warnCount + errorCount;
+    if (
+      importantCount > 0 &&
+      (!echoDrawerUserCollapsed || importantCount > lastEchoImportantCount)
+    ) {
       echoDrawer.classList.remove('collapsed');
+      echoDrawerUserCollapsed = false;
     }
+    lastEchoImportantCount = importantCount;
 
-    const toggleBtn = document.getElementById('echoDrawerToggle');
-    if (toggleBtn) {
-      const isExpanded = warnCount > 0 || errorCount > 0;
-      toggleBtn.setAttribute('aria-expanded', String(isExpanded));
-    }
+    // aria mirrors the REAL state — the class and attribute are never
+    // written from different truths (the old code marked echo-only output
+    // aria-expanded=false while the content stayed visible).
+    document
+      .getElementById('echoDrawerToggle')
+      ?.setAttribute(
+        'aria-expanded',
+        String(!echoDrawer.classList.contains('collapsed'))
+      );
 
     // Build accessible announcement
     const summary = [];
@@ -11922,12 +12434,9 @@ if (rounded) {
 
   echoDrawerToggleBtn?.addEventListener('click', () => {
     if (!echoDrawerEl) return;
-    const isCollapsed = echoDrawerEl.classList.contains('collapsed');
-    echoDrawerEl.classList.toggle('collapsed');
-    echoDrawerToggleBtn.setAttribute(
-      'aria-expanded',
-      isCollapsed ? 'true' : 'false'
-    );
+    const collapsed = echoDrawerEl.classList.toggle('collapsed');
+    echoDrawerUserCollapsed = collapsed;
+    echoDrawerToggleBtn.setAttribute('aria-expanded', String(!collapsed));
   });
 
   // Echo drawer "View Full Console" button
@@ -13331,29 +13840,18 @@ if (typeof window !== 'undefined') {
      * @returns {string|null} The SCAD source text, or null if no model is loaded
      */
     exportScadSource(options = {}) {
-      const { injected = false, download = false } = options;
+      const { download = false } = options;
       const state = stateManager.getState();
       if (!state.uploadedFile?.content) {
         console.error('[ExportDiag] No model loaded.');
         return null;
       }
 
-      const rawSource =
+      // Renders always use unmodified source (KI-012); the old
+      // `injected` diagnostic mode died with injectCsgColors (F-4).
+      const source =
         autoPreviewController?.currentScadContent || state.uploadedFile.content;
-
-      let source;
-      let label;
-      if (injected) {
-        const hasColorCalls = AutoPreviewController.scadUsesColor(rawSource);
-        const cleaned = hasColorCalls
-          ? AutoPreviewController.stripColorCalls(rawSource)
-          : rawSource;
-        source = AutoPreviewController.injectCsgColors(cleaned);
-        label = 'csg-injected';
-      } else {
-        source = rawSource;
-        label = 'original';
-      }
+      const label = 'original';
 
       const csgBypass = isDebugPrefEnabled('noCsgColors');
 

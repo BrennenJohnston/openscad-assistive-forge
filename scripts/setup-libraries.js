@@ -219,6 +219,27 @@ function generatePerLibraryManifest(libName) {
 }
 
 /**
+ * Compare two manifests ignoring the fields that churn on every run
+ * (top-level `generated`, per-library `downloaded` timestamps). The
+ * tracked public/libraries/manifest.json must not be rewritten — and
+ * dirty the working tree — when nothing meaningful changed.
+ */
+function manifestsEquivalent(a, b) {
+  if (!a || !b) return false;
+  const strip = (manifest) => ({
+    ...manifest,
+    generated: undefined,
+    libraries: Object.fromEntries(
+      Object.entries(manifest.libraries || {}).map(([name, lib]) => [
+        name,
+        { ...lib, downloaded: undefined },
+      ])
+    ),
+  });
+  return JSON.stringify(strip(a)) === JSON.stringify(strip(b));
+}
+
+/**
  * Generate library manifest
  */
 function generateManifest() {
@@ -226,11 +247,11 @@ function generateManifest() {
     generated: new Date().toISOString(),
     libraries: {},
   };
-  
+
   for (const libName of Object.keys(LIBRARIES)) {
     const libPath = path.join(LIBRARIES_DIR, libName);
     const metadataPath = path.join(libPath, '.library-metadata.json');
-    
+
     if (fs.existsSync(metadataPath)) {
       const metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf-8'));
       manifest.libraries[libName] = {
@@ -247,11 +268,21 @@ function generateManifest() {
 
     generatePerLibraryManifest(libName);
   }
-  
+
   const manifestPath = path.join(LIBRARIES_DIR, 'manifest.json');
+  let existing = null;
+  try {
+    existing = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+  } catch {
+    // Missing or unparsable — write fresh below.
+  }
+  if (manifestsEquivalent(existing, manifest)) {
+    console.log(`\n✓ Manifest unchanged — not rewritten: ${manifestPath}`);
+    return existing;
+  }
   fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
   console.log(`\n✓ Generated manifest: ${manifestPath}`);
-  
+
   return manifest;
 }
 
@@ -332,4 +363,4 @@ if (path.resolve(process.argv[1]) === __filename) {
   });
 }
 
-export { setupLibrary, generateManifest, collectScadFiles, generatePerLibraryManifest };
+export { setupLibrary, generateManifest, collectScadFiles, generatePerLibraryManifest, manifestsEquivalent };

@@ -1,11 +1,12 @@
 import { test, expect } from '@playwright/test'
 import path from 'path'
 
-// Classic mode (desktop-OpenSCAD-style four-pane layout) — C4 acceptance.
+// Classic mode (desktop-OpenSCAD-style layout) — C4 acceptance.
 //
-// Classic is gated on the classic_mode feature flag (default off); these
-// tests enable it via the URL override. Mode switching goes through the
-// real UI: header toggle to Standard, then View > Interface Mode radios.
+// Classic is gated on the classic_mode feature flag (default ON since C4.6);
+// flag-off behavior is covered via the URL override. Mode switching goes
+// through the real UI: the header Classic toggle, the Simplified/Standard
+// switch, and View > Interface Mode radios.
 
 const FIXTURE = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad')
 
@@ -53,6 +54,299 @@ async function pickInterfaceMode(page, radioName) {
   await radio.click()
 }
 
+test.describe('Classic header toggle (C1)', () => {
+  test('classic-header-toggle: always-visible button enters classic and returns to the remembered custom mode', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000)
+
+    await loadSampleProject(page)
+
+    const classicToggle = page.locator('#classicModeToggle')
+    await expect(classicToggle).toBeVisible()
+    await expect(classicToggle).toHaveAttribute('aria-pressed', 'false')
+
+    // Enter classic straight from the default Simplified mode
+    await classicToggle.click()
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'classic'
+    )
+    await expect(classicToggle).toHaveAttribute('aria-pressed', 'true')
+
+    // The View menu radio agrees with the header toggle
+    await page.locator('#viewMenuBtn').click()
+    await expect(
+      page.getByRole('menuitemradio', { name: /Classic/ })
+    ).toHaveAttribute('aria-checked', 'true')
+    await page.keyboard.press('Escape')
+
+    // Exiting returns to the mode the user came FROM (simplified, not standard)
+    await classicToggle.click()
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'simplified'
+    )
+    await expect(classicToggle).toHaveAttribute('aria-pressed', 'false')
+
+    // From Standard, the round-trip remembers standard
+    await switchToStandardMode(page)
+    await classicToggle.click()
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'classic'
+    )
+    await classicToggle.click()
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'standard'
+    )
+  })
+
+  test('classic mode persists across reload and exit still returns to the remembered mode', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000)
+
+    await loadSampleProject(page)
+    await switchToStandardMode(page)
+
+    const classicToggle = page.locator('#classicModeToggle')
+    await classicToggle.click()
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'classic'
+    )
+
+    await page.reload()
+    await page.waitForSelector('body[data-wasm-ready="true"]', {
+      state: 'attached',
+      timeout: WASM_READY_TIMEOUT,
+    })
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'classic'
+    )
+    await expect(classicToggle).toHaveAttribute('aria-pressed', 'true')
+
+    await classicToggle.click()
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'standard'
+    )
+  })
+
+  test('header toggle is hidden when the classic_mode flag is off', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000)
+
+    await page.goto('/?flag_classic_mode=false')
+    await page.waitForSelector('body[data-wasm-ready="true"]', {
+      state: 'attached',
+      timeout: WASM_READY_TIMEOUT,
+    })
+
+    await expect(page.locator('#classicModeToggle')).toHaveClass(/hidden/)
+  })
+})
+
+test.describe('Classic chrome strip (C3)', () => {
+  test('classic-strips-custom-chrome: Forge chrome hides in classic and returns on exit', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000)
+
+    await loadSampleProject(page)
+    await switchToStandardMode(page)
+
+    // Sanity: the chrome exists in the custom modes
+    for (const sel of [
+      '#uiModeToggle',
+      '#actionsBar',
+      '#paramPanel > .panel-header',
+      '#clearFileBtn',
+    ]) {
+      await expect(page.locator(sel)).toBeVisible()
+    }
+
+    await page.locator('#classicModeToggle').click()
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'classic'
+    )
+
+    const hiddenInClassic = [
+      '#uiModeToggle',
+      '#focusModeBtn',
+      '#featuresGuideBtn',
+      '#clearFileBtn',
+      '#actionsBar',
+      '#previewInfoSection',
+      '#previewDrawerToggle',
+      '#paramSearchSection',
+      '.output-format-section',
+      '#paramPanel > .panel-header',
+      '#cameraPanel',
+    ]
+    for (const sel of hiddenInClassic) {
+      await expect(
+        page.locator(sel).first(),
+        `${sel} must be hidden in classic`
+      ).toBeHidden()
+    }
+
+    // The desktop-style menu bar and all six menus stay visible
+    await expect(page.locator('#toolbarMenuBar')).toBeVisible()
+    for (const id of [
+      '#fileMenuBtn',
+      '#editMenuBtn',
+      '#designMenuBtn',
+      '#viewMenuBtn',
+      '#windowMenuBtn',
+      '#helpMenuBtn',
+    ]) {
+      await expect(page.locator(id)).toBeVisible()
+    }
+
+    // Exit restores the chrome
+    await page.locator('#classicModeToggle').click()
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'standard'
+    )
+    for (const sel of [
+      '#uiModeToggle',
+      '#actionsBar',
+      '#paramPanel > .panel-header',
+      '#clearFileBtn',
+    ]) {
+      await expect(page.locator(sel)).toBeVisible()
+    }
+  })
+})
+
+test.describe('Classic acceptance (C13)', () => {
+  test('classic-menu-reachability: every hidden control has a menu home', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000)
+
+    await loadSampleProject(page)
+    await page.locator('#classicModeToggle').click()
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'classic'
+    )
+
+    // No "(planned)" stubs anywhere in the menus
+    for (const menuBtn of [
+      '#fileMenuBtn',
+      '#designMenuBtn',
+      '#viewMenuBtn',
+      '#windowMenuBtn',
+    ]) {
+      await page.locator(menuBtn).click()
+      const menuText = await page
+        .locator('.toolbar-menu-modal:not(.hidden)')
+        .textContent()
+      expect(menuText, `${menuBtn} has no planned stubs`).not.toContain(
+        '(planned)'
+      )
+      await page.keyboard.press('Escape')
+    }
+
+    // Design > Automatic Reload and Preview is a real, checkable toggle
+    await page.locator('#designMenuBtn').click()
+    await expect(
+      page.getByRole('menuitemcheckbox', {
+        name: 'Automatic Reload and Preview',
+      })
+    ).toBeVisible()
+    await page.keyboard.press('Escape')
+
+    // Window > Customizer hides and restores the dock
+    await page.locator('#windowMenuBtn').click()
+    await page.getByRole('menuitemcheckbox', { name: 'Customizer' }).click()
+    await expect(page.locator('#paramPanel')).toBeHidden()
+    await page.locator('#windowMenuBtn').click()
+    await page.getByRole('menuitemcheckbox', { name: 'Customizer' }).click()
+    await expect(page.locator('#paramPanel')).toBeVisible()
+
+    // View > Preview Quality submenu proxies the real select
+    await page.locator('#viewMenuBtn').click()
+    const qualitySubmenu = page.getByRole('menuitem', {
+      name: 'Preview Quality',
+    })
+    await expect(qualitySubmenu).toBeVisible()
+    await page.keyboard.press('Escape')
+
+    // File > Close returns to the welcome screen (accept the unsaved-changes
+    // confirmation the #clearFileBtn handler shows)
+    await page.locator('#fileMenuBtn').click()
+    await page.getByRole('menuitem', { name: 'Close', exact: true }).click()
+    await page
+      .locator('button:has-text("Confirm")')
+      .first()
+      .click({ timeout: 5_000 })
+    await expect(page.locator('#welcomeScreen')).toBeVisible({
+      timeout: 10_000,
+    })
+  })
+
+  test('classic-midwidth: 900px classic stacks with all panes reachable', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000)
+
+    await page.setViewportSize({ width: 900, height: 800 })
+    await loadSampleProject(page)
+    await page.locator('#classicModeToggle').click()
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'classic'
+    )
+
+    await expect(page.locator('.preview-panel')).toBeVisible()
+    await expect(page.locator('#paramPanel')).toBeVisible()
+    await expect(page.locator('#classicConsoleSlot')).toBeVisible()
+    await expect(page.locator('#classicEditorSlot')).toBeVisible()
+    await expect(page.locator('#cameraPanel')).toBeHidden()
+
+    // No horizontal page scroll in the stacked layout
+    const overflow = await page.evaluate(
+      () =>
+        document.documentElement.scrollWidth -
+        document.documentElement.clientWidth
+    )
+    expect(overflow, 'no horizontal overflow').toBeLessThanOrEqual(1)
+  })
+
+  test('reduced-motion: classic folds complete instantly', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000)
+
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await loadSampleProject(page)
+    await page.locator('#classicModeToggle').click()
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'classic'
+    )
+
+    // The app-wide reduced-motion rule clamps durations to ~0.01ms (the
+    // standard can't-observe trick), so assert "effectively instant".
+    const duration = await page
+      .locator('#classicConsoleSlot .classic-fold')
+      .evaluate((el) => parseFloat(getComputedStyle(el).transitionDuration))
+    expect(
+      duration,
+      'fold transition effectively instant under reduced motion'
+    ).toBeLessThan(0.005)
+  })
+})
+
 test.describe('Classic mode layout (C4)', () => {
   test('entering Classic moves console and presets into pane slots, exiting restores them', async ({
     page,
@@ -89,10 +383,19 @@ test.describe('Classic mode layout (C4)', () => {
     await expect(consoleSlot.locator('#consolePanel')).toHaveCount(1)
     await expect(page.locator('#consolePanel')).toHaveAttribute('open', '')
 
-    // Presets pane: moved into its labelled slot and forced open
-    const presetsSlot = page.locator('#classicPresetsSlot')
-    await expect(presetsSlot).toBeVisible()
-    await expect(presetsSlot.locator('#presetControls')).toHaveCount(1)
+    // Presets: moved INTO the Customizer dock's preset row (C7); the old
+    // standalone presets slot no longer exists
+    await expect(page.locator('#classicPresetsSlot')).toHaveCount(0)
+    await expect(
+      page.locator('#classicPresetRow #presetControls')
+    ).toHaveCount(1)
+    await expect(page.locator('#classicCustomizerBar')).toBeVisible()
+
+    // Editor pane (C5): visible by default alongside the customizer
+    const editorSlot = page.locator('#classicEditorSlot')
+    await expect(editorSlot).toBeVisible()
+    await expect(editorSlot.locator('#expertModePanel')).toHaveCount(1)
+    await expect(page.locator('#parametersContainer')).toBeVisible()
 
     // Display + customizer panes still present
     await expect(page.locator('.preview-panel')).toBeVisible()
@@ -104,19 +407,29 @@ test.describe('Classic mode layout (C4)', () => {
       .count()
     expect(openGroups, 'all param groups collapsed in Classic').toBe(0)
 
-    // Display strip (C4.5): visible in Classic with snap views, overlay
-    // toggles, bed-size select, and Preview/Render
-    const strip = page.locator('#classicDisplayStrip')
-    await expect(strip).toBeVisible()
-    await expect(strip.locator('[data-classic-view]')).toHaveCount(7)
-    await expect(strip.locator('#classicRenderBtn')).toBeVisible()
-    const bedOptions = await strip
+    // Icon toolbar (C6): docked under the menu bar with snap views, overlay
+    // toggles, bed-size select, and Preview/Render — chokusen icons render
+    const toolbar = page.locator('#classicToolbar')
+    await expect(toolbar).toBeVisible()
+    await expect(toolbar.locator('[data-classic-view]')).toHaveCount(7)
+    await expect(toolbar.locator('#classicRenderBtn')).toBeVisible()
+    const toolbarBox = await toolbar.boundingBox()
+    const menuBox = await page.locator('#toolbarMenuBar').boundingBox()
+    expect(
+      toolbarBox.y,
+      'toolbar sits below the menu bar'
+    ).toBeGreaterThanOrEqual(menuBox.y)
+    const iconImage = await toolbar
+      .locator('.classic-icon[data-icon="render"]')
+      .evaluate((el) => getComputedStyle(el).backgroundImage)
+    expect(iconImage, 'vendored icon resolves').toContain('openscad-icons')
+    const bedOptions = await toolbar
       .locator('#classicGridSizeSelect option')
       .count()
     expect(bedOptions, 'bed-size select populated from grid presets').toBeGreaterThan(3)
 
     // Axes toggle reflects pressed state
-    const axesToggle = strip.locator('#classicAxesToggle')
+    const axesToggle = toolbar.locator('#classicAxesToggle')
     const before = await axesToggle.getAttribute('aria-pressed')
     await axesToggle.click()
     await expect(axesToggle).toHaveAttribute(
@@ -124,6 +437,50 @@ test.describe('Classic mode layout (C4)', () => {
       before === 'true' ? 'false' : 'true'
     )
     await axesToggle.click()
+
+    // Window-bottom status bar (C8): visible at the bottom, mirroring the
+    // hidden in-viewport overlay's text; only one aria-live status source
+    const statusBar = page.locator('#classicStatusBar')
+    await expect(statusBar).toBeVisible()
+    await expect(page.locator('#previewStatusBar')).toBeHidden()
+    const barBox = await statusBar.boundingBox()
+    const viewport = page.viewportSize()
+    expect(
+      barBox.y + barBox.height,
+      'status bar sits at the window bottom'
+    ).toBeGreaterThan(viewport.height * 0.8)
+    await expect
+      .poll(async () =>
+        page.locator('#classicStatusText').evaluate((el) => el.textContent)
+      )
+      .toBe(
+        await page
+          .locator('#previewStatusText')
+          .evaluate((el) => el.textContent)
+      )
+
+    // Console fold (C10): the titlebar button folds the console pane and
+    // the display pane grows into the freed row
+    const consoleFold = page.locator('#classicConsoleFoldBtn')
+    await expect(consoleFold).toBeVisible()
+    const displayBefore = await page
+      .locator('.preview-panel')
+      .boundingBox()
+    await consoleFold.click()
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-classic-console-collapsed',
+      'true'
+    )
+    await expect
+      .poll(
+        async () => (await page.locator('.preview-panel').boundingBox()).height
+      )
+      .toBeGreaterThan(displayBefore.height)
+    await consoleFold.click()
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-classic-console-collapsed',
+      'false'
+    )
 
     // Exit back to Standard: exact DOM restore, slots removed
     await pickInterfaceMode(page, 'Standard')
@@ -139,8 +496,9 @@ test.describe('Classic mode layout (C4)', () => {
     expect(restoredParents.console).toBe(originalParents.console)
     expect(restoredParents.presets).toBe(originalParents.presets)
     await expect(page.locator('#classicConsoleSlot')).toHaveCount(0)
-    await expect(page.locator('#classicPresetsSlot')).toHaveCount(0)
-    await expect(page.locator('#classicDisplayStrip')).toBeHidden()
+    await expect(page.locator('#classicEditorSlot')).toHaveCount(0)
+    await expect(page.locator('#classicToolbar')).toBeHidden()
+    await expect(page.locator('#classicCustomizerBar')).toBeHidden()
   })
 
   test('preset copy and unsaved-changes guard (C4.4)', async ({ page }) => {

@@ -52,6 +52,25 @@ To build OpenSCAD WASM from source, see:
 
 ---
 
+## OpenSCAD "chokusen" Icon Theme (GPL-2.0-or-later)
+
+The Classic desktop-layout mode uses a subset of the icon theme shipped with
+the OpenSCAD desktop application, so power users see the exact toolbar
+iconography they know from desktop OpenSCAD.
+
+**License**: GNU General Public License v2.0 or later (OpenSCAD repository license)
+**Project**: https://openscad.org/
+**Source Code**: https://github.com/openscad/openscad (`resources/icons/chokusen/` and `resources/icons/chokusen-dark/`)
+**Pinned Commit**: `fa8ff8916a9090d9bc64e9d3ad2725ba1aa74dce`
+**Vendored Location**: `public/vendor/openscad-icons/` (26 SVGs per theme)
+**Redistribution**: under this repository's GPL-3.0-or-later umbrella (GPL-2.0-or-later permits this)
+
+The OpenSCAD logo, application icon, and name are **not** included — see the
+"Trademarks / No Affiliation" section below. Only functional toolbar glyphs
+are vendored.
+
+---
+
 ## Three.js (MIT)
 
 Generated web applications use Three.js for 3D preview rendering.

@@ -508,14 +508,19 @@ export function initFileHandler({
   }
 
   /**
-   * Handle a folder selection from the webkitdirectory input or showDirectoryPicker.
+   * Validate a folder selection and resolve its main .scad file.
+   * Shared by the copy-import path (handleFolderImport) and the
+   * connected-folder link path (main.js _loadFromConnectedFolder).
+   * Shows its own processing overlay and dismisses it on every exit.
+   *
    * @param {FileList|File[]} files - FileList or array of Files with webkitRelativePath
+   * @returns {Promise<{fileArr: File[], mainFilePath: string, rootDir: string, totalBytes: number}|null>}
+   *   null when the selection was rejected (a toast was shown) or the user
+   *   cancelled the main-file prompt.
    */
-  async function handleFolderImport(files) {
+  async function prepareFolderSelection(files) {
     const fileArr = Array.from(files);
-    let dismissOverlay = () => {};
-
-    dismissOverlay = showProcessingOverlay(
+    const dismissOverlay = showProcessingOverlay(
       `Processing ${fileArr.length} files from folder\u2026`,
       'Analyzing project structure. Please do not close or refresh the page.'
     );
@@ -538,7 +543,7 @@ export function initFileHandler({
         title: 'Too Many Files',
         message: `The selected folder contains ${fileArr.length} files (limit: ${MAX_FILES}). Please select a smaller project folder.`,
       });
-      return;
+      return null;
     }
 
     if (totalBytes > MAX_BYTES) {
@@ -549,7 +554,7 @@ export function initFileHandler({
         title: 'Folder Too Large',
         message: `The selected folder is ${mb} MB (limit: ${limitMb} MB). Please select a smaller project folder.`,
       });
-      return;
+      return null;
     }
 
     if (fileArr.length > WARN_FILES) {
@@ -592,13 +597,26 @@ export function initFileHandler({
         title: 'No .scad Files',
         message: 'No OpenSCAD (.scad) files found in the selected folder.',
       });
-      return;
+      return null;
     }
 
-    if (!mainFilePath) return;
+    dismissOverlay();
+    if (!mainFilePath) return null;
+
+    return { fileArr, mainFilePath, rootDir, totalBytes };
+  }
+
+  /**
+   * Handle a folder selection from the webkitdirectory input or showDirectoryPicker.
+   * @param {FileList|File[]} files - FileList or array of Files with webkitRelativePath
+   */
+  async function handleFolderImport(files) {
+    const selection = await prepareFolderSelection(files);
+    if (!selection) return;
+    const { fileArr, mainFilePath, rootDir, totalBytes } = selection;
 
     const totalMB = (totalBytes / (1024 * 1024)).toFixed(1);
-    dismissOverlay = showProcessingOverlay(
+    const dismissOverlay = showProcessingOverlay(
       `Importing folder "${rootDir}" (${fileArr.length} files, ${totalMB} MB)\u2026`,
       'This may take a moment for large projects. Please do not close or refresh the page.'
     );
@@ -1938,6 +1956,7 @@ export function initFileHandler({
   return {
     handleFile,
     handleFolderImport,
+    prepareFolderSelection,
     handleStlView,
     loadExampleByKey,
     /** @internal Exposed for folder picker wiring in main.js */

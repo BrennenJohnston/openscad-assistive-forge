@@ -101,23 +101,28 @@ summary:focus-visible,
   min-width: 0;
 }
 
-/* Hide button on each group header */
+/* Hide button on each group header (C12): full touch target anchored at the
+   far right, well clear of the disclosure chevron (which param groups move
+   to the LEFT of the label) — the old 24px ✕ sat 4px from the chevron and
+   was constantly mis-pressed. */
 .param-group-hide-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.5rem;
-  height: 1.5rem;
+  width: var(--size-touch-target);
+  height: var(--size-touch-target);
   padding: 0;
-  margin-right: var(--space-xs);
+  margin-left: var(--space-lg);
+  margin-right: 0;
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--color-text-secondary);
-  font-size: 0.75rem;
+  font-size: 1rem;
   line-height: 1;
   cursor: pointer;
   opacity: 0;
+  flex-shrink: 0;
   transition:
     opacity var(--motion-base) ease,
     background-color var(--motion-base) ease;
@@ -168,6 +173,43 @@ summary:focus-visible,
 
 .forge-disclosure[open] summary::after {
   transform: rotate(45deg);
+}
+
+/* C12: param groups carry the chevron LEFT of the label (desktop Customizer
+   look); other .forge-disclosure users keep the shared right chevron. */
+details.param-group.forge-disclosure > summary::after {
+  display: none;
+}
+
+details.param-group.forge-disclosure > summary::before {
+  content: '';
+  display: inline-block;
+  width: 0.5em;
+  height: 0.5em;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform var(--motion-base) ease;
+  margin-right: var(--space-sm);
+  flex-shrink: 0;
+}
+
+details.param-group.forge-disclosure[open] > summary::before {
+  transform: rotate(45deg);
+}
+
+/* Per-group restore chips in the hidden-groups bar (C12) */
+.param-groups-hidden-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-top: var(--space-sm);
+}
+
+.param-group-show-chip {
+  min-height: var(--size-touch-target);
+  font-size: var(--font-size-sm);
 }
 
 .forge-disclosure-icon {
@@ -822,6 +864,19 @@ summary:focus-visible,
   display: flex;
   align-items: center;
   gap: var(--space-xs);
+}
+
+/* Folder-link cards: contents live on disk, the record is a pointer */
+.saved-project-badge {
+  display: inline-block;
+  align-self: flex-start;
+  padding: 0 var(--space-xs);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
 }
 
 .saved-project-notes-preview {
@@ -9872,6 +9927,35 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
 .role-paths-grid--collapsed {
   margin-top: var(--space-lg);
   margin-bottom: 0;
+}
+
+/* W3: single-surface welcome — start actions and saved projects side by
+   side under one Get Started heading; stacks on narrow viewports */
+.welcome-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--space-lg);
+  align-items: start;
+  margin-bottom: var(--space-lg);
+}
+
+@media (max-width: 900px) {
+  .welcome-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Demoted guide cards: tighter padding, side-by-side on wide screens —
+   every control stays, targets stay token-sized */
+.role-paths-grid--compact {
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--space-md);
+  margin-bottom: var(--space-lg);
+}
+
+.role-paths-grid--compact .role-path-card {
+  padding: var(--space-md);
+  gap: var(--space-sm);
 }
 
 .role-path-card {

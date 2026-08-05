@@ -7,7 +7,6 @@ import {
   scanIncludes,
   resolveIncludePath,
   getZipStats,
-  createFileTree,
   extractZipFiles,
   resolveProjectFile,
   buildPresetCompanionMap,
@@ -347,65 +346,6 @@ describe('ZIP Handler', () => {
       const resolved = resolveIncludePath('include <../../../root.scad>', 'a/b/c/d.scad')
       
       expect(resolved).toBe('root.scad')
-    })
-  })
-
-  describe('File Tree Rendering', () => {
-    it('should highlight the main file in the tree', () => {
-      const files = new Map([
-        ['main.scad', 'content'],
-        ['utils/helper.scad', 'content']
-      ])
-      const tree = createFileTree(files, 'main.scad')
-
-      expect(tree).toContain('file-tree-item main')
-      expect(tree).toContain('main.scad')
-      expect(tree).toContain('ZIP Contents (2 files)')
-    })
-
-    it('should use different icons for different file types', () => {
-      const files = new Map([
-        ['main.scad', 'content'],
-        ['readme.md', 'readme content']
-      ])
-      const tree = createFileTree(files, 'main.scad')
-
-      expect(tree).toContain('📄') // scad file icon
-      expect(tree).toContain('📎') // other file icon
-    })
-
-    it('should sort files alphabetically', () => {
-      const files = new Map([
-        ['z_file.scad', 'content'],
-        ['a_file.scad', 'content'],
-        ['m_file.scad', 'content']
-      ])
-      const tree = createFileTree(files, 'a_file.scad')
-
-      const aIndex = tree.indexOf('a_file.scad')
-      const mIndex = tree.indexOf('m_file.scad')
-      const zIndex = tree.indexOf('z_file.scad')
-
-      expect(aIndex).toBeLessThan(mIndex)
-      expect(mIndex).toBeLessThan(zIndex)
-    })
-
-    it('should show badge for main file', () => {
-      const files = new Map([
-        ['main.scad', 'content'],
-        ['other.scad', 'content']
-      ])
-      const tree = createFileTree(files, 'main.scad')
-
-      expect(tree).toContain('file-tree-badge')
-      expect(tree).toContain('main</span>')
-    })
-
-    it('should handle empty file map', () => {
-      const files = new Map()
-      const tree = createFileTree(files, '')
-
-      expect(tree).toContain('ZIP Contents (0 files)')
     })
   })
 

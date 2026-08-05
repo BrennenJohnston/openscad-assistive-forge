@@ -78,10 +78,22 @@ async function uploadFile(page, filePath) {
 }
 
 async function uploadMultipleFiles(page, filePaths) {
+  // #fileInput is single-file since the unified upload surface (C1.2) —
+  // multi-file projects go in as a zip, matching the real user flow.
+  const zip = new JSZip();
+  for (const filePath of filePaths) {
+    zip.file(path.basename(filePath), fs.readFileSync(filePath));
+  }
+  const buffer = await zip.generateAsync({ type: 'nodebuffer' });
+
   await waitForWasm(page);
   const fileInput = page.locator('#fileInput');
   await fileInput.waitFor({ state: 'attached', timeout: 10_000 });
-  await fileInput.setInputFiles(filePaths);
+  await fileInput.setInputFiles({
+    name: 'companion-project.zip',
+    mimeType: 'application/zip',
+    buffer,
+  });
   await page.locator('#mainInterface').waitFor({ state: 'visible', timeout: 30_000 });
   try {
     const notNowBtn = page.locator('#saveProjectNotNow');
@@ -287,7 +299,20 @@ test.describe('Parity — Blank Display (S-007)', () => {
       return;
     }
 
-    await generateSelect.selectOption({ label: /customizer/i });
+    // The control lives inside a collapsed <details> group — open it first
+    const generateGroup = page
+      .locator('details.param-group')
+      .filter({ has: generateSelect })
+      .first();
+    if (!(await generateGroup.evaluate((el) => el.open))) {
+      await generateGroup.locator('summary').click();
+    }
+
+    // selectOption() takes a string label, not a regex — resolve it first
+    const customizerLabel = (
+      await customizerOption.first().textContent()
+    ).trim();
+    await generateSelect.selectOption({ label: customizerLabel });
     await page.waitForTimeout(2_000);
 
     const meshPresent = await hasMesh(page);
@@ -312,6 +337,18 @@ test.describe('Parity — No Spontaneous Geometry (S-008)', () => {
     await page.goto('/?example=simple-box');
     await page.locator('#mainInterface').waitFor({ state: 'visible', timeout: 30_000 });
     await waitForPreviewIdle(page, { timeout: 60_000 });
+
+    // The console panel is registry-hidden in Simplified mode — switch to
+    // Standard so its summary is interactable, THEN take the baseline (a
+    // mode switch must not count against the console interactions).
+    const uiModeToggle = page.locator('#uiModeToggle');
+    if ((await uiModeToggle.getAttribute('aria-checked')) === 'false') {
+      await uiModeToggle.click();
+      await page.waitForSelector('body[data-ui-mode="standard"]', {
+        state: 'attached',
+        timeout: 5_000,
+      });
+    }
     await page.waitForTimeout(1_000);
 
     const renderCountBefore = consoleMessages.filter((message) =>
@@ -322,9 +359,9 @@ test.describe('Parity — No Spontaneous Geometry (S-008)', () => {
       '#consolePanel > summary, details#consolePanel > summary',
     );
     if ((await consoleSummary.count()) > 0) {
-      await consoleSummary.click();
+      await consoleSummary.first().click();
       await page.waitForTimeout(500);
-      await consoleSummary.click();
+      await consoleSummary.first().click();
       await page.waitForTimeout(500);
     }
 
