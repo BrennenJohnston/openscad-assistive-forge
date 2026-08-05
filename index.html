@@ -1091,17 +1091,27 @@
                     <polyline points="17 8 12 3 7 8"></polyline>
                     <line x1="12" y1="3" x2="12" y2="15"></line>
                   </svg>
-                  <span class="upload-text"
-                    >Drop .scad or .zip file here or click to browse</span
+                  <span class="upload-text" id="uploadZoneText"
+                    >Drop a project here or click to browse — .scad model ·
+                    .zip project · project folder · .stl (view only) · .json
+                    presets</span
                   >
                   <input
                     type="file"
                     id="fileInput"
-                    accept=".scad,.zip"
+                    accept=".scad,.zip,.stl,.json"
                     class="file-input"
                   />
                 </label>
                 <div class="welcome-divider"><span>or</span></div>
+                <button
+                  type="button"
+                  class="btn btn-large btn-outline"
+                  id="uploadZoneFolderBtn"
+                  aria-label="Open a project folder from your computer"
+                >
+                  Open Project Folder…
+                </button>
                 <button
                   type="button"
                   class="btn btn-lg btn-outline start-new-btn"

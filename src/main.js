@@ -36,6 +36,11 @@ import {
   applyPreviewOverrides,
 } from './js/project-manifest.js';
 import { build2DPreviewStyleTag } from './js/state-colors.js';
+import {
+  DROP_KIND,
+  classifyDrop,
+  describeAccepted,
+} from './js/upload-router.js';
 import { escapeHtml, isValidServiceWorkerMessage } from './js/html-utils.js';
 import { getQualityPreset, COMPLEXITY_TIER } from './js/quality-tiers.js';
 import { getThreeModule } from './js/preview.js';
@@ -1466,6 +1471,14 @@ async function initApp() {
     const importFolderInput = document.getElementById('importFolderInput');
 
     if (importFolderBtn) importFolderBtn.hidden = false;
+
+    // Welcome-zone folder affordance delegates to the same flow.
+    const uploadZoneFolderBtn = document.getElementById('uploadZoneFolderBtn');
+    if (uploadZoneFolderBtn && importFolderBtn) {
+      uploadZoneFolderBtn.addEventListener('click', () =>
+        importFolderBtn.click()
+      );
+    }
     // webkitdirectory is non-standard, so it is applied here (behind the
     // feature detection above) instead of in the static HTML.
     if (importFolderInput) {
@@ -5302,13 +5315,125 @@ async function initApp() {
 
   // handleFile moved to file-handler.js
 
+  // ── Unified upload routing (welcome zone + file picker) ─────────────────
+
+  function withRelativePath(file, relPath) {
+    if (file.webkitRelativePath) return file;
+    try {
+      Object.defineProperty(file, 'webkitRelativePath', { value: relPath });
+    } catch (defineErr) {
+      // Instance property was non-configurable in this browser; the folder
+      // import falls back to file.name-based paths for this file.
+      console.warn(
+        `[Upload] Could not attach relative path to ${file.name}:`,
+        defineErr
+      );
+    }
+    return file;
+  }
+
+  function readAllDirectoryEntries(reader) {
+    return new Promise((resolve, reject) => {
+      const all = [];
+      const readBatch = () =>
+        reader.readEntries((batch) => {
+          if (batch.length === 0) return resolve(all);
+          all.push(...batch);
+          readBatch();
+        }, reject);
+      readBatch();
+    });
+  }
+
+  async function collectFilesFromDirectoryEntry(dirEntry, basePath, out) {
+    const entries = await readAllDirectoryEntries(dirEntry.createReader());
+    for (const entry of entries) {
+      if (entry.isFile) {
+        const file = await new Promise((resolve, reject) =>
+          entry.file(resolve, reject)
+        );
+        out.push(withRelativePath(file, `${basePath}/${entry.name}`));
+      } else if (entry.isDirectory) {
+        await collectFilesFromDirectoryEntry(
+          entry,
+          `${basePath}/${entry.name}`,
+          out
+        );
+      }
+    }
+  }
+
+  async function routeUploadSelection(selection) {
+    switch (selection.kind) {
+      case DROP_KIND.SCAD:
+      case DROP_KIND.ZIP:
+        fileHandler.handleFile(selection.files[0]);
+        break;
+
+      case DROP_KIND.FOLDER: {
+        try {
+          const files = [];
+          for (const entry of selection.directoryEntries) {
+            await collectFilesFromDirectoryEntry(entry, entry.name, files);
+          }
+          if (files.length === 0) {
+            showErrorToast({
+              title: 'Empty Folder',
+              message: 'No files found in the dropped folder.',
+            });
+            return;
+          }
+          await fileHandler.handleFolderImport(files);
+        } catch (err) {
+          showErrorToast({
+            title: 'Folder Import Error',
+            message: err.message,
+          });
+        }
+        break;
+      }
+
+      case DROP_KIND.MULTI: {
+        // Loose files with a .scad among them behave like a flat folder:
+        // the folder import prompts for the main file and keeps the rest
+        // as companions.
+        const files = selection.files.map((f) => withRelativePath(f, f.name));
+        await fileHandler.handleFolderImport(files);
+        break;
+      }
+
+      case DROP_KIND.STL:
+        // Replaced by the STL view-only mode in the next change.
+        showErrorToast({
+          title: 'STL Viewing Coming Soon',
+          message:
+            'Direct STL viewing is not available yet. Open a .scad model or a .zip project instead.',
+        });
+        break;
+
+      case DROP_KIND.PRESET_JSON:
+        // Replaced by preset-import routing in an upcoming change.
+        showErrorToast({
+          title: 'Preset Files',
+          message:
+            'To import presets, open the matching .scad model first, then use the preset Import control.',
+        });
+        break;
+
+      default:
+        showErrorToast({
+          title: 'Unsupported File Type',
+          message: `Supported: ${describeAccepted()}.`,
+        });
+    }
+  }
+
   // File input change
-  fileInput.addEventListener('change', (e) => {
-    const selectedFile = e.target.files[0];
-    if (!selectedFile) return;
-    fileHandler.handleFile(selectedFile);
+  fileInput.addEventListener('change', async (e) => {
+    const selection = classifyDrop(e.target.files);
     // Allow re-selecting the same file if needed
     e.target.value = '';
+    await routeUploadSelection(selection);
   });
 
   // Companion file input (Project Files Manager)
@@ -5534,22 +5659,15 @@ async function initApp() {
     uploadZone.classList.remove('drag-over');
   });
 
-  uploadZone.addEventListener('drop', (e) => {
+  uploadZone.addEventListener('drop', async (e) => {
     e.preventDefault();
     uploadZone.classList.remove('drag-over');
-    const dropped = e.dataTransfer.files[0];
-    if (!dropped) return;
-    // Validate the extension here instead of passing arbitrary files
-    // straight into the handler (which used to accept anything silently).
-    const name = dropped.name.toLowerCase();
-    if (!name.endsWith('.scad') && !name.endsWith('.zip')) {
-      showErrorToast({
-        title: 'Unsupported File Type',
-        message: `"${dropped.name}" is not a supported file. Drop a .scad model or a .zip project.`,
-      });
-      return;
-    }
-    fileHandler.handleFile(dropped);
+    // Prefer items (enables folder detection); fall back to plain files.
+    const input =
+      e.dataTransfer.items?.length > 0
+        ? e.dataTransfer.items
+        : e.dataTransfer.files;
+    await routeUploadSelection(classifyDrop(input));
   });
 
   // Click to upload is handled by the label wrapping the input.

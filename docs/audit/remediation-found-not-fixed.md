@@ -44,6 +44,10 @@ decides to drop it. Per project rules, none of these were fixed silently.
   tree: `accessibility.spec.js:2348` "UI mode toggle switches to Advanced
   mode and shows all panels" and `:2381` "all disclosure sections are
   keyboard-operable" (chromium, local; CI-skipped).
+- **Addendum (C1.2 baseline run, 2026-08-04):** also pre-existing on clean
+  tree: `zip-workflow.spec.js:206` "accessible with keyboard navigation
+  for file tree" and `:235` "should show project statistics" (chromium,
+  local; CI-skipped).
 
 ### F-3: `npm run build` dirties a tracked file
 
