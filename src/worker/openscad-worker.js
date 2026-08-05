@@ -52,6 +52,11 @@ let wasmAssetLogShown = false;
 let openscadConsoleOutput = ''; // Accumulated console output from OpenSCAD
 let openscadCapabilities = null;
 let _callMainInvoked = false;
+// Mutes console mirroring inside the Module print/printErr closures while the
+// --help capability probe runs (its ~200-line usage block otherwise floods the
+// page console as [OpenSCAD ERR] on every cold start). Output still accumulates
+// in openscadConsoleOutput for the capability parser.
+let capabilityProbeActive = false;
 
 function isAbsoluteUrl(value) {
   return /^[a-z]+:\/\//i.test(value);
@@ -254,11 +259,11 @@ async function initWASM(baseUrl = '', cachedCapabilities = null) {
       },
       print: (text) => {
         openscadConsoleOutput += text + '\n';
-        console.log('[OpenSCAD]', text);
+        if (!capabilityProbeActive) console.log('[OpenSCAD]', text);
       },
       printErr: (text) => {
         openscadConsoleOutput += '[ERR] ' + text + '\n';
-        console.error('[OpenSCAD ERR]', text);
+        if (!capabilityProbeActive) console.error('[OpenSCAD ERR]', text);
         // Detecting GUI mode or abort errors is done via console output inspection
       },
     });
@@ -501,19 +506,22 @@ async function checkCapabilities() {
       return capabilities;
     }
 
-    // Capture --help output
-    const helpOutput = [];
-    const originalPrint = module.print;
-    const originalPrintErr = module.printErr;
-    module.print = (text) => helpOutput.push(String(text));
-    module.printErr = (text) => helpOutput.push(String(text));
+    // OpenSCAD writes the --help usage block to stderr. The Emscripten glue
+    // binds out/err to the Module print/printErr closures once at creation, so
+    // reassigning module.printErr here can never intercept it — instead the
+    // worker-scope capabilityProbeActive flag mutes the console mirroring in
+    // those closures and the help text is read back from the
+    // openscadConsoleOutput delta they still accumulate.
     const consoleOutputBeforeHelp = openscadConsoleOutput.length;
 
     try {
+      capabilityProbeActive = true;
       _callMainInvoked = true;
       await module.callMain(['--help']);
     } catch (_error) {
       // --help might exit with non-zero, that's okay
+    } finally {
+      capabilityProbeActive = false;
     }
 
     // Reset the guard after the non-destructive --help probe.
@@ -521,18 +529,7 @@ async function checkCapabilities() {
     // geometry; --help does not modify geometry state.
     _callMainInvoked = false;
 
-    module.print = originalPrint;
-    module.printErr = originalPrintErr;
-    // Some OpenSCAD WASM builds keep internal print callbacks and do not honor
-    // runtime reassignment of module.print/module.printErr. In that case,
-    // helpOutput stays empty while output still lands in openscadConsoleOutput.
-    let helpText = helpOutput.join('\n');
-    if (helpText.trim().length === 0) {
-      const consoleDelta = openscadConsoleOutput.slice(consoleOutputBeforeHelp);
-      if (consoleDelta.trim().length > 0) {
-        helpText = consoleDelta;
-      }
-    }
+    const helpText = openscadConsoleOutput.slice(consoleOutputBeforeHelp);
 
     // Parse capabilities from help text
     // Note: Modern OpenSCAD uses --backend=Manifold instead of --enable=manifold

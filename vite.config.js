@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite';
 import { readFileSync } from 'fs';
+import { injectSwVersion } from './scripts/inject-sw-version.js';
 
-const SW_CACHE_VERSION_TOKEN = '__SW_CACHE_VERSION__';
 const APP_VERSION_TOKEN = '__APP_VERSION__';
 const BUILD_TIME_TOKEN = '__BUILD_TIME__';
 const COMMIT_SHA_TOKEN = '__COMMIT_SHA__';
@@ -34,7 +34,12 @@ function getBuildInfo() {
 }
 
 /**
- * Plugin to inject version info into service worker
+ * Plugin to inject version info into the service worker.
+ *
+ * sw.js is copied from public/ verbatim and never appears in the Rollup
+ * bundle, so this must run in closeBundle (after copyPublicDir) and rewrite
+ * dist/sw.js on disk. injectSwVersion throws on any miss, failing the build
+ * rather than shipping a frozen cache name that blocks old-cache purges.
  */
 function injectSwCacheVersion() {
   const { swVersion } = getBuildInfo();
@@ -42,12 +47,9 @@ function injectSwCacheVersion() {
   return {
     name: 'inject-sw-cache-version',
     apply: 'build',
-    generateBundle(_, bundle) {
-      const swAsset = bundle['sw.js'];
-      if (!swAsset || swAsset.type !== 'asset') return;
-
-      const source = swAsset.source.toString();
-      swAsset.source = source.replace(SW_CACHE_VERSION_TOKEN, swVersion);
+    closeBundle() {
+      const injected = injectSwVersion('dist', swVersion);
+      console.log(`[sw] cache version injected: ${injected}`);
     },
   };
 }

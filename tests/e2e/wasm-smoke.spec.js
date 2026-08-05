@@ -76,6 +76,15 @@ test.describe('WASM smoke (never skipped)', () => {
   test('app boots and the WASM engine initializes', async ({ page }) => {
     test.setTimeout(240_000)
 
+    // The --help capability probe used to flood ~200 [OpenSCAD ERR] lines into
+    // the console on every cold start; a clean boot console is a hard gate.
+    const openscadErrLines = []
+    page.on('console', (msg) => {
+      if (msg.text().includes('[OpenSCAD ERR]')) {
+        openscadErrLines.push(msg.text())
+      }
+    })
+
     await page.goto('/')
     await expect(page.locator('h1')).toContainText('OpenSCAD', { timeout: 15_000 })
     await expect(page.locator('#uploadZone, .upload-zone').first()).toBeVisible({
@@ -85,6 +94,11 @@ test.describe('WASM smoke (never skipped)', () => {
       state: 'attached',
       timeout: WASM_READY_TIMEOUT,
     })
+
+    expect(
+      openscadErrLines,
+      `boot console must not contain [OpenSCAD ERR] noise; got:\n${openscadErrLines.slice(0, 5).join('\n')}`
+    ).toHaveLength(0)
   })
 
   test('uploading a .scad renders a preview with geometry', async ({ page }) => {
