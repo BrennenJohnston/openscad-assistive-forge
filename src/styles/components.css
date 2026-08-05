@@ -9929,6 +9929,35 @@ body:has(#featuresGuideModal:not(.hidden)) .tutorial-arrow {
   margin-bottom: 0;
 }
 
+/* W3: single-surface welcome — start actions and saved projects side by
+   side under one Get Started heading; stacks on narrow viewports */
+.welcome-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--space-lg);
+  align-items: start;
+  margin-bottom: var(--space-lg);
+}
+
+@media (max-width: 900px) {
+  .welcome-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Demoted guide cards: tighter padding, side-by-side on wide screens —
+   every control stays, targets stay token-sized */
+.role-paths-grid--compact {
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--space-md);
+  margin-bottom: var(--space-lg);
+}
+
+.role-paths-grid--compact .role-path-card {
+  padding: var(--space-md);
+  gap: var(--space-sm);
+}
+
 .role-path-card {
   padding: var(--space-lg);
   background: var(--color-bg-secondary);

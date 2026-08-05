@@ -616,7 +616,284 @@
               aria-labelledby="features-heading"
             >
               <h2 id="features-heading">Get Started</h2>
-              <div class="role-paths-grid">
+              <!-- W3: one decluttered surface — start actions and
+                   saved projects side by side under a single heading -->
+              <div class="welcome-columns">
+            <section
+              class="upload-panel"
+              aria-labelledby="upload-panel-heading"
+            >
+              <h3 id="upload-panel-heading">Open or start a project</h3>
+              <p>
+                Upload an OpenSCAD (.scad) file to customize its parameters and
+                generate STL files
+              </p>
+              <!-- Primary actions: Upload existing file OR start new -->
+              <div class="welcome-actions">
+                <label
+                  class="upload-zone"
+                  id="uploadZone"
+                  for="fileInput"
+                  tabindex="0"
+                >
+                  <svg
+                    class="upload-icon"
+                    width="48"
+                    height="48"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    aria-hidden="true"
+                  >
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="17 8 12 3 7 8"></polyline>
+                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                  </svg>
+                  <span class="upload-text" id="uploadZoneText"
+                    >Drop a project here or click to browse — .scad model ·
+                    .zip project · project folder · .stl (view only) · .json
+                    presets</span
+                  >
+                  <input
+                    type="file"
+                    id="fileInput"
+                    accept=".scad,.zip,.stl,.json"
+                    class="file-input"
+                  />
+                </label>
+                <div class="welcome-divider"><span>or</span></div>
+                <button
+                  type="button"
+                  class="btn btn-large btn-outline"
+                  id="uploadZoneFolderBtn"
+                  aria-label="Open a project folder from your computer"
+                >
+                  Open Project Folder…
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-lg btn-outline start-new-btn"
+                  id="startNewProjectBtn"
+                  aria-label="Start a new OpenSCAD project from scratch"
+                >
+                  <svg
+                    class="btn-icon-svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+                    ></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                    <line x1="12" y1="18" x2="12" y2="12"></line>
+                    <line x1="9" y1="15" x2="15" y2="15"></line>
+                  </svg>
+                  <span>Start New Project</span>
+                </button>
+              </div>
+            </section>
+            <!-- Saved Projects Section (v2 with folder tree) -->
+            <section
+              class="saved-projects-panel"
+              id="savedProjectsPanel"
+              aria-labelledby="saved-projects-heading"
+            >
+              <div class="saved-projects-header">
+                <h3 id="saved-projects-heading">Saved Projects</h3>
+                <div class="saved-projects-actions">
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-outline"
+                    id="exportAllProjectsBtn"
+                    aria-label="Export all projects as backup"
+                    title="Export Backup"
+                  >
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
+                      ></path>
+                      <polyline points="7 10 12 15 17 10"></polyline>
+                      <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    <span class="btn-text">Export</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-outline"
+                    id="importProjectsBtn"
+                    aria-label="Import projects from backup"
+                    title="Import Backup"
+                  >
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
+                      ></path>
+                      <polyline points="17 8 12 3 7 8"></polyline>
+                      <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                    <span class="btn-text">Import</span>
+                  </button>
+                  <!-- Import Folder button — hidden by default; shown by JS when
+                       folder_import flag is on AND webkitdirectory is supported -->
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-outline"
+                    id="importFolderBtn"
+                    aria-label="Import project folder"
+                    title="Import Folder"
+                    hidden
+                  >
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"
+                      ></path>
+                    </svg>
+                    <span class="btn-text">Import Folder</span>
+                  </button>
+                  <!-- Connect Folder button (F35 Phase A) — Chromium-only.
+                       Hidden by default; shown when local_folder_sync flag is on
+                       AND showDirectoryPicker is available. -->
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-outline"
+                    id="connectFolderBtn"
+                    aria-label="Connect to a folder on disk for persistent two-way access"
+                    title="Connect to a folder (Chromium only)"
+                    hidden
+                  >
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+                    </svg>
+                    <span class="btn-text">Connect Folder</span>
+                  </button>
+                </div>
+                <!-- Folder-sync status pill (F35 Phase A). Hidden until the
+                     controller fires its first state change. aria-live so
+                     connection / restore / disconnect events are announced. -->
+                <div
+                  class="folder-sync-status"
+                  id="folderSyncStatus"
+                  role="status"
+                  aria-live="polite"
+                  hidden
+                >
+                  <span class="folder-sync-status-text" id="folderSyncStatusText"></span>
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-outline"
+                    id="folderSyncRestoreBtn"
+                    aria-label="Reconnect to the previously-connected folder"
+                    hidden
+                  >
+                    Reconnect
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-outline"
+                    id="folderSyncDisconnectBtn"
+                    aria-label="Disconnect from the connected folder"
+                    hidden
+                  >
+                    Disconnect
+                  </button>
+                </div>
+              </div>
+              <p class="saved-projects-description">
+                Your projects organized in folders (stored in this browser)
+              </p>
+              <!-- Breadcrumb navigation for folder path -->
+              <nav
+                class="folder-breadcrumbs hidden"
+                id="folderBreadcrumbs"
+                aria-label="Folder navigation"
+              >
+                <ol class="breadcrumb-list" id="breadcrumbList">
+                  <!-- Dynamically populated -->
+                </ol>
+              </nav>
+              <!-- Folder tree and projects container -->
+              <div class="saved-projects-container" id="savedProjectsContainer">
+                <div
+                  class="folder-tree"
+                  id="folderTree"
+                  role="tree"
+                  aria-label="Folder tree"
+                >
+                  <!-- Dynamically populated with folders -->
+                </div>
+                <div
+                  class="saved-projects-list"
+                  id="savedProjectsList"
+                  role="list"
+                  aria-label="Saved projects"
+                >
+                  <!-- Dynamically populated with projects -->
+                </div>
+              </div>
+              <p class="saved-projects-empty hidden" id="savedProjectsEmpty">
+                No saved projects yet. Upload a file and choose to save it.
+              </p>
+              <!-- Hidden file input for import -->
+              <input
+                type="file"
+                id="importBackupInput"
+                accept=".zip,.json"
+                class="hidden"
+                aria-hidden="true"
+              />
+              <!-- Hidden folder input (shown when folder_import flag + webkitdirectory
+                   support; the non-standard webkitdirectory attribute is set by JS
+                   during init to keep the static HTML valid) -->
+              <input
+                type="file"
+                id="importFolderInput"
+                class="hidden"
+                aria-hidden="true"
+              />
+            </section>
+              </div>
+              <div class="role-paths-grid role-paths-grid--compact">
                 <!-- Beginners Start Here (only visible tutorial for now) -->
                 <div class="role-path-card">
                   <h3 class="role-path-title">Beginners Start Here</h3>
@@ -991,279 +1268,8 @@
                 </div>
               </details>
             </div>
-            <!-- Saved Projects Section (v2 with folder tree) -->
-            <section
-              class="saved-projects-panel"
-              id="savedProjectsPanel"
-              aria-labelledby="saved-projects-heading"
-            >
-              <div class="saved-projects-header">
-                <h3 id="saved-projects-heading">Saved Projects</h3>
-                <div class="saved-projects-actions">
-                  <button
-                    type="button"
-                    class="btn btn-sm btn-outline"
-                    id="exportAllProjectsBtn"
-                    aria-label="Export all projects as backup"
-                    title="Export Backup"
-                  >
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      aria-hidden="true"
-                    >
-                      <path
-                        d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
-                      ></path>
-                      <polyline points="7 10 12 15 17 10"></polyline>
-                      <line x1="12" y1="15" x2="12" y2="3"></line>
-                    </svg>
-                    <span class="btn-text">Export</span>
-                  </button>
-                  <button
-                    type="button"
-                    class="btn btn-sm btn-outline"
-                    id="importProjectsBtn"
-                    aria-label="Import projects from backup"
-                    title="Import Backup"
-                  >
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      aria-hidden="true"
-                    >
-                      <path
-                        d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
-                      ></path>
-                      <polyline points="17 8 12 3 7 8"></polyline>
-                      <line x1="12" y1="3" x2="12" y2="15"></line>
-                    </svg>
-                    <span class="btn-text">Import</span>
-                  </button>
-                  <!-- Import Folder button — hidden by default; shown by JS when
-                       folder_import flag is on AND webkitdirectory is supported -->
-                  <button
-                    type="button"
-                    class="btn btn-sm btn-outline"
-                    id="importFolderBtn"
-                    aria-label="Import project folder"
-                    title="Import Folder"
-                    hidden
-                  >
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      aria-hidden="true"
-                    >
-                      <path
-                        d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"
-                      ></path>
-                    </svg>
-                    <span class="btn-text">Import Folder</span>
-                  </button>
-                  <!-- Connect Folder button (F35 Phase A) — Chromium-only.
-                       Hidden by default; shown when local_folder_sync flag is on
-                       AND showDirectoryPicker is available. -->
-                  <button
-                    type="button"
-                    class="btn btn-sm btn-outline"
-                    id="connectFolderBtn"
-                    aria-label="Connect to a folder on disk for persistent two-way access"
-                    title="Connect to a folder (Chromium only)"
-                    hidden
-                  >
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      aria-hidden="true"
-                    >
-                      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
-                      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
-                    </svg>
-                    <span class="btn-text">Connect Folder</span>
-                  </button>
-                </div>
-                <!-- Folder-sync status pill (F35 Phase A). Hidden until the
-                     controller fires its first state change. aria-live so
-                     connection / restore / disconnect events are announced. -->
-                <div
-                  class="folder-sync-status"
-                  id="folderSyncStatus"
-                  role="status"
-                  aria-live="polite"
-                  hidden
-                >
-                  <span class="folder-sync-status-text" id="folderSyncStatusText"></span>
-                  <button
-                    type="button"
-                    class="btn btn-sm btn-outline"
-                    id="folderSyncRestoreBtn"
-                    aria-label="Reconnect to the previously-connected folder"
-                    hidden
-                  >
-                    Reconnect
-                  </button>
-                  <button
-                    type="button"
-                    class="btn btn-sm btn-outline"
-                    id="folderSyncDisconnectBtn"
-                    aria-label="Disconnect from the connected folder"
-                    hidden
-                  >
-                    Disconnect
-                  </button>
-                </div>
-              </div>
-              <p class="saved-projects-description">
-                Your projects organized in folders (stored in this browser)
-              </p>
-              <!-- Breadcrumb navigation for folder path -->
-              <nav
-                class="folder-breadcrumbs hidden"
-                id="folderBreadcrumbs"
-                aria-label="Folder navigation"
-              >
-                <ol class="breadcrumb-list" id="breadcrumbList">
-                  <!-- Dynamically populated -->
-                </ol>
-              </nav>
-              <!-- Folder tree and projects container -->
-              <div class="saved-projects-container" id="savedProjectsContainer">
-                <div
-                  class="folder-tree"
-                  id="folderTree"
-                  role="tree"
-                  aria-label="Folder tree"
-                >
-                  <!-- Dynamically populated with folders -->
-                </div>
-                <div
-                  class="saved-projects-list"
-                  id="savedProjectsList"
-                  role="list"
-                  aria-label="Saved projects"
-                >
-                  <!-- Dynamically populated with projects -->
-                </div>
-              </div>
-              <p class="saved-projects-empty hidden" id="savedProjectsEmpty">
-                No saved projects yet. Upload a file and choose to save it.
-              </p>
-              <!-- Hidden file input for import -->
-              <input
-                type="file"
-                id="importBackupInput"
-                accept=".zip,.json"
-                class="hidden"
-                aria-hidden="true"
-              />
-              <!-- Hidden folder input (shown when folder_import flag + webkitdirectory
-                   support; the non-standard webkitdirectory attribute is set by JS
-                   during init to keep the static HTML valid) -->
-              <input
-                type="file"
-                id="importFolderInput"
-                class="hidden"
-                aria-hidden="true"
-              />
-            </section>
-            <section
-              class="upload-panel"
-              aria-labelledby="upload-panel-heading"
-            >
-              <h3 id="upload-panel-heading">Get Started</h3>
-              <p>
-                Upload an OpenSCAD (.scad) file to customize its parameters and
-                generate STL files
-              </p>
-              <!-- Primary actions: Upload existing file OR start new -->
-              <div class="welcome-actions">
-                <label
-                  class="upload-zone"
-                  id="uploadZone"
-                  for="fileInput"
-                  tabindex="0"
-                >
-                  <svg
-                    class="upload-icon"
-                    width="48"
-                    height="48"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    aria-hidden="true"
-                  >
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                    <polyline points="17 8 12 3 7 8"></polyline>
-                    <line x1="12" y1="3" x2="12" y2="15"></line>
-                  </svg>
-                  <span class="upload-text" id="uploadZoneText"
-                    >Drop a project here or click to browse — .scad model ·
-                    .zip project · project folder · .stl (view only) · .json
-                    presets</span
-                  >
-                  <input
-                    type="file"
-                    id="fileInput"
-                    accept=".scad,.zip,.stl,.json"
-                    class="file-input"
-                  />
-                </label>
-                <div class="welcome-divider"><span>or</span></div>
-                <button
-                  type="button"
-                  class="btn btn-large btn-outline"
-                  id="uploadZoneFolderBtn"
-                  aria-label="Open a project folder from your computer"
-                >
-                  Open Project Folder…
-                </button>
-                <button
-                  type="button"
-                  class="btn btn-lg btn-outline start-new-btn"
-                  id="startNewProjectBtn"
-                  aria-label="Start a new OpenSCAD project from scratch"
-                >
-                  <svg
-                    class="btn-icon-svg"
-                    width="24"
-                    height="24"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    aria-hidden="true"
-                  >
-                    <path
-                      d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
-                    ></path>
-                    <polyline points="14 2 14 8 20 8"></polyline>
-                    <line x1="12" y1="18" x2="12" y2="12"></line>
-                    <line x1="9" y1="15" x2="15" y2="15"></line>
-                  </svg>
-                  <span>Start New Project</span>
-                </button>
-              </div>
-            </section>
+
+
             <!-- Storage Panel -->
             <section class="storage-panel" aria-labelledby="storage-heading">
               <h3 id="storage-heading">Storage Usage</h3>
