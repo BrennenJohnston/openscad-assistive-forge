@@ -196,6 +196,7 @@ import { getModeManager } from './js/mode-manager.js';
 import { getUIModeController } from './js/ui-mode-controller.js';
 import {
   initClassicLayoutController,
+  getClassicLayoutController,
   collapseCustomizerGroups,
 } from './js/classic-layout-controller.js';
 import { FolderChangeWatcher } from './js/folder-change-watcher.js';
@@ -2694,6 +2695,16 @@ async function initApp() {
       },
       { type: 'separator' },
       { type: 'submenu', label: 'Export', items: exportItems },
+      { type: 'separator' },
+      {
+        type: 'action',
+        label: 'Close',
+        enabled: hasFile,
+        tooltip: hasFile
+          ? 'Close the project and return to the start screen'
+          : 'Open a file first',
+        handler: () => document.getElementById('clearFileBtn')?.click(),
+      },
     ];
   });
 
@@ -2909,10 +2920,19 @@ async function initApp() {
     return [
       {
         type: 'toggle',
-        label: 'Automatic Reload and Preview (planned)',
-        disabled: true,
-        tooltip:
-          'Planned — arrives with live local-folder sync (edit files in your own editor and the model re-renders)',
+        label: 'Automatic Reload and Preview',
+        checked: Boolean(
+          document.getElementById('autoPreviewToggle')?.checked
+        ),
+        handler: () => {
+          // Single source: the existing auto-preview checkbox drives the
+          // controller; this item (and the Classic Customizer checkbox)
+          // proxy it so all three stay in sync.
+          const toggle = document.getElementById('autoPreviewToggle');
+          if (!toggle) return;
+          toggle.checked = !toggle.checked;
+          toggle.dispatchEvent(new Event('change'));
+        },
       },
       {
         type: 'action',
@@ -3191,6 +3211,28 @@ async function initApp() {
         },
       },
       { type: 'separator' },
+      // -- Preview Quality (proxies #previewQualitySelect, C4) --
+      (() => {
+        const select = document.getElementById('previewQualitySelect');
+        const options = select ? Array.from(select.options) : [];
+        return {
+          type: 'submenu',
+          label: 'Preview Quality',
+          items: options.map((opt) => ({
+            type: 'radio',
+            label: opt.textContent.trim(),
+            group: 'previewQuality',
+            value: opt.value,
+            checked: select?.value === opt.value,
+            onChange: () => {
+              if (!select) return;
+              select.value = opt.value;
+              select.dispatchEvent(new Event('change'));
+            },
+          })),
+        };
+      })(),
+      { type: 'separator' },
       // -- Interface Mode Radio Group (Classic gated on classic_mode flag) --
       interfaceModeRadio('Simplified', 'simplified'),
       interfaceModeRadio('Standard', 'standard'),
@@ -3228,18 +3270,54 @@ async function initApp() {
 
     return [
       // -- Desktop-parity panel toggles --
-      panelToggle('codeEditor', 'Editor', 'toggleCodeEditor'),
+      (() => {
+        const classicLayout = getClassicLayoutController();
+        if (document.body.dataset.uiMode === 'classic' && classicLayout) {
+          return {
+            type: 'toggle',
+            label: 'Editor',
+            shortcutAction: 'toggleCodeEditor',
+            checked: classicLayout.isEditorVisible(),
+            handler: () => classicLayout.toggleEditor(),
+          };
+        }
+        return panelToggle('codeEditor', 'Editor', 'toggleCodeEditor');
+      })(),
       panelToggle('consoleOutput', 'Console', 'toggleConsole'),
-      {
-        type: 'toggle',
-        label: 'Customizer (planned)',
-        disabled: true,
-        tooltip:
-          'Planned \u2014 arrives with the desktop-style Classic layout. Use the collapse button on the parameters panel for now.',
-      },
+      (() => {
+        const inClassic = document.body.dataset.uiMode === 'classic';
+        const classicLayout = getClassicLayoutController();
+        const checked = inClassic
+          ? Boolean(classicLayout?.isCustomizerVisible())
+          : !document
+              .getElementById('paramPanel')
+              ?.classList.contains('collapsed');
+        return {
+          type: 'toggle',
+          label: 'Customizer',
+          checked,
+          handler: () => {
+            if (
+              document.body.dataset.uiMode === 'classic' &&
+              getClassicLayoutController()
+            ) {
+              getClassicLayoutController().toggleCustomizer();
+            } else {
+              document.getElementById('collapseParamPanelBtn')?.click();
+            }
+          },
+        };
+      })(),
       {
         type: 'action',
         label: 'Viewport-Control',
+        ...(document.body.dataset.uiMode === 'classic'
+          ? {
+              disabled: true,
+              tooltip:
+                'The camera panel is not part of the Classic layout \u2014 drag to orbit, or use the View menu and toolbar view buttons',
+            }
+          : {}),
         handler: () => {
           const panel = document.getElementById('cameraPanel');
           if (panel) {
@@ -7283,6 +7361,31 @@ if (rounded) {
     // Expose modeManager globally for keyboard shortcut handler
     window._modeManager = modeManager;
 
+    // Classic-mode editor co-existence (C5): the desktop shell shows the
+    // editor pane ALONGSIDE the customizer, so entering classic must never
+    // route through modeManager's exclusive expert view (which hides
+    // #paramPanelBody). If expert mode was active, unwind it first so the
+    // param body is restored, then light the editor up inside its slot.
+    document.addEventListener('classic-editor-activate', () => {
+      if (
+        modeManager?.isExpertMode?.() &&
+        typeof modeManager.toggleMode === 'function'
+      ) {
+        modeManager.toggleMode();
+      }
+      if (!currentEditor) {
+        initExpertEditor();
+      } else if (currentEditor.setValue) {
+        const code = editorStateManager.getSource();
+        if (code) currentEditor.setValue(code);
+      }
+      expertModePanel.classList.add('classic-editor-active');
+    });
+
+    document.addEventListener('classic-editor-deactivate', () => {
+      expertModePanel.classList.remove('classic-editor-active');
+    });
+
     /**
      * Handle mode change between Standard and Expert
      * @param {string} newMode - 'standard' or 'expert'
@@ -7774,13 +7877,21 @@ if (rounded) {
       initSplit();
     }
 
-    // Classic four-pane layout (moves console/preset panes into grid slots)
+    // Classic desktop-shell layout (moves console/editor into grid slots,
+    // presets into the Customizer dock)
     initClassicLayoutController({
       onEnter: () => {
         destroySplit();
         // Startup contract: collapsed customizer groups, and a first
         // preview with current values if nothing has rendered yet
         collapseCustomizerGroups();
+        // Mirror the auto-preview state into the dock checkbox on entry
+        const classicAutoCheck = document.getElementById(
+          'classicAutoPreviewCheck'
+        );
+        if (classicAutoCheck && autoPreviewToggle) {
+          classicAutoCheck.checked = autoPreviewToggle.checked;
+        }
         const classicState = stateManager.getState();
         if (
           classicState?.uploadedFile &&
@@ -7798,6 +7909,32 @@ if (rounded) {
         requestAnimationFrame(() => previewManager?.handleResize?.());
       },
     });
+
+    // Classic Customizer bar (C7): titlebar ✕ + the Automatic Preview mirror.
+    // All state flows through the real controls (#autoPreviewToggle), never
+    // element-to-element side channels.
+    document
+      .getElementById('classicCustomizerCloseBtn')
+      ?.addEventListener('click', () => {
+        getClassicLayoutController()?.toggleCustomizer();
+      });
+    {
+      const classicAutoCheck = document.getElementById(
+        'classicAutoPreviewCheck'
+      );
+      if (classicAutoCheck && autoPreviewToggle) {
+        classicAutoCheck.checked = autoPreviewToggle.checked;
+        classicAutoCheck.addEventListener('change', () => {
+          if (autoPreviewToggle.checked !== classicAutoCheck.checked) {
+            autoPreviewToggle.checked = classicAutoCheck.checked;
+            autoPreviewToggle.dispatchEvent(new Event('change'));
+          }
+        });
+        autoPreviewToggle.addEventListener('change', () => {
+          classicAutoCheck.checked = autoPreviewToggle.checked;
+        });
+      }
+    }
 
     // Classic display strip (C4.5): snap views, axes/grid overlays, bed
     // size, Preview/Render — thin wrappers over the existing actions

@@ -1202,6 +1202,31 @@
             role="region"
             aria-labelledby="parameters-heading"
           >
+            <!-- Classic-only desktop-style Customizer header (C7): titlebar,
+                 Automatic Preview / Reset row, and the preset row the
+                 classic-layout-controller moves #presetControls into.
+                 Hidden outside classic via classic.css. -->
+            <div id="classicCustomizerBar" class="classic-customizer-bar">
+              <div class="classic-pane-titlebar">
+                <span class="classic-pane-title">Customizer</span>
+                <button type="button"
+                  id="classicCustomizerCloseBtn"
+                  class="btn btn-sm btn-icon classic-pane-btn"
+                  aria-label="Hide Customizer"
+                  title="Hide Customizer"
+                >✕</button>
+              </div>
+              <div class="classic-customizer-controls">
+                <label class="classic-auto-preview-label">
+                  <input type="checkbox" id="classicAutoPreviewCheck" checked />
+                  <span>Automatic Preview</span>
+                </label>
+                <!-- Show Details + Reset All: the existing
+                     .customizer-header-row below provides both, matching the
+                     desktop Customizer's header line. -->
+              </div>
+              <div id="classicPresetRow" class="classic-preset-row"></div>
+            </div>
             <!-- WCAG 2.2 SC 3.2.6 Consistent Help: Help mechanisms (Features Guide button)                  appear in consistent relative order across panels (top-right area) -->
             <div class="panel-header">
               <!-- Row 1: Title + close/collapse controls -->

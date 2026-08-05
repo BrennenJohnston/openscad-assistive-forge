@@ -262,10 +262,19 @@ test.describe('Classic mode layout (C4)', () => {
     await expect(consoleSlot.locator('#consolePanel')).toHaveCount(1)
     await expect(page.locator('#consolePanel')).toHaveAttribute('open', '')
 
-    // Presets pane: moved into its labelled slot and forced open
-    const presetsSlot = page.locator('#classicPresetsSlot')
-    await expect(presetsSlot).toBeVisible()
-    await expect(presetsSlot.locator('#presetControls')).toHaveCount(1)
+    // Presets: moved INTO the Customizer dock's preset row (C7); the old
+    // standalone presets slot no longer exists
+    await expect(page.locator('#classicPresetsSlot')).toHaveCount(0)
+    await expect(
+      page.locator('#classicPresetRow #presetControls')
+    ).toHaveCount(1)
+    await expect(page.locator('#classicCustomizerBar')).toBeVisible()
+
+    // Editor pane (C5): visible by default alongside the customizer
+    const editorSlot = page.locator('#classicEditorSlot')
+    await expect(editorSlot).toBeVisible()
+    await expect(editorSlot.locator('#expertModePanel')).toHaveCount(1)
+    await expect(page.locator('#parametersContainer')).toBeVisible()
 
     // Display + customizer panes still present
     await expect(page.locator('.preview-panel')).toBeVisible()
@@ -312,8 +321,9 @@ test.describe('Classic mode layout (C4)', () => {
     expect(restoredParents.console).toBe(originalParents.console)
     expect(restoredParents.presets).toBe(originalParents.presets)
     await expect(page.locator('#classicConsoleSlot')).toHaveCount(0)
-    await expect(page.locator('#classicPresetsSlot')).toHaveCount(0)
+    await expect(page.locator('#classicEditorSlot')).toHaveCount(0)
     await expect(page.locator('#classicDisplayStrip')).toBeHidden()
+    await expect(page.locator('#classicCustomizerBar')).toBeHidden()
   })
 
   test('preset copy and unsaved-changes guard (C4.4)', async ({ page }) => {

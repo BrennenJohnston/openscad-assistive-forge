@@ -73,25 +73,61 @@ body[data-ui-mode='classic'] .classic-slot > details {
   flex-direction: column;
 }
 
+/* Desktop shell grid v2 (C5): editor | display | customizer over a console
+   row, exactly like desktop OpenSCAD's default docks. Pane visibility is
+   data-attribute-driven so hidden panes give their tracks back (no dead
+   boxes). Presets live INSIDE the customizer dock (C7), so they have no
+   grid area of their own. */
 @media (min-width: 1024px) {
   body[data-ui-mode='classic'] .main-interface {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto minmax(300px, 34%);
-    grid-template-rows: minmax(0, 1.6fr) minmax(0, 1fr) minmax(140px, 0.7fr);
+    grid-template-columns:
+      minmax(280px, 26%)
+      minmax(0, 1fr)
+      minmax(300px, 28%);
+    grid-template-rows: minmax(0, 1fr) minmax(120px, 0.45fr);
     grid-template-areas:
-      'display camera customizer'
-      'display camera presets'
-      'console console presets';
+      'editor display customizer'
+      'console console customizer';
     gap: var(--space-xs);
+  }
+
+  body[data-ui-mode='classic'][data-classic-editor-hidden='true']
+    .main-interface {
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 28%);
+    grid-template-areas:
+      'display customizer'
+      'console customizer';
+  }
+
+  body[data-ui-mode='classic'][data-classic-customizer-hidden='true']
+    .main-interface {
+    grid-template-columns: minmax(280px, 26%) minmax(0, 1fr);
+    grid-template-areas:
+      'editor display'
+      'console console';
+  }
+
+  body[data-ui-mode='classic'][data-classic-editor-hidden='true'][data-classic-customizer-hidden='true']
+    .main-interface {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'display'
+      'console';
+  }
+
+  /* A folded console keeps only its titlebar height */
+  body[data-ui-mode='classic'][data-classic-console-collapsed='true']
+    .main-interface {
+    grid-template-rows: minmax(0, 1fr) min-content;
   }
 
   body[data-ui-mode='classic'] .preview-panel {
     grid-area: display;
   }
 
-  body[data-ui-mode='classic'] .camera-panel {
-    grid-area: camera;
-    min-height: 0;
+  body[data-ui-mode='classic'] .classic-editor-slot {
+    grid-area: editor;
   }
 
   body[data-ui-mode='classic'] .param-panel {
@@ -99,10 +135,6 @@ body[data-ui-mode='classic'] .classic-slot > details {
     max-height: none;
     min-height: 0;
     overflow-y: auto;
-  }
-
-  body[data-ui-mode='classic'] .classic-presets-slot {
-    grid-area: presets;
   }
 
   body[data-ui-mode='classic'] .classic-console-slot {
@@ -118,6 +150,7 @@ body[data-ui-mode='classic'] .classic-slot > details {
 
 @media (max-width: 1023px) {
   body[data-ui-mode='classic'] .main-interface {
+    display: flex;
     flex-direction: column;
   }
 
@@ -125,6 +158,134 @@ body[data-ui-mode='classic'] .classic-slot > details {
     flex: 0 0 auto;
     max-height: 40vh;
   }
+
+  /* Stack order: display first, then customizer, console, editor */
+  body[data-ui-mode='classic'] .preview-panel {
+    order: 1;
+  }
+  body[data-ui-mode='classic'] .param-panel {
+    order: 2;
+  }
+  body[data-ui-mode='classic'] .classic-console-slot {
+    order: 3;
+  }
+  body[data-ui-mode='classic'] .classic-editor-slot {
+    order: 4;
+  }
+}
+
+/* Hidden panes give up their space entirely (both breakpoints) */
+body[data-classic-editor-hidden='true'] .classic-editor-slot {
+  display: none !important;
+}
+
+body[data-ui-mode='classic'][data-classic-customizer-hidden='true']
+  .param-panel {
+  display: none !important;
+}
+
+/* ── Pane titlebars (desktop dock look) ─────────────────────────────────── */
+body[data-ui-mode='classic'] .classic-pane-titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-xs);
+  padding: var(--space-xxs) var(--space-sm);
+  background-color: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+body[data-ui-mode='classic'] .classic-pane-title {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+body[data-ui-mode='classic'] .classic-pane-btn {
+  min-width: var(--size-touch-target);
+  min-height: var(--size-touch-target);
+}
+
+/* ── Fold technique (C10): grid-template-rows 0fr/1fr is animatable ─────── */
+body[data-ui-mode='classic'] .classic-fold {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows var(--motion-slow) ease;
+  min-height: 0;
+  flex: 1;
+}
+
+body[data-ui-mode='classic'] .classic-fold-inner {
+  overflow: hidden;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+body[data-classic-console-collapsed='true']
+  .classic-console-slot
+  .classic-fold {
+  grid-template-rows: 0fr;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body[data-ui-mode='classic'] .classic-fold {
+    transition: none;
+  }
+}
+
+/* ── Editor pane (C5): co-exists with the customizer in classic ─────────── */
+body[data-ui-mode='classic'] .classic-editor-slot .expert-mode-panel {
+  display: flex !important;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+/* ── Customizer dock header (C7, desktop Customizer look) ──────────────── */
+.classic-customizer-bar {
+  display: none;
+}
+
+body[data-ui-mode='classic'] .classic-customizer-bar {
+  display: flex;
+  flex-direction: column;
+  border-bottom: 1px solid var(--color-border);
+  background-color: var(--color-bg-secondary);
+  flex-shrink: 0;
+}
+
+body[data-ui-mode='classic'] .classic-customizer-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: var(--space-xxs) var(--space-sm);
+}
+
+body[data-ui-mode='classic'] .classic-auto-preview-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--font-size-sm);
+  min-height: var(--size-touch-target);
+  cursor: pointer;
+}
+
+body[data-ui-mode='classic'] .classic-preset-row {
+  padding: var(--space-xxs) var(--space-sm) var(--space-xs);
+}
+
+/* The relocated presets panel reads as one desktop row: no summary, no
+   sort/search toolbars — just the combobox + buttons */
+body[data-ui-mode='classic'] .classic-preset-row > details > summary {
+  display: none;
+}
+
+body[data-ui-mode='classic'] .classic-preset-row #presetSortToolbar,
+body[data-ui-mode='classic'] .classic-preset-row #presetSearchLegacy {
+  display: none;
 }
 
 /* ============================================================================
