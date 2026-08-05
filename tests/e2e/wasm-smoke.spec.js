@@ -60,15 +60,17 @@ async function waitForPreviewReady(page) {
     /state-current/,
     { timeout: PREVIEW_TIMEOUT }
   )
-  // Stats read "12.3 KB | 1,234 triangles". The triangle count is 0 for
-  // OFF-format previews today (worker only counts triangles for text
-  // outputs — known display bug), so gate on non-zero output size here.
-  // Real triangle truth is asserted by the full-render test below via
-  // __forgeDebug.compareGeometry().
+  // Stats read "12.3 KB | 1,234 triangles". OFF previews (the render-colors
+  // default) now report a real triangle count parsed from the header (F-1),
+  // so both the size and the count must be non-zero for a 3D fixture.
   const statsText = await page.locator('#previewStatusStats').textContent()
   expect(statsText, 'preview stats should be populated').toMatch(/\d/)
   const size = Number.parseFloat(statsText)
   expect(size, `preview output size should be non-zero, got: "${statsText}"`).toBeGreaterThan(0)
+  const triangleMatch = statsText.match(/([\d,]+)\s+triangles/)
+  expect(triangleMatch, `stats should include a triangle count, got: "${statsText}"`).not.toBeNull()
+  const triangles = Number.parseInt(triangleMatch[1].replace(/,/g, ''), 10)
+  expect(triangles, `triangle count should be non-zero, got: "${statsText}"`).toBeGreaterThan(0)
   return statsText
 }
 

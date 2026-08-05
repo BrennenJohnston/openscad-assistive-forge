@@ -11003,7 +11003,8 @@ if (rounded) {
 
             // Replace mode: confirm and clear existing presets first
             if (importMode === 'replace' && currentModelName) {
-              const existing = presetManager.getPresets(currentModelName) || [];
+              const existing =
+                presetManager.getPresetsForModel(currentModelName) || [];
               const realCount = existing.filter(
                 (p) => p.id !== 'design-defaults'
               ).length;

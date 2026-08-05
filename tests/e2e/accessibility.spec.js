@@ -2313,7 +2313,7 @@ test.describe('Tutorial CSS and Styling - Phase 6.4', () => {
 });
 
 test.describe('UI Mode Toggle & Disclosure Section Accessibility', () => {
-  test('UI mode toggle exists and defaults to Basic mode', async ({ page }) => {
+  test('UI mode toggle exists and defaults to Simplified mode', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI');
 
     await page.goto('/');
@@ -2321,7 +2321,14 @@ test.describe('UI Mode Toggle & Disclosure Section Accessibility', () => {
 
     const fixturePath = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad');
     await page.setInputFiles('#fileInput', fixturePath);
-    await page.waitForSelector('.param-control', { timeout: 30_000 });
+    await page.waitForSelector('.param-control', { state: 'attached', timeout: 30_000 });
+    try {
+      const notNow = page.locator('#saveProjectNotNow');
+      await notNow.waitFor({ state: 'visible', timeout: 3000 });
+      await notNow.click();
+    } catch {
+      // Save-project modal did not appear; nothing to dismiss.
+    }
 
     // Legacy toggle must not exist
     const legacyToggle = page.locator('#settingsLevelToggle');
@@ -2336,16 +2343,22 @@ test.describe('UI Mode Toggle & Disclosure Section Accessibility', () => {
     await expect(uiModeToggle).toHaveCount(1);
     await expect(uiModeToggle).toBeVisible();
 
-    // Toggle must have role="switch" and correct initial ARIA state (Basic = false)
+    // Toggle must have role="switch" and correct initial ARIA state (Simplified = false)
     await expect(uiModeToggle).toHaveAttribute('role', 'switch');
     await expect(uiModeToggle).toHaveAttribute('aria-checked', 'false');
+
+    // The three-mode controller stamps the layout mode on <body>
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'simplified'
+    );
 
     // Toggle must be keyboard-operable (focusable)
     await uiModeToggle.focus();
     await expect(uiModeToggle).toBeFocused();
   });
 
-  test('UI mode toggle switches to Advanced mode and shows all panels', async ({ page }) => {
+  test('UI mode toggle switches to Standard mode and shows all panels', async ({ page }) => {
     test.skip(isCI, 'WASM file processing is slow/unreliable in CI');
 
     await page.goto('/');
@@ -2353,18 +2366,25 @@ test.describe('UI Mode Toggle & Disclosure Section Accessibility', () => {
 
     const fixturePath = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad');
     await page.setInputFiles('#fileInput', fixturePath);
-    await page.waitForSelector('.param-control', { timeout: 30_000 });
+    await page.waitForSelector('.param-control', { state: 'attached', timeout: 30_000 });
+    try {
+      const notNow = page.locator('#saveProjectNotNow');
+      await notNow.waitFor({ state: 'visible', timeout: 3000 });
+      await notNow.click();
+    } catch {
+      // Save-project modal did not appear; nothing to dismiss.
+    }
 
     const uiModeToggle = page.locator('#uiModeToggle');
 
-    // Default is Basic mode (aria-checked="false")
+    // Default is Simplified mode (aria-checked="false")
     await expect(uiModeToggle).toHaveAttribute('aria-checked', 'false');
 
-    // Click to switch to Advanced mode
+    // Click to switch to Standard mode
     await uiModeToggle.click();
     await expect(uiModeToggle).toHaveAttribute('aria-checked', 'true');
 
-    // In Advanced mode, no panels should have ui-mode-hidden class
+    // In Standard mode, no panels should have ui-mode-hidden class
     const hiddenPanels = await page.locator('.ui-mode-hidden').count();
     expect(hiddenPanels).toBe(0);
 
@@ -2373,7 +2393,7 @@ test.describe('UI Mode Toggle & Disclosure Section Accessibility', () => {
     const paramCount = await paramControls.count();
     expect(paramCount).toBeGreaterThan(0);
 
-    // Click again to switch back to Basic mode
+    // Click again to switch back to Simplified mode
     await uiModeToggle.click();
     await expect(uiModeToggle).toHaveAttribute('aria-checked', 'false');
   });
@@ -2386,7 +2406,14 @@ test.describe('UI Mode Toggle & Disclosure Section Accessibility', () => {
 
     const fixturePath = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad');
     await page.setInputFiles('#fileInput', fixturePath);
-    await page.waitForSelector('.param-control', { timeout: 30_000 });
+    await page.waitForSelector('.param-control', { state: 'attached', timeout: 30_000 });
+    try {
+      const notNow = page.locator('#saveProjectNotNow');
+      await notNow.waitFor({ state: 'visible', timeout: 3000 });
+      await notNow.click();
+    } catch {
+      // Save-project modal did not appear; nothing to dismiss.
+    }
 
     // Test that forge-disclosure details can be toggled with keyboard
     const disclosures = page.locator('.forge-disclosure');

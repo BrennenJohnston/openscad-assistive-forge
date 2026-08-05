@@ -31,6 +31,7 @@ import {
 } from '../js/scad-param-formatter.js';
 import { validateSVGOutput } from './svg-validation.js';
 import { postProcessDXF } from './dxf-postprocess.js';
+import { parseOffTriangleCount } from './mesh-stats.js';
 import { generateMissingFileWarnings } from './missing-file-warnings.js';
 import { resolveMountContent } from './mount-content.js';
 import {
@@ -1854,10 +1855,7 @@ async function render(payload) {
       } else if (resultFormat === 'obj') {
         triangleCount = (outputData.match(/^f /gm) || []).length;
       } else if (resultFormat === 'off') {
-        const match =
-          outputData.match(/^C?OFF\s+\d+\s+(\d+)/m) ||
-          outputData.match(/^C?OFF\b[^\n]*\n\s*\d+\s+(\d+)/m);
-        if (match) triangleCount = parseInt(match[1]);
+        triangleCount = parseOffTriangleCount(outputData);
       }
     } else if (outputData instanceof Uint8Array) {
       // CRITICAL FIX: Uint8Array's .buffer property returns the underlying ArrayBuffer
@@ -1869,6 +1867,13 @@ async function render(payload) {
       );
     } else {
       throw new Error(`Unknown ${resultFormat.toUpperCase()} data format`);
+    }
+
+    // OFF delivered as a buffer (the render-colors default path) skipped the
+    // string-branch counting above and left the status bar at "0 triangles" —
+    // the header parse works on raw bytes, so recover the count here.
+    if (resultFormat === 'off' && triangleCount === 0 && outputBuffer) {
+      triangleCount = parseOffTriangleCount(outputBuffer);
     }
 
     // Validate 2D format outputs (SVG/DXF) - they may be "valid" but empty

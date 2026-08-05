@@ -44,7 +44,7 @@ test.describe('Expert Mode E2E Smoke Test (REC-003)', () => {
       'sample.scad'
     )
     await page.setInputFiles('#fileInput', fixturePath)
-    await page.waitForSelector('.param-control', { timeout: 30_000 })
+    await page.waitForSelector('.param-control', { state: 'attached', timeout: 30_000 })
     await dismissSaveProjectModal(page)
 
     // Step 1: Switch to Advanced mode via the UI mode toggle
@@ -74,17 +74,25 @@ test.describe('Expert Mode E2E Smoke Test (REC-003)', () => {
     await expect(expertPanel).toBeVisible({ timeout: 10_000 })
     await expect(expertPanel).toHaveClass(/active/)
 
-    // Step 4: Verify the textarea editor was created
-    const textarea = page.locator('#expert-mode-textarea')
-    await expect(textarea).toBeVisible({ timeout: 5_000 })
+    // Step 4: Verify the editor surface was created — CodeMirror's
+    // contenteditable in the normal case, the textarea only as fallback
+    const editor = page
+      .locator('#expertModePanel .cm-content, #expert-mode-textarea')
+      .first()
+    await expect(editor).toBeVisible({ timeout: 5_000 })
 
-    // Step 5: Type content and verify it appears in the textarea
+    // Step 5: Type content and verify it appears in the editor
     const testCode = 'cube([10, 20, 30]);'
-    await textarea.focus()
-    await textarea.fill(testCode)
-
-    const currentValue = await textarea.inputValue()
-    expect(currentValue).toContain(testCode)
+    const isTextarea = await editor.evaluate(
+      (el) => el.tagName === 'TEXTAREA'
+    )
+    await editor.click()
+    await editor.fill(testCode)
+    if (isTextarea) {
+      expect(await editor.inputValue()).toContain(testCode)
+    } else {
+      await expect(editor).toContainText('cube([10, 20, 30]);')
+    }
 
     console.log(
       'Expert Mode smoke test passed: editor visible, input accepted'
@@ -106,7 +114,7 @@ test.describe('Expert Mode E2E Smoke Test (REC-003)', () => {
       'sample.scad'
     )
     await page.setInputFiles('#fileInput', fixturePath)
-    await page.waitForSelector('.param-control', { timeout: 30_000 })
+    await page.waitForSelector('.param-control', { state: 'attached', timeout: 30_000 })
     await dismissSaveProjectModal(page)
 
     // Switch to Advanced → Expert Mode
@@ -163,7 +171,7 @@ test.describe('Expert Mode E2E Smoke Test (REC-003)', () => {
       'sample.scad'
     )
     await page.setInputFiles('#fileInput', fixturePath)
-    await page.waitForSelector('.param-control', { timeout: 30_000 })
+    await page.waitForSelector('.param-control', { state: 'attached', timeout: 30_000 })
     await dismissSaveProjectModal(page)
 
     // Activate Expert Mode
@@ -193,18 +201,29 @@ test.describe('Expert Mode E2E Smoke Test (REC-003)', () => {
       'OpenSCAD code editor'
     )
 
-    // Verify textarea accessibility
-    const textarea = page.locator('#expert-mode-textarea')
-    await expect(textarea).toHaveAttribute(
+    // Verify editor-surface accessibility (CodeMirror content in the normal
+    // case; the plain textarea only when CM failed to load)
+    const editor = page
+      .locator('#expertModePanel .cm-content, #expert-mode-textarea')
+      .first()
+    await expect(editor).toBeVisible({ timeout: 5_000 })
+    await expect(editor).toHaveAttribute(
       'aria-label',
       'OpenSCAD code editor'
     )
-    await expect(textarea).toHaveAttribute('aria-describedby')
-    await expect(textarea).toHaveAttribute('spellcheck', 'false')
-
-    // Verify the instructions element referenced by aria-describedby exists
-    const describedById = await textarea.getAttribute('aria-describedby')
-    await expect(page.locator(`#${describedById}`)).toBeAttached()
+    const isTextarea = await editor.evaluate(
+      (el) => el.tagName === 'TEXTAREA'
+    )
+    if (isTextarea) {
+      await expect(editor).toHaveAttribute('aria-describedby')
+      await expect(editor).toHaveAttribute('spellcheck', 'false')
+      const describedById = await editor.getAttribute('aria-describedby')
+      await expect(page.locator(`#${describedById}`)).toBeAttached()
+    } else {
+      // CodeMirror's editable surface is a native textbox
+      await expect(editor).toHaveAttribute('role', 'textbox')
+      await expect(editor).toHaveAttribute('contenteditable', 'true')
+    }
 
     console.log(
       'Expert Mode accessibility test passed: ARIA attributes correct'

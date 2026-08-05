@@ -62,7 +62,7 @@ async function loadSampleFile(page) {
 
   const fixturePath = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad')
   await page.setInputFiles('#fileInput', fixturePath)
-  await page.waitForSelector('.param-control', { timeout: 30_000 })
+  await page.waitForSelector('.param-control', { state: 'attached', timeout: 30_000 })
 
   try {
     const notNowBtn = page.locator('#saveProjectNotNow')
@@ -257,7 +257,7 @@ for (const vp of VIEWPORTS) {
       await safeGoto(page, '/?example=q-charm&flag_svg_preparer=true')
       await wasmReady
 
-      await page.waitForSelector('.param-control', { timeout: 30_000 })
+      await page.waitForSelector('.param-control', { state: 'attached', timeout: 30_000 })
 
       try {
         const notNowBtn = page.locator('#saveProjectNotNow')
