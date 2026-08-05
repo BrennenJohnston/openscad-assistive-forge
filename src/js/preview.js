@@ -38,6 +38,7 @@ import {
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { normalizeHexColor } from './color-utils.js';
+import { get2DStylePalette } from './state-colors.js';
 import {
   announceCameraAction as announceCamera,
   announceImmediate,
@@ -1752,6 +1753,28 @@ export class PreviewManager {
               );
               hasColors = true;
             }
+          }
+        }
+        if (hasColors && rawColors.length > 0) {
+          // Uniform inline colors carry no visual information (e.g. a
+          // colorless model rendered with --enable=render-colors, or a
+          // model wrapped in a single color() call). Drop them so the
+          // cavity classifier below can tint inner faces instead — this
+          // replaces the old strip-and-re-render fallback, which mutated
+          // the user's source and cost a second render.
+          const uniqueFaceColors = new Set();
+          for (let i = 0; i < rawColors.length; i += 9) {
+            uniqueFaceColors.add(
+              `${rawColors[i]},${rawColors[i + 1]},${rawColors[i + 2]}`
+            );
+            if (uniqueFaceColors.size > 1) break;
+          }
+          if (uniqueFaceColors.size <= 1) {
+            console.log(
+              '[Preview] OFF colors are uniform — using viewer-side cavity tinting'
+            );
+            hasColors = false;
+            rawColors.length = 0;
           }
         }
         if (hasColors && rawColors.length > 0) {
@@ -4827,20 +4850,7 @@ export class PreviewManager {
     const existing = svgEl.querySelector('style[data-forge-preview]');
     if (existing) return;
 
-    const palette =
-      mode === 'rendered'
-        ? {
-            fill: '#07D0A7',
-            stroke: '#FF0603',
-            strokeWidth: '0.5',
-            fillOpacity: '1',
-          }
-        : {
-            fill: '#7A9F7A',
-            stroke: '#7A9F7A',
-            strokeWidth: '0.25',
-            fillOpacity: '0.9',
-          };
+    const palette = get2DStylePalette(mode);
 
     const styleEl = document.createElementNS(ns, 'style');
     styleEl.setAttribute('data-forge-preview', 'true');

@@ -17,6 +17,14 @@
  */
 
 /**
+ * Guidance for MODEL_NOT_2D — single source for a string that was
+ * previously copy-pasted here, in openscad-worker.js, and in the
+ * main-thread error-translator.js.
+ */
+export const MODEL_NOT_2D_SUGGESTION =
+  'Enable "use Laser Cutting best practices" or ensure your model uses projection() to produce 2D geometry.';
+
+/**
  * Error message translations for common OpenSCAD errors
  * Maps error patterns to user-friendly messages
  */
@@ -80,7 +88,7 @@ export const ERROR_TRANSLATIONS = [
     pattern: /MODEL_NOT_2D|Current top level object is not a 2D object/i,
     message:
       'Your model produces 3D geometry but SVG/DXF export requires 2D output. ' +
-      'Enable "use Laser Cutting best practices" or ensure your model uses projection() to produce 2D geometry.',
+      MODEL_NOT_2D_SUGGESTION,
     code: 'MODEL_NOT_2D',
   },
   {

@@ -1452,9 +1452,10 @@ describe('AutoPreviewController', () => {
       isFlagEnabled.mockReset()
     })
 
-    it('uses OFF format and injects CSG colors when no color() calls in SCAD', async () => {
+    it('uses OFF format with UNMODIFIED source when no color() calls in SCAD', async () => {
       isFlagEnabled.mockReturnValue(false)
-      controller.setScadContent('difference() { cube(20); cube(10); }')
+      const scad = 'difference() { cube(20); cube(10); }'
+      controller.setScadContent(scad)
       const params = { width: 10 }
       const paramHash = controller.hashParams(params)
       controller.currentParamHash = paramHash
@@ -1464,13 +1465,15 @@ describe('AutoPreviewController', () => {
 
       const [source, , options] = renderController.renderPreview.mock.calls[0]
       expect(options.outputFormat).toBe('off')
-      expect(source).toContain('color("#f9d72c")')
-      expect(source).toContain('color("#9dcb51")')
+      // KI-012: injection wrapped subtractor statements in color(){} scopes
+      // and corrupted geometry. The source must pass through byte-identical.
+      expect(source).toBe(scad)
     })
 
-    it('uses OFF format with strip+inject when color() present and passthrough off', async () => {
+    it('uses OFF format with UNMODIFIED source when color() present and passthrough off', async () => {
       isFlagEnabled.mockReturnValue(false)
-      controller.setScadContent('color("red") difference() { cube(20); cube(10); }')
+      const scad = 'color("red") difference() { cube(20); cube(10); }'
+      controller.setScadContent(scad)
       const params = { width: 10 }
       const paramHash = controller.hashParams(params)
       controller.currentParamHash = paramHash
@@ -1480,8 +1483,7 @@ describe('AutoPreviewController', () => {
 
       const [source, , options] = renderController.renderPreview.mock.calls[0]
       expect(options.outputFormat).toBe('off')
-      expect(source).toContain('color("#f9d72c")')
-      expect(source).not.toMatch(/color\s*\(\s*"red"\s*\)/)
+      expect(source).toBe(scad)
     })
 
     it('uses OFF format with original source when color() present and passthrough on', async () => {
@@ -1765,7 +1767,7 @@ describe('AutoPreviewController', () => {
       expect(controller.previewCacheKey).toBeNull()
     })
 
-    it('disabling CSG bypass returns to OFF format with CSG color injection', async () => {
+    it('disabling CSG bypass returns to OFF format with unmodified source', async () => {
       localStorage.setItem('openscad-forge-debug-no-csg-colors', '1')
       isFlagEnabled.mockReturnValue(false)
       controller.setScadContent('difference() { cube(20); cube(10); }')
@@ -1800,7 +1802,7 @@ describe('AutoPreviewController', () => {
 
       const [source2, , secondOptions] = renderController.renderPreview.mock.calls[1]
       expect(secondOptions.outputFormat).toBe('off')
-      expect(source2).toContain('color("#f9d72c")')
+      expect(source2).toBe('difference() { cube(20); cube(10); }')
     })
   })
 
@@ -1826,28 +1828,28 @@ describe('AutoPreviewController', () => {
       isFlagEnabled.mockReset()
     })
 
-    it('uses OFF format and injects CSG colors for full render when no color() calls', async () => {
+    it('uses OFF format with UNMODIFIED source for full render when no color() calls', async () => {
       isFlagEnabled.mockReturnValue(false)
-      controller.setScadContent('difference() { cube(20); cube(10); }')
+      const scad = 'difference() { cube(20); cube(10); }'
+      controller.setScadContent(scad)
 
       await controller.renderFull({ width: 10 })
 
       const [source, , options] = renderController.renderFull.mock.calls[0]
       expect(options.outputFormat).toBe('off')
-      expect(source).toContain('color("#f9d72c")')
-      expect(source).toContain('color("#9dcb51")')
+      expect(source).toBe(scad)
     })
 
-    it('uses OFF format with strip+inject for full render when color() present and passthrough off', async () => {
+    it('uses OFF format with UNMODIFIED source for full render when color() present and passthrough off', async () => {
       isFlagEnabled.mockReturnValue(false)
-      controller.setScadContent('color("blue") difference() { sphere(10); sphere(5); }')
+      const scad = 'color("blue") difference() { sphere(10); sphere(5); }'
+      controller.setScadContent(scad)
 
       await controller.renderFull({ width: 10 })
 
       const [source, , options] = renderController.renderFull.mock.calls[0]
       expect(options.outputFormat).toBe('off')
-      expect(source).toContain('color("#f9d72c")')
-      expect(source).not.toMatch(/color\s*\(\s*"blue"\s*\)/)
+      expect(source).toBe(scad)
     })
 
     it('uses OFF format with original source for full render when color() present and passthrough on', async () => {
@@ -1886,7 +1888,7 @@ describe('AutoPreviewController', () => {
       expect(callOptions.outputFormat).toBeUndefined()
     })
 
-    it('updates project files map when CSG colors are injected and project files exist', async () => {
+    it('passes the ORIGINAL project files map through to the render', async () => {
       isFlagEnabled.mockReturnValue(false)
       const scad = 'difference() { cube(20); cube(10); }'
       const files = new Map([['main.scad', scad]])
@@ -1896,8 +1898,8 @@ describe('AutoPreviewController', () => {
       await controller.renderFull({ width: 10 })
 
       const callOptions = renderController.renderFull.mock.calls[0][2]
-      expect(callOptions.files).toBeInstanceOf(Map)
-      expect(callOptions.files.get('main.scad')).toContain('color("#f9d72c")')
+      expect(callOptions.files).toBe(files)
+      expect(callOptions.files.get('main.scad')).toBe(scad)
     })
 
     it('skips CSG injection for full render when debug-no-csg-colors toggle is set', async () => {
@@ -2107,12 +2109,7 @@ describe('AutoPreviewController', () => {
     });
   });
 
-  describe('CSG Color Injection — Error Recovery', () => {
-    const okResult = {
-      stl: new ArrayBuffer(8),
-      stats: { triangles: 12 },
-      format: 'off',
-    }
+  describe('Render errors — no source-mutation retries (post-KI-012)', () => {
     const parserErr = new Error(
       'Parser error: syntax error in file /tmp/input.scad, line 51'
     )
@@ -2131,7 +2128,7 @@ describe('AutoPreviewController', () => {
       isFlagEnabled.mockReset()
     })
 
-    it('retries renderPreview with original source when injection causes parser error', async () => {
+    it('renderPreview surfaces parser errors after a single attempt', async () => {
       isFlagEnabled.mockReturnValue(false)
       const scad = 'difference() { cube(20); cube(10); }'
       controller.setScadContent(scad)
@@ -2140,20 +2137,15 @@ describe('AutoPreviewController', () => {
       controller.currentParamHash = paramHash
       controller.currentPreviewKey = `${paramHash}|model`
 
-      renderController.renderPreview
-        .mockRejectedValueOnce(parserErr)
-        .mockResolvedValueOnce(okResult)
+      renderController.renderPreview.mockRejectedValueOnce(parserErr)
 
       await controller.renderPreview(params, paramHash)
 
-      expect(renderController.renderPreview).toHaveBeenCalledTimes(2)
-      const [firstSource] = renderController.renderPreview.mock.calls[0]
-      expect(firstSource).toContain('color("#f9d72c")')
-      const [secondSource] = renderController.renderPreview.mock.calls[1]
-      expect(secondSource).toBe(scad)
+      expect(renderController.renderPreview).toHaveBeenCalledTimes(1)
+      expect(controller.state).toBe(PREVIEW_STATE.ERROR)
     })
 
-    it('does not retry renderPreview when a non-parser error occurs', async () => {
+    it('renderPreview surfaces non-parser errors after a single attempt', async () => {
       isFlagEnabled.mockReturnValue(false)
       const scad = 'difference() { cube(20); cube(10); }'
       controller.setScadContent(scad)
@@ -2172,52 +2164,17 @@ describe('AutoPreviewController', () => {
       expect(controller.state).toBe(PREVIEW_STATE.ERROR)
     })
 
-    it('does not retry renderPreview when no injection was applied', async () => {
-      isFlagEnabled.mockImplementation((flag) => flag === 'color_passthrough')
-      controller.setScadContent('color("red") cube(10);')
-      const params = { width: 10 }
-      const paramHash = controller.hashParams(params)
-      controller.currentParamHash = paramHash
-      controller.currentPreviewKey = `${paramHash}|model`
-
-      renderController.renderPreview.mockRejectedValueOnce(parserErr)
-
-      await controller.renderPreview(params, paramHash)
-
-      expect(renderController.renderPreview).toHaveBeenCalledTimes(1)
-      expect(controller.state).toBe(PREVIEW_STATE.ERROR)
-    })
-
-    it('retries renderFull with original source when injection causes parser error', async () => {
+    it('renderFull rejects with parser errors after a single attempt', async () => {
       isFlagEnabled.mockReturnValue(false)
       const scad = 'difference() { cube(20); cube(10); }'
       controller.setScadContent(scad)
 
-      const stlFollowUp = {
-        stl: new ArrayBuffer(32),
-        stats: { triangles: 42 },
-        format: 'stl',
-        consoleOutput: '',
-      }
-      renderController.renderFull = vi.fn()
-        .mockRejectedValueOnce(parserErr)
-        .mockResolvedValueOnce({
-          stl: new ArrayBuffer(32),
-          stats: { triangles: 42 },
-          format: 'off',
-          consoleOutput: '',
-        })
-        .mockResolvedValueOnce(stlFollowUp)
-      previewManager.loadOFF.mockResolvedValue({})
+      renderController.renderFull = vi.fn().mockRejectedValueOnce(parserErr)
 
-      await controller.renderFull({ width: 10 })
-
-      // 3 calls: injected (fails), retry original (off), STL follow-up for download
-      expect(renderController.renderFull).toHaveBeenCalledTimes(3)
-      const [firstSource] = renderController.renderFull.mock.calls[0]
-      expect(firstSource).toContain('color("#f9d72c")')
-      const [secondSource] = renderController.renderFull.mock.calls[1]
-      expect(secondSource).toBe(scad)
+      await expect(controller.renderFull({ width: 10 })).rejects.toThrow(
+        'Parser error'
+      )
+      expect(renderController.renderFull).toHaveBeenCalledTimes(1)
     })
 
     it('propagates non-parser errors from renderFull without retry', async () => {
@@ -2232,35 +2189,6 @@ describe('AutoPreviewController', () => {
         'WASM out of memory'
       )
       expect(renderController.renderFull).toHaveBeenCalledTimes(1)
-    })
-
-    it('uses original project files on retry, not the injection-modified map', async () => {
-      isFlagEnabled.mockReturnValue(false)
-      const scad = 'difference() { cube(20); cube(10); }'
-      const origFiles = new Map([['main.scad', scad]])
-      controller.setProjectFiles(origFiles, 'main.scad')
-      controller.setScadContent(scad)
-
-      renderController.renderFull = vi.fn()
-        .mockRejectedValueOnce(parserErr)
-        .mockResolvedValueOnce({
-          stl: new ArrayBuffer(32),
-          stats: { triangles: 42 },
-          format: 'off',
-          consoleOutput: '',
-        })
-        .mockResolvedValueOnce({
-          stl: new ArrayBuffer(32),
-          stats: { triangles: 42 },
-          format: 'stl',
-          consoleOutput: '',
-        })
-      previewManager.loadOFF.mockResolvedValue({})
-
-      await controller.renderFull({ width: 10 })
-
-      const retryOpts = renderController.renderFull.mock.calls[1][2]
-      expect(retryOpts.files).toBe(origFiles)
     })
   })
 
@@ -2379,9 +2307,10 @@ describe('AutoPreviewController', () => {
       expect(fullOpts.outputFormat).toBe('off')
     })
 
-    it('both preview and full render inject CSG colors identically when no color() calls', async () => {
+    it('both preview and full render use the identical UNMODIFIED source when no color() calls', async () => {
       isFlagEnabled.mockReturnValue(false)
-      controller.setScadContent('difference() { cube(20); cube(10); }')
+      const scad = 'difference() { cube(20); cube(10); }'
+      controller.setScadContent(scad)
 
       renderController.renderPreview.mockResolvedValue({
         stl: new ArrayBuffer(8),
@@ -2400,8 +2329,8 @@ describe('AutoPreviewController', () => {
       await controller.renderFull(params)
       const [fullSource] = renderController.renderFull.mock.calls[0]
 
-      expect(previewSource).toContain('color("#f9d72c")')
-      expect(fullSource).toContain('color("#f9d72c")')
+      expect(previewSource).toBe(scad)
+      expect(fullSource).toBe(scad)
       expect(previewSource).toBe(fullSource)
     })
 
@@ -2728,6 +2657,117 @@ describe('AutoPreviewController', () => {
       })
 
       logSpy.mockRestore()
+    })
+  })
+
+  describe('renderFull export integrity (A1: no OFF bytes as STL)', () => {
+    beforeEach(() => {
+      isFlagEnabled.mockReturnValue(false)
+      renderController.getCapabilities = vi.fn(() => ({
+        hasRenderColorsFlag: true,
+        hasManifold: true,
+      }))
+      previewManager.loadOFF = vi.fn().mockResolvedValue()
+      previewManager.setRenderState = vi.fn()
+      previewManager._getPrimaryGeometry = vi.fn(() => null)
+      controller.setScadContent('difference() { cube(20); cube(10); }')
+    })
+
+    afterEach(() => {
+      isFlagEnabled.mockReset()
+    })
+
+    it('throws EXPORT_STL_FAILED and clears the cached artifact when the STL follow-up render fails', async () => {
+      const offBytes = new TextEncoder().encode('OFF\n8 12 0\n').buffer
+      renderController.renderFull = vi.fn()
+        .mockResolvedValueOnce({
+          stl: offBytes,
+          format: 'off',
+          stats: { triangles: 0, size: 10 },
+          consoleOutput: '',
+        })
+        .mockRejectedValueOnce(new Error('worker crashed'))
+
+      const params = { width: 10 }
+      await expect(controller.renderFull(params)).rejects.toMatchObject({
+        code: 'EXPORT_STL_FAILED',
+      })
+
+      expect(controller.fullQualitySTL).toBeNull()
+      expect(controller.fullQualityFormat).toBeNull()
+      expect(controller.fullRenderParamHash).toBeNull()
+      expect(controller.getCurrentFullSTL(params)).toBeNull()
+      expect(controller.getCurrentFullOutput(params)).toBeNull()
+    })
+
+    it('returns the STL follow-up result when it succeeds after an OFF render', async () => {
+      const offBytes = new TextEncoder().encode('OFF\n8 12 0\n').buffer
+      const stlBytes = new ArrayBuffer(134)
+      renderController.renderFull = vi.fn()
+        .mockResolvedValueOnce({
+          stl: offBytes,
+          format: 'off',
+          stats: { triangles: 0, size: 10 },
+          consoleOutput: '',
+        })
+        .mockResolvedValueOnce({
+          stl: stlBytes,
+          format: 'stl',
+          stats: { triangles: 1, size: 134 },
+          consoleOutput: '',
+        })
+
+      const params = { width: 10 }
+      const result = await controller.renderFull(params)
+
+      expect(result.format).toBe('stl')
+      expect(result.stl).toBe(stlBytes)
+      expect(controller.getCurrentFullSTL(params)).toMatchObject({
+        stl: stlBytes,
+      })
+    })
+
+    it('getCurrentFullSTL returns null while the stored artifact is OFF-format', () => {
+      const params = { a: 1 }
+      controller.fullQualitySTL = new ArrayBuffer(8)
+      controller.fullQualityFormat = 'off'
+      controller.fullQualityStats = { triangles: 0, size: 8 }
+      controller.fullRenderParamHash = controller.hashParams(params)
+
+      expect(controller.getCurrentFullSTL(params)).toBeNull()
+      // The format-agnostic accessor still reports it, with its format.
+      expect(controller.getCurrentFullOutput(params)).toMatchObject({
+        format: 'off',
+      })
+    })
+
+    it('does not serve an OFF-format artifact from the renderFull cache fast-path', async () => {
+      const params = { a: 1 }
+      controller.fullQualitySTL = new ArrayBuffer(8)
+      controller.fullQualityFormat = 'off'
+      controller.fullQualityStats = { triangles: 0, size: 8 }
+      controller.fullRenderParamHash = controller.hashParams(params)
+      controller.fullQualityKey = 'full'
+
+      const stlBytes = new ArrayBuffer(134)
+      renderController.renderFull = vi.fn()
+        .mockResolvedValueOnce({
+          stl: new TextEncoder().encode('OFF\n8 12 0\n').buffer,
+          format: 'off',
+          stats: { triangles: 0, size: 10 },
+          consoleOutput: '',
+        })
+        .mockResolvedValueOnce({
+          stl: stlBytes,
+          format: 'stl',
+          stats: { triangles: 1, size: 134 },
+          consoleOutput: '',
+        })
+
+      const result = await controller.renderFull(params)
+
+      expect(result.cached).toBeUndefined()
+      expect(result.format).toBe('stl')
     })
   })
 })

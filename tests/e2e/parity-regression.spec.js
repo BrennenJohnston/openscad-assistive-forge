@@ -172,8 +172,14 @@ async function sampleCanvasColorGroups(page) {
 // ─── S-001 through S-004, S-006: COFF Color Passthrough ──────────────────────
 
 test.describe('Parity — Color Passthrough (S-001–004, S-006)', () => {
-  test('WASM emits per-face colors with 2+ distinct face-color groups', async ({ page }) => {
-    test.skip(isCI, 'WASM rendering is slow/unreliable in CI');
+  test('WASM emits per-face colors with 2+ distinct face-color groups', async ({ page, browserName }) => {
+    // Un-skipped for Chromium-family CI (skip-debt drawdown); Firefox/WebKit
+    // CI workers are not yet proven stable for real WASM renders.
+    test.skip(
+      isCI && browserName !== 'chromium',
+      'Non-Chromium CI workers cannot complete WASM renders reliably'
+    );
+    test.setTimeout(240_000);
 
     const consoleMessages = [];
     page.on('console', (msg) => consoleMessages.push(msg.text()));
@@ -218,8 +224,14 @@ test.describe('Parity — Color Passthrough (S-001–004, S-006)', () => {
 // ─── S-005: Debug Modifier Dual-Render ────────────────────────────────────────
 
 test.describe('Parity — Debug Modifier Dual-Render (S-005)', () => {
-  test('# modifier geometry renders as THREE.Group with two children', async ({ page }) => {
-    test.skip(isCI, 'WASM rendering is slow/unreliable in CI');
+  test('# modifier geometry renders as THREE.Group with two children', async ({ page, browserName }) => {
+    // Un-skipped for Chromium-family CI (skip-debt drawdown); Firefox/WebKit
+    // CI workers are not yet proven stable for real WASM renders.
+    test.skip(
+      isCI && browserName !== 'chromium',
+      'Non-Chromium CI workers cannot complete WASM renders reliably'
+    );
+    test.setTimeout(240_000);
 
     const consoleMessages = [];
     page.on('console', (msg) => consoleMessages.push(msg.text()));

@@ -21,6 +21,15 @@ coverage/
 test-results/
 playwright-report/
 
+# Parity harness output (generated; goldens live in scripts/parity/golden/)
+artifacts/
+
+# Local scratch/experiment dirs and debug dumps (never commit)
+_em_temp/
+.tmp-scad-check/
+forge-cad-to-parametric/
+webkit-logs.txt
+
 # Lighthouse reports
 localhost_*.report.html
 .lighthouseci/

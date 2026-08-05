@@ -50,6 +50,9 @@ export default defineConfig({
       use: { ...devices['Desktop Edge'], channel: 'msedge' },
     },
     // Firefox - Tier 1 browser (extended timeouts for WASM init overhead)
+    // wasm-smoke runs on Chromium-family projects only for now: it performs
+    // real WASM renders with no CI skip, and Firefox/WebKit CI runners are
+    // not yet proven stable for that (see the skip-debt drawdown plan).
     {
       name: 'firefox',
       use: {
@@ -58,6 +61,7 @@ export default defineConfig({
         navigationTimeout: 45000,
       },
       timeout: 90000,
+      testIgnore: '**/wasm-smoke.spec.js',
     },
     // Visual regression tests (Milestone 3: Performance & Stability)
     // Run separately with: npm run test:visual
@@ -82,6 +86,7 @@ export default defineConfig({
         navigationTimeout: 45000,
       },
       timeout: 90000,
+      testIgnore: '**/wasm-smoke.spec.js',
     },
     // Mobile & tablet projects — scoped to responsive audit spec to avoid
     // interference with desktop-only E2E tests.

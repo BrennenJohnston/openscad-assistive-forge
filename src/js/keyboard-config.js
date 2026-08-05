@@ -39,18 +39,11 @@ export const DEFAULT_SHORTCUTS = {
     key: 'F7',
     description: 'Export STL / download rendered model',
   },
-  exportParams: {
-    key: 'e',
-    ctrl: true,
-    shift: true,
-    description: 'Export parameters as JSON',
-  },
-
-  // Expert Mode
+  // Code Editor
   toggleExpertMode: {
     key: 'e',
     ctrl: true,
-    description: 'Toggle Expert Mode (code editor)',
+    description: 'Toggle Code Editor',
   },
 
   // View controls
@@ -144,11 +137,6 @@ export const DEFAULT_SHORTCUTS = {
   },
 
   // Help
-  showHelp: {
-    key: '?',
-    shift: true,
-    description: 'Show keyboard shortcuts help',
-  },
   showShortcutsModal: {
     key: 'k',
     ctrl: true,
@@ -191,30 +179,6 @@ export const DEFAULT_SHORTCUTS = {
     ctrl: true,
     shift: true,
     description: 'Export preview as image',
-  },
-
-  // Navigation
-  nextParameter: {
-    key: 'ArrowDown',
-    alt: true,
-    description: 'Focus next parameter',
-  },
-  prevParameter: {
-    key: 'ArrowUp',
-    alt: true,
-    description: 'Focus previous parameter',
-  },
-  nextGroup: {
-    key: 'ArrowDown',
-    ctrl: true,
-    alt: true,
-    description: 'Jump to next parameter group',
-  },
-  prevGroup: {
-    key: 'ArrowUp',
-    ctrl: true,
-    alt: true,
-    description: 'Jump to previous parameter group',
   },
 
   // Edit actions
@@ -309,9 +273,6 @@ export const DEFAULT_SHORTCUTS = {
     ctrl: true,
     description: 'Toggle crosshairs overlay',
   },
-  // toggleAnimate: removed from UI pending full debug; key binding preserved here for future re-integration
-  // toggleAnimate: { key: 'm', ctrl: true, alt: true, description: 'Toggle animation playback' },
-
   // Panel controls
   toggleConsole: {
     key: '1',
@@ -388,7 +349,7 @@ export const SHORTCUT_CATEGORIES = {
   },
   downloads: {
     label: 'Downloads & Export',
-    actions: ['download', 'exportParams'],
+    actions: ['download'],
   },
   view: {
     label: 'View Controls',
@@ -418,15 +379,11 @@ export const SHORTCUT_CATEGORIES = {
   },
   help: {
     label: 'Help',
-    actions: ['showHelp', 'showShortcutsModal'],
+    actions: ['showShortcutsModal'],
   },
   file: {
     label: 'File',
     actions: ['newFile', 'saveFile', 'saveFileAs', 'reloadFile', 'exportImage'],
-  },
-  navigation: {
-    label: 'Navigation',
-    actions: ['nextParameter', 'prevParameter', 'nextGroup', 'prevGroup'],
   },
   editing: {
     label: 'Editing',

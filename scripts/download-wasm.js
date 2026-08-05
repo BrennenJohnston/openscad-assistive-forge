@@ -27,9 +27,11 @@ const strictMode = process.argv.includes('--strict');
 // Source: https://github.com/liberationfonts/liberation-fonts/releases/tag/2.1.5
 const FONTS_RELEASE_URL = 'https://github.com/liberationfonts/liberation-fonts/files/7261482/liberation-fonts-ttf-2.1.5.tar.gz';
 
-// SHA-256 checksum of the font archive for integrity verification
-// Computed from the official release artifact
-const FONTS_ARCHIVE_SHA256 = null; // Set after first verified download — see verifyChecksum()
+// SHA-256 checksum of the font archive for integrity verification.
+// Computed 2026-08-04 from the official release artifact at
+// FONTS_RELEASE_URL (liberation-fonts-ttf-2.1.5.tar.gz, 2,385,008 bytes).
+const FONTS_ARCHIVE_SHA256 =
+  '7191c669bf38899f73a2094ed00f7b800553364f90e2637010a69c0e268f25d0';
 
 // Required fonts from the archive
 const REQUIRED_FONTS = [
@@ -329,6 +331,51 @@ console.log('The official WASM files are vendored in the repository.');
 console.log('They include Manifold support for 5-30x faster CSG operations.');
 console.log('');
 
+/**
+ * Verify the vendored WASM engine files against the SHA-256 hashes
+ * recorded in INTEGRITY.json. In --strict mode a mismatch fails the build
+ * (corrupted or tampered engine files must never reach dist/).
+ */
+async function verifyWasmIntegrity(wasmDir) {
+  const integrityPath = join(wasmDir, 'INTEGRITY.json');
+  if (!existsSync(integrityPath)) {
+    const msg = 'WASM INTEGRITY.json missing — cannot verify engine files';
+    if (strictMode) throw new Error(msg);
+    console.warn(`⚠ ${msg}`);
+    return;
+  }
+
+  const integrity = JSON.parse(await readFile(integrityPath, 'utf8'));
+  const failures = [];
+
+  for (const [name, expected] of Object.entries(integrity.files || {})) {
+    if (!expected?.sha256) continue;
+    const filePath = join(wasmDir, name);
+    if (!existsSync(filePath)) {
+      failures.push(`${name}: file missing`);
+      continue;
+    }
+    const hash = createHash('sha256')
+      .update(await readFile(filePath))
+      .digest('hex');
+    if (hash !== expected.sha256) {
+      failures.push(
+        `${name}: SHA-256 mismatch (expected ${expected.sha256.slice(0, 16)}…, got ${hash.slice(0, 16)}…)`
+      );
+    }
+  }
+
+  if (failures.length > 0) {
+    const msg = `WASM engine integrity check FAILED — ${failures.join('; ')}`;
+    if (strictMode) throw new Error(msg);
+    console.warn(`⚠ ${msg}`);
+    return;
+  }
+  console.log(
+    `✓ WASM engine integrity verified (${integrity.build}, size + SHA-256)`
+  );
+}
+
 // Create directories and download fonts
 async function setup() {
   const publicWasmDir = join(__dirname, '..', 'public', 'wasm');
@@ -338,6 +385,8 @@ async function setup() {
     await mkdir(publicWasmDir, { recursive: true });
     console.log('✓ Created public/wasm/ directory');
   }
+
+  await verifyWasmIntegrity(join(publicWasmDir, 'openscad-official'));
 
   if (!existsSync(fontsDir)) {
     await mkdir(fontsDir, { recursive: true });

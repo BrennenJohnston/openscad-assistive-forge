@@ -10,6 +10,10 @@
 import { stateManager } from './state.js';
 import { extractParameters } from './parser.js';
 import {
+  FOLDER_IMPORT_LIMITS,
+  FILE_SIZE_LIMITS,
+} from './validation-constants.js';
+import {
   renderParameterUI,
   setGalleryOptions,
   clearGalleryOptions,
@@ -41,6 +45,7 @@ import { presetManager } from './preset-manager.js';
 import { closeModal } from './modal-manager.js';
 import { themeManager } from './theme-manager.js';
 import { getUIModeController } from './ui-mode-controller.js';
+import { collapseCustomizerGroups } from './classic-layout-controller.js';
 import {
   detectIncludeUse,
   detectRequiredCompanionFiles,
@@ -51,7 +56,12 @@ import { importProjectFromFiles } from './storage-manager.js';
 import { addProjectFile, getProjectFiles } from './saved-projects-manager.js';
 import { showMissingDependenciesDialog, showConfirmDialog } from './dialogs.js';
 import { escapeHtml } from './html-utils.js';
-import { announceError as _announceError } from './announcer.js';
+import {
+  announceError as _announceError,
+  announceImmediate,
+} from './announcer.js';
+import { setStlViewActive } from './stl-view-mode.js';
+import { showWorkflowProgress } from './workflow-progress.js';
 import { showErrorModal, showErrorToast } from './error-translator.js';
 import { closeTutorial } from './tutorial-sandbox.js';
 import { sanitizeUrlParams } from './file-param-resolver.js';
@@ -510,11 +520,17 @@ export function initFileHandler({
       'Analyzing project structure. Please do not close or refresh the page.'
     );
 
-    const MAX_FILES = 500;
-    const MAX_BYTES = 100 * 1024 * 1024; // 100 MB
-    const WARN_FILES = 200;
+    const { MAX_FILES, MAX_BYTES, WARN_FILES, WARN_BYTES } =
+      FOLDER_IMPORT_LIMITS;
 
     const totalBytes = fileArr.reduce((sum, f) => sum + f.size, 0);
+
+    if (totalBytes > WARN_BYTES && totalBytes <= MAX_BYTES) {
+      console.warn(
+        `[FolderImport] Large project: ${(totalBytes / 1024 / 1024).toFixed(1)} MB — ` +
+          'stored locally in full; renders mount only what the model references.'
+      );
+    }
 
     if (fileArr.length > MAX_FILES) {
       dismissOverlay();
@@ -528,9 +544,10 @@ export function initFileHandler({
     if (totalBytes > MAX_BYTES) {
       dismissOverlay();
       const mb = (totalBytes / 1024 / 1024).toFixed(1);
+      const limitMb = (MAX_BYTES / 1024 / 1024).toFixed(0);
       showErrorToast({
         title: 'Folder Too Large',
-        message: `The selected folder is ${mb} MB (limit: 100 MB). Please select a smaller project folder.`,
+        message: `The selected folder is ${mb} MB (limit: ${limitMb} MB). Please select a smaller project folder.`,
       });
       return;
     }
@@ -1095,6 +1112,9 @@ export function initFileHandler({
         getUIModeController().setProjectHiddenPanels(null);
       }
       getUIModeController().applyCurrentMode();
+      if (getUIModeController().getMode() === 'classic') {
+        collapseCustomizerGroups();
+      }
 
       getFileActionsController().trackOpen(fileName);
 
@@ -1371,110 +1391,7 @@ export function initFileHandler({
         }
       });
 
-      previewManager = getPreviewManager();
-      if (!previewManager) {
-        const previewContainer = getPreviewContainer();
-        previewManager = new PreviewManager(previewContainer);
-        setPreviewManager(previewManager);
-        await previewManager.init();
-
-        if (!document.getElementById('rendered2dPreview')) {
-          const preview2d = document.createElement('div');
-          preview2d.id = 'rendered2dPreview';
-          preview2d.className = 'rendered-2d-preview hidden';
-          preview2d.setAttribute('role', 'img');
-          preview2d.setAttribute('aria-label', 'Rendered 2D SVG preview');
-          previewContainer.appendChild(preview2d);
-        }
-
-        previewContainer.style.position = 'relative';
-        previewContainer.appendChild(getPreviewStateIndicator());
-        previewContainer.appendChild(getRenderingOverlay());
-
-        syncPreviewModelColorOverride();
-        syncPreviewAppearanceOverride();
-
-        const measurementsToggle =
-          document.getElementById('measurementsToggle');
-        if (measurementsToggle) {
-          measurementsToggle.checked = previewManager.measurementsEnabled;
-        }
-
-        const gridToggle = document.getElementById('gridToggle');
-        if (gridToggle) {
-          gridToggle.checked = previewManager.gridEnabled;
-        }
-
-        getOverlayGridCtrl().connectPreviewManager(previewManager);
-        getDisplayOptionsCtrl().connectPreviewManager(previewManager);
-
-        const autoBedToggle = document.getElementById('autoBedToggle');
-        if (autoBedToggle) {
-          autoBedToggle.checked = previewManager.autoBedEnabled;
-        }
-
-        const zoomToCursorToggle =
-          document.getElementById('zoomToCursorToggle');
-        if (zoomToCursorToggle) {
-          zoomToCursorToggle.checked = previewManager.zoomToCursorEnabled;
-        }
-
-        syncPreviewAppearanceOverride();
-
-        const cameraPanelController = getCameraPanelController();
-        if (cameraPanelController) {
-          cameraPanelController.setPreviewManager(previewManager);
-        }
-
-        const hfmCtrl = getHfmCtrl();
-        if (hfmCtrl.isUnlocked() && !document.getElementById('_hfmToggle')) {
-          hfmCtrl.injectAltToggle();
-        }
-
-        if (hfmCtrl.isPendingEnable()) {
-          const toggleBtn = document.getElementById('_hfmToggle');
-          if (toggleBtn) {
-            await hfmCtrl.enableAltViewWithPreview(toggleBtn);
-          }
-        }
-
-        syncPreviewModelColorOverride();
-        syncPreviewAppearanceOverride();
-
-        themeManager.addListener((theme, activeTheme, highContrast) => {
-          const pm = getPreviewManager();
-          if (pm) {
-            // detectTheme() returns mono-aware keys, keeping the WebGL scene
-            // black while Alt View is active (activeTheme is only light/dark).
-            pm.updateTheme(pm.detectTheme(), highContrast);
-
-            const modelColorPicker =
-              document.getElementById('modelColorPicker');
-            const hasSavedColor = localStorage.getItem(STORAGE_KEY_MODEL_COLOR);
-            if (modelColorPicker && !hasSavedColor) {
-              const themeKey = highContrast ? `${activeTheme}-hc` : activeTheme;
-              // Match PREVIEW_COLORS from preview.js (Cornfield gold [OBSERVED])
-              const PREVIEW_COLORS = {
-                light: 0xf9d72c,
-                dark: 0x4d9fff,
-                'light-hc': 0x0052cc,
-                'dark-hc': 0x66b3ff,
-              };
-              const colorHex = PREVIEW_COLORS[themeKey] || PREVIEW_COLORS.light;
-              modelColorPicker.value =
-                '#' + colorHex.toString(16).padStart(6, '0');
-            }
-          }
-
-          getOverlayGridCtrl().syncGridColorPicker();
-
-          const root = document.documentElement;
-          if (root.getAttribute('data-ui-variant') === 'mono') {
-            getHfmCtrl().refreshVariantAssets();
-            getHfmCtrl().onThemeChanged();
-          }
-        });
-      }
+      previewManager = await ensurePreviewManagerBootstrap();
 
       let autoPreviewController = getAutoPreviewController();
       if (!autoPreviewController) {
@@ -1827,6 +1744,193 @@ export function initFileHandler({
     }
   }
 
+  /**
+   * Open an .stl straight into the three.js preview — view-only mode.
+   * No WASM render, no parameters, nothing to generate: the camera,
+   * measurement, and grid tools work on the loaded mesh, and the
+   * customizer panel shows an explanatory notice instead of controls.
+   *
+   * @param {File} file - The .stl file to view
+   */
+  async function handleStlView(file) {
+    if (file.size > FILE_SIZE_LIMITS.STL_VIEW_FILE) {
+      const limitMB = FILE_SIZE_LIMITS.STL_VIEW_FILE / (1024 * 1024);
+      const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+      showErrorToast({
+        title: 'STL Too Large',
+        message: `"${file.name}" is ${sizeMB} MB — the viewing limit is ${limitMB} MB.`,
+      });
+      return;
+    }
+
+    let dismissOverlay = () => {};
+    try {
+      dismissOverlay = showProcessingOverlay(
+        `Loading ${file.name}…`,
+        'Preparing the 3D viewer.'
+      );
+      const buffer = await file.arrayBuffer();
+
+      const welcomeScreen = document.getElementById('welcomeScreen');
+      const mainInterface = document.getElementById('mainInterface');
+      welcomeScreen?.classList.add('hidden');
+      mainInterface?.classList.remove('hidden');
+      // The workflow toolbar carries the Back button — required to leave
+      // view mode again.
+      showWorkflowProgress();
+
+      const previewManager = await ensurePreviewManagerBootstrap();
+      await previewManager.loadSTL(buffer, { preserveCamera: false });
+      setStlViewActive(true, file.name);
+      // Reflect view-only mode on the primary action (Generate disabled).
+      updatePrimaryActionButton();
+
+      // View-only notice replaces the parameter controls. state.uploadedFile
+      // stays null, so Generate/Export stay disabled through the existing
+      // button-state logic — nothing renderable is loaded.
+      const parametersContainer = document.getElementById(
+        'parametersContainer'
+      );
+      if (parametersContainer) {
+        parametersContainer.textContent = '';
+        const notice = document.createElement('p');
+        notice.className = 'stl-view-notice';
+        notice.textContent =
+          `Viewing ${file.name} — STL files have no editable parameters. ` +
+          'Open a .scad model to customize a design.';
+        parametersContainer.appendChild(notice);
+      }
+
+      const triangles =
+        (previewManager._getPrimaryGeometry?.()?.attributes?.position?.count ??
+          0) / 3;
+      updateStatus(`Viewing STL: ${file.name}`);
+      announceImmediate(
+        `STL loaded for viewing: ${file.name}.` +
+          (triangles > 0 ? ` ${Math.round(triangles)} triangles.` : '') +
+          ' Customization is unavailable for STL files.'
+      );
+    } catch (err) {
+      setStlViewActive(false);
+      showErrorToast({ title: 'STL Load Failed', message: err.message });
+    } finally {
+      dismissOverlay();
+    }
+  }
+
+  /**
+   * Create and wire the PreviewManager on first use. Shared by the SCAD
+   * flow (handleFile) and STL view-only mode; returns the existing
+   * instance on subsequent calls.
+   */
+  async function ensurePreviewManagerBootstrap() {
+    let previewManager = getPreviewManager();
+    if (!previewManager) {
+      const previewContainer = getPreviewContainer();
+      previewManager = new PreviewManager(previewContainer);
+      setPreviewManager(previewManager);
+      await previewManager.init();
+
+      if (!document.getElementById('rendered2dPreview')) {
+        const preview2d = document.createElement('div');
+        preview2d.id = 'rendered2dPreview';
+        preview2d.className = 'rendered-2d-preview hidden';
+        preview2d.setAttribute('role', 'img');
+        preview2d.setAttribute('aria-label', 'Rendered 2D SVG preview');
+        previewContainer.appendChild(preview2d);
+      }
+
+      previewContainer.style.position = 'relative';
+      previewContainer.appendChild(getPreviewStateIndicator());
+      previewContainer.appendChild(getRenderingOverlay());
+
+      syncPreviewModelColorOverride();
+      syncPreviewAppearanceOverride();
+
+      const measurementsToggle =
+        document.getElementById('measurementsToggle');
+      if (measurementsToggle) {
+        measurementsToggle.checked = previewManager.measurementsEnabled;
+      }
+
+      const gridToggle = document.getElementById('gridToggle');
+      if (gridToggle) {
+        gridToggle.checked = previewManager.gridEnabled;
+      }
+
+      getOverlayGridCtrl().connectPreviewManager(previewManager);
+      getDisplayOptionsCtrl().connectPreviewManager(previewManager);
+
+      const autoBedToggle = document.getElementById('autoBedToggle');
+      if (autoBedToggle) {
+        autoBedToggle.checked = previewManager.autoBedEnabled;
+      }
+
+      const zoomToCursorToggle =
+        document.getElementById('zoomToCursorToggle');
+      if (zoomToCursorToggle) {
+        zoomToCursorToggle.checked = previewManager.zoomToCursorEnabled;
+      }
+
+      syncPreviewAppearanceOverride();
+
+      const cameraPanelController = getCameraPanelController();
+      if (cameraPanelController) {
+        cameraPanelController.setPreviewManager(previewManager);
+      }
+
+      const hfmCtrl = getHfmCtrl();
+      if (hfmCtrl.isUnlocked() && !document.getElementById('_hfmToggle')) {
+        hfmCtrl.injectAltToggle();
+      }
+
+      if (hfmCtrl.isPendingEnable()) {
+        const toggleBtn = document.getElementById('_hfmToggle');
+        if (toggleBtn) {
+          await hfmCtrl.enableAltViewWithPreview(toggleBtn);
+        }
+      }
+
+      syncPreviewModelColorOverride();
+      syncPreviewAppearanceOverride();
+
+      themeManager.addListener((theme, activeTheme, highContrast) => {
+        const pm = getPreviewManager();
+        if (pm) {
+          // detectTheme() returns mono-aware keys, keeping the WebGL scene
+          // black while Alt View is active (activeTheme is only light/dark).
+          pm.updateTheme(pm.detectTheme(), highContrast);
+
+          const modelColorPicker =
+            document.getElementById('modelColorPicker');
+          const hasSavedColor = localStorage.getItem(STORAGE_KEY_MODEL_COLOR);
+          if (modelColorPicker && !hasSavedColor) {
+            const themeKey = highContrast ? `${activeTheme}-hc` : activeTheme;
+            // Match PREVIEW_COLORS from preview.js (Cornfield gold [OBSERVED])
+            const PREVIEW_COLORS = {
+              light: 0xf9d72c,
+              dark: 0x4d9fff,
+              'light-hc': 0x0052cc,
+              'dark-hc': 0x66b3ff,
+            };
+            const colorHex = PREVIEW_COLORS[themeKey] || PREVIEW_COLORS.light;
+            modelColorPicker.value =
+              '#' + colorHex.toString(16).padStart(6, '0');
+          }
+        }
+
+        getOverlayGridCtrl().syncGridColorPicker();
+
+        const root = document.documentElement;
+        if (root.getAttribute('data-ui-variant') === 'mono') {
+          getHfmCtrl().refreshVariantAssets();
+          getHfmCtrl().onThemeChanged();
+        }
+      });
+    }
+    return previewManager;
+  }
+
   // ------------------------------------------------------------------
   // Public API
   // ------------------------------------------------------------------
@@ -1834,6 +1938,7 @@ export function initFileHandler({
   return {
     handleFile,
     handleFolderImport,
+    handleStlView,
     loadExampleByKey,
     /** @internal Exposed for folder picker wiring in main.js */
     collectFilesFromDir: _collectFilesFromDir,

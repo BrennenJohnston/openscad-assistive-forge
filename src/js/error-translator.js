@@ -6,6 +6,7 @@
 
 import { announceError } from './announcer.js';
 import { createFocusTrap } from './focus-trap.js';
+import { MODEL_NOT_2D_SUGGESTION } from '../worker/error-translations.js';
 
 /**
  * Common OpenSCAD error patterns and their user-friendly translations
@@ -298,8 +299,7 @@ export const TRANSLATIONS_BY_CODE = {
     title: '2D Output Required',
     explanation:
       'Your model produces 3D geometry, but SVG/DXF export requires 2D output.',
-    suggestion:
-      'Enable "use Laser Cutting best practices" or ensure your model uses projection() to produce 2D geometry.',
+    suggestion: MODEL_NOT_2D_SUGGESTION,
   },
   UNSUPPORTED_CONFIG: {
     title: 'Unsupported Option Combination',

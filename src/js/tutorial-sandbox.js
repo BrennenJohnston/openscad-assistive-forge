@@ -2022,11 +2022,14 @@ export async function startTutorial(tutorialId, { triggerEl } = {}) {
   currentStepIndex = startIndex;
   isMinimized = false;
 
-  // Switch to Basic mode for intro tutorial so the UI is simplified
+  // Switch to Simplified mode for intro tutorial so the UI is simplified
   const modeCtrl = getUIModeController();
   preTutorialMode = modeCtrl.getMode();
-  if (tutorialId === 'intro' && preTutorialMode !== 'basic') {
-    modeCtrl.switchMode('basic', { skipAnnouncement: true, skipFocus: true });
+  if (tutorialId === 'intro' && preTutorialMode !== 'simplified') {
+    modeCtrl.switchMode('simplified', {
+      skipAnnouncement: true,
+      skipFocus: true,
+    });
   }
 
   createTutorialOverlay();

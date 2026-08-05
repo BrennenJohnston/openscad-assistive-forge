@@ -23,6 +23,7 @@ export const CONSOLE_ENTRY_TYPE = {
   INFO: 'info',
   DEPRECATED: 'deprecated',
   TRACE: 'trace',
+  SEPARATOR: 'separator',
 };
 
 /**
@@ -72,6 +73,13 @@ export class ConsolePanel {
 
     /** @type {'log'|'structured'} */
     this.activeView = 'log';
+
+    // Append-only log (desktop parity): renders never clear the log; a
+    // "── Render N ──" separator marks each new run instead. The separator
+    // is lazy — it is only inserted when the new run actually produces
+    // output, so silent renders do not fill the log with bare separators.
+    this.renderSection = 1;
+    this._pendingSeparator = false;
 
     if (this.container) {
       this.initFilters();
@@ -241,14 +249,13 @@ export class ConsolePanel {
     if (!output) return;
 
     const lines = output.split('\n');
-    let hasNewEntries = false;
+    const parsed = [];
     let hasWarningOrError = false;
 
     for (const line of lines) {
       const entry = this.parseLine(line);
       if (entry) {
-        this.addEntry(entry);
-        hasNewEntries = true;
+        parsed.push(entry);
         if (
           entry.type === CONSOLE_ENTRY_TYPE.WARNING ||
           entry.type === CONSOLE_ENTRY_TYPE.ERROR
@@ -258,13 +265,55 @@ export class ConsolePanel {
       }
     }
 
-    if (hasNewEntries) {
-      this.render();
+    if (parsed.length === 0) return;
+
+    if (this._pendingSeparator) {
+      this._pendingSeparator = false;
+      this.renderSection++;
+      this.addEntry({
+        type: CONSOLE_ENTRY_TYPE.SEPARATOR,
+        message: `── Render ${this.renderSection} ──`,
+        file: null,
+        line: null,
+        timestamp: Date.now(),
+      });
     }
+
+    for (const entry of parsed) {
+      this.addEntry(entry);
+    }
+
+    this.render();
 
     if (hasWarningOrError) {
       this.autoExpandPanel();
     }
+  }
+
+  /**
+   * Mark the start of a new render run. The log stays append-only; if this
+   * run produces output, a "── Render N ──" separator is inserted before it.
+   */
+  beginRenderSection() {
+    this._pendingSeparator = this.entries.length > 0;
+  }
+
+  /**
+   * Append an app-generated status line (e.g. "Detected change in X —
+   * re-rendering"). Uses the separator entry type so it is always visible
+   * regardless of message-type filters and clearly not engine output.
+   * @param {string} message
+   */
+  addSystemLine(message) {
+    if (!message) return;
+    this.addEntry({
+      type: CONSOLE_ENTRY_TYPE.SEPARATOR,
+      message: `── ${message} ──`,
+      file: null,
+      line: null,
+      timestamp: Date.now(),
+    });
+    this.render();
   }
 
   /**
@@ -312,7 +361,9 @@ export class ConsolePanel {
     const issueCount =
       this.counts.warning + this.counts.error + this.counts.deprecated;
     const importantCount = issueCount + this.counts.echo;
-    const totalCount = this.entries.length;
+    const totalCount = this.entries.filter(
+      (e) => e.type !== CONSOLE_ENTRY_TYPE.SEPARATOR
+    ).length;
 
     if (issueCount > 0) {
       this.badge.textContent = importantCount;
@@ -389,7 +440,9 @@ export class ConsolePanel {
   render() {
     if (!this.container) return;
 
-    const visibleEntries = this.entries.filter((e) => this.filters[e.type]);
+    const visibleEntries = this.entries.filter(
+      (e) => e.type === CONSOLE_ENTRY_TYPE.SEPARATOR || this.filters[e.type]
+    );
 
     if (visibleEntries.length === 0) {
       this.container.innerHTML = `
@@ -414,6 +467,14 @@ export class ConsolePanel {
    * @returns {string} HTML string
    */
   renderEntry(entry) {
+    if (entry.type === CONSOLE_ENTRY_TYPE.SEPARATOR) {
+      return `
+      <div class="console-entry console-entry--separator" role="separator">
+        <span class="console-message">${escapeHtml(entry.message)}</span>
+      </div>
+    `;
+    }
+
     const time = new Date(entry.timestamp);
     const timeStr = time.toLocaleTimeString('en-US', {
       hour12: false,
@@ -457,6 +518,8 @@ export class ConsolePanel {
       deprecated: 0,
       trace: 0,
     };
+    this.renderSection = 1;
+    this._pendingSeparator = false;
     this.updateBadge();
     this.render();
     if (this.structuredPanel) {
@@ -474,6 +537,9 @@ export class ConsolePanel {
     }
     return this.entries
       .map((e) => {
+        if (e.type === CONSOLE_ENTRY_TYPE.SEPARATOR) {
+          return e.message;
+        }
         const time = new Date(e.timestamp).toISOString();
         return `[${time}] [${e.type.toUpperCase()}] ${e.message}`;
       })

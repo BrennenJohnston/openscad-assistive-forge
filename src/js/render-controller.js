@@ -10,12 +10,15 @@ import {
 } from './storage-keys.js';
 import { isPerfMetricsEnabled, appendPerfMetric } from './perf-metrics.js';
 
-import { QUALITY_TIERS, COMPLEXITY_TIER } from './quality-tiers.js';
-
-// Re-export quality tier system for convenience
+// Re-export quality tier system for convenience.
+// RENDER_QUALITY now lives in quality-tiers.js (single source of truth for
+// tessellation defaults); existing `import { RENDER_QUALITY } from
+// './render-controller.js'` sites keep working through this re-export.
 export {
   COMPLEXITY_TIER,
   QUALITY_TIERS,
+  RENDER_QUALITY,
+  PREVIEW_QUALITY_DEFAULT,
   HARDWARE_LEVEL,
   detectHardware,
   analyzeComplexity,
@@ -25,98 +28,8 @@ export {
   formatPresetDescription,
 } from './quality-tiers.js';
 
-/** STANDARD-tier presets that several RENDER_QUALITY entries mirror. */
-const STANDARD_TIER = QUALITY_TIERS[COMPLEXITY_TIER.STANDARD];
-
-/**
- * Legacy render quality presets (for backwards compatibility)
- *
- * NOTE: New code should use the adaptive quality tier system from quality-tiers.js
- * These presets are based on community standards for STANDARD complexity models.
- *
- * MANIFOLD OPTIMIZED: These values have been recalibrated for the Manifold
- * rendering backend, which is 10-100x faster than CGAL for boolean operations.
- *
- * For adaptive quality based on model complexity and hardware, use:
- * - getAdaptiveQualityConfig(scadContent, parameters)
- * - getQualityPreset(tier, hardwareLevel, qualityLevel, mode)
- */
-export const RENDER_QUALITY = {
-  /**
-   * Draft quality - very fast preview for any model.
-   * Numbers mirror STANDARD preview-low exactly, so derive them.
-   */
-  DRAFT: {
-    ...STANDARD_TIER.preview.low,
-    name: 'draft',
-  },
-  /**
-   * Low quality - fast exports, coarse tessellation.
-   * No exact QUALITY_TIERS counterpart (minFa 10 / 15s timeout are unique
-   * to this preset) — keep literal.
-   */
-  LOW: {
-    name: 'low',
-    maxFn: 48,
-    forceFn: false,
-    minFa: 10,
-    minFs: 2,
-    timeoutMs: 15000, // Reduced from 45s
-  },
-  /**
-   * Preview quality - balanced for interactive use (~50% of full quality)
-   * Targets approximately 50% triangle count vs full render:
-   * - For STANDARD models (export-medium $fn=192): $fn=96 gives ~50%
-   * - For COMPLEX models: $fn=96 capped by their lower limits, still rounded
-   * Close to STANDARD export-low but with a tighter 12s timeout — keep literal.
-   */
-  PREVIEW: {
-    name: 'preview',
-    maxFn: 96, // ~50% of STANDARD export-medium ($fn=192)
-    forceFn: false,
-    minFa: 8,
-    minFs: 1.5,
-    timeoutMs: 12000,
-  },
-  /**
-   * Medium quality - community standard (STANDARD tier export-medium).
-   */
-  MEDIUM: {
-    ...STANDARD_TIER.export.medium,
-    name: 'medium',
-  },
-  /**
-   * High quality - community high standard (STANDARD tier export-high).
-   */
-  HIGH: {
-    ...STANDARD_TIER.export.high,
-    name: 'high',
-  },
-  /**
-   * Desktop-equivalent - respects model's settings (OpenSCAD defaults)
-   * Matches native OpenSCAD behavior: $fn, $fa, $fs from model.
-   * maxFn: null has no QUALITY_TIERS counterpart — keep literal.
-   */
-  DESKTOP_DEFAULT: {
-    name: 'desktop',
-    maxFn: null,
-    forceFn: false,
-    minFa: 12,
-    minFs: 2,
-    timeoutMs: 30000, // Reduced from 60s
-  },
-  /**
-   * Full quality - for final export (respects model's settings)
-   */
-  FULL: {
-    name: 'full',
-    maxFn: null,
-    forceFn: false,
-    minFa: 12,
-    minFs: 2,
-    timeoutMs: 30000, // Reduced from 60s
-  },
-};
+import { RENDER_QUALITY } from './quality-tiers.js';
+import { filterFilesForMount } from './mount-filter.js';
 
 /**
  * Estimate render time based on SCAD content complexity
@@ -1041,10 +954,23 @@ export class RenderController {
             onProgress: options.onProgress,
           };
 
-          // Convert Map to plain object if files are provided
-          const filesObject = options.files
-            ? Object.fromEntries(options.files)
-            : undefined;
+          // Mount only what the render needs (text always; large binary
+          // sets reduced to dependency-referenced files), then convert
+          // the Map to a plain object for the worker.
+          let filesObject;
+          if (options.files) {
+            const mountSelection = filterFilesForMount(
+              options.files,
+              options.mainFile
+            );
+            if (mountSelection.dropped.length > 0) {
+              console.log(
+                `[RenderController] Not mounting ${mountSelection.dropped.length} ` +
+                  `unreferenced binary companion(s): ${mountSelection.dropped.join(', ')}`
+              );
+            }
+            filesObject = Object.fromEntries(mountSelection.files);
+          }
 
           // Determine output format (default to stl)
           const outputFormat = options.outputFormat || 'stl';
@@ -1181,50 +1107,45 @@ export class RenderController {
    * MODEL_NOT_2D.
    *
    * Fallback strategy:
-   *   Pass 1 — Remove the 2D-producing `generate` value so the model
-   *            falls back to its default 3D mode. Render the full
-   *            3D keyguard mesh to STL on a fresh worker.
+   *   Pass 1 — Render the model to STL with the parameters EXACTLY as
+   *            given (the caller decides which 3D-producing parameters to
+   *            use — this method never rewrites them; the historical
+   *            silent `generate`-stripping moved to the consent flow in
+   *            main.js).
    *   Pass 2 — Compile `projection(cut=true) { import("mesh.stl"); }`
    *            to the target 2D format on another fresh worker.
+   *
+   * The output is an APPROXIMATION: a polyline projection of a
+   * tessellated mesh, not OpenSCAD's exact 2D geometry. Results are
+   * tagged `approximation: 'stl-projection'` and SVG output carries an
+   * explanatory comment. EXPORT callers must obtain user consent before
+   * invoking this (see the MODEL_NOT_2D handlers in main.js); the draft
+   * 2D preview may use it without a dialog since nothing leaves the app.
    *
    * Each pass uses a fresh WASM module (proactive restart in renderOnce)
    * to avoid the callMain-reuse corruption bug.
    *
    * @param {string} scadContent - OpenSCAD source code
-   * @param {Object} parameters - Parameter overrides
+   * @param {Object} parameters - Parameter overrides (used verbatim)
    * @param {Object} options - Original render options (outputFormat must be svg/dxf)
    * @returns {Promise<Object>} Render result with 2D data
    */
   async render2DFallback(scadContent, parameters = {}, options = {}) {
     const targetFormat = options.outputFormat || 'svg';
-    const TWO_D_RE = /svg|dxf|2d|first layer/i;
 
     console.log(
-      `[RenderController] 2D fallback: STL (3D default) → projection → ${targetFormat}`
+      `[RenderController] 2D fallback: STL → projection → ${targetFormat}`
     );
 
     if (options.onProgress) {
       options.onProgress(
         -1,
-        'Model produces 3D geometry — rendering 3D mesh then projecting to 2D...'
+        'Rendering 3D mesh then projecting to an approximate 2D profile...'
       );
     }
 
-    // Pass 1: render full 3D model to STL.
-    // Remove the `generate` parameter when it selects a 2D-export mode
-    // so the model falls back to its default 3D output path (e.g.
-    // generate="keyguard" instead of "first layer for SVG/DXF file").
-    // Only target `generate` — other parameters that happen to contain
-    // "svg" (like screenshot_file="default.svg") must not be removed.
-    const stlParams = { ...parameters };
-    if (
-      typeof stlParams.generate === 'string' &&
-      TWO_D_RE.test(stlParams.generate)
-    ) {
-      delete stlParams.generate;
-    }
-
-    const stlResult = await this.renderFull(scadContent, stlParams, {
+    // Pass 1: render the 3D model to STL with the caller's parameters.
+    const stlResult = await this.renderFull(scadContent, parameters, {
       ...options,
       outputFormat: 'stl',
     });
@@ -1248,7 +1169,7 @@ export class RenderController {
       [wrapperName, new TextEncoder().encode(wrapperScad)],
     ]);
 
-    return this.renderFull(
+    const result = await this.renderFull(
       wrapperScad,
       {},
       {
@@ -1259,6 +1180,30 @@ export class RenderController {
         timeoutMs: options.timeoutMs || 60000,
       }
     );
+
+    result.approximation = 'stl-projection';
+
+    if (targetFormat === 'svg') {
+      const raw = result.data || result.stl;
+      if (raw != null) {
+        const text =
+          typeof raw === 'string' ? raw : new TextDecoder().decode(raw);
+        const svgIdx = text.indexOf('<svg');
+        if (svgIdx !== -1) {
+          const annotated =
+            text.slice(0, svgIdx) +
+            '<!-- Approximate outline: projection(cut=true) of a tessellated 3D mesh.\n' +
+            '     Curves are polyline segments - verify dimensions before cutting.\n' +
+            '     Generated by the openscad-assistive-forge 2D fallback. -->\n' +
+            text.slice(svgIdx);
+          const encoded = new TextEncoder().encode(annotated);
+          if (result.data != null) result.data = encoded;
+          if (result.stl != null) result.stl = encoded;
+        }
+      }
+    }
+
+    return result;
   }
 
   /**

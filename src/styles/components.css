@@ -4561,6 +4561,32 @@ select:focus-visible {
   margin-bottom: var(--space-xs);
 }
 
+/* STL view-only mode: notice shown in place of parameter controls */
+.stl-view-notice {
+  margin: var(--space-md) 0;
+  padding: var(--space-sm) var(--space-md);
+  background: var(--color-bg-secondary, rgba(0, 0, 0, 0.03));
+  border-left: var(--space-xxs, 3px) solid var(--color-border, currentColor);
+  border-radius: var(--border-radius-xs);
+  color: var(--color-text-secondary);
+}
+
+.format-2d-auto-adjust .auto-adjust-consent {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin: 0 0 var(--space-xs) 0;
+  min-height: var(--size-touch-target);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.format-2d-auto-adjust .auto-adjust-consent input[type='checkbox'] {
+  width: var(--space-md);
+  height: var(--space-md);
+  flex-shrink: 0;
+}
+
 .format-2d-auto-adjust .auto-adjust-note {
   margin: 0;
   font-size: var(--font-size-xs, 0.75rem);
@@ -5578,6 +5604,13 @@ body.first-visit-blocking #app {
 
 .console-entry--info .console-type {
   color: var(--color-text-secondary);
+}
+
+/* Render-run separator in the append-only log */
+.console-entry--separator {
+  justify-content: center;
+  color: var(--color-text-secondary);
+  user-select: none;
 }
 
 .console-entry--deprecated .console-type {

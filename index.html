@@ -401,19 +401,19 @@
               id="uiModeToggle"
               class="ui-mode-toggle hidden"
               role="switch"
-              aria-checked="true"
-              aria-label="Interface mode: Advanced. Click to switch to Basic mode"
-              title="Switch between Basic and Advanced interface modes"
+              aria-checked="false"
+              aria-label="Interface mode: Simplified. Click to switch to Standard mode"
+              title="Switch between Simplified and Standard interface modes"
             >
               <span
                 class="ui-mode-option ui-mode-option--basic"
                 aria-hidden="true"
-                >Basic</span
+                >Simplified</span
               >
               <span
                 class="ui-mode-option ui-mode-option--advanced"
                 aria-hidden="true"
-                >Advanced</span
+                >Standard</span
               >
               <span class="ui-mode-slider" aria-hidden="true"></span>
             </button>
@@ -1091,17 +1091,27 @@
                     <polyline points="17 8 12 3 7 8"></polyline>
                     <line x1="12" y1="3" x2="12" y2="15"></line>
                   </svg>
-                  <span class="upload-text"
-                    >Drop .scad or .zip file here or click to browse</span
+                  <span class="upload-text" id="uploadZoneText"
+                    >Drop a project here or click to browse — .scad model ·
+                    .zip project · project folder · .stl (view only) · .json
+                    presets</span
                   >
                   <input
                     type="file"
                     id="fileInput"
-                    accept=".scad,.zip"
+                    accept=".scad,.zip,.stl,.json"
                     class="file-input"
                   />
                 </label>
                 <div class="welcome-divider"><span>or</span></div>
+                <button
+                  type="button"
+                  class="btn btn-large btn-outline"
+                  id="uploadZoneFolderBtn"
+                  aria-label="Open a project folder from your computer"
+                >
+                  Open Project Folder…
+                </button>
                 <button
                   type="button"
                   class="btn btn-lg btn-outline start-new-btn"
@@ -1250,13 +1260,13 @@
                 >
                   Reset
                 </button>
-                <!-- Expert Mode toggle (M2) - hidden until feature flag enabled -->
+                <!-- Code Editor toggle (M2) - hidden until feature flag enabled -->
                 <button type="button"
                   id="expertModeToggle"
                   class="mode-toggle-btn hidden"
                   aria-pressed="false"
-                  aria-label="Toggle Expert Mode - code editor"
-                  title="Expert Mode: Edit OpenSCAD code directly"
+                  aria-label="Toggle Code Editor"
+                  title="Code Editor: Edit OpenSCAD code directly"
                   data-tutorial-target="expert-mode-toggle"
                 >
                   <span class="mode-icon" aria-hidden="true">{ }</span>
@@ -2569,6 +2579,15 @@
                         +
                       </button>
                       <button type="button"
+                        id="copyPresetBtn"
+                        class="btn btn-sm btn-icon"
+                        aria-label="Copy current preset to a new preset"
+                        title="Copy Preset — duplicate the current preset"
+                        disabled
+                      >
+                        ⧉
+                      </button>
+                      <button type="button"
                         id="deletePresetBtn"
                         class="btn btn-sm btn-icon btn-danger-icon"
                         aria-label="Delete current preset"
@@ -2761,8 +2780,10 @@
                     <li>Click <strong>Download</strong> to save the SVG or DXF file</li>
                     <li>Open the file in your laser cutter software (e.g. LightBurn, LaserGRBL, Inkscape)</li>
                   </ol>
-                  <!-- Auto-adjustment notification: populated by main.js when
-                       resolve2DExportParameters() would change current params -->
+                  <!-- 2D-export change proposal: populated by main.js when
+                       propose2DExportChanges() suggests parameter changes.
+                       Changes apply only while the consent checkbox is
+                       checked — never silently. -->
                   <div
                     id="format2dAutoAdjust"
                     class="format-2d-auto-adjust hidden"
@@ -2770,12 +2791,23 @@
                     aria-live="polite"
                   >
                     <p class="auto-adjust-title">
-                      &#x2139;&#xFE0F; Parameters auto-adjusted for 2D export:
+                      &#x2139;&#xFE0F; Suggested parameter changes for 2D
+                      export:
                     </p>
                     <ul id="format2dAutoAdjustList" class="auto-adjust-list"></ul>
+                    <label class="auto-adjust-consent">
+                      <input
+                        type="checkbox"
+                        id="format2dAutoAdjustApply"
+                        checked
+                        aria-describedby="format2dAutoAdjustList"
+                      />
+                      Apply these changes for this export
+                    </label>
                     <p class="auto-adjust-note">
-                      These changes apply only during Generate — your current
-                      parameter values are not permanently modified.
+                      Applied only during Generate — your saved parameter
+                      values are not modified. Uncheck to export with your
+                      parameters exactly as configured.
                     </p>
                   </div>
                   <details class="guidance-details">
@@ -2851,14 +2883,14 @@
                   <button type="button"
                     id="expertModeCloseBtn"
                     class="btn btn-sm btn-outline"
-                    aria-label="Exit Expert Mode"
+                    aria-label="Exit Code Editor"
                   >
-                    Exit Code Mode
+                    Exit Code Editor
                   </button>
                 </div>
               </div>
               <div class="expert-mode-body" id="expertModeBody">
-                <!-- Editor will be inserted here by JavaScript (Monaco or Textarea) -->
+                <!-- Editor inserted here by mode-manager (CodeMirror or textarea) -->
               </div>
             </div>
           </div>
@@ -2868,6 +2900,59 @@
             role="region"
             aria-label="3D preview and actions"
           >
+            <!-- Classic mode display strip (C4.5) — shown only in Classic layout -->
+            <div class="classic-display-strip" id="classicDisplayStrip">
+              <div class="classic-strip-group" role="group" aria-label="Snap views">
+                <button type="button" class="btn btn-sm" data-classic-view="top">Top</button>
+                <button type="button" class="btn btn-sm" data-classic-view="bottom">Bottom</button>
+                <button type="button" class="btn btn-sm" data-classic-view="left">Left</button>
+                <button type="button" class="btn btn-sm" data-classic-view="right">Right</button>
+                <button type="button" class="btn btn-sm" data-classic-view="front">Front</button>
+                <button type="button" class="btn btn-sm" data-classic-view="back">Back</button>
+                <button type="button" class="btn btn-sm" data-classic-view="diagonal">Diagonal</button>
+                <button type="button"
+                  class="btn btn-sm"
+                  id="classicViewHomeBtn"
+                  aria-label="Fit view to model"
+                >
+                  Home
+                </button>
+              </div>
+              <div class="classic-strip-group" role="group" aria-label="Overlays">
+                <button type="button"
+                  class="btn btn-sm"
+                  id="classicAxesToggle"
+                  aria-pressed="false"
+                  aria-label="Show axes with millimetre markings"
+                >
+                  Axes (mm)
+                </button>
+                <button type="button"
+                  class="btn btn-sm"
+                  id="classicGridToggle"
+                  aria-pressed="true"
+                  aria-label="Show printer bed grid"
+                >
+                  Bed grid
+                </button>
+                <select
+                  id="classicGridSizeSelect"
+                  class="classic-grid-select"
+                  aria-label="Printer bed size in millimetres"
+                ></select>
+              </div>
+              <div class="classic-strip-group" role="group" aria-label="Rendering">
+                <button type="button" class="btn btn-sm" id="classicPreviewBtn">
+                  Preview (F5)
+                </button>
+                <button type="button"
+                  class="btn btn-sm btn-primary"
+                  id="classicRenderBtn"
+                >
+                  Render (F6)
+                </button>
+              </div>
+            </div>
             <!-- Scrollable content wrapper with vertical split -->
             <div class="preview-content" id="previewContent">
               <!-- Top section: Preview settings, status, stats, dimensions -->
@@ -3351,11 +3436,11 @@
                             id="previewQualitySelect"
                             aria-label="Select preview quality"
                           >
-                            <option value="auto">Auto (adaptive)</option>
-                            <option value="fidelity">Fidelity (slower)</option>
-                            <option value="balanced" selected>
-                              Balanced (~50%)
+                            <option value="auto" selected>
+                              Auto (adaptive)
                             </option>
+                            <option value="fidelity">Fidelity (slower)</option>
+                            <option value="balanced">Balanced (~50%)</option>
                             <option value="fast">Fast (lower resolution)</option>
                           </select>
                         </label>

@@ -699,11 +699,36 @@ export class TextareaEditor {
   }
 
   /**
-   * Shim for Monaco-compatible getAction() — textarea has no actions.
-   * @returns {null}
+   * The basic textarea editor has no named commands; the Edit menu uses
+   * this to disable those items with an honest tooltip.
+   * @returns {boolean}
    */
-  getAction() {
-    return null;
+  supportsAction() {
+    return false;
+  }
+
+  /**
+   * @returns {boolean} Always false — no named commands here.
+   */
+  performAction() {
+    return false;
+  }
+
+  /**
+   * Replace the current selection (or insert at the cursor) with text.
+   * Used by the Edit-menu Paste handler.
+   * @param {string} text
+   */
+  replaceSelection(text) {
+    if (!this.textarea) return;
+    this.textarea.setRangeText(
+      text,
+      this.textarea.selectionStart,
+      this.textarea.selectionEnd,
+      'end'
+    );
+    this.textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    this.textarea.focus();
   }
 
   /**

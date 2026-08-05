@@ -33,7 +33,10 @@ import { validateSVGOutput } from './svg-validation.js';
 import { postProcessDXF } from './dxf-postprocess.js';
 import { generateMissingFileWarnings } from './missing-file-warnings.js';
 import { resolveMountContent } from './mount-content.js';
-import { translateWorkerError } from './error-translations.js';
+import {
+  translateWorkerError,
+  MODEL_NOT_2D_SUGGESTION,
+} from './error-translations.js';
 
 // Official WASM is loaded dynamically in initWASM() from /wasm/openscad-official/
 
@@ -136,9 +139,12 @@ async function initWASM(baseUrl = '', cachedCapabilities = null) {
     if (import.meta.env.DEV)
       console.log('[Worker] Loading official OpenSCAD from:', wasmJsUrl);
 
-    // Integrity check: verify WASM artifacts match expected manifest.
-    // Guards against corrupted or tampered files before they produce silent wrong results.
-    // Checks both openscad.js and openscad.wasm sizes; optionally verifies SHA-256.
+    // Integrity check: verify WASM artifacts match the vendored manifest.
+    // Guards against corrupted or tampered files before they produce silent
+    // wrong results. Verifies byte size AND the SHA-256 recorded in
+    // INTEGRITY.json (previously only content-length was compared, which
+    // cannot detect same-size tampering). The fetch hits the HTTP/SW cache
+    // and the 10.7 MB digest takes milliseconds.
     let integrityData = null;
     try {
       const integrityUrl = `${wasmBasePath}/INTEGRITY.json`;
@@ -154,7 +160,7 @@ async function initWASM(baseUrl = '', cachedCapabilities = null) {
           }
         }
 
-        // Verify sizes of both JS loader and WASM binary
+        // Verify size and SHA-256 of both the JS loader and the WASM binary
         const filesToCheck = [
           { name: 'openscad.js', url: wasmJsUrl },
           { name: 'openscad.wasm', url: `${wasmBasePath}/openscad.wasm` },
@@ -163,36 +169,49 @@ async function initWASM(baseUrl = '', cachedCapabilities = null) {
 
         for (const { name, url } of filesToCheck) {
           const expected = integrityData.files?.[name];
-          if (!expected?.size) continue;
+          if (!expected?.size && !expected?.sha256) continue;
 
           try {
-            const headResp = await fetch(url, { method: 'HEAD' });
-            const actualSize = parseInt(
-              headResp.headers.get('content-length'),
-              10
-            );
-            if (actualSize && actualSize !== expected.size) {
+            const resp = await fetch(url);
+            if (!resp.ok) continue;
+            const buffer = await resp.arrayBuffer();
+
+            if (expected.size && buffer.byteLength !== expected.size) {
               mismatches.push(
-                `${name}: expected ${expected.size} bytes, got ${actualSize}`
+                `${name}: expected ${expected.size} bytes, got ${buffer.byteLength}`
               );
+              continue;
             }
-          } catch (_headErr) {
-            // HEAD may fail on some CDN configs; skip this file's check
+            if (expected.sha256 && crypto?.subtle) {
+              const digest = await crypto.subtle.digest('SHA-256', buffer);
+              const hex = Array.from(new Uint8Array(digest))
+                .map((b) => b.toString(16).padStart(2, '0'))
+                .join('');
+              if (hex !== expected.sha256) {
+                mismatches.push(
+                  `${name}: SHA-256 mismatch (expected ${expected.sha256.slice(0, 16)}…, got ${hex.slice(0, 16)}…)`
+                );
+              }
+            }
+          } catch (_fetchErr) {
+            // Fetch may fail on some CDN configs; skip this file's check
           }
         }
 
         if (mismatches.length > 0) {
-          const msg = `[Worker] WASM integrity warning: size mismatch — ${mismatches.join('; ')}. Files may be corrupted or outdated.`;
+          const msg = `[Worker] WASM integrity check FAILED — ${mismatches.join('; ')}. Files may be corrupted or tampered with; re-run npm run setup-wasm.`;
           console.warn(msg);
           self.postMessage({
             type: 'WARNING',
             payload: {
               code: 'WASM_INTEGRITY',
               message:
-                'WASM file integrity check detected a size mismatch. Files may need re-downloading.',
+                'WASM engine files failed integrity verification (size or SHA-256 mismatch). Re-download them with "npm run setup-wasm".',
               severity: 'warning',
             },
           });
+        } else if (import.meta.env.DEV) {
+          console.log('[Worker] WASM integrity verified (size + SHA-256)');
         }
       }
     } catch (integrityErr) {
@@ -2022,7 +2041,7 @@ async function render(payload) {
       code = 'MODEL_NOT_2D';
       message =
         'Your model produces 3D geometry but SVG/DXF export requires 2D output. ' +
-        'Enable "use Laser Cutting best practices" or ensure your model uses projection() to produce 2D geometry.';
+        MODEL_NOT_2D_SUGGESTION;
     }
 
     // Signal that the WASM module needs a restart before the next render.

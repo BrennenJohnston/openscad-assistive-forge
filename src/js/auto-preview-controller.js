@@ -11,7 +11,12 @@ import {
 import { isPerfMetricsEnabled, appendPerfMetric } from './perf-metrics.js';
 import { isDebugPrefEnabled } from './storage-keys.js';
 import { isEnabled as isFlagEnabled } from './feature-flags.js';
-import { isNonPreviewable, is2DGenerateValue } from './render-intent.js';
+import {
+  isNonPreviewable,
+  is2DGenerateValue,
+  strip2DGenerateForFallback,
+} from './render-intent.js';
+import { build2DPreviewStyleTag } from './state-colors.js';
 import { RENDER_QUALITY } from './render-controller.js';
 
 /**
@@ -688,6 +693,8 @@ export class AutoPreviewController {
    *
    * @param {string} scadContent - OpenSCAD source code
    * @returns {string} Source with color() calls removed
+   * @deprecated No longer called by the render pipeline — renders always use
+   * unmodified source (KI-012). Kept only until dependent tests are removed.
    */
   static stripColorCalls(scadContent) {
     if (!scadContent || typeof scadContent !== 'string') return scadContent;
@@ -730,6 +737,10 @@ export class AutoPreviewController {
    *
    * @param {string} scadContent - OpenSCAD source code without user color() calls
    * @returns {string} Source with injected gold/green color() wrappers
+   * @deprecated No longer called by the render pipeline. Wrapping each
+   * subtractor statement in its own color(){} block creates new lexical
+   * scopes and silently corrupts geometry when statements share variables
+   * (KI-012 phase 1). Kept only until dependent tests are removed.
    */
   static injectCsgColors(scadContent) {
     if (!scadContent || typeof scadContent !== 'string') return scadContent;
@@ -841,6 +852,8 @@ export class AutoPreviewController {
    * error — the kind that injection can cause when it produces invalid SCAD.
    * @param {Error|string} error
    * @returns {boolean}
+   * @deprecated Only existed to detect injectCsgColors() breakage; the
+   * injection no longer runs. Kept only until dependent tests are removed.
    */
   static isParserError(error) {
     const msg = (error?.message || String(error)).toLowerCase();
@@ -1085,27 +1098,21 @@ export class AutoPreviewController {
     );
 
     let previewOutputFormat;
-    let scadForPreview = this.currentScadContent;
-    let filesForPreview = this.projectFiles;
-    let csgColorsInjected = false;
+    // The render always uses the user's UNMODIFIED source. injectCsgColors()
+    // used to wrap each difference() subtractor in its own color(){} block,
+    // but each block is a new lexical scope, so variables assigned in one
+    // subtractor became undef in the next — silently wrong geometry (KI-012
+    // phase 1, the confirmed keyguard-corruption root cause). Colorless and
+    // monochrome models now get viewer-side cavity tinting in loadOFF().
+    const scadForPreview = this.currentScadContent;
+    const filesForPreview = this.projectFiles;
+    const csgColorsInjected = false;
     const noCsgColors = isDebugPrefEnabled('noCsgColors');
 
     if (noCsgColors) {
       previewOutputFormat = 'stl';
     } else if (supportsRenderColors) {
       previewOutputFormat = 'off';
-      if (!hasColorCalls || !colorPassthroughEnabled) {
-        scadForPreview = AutoPreviewController.injectCsgColors(
-          hasColorCalls
-            ? AutoPreviewController.stripColorCalls(this.currentScadContent)
-            : this.currentScadContent
-        );
-        csgColorsInjected = true;
-        if (this.projectFiles && this.mainFilePath) {
-          filesForPreview = new Map(this.projectFiles);
-          filesForPreview.set(this.mainFilePath, scadForPreview);
-        }
-      }
     } else {
       const useColorPassthrough =
         colorPassthroughEnabled && (hasColorCalls || hasDebugModifier);
@@ -1171,32 +1178,11 @@ export class AutoPreviewController {
         );
       }
 
-      let result;
-      try {
-        result = await this.renderController.renderPreview(
-          scadForPreview,
-          previewParameters,
-          previewRenderOpts
-        );
-      } catch (renderErr) {
-        if (
-          csgColorsInjected &&
-          AutoPreviewController.isParserError(renderErr)
-        ) {
-          console.warn(
-            '[AutoPreview] CSG color injection produced invalid SCAD — ' +
-              'retrying with original source'
-          );
-          csgColorsInjected = false;
-          result = await this.renderController.renderPreview(
-            this.currentScadContent,
-            previewParameters,
-            { ...previewRenderOpts, files: this.projectFiles }
-          );
-        } else {
-          throw renderErr;
-        }
-      }
+      const result = await this.renderController.renderPreview(
+        scadForPreview,
+        previewParameters,
+        previewRenderOpts
+      );
 
       const durationMs = Date.now() - startTime;
 
@@ -1225,63 +1211,10 @@ export class AutoPreviewController {
         return;
       }
 
-      // Monochrome fallback: if the OFF output has only 1 unique face color,
-      // the author's color() calls wrap all geometry in a single hue, which
-      // isn't visually useful. Re-render with color() calls stripped so the
-      // Manifold CSG engine assigns per-operation face colors instead.
-      let activeResult = result;
-      const useAuthorColors =
-        hasColorCalls && colorPassthroughEnabled && !csgColorsInjected;
-      if (
-        (result.format || 'stl') === 'off' &&
-        useAuthorColors &&
-        !noCsgColors
-      ) {
-        const uniqueColors = AutoPreviewController.countUniqueOFFColors(
-          result.stl
-        );
-        if (uniqueColors === 1) {
-          console.log(
-            '[AutoPreview] Monochrome OFF detected (1 unique color) — ' +
-              're-rendering with stripped color() for CSG face colors'
-          );
-          const strippedSource = AutoPreviewController.injectCsgColors(
-            AutoPreviewController.stripColorCalls(this.currentScadContent)
-          );
-          let strippedFiles = this.projectFiles;
-          if (this.projectFiles && this.mainFilePath) {
-            strippedFiles = new Map(this.projectFiles);
-            strippedFiles.set(this.mainFilePath, strippedSource);
-          }
-          try {
-            const fallbackResult = await this.renderController.renderPreview(
-              strippedSource,
-              previewParameters,
-              {
-                ...(quality ? { quality } : {}),
-                outputFormat: 'off',
-                files: strippedFiles,
-                mainFile: this.mainFilePath,
-                libraries: this.enabledLibraries,
-                paramTypes: this.paramTypes,
-                onProgress: (percent, message) => {
-                  this.onProgress(percent, message, 'preview');
-                },
-              }
-            );
-            activeResult = fallbackResult;
-            console.log(
-              '[AutoPreview] Monochrome fallback render complete — ' +
-                `${AutoPreviewController.countUniqueOFFColors(fallbackResult.stl)} unique colors`
-            );
-          } catch (fallbackErr) {
-            console.warn(
-              '[AutoPreview] Monochrome fallback render failed, using original:',
-              fallbackErr.message
-            );
-          }
-        }
-      }
+      // Monochrome/colorless OFF needs no re-render: loadOFF() detects
+      // uniform inline colors, drops them, and applies viewer-side cavity
+      // tinting via _classifyInnerFaces() — zero geometry impact.
+      const activeResult = result;
 
       // Cache the result
       this.addToCache(cacheKey, activeResult, durationMs);
@@ -1366,7 +1299,8 @@ export class AutoPreviewController {
         activeResult.stats,
         false,
         durationMs,
-        timing
+        timing,
+        activeResult.consoleOutput || ''
       );
     } catch (error) {
       renderFailed = true;
@@ -1495,11 +1429,15 @@ export class AutoPreviewController {
     const qualityKey = quality?.name ? `full-${quality.name}` : 'full';
     const cacheKey = this.getPreviewCacheKey(paramHash, qualityKey);
 
-    // Check if we already have full quality for these params
+    // Check if we already have full quality for these params.
+    // The format guard matters: renderFull() only ever resolves with STL
+    // for callers, but fullQualitySTL transiently holds OFF bytes between
+    // the colored render and the STL follow-up render.
     if (
       paramHash === this.fullRenderParamHash &&
       this.fullQualitySTL &&
-      this.fullQualityKey === qualityKey
+      this.fullQualityKey === qualityKey &&
+      (this.fullQualityFormat || 'stl') === 'stl'
     ) {
       return {
         stl: this.fullQualitySTL,
@@ -1523,27 +1461,17 @@ export class AutoPreviewController {
     );
 
     let fullOutputFormat;
-    let scadContentForRender = this.currentScadContent;
-    let filesForRender = this.projectFiles;
-    let csgColorsInjected = false;
+    // Always render the user's UNMODIFIED source — see the matching comment
+    // in renderPreview() for why injectCsgColors() was removed (KI-012).
+    const scadContentForRender = this.currentScadContent;
+    const filesForRender = this.projectFiles;
+    const csgColorsInjected = false;
     const noCsgColors = isDebugPrefEnabled('noCsgColors');
 
     if (noCsgColors) {
       fullOutputFormat = undefined;
     } else if (supportsRenderColors) {
       fullOutputFormat = 'off';
-      if (!hasColorCalls || !colorPassthroughEnabled) {
-        scadContentForRender = AutoPreviewController.injectCsgColors(
-          hasColorCalls
-            ? AutoPreviewController.stripColorCalls(this.currentScadContent)
-            : this.currentScadContent
-        );
-        csgColorsInjected = true;
-        if (this.projectFiles && this.mainFilePath) {
-          filesForRender = new Map(this.projectFiles);
-          filesForRender.set(this.mainFilePath, scadContentForRender);
-        }
-      }
     } else {
       const useColorPassthrough =
         colorPassthroughEnabled && (hasColorCalls || hasDebugModifier);
@@ -1582,81 +1510,14 @@ export class AutoPreviewController {
       });
     }
 
-    let result;
-    try {
-      result = await this.renderController.renderFull(
-        scadContentForRender,
-        parameters,
-        renderOptions
-      );
-    } catch (renderErr) {
-      if (csgColorsInjected && AutoPreviewController.isParserError(renderErr)) {
-        console.warn(
-          '[AutoPreview] CSG color injection produced invalid SCAD — ' +
-            'retrying with original source'
-        );
-        csgColorsInjected = false;
-        result = await this.renderController.renderFull(
-          this.currentScadContent,
-          parameters,
-          { ...renderOptions, files: this.projectFiles }
-        );
-      } else {
-        throw renderErr;
-      }
-    }
+    const result = await this.renderController.renderFull(
+      scadContentForRender,
+      parameters,
+      renderOptions
+    );
 
     if (fullOutputFormat === 'off') {
       console.log('[AutoPreview] Full render using OFF format');
-    }
-
-    const useAuthorColors =
-      hasColorCalls && colorPassthroughEnabled && !csgColorsInjected;
-    if (
-      !noCsgColors &&
-      useAuthorColors &&
-      (result.format || 'stl') === 'off' &&
-      AutoPreviewController.countUniqueOFFColors(result.stl) === 1
-    ) {
-      console.log(
-        '[AutoPreview] Full render monochrome OFF detected — ' +
-          're-rendering with stripped color() for CSG face colors'
-      );
-      const strippedSource = AutoPreviewController.injectCsgColors(
-        AutoPreviewController.stripColorCalls(this.currentScadContent)
-      );
-      let strippedFiles = this.projectFiles;
-      if (this.projectFiles && this.mainFilePath) {
-        strippedFiles = new Map(this.projectFiles);
-        strippedFiles.set(this.mainFilePath, strippedSource);
-      }
-      try {
-        const fallbackResult = await this.renderController.renderFull(
-          strippedSource,
-          parameters,
-          {
-            files: strippedFiles,
-            mainFile: this.mainFilePath,
-            libraries: this.enabledLibraries,
-            paramTypes: this.paramTypes,
-            ...(quality ? { quality } : {}),
-            outputFormat: 'off',
-            onProgress: (percent, message) => {
-              this.onProgress(percent, message, 'full');
-            },
-          }
-        );
-        result = fallbackResult;
-        console.log(
-          '[AutoPreview] Full render monochrome fallback complete — ' +
-            `${AutoPreviewController.countUniqueOFFColors(fallbackResult.stl)} unique colors`
-        );
-      } catch (fallbackErr) {
-        console.warn(
-          '[AutoPreview] Full render monochrome fallback failed, using original:',
-          fallbackErr.message
-        );
-      }
     }
 
     // Store for reuse — when color passthrough produced OFF, the STL for
@@ -1757,10 +1618,21 @@ export class AutoPreviewController {
         this.fullQualityConsoleOutput = stlResult.consoleOutput || '';
         return stlResult;
       } catch (stlError) {
-        console.warn(
-          '[AutoPreview] STL follow-up render failed; download may use OFF data:',
-          stlError
+        // Never leave OFF bytes where the download path expects STL: clear
+        // the cached artifact entirely and fail loudly. Returning the OFF
+        // result here used to make the app silently save OFF bytes as .stl.
+        this.fullQualitySTL = null;
+        this.fullQualityFormat = null;
+        this.fullQualityStats = null;
+        this.fullQualityKey = null;
+        this.fullRenderParamHash = null;
+        this.fullQualityConsoleOutput = null;
+        const exportError = new Error(
+          `STL export render failed: ${stlError.message}`
         );
+        exportError.code = 'EXPORT_STL_FAILED';
+        exportError.cause = stlError;
+        throw exportError;
       }
     }
 
@@ -1793,15 +1665,11 @@ export class AutoPreviewController {
             ? result.stl
             : new TextDecoder().decode(result.stl || result.data);
 
-        // Pre-inject F5-draft parity styling into SVG before show2DPreview.
-        // Desktop OpenSCAD F5 preview for 2D first-layer: #7A9F7A sage green.
-        // Ref: Testing Round 7 color-codes.json preview_colors for laser-cut-first-layer.
-        const draftStyle =
-          '<style data-forge-preview="true">' +
-          'path,polygon,polyline,circle,ellipse,rect{fill:#7A9F7A;stroke:#7A9F7A;stroke-width:0.25;fill-opacity:0.9}' +
-          'line{stroke:#7A9F7A;stroke-width:0.25}' +
-          '</style>';
-        svgText = svgText.replace(/(<svg[^>]*>)/i, '$1' + draftStyle);
+        // Pre-inject F5-draft parity styling (see state-colors.js).
+        svgText = svgText.replace(
+          /(<svg[^>]*>)/i,
+          '$1' + build2DPreviewStyleTag('draft')
+        );
 
         if (typeof this.previewManager?.show2DPreviewAs3DPlane === 'function') {
           await this.previewManager.show2DPreviewAs3DPlane(svgText, {
@@ -1821,9 +1689,13 @@ export class AutoPreviewController {
       const msg = (svgError?.message || '').toLowerCase();
       if (svgError?.code === 'MODEL_NOT_2D' || msg.includes('not a 2d')) {
         try {
+          // Draft PREVIEW of the projected outline (on-screen only, no
+          // file leaves the app, so no consent dialog here). Strip the
+          // 2D-mode generate so the 3D pass renders the model's default
+          // geometry — render2DFallback no longer rewrites parameters.
           const fallbackResult = await this.renderController.render2DFallback(
             this.currentScadContent,
-            parameters,
+            strip2DGenerateForFallback(parameters),
             {
               outputFormat: 'svg',
               files: this.projectFiles,
@@ -1837,12 +1709,10 @@ export class AutoPreviewController {
               : new TextDecoder().decode(
                   fallbackResult.stl || fallbackResult.data
                 );
-          const draftFallbackStyle =
-            '<style data-forge-preview="true">' +
-            'path,polygon,polyline,circle,ellipse,rect{fill:#7A9F7A;stroke:#7A9F7A;stroke-width:0.25;fill-opacity:0.9}' +
-            'line{stroke:#7A9F7A;stroke-width:0.25}' +
-            '</style>';
-          svgText = svgText.replace(/(<svg[^>]*>)/i, '$1' + draftFallbackStyle);
+          svgText = svgText.replace(
+            /(<svg[^>]*>)/i,
+            '$1' + build2DPreviewStyleTag('draft')
+          );
           if (
             typeof this.previewManager?.show2DPreviewAs3DPlane === 'function'
           ) {
@@ -1882,7 +1752,11 @@ export class AutoPreviewController {
    */
   getCurrentFullSTL(parameters) {
     const paramHash = this.hashParams(parameters);
-    if (paramHash === this.fullRenderParamHash && this.fullQualitySTL) {
+    if (
+      paramHash === this.fullRenderParamHash &&
+      this.fullQualitySTL &&
+      (this.fullQualityFormat || 'stl') === 'stl'
+    ) {
       return {
         stl: this.fullQualitySTL,
         stats: this.fullQualityStats,

@@ -623,17 +623,93 @@ export async function getDetailedStorageInfo() {
 // Folder Import (webkitdirectory)
 // ============================================================================
 
-/** Companion file extensions accepted alongside .scad source */
-const FOLDER_IMPORT_COMPANION_EXTS = new Set([
-  '.stl',
+// Companion handling mirrors zip-handler.js so every import path stores
+// one shape: text formats as strings, images as base64 data URLs, and
+// binary formats the renderer cannot use (e.g. .stl) skipped with a log.
+// File.text() never throws on binary input — it lossily decodes as UTF-8 —
+// so the old read-as-text-with-empty-catch approach silently CORRUPTED
+// every imported .png and .stl companion.
+
+/** Companion extensions stored as text (matches zip-handler's text path) */
+const FOLDER_IMPORT_TEXT_EXTS = new Set([
+  '.scad',
   '.dxf',
   '.svg',
   '.dat',
   '.csv',
-  '.png',
   '.json',
   '.txt',
 ]);
+
+/** Image extensions stored as data URLs (matches zip-handler IMAGE_EXTS) */
+const FOLDER_IMPORT_IMAGE_EXTS = new Set([
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.gif',
+  '.webp',
+]);
+
+function bufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  const CHUNK = 0x8000;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+  }
+  return btoa(binary);
+}
+
+/**
+ * Read a folder FileList into the canonical projectFiles shape.
+ * Pure (no persistence) so the binary-safety contract is unit-testable.
+ *
+ * @param {FileList|File[]} fileList - Files from the folder selection
+ * @param {string} mainFilePath - Relative path of the primary .scad file
+ * @returns {Promise<{mainFile: File, mainContent: string, rootDir: string, projectFiles: Object}>}
+ * @throws {Error} When the main file is missing from the list
+ */
+export async function readProjectFilesFromList(fileList, mainFilePath) {
+  const files = Array.from(fileList);
+  const mainFile = files.find((f) => f.webkitRelativePath === mainFilePath);
+  if (!mainFile) {
+    throw new Error(`Main file not found: ${mainFilePath}`);
+  }
+
+  const mainContent = await mainFile.text();
+  const rootDir = mainFilePath.includes('/') ? mainFilePath.split('/')[0] : '';
+
+  const projectFiles = {};
+  projectFiles[mainFilePath.replace(`${rootDir}/`, '') || mainFilePath] =
+    mainContent;
+
+  for (const f of files) {
+    if (f === mainFile) continue;
+    const rel = f.webkitRelativePath || f.name;
+    const baseName = rel.split('/').pop();
+
+    if (baseName.startsWith('.')) continue; // hidden file
+
+    const ext = baseName.includes('.')
+      ? `.${baseName.split('.').pop().toLowerCase()}`
+      : '';
+    const relPath = rootDir ? rel.replace(`${rootDir}/`, '') : rel;
+
+    if (FOLDER_IMPORT_TEXT_EXTS.has(ext)) {
+      projectFiles[relPath] = await f.text();
+    } else if (FOLDER_IMPORT_IMAGE_EXTS.has(ext)) {
+      const mime = ext === '.jpg' ? 'jpeg' : ext.slice(1);
+      projectFiles[relPath] =
+        `data:image/${mime};base64,${bufferToBase64(await f.arrayBuffer())}`;
+    } else {
+      console.log(
+        `[FolderImport] Skipping companion (not usable by the renderer): ${rel}`
+      );
+    }
+  }
+
+  return { mainFile, mainContent, rootDir, projectFiles };
+}
 
 /**
  * Import a project from a FileList produced by an `<input webkitdirectory>`.
@@ -645,43 +721,8 @@ const FOLDER_IMPORT_COMPANION_EXTS = new Set([
  */
 export async function importProjectFromFiles(fileList, mainFilePath) {
   try {
-    const files = Array.from(fileList);
-    const mainFile = files.find((f) => f.webkitRelativePath === mainFilePath);
-    if (!mainFile) {
-      return { success: false, error: `Main file not found: ${mainFilePath}` };
-    }
-
-    const mainContent = await mainFile.text();
-    const rootDir = mainFilePath.includes('/')
-      ? mainFilePath.split('/')[0]
-      : '';
-
-    // Collect companion files (non-hidden, allowed extensions)
-    const projectFiles = {};
-    projectFiles[mainFilePath.replace(`${rootDir}/`, '') || mainFilePath] =
-      mainContent;
-
-    for (const f of files) {
-      if (f === mainFile) continue;
-      const rel = f.webkitRelativePath || f.name;
-      const baseName = rel.split('/').pop();
-
-      if (baseName.startsWith('.')) continue; // hidden file
-
-      const ext = baseName.includes('.')
-        ? `.${baseName.split('.').pop().toLowerCase()}`
-        : '';
-
-      if (!FOLDER_IMPORT_COMPANION_EXTS.has(ext) && ext !== '.scad') continue;
-
-      try {
-        const content = await f.text();
-        const relPath = rootDir ? rel.replace(`${rootDir}/`, '') : rel;
-        projectFiles[relPath] = content;
-      } catch {
-        // Binary files (e.g. PNG) — skip text reading for now
-      }
-    }
+    const { mainFile, mainContent, rootDir, projectFiles } =
+      await readProjectFilesFromList(fileList, mainFilePath);
 
     const projectName = rootDir || mainFile.name.replace('.scad', '');
     const mainRelPath = rootDir

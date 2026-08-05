@@ -8,7 +8,8 @@
  *   constructor({ container, onChange, onSave, onRun, announce })
  *   initialize(), getValue(), setValue(v), focus(), dispose()
  *   getSelection(), setSelection(s,e), setCursorPosition(l,c), scrollToLine(l)
- *   setErrorLines(lines), clearErrors(), getAction()
+ *   setErrorLines(lines), clearErrors(), supportsAction(id),
+ *   performAction(id), replaceSelection(text)
  *
  * @license GPL-3.0-or-later
  */
@@ -33,9 +34,23 @@ import {
   HighlightStyle,
 } from '@codemirror/language';
 import { tags } from '@lezer/highlight';
-import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
+import {
+  defaultKeymap,
+  history,
+  historyKeymap,
+  indentMore,
+  indentLess,
+  lineComment,
+  lineUncomment,
+} from '@codemirror/commands';
 import { autocompletion } from '@codemirror/autocomplete';
-import { highlightSelectionMatches, searchKeymap } from '@codemirror/search';
+import {
+  highlightSelectionMatches,
+  searchKeymap,
+  openSearchPanel,
+  findNext,
+  findPrevious,
+} from '@codemirror/search';
 
 // ─── OpenSCAD token lists (ported from textarea-editor.js / monaco-editor.js) ──
 
@@ -322,6 +337,21 @@ const errorLineTheme = EditorView.baseTheme({
 
 // ─── CodeMirrorEditor class ─────────────────────────────────────────────────
 
+// Named editor commands exposed to the Edit menu / keyboard shortcuts.
+// All are stock CodeMirror commands; comment syntax comes from the
+// commentTokens languageData on the OpenSCAD stream language above.
+const EDITOR_COMMANDS = {
+  indent: indentMore,
+  unindent: indentLess,
+  comment: lineComment,
+  uncomment: lineUncomment,
+  find: openSearchPanel,
+  // CodeMirror's search panel includes the replace controls.
+  findReplace: openSearchPanel,
+  findNext,
+  findPrevious,
+};
+
 export class CodeMirrorEditor {
   /**
    * @param {Object} options
@@ -559,11 +589,36 @@ export class CodeMirrorEditor {
   }
 
   /**
-   * Shim for Monaco-compatible getAction() — returns null.
-   * @returns {null}
+   * Whether performAction(actionId) can execute in this editor.
+   * Consumed by the Edit menu to disable unsupported items honestly.
+   * @param {string} actionId
+   * @returns {boolean}
    */
-  getAction() {
-    return null;
+  supportsAction(actionId) {
+    return Boolean(this._view) && actionId in EDITOR_COMMANDS;
+  }
+
+  /**
+   * Run a named editor command (Edit-menu / keyboard-shortcut integration).
+   * @param {string} actionId
+   * @returns {boolean} True when the command executed
+   */
+  performAction(actionId) {
+    const command = EDITOR_COMMANDS[actionId];
+    if (!command || !this._view) return false;
+    this._view.focus();
+    return command(this._view);
+  }
+
+  /**
+   * Replace the current selection (or insert at the cursor) with text.
+   * Used by the Edit-menu Paste handler.
+   * @param {string} text
+   */
+  replaceSelection(text) {
+    if (!this._view) return;
+    this._view.dispatch(this._view.state.replaceSelection(text));
+    this._view.focus();
   }
 
   dispose() {

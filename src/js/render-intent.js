@@ -6,14 +6,20 @@
  * current parameter values — works against any project schema, not just
  * keyguard-shaped names.
  *
- * Stakeholder-specific heuristics (type_of_keyguard, laser-cutting regex)
- * are preserved as backward-compatible inputs but are not required.
+ * 2D-export parameter adjustments are PROPOSED, never applied silently:
+ * propose2DExportAdjustments() returns a change list the UI presents for
+ * user consent. Project-specific heuristics (e.g. the keyguard family's
+ * type_of_keyguard / laser-cutting toggles) arrive as data via the
+ * export2D section of forge.project.json (see project-manifest.js) instead
+ * of being hardcoded here.
  *
  * This module is a leaf dependency: it must NOT import from main.js or
  * auto-preview-controller.js.
  *
  * @license GPL-3.0-or-later
  */
+
+import { getBuiltinManifest } from './project-manifest.js';
 
 // ── Render state constants ──────────────────────────────────────────────────
 
@@ -28,8 +34,6 @@ export const RENDER_STATE = {
 
 const TWO_D_KEYWORDS = ['svg', 'dxf', '2d', 'first layer'];
 const INFORMATIONAL_KEYWORDS = ['customizer'];
-const LASER_VALUE_KEYWORDS = ['laser'];
-const LASER_NAME_PATTERN = /laser.*(cut|cutting).*(best|pract)/i;
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -100,66 +104,123 @@ function pickBest2DValue(enumValues, format) {
 // ── Public API ──────────────────────────────────────────────────────────────
 
 /**
- * Resolve parameter adjustments for 2D export (SVG / DXF).
+ * Propose parameter adjustments for 2D export (SVG / DXF).
  *
- * Scans every enum parameter in the schema.  Parameters whose enum values
- * span both 2D and non-2D options are treated as output-mode selectors and
- * switched to the best 2D value.  Stakeholder-specific heuristics for
- * `type_of_keyguard` and the laser-cutting toggle are applied as well but
- * are not required by the API.
+ * Two rule sources, in precedence order:
+ * 1. Project rules from the export2D section of forge.project.json —
+ *    `{ param, toValueMatching }` picks the enum entry whose value/label
+ *    contains the needle; `{ paramMatching, toValue }` sets every
+ *    name-matching enum param to the exact enum value.
+ * 2. Generic: any enum whose values span both 2D and non-2D options is
+ *    treated as an output-mode selector and its best 2D value is proposed.
+ *
+ * Nothing is applied silently: callers present `changes` for user consent
+ * and use `resolvedParameters` only when the user accepts.
  *
  * @param {Object} parameters  Current UI parameter values
  * @param {Object|null} schema Parsed schema ({ parameters: { ... } })
  * @param {string} format      Target format ('svg' or 'dxf')
- * @returns {Object} Shallow copy of parameters with 2D-compatible overrides
+ * @param {Object|null} [export2D] export2D section of the project manifest
+ * @returns {{ changes: Array<{name: string, from: *, to: *, reason: string}>,
+ *             resolvedParameters: Object }}
+ *   changes is empty (and resolvedParameters === parameters) when nothing
+ *   would change.
  */
-export function resolve2DExportIntent(parameters, schema, format) {
-  if (format !== 'svg' && format !== 'dxf') return parameters;
+export function propose2DExportAdjustments(
+  parameters,
+  schema,
+  format,
+  export2D = null
+) {
+  const noChange = { changes: [], resolvedParameters: parameters };
+  if (format !== 'svg' && format !== 'dxf') return noChange;
   const schemaParams = schema?.parameters;
-  if (!schemaParams) return parameters;
+  if (!schemaParams || !parameters) return noChange;
 
-  const resolved = { ...parameters };
+  const changes = [];
+  const handled = new Set();
+  const propose = (name, to, reason) => {
+    handled.add(name);
+    if (parameters[name] !== to) {
+      changes.push({ name, from: parameters[name], to, reason });
+    }
+  };
+  const rawValue = (entry) =>
+    typeof entry === 'object' && entry !== null ? entry.value : entry;
 
-  for (const [name, pDef] of Object.entries(schemaParams)) {
-    const enumValues = pDef.enum;
-    if (!Array.isArray(enumValues) || enumValues.length === 0) continue;
-
-    // ── Stakeholder heuristic: type_of_keyguard → pick laser entry ──
-    if (name === 'type_of_keyguard') {
-      const laserEntry = enumValues.find((e) => {
+  for (const rule of export2D?.rules || []) {
+    if (rule.param && rule.toValueMatching !== undefined) {
+      const enumValues = schemaParams[rule.param]?.enum;
+      if (!Array.isArray(enumValues)) continue;
+      const needle = String(rule.toValueMatching).toLowerCase();
+      const entry = enumValues.find((e) => {
         const { value, label } = entryMeta(e);
-        return LASER_VALUE_KEYWORDS.some(
-          (kw) => value.includes(kw) || label.includes(kw)
+        return value.includes(needle) || label.includes(needle);
+      });
+      if (entry !== undefined) {
+        propose(rule.param, rawValue(entry), 'project 2D-export rule');
+      }
+    } else if (rule.paramMatching && rule.toValue !== undefined) {
+      let namePattern;
+      try {
+        namePattern = new RegExp(rule.paramMatching, 'i');
+      } catch {
+        console.warn(
+          `[RenderIntent] Ignoring export2D rule with invalid pattern: ${rule.paramMatching}`
         );
-      });
-      if (laserEntry !== undefined) {
-        resolved[name] =
-          typeof laserEntry === 'object' ? laserEntry.value : laserEntry;
+        continue;
       }
-      continue;
-    }
-
-    // ── Stakeholder heuristic: laser-cutting best-practices toggle → Yes ──
-    if (LASER_NAME_PATTERN.test(name)) {
-      const yesEntry = enumValues.find((e) => {
-        const { value, label } = entryMeta(e);
-        return value === 'yes' || label === 'yes';
-      });
-      if (yesEntry !== undefined) {
-        resolved[name] =
-          typeof yesEntry === 'object' ? yesEntry.value : yesEntry;
+      const target = String(rule.toValue).toLowerCase();
+      for (const [name, pDef] of Object.entries(schemaParams)) {
+        if (handled.has(name) || !namePattern.test(name)) continue;
+        const enumValues = pDef.enum;
+        if (!Array.isArray(enumValues)) continue;
+        const entry = enumValues.find((e) => {
+          const { value, label } = entryMeta(e);
+          return value === target || label === target;
+        });
+        if (entry !== undefined) {
+          propose(name, rawValue(entry), 'project 2D-export rule');
+        }
       }
-      continue;
-    }
-
-    // ── Generic: pick best 2D value from any mode-selector enum ──
-    const best = pickBest2DValue(enumValues, format);
-    if (best !== undefined) {
-      resolved[name] = best;
     }
   }
 
-  return resolved;
+  for (const [name, pDef] of Object.entries(schemaParams)) {
+    if (handled.has(name)) continue;
+    const enumValues = pDef.enum;
+    if (!Array.isArray(enumValues) || enumValues.length === 0) continue;
+    const best = pickBest2DValue(enumValues, format);
+    if (best !== undefined) {
+      propose(name, best, `2D output mode for ${format.toUpperCase()}`);
+    }
+  }
+
+  if (changes.length === 0) return noChange;
+
+  const resolvedParameters = { ...parameters };
+  for (const change of changes) {
+    resolvedParameters[change.name] = change.to;
+  }
+  return { changes, resolvedParameters };
+}
+
+/**
+ * Legacy resolver that applies the proposals unconditionally (the old
+ * silent behavior), including the builtin keyguard rules.
+ *
+ * @deprecated Application code must use propose2DExportAdjustments() and
+ * present the changes for user consent. This wrapper exists only so the
+ * extensive legacy test suites keep exercising the proposal engine; no
+ * production call sites remain.
+ */
+export function resolve2DExportIntent(parameters, schema, format) {
+  return propose2DExportAdjustments(
+    parameters,
+    schema,
+    format,
+    getBuiltinManifest().export2D
+  ).resolvedParameters;
 }
 
 /**
@@ -254,6 +315,27 @@ export function classifyRenderState(parameters, schema, options = {}) {
 
   if (isFullQuality) return RENDER_STATE.RENDER_3D;
   return RENDER_STATE.PREVIEW;
+}
+
+/**
+ * Parameters for the projection fallback's 3D pass: drop a 2D-mode
+ * `generate` value so the model renders its default 3D geometry. Only
+ * `generate` is targeted — parameters that merely contain "svg" (like
+ * screenshot_file="default.svg") are untouched.
+ *
+ * @param {Object} parameters
+ * @returns {Object} Copy with a 2D-mode generate removed, or the original
+ */
+export function strip2DGenerateForFallback(parameters) {
+  if (
+    typeof parameters?.generate === 'string' &&
+    is2DGenerateValue(parameters.generate)
+  ) {
+    const stripped = { ...parameters };
+    delete stripped.generate;
+    return stripped;
+  }
+  return parameters;
 }
 
 /**
