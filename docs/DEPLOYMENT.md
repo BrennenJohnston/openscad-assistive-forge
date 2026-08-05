@@ -422,10 +422,25 @@ auto-injects its Web Analytics beacon into served pages; our CSP
 (`public/_headers`) blocks third-party scripts **by design** and must not be
 loosened for it (project security rule).
 
-**Owner action (dashboard, not repo):** Cloudflare Pages → this project →
-Settings → turn off **Web Analytics** auto-injection. After that the
-violation disappears. No repository change is involved (`wrangler.toml`
-carries no analytics config).
+**Owner decision (2026-08-05): Web Analytics stays DISABLED for now.**
+To turn off the injection (dashboard, not repo — no rebuild needed):
+either *Workers & Pages → this project → Metrics tab → Web Analytics →
+Disable*, or *account sidebar → Analytics & Logs → Web Analytics →
+Manage site (openscad-assistive-forge.pages.dev) → Remove site / turn off
+Automatic setup*. Verify with a hard refresh: the beacon CSP violation
+disappears. `wrangler.toml` carries no analytics config.
+
+**Future work — privacy-first usage telemetry (planned, not started):**
+a FIRST-PARTY anonymous ping instead of any third-party script: a
+same-origin Pages Function feeding Workers Analytics Engine with a small
+owner-approved event set (`app_loaded`, `wasm_ready`, `wasm_failed`,
+`render_ok`, `render_failed` + coarse browser family / error category).
+No cookies, no identifiers, no IPs stored, no CSP change (same-origin
+`connect-src 'self'` already covers it). Counts app loads and
+success/failure rates — not distinct individuals (deduplicating people
+would require an identifier, which we deliberately do not use). Ship
+with a one-line transparency note in the use statement, text
+owner-approved before release.
 
 ### CSP Violations
 
