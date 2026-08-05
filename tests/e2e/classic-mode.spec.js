@@ -157,6 +157,11 @@ test.describe('Classic mode layout (C4)', () => {
 
     const presetSelect = page.locator('#presetSelect')
 
+    // Ken's contract: "design default values" is the first real entry
+    await expect(presetSelect.locator('option').nth(1)).toHaveText(
+      'design default values'
+    )
+
     // Copy design defaults into a new preset; it becomes the selection
     await presetSelect.selectOption('__design_defaults__')
     await page.locator('#copyPresetBtn').click()
@@ -198,7 +203,8 @@ test.describe('Classic mode layout (C4)', () => {
   }) => {
     test.setTimeout(240_000)
 
-    await loadSampleProject(page)
+    // classic_mode defaults on since C4.6; force it off via URL override
+    await loadSampleProject(page, { query: '?flag_classic_mode=false' })
     await switchToStandardMode(page)
 
     await page.locator('#viewMenuBtn').click()

@@ -124,13 +124,17 @@ export const FLAGS = {
     userConfigurable: true,
     killSwitch: false,
   },
+  // C4.6: acceptance suite green (classic-mode.spec.js + console-fidelity
+  // .spec.js walk the four-pane contract), so Classic is available to all
+  // users as a View > Interface Mode option. Disable via
+  // ?flag_classic_mode=false or the settings panel.
   classic_mode: {
     id: 'classic_mode',
     name: 'Classic Desktop Layout',
     description:
       'Enable the Classic interface mode: a desktop-OpenSCAD-style layout with display, customizer, presets, and console panes',
-    default: false,
-    rollout: 0,
+    default: true,
+    rollout: 100,
     userConfigurable: true,
     killSwitch: false,
   },
