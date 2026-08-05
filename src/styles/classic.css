@@ -1,0 +1,91 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* ============================================================================
+   Classic Mode - desktop-OpenSCAD-style four-pane layout
+
+   Every rule is keyed off body[data-ui-mode='classic'] so the other modes
+   are pixel-identical with this file loaded. The pane slots
+   (.classic-console-slot / .classic-presets-slot) are created by
+   classic-layout-controller.js only while Classic mode is active.
+
+   Desktop (>=1024px) grid:
+     display  | customizer
+     display  | presets
+     console  | presets
+   Below 1024px the panes stack in a single column.
+   ============================================================================ */
+
+.classic-slot {
+  display: none;
+}
+
+body[data-ui-mode='classic'] .classic-slot {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+  background-color: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+}
+
+/* The moved <details> panes act as always-open panels in Classic mode */
+body[data-ui-mode='classic'] .classic-slot > details {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+@media (min-width: 1024px) {
+  body[data-ui-mode='classic'] .main-interface {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(300px, 34%);
+    grid-template-rows: minmax(0, 1.6fr) minmax(0, 1fr) minmax(140px, 0.7fr);
+    grid-template-areas:
+      'display camera customizer'
+      'display camera presets'
+      'console console presets';
+    gap: var(--space-xs);
+  }
+
+  body[data-ui-mode='classic'] .preview-panel {
+    grid-area: display;
+  }
+
+  body[data-ui-mode='classic'] .camera-panel {
+    grid-area: camera;
+    min-height: 0;
+  }
+
+  body[data-ui-mode='classic'] .param-panel {
+    grid-area: customizer;
+    max-height: none;
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  body[data-ui-mode='classic'] .classic-presets-slot {
+    grid-area: presets;
+  }
+
+  body[data-ui-mode='classic'] .classic-console-slot {
+    grid-area: console;
+  }
+
+  /* Split.js is destroyed on entering Classic; hide any leftover gutter so
+     the grid never places it as a stray cell */
+  body[data-ui-mode='classic'] .main-interface > .gutter {
+    display: none;
+  }
+}
+
+@media (max-width: 1023px) {
+  body[data-ui-mode='classic'] .main-interface {
+    flex-direction: column;
+  }
+
+  body[data-ui-mode='classic'] .classic-slot {
+    flex: 0 0 auto;
+    max-height: 40vh;
+  }
+}

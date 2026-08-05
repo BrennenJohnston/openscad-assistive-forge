@@ -1,0 +1,125 @@
+import { test, expect } from '@playwright/test'
+import path from 'path'
+
+// Classic mode (desktop-OpenSCAD-style four-pane layout) — C4 acceptance.
+//
+// Classic is gated on the classic_mode feature flag (default off); these
+// tests enable it via the URL override. Mode switching goes through the
+// real UI: header toggle to Standard, then View > Interface Mode radios.
+
+const FIXTURE = path.join(process.cwd(), 'tests', 'fixtures', 'sample.scad')
+
+const WASM_READY_TIMEOUT = 180_000
+
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('openscad-forge-first-visit-seen', 'true')
+  })
+})
+
+async function loadSampleProject(page, { query = '' } = {}) {
+  await page.goto(`/${query}`)
+  await page.waitForSelector('body[data-wasm-ready="true"]', {
+    state: 'attached',
+    timeout: WASM_READY_TIMEOUT,
+  })
+
+  await page.locator('#fileInput').setInputFiles(FIXTURE)
+  await expect(page.locator('#welcomeScreen')).toBeHidden({ timeout: 30_000 })
+  await expect(page.locator('#mainInterface')).toBeVisible({ timeout: 10_000 })
+
+  const notNowBtn = page.locator('#saveProjectNotNow')
+  try {
+    await notNowBtn.waitFor({ state: 'visible', timeout: 3_000 })
+    await notNowBtn.click()
+  } catch {
+    // Save-project modal did not appear; nothing to dismiss.
+  }
+}
+
+async function switchToStandardMode(page) {
+  const toggle = page.locator('#uiModeToggle')
+  await expect(toggle).toBeVisible({ timeout: 10_000 })
+  if ((await toggle.getAttribute('aria-checked')) !== 'true') {
+    await toggle.click()
+    await expect(toggle).toHaveAttribute('aria-checked', 'true')
+  }
+}
+
+async function pickInterfaceMode(page, radioName) {
+  await page.locator('#viewMenuBtn').click()
+  const radio = page.getByRole('menuitemradio', { name: radioName })
+  await expect(radio).toBeVisible({ timeout: 5_000 })
+  await radio.click()
+}
+
+test.describe('Classic mode layout (C4)', () => {
+  test('entering Classic moves console and presets into pane slots, exiting restores them', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000)
+
+    await loadSampleProject(page, { query: '?flag_classic_mode=true' })
+    await switchToStandardMode(page)
+
+    // Record the original DOM location of the panes to be moved
+    const originalParents = await page.evaluate(() => ({
+      console: document.getElementById('consolePanel')?.parentElement?.id,
+      presets: document.getElementById('presetControls')?.parentElement?.id,
+    }))
+    expect(originalParents.console).toBeTruthy()
+    expect(originalParents.presets).toBeTruthy()
+
+    await pickInterfaceMode(page, 'Classic (Desktop Layout)')
+
+    await expect(page.locator('body')).toHaveAttribute('data-ui-mode', 'classic')
+
+    // Console pane: moved into its labelled slot and forced open
+    const consoleSlot = page.locator('#classicConsoleSlot')
+    await expect(consoleSlot).toBeVisible()
+    await expect(consoleSlot.locator('#consolePanel')).toHaveCount(1)
+    await expect(page.locator('#consolePanel')).toHaveAttribute('open', '')
+
+    // Presets pane: moved into its labelled slot and forced open
+    const presetsSlot = page.locator('#classicPresetsSlot')
+    await expect(presetsSlot).toBeVisible()
+    await expect(presetsSlot.locator('#presetControls')).toHaveCount(1)
+
+    // Display + customizer panes still present
+    await expect(page.locator('.preview-panel')).toBeVisible()
+    await expect(page.locator('#paramPanel')).toBeVisible()
+
+    // Exit back to Standard: exact DOM restore, slots removed
+    await pickInterfaceMode(page, 'Standard')
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'standard'
+    )
+
+    const restoredParents = await page.evaluate(() => ({
+      console: document.getElementById('consolePanel')?.parentElement?.id,
+      presets: document.getElementById('presetControls')?.parentElement?.id,
+    }))
+    expect(restoredParents.console).toBe(originalParents.console)
+    expect(restoredParents.presets).toBe(originalParents.presets)
+    await expect(page.locator('#classicConsoleSlot')).toHaveCount(0)
+    await expect(page.locator('#classicPresetsSlot')).toHaveCount(0)
+  })
+
+  test('Classic radio is absent when the classic_mode flag is off', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000)
+
+    await loadSampleProject(page)
+    await switchToStandardMode(page)
+
+    await page.locator('#viewMenuBtn').click()
+    await expect(
+      page.getByRole('menuitemradio', { name: 'Standard' })
+    ).toBeVisible({ timeout: 5_000 })
+    await expect(
+      page.getByRole('menuitemradio', { name: 'Classic (Desktop Layout)' })
+    ).toHaveCount(0)
+  })
+})

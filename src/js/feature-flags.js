@@ -130,7 +130,7 @@ export const FLAGS = {
     description:
       'Enable the Classic interface mode: a desktop-OpenSCAD-style layout with display, customizer, presets, and console panes',
     default: false,
-    rollout: 100,
+    rollout: 0,
     userConfigurable: true,
     killSwitch: false,
   },

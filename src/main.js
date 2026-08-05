@@ -189,8 +189,9 @@ import {
 } from './js/announcer.js';
 // Expert Mode (M2) - Code editor integration
 import { getModeManager } from './js/mode-manager.js';
-// UI Mode Controller - Basic/Advanced interface layout switching
+// UI Mode Controller - Simplified/Standard/Classic interface layout switching
 import { getUIModeController } from './js/ui-mode-controller.js';
+import { initClassicLayoutController } from './js/classic-layout-controller.js';
 // Toolbar Menu Controller - File|Edit|Design|View|Window|Help menu bar
 import {
   getToolbarMenuController,
@@ -7187,6 +7188,11 @@ if (rounded) {
         return;
       }
 
+      // Classic mode uses a CSS grid; Split.js inline styles would fight it
+      if (document.body.dataset.uiMode === 'classic') {
+        return;
+      }
+
       if (splitInstance || paramPanel.classList.contains('collapsed')) {
         return;
       }
@@ -7366,6 +7372,20 @@ if (rounded) {
     if (!paramPanel.classList.contains('collapsed')) {
       initSplit();
     }
+
+    // Classic four-pane layout (moves console/preset panes into grid slots)
+    initClassicLayoutController({
+      onEnter: () => {
+        destroySplit();
+        requestAnimationFrame(() => previewManager?.handleResize?.());
+      },
+      onExit: () => {
+        if (!paramPanel.classList.contains('collapsed')) {
+          initSplit();
+        }
+        requestAnimationFrame(() => previewManager?.handleResize?.());
+      },
+    });
 
     // Initialize mobile drawer controller
     initDrawerController();
