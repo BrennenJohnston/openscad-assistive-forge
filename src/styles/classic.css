@@ -126,3 +126,70 @@ body[data-ui-mode='classic'] .classic-slot > details {
     max-height: 40vh;
   }
 }
+
+/* ============================================================================
+   Chrome strip (C3) — Classic hides the Forge-specific chrome so the shell
+   reads like desktop OpenSCAD. Every hidden control's function remains
+   reachable; the mapping is noted per rule. Deliberately KEPT visible:
+   #updateBanner and #memoryBanner (safety and data-loss relevance outweigh
+   visual purity — owner-flagged policy), and #previewStatusBar until the
+   window-bottom status bar (C8) replaces it.
+   ============================================================================ */
+
+/* Branding slims down: desktop apps have a title bar, not a hero header */
+body[data-ui-mode='classic'] .app-tagline {
+  display: none;
+}
+
+body[data-ui-mode='classic'] .app-header {
+  padding-top: var(--space-xs);
+  padding-bottom: var(--space-xs);
+}
+
+body[data-ui-mode='classic'] .header-logo {
+  width: 24px;
+  height: 24px;
+}
+
+/* Simplified/Standard switch — replaced by the header Classic toggle (C1)
+   and View > Interface Mode radios; clicking it would silently exit classic */
+body[data-ui-mode='classic'] #uiModeToggle,
+/* Focus mode — not part of the desktop shell; the keyboard shortcut works */
+body[data-ui-mode='classic'] #focusModeBtn,
+/* Features guide — reachable via Help menu */
+body[data-ui-mode='classic'] #featuresGuideBtn,
+/* Back-to-welcome — File > Close (C4) */
+body[data-ui-mode='classic'] #clearFileBtn,
+/* Custom actions bar + drawer — toolbar Preview/Render (C6) + Design menu;
+   downloads via File > Export */
+body[data-ui-mode='classic'] #actionsBar,
+body[data-ui-mode='classic'] #actionsDrawer,
+/* Preview settings drawer — stats go to the status bar (C8); quality and
+   friends live under View > Preview Quality (C4) */
+body[data-ui-mode='classic'] #previewInfoSection,
+body[data-ui-mode='classic'] #previewDrawerToggle,
+/* Echo drawer — ECHO lines already stream into the console dock */
+body[data-ui-mode='classic'] #echoDrawer,
+/* Param search/jump — desktop's Customizer has no search row */
+body[data-ui-mode='classic'] #paramSearchSection,
+/* Output format row — File > Export offers every format */
+body[data-ui-mode='classic'] .output-format-section,
+/* Custom param-panel header rows — Undo/Redo in Edit menu + toolbar (C6),
+   Reset in the Customizer dock header (C7), editor via Window > Editor */
+body[data-ui-mode='classic'] #paramPanel > .panel-header,
+/* Camera panel and the floating in-viewport overlay — drag/orbit plus the
+   View menu and toolbar snaps cover every camera action */
+body[data-ui-mode='classic'] #cameraPanel,
+body[data-ui-mode='classic'] .camera-controls,
+/* Manifest info banner — informational only, suppressed in classic */
+body[data-ui-mode='classic'] #manifestInfoBanner {
+  display: none !important;
+}
+
+/* The custom-mode 48px collapsed strip must never appear inside the grid */
+body[data-ui-mode='classic'] .param-panel.collapsed {
+  width: auto !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  flex: initial !important;
+}

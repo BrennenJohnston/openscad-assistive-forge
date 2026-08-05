@@ -151,6 +151,81 @@ test.describe('Classic header toggle (C1)', () => {
   })
 })
 
+test.describe('Classic chrome strip (C3)', () => {
+  test('classic-strips-custom-chrome: Forge chrome hides in classic and returns on exit', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000)
+
+    await loadSampleProject(page)
+    await switchToStandardMode(page)
+
+    // Sanity: the chrome exists in the custom modes
+    for (const sel of [
+      '#uiModeToggle',
+      '#actionsBar',
+      '#paramPanel > .panel-header',
+      '#clearFileBtn',
+    ]) {
+      await expect(page.locator(sel)).toBeVisible()
+    }
+
+    await page.locator('#classicModeToggle').click()
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'classic'
+    )
+
+    const hiddenInClassic = [
+      '#uiModeToggle',
+      '#focusModeBtn',
+      '#featuresGuideBtn',
+      '#clearFileBtn',
+      '#actionsBar',
+      '#previewInfoSection',
+      '#previewDrawerToggle',
+      '#paramSearchSection',
+      '.output-format-section',
+      '#paramPanel > .panel-header',
+      '#cameraPanel',
+    ]
+    for (const sel of hiddenInClassic) {
+      await expect(
+        page.locator(sel).first(),
+        `${sel} must be hidden in classic`
+      ).toBeHidden()
+    }
+
+    // The desktop-style menu bar and all six menus stay visible
+    await expect(page.locator('#toolbarMenuBar')).toBeVisible()
+    for (const id of [
+      '#fileMenuBtn',
+      '#editMenuBtn',
+      '#designMenuBtn',
+      '#viewMenuBtn',
+      '#windowMenuBtn',
+      '#helpMenuBtn',
+    ]) {
+      await expect(page.locator(id)).toBeVisible()
+    }
+
+    // Exit restores the chrome
+    await page.locator('#classicModeToggle').click()
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'standard'
+    )
+    for (const sel of [
+      '#uiModeToggle',
+      '#actionsBar',
+      '#paramPanel > .panel-header',
+      '#clearFileBtn',
+    ]) {
+      await expect(page.locator(sel)).toBeVisible()
+    }
+  })
+})
+
 test.describe('Classic mode layout (C4)', () => {
   test('entering Classic moves console and presets into pane slots, exiting restores them', async ({
     page,
