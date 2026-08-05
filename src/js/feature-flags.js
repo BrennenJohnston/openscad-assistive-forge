@@ -221,10 +221,41 @@ export const FLAGS = {
       'support showDirectoryPicker (Firefox / Safari today). ' +
       'Phase A: connect / disconnect / persist. Phase B (auto-rerun on ' +
       'external edits) and Phase C (write-back) ship behind separate flags.',
+    // C5.1: Phase A surfaced — on by default; the UI still hides itself on
+    // browsers without showDirectoryPicker.
+    default: true,
+    rollout: 100,
+    userConfigurable: true,
+    killSwitch: false,
+  },
+  // C5.2 (Phase B): watch the connected folder for external edits and
+  // re-render automatically — Ken's edit-in-desktop-editor loop.
+  folder_sync_watch: {
+    id: 'folder_sync_watch',
+    name: 'Folder Change Watcher (Chromium only)',
+    description:
+      'When connected to a local folder, poll the project files for external ' +
+      'changes (e.g. edits saved from a desktop editor) and re-render ' +
+      'automatically. Requires Persistent Local Folder Sync.',
+    default: true,
+    rollout: 100,
+    userConfigurable: true,
+    killSwitch: false,
+    requires: ['local_folder_sync'],
+  },
+  // C5.3 (Phase C): write exports and preset sidecars back to the folder.
+  // Dark until tested on real Chrome/Edge with the watcher active.
+  folder_sync_writeback: {
+    id: 'folder_sync_writeback',
+    name: 'Folder Write-Back (Chromium only)',
+    description:
+      'Allow the Forge to write files (exports, preset sidecars) back into ' +
+      'the connected local folder. Requires Persistent Local Folder Sync.',
     default: false,
     rollout: 0,
     userConfigurable: true,
     killSwitch: false,
+    requires: ['local_folder_sync'],
   },
 };
 

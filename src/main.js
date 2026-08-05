@@ -1584,6 +1584,9 @@ async function initApp() {
   // Phase A only adds persistence of the directory handle. Phase B
   // (file-watcher / F14) and Phase C (write-back) build on this.
   const folderSyncCtrl = getFolderSyncController();
+  // Exposed to the File menu (C5.1); stays null on unsupported browsers so
+  // the menu item can render disabled with an honest tooltip.
+  let connectToLocalFolder = null;
   if (_isEnabled('local_folder_sync') && folderSyncCtrl.isSupported()) {
     const connectBtn = document.getElementById('connectFolderBtn');
     const statusEl = document.getElementById('folderSyncStatus');
@@ -1676,7 +1679,7 @@ async function initApp() {
       }
     }
 
-    connectBtn?.addEventListener('click', async () => {
+    connectToLocalFolder = async () => {
       const result = await folderSyncCtrl.connect();
       if (result.ok && result.handle) {
         announceImmediate(`Connected to folder ${result.folderName}`);
@@ -1694,7 +1697,9 @@ async function initApp() {
       } else {
         updateStatus(`Could not connect to folder: ${result.reason}`, 'error');
       }
-    });
+    };
+
+    connectBtn?.addEventListener('click', () => connectToLocalFolder());
 
     restoreBtn?.addEventListener('click', async () => {
       const result = await folderSyncCtrl.restoreFromStored();
@@ -2277,6 +2282,15 @@ async function initApp() {
         type: 'action',
         label: 'Open File\u2026',
         handler: () => document.getElementById('fileInput')?.click(),
+      },
+      {
+        type: 'action',
+        label: 'Open Local Folder\u2026',
+        enabled: Boolean(connectToLocalFolder),
+        tooltip: connectToLocalFolder
+          ? 'Connect to a folder on disk; the connection persists across visits'
+          : 'Persistent folder access requires Chrome or Edge',
+        handler: () => connectToLocalFolder?.(),
       },
       { type: 'submenu', label: 'Recent Files', items: recentItems },
       { type: 'separator' },
