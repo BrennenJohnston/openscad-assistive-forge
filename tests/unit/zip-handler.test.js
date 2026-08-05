@@ -17,6 +17,7 @@ import {
   matchesBrand,
   parsePresetParts,
 } from '../../src/js/zip-handler.js'
+import { FILE_SIZE_LIMITS } from '../../src/js/validation-constants.js'
 import JSZip from 'jszip'
 
 describe('ZIP Handler', () => {
@@ -30,14 +31,19 @@ describe('ZIP Handler', () => {
       expect(result.error).toBeUndefined()
     })
 
-    it('should reject files over 100MB', () => {
-      const largeSize = 101 * 1024 * 1024 // 101MB
-      const largeFile = new File(['x'.repeat(largeSize)], 'large.zip', { type: 'application/zip' })
+    it('should reject files over the ZIP size cap', () => {
+      // Derive from the shared constant so this test cannot drift when
+      // the cap changes; fake the size instead of allocating real bytes.
+      const largeFile = new File([''], 'large.zip', { type: 'application/zip' })
+      Object.defineProperty(largeFile, 'size', {
+        value: FILE_SIZE_LIMITS.ZIP_FILE + 1024,
+      })
 
       const result = validateZipFile(largeFile)
 
       expect(result.valid).toBe(false)
-      expect(result.error).toContain('100MB')
+      const limitMB = FILE_SIZE_LIMITS.ZIP_FILE / (1024 * 1024)
+      expect(result.error).toContain(`${limitMB}MB`)
     })
 
     it('should reject non-zip files', () => {
