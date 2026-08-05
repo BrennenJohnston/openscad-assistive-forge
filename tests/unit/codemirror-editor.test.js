@@ -184,10 +184,50 @@ describe('CodeMirrorEditor', () => {
     });
   });
 
-  describe('getAction()', () => {
-    it('should return null (Monaco compat shim)', () => {
+  describe('supportsAction() / performAction()', () => {
+    it('reports no support before initialization', () => {
       createEditor();
-      expect(editor.getAction()).toBeNull();
+      expect(editor.supportsAction('indent')).toBe(false);
+      expect(editor.performAction('indent')).toBe(false);
+    });
+
+    it('supports the named Edit-menu commands after initialization', () => {
+      createEditor();
+      editor.initialize();
+      for (const id of [
+        'indent',
+        'unindent',
+        'comment',
+        'uncomment',
+        'find',
+        'findReplace',
+        'findNext',
+        'findPrevious',
+      ]) {
+        expect(editor.supportsAction(id), id).toBe(true);
+      }
+      expect(editor.supportsAction('nonsense')).toBe(false);
+      expect(editor.performAction('nonsense')).toBe(false);
+    });
+
+    it('performs line commenting on the current line', () => {
+      createEditor();
+      editor.initialize();
+      editor.setValue('cube(10);');
+      editor.setSelection(0, 0);
+      expect(editor.performAction('comment')).toBe(true);
+      expect(editor.getValue()).toBe('// cube(10);');
+      expect(editor.performAction('uncomment')).toBe(true);
+      expect(editor.getValue()).toBe('cube(10);');
+    });
+
+    it('replaceSelection inserts at the cursor', () => {
+      createEditor();
+      editor.initialize();
+      editor.setValue('cube();');
+      editor.setSelection(5, 5);
+      editor.replaceSelection('10');
+      expect(editor.getValue()).toBe('cube(10);');
     });
   });
 

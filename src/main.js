@@ -2257,13 +2257,6 @@ async function initApp() {
         label: 'Open File\u2026',
         handler: () => document.getElementById('fileInput')?.click(),
       },
-      {
-        type: 'action',
-        label: 'Recent File',
-        disabled: true,
-        tooltip:
-          'Previously opened files appear in the Recent Files submenu below',
-      },
       { type: 'submenu', label: 'Recent Files', items: recentItems },
       { type: 'separator' },
       {
@@ -2349,14 +2342,6 @@ async function initApp() {
       },
       { type: 'separator' },
       { type: 'submenu', label: 'Export', items: exportItems },
-      { type: 'separator' },
-      {
-        type: 'action',
-        label: 'Show Library Folder',
-        disabled: true,
-        tooltip:
-          'Libraries are managed in-browser \u2014 use the Libraries panel (Window menu) to add or remove libraries',
-      },
     ];
   });
 
@@ -2397,18 +2382,19 @@ async function initApp() {
     const canEdit = expertMode && editor;
     const editorTip = 'Available in Expert Mode with Code Editor';
 
-    function editorAction(label, monacoActionId) {
+    function editorAction(label, actionId) {
+      const available =
+        canEdit && editor.supportsAction?.(actionId) === true;
       return {
         type: 'action',
         label,
-        disabled: !canEdit,
-        tooltip: canEdit ? undefined : editorTip,
-        handler: canEdit
-          ? () => {
-              const action = editor.getAction(monacoActionId);
-              if (action) action.run();
-            }
-          : undefined,
+        disabled: !available,
+        tooltip: available
+          ? undefined
+          : canEdit
+            ? 'Not available in the basic text editor'
+            : editorTip,
+        handler: available ? () => editor.performAction(actionId) : undefined,
       };
     }
 
@@ -2447,17 +2433,29 @@ async function initApp() {
         label: 'Paste',
         disabled: !canEdit,
         tooltip: canEdit ? undefined : editorTip,
-        handler: canEdit ? () => document.execCommand('paste') : undefined,
+        // execCommand('paste') is blocked by every modern browser; read
+        // the async Clipboard API instead, with an honest fallback.
+        handler: canEdit
+          ? async () => {
+              try {
+                const text = await navigator.clipboard.readText();
+                editor.replaceSelection?.(text);
+              } catch {
+                updateStatus(
+                  'Clipboard access was blocked — press Ctrl+V in the editor to paste'
+                );
+                announceImmediate(
+                  'Clipboard access was blocked. Press Control V in the editor to paste.'
+                );
+              }
+            }
+          : undefined,
       },
       { type: 'separator' },
-      editorAction('Indent', 'editor.action.indentLines'),
-      editorAction('Unindent', 'editor.action.outdentLines'),
-      editorAction('Comment', 'editor.action.commentLine'),
-      editorAction('Uncomment', 'editor.action.removeCommentLine'),
-      editorAction(
-        'Convert Tabs to Spaces',
-        'editor.action.indentationToSpaces'
-      ),
+      editorAction('Indent', 'indent'),
+      editorAction('Unindent', 'unindent'),
+      editorAction('Comment', 'comment'),
+      editorAction('Uncomment', 'uncomment'),
       { type: 'separator' },
       {
         type: 'action',
@@ -2496,19 +2494,10 @@ async function initApp() {
         handler: () => editActionsController.copyFov(),
       },
       { type: 'separator' },
-      editorAction('Find\u2026', 'actions.find'),
-      editorAction(
-        'Find and Replace\u2026',
-        'editor.action.startFindReplaceAction'
-      ),
-      editorAction('Find Next', 'editor.action.nextMatchFindAction'),
-      editorAction('Find Previous', 'editor.action.previousMatchFindAction'),
-      {
-        type: 'action',
-        label: 'Use Selection for Find',
-        disabled: !canEdit,
-        tooltip: canEdit ? undefined : editorTip,
-      },
+      editorAction('Find\u2026', 'find'),
+      editorAction('Find and Replace\u2026', 'findReplace'),
+      editorAction('Find Next', 'findNext'),
+      editorAction('Find Previous', 'findPrevious'),
       { type: 'separator' },
       {
         type: 'action',
@@ -2568,9 +2557,10 @@ async function initApp() {
     return [
       {
         type: 'toggle',
-        label: 'Automatic Reload and Preview',
+        label: 'Automatic Reload and Preview (planned)',
         disabled: true,
-        tooltip: 'Planned for future release',
+        tooltip:
+          'Planned — arrives with live local-folder sync (edit files in your own editor and the model re-renders)',
       },
       {
         type: 'action',
@@ -2623,19 +2613,14 @@ async function initApp() {
           if (renderController?.isBusy?.()) renderController.cancel();
         },
       },
-      {
-        type: 'action',
-        label: '3D Print',
-        disabled: true,
-        tooltip:
-          'Not available in browser \u2014 export the model as STL and open it in your slicer application (e.g. PrusaSlicer, Cura)',
-      },
       { type: 'separator' },
       {
         type: 'action',
         label: 'Check Validity',
-        disabled: true,
-        tooltip: 'Planned for future release',
+        shortcutAction: 'checkValidity',
+        enabled: hasFile,
+        tooltip: hasFile ? undefined : 'Open a file first',
+        handler: () => designPanelController.checkValidity(),
       },
       {
         type: 'action',
@@ -2644,12 +2629,6 @@ async function initApp() {
         enabled: hasFile,
         tooltip: hasFile ? undefined : 'Open a file first',
         handler: () => designPanelController.showAST(),
-      },
-      {
-        type: 'action',
-        label: 'Geometry Info',
-        disabled: true,
-        tooltip: 'Planned for future release',
       },
       { type: 'separator' },
       {
@@ -2877,18 +2856,10 @@ async function initApp() {
       panelToggle('consoleOutput', 'Console', 'toggleConsole'),
       {
         type: 'toggle',
-        label: 'Customizer',
+        label: 'Customizer (planned)',
         disabled: true,
         tooltip:
-          'Planned for future release \u2014 use the collapse button on the parameters panel instead',
-      },
-      { type: 'separator' },
-      {
-        type: 'action',
-        label: 'Font List',
-        disabled: true,
-        tooltip:
-          'Not available in browser \u2014 see openscad.org/documentation.html for font information',
+          'Planned \u2014 arrives with the desktop-style Classic layout. Use the collapse button on the parameters panel for now.',
       },
       {
         type: 'action',
@@ -2962,18 +2933,10 @@ async function initApp() {
         label: 'Library Info',
         handler: () => _openFeaturesTab('tab-libraries'),
       },
-      {
-        type: 'action',
-        label: 'Font List',
-        disabled: true,
-        tooltip:
-          'Not available in browser \u2014 see openscad.org/documentation.html for font information',
-      },
       { type: 'separator' },
       {
         type: 'action',
         label: 'Features Guide',
-        shortcutAction: 'showHelp',
         handler: () => _openFeaturesTab('tab-libraries'),
       },
       {
@@ -12027,6 +11990,19 @@ if (rounded) {
     }
   });
 
+  keyboardConfig.on('toggleHighContrast', () => {
+    const enabled = themeManager.toggleHighContrast();
+    announceImmediate(
+      `High contrast mode ${enabled ? 'enabled' : 'disabled'}`
+    );
+  });
+  keyboardConfig.on('searchParams', () => {
+    const searchInput = document.getElementById('paramSearchInput');
+    if (searchInput) {
+      searchInput.scrollIntoView({ block: 'nearest' });
+      searchInput.focus();
+    }
+  });
   keyboardConfig.on('toggleTheme', () => {
     themeManager.cycleTheme();
   });
@@ -12106,51 +12082,16 @@ if (rounded) {
   keyboardConfig.on('nextPanel', () => getUIModeController().cyclePanel(1));
   keyboardConfig.on('prevPanel', () => getUIModeController().cyclePanel(-1));
 
-  keyboardConfig.on('find', () => {
+  const runEditorAction = (actionId) => {
     const modeManager = getModeManager();
     if (modeManager?.isExpertMode?.() && modeManager.getEditorInstance?.()) {
-      const editor = modeManager.getEditorInstance();
-      if (editor.getAction) {
-        const action = editor.getAction('actions.find');
-        if (action) action.run();
-      }
+      modeManager.getEditorInstance().performAction?.(actionId);
     }
-  });
-
-  keyboardConfig.on('findNext', () => {
-    const modeManager = getModeManager();
-    if (modeManager?.isExpertMode?.() && modeManager.getEditorInstance?.()) {
-      const editor = modeManager.getEditorInstance();
-      if (editor.getAction) {
-        const action = editor.getAction('editor.action.nextMatchFindAction');
-        if (action) action.run();
-      }
-    }
-  });
-
-  keyboardConfig.on('findPrevious', () => {
-    const modeManager = getModeManager();
-    if (modeManager?.isExpertMode?.() && modeManager.getEditorInstance?.()) {
-      const editor = modeManager.getEditorInstance();
-      if (editor.getAction) {
-        const action = editor.getAction(
-          'editor.action.previousMatchFindAction'
-        );
-        if (action) action.run();
-      }
-    }
-  });
-
-  keyboardConfig.on('findReplace', () => {
-    const modeManager = getModeManager();
-    if (modeManager?.isExpertMode?.() && modeManager.getEditorInstance?.()) {
-      const editor = modeManager.getEditorInstance();
-      if (editor.getAction) {
-        const action = editor.getAction('editor.action.startFindReplaceAction');
-        if (action) action.run();
-      }
-    }
-  });
+  };
+  keyboardConfig.on('find', () => runEditorAction('find'));
+  keyboardConfig.on('findNext', () => runEditorAction('findNext'));
+  keyboardConfig.on('findPrevious', () => runEditorAction('findPrevious'));
+  keyboardConfig.on('findReplace', () => runEditorAction('findReplace'));
 
   // Expert Mode toggle (Ctrl+E) -- only in Advanced UI mode per COGA principle
   keyboardConfig.on('toggleExpertMode', () => {

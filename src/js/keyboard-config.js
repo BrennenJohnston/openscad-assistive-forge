@@ -39,13 +39,6 @@ export const DEFAULT_SHORTCUTS = {
     key: 'F7',
     description: 'Export STL / download rendered model',
   },
-  exportParams: {
-    key: 'e',
-    ctrl: true,
-    shift: true,
-    description: 'Export parameters as JSON',
-  },
-
   // Expert Mode
   toggleExpertMode: {
     key: 'e',
@@ -144,11 +137,6 @@ export const DEFAULT_SHORTCUTS = {
   },
 
   // Help
-  showHelp: {
-    key: '?',
-    shift: true,
-    description: 'Show keyboard shortcuts help',
-  },
   showShortcutsModal: {
     key: 'k',
     ctrl: true,
@@ -191,30 +179,6 @@ export const DEFAULT_SHORTCUTS = {
     ctrl: true,
     shift: true,
     description: 'Export preview as image',
-  },
-
-  // Navigation
-  nextParameter: {
-    key: 'ArrowDown',
-    alt: true,
-    description: 'Focus next parameter',
-  },
-  prevParameter: {
-    key: 'ArrowUp',
-    alt: true,
-    description: 'Focus previous parameter',
-  },
-  nextGroup: {
-    key: 'ArrowDown',
-    ctrl: true,
-    alt: true,
-    description: 'Jump to next parameter group',
-  },
-  prevGroup: {
-    key: 'ArrowUp',
-    ctrl: true,
-    alt: true,
-    description: 'Jump to previous parameter group',
   },
 
   // Edit actions
@@ -388,7 +352,7 @@ export const SHORTCUT_CATEGORIES = {
   },
   downloads: {
     label: 'Downloads & Export',
-    actions: ['download', 'exportParams'],
+    actions: ['download'],
   },
   view: {
     label: 'View Controls',
@@ -418,15 +382,11 @@ export const SHORTCUT_CATEGORIES = {
   },
   help: {
     label: 'Help',
-    actions: ['showHelp', 'showShortcutsModal'],
+    actions: ['showShortcutsModal'],
   },
   file: {
     label: 'File',
     actions: ['newFile', 'saveFile', 'saveFileAs', 'reloadFile', 'exportImage'],
-  },
-  navigation: {
-    label: 'Navigation',
-    actions: ['nextParameter', 'prevParameter', 'nextGroup', 'prevGroup'],
   },
   editing: {
     label: 'Editing',

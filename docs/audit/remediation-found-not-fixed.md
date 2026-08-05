@@ -40,6 +40,10 @@ decides to drop it. Per project rules, none of these were fixed silently.
   tree: `responsive-audit.spec.js:249` "SVG editor fullscreen — opens,
   fills viewport, closeable" fails at all 8 audited viewports (chromium,
   local run; CI-skipped like the rest).
+- **Addendum (B13 baseline run, 2026-08-04):** also pre-existing on clean
+  tree: `accessibility.spec.js:2348` "UI mode toggle switches to Advanced
+  mode and shows all panels" and `:2381` "all disclosure sections are
+  keyboard-operable" (chromium, local; CI-skipped).
 
 ### F-3: `npm run build` dirties a tracked file
 
