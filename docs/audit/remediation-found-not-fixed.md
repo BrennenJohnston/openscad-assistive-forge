@@ -48,6 +48,11 @@ decides to drop it. Per project rules, none of these were fixed silently.
   tree: `zip-workflow.spec.js:206` "accessible with keyboard navigation
   for file tree" and `:235` "should show project statistics" (chromium,
   local; CI-skipped).
+- **Addendum (C1.4 baseline run, 2026-08-04):** also pre-existing (fails
+  identically at pre-Track-5 commit ba5d4b1): `preset-workflow.spec.js:816`
+  "user-saved presets in localStorage survive project reload" — exercises
+  the dark `project_presets` feature; relevant to the Classic preset work,
+  where this behavior gets finished properly.
 
 ### F-3: `npm run build` dirties a tracked file
 

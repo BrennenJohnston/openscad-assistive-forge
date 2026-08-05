@@ -5411,14 +5411,33 @@ async function initApp() {
         });
         break;
 
-      case DROP_KIND.PRESET_JSON:
-        // Replaced by preset-import routing in an upcoming change.
-        showErrorToast({
-          title: 'Preset Files',
-          message:
-            'To import presets, open the matching .scad model first, then use the preset Import control.',
-        });
+      case DROP_KIND.PRESET_JSON: {
+        const currentState = stateManager.getState();
+        if (!currentState.uploadedFile) {
+          // Never guess which model a preset belongs to.
+          showErrorToast({
+            title: 'Open a Model First',
+            message:
+              'This looks like a preset file. Open the matching .scad model first, then drop the preset file again to import it.',
+          });
+          return;
+        }
+        try {
+          const fileText = await selection.files[0].text();
+          // Merge without overwriting: duplicates by name are skipped, so
+          // a stray drop can never clobber existing designs.
+          const result = presetManager.importAndMergePresets(
+            [fileText],
+            currentState.uploadedFile?.name || null,
+            currentState.schema?.parameters || {},
+            'keep'
+          );
+          _handleImportResult(result, currentState.uploadedFile?.name || null);
+        } catch (error) {
+          showErrorToast({ title: 'Import Failed', message: error.message });
+        }
         break;
+      }
 
       default:
         showErrorToast({
