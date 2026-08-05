@@ -511,9 +511,17 @@ export function initFileHandler({
       'Analyzing project structure. Please do not close or refresh the page.'
     );
 
-    const { MAX_FILES, MAX_BYTES, WARN_FILES } = FOLDER_IMPORT_LIMITS;
+    const { MAX_FILES, MAX_BYTES, WARN_FILES, WARN_BYTES } =
+      FOLDER_IMPORT_LIMITS;
 
     const totalBytes = fileArr.reduce((sum, f) => sum + f.size, 0);
+
+    if (totalBytes > WARN_BYTES && totalBytes <= MAX_BYTES) {
+      console.warn(
+        `[FolderImport] Large project: ${(totalBytes / 1024 / 1024).toFixed(1)} MB — ` +
+          'stored locally in full; renders mount only what the model references.'
+      );
+    }
 
     if (fileArr.length > MAX_FILES) {
       dismissOverlay();

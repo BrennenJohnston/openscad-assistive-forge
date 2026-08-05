@@ -29,6 +29,7 @@ export {
 } from './quality-tiers.js';
 
 import { RENDER_QUALITY } from './quality-tiers.js';
+import { filterFilesForMount } from './mount-filter.js';
 
 /**
  * Estimate render time based on SCAD content complexity
@@ -953,10 +954,23 @@ export class RenderController {
             onProgress: options.onProgress,
           };
 
-          // Convert Map to plain object if files are provided
-          const filesObject = options.files
-            ? Object.fromEntries(options.files)
-            : undefined;
+          // Mount only what the render needs (text always; large binary
+          // sets reduced to dependency-referenced files), then convert
+          // the Map to a plain object for the worker.
+          let filesObject;
+          if (options.files) {
+            const mountSelection = filterFilesForMount(
+              options.files,
+              options.mainFile
+            );
+            if (mountSelection.dropped.length > 0) {
+              console.log(
+                `[RenderController] Not mounting ${mountSelection.dropped.length} ` +
+                  `unreferenced binary companion(s): ${mountSelection.dropped.join(', ')}`
+              );
+            }
+            filesObject = Object.fromEntries(mountSelection.files);
+          }
 
           // Determine output format (default to stl)
           const outputFormat = options.outputFormat || 'stl';
