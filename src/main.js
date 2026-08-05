@@ -5537,7 +5537,19 @@ async function initApp() {
   uploadZone.addEventListener('drop', (e) => {
     e.preventDefault();
     uploadZone.classList.remove('drag-over');
-    fileHandler.handleFile(e.dataTransfer.files[0]);
+    const dropped = e.dataTransfer.files[0];
+    if (!dropped) return;
+    // Validate the extension here instead of passing arbitrary files
+    // straight into the handler (which used to accept anything silently).
+    const name = dropped.name.toLowerCase();
+    if (!name.endsWith('.scad') && !name.endsWith('.zip')) {
+      showErrorToast({
+        title: 'Unsupported File Type',
+        message: `"${dropped.name}" is not a supported file. Drop a .scad model or a .zip project.`,
+      });
+      return;
+    }
+    fileHandler.handleFile(dropped);
   });
 
   // Click to upload is handled by the label wrapping the input.
