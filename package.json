@@ -1,7 +1,7 @@
 {
   "name": "openscad-assistive-forge",
   "version": "4.5.0",
-  "description": "Accessibility-first web-based OpenSCAD customizer with client-side WASM rendering and developer toolchain",
+  "description": "Accessibility-first web-based OpenSCAD customizer with client-side WASM rendering",
   "type": "module",
   "author": "Brennen Johnston <https://github.com/BrennenJohnston>",
   "repository": {
@@ -11,9 +11,6 @@
   "homepage": "https://openscad-assistive-forge.pages.dev/",
   "bugs": {
     "url": "https://github.com/BrennenJohnston/openscad-assistive-forge/issues"
-  },
-  "bin": {
-    "openscad-forge": "./bin/openscad-forge.js"
   },
   "scripts": {
     "dev": "vite",
@@ -75,9 +72,7 @@
     "@playwright/test": "^1.57.0",
     "@vitest/coverage-v8": "^4.0.17",
     "@vitest/ui": "^4.0.17",
-    "chalk": "^5.3.0",
     "colorjs.io": "^0.6.1",
-    "commander": "^14.0.2",
     "eslint": "^10.0.1",
     "globals": "^17.1.0",
     "happy-dom": "^20.3.0",
@@ -115,8 +110,8 @@
   },
   "overrides": {
     "minimatch": "^10.2.1",
-    "@angular/common": "20.3.25",
-    "@angular/core": "20.3.25",
+    "@angular/common": "20.3.27",
+    "@angular/core": "20.3.27",
     "basic-ftp": "^5.3.0"
   }
 }
