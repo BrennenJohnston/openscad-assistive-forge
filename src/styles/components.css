@@ -5606,6 +5606,13 @@ body.first-visit-blocking #app {
   color: var(--color-text-secondary);
 }
 
+/* Render-run separator in the append-only log */
+.console-entry--separator {
+  justify-content: center;
+  color: var(--color-text-secondary);
+  user-select: none;
+}
+
 .console-entry--deprecated .console-type {
   color: var(--color-info, #2196f3);
 }

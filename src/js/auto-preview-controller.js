@@ -1299,7 +1299,8 @@ export class AutoPreviewController {
         activeResult.stats,
         false,
         durationMs,
-        timing
+        timing,
+        activeResult.consoleOutput || ''
       );
     } catch (error) {
       renderFailed = true;

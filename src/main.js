@@ -4883,7 +4883,14 @@ async function initApp() {
           }
           updatePreviewStateUI(newState, extra);
         },
-        onPreviewReady: (stl, stats, cached) => {
+        onPreviewReady: (
+          stl,
+          stats,
+          cached,
+          _durationMs,
+          _timing,
+          consoleOutput
+        ) => {
           console.log('[AutoPreview] Preview ready, cached:', cached);
           // Update status to ready (use 'success' type to keep visible)
           updateStatus('Preview ready', 'success');
@@ -4891,6 +4898,14 @@ async function initApp() {
           updatePrimaryActionButton();
           // Update dimensions display
           updateDimensionsDisplay();
+          // Console fidelity: preview runs surface their echo()/WARNING
+          // output too, not just full renders (cache hits carry none)
+          if (
+            consoleOutput &&
+            typeof window.updateConsoleOutput === 'function'
+          ) {
+            window.updateConsoleOutput(consoleOutput);
+          }
         },
         onProgress: (percent, message, type) => {
           // Simplified status: just show what's happening, no confusing percentages
@@ -11294,7 +11309,11 @@ if (rounded) {
     const normalizedOutput = normalizeOpenSCADConsoleOutput(output);
 
     if (!append) {
-      consolePanel.clear();
+      // Append-only log (desktop parity): mark a new render section instead
+      // of wiping the log. The structured error table still reflects only
+      // the latest render so click-to-line never targets stale errors.
+      consolePanel.beginRenderSection();
+      errorLogPanel.clear();
     }
 
     if (!normalizedOutput || normalizedOutput.trim() === '') {
