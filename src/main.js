@@ -7416,6 +7416,90 @@ if (rounded) {
       },
     });
 
+    // Classic display strip (C4.5): snap views, axes/grid overlays, bed
+    // size, Preview/Render — thin wrappers over the existing actions
+    const classicStrip = document.getElementById('classicDisplayStrip');
+    if (classicStrip) {
+      classicStrip.querySelectorAll('[data-classic-view]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          if (!previewManager) return;
+          previewManager.setCameraView(btn.dataset.classicView);
+          announceCameraAction(`${btn.dataset.classicView} view`);
+        });
+      });
+
+      document
+        .getElementById('classicViewHomeBtn')
+        ?.addEventListener('click', () => {
+          if (!previewManager) return;
+          previewManager.fitCameraToModel();
+          announceCameraAction('View fitted to model');
+        });
+
+      const classicAxesToggle = document.getElementById('classicAxesToggle');
+      if (classicAxesToggle) {
+        classicAxesToggle.setAttribute(
+          'aria-pressed',
+          String(displayOptionsController.get('axes'))
+        );
+        classicAxesToggle.addEventListener('click', () => {
+          const next = !displayOptionsController.get('axes');
+          displayOptionsController.set('axes', next);
+          displayOptionsController.set('axisMarks', next);
+          classicAxesToggle.setAttribute('aria-pressed', String(next));
+        });
+      }
+
+      const classicGridToggle = document.getElementById('classicGridToggle');
+      classicGridToggle?.addEventListener('click', () => {
+        if (!previewManager) return;
+        const next = !previewManager.gridEnabled;
+        previewManager.toggleGrid(next);
+        classicGridToggle.setAttribute('aria-pressed', String(next));
+        announceImmediate(next ? 'Bed grid shown' : 'Bed grid hidden');
+      });
+
+      // Bed size proxies the existing grid preset selector so presets and
+      // persistence stay single-sourced (custom sizes live in the drawer)
+      const classicGridSizeSelect = document.getElementById(
+        'classicGridSizeSelect'
+      );
+      const gridPresetSelectForStrip =
+        document.getElementById('gridPresetSelect');
+      if (classicGridSizeSelect && gridPresetSelectForStrip) {
+        for (const opt of gridPresetSelectForStrip.querySelectorAll(
+          'option'
+        )) {
+          if (opt.value === 'custom') continue;
+          classicGridSizeSelect.appendChild(opt.cloneNode(true));
+        }
+        classicGridSizeSelect.value = gridPresetSelectForStrip.value;
+        classicGridSizeSelect.addEventListener('change', () => {
+          gridPresetSelectForStrip.value = classicGridSizeSelect.value;
+          gridPresetSelectForStrip.dispatchEvent(
+            new Event('change', { bubbles: true })
+          );
+        });
+      }
+
+      document
+        .getElementById('classicPreviewBtn')
+        ?.addEventListener('click', () => {
+          const stripState = stateManager.getState();
+          if (stripState.uploadedFile && autoPreviewController) {
+            autoPreviewController.onParameterChange(stripState.parameters);
+          }
+        });
+
+      document
+        .getElementById('classicRenderBtn')
+        ?.addEventListener('click', () => {
+          if (primaryActionBtn && !primaryActionBtn.disabled) {
+            primaryActionBtn.click();
+          }
+        });
+    }
+
     // Initialize mobile drawer controller
     initDrawerController();
 

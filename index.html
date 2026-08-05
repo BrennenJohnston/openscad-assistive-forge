@@ -2900,6 +2900,59 @@
             role="region"
             aria-label="3D preview and actions"
           >
+            <!-- Classic mode display strip (C4.5) — shown only in Classic layout -->
+            <div class="classic-display-strip" id="classicDisplayStrip">
+              <div class="classic-strip-group" role="group" aria-label="Snap views">
+                <button type="button" class="btn btn-sm" data-classic-view="top">Top</button>
+                <button type="button" class="btn btn-sm" data-classic-view="bottom">Bottom</button>
+                <button type="button" class="btn btn-sm" data-classic-view="left">Left</button>
+                <button type="button" class="btn btn-sm" data-classic-view="right">Right</button>
+                <button type="button" class="btn btn-sm" data-classic-view="front">Front</button>
+                <button type="button" class="btn btn-sm" data-classic-view="back">Back</button>
+                <button type="button" class="btn btn-sm" data-classic-view="diagonal">Diagonal</button>
+                <button type="button"
+                  class="btn btn-sm"
+                  id="classicViewHomeBtn"
+                  aria-label="Fit view to model"
+                >
+                  Home
+                </button>
+              </div>
+              <div class="classic-strip-group" role="group" aria-label="Overlays">
+                <button type="button"
+                  class="btn btn-sm"
+                  id="classicAxesToggle"
+                  aria-pressed="false"
+                  aria-label="Show axes with millimetre markings"
+                >
+                  Axes (mm)
+                </button>
+                <button type="button"
+                  class="btn btn-sm"
+                  id="classicGridToggle"
+                  aria-pressed="true"
+                  aria-label="Show printer bed grid"
+                >
+                  Bed grid
+                </button>
+                <select
+                  id="classicGridSizeSelect"
+                  class="classic-grid-select"
+                  aria-label="Printer bed size in millimetres"
+                ></select>
+              </div>
+              <div class="classic-strip-group" role="group" aria-label="Rendering">
+                <button type="button" class="btn btn-sm" id="classicPreviewBtn">
+                  Preview (F5)
+                </button>
+                <button type="button"
+                  class="btn btn-sm btn-primary"
+                  id="classicRenderBtn"
+                >
+                  Render (F6)
+                </button>
+              </div>
+            </div>
             <!-- Scrollable content wrapper with vertical split -->
             <div class="preview-content" id="previewContent">
               <!-- Top section: Preview settings, status, stats, dimensions -->

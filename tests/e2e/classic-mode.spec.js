@@ -104,6 +104,27 @@ test.describe('Classic mode layout (C4)', () => {
       .count()
     expect(openGroups, 'all param groups collapsed in Classic').toBe(0)
 
+    // Display strip (C4.5): visible in Classic with snap views, overlay
+    // toggles, bed-size select, and Preview/Render
+    const strip = page.locator('#classicDisplayStrip')
+    await expect(strip).toBeVisible()
+    await expect(strip.locator('[data-classic-view]')).toHaveCount(7)
+    await expect(strip.locator('#classicRenderBtn')).toBeVisible()
+    const bedOptions = await strip
+      .locator('#classicGridSizeSelect option')
+      .count()
+    expect(bedOptions, 'bed-size select populated from grid presets').toBeGreaterThan(3)
+
+    // Axes toggle reflects pressed state
+    const axesToggle = strip.locator('#classicAxesToggle')
+    const before = await axesToggle.getAttribute('aria-pressed')
+    await axesToggle.click()
+    await expect(axesToggle).toHaveAttribute(
+      'aria-pressed',
+      before === 'true' ? 'false' : 'true'
+    )
+    await axesToggle.click()
+
     // Exit back to Standard: exact DOM restore, slots removed
     await pickInterfaceMode(page, 'Standard')
     await expect(page.locator('body')).toHaveAttribute(
@@ -119,6 +140,7 @@ test.describe('Classic mode layout (C4)', () => {
     expect(restoredParents.presets).toBe(originalParents.presets)
     await expect(page.locator('#classicConsoleSlot')).toHaveCount(0)
     await expect(page.locator('#classicPresetsSlot')).toHaveCount(0)
+    await expect(page.locator('#classicDisplayStrip')).toBeHidden()
   })
 
   test('preset copy and unsaved-changes guard (C4.4)', async ({ page }) => {
