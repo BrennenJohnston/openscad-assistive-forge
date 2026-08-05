@@ -1428,7 +1428,8 @@ export class PresetManager {
               'Try exporting your presets to a file, then clear old projects to free space.',
           },
         });
-        document.dispatchEvent(event);
+        // main.js listens on window; document dispatch never reached it.
+        window.dispatchEvent(event);
       }
     }
   }

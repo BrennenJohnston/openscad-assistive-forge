@@ -632,13 +632,15 @@ async function initApp() {
       window.location.href = window.location.pathname + '?recovery=true';
     });
 
-  // Listen for storage-quota-exceeded events dispatched by preset-manager
-  // when localStorage is full, so the user gets visible + audible feedback.
+  // Listen for storage-quota-exceeded events dispatched by preset-manager and
+  // saved-projects-manager when persistence fails, so the user gets visible +
+  // audible feedback instead of a console-only error.
   window.addEventListener('storage-quota-exceeded', (e) => {
     const msg =
       e.detail?.message || 'Storage is full. Data could not be saved.';
     updateStatus(msg, 'error');
     _announceError(msg);
+    showErrorToast({ title: 'Storage Problem', message: msg });
   });
 
   let statusArea = null;

@@ -221,7 +221,7 @@ describe('Large import batching', () => {
    * Build a minimal IDB mock that records writes to the named stores.
    * `storeWrites` is mutated in-place so the caller can inspect it.
    */
-  function makeBatchingDb(storeWrites) {
+  function makeBatchingDb(storeWrites, failFlags = {}) {
     const storeData = {
       projects: new Map(),
       projectFiles: new Map(),
@@ -232,14 +232,26 @@ describe('Large import batching', () => {
       onversionchange: null,
       objectStoreNames: {
         contains: (name) =>
-          ['projects', 'folders', 'projectFiles', 'assets'].includes(name),
+          failFlags.noProjectFilesStore && name === 'projectFiles'
+            ? false
+            : ['projects', 'folders', 'projectFiles', 'assets'].includes(name),
       },
       transaction: (storeNames) => {
         const storeName = Array.isArray(storeNames) ? storeNames[0] : storeNames;
-        const putReq = { result: undefined, onsuccess: null, onerror: null };
+        const putReq = { result: undefined, error: null, onsuccess: null, onerror: null };
 
         const store = {
           put: (item) => {
+            if (storeName === 'projects' && failFlags.projectsPut) {
+              Promise.resolve().then(() => {
+                putReq.error = new DOMException(
+                  'Simulated put failure',
+                  'UnknownError'
+                );
+                if (putReq.onerror) putReq.onerror();
+              });
+              return putReq;
+            }
             storeData[storeName]?.set(item.id, item);
             storeWrites[storeName] = (storeWrites[storeName] || []);
             storeWrites[storeName].push(item);
@@ -247,6 +259,25 @@ describe('Large import batching', () => {
               if (putReq.onsuccess) putReq.onsuccess();
             });
             return putReq;
+          },
+          get: (id) => {
+            const getReq = {
+              result: storeData[storeName]?.get(id),
+              onsuccess: null,
+              onerror: null,
+            };
+            Promise.resolve().then(() => {
+              if (getReq.onsuccess) getReq.onsuccess();
+            });
+            return getReq;
+          },
+          delete: (id) => {
+            storeData[storeName]?.delete(id);
+            const delReq = { result: undefined, onsuccess: null, onerror: null };
+            Promise.resolve().then(() => {
+              if (delReq.onsuccess) delReq.onsuccess();
+            });
+            return delReq;
           },
           getAll: () => {
             const getAllReq = {
@@ -415,6 +446,380 @@ describe('Large import batching', () => {
     // getProject still parses the inline JSON correctly
     const project = await getProject(result.id);
     expect(Object.keys(project.projectFiles)).toHaveLength(10);
+  });
+
+  // ==========================================================================
+  // Metadata writes must preserve batched storage (touchProject/updateProject)
+  // Regression for the 218MB single-record put that broke 211-file folder
+  // project loads: the batching done by saveProject must never be undone by
+  // later metadata writes.
+  // ==========================================================================
+
+  function setupBatchingHarness(failFlags = {}) {
+    const storeWrites = {};
+    const dbInstance = makeBatchingDb(storeWrites, failFlags);
+    const mockOpen = vi.fn(() => {
+      const req = {
+        result: dbInstance,
+        error: null,
+        onsuccess: null,
+        onerror: null,
+        onupgradeneeded: null,
+        onblocked: null,
+      };
+      Promise.resolve().then(() => {
+        if (req.onsuccess) req.onsuccess();
+      });
+      return req;
+    });
+    vi.stubGlobal('indexedDB', { open: mockOpen });
+    return { storeWrites, dbInstance, failFlags };
+  }
+
+  function makeFilesMap(count, content = (i) => `// File ${i} content`) {
+    const files = {};
+    for (let i = 0; i < count; i++) {
+      files[`file-${i}.scad`] = content(i);
+    }
+    return files;
+  }
+
+  async function importFreshManager() {
+    return import('../../src/js/saved-projects-manager.js');
+  }
+
+  it('touchProject on a batched project keeps projectFiles null and writes no file rows', async () => {
+    vi.resetModules();
+    localStorage.clear();
+    const { storeWrites } = setupBatchingHarness();
+    const { initSavedProjectsDB, saveProject, touchProject } =
+      await importFreshManager();
+    await initSavedProjectsDB();
+
+    const result = await saveProject({
+      name: 'Batched Touch',
+      originalName: 'batched.zip',
+      kind: 'zip',
+      mainFilePath: 'main.scad',
+      content: '// main',
+      projectFiles: makeFilesMap(75),
+    });
+    expect(result.success).toBe(true);
+    const fileRowsBefore = (storeWrites.projectFiles || []).length;
+
+    expect(await touchProject(result.id)).toBe(true);
+
+    const lastRecord = (storeWrites.projects || [])
+      .filter((p) => p.id === result.id)
+      .pop();
+    expect(lastRecord.projectFiles).toBeNull();
+    expect(lastRecord.largeFilesInStore).toBe(true);
+    expect((storeWrites.projectFiles || []).length).toBe(fileRowsBefore);
+  });
+
+  it('touchProject on an inline project writes the stored JSON string back unchanged', async () => {
+    vi.resetModules();
+    localStorage.clear();
+    const { storeWrites } = setupBatchingHarness();
+    const { initSavedProjectsDB, saveProject, touchProject } =
+      await importFreshManager();
+    await initSavedProjectsDB();
+
+    const result = await saveProject({
+      name: 'Inline Touch',
+      originalName: 'inline.zip',
+      kind: 'zip',
+      mainFilePath: 'main.scad',
+      content: '// main',
+      projectFiles: makeFilesMap(10),
+    });
+    const savedJson = (storeWrites.projects || []).find(
+      (p) => p.id === result.id
+    ).projectFiles;
+    expect(typeof savedJson).toBe('string');
+
+    expect(await touchProject(result.id)).toBe(true);
+
+    const lastRecord = (storeWrites.projects || [])
+      .filter((p) => p.id === result.id)
+      .pop();
+    // Identity, not just equality: a re-serialization would produce a new string
+    expect(lastRecord.projectFiles).toBe(savedJson);
+  });
+
+  it('updateProject metadata-only on a batched project keeps projectFiles null', async () => {
+    vi.resetModules();
+    localStorage.clear();
+    const { storeWrites } = setupBatchingHarness();
+    const { initSavedProjectsDB, saveProject, updateProject, getProject } =
+      await importFreshManager();
+    await initSavedProjectsDB();
+
+    const result = await saveProject({
+      name: 'Batched Update',
+      originalName: 'batched.zip',
+      kind: 'zip',
+      mainFilePath: 'main.scad',
+      content: '// main',
+      projectFiles: makeFilesMap(75),
+    });
+    const fileRowsBefore = (storeWrites.projectFiles || []).length;
+
+    const res = await updateProject({
+      id: result.id,
+      uiPreferences: { uiMode: 'standard' },
+      notes: 'metadata only',
+    });
+    expect(res.success).toBe(true);
+
+    const lastRecord = (storeWrites.projects || [])
+      .filter((p) => p.id === result.id)
+      .pop();
+    expect(lastRecord.projectFiles).toBeNull();
+    expect(lastRecord.largeFilesInStore).toBe(true);
+    expect(lastRecord.uiPreferences).toEqual({ uiMode: 'standard' });
+    expect(lastRecord.notes).toBe('metadata only');
+    expect((storeWrites.projectFiles || []).length).toBe(fileRowsBefore);
+
+    // Contents still hydrate after the metadata write
+    const project = await getProject(result.id);
+    expect(Object.keys(project.projectFiles)).toHaveLength(75);
+  });
+
+  it('updateProject persists mainFilePath and kind', async () => {
+    vi.resetModules();
+    localStorage.clear();
+    const { storeWrites } = setupBatchingHarness();
+    const { initSavedProjectsDB, saveProject, updateProject } =
+      await importFreshManager();
+    await initSavedProjectsDB();
+
+    const result = await saveProject({
+      name: 'Main File Move',
+      originalName: 'proj.zip',
+      kind: 'zip',
+      mainFilePath: 'main.scad',
+      content: '// main',
+      projectFiles: makeFilesMap(3),
+    });
+
+    const res = await updateProject({
+      id: result.id,
+      mainFilePath: 'nested/other.scad',
+      kind: 'scad',
+    });
+    expect(res.success).toBe(true);
+
+    const lastRecord = (storeWrites.projects || [])
+      .filter((p) => p.id === result.id)
+      .pop();
+    expect(lastRecord.mainFilePath).toBe('nested/other.scad');
+    expect(lastRecord.kind).toBe('scad');
+  });
+
+  it('updateProject routes a large map through PROJECT_FILES_STORE', async () => {
+    vi.resetModules();
+    localStorage.clear();
+    setupBatchingHarness();
+    const { initSavedProjectsDB, saveProject, updateProject, getProject } =
+      await importFreshManager();
+    await initSavedProjectsDB();
+
+    const result = await saveProject({
+      name: 'Grows Later',
+      originalName: 'grow.zip',
+      kind: 'zip',
+      mainFilePath: 'main.scad',
+      content: '// main',
+    });
+
+    const res = await updateProject({
+      id: result.id,
+      projectFiles: makeFilesMap(75),
+    });
+    expect(res.success).toBe(true);
+
+    const project = await getProject(result.id);
+    expect(Object.keys(project.projectFiles)).toHaveLength(75);
+    expect(project.largeFilesInStore).toBe(true);
+  });
+
+  it('updateProject and touchProject surface put failures (success:false + window event)', async () => {
+    vi.resetModules();
+    localStorage.clear();
+    const flags = { projectsPut: false };
+    setupBatchingHarness(flags);
+    const { initSavedProjectsDB, saveProject, updateProject, touchProject } =
+      await importFreshManager();
+    await initSavedProjectsDB();
+
+    const result = await saveProject({
+      name: 'Fail Later',
+      originalName: 'fail.scad',
+      kind: 'scad',
+      mainFilePath: 'fail.scad',
+      content: '// ok',
+    });
+    expect(result.success).toBe(true);
+
+    flags.projectsPut = true;
+    const events = [];
+    const onEvt = (e) => events.push(e.detail);
+    window.addEventListener('storage-quota-exceeded', onEvt);
+    try {
+      const res = await updateProject({ id: result.id, notes: 'will fail' });
+      expect(res.success).toBe(false);
+      expect(await touchProject(result.id)).toBe(false);
+    } finally {
+      window.removeEventListener('storage-quota-exceeded', onEvt);
+    }
+
+    expect(events).toHaveLength(2);
+    expect(events[0].source).toBe('saved-projects');
+    expect(events[0].op).toBe('updateProject');
+    expect(events[1].op).toBe('touchProject');
+  });
+
+  it('updateProject normalizes hybrid records left by the old re-inline bug', async () => {
+    vi.resetModules();
+    localStorage.clear();
+    const { storeWrites, dbInstance } = setupBatchingHarness();
+    const { initSavedProjectsDB, saveProject, updateProject } =
+      await importFreshManager();
+    await initSavedProjectsDB();
+
+    const result = await saveProject({
+      name: 'Hybrid Repair',
+      originalName: 'hybrid.zip',
+      kind: 'zip',
+      mainFilePath: 'main.scad',
+      content: '// main',
+      projectFiles: makeFilesMap(75),
+    });
+    const batchedRecord = (storeWrites.projects || [])
+      .filter((p) => p.id === result.id)
+      .pop();
+
+    // Simulate the corruption the old bug produced: batched flag AND a stale
+    // inline copy in the same record.
+    dbInstance
+      .transaction(['projects'])
+      .objectStore()
+      .put({ ...batchedRecord, projectFiles: '{"stale":"data"}' });
+
+    const res = await updateProject({ id: result.id, notes: 'repair pass' });
+    expect(res.success).toBe(true);
+
+    const lastRecord = (storeWrites.projects || [])
+      .filter((p) => p.id === result.id)
+      .pop();
+    expect(lastRecord.projectFiles).toBeNull();
+    expect(lastRecord.largeFilesInStore).toBe(true);
+    expect(lastRecord.notes).toBe('repair pass');
+  });
+
+  it('strips oversized projectFiles from the localStorage mirror on update', async () => {
+    vi.resetModules();
+    localStorage.clear();
+    const { storeWrites } = setupBatchingHarness();
+    const { initSavedProjectsDB, saveProject, updateProject } =
+      await importFreshManager();
+    await initSavedProjectsDB();
+
+    // ~3MB serialized: over the 2MB LS budget, under the 8MB inline cap
+    const result = await saveProject({
+      name: 'LS Strip',
+      originalName: 'big-inline.zip',
+      kind: 'zip',
+      mainFilePath: 'main.scad',
+      content: '// main',
+      projectFiles: { 'big.dat': 'x'.repeat(3 * 1024 * 1024) },
+    });
+    expect(result.success).toBe(true);
+
+    const res = await updateProject({ id: result.id, name: 'LS Strip v2' });
+    expect(res.success).toBe(true);
+
+    const lastRecord = (storeWrites.projects || [])
+      .filter((p) => p.id === result.id)
+      .pop();
+    expect(typeof lastRecord.projectFiles).toBe('string');
+
+    const lsEntry = JSON.parse(
+      localStorage.getItem('openscad-saved-projects')
+    ).find((p) => p.id === result.id);
+    expect(lsEntry.projectFiles).toBeNull();
+    expect(lsEntry.name).toBe('LS Strip v2');
+  });
+
+  it('saveProject batches by byte size even when the file count is small', async () => {
+    vi.resetModules();
+    localStorage.clear();
+    const { storeWrites } = setupBatchingHarness();
+    const { initSavedProjectsDB, saveProject, getProject } =
+      await importFreshManager();
+    await initSavedProjectsDB();
+
+    const bigFiles = {};
+    for (let i = 0; i < 5; i++) {
+      bigFiles[`chunk-${i}.dat`] = 'y'.repeat(3 * 1024 * 1024);
+    }
+    const result = await saveProject({
+      name: 'Byte Batched',
+      originalName: 'bytes.zip',
+      kind: 'zip',
+      mainFilePath: 'main.scad',
+      content: '// main',
+      projectFiles: bigFiles,
+    });
+    expect(result.success).toBe(true);
+
+    const savedRecord = (storeWrites.projects || []).find(
+      (p) => p.id === result.id
+    );
+    expect(savedRecord.projectFiles).toBeNull();
+    expect(savedRecord.largeFilesInStore).toBe(true);
+    expect(
+      (storeWrites.projectFiles || []).filter((f) => f.projectId === result.id)
+    ).toHaveLength(5);
+
+    const project = await getProject(result.id);
+    expect(Object.keys(project.projectFiles)).toHaveLength(5);
+  });
+
+  it('rejects a record past the per-value cap with a typed error instead of UnknownError', async () => {
+    vi.resetModules();
+    localStorage.clear();
+    setupBatchingHarness({ noProjectFilesStore: true });
+    const { initSavedProjectsDB, saveProject, updateProject } =
+      await importFreshManager();
+    await initSavedProjectsDB();
+
+    const result = await saveProject({
+      name: 'Cap Guard',
+      originalName: 'cap.scad',
+      kind: 'scad',
+      mainFilePath: 'cap.scad',
+      content: '// ok',
+    });
+    expect(result.success).toBe(true);
+
+    const events = [];
+    const onEvt = (e) => events.push(e.detail);
+    window.addEventListener('storage-quota-exceeded', onEvt);
+    try {
+      // Batching is unavailable in this harness, so the giant string takes the
+      // inline path and must be stopped by the per-value guard.
+      const giant = 'x'.repeat(100 * 1024 * 1024 + 8192);
+      const res = await updateProject({ id: result.id, projectFiles: giant });
+      expect(res.success).toBe(false);
+      expect(res.error).toMatch(/too large/i);
+    } finally {
+      window.removeEventListener('storage-quota-exceeded', onEvt);
+    }
+
+    expect(events).toHaveLength(1);
+    expect(events[0].message).toMatch(/Connect Folder/);
   });
 });
 
