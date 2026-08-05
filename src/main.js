@@ -12423,7 +12423,7 @@ function getEnabledLibrariesForRender() {
 // Source: docs/audit/testing-round-7/reference-data/cli-extracts/nightly/
 //
 // Facet counts here are ENGINE-VERSION-SPECIFIC tessellation bookkeeping;
-// the parity harness proved volume/bbox are identical across engines while
+// the parity harness measured identical volume/bbox across engines while
 // facet counts differ by up to ~9% (see desktop-comparison-results.md
 // resolution addendum). Authoritative parity checking lives in
 // `npm run parity` (scripts/parity/), which compares dimensional metrics
