@@ -39,11 +39,11 @@ export const DEFAULT_SHORTCUTS = {
     key: 'F7',
     description: 'Export STL / download rendered model',
   },
-  // Expert Mode
+  // Code Editor
   toggleExpertMode: {
     key: 'e',
     ctrl: true,
-    description: 'Toggle Expert Mode (code editor)',
+    description: 'Toggle Code Editor',
   },
 
   // View controls

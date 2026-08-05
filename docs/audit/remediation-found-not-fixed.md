@@ -53,6 +53,14 @@ decides to drop it. Per project rules, none of these were fixed silently.
   "user-saved presets in localStorage survive project reload" — exercises
   the dark `project_presets` feature; relevant to the Classic preset work,
   where this behavior gets finished properly.
+- **Addendum (C3 baseline run, 2026-08-04):** also pre-existing on clean
+  tree (verified by stash run at commit af3e0f3): `accessibility.spec.js:2316`
+  "UI mode toggle exists and defaults to Basic mode" and
+  `expert-mode.spec.js:31` / `:94` / `:151` (all three Expert Mode smoke
+  tests fail waiting for `.param-control` to become visible — parameter
+  groups are collapsed `<details>` by default, same root cause the
+  wasm-smoke suite works around with `openFirstParamGroup()`). Chromium,
+  local; CI-skipped.
 
 ### F-3: `npm run build` dirties a tracked file
 

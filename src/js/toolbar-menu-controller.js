@@ -40,6 +40,7 @@ const MENU_LABELS = {
 const RADIO_GROUP_LABELS = {
   displayMode: 'Display Mode',
   projection: 'Projection',
+  interfaceMode: 'Interface Mode',
 };
 
 export class ToolbarMenuController {
@@ -1011,7 +1012,7 @@ export function resetToolbarMenuController() {
 
 /**
  * Apply toolbar bar / workflow progress mutual exclusion based on UI mode.
- * @param {'basic'|'advanced'} mode
+ * @param {'simplified'|'standard'|'classic'} mode
  */
 export function applyToolbarModeVisibility(mode) {
   const controller = getToolbarMenuController();
@@ -1028,7 +1029,7 @@ export function applyToolbarModeVisibility(mode) {
 
   showWorkflowProgress();
 
-  if (mode === 'advanced') {
+  if (mode !== 'simplified') {
     controller.show();
   } else {
     const uiMode = getUIModeController();

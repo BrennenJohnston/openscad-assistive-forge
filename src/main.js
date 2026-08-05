@@ -2397,7 +2397,7 @@ async function initApp() {
     const editor = modeManager?.getEditorInstance?.();
     const expertMode = modeManager?.isExpertMode?.();
     const canEdit = expertMode && editor;
-    const editorTip = 'Available in Expert Mode with Code Editor';
+    const editorTip = 'Available when the Code Editor is open';
 
     function editorAction(label, actionId) {
       const available =
@@ -2669,6 +2669,23 @@ async function initApp() {
     const state = stateManager.getState();
     const hasRender = Boolean(state.stl);
     const projMode = previewManager?.getProjectionMode?.() ?? 'perspective';
+    const uiCtrl = getUIModeController();
+    const uiModeNow = uiCtrl.getMode();
+
+    function interfaceModeRadio(label, value) {
+      return {
+        type: 'radio',
+        label,
+        group: 'interfaceMode',
+        value,
+        checked: uiModeNow === value,
+        onChange: () => {
+          if (uiModeNow !== value) {
+            uiCtrl.switchMode(value);
+          }
+        },
+      };
+    }
 
     function cameraViewHandler(view) {
       return () => {
@@ -2838,6 +2855,13 @@ async function initApp() {
           }
         },
       },
+      { type: 'separator' },
+      // -- Interface Mode Radio Group (Classic gated on classic_mode flag) --
+      interfaceModeRadio('Simplified', 'simplified'),
+      interfaceModeRadio('Standard', 'standard'),
+      ...(_isEnabled('classic_mode')
+        ? [interfaceModeRadio('Classic (Desktop Layout)', 'classic')]
+        : []),
     ];
   });
 
@@ -8678,7 +8702,7 @@ if (rounded) {
 
     // Include UI mode preferences so shared links apply the same panel visibility
     const uiModePrefs = getUIModeController().getPreferencesForExport();
-    if (uiModePrefs.defaultMode !== 'advanced') {
+    if (uiModePrefs.defaultMode !== 'standard') {
       manifest.defaults.uiMode = uiModePrefs.defaultMode;
     }
     const registryDefaults = getUIModeController()
@@ -12266,12 +12290,12 @@ if (rounded) {
   keyboardConfig.on('findPrevious', () => runEditorAction('findPrevious'));
   keyboardConfig.on('findReplace', () => runEditorAction('findReplace'));
 
-  // Expert Mode toggle (Ctrl+E) -- only in Advanced UI mode per COGA principle
+  // Code Editor toggle (Ctrl+E) -- not in Simplified UI mode per COGA principle
   keyboardConfig.on('toggleExpertMode', () => {
     if (
       _isEnabled('expert_mode') &&
       window._modeManager &&
-      getUIModeController()?.getMode() === 'advanced'
+      getUIModeController()?.getMode() !== 'simplified'
     ) {
       window._modeManager.toggleMode();
     }

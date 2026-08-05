@@ -1,8 +1,13 @@
 /**
- * UI Mode Controller - Controls switching between Basic and Advanced interface layouts
+ * UI Mode Controller - Single owner of the interface layout mode
  *
- * Basic Mode: Simplified interface showing only core parameter controls and preview
- * Advanced Mode: Full interface with all panels visible (default — preserves existing behavior)
+ * Simplified: core parameter controls and preview only (panels hidden)
+ * Standard: full interface with all panels visible
+ * Classic: desktop-OpenSCAD-style four-pane layout (gated on the
+ *   classic_mode feature flag; layout applied via body[data-ui-mode])
+ *
+ * Legacy stored values migrate on load: 'basic' → 'simplified',
+ * 'advanced' → 'standard'. Storage keys and panel IDs are unchanged.
  *
  * @license GPL-3.0-or-later
  */
@@ -11,25 +16,44 @@ import { isEnabled } from './feature-flags.js';
 import { announceImmediate } from './announcer.js';
 
 /**
- * @typedef {'basic' | 'advanced'} UIMode
+ * @typedef {'simplified' | 'standard' | 'classic'} UIMode
  */
+
+const VALID_MODES = ['simplified', 'standard', 'classic'];
+
+const LEGACY_MODE_MAP = {
+  basic: 'simplified',
+  advanced: 'standard',
+};
+
+/**
+ * Normalize a mode value, accepting legacy names from old storage,
+ * manifests, and ?uiMode= links.
+ * @param {*} value
+ * @returns {UIMode|null} Normalized mode, or null if unrecognized
+ */
+export function normalizeUiMode(value) {
+  if (typeof value !== 'string') return null;
+  const mapped = LEGACY_MODE_MAP[value] || value;
+  return VALID_MODES.includes(mapped) ? mapped : null;
+}
 
 /**
  * @typedef {Object} PanelDefinition
  * @property {string} id - Unique panel identifier
  * @property {string} label - Human-readable label for preferences UI
  * @property {string} selector - CSS selector targeting the panel element(s)
- * @property {boolean} defaultHiddenInBasic - Whether hidden by default in Basic mode
+ * @property {boolean} defaultHiddenInBasic - Whether hidden by default in Simplified mode
  */
 
 // Storage key for UI mode preference (follows openscad-forge-{feature} convention)
 const UI_MODE_STORAGE_KEY = 'openscad-forge-ui-mode';
 
-// CSS class applied to panel elements when hidden in Basic mode
+// CSS class applied to panel elements when hidden in Simplified mode
 const HIDDEN_CLASS = 'ui-mode-hidden';
 
 /**
- * Registry of panels controlled by Basic/Advanced mode.
+ * Registry of panels controlled by Simplified mode.
  * Selectors are verified against the current index.html DOM structure.
  * CRITICAL: Never target .param-group or .param-control elements here —
  * those are independently controlled by isSimpleGroup() and data-settings-level.
@@ -119,14 +143,14 @@ const PANEL_REGISTRY = [
 ];
 
 /**
- * UIModeController - Central controller for Basic/Advanced interface mode switching
+ * UIModeController - Central controller for interface mode switching
  *
  * Responsibilities:
- * - Track current UI mode (basic/advanced)
+ * - Track current UI mode (simplified/standard/classic)
  * - Handle mode switching with screen reader announcements
- * - Persist mode preference to localStorage
- * - Apply panel visibility via CSS class (PR 2 wires the actual hiding)
- * - Expose panel registry for preferences UI (PR 3)
+ * - Persist mode preference to localStorage (with legacy-name migration)
+ * - Apply panel visibility via CSS class and body[data-ui-mode]
+ * - Expose panel registry for preferences UI
  */
 export class UIModeController {
   /**
@@ -135,7 +159,7 @@ export class UIModeController {
    */
   constructor(options = {}) {
     /** @type {UIMode} */
-    this.currentMode = 'basic';
+    this.currentMode = 'simplified';
 
     /** @type {Function} */
     this.onModeChange = options.onModeChange || (() => {});
@@ -151,11 +175,19 @@ export class UIModeController {
   }
 
   /**
-   * Check if Basic/Advanced mode feature is enabled via feature flag
+   * Check if the mode toggle feature is enabled via feature flag
    * @returns {boolean}
    */
   isFeatureEnabled() {
     return isEnabled('basic_advanced_mode');
+  }
+
+  /**
+   * Check if Classic mode is available (classic_mode feature flag)
+   * @returns {boolean}
+   */
+  isClassicAvailable() {
+    return isEnabled('classic_mode');
   }
 
   /**
@@ -186,15 +218,24 @@ export class UIModeController {
 
   /**
    * Switch to a specific UI mode
-   * @param {UIMode} targetMode - 'basic' or 'advanced'
+   * @param {UIMode} targetMode - 'simplified', 'standard', or 'classic'
+   *   (legacy 'basic'/'advanced' accepted and migrated)
    * @param {Object} [options]
    * @param {boolean} [options.skipAnnouncement] - Skip screen reader announcement
    * @param {boolean} [options.skipFocus] - Skip focus management
    * @returns {boolean} True if switch was successful
    */
   switchMode(targetMode, options = {}) {
-    if (!['basic', 'advanced'].includes(targetMode)) {
+    targetMode = normalizeUiMode(targetMode);
+    if (!targetMode) {
       console.warn(`[UIModeController] Invalid mode: ${targetMode}`);
+      return false;
+    }
+
+    if (targetMode === 'classic' && !this.isClassicAvailable()) {
+      console.warn(
+        '[UIModeController] Classic mode requested but classic_mode flag is disabled'
+      );
       return false;
     }
 
@@ -229,11 +270,13 @@ export class UIModeController {
   }
 
   /**
-   * Toggle between Basic and Advanced modes
+   * Toggle between Simplified and Standard modes.
+   * From Classic mode, toggling returns to Simplified.
    * @returns {UIMode} New mode after toggle
    */
   toggleMode() {
-    const newMode = this.currentMode === 'advanced' ? 'basic' : 'advanced';
+    const newMode =
+      this.currentMode === 'simplified' ? 'standard' : 'simplified';
     this.switchMode(newMode);
     return this.currentMode;
   }
@@ -249,11 +292,16 @@ export class UIModeController {
    * @param {UIMode} mode
    */
   applyMode(mode) {
+    if (document.body) {
+      document.body.dataset.uiMode = mode;
+    }
+
     const hiddenPanelIds = this._getEffectiveHiddenPanels();
 
     for (const panel of PANEL_REGISTRY) {
       const elements = this._queryPanelElements(panel.selector);
-      const shouldHide = mode === 'basic' && hiddenPanelIds.includes(panel.id);
+      const shouldHide =
+        mode === 'simplified' && hiddenPanelIds.includes(panel.id);
 
       if (shouldHide) {
         elements.forEach((el) => el.classList.add(HIDDEN_CLASS));
@@ -305,8 +353,12 @@ export class UIModeController {
       this._projectHiddenPanels = prefs.hiddenPanelsInBasic;
     }
 
-    if (prefs.defaultMode === 'basic' || prefs.defaultMode === 'advanced') {
-      this.currentMode = prefs.defaultMode;
+    const normalized = normalizeUiMode(prefs.defaultMode);
+    if (normalized) {
+      this.currentMode =
+        normalized === 'classic' && !this.isClassicAvailable()
+          ? 'standard'
+          : normalized;
     }
 
     if (options.applyImmediately !== false) {
@@ -318,7 +370,7 @@ export class UIModeController {
   /**
    * Update the user's default hidden panel list (saved to localStorage).
    * @param {string} panelId - Panel ID to toggle
-   * @param {boolean} hidden - Whether the panel should be hidden in Basic mode
+   * @param {boolean} hidden - Whether the panel should be hidden in Simplified mode
    */
   setPanelHidden(panelId, hidden) {
     const validIds = PANEL_REGISTRY.map((p) => p.id);
@@ -331,8 +383,8 @@ export class UIModeController {
 
     this._saveHiddenPanels(updated);
 
-    if (this.currentMode === 'basic') {
-      this.applyMode('basic');
+    if (this.currentMode === 'simplified') {
+      this.applyMode('simplified');
     }
   }
 
@@ -346,8 +398,8 @@ export class UIModeController {
     this._saveHiddenPanels(defaults);
     this._projectHiddenPanels = null;
 
-    if (this.currentMode === 'basic') {
-      this.applyMode('basic');
+    if (this.currentMode === 'simplified') {
+      this.applyMode('simplified');
     }
   }
 
@@ -363,14 +415,14 @@ export class UIModeController {
 
     const heading = document.createElement('h4');
     heading.className = 'ui-prefs-heading';
-    heading.textContent = 'Basic Mode: Hidden Panels';
+    heading.textContent = 'Simplified Mode: Hidden Panels';
     heading.id = 'uiPrefsHeading';
     container.appendChild(heading);
 
     const description = document.createElement('p');
     description.className = 'ui-prefs-description';
     description.textContent =
-      'Select which panels are hidden when Basic mode is active. Parameter controls always remain visible.';
+      'Select which panels are hidden when Simplified mode is active. Parameter controls always remain visible.';
     container.appendChild(description);
 
     const group = document.createElement('div');
@@ -391,12 +443,15 @@ export class UIModeController {
       checkbox.type = 'checkbox';
       checkbox.checked = hiddenPanels.includes(panel.id);
       checkbox.dataset.panelId = panel.id;
-      checkbox.setAttribute('aria-label', `Hide ${panel.label} in Basic mode`);
+      checkbox.setAttribute(
+        'aria-label',
+        `Hide ${panel.label} in Simplified mode`
+      );
 
       checkbox.addEventListener('change', () => {
         this.setPanelHidden(panel.id, checkbox.checked);
         announceImmediate(
-          `${panel.label} will be ${checkbox.checked ? 'hidden' : 'visible'} in Basic mode`,
+          `${panel.label} will be ${checkbox.checked ? 'hidden' : 'visible'} in Simplified mode`,
           { clearDelayMs: 2000 }
         );
       });
@@ -528,6 +583,10 @@ export class UIModeController {
    * wire click handler, apply initial mode.
    */
   init() {
+    if (document.body) {
+      document.body.dataset.uiMode = this.currentMode;
+    }
+
     const btn = document.getElementById('uiModeToggle');
     if (!btn) return;
 
@@ -633,21 +692,22 @@ export class UIModeController {
     const btn = document.getElementById('uiModeToggle');
     if (!btn) return;
 
-    const isAdvanced = this.currentMode === 'advanced';
-    btn.setAttribute('aria-checked', String(isAdvanced));
+    const isSimplified = this.currentMode === 'simplified';
+    btn.setAttribute('aria-checked', String(!isSimplified));
 
-    if (isAdvanced) {
+    if (isSimplified) {
       btn.setAttribute(
         'aria-label',
-        'Interface mode: Advanced. Click to switch to Basic mode'
-      );
-      btn.classList.remove('ui-mode-toggle--basic');
-    } else {
-      btn.setAttribute(
-        'aria-label',
-        'Interface mode: Basic. Click to switch to Advanced mode'
+        'Interface mode: Simplified. Click to switch to Standard mode'
       );
       btn.classList.add('ui-mode-toggle--basic');
+    } else {
+      const modeName = this.currentMode === 'classic' ? 'Classic' : 'Standard';
+      btn.setAttribute(
+        'aria-label',
+        `Interface mode: ${modeName}. Click to switch to Simplified mode`
+      );
+      btn.classList.remove('ui-mode-toggle--basic');
     }
   }
 
@@ -658,7 +718,7 @@ export class UIModeController {
    */
   _manageFocusAfterSwitch(mode) {
     try {
-      if (mode === 'basic') {
+      if (mode === 'simplified') {
         // Focus the first visible parameter control
         const firstInput = document.querySelector(
           '.param-control:not(.ui-mode-hidden) input:not([type="hidden"]), ' +
@@ -686,9 +746,11 @@ export class UIModeController {
    */
   _announceSwitch(mode) {
     const messages = {
-      basic:
-        'Switched to Basic mode. Advanced panels are now hidden. Parameter controls remain accessible.',
-      advanced: 'Switched to Advanced mode. All panels are now visible.',
+      simplified:
+        'Switched to Simplified mode. Extra panels are now hidden. Parameter controls remain accessible.',
+      standard: 'Switched to Standard mode. All panels are now visible.',
+      classic:
+        'Switched to Classic mode. Desktop-style layout with display, customizer, presets, and console panes.',
     };
 
     announceImmediate(messages[mode] || `Switched to ${mode} mode`, {
@@ -705,8 +767,12 @@ export class UIModeController {
       const stored = localStorage.getItem(UI_MODE_STORAGE_KEY);
       if (stored) {
         const prefs = JSON.parse(stored);
-        if (prefs.mode === 'basic' || prefs.mode === 'advanced') {
-          this.currentMode = prefs.mode;
+        const normalized = normalizeUiMode(prefs.mode);
+        if (normalized) {
+          this.currentMode =
+            normalized === 'classic' && !this.isClassicAvailable()
+              ? 'standard'
+              : normalized;
         }
       }
     } catch (error) {

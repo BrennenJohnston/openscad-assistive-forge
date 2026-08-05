@@ -114,7 +114,7 @@ describe('ModeManager', () => {
       modeManager.switchMode('expert');
 
       expect(mockAnnounce).toHaveBeenCalledWith(
-        expect.stringContaining('Expert Mode')
+        expect.stringContaining('Code Editor')
       );
     });
 

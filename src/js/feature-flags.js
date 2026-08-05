@@ -44,7 +44,7 @@ function cyrb53(str, seed = 0) {
 export const FLAGS = {
   expert_mode: {
     id: 'expert_mode',
-    name: 'Expert Mode',
+    name: 'Code Editor',
     description: 'Code editor with syntax highlighting for OpenSCAD',
     default: true,
     rollout: 100,
@@ -117,9 +117,19 @@ export const FLAGS = {
   },
   basic_advanced_mode: {
     id: 'basic_advanced_mode',
-    name: 'Basic/Advanced Mode',
-    description: 'Toggle between simplified and full interface layouts',
+    name: 'Interface Mode Toggle',
+    description: 'Toggle between Simplified and Standard interface layouts',
     default: true,
+    rollout: 100,
+    userConfigurable: true,
+    killSwitch: false,
+  },
+  classic_mode: {
+    id: 'classic_mode',
+    name: 'Classic Desktop Layout',
+    description:
+      'Enable the Classic interface mode: a desktop-OpenSCAD-style layout with display, customizer, presets, and console panes',
+    default: false,
     rollout: 100,
     userConfigurable: true,
     killSwitch: false,
