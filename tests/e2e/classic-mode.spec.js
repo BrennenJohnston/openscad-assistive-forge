@@ -286,19 +286,29 @@ test.describe('Classic mode layout (C4)', () => {
       .count()
     expect(openGroups, 'all param groups collapsed in Classic').toBe(0)
 
-    // Display strip (C4.5): visible in Classic with snap views, overlay
-    // toggles, bed-size select, and Preview/Render
-    const strip = page.locator('#classicDisplayStrip')
-    await expect(strip).toBeVisible()
-    await expect(strip.locator('[data-classic-view]')).toHaveCount(7)
-    await expect(strip.locator('#classicRenderBtn')).toBeVisible()
-    const bedOptions = await strip
+    // Icon toolbar (C6): docked under the menu bar with snap views, overlay
+    // toggles, bed-size select, and Preview/Render — chokusen icons render
+    const toolbar = page.locator('#classicToolbar')
+    await expect(toolbar).toBeVisible()
+    await expect(toolbar.locator('[data-classic-view]')).toHaveCount(7)
+    await expect(toolbar.locator('#classicRenderBtn')).toBeVisible()
+    const toolbarBox = await toolbar.boundingBox()
+    const menuBox = await page.locator('#toolbarMenuBar').boundingBox()
+    expect(
+      toolbarBox.y,
+      'toolbar sits below the menu bar'
+    ).toBeGreaterThanOrEqual(menuBox.y)
+    const iconImage = await toolbar
+      .locator('.classic-icon[data-icon="render"]')
+      .evaluate((el) => getComputedStyle(el).backgroundImage)
+    expect(iconImage, 'vendored icon resolves').toContain('openscad-icons')
+    const bedOptions = await toolbar
       .locator('#classicGridSizeSelect option')
       .count()
     expect(bedOptions, 'bed-size select populated from grid presets').toBeGreaterThan(3)
 
     // Axes toggle reflects pressed state
-    const axesToggle = strip.locator('#classicAxesToggle')
+    const axesToggle = toolbar.locator('#classicAxesToggle')
     const before = await axesToggle.getAttribute('aria-pressed')
     await axesToggle.click()
     await expect(axesToggle).toHaveAttribute(
@@ -322,7 +332,7 @@ test.describe('Classic mode layout (C4)', () => {
     expect(restoredParents.presets).toBe(originalParents.presets)
     await expect(page.locator('#classicConsoleSlot')).toHaveCount(0)
     await expect(page.locator('#classicEditorSlot')).toHaveCount(0)
-    await expect(page.locator('#classicDisplayStrip')).toBeHidden()
+    await expect(page.locator('#classicToolbar')).toBeHidden()
     await expect(page.locator('#classicCustomizerBar')).toBeHidden()
   })
 

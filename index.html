@@ -503,6 +503,109 @@
             </button>
           </div>
         </div>
+        <!-- Classic icon toolbar (C6): desktop OpenSCAD's second toolbar row.
+             Shown only in classic (classic.css); vendored chokusen icons with
+             sr-only text labels (missing icon degrades to an empty button,
+             the accessible name always holds). -->
+        <div
+          id="classicToolbar"
+          class="classic-toolbar"
+          role="toolbar"
+          aria-label="Classic toolbar"
+        >
+          <div class="classic-tb-group" role="group" aria-label="File">
+            <button type="button" class="btn classic-tb-btn" id="classicTbNewBtn" title="New (start a new file)">
+              <span class="classic-icon" data-icon="new" aria-hidden="true"></span><span class="sr-only">New</span>
+            </button>
+            <button type="button" class="btn classic-tb-btn" id="classicTbOpenBtn" title="Open a file">
+              <span class="classic-icon" data-icon="open" aria-hidden="true"></span><span class="sr-only">Open</span>
+            </button>
+            <button type="button" class="btn classic-tb-btn" id="classicTbSaveBtn" title="Save">
+              <span class="classic-icon" data-icon="save" aria-hidden="true"></span><span class="sr-only">Save</span>
+            </button>
+          </div>
+          <div class="classic-tb-group" role="group" aria-label="Edit">
+            <button type="button" class="btn classic-tb-btn" id="classicTbUndoBtn" title="Undo parameter change">
+              <span class="classic-icon" data-icon="undo" aria-hidden="true"></span><span class="sr-only">Undo</span>
+            </button>
+            <button type="button" class="btn classic-tb-btn" id="classicTbRedoBtn" title="Redo parameter change">
+              <span class="classic-icon" data-icon="redo" aria-hidden="true"></span><span class="sr-only">Redo</span>
+            </button>
+          </div>
+          <div class="classic-tb-group" role="group" aria-label="Rendering">
+            <button type="button" class="btn classic-tb-btn" id="classicPreviewBtn" title="Preview (F5)">
+              <span class="classic-icon" data-icon="preview" aria-hidden="true"></span><span class="sr-only">Preview (F5)</span>
+            </button>
+            <button type="button" class="btn classic-tb-btn" id="classicRenderBtn" title="Render (F6)">
+              <span class="classic-icon" data-icon="render" aria-hidden="true"></span><span class="sr-only">Render (F6)</span>
+            </button>
+            <button type="button" class="btn classic-tb-btn" id="classicTbExportStlBtn" title="Export as STL">
+              <span class="classic-icon" data-icon="export-stl" aria-hidden="true"></span><span class="sr-only">Export STL</span>
+            </button>
+          </div>
+          <div class="classic-tb-group" role="group" aria-label="Views">
+            <button type="button" class="btn classic-tb-btn" id="classicViewHomeBtn" title="View all (fit model)">
+              <span class="classic-icon" data-icon="zoom-all" aria-hidden="true"></span><span class="sr-only">View All</span>
+            </button>
+            <button type="button" class="btn classic-tb-btn" data-classic-view="diagonal" title="Reset view (diagonal)">
+              <span class="classic-icon" data-icon="reset-view" aria-hidden="true"></span><span class="sr-only">Reset View</span>
+            </button>
+            <button type="button" class="btn classic-tb-btn" data-classic-view="top" title="Top view">
+              <span class="classic-icon" data-icon="view-top" aria-hidden="true"></span><span class="sr-only">Top</span>
+            </button>
+            <button type="button" class="btn classic-tb-btn" data-classic-view="bottom" title="Bottom view">
+              <span class="classic-icon" data-icon="view-bottom" aria-hidden="true"></span><span class="sr-only">Bottom</span>
+            </button>
+            <button type="button" class="btn classic-tb-btn" data-classic-view="left" title="Left view">
+              <span class="classic-icon" data-icon="view-left" aria-hidden="true"></span><span class="sr-only">Left</span>
+            </button>
+            <button type="button" class="btn classic-tb-btn" data-classic-view="right" title="Right view">
+              <span class="classic-icon" data-icon="view-right" aria-hidden="true"></span><span class="sr-only">Right</span>
+            </button>
+            <button type="button" class="btn classic-tb-btn" data-classic-view="front" title="Front view">
+              <span class="classic-icon" data-icon="view-front" aria-hidden="true"></span><span class="sr-only">Front</span>
+            </button>
+            <button type="button" class="btn classic-tb-btn" data-classic-view="back" title="Back view">
+              <span class="classic-icon" data-icon="view-back" aria-hidden="true"></span><span class="sr-only">Back</span>
+            </button>
+          </div>
+          <div class="classic-tb-group" role="group" aria-label="Projection">
+            <button type="button" class="btn classic-tb-btn" id="classicTbPerspectiveBtn" aria-pressed="true" title="Perspective projection">
+              <span class="classic-icon" data-icon="perspective" aria-hidden="true"></span><span class="sr-only">Perspective</span>
+            </button>
+            <button type="button" class="btn classic-tb-btn" id="classicTbOrthogonalBtn" aria-pressed="false" title="Orthogonal projection">
+              <span class="classic-icon" data-icon="orthogonal" aria-hidden="true"></span><span class="sr-only">Orthogonal</span>
+            </button>
+          </div>
+          <div class="classic-tb-group" role="group" aria-label="Overlays">
+            <button type="button" class="btn classic-tb-btn" id="classicEdgesToggle" aria-pressed="false" title="Show edges">
+              <span class="classic-icon" data-icon="show-edges" aria-hidden="true"></span><span class="sr-only">Show Edges</span>
+            </button>
+            <button type="button" class="btn classic-tb-btn" id="classicAxesToggle" aria-pressed="false" title="Show axes with millimetre markings">
+              <span class="classic-icon" data-icon="axes" aria-hidden="true"></span><span class="sr-only">Axes (mm)</span>
+            </button>
+            <button type="button" class="btn classic-tb-btn" id="classicCrosshairsToggle" aria-pressed="false" title="Show crosshairs">
+              <span class="classic-icon" data-icon="crosshairs" aria-hidden="true"></span><span class="sr-only">Crosshairs</span>
+            </button>
+            <button type="button"
+              class="btn btn-sm classic-tb-text-btn"
+              id="classicGridToggle"
+              aria-pressed="true"
+              aria-label="Show printer bed grid"
+              title="Show printer bed grid"
+            >Bed grid</button>
+            <label class="sr-only" for="classicGridSizeSelect">Printer bed size in millimetres</label>
+            <select
+              id="classicGridSizeSelect"
+              class="classic-grid-select"
+            ></select>
+          </div>
+          <div class="classic-tb-group" role="group" aria-label="Panels">
+            <button type="button" class="btn classic-tb-btn" id="classicTbCustomizerBtn" aria-pressed="true" title="Show or hide the Customizer">
+              <span class="classic-icon" data-icon="parameter" aria-hidden="true"></span><span class="sr-only">Customizer</span>
+            </button>
+          </div>
+        </div>
       </div>
       <main class="app-main" id="main-content" tabindex="-1">
         <div class="welcome-screen" id="welcomeScreen">
@@ -2947,59 +3050,6 @@
             role="region"
             aria-label="3D preview and actions"
           >
-            <!-- Classic mode display strip (C4.5) — shown only in Classic layout -->
-            <div class="classic-display-strip" id="classicDisplayStrip">
-              <div class="classic-strip-group" role="group" aria-label="Snap views">
-                <button type="button" class="btn btn-sm" data-classic-view="top">Top</button>
-                <button type="button" class="btn btn-sm" data-classic-view="bottom">Bottom</button>
-                <button type="button" class="btn btn-sm" data-classic-view="left">Left</button>
-                <button type="button" class="btn btn-sm" data-classic-view="right">Right</button>
-                <button type="button" class="btn btn-sm" data-classic-view="front">Front</button>
-                <button type="button" class="btn btn-sm" data-classic-view="back">Back</button>
-                <button type="button" class="btn btn-sm" data-classic-view="diagonal">Diagonal</button>
-                <button type="button"
-                  class="btn btn-sm"
-                  id="classicViewHomeBtn"
-                  aria-label="Fit view to model"
-                >
-                  Home
-                </button>
-              </div>
-              <div class="classic-strip-group" role="group" aria-label="Overlays">
-                <button type="button"
-                  class="btn btn-sm"
-                  id="classicAxesToggle"
-                  aria-pressed="false"
-                  aria-label="Show axes with millimetre markings"
-                >
-                  Axes (mm)
-                </button>
-                <button type="button"
-                  class="btn btn-sm"
-                  id="classicGridToggle"
-                  aria-pressed="true"
-                  aria-label="Show printer bed grid"
-                >
-                  Bed grid
-                </button>
-                <select
-                  id="classicGridSizeSelect"
-                  class="classic-grid-select"
-                  aria-label="Printer bed size in millimetres"
-                ></select>
-              </div>
-              <div class="classic-strip-group" role="group" aria-label="Rendering">
-                <button type="button" class="btn btn-sm" id="classicPreviewBtn">
-                  Preview (F5)
-                </button>
-                <button type="button"
-                  class="btn btn-sm btn-primary"
-                  id="classicRenderBtn"
-                >
-                  Render (F6)
-                </button>
-              </div>
-            </div>
             <!-- Scrollable content wrapper with vertical split -->
             <div class="preview-content" id="previewContent">
               <!-- Top section: Preview settings, status, stats, dimensions -->

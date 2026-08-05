@@ -18,41 +18,57 @@
   display: none;
 }
 
-/* Display-pane control strip (C4.5) — Classic mode only */
-.classic-display-strip {
+/* Classic icon toolbar (C6) — desktop OpenSCAD's second toolbar row,
+   docked under the menu bar. Hidden outside classic and via the
+   View > Hide Toolbar toggle (data-classic-toolbar-hidden). */
+.classic-toolbar {
   display: none;
 }
 
-body[data-ui-mode='classic'] .classic-display-strip {
+body[data-ui-mode='classic'] .classic-toolbar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-sm);
-  padding: var(--space-xs) var(--space-sm);
+  padding: var(--space-xxs) var(--space-sm);
   border-bottom: 1px solid var(--color-border);
   background-color: var(--color-bg-secondary);
 }
 
-body[data-ui-mode='classic'] .classic-strip-group {
+body[data-ui-mode='classic'][data-classic-toolbar-hidden='true']
+  .classic-toolbar {
+  display: none;
+}
+
+body[data-ui-mode='classic'] .classic-tb-group {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-xxs);
 }
 
-body[data-ui-mode='classic'] .classic-strip-group + .classic-strip-group {
+body[data-ui-mode='classic'] .classic-tb-group + .classic-tb-group {
   padding-left: var(--space-sm);
   border-left: 1px solid var(--color-border);
 }
 
-body[data-ui-mode='classic'] .classic-display-strip .btn,
+body[data-ui-mode='classic'] .classic-tb-btn {
+  min-width: var(--size-touch-target);
+  min-height: var(--size-touch-target);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-xxs);
+}
+
+body[data-ui-mode='classic'] .classic-tb-text-btn,
 body[data-ui-mode='classic'] .classic-grid-select {
   min-height: var(--size-touch-target);
 }
 
-body[data-ui-mode='classic'] .classic-display-strip [aria-pressed='true'] {
-  background-color: var(--color-accent);
-  color: var(--color-accent-text);
+body[data-ui-mode='classic'] .classic-toolbar [aria-pressed='true'] {
+  background-color: var(--color-accent-subtle, var(--color-hover-bg));
+  outline: 1px solid var(--color-accent);
 }
 
 body[data-ui-mode='classic'] .classic-slot {

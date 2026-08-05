@@ -3232,6 +3232,28 @@ async function initApp() {
           })),
         };
       })(),
+      ...(document.body.dataset.uiMode === 'classic'
+        ? [
+            {
+              type: 'toggle',
+              label: 'Hide Toolbar',
+              checked: document.body.dataset.classicToolbarHidden === 'true',
+              handler: () => {
+                const hidden =
+                  document.body.dataset.classicToolbarHidden === 'true';
+                document.body.dataset.classicToolbarHidden = String(!hidden);
+                try {
+                  localStorage.setItem(
+                    'openscad-forge-classic-toolbar-hidden',
+                    String(!hidden)
+                  );
+                } catch {
+                  // Preference persistence is best-effort.
+                }
+              },
+            },
+          ]
+        : []),
       { type: 'separator' },
       // -- Interface Mode Radio Group (Classic gated on classic_mode flag) --
       interfaceModeRadio('Simplified', 'simplified'),
@@ -7938,9 +7960,22 @@ if (rounded) {
 
     // Classic display strip (C4.5): snap views, axes/grid overlays, bed
     // size, Preview/Render — thin wrappers over the existing actions
-    const classicStrip = document.getElementById('classicDisplayStrip');
-    if (classicStrip) {
-      classicStrip.querySelectorAll('[data-classic-view]').forEach((btn) => {
+    // Classic icon toolbar (C6): thin wrappers over the same actions the
+    // menus drive — no new state anywhere.
+    const classicToolbar = document.getElementById('classicToolbar');
+    if (classicToolbar) {
+      // Restore the View > Hide Toolbar preference
+      try {
+        if (
+          localStorage.getItem('openscad-forge-classic-toolbar-hidden') ===
+          'true'
+        ) {
+          document.body.dataset.classicToolbarHidden = 'true';
+        }
+      } catch {
+        // Preference read is best-effort.
+      }
+      classicToolbar.querySelectorAll('[data-classic-view]').forEach((btn) => {
         btn.addEventListener('click', () => {
           if (!previewManager) return;
           previewManager.setCameraView(btn.dataset.classicView);
@@ -7955,6 +7990,81 @@ if (rounded) {
           previewManager.fitCameraToModel();
           announceCameraAction('View fitted to model');
         });
+
+      // File / Edit / Render groups proxy the same handlers as the menus
+      document
+        .getElementById('classicTbNewBtn')
+        ?.addEventListener('click', () => fileActionsController.onNew());
+      document
+        .getElementById('classicTbOpenBtn')
+        ?.addEventListener('click', () =>
+          document.getElementById('fileInput')?.click()
+        );
+      document
+        .getElementById('classicTbSaveBtn')
+        ?.addEventListener('click', () => fileActionsController.onSave());
+      document
+        .getElementById('classicTbUndoBtn')
+        ?.addEventListener('click', () =>
+          document.getElementById('undoBtn')?.click()
+        );
+      document
+        .getElementById('classicTbRedoBtn')
+        ?.addEventListener('click', () =>
+          document.getElementById('redoBtn')?.click()
+        );
+      document
+        .getElementById('classicTbExportStlBtn')
+        ?.addEventListener('click', () => exportFormatFromMenu('stl'));
+
+      // Projection pair mirrors the preview manager's actual mode
+      const perspBtn = document.getElementById('classicTbPerspectiveBtn');
+      const orthoBtn = document.getElementById('classicTbOrthogonalBtn');
+      const syncProjectionButtons = () => {
+        const mode = previewManager?.getProjectionMode?.() || 'perspective';
+        perspBtn?.setAttribute('aria-pressed', String(mode === 'perspective'));
+        orthoBtn?.setAttribute(
+          'aria-pressed',
+          String(mode === 'orthographic')
+        );
+      };
+      perspBtn?.addEventListener('click', () => {
+        if (
+          previewManager &&
+          previewManager.getProjectionMode?.() !== 'perspective'
+        ) {
+          previewManager.toggleProjection();
+        }
+        syncProjectionButtons();
+      });
+      orthoBtn?.addEventListener('click', () => {
+        if (
+          previewManager &&
+          previewManager.getProjectionMode?.() !== 'orthographic'
+        ) {
+          previewManager.toggleProjection();
+        }
+        syncProjectionButtons();
+      });
+
+      // Overlay toggles share displayOptionsController state
+      const wireOverlayToggle = (btnId, option) => {
+        const btn = document.getElementById(btnId);
+        if (!btn) return;
+        btn.setAttribute(
+          'aria-pressed',
+          String(displayOptionsController.get(option))
+        );
+        btn.addEventListener('click', () => {
+          displayOptionsController.toggle(option);
+          btn.setAttribute(
+            'aria-pressed',
+            String(displayOptionsController.get(option))
+          );
+        });
+      };
+      wireOverlayToggle('classicEdgesToggle', 'edges');
+      wireOverlayToggle('classicCrosshairsToggle', 'crosshairs');
 
       const classicAxesToggle = document.getElementById('classicAxesToggle');
       if (classicAxesToggle) {
@@ -8018,6 +8128,16 @@ if (rounded) {
             primaryActionBtn.click();
           }
         });
+
+      const classicTbCustomizerBtn = document.getElementById(
+        'classicTbCustomizerBtn'
+      );
+      classicTbCustomizerBtn?.addEventListener('click', () => {
+        const layout = getClassicLayoutController();
+        if (!layout) return;
+        const visible = layout.toggleCustomizer();
+        classicTbCustomizerBtn.setAttribute('aria-pressed', String(visible));
+      });
     }
 
     // Initialize mobile drawer controller
