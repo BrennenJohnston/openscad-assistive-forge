@@ -80,11 +80,6 @@ const PANEL_REGISTRY = [
     selector: '#projectFilesControls',
     defaultHiddenInBasic: true,
   },
-  // editTools panel removed — now in Edit toolbar menu
-  // designTools panel removed — now in Design toolbar menu
-  // displayOptions panel removed — toggles now in View toolbar menu
-  // animationPanel removed from UI pending full debug (controller deleted;
-  // recoverable from git history if animation support returns)
   {
     id: 'toolbarMenuFile',
     label: 'Toolbar: File',

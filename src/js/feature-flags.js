@@ -175,6 +175,11 @@ export const FLAGS = {
     killSwitch: false,
     requires: ['svg_preparer'],
   },
+  // Kept dark on purpose: this working implementation is the foundation
+  // for the Classic-mode preset contract (project = .scad + sidecar
+  // presets + assets) and the local-folder preset sidecars. Now user-
+  // configurable so it is at least reachable for testing; default stays
+  // off until that work lands.
   project_presets: {
     id: 'project_presets',
     name: 'Project-Native Presets',
@@ -184,7 +189,7 @@ export const FLAGS = {
       'and user-saved presets in the dropdown.',
     default: false,
     rollout: 0,
-    userConfigurable: false,
+    userConfigurable: true,
     killSwitch: false,
   },
   // F35 Phase A — persistent two-way sync with a folder on disk via the

@@ -273,9 +273,6 @@ export const DEFAULT_SHORTCUTS = {
     ctrl: true,
     description: 'Toggle crosshairs overlay',
   },
-  // toggleAnimate: removed from UI pending full debug; key binding preserved here for future re-integration
-  // toggleAnimate: { key: 'm', ctrl: true, alt: true, description: 'Toggle animation playback' },
-
   // Panel controls
   toggleConsole: {
     key: '1',
