@@ -6,6 +6,7 @@
 
 import { isValidServiceWorkerMessage } from './html-utils.js';
 import { getAppPrefKey } from './storage-keys.js';
+import { loadFolderHandle } from './folder-handle-store.js';
 import {
   listSavedProjects,
   listFolders,
@@ -740,6 +741,111 @@ export async function importProjectFromFiles(fileList, mainFilePath) {
     });
 
     return result;
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Find the folder-link project whose stored handle points at the same disk
+ * folder, so reconnecting a folder never duplicates saved-project cards.
+ *
+ * @param {FileSystemDirectoryHandle} handle - Freshly connected handle
+ * @param {Object} [deps]
+ * @param {(folderRef: string) => Promise<FileSystemDirectoryHandle|null>} [deps.loadHandle]
+ * @returns {Promise<{id: string, folderRef: string}|null>}
+ */
+export async function findLinkedProjectForHandle(handle, deps = {}) {
+  const load = deps.loadHandle ?? ((key) => loadFolderHandle({ key }));
+  try {
+    const projects = await listSavedProjects();
+    for (const p of projects) {
+      if (p.kind !== 'folder-link' || !p.folderRef) continue;
+      const stored = await load(p.folderRef);
+      if (!stored) continue;
+      try {
+        if (
+          typeof stored.isSameEntry === 'function' &&
+          (await stored.isSameEntry(handle))
+        ) {
+          return { id: p.id, folderRef: p.folderRef };
+        }
+      } catch {
+        // isSameEntry can reject on revoked handles — treat as no match.
+      }
+    }
+  } catch (err) {
+    console.warn('[FolderSync] Linked-project lookup failed:', err);
+  }
+  return null;
+}
+
+/**
+ * Create or refresh a folder-link saved project: a pointer record holding
+ * only metadata — contents stay on disk behind the directory handle stored
+ * under `folderRef` in the folder-sync DB. Returns the freshly-read contents
+ * so the caller can load them into the app without a second disk pass.
+ *
+ * @param {FileList|File[]} fileList - Files from the connected folder walk
+ * @param {string} mainFilePath - webkitRelativePath of the primary .scad file
+ * @param {Object} options
+ * @param {string} options.folderRef - Handle-store key for this folder
+ * @param {string|null} [options.existingId] - Refresh this record instead of creating one
+ * @returns {Promise<{success: boolean, id?: string, error?: string,
+ *   mainContent?: string, projectFiles?: Object, mainRelPath?: string,
+ *   projectName?: string}>}
+ */
+export async function linkProjectFromFiles(
+  fileList,
+  mainFilePath,
+  { folderRef, existingId = null } = {}
+) {
+  try {
+    const { mainFile, mainContent, rootDir, projectFiles } =
+      await readProjectFilesFromList(fileList, mainFilePath);
+
+    const projectName = rootDir || mainFile.name.replace('.scad', '');
+    const mainRelPath = rootDir
+      ? mainFilePath.replace(`${rootDir}/`, '')
+      : mainFilePath;
+    const fileArr = Array.from(fileList);
+    const fileSummary = {
+      fileCount: fileArr.length,
+      totalBytes: fileArr.reduce((sum, f) => sum + (f.size || 0), 0),
+    };
+
+    let result;
+    if (existingId) {
+      const update = await updateProject({
+        id: existingId,
+        mainFilePath: mainRelPath,
+        folderRef,
+        fileSummary,
+      });
+      result = update.success ? { success: true, id: existingId } : update;
+    } else {
+      result = await saveProject({
+        name: projectName,
+        originalName: mainFile.name,
+        kind: 'folder-link',
+        mainFilePath: mainRelPath,
+        content: '',
+        projectFiles: null,
+        notes: '',
+        folderRef,
+        fileSummary,
+      });
+    }
+
+    if (!result.success) return result;
+    return {
+      ...result,
+      mainContent,
+      projectFiles,
+      mainRelPath,
+      projectName,
+      originalName: mainFile.name,
+    };
   } catch (error) {
     return { success: false, error: error.message };
   }

@@ -280,6 +280,26 @@ export class FolderSyncController {
   }
 
   /**
+   * Adopt an already-permission-granted directory handle as the active
+   * connection — used when a folder-link saved project is loaded straight
+   * from its card, where the permission flow already happened. Persists it
+   * as the root handle (so reload lands in pending-restore for the same
+   * folder) and flips state to connected for the pill + watcher.
+   *
+   * @param {FileSystemDirectoryHandle} handle
+   */
+  async adoptHandle(handle) {
+    if (!handle) return;
+    try {
+      await this._persistHandle(handle);
+    } catch (err) {
+      console.warn('[FolderSync] adoptHandle: persist failed', err);
+    }
+    this._handle = handle;
+    this._setState('connected');
+  }
+
+  /**
    * Forget the connection: drop the in-memory handle, clear IDB, and
    * fire a state change. Does not (and cannot) revoke the granted
    * permission — only the user can do that via browser UI.

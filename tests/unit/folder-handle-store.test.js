@@ -196,6 +196,51 @@ describe('folder-handle-store (F35 Phase A)', () => {
     });
   });
 
+  describe('keyed storage (folder-link projects)', () => {
+    it('round-trips a handle under a custom key without touching root', async () => {
+      const rootHandle = { name: 'root-folder', kind: 'directory' };
+      const linkedHandle = { name: 'keyguard-folder', kind: 'directory' };
+      await saveFolderHandle(rootHandle, { idbFactory: memIdb });
+      await saveFolderHandle(linkedHandle, {
+        idbFactory: memIdb,
+        key: 'fh-123-abc',
+      });
+
+      expect(
+        await loadFolderHandle({ idbFactory: memIdb, key: 'fh-123-abc' })
+      ).toEqual(linkedHandle);
+      expect(await loadFolderHandle({ idbFactory: memIdb })).toEqual(
+        rootHandle
+      );
+    });
+
+    it('loading an unknown key returns null', async () => {
+      expect(
+        await loadFolderHandle({ idbFactory: memIdb, key: 'fh-nope' })
+      ).toBeNull();
+    });
+
+    it('clear({key}) removes only that key and leaves root intact', async () => {
+      await saveFolderHandle(
+        { name: 'root-folder', kind: 'directory' },
+        { idbFactory: memIdb }
+      );
+      await saveFolderHandle(
+        { name: 'linked', kind: 'directory' },
+        { idbFactory: memIdb, key: 'fh-1' }
+      );
+
+      await clearFolderHandle({ idbFactory: memIdb, key: 'fh-1' });
+
+      expect(
+        await loadFolderHandle({ idbFactory: memIdb, key: 'fh-1' })
+      ).toBeNull();
+      expect((await loadFolderHandle({ idbFactory: memIdb })).name).toBe(
+        'root-folder'
+      );
+    });
+  });
+
   describe('input validation', () => {
     it('rejects null/undefined handle on save', async () => {
       await expect(

@@ -10,6 +10,7 @@ import {
   getValidationErrorMessage,
 } from './validation-schemas.js';
 import { STORAGE_LIMITS } from './validation-constants.js';
+import { clearFolderHandle } from './folder-handle-store.js';
 
 const DB_NAME = 'openscad-forge-saved-projects';
 const DB_VERSION = 2; // Bumped for v2 schema with folders, project files, assets
@@ -772,6 +773,8 @@ export async function saveProject({
   forkedFrom = null,
   uiPreferences = null,
   sourceExampleKey = null,
+  folderRef = null,
+  fileSummary = null,
 }) {
   try {
     await ensureInitialized();
@@ -797,13 +800,18 @@ export async function saveProject({
 
     const now = Date.now();
 
+    // Folder-link projects are pointers: their contents live on disk behind
+    // the handle named by folderRef, never in this record.
+    const isFolderLink = kind === 'folder-link';
+
     // Normalise projectFiles to a plain object once so both the inline path
     // and the batched path share the same representation.
-    const filesObj = projectFiles
-      ? projectFiles instanceof Map
-        ? Object.fromEntries(projectFiles)
-        : projectFiles
-      : null;
+    const filesObj =
+      projectFiles && !isFolderLink
+        ? projectFiles instanceof Map
+          ? Object.fromEntries(projectFiles)
+          : projectFiles
+        : null;
     const fileCount = filesObj ? Object.keys(filesObj).length : 0;
     const filesJson = filesObj ? JSON.stringify(filesObj) : null;
 
@@ -831,6 +839,8 @@ export async function saveProject({
       content,
       projectFiles: useBatchedStorage ? null : filesJson,
       ...(useBatchedStorage ? { largeFilesInStore: true } : {}),
+      folderRef: folderRef || null,
+      fileSummary: fileSummary || null,
       folderId: folderId, // v2: parent folder (null = root)
       overlayFiles: {}, // v2: overlay metadata
       presets: [], // v2: project-scoped presets metadata
@@ -1072,6 +1082,8 @@ export async function touchProject(id) {
  * @param {Object|null} [options.uiPreferences] - Per-project UI preferences sidecar
  * @param {string} [options.mainFilePath] - New main file path
  * @param {string} [options.kind] - New project kind
+ * @param {string|null} [options.folderRef] - Handle-store key for folder-link projects
+ * @param {Object|null} [options.fileSummary] - {fileCount, totalBytes} snapshot
  * @returns {Promise<{success: boolean, error?: string}>}
  */
 export async function updateProject({
@@ -1083,6 +1095,8 @@ export async function updateProject({
   uiPreferences,
   mainFilePath,
   kind,
+  folderRef,
+  fileSummary,
 }) {
   try {
     await ensureInitialized();
@@ -1091,6 +1105,8 @@ export async function updateProject({
     if (!record) {
       return { success: false, error: 'Project not found' };
     }
+
+    const isFolderLink = record.kind === 'folder-link';
 
     if (name !== undefined) {
       record.name = name;
@@ -1105,8 +1121,18 @@ export async function updateProject({
       record.notes = notes;
     }
     if (content !== undefined) {
-      record.content = content;
-      record.savedAt = Date.now();
+      if (isFolderLink) {
+        // By design: folder-link contents live on disk; the flag-gated
+        // write-back path is the only writer.
+        if (import.meta.env.DEV) {
+          console.log(
+            '[Saved Projects] Ignoring content update for folder-link project'
+          );
+        }
+      } else {
+        record.content = content;
+        record.savedAt = Date.now();
+      }
     }
     if (uiPreferences !== undefined) {
       record.uiPreferences = uiPreferences || null;
@@ -1117,11 +1143,23 @@ export async function updateProject({
     if (kind !== undefined) {
       record.kind = kind;
     }
+    if (folderRef !== undefined) {
+      record.folderRef = folderRef || null;
+    }
+    if (fileSummary !== undefined) {
+      record.fileSummary = fileSummary || null;
+    }
 
     // Once a project is batched it stays batched — re-inlining a hydrated map
     // as one record is what once exceeded Chromium's per-value cap.
     let filesForBatchedStore = null;
-    if (projectFiles !== undefined) {
+    if (projectFiles !== undefined && isFolderLink) {
+      if (import.meta.env.DEV) {
+        console.log(
+          '[Saved Projects] Ignoring projectFiles update for folder-link project'
+        );
+      }
+    } else if (projectFiles !== undefined) {
       let filesObj =
         projectFiles && typeof projectFiles === 'object'
           ? projectFiles instanceof Map
@@ -1243,6 +1281,10 @@ export async function deleteProject(id) {
   try {
     await ensureInitialized();
 
+    // Read the record BEFORE deleting so a folder-link's handle key can be
+    // cleaned up afterwards.
+    const record = await getRawProjectRecord(id);
+
     // v2: Delete all project files and assets first
     try {
       await deleteAllProjectFiles(id);
@@ -1279,6 +1321,12 @@ export async function deleteProject(id) {
         '[Saved Projects] localStorage delete failed:',
         lsError.message
       );
+    }
+
+    // Drop the folder-link's persisted directory handle so the folder-sync
+    // DB does not accumulate orphaned handles.
+    if (record && record.kind === 'folder-link' && record.folderRef) {
+      await clearFolderHandle({ key: record.folderRef });
     }
 
     return { success: true };

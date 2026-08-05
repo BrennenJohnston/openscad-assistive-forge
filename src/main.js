@@ -110,6 +110,9 @@ import {
   exportProjectsBackup,
   exportSingleProject,
   importProjectsBackup,
+  linkProjectFromFiles,
+  readProjectFilesFromList,
+  findLinkedProjectForHandle,
 } from './js/storage-manager.js';
 // showWorkflowProgress / hideWorkflowProgress moved to hfm-controller.js (applyToolbarModeVisibility)
 import { startTutorial } from './js/tutorial-sandbox.js';
@@ -234,6 +237,8 @@ import {
 import {
   initSavedProjectsDB,
   updateProject,
+  touchProject,
+  getProject,
   getSavedProjectsSummary as _getSavedProjectsSummary,
   clearAllSavedProjects as _clearAllSavedProjects,
   getStorageDiagnostics,
@@ -241,6 +246,10 @@ import {
   createFolder as _createFolder,
   moveFolder as _moveFolder,
 } from './js/saved-projects-manager.js';
+import {
+  loadFolderHandle,
+  saveFolderHandle,
+} from './js/folder-handle-store.js';
 import Split from 'split.js';
 
 /**
@@ -1017,6 +1026,9 @@ async function initApp() {
   // updateCompanionSaveButton is wrapped because companionFilesCtrl is
   // created later (after DOM element queries); the wrapper defers safely
   // since savedProjectsUI only invokes it after user interaction.
+  // Set by the folder-sync section when folder_sync_watch is enabled; lets
+  // the folder-link card-load path start watching after it loads state.
+  let resumeFolderWatch = null;
   const savedProjectsUI = initSavedProjectsUI({
     showConfirmDialog,
     showProcessingOverlay,
@@ -1027,6 +1039,104 @@ async function initApp() {
     downloadSingleProject,
     setCurrentSavedProjectId: (id) => {
       currentSavedProjectId = id;
+    },
+    // Pointer-model load path: read a folder-link project's contents from
+    // disk via its stored handle. Defined here as a closure because the
+    // folder-sync controller/watcher live later in initApp — they are
+    // initialized long before any card's Load click can invoke this.
+    readLinkedFolder: async (project) => {
+      const syncCtrl = getFolderSyncController();
+      if (!syncCtrl.isSupported()) {
+        return {
+          ok: false,
+          reason: 'no-handle',
+          message: 'This browser cannot access local folders.',
+        };
+      }
+      if (!project.folderRef) {
+        return { ok: false, reason: 'no-handle' };
+      }
+      const handle = await loadFolderHandle({ key: project.folderRef });
+      if (!handle) {
+        return { ok: false, reason: 'no-handle' };
+      }
+      try {
+        let perm =
+          typeof handle.queryPermission === 'function'
+            ? await handle.queryPermission({ mode: 'readwrite' })
+            : 'prompt';
+        if (perm !== 'granted') {
+          if (typeof handle.requestPermission !== 'function') {
+            return { ok: false, reason: 'permission-denied' };
+          }
+          perm = await handle.requestPermission({ mode: 'readwrite' });
+        }
+        if (perm !== 'granted') {
+          return { ok: false, reason: 'permission-denied' };
+        }
+      } catch (permErr) {
+        return {
+          ok: false,
+          reason: 'permission-denied',
+          message: permErr?.message,
+        };
+      }
+      try {
+        const files = [];
+        await fileHandler.collectFilesFromDir(handle, handle.name, files);
+        if (files.length === 0) {
+          return {
+            ok: false,
+            reason: 'read-error',
+            message: 'The linked folder is empty.',
+          };
+        }
+        // The record stores a root-relative main path; disk paths carry the
+        // (possibly renamed) root folder prefix, so match by suffix and fall
+        // back to the selection prompt if the file moved.
+        let mainAbs =
+          files.find((f) =>
+            (f.webkitRelativePath || '').endsWith(`/${project.mainFilePath}`)
+          )?.webkitRelativePath || null;
+        if (!mainAbs) {
+          const selection = await fileHandler.prepareFolderSelection(files);
+          if (!selection) {
+            return {
+              ok: false,
+              reason: 'read-error',
+              message: 'No main .scad file was selected.',
+            };
+          }
+          mainAbs = selection.mainFilePath;
+        }
+        const read = await readProjectFilesFromList(files, mainAbs);
+        const mainRel = read.rootDir
+          ? mainAbs.replace(`${read.rootDir}/`, '')
+          : mainAbs;
+        if (mainRel !== project.mainFilePath) {
+          await updateProject({ id: project.id, mainFilePath: mainRel });
+        }
+        await syncCtrl.adoptHandle(handle);
+        const projectFilesMap = new Map(Object.entries(read.projectFiles));
+        return {
+          ok: true,
+          content: read.mainContent,
+          projectFiles: projectFilesMap.size > 0 ? projectFilesMap : null,
+          mainFilePath: projectFilesMap.size > 0 ? mainRel : null,
+          fileName: read.mainFile.name,
+          // Called by the UI after handleFile so the watcher snapshots the
+          // freshly-loaded state, not the pre-load one.
+          finishConnect: async () => {
+            if (resumeFolderWatch) await resumeFolderWatch();
+          },
+        };
+      } catch (readErr) {
+        return {
+          ok: false,
+          reason: 'read-error',
+          message: readErr?.message ?? String(readErr),
+        };
+      }
     },
   });
 
@@ -1675,7 +1785,68 @@ async function initApp() {
           return;
         }
         dismissOverlay();
-        await fileHandler.handleFolderImport(files);
+
+        const selection = await fileHandler.prepareFolderSelection(files);
+        if (!selection) return;
+
+        // Pointer model: persist the handle + a contentless folder-link
+        // record; the disk stays the source of truth (contents are re-read
+        // on every load, so browser storage caps no longer apply).
+        const existing = await findLinkedProjectForHandle(handle);
+        const folderRef =
+          existing?.folderRef ||
+          `fh-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+        await saveFolderHandle(handle, { key: folderRef });
+
+        const linkResult = await linkProjectFromFiles(
+          files,
+          selection.mainFilePath,
+          { folderRef, existingId: existing?.id || null }
+        );
+        if (!linkResult.success) {
+          showErrorToast({
+            title: 'Folder Link Failed',
+            message: linkResult.error,
+          });
+          return;
+        }
+
+        await touchProject(linkResult.id);
+        currentSavedProjectId = linkResult.id;
+
+        const projectFilesMap =
+          linkResult.projectFiles &&
+          Object.keys(linkResult.projectFiles).length > 0
+            ? new Map(Object.entries(linkResult.projectFiles))
+            : null;
+        await fileHandler.handleFile(
+          { name: linkResult.originalName },
+          linkResult.mainContent,
+          projectFilesMap,
+          projectFilesMap ? linkResult.mainRelPath : null,
+          'saved',
+          linkResult.projectName
+        );
+
+        // Apply per-project UI preferences from the record (same contract as
+        // loadSavedProject) \u2014 cheap now that folder-link records are tiny.
+        try {
+          const record = await getProject(linkResult.id);
+          if (record?.uiPreferences != null) {
+            getUIModeController().importPreferences(record.uiPreferences, {
+              applyImmediately: true,
+            });
+          }
+        } catch (prefsErr) {
+          console.warn(
+            '[FolderSync] Could not apply project UI preferences:',
+            prefsErr
+          );
+        }
+
+        await savedProjectsUI.renderSavedProjectsList();
+        updateStatus(`Connected folder loaded: ${linkResult.projectName}`);
+
         if (folderWatcher) {
           await folderWatcher.primeSnapshot();
           folderWatcher.start();
@@ -1736,6 +1907,11 @@ async function initApp() {
 
     // ── C5.2 (Phase B): watch the connected folder for external edits ──
     if (_isEnabled('folder_sync_watch')) {
+      resumeFolderWatch = async () => {
+        if (!folderWatcher) return;
+        await folderWatcher.primeSnapshot();
+        folderWatcher.start();
+      };
       folderWatcher = new FolderChangeWatcher({
         getHandle: () => folderSyncCtrl.getHandle(),
         getWatchPaths: () => {

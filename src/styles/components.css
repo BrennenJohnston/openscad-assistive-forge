@@ -824,6 +824,19 @@ summary:focus-visible,
   gap: var(--space-xs);
 }
 
+/* Folder-link cards: contents live on disk, the record is a pointer */
+.saved-project-badge {
+  display: inline-block;
+  align-self: flex-start;
+  padding: 0 var(--space-xs);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+}
+
 .saved-project-notes-preview {
   margin: var(--space-sm) 0;
   padding: var(--space-sm);

@@ -9,7 +9,10 @@
  *
  * Storage layout:
  *   db:    `openscad-forge-folder-sync`
- *   store: `handles`  (key = "root" — the project's root folder)
+ *   store: `handles`
+ *     key "root"        — the most recent connection (status pill/Reconnect)
+ *     key `fh-*`        — per-project handles for folder-link saved projects
+ *                         (the record's `folderRef` field names its key)
  *
  * The handle is stored verbatim. Browsers that support the File
  * System Access API guarantee structured-cloning of the handle, so
@@ -81,13 +84,15 @@ function tx(db, mode, fn) {
  *
  * @param {Object} [deps]
  * @param {IDBFactory} [deps.idbFactory]
+ * @param {string} [deps.key] Storage key; defaults to the root slot.
  * @returns {Promise<FileSystemDirectoryHandle|null>}
  */
 export async function loadFolderHandle(deps = {}) {
+  const key = deps.key ?? ROOT_KEY;
   try {
     const db = await openDb(deps.idbFactory);
     try {
-      const result = await tx(db, 'readonly', (store) => store.get(ROOT_KEY));
+      const result = await tx(db, 'readonly', (store) => store.get(key));
       return result ?? null;
     } finally {
       db.close();
@@ -105,15 +110,17 @@ export async function loadFolderHandle(deps = {}) {
  * @param {FileSystemDirectoryHandle} handle
  * @param {Object} [deps]
  * @param {IDBFactory} [deps.idbFactory]
+ * @param {string} [deps.key] Storage key; defaults to the root slot.
  * @returns {Promise<void>}
  */
 export async function saveFolderHandle(handle, deps = {}) {
   if (!handle || typeof handle !== 'object') {
     throw new Error('saveFolderHandle requires a directory handle');
   }
+  const key = deps.key ?? ROOT_KEY;
   const db = await openDb(deps.idbFactory);
   try {
-    await tx(db, 'readwrite', (store) => store.put(handle, ROOT_KEY));
+    await tx(db, 'readwrite', (store) => store.put(handle, key));
   } finally {
     db.close();
   }
@@ -125,13 +132,15 @@ export async function saveFolderHandle(handle, deps = {}) {
  *
  * @param {Object} [deps]
  * @param {IDBFactory} [deps.idbFactory]
+ * @param {string} [deps.key] Storage key; defaults to the root slot.
  * @returns {Promise<void>}
  */
 export async function clearFolderHandle(deps = {}) {
+  const key = deps.key ?? ROOT_KEY;
   try {
     const db = await openDb(deps.idbFactory);
     try {
-      await tx(db, 'readwrite', (store) => store.delete(ROOT_KEY));
+      await tx(db, 'readwrite', (store) => store.delete(key));
     } finally {
       db.close();
     }

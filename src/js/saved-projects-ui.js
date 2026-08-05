@@ -43,6 +43,9 @@ import { showErrorModal, showErrorToast } from './error-translator.js';
  * @param {Function} deps.updateCompanionSaveButton - Companion save button state updater
  * @param {Function} deps.downloadSingleProject - Single project ZIP download
  * @param {Function} deps.setCurrentSavedProjectId - Setter for the shared currentSavedProjectId
+ * @param {Function} [deps.readLinkedFolder] - Read a folder-link project's
+ *   contents from disk; returns {ok, content, projectFiles, mainFilePath,
+ *   fileName, finishConnect} or {ok:false, reason, message}
  * @returns {Object} Controller API
  */
 export function initSavedProjectsUI({
@@ -53,6 +56,7 @@ export function initSavedProjectsUI({
   updateCompanionSaveButton,
   downloadSingleProject,
   setCurrentSavedProjectId,
+  readLinkedFolder = null,
 }) {
   let currentFolderId = null;
 
@@ -297,9 +301,14 @@ export function initSavedProjectsUI({
         : null;
 
     const isZip = project.kind === 'zip';
-    const iconPath = isZip
-      ? '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>'
-      : '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline>';
+    const isFolderLink = project.kind === 'folder-link';
+    const iconPath =
+      isZip || isFolderLink
+        ? '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>'
+        : '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline>';
+    const linkedBadge = isFolderLink
+      ? '<span class="saved-project-badge">Linked folder</span>'
+      : '';
 
     return `
       <div class="saved-project-card" role="listitem" data-project-id="${project.id}" draggable="true">
@@ -310,6 +319,7 @@ export function initSavedProjectsUI({
           <div class="saved-project-info">
             <h4 class="saved-project-name">${escapeHtml(project.name)}</h4>
             <div class="saved-project-meta">
+              ${linkedBadge}
               <span class="saved-project-date">Saved ${savedTime}</span>
               ${loadedTime ? `<span class="saved-project-date">Opened ${loadedTime}</span>` : ''}
             </div>
@@ -330,9 +340,13 @@ export function initSavedProjectsUI({
             <button class="btn btn-secondary btn-edit-project" data-project-id="${project.id}">
               Edit
             </button>
-            <button class="btn btn-secondary btn-download-project" data-project-id="${project.id}" title="Download this project as a ZIP">
+            ${
+              isFolderLink
+                ? ''
+                : `<button class="btn btn-secondary btn-download-project" data-project-id="${project.id}" title="Download this project as a ZIP">
               Export
-            </button>
+            </button>`
+            }
             <button class="btn btn-danger btn-delete-project" data-project-id="${project.id}">
               Delete
             </button>
@@ -1275,6 +1289,113 @@ export function initSavedProjectsUI({
    * Load a saved project
    * @param {string} projectId
    */
+  /**
+   * Apply per-project UI preferences from the project record (authoritative
+   * source; overrides whatever handleFile loaded from the legacy
+   * localStorage sidecar).
+   */
+  function applyProjectUiPreferences(project) {
+    if (project.uiPreferences == null) return;
+    try {
+      getUIModeController().importPreferences(project.uiPreferences, {
+        applyImmediately: true,
+      });
+      console.log(
+        `[App] Applied per-project UI preferences from project record: ${project.name}`
+      );
+    } catch (prefsErr) {
+      console.warn('[App] Could not apply project UI preferences:', prefsErr);
+    }
+  }
+
+  /**
+   * Load a folder-link project by re-reading its folder from disk.
+   * Assumes the replace-confirmation already happened.
+   */
+  async function loadLinkedFolderProject(project) {
+    if (typeof readLinkedFolder !== 'function') {
+      showErrorModal({
+        title: 'Folder Link Missing',
+        message:
+          'This project points to a folder on your computer, but folder access is not available here.',
+        suggestion: 'Use Chrome or Edge to open linked-folder projects.',
+      });
+      return;
+    }
+
+    // No overlay before readLinkedFolder: the permission prompt needs the
+    // click's user activation, and an assertive overlay would talk over it.
+    const linked = await readLinkedFolder(project);
+    if (!linked.ok) {
+      if (linked.reason === 'no-handle') {
+        showErrorModal({
+          title: 'Folder Link Missing',
+          message:
+            'This project points to a folder on your computer, but the link is gone.',
+          suggestion:
+            'Click Connect Folder and choose the folder again to relink it.',
+          technical: linked.message,
+        });
+      } else if (linked.reason === 'permission-denied') {
+        showErrorModal({
+          title: 'Permission Needed',
+          message: 'The browser needs permission to read this folder.',
+          suggestion:
+            'Click Load again and choose Allow when your browser asks.',
+        });
+      } else {
+        showErrorModal({
+          title: 'Folder Read Failed',
+          message: 'The linked folder could not be read.',
+          suggestion: 'Check that the folder still exists, then try again.',
+          technical: linked.message,
+        });
+      }
+      return;
+    }
+
+    const dismissOverlay = showProcessingOverlay(
+      `Loading "${project.name}" from your folder…`,
+      { hint: 'Reading files from disk. Large projects may take a moment.' }
+    );
+    try {
+      await new Promise((r) => setTimeout(r, 0));
+
+      await touchProject(project.id);
+      setCurrentSavedProjectId(project.id);
+
+      await handleFile(
+        { name: linked.fileName },
+        linked.content,
+        linked.projectFiles,
+        linked.mainFilePath,
+        'saved',
+        project.name
+      );
+
+      applyProjectUiPreferences(project);
+
+      if (typeof linked.finishConnect === 'function') {
+        await linked.finishConnect();
+      }
+
+      dismissOverlay();
+      updateCompanionSaveButton();
+      stateManager.announceChange(`Loaded saved design: ${project.name}`);
+      updateStatus(`Loaded: ${project.name}`);
+      await renderSavedProjectsList();
+    } catch (error) {
+      dismissOverlay();
+      console.error('Error loading linked folder project:', error);
+      showErrorModal({
+        title: 'Project Load Failed',
+        message: 'The linked folder project could not be loaded.',
+        suggestion: 'Check that the folder still exists, then try again.',
+        technical: error.message,
+      });
+    }
+  }
+
   async function loadSavedProject(projectId) {
     let dismissOverlay = () => {};
     try {
@@ -1297,6 +1418,12 @@ export function initSavedProjectsUI({
           'Cancel'
         );
         if (!confirmed) return;
+      }
+
+      // Pointer model: folder-link projects re-read their contents from disk.
+      if (project.kind === 'folder-link') {
+        await loadLinkedFolderProject(project);
+        return;
       }
 
       dismissOverlay = showProcessingOverlay(
@@ -1334,24 +1461,7 @@ export function initSavedProjectsUI({
         project.name
       );
 
-      // Apply per-project UI preferences from the project record (authoritative
-      // source). This overrides whatever handleFile loaded from the legacy
-      // openscad-forge-ui-prefs-{fileName} localStorage key.
-      if (project.uiPreferences != null) {
-        try {
-          getUIModeController().importPreferences(project.uiPreferences, {
-            applyImmediately: true,
-          });
-          console.log(
-            `[App] Applied per-project UI preferences from project record: ${project.name}`
-          );
-        } catch (prefsErr) {
-          console.warn(
-            '[App] Could not apply project UI preferences:',
-            prefsErr
-          );
-        }
-      }
+      applyProjectUiPreferences(project);
 
       dismissOverlay();
 
