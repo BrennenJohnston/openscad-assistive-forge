@@ -299,6 +299,24 @@ export class ConsolePanel {
   }
 
   /**
+   * Append an app-generated status line (e.g. "Detected change in X —
+   * re-rendering"). Uses the separator entry type so it is always visible
+   * regardless of message-type filters and clearly not engine output.
+   * @param {string} message
+   */
+  addSystemLine(message) {
+    if (!message) return;
+    this.addEntry({
+      type: CONSOLE_ENTRY_TYPE.SEPARATOR,
+      message: `── ${message} ──`,
+      file: null,
+      line: null,
+      timestamp: Date.now(),
+    });
+    this.render();
+  }
+
+  /**
    * Auto-expand the console <details> panel when important messages arrive
    */
   autoExpandPanel() {

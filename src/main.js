@@ -195,6 +195,8 @@ import {
   initClassicLayoutController,
   collapseCustomizerGroups,
 } from './js/classic-layout-controller.js';
+import { FolderChangeWatcher } from './js/folder-change-watcher.js';
+import { FolderWriteBack } from './js/folder-write-back.js';
 // Toolbar Menu Controller - File|Edit|Design|View|Window|Help menu bar
 import {
   getToolbarMenuController,
@@ -1651,6 +1653,9 @@ async function initApp() {
      * everything downstream (parser, schema, presets, render) is
      * unchanged.
      */
+    // Created below when folder_sync_watch is enabled (C5.2)
+    let folderWatcher = null;
+
     async function _loadFromConnectedFolder(handle) {
       const dismissOverlay = showProcessingOverlay(
         `Reading folder "${handle.name}"\u2026`,
@@ -1670,6 +1675,10 @@ async function initApp() {
         }
         dismissOverlay();
         await fileHandler.handleFolderImport(files);
+        if (folderWatcher) {
+          await folderWatcher.primeSnapshot();
+          folderWatcher.start();
+        }
       } catch (err) {
         dismissOverlay();
         showErrorToast({
@@ -1723,6 +1732,137 @@ async function initApp() {
       announceImmediate('Disconnected from folder');
       updateStatus('Disconnected from folder');
     });
+
+    // ── C5.2 (Phase B): watch the connected folder for external edits ──
+    if (_isEnabled('folder_sync_watch')) {
+      folderWatcher = new FolderChangeWatcher({
+        getHandle: () => folderSyncCtrl.getHandle(),
+        getWatchPaths: () => {
+          const watchState = stateManager.getState();
+          if (!watchState.projectFiles || watchState.projectFiles.size === 0) {
+            return watchState.mainFilePath ? [watchState.mainFilePath] : [];
+          }
+          return Array.from(watchState.projectFiles.entries())
+            .filter(
+              ([, content]) =>
+                typeof content === 'string' && !content.startsWith('data:')
+            )
+            .map(([path]) => path);
+        },
+        isRenderInFlight: () =>
+          autoPreviewController?.state === PREVIEW_STATE.RENDERING,
+        onPermissionLost: () => {
+          updateStatus(
+            'Lost permission to the connected folder — click Reconnect to re-grant',
+            'warning'
+          );
+          announceImmediate('Lost permission to the connected folder');
+        },
+        onChange: async (changes) => {
+          const changeState = stateManager.getState();
+          if (!changeState.uploadedFile) return;
+
+          const nextProjectFiles = changeState.projectFiles
+            ? new Map(changeState.projectFiles)
+            : new Map();
+          let mainContent = null;
+          const changedPaths = [];
+          for (const { path, file } of changes) {
+            let text;
+            try {
+              text = await file.text();
+            } catch (err) {
+              console.warn('[FolderWatch] Could not read changed file:', err);
+              continue;
+            }
+            nextProjectFiles.set(path, text);
+            changedPaths.push(path);
+            if (path === changeState.mainFilePath) {
+              mainContent = text;
+            }
+            consolePanel.addSystemLine(
+              `Detected change in ${path} — re-rendering`
+            );
+          }
+          if (changedPaths.length === 0) return;
+
+          const statePatch = { projectFiles: nextProjectFiles };
+          if (mainContent !== null) {
+            statePatch.uploadedFile = {
+              ...changeState.uploadedFile,
+              content: mainContent,
+            };
+          }
+          stateManager.setState(statePatch);
+
+          if (autoPreviewController) {
+            if (mainContent !== null) {
+              autoPreviewController.setScadContent(mainContent);
+            }
+            autoPreviewController.setProjectFiles(
+              nextProjectFiles,
+              changeState.mainFilePath
+            );
+            autoPreviewController.clearPreviewCache();
+            autoPreviewController.onParameterChange(
+              stateManager.getState().parameters
+            );
+          }
+
+          announceImmediate(
+            changedPaths.length === 1
+              ? `Detected change in ${changedPaths[0]}, re-rendering`
+              : `Detected changes in ${changedPaths.length} files, re-rendering`
+          );
+        },
+      });
+
+      folderSyncCtrl.subscribe((syncState) => {
+        if (syncState !== 'connected') {
+          folderWatcher.stop();
+        }
+      });
+    }
+
+    // ── C5.3 (Phase C, default OFF): write preset sidecars back to disk ──
+    if (_isEnabled('folder_sync_writeback')) {
+      const folderWriteBack = new FolderWriteBack({
+        getHandle: () => folderSyncCtrl.getHandle(),
+        getWatcher: () => folderWatcher,
+      });
+
+      // OpenSCAD desktop convention: presets live in <design>.json next to
+      // the .scad. Case- and space-preserving (raw path, no slugging).
+      presetManager.subscribe((event, _preset, modelName) => {
+        if (!['save', 'delete', 'rename'].includes(event)) return;
+        if (!folderWriteBack.isAvailable()) return;
+        const wbState = stateManager.getState();
+        if (!wbState.uploadedFile || wbState.uploadedFile.name !== modelName) {
+          return;
+        }
+        const mainPath = wbState.mainFilePath || wbState.uploadedFile.name;
+        const sidecarPath = mainPath.replace(/\.scad$/i, '.json');
+        if (sidecarPath === mainPath) return;
+        const hiddenParams = wbState.schema?.hiddenParameters || {};
+        const json = presetManager.exportOpenSCADNativeFormat(
+          modelName,
+          hiddenParams
+        );
+        if (!json) return;
+        folderWriteBack
+          .writeFile(sidecarPath, json)
+          .then(() => {
+            consolePanel.addSystemLine(`Saved presets to ${sidecarPath}`);
+          })
+          .catch((err) => {
+            console.warn('[FolderWriteBack] Sidecar write failed:', err);
+            updateStatus(
+              `Could not write presets to folder: ${err.message}`,
+              'warning'
+            );
+          });
+      });
+    }
 
     // Probe IDB for a previously-stored handle. Does NOT call
     // requestPermission (no user gesture yet); just transitions to
