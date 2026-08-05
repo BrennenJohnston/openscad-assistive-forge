@@ -121,6 +121,56 @@ test.describe('Classic mode layout (C4)', () => {
     await expect(page.locator('#classicPresetsSlot')).toHaveCount(0)
   })
 
+  test('preset copy and unsaved-changes guard (C4.4)', async ({ page }) => {
+    test.setTimeout(240_000)
+
+    // Legacy native select (combobox flag off) so the test can drive the
+    // preset dropdown directly
+    await loadSampleProject(page, {
+      query: '?flag_classic_mode=true&flag_searchable_combobox=false',
+    })
+    await switchToStandardMode(page)
+    await pickInterfaceMode(page, 'Classic (Desktop Layout)')
+    await expect(page.locator('body')).toHaveAttribute('data-ui-mode', 'classic')
+
+    const presetSelect = page.locator('#presetSelect')
+
+    // Copy design defaults into a new preset; it becomes the selection
+    await presetSelect.selectOption('__design_defaults__')
+    await page.locator('#copyPresetBtn').click()
+    await expect(
+      presetSelect.locator('option', {
+        hasText: 'design default values (copy)',
+      })
+    ).toHaveCount(1)
+    const copyValue = await presetSelect.inputValue()
+    expect(copyValue).not.toBe('__design_defaults__')
+    expect(copyValue).not.toBe('')
+
+    // Dirty the copy: change a parameter
+    const firstGroup = page.locator('details.param-group').first()
+    await firstGroup.locator('summary').click()
+    const widthInput = page.locator('.param-group input[type="number"]').first()
+    await expect(widthInput).toBeVisible({ timeout: 15_000 })
+    await widthInput.fill('77')
+    await widthInput.blur()
+
+    // Switching away now prompts; Cancel keeps the dirty preset selected
+    await presetSelect.selectOption('__design_defaults__')
+    const dialog = page.locator('dialog', {
+      hasText: 'Unsaved preset changes',
+    })
+    await expect(dialog).toBeVisible({ timeout: 10_000 })
+    await dialog.getByRole('button', { name: 'Cancel' }).click()
+    await expect(presetSelect).toHaveValue(copyValue)
+
+    // Switching again and discarding completes the switch
+    await presetSelect.selectOption('__design_defaults__')
+    await expect(dialog).toBeVisible({ timeout: 10_000 })
+    await dialog.getByRole('button', { name: 'Discard changes' }).click()
+    await expect(presetSelect).toHaveValue('__design_defaults__')
+  })
+
   test('Classic radio is absent when the classic_mode flag is off', async ({
     page,
   }) => {

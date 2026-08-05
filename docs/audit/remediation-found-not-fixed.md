@@ -62,6 +62,18 @@ decides to drop it. Per project rules, none of these were fixed silently.
   wasm-smoke suite works around with `openFirstParamGroup()`). Chromium,
   local; CI-skipped.
 
+### F-5: Preset import "Replace" mode calls a method that does not exist
+
+- **Found during:** C4.4 (copy-preset button hit the same trap), 2026-08-04
+- **What:** `src/main.js` (preset Import/Export → import → Replace mode)
+  calls `presetManager.getPresets(currentModelName)`, but `PresetManager`
+  only defines `getPresetsForModel()`. Choosing Replace mode throws
+  `TypeError: presetManager.getPresets is not a function` and the import
+  never runs. Merge and Import-as-copies modes are unaffected.
+- **Why it matters:** Replace-mode preset import is silently broken.
+- **Fix shape:** one-line rename to `getPresetsForModel`, plus an e2e or
+  unit test covering the Replace path.
+
 ### F-3: `npm run build` dirties a tracked file
 
 - **Found during:** A2 (stray diff in working tree), 2026-08-04

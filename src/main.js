@@ -9601,6 +9601,16 @@ if (rounded) {
           : 'Select a preset first to delete';
     }
 
+    // Copy Preset button (C4.4): duplicates any selection, including design
+    // defaults (that copies the schema defaults into a new preset)
+    const copyPresetBtn = document.getElementById('copyPresetBtn');
+    if (copyPresetBtn) {
+      copyPresetBtn.disabled = !hasPresetSelected || !hasModel;
+      copyPresetBtn.title = hasPresetSelected
+        ? 'Copy Preset — duplicate the current preset'
+        : 'Select a preset first to copy it';
+    }
+
     // Copy preset name button (F30): enabled whenever something is selected,
     // including the immutable "design default values" entry (the spec asks for
     // the exact visible name to be copied, regardless of mutability).
@@ -10613,25 +10623,30 @@ if (rounded) {
   // Save: update selected preset, Add: create new, Delete: remove selected
   const savePresetBtn = document.getElementById('savePresetBtn');
   const addPresetBtn = document.getElementById('addPresetBtn');
+  const copyPresetBtn = document.getElementById('copyPresetBtn');
   const deletePresetBtn = document.getElementById('deletePresetBtn');
   const managePresetsBtn = document.getElementById('managePresetsBtn');
   const presetSelect = document.getElementById('presetSelect');
 
-  // Save button: Update currently selected preset (not create new)
-  // "Pressing 'Save Preset' creates a new preset. It should simply save any parameter changes to the current preset"
-  savePresetBtn.addEventListener('click', () => {
+  /**
+   * Overwrite the currently selected preset with the current parameter
+   * values. Shared by the Save button and the unsaved-changes prompt when
+   * switching presets (C4.4).
+   * @returns {boolean} True if the preset was saved
+   */
+  function overwriteCurrentPreset() {
     const state = stateManager.getState();
-    const selectedPresetId = presetSelect?.value;
+    const selectedPresetId = presetSelect?.value || state.currentPresetId;
 
     if (!state.uploadedFile) {
       updateStatus('No model loaded', 'error');
-      return;
+      return false;
     }
 
     if (!selectedPresetId) {
       // Fallback: if no preset selected, show dialog (shouldn't happen if button is disabled)
       updateStatus('Select a preset first, or use + to create new', 'warning');
-      return;
+      return false;
     }
 
     // Block saving over "design default values" (immutable, desktop parity)
@@ -10640,7 +10655,7 @@ if (rounded) {
         'Design default values cannot be overwritten. Use + to create a new preset.',
         'warning'
       );
-      return;
+      return false;
     }
 
     // Get the preset to update
@@ -10650,7 +10665,7 @@ if (rounded) {
     );
     if (!preset) {
       updateStatus('Preset not found', 'error');
-      return;
+      return false;
     }
 
     try {
@@ -10684,20 +10699,81 @@ if (rounded) {
 
       updateStatus(`Preset "${preset.name}" saved`, 'success');
       setCurrentPresetSelection(savedPreset);
+      return true;
+    } catch (error) {
+      updateStatus(`Failed to save preset: ${error.message}`, 'error');
+      return false;
+    }
+  }
 
+  // Save button: Update currently selected preset (not create new)
+  // "Pressing 'Save Preset' creates a new preset. It should simply save any parameter changes to the current preset"
+  savePresetBtn.addEventListener('click', () => {
+    if (overwriteCurrentPreset()) {
       // Brief visual feedback on button
       savePresetBtn.textContent = '✓';
       setTimeout(() => {
         savePresetBtn.textContent = '💾';
       }, 1500);
-    } catch (error) {
-      updateStatus(`Failed to save preset: ${error.message}`, 'error');
     }
   });
 
   // Add button: Create new preset (shows dialog)
   // "You use the '+' button to create a new preset based on the current customizer parameter settings"
   addPresetBtn.addEventListener('click', showSavePresetModal);
+
+  // Copy button (C4.4): duplicate the selected preset's SAVED values into a
+  // new preset named "<name> (copy)" and select it. Copying design defaults
+  // creates a preset from the schema defaults.
+  copyPresetBtn?.addEventListener('click', () => {
+    const state = stateManager.getState();
+    const selectedPresetId = presetSelect?.value;
+    if (!state.uploadedFile || !selectedPresetId) return;
+
+    let baseName;
+    let params;
+    let description;
+    if (selectedPresetId === DESIGN_DEFAULTS_ID) {
+      baseName = 'design default values';
+      params = { ...state.defaults };
+    } else {
+      const preset = presetManager.loadPreset(
+        state.uploadedFile.name,
+        selectedPresetId
+      );
+      if (!preset) {
+        updateStatus('Preset not found', 'error');
+        return;
+      }
+      baseName = preset.name;
+      params = { ...preset.parameters };
+      description = preset.description;
+    }
+
+    const existingNames = new Set(
+      (presetManager.getPresetsForModel(state.uploadedFile.name) || []).map(
+        (p) => p.name
+      )
+    );
+    let copyName = `${baseName} (copy)`;
+    for (let i = 2; existingNames.has(copyName); i++) {
+      copyName = `${baseName} (copy ${i})`;
+    }
+
+    try {
+      const savedPreset = presetManager.savePreset(
+        state.uploadedFile.name,
+        copyName,
+        params,
+        { description }
+      );
+      updatePresetDropdown();
+      setCurrentPresetSelection(savedPreset);
+      updateStatus(`Preset copied to "${copyName}"`, 'success');
+    } catch (error) {
+      updateStatus(`Failed to copy preset: ${error.message}`, 'error');
+    }
+  });
 
   // Delete button: Delete currently selected preset
   deletePresetBtn.addEventListener('click', async () => {
@@ -10925,12 +11001,80 @@ if (rounded) {
     });
   });
 
+  /**
+   * Three-way unsaved-changes prompt shown when switching away from a
+   * preset with unsaved parameter changes (C4.4, Ken's preset contract).
+   * @param {string} presetName - Name of the preset with unsaved changes
+   * @returns {Promise<'save'|'discard'|'cancel'>}
+   */
+  function showUnsavedPresetDialog(presetName) {
+    return new Promise((resolve) => {
+      const dialog = document.createElement('dialog');
+      dialog.className = 'preset-import-mode-dialog';
+      dialog.setAttribute('aria-labelledby', 'unsavedPresetTitle');
+      dialog.innerHTML = `
+        <form method="dialog" class="import-mode-form">
+          <h3 id="unsavedPresetTitle" class="import-mode-title">Unsaved preset changes</h3>
+          <p class="import-mode-desc">The preset &ldquo;${escapeHtml(presetName)}&rdquo; has parameter changes that have not been saved.</p>
+          <div class="import-mode-actions">
+            <button type="submit" value="save" class="btn btn-primary">Save changes</button>
+            <button type="submit" value="discard" class="btn btn-outline">Discard changes</button>
+            <button type="submit" value="cancel" class="btn btn-outline">Cancel</button>
+          </div>
+        </form>`;
+      document.body.appendChild(dialog);
+      dialog.showModal();
+      dialog.addEventListener(
+        'close',
+        () => {
+          const choice = dialog.returnValue;
+          document.body.removeChild(dialog);
+          resolve(choice === 'save' || choice === 'discard' ? choice : 'cancel');
+        },
+        { once: true }
+      );
+    });
+  }
+
   // Handle preset selection
   presetSelect.addEventListener('change', async (e) => {
     const presetId = e.target.value;
     if (!presetId) return;
 
     const state = stateManager.getState();
+
+    // Unsaved-changes guard (C4.4): switching away from a dirty user preset
+    // offers Save / Discard / Cancel instead of silently dropping edits
+    const previousPresetId = state.currentPresetId;
+    if (
+      isPresetDirty &&
+      previousPresetId &&
+      previousPresetId !== presetId &&
+      previousPresetId !== DESIGN_DEFAULTS_ID
+    ) {
+      const choice = await showUnsavedPresetDialog(
+        state.currentPresetName || 'current preset'
+      );
+      if (choice === 'cancel') {
+        presetSelect.value = previousPresetId;
+        _presetCombobox?.setValue(previousPresetId);
+        updatePresetControlStates();
+        return;
+      }
+      if (choice === 'save') {
+        const prevSelectValue = presetSelect.value;
+        presetSelect.value = previousPresetId;
+        const saved = overwriteCurrentPreset();
+        presetSelect.value = prevSelectValue;
+        if (!saved) {
+          _presetCombobox?.setValue(previousPresetId);
+          presetSelect.value = previousPresetId;
+          updatePresetControlStates();
+          return;
+        }
+      }
+      // 'discard' falls through and loads the newly selected preset
+    }
 
     // Handle "design default values" virtual preset (desktop OpenSCAD parity)
     if (presetId === DESIGN_DEFAULTS_ID) {
