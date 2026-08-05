@@ -226,6 +226,127 @@ test.describe('Classic chrome strip (C3)', () => {
   })
 })
 
+test.describe('Classic acceptance (C13)', () => {
+  test('classic-menu-reachability: every hidden control has a menu home', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000)
+
+    await loadSampleProject(page)
+    await page.locator('#classicModeToggle').click()
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'classic'
+    )
+
+    // No "(planned)" stubs anywhere in the menus
+    for (const menuBtn of [
+      '#fileMenuBtn',
+      '#designMenuBtn',
+      '#viewMenuBtn',
+      '#windowMenuBtn',
+    ]) {
+      await page.locator(menuBtn).click()
+      const menuText = await page
+        .locator('.toolbar-menu-modal:not(.hidden)')
+        .textContent()
+      expect(menuText, `${menuBtn} has no planned stubs`).not.toContain(
+        '(planned)'
+      )
+      await page.keyboard.press('Escape')
+    }
+
+    // Design > Automatic Reload and Preview is a real, checkable toggle
+    await page.locator('#designMenuBtn').click()
+    await expect(
+      page.getByRole('menuitemcheckbox', {
+        name: 'Automatic Reload and Preview',
+      })
+    ).toBeVisible()
+    await page.keyboard.press('Escape')
+
+    // Window > Customizer hides and restores the dock
+    await page.locator('#windowMenuBtn').click()
+    await page.getByRole('menuitemcheckbox', { name: 'Customizer' }).click()
+    await expect(page.locator('#paramPanel')).toBeHidden()
+    await page.locator('#windowMenuBtn').click()
+    await page.getByRole('menuitemcheckbox', { name: 'Customizer' }).click()
+    await expect(page.locator('#paramPanel')).toBeVisible()
+
+    // View > Preview Quality submenu proxies the real select
+    await page.locator('#viewMenuBtn').click()
+    const qualitySubmenu = page.getByRole('menuitem', {
+      name: 'Preview Quality',
+    })
+    await expect(qualitySubmenu).toBeVisible()
+    await page.keyboard.press('Escape')
+
+    // File > Close returns to the welcome screen (accept the unsaved-changes
+    // confirmation the #clearFileBtn handler shows)
+    await page.locator('#fileMenuBtn').click()
+    await page.getByRole('menuitem', { name: 'Close', exact: true }).click()
+    await page
+      .locator('button:has-text("Confirm")')
+      .first()
+      .click({ timeout: 5_000 })
+    await expect(page.locator('#welcomeScreen')).toBeVisible({
+      timeout: 10_000,
+    })
+  })
+
+  test('classic-midwidth: 900px classic stacks with all panes reachable', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000)
+
+    await page.setViewportSize({ width: 900, height: 800 })
+    await loadSampleProject(page)
+    await page.locator('#classicModeToggle').click()
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'classic'
+    )
+
+    await expect(page.locator('.preview-panel')).toBeVisible()
+    await expect(page.locator('#paramPanel')).toBeVisible()
+    await expect(page.locator('#classicConsoleSlot')).toBeVisible()
+    await expect(page.locator('#classicEditorSlot')).toBeVisible()
+    await expect(page.locator('#cameraPanel')).toBeHidden()
+
+    // No horizontal page scroll in the stacked layout
+    const overflow = await page.evaluate(
+      () =>
+        document.documentElement.scrollWidth -
+        document.documentElement.clientWidth
+    )
+    expect(overflow, 'no horizontal overflow').toBeLessThanOrEqual(1)
+  })
+
+  test('reduced-motion: classic folds complete instantly', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000)
+
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await loadSampleProject(page)
+    await page.locator('#classicModeToggle').click()
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'classic'
+    )
+
+    // The app-wide reduced-motion rule clamps durations to ~0.01ms (the
+    // standard can't-observe trick), so assert "effectively instant".
+    const duration = await page
+      .locator('#classicConsoleSlot .classic-fold')
+      .evaluate((el) => parseFloat(getComputedStyle(el).transitionDuration))
+    expect(
+      duration,
+      'fold transition effectively instant under reduced motion'
+    ).toBeLessThan(0.005)
+  })
+})
+
 test.describe('Classic mode layout (C4)', () => {
   test('entering Classic moves console and presets into pane slots, exiting restores them', async ({
     page,
