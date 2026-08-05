@@ -9,6 +9,7 @@
 
 import { stateManager } from './state.js';
 import { extractParameters } from './parser.js';
+import { FOLDER_IMPORT_LIMITS } from './validation-constants.js';
 import {
   renderParameterUI,
   setGalleryOptions,
@@ -510,9 +511,7 @@ export function initFileHandler({
       'Analyzing project structure. Please do not close or refresh the page.'
     );
 
-    const MAX_FILES = 500;
-    const MAX_BYTES = 100 * 1024 * 1024; // 100 MB
-    const WARN_FILES = 200;
+    const { MAX_FILES, MAX_BYTES, WARN_FILES } = FOLDER_IMPORT_LIMITS;
 
     const totalBytes = fileArr.reduce((sum, f) => sum + f.size, 0);
 
@@ -528,9 +527,10 @@ export function initFileHandler({
     if (totalBytes > MAX_BYTES) {
       dismissOverlay();
       const mb = (totalBytes / 1024 / 1024).toFixed(1);
+      const limitMb = (MAX_BYTES / 1024 / 1024).toFixed(0);
       showErrorToast({
         title: 'Folder Too Large',
-        message: `The selected folder is ${mb} MB (limit: 100 MB). Please select a smaller project folder.`,
+        message: `The selected folder is ${mb} MB (limit: ${limitMb} MB). Please select a smaller project folder.`,
       });
       return;
     }

@@ -9,6 +9,15 @@ export const FILE_SIZE_LIMITS = {
   ZIP_FILE: 100 * 1024 * 1024, // 100MB for .zip archives (multi-file projects with STLs/images)
 };
 
+// Folder import limits (webkitdirectory / directory-picker path).
+// Values unchanged from the historical inline constants in file-handler.js —
+// this is the single source so the caps cannot drift between entry points.
+export const FOLDER_IMPORT_LIMITS = {
+  MAX_FILES: 500,
+  MAX_BYTES: 100 * 1024 * 1024, // 100 MB total
+  WARN_FILES: 200, // soft warning threshold
+};
+
 // URL param limits
 export const URL_PARAM_LIMITS = {
   MAX_STRING_LENGTH: 10000,

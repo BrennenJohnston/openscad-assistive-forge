@@ -33,7 +33,10 @@ import { validateSVGOutput } from './svg-validation.js';
 import { postProcessDXF } from './dxf-postprocess.js';
 import { generateMissingFileWarnings } from './missing-file-warnings.js';
 import { resolveMountContent } from './mount-content.js';
-import { translateWorkerError } from './error-translations.js';
+import {
+  translateWorkerError,
+  MODEL_NOT_2D_SUGGESTION,
+} from './error-translations.js';
 
 // Official WASM is loaded dynamically in initWASM() from /wasm/openscad-official/
 
@@ -2038,7 +2041,7 @@ async function render(payload) {
       code = 'MODEL_NOT_2D';
       message =
         'Your model produces 3D geometry but SVG/DXF export requires 2D output. ' +
-        'Enable "use Laser Cutting best practices" or ensure your model uses projection() to produce 2D geometry.';
+        MODEL_NOT_2D_SUGGESTION;
     }
 
     // Signal that the WASM module needs a restart before the next render.
