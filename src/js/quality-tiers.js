@@ -634,12 +634,18 @@ export const RENDER_QUALITY = {
 /**
  * Default preview-quality mode for the UI select (#previewQualitySelect).
  *
- * Single source of truth for a value that previously disagreed three ways:
- * index.html marked "balanced" selected, main.js force-set "auto" on boot
- * (the effective behavior), and the JS fallback said "balanced". "auto" is
- * the long-standing effective default and is preserved here.
+ * Single source of truth (index.html's `selected` attribute only covers
+ * pre-JS paint; main.js re-asserts this on boot).
+ *
+ * 'fidelity' maps to RENDER_QUALITY.DESKTOP_DEFAULT (maxFn: null): the
+ * model's own $fn/$fa/$fs are honored exactly like desktop OpenSCAD's F5,
+ * with OpenSCAD's stock $fa=12/$fs=2 only when the model declares neither.
+ * The previous 'auto' default silently downgraded complex models to
+ * complex-preview-low (forced $fn=10), which rendered curved designs as
+ * faceted blocks on first load — owner-reported against the keyguard.
+ * 'auto' remains available as the opt-in performance mode.
  */
-export const PREVIEW_QUALITY_DEFAULT = 'auto';
+export const PREVIEW_QUALITY_DEFAULT = 'fidelity';
 
 /**
  * Format quality preset for display

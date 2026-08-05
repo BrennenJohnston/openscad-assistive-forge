@@ -579,18 +579,17 @@ async function initApp() {
   document
     .getElementById('memoryBannerReduceFn')
     ?.addEventListener('click', () => {
-      // Reduce quality by switching to low quality mode
-      const qualitySelect = document.getElementById('qualityPreset');
-      if (qualitySelect) {
-        qualitySelect.value = 'low';
-        qualitySelect.dispatchEvent(new Event('change'));
+      // Reduce export quality to low
+      const exportQuality = document.getElementById('exportQualitySelect');
+      if (exportQuality) {
+        exportQuality.value = 'low';
+        exportQuality.dispatchEvent(new Event('change'));
       }
-      // Also reduce auto-preview quality
-      const previewQualitySelect =
-        document.getElementById('previewQualityMode');
-      if (previewQualitySelect) {
-        previewQualitySelect.value = 'fast';
-        previewQualitySelect.dispatchEvent(new Event('change'));
+      // Also reduce preview quality to fast
+      const previewQuality = document.getElementById('previewQualitySelect');
+      if (previewQuality) {
+        previewQuality.value = 'fast';
+        previewQuality.dispatchEvent(new Event('change'));
       }
       console.log('[Memory] Quality reduced to conserve memory');
     });
@@ -658,7 +657,7 @@ async function initApp() {
   let currentPresetSignature = null;
   let isPresetDirty = false;
   let autoPreviewUserEnabled = true;
-  let previewQuality = RENDER_QUALITY.PREVIEW;
+  let previewQuality = RENDER_QUALITY.DESKTOP_DEFAULT;
 
   // CRITICAL: Declare DOM element variables early to avoid Temporal Dead Zone errors
   // These will be assigned actual values later when DOM queries are performed
@@ -690,7 +689,7 @@ async function initApp() {
   function setCanonicalProjectFiles(files) {
     canonicalProjectFiles = cloneProjectFiles(files);
   }
-  let previewQualityMode = 'auto';
+  let previewQualityMode = PREVIEW_QUALITY_DEFAULT;
 
   const AUTO_PREVIEW_FORCE_FAST_MS = 2 * 60 * 1000;
   // MANIFOLD OPTIMIZED: Raised threshold since Manifold renders much faster
@@ -4380,17 +4379,36 @@ async function initApp() {
   }
 
   if (previewQualitySelect) {
-    // Defensive re-assert of the shared default (index.html marks the same
-    // option selected; PREVIEW_QUALITY_DEFAULT is the single source).
+    // Restore the persisted choice; fall back to the shared default
+    // (PREVIEW_QUALITY_DEFAULT is the single source; index.html's `selected`
+    // only covers pre-JS paint). Recovery mode writes 'fast' to this key so a
+    // crashed session reboots at low cost — honoring it here is intended.
+    let savedQualityMode = null;
+    try {
+      savedQualityMode = localStorage.getItem(STORAGE_KEY_PREVIEW_QUALITY);
+    } catch {
+      // Private browsing / storage disabled — use the default.
+    }
+    const validQualityMode =
+      savedQualityMode &&
+      previewQualitySelect.querySelector(`option[value="${savedQualityMode}"]`)
+        ? savedQualityMode
+        : PREVIEW_QUALITY_DEFAULT;
     if (
-      previewQualitySelect.querySelector(
-        `option[value="${PREVIEW_QUALITY_DEFAULT}"]`
-      )
+      previewQualitySelect.querySelector(`option[value="${validQualityMode}"]`)
     ) {
-      previewQualitySelect.value = PREVIEW_QUALITY_DEFAULT;
+      previewQualitySelect.value = validQualityMode;
     }
     applyPreviewQualityMode();
     previewQualitySelect.addEventListener('change', () => {
+      try {
+        localStorage.setItem(
+          STORAGE_KEY_PREVIEW_QUALITY,
+          previewQualitySelect.value
+        );
+      } catch {
+        // Persistence is best-effort; the in-session mode still applies.
+      }
       applyPreviewQualityMode();
       if (autoPreviewController) {
         const state = stateManager.getState();
@@ -4410,6 +4428,39 @@ async function initApp() {
       applyExportQualityMode();
     });
   }
+
+  // Advisory instead of a silent downgrade: with the desktop-fidelity default,
+  // heavy models preview at full model quality — surface a one-shot hint that
+  // Performance (auto) exists. Auto mode adapts on its own and needs none.
+  let lastComplexityAdvisedFile = null;
+  function maybeShowComplexityAdvisory(state) {
+    if (previewQualityMode === 'auto') return;
+    const fileName = state.uploadedFile?.name || null;
+    if (!fileName || fileName === lastComplexityAdvisedFile) return;
+    const isComplex =
+      state.complexityTier === COMPLEXITY_TIER.COMPLEX ||
+      (state.complexityAnalysis?.warnings?.length ?? 0) > 0;
+    if (!isComplex) return;
+    lastComplexityAdvisedFile = fileName;
+    const advisoryMsg =
+      'This model is complex — Desktop-quality previews may be slow. ' +
+      'Switch Preview quality to "Performance (auto)" for faster previews.';
+    updateStatus(advisoryMsg, 'info');
+    announceImmediate(advisoryMsg);
+  }
+
+  // A fresh complexityAnalysis lands once per file load (file-handler sets it
+  // after the file is in state), so keying on it avoids advising a new file
+  // from the previous file's stale analysis.
+  stateManager.subscribe((state, prevState) => {
+    if (
+      state.uploadedFile &&
+      state.complexityAnalysis &&
+      state.complexityAnalysis !== prevState.complexityAnalysis
+    ) {
+      maybeShowComplexityAdvisory(state);
+    }
+  });
 
   // Wire measurements toggle
   if (measurementsToggle) {
