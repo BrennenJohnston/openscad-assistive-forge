@@ -20,9 +20,21 @@ import {
   PREVIEW_STATE,
 } from '../../src/js/auto-preview-controller.js';
 import {
-  resolve2DExportIntent,
+  propose2DExportAdjustments,
   isNonPreviewable,
 } from '../../src/js/render-intent.js';
+import { getBuiltinManifest } from '../../src/js/project-manifest.js';
+
+// F-4: the deprecated resolve2DExportIntent wrapper was deleted; this
+// local equivalent keeps the proposal-engine assertions exercising the
+// same behavior (unconditional application of the builtin rules).
+const resolve2DExportIntent = (parameters, schema, format) =>
+  propose2DExportAdjustments(
+    parameters,
+    schema,
+    format,
+    getBuiltinManifest().export2D
+  ).resolvedParameters;
 import {
   DEBUG_HIGHLIGHT_COLOR,
   DEBUG_HIGHLIGHT_HEX,

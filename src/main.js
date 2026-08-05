@@ -13840,29 +13840,18 @@ if (typeof window !== 'undefined') {
      * @returns {string|null} The SCAD source text, or null if no model is loaded
      */
     exportScadSource(options = {}) {
-      const { injected = false, download = false } = options;
+      const { download = false } = options;
       const state = stateManager.getState();
       if (!state.uploadedFile?.content) {
         console.error('[ExportDiag] No model loaded.');
         return null;
       }
 
-      const rawSource =
+      // Renders always use unmodified source (KI-012); the old
+      // `injected` diagnostic mode died with injectCsgColors (F-4).
+      const source =
         autoPreviewController?.currentScadContent || state.uploadedFile.content;
-
-      let source;
-      let label;
-      if (injected) {
-        const hasColorCalls = AutoPreviewController.scadUsesColor(rawSource);
-        const cleaned = hasColorCalls
-          ? AutoPreviewController.stripColorCalls(rawSource)
-          : rawSource;
-        source = AutoPreviewController.injectCsgColors(cleaned);
-        label = 'csg-injected';
-      } else {
-        source = rawSource;
-        label = 'original';
-      }
+      const label = 'original';
 
       const csgBypass = isDebugPrefEnabled('noCsgColors');
 

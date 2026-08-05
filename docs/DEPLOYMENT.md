@@ -414,6 +414,19 @@ Keep a ZIP of the last known-good `dist/` folder. In emergency:
    - `LiberationSans-Italic.ttf`
    - `LiberationMono-Regular.ttf`
 
+### Cloudflare Web Analytics beacon blocked (expected)
+
+The deployed console may show a CSP violation for
+`https://static.cloudflareinsights.com/beacon.min.js`. Cloudflare Pages
+auto-injects its Web Analytics beacon into served pages; our CSP
+(`public/_headers`) blocks third-party scripts **by design** and must not be
+loosened for it (project security rule).
+
+**Owner action (dashboard, not repo):** Cloudflare Pages → this project →
+Settings → turn off **Web Analytics** auto-injection. After that the
+violation disappears. No repository change is involved (`wrangler.toml`
+carries no analytics config).
+
 ### CSP Violations
 
 **Cause:** Security policy blocking resources.

@@ -10,7 +10,20 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
-import { resolve2DExportIntent } from '../../src/js/render-intent.js';
+import { propose2DExportAdjustments } from '../../src/js/render-intent.js';
+import { getBuiltinManifest } from '../../src/js/project-manifest.js';
+
+// F-4: the deprecated resolve2DExportIntent wrapper was deleted; this
+// local equivalent keeps the proposal-engine assertions exercising the
+// same behavior (unconditional application of the builtin rules).
+const resolve2DExportIntent = (parameters, schema, format) =>
+  propose2DExportAdjustments(
+    parameters,
+    schema,
+    format,
+    getBuiltinManifest().export2D
+  ).resolvedParameters;
+
 import { buildDefineArgs } from '../../src/js/scad-param-formatter.js';
 
 const resolve2DExportParameters = resolve2DExportIntent;

@@ -29,8 +29,20 @@ import {
 import {
   isNonPreviewable,
   RENDER_STATE,
-  resolve2DExportIntent,
+  propose2DExportAdjustments,
 } from '../../src/js/render-intent.js';
+import { getBuiltinManifest } from '../../src/js/project-manifest.js';
+
+// F-4: the deprecated resolve2DExportIntent wrapper was deleted; this
+// local equivalent keeps the proposal-engine assertions exercising the
+// same behavior (unconditional application of the builtin rules).
+const resolve2DExportIntent = (parameters, schema, format) =>
+  propose2DExportAdjustments(
+    parameters,
+    schema,
+    format,
+    getBuiltinManifest().export2D
+  ).resolvedParameters;
 import {
   buildDefineArgs,
   formatScadValue,

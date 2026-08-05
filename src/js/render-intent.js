@@ -19,7 +19,6 @@
  * @license GPL-3.0-or-later
  */
 
-import { getBuiltinManifest } from './project-manifest.js';
 
 // ── Render state constants ──────────────────────────────────────────────────
 
@@ -203,24 +202,6 @@ export function propose2DExportAdjustments(
     resolvedParameters[change.name] = change.to;
   }
   return { changes, resolvedParameters };
-}
-
-/**
- * Legacy resolver that applies the proposals unconditionally (the old
- * silent behavior), including the builtin keyguard rules.
- *
- * @deprecated Application code must use propose2DExportAdjustments() and
- * present the changes for user consent. This wrapper exists only so the
- * extensive legacy test suites keep exercising the proposal engine; no
- * production call sites remain.
- */
-export function resolve2DExportIntent(parameters, schema, format) {
-  return propose2DExportAdjustments(
-    parameters,
-    schema,
-    format,
-    getBuiltinManifest().export2D
-  ).resolvedParameters;
 }
 
 /**
