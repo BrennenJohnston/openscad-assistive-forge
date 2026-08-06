@@ -370,6 +370,14 @@ export class UIModeController {
     }
 
     this._updateClassicDensityButton();
+
+    // Document-level notification for modules that must react to the layout
+    // mode without importing this controller (import order would decide who
+    // constructs the singleton). First consumer: the mobile drawer closes
+    // itself when Classic takes over the Customizer.
+    document.dispatchEvent(
+      new CustomEvent('ui-mode-changed', { detail: { mode } })
+    );
   }
 
   /**

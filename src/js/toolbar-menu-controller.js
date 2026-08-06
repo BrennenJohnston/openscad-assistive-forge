@@ -289,6 +289,22 @@ export class ToolbarMenuController {
     modal.classList.remove('hidden');
     modal.setAttribute('aria-hidden', 'false');
 
+    // Anchored panels for right-edge triggers (Help on a phone) would run
+    // off screen; desktop menus shift left to stay visible. Measure the
+    // rendered panel and re-anchor — CSS alone cannot shift by own width.
+    const content = modal.querySelector('.toolbar-menu-content');
+    if (content) {
+      const panel = content.getBoundingClientRect();
+      const margin = 8;
+      if (panel.width > 0 && panel.right > window.innerWidth - margin) {
+        const shifted = Math.max(
+          margin,
+          window.innerWidth - margin - panel.width
+        );
+        modal.style.setProperty('--menu-anchor-x', `${Math.round(shifted)}px`);
+      }
+    }
+
     // Focus the first menuitem inside the menu list
     const listEl = modal.querySelector(`#${menuId}MenuItems`);
     if (listEl) {

@@ -508,6 +508,18 @@ export class CodeMirrorEditor {
     }
   }
 
+  /**
+   * Re-measure the editor against its current container. CodeMirror caches
+   * geometry from init time; after the panel is re-parented into a
+   * different-width dock (Classic's editor slot) the cached width paints
+   * wider than the pane until a measure runs.
+   */
+  refreshLayout() {
+    if (this._view) {
+      this._view.requestMeasure();
+    }
+  }
+
   /** @returns {{ start: number, end: number }} */
   getSelection() {
     if (!this._view) return { start: 0, end: 0 };

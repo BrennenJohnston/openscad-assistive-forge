@@ -162,7 +162,7 @@ body[data-ui-mode='classic'] .classic-window-title {
 }
 
 body[data-ui-mode='classic'] .header-controls .btn {
-  min-height: var(--size-touch-target-sm);
+  min-height: var(--size-touch-target);
 }
 
 /* Menu bar: flat text items, no boxes, hover highlight only */
@@ -189,6 +189,14 @@ body[data-ui-mode='classic'] .toolbar-menu-btn:hover,
 body[data-ui-mode='classic'] .toolbar-menu-btn[aria-expanded='true'] {
   background: var(--color-hover-bg);
   border-color: var(--color-border-light);
+}
+
+/* The 26px menu bar is desktop authenticity for mouse pointers only —
+   fingers get the full touch target (a11y rule 4) */
+@media (pointer: coarse) {
+  body[data-ui-mode='classic'] .toolbar-menu-btn {
+    min-height: var(--size-touch-target);
+  }
 }
 
 /* Menus drop under their own menu-bar button, content-sized, like a desktop
@@ -419,6 +427,50 @@ body[data-ui-mode='classic'] .classic-slot > details {
     overflow-y: auto;
   }
 
+  /* The Customizer joins the stack as a normal pane. Below 768px the custom
+     modes turn .param-panel into an off-canvas drawer (layout.css) whose
+     open button lives in the classic-hidden #actionsBar — without these
+     resets the Customizer is position:fixed off screen with no way to open
+     it, i.e. unreachable on phones. drawer-controller.js additionally
+     refuses to engage while Classic is active. */
+  body[data-ui-mode='classic'] .param-panel {
+    /* relative, not static: the pane's absolutely-positioned sr-only
+       labels must keep resolving against the pane — against <html> they
+       poke past the viewport and hand the page a phantom scrollbar */
+    position: relative;
+    transform: none;
+    width: auto;
+    /* flex-shrink would compress the pane to its borders inside the
+       fixed-height scrolling column — same collapse the preview panel
+       needed guarding against */
+    flex: 0 0 auto;
+    min-height: 0;
+    max-height: none;
+    z-index: auto;
+    transition: none;
+    border-right: 0;
+    box-shadow: none;
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  /* Bottom clearance for the custom modes' fixed actions bar — hidden in
+     Classic, so the clearance is just dead space */
+  body[data-ui-mode='classic'] .param-panel .param-panel-body {
+    padding-bottom: 0;
+  }
+
+  /* The drawer's backdrop and body scroll-lock must never engage */
+  body[data-ui-mode='classic'] #drawerBackdrop {
+    display: none !important;
+  }
+
+  body[data-ui-mode='classic'].drawer-open {
+    overflow: auto;
+    position: static;
+    top: auto;
+  }
+
   body[data-ui-mode='classic'] .classic-slot {
     flex: 0 0 auto;
     max-height: 40vh;
@@ -441,6 +493,21 @@ body[data-ui-mode='classic'] .classic-slot > details {
   }
   body[data-ui-mode='classic'] .classic-editor-slot {
     order: 4;
+  }
+}
+
+/* Phone-width toolbar: the snap views, projection and overlay toggles are
+   one-tap conveniences duplicated verbatim in the View menu, and together
+   they wrapped the toolbar to ~270px tall at 375px — a third of the screen.
+   Dropped here, reachable in the menu; Bed grid stays (no menu home).
+   Desktop keeps the full row. */
+@media (max-width: 767px) {
+  body[data-ui-mode='classic'] .classic-tb-group[aria-label='Views'],
+  body[data-ui-mode='classic'] .classic-tb-group[aria-label='Projection'],
+  body[data-ui-mode='classic'] #classicEdgesToggle,
+  body[data-ui-mode='classic'] #classicAxesToggle,
+  body[data-ui-mode='classic'] #classicCrosshairsToggle {
+    display: none;
   }
 }
 
@@ -473,8 +540,9 @@ body[data-ui-mode='classic'] .classic-pane-title {
 }
 
 body[data-ui-mode='classic'] .classic-pane-btn {
-  min-width: var(--size-touch-target-sm);
-  min-height: var(--size-touch-target-sm);
+  /* 44px on touch, auto-compact 36px on fine pointers (token media query) */
+  min-width: var(--size-touch-target);
+  min-height: var(--size-touch-target);
   background: transparent;
   border: 1px solid transparent;
   border-radius: var(--border-radius-xs);
@@ -583,7 +651,7 @@ body[data-ui-mode='classic'] .classic-auto-preview-label {
   align-items: center;
   gap: var(--space-xs);
   font-size: var(--font-size-xs);
-  min-height: var(--size-touch-target-sm);
+  min-height: var(--size-touch-target);
   cursor: pointer;
 }
 
@@ -607,12 +675,33 @@ body[data-ui-mode='classic']
   .customizer-header-select {
   flex: 0 1 auto;
   max-width: 150px;
-  min-height: var(--size-touch-target-sm);
+  min-height: var(--size-touch-target);
 }
 
-/* Flat parameter rows: the desktop Customizer is a list, not stacked cards */
+/* Flat parameter rows: the desktop Customizer is a list, not stacked
+   cards. Every disclosure in the dock loses its card chrome (side borders,
+   radius, elevated background, margins) and becomes a full-width row
+   separated by hairlines. Applies to the Forge sections (Libraries,
+   Companion Files, Advanced, …) and the parameter groups alike. */
+body[data-ui-mode='classic'] .param-panel-body .forge-disclosure,
 body[data-ui-mode='classic'] #parametersContainer .param-group {
-  margin-bottom: var(--space-xs);
+  border: 0;
+  border-bottom: 1px solid var(--color-border-light);
+  border-radius: 0;
+  margin: 0;
+  background: var(--color-bg-primary);
+}
+
+body[data-ui-mode='classic'] .param-panel-body .forge-disclosure summary,
+body[data-ui-mode='classic'] #parametersContainer .param-group summary {
+  padding-top: var(--space-xs);
+  padding-bottom: var(--space-xs);
+  font-weight: var(--font-weight-normal);
+}
+
+body[data-ui-mode='classic'] .param-panel-body .forge-disclosure summary:hover,
+body[data-ui-mode='classic'] #parametersContainer .param-group summary:hover {
+  background: var(--color-hover-bg);
 }
 
 body[data-ui-mode='classic'] .classic-preset-row {
@@ -717,6 +806,14 @@ body[data-ui-mode='classic'] .classic-status-spacer {
 /* The in-viewport overlay yields to the bottom bar in classic —
    display:none also removes its aria-live region, so only the bar speaks */
 body[data-ui-mode='classic'] #previewStatusBar {
+  display: none !important;
+}
+
+/* Same rule for the floating "✓ Preview ready" pill (JS-created
+   .preview-state-indicator, aria-live): the status bar mirrors the same
+   render-state text, so in classic the pill is a duplicate live region
+   floating over the viewport. Desktop has no such overlay. */
+body[data-ui-mode='classic'] .preview-state-indicator {
   display: none !important;
 }
 
