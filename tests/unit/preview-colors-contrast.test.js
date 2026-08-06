@@ -39,7 +39,7 @@ function contrastRatio(a, b) {
 const THEMES = Object.keys(PREVIEW_COLORS);
 
 describe('PREVIEW_COLORS non-text contrast (WCAG 2.2 SC 1.4.11)', () => {
-  it('covers all eight themes', () => {
+  it('covers all nine themes', () => {
     expect(THEMES.sort()).toEqual(
       [
         'light',
@@ -50,6 +50,7 @@ describe('PREVIEW_COLORS non-text contrast (WCAG 2.2 SC 1.4.11)', () => {
         'mono-light',
         'mono-hc',
         'mono-light-hc',
+        'classic',
       ].sort()
     );
   });
@@ -77,5 +78,23 @@ describe('PREVIEW_COLORS non-text contrast (WCAG 2.2 SC 1.4.11)', () => {
     // #f9d72c (1.3:1) and #9dcb51 (1.7:1) fail SC 1.4.11 on #f5f5f5.
     expect(PREVIEW_COLORS.light.model).not.toBe(0xf9d72c);
     expect(PREVIEW_COLORS.light.modelBack).not.toBe(0x9dcb51);
+  });
+
+  it('classic uses the desktop Cornfield background without regressing the model', () => {
+    // Classic buys desktop fidelity on the background only; the model pair
+    // stays the accessibility-tuned one and gains contrast on cornfield.
+    expect(PREVIEW_COLORS.classic.background).toBe(0xffffe5);
+    expect(PREVIEW_COLORS.classic.model).toBe(PREVIEW_COLORS.light.model);
+    expect(PREVIEW_COLORS.classic.modelBack).toBe(
+      PREVIEW_COLORS.light.modelBack
+    );
+    expect(
+      contrastRatio(
+        PREVIEW_COLORS.classic.model,
+        PREVIEW_COLORS.classic.background
+      )
+    ).toBeGreaterThan(
+      contrastRatio(PREVIEW_COLORS.light.model, PREVIEW_COLORS.light.background)
+    );
   });
 });

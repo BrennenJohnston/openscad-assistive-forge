@@ -7,7 +7,9 @@
  *                default, Window > Editor / titlebar ✕ toggles it)
  *   Display    — .preview-panel (untouched)
  *   Customizer — .param-panel with the desktop-style #classicCustomizerBar
- *                (Automatic Preview / Reset / preset row) at its top
+ *                at its top: titlebar, then Automatic Preview + the moved
+ *                #customizerHeaderRow (Show Details / Reset All), then the
+ *                preset row
  *   Presets    — #presetControls, moved INTO the Customizer bar's
  *                #classicPresetRow (desktop puts the preset combobox inside
  *                the Customizer dock)
@@ -60,9 +62,17 @@ const SLOT_DEFS = [
   },
 ];
 
-// Presets move into the Customizer dock rather than a created slot
-const PRESETS_PANEL_ID = 'presetControls';
-const PRESETS_TARGET_ID = 'classicPresetRow';
+/**
+ * Panels that move into the Customizer dock rather than a created slot, so
+ * its header block matches the desktop Customizer: the Show Details / Reset
+ * row on the first line, the preset combobox and its +/−/save buttons on the
+ * second. Order matters — each is appended to its target in turn.
+ * @type {Array<{panelId: string, targetId: string}>}
+ */
+const CUSTOMIZER_DOCK_MOVES = [
+  { panelId: 'customizerHeaderRow', targetId: 'classicCustomizerControls' },
+  { panelId: 'presetControls', targetId: 'classicPresetRow' },
+];
 
 export class ClassicLayoutController {
   /**
@@ -103,9 +113,36 @@ export class ClassicLayoutController {
       }
     });
 
+    // Simplified drops the editor dock entirely, so CodeMirror must not be
+    // initialized into a display:none container — activate it only when the
+    // density brings the pane back.
+    document.addEventListener('classic-density-change', () => {
+      if (!this.active) return;
+      document.dispatchEvent(
+        new CustomEvent(
+          this._isEditorAvailable()
+            ? 'classic-editor-activate'
+            : 'classic-editor-deactivate'
+        )
+      );
+    });
+
     if (ui.getMode() === 'classic') {
       this.enter();
     }
+  }
+
+  /**
+   * Whether the editor dock is actually on screen: the pane toggle says so
+   * AND the Simplified density has not dropped it.
+   * @returns {boolean}
+   * @private
+   */
+  _isEditorAvailable() {
+    return (
+      this._panes.editorVisible &&
+      getUIModeController().getClassicDensity() !== 'simplified'
+    );
   }
 
   /**
@@ -137,24 +174,26 @@ export class ClassicLayoutController {
       }
     }
 
-    // Presets join the Customizer dock (desktop layout)
-    const presets = document.getElementById(PRESETS_PANEL_ID);
-    const presetTarget = document.getElementById(PRESETS_TARGET_ID);
-    if (presets && presetTarget) {
+    // Header row + presets join the Customizer dock (desktop layout)
+    for (const move of CUSTOMIZER_DOCK_MOVES) {
+      const panel = document.getElementById(move.panelId);
+      const target = document.getElementById(move.targetId);
+      if (!panel || !target) continue;
+
       this._moved.push({
-        el: presets,
-        parent: presets.parentElement,
-        nextSibling: presets.nextSibling,
-        wasOpen: presets.tagName === 'DETAILS' ? presets.open : null,
+        el: panel,
+        parent: panel.parentElement,
+        nextSibling: panel.nextSibling,
+        wasOpen: panel.tagName === 'DETAILS' ? panel.open : null,
       });
-      presetTarget.appendChild(presets);
-      if (presets.tagName === 'DETAILS') {
-        presets.open = true;
+      target.appendChild(panel);
+      if (panel.tagName === 'DETAILS') {
+        panel.open = true;
       }
     }
 
     this._applyPaneAttributes();
-    if (this._panes.editorVisible) {
+    if (this._isEditorAvailable()) {
       document.dispatchEvent(new CustomEvent('classic-editor-activate'));
     }
 
@@ -193,6 +232,16 @@ export class ClassicLayoutController {
     this.onExit();
   }
 
+  /**
+   * Re-assert the editor pane's activation. Called after a project loads
+   * while Classic is active so the pane shows the new file's source
+   * instead of whatever was open before.
+   */
+  syncEditorPane() {
+    if (!this.active || !this._isEditorAvailable()) return;
+    document.dispatchEvent(new CustomEvent('classic-editor-activate'));
+  }
+
   /** @returns {boolean} */
   isEditorVisible() {
     return this._panes.editorVisible;
@@ -216,7 +265,7 @@ export class ClassicLayoutController {
     if (this.active) {
       document.dispatchEvent(
         new CustomEvent(
-          this._panes.editorVisible
+          this._isEditorAvailable()
             ? 'classic-editor-activate'
             : 'classic-editor-deactivate'
         )

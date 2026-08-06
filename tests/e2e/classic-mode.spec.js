@@ -178,6 +178,9 @@ test.describe('Classic chrome strip (C3)', () => {
 
     const hiddenInClassic = [
       '#uiModeToggle',
+      // Classic renders one fixed desktop appearance (owner decision)
+      '#themeToggle',
+      '#contrastToggle',
       '#focusModeBtn',
       '#featuresGuideBtn',
       '#clearFileBtn',
@@ -209,6 +212,9 @@ test.describe('Classic chrome strip (C3)', () => {
       await expect(page.locator(id)).toBeVisible()
     }
 
+    // The Classic-only density switch replaces the custom-mode toggle
+    await expect(page.locator('#classicDensityToggle')).toBeVisible()
+
     // Exit restores the chrome
     await page.locator('#classicModeToggle').click()
     await expect(page.locator('body')).toHaveAttribute(
@@ -217,12 +223,226 @@ test.describe('Classic chrome strip (C3)', () => {
     )
     for (const sel of [
       '#uiModeToggle',
+      '#themeToggle',
+      '#contrastToggle',
       '#actionsBar',
       '#paramPanel > .panel-header',
       '#clearFileBtn',
     ]) {
       await expect(page.locator(sel)).toBeVisible()
     }
+    await expect(page.locator('#classicDensityToggle')).toBeHidden()
+  })
+})
+
+test.describe('Classic density: Simplified / Standard inside Classic', () => {
+  test('classic-density-switch: the header switch changes the shell without leaving Classic', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000)
+
+    // Default mode is Simplified, so Classic opens in the Simplified view
+    await loadSampleProject(page)
+    await page.locator('#classicModeToggle').click()
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'classic'
+    )
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-classic-density',
+      'simplified'
+    )
+
+    const densityToggle = page.locator('#classicDensityToggle')
+    await expect(densityToggle).toBeVisible()
+    await expect(densityToggle).toHaveAttribute('role', 'switch')
+    await expect(densityToggle).toHaveAttribute('aria-checked', 'false')
+
+    // Simplified drops the code-facing docks and the programmer buttons
+    await expect(page.locator('#classicEditorSlot')).toBeHidden()
+    await expect(page.locator('#classicConsoleSlot')).toBeHidden()
+    await expect(page.locator('#classicTbNewBtn')).toBeHidden()
+    await expect(page.locator('#classicTbSaveBtn')).toBeHidden()
+    await expect(page.locator('#classicTbUndoBtn')).toBeHidden()
+    await expect(page.locator('#editMenuBtn')).toBeHidden()
+    await expect(page.locator('#windowMenuBtn')).toBeHidden()
+
+    // ...and keeps everything customizing needs
+    await expect(page.locator('.preview-panel')).toBeVisible()
+    await expect(page.locator('#paramPanel')).toBeVisible()
+    await expect(page.locator('#classicPresetRow #presetControls')).toHaveCount(
+      1
+    )
+    await expect(page.locator('#classicRenderBtn')).toBeVisible()
+    await expect(page.locator('#classicTbExportStlBtn')).toBeVisible()
+    for (const id of [
+      '#fileMenuBtn',
+      '#designMenuBtn',
+      '#viewMenuBtn',
+      '#helpMenuBtn',
+    ]) {
+      await expect(page.locator(id)).toBeVisible()
+    }
+
+    // Switching to Standard restores the full shell — still in Classic
+    await densityToggle.click()
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'classic'
+    )
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-classic-density',
+      'standard'
+    )
+    await expect(densityToggle).toHaveAttribute('aria-checked', 'true')
+    await expect(page.locator('#classicEditorSlot')).toBeVisible()
+    await expect(page.locator('#classicConsoleSlot')).toBeVisible()
+    await expect(page.locator('#classicTbNewBtn')).toBeVisible()
+    await expect(page.locator('#editMenuBtn')).toBeVisible()
+    await expect(page.locator('#windowMenuBtn')).toBeVisible()
+  })
+
+  test('classic-density-menu: View > Simplified view drives the same state', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000)
+
+    await loadSampleProject(page)
+    await switchToStandardMode(page)
+    await page.locator('#classicModeToggle').click()
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-classic-density',
+      'standard'
+    )
+
+    await page.locator('#viewMenuBtn').click()
+    const item = page.getByRole('menuitemcheckbox', { name: 'Simplified view' })
+    await expect(item).toBeVisible({ timeout: 5_000 })
+    await expect(item).toHaveAttribute('aria-checked', 'false')
+    await item.click()
+
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-classic-density',
+      'simplified'
+    )
+    await expect(page.locator('#classicDensityToggle')).toHaveAttribute(
+      'aria-checked',
+      'false'
+    )
+  })
+
+  test('classic-density-shared: the choice carries out of Classic and survives reload', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000)
+
+    await loadSampleProject(page)
+    await switchToStandardMode(page)
+    await page.locator('#classicModeToggle').click()
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'classic'
+    )
+
+    // Choosing Simplified inside Classic is the same preference the custom
+    // modes use, so leaving Classic lands in Simplified
+    await page.locator('#classicDensityToggle').click()
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-classic-density',
+      'simplified'
+    )
+    await page.locator('#classicModeToggle').click()
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'simplified'
+    )
+
+    // Back into Classic, the density persists across a reload
+    await page.locator('#classicModeToggle').click()
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-classic-density',
+      'simplified'
+    )
+    await page.reload()
+    await page.waitForSelector('body[data-wasm-ready="true"]', {
+      state: 'attached',
+      timeout: WASM_READY_TIMEOUT,
+    })
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'classic'
+    )
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-classic-density',
+      'simplified'
+    )
+  })
+})
+
+test.describe('Classic desktop appearance', () => {
+  test('classic-desktop-palette: Classic paints itself, not the Forge theme', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000)
+
+    await loadSampleProject(page)
+    await switchToStandardMode(page)
+
+    // Turn dark theme AND high contrast on in a custom mode first.
+    // The theme button cycles Auto → Light → Dark, so click until dark.
+    for (let i = 0; i < 3; i++) {
+      if ((await page.locator('html').getAttribute('data-theme')) === 'dark') {
+        break
+      }
+      await page.locator('#themeToggle').click()
+    }
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+    await page.locator('#contrastToggle').click()
+    await expect(page.locator('html')).toHaveAttribute(
+      'data-high-contrast',
+      'true'
+    )
+
+    await page.locator('#classicModeToggle').click()
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'classic'
+    )
+
+    // Classic ignores both: chrome stays the desktop light gray/white pair
+    const paint = await page.evaluate(() => {
+      const cs = getComputedStyle(document.body)
+      return {
+        chrome: cs.getPropertyValue('--color-bg-secondary').trim(),
+        surface: cs.getPropertyValue('--color-bg-primary').trim(),
+        accent: cs.getPropertyValue('--color-accent').trim(),
+      }
+    })
+    expect(paint.chrome).toBe('#f0f0f0')
+    expect(paint.surface).toBe('#ffffff')
+    // Selection blue, never the Forge brand yellow
+    expect(paint.accent).toBe('#0067c0')
+
+    // The 3D viewport switches to the desktop Cornfield scheme
+    await expect
+      .poll(async () =>
+        page.evaluate(
+          () => window.__forgeDebug?.previewColorScheme?.() ?? null
+        )
+      )
+      .toBe('classic')
+
+    // Leaving Classic restores the user's dark + high-contrast preference
+    await page.locator('#classicModeToggle').click()
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'standard'
+    )
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+    await expect(page.locator('html')).toHaveAttribute(
+      'data-high-contrast',
+      'true'
+    )
   })
 })
 
@@ -233,10 +453,17 @@ test.describe('Classic acceptance (C13)', () => {
     test.setTimeout(240_000)
 
     await loadSampleProject(page)
+    // Standard density: the Simplified Classic view drops the Edit and
+    // Window menus, and this test walks both
+    await switchToStandardMode(page)
     await page.locator('#classicModeToggle').click()
     await expect(page.locator('body')).toHaveAttribute(
       'data-ui-mode',
       'classic'
+    )
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-classic-density',
+      'standard'
     )
 
     // No "(planned)" stubs anywhere in the menus
@@ -301,6 +528,8 @@ test.describe('Classic acceptance (C13)', () => {
 
     await page.setViewportSize({ width: 900, height: 800 })
     await loadSampleProject(page)
+    // Standard density so every pane is in play for the stack assertions
+    await switchToStandardMode(page)
     await page.locator('#classicModeToggle').click()
     await expect(page.locator('body')).toHaveAttribute(
       'data-ui-mode',
@@ -312,6 +541,14 @@ test.describe('Classic acceptance (C13)', () => {
     await expect(page.locator('#classicConsoleSlot')).toBeVisible()
     await expect(page.locator('#classicEditorSlot')).toBeVisible()
     await expect(page.locator('#cameraPanel')).toBeHidden()
+
+    // The viewport must keep a usable height: flex:1 with a zero basis used
+    // to hand it whatever the fixed-height panes left over, i.e. nothing,
+    // collapsing it to a 2px sliver that still counted as "visible"
+    const previewBox = await page.locator('.preview-panel').boundingBox()
+    expect(previewBox.height, 'viewport keeps a usable height').toBeGreaterThan(
+      250
+    )
 
     // No horizontal page scroll in the stacked layout
     const overflow = await page.evaluate(

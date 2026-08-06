@@ -82,6 +82,28 @@ Some OpenSCAD parameters contain expressions that cannot be parsed:
 - **Mitigation**: Falls back to text input (raw mode)
 - **Status**: Preserves original value exactly
 
+### Classic mode has one fixed appearance
+
+Classic mode reproduces the desktop OpenSCAD window, which means a single
+light desktop appearance. Dark theme and high contrast do **not** apply
+there, and their buttons are not shown in Classic.
+
+- **Decision**: Owner, 2026-08-05, for visual fidelity with the desktop
+  application. Recorded here because it withholds an accessibility feature
+  in one mode.
+- **Mitigation**: Dark theme and high contrast remain fully available in
+  Simplified and Standard modes, one click from the Classic toggle.
+- **Mitigation**: The Classic palette itself is high contrast — body text
+  measures 17.4:1 on pane surfaces and 15.3:1 on window chrome, and every
+  control border clears the 3:1 non-text threshold (SC 1.4.11).
+- **Mitigation**: Entering Classic with dark or high contrast active
+  announces that the setting is paused until you leave Classic. The
+  keyboard shortcuts say the same thing rather than silently doing nothing.
+- **Not affected**: Operating-system high contrast (`forced-colors`) still
+  applies in Classic — the app never overrides it.
+- **Status**: Under review. A desktop-flavoured dark and high-contrast
+  Classic appearance remains the preferred long-term answer.
+
 ---
 
 ## Testing Methodology

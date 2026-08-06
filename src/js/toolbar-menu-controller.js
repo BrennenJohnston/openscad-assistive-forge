@@ -277,6 +277,15 @@ export class ToolbarMenuController {
 
     this._openMenuId = menuId;
     btn.setAttribute('aria-expanded', 'true');
+
+    // Publish the trigger's position as custom properties so Classic can
+    // drop the panel under its own menu-bar button, the way a desktop menu
+    // behaves. These are anchor values, not layout styles — classic.css
+    // decides whether to use them and the other modes ignore them.
+    const rect = btn.getBoundingClientRect();
+    modal.style.setProperty('--menu-anchor-x', `${Math.round(rect.left)}px`);
+    modal.style.setProperty('--menu-anchor-y', `${Math.round(rect.bottom)}px`);
+
     modal.classList.remove('hidden');
     modal.setAttribute('aria-hidden', 'false');
 

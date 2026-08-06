@@ -3236,6 +3236,15 @@ async function initApp() {
       ...(document.body.dataset.uiMode === 'classic'
         ? [
             {
+              // Keyboard/menu home for the header Simplified/Standard switch
+              type: 'toggle',
+              label: 'Simplified view',
+              checked: getUIModeController().getClassicDensity() === 'simplified',
+              handler: () => {
+                getUIModeController().toggleClassicDensity();
+              },
+            },
+            {
               type: 'toggle',
               label: 'Hide Toolbar',
               checked: document.body.dataset.classicToolbarHidden === 'true',
@@ -7399,8 +7408,11 @@ if (rounded) {
       if (!currentEditor) {
         initExpertEditor();
       } else if (currentEditor.setValue) {
-        const code = editorStateManager.getSource();
-        if (code) currentEditor.setValue(code);
+        const code = resolveEditorSource();
+        // Only write when it actually differs — setValue resets the caret
+        if (code && currentEditor.getValue?.() !== code) {
+          currentEditor.setValue(code);
+        }
       }
       expertModePanel.classList.add('classic-editor-active');
     });
@@ -7456,6 +7468,23 @@ if (rounded) {
     }
 
     /**
+     * The source the editor should show. editorStateManager only holds a
+     * value once the editor has been opened or edited, so a freshly loaded
+     * project falls through to the uploaded file's own text — otherwise the
+     * Classic Editor dock, which opens on entry rather than on demand, would
+     * show an empty document.
+     * @returns {string}
+     */
+    function resolveEditorSource() {
+      return (
+        editorStateManager.getSource() ||
+        window._currentSCADCode ||
+        stateManager.getState()?.uploadedFile?.content ||
+        ''
+      );
+    }
+
+    /**
      * Initialize the Expert Mode code editor
      */
     function initExpertEditor() {
@@ -7486,8 +7515,7 @@ if (rounded) {
 
       currentEditor.initialize();
 
-      const initialCode =
-        editorStateManager.getSource() || window._currentSCADCode || '';
+      const initialCode = resolveEditorSource();
       if (initialCode) {
         currentEditor.setValue(initialCode);
       }
@@ -7902,9 +7930,21 @@ if (rounded) {
 
     // Classic desktop-shell layout (moves console/editor into grid slots,
     // presets into the Customizer dock)
+    // Classic swaps the WebGL scene to the desktop Cornfield colors, so the
+    // viewport re-detects on every entry and exit (detectTheme() returns
+    // 'classic' while the mode is active).
+    const syncPreviewSceneToMode = () => {
+      if (!previewManager) return;
+      previewManager.updateTheme(
+        previewManager.detectTheme(),
+        document.documentElement.getAttribute('data-high-contrast') === 'true'
+      );
+    };
+
     initClassicLayoutController({
       onEnter: () => {
         destroySplit();
+        syncPreviewSceneToMode();
         // Startup contract: collapsed customizer groups, and a first
         // preview with current values if nothing has rendered yet
         collapseCustomizerGroups();
@@ -7929,6 +7969,7 @@ if (rounded) {
         if (!paramPanel.classList.contains('collapsed')) {
           initSplit();
         }
+        syncPreviewSceneToMode();
         requestAnimationFrame(() => previewManager?.handleResize?.());
       },
     });
@@ -13131,7 +13172,17 @@ if (rounded) {
     }
   });
 
+  // Classic renders one fixed desktop appearance, so these shortcuts would
+  // flip a setting with no visible effect. Say so instead of no-opping.
+  const APPEARANCE_UNAVAILABLE_IN_CLASSIC =
+    'Not available in Classic mode. Classic uses the desktop light appearance — leave Classic to change the theme or high contrast.';
+
   keyboardConfig.on('toggleHighContrast', () => {
+    if (document.body.dataset.uiMode === 'classic') {
+      announceImmediate(APPEARANCE_UNAVAILABLE_IN_CLASSIC);
+      updateStatus('High contrast is not available in Classic mode');
+      return;
+    }
     const enabled = themeManager.toggleHighContrast();
     announceImmediate(
       `High contrast mode ${enabled ? 'enabled' : 'disabled'}`
@@ -13145,6 +13196,11 @@ if (rounded) {
     }
   });
   keyboardConfig.on('toggleTheme', () => {
+    if (document.body.dataset.uiMode === 'classic') {
+      announceImmediate(APPEARANCE_UNAVAILABLE_IN_CLASSIC);
+      updateStatus('Theme switching is not available in Classic mode');
+      return;
+    }
     themeManager.cycleTheme();
   });
 
@@ -13562,6 +13618,15 @@ if (typeof window !== 'undefined') {
   window.libraryManager = libraryManager;
 
   window.__forgeDebug = {
+    /**
+     * Current 3D viewport color-scheme key (a PREVIEW_COLORS name). Classic
+     * mode reports 'classic' — the desktop Cornfield scheme.
+     * @returns {string|null}
+     */
+    previewColorScheme() {
+      return previewManager?.currentTheme ?? null;
+    },
+
     async compareGeometry() {
       if (!renderController || !renderController.ready) {
         console.error(

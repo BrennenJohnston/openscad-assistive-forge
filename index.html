@@ -67,7 +67,14 @@
             />
             <div class="header-branding-text">
               <h1>
-                <span class="title-full">OpenSCAD Assistive Forge</span>
+                <!-- Classic renders a desktop window caption
+                     ("<file>.scad — OpenSCAD Assistive Forge"); the span is
+                     empty and hidden in the custom modes. -->
+                <span
+                  class="classic-window-title"
+                  id="classicWindowTitle"
+                ></span
+                ><span class="title-full">OpenSCAD Assistive Forge</span>
                 <span class="title-short" aria-hidden="true">OpenSCAD AF</span>
               </h1>
               <p class="app-tagline">
@@ -222,6 +229,29 @@
                   d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"
                 ></path>
               </svg>
+            </button>
+            <!-- Simplified/Standard inside Classic. Same switch component as
+                 #uiModeToggle so the choice reads identically in both
+                 layouts; Classic-only via classic.css. -->
+            <button type="button"
+              id="classicDensityToggle"
+              class="ui-mode-toggle classic-density-toggle ui-mode-toggle--basic"
+              role="switch"
+              aria-checked="false"
+              aria-label="Classic view: Simplified. Click to switch to Standard"
+              title="Switch between the Simplified and Standard Classic views"
+            >
+              <span
+                class="ui-mode-option ui-mode-option--basic"
+                aria-hidden="true"
+                >Simplified</span
+              >
+              <span
+                class="ui-mode-option ui-mode-option--advanced"
+                aria-hidden="true"
+                >Standard</span
+              >
+              <span class="ui-mode-slider" aria-hidden="true"></span>
             </button>
             <button type="button"
               id="classicModeToggle"
@@ -1325,13 +1355,16 @@
                   title="Hide Customizer"
                 >✕</button>
               </div>
-              <div class="classic-customizer-controls">
+              <div
+                id="classicCustomizerControls"
+                class="classic-customizer-controls"
+              >
                 <label class="classic-auto-preview-label">
                   <input type="checkbox" id="classicAutoPreviewCheck" checked />
                   <span>Automatic Preview</span>
                 </label>
-                <!-- Show Details + Reset All: the existing
-                     .customizer-header-row below provides both, matching the
+                <!-- #customizerHeaderRow (Show Details + Reset All) is moved
+                     in here by classic-layout-controller.js, matching the
                      desktop Customizer's header line. -->
               </div>
               <div id="classicPresetRow" class="classic-preset-row"></div>
@@ -2786,7 +2819,9 @@
                   </div>
                 </div>
               </details>
-              <div class="customizer-header-row">
+              <!-- Classic moves this row into #classicCustomizerBar so the
+                   dock header matches the desktop Customizer's first line. -->
+              <div class="customizer-header-row" id="customizerHeaderRow">
                 <label for="paramDetailLevel" class="sr-only"
                   >Show Details</label
                 ><select

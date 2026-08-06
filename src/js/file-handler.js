@@ -45,7 +45,10 @@ import { presetManager } from './preset-manager.js';
 import { closeModal } from './modal-manager.js';
 import { themeManager } from './theme-manager.js';
 import { getUIModeController } from './ui-mode-controller.js';
-import { collapseCustomizerGroups } from './classic-layout-controller.js';
+import {
+  collapseCustomizerGroups,
+  getClassicLayoutController,
+} from './classic-layout-controller.js';
 import {
   detectIncludeUse,
   detectRequiredCompanionFiles,
@@ -1132,6 +1135,7 @@ export function initFileHandler({
       getUIModeController().applyCurrentMode();
       if (getUIModeController().getMode() === 'classic') {
         collapseCustomizerGroups();
+        getClassicLayoutController()?.syncEditorPane();
       }
 
       getFileActionsController().trackOpen(fileName);
