@@ -3,8 +3,15 @@
  *
  * Simplified: core parameter controls and preview only (panels hidden)
  * Standard: full interface with all panels visible
- * Classic: desktop-OpenSCAD-style four-pane layout (gated on the
- *   classic_mode feature flag; layout applied via body[data-ui-mode])
+ * Classic: desktop-OpenSCAD-style dock layout (gated on the classic_mode
+ *   feature flag; layout applied via body[data-ui-mode])
+ *
+ * Simplified/Standard is a DENSITY that applies in Classic too, stamped as
+ * body[data-classic-density] and driven by the header switch. It is stored
+ * in the same field Classic returns to on exit, so choosing Simplified
+ * inside Classic and then leaving Classic lands in Simplified — one
+ * preference, two layouts. The panel registry below is shared, minus the
+ * menus Classic cannot do without (CLASSIC_SIMPLIFIED_KEEP_VISIBLE).
  *
  * Legacy stored values migrate on load: 'basic' → 'simplified',
  * 'advanced' → 'standard'. Storage keys and panel IDs are unchanged.
@@ -141,6 +148,21 @@ const PANEL_REGISTRY = [
     defaultHiddenInBasic: true,
   },
 ];
+
+/**
+ * Panels the Simplified density hides everywhere EXCEPT Classic: the desktop
+ * shell routes File/Export, rendering, view and help through its menu bar, so
+ * hiding those four would strand the actions with no other home. Edit and
+ * Window stay in the hidden list — Edit is editor-only and Window toggles
+ * panes Simplified has already dropped.
+ * @type {Set<string>}
+ */
+const CLASSIC_SIMPLIFIED_KEEP_VISIBLE = new Set([
+  'toolbarMenuFile',
+  'toolbarMenuDesign',
+  'toolbarMenuView',
+  'toolbarMenuHelp',
+]);
 
 /**
  * UIModeController - Central controller for interface mode switching
@@ -317,16 +339,28 @@ export class UIModeController {
    * @param {UIMode} mode
    */
   applyMode(mode) {
+    const inClassic = mode === 'classic';
+
     if (document.body) {
       document.body.dataset.uiMode = mode;
+      if (inClassic) {
+        document.body.dataset.classicDensity = this._lastCustomMode;
+      } else {
+        delete document.body.dataset.classicDensity;
+      }
     }
 
     const hiddenPanelIds = this._getEffectiveHiddenPanels();
+    const simplifiedActive =
+      mode === 'simplified' ||
+      (inClassic && this._lastCustomMode === 'simplified');
 
     for (const panel of PANEL_REGISTRY) {
       const elements = this._queryPanelElements(panel.selector);
       const shouldHide =
-        mode === 'simplified' && hiddenPanelIds.includes(panel.id);
+        simplifiedActive &&
+        hiddenPanelIds.includes(panel.id) &&
+        !(inClassic && CLASSIC_SIMPLIFIED_KEEP_VISIBLE.has(panel.id));
 
       if (shouldHide) {
         elements.forEach((el) => el.classList.add(HIDDEN_CLASS));
@@ -334,6 +368,77 @@ export class UIModeController {
         elements.forEach((el) => el.classList.remove(HIDDEN_CLASS));
       }
     }
+
+    this._updateClassicDensityButton();
+
+    // Document-level notification for modules that must react to the layout
+    // mode without importing this controller (import order would decide who
+    // constructs the singleton). First consumer: the mobile drawer closes
+    // itself when Classic takes over the Customizer.
+    document.dispatchEvent(
+      new CustomEvent('ui-mode-changed', { detail: { mode } })
+    );
+  }
+
+  /**
+   * The Simplified/Standard density in effect inside Classic. Shared with
+   * the custom mode Classic returns to on exit.
+   * @returns {'simplified'|'standard'}
+   */
+  getClassicDensity() {
+    return this._lastCustomMode === 'simplified' ? 'simplified' : 'standard';
+  }
+
+  /**
+   * Choose the Simplified or Standard density. In Classic this re-applies
+   * the shell in place; outside Classic it only records the preference,
+   * which is also the mode Classic returns to.
+   * @param {'simplified'|'standard'} density
+   * @param {Object} [options]
+   * @param {boolean} [options.skipAnnouncement]
+   * @returns {'simplified'|'standard'} The density in effect after the call
+   */
+  setClassicDensity(density, options = {}) {
+    const normalized = normalizeUiMode(density);
+    if (normalized !== 'simplified' && normalized !== 'standard') {
+      console.warn(`[UIModeController] Invalid classic density: ${density}`);
+      return this.getClassicDensity();
+    }
+    if (normalized === this._lastCustomMode) return normalized;
+
+    this._lastCustomMode = normalized;
+    this._savePreferences();
+
+    if (this.currentMode === 'classic') {
+      this.applyMode('classic');
+      document.dispatchEvent(
+        new CustomEvent('classic-density-change', {
+          detail: { density: normalized },
+        })
+      );
+      if (!options.skipAnnouncement) {
+        announceImmediate(
+          normalized === 'simplified'
+            ? 'Simplified Classic view. The editor and console panes, the file and undo toolbar buttons, and the Edit and Window menus are hidden.'
+            : 'Standard Classic view. All panes, toolbar buttons, and menus are shown.',
+          { clearDelayMs: 4000 }
+        );
+      }
+    } else {
+      this._updateClassicDensityButton();
+    }
+
+    return normalized;
+  }
+
+  /**
+   * Flip the Classic density between Simplified and Standard.
+   * @returns {'simplified'|'standard'} The density in effect after the call
+   */
+  toggleClassicDensity() {
+    return this.setClassicDensity(
+      this.getClassicDensity() === 'simplified' ? 'standard' : 'simplified'
+    );
   }
 
   /**
@@ -608,9 +713,10 @@ export class UIModeController {
    * wire click handler, apply initial mode.
    */
   init() {
-    if (document.body) {
-      document.body.dataset.uiMode = this.currentMode;
-    }
+    // Full apply, not a bare uiMode stamp: a reload straight into Classic
+    // must land with the density attribute and the Simplified panel hiding
+    // already in place, not only once a project finishes loading.
+    this.applyMode(this.currentMode);
 
     // Header Classic toggle: wired BEFORE the basic_advanced_mode early
     // return below — that flag gates the Simplified/Standard switch only
@@ -624,6 +730,15 @@ export class UIModeController {
       } else {
         classicBtn.classList.add('hidden');
       }
+    }
+
+    // The Classic density switch is Classic-only chrome (classic.css keeps
+    // it out of the custom modes), so it is wired alongside the Classic
+    // entry point rather than behind the basic_advanced_mode flag.
+    const densityBtn = document.getElementById('classicDensityToggle');
+    if (densityBtn) {
+      densityBtn.addEventListener('click', () => this.toggleClassicDensity());
+      this._updateClassicDensityButton();
     }
 
     const btn = document.getElementById('uiModeToggle');
@@ -768,6 +883,25 @@ export class UIModeController {
   }
 
   /**
+   * Update the Classic density switch's pressed state and label.
+   * @private
+   */
+  _updateClassicDensityButton() {
+    const btn = document.getElementById('classicDensityToggle');
+    if (!btn) return;
+
+    const isSimplified = this.getClassicDensity() === 'simplified';
+    btn.setAttribute('aria-checked', String(!isSimplified));
+    btn.classList.toggle('ui-mode-toggle--basic', isSimplified);
+    btn.setAttribute(
+      'aria-label',
+      isSimplified
+        ? 'Classic view: Simplified. Click to switch to Standard'
+        : 'Classic view: Standard. Click to switch to Simplified'
+    );
+  }
+
+  /**
    * Move focus to an appropriate element after mode switch (WCAG 2.4.3)
    * @param {UIMode} mode
    * @private
@@ -805,13 +939,34 @@ export class UIModeController {
       simplified:
         'Switched to Simplified mode. Extra panels are now hidden. Parameter controls remain accessible.',
       standard: 'Switched to Standard mode. All panels are now visible.',
-      classic:
-        'Switched to Classic mode. Desktop-style layout with display, customizer, presets, and console panes.',
+      classic: `Switched to Classic mode, ${this.getClassicDensity()} view. Desktop-style layout with display, customizer, presets, and console panes.${this._suspendedAppearanceNote()}`,
     };
 
     announceImmediate(messages[mode] || `Switched to ${mode} mode`, {
       clearDelayMs: 3000,
     });
+  }
+
+  /**
+   * Classic renders one fixed desktop appearance, so a dark or high-contrast
+   * preference does not apply there. Say so instead of letting the setting
+   * silently stop working (owner decision 2026-08-05).
+   * @returns {string} Sentence to append, or '' when nothing is suspended
+   * @private
+   */
+  _suspendedAppearanceNote() {
+    const root = document.documentElement;
+    const highContrast = root?.getAttribute('data-high-contrast') === 'true';
+    const dark = root?.getAttribute('data-theme') === 'dark';
+    if (!highContrast && !dark) return '';
+
+    const suspended =
+      highContrast && dark
+        ? 'Dark theme and high contrast are'
+        : highContrast
+          ? 'High contrast is'
+          : 'Dark theme is';
+    return ` Classic uses the desktop light appearance, so ${suspended} paused until you leave Classic.`;
   }
 
   /**

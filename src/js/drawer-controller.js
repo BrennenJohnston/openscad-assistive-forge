@@ -45,6 +45,10 @@ export function initDrawerController() {
    */
   function open(trigger) {
     if (isOpen || window.innerWidth >= MOBILE_BREAKPOINT_PX) return;
+    // Classic lays the Customizer into its own stacked pane (classic.css
+    // resets the off-canvas positioning); engaging the drawer there would
+    // trap focus in a panel that is already in the normal document flow.
+    if (document.body.dataset.uiMode === 'classic') return;
 
     triggerEl = trigger || toggleBtn;
     isOpen = true;
@@ -226,6 +230,16 @@ export function initDrawerController() {
 
   // Event listeners
   toggleBtn.addEventListener('click', toggle);
+
+  // Entering Classic while the drawer is open would leave its focus trap
+  // and scroll lock active on a panel Classic has re-parented into the
+  // normal flow — close cleanly instead. Document event, not a controller
+  // import: see the dispatch note in ui-mode-controller.applyMode().
+  document.addEventListener('ui-mode-changed', (event) => {
+    if (event.detail?.mode === 'classic' && isOpen) {
+      close();
+    }
+  });
 
   // Wire up close button
   if (closeBtn) {

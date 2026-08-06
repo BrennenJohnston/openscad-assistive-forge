@@ -41,10 +41,7 @@ import {
   classifyDrop,
   describeAccepted,
 } from './js/upload-router.js';
-import {
-  setStlViewActive,
-  isStlViewActive,
-} from './js/stl-view-mode.js';
+import { setStlViewActive, isStlViewActive } from './js/stl-view-mode.js';
 import { escapeHtml, isValidServiceWorkerMessage } from './js/html-utils.js';
 import { getQualityPreset, COMPLEXITY_TIER } from './js/quality-tiers.js';
 import { getThreeModule } from './js/preview.js';
@@ -317,7 +314,6 @@ function confirmProjectionFallback(format) {
     'Cancel'
   );
 }
-
 
 // EXAMPLE_DEFINITIONS moved to file-handler.js
 
@@ -1730,8 +1726,7 @@ async function initApp() {
         case 'pending-restore':
           statusEl.hidden = false;
           statusEl.dataset.state = 'pending-restore';
-          statusText.textContent =
-            `"${name}" — click Reconnect to re-grant permission for this session`;
+          statusText.textContent = `"${name}" — click Reconnect to re-grant permission for this session`;
           if (restoreBtn) restoreBtn.hidden = false;
           if (disconnectBtn) disconnectBtn.hidden = false;
           if (connectBtn) connectBtn.hidden = true;
@@ -1739,8 +1734,7 @@ async function initApp() {
         case 'denied':
           statusEl.hidden = false;
           statusEl.dataset.state = 'denied';
-          statusText.textContent =
-            `"${name}" — permission was denied. Click Reconnect to try again, or Disconnect to forget.`;
+          statusText.textContent = `"${name}" — permission was denied. Click Reconnect to try again, or Disconnect to forget.`;
           if (restoreBtn) restoreBtn.hidden = false;
           if (disconnectBtn) disconnectBtn.hidden = false;
           if (connectBtn) connectBtn.hidden = true;
@@ -1870,7 +1864,10 @@ async function initApp() {
       } else if (result.reason === 'cancelled') {
         updateStatus('Folder connection cancelled');
       } else if (result.reason === 'permission-denied') {
-        updateStatus('Folder connection denied — permission required', 'warning');
+        updateStatus(
+          'Folder connection denied — permission required',
+          'warning'
+        );
       } else if (result.reason === 'unsupported') {
         // Defensive: should not happen because the button is hidden.
         updateStatus(
@@ -2386,9 +2383,7 @@ async function initApp() {
             updateStatus(`${formatName} export cancelled`);
             return;
           }
-          updateStatus(
-            `Projecting 3D mesh to approximate ${formatName}...`
-          );
+          updateStatus(`Projecting 3D mesh to approximate ${formatName}...`);
           result = await renderController.render2DFallback(
             state.uploadedFile.content,
             strip2DGenerateForFallback(renderParameters),
@@ -2747,8 +2742,7 @@ async function initApp() {
     const editorTip = 'Available when the Code Editor is open';
 
     function editorAction(label, actionId) {
-      const available =
-        canEdit && editor.supportsAction?.(actionId) === true;
+      const available = canEdit && editor.supportsAction?.(actionId) === true;
       return {
         type: 'action',
         label,
@@ -2922,9 +2916,7 @@ async function initApp() {
       {
         type: 'toggle',
         label: 'Automatic Reload and Preview',
-        checked: Boolean(
-          document.getElementById('autoPreviewToggle')?.checked
-        ),
+        checked: Boolean(document.getElementById('autoPreviewToggle')?.checked),
         handler: () => {
           // Single source: the existing auto-preview checkbox drives the
           // controller; this item (and the Classic Customizer checkbox)
@@ -3235,6 +3227,16 @@ async function initApp() {
       })(),
       ...(document.body.dataset.uiMode === 'classic'
         ? [
+            {
+              // Keyboard/menu home for the header Simplified/Standard switch
+              type: 'toggle',
+              label: 'Simplified view',
+              checked:
+                getUIModeController().getClassicDensity() === 'simplified',
+              handler: () => {
+                getUIModeController().toggleClassicDensity();
+              },
+            },
             {
               type: 'toggle',
               label: 'Hide Toolbar',
@@ -7390,6 +7392,17 @@ if (rounded) {
     // #paramPanelBody). If expert mode was active, unwind it first so the
     // param body is restored, then light the editor up inside its slot.
     document.addEventListener('classic-editor-activate', () => {
+      // Reloading straight into Classic fires this from the controller's
+      // init while the welcome screen is up — there is no project and
+      // #mainInterface is display:none. Creating CodeMirror there produces
+      // a zero-size, empty instance whose '' value then poisons the
+      // editor-state capture on exit. Wait for a real project: the
+      // file-handler re-fires via syncEditorPane() after every load.
+      if (
+        document.getElementById('mainInterface')?.classList.contains('hidden')
+      ) {
+        return;
+      }
       if (
         modeManager?.isExpertMode?.() &&
         typeof modeManager.toggleMode === 'function'
@@ -7399,10 +7412,16 @@ if (rounded) {
       if (!currentEditor) {
         initExpertEditor();
       } else if (currentEditor.setValue) {
-        const code = editorStateManager.getSource();
-        if (code) currentEditor.setValue(code);
+        const code = resolveEditorSource();
+        // Only write when it actually differs — setValue resets the caret
+        if (code && currentEditor.getValue?.() !== code) {
+          currentEditor.setValue(code);
+        }
       }
       expertModePanel.classList.add('classic-editor-active');
+      // The slot is a different width than the custom-mode panel; CodeMirror
+      // paints with its cached geometry until told to re-measure.
+      currentEditor?.refreshLayout?.();
     });
 
     document.addEventListener('classic-editor-deactivate', () => {
@@ -7427,11 +7446,15 @@ if (rounded) {
         if (!currentEditor) {
           initExpertEditor();
         } else {
-          // Sync code from state to editor
-          const currentCode = editorStateManager.getSource();
-          if (currentCode) {
+          // Sync through the full fallback chain: after a round-trip through
+          // Classic the captured buffer can legitimately be empty while a
+          // project is loaded — bare getSource() would leave the loaded
+          // file's code invisible here.
+          const currentCode = resolveEditorSource();
+          if (currentCode && currentEditor.getValue() !== currentCode) {
             currentEditor.setValue(currentCode);
           }
+          currentEditor.refreshLayout?.();
         }
 
         // Focus the editor
@@ -7444,15 +7467,37 @@ if (rounded) {
         if (paramPanelBody) paramPanelBody.classList.remove('hidden');
         expertModeToggle.setAttribute('aria-pressed', 'false');
 
-        // Capture state from editor before switching
+        // Capture state from editor before switching. An empty value from a
+        // never-shown editor must not overwrite a real stored source —
+        // capturing '' here is only meaningful when the user actually
+        // cleared the document (the buffer is dirty then).
         if (currentEditor) {
           const code = currentEditor.getValue();
-          editorStateManager.setSource(code, { markDirty: false });
+          if (code !== '' || editorStateManager.getIsDirty()) {
+            editorStateManager.setSource(code, { markDirty: false });
+          }
         }
 
         // Clear editor instance so Edit menu items disable in Standard Mode
         modeManager.setEditorInstance(null);
       }
+    }
+
+    /**
+     * The source the editor should show. editorStateManager only holds a
+     * value once the editor has been opened or edited, so a freshly loaded
+     * project falls through to the uploaded file's own text — otherwise the
+     * Classic Editor dock, which opens on entry rather than on demand, would
+     * show an empty document.
+     * @returns {string}
+     */
+    function resolveEditorSource() {
+      return (
+        editorStateManager.getSource() ||
+        window._currentSCADCode ||
+        stateManager.getState()?.uploadedFile?.content ||
+        ''
+      );
     }
 
     /**
@@ -7486,8 +7531,7 @@ if (rounded) {
 
       currentEditor.initialize();
 
-      const initialCode =
-        editorStateManager.getSource() || window._currentSCADCode || '';
+      const initialCode = resolveEditorSource();
       if (initialCode) {
         currentEditor.setValue(initialCode);
       }
@@ -7902,9 +7946,21 @@ if (rounded) {
 
     // Classic desktop-shell layout (moves console/editor into grid slots,
     // presets into the Customizer dock)
+    // Classic swaps the WebGL scene to the desktop Cornfield colors, so the
+    // viewport re-detects on every entry and exit (detectTheme() returns
+    // 'classic' while the mode is active).
+    const syncPreviewSceneToMode = () => {
+      if (!previewManager) return;
+      previewManager.updateTheme(
+        previewManager.detectTheme(),
+        document.documentElement.getAttribute('data-high-contrast') === 'true'
+      );
+    };
+
     initClassicLayoutController({
       onEnter: () => {
         destroySplit();
+        syncPreviewSceneToMode();
         // Startup contract: collapsed customizer groups, and a first
         // preview with current values if nothing has rendered yet
         collapseCustomizerGroups();
@@ -7929,6 +7985,7 @@ if (rounded) {
         if (!paramPanel.classList.contains('collapsed')) {
           initSplit();
         }
+        syncPreviewSceneToMode();
         requestAnimationFrame(() => previewManager?.handleResize?.());
       },
     });
@@ -8027,10 +8084,7 @@ if (rounded) {
       const syncProjectionButtons = () => {
         const mode = previewManager?.getProjectionMode?.() || 'perspective';
         perspBtn?.setAttribute('aria-pressed', String(mode === 'perspective'));
-        orthoBtn?.setAttribute(
-          'aria-pressed',
-          String(mode === 'orthographic')
-        );
+        orthoBtn?.setAttribute('aria-pressed', String(mode === 'orthographic'));
       };
       perspBtn?.addEventListener('click', () => {
         if (
@@ -8101,9 +8155,7 @@ if (rounded) {
       const gridPresetSelectForStrip =
         document.getElementById('gridPresetSelect');
       if (classicGridSizeSelect && gridPresetSelectForStrip) {
-        for (const opt of gridPresetSelectForStrip.querySelectorAll(
-          'option'
-        )) {
+        for (const opt of gridPresetSelectForStrip.querySelectorAll('option')) {
           if (opt.value === 'custom') continue;
           classicGridSizeSelect.appendChild(opt.cloneNode(true));
         }
@@ -8141,6 +8193,68 @@ if (rounded) {
         if (!layout) return;
         const visible = layout.toggleCustomizer();
         classicTbCustomizerBtn.setAttribute('aria-pressed', String(visible));
+      });
+
+      // APG toolbar keyboard pattern: the ~23 buttons form ONE tab stop and
+      // Arrow keys move within it — Tab-through would cost two dozen presses
+      // to cross. The bed-size <select> keeps its own tab stop because Arrow
+      // keys change a select's value; hijacking them there would break the
+      // control. Hidden buttons (Simplified density, phone-width trims) are
+      // skipped by the visibility check at keystroke time.
+      const toolbarButtons = Array.from(
+        classicToolbar.querySelectorAll('button')
+      );
+      const visibleButtons = () =>
+        toolbarButtons.filter((b) => b.offsetParent !== null && !b.disabled);
+      const setRovingStop = (target) => {
+        for (const b of toolbarButtons) {
+          b.tabIndex = b === target ? 0 : -1;
+        }
+      };
+      // The single tab stop must always be a VISIBLE button — if the stop
+      // is hidden (Simplified density, phone-width trims), Tab skips it and
+      // the whole toolbar drops out of the keyboard order. Re-pick whenever
+      // visibility can change.
+      const refreshRovingStop = () => {
+        const buttons = visibleButtons();
+        if (buttons.length === 0) return;
+        const current = toolbarButtons.find((b) => b.tabIndex === 0);
+        setRovingStop(buttons.includes(current) ? current : buttons[0]);
+      };
+      setRovingStop(toolbarButtons[0]);
+      refreshRovingStop();
+      document.addEventListener('ui-mode-changed', refreshRovingStop);
+      document.addEventListener('classic-density-change', refreshRovingStop);
+      let rovingResizeTimer;
+      window.addEventListener('resize', () => {
+        clearTimeout(rovingResizeTimer);
+        rovingResizeTimer = setTimeout(refreshRovingStop, 200);
+      });
+      classicToolbar.addEventListener('focusin', (event) => {
+        const btn = event.target.closest('button');
+        if (btn && toolbarButtons.includes(btn)) setRovingStop(btn);
+      });
+      classicToolbar.addEventListener('keydown', (event) => {
+        const { key } = event;
+        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(key)) return;
+        const btn = event.target.closest('button');
+        if (!btn || !toolbarButtons.includes(btn)) return;
+
+        const buttons = visibleButtons();
+        if (buttons.length === 0) return;
+        const current = buttons.indexOf(btn);
+        let next;
+        if (key === 'Home') {
+          next = buttons[0];
+        } else if (key === 'End') {
+          next = buttons[buttons.length - 1];
+        } else {
+          const delta = key === 'ArrowRight' ? 1 : -1;
+          next = buttons[(current + delta + buttons.length) % buttons.length];
+        }
+        event.preventDefault();
+        setRovingStop(next);
+        next.focus();
       });
     }
 
@@ -11758,7 +11872,9 @@ if (rounded) {
         () => {
           const choice = dialog.returnValue;
           document.body.removeChild(dialog);
-          resolve(choice === 'save' || choice === 'discard' ? choice : 'cancel');
+          resolve(
+            choice === 'save' || choice === 'discard' ? choice : 'cancel'
+          );
         },
         { once: true }
       );
@@ -12586,8 +12702,7 @@ if (rounded) {
   const collapseAllGroupsBtn = document.getElementById('collapseAllGroupsBtn');
   /** @param {boolean} open */
   const setAllParamGroupsOpen = (open) => {
-    const parametersContainer =
-      document.getElementById('parametersContainer');
+    const parametersContainer = document.getElementById('parametersContainer');
     if (!parametersContainer) return;
     const groups = parametersContainer.querySelectorAll('details.param-group');
     if (groups.length === 0) {
@@ -12601,12 +12716,11 @@ if (rounded) {
       // Per F5 acceptance criteria: focus the first parameter when
       // Expand-all is activated to give keyboard users a clear next
       // landing spot.
-      const firstControl =
-        /** @type {HTMLElement|null} */ (
-          parametersContainer.querySelector(
-            '.param-control input, .param-control select, .param-control textarea, .param-control button'
-          )
-        );
+      const firstControl = /** @type {HTMLElement|null} */ (
+        parametersContainer.querySelector(
+          '.param-control input, .param-control select, .param-control textarea, .param-control button'
+        )
+      );
       if (firstControl && typeof firstControl.focus === 'function') {
         firstControl.focus();
       }
@@ -13131,11 +13245,19 @@ if (rounded) {
     }
   });
 
+  // Classic renders one fixed desktop appearance, so these shortcuts would
+  // flip a setting with no visible effect. Say so instead of no-opping.
+  const APPEARANCE_UNAVAILABLE_IN_CLASSIC =
+    'Not available in Classic mode. Classic uses the desktop light appearance — leave Classic to change the theme or high contrast.';
+
   keyboardConfig.on('toggleHighContrast', () => {
+    if (document.body.dataset.uiMode === 'classic') {
+      announceImmediate(APPEARANCE_UNAVAILABLE_IN_CLASSIC);
+      updateStatus('High contrast is not available in Classic mode');
+      return;
+    }
     const enabled = themeManager.toggleHighContrast();
-    announceImmediate(
-      `High contrast mode ${enabled ? 'enabled' : 'disabled'}`
-    );
+    announceImmediate(`High contrast mode ${enabled ? 'enabled' : 'disabled'}`);
   });
   keyboardConfig.on('searchParams', () => {
     const searchInput = document.getElementById('paramSearchInput');
@@ -13145,6 +13267,11 @@ if (rounded) {
     }
   });
   keyboardConfig.on('toggleTheme', () => {
+    if (document.body.dataset.uiMode === 'classic') {
+      announceImmediate(APPEARANCE_UNAVAILABLE_IN_CLASSIC);
+      updateStatus('Theme switching is not available in Classic mode');
+      return;
+    }
     themeManager.cycleTheme();
   });
 
@@ -13562,6 +13689,15 @@ if (typeof window !== 'undefined') {
   window.libraryManager = libraryManager;
 
   window.__forgeDebug = {
+    /**
+     * Current 3D viewport color-scheme key (a PREVIEW_COLORS name). Classic
+     * mode reports 'classic' — the desktop Cornfield scheme.
+     * @returns {string|null}
+     */
+    previewColorScheme() {
+      return previewManager?.currentTheme ?? null;
+    },
+
     async compareGeometry() {
       if (!renderController || !renderController.ready) {
         console.error(

@@ -211,6 +211,21 @@ export const PREVIEW_COLORS = {
     edges: 0x261a00, // 10.6:1 vs model
     ambientLight: 0xffb000,
   },
+  // Classic mode: the desktop's Cornfield viewport background
+  // (#FFFFE5 — OpenSCAD src/glview/ColorMap.cc BACKGROUND_COLOR [OBSERVED]).
+  // The model pair stays the accessibility-tuned one; on cornfield it
+  // measures BETTER than on the light theme's #f5f5f5 (3.7:1 / 4.1:1 vs
+  // 3.5:1 / 3.8:1), so fidelity and contrast agree here. Classic ignores
+  // theme and high contrast entirely, so it has no -hc sibling.
+  classic: {
+    background: 0xffffe5,
+    gridPrimary: 0xb9b9a1,
+    gridSecondary: 0xd6d6bf,
+    model: 0x9a8200,
+    modelBack: 0x5a8a22,
+    edges: 0x020617,
+    ambientLight: 0xffffff,
+  },
 };
 
 // RENDER_STATE_COLORS was removed: it applied fabricated amber/red tints
@@ -591,6 +606,11 @@ export class PreviewManager {
    */
   detectTheme() {
     const root = document.documentElement;
+
+    // Classic renders one fixed desktop appearance, so it outranks the
+    // theme, high-contrast and Alt View settings (see classic.css).
+    if (document.body?.dataset.uiMode === 'classic') return 'classic';
+
     const highContrast = root.getAttribute('data-high-contrast') === 'true';
     const dataTheme = root.getAttribute('data-theme');
 
@@ -631,9 +651,9 @@ export class PreviewManager {
    * @param {boolean} highContrast - High contrast mode enabled
    */
   updateTheme(theme, highContrast = false) {
-    // Determine theme key
+    // Determine theme key. 'classic' has no -hc sibling by design.
     let themeKey = theme;
-    if (highContrast && !theme.endsWith('-hc')) {
+    if (highContrast && theme !== 'classic' && !theme.endsWith('-hc')) {
       themeKey = `${theme}-hc`;
     }
 
