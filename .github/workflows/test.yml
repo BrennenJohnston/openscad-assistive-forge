@@ -177,6 +177,13 @@ jobs:
       
       - name: Run E2E tests (Chromium only)
         run: npx playwright test --project=chromium
+        env:
+          # R2a added 17 Classic e2e cases, each booting WASM and loading a
+          # project, which pushed this job past the default 10-minute global
+          # ceiling: the run ended in "Timed out waiting 600s" with 23 tests
+          # never started, not on any assertion. Same escape hatch the WASM
+          # smoke and WebKit jobs already use.
+          PW_GLOBAL_TIMEOUT: '900000'
       
       - name: Upload Playwright report
         uses: actions/upload-artifact@v4
@@ -213,6 +220,13 @@ jobs:
       
       - name: Run E2E tests (Edge)
         run: npx playwright test --project=msedge
+        env:
+          # R2a added 17 Classic e2e cases, each booting WASM and loading a
+          # project, which pushed this job past the default 10-minute global
+          # ceiling: the run ended in "Timed out waiting 600s" with 23 tests
+          # never started, not on any assertion. Same escape hatch the WASM
+          # smoke and WebKit jobs already use.
+          PW_GLOBAL_TIMEOUT: '900000'
       
       - name: Upload Playwright report (Edge)
         uses: actions/upload-artifact@v4
