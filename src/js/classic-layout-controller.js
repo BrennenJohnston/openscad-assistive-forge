@@ -136,6 +136,19 @@ const DOCK_FIELDS = [
 ];
 
 /**
+ * The panes that start hidden and are turned on from the Window menu. The
+ * key is the `<key>Visible` half of the persisted pane state and the
+ * `data-classic-<key>-visible` attribute; the value is the announced name.
+ * Names are the upstream dock titles, owner-approved 2026-08-06.
+ * @type {Record<string, string>}
+ */
+const OPTIONAL_PANE_LABELS = {
+  animate: 'Animate',
+  fontList: 'Font List',
+  viewportControl: 'Viewport-Control',
+};
+
+/**
  * Panels that move into the Customizer dock rather than a created slot, so
  * its header block matches the desktop Customizer: the Show Details / Reset
  * row on the first line, the preset combobox and its +/−/save buttons on the
@@ -331,6 +344,9 @@ export class ClassicLayoutController {
     delete document.body.dataset.classicEditorHidden;
     delete document.body.dataset.classicCustomizerHidden;
     delete document.body.dataset.classicConsoleCollapsed;
+    delete document.body.dataset.classicAnimateVisible;
+    delete document.body.dataset.classicFontListVisible;
+    delete document.body.dataset.classicViewportControlVisible;
     for (const field of DOCK_FIELDS) {
       delete document.body.dataset[`classicField${field.datasetSuffix}`];
     }
@@ -369,6 +385,21 @@ export class ClassicLayoutController {
     return this._panes.consoleCollapsed;
   }
 
+  /** @returns {boolean} */
+  isAnimateVisible() {
+    return this._panes.animateVisible;
+  }
+
+  /** @returns {boolean} */
+  isFontListVisible() {
+    return this._panes.fontListVisible;
+  }
+
+  /** @returns {boolean} */
+  isViewportControlVisible() {
+    return this._panes.viewportControlVisible;
+  }
+
   /** Show/hide the editor pane (Window > Editor, titlebar ✕). */
   toggleEditor() {
     this._panes.editorVisible = !this._panes.editorVisible;
@@ -398,6 +429,40 @@ export class ClassicLayoutController {
       this._panes.customizerVisible ? 'Customizer shown' : 'Customizer hidden'
     );
     return this._panes.customizerVisible;
+  }
+
+  /**
+   * Show/hide one of the optional panes (Window menu, titlebar ✕). Same
+   * shape as toggleCustomizer, driven by a table so the three panes cannot
+   * drift apart. Announcement wording owner-approved 2026-08-06.
+   * @param {'animate'|'fontList'|'viewportControl'} pane
+   * @returns {boolean} the new visibility
+   * @private
+   */
+  _toggleOptionalPane(pane) {
+    const key = `${pane}Visible`;
+    this._panes[key] = !this._panes[key];
+    this._applyPaneAttributes();
+    this._savePaneState();
+    announceImmediate(
+      `${OPTIONAL_PANE_LABELS[pane]} ${this._panes[key] ? 'shown' : 'hidden'}`
+    );
+    return this._panes[key];
+  }
+
+  /** Show/hide the Animate pane (Window > Animate). */
+  toggleAnimate() {
+    return this._toggleOptionalPane('animate');
+  }
+
+  /** Show/hide the Font List pane (Window > Font List). */
+  toggleFontList() {
+    return this._toggleOptionalPane('fontList');
+  }
+
+  /** Show/hide the Viewport-Control pane (Window > Viewport-Control). */
+  toggleViewportControl() {
+    return this._toggleOptionalPane('viewportControl');
   }
 
   /**
@@ -431,10 +496,10 @@ export class ClassicLayoutController {
     return {
       left: this._panes.editorVisible && !simplified,
       'right-top': this._panes.customizerVisible,
-      // Viewport-Control is Standard-only for v1 (D-7) and has no visibility
-      // state until B3, so it reads as empty here.
-      'right-bottom':
-        this._panes.viewportControlVisible === true && !simplified,
+      // Viewport-Control is Standard-only for v1 (D-7). Simplified treats it
+      // as hidden without clearing the preference, so returning to Standard
+      // brings it back rather than silently resetting the arrangement.
+      'right-bottom': this._panes.viewportControlVisible && !simplified,
       // Simplified drops the code-facing docks, which empties the strip.
       bottom: !simplified,
     };
@@ -453,6 +518,16 @@ export class ClassicLayoutController {
       !this._panes.customizerVisible
     );
     body.dataset.classicConsoleCollapsed = String(this._panes.consoleCollapsed);
+
+    // Simplified hides Viewport-Control without clearing its preference, so
+    // the visible-attribute follows the same rule the occupancy does.
+    const simplified =
+      getUIModeController().getClassicDensity() === 'simplified';
+    body.dataset.classicAnimateVisible = String(this._panes.animateVisible);
+    body.dataset.classicFontListVisible = String(this._panes.fontListVisible);
+    body.dataset.classicViewportControlVisible = String(
+      this._panes.viewportControlVisible && !simplified
+    );
 
     const occupancy = this._fieldOccupancy();
     for (const field of DOCK_FIELDS) {
@@ -519,31 +594,31 @@ export class ClassicLayoutController {
     return el;
   }
 
-  /** @private */
+  /**
+   * Desktop defaults: editor and Customizer shown, the optional panes off
+   * until the user asks for them (upstream starts the same way).
+   * Every key is validated independently, so a preference written before the
+   * optional panes existed hydrates without a half-restored state.
+   * @private
+   */
   _loadPaneState() {
     const defaults = {
       editorVisible: true,
       customizerVisible: true,
       consoleCollapsed: false,
+      animateVisible: false,
+      fontListVisible: false,
+      viewportControlVisible: false,
     };
     try {
       const stored = localStorage.getItem(PANES_STORAGE_KEY);
       if (!stored) return defaults;
       const parsed = JSON.parse(stored);
-      return {
-        editorVisible:
-          typeof parsed.editorVisible === 'boolean'
-            ? parsed.editorVisible
-            : defaults.editorVisible,
-        customizerVisible:
-          typeof parsed.customizerVisible === 'boolean'
-            ? parsed.customizerVisible
-            : defaults.customizerVisible,
-        consoleCollapsed:
-          typeof parsed.consoleCollapsed === 'boolean'
-            ? parsed.consoleCollapsed
-            : defaults.consoleCollapsed,
-      };
+      const hydrated = { ...defaults };
+      for (const key of Object.keys(defaults)) {
+        if (typeof parsed?.[key] === 'boolean') hydrated[key] = parsed[key];
+      }
+      return hydrated;
     } catch {
       return defaults;
     }
