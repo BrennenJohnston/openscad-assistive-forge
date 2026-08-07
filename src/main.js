@@ -2270,6 +2270,9 @@ async function initApp() {
   initParamDetailController();
 
   async function _saveCurrentProject(successMessage) {
+    // Save what the user can see. Without this, saving inside the editor's
+    // write-back window persists the pre-edit source and then reports success.
+    flushEditorWriteBack();
     const state = stateManager.getState();
     if (!state.uploadedFile?.content) return;
     if (currentSavedProjectId) {
@@ -2286,6 +2289,9 @@ async function initApp() {
             : undefined,
       });
       if (result.success) {
+        // The dirty flag means "differs from the saved project" (D-10), so
+        // saving — and only saving — clears it.
+        getEditorStateManager().markClean();
         companionFilesCtrl.updateCompanionSaveButton();
         stateManager.announceChange(successMessage);
         updateStatus(successMessage);
@@ -7386,6 +7392,69 @@ if (rounded) {
     }
   }
 
+  // Long enough that a burst of typing writes back once, short enough that
+  // Export/Generate right after a pause still sees the edit.
+  const EDITOR_WRITE_BACK_DELAY_MS = 500;
+
+  /**
+   * Publish an editor edit into the app's single source of truth, so render,
+   * export and save all see it. Mirrors the folder-watch writer
+   * (`main.js` folder-change handler) minus its re-render: typing must not
+   * start a render (D-12) — Preview/F5 does that.
+   * @param {string} code
+   */
+  function applyEditorEdit(code) {
+    const state = stateManager.getState();
+    if (!state?.uploadedFile) return;
+    if (state.uploadedFile.content === code) return;
+
+    isApplyingEditorEdit = true;
+    try {
+      stateManager.setState({
+        uploadedFile: { ...state.uploadedFile, content: code },
+        // The generated output belongs to the source it was rendered from.
+        // Keeping it would let Download and the Export menu hand back the
+        // pre-edit model, since their staleness check keys on parameters.
+        stl: null,
+      });
+    } finally {
+      isApplyingEditorEdit = false;
+    }
+
+    if (autoPreviewController) {
+      const cameraSettled = autoPreviewController.initialPreviewDone;
+      autoPreviewController.setScadContent(code);
+      // D-11: an edit is not a new file — keep the user's viewpoint instead
+      // of re-fitting to the model. setScadContent clears the preview cache
+      // (which is keyed on parameters, not source) but also resets the
+      // camera-settled flag, which would snap a zoomed-in user back out.
+      autoPreviewController.initialPreviewDone = cameraSettled;
+    }
+
+    updatePrimaryActionButton();
+  }
+
+  /** Queue a write-back for the current edit burst. */
+  function scheduleEditorWriteBack() {
+    cancelEditorWriteBack();
+    editorWriteBackTimer = setTimeout(() => {
+      editorWriteBackTimer = null;
+      // Read the buffer at fire time. A snapshot captured when the timer was
+      // armed could belong to a project the user has since navigated away
+      // from, and would be written back over the current one.
+      const code = currentEditor?.getValue?.();
+      if (typeof code === 'string') applyEditorEdit(code);
+    }, EDITOR_WRITE_BACK_DELAY_MS);
+  }
+
+  /** Write a queued edit through immediately (save, preview, mode switch). */
+  function flushEditorWriteBack() {
+    if (!editorWriteBackTimer) return;
+    cancelEditorWriteBack();
+    const code = currentEditor?.getValue?.();
+    if (typeof code === 'string') applyEditorEdit(code);
+  }
+
   if (
     isExpertModeEnabled &&
     expertModeToggle &&
@@ -7500,6 +7569,7 @@ if (rounded) {
         // never-shown editor must not overwrite a real stored source —
         // capturing '' here is only meaningful when the user actually
         // cleared the document (the buffer is dirty then).
+        flushEditorWriteBack();
         if (currentEditor) {
           const code = currentEditor.getValue();
           if (code !== '' || editorStateManager.getIsDirty()) {
@@ -7536,10 +7606,13 @@ if (rounded) {
         onChange: (code) => {
           editorStateManager.setSource(code, { markDirty: true });
           updateDirtyIndicator();
+          scheduleEditorWriteBack();
         },
         onSave: () => {
-          const saveBtn = document.getElementById('saveProjectBtn');
-          if (saveBtn) saveBtn.click();
+          // #saveProjectBtn does not exist in index.html, so the editor's
+          // Ctrl+S was a no-op that still announced "Saved". Route it to the
+          // same handler the File menu uses; it flushes the write-back first.
+          fileActionsController.onSave();
         },
         onRun: () => {
           triggerPreviewFromEditor();
@@ -7588,6 +7661,8 @@ if (rounded) {
      */
     function triggerPreviewFromEditor() {
       if (!currentEditor) return;
+
+      flushEditorWriteBack();
 
       const code = currentEditor.getValue();
       if (!code || code.trim() === '') {
@@ -7750,6 +7825,21 @@ if (rounded) {
       editorStateManager.setSource(code, { markDirty: false });
       editorStateManager.markClean();
       updateDirtyIndicator();
+    });
+
+    // The dot also has to react to markClean() calls made outside this block
+    // — saving a project clears the flag from the save routine.
+    editorStateManager.subscribe((_snapshot, change) => {
+      if (change?.type === 'dirty') updateDirtyIndicator();
+    });
+
+    // Unsaved editor text is not persisted anywhere the user can get it back
+    // from, so leaving the page with a dirty buffer asks first. Separate
+    // listener from the worker-termination one above; both run.
+    window.addEventListener('beforeunload', (event) => {
+      if (!editorStateManager.getIsDirty()) return;
+      event.preventDefault();
+      event.returnValue = '';
     });
 
     console.log('[Expert Mode] Initialization complete');
@@ -13457,6 +13547,16 @@ if (rounded) {
     });
   }
 
+  // The bare r/d/g shortcuts below must never steal a keystroke from
+  // somewhere the user is entering text. CodeMirror's editing surface is a
+  // contenteditable div, not a textarea, so a tagName-only check let 'r'
+  // reset every parameter while the user was typing "render".
+  const isTextEntryTarget = (target) =>
+    target.tagName === 'INPUT' ||
+    target.tagName === 'TEXTAREA' ||
+    target.tagName === 'SELECT' ||
+    target.isContentEditable;
+
   // Global keyboard shortcuts (legacy - kept for backward compatibility)
   document.addEventListener('keydown', (e) => {
     const state = stateManager.getState();
@@ -13493,12 +13593,7 @@ if (rounded) {
 
     // R key: Reset parameters (when not in input field)
     if (e.key === 'r' && !e.ctrlKey && !e.metaKey) {
-      const target = e.target;
-      if (
-        target.tagName !== 'INPUT' &&
-        target.tagName !== 'TEXTAREA' &&
-        target.tagName !== 'SELECT'
-      ) {
+      if (!isTextEntryTarget(e.target)) {
         if (state.uploadedFile) {
           e.preventDefault();
           resetBtn.click();
@@ -13508,12 +13603,7 @@ if (rounded) {
 
     // D key: Download (when button is in download mode)
     if (e.key === 'd' && !e.ctrlKey && !e.metaKey) {
-      const target = e.target;
-      if (
-        target.tagName !== 'INPUT' &&
-        target.tagName !== 'TEXTAREA' &&
-        target.tagName !== 'SELECT'
-      ) {
+      if (!isTextEntryTarget(e.target)) {
         if (state.stl && primaryActionBtn.dataset.action === 'download') {
           e.preventDefault();
           primaryActionBtn.click();
@@ -13523,12 +13613,7 @@ if (rounded) {
 
     // G key: Generate (when button is in generate mode)
     if (e.key === 'g' && !e.ctrlKey && !e.metaKey) {
-      const target = e.target;
-      if (
-        target.tagName !== 'INPUT' &&
-        target.tagName !== 'TEXTAREA' &&
-        target.tagName !== 'SELECT'
-      ) {
+      if (!isTextEntryTarget(e.target)) {
         if (
           state.uploadedFile &&
           primaryActionBtn.dataset.action === 'generate' &&
