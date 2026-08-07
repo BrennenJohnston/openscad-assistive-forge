@@ -115,9 +115,23 @@ body[data-ui-mode='classic'] {
   --classic-col-editor-min: 280px;
   --classic-col-customizer-min: 300px;
   --classic-col-middle-min: 320px;
-  --classic-row-bottom: minmax(120px, 0.45fr);
+  --classic-row-bottom-min: 120px;
+  --classic-row-bottom: minmax(var(--classic-row-bottom-min), 0.45fr);
+  /* Floor for the 3D view, so dragging the strip up cannot reduce the
+     viewport to a sliver. Owner-approved 2026-08-06. */
+  --classic-row-display-min: 240px;
   --classic-resizer-track: 6px;
   --classic-resizer-hit: var(--size-touch-target);
+  /* How far a resizer's hit zone may reach toward an INTERACTIVE neighbour:
+     the CodeMirror scroller, the Customizer's controls, the strip's pane
+     titlebars. The zone keeps its full size by expanding further on the
+     other side, which is always the canvas — orbit stays available across
+     the rest of the viewport, so that overhang is the accepted deviation. */
+  --classic-resizer-hit-clip: 4px;
+  --classic-resizer-hit-free: calc(
+    var(--classic-resizer-hit) - var(--classic-resizer-track) -
+      var(--classic-resizer-hit-clip)
+  );
 }
 
 /* The high-contrast control rule outranks a body-scoped one, so it is
@@ -463,6 +477,118 @@ body[data-ui-mode='classic'][data-classic-field-right-bottom='empty']
 body[data-ui-mode='classic'][data-classic-field-bottom='empty']
   .classic-bottom-strip {
   display: none;
+}
+
+/* ── Dock splitters (B4) ────────────────────────────────────────────────────
+   A 6px visible track with a larger invisible hit zone via ::before. The zone
+   sits BELOW its interactive neighbours in z-index and never handles wheel
+   events, so scrolling the editor or orbiting the canvas still works where
+   the zones overlap. The editor-side expansion is clipped short of the
+   CodeMirror scroller; the canvas-side overhang is accepted, since orbit
+   remains available across the rest of the viewport. */
+.classic-resizer {
+  display: none;
+}
+
+@media (min-width: 1024px) {
+  body[data-ui-mode='classic'] .classic-resizer {
+    display: block;
+    position: relative;
+    z-index: 1;
+    background-color: var(--color-bg-secondary);
+    border-left: 1px solid var(--color-border-light);
+    border-right: 1px solid var(--color-border-light);
+    touch-action: none;
+  }
+
+  body[data-ui-mode='classic'] .classic-resizer--editor {
+    grid-area: sep1;
+    cursor: col-resize;
+  }
+
+  body[data-ui-mode='classic'] .classic-resizer--customizer {
+    grid-area: sep2;
+    cursor: col-resize;
+  }
+
+  /* The strip separator rides the top edge of the bottom field rather than
+     taking a row of its own — the grid's three rows come straight from the
+     desktop layout and adding a fourth would shift every area assignment. */
+  body[data-ui-mode='classic'] .classic-resizer--strip {
+    grid-area: bottom;
+    align-self: start;
+    height: var(--classic-resizer-track);
+    width: 100%;
+    cursor: row-resize;
+    border-left: 0;
+    border-right: 0;
+    border-top: 1px solid var(--color-border-light);
+    border-bottom: 1px solid var(--color-border-light);
+  }
+
+  body[data-ui-mode='classic'] .classic-resizer::before {
+    content: '';
+    position: absolute;
+    z-index: -1;
+  }
+
+  /* Each zone is clipped on the side facing an interactive neighbour and
+     expands the balance into the canvas, so it stays a full touch target
+     without ever stealing a click from the editor, the Customizer's controls
+     or the strip's fold button. */
+
+  /* Editor separator: editor to its left, canvas to its right */
+  body[data-ui-mode='classic'] .classic-resizer--editor::before {
+    top: 0;
+    bottom: 0;
+    left: calc(var(--classic-resizer-hit-clip) * -1);
+    right: calc(var(--classic-resizer-hit-free) * -1);
+  }
+
+  /* Customizer separator: canvas to its left, Customizer to its right */
+  body[data-ui-mode='classic'] .classic-resizer--customizer::before {
+    top: 0;
+    bottom: 0;
+    left: calc(var(--classic-resizer-hit-free) * -1);
+    right: calc(var(--classic-resizer-hit-clip) * -1);
+  }
+
+  /* Strip separator: canvas above it, pane titlebars below it */
+  body[data-ui-mode='classic'] .classic-resizer--strip::before {
+    left: 0;
+    right: 0;
+    top: calc(var(--classic-resizer-hit-free) * -1);
+    bottom: calc(var(--classic-resizer-hit-clip) * -1);
+  }
+
+  body[data-ui-mode='classic'] .classic-resizer:hover,
+  body[data-ui-mode='classic'] .classic-resizer:focus-visible {
+    background-color: var(--color-accent);
+  }
+
+  /* The global [tabindex]:focus-visible ring is an outline on a 6px element,
+     which is nearly invisible — the separator gets its own offset ring. */
+  body[data-ui-mode='classic'] .classic-resizer:focus-visible {
+    outline: var(--border-width-thick, 2px) solid var(--color-focus);
+    outline-offset: 1px;
+  }
+
+  /* An empty field has no boundary to drag */
+  body[data-ui-mode='classic'][data-classic-field-left='empty']
+    .classic-resizer--editor,
+  body[data-ui-mode='classic'][data-classic-field-right-top='empty'][data-classic-field-right-bottom='empty']
+    .classic-resizer--customizer,
+  body[data-ui-mode='classic'][data-classic-field-bottom='empty']
+    .classic-resizer--strip {
+    display: none;
+  }
+
+  /* A folded strip owns the row token; the separator steps aside rather than
+     fighting it for the same value (D-8). */
+  body[data-ui-mode='classic'][data-classic-console-collapsed='true']
+    .classic-resizer--strip {
+    display: none;
+  }
 }
 
 /* ── Bottom strip: side-by-side panes between editor and right column ────── */

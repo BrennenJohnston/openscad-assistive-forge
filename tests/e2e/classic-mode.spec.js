@@ -1229,3 +1229,183 @@ test.describe('Classic dock shell (B2)', () => {
     await expect(page.locator('#paramPanel')).toBeVisible();
   });
 });
+
+test.describe('Classic dock resizers (B4)', () => {
+  test('classic-resizer-keyboard: each separator is a tab stop that moves its pane and announces the width', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+
+    await page.setViewportSize({ width: 1400, height: 900 });
+    await loadSampleProject(page, { query: '?flag_classic_mode=true' });
+    await switchToStandardMode(page);
+    await pickInterfaceMode(page, 'Classic (Desktop Layout)');
+
+    const editorResizer = page.locator('#classicResizerEditor');
+    const customizerResizer = page.locator('#classicResizerCustomizer');
+    const stripResizer = page.locator('#classicResizerStrip');
+
+    for (const resizer of [editorResizer, customizerResizer, stripResizer]) {
+      await expect(resizer).toBeVisible();
+      await expect(resizer).toHaveAttribute('role', 'separator');
+      await expect(resizer).toHaveAttribute('tabindex', '0');
+    }
+
+    await expect(editorResizer).toHaveAttribute(
+      'aria-label',
+      'Resize editor pane'
+    );
+    await expect(customizerResizer).toHaveAttribute(
+      'aria-label',
+      'Resize Customizer pane'
+    );
+    await expect(stripResizer).toHaveAttribute(
+      'aria-label',
+      'Resize bottom panels'
+    );
+    await expect(editorResizer).toHaveAttribute('aria-orientation', 'vertical');
+    await expect(stripResizer).toHaveAttribute(
+      'aria-orientation',
+      'horizontal'
+    );
+
+    // ArrowLeft shrinks the editor, and the announced value follows it
+    const editorSlot = page.locator('#classicEditorSlot');
+    const widthBefore = (await editorSlot.boundingBox()).width;
+
+    await editorResizer.focus();
+    await expect(editorResizer).toBeFocused();
+    for (let i = 0; i < 5; i++) await page.keyboard.press('ArrowLeft');
+
+    const widthAfter = (await editorSlot.boundingBox()).width;
+    expect(widthAfter).toBeLessThan(widthBefore);
+
+    const valueNow = Number(await editorResizer.getAttribute('aria-valuenow'));
+    await expect(editorResizer).toHaveAttribute(
+      'aria-valuetext',
+      `Editor: ${valueNow}%`
+    );
+
+    // Home pins the editor at its minimum and stays there
+    await page.keyboard.press('Home');
+    const atMin = (await editorSlot.boundingBox()).width;
+    await page.keyboard.press('ArrowLeft');
+    expect((await editorSlot.boundingBox()).width).toBeCloseTo(atMin, 0);
+
+    // The 3D view keeps its floor when the strip is dragged to its limit
+    await stripResizer.focus();
+    for (let i = 0; i < 20; i++) await page.keyboard.press('ArrowUp');
+    expect(
+      (await page.locator('.preview-panel').boundingBox()).height
+    ).toBeGreaterThanOrEqual(230);
+  });
+
+  test('classic-resizer-persist: a resized column survives a reload', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+
+    await page.setViewportSize({ width: 1400, height: 900 });
+    await loadSampleProject(page, { query: '?flag_classic_mode=true' });
+    await switchToStandardMode(page);
+    await pickInterfaceMode(page, 'Classic (Desktop Layout)');
+
+    const editorResizer = page.locator('#classicResizerEditor');
+    await editorResizer.focus();
+    for (let i = 0; i < 4; i++) await page.keyboard.press('ArrowLeft');
+    const stored = Number(await editorResizer.getAttribute('aria-valuenow'));
+
+    await page.reload();
+    await page.waitForSelector('body[data-wasm-ready="true"]', {
+      state: 'attached',
+      timeout: WASM_READY_TIMEOUT,
+    });
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'classic'
+    );
+
+    await expect(page.locator('#classicResizerEditor')).toHaveAttribute(
+      'aria-valuenow',
+      String(stored)
+    );
+  });
+
+  test('classic-resizer-fold: folding parks the strip height and unfolding returns it', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+
+    await page.setViewportSize({ width: 1400, height: 900 });
+    await loadSampleProject(page, { query: '?flag_classic_mode=true' });
+    await switchToStandardMode(page);
+    await pickInterfaceMode(page, 'Classic (Desktop Layout)');
+
+    // Resize the strip away from its default first, so "returns it" means
+    // the user's height rather than the default
+    const stripResizer = page.locator('#classicResizerStrip');
+    await stripResizer.focus();
+    for (let i = 0; i < 3; i++) await page.keyboard.press('ArrowUp');
+
+    const strip = page.locator('#classicBottomStrip');
+    const resizedHeight = (await strip.boundingBox()).height;
+
+    const foldBtn = page.locator('#classicConsoleFoldBtn');
+    await expect(foldBtn).toHaveAttribute('aria-label', 'Fold bottom panels');
+    await foldBtn.click();
+
+    await expect(foldBtn).toHaveAttribute('aria-expanded', 'false');
+    // The fold animates, so the height has to be polled rather than sampled
+    await expect
+      .poll(async () => (await strip.boundingBox()).height)
+      .toBeLessThan(resizedHeight / 2);
+    // The separator steps aside while folded rather than fighting the token
+    await expect(stripResizer).toBeHidden();
+
+    await foldBtn.click();
+    await expect(foldBtn).toHaveAttribute('aria-expanded', 'true');
+    // Back to the height the user chose, not the default
+    await expect
+      .poll(async () =>
+        Math.abs((await strip.boundingBox()).height - resizedHeight)
+      )
+      .toBeLessThan(3);
+    await expect(stripResizer).toBeVisible();
+  });
+
+  test('classic-resizer-scope: no separators outside Classic or below 1024px', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+
+    await page.setViewportSize({ width: 1400, height: 900 });
+    await loadSampleProject(page, { query: '?flag_classic_mode=true' });
+    await switchToStandardMode(page);
+
+    // Forge keeps Split.js and must gain nothing
+    await expect(page.locator('#classicResizerEditor')).toHaveCount(0);
+
+    await pickInterfaceMode(page, 'Classic (Desktop Layout)');
+    await expect(page.locator('#classicResizerEditor')).toBeVisible();
+
+    // Below the desktop breakpoint the stacked fallback has no boundaries
+    await page.setViewportSize({ width: 900, height: 900 });
+    await expect(page.locator('#classicResizerEditor')).toBeHidden();
+
+    await page.setViewportSize({ width: 1400, height: 900 });
+    await expect(page.locator('#classicResizerEditor')).toBeVisible();
+
+    // Leaving Classic removes them and the properties they wrote
+    await pickInterfaceMode(page, 'Standard');
+    await expect(page.locator('#classicResizerEditor')).toHaveCount(0);
+    const leftovers = await page.evaluate(() => {
+      const el = document.getElementById('mainInterface');
+      return [
+        el.style.getPropertyValue('--classic-col-editor'),
+        el.style.getPropertyValue('--classic-col-customizer'),
+        el.style.getPropertyValue('--classic-row-bottom'),
+      ].filter(Boolean);
+    });
+    expect(leftovers).toEqual([]);
+  });
+});

@@ -33,6 +33,11 @@
 
 import { getUIModeController } from './ui-mode-controller.js';
 import { announceImmediate } from './announcer.js';
+import {
+  initClassicResizers,
+  destroyClassicResizers,
+  getClassicResizerController,
+} from './classic-resizer-controller.js';
 
 const PANES_STORAGE_KEY = 'openscad-forge-classic-panes';
 
@@ -313,6 +318,11 @@ export class ClassicLayoutController {
       document.dispatchEvent(new CustomEvent('classic-editor-activate'));
     }
 
+    initClassicResizers();
+    if (this._panes.consoleCollapsed) {
+      getClassicResizerController()?.parkBottomSize();
+    }
+
     this.active = true;
     this.onEnter();
   }
@@ -323,6 +333,10 @@ export class ClassicLayoutController {
    */
   exit() {
     if (!this.active) return;
+
+    // Before the moves, so the separators cannot outlive the grid areas they
+    // are placed in and leave custom properties behind for Split.js to fight.
+    destroyClassicResizers();
 
     for (const record of [...this._moved].reverse()) {
       const { el, parent, nextSibling, wasOpen } = record;
@@ -473,6 +487,15 @@ export class ClassicLayoutController {
    */
   setConsoleCollapsed(collapsed) {
     this._panes.consoleCollapsed = Boolean(collapsed);
+
+    // The fold and the row resizer both own --classic-row-bottom, so the
+    // resizer parks its value for the duration instead of the two writing
+    // over each other. Unfolding returns the height the user chose, not the
+    // default (B4/D-8).
+    const resizers = getClassicResizerController();
+    if (this._panes.consoleCollapsed) resizers?.parkBottomSize();
+    else resizers?.restoreBottomSize();
+
     this._applyPaneAttributes();
     this._savePaneState();
     announceImmediate(
