@@ -24,9 +24,6 @@ const WASM_READY_TIMEOUT = 180_000;
 // Write-back is debounced at 500ms; poll past it rather than sleeping.
 const WRITE_BACK_TIMEOUT = 5_000;
 
-// The camera test reads a value the app copies to the clipboard.
-test.use({ permissions: ['clipboard-read', 'clipboard-write'] });
-
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem('openscad-forge-first-visit-seen', 'true');
@@ -301,8 +298,18 @@ test.describe('Editor content sync (R5)', () => {
 
   test('post-edit preview keeps the camera where the user put it (D-11)', async ({
     page,
+    context,
+    browserName,
   }) => {
+    // Reading the value back needs clipboard-read, which Playwright only
+    // grants on Chromium. Granted per-test rather than per-file so the rest
+    // of this suite still runs on Firefox and WebKit.
+    test.skip(
+      browserName !== 'chromium',
+      'Playwright clipboard-read permission is Chromium-only'
+    );
     test.setTimeout(300_000);
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
     await bootstrap(page);
     await loadProject(page, FIXTURE_A);
     await expect(page.locator('.preview-state-indicator')).toContainText(
