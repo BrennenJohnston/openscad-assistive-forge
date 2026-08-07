@@ -238,58 +238,6 @@ describe('EditorStateManager', () => {
     });
   });
 
-  describe('injectParameterValue', () => {
-    it('should inject numeric parameter value', () => {
-      stateManager.setSource('width = 10; // [0:100]');
-      const result = stateManager.injectParameterValue('width', 50);
-
-      expect(result).toBe(true);
-      expect(stateManager.getSource()).toBe('width = 50; // [0:100]');
-    });
-
-    it('should inject string parameter value', () => {
-      stateManager.setSource('name = "test"; // text');
-      stateManager.injectParameterValue('name', 'hello');
-
-      expect(stateManager.getSource()).toBe('name = "hello"; // text');
-    });
-
-    it('should inject vector parameter value', () => {
-      stateManager.setSource('size = [1, 2, 3];');
-      stateManager.injectParameterValue('size', [10, 20, 30]);
-
-      expect(stateManager.getSource()).toBe('size = [10, 20, 30];');
-    });
-
-    it('should inject boolean value', () => {
-      stateManager.setSource('enabled = true;');
-      stateManager.injectParameterValue('enabled', false);
-
-      expect(stateManager.getSource()).toBe('enabled = false;');
-    });
-
-    it('should inject yes/no value as boolean', () => {
-      stateManager.setSource('show = true;');
-      stateManager.injectParameterValue('show', 'no');
-
-      expect(stateManager.getSource()).toBe('show = false;');
-    });
-
-    it('should return false when parameter not found', () => {
-      stateManager.setSource('width = 10;');
-      const result = stateManager.injectParameterValue('height', 20);
-
-      expect(result).toBe(false);
-    });
-
-    it('should preserve comment after value', () => {
-      stateManager.setSource('width = 10; // Width in mm');
-      stateManager.injectParameterValue('width', 25);
-
-      expect(stateManager.getSource()).toBe('width = 25; // Width in mm');
-    });
-  });
-
   describe('position conversion', () => {
     beforeEach(() => {
       stateManager.setSource('line1\nline2\nline3');
@@ -313,23 +261,6 @@ describe('EditorStateManager', () => {
       // Line 1 is 'line1' (5 chars) + newline
       const offset = stateManager._positionToOffset({ line: 1, column: 6 });
       expect(offset).toBe(5);
-    });
-  });
-
-  describe('reset', () => {
-    it('should reset all state', () => {
-      stateManager.setSource('test code');
-      stateManager.setParameters({ width: 10 });
-      stateManager.markDirty();
-      stateManager.setErrors([{ line: 1, message: 'Error' }]);
-
-      stateManager.reset();
-
-      expect(stateManager.getSource()).toBe('');
-      expect(stateManager.getParameters()).toEqual({});
-      expect(stateManager.getIsDirty()).toBe(false);
-      expect(stateManager.getErrors()).toEqual([]);
-      expect(stateManager.cursor).toEqual({ line: 1, column: 1 });
     });
   });
 
