@@ -386,6 +386,17 @@ export class CodeMirrorEditor {
     /** @type {Compartment} */
     this._highlightCompartment = new Compartment();
 
+    /** @type {Compartment} - Holds history() so setValue can reset undo state */
+    this._historyCompartment = new Compartment();
+
+    /**
+     * True while setValue() replaces the document. A programmatic replace is
+     * not a user edit: it must not reach onChange, or loading a project marks
+     * the buffer dirty before the user has typed anything.
+     * @type {boolean}
+     */
+    this._suppressOnChange = false;
+
     /** @type {Set<number>} */
     this._errorLines = new Set();
 
@@ -406,13 +417,12 @@ export class CodeMirrorEditor {
 
     const onSave = this.onSave;
     const onRun = this.onRun;
-    const announceRef = this.announce;
 
     const startState = EditorState.create({
       doc: '',
       extensions: [
         lineNumbers(),
-        history(),
+        this._historyCompartment.of(history()),
         drawSelection(),
         highlightActiveLine(),
         highlightSelectionMatches(),
@@ -426,11 +436,14 @@ export class CodeMirrorEditor {
         autocompletion({ override: [openscadCompletions] }),
 
         keymap.of([
+          // Neither shortcut announces here: the keymap cannot know the
+          // outcome. Saving announces "Project saved" once it succeeds and
+          // toasts on failure; the preview state indicator is an aria-live
+          // region that reports rendering and readiness on its own.
           {
             key: 'Mod-s',
             run() {
               onSave();
-              announceRef('Saved');
               return true;
             },
           },
@@ -438,7 +451,6 @@ export class CodeMirrorEditor {
             key: 'Mod-Enter',
             run() {
               onRun();
-              announceRef('Generating preview');
               return true;
             },
           },
@@ -448,7 +460,7 @@ export class CodeMirrorEditor {
         ]),
 
         EditorView.updateListener.of((update) => {
-          if (update.docChanged) {
+          if (update.docChanged && !this._suppressOnChange) {
             this.onChange(update.state.doc.toString());
           }
         }),
@@ -494,11 +506,37 @@ export class CodeMirrorEditor {
     return this._view ? this._view.state.doc.toString() : '';
   }
 
-  /** @param {string} value */
+  /**
+   * Replace the whole document programmatically (project load, mode switch).
+   * Not a user edit: onChange stays silent and the undo history is discarded,
+   * so Undo cannot resurrect the previously loaded project — this matches
+   * desktop OpenSCAD's behavior when opening a file.
+   * @param {string} value
+   */
   setValue(value) {
     if (!this._view) return;
+    this._suppressOnChange = true;
+    try {
+      this._view.dispatch({
+        changes: { from: 0, to: this._view.state.doc.length, insert: value },
+      });
+      this._resetHistory();
+    } finally {
+      this._suppressOnChange = false;
+    }
+  }
+
+  /**
+   * Discard undo/redo state by tearing the history field out of the
+   * configuration and putting a fresh one back. Reconfiguring in a single
+   * transaction would keep the existing field, so this needs two dispatches.
+   * @private
+   */
+  _resetHistory() {
+    if (!this._view) return;
+    this._view.dispatch({ effects: this._historyCompartment.reconfigure([]) });
     this._view.dispatch({
-      changes: { from: 0, to: this._view.state.doc.length, insert: value },
+      effects: this._historyCompartment.reconfigure(history()),
     });
   }
 

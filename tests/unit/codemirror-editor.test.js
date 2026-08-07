@@ -3,6 +3,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { undo } from '@codemirror/commands';
 import { CodeMirrorEditor } from '../../src/js/codemirror-editor.js';
 
 describe('CodeMirrorEditor', () => {
@@ -105,13 +106,65 @@ describe('CodeMirrorEditor', () => {
       expect(editor.getValue()).toBe(code);
     });
 
-    it('should fire onChange when setValue is called', () => {
+    it('should NOT fire onChange when setValue is called', () => {
       const onChange = vi.fn();
       createEditor({ onChange });
       editor.initialize();
 
       editor.setValue('sphere(5);');
-      expect(onChange).toHaveBeenCalledWith('sphere(5);');
+      expect(onChange).not.toHaveBeenCalled();
+    });
+
+    it('should fire onChange for a user edit', () => {
+      const onChange = vi.fn();
+      createEditor({ onChange });
+      editor.initialize();
+      editor.setValue('sphere(5);');
+      onChange.mockClear();
+
+      editor._view.dispatch({ changes: { from: 0, insert: '// ' } });
+      expect(onChange).toHaveBeenCalledWith('// sphere(5);');
+    });
+
+    it('should resume firing onChange after setValue throws', () => {
+      const onChange = vi.fn();
+      createEditor({ onChange });
+      editor.initialize();
+
+      const realDispatch = editor._view.dispatch.bind(editor._view);
+      editor._view.dispatch = () => {
+        throw new Error('boom');
+      };
+      expect(() => editor.setValue('sphere(5);')).toThrow('boom');
+      editor._view.dispatch = realDispatch;
+
+      editor._view.dispatch({ changes: { from: 0, insert: 'cube();' } });
+      expect(onChange).toHaveBeenCalledWith('cube();');
+    });
+
+    it('should discard undo history so Undo cannot restore the old document', () => {
+      createEditor();
+      editor.initialize();
+
+      editor.setValue('project A');
+      editor._view.dispatch({ changes: { from: 0, insert: 'edited ' } });
+      expect(editor.getValue()).toBe('edited project A');
+
+      editor.setValue('project B');
+      undo(editor._view);
+      expect(editor.getValue()).toBe('project B');
+    });
+
+    it('should still undo user edits made after a setValue', () => {
+      createEditor();
+      editor.initialize();
+
+      editor.setValue('project B');
+      editor._view.dispatch({ changes: { from: 0, insert: 'typed ' } });
+      expect(editor.getValue()).toBe('typed project B');
+
+      undo(editor._view);
+      expect(editor.getValue()).toBe('project B');
     });
   });
 

@@ -579,8 +579,10 @@ async function initApp() {
     });
 
   document.getElementById('memoryBannerSave')?.addEventListener('click', () => {
-    // Trigger project save - dispatch event that saved-projects system listens for
-    document.getElementById('saveProjectBtn')?.click();
+    // This banner tells the user to save immediately, so the button has to
+    // reach a real save. It used to click #saveProjectBtn, which does not
+    // exist in index.html.
+    getFileActionsController().onSave();
   });
 
   document
@@ -616,25 +618,24 @@ async function initApp() {
   document
     .getElementById('memoryBannerExport')
     ?.addEventListener('click', () => {
-      // Trigger STL export
-      const exportBtn = document.getElementById('renderExportButton');
-      if (exportBtn) {
-        exportBtn.click();
-      }
+      // Downloads the render that already exists, and says so plainly when
+      // there is none. Deliberately does NOT start a fresh render: rendering
+      // is the memory-hungry operation this banner is warning about.
+      // Previously clicked #renderExportButton, which does not exist.
+      exportFormatFromMenu('stl');
       console.log('[Memory] STL export triggered for emergency save');
     });
 
   document
     .getElementById('memoryBannerReload')
     ?.addEventListener('click', () => {
-      // Save current state to localStorage before reload
-      const currentCode =
-        document.getElementById('openscadSource')?.value || '';
-      if (currentCode) {
-        safeSetItem(STORAGE_KEY_RECOVERY_SOURCE, currentCode);
-        safeSetItem(STORAGE_KEY_RECOVERY_TIMESTAMP, Date.now().toString());
-      }
-      // Reload in recovery mode
+      // Recovery mode is real — it boots with the code editor disabled to
+      // cut memory. Restoring work across the reload is NOT: the snapshot
+      // this used to write came from #openscadSource, which does not exist,
+      // and the read side sets window._recoverySource, which nothing
+      // consumes. Rather than write data no one reads, the button now only
+      // does what it can do, and its tooltip no longer promises a save.
+      // The beforeunload dirty guard still stops an unsaved buffer here.
       window.location.href = window.location.pathname + '?recovery=true';
     });
 
@@ -2270,6 +2271,9 @@ async function initApp() {
   initParamDetailController();
 
   async function _saveCurrentProject(successMessage) {
+    // Save what the user can see. Without this, saving inside the editor's
+    // write-back window persists the pre-edit source and then reports success.
+    flushEditorWriteBack();
     const state = stateManager.getState();
     if (!state.uploadedFile?.content) return;
     if (currentSavedProjectId) {
@@ -2286,6 +2290,9 @@ async function initApp() {
             : undefined,
       });
       if (result.success) {
+        // The dirty flag means "differs from the saved project" (D-10), so
+        // saving — and only saving — clears it.
+        getEditorStateManager().markClean();
         companionFilesCtrl.updateCompanionSaveButton();
         stateManager.announceChange(successMessage);
         updateStatus(successMessage);
@@ -7365,6 +7372,90 @@ if (rounded) {
   let modeManager = null;
   let editorStateManager = null;
 
+  // True while an editor edit is being written into stateManager. The push
+  // channel below subscribes to the same store, so without this it would
+  // echo the edit straight back into the buffer the user is typing in.
+  let isApplyingEditorEdit = false;
+
+  /** @type {ReturnType<typeof setTimeout>|null} */
+  let editorWriteBackTimer = null;
+
+  /**
+   * Drop a queued write-back. Called before the push channel replaces the
+   * buffer: a timer armed against the previous project must never fire
+   * afterwards, or it would write the old project's text back over the new
+   * one while the editor already shows the new file.
+   */
+  function cancelEditorWriteBack() {
+    if (editorWriteBackTimer) {
+      clearTimeout(editorWriteBackTimer);
+      editorWriteBackTimer = null;
+    }
+  }
+
+  // Long enough that a burst of typing writes back once, short enough that
+  // Export/Generate right after a pause still sees the edit.
+  const EDITOR_WRITE_BACK_DELAY_MS = 500;
+
+  /**
+   * Publish an editor edit into the app's single source of truth, so render,
+   * export and save all see it. Mirrors the folder-watch writer
+   * (`main.js` folder-change handler) minus its re-render: typing must not
+   * start a render (D-12) — Preview/F5 does that.
+   * @param {string} code
+   */
+  function applyEditorEdit(code) {
+    const state = stateManager.getState();
+    if (!state?.uploadedFile) return;
+    if (state.uploadedFile.content === code) return;
+
+    isApplyingEditorEdit = true;
+    try {
+      stateManager.setState({
+        uploadedFile: { ...state.uploadedFile, content: code },
+        // The generated output belongs to the source it was rendered from.
+        // Keeping it would let Download and the Export menu hand back the
+        // pre-edit model, since their staleness check keys on parameters.
+        stl: null,
+      });
+    } finally {
+      isApplyingEditorEdit = false;
+    }
+
+    if (autoPreviewController) {
+      const cameraSettled = autoPreviewController.initialPreviewDone;
+      autoPreviewController.setScadContent(code);
+      // D-11: an edit is not a new file — keep the user's viewpoint instead
+      // of re-fitting to the model. setScadContent clears the preview cache
+      // (which is keyed on parameters, not source) but also resets the
+      // camera-settled flag, which would snap a zoomed-in user back out.
+      autoPreviewController.initialPreviewDone = cameraSettled;
+    }
+
+    updatePrimaryActionButton();
+  }
+
+  /** Queue a write-back for the current edit burst. */
+  function scheduleEditorWriteBack() {
+    cancelEditorWriteBack();
+    editorWriteBackTimer = setTimeout(() => {
+      editorWriteBackTimer = null;
+      // Read the buffer at fire time. A snapshot captured when the timer was
+      // armed could belong to a project the user has since navigated away
+      // from, and would be written back over the current one.
+      const code = currentEditor?.getValue?.();
+      if (typeof code === 'string') applyEditorEdit(code);
+    }, EDITOR_WRITE_BACK_DELAY_MS);
+  }
+
+  /** Write a queued edit through immediately (save, preview, mode switch). */
+  function flushEditorWriteBack() {
+    if (!editorWriteBackTimer) return;
+    cancelEditorWriteBack();
+    const code = currentEditor?.getValue?.();
+    if (typeof code === 'string') applyEditorEdit(code);
+  }
+
   if (
     isExpertModeEnabled &&
     expertModeToggle &&
@@ -7413,8 +7504,13 @@ if (rounded) {
         initExpertEditor();
       } else if (currentEditor.setValue) {
         const code = resolveEditorSource();
-        // Only write when it actually differs — setValue resets the caret
-        if (code && currentEditor.getValue?.() !== code) {
+        // Only write when it actually differs — setValue resets the caret.
+        // Unsaved edits win: re-entering Classic must never discard them.
+        if (
+          code &&
+          !editorStateManager.getIsDirty() &&
+          currentEditor.getValue?.() !== code
+        ) {
           currentEditor.setValue(code);
         }
       }
@@ -7446,12 +7542,15 @@ if (rounded) {
         if (!currentEditor) {
           initExpertEditor();
         } else {
-          // Sync through the full fallback chain: after a round-trip through
-          // Classic the captured buffer can legitimately be empty while a
-          // project is loaded — bare getSource() would leave the loaded
-          // file's code invisible here.
+          // Re-sync from the loaded project, unless the user has unsaved
+          // edits in the buffer — those are newer than anything in state
+          // that has not been written back yet.
           const currentCode = resolveEditorSource();
-          if (currentCode && currentEditor.getValue() !== currentCode) {
+          if (
+            currentCode &&
+            !editorStateManager.getIsDirty() &&
+            currentEditor.getValue() !== currentCode
+          ) {
             currentEditor.setValue(currentCode);
           }
           currentEditor.refreshLayout?.();
@@ -7471,6 +7570,7 @@ if (rounded) {
         // never-shown editor must not overwrite a real stored source —
         // capturing '' here is only meaningful when the user actually
         // cleared the document (the buffer is dirty then).
+        flushEditorWriteBack();
         if (currentEditor) {
           const code = currentEditor.getValue();
           if (code !== '' || editorStateManager.getIsDirty()) {
@@ -7484,20 +7584,15 @@ if (rounded) {
     }
 
     /**
-     * The source the editor should show. editorStateManager only holds a
-     * value once the editor has been opened or edited, so a freshly loaded
-     * project falls through to the uploaded file's own text — otherwise the
-     * Classic Editor dock, which opens on entry rather than on demand, would
-     * show an empty document.
+     * The source the editor should show. `uploadedFile.content` is the single
+     * source of truth — it is what render, export, save and auto-preview all
+     * read, and what every loader writes. Reading anything else first (as this
+     * used to) lets a stale cache win forever, so a second project load could
+     * never reach the editor.
      * @returns {string}
      */
     function resolveEditorSource() {
-      return (
-        editorStateManager.getSource() ||
-        window._currentSCADCode ||
-        stateManager.getState()?.uploadedFile?.content ||
-        ''
-      );
+      return stateManager.getState()?.uploadedFile?.content || '';
     }
 
     /**
@@ -7512,10 +7607,13 @@ if (rounded) {
         onChange: (code) => {
           editorStateManager.setSource(code, { markDirty: true });
           updateDirtyIndicator();
+          scheduleEditorWriteBack();
         },
         onSave: () => {
-          const saveBtn = document.getElementById('saveProjectBtn');
-          if (saveBtn) saveBtn.click();
+          // #saveProjectBtn does not exist in index.html, so the editor's
+          // Ctrl+S was a no-op that still announced "Saved". Route it to the
+          // same handler the File menu uses; it flushes the write-back first.
+          fileActionsController.onSave();
         },
         onRun: () => {
           triggerPreviewFromEditor();
@@ -7560,7 +7658,9 @@ if (rounded) {
     }
 
     /**
-     * Trigger preview render from editor code
+     * Render a preview of the editor's current code. Explicit user action
+     * (▶ Preview, Ctrl+Enter) — typing alone never renders (D-12). The
+     * dirty flag is untouched: only saving clears it (D-10).
      */
     function triggerPreviewFromEditor() {
       if (!currentEditor) return;
@@ -7571,20 +7671,25 @@ if (rounded) {
         return;
       }
 
-      // Update global code variable
-      window._currentSCADCode = code;
+      // Publish the edit before rendering — forcePreview renders whatever
+      // content the controller was last given, not the editor buffer.
+      flushEditorWriteBack();
 
-      // Trigger preview update
-      if (typeof triggerPreviewFromEditor === 'function') {
-        triggerPreviewFromEditor();
-      } else if (previewManager) {
-        previewManager.render(code);
+      if (!autoPreviewController) {
+        announceToScreenReader('Preview is not ready yet');
+        return;
       }
 
-      // Mark as clean after preview
-      editorStateManager.markClean();
-      updateDirtyIndicator();
-      announceToScreenReader('Preview update triggered');
+      autoPreviewController
+        .forcePreview(stateManager.getState().parameters)
+        .catch((error) => {
+          console.error('[Expert Mode] Preview failed:', error);
+          showErrorToast({
+            title: 'Preview Failed',
+            message: error.message,
+          });
+          announceToScreenReader('Preview failed. See the error message.');
+        });
     }
 
     // Toggle button click handler
@@ -7706,18 +7811,41 @@ if (rounded) {
 
     // Keyboard shortcut: Ctrl+E to toggle Expert Mode (registered via keyboard config below)
 
-    // Sync code changes from parameter panel to editor state
-    // This happens when parameters are modified in Standard mode
-    window.addEventListener('scadCodeUpdated', (e) => {
-      const newCode = e.detail?.code || window._currentSCADCode;
-      if (newCode && editorStateManager) {
-        editorStateManager.setSource(newCode, { markDirty: false });
+    // Push channel: loaded source → editor. Every writer of
+    // uploadedFile.content (the load funnel, folder-watch, back-to-welcome)
+    // reaches the editor through this one subscription, so Standard,
+    // Simplified and Classic all refill from the same place. Replaces a
+    // 'scadCodeUpdated' event that had a listener and no dispatchers.
+    stateManager.subscribe((newState, prevState) => {
+      if (isApplyingEditorEdit) return;
+      const nextFile = newState?.uploadedFile;
+      if (nextFile === prevState?.uploadedFile) return;
 
-        // Update editor if in Expert Mode
-        if (modeManager.getMode() === 'expert' && currentEditor) {
-          currentEditor.setValue(newCode);
-        }
+      const code = nextFile?.content || '';
+
+      cancelEditorWriteBack();
+
+      if (currentEditor?.setValue && currentEditor.getValue?.() !== code) {
+        currentEditor.setValue(code);
       }
+      editorStateManager.setSource(code, { markDirty: false });
+      editorStateManager.markClean();
+      updateDirtyIndicator();
+    });
+
+    // The dot also has to react to markClean() calls made outside this block
+    // — saving a project clears the flag from the save routine.
+    editorStateManager.subscribe((_snapshot, change) => {
+      if (change?.type === 'dirty') updateDirtyIndicator();
+    });
+
+    // Unsaved editor text is not persisted anywhere the user can get it back
+    // from, so leaving the page with a dirty buffer asks first. Separate
+    // listener from the worker-termination one above; both run.
+    window.addEventListener('beforeunload', (event) => {
+      if (!editorStateManager.getIsDirty()) return;
+      event.preventDefault();
+      event.returnValue = '';
     });
 
     console.log('[Expert Mode] Initialization complete');
@@ -13425,6 +13553,16 @@ if (rounded) {
     });
   }
 
+  // The bare r/d/g shortcuts below must never steal a keystroke from
+  // somewhere the user is entering text. CodeMirror's editing surface is a
+  // contenteditable div, not a textarea, so a tagName-only check let 'r'
+  // reset every parameter while the user was typing "render".
+  const isTextEntryTarget = (target) =>
+    target.tagName === 'INPUT' ||
+    target.tagName === 'TEXTAREA' ||
+    target.tagName === 'SELECT' ||
+    target.isContentEditable;
+
   // Global keyboard shortcuts (legacy - kept for backward compatibility)
   document.addEventListener('keydown', (e) => {
     const state = stateManager.getState();
@@ -13461,12 +13599,7 @@ if (rounded) {
 
     // R key: Reset parameters (when not in input field)
     if (e.key === 'r' && !e.ctrlKey && !e.metaKey) {
-      const target = e.target;
-      if (
-        target.tagName !== 'INPUT' &&
-        target.tagName !== 'TEXTAREA' &&
-        target.tagName !== 'SELECT'
-      ) {
+      if (!isTextEntryTarget(e.target)) {
         if (state.uploadedFile) {
           e.preventDefault();
           resetBtn.click();
@@ -13476,12 +13609,7 @@ if (rounded) {
 
     // D key: Download (when button is in download mode)
     if (e.key === 'd' && !e.ctrlKey && !e.metaKey) {
-      const target = e.target;
-      if (
-        target.tagName !== 'INPUT' &&
-        target.tagName !== 'TEXTAREA' &&
-        target.tagName !== 'SELECT'
-      ) {
+      if (!isTextEntryTarget(e.target)) {
         if (state.stl && primaryActionBtn.dataset.action === 'download') {
           e.preventDefault();
           primaryActionBtn.click();
@@ -13491,12 +13619,7 @@ if (rounded) {
 
     // G key: Generate (when button is in generate mode)
     if (e.key === 'g' && !e.ctrlKey && !e.metaKey) {
-      const target = e.target;
-      if (
-        target.tagName !== 'INPUT' &&
-        target.tagName !== 'TEXTAREA' &&
-        target.tagName !== 'SELECT'
-      ) {
+      if (!isTextEntryTarget(e.target)) {
         if (
           state.uploadedFile &&
           primaryActionBtn.dataset.action === 'generate' &&
