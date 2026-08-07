@@ -341,76 +341,76 @@ body[data-ui-mode='classic'] .classic-slot > details {
   flex-direction: column;
 }
 
-/* Desktop shell grid: editor | display | customizer over a console row,
-   exactly like desktop OpenSCAD's default docks. Pane visibility is
-   data-attribute-driven so hidden panes give their tracks back (no dead
-   boxes). Presets live INSIDE the customizer dock, so they have no grid
-   area of their own. */
+/* Desktop shell grid, matching the owner's desktop screenshots: the editor
+   runs full height down the left, the 3D view sits centre with the camera bar
+   along its bottom edge, the Console/Error-Log strip spans between the editor
+   and the right column, and the Customizer owns the right column with
+   Viewport-Control beneath it.
+
+   The areas string is written ONCE and never overridden. Every arrangement is
+   expressed by changing track SIZES only, driven by the
+   data-classic-field-<name> occupancy attributes the layout controller stamps:
+   an empty field collapses its track to zero and its slot is display:none, so
+   no combination of hidden panes can leave a stray auto-placed cell. That is
+   what keeps this from needing one hand-written template per combination. */
 @media (min-width: 1024px) {
   body[data-ui-mode='classic'] .main-interface {
     display: grid;
     grid-template-columns:
       minmax(var(--classic-col-editor-min), var(--classic-col-editor))
-      minmax(0, 1fr)
+      var(--classic-resizer-track)
+      minmax(var(--classic-col-middle-min), 1fr)
+      var(--classic-resizer-track)
       minmax(var(--classic-col-customizer-min), var(--classic-col-customizer));
-    grid-template-rows: minmax(0, 1fr) var(--classic-row-bottom);
+    /* The camera-bar row is min-content: zero until sub-plan E fills it. */
+    grid-template-rows: minmax(0, 1fr) min-content var(--classic-row-bottom);
     grid-template-areas:
-      'editor display customizer'
-      'console console customizer';
+      'editor sep1 display sep2 customizer'
+      'editor sep1 camerabar sep2 customizer'
+      'editor sep1 bottom sep2 customizer';
     gap: 1px;
   }
 
-  body[data-ui-mode='classic'][data-classic-editor-hidden='true']
+  /* Empty left field: the editor track and its resizer collapse. */
+  body[data-ui-mode='classic'][data-classic-field-left='empty']
     .main-interface {
     grid-template-columns:
-      minmax(0, 1fr)
+      0
+      0
+      minmax(var(--classic-col-middle-min), 1fr)
+      var(--classic-resizer-track)
       minmax(var(--classic-col-customizer-min), var(--classic-col-customizer));
-    grid-template-areas:
-      'display customizer'
-      'console customizer';
   }
 
-  body[data-ui-mode='classic'][data-classic-customizer-hidden='true']
+  /* Empty right column: both its fields are empty, so the customizer track
+     and its resizer collapse. */
+  body[data-ui-mode='classic'][data-classic-field-right-top='empty'][data-classic-field-right-bottom='empty']
     .main-interface {
     grid-template-columns:
       minmax(var(--classic-col-editor-min), var(--classic-col-editor))
-      minmax(0, 1fr);
-    grid-template-areas:
-      'editor display'
-      'console console';
+      var(--classic-resizer-track)
+      minmax(var(--classic-col-middle-min), 1fr)
+      0
+      0;
   }
 
-  body[data-ui-mode='classic'][data-classic-editor-hidden='true'][data-classic-customizer-hidden='true']
+  body[data-ui-mode='classic'][data-classic-field-left='empty'][data-classic-field-right-top='empty'][data-classic-field-right-bottom='empty']
     .main-interface {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-areas:
-      'display'
-      'console';
+    grid-template-columns: 0 0 minmax(var(--classic-col-middle-min), 1fr) 0 0;
   }
 
-  /* A folded console keeps only its titlebar height. Overriding the row
-     token rather than the whole row template is what lets this compose with
-     every column variant instead of needing one collapsed rule per variant. */
+  /* Empty bottom field: the strip row collapses. */
+  body[data-ui-mode='classic'][data-classic-field-bottom='empty']
+    .main-interface {
+    --classic-row-bottom: 0;
+  }
+
+  /* A folded strip keeps only its pane titlebars. Overriding the row token
+     rather than the whole row template is what lets this compose with every
+     column variant instead of needing one collapsed rule per variant. */
   body[data-ui-mode='classic'][data-classic-console-collapsed='true']
     .main-interface {
     --classic-row-bottom: min-content;
-  }
-
-  /* Simplified drops both code-facing docks, so the grid loses the editor
-     column and the console row outright */
-  body[data-ui-mode='classic'][data-classic-density='simplified']
-    .main-interface {
-    grid-template-columns:
-      minmax(0, 1fr)
-      minmax(var(--classic-col-customizer-min), var(--classic-col-customizer));
-    grid-template-rows: minmax(0, 1fr);
-    grid-template-areas: 'display customizer';
-  }
-
-  body[data-ui-mode='classic'][data-classic-density='simplified'][data-classic-customizer-hidden='true']
-    .main-interface {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: 'display';
   }
 
   body[data-ui-mode='classic'] .preview-panel {
@@ -421,6 +421,14 @@ body[data-ui-mode='classic'] .classic-slot > details {
     grid-area: editor;
   }
 
+  body[data-ui-mode='classic'] .classic-camera-bar {
+    grid-area: camerabar;
+  }
+
+  body[data-ui-mode='classic'] .classic-bottom-strip {
+    grid-area: bottom;
+  }
+
   body[data-ui-mode='classic'] .param-panel {
     grid-area: customizer;
     max-height: none;
@@ -428,8 +436,17 @@ body[data-ui-mode='classic'] .classic-slot > details {
     overflow-y: auto;
   }
 
-  body[data-ui-mode='classic'] .classic-console-slot {
-    grid-area: console;
+  /* Viewport-Control shares the right column, taking the bottom row only
+     while it is occupied; until then the Customizer keeps the whole column
+     exactly as it does today. */
+  body[data-ui-mode='classic'] .classic-viewport-control-slot {
+    grid-column: customizer-start / customizer-end;
+    grid-row: 3;
+  }
+
+  body[data-ui-mode='classic'][data-classic-field-right-bottom='occupied']
+    .param-panel {
+    grid-row: 1 / 3;
   }
 
   /* Split.js is destroyed on entering Classic; hide any leftover gutter so
@@ -437,6 +454,51 @@ body[data-ui-mode='classic'] .classic-slot > details {
   body[data-ui-mode='classic'] .main-interface > .gutter {
     display: none;
   }
+}
+
+/* Empty fields hide their occupants at every breakpoint, so a collapsed track
+   never has a zero-width element painting inside it. */
+body[data-ui-mode='classic'][data-classic-field-right-bottom='empty']
+  .classic-viewport-control-slot,
+body[data-ui-mode='classic'][data-classic-field-bottom='empty']
+  .classic-bottom-strip {
+  display: none;
+}
+
+/* ── Bottom strip: side-by-side panes between editor and right column ────── */
+body[data-ui-mode='classic'] .classic-bottom-strip {
+  display: flex;
+  flex-direction: row;
+  min-height: 0;
+  min-width: 0;
+  gap: 1px;
+  background-color: var(--color-border);
+}
+
+body[data-ui-mode='classic'] .classic-bottom-strip > .classic-slot {
+  flex: 1 1 50%;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* Animate and Font List are reserved fields until sub-plan F builds their
+   panels; an empty titled pane would read as a dead control. */
+body[data-ui-mode='classic'] .classic-animate-slot,
+body[data-ui-mode='classic'] .classic-font-list-slot {
+  display: none;
+}
+
+body[data-ui-mode='classic'][data-classic-animate-visible='true']
+  .classic-animate-slot,
+body[data-ui-mode='classic'][data-classic-font-list-visible='true']
+  .classic-font-list-slot {
+  display: flex;
+}
+
+body[data-ui-mode='classic'] .classic-error-log-slot .error-log-output {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 @media (max-width: 1023px) {
@@ -497,7 +559,8 @@ body[data-ui-mode='classic'] .classic-slot > details {
     max-height: 40vh;
   }
 
-  /* Stack order: display first, then customizer, console, editor.
+  /* Stack order: display first, then the camera bar it belongs to, then
+     customizer, the bottom strip, and the editor.
      .preview-panel's flex:1 basis-0 would give the viewport whatever the
      fixed-height panes leave over — which is nothing once they overflow,
      collapsing it to a 2px sliver. It gets a real height instead. */
@@ -506,14 +569,35 @@ body[data-ui-mode='classic'] .classic-slot > details {
     flex: 0 0 auto;
     min-height: 45vh;
   }
-  body[data-ui-mode='classic'] .param-panel {
+  body[data-ui-mode='classic'] .classic-camera-bar {
     order: 2;
+    flex: 0 0 auto;
   }
-  body[data-ui-mode='classic'] .classic-console-slot {
+  body[data-ui-mode='classic'] .param-panel {
     order: 3;
   }
-  body[data-ui-mode='classic'] .classic-editor-slot {
+  body[data-ui-mode='classic'] .classic-bottom-strip {
     order: 4;
+    flex: 0 0 auto;
+  }
+  body[data-ui-mode='classic'] .classic-editor-slot {
+    order: 5;
+  }
+
+  /* Side by side does not survive a phone width — the strip's panes join the
+     stack, each capped like every other slot (D-6). */
+  body[data-ui-mode='classic'] .classic-bottom-strip {
+    flex-direction: column;
+  }
+  body[data-ui-mode='classic'] .classic-bottom-strip > .classic-slot {
+    flex: 0 0 auto;
+    max-height: 40vh;
+  }
+
+  /* Resizers and Viewport-Control are desktop-only (D-6, D-7) */
+  body[data-ui-mode='classic'] .classic-resizer,
+  body[data-ui-mode='classic'] .classic-viewport-control-slot {
+    display: none;
   }
 }
 
@@ -590,8 +674,10 @@ body[data-ui-mode='classic'] .classic-fold-inner {
   flex-direction: column;
 }
 
+/* D-8: the fold button collapses the whole bottom strip, so every pane in it
+   folds down to its titlebar together. */
 body[data-classic-console-collapsed='true']
-  .classic-console-slot
+  .classic-bottom-strip
   .classic-fold {
   grid-template-rows: 0fr;
 }
@@ -621,27 +707,14 @@ body[data-ui-mode='classic'] .classic-console-slot > .classic-fold summary {
   display: none;
 }
 
-/* Desktop docks tab along their top edge; the segmented full-width bar the
-   custom modes use reads as a giant button here */
+/* Classic replaces the Log/Structured tabs with side-by-side Console and
+   Error-Log panes, so the tablist has nothing left to switch between and is
+   hidden outright — a two-tab control where both tabpanels are always shown
+   is noise for a screen-reader user. The Forge layouts keep it untouched;
+   the layout controller resets the selection to Log on entry and restores it
+   on exit (D-9). */
 body[data-ui-mode='classic'] .console-view-tabs {
-  border: 0;
-  border-bottom: 1px solid var(--color-border);
-  border-radius: 0;
-  margin-bottom: var(--space-xs);
-}
-
-body[data-ui-mode='classic'] .console-view-tab {
-  flex: 0 0 auto;
-  padding: var(--space-2xs) var(--space-md);
-  border-bottom: 2px solid transparent;
-  font-weight: var(--font-weight-normal);
-}
-
-body[data-ui-mode='classic'] .console-view-tab.active {
-  background: var(--color-bg-primary);
-  color: var(--color-text-primary);
-  border-bottom-color: var(--color-accent);
-  font-weight: var(--font-weight-semibold);
+  display: none;
 }
 
 /* ============================================================================
@@ -858,9 +931,14 @@ body[data-ui-mode='classic'] .classic-density-toggle {
   display: inline-flex;
 }
 
-/* Both code-facing docks leave the shell in Simplified */
+/* Both code-facing docks leave the shell in Simplified. The strip covers the
+   Console, Error-Log, Animate and Font List panes it contains; the explicit
+   .classic-console-slot entry is kept because it is what the existing
+   Simplified regression test asserts on. */
 body[data-ui-mode='classic'][data-classic-density='simplified']
   .classic-editor-slot,
+body[data-ui-mode='classic'][data-classic-density='simplified']
+  .classic-bottom-strip,
 body[data-ui-mode='classic'][data-classic-density='simplified']
   .classic-console-slot,
 /* Programmer toolbar buttons: file authoring and editor undo/redo */

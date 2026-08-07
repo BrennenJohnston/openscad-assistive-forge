@@ -1075,3 +1075,157 @@ test.describe('Classic mode layout (C4)', () => {
     ).toHaveCount(0);
   });
 });
+
+test.describe('Classic dock shell (B2)', () => {
+  test('classic-dock-strip: Console and Error-Log sit side by side under a full-height editor', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await loadSampleProject(page, { query: '?flag_classic_mode=true' });
+    await switchToStandardMode(page);
+    await pickInterfaceMode(page, 'Classic (Desktop Layout)');
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'classic'
+    );
+
+    const strip = page.locator('#classicBottomStrip');
+    const consoleSlot = page.locator('#classicConsoleSlot');
+    const errorLogSlot = page.locator('#classicErrorLogSlot');
+    const editorSlot = page.locator('#classicEditorSlot');
+
+    await expect(strip).toBeVisible();
+    await expect(consoleSlot).toBeVisible();
+    await expect(errorLogSlot).toBeVisible();
+
+    // The Error-Log pane is a sibling of Console inside the strip, not a tab
+    await expect(strip.locator('> #classicConsoleSlot')).toHaveCount(1);
+    await expect(strip.locator('> #classicErrorLogSlot')).toHaveCount(1);
+    await expect(errorLogSlot.locator('#error-log-output')).toHaveCount(1);
+
+    const [stripBox, consoleBox, errorBox, editorBox] = await Promise.all([
+      strip.boundingBox(),
+      consoleSlot.boundingBox(),
+      errorLogSlot.boundingBox(),
+      editorSlot.boundingBox(),
+    ]);
+
+    // Error-Log is to the RIGHT of Console
+    expect(errorBox.x).toBeGreaterThan(consoleBox.x);
+
+    // R6: the editor runs full height — it starts above the strip and its
+    // bottom edge lines up with the strip's
+    expect(editorBox.y).toBeLessThan(consoleBox.y);
+    expect(
+      Math.abs(editorBox.y + editorBox.height - (stripBox.y + stripBox.height))
+    ).toBeLessThanOrEqual(4);
+
+    // R7: the strip no longer runs under the editor
+    expect(consoleBox.x).toBeGreaterThanOrEqual(
+      editorBox.x + editorBox.width - 2
+    );
+
+    // R8: the camera bar exists as its own row between view and strip
+    await expect(page.locator('#classicCameraBar')).toHaveCount(1);
+
+    // D-9: Classic replaces the console tabs with panes, so the tablist goes
+    await expect(page.locator('.console-view-tabs')).toBeHidden();
+
+    // Every dock field is stamped for the grid to size from
+    const body = page.locator('body');
+    await expect(body).toHaveAttribute('data-classic-field-left', 'occupied');
+    await expect(body).toHaveAttribute(
+      'data-classic-field-right-top',
+      'occupied'
+    );
+    await expect(body).toHaveAttribute('data-classic-field-bottom', 'occupied');
+    await expect(body).toHaveAttribute(
+      'data-classic-field-right-bottom',
+      'empty'
+    );
+
+    // Reserved fields exist but must not paint as empty dead panes
+    await expect(page.locator('#classicAnimateSlot')).toBeHidden();
+    await expect(page.locator('#classicFontListSlot')).toBeHidden();
+    await expect(page.locator('#classicViewportControlSlot')).toBeHidden();
+  });
+
+  test('classic-console-tab-restore: a Structured selection is reset on entry and handed back on exit (D-9)', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await loadSampleProject(page, { query: '?flag_classic_mode=true' });
+    await switchToStandardMode(page);
+
+    // Select the Structured tab in Forge — the console is a collapsed
+    // <details>, so it has to be opened before its tablist is reachable
+    const consolePanel = page.locator('#consolePanel');
+    if (!(await consolePanel.evaluate((el) => el.open))) {
+      await consolePanel.locator('summary').first().click();
+    }
+    const structuredTab = page.locator('#console-tab-structured');
+    await expect(structuredTab).toBeVisible({ timeout: 10_000 });
+    await structuredTab.click();
+    await expect(structuredTab).toHaveAttribute('aria-selected', 'true');
+
+    await pickInterfaceMode(page, 'Classic (Desktop Layout)');
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'classic'
+    );
+
+    // Entry sanitation: Log is selected, so exiting cannot strand the panel
+    // showing a view whose content Classic moved away
+    await expect(page.locator('#console-tab-log')).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
+    await expect(structuredTab).toHaveAttribute('aria-selected', 'false');
+
+    await pickInterfaceMode(page, 'Standard');
+    await expect(page.locator('body')).not.toHaveAttribute(
+      'data-ui-mode',
+      'classic'
+    );
+
+    // Exit restore: the panel is handed back as found
+    await expect(structuredTab).toHaveAttribute('aria-selected', 'true');
+    await expect(
+      page.locator('#console-view-structured #error-log-output')
+    ).toHaveCount(1);
+    await expect(page.locator('.console-view-tabs')).toBeVisible();
+  });
+
+  test('classic-dock-occupancy: Simplified empties the left and bottom fields', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await loadSampleProject(page, { query: '?flag_classic_mode=true' });
+    await switchToStandardMode(page);
+    await pickInterfaceMode(page, 'Classic (Desktop Layout)');
+
+    const body = page.locator('body');
+    await expect(body).toHaveAttribute('data-classic-field-left', 'occupied');
+
+    await page.locator('#classicDensityToggle').click();
+    await expect(body).toHaveAttribute('data-classic-density', 'simplified');
+
+    await expect(body).toHaveAttribute('data-classic-field-left', 'empty');
+    await expect(body).toHaveAttribute('data-classic-field-bottom', 'empty');
+    await expect(page.locator('#classicBottomStrip')).toBeHidden();
+    await expect(page.locator('#classicEditorSlot')).toBeHidden();
+
+    // The Customizer keeps its column — Simplified is not a blank screen
+    await expect(body).toHaveAttribute(
+      'data-classic-field-right-top',
+      'occupied'
+    );
+    await expect(page.locator('#paramPanel')).toBeVisible();
+  });
+});
