@@ -2009,3 +2009,48 @@ test.describe('Classic 3D view toolbar (E3-E7)', () => {
     await expect(page.locator('#classicRenderBtn')).toBeVisible();
   });
 });
+
+test.describe('Classic toolbars stay one row', () => {
+  test('classic-toolbars-single-row: neither toolbar wraps, and every button is still reachable', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+
+    // 1024px is the tightest desktop width — the camera bar took three rows
+    // here before, costing ~110px of 3D view
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await loadSampleProject(page, { query: '?flag_classic_mode=true' });
+    await switchToStandardMode(page);
+    await pickInterfaceMode(page, 'Classic (Desktop Layout)');
+
+    // A wrapped flex row shows up as buttons on more than one y position
+    const rowCount = (sel) =>
+      page.locator(sel).evaluate((el) => {
+        const tops = new Set(
+          Array.from(el.querySelectorAll('button'))
+            .filter((b) => b.offsetParent !== null)
+            .map((b) => Math.round(b.getBoundingClientRect().top))
+        );
+        return tops.size;
+      });
+
+    expect(await rowCount('#classicCameraBar'), 'camera bar rows').toBe(1);
+    expect(await rowCount('#classicEditorToolbar'), 'editor toolbar rows').toBe(
+      1
+    );
+
+    // Scrolling sideways must not cost reachability: arrow keys traverse the
+    // whole bar and the browser brings a focused button into view
+    await page.locator('#classicPreviewBtn').focus();
+    await page.keyboard.press('End');
+    const last = page.locator('#classicEdgesToggle');
+    await expect(last).toBeFocused();
+    const inView = await last.evaluate((el) => {
+      const bar = document.getElementById('classicCameraBar');
+      const b = el.getBoundingClientRect();
+      const r = bar.getBoundingClientRect();
+      return b.left >= r.left - 1 && b.right <= r.right + 1;
+    });
+    expect(inView, 'focused button scrolled into view').toBe(true);
+  });
+});

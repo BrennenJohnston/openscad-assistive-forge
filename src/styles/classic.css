@@ -124,6 +124,10 @@ body[data-ui-mode='classic'] {
      token plus its padding, so it stays one row on every pointer type. */
   --classic-camera-bar-h: calc(var(--size-touch-target) + var(--space-xs));
   --classic-resizer-track: 6px;
+  /* The horizontal separator carries its own thickness: see its rule below —
+     both its neighbours are interactive, so the track IS the pointer target
+     rather than a thin handle inside a larger invisible zone. */
+  --classic-resizer-track-h: 12px;
   --classic-resizer-hit: var(--size-touch-target);
   /* How far a resizer's hit zone may reach toward an INTERACTIVE neighbour:
      the CodeMirror scroller, the Customizer's controls, the strip's pane
@@ -483,6 +487,16 @@ body[data-ui-mode='classic'] .classic-slot > details {
 
   body[data-ui-mode='classic'] .classic-bottom-strip {
     grid-area: bottom;
+    /* The strip separator shares this grid area and rides its top edge, so
+       the panes start below the track instead of under it — otherwise it
+       clips their titlebar text. */
+    padding-top: var(--classic-resizer-track-h);
+  }
+
+  /* Folded: the separator steps aside, so its reserved space goes too */
+  body[data-ui-mode='classic'][data-classic-console-collapsed='true']
+    .classic-bottom-strip {
+    padding-top: 0;
   }
 
   body[data-ui-mode='classic'] .param-panel {
@@ -558,11 +572,16 @@ body[data-ui-mode='classic'][data-classic-field-bottom='empty']
 
   /* The strip separator rides the top edge of the bottom field rather than
      taking a row of its own — the grid's three rows come straight from the
-     desktop layout and adding a fourth would shift every area assignment. */
+     desktop layout and adding a fourth would shift every area assignment.
+
+     It is thicker than the vertical separators on purpose. Both of ITS
+     neighbours are interactive (the 3D view toolbar above, the pane titlebars
+     below), so its hit zone cannot expand into either without stealing their
+     clicks — the track itself has to be the pointer target. */
   body[data-ui-mode='classic'] .classic-resizer--strip {
     grid-area: bottom;
     align-self: start;
-    height: var(--classic-resizer-track);
+    height: var(--classic-resizer-track-h);
     width: 100%;
     cursor: row-resize;
     border-left: 0;
@@ -646,7 +665,6 @@ body[data-ui-mode='classic'][data-classic-field-bottom='empty']
 
 body[data-ui-mode='classic'] .classic-camera-bar {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   gap: 0;
   min-height: var(--classic-camera-bar-h);
@@ -658,6 +676,26 @@ body[data-ui-mode='classic'] .classic-camera-bar {
      hand the page a phantom scrollbar — the same trap the Customizer pane
      already guards against below. */
   position: relative;
+}
+
+/* Desktop OpenSCAD keeps each toolbar on ONE row and hides the overflow
+   behind a chevron. Wrapping instead cost up to three rows and ~110px of 3D
+   view at 1024px, so these scroll sideways rather than growing downward.
+   Every button stays reachable: the roving arrow keys traverse the whole
+   toolbar and the browser scrolls a focused button into view, so the keyboard
+   path never depends on the scrollbar. */
+body[data-ui-mode='classic'] .classic-camera-bar,
+body[data-ui-mode='classic'] .classic-editor-toolbar {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+
+body[data-ui-mode='classic'] .classic-camera-bar .classic-tb-group,
+body[data-ui-mode='classic'] .classic-editor-toolbar .classic-tb-group {
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
 }
 
 /* Same reason: the toolbars' reason spans are siblings of their buttons,
@@ -673,23 +711,9 @@ body[data-ui-mode='classic'][data-classic-camera-bar-hidden='true']
   display: none;
 }
 
-/* Vertical-only hit-zone expansion, same policy as the resizers: the bar's
-   neighbours are the canvas above and the strip below, so the zone reaches
-   into the canvas and stops short of the strip. It never handles wheel
-   events, so scrolling and orbiting still work over it. */
-body[data-ui-mode='classic'] .classic-camera-bar .classic-tb-btn {
-  position: relative;
-}
-
-body[data-ui-mode='classic'] .classic-camera-bar .classic-tb-btn::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: calc(var(--classic-resizer-hit-clip) * -1);
-  bottom: calc(var(--classic-resizer-hit-clip) * -1);
-  z-index: -1;
-}
+/* No expanded hit zones on these buttons: they already meet the touch-target
+   token through .classic-tb-btn, and the bar is now a scroll container, which
+   would clip any overflow expansion anyway. */
 
 /* ── Bottom strip: side-by-side panes between editor and right column ────── */
 body[data-ui-mode='classic'] .classic-bottom-strip {
