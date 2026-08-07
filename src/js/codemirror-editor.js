@@ -9,7 +9,7 @@
  *   initialize(), getValue(), setValue(v), focus(), dispose()
  *   getSelection(), setSelection(s,e), setCursorPosition(l,c), scrollToLine(l)
  *   setErrorLines(lines), clearErrors(), supportsAction(id),
- *   performAction(id), replaceSelection(text)
+ *   performAction(id), canUndo(), canRedo(), replaceSelection(text)
  *
  * @license GPL-3.0-or-later
  */
@@ -42,6 +42,10 @@ import {
   indentLess,
   lineComment,
   lineUncomment,
+  undo,
+  redo,
+  undoDepth,
+  redoDepth,
 } from '@codemirror/commands';
 import { autocompletion } from '@codemirror/autocomplete';
 import {
@@ -341,6 +345,11 @@ const errorLineTheme = EditorView.baseTheme({
 // All are stock CodeMirror commands; comment syntax comes from the
 // commentTokens languageData on the OpenSCAD stream language above.
 const EDITOR_COMMANDS = {
+  // Text undo/redo, distinct from the app's parameter history. A full-document
+  // programmatic setValue resets this history on purpose (A1), so Undo can
+  // never resurrect a previously loaded project.
+  undo,
+  redo,
   indent: indentMore,
   unindent: indentLess,
   comment: lineComment,
@@ -646,6 +655,23 @@ export class CodeMirrorEditor {
    */
   supportsAction(actionId) {
     return Boolean(this._view) && actionId in EDITOR_COMMANDS;
+  }
+
+  /**
+   * Whether there is a text edit to undo. Lets the editor toolbar disable its
+   * Undo button honestly rather than offering a no-op.
+   * @returns {boolean}
+   */
+  canUndo() {
+    return Boolean(this._view) && undoDepth(this._view.state) > 0;
+  }
+
+  /**
+   * Whether there is an undone text edit to redo.
+   * @returns {boolean}
+   */
+  canRedo() {
+    return Boolean(this._view) && redoDepth(this._view.state) > 0;
   }
 
   /**

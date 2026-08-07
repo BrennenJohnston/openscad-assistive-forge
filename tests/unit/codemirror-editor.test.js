@@ -237,6 +237,43 @@ describe('CodeMirrorEditor', () => {
     });
   });
 
+  describe('canUndo() / canRedo() / text undo (D3)', () => {
+    it('reports nothing to undo or redo before initialization', () => {
+      createEditor();
+      expect(editor.canUndo()).toBe(false);
+      expect(editor.canRedo()).toBe(false);
+    });
+
+    it('a loaded document alone is not undoable', () => {
+      createEditor();
+      editor.initialize();
+      editor.setValue('cube(10);');
+
+      // setValue resets history (A1), so the editor toolbar must not offer
+      // an Undo that would wipe the project the user just opened
+      expect(editor.canUndo()).toBe(false);
+      expect(editor.canRedo()).toBe(false);
+    });
+
+    it('a typed edit becomes undoable, and undoing makes it redoable', () => {
+      createEditor();
+      editor.initialize();
+      editor.setValue('cube(10);');
+
+      editor._view.dispatch({ changes: { from: 0, insert: '// ' } });
+      expect(editor.getValue()).toBe('// cube(10);');
+      expect(editor.canUndo()).toBe(true);
+      expect(editor.canRedo()).toBe(false);
+
+      expect(editor.performAction('undo')).toBe(true);
+      expect(editor.getValue()).toBe('cube(10);');
+      expect(editor.canRedo()).toBe(true);
+
+      expect(editor.performAction('redo')).toBe(true);
+      expect(editor.getValue()).toBe('// cube(10);');
+    });
+  });
+
   describe('supportsAction() / performAction()', () => {
     it('reports no support before initialization', () => {
       createEditor();
@@ -248,6 +285,8 @@ describe('CodeMirrorEditor', () => {
       createEditor();
       editor.initialize();
       for (const id of [
+        'undo',
+        'redo',
         'indent',
         'unindent',
         'comment',
