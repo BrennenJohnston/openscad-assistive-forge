@@ -1592,3 +1592,84 @@ test.describe('Automatic Preview control (C4)', () => {
     await expect(forgeToggle).toBeChecked();
   });
 });
+
+test.describe('Classic editor toolbar (D1)', () => {
+  const ORDER = [
+    ['classicEdNewBtn', 'New file'],
+    ['classicEdOpenBtn', 'Open file'],
+    ['classicEdSaveBtn', 'Save'],
+    ['classicEdUndoBtn', 'Undo edit'],
+    ['classicEdRedoBtn', 'Redo edit'],
+    ['classicEdUnindentBtn', 'Unindent'],
+    ['classicEdIndentBtn', 'Indent'],
+    ['classicEdPreviewBtn', 'Preview'],
+    ['classicEdRenderBtn', 'Render'],
+    ['classicEdExportStlBtn', 'Export STL'],
+    ['classicEdExportDxfBtn', 'Export DXF'],
+    ['classicEdPrintBtn', '3D Print'],
+  ];
+
+  test('classic-editor-toolbar: twelve buttons in upstream order, named and reachable', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+
+    await page.setViewportSize({ width: 1400, height: 900 });
+    await loadSampleProject(page, { query: '?flag_classic_mode=true' });
+    await switchToStandardMode(page);
+
+    // Forge keeps its own editor header and must not gain this toolbar
+    await expect(page.locator('#classicEditorToolbar')).toBeHidden();
+
+    await pickInterfaceMode(page, 'Classic (Desktop Layout)');
+
+    const toolbar = page.locator('#classicEditorToolbar');
+    await expect(toolbar).toBeVisible();
+    await expect(toolbar).toHaveAttribute('aria-label', 'Editor toolbar');
+
+    // It travels into the editor slot with the panel it lives in
+    await expect(
+      page.locator('#classicEditorSlot #classicEditorToolbar')
+    ).toHaveCount(1);
+
+    // Exact upstream order, by DOM position
+    const ids = await toolbar.evaluate((el) =>
+      Array.from(el.querySelectorAll('button')).map((b) => b.id)
+    );
+    expect(ids).toEqual(ORDER.map(([id]) => id));
+
+    // Every button has an accessible name and a real touch target
+    for (const [id, name] of ORDER) {
+      const btn = page.locator(`#${id}`);
+      await expect(btn, `${id} name`).toHaveAccessibleName(name);
+      const box = await btn.boundingBox();
+      const target = await page.evaluate(() =>
+        parseInt(
+          getComputedStyle(document.body).getPropertyValue(
+            '--size-touch-target'
+          ),
+          10
+        )
+      );
+      expect(box.width, `${id} width`).toBeGreaterThanOrEqual(target - 1);
+      expect(box.height, `${id} height`).toBeGreaterThanOrEqual(target - 1);
+    }
+
+    // 3D Print is disabled-with-reason: focusable, and it says why (D-26)
+    const print = page.locator('#classicEdPrintBtn');
+    await expect(print).toHaveAttribute('aria-disabled', 'true');
+    await print.focus();
+    await expect(print).toBeFocused();
+    await expect(page.locator('#classicEdPrintReason')).toContainText(
+      'not available in this browser version'
+    );
+
+    // The two Undo buttons are distinguishable to a screen reader
+    await expect(page.locator('#classicTbUndoBtn')).toHaveAccessibleName(
+      'Undo parameter change'
+    );
+    await expect(page.locator('#classicTbRedoBtn')).toHaveAccessibleName(
+      'Redo parameter change'
+    );
+  });
+});

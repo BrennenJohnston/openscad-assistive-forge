@@ -282,6 +282,37 @@ body[data-ui-mode='classic'][data-classic-toolbar-hidden='true']
   display: none;
 }
 
+/* Editor toolbar (D1). Lives inside #expertModePanel so it travels into the
+   Classic editor slot with the panel; the Forge layouts keep their own
+   .expert-mode-header and never show this. Group hairlines come from the
+   shared .classic-tb-group rules below. */
+.classic-editor-toolbar {
+  display: none;
+}
+
+body[data-ui-mode='classic'] .classic-editor-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0;
+  padding: var(--space-2xs) var(--space-xs);
+  border-bottom: 1px solid var(--color-border);
+  background-color: var(--color-bg-secondary);
+  flex-shrink: 0;
+}
+
+/* Disabled-with-reason buttons stay focusable, so they need a resting look
+   that reads as unavailable without relying on colour alone (the icon is
+   dimmed AND the cursor changes). */
+body[data-ui-mode='classic'] .classic-tb-btn[aria-disabled='true'] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+body[data-ui-mode='classic'] .classic-tb-btn[aria-disabled='true']:hover {
+  background: transparent;
+}
+
 body[data-ui-mode='classic'] .classic-tb-group {
   display: flex;
   flex-wrap: wrap;

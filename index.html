@@ -555,11 +555,14 @@
             </button>
           </div>
           <div class="classic-tb-group" role="group" aria-label="Edit">
+            <!-- Named in full: the editor toolbar has its own Undo/Redo for
+                 text edits, and a bare "Undo" would be two identical buttons
+                 to a screen reader. The tooltips already said this. -->
             <button type="button" class="btn classic-tb-btn" id="classicTbUndoBtn" title="Undo parameter change">
-              <span class="classic-icon" data-icon="undo" aria-hidden="true"></span><span class="sr-only">Undo</span>
+              <span class="classic-icon" data-icon="undo" aria-hidden="true"></span><span class="sr-only">Undo parameter change</span>
             </button>
             <button type="button" class="btn classic-tb-btn" id="classicTbRedoBtn" title="Redo parameter change">
-              <span class="classic-icon" data-icon="redo" aria-hidden="true"></span><span class="sr-only">Redo</span>
+              <span class="classic-icon" data-icon="redo" aria-hidden="true"></span><span class="sr-only">Redo parameter change</span>
             </button>
           </div>
           <div class="classic-tb-group" role="group" aria-label="Rendering">
@@ -3060,6 +3063,73 @@
               <!-- Mobile touch-drag resize handle -->
               <div class="expert-mode-drag-handle" aria-hidden="true">
                 <span class="drag-handle-bar"></span>
+              </div>
+              <!-- Classic editor toolbar (D1). Lives inside #expertModePanel so
+                   it travels into the Classic editor slot with the panel, and
+                   is hidden outside Classic. Order is upstream's editortoolbar
+                   (U3) plus the runtime STL/DXF buttons the desktop adds, per
+                   DCR-1: New Open Save | Undo Redo Unindent Indent |
+                   Preview Render | STL DXF | 3D Print. -->
+              <div
+                id="classicEditorToolbar"
+                class="classic-editor-toolbar"
+                role="toolbar"
+                aria-label="Editor toolbar"
+              >
+                <div class="classic-tb-group" role="group" aria-label="File">
+                  <button type="button" class="btn classic-tb-btn" id="classicEdNewBtn" title="New file">
+                    <span class="classic-icon" data-icon="new" aria-hidden="true"></span><span class="sr-only">New file</span>
+                  </button>
+                  <button type="button" class="btn classic-tb-btn" id="classicEdOpenBtn" title="Open file">
+                    <span class="classic-icon" data-icon="open" aria-hidden="true"></span><span class="sr-only">Open file</span>
+                  </button>
+                  <button type="button" class="btn classic-tb-btn" id="classicEdSaveBtn" title="Save">
+                    <span class="classic-icon" data-icon="save" aria-hidden="true"></span><span class="sr-only">Save</span>
+                  </button>
+                </div>
+                <div class="classic-tb-group" role="group" aria-label="Edit">
+                  <button type="button" class="btn classic-tb-btn" id="classicEdUndoBtn" title="Undo edit">
+                    <span class="classic-icon" data-icon="undo" aria-hidden="true"></span><span class="sr-only">Undo edit</span>
+                  </button>
+                  <button type="button" class="btn classic-tb-btn" id="classicEdRedoBtn" title="Redo edit">
+                    <span class="classic-icon" data-icon="redo" aria-hidden="true"></span><span class="sr-only">Redo edit</span>
+                  </button>
+                  <!-- Upstream orders Unindent before Indent (U3) -->
+                  <button type="button" class="btn classic-tb-btn" id="classicEdUnindentBtn" title="Unindent">
+                    <span class="classic-icon" data-icon="unindent" aria-hidden="true"></span><span class="sr-only">Unindent</span>
+                  </button>
+                  <button type="button" class="btn classic-tb-btn" id="classicEdIndentBtn" title="Indent">
+                    <span class="classic-icon" data-icon="indent" aria-hidden="true"></span><span class="sr-only">Indent</span>
+                  </button>
+                </div>
+                <div class="classic-tb-group" role="group" aria-label="Rendering">
+                  <button type="button" class="btn classic-tb-btn" id="classicEdPreviewBtn" title="Preview (F5)">
+                    <span class="classic-icon" data-icon="preview" aria-hidden="true"></span><span class="sr-only">Preview</span>
+                  </button>
+                  <button type="button" class="btn classic-tb-btn" id="classicEdRenderBtn" title="Render (F6)">
+                    <span class="classic-icon" data-icon="render" aria-hidden="true"></span><span class="sr-only">Render</span>
+                  </button>
+                </div>
+                <div class="classic-tb-group" role="group" aria-label="Export">
+                  <button type="button" class="btn classic-tb-btn" id="classicEdExportStlBtn" title="Export as STL">
+                    <span class="classic-icon" data-icon="export-stl" aria-hidden="true"></span><span class="sr-only">Export STL</span>
+                  </button>
+                  <button type="button" class="btn classic-tb-btn" id="classicEdExportDxfBtn" title="Export as DXF">
+                    <span class="classic-icon" data-icon="export-dxf" aria-hidden="true"></span><span class="sr-only">Export DXF</span>
+                  </button>
+                </div>
+                <div class="classic-tb-group" role="group" aria-label="Print">
+                  <!-- aria-disabled rather than disabled: the button stays
+                       focusable so keyboard and screen-reader users can find
+                       it and hear why it is unavailable (D-15/D-26). -->
+                  <button type="button" class="btn classic-tb-btn" id="classicEdPrintBtn" aria-disabled="true" aria-describedby="classicEdPrintReason" title="3D Print">
+                    <span class="classic-icon" data-icon="print" aria-hidden="true"></span><span class="sr-only">3D Print</span>
+                  </button>
+                  <span id="classicEdPrintReason" class="sr-only"
+                    >3D printing is not available in this browser version.
+                    Export an STL file and open it in your slicer.</span
+                  >
+                </div>
               </div>
               <div class="expert-mode-header">
                 <span class="expert-mode-title">
