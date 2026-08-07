@@ -7365,6 +7365,27 @@ if (rounded) {
   let modeManager = null;
   let editorStateManager = null;
 
+  // True while an editor edit is being written into stateManager. The push
+  // channel below subscribes to the same store, so without this it would
+  // echo the edit straight back into the buffer the user is typing in.
+  let isApplyingEditorEdit = false;
+
+  /** @type {ReturnType<typeof setTimeout>|null} */
+  let editorWriteBackTimer = null;
+
+  /**
+   * Drop a queued write-back. Called before the push channel replaces the
+   * buffer: a timer armed against the previous project must never fire
+   * afterwards, or it would write the old project's text back over the new
+   * one while the editor already shows the new file.
+   */
+  function cancelEditorWriteBack() {
+    if (editorWriteBackTimer) {
+      clearTimeout(editorWriteBackTimer);
+      editorWriteBackTimer = null;
+    }
+  }
+
   if (
     isExpertModeEnabled &&
     expertModeToggle &&
@@ -7413,8 +7434,13 @@ if (rounded) {
         initExpertEditor();
       } else if (currentEditor.setValue) {
         const code = resolveEditorSource();
-        // Only write when it actually differs — setValue resets the caret
-        if (code && currentEditor.getValue?.() !== code) {
+        // Only write when it actually differs — setValue resets the caret.
+        // Unsaved edits win: re-entering Classic must never discard them.
+        if (
+          code &&
+          !editorStateManager.getIsDirty() &&
+          currentEditor.getValue?.() !== code
+        ) {
           currentEditor.setValue(code);
         }
       }
@@ -7446,12 +7472,15 @@ if (rounded) {
         if (!currentEditor) {
           initExpertEditor();
         } else {
-          // Sync through the full fallback chain: after a round-trip through
-          // Classic the captured buffer can legitimately be empty while a
-          // project is loaded — bare getSource() would leave the loaded
-          // file's code invisible here.
+          // Re-sync from the loaded project, unless the user has unsaved
+          // edits in the buffer — those are newer than anything in state
+          // that has not been written back yet.
           const currentCode = resolveEditorSource();
-          if (currentCode && currentEditor.getValue() !== currentCode) {
+          if (
+            currentCode &&
+            !editorStateManager.getIsDirty() &&
+            currentEditor.getValue() !== currentCode
+          ) {
             currentEditor.setValue(currentCode);
           }
           currentEditor.refreshLayout?.();
@@ -7484,20 +7513,15 @@ if (rounded) {
     }
 
     /**
-     * The source the editor should show. editorStateManager only holds a
-     * value once the editor has been opened or edited, so a freshly loaded
-     * project falls through to the uploaded file's own text — otherwise the
-     * Classic Editor dock, which opens on entry rather than on demand, would
-     * show an empty document.
+     * The source the editor should show. `uploadedFile.content` is the single
+     * source of truth — it is what render, export, save and auto-preview all
+     * read, and what every loader writes. Reading anything else first (as this
+     * used to) lets a stale cache win forever, so a second project load could
+     * never reach the editor.
      * @returns {string}
      */
     function resolveEditorSource() {
-      return (
-        editorStateManager.getSource() ||
-        window._currentSCADCode ||
-        stateManager.getState()?.uploadedFile?.content ||
-        ''
-      );
+      return stateManager.getState()?.uploadedFile?.content || '';
     }
 
     /**
@@ -7706,18 +7730,26 @@ if (rounded) {
 
     // Keyboard shortcut: Ctrl+E to toggle Expert Mode (registered via keyboard config below)
 
-    // Sync code changes from parameter panel to editor state
-    // This happens when parameters are modified in Standard mode
-    window.addEventListener('scadCodeUpdated', (e) => {
-      const newCode = e.detail?.code || window._currentSCADCode;
-      if (newCode && editorStateManager) {
-        editorStateManager.setSource(newCode, { markDirty: false });
+    // Push channel: loaded source → editor. Every writer of
+    // uploadedFile.content (the load funnel, folder-watch, back-to-welcome)
+    // reaches the editor through this one subscription, so Standard,
+    // Simplified and Classic all refill from the same place. Replaces a
+    // 'scadCodeUpdated' event that had a listener and no dispatchers.
+    stateManager.subscribe((newState, prevState) => {
+      if (isApplyingEditorEdit) return;
+      const nextFile = newState?.uploadedFile;
+      if (nextFile === prevState?.uploadedFile) return;
 
-        // Update editor if in Expert Mode
-        if (modeManager.getMode() === 'expert' && currentEditor) {
-          currentEditor.setValue(newCode);
-        }
+      const code = nextFile?.content || '';
+
+      cancelEditorWriteBack();
+
+      if (currentEditor?.setValue && currentEditor.getValue?.() !== code) {
+        currentEditor.setValue(code);
       }
+      editorStateManager.setSource(code, { markDirty: false });
+      editorStateManager.markClean();
+      updateDirtyIndicator();
     });
 
     console.log('[Expert Mode] Initialization complete');
