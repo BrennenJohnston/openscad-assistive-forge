@@ -1499,24 +1499,34 @@ test.describe('Classic canvas re-measure (B5)', () => {
           : null;
       });
 
-    // The backing store matching the CSS box IS the property under test: a
-    // canvas that has not re-measured shows up as a mismatch here. Entering
-    // Classic re-measures through the container's ResizeObserver, which is
-    // debounced — so wait for that to land before taking the baseline, or the
-    // baseline is the Forge layout's width and every later comparison is
-    // against a number the canvas never legitimately has.
-    const inSync = async () => {
-      const s = await canvasSize();
-      if (!s) return false;
-      return (
-        Math.abs(s.w - s.cssW * s.dpr) <= 2 &&
-        Math.abs(s.h - s.cssH * s.dpr) <= 2
-      );
+    // Entering Classic re-measures the canvas through the container's
+    // ResizeObserver, which is debounced — so wait for the size to stop moving
+    // before taking a baseline. Sampling too early captures the Forge layout's
+    // width, a number the canvas never legitimately has in Classic, and every
+    // later comparison is then against a lie.
+    const settled = async () => {
+      let last = null;
+      for (let i = 0; i < 40; i++) {
+        const s = await canvasSize();
+        if (s && last !== null && s.w === last) return s;
+        last = s?.w ?? null;
+        await page.waitForTimeout(250);
+      }
+      return null;
     };
-    await expect.poll(inSync, { timeout: 15_000 }).toBe(true);
 
-    const before = await canvasSize();
+    const before = await settled();
+    expect(before, 'canvas size settled').not.toBeNull();
     expect(before.w).toBeGreaterThan(0);
+
+    // The backing store must track the CSS box rather than being stretched to
+    // fit it. Comparing the ratio before and after is what proves that; the
+    // absolute value is NOT clientWidth * devicePixelRatio, because the
+    // renderer sizes from its container, not from the canvas element
+    // (preview.js:512), and the two differ by the container's padding.
+    const ratio = (s) => s.w / s.cssW;
+    const beforeRatio = ratio(before);
+    expect(beforeRatio).toBeGreaterThan(0);
 
     // Shrinking the editor gives the 3D view the space
     const editorResizer = page.locator('#classicResizerEditor');
@@ -1524,19 +1534,31 @@ test.describe('Classic canvas re-measure (B5)', () => {
     for (let i = 0; i < 5; i++) await page.keyboard.press('ArrowLeft');
 
     await expect
-      .poll(async () => (await canvasSize()).w)
+      .poll(async () => (await canvasSize()).w, { timeout: 30_000 })
       .toBeGreaterThan(before.w);
-    await expect.poll(inSync, { timeout: 15_000 }).toBe(true);
 
-    const after = await canvasSize();
+    const after = await settled();
+    expect(after, 'canvas size settled after widening').not.toBeNull();
+    expect(
+      Math.abs(ratio(after) - beforeRatio),
+      'backing store scaled with the box, not stretched'
+    ).toBeLessThan(0.1);
 
     // And the same for the horizontal separator
     const stripResizer = page.locator('#classicResizerStrip');
     await stripResizer.focus();
     for (let i = 0; i < 4; i++) await page.keyboard.press('ArrowUp');
 
-    await expect.poll(async () => (await canvasSize()).h).toBeLessThan(after.h);
-    await expect.poll(inSync, { timeout: 15_000 }).toBe(true);
+    await expect
+      .poll(async () => (await canvasSize()).h, { timeout: 30_000 })
+      .toBeLessThan(after.h);
+
+    const shortened = await settled();
+    expect(shortened, 'canvas size settled after shortening').not.toBeNull();
+    expect(
+      Math.abs(shortened.h / shortened.cssH - after.h / after.cssH),
+      'height backing store scaled with the box'
+    ).toBeLessThan(0.1);
   });
 });
 
