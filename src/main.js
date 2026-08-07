@@ -7657,12 +7657,12 @@ if (rounded) {
     }
 
     /**
-     * Trigger preview render from editor code
+     * Render a preview of the editor's current code. Explicit user action
+     * (▶ Preview, Ctrl+Enter) — typing alone never renders (D-12). The
+     * dirty flag is untouched: only saving clears it (D-10).
      */
     function triggerPreviewFromEditor() {
       if (!currentEditor) return;
-
-      flushEditorWriteBack();
 
       const code = currentEditor.getValue();
       if (!code || code.trim() === '') {
@@ -7670,20 +7670,25 @@ if (rounded) {
         return;
       }
 
-      // Update global code variable
-      window._currentSCADCode = code;
+      // Publish the edit before rendering — forcePreview renders whatever
+      // content the controller was last given, not the editor buffer.
+      flushEditorWriteBack();
 
-      // Trigger preview update
-      if (typeof triggerPreviewFromEditor === 'function') {
-        triggerPreviewFromEditor();
-      } else if (previewManager) {
-        previewManager.render(code);
+      if (!autoPreviewController) {
+        announceToScreenReader('Preview is not ready yet');
+        return;
       }
 
-      // Mark as clean after preview
-      editorStateManager.markClean();
-      updateDirtyIndicator();
-      announceToScreenReader('Preview update triggered');
+      autoPreviewController
+        .forcePreview(stateManager.getState().parameters)
+        .catch((error) => {
+          console.error('[Expert Mode] Preview failed:', error);
+          showErrorToast({
+            title: 'Preview Failed',
+            message: error.message,
+          });
+          announceToScreenReader('Preview failed. See the error message.');
+        });
     }
 
     // Toggle button click handler
