@@ -197,6 +197,10 @@ import {
   collapseCustomizerGroups,
 } from './js/classic-layout-controller.js';
 import { initClassicStatusBar } from './js/classic-status-bar.js';
+import {
+  initClassicEditorToolbar,
+  getClassicEditorToolbar,
+} from './js/classic-editor-toolbar.js';
 import { FolderChangeWatcher } from './js/folder-change-watcher.js';
 import { FolderWriteBack } from './js/folder-write-back.js';
 // Toolbar Menu Controller - File|Edit|Design|View|Window|Help menu bar
@@ -382,6 +386,32 @@ let autoPreviewController = null;
 let comparisonController = null;
 let comparisonView = null;
 let renderQueue = null;
+
+/**
+ * The expert block's ▶ Preview handler, published for the Classic editor
+ * toolbar. Null until the expert block initializes.
+ * @type {Function|null}
+ */
+let editorPreviewTrigger = null;
+
+/**
+ * Whether a full-quality STL for the given parameters is available right now —
+ * i.e. Generate has been pressed and the result still matches the parameters.
+ *
+ * This is the single source for render-state enablement. It gates the File
+ * menu's export items, the Generate button's Download state, and the Classic
+ * editor toolbar's Export STL button; the same recipe used to be written out
+ * twice, which is exactly the drift the risk register calls out.
+ *
+ * @param {Object} parameters - current parameter values
+ * @returns {boolean}
+ */
+function hasFullQualitySTLFor(parameters) {
+  return Boolean(
+    autoPreviewController?.getCurrentFullSTL(parameters) &&
+    !autoPreviewController?.needsFullRender(parameters)
+  );
+}
 
 // Track which saved project is currently loaded (for auto-saving companion files)
 let currentSavedProjectId = null;
@@ -2519,11 +2549,7 @@ async function initApp() {
       stateOutputFormat === selectedFormat &&
       stateOutputFormat !== 'stl';
     const hasFullRender =
-      hasNonSTLRender ||
-      Boolean(
-        autoPreviewController?.getCurrentFullSTL(state.parameters) &&
-        !autoPreviewController?.needsFullRender(state.parameters)
-      );
+      hasNonSTLRender || hasFullQualitySTLFor(state.parameters);
 
     // Recent Files submenu items (filenames only; actual re-open via onOpenRecent callback)
     const recentItems =
@@ -5488,13 +5514,10 @@ async function initApp() {
     const isStlFormat = selectedFormat === 'stl';
 
     // Check auto-preview controller state (works for any 3D format routed
-    // through the controller; 2D formats bypass it)
-    const hasFullQualitySTL = autoPreviewController?.getCurrentFullSTL(
-      state.parameters
-    );
-    const needsFullRender =
-      !hasFullQualitySTL ||
-      autoPreviewController?.needsFullRender(state.parameters);
+    // through the controller; 2D formats bypass it). Same shared helper the
+    // File menu and the Classic editor toolbar consult, so the three cannot
+    // disagree about whether a full render exists.
+    const hasFullQualityStl = hasFullQualitySTLFor(state.parameters);
 
     const stateOutputFormat = (state.outputFormat || '').toLowerCase();
     const hasMatchingOutput =
@@ -5502,7 +5525,7 @@ async function initApp() {
       stateOutputFormat === selectedFormat &&
       !paramsChanged;
 
-    if (isStlFormat && hasFullQualitySTL && !needsFullRender) {
+    if (isStlFormat && hasFullQualityStl) {
       primaryActionBtn.textContent = '📥 Download';
       primaryActionBtn.dataset.action = 'download';
       primaryActionBtn.classList.remove('btn-primary');
@@ -7608,6 +7631,9 @@ if (rounded) {
           editorStateManager.setSource(code, { markDirty: true });
           updateDirtyIndicator();
           scheduleEditorWriteBack();
+          // The first keystroke is what makes Undo available, and nothing
+          // else re-checks the editor toolbar's enablement.
+          getClassicEditorToolbar()?.refresh();
         },
         onSave: () => {
           // #saveProjectBtn does not exist in index.html, so the editor's
@@ -7691,6 +7717,13 @@ if (rounded) {
           announceToScreenReader('Preview failed. See the error message.');
         });
     }
+
+    // The Classic editor toolbar's Preview must be this exact handler — it
+    // flushes the pending write-back first, so it previews what is typed
+    // rather than the last published content. It is a closure in this block,
+    // so it is published here rather than reached by clicking a hidden
+    // button, which is the element-to-element side channel this file avoids.
+    editorPreviewTrigger = triggerPreviewFromEditor;
 
     // Toggle button click handler
     expertModeToggle.addEventListener('click', () => {
@@ -8134,6 +8167,19 @@ if (rounded) {
 
     // Classic window-bottom status bar (C8): mirrors the viewport overlay
     initClassicStatusBar();
+
+    // Classic editor toolbar (D4). Dependencies are injected because they are
+    // closures in here; the toolbar owns wiring and enablement only, never a
+    // second implementation of any action.
+    initClassicEditorToolbar({
+      fileActionsController,
+      getEditor: () => getModeManager()?.getEditorInstance?.() || null,
+      getState: () => stateManager.getState(),
+      getHasFullRender: () =>
+        hasFullQualitySTLFor(stateManager.getState().parameters),
+      triggerPreview: () => editorPreviewTrigger?.(),
+      exportStl: () => exportFormatFromMenu('stl'),
+    });
 
     // Classic Customizer bar (C7): titlebar ✕ + the Automatic Preview mirror.
     // All state flows through the real controls (#autoPreviewToggle), never

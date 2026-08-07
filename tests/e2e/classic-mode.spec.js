@@ -1717,3 +1717,97 @@ test.describe('Classic editor toolbar icons (D2)', () => {
     await expect(print).toHaveAccessibleName('3D Print');
   });
 });
+
+test.describe('Classic editor toolbar behaviour (D4/D5)', () => {
+  test('classic-editor-toolbar-actions: undo gating follows the editor, export gating follows render state', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+
+    await page.setViewportSize({ width: 1400, height: 900 });
+    await loadSampleProject(page, { query: '?flag_classic_mode=true' });
+    await switchToStandardMode(page);
+    await pickInterfaceMode(page, 'Classic (Desktop Layout)');
+
+    const undoBtn = page.locator('#classicEdUndoBtn');
+    const redoBtn = page.locator('#classicEdRedoBtn');
+    const stlBtn = page.locator('#classicEdExportStlBtn');
+
+    // A freshly loaded project has nothing to undo — and Undo must never be
+    // able to wipe the document that was just loaded
+    await expect(undoBtn).toHaveAttribute('aria-disabled', 'true');
+    await expect(page.locator('#classicEdUndoBtnReason')).toHaveText(
+      'Nothing to undo'
+    );
+
+    // Nothing has been rendered at full quality yet
+    await expect(stlBtn).toHaveAttribute('aria-disabled', 'true');
+    await expect(page.locator('#classicEdExportStlBtnReason')).toHaveText(
+      'Press Generate first to enable this export'
+    );
+
+    // A gated button is still focusable, so it is discoverable
+    await stlBtn.focus();
+    await expect(stlBtn).toBeFocused();
+
+    // Typing makes Undo available; CodeMirror drops keystrokes at full speed
+    const editor = page.locator('#expertModeBody .cm-content');
+    await expect(editor).toBeVisible({ timeout: 30_000 });
+    await editor.click();
+    await page.keyboard.type('// hello', { delay: 25 });
+
+    await expect(undoBtn).not.toHaveAttribute('aria-disabled', 'true');
+    await expect(redoBtn).toHaveAttribute('aria-disabled', 'true');
+
+    // Activating Undo reverts the text and re-enables Redo
+    const before = await editor.textContent();
+    expect(before).toContain('// hello');
+    await undoBtn.click();
+    await expect
+      .poll(async () => (await editor.textContent()).includes('// hello'))
+      .toBe(false);
+    await expect(redoBtn).not.toHaveAttribute('aria-disabled', 'true');
+  });
+
+  test('classic-editor-toolbar-roving: one tab stop, arrows traverse, disabled buttons stay reachable', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+
+    await page.setViewportSize({ width: 1400, height: 900 });
+    await loadSampleProject(page, { query: '?flag_classic_mode=true' });
+    await switchToStandardMode(page);
+    await pickInterfaceMode(page, 'Classic (Desktop Layout)');
+
+    const toolbar = page.locator('#classicEditorToolbar');
+    await expect(toolbar).toBeVisible();
+
+    // Exactly one button is in the tab order
+    const stops = await toolbar.evaluate(
+      (el) =>
+        Array.from(el.querySelectorAll('button')).filter(
+          (b) => b.tabIndex === 0
+        ).length
+    );
+    expect(stops).toBe(1);
+
+    await page.locator('#classicEdNewBtn').focus();
+    await page.keyboard.press('ArrowRight');
+    await expect(page.locator('#classicEdOpenBtn')).toBeFocused();
+
+    await page.keyboard.press('End');
+    await expect(page.locator('#classicEdPrintBtn')).toBeFocused();
+
+    // Wraps from the last button back to the first
+    await page.keyboard.press('ArrowRight');
+    await expect(page.locator('#classicEdNewBtn')).toBeFocused();
+
+    await page.keyboard.press('Home');
+    await expect(page.locator('#classicEdNewBtn')).toBeFocused();
+
+    // An aria-disabled button is still in the arrow ring — that is how a
+    // keyboard user discovers it and hears why it is unavailable
+    await page.locator('#classicEdExportStlBtn').focus();
+    await expect(page.locator('#classicEdExportStlBtn')).toBeFocused();
+  });
+});

@@ -1165,6 +1165,14 @@ body[data-ui-mode='classic'][data-classic-density='simplified']
   #classicTbSaveBtn,
 body[data-ui-mode='classic'][data-classic-density='simplified']
   .classic-tb-group[aria-label='Edit'],
+/* Editor-toolbar equivalents. Moot while Simplified hides the editor slot
+   outright, kept so the two hide-lists cannot drift apart if that changes. */
+body[data-ui-mode='classic'][data-classic-density='simplified']
+  #classicEdNewBtn,
+body[data-ui-mode='classic'][data-classic-density='simplified']
+  #classicEdExportDxfBtn,
+body[data-ui-mode='classic'][data-classic-density='simplified']
+  #classicEdPrintBtn,
 /* Everything the desktop Customizer does not have now lives in one section,
    so Simplified drops it whole rather than naming its members (D-20/D-21).
    This subsumes the previous #copyPresetNameBtn and #managePresetsBtn
