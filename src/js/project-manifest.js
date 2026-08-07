@@ -161,8 +161,7 @@ export function applyPreviewOverrides(manifest, parameters, qualityKey) {
   )?.[1];
   if (!entry) return parameters;
 
-  const has = (name) =>
-    Object.prototype.hasOwnProperty.call(parameters, name);
+  const has = (name) => Object.prototype.hasOwnProperty.call(parameters, name);
 
   let adjusted = null;
   const ensureCopy = () => adjusted ?? (adjusted = { ...parameters });

@@ -550,7 +550,11 @@ export async function layoutSignText({
         const segBraille = await translateCached(segment);
         const segCells = countCells(segBraille);
         if (segCells > cellsPerLine) anySegmentTooLong = true;
-        packable.push({ source: segment, braille: segBraille, cells: segCells });
+        packable.push({
+          source: segment,
+          braille: segBraille,
+          cells: segCells,
+        });
       }
       if (anySegmentTooLong) {
         warnings.push({

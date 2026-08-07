@@ -45,7 +45,8 @@ export function parseOffTriangleCount(input) {
     return 0;
   }
 
-  const match = head.match(OFF_HEADER_INLINE) || head.match(OFF_HEADER_NEXT_LINE);
+  const match =
+    head.match(OFF_HEADER_INLINE) || head.match(OFF_HEADER_NEXT_LINE);
   if (!match) return 0;
   const count = parseInt(match[1], 10);
   return Number.isFinite(count) && count >= 0 ? count : 0;

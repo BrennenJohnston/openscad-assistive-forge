@@ -14676,12 +14676,12 @@ body.tutorial-body-locked {
 }
 
 /* High contrast */
-:root[data-high-contrast="true"] .braille-panel {
+:root[data-high-contrast='true'] .braille-panel {
   border-width: 2px;
 }
 
-:root[data-high-contrast="true"] .braille-messages,
-:root[data-high-contrast="true"] .braille-multi-card-notice {
+:root[data-high-contrast='true'] .braille-messages,
+:root[data-high-contrast='true'] .braille-multi-card-notice {
   border-width: 2px;
 }
 

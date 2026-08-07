@@ -79,7 +79,8 @@ export function resolveAxisMarkColor(themeKey, docRef) {
  * }}
  */
 export function buildAxisTickOverlay(three, opts = {}) {
-  if (!three) throw new Error('buildAxisTickOverlay requires a Three.js module');
+  if (!three)
+    throw new Error('buildAxisTickOverlay requires a Three.js module');
 
   const themeKey = opts.themeKey || 'light';
   const rangeMm = clampPositive(opts.rangeMm, DEFAULT_RANGE_MM);

@@ -103,7 +103,8 @@ function _updateHfmStatusBar() {
 
   let displayText;
   if (_hfmPanAdjustEnabled) {
-    displayText = '[ALT ADJUST] \u25B2\u25BC edge \u00B7 \u25C4\u25BA size \u00B7 Shift+\u25B2\u25BC glow';
+    displayText =
+      '[ALT ADJUST] \u25B2\u25BC edge \u00B7 \u25C4\u25BA size \u00B7 Shift+\u25B2\u25BC glow';
   } else {
     const edge = _formatPercent(_hfmContrastScale);
     const size = _formatPercent(_hfmFontScale);
@@ -256,7 +257,13 @@ function _applyHfmPersistFade(value) {
  * @param {(value:number) => void} cfg.onInput
  * @returns {{ setEnabled: Function, sync: Function }}
  */
-function _buildHfmSliderControls({ idBase, titleText, range, getValue, onInput }) {
+function _buildHfmSliderControls({
+  idBase,
+  titleText,
+  range,
+  getValue,
+  onInput,
+}) {
   const inputs = [];
   const valueEls = [];
   const sections = [];

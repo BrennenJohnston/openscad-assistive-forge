@@ -19,7 +19,6 @@
  * @license GPL-3.0-or-later
  */
 
-
 // ── Render state constants ──────────────────────────────────────────────────
 
 export const RENDER_STATE = {
