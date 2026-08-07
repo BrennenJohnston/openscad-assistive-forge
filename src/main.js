@@ -8072,6 +8072,20 @@ if (rounded) {
       initSplit();
     }
 
+    // The Classic dock resizers change the 3D view's box without a window
+    // resize, so the canvas would keep its old backing store and letterbox
+    // or stretch. Same contract Split.js's onDrag fulfils above, same rAF
+    // throttle — a keyboard repeat or a drag fires this continuously.
+    let classicResizePending = false;
+    document.addEventListener('classic-layout-resize', () => {
+      if (!previewManager || classicResizePending) return;
+      classicResizePending = true;
+      requestAnimationFrame(() => {
+        classicResizePending = false;
+        previewManager.handleResize();
+      });
+    });
+
     // Classic desktop-shell layout (moves console/editor into grid slots,
     // presets into the Customizer dock)
     // Classic swaps the WebGL scene to the desktop Cornfield colors, so the

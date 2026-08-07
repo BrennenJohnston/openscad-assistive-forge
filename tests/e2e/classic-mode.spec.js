@@ -1409,3 +1409,50 @@ test.describe('Classic dock resizers (B4)', () => {
     expect(leftovers).toEqual([]);
   });
 });
+
+test.describe('Classic canvas re-measure (B5)', () => {
+  test('classic-resizer-remeasure: the 3D canvas follows a keyboard resize', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+
+    await page.setViewportSize({ width: 1400, height: 900 });
+    await loadSampleProject(page, { query: '?flag_classic_mode=true' });
+    await switchToStandardMode(page);
+    await pickInterfaceMode(page, 'Classic (Desktop Layout)');
+
+    const canvasSize = () =>
+      page.evaluate(() => {
+        const canvas = document.querySelector('.preview-panel canvas');
+        return canvas
+          ? { w: canvas.width, h: canvas.height, css: canvas.clientWidth }
+          : null;
+      });
+
+    const before = await canvasSize();
+    expect(before).not.toBeNull();
+    expect(before.w).toBeGreaterThan(0);
+
+    // Shrinking the editor gives the 3D view the space
+    const editorResizer = page.locator('#classicResizerEditor');
+    await editorResizer.focus();
+    for (let i = 0; i < 5; i++) await page.keyboard.press('ArrowLeft');
+
+    // The backing store has to follow the CSS box, not just the box change
+    await expect
+      .poll(async () => (await canvasSize()).w)
+      .toBeGreaterThan(before.w);
+
+    const after = await canvasSize();
+    const ratio = after.w / after.css;
+    expect(ratio).toBeGreaterThan(0.5);
+    expect(ratio).toBeLessThan(4);
+
+    // And the same for the horizontal separator
+    const stripResizer = page.locator('#classicResizerStrip');
+    await stripResizer.focus();
+    for (let i = 0; i < 4; i++) await page.keyboard.press('ArrowUp');
+
+    await expect.poll(async () => (await canvasSize()).h).toBeLessThan(after.h);
+  });
+});

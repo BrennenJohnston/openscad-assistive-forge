@@ -85,13 +85,17 @@ function readPxToken(host, token) {
   return Number.isFinite(value) ? value : 0;
 }
 
+/**
+ * Announce that the dock geometry changed. The 3D canvas sizes itself from
+ * its container, so it has to re-measure — the same contract Split.js's
+ * onDrag fulfils for the Forge layout (main.js:7908-7915).
+ */
+function emitLayoutResize() {
+  document.dispatchEvent(new CustomEvent('classic-layout-resize'));
+}
+
 export class ClassicResizerController {
-  /**
-   * @param {Object} [options]
-   * @param {Function} [options.onResize] - called after every applied change
-   */
-  constructor(options = {}) {
-    this.onResize = options.onResize || (() => {});
+  constructor() {
     /** @type {Element|null} */
     this._host = null;
     /** @type {Map<string, Element>} */
@@ -160,6 +164,7 @@ export class ClassicResizerController {
     this._parkedBottom = this._sizes.bottom ?? null;
     this._host.style.removeProperty('--classic-row-bottom');
     this._refreshAria();
+    emitLayoutResize();
   }
 
   /** Restore the size parked by {@link parkBottomSize}. */
@@ -169,6 +174,7 @@ export class ClassicResizerController {
     this._parkedBottom = null;
     this._apply('bottom');
     this._refreshAria();
+    emitLayoutResize();
   }
 
   /** @returns {boolean} whether the bottom strip is currently folded */
@@ -261,7 +267,7 @@ export class ClassicResizerController {
     this._apply(key);
     this._refreshAria(key);
     this._saveSizes();
-    this.onResize();
+    emitLayoutResize();
     return clamped;
   }
 
@@ -457,11 +463,10 @@ let instance = null;
 /**
  * Create the Classic resizers. Called at the end of the layout controller's
  * enter().
- * @param {Object} [options]
  * @returns {ClassicResizerController}
  */
-export function initClassicResizers(options = {}) {
-  if (!instance) instance = new ClassicResizerController(options);
+export function initClassicResizers() {
+  if (!instance) instance = new ClassicResizerController();
   instance.init();
   return instance;
 }
