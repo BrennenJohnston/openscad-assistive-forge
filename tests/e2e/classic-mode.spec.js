@@ -1485,6 +1485,19 @@ test.describe('Classic canvas re-measure (B5)', () => {
     await switchToStandardMode(page);
     await pickInterfaceMode(page, 'Classic (Desktop Layout)');
 
+    // Where WebGL is unavailable, PreviewManager initializes headless and
+    // creates NO canvas at all ("renderer: no-renderer (headless)" in its
+    // startup log) — which is the case for Firefox on the CI runners. There is
+    // no backing store to re-measure, so the precondition is absent rather
+    // than the behaviour being wrong. Skipped on the missing capability, not
+    // on a browser name: Firefox with WebGL still runs this and still counts.
+    const rendererPresent =
+      (await page.locator('.preview-panel canvas').count()) > 0;
+    test.skip(
+      !rendererPresent,
+      'no WebGL renderer in this environment, so there is no canvas to re-measure'
+    );
+
     const canvasSize = () =>
       page.evaluate(() => {
         const canvas = document.querySelector('.preview-panel canvas');
