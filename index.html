@@ -3258,6 +3258,25 @@
                         <h3 class="preview-settings-subheading" id="previewOptionsHeading">
                           Preview Options
                         </h3>
+                        <!-- The control that OWNS auto-preview state. The
+                             Classic Customizer checkbox and Design > Automatic
+                             Reload and Preview both drive this one; without it
+                             all three surfaces were dead. Hidden in Classic,
+                             which shows its own upstream-labelled mirror. -->
+                        <label class="toggle-switch">
+                          <input
+                            type="checkbox"
+                            id="autoPreviewToggle"
+                            checked
+                            aria-describedby="autoPreviewHelp"
+                          />
+                          <span class="toggle-label">Automatic preview</span>
+                        </label>
+                        <span id="autoPreviewHelp" class="sr-only"
+                          >Re-render the preview automatically when a parameter
+                          changes. Turn off to preview only when you press
+                          Preview.</span
+                        >
                         <label class="toggle-switch">
                           <input
                             type="checkbox"

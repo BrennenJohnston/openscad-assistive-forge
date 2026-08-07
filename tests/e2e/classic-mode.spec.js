@@ -1533,3 +1533,62 @@ test.describe('Classic canvas re-measure (B5)', () => {
     await expect.poll(inSync, { timeout: 15_000 }).toBe(true);
   });
 });
+
+test.describe('Automatic Preview control (C4)', () => {
+  test('classic-auto-preview-sync: all three surfaces drive one piece of state', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+
+    await loadSampleProject(page, { query: '?flag_classic_mode=true' });
+    await switchToStandardMode(page);
+
+    // The canonical control exists and owns the state
+    const forgeToggle = page.locator('#autoPreviewToggle');
+    await expect(forgeToggle).toHaveCount(1);
+    await expect(forgeToggle).toBeChecked();
+
+    const designMenuChecked = async () => {
+      await page.locator('#designMenuBtn').click();
+      const item = page.getByRole('menuitemcheckbox', {
+        name: 'Automatic Reload and Preview',
+      });
+      await expect(item).toBeVisible({ timeout: 5_000 });
+      const checked = await item.getAttribute('aria-checked');
+      await page.keyboard.press('Escape');
+      return checked === 'true';
+    };
+    const toggleFromDesignMenu = async () => {
+      await page.locator('#designMenuBtn').click();
+      await page
+        .getByRole('menuitemcheckbox', {
+          name: 'Automatic Reload and Preview',
+        })
+        .click();
+    };
+
+    // Standard: the Design menu reflects and drives the real control
+    expect(await designMenuChecked()).toBe(true);
+    await toggleFromDesignMenu();
+    await expect(forgeToggle).not.toBeChecked();
+    expect(await designMenuChecked()).toBe(false);
+    await toggleFromDesignMenu();
+    await expect(forgeToggle).toBeChecked();
+
+    // Classic: the Customizer checkbox mirrors it both ways, and the real
+    // control is present but not shown
+    await pickInterfaceMode(page, 'Classic (Desktop Layout)');
+    const classicCheck = page.locator('#classicAutoPreviewCheck');
+    await expect(classicCheck).toBeVisible();
+    await expect(classicCheck).toBeChecked();
+    await expect(forgeToggle).toBeHidden();
+
+    await classicCheck.uncheck();
+    await expect(forgeToggle).not.toBeChecked();
+    expect(await designMenuChecked()).toBe(false);
+
+    await toggleFromDesignMenu();
+    await expect(classicCheck).toBeChecked();
+    await expect(forgeToggle).toBeChecked();
+  });
+});
