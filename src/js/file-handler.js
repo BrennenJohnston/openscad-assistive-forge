@@ -58,6 +58,7 @@ import * as SharedImageStore from './shared-image-store.js';
 import { importProjectFromFiles } from './storage-manager.js';
 import { addProjectFile, getProjectFiles } from './saved-projects-manager.js';
 import { showMissingDependenciesDialog, showConfirmDialog } from './dialogs.js';
+import { getEditorStateManager } from './editor-state-manager.js';
 import { escapeHtml } from './html-utils.js';
 import {
   announceError as _announceError,
@@ -862,6 +863,30 @@ export function initFileHandler({
       };
       reader.readAsText(file);
       return;
+    }
+
+    // Unsaved editor text lives only in the buffer, and the load below
+    // replaces it. Examples ask their own question before reaching here
+    // (loadExampleByKey), so they must not ask a second time.
+    const priorState = stateManager.getState();
+    const isConfirmedExampleLoad =
+      source === 'example' || source === 'program-example';
+    if (
+      priorState.uploadedFile &&
+      !isConfirmedExampleLoad &&
+      getEditorStateManager().getIsDirty()
+    ) {
+      const confirmed = await showConfirmDialog(
+        'You have unsaved edits in the code editor. Loading another file will discard them.',
+        'Unsaved code edits',
+        'Discard edits and load',
+        'Keep editing',
+        { destructive: true }
+      );
+      if (!confirmed) {
+        updateStatus('Load cancelled');
+        return;
+      }
     }
 
     console.log('File loaded:', fileName, fileContent.length, 'bytes');
