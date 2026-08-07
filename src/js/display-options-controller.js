@@ -172,8 +172,7 @@ export class DisplayOptionsController {
     this._syncCheckbox(option);
     if (option === 'edges') this._updateEdgeBudgetStatus();
     const label =
-      HUMAN_LABELS[option] ||
-      option.charAt(0).toUpperCase() + option.slice(1);
+      HUMAN_LABELS[option] || option.charAt(0).toUpperCase() + option.slice(1);
     announceImmediate(`${label} ${enabled ? 'shown' : 'hidden'}`);
   }
 

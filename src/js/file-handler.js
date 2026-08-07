@@ -1869,8 +1869,7 @@ export function initFileHandler({
       syncPreviewModelColorOverride();
       syncPreviewAppearanceOverride();
 
-      const measurementsToggle =
-        document.getElementById('measurementsToggle');
+      const measurementsToggle = document.getElementById('measurementsToggle');
       if (measurementsToggle) {
         measurementsToggle.checked = previewManager.measurementsEnabled;
       }
@@ -1888,8 +1887,7 @@ export function initFileHandler({
         autoBedToggle.checked = previewManager.autoBedEnabled;
       }
 
-      const zoomToCursorToggle =
-        document.getElementById('zoomToCursorToggle');
+      const zoomToCursorToggle = document.getElementById('zoomToCursorToggle');
       if (zoomToCursorToggle) {
         zoomToCursorToggle.checked = previewManager.zoomToCursorEnabled;
       }
@@ -1923,8 +1921,7 @@ export function initFileHandler({
           // black while Alt View is active (activeTheme is only light/dark).
           pm.updateTheme(pm.detectTheme(), highContrast);
 
-          const modelColorPicker =
-            document.getElementById('modelColorPicker');
+          const modelColorPicker = document.getElementById('modelColorPicker');
           const hasSavedColor = localStorage.getItem(STORAGE_KEY_MODEL_COLOR);
           if (modelColorPicker && !hasSavedColor) {
             const themeKey = highContrast ? `${activeTheme}-hc` : activeTheme;

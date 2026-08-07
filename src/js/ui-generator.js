@@ -2665,8 +2665,7 @@ export function renderParameterUI(
   if (openGroupIds instanceof Set) {
     resolvedOpenIds = openGroupIds;
   } else if (useStoredState && _activeCustomizerFileId) {
-    resolvedOpenIds =
-      loadOpenGroupIds(_activeCustomizerFileId) ?? new Set();
+    resolvedOpenIds = loadOpenGroupIds(_activeCustomizerFileId) ?? new Set();
   } else {
     // Preserve the user's current expand/collapse state across an
     // automatic re-render (theme change, preset apply, etc.).

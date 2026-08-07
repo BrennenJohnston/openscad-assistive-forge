@@ -57,8 +57,7 @@ export class FolderSyncController {
     this._showDirectoryPicker =
       deps.showDirectoryPicker ??
       ((opts) =>
-        globalThis.showDirectoryPicker &&
-        globalThis.showDirectoryPicker(opts));
+        globalThis.showDirectoryPicker && globalThis.showDirectoryPicker(opts));
     this._getStoredHandle = deps.getStoredHandle ?? loadFolderHandle;
     this._persistHandle = deps.persistHandle ?? saveFolderHandle;
     this._forgetHandle = deps.forgetHandle ?? clearFolderHandle;

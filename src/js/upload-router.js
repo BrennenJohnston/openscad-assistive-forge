@@ -66,7 +66,10 @@ export function classifyDrop(input) {
 
   const items = Array.from(input || []);
   for (const item of items) {
-    if (typeof DataTransferItem !== 'undefined' && item instanceof DataTransferItem) {
+    if (
+      typeof DataTransferItem !== 'undefined' &&
+      item instanceof DataTransferItem
+    ) {
       if (item.kind !== 'file') continue;
       const entry = item.webkitGetAsEntry?.();
       if (entry?.isDirectory) {
@@ -110,6 +113,7 @@ export function classifyDrop(input) {
     };
   }
 
-  const kind = EXT_KIND.get(extensionOf(files[0].name)) ?? DROP_KIND.UNSUPPORTED;
+  const kind =
+    EXT_KIND.get(extensionOf(files[0].name)) ?? DROP_KIND.UNSUPPORTED;
   return { kind, files, directoryEntries };
 }

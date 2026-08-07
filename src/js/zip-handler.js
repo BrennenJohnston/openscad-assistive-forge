@@ -3,7 +3,6 @@
  * @license GPL-3.0-or-later
  */
 
-
 /**
  * Extract files from a ZIP archive
  * @param {File|Blob} zipFile - ZIP file to extract

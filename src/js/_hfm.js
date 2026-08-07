@@ -311,7 +311,14 @@ function _ensureGlyphModel({ fontFamily, fontSizePx, charW, charH, dpr }) {
   const key = `${fontFamily}|${fontSizePx}|${charW}|${charH}|${dpr}|${color}`;
   if (_atlas && _atlasKey === key) return;
 
-  _atlas = buildGlyphAtlas({ fontFamily, fontSizePx, charW, charH, dpr, color });
+  _atlas = buildGlyphAtlas({
+    fontFamily,
+    fontSizePx,
+    charW,
+    charH,
+    dpr,
+    color,
+  });
   _glyphVectors = _buildGlyphVectors(_atlas);
   _lookup = createLookup(_glyphVectors);
   _atlasKey = key;
@@ -459,10 +466,7 @@ function _renderFrame({
   // Sync overlay canvas backing store to container size at device resolution
   const backingW = Math.max(1, Math.round(width * dpr));
   const backingH = Math.max(1, Math.round(height * dpr));
-  if (
-    _overlayCanvas.width !== backingW ||
-    _overlayCanvas.height !== backingH
-  ) {
+  if (_overlayCanvas.width !== backingW || _overlayCanvas.height !== backingH) {
     resizeOverlay(_overlayCanvas, width, height, dpr, _persistCanvas);
   }
 
@@ -537,10 +541,7 @@ export async function initAltView(previewManager) {
 
       // Camera changes (drag, damping decay, programmatic moves) mark the
       // frame dirty so conversion runs only while something moves.
-      previewManager.controls?.addEventListener?.(
-        'change',
-        _onControlsChange
-      );
+      previewManager.controls?.addEventListener?.('change', _onControlsChange);
 
       isEnabled = true;
       _overlayCanvas.style.display = 'block';

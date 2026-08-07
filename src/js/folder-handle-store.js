@@ -52,8 +52,7 @@ function openDb(idbFactory) {
       }
     };
     req.onsuccess = () => resolve(req.result);
-    req.onerror = () =>
-      reject(req.error || new Error('IndexedDB open failed'));
+    req.onerror = () => reject(req.error || new Error('IndexedDB open failed'));
     req.onblocked = () =>
       reject(new Error('IndexedDB open blocked by another connection'));
   });

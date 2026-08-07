@@ -24,7 +24,9 @@ const cache = new Map();
 
 function createWorker() {
   // Classic worker (importScripts inside) — do NOT pass { type: 'module' }.
-  const w = new Worker(new URL('../worker/liblouis-worker.js', import.meta.url));
+  const w = new Worker(
+    new URL('../worker/liblouis-worker.js', import.meta.url)
+  );
 
   w.onmessage = (e) => {
     const { id, result } = e.data || {};
@@ -118,7 +120,11 @@ export function stripUnsupportedChars(text) {
  *   strippedChars: string[],
  * }>}
  */
-export async function translateText(text, table, { preserveCaps = false } = {}) {
+export async function translateText(
+  text,
+  table,
+  { preserveCaps = false } = {}
+) {
   await ensureReady();
 
   const { text: safeText, stripped } = stripUnsupportedChars(text);
