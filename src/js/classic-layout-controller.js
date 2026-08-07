@@ -38,6 +38,11 @@ import {
   destroyClassicResizers,
   getClassicResizerController,
 } from './classic-resizer-controller.js';
+import {
+  ClassicDockModel,
+  DOCK_FIELDS,
+  panelLabel,
+} from './classic-dock-model.js';
 
 const PANES_STORAGE_KEY = 'openscad-forge-classic-panes';
 
@@ -114,43 +119,46 @@ const SLOT_DEFS = [
     className: 'classic-slot classic-editor-slot',
     label: 'Editor',
     panelId: 'expertModePanel',
+    parentId: 'classicFieldLeft',
     titlebar: { text: 'Editor', closeBtnId: 'classicEditorCloseBtn' },
   },
   {
     id: 'classicViewportControlSlot',
     className: 'classic-slot classic-viewport-control-slot',
     label: 'Viewport-Control',
+    parentId: 'classicFieldRightBottom',
     titlebar: { text: 'Viewport-Control' },
   },
 ];
 
 /**
- * The dock fields the grid is built from. Each is stamped on <body> as
- * data-classic-field-<name>="occupied|empty"; classic.css collapses an empty
- * field's track to zero and hides its slot, so no arrangement can leave a
- * stray auto-placed cell. `centre` (the 3D view) is always occupied and has
- * no attribute.
- * @type {Array<{name: string, datasetSuffix: string}>}
+ * The dock field containers, in creation order. Each is a grid item holding
+ * whichever panels the dock model has placed there (B6); the panels move
+ * between them, the containers themselves never move.
+ *
+ * `anchorId` inserts a container where a static panel already sits rather than
+ * appending it, so adopting that panel into the dock leaves the document
+ * order — and therefore the reading order — exactly as it was.
+ *
+ * The bottom strip predates the field model and keeps its own id and class
+ * (B2), so it is created by _ensureContainer instead of appearing here.
+ * @type {Array<{id: string, className: string, anchorId?: string}>}
  */
-const DOCK_FIELDS = [
-  { name: 'left', datasetSuffix: 'Left' },
-  { name: 'right-top', datasetSuffix: 'RightTop' },
-  { name: 'right-bottom', datasetSuffix: 'RightBottom' },
-  { name: 'bottom', datasetSuffix: 'Bottom' },
+const DOCK_FIELD_CONTAINERS = [
+  {
+    id: 'classicFieldRightTop',
+    className: 'classic-dock-field classic-dock-field--right-top',
+    anchorId: 'paramPanel',
+  },
+  {
+    id: 'classicFieldLeft',
+    className: 'classic-dock-field classic-dock-field--left',
+  },
+  {
+    id: 'classicFieldRightBottom',
+    className: 'classic-dock-field classic-dock-field--right-bottom',
+  },
 ];
-
-/**
- * The panes that start hidden and are turned on from the Window menu. The
- * key is the `<key>Visible` half of the persisted pane state and the
- * `data-classic-<key>-visible` attribute; the value is the announced name.
- * Names are the upstream dock titles, owner-approved 2026-08-06.
- * @type {Record<string, string>}
- */
-const OPTIONAL_PANE_LABELS = {
-  animate: 'Animate',
-  fontList: 'Font List',
-  viewportControl: 'Viewport-Control',
-};
 
 /**
  * Controls that move into the Customizer dock rather than a created slot, so
@@ -219,6 +227,17 @@ export class ClassicLayoutController {
 
     /** Pane visibility state, persisted. Desktop defaults: editor shown. */
     this._panes = this._loadPaneState();
+
+    /**
+     * Which panel sits in which dock field (B6). The only thing that moves a
+     * panel is its movePanel(); this controller owns the DOM containers, the
+     * occupancy attributes and the resize event that follow from it.
+     * @type {ClassicDockModel}
+     */
+    this._dock = new ClassicDockModel({
+      isPanelVisible: (panelId) => this._isPanelVisible(panelId),
+      isFieldAvailable: (field) => this._isFieldAvailable(field),
+    });
   }
 
   /**
@@ -286,15 +305,23 @@ export class ClassicLayoutController {
     // Reset to Log, remembering what was found so exit() can restore it (D-9).
     this._consoleTabOnEnter = this._sanitizeConsoleTabs();
 
+    // The right-top container is created around the Customizer, and the strip
+    // and camera bar keep the positions they had before the field model, so
+    // adopting the dock does not reshuffle the document order.
+    this._ensureField(mainInterface, DOCK_FIELD_CONTAINERS[0]);
     this._ensureContainer(
       mainInterface,
       BOTTOM_STRIP_ID,
-      'classic-bottom-strip'
+      'classic-dock-field classic-bottom-strip'
     );
     // The camera bar is static markup in index.html (E3), so it is adopted
     // into the grid rather than created — same appendChild contract as every
     // other move, and exit() puts it back where it came from.
     this._adoptIntoGrid(mainInterface, CAMERA_BAR_ID);
+
+    for (const def of DOCK_FIELD_CONTAINERS.slice(1)) {
+      this._ensureField(mainInterface, def);
+    }
 
     for (const def of SLOT_DEFS) {
       const panel = def.panelId ? document.getElementById(def.panelId) : null;
@@ -338,6 +365,10 @@ export class ClassicLayoutController {
         panel.open = true;
       }
     }
+
+    // Slots are created in their default fields, so this is a no-op on a first
+    // entry and puts a user's saved arrangement back in place afterwards (B9).
+    this._dock.applyToDom();
 
     this._applyPaneAttributes();
     if (this._isEditorAvailable()) {
@@ -387,10 +418,14 @@ export class ClassicLayoutController {
     for (const def of SLOT_DEFS) {
       document.getElementById(def.id)?.remove();
     }
-    // The strip is created here, so it is removed here. The camera bar is
-    // static markup that was adopted, so the move-restore loop above has
-    // already put it back — removing it would delete it from the document.
+    // The strip and the field containers are created here, so they are removed
+    // here. The camera bar and the Customizer are static markup that was
+    // adopted, so the move-restore loop above has already put them back —
+    // removing those would delete them from the document.
     document.getElementById(BOTTOM_STRIP_ID)?.remove();
+    for (const def of DOCK_FIELD_CONTAINERS) {
+      document.getElementById(def.id)?.remove();
+    }
 
     delete document.body.dataset.classicEditorHidden;
     delete document.body.dataset.classicCustomizerHidden;
@@ -496,7 +531,7 @@ export class ClassicLayoutController {
     this._applyPaneAttributes();
     this._savePaneState();
     announceImmediate(
-      `${OPTIONAL_PANE_LABELS[pane]} ${this._panes[key] ? 'shown' : 'hidden'}`
+      `${panelLabel(pane)} ${this._panes[key] ? 'shown' : 'hidden'}`
     );
     return this._panes[key];
   }
@@ -544,6 +579,55 @@ export class ClassicLayoutController {
   }
 
   /**
+   * Whether a dock panel is currently on screen — its pane toggle is on AND
+   * the density has not dropped it. This is what makes a field occupied, so
+   * moving a panel moves its contribution to the grid with it.
+   * @param {string} panelId
+   * @returns {boolean}
+   * @private
+   */
+  _isPanelVisible(panelId) {
+    const simplified =
+      getUIModeController().getClassicDensity() === 'simplified';
+    switch (panelId) {
+      case 'editor':
+        return this._panes.editorVisible && !simplified;
+      case 'customizer':
+        return this._panes.customizerVisible;
+      // Viewport-Control is Standard-only for v1 (D-7). Simplified treats it
+      // as hidden without clearing the preference, so returning to Standard
+      // brings it back rather than silently resetting the arrangement.
+      case 'viewportControl':
+        return this._panes.viewportControlVisible && !simplified;
+      case 'animate':
+        return this._panes.animateVisible && !simplified;
+      case 'fontList':
+        return this._panes.fontListVisible && !simplified;
+      // Console and Error-Log have no toggle yet — Window > Error-Log arrives
+      // with F1. Simplified drops both with the rest of the code-facing docks.
+      case 'console':
+      case 'errorLog':
+        return !simplified;
+      default:
+        return false;
+    }
+  }
+
+  /**
+   * Whether a field is rendered at all right now. Moving a panel into a field
+   * the current density does not draw would strand it with no way back, so
+   * those moves are refused rather than offered and quietly ignored.
+   * @param {string} field
+   * @returns {boolean}
+   * @private
+   */
+  _isFieldAvailable(field) {
+    const simplified =
+      getUIModeController().getClassicDensity() === 'simplified';
+    return simplified ? field === 'right-top' : true;
+  }
+
+  /**
    * Which dock fields currently hold a visible panel. The grid derives its
    * track sizes from this, so every arrangement is described by data rather
    * than by a hand-written template per combination.
@@ -551,18 +635,46 @@ export class ClassicLayoutController {
    * @private
    */
   _fieldOccupancy() {
-    const simplified =
-      getUIModeController().getClassicDensity() === 'simplified';
-    return {
-      left: this._panes.editorVisible && !simplified,
-      'right-top': this._panes.customizerVisible,
-      // Viewport-Control is Standard-only for v1 (D-7). Simplified treats it
-      // as hidden without clearing the preference, so returning to Standard
-      // brings it back rather than silently resetting the arrangement.
-      'right-bottom': this._panes.viewportControlVisible && !simplified,
-      // Simplified drops the code-facing docks, which empties the strip.
-      bottom: !simplified,
-    };
+    return this._dock.getOccupancy();
+  }
+
+  /**
+   * Move a dock panel into another field (B6) — the one mutation the dock
+   * has. Re-parents the panel, re-stamps the pane and occupancy attributes,
+   * and fires the resize event so the 3D view re-measures against its new
+   * track (B5). Announcement and focus are the title-bar menu's job (B8).
+   *
+   * @param {string} panelId - a dock panel id, e.g. 'console' (NOT an element id)
+   * @param {string} targetField - 'left' | 'right-top' | 'right-bottom' | 'bottom'
+   * @param {number|null} [index] - position among the field's occupants
+   * @param {{mergeWith?: string|null}} [options] - join an occupant's tab group
+   * @returns {{ok: boolean, reason: string|null, field: string|null, merged: boolean}}
+   */
+  movePanel(panelId, targetField, index = null, options = {}) {
+    const result = this._dock.movePanel(panelId, targetField, index, options);
+    if (!result.ok) return result;
+
+    this._dock.applyToDom();
+    this._applyPaneAttributes();
+    document.dispatchEvent(new CustomEvent('classic-layout-resize'));
+    return result;
+  }
+
+  /**
+   * The dock's field map (B6), for the title-bar menu and the tests.
+   * @returns {Record<string, string[][]>}
+   */
+  getArrangement() {
+    return this._dock.getArrangement();
+  }
+
+  /**
+   * Which field a panel currently sits in.
+   * @param {string} panelId
+   * @returns {string|null}
+   */
+  getPanelField(panelId) {
+    return this._dock.getFieldOf(panelId);
   }
 
   /**
@@ -649,6 +761,40 @@ export class ClassicLayoutController {
       el = document.createElement('div');
       el.id = id;
       el.className = className;
+      mainInterface.appendChild(el);
+    }
+    return el;
+  }
+
+  /**
+   * Find or create a dock field container. When the definition names an
+   * anchor, the container takes that element's place in the document and the
+   * element moves inside it — that is how the Customizer joins the dock
+   * without changing where it falls in the reading order.
+   * @param {Element} mainInterface
+   * @param {{id: string, className: string, anchorId?: string}} def
+   * @returns {Element}
+   * @private
+   */
+  _ensureField(mainInterface, def) {
+    let el = document.getElementById(def.id);
+    if (el) return el;
+
+    el = document.createElement('div');
+    el.id = def.id;
+    el.className = def.className;
+
+    const anchor = def.anchorId ? document.getElementById(def.anchorId) : null;
+    if (anchor && anchor.parentElement) {
+      anchor.parentElement.insertBefore(el, anchor);
+      this._moved.push({
+        el: anchor,
+        parent: anchor.parentElement,
+        nextSibling: anchor.nextSibling,
+        wasOpen: anchor.tagName === 'DETAILS' ? anchor.open : null,
+      });
+      el.appendChild(anchor);
+    } else {
       mainInterface.appendChild(el);
     }
     return el;
