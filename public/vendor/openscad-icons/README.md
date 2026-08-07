@@ -42,10 +42,16 @@ icons and the transcribed structure describe the same release.
 Icon **names** come from `resources/icons-chokusen.qrc` in the same commit —
 never guessed. That manifest is also identical between the two commits.
 
-## Vendored files (29 per theme)
+## Vendored files (33 per theme)
 
-add, axes, crosshairs, export-dxf, export-stl, indent, new, open, orthogonal,
-parameter, perspective, preview, redo, remove, render, reset-view, save,
-scalemarkers, show-edges, surface, undo, unindent, view-back, view-bottom,
-view-front, view-left, view-right, view-top, zoom-all (all prefixed
-`chokusen-`, in both the `chokusen/` and `chokusen-dark/` directories).
+add, axes, crosshairs, export-dxf, export-stl, indent, measure-angle,
+measure-distance, new, open, orthogonal, parameter, perspective, preview,
+redo, remove, render, reset-view, save, scalemarkers, show-edges, surface,
+undo, unindent, view-back, view-bottom, view-front, view-left, view-right,
+view-top, zoom-all, zoom-in, zoom-out (all prefixed `chokusen-`, in both the
+`chokusen/` and `chokusen-dark/` directories).
+
+The `vcr-control-*` and `animate-*` glyphs exist at the same commit but are
+NOT vendored yet: nothing references them until the Animate panel is built,
+and an unreferenced asset is audit surface for no benefit. Add them with that
+panel, using the procedure above.

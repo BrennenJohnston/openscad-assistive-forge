@@ -43,6 +43,14 @@
   background-image: url('/vendor/openscad-icons/chokusen/chokusen-indent.svg');
 }
 
+.classic-icon[data-icon='measure-angle'] {
+  background-image: url('/vendor/openscad-icons/chokusen/chokusen-measure-angle.svg');
+}
+
+.classic-icon[data-icon='measure-distance'] {
+  background-image: url('/vendor/openscad-icons/chokusen/chokusen-measure-distance.svg');
+}
+
 .classic-icon[data-icon='new'] {
   background-image: url('/vendor/openscad-icons/chokusen/chokusen-new.svg');
 }
@@ -133,4 +141,12 @@
 
 .classic-icon[data-icon='zoom-all'] {
   background-image: url('/vendor/openscad-icons/chokusen/chokusen-zoom-all.svg');
+}
+
+.classic-icon[data-icon='zoom-in'] {
+  background-image: url('/vendor/openscad-icons/chokusen/chokusen-zoom-in.svg');
+}
+
+.classic-icon[data-icon='zoom-out'] {
+  background-image: url('/vendor/openscad-icons/chokusen/chokusen-zoom-out.svg');
 }
