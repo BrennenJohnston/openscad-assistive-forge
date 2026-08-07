@@ -1368,6 +1368,24 @@
                      desktop Customizer's header line. -->
               </div>
               <div id="classicPresetRow" class="classic-preset-row"></div>
+              <!-- Desktop's Customizer header is exactly the two rows above.
+                   Everything this app adds beyond it lives in this collapsed
+                   section (D-20) rather than being blended into the desktop
+                   rows; classic-layout-controller.js moves the controls in.
+                   <details> is the codebase's disclosure primitive, so the
+                   keyboard behaviour, ARIA and focus ring come for free. -->
+              <details
+                id="classicForgeExtras"
+                class="classic-forge-extras forge-disclosure"
+              >
+                <summary class="classic-forge-extras-summary">
+                  <span class="forge-disclosure-title">Forge additions</span>
+                </summary>
+                <div
+                  id="classicForgeExtrasRow"
+                  class="classic-forge-extras-row"
+                ></div>
+              </details>
             </div>
             <!-- WCAG 2.2 SC 3.2.6 Consistent Help: Help mechanisms (Features Guide button)                  appear in consistent relative order across panels (top-right area) -->
             <div class="panel-header">
@@ -2822,17 +2840,22 @@
               <!-- Classic moves this row into #classicCustomizerBar so the
                    dock header matches the desktop Customizer's first line. -->
               <div class="customizer-header-row" id="customizerHeaderRow">
-                <label for="paramDetailLevel" class="sr-only"
-                  >Show Details</label
-                ><select
-                  id="paramDetailLevel"
-                  class="customizer-header-select"
-                  aria-label="Parameter detail level"
-                >
-                  <option value="show">Show Details</option>
-                  <option value="inline">Inline Details</option>
-                  <option value="hide" selected>Hide Details</option>
-                  <option value="desc-only">Description Only</option></select
+                <!-- Classic moves the detail combobox alone up to its first
+                     header row, so it travels with its label rather than
+                     leaving an orphaned <label for> behind. -->
+                <span id="paramDetailLevelWrap" class="param-detail-level-wrap"
+                  ><label for="paramDetailLevel" class="sr-only"
+                    >Show Details</label
+                  ><select
+                    id="paramDetailLevel"
+                    class="customizer-header-select"
+                    aria-label="Parameter detail level"
+                  >
+                    <option value="show">Show Details</option>
+                    <option value="inline">Inline Details</option>
+                    <option value="hide" selected>Hide Details</option>
+                    <option value="desc-only">Description Only</option>
+                  </select></span
                 ><button type="button"
                   id="resetAllBtn"
                   class="btn btn-sm btn-outline"
@@ -2842,6 +2865,7 @@
                   Reset All
                 </button>
                 <div
+                  id="customizerGroupToggles"
                   class="customizer-group-toggles"
                   role="group"
                   aria-label="Expand or collapse all parameter groups"
