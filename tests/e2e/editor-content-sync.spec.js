@@ -24,6 +24,9 @@ const WASM_READY_TIMEOUT = 180_000;
 // Write-back is debounced at 500ms; poll past it rather than sleeping.
 const WRITE_BACK_TIMEOUT = 5_000;
 
+// The camera test reads a value the app copies to the clipboard.
+test.use({ permissions: ['clipboard-read', 'clipboard-write'] });
+
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem('openscad-forge-first-visit-seen', 'true');
@@ -294,5 +297,49 @@ test.describe('Editor content sync (R5)', () => {
 
     // 'r' must not have fired Reset Parameters
     expect(await page.evaluate(() => window.__resetClicks)).toBe(0);
+  });
+
+  test('post-edit preview keeps the camera where the user put it (D-11)', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    await bootstrap(page);
+    await loadProject(page, FIXTURE_A);
+    await expect(page.locator('.preview-state-indicator')).toContainText(
+      'Preview ready',
+      { timeout: 180_000 }
+    );
+
+    // Standard mode so the full menu bar is available
+    await page.locator('#uiModeToggle').click();
+
+    const readDistance = async () => {
+      await page.locator('#editMenuBtn').click();
+      await page.getByRole('menuitem', { name: 'Copy Viewport Distance' }).click();
+      return (await page.evaluate(() => navigator.clipboard.readText())).trim();
+    };
+
+    // Zoom, so the camera sits where the user put it, not at the fit default
+    await page.locator('#viewMenuBtn').click();
+    await page.getByRole('menuitem', { name: 'Zoom In' }).click();
+    await page.waitForTimeout(500);
+    const distanceBefore = await readDistance();
+    expect(Number(distanceBefore)).toBeGreaterThan(0);
+
+    await page.locator('#expertModeToggle').click();
+    const editor = page.locator('#expertModeBody .cm-content').first();
+    await expect(editor).toBeVisible({ timeout: 15_000 });
+    await appendToEditor(page, editor, '\ntranslate([0,0,90]) sphere(20);');
+    await expect(editor).toContainText('sphere(20);');
+
+    await page.locator('#expertRunPreviewBtn').click();
+    await expect(page.locator('.preview-state-indicator')).toContainText(
+      'Preview ready',
+      { timeout: 180_000 }
+    );
+
+    // The model grew a lot. Re-fitting would move the camera and throw away
+    // a zoomed-in user's working position, so the distance must not change.
+    expect(await readDistance()).toBe(distanceBefore);
   });
 });
