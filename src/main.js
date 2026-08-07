@@ -579,8 +579,10 @@ async function initApp() {
     });
 
   document.getElementById('memoryBannerSave')?.addEventListener('click', () => {
-    // Trigger project save - dispatch event that saved-projects system listens for
-    document.getElementById('saveProjectBtn')?.click();
+    // This banner tells the user to save immediately, so the button has to
+    // reach a real save. It used to click #saveProjectBtn, which does not
+    // exist in index.html.
+    getFileActionsController().onSave();
   });
 
   document
@@ -616,25 +618,24 @@ async function initApp() {
   document
     .getElementById('memoryBannerExport')
     ?.addEventListener('click', () => {
-      // Trigger STL export
-      const exportBtn = document.getElementById('renderExportButton');
-      if (exportBtn) {
-        exportBtn.click();
-      }
+      // Downloads the render that already exists, and says so plainly when
+      // there is none. Deliberately does NOT start a fresh render: rendering
+      // is the memory-hungry operation this banner is warning about.
+      // Previously clicked #renderExportButton, which does not exist.
+      exportFormatFromMenu('stl');
       console.log('[Memory] STL export triggered for emergency save');
     });
 
   document
     .getElementById('memoryBannerReload')
     ?.addEventListener('click', () => {
-      // Save current state to localStorage before reload
-      const currentCode =
-        document.getElementById('openscadSource')?.value || '';
-      if (currentCode) {
-        safeSetItem(STORAGE_KEY_RECOVERY_SOURCE, currentCode);
-        safeSetItem(STORAGE_KEY_RECOVERY_TIMESTAMP, Date.now().toString());
-      }
-      // Reload in recovery mode
+      // Recovery mode is real — it boots with the code editor disabled to
+      // cut memory. Restoring work across the reload is NOT: the snapshot
+      // this used to write came from #openscadSource, which does not exist,
+      // and the read side sets window._recoverySource, which nothing
+      // consumes. Rather than write data no one reads, the button now only
+      // does what it can do, and its tooltip no longer promises a save.
+      // The beforeunload dirty guard still stops an unsaved buffer here.
       window.location.href = window.location.pathname + '?recovery=true';
     });
 
