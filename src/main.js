@@ -44,7 +44,7 @@ import {
 import { setStlViewActive, isStlViewActive } from './js/stl-view-mode.js';
 import { escapeHtml, isValidServiceWorkerMessage } from './js/html-utils.js';
 import { getQualityPreset, COMPLEXITY_TIER } from './js/quality-tiers.js';
-import { getThreeModule } from './js/preview.js';
+import { getThreeModule, CAMERA_ZOOM_STEP } from './js/preview.js';
 import { normalizeHexColor } from './js/color-utils.js';
 import { buildDefineArgs as formatBuildDefineArgs } from './js/scad-param-formatter.js';
 import {
@@ -3195,7 +3195,7 @@ async function initApp() {
         label: 'Zoom In',
         handler: () => {
           if (previewManager) {
-            previewManager.zoomCamera(1);
+            previewManager.zoomCamera(CAMERA_ZOOM_STEP);
             announceCameraAction('zoom-in');
           }
         },
@@ -3205,7 +3205,7 @@ async function initApp() {
         label: 'Zoom Out',
         handler: () => {
           if (previewManager) {
-            previewManager.zoomCamera(-1);
+            previewManager.zoomCamera(-CAMERA_ZOOM_STEP);
             announceCameraAction('zoom-out');
           }
         },
@@ -8224,7 +8224,10 @@ if (rounded) {
       } catch {
         // Preference read is best-effort.
       }
-      classicToolbar.querySelectorAll('[data-classic-view]').forEach((btn) => {
+      // E3 moved the snap-view buttons to the 3D view toolbar. Scoping this
+      // to #classicToolbar would silently leave every one of them dead, so it
+      // queries the document — both bars are Classic-only markup.
+      document.querySelectorAll('[data-classic-view]').forEach((btn) => {
         btn.addEventListener('click', () => {
           if (!previewManager) return;
           previewManager.setCameraView(btn.dataset.classicView);
@@ -8293,66 +8296,63 @@ if (rounded) {
         syncProjectionButtons();
       });
 
-      // Overlay toggles share displayOptionsController state
+      // Overlay toggles share displayOptionsController state. They listen for
+      // display-option-change rather than only updating on their own click,
+      // so toggling the same flag from the View menu or the camera panel
+      // keeps this button's aria-pressed truthful.
       const wireOverlayToggle = (btnId, option) => {
         const btn = document.getElementById(btnId);
         if (!btn) return;
-        btn.setAttribute(
-          'aria-pressed',
-          String(displayOptionsController.get(option))
-        );
-        btn.addEventListener('click', () => {
-          displayOptionsController.toggle(option);
+        const syncPressed = () =>
           btn.setAttribute(
             'aria-pressed',
             String(displayOptionsController.get(option))
           );
+        syncPressed();
+        btn.addEventListener('click', () => {
+          displayOptionsController.toggle(option);
+        });
+        document.addEventListener('display-option-change', (event) => {
+          if (event.detail?.option === option) syncPressed();
         });
       };
       wireOverlayToggle('classicEdgesToggle', 'edges');
-      wireOverlayToggle('classicCrosshairsToggle', 'crosshairs');
+      // Honest split per D-16: the combined "Axes (mm)" button drove two
+      // separate display flags at once, so the View menu and the toolbar
+      // could disagree about either. Each now drives exactly its own flag,
+      // and axisMarks IS this app's scale-marker overlay.
+      wireOverlayToggle('classicAxesToggle', 'axes');
+      wireOverlayToggle('classicScaleMarkersToggle', 'axisMarks');
 
-      const classicAxesToggle = document.getElementById('classicAxesToggle');
-      if (classicAxesToggle) {
-        classicAxesToggle.setAttribute(
-          'aria-pressed',
-          String(displayOptionsController.get('axes'))
-        );
-        classicAxesToggle.addEventListener('click', () => {
-          const next = !displayOptionsController.get('axes');
-          displayOptionsController.set('axes', next);
-          displayOptionsController.set('axisMarks', next);
-          classicAxesToggle.setAttribute('aria-pressed', String(next));
+      // Bed grid and its size select are dropped from Classic entirely
+      // (D-18); both remain in Simplified and Standard, where the preview
+      // settings drawer owns them.
+
+      // Zoom uses the one shared step so the bar, the View menu and the
+      // camera panel all move the camera by the same amount (D-19).
+      const wireZoom = (btnId, direction) => {
+        document.getElementById(btnId)?.addEventListener('click', () => {
+          if (!previewManager) return;
+          previewManager.zoomCamera(direction * CAMERA_ZOOM_STEP);
+          announceCameraAction(direction > 0 ? 'Zoomed in' : 'Zoomed out');
         });
-      }
+      };
+      wireZoom('classicZoomInBtn', 1);
+      wireZoom('classicZoomOutBtn', -1);
 
-      const classicGridToggle = document.getElementById('classicGridToggle');
-      classicGridToggle?.addEventListener('click', () => {
-        if (!previewManager) return;
-        const next = !previewManager.gridEnabled;
-        previewManager.toggleGrid(next);
-        classicGridToggle.setAttribute('aria-pressed', String(next));
-        announceImmediate(next ? 'Bed grid shown' : 'Bed grid hidden');
-      });
-
-      // Bed size proxies the existing grid preset selector so presets and
-      // persistence stay single-sourced (custom sizes live in the drawer)
-      const classicGridSizeSelect = document.getElementById(
-        'classicGridSizeSelect'
-      );
-      const gridPresetSelectForStrip =
-        document.getElementById('gridPresetSelect');
-      if (classicGridSizeSelect && gridPresetSelectForStrip) {
-        for (const opt of gridPresetSelectForStrip.querySelectorAll('option')) {
-          if (opt.value === 'custom') continue;
-          classicGridSizeSelect.appendChild(opt.cloneNode(true));
-        }
-        classicGridSizeSelect.value = gridPresetSelectForStrip.value;
-        classicGridSizeSelect.addEventListener('change', () => {
-          gridPresetSelectForStrip.value = classicGridSizeSelect.value;
-          gridPresetSelectForStrip.dispatchEvent(
-            new Event('change', { bubbles: true })
-          );
+      // Measurement has no engine yet (D-15). The buttons are aria-disabled
+      // rather than disabled so they stay discoverable; activating one says
+      // why instead of doing nothing.
+      for (const id of ['classicMeasureDistBtn', 'classicMeasureAngleBtn']) {
+        const btn = document.getElementById(id);
+        btn?.addEventListener('click', (event) => {
+          if (btn.getAttribute('aria-disabled') !== 'true') return;
+          event.preventDefault();
+          const name = btn.querySelector('.sr-only')?.textContent.trim() || '';
+          const reason = document
+            .getElementById('classicMeasureReason')
+            ?.textContent.trim();
+          announceImmediate(`${name} unavailable. ${reason}`);
         });
       }
 
@@ -8383,67 +8383,73 @@ if (rounded) {
         classicTbCustomizerBtn.setAttribute('aria-pressed', String(visible));
       });
 
-      // APG toolbar keyboard pattern: the ~23 buttons form ONE tab stop and
-      // Arrow keys move within it — Tab-through would cost two dozen presses
-      // to cross. The bed-size <select> keeps its own tab stop because Arrow
-      // keys change a select's value; hijacking them there would break the
-      // control. Hidden buttons (Simplified density, phone-width trims) are
-      // skipped by the visibility check at keystroke time.
-      const toolbarButtons = Array.from(
-        classicToolbar.querySelectorAll('button')
-      );
-      const visibleButtons = () =>
-        toolbarButtons.filter((b) => b.offsetParent !== null && !b.disabled);
-      const setRovingStop = (target) => {
-        for (const b of toolbarButtons) {
-          b.tabIndex = b === target ? 0 : -1;
-        }
-      };
-      // The single tab stop must always be a VISIBLE button — if the stop
-      // is hidden (Simplified density, phone-width trims), Tab skips it and
-      // the whole toolbar drops out of the keyboard order. Re-pick whenever
-      // visibility can change.
-      const refreshRovingStop = () => {
-        const buttons = visibleButtons();
+      // APG toolbar keyboard pattern: each toolbar's buttons form ONE tab
+      // stop and Arrow keys move within it — Tab-through would cost two dozen
+      // presses to cross. Applied to both the top toolbar and the 3D view
+      // toolbar from one implementation, so the two cannot drift apart. Any
+      // <select> keeps its own tab stop, because Arrow keys change a select's
+      // value and hijacking them there would break the control.
+      const wireRovingToolbar = (toolbarEl) => {
+        if (!toolbarEl) return;
+        const buttons = Array.from(toolbarEl.querySelectorAll('button'));
         if (buttons.length === 0) return;
-        const current = toolbarButtons.find((b) => b.tabIndex === 0);
-        setRovingStop(buttons.includes(current) ? current : buttons[0]);
-      };
-      setRovingStop(toolbarButtons[0]);
-      refreshRovingStop();
-      document.addEventListener('ui-mode-changed', refreshRovingStop);
-      document.addEventListener('classic-density-change', refreshRovingStop);
-      let rovingResizeTimer;
-      window.addEventListener('resize', () => {
-        clearTimeout(rovingResizeTimer);
-        rovingResizeTimer = setTimeout(refreshRovingStop, 200);
-      });
-      classicToolbar.addEventListener('focusin', (event) => {
-        const btn = event.target.closest('button');
-        if (btn && toolbarButtons.includes(btn)) setRovingStop(btn);
-      });
-      classicToolbar.addEventListener('keydown', (event) => {
-        const { key } = event;
-        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(key)) return;
-        const btn = event.target.closest('button');
-        if (!btn || !toolbarButtons.includes(btn)) return;
 
-        const buttons = visibleButtons();
-        if (buttons.length === 0) return;
-        const current = buttons.indexOf(btn);
-        let next;
-        if (key === 'Home') {
-          next = buttons[0];
-        } else if (key === 'End') {
-          next = buttons[buttons.length - 1];
-        } else {
-          const delta = key === 'ArrowRight' ? 1 : -1;
-          next = buttons[(current + delta + buttons.length) % buttons.length];
-        }
-        event.preventDefault();
-        setRovingStop(next);
-        next.focus();
-      });
+        // aria-disabled buttons stay in the ring on purpose: that is how a
+        // keyboard user discovers them and hears why they are unavailable.
+        const visible = () =>
+          buttons.filter((b) => b.offsetParent !== null && !b.disabled);
+        const setStop = (target) => {
+          for (const b of buttons) b.tabIndex = b === target ? 0 : -1;
+        };
+        // The single tab stop must always be a VISIBLE button — if the stop
+        // is hidden (Simplified density, phone-width trims), Tab skips it and
+        // the whole toolbar drops out of the keyboard order. Re-pick whenever
+        // visibility can change.
+        const refreshStop = () => {
+          const list = visible();
+          if (list.length === 0) return;
+          const current = buttons.find((b) => b.tabIndex === 0);
+          setStop(list.includes(current) ? current : list[0]);
+        };
+
+        setStop(buttons[0]);
+        refreshStop();
+        document.addEventListener('ui-mode-changed', refreshStop);
+        document.addEventListener('classic-density-change', refreshStop);
+        let resizeTimer;
+        window.addEventListener('resize', () => {
+          clearTimeout(resizeTimer);
+          resizeTimer = setTimeout(refreshStop, 200);
+        });
+
+        toolbarEl.addEventListener('focusin', (event) => {
+          const btn = event.target.closest('button');
+          if (btn && buttons.includes(btn)) setStop(btn);
+        });
+        toolbarEl.addEventListener('keydown', (event) => {
+          const { key } = event;
+          if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(key)) return;
+          const btn = event.target.closest('button');
+          if (!btn || !buttons.includes(btn)) return;
+
+          const list = visible();
+          if (list.length === 0) return;
+          const current = list.indexOf(btn);
+          let next;
+          if (key === 'Home') next = list[0];
+          else if (key === 'End') next = list[list.length - 1];
+          else {
+            const delta = key === 'ArrowRight' ? 1 : -1;
+            next = list[(current + delta + list.length) % list.length];
+          }
+          event.preventDefault();
+          setStop(next);
+          next.focus();
+        });
+      };
+
+      wireRovingToolbar(classicToolbar);
+      wireRovingToolbar(document.getElementById('classicCameraBar'));
     }
 
     // Initialize mobile drawer controller

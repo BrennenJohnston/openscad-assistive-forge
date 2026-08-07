@@ -60,9 +60,8 @@ export function collapseCustomizerGroups() {
 const BOTTOM_STRIP_ID = 'classicBottomStrip';
 
 /**
- * The camera bar. Created empty here so the grid has its row from the start;
- * sub-plan E fills it and gives it role="toolbar" and a name. An empty
- * labelled region is rotor clutter, so it stays unlabelled until populated.
+ * The 3D view toolbar, declared as static markup in index.html (E3) and
+ * adopted into the camera-bar row of the grid while Classic is active.
  */
 const CAMERA_BAR_ID = 'classicCameraBar';
 
@@ -292,7 +291,10 @@ export class ClassicLayoutController {
       BOTTOM_STRIP_ID,
       'classic-bottom-strip'
     );
-    this._ensureContainer(mainInterface, CAMERA_BAR_ID, 'classic-camera-bar');
+    // The camera bar is static markup in index.html (E3), so it is adopted
+    // into the grid rather than created — same appendChild contract as every
+    // other move, and exit() puts it back where it came from.
+    this._adoptIntoGrid(mainInterface, CAMERA_BAR_ID);
 
     for (const def of SLOT_DEFS) {
       const panel = def.panelId ? document.getElementById(def.panelId) : null;
@@ -385,8 +387,10 @@ export class ClassicLayoutController {
     for (const def of SLOT_DEFS) {
       document.getElementById(def.id)?.remove();
     }
+    // The strip is created here, so it is removed here. The camera bar is
+    // static markup that was adopted, so the move-restore loop above has
+    // already put it back — removing it would delete it from the document.
     document.getElementById(BOTTOM_STRIP_ID)?.remove();
-    document.getElementById(CAMERA_BAR_ID)?.remove();
 
     delete document.body.dataset.classicEditorHidden;
     delete document.body.dataset.classicCustomizerHidden;
@@ -647,6 +651,29 @@ export class ClassicLayoutController {
       el.className = className;
       mainInterface.appendChild(el);
     }
+    return el;
+  }
+
+  /**
+   * Move an existing static element onto the grid, recording where it came
+   * from so exit() restores it. Used for markup that must live in index.html
+   * (the camera bar) but occupy a grid cell while Classic is active.
+   * @param {Element} mainInterface
+   * @param {string} id
+   * @returns {Element|null}
+   * @private
+   */
+  _adoptIntoGrid(mainInterface, id) {
+    const el = document.getElementById(id);
+    if (!el || el.parentElement === mainInterface) return el;
+
+    this._moved.push({
+      el,
+      parent: el.parentElement,
+      nextSibling: el.nextSibling,
+      wasOpen: null,
+    });
+    mainInterface.appendChild(el);
     return el;
   }
 

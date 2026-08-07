@@ -219,7 +219,15 @@ export class ClassicResizerController {
         readPxToken(host, '--classic-resizer-track') * 2;
       max = toPct(total - reserved);
     } else {
-      max = toPct(total - readPxToken(host, '--classic-row-display-min'));
+      // The floor belongs to the 3D VIEW, not to the display row as a whole:
+      // the camera bar sits between the view and the strip and takes real
+      // height, so it has to come out of the budget too or the view is
+      // squeezed below its minimum by exactly the bar's height.
+      const cameraBar = document.getElementById('classicCameraBar');
+      const reserved =
+        readPxToken(host, '--classic-row-display-min') +
+        (cameraBar?.offsetHeight || 0);
+      max = toPct(total - reserved);
     }
 
     const min = toPct(own);

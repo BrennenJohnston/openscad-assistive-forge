@@ -120,6 +120,9 @@ body[data-ui-mode='classic'] {
   /* Floor for the 3D view, so dragging the strip up cannot reduce the
      viewport to a sliver. Owner-approved 2026-08-06. */
   --classic-row-display-min: 240px;
+  /* The 3D view toolbar is a thin strip; its height follows the touch-target
+     token plus its padding, so it stays one row on every pointer type. */
+  --classic-camera-bar-h: calc(var(--size-touch-target) + var(--space-xs));
   --classic-resizer-track: 6px;
   --classic-resizer-hit: var(--size-touch-target);
   /* How far a resizer's hit zone may reach toward an INTERACTIVE neighbour:
@@ -532,8 +535,11 @@ body[data-ui-mode='classic'][data-classic-field-bottom='empty']
 @media (min-width: 1024px) {
   body[data-ui-mode='classic'] .classic-resizer {
     display: block;
+    /* Deliberately NO z-index: a stacking context here would trap the
+       ::before hit zone above the panes it overlaps, and the zone must sit
+       BELOW every interactive neighbour so their clicks win. The 6px track
+       itself occupies its own grid track and overlaps nothing. */
     position: relative;
-    z-index: 1;
     background-color: var(--color-bg-secondary);
     border-left: 1px solid var(--color-border-light);
     border-right: 1px solid var(--color-border-light);
@@ -628,6 +634,61 @@ body[data-ui-mode='classic'][data-classic-field-bottom='empty']
     .classic-resizer--strip {
     display: none;
   }
+}
+
+/* ── 3D view toolbar (E5) ───────────────────────────────────────────────────
+   A thin strip along the bottom edge of the 3D view, as on the desktop. Its
+   markup is static in index.html and Classic-only, so it is hidden by default
+   and shown once the layout controller has adopted it into the grid. */
+.classic-camera-bar {
+  display: none;
+}
+
+body[data-ui-mode='classic'] .classic-camera-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0;
+  min-height: var(--classic-camera-bar-h);
+  padding: var(--space-2xs) var(--space-xs);
+  border-top: 1px solid var(--color-border);
+  background-color: var(--color-bg-secondary);
+  /* relative, not static: the disabled-reason sr-only spans are
+     position:absolute, and against <html> they poke past the viewport and
+     hand the page a phantom scrollbar — the same trap the Customizer pane
+     already guards against below. */
+  position: relative;
+}
+
+/* Same reason: the toolbars' reason spans are siblings of their buttons,
+   inside a group. */
+body[data-ui-mode='classic'] .classic-tb-group {
+  position: relative;
+}
+
+/* Hide 3D View toolbar (View menu) is per-toolbar, separate from the top
+   toolbar's own pref */
+body[data-ui-mode='classic'][data-classic-camera-bar-hidden='true']
+  .classic-camera-bar {
+  display: none;
+}
+
+/* Vertical-only hit-zone expansion, same policy as the resizers: the bar's
+   neighbours are the canvas above and the strip below, so the zone reaches
+   into the canvas and stops short of the strip. It never handles wheel
+   events, so scrolling and orbiting still work over it. */
+body[data-ui-mode='classic'] .classic-camera-bar .classic-tb-btn {
+  position: relative;
+}
+
+body[data-ui-mode='classic'] .classic-camera-bar .classic-tb-btn::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(var(--classic-resizer-hit-clip) * -1);
+  bottom: calc(var(--classic-resizer-hit-clip) * -1);
+  z-index: -1;
 }
 
 /* ── Bottom strip: side-by-side panes between editor and right column ────── */
@@ -766,17 +827,26 @@ body[data-ui-mode='classic'] .classic-error-log-slot .error-log-output {
   }
 }
 
-/* Phone-width toolbar: the snap views, projection and overlay toggles are
+/* Phone-width trimming. The snap views, projection and overlay toggles are
    one-tap conveniences duplicated verbatim in the View menu, and together
-   they wrapped the toolbar to ~270px tall at 375px — a third of the screen.
-   Dropped here, reachable in the menu; Bed grid stays (no menu home).
-   Desktop keeps the full row. */
+   they wrapped the bar to roughly a third of a 375px screen. Dropped here,
+   reachable in the menu.
+
+   These now live on the 3D view toolbar, not the top toolbar — E3 moved
+   them — so the selectors are scoped to it. Preview, Render, View All and
+   the zoom pair stay: they have no one-tap equivalent. */
 @media (max-width: 767px) {
-  body[data-ui-mode='classic'] .classic-tb-group[aria-label='Views'],
-  body[data-ui-mode='classic'] .classic-tb-group[aria-label='Projection'],
-  body[data-ui-mode='classic'] #classicEdgesToggle,
-  body[data-ui-mode='classic'] #classicAxesToggle,
-  body[data-ui-mode='classic'] #classicCrosshairsToggle {
+  body[data-ui-mode='classic']
+    .classic-camera-bar
+    .classic-tb-group[aria-label='Views'],
+  body[data-ui-mode='classic']
+    .classic-camera-bar
+    .classic-tb-group[aria-label='Projection'],
+  body[data-ui-mode='classic']
+    .classic-camera-bar
+    .classic-tb-group[aria-label='Overlays'],
+  body[data-ui-mode='classic'] #classicMeasureDistBtn,
+  body[data-ui-mode='classic'] #classicMeasureAngleBtn {
     display: none;
   }
 }
@@ -1178,6 +1248,13 @@ body[data-ui-mode='classic'][data-classic-density='simplified']
    This subsumes the previous #copyPresetNameBtn and #managePresetsBtn
    entries; both are inside the section now. */
 body[data-ui-mode='classic'][data-classic-density='simplified']
-  #classicForgeExtras {
+  #classicForgeExtras,
+/* On the 3D view toolbar Simplified drops ONLY the two disabled measure
+   buttons; Preview, Render and the view controls are what Simplified is for
+   (R9), so the rest of the bar stays in both densities. */
+body[data-ui-mode='classic'][data-classic-density='simplified']
+  #classicMeasureDistBtn,
+body[data-ui-mode='classic'][data-classic-density='simplified']
+  #classicMeasureAngleBtn {
   display: none !important;
 }
