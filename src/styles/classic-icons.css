@@ -31,8 +31,16 @@
   background-image: url('/vendor/openscad-icons/chokusen/chokusen-crosshairs.svg');
 }
 
+.classic-icon[data-icon='export-dxf'] {
+  background-image: url('/vendor/openscad-icons/chokusen/chokusen-export-dxf.svg');
+}
+
 .classic-icon[data-icon='export-stl'] {
   background-image: url('/vendor/openscad-icons/chokusen/chokusen-export-stl.svg');
+}
+
+.classic-icon[data-icon='indent'] {
+  background-image: url('/vendor/openscad-icons/chokusen/chokusen-indent.svg');
 }
 
 .classic-icon[data-icon='new'] {
@@ -93,6 +101,10 @@
 
 .classic-icon[data-icon='undo'] {
   background-image: url('/vendor/openscad-icons/chokusen/chokusen-undo.svg');
+}
+
+.classic-icon[data-icon='unindent'] {
+  background-image: url('/vendor/openscad-icons/chokusen/chokusen-unindent.svg');
 }
 
 .classic-icon[data-icon='view-back'] {

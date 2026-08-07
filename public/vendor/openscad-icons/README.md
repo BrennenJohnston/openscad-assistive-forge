@@ -23,9 +23,29 @@ project's Classic desktop-layout mode.
    `https://raw.githubusercontent.com/openscad/openscad/<commit>/resources/icons/<theme>/svg/<name>.svg`.
 3. Keep `src/styles/classic-icons.css` in sync with the file list.
 
-## Vendored files (26 per theme)
+## Pin verification
 
-add, axes, crosshairs, export-stl, new, open, orthogonal, parameter,
-perspective, preview, redo, remove, render, reset-view, save, scalemarkers,
-show-edges, surface, undo, view-back, view-bottom, view-front, view-left,
-view-right, view-top, zoom-all (all prefixed `chokusen-`).
+The pinned commit above is **content-identical** to `f2bfab1e`
+(tag `openscad-2026.01.01-TEST2`), the revision this project transcribes its
+menu and toolbar structure from. Verified 2026-08-07 by comparing the git
+tree hashes of both icon directories at the two commits:
+
+| Directory | Tree hash at both commits |
+|---|---|
+| `resources/icons/chokusen/svg` | `83494843fe36b6fdbdaeefceea9224fae66531a5` |
+| `resources/icons/chokusen-dark/svg` | `d6b0c5043a8f589953155a6a6822c5e557246120` |
+
+Tree hashes are content-addressed over the whole directory, so matching
+hashes prove every file is byte-identical. No re-pinning is required; the
+icons and the transcribed structure describe the same release.
+
+Icon **names** come from `resources/icons-chokusen.qrc` in the same commit —
+never guessed. That manifest is also identical between the two commits.
+
+## Vendored files (29 per theme)
+
+add, axes, crosshairs, export-dxf, export-stl, indent, new, open, orthogonal,
+parameter, perspective, preview, redo, remove, render, reset-view, save,
+scalemarkers, show-edges, surface, undo, unindent, view-back, view-bottom,
+view-front, view-left, view-right, view-top, zoom-all (all prefixed
+`chokusen-`, in both the `chokusen/` and `chokusen-dark/` directories).

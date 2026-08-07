@@ -3122,8 +3122,12 @@
                   <!-- aria-disabled rather than disabled: the button stays
                        focusable so keyboard and screen-reader users can find
                        it and hear why it is unavailable (D-15/D-26). -->
-                  <button type="button" class="btn classic-tb-btn" id="classicEdPrintBtn" aria-disabled="true" aria-describedby="classicEdPrintReason" title="3D Print">
-                    <span class="classic-icon" data-icon="print" aria-hidden="true"></span><span class="sr-only">3D Print</span>
+                  <!-- No glyph: upstream assigns this action no icon either
+                       (empty iconset in MainWindow.ui, never set in
+                       MainWindow.cc), so the label is shown as text rather
+                       than inventing artwork for it. -->
+                  <button type="button" class="btn classic-tb-btn classic-tb-btn--text" id="classicEdPrintBtn" aria-disabled="true" aria-describedby="classicEdPrintReason" title="3D Print">
+                    3D Print
                   </button>
                   <span id="classicEdPrintReason" class="sr-only"
                     >3D printing is not available in this browser version.

@@ -301,6 +301,14 @@ body[data-ui-mode='classic'] .classic-editor-toolbar {
   flex-shrink: 0;
 }
 
+/* A toolbar button with no upstream glyph shows its label as text instead */
+body[data-ui-mode='classic'] .classic-tb-btn--text {
+  width: auto;
+  padding: 0 var(--space-xs);
+  font-size: var(--font-size-xs);
+  white-space: nowrap;
+}
+
 /* Disabled-with-reason buttons stay focusable, so they need a resting look
    that reads as unavailable without relying on colour alone (the icon is
    dimmed AND the cursor changes). */

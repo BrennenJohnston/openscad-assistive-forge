@@ -1673,3 +1673,47 @@ test.describe('Classic editor toolbar (D1)', () => {
     );
   });
 });
+
+test.describe('Classic editor toolbar icons (D2)', () => {
+  test('classic-editor-icons: every glyph resolves to a vendored SVG', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+
+    await page.setViewportSize({ width: 1400, height: 900 });
+    await loadSampleProject(page, { query: '?flag_classic_mode=true' });
+    await switchToStandardMode(page);
+    await pickInterfaceMode(page, 'Classic (Desktop Layout)');
+
+    const toolbar = page.locator('#classicEditorToolbar');
+    await expect(toolbar).toBeVisible();
+
+    // Each icon span must resolve to a real background image, not a 404 —
+    // a missing file degrades silently to an empty box otherwise
+    const icons = await toolbar.evaluate((el) =>
+      Array.from(el.querySelectorAll('.classic-icon')).map((s) => ({
+        icon: s.dataset.icon,
+        url: getComputedStyle(s).backgroundImage,
+      }))
+    );
+    expect(icons.length).toBe(11);
+    for (const { icon, url } of icons) {
+      expect(url, `${icon} has a background image`).toContain(
+        'openscad-icons/chokusen/'
+      );
+    }
+
+    const urls = icons.map(({ url }) => url.match(/url\("?([^")]+)"?\)/)[1]);
+    for (const url of urls) {
+      const res = await page.request.get(url);
+      expect(res.status(), `${url} must be served`).toBe(200);
+    }
+
+    // 3D Print carries no glyph — upstream assigns it none — so it shows its
+    // label as text rather than an empty icon box
+    const print = page.locator('#classicEdPrintBtn');
+    await expect(print.locator('.classic-icon')).toHaveCount(0);
+    await expect(print).toHaveText('3D Print');
+    await expect(print).toHaveAccessibleName('3D Print');
+  });
+});

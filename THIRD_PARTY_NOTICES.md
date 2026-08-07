@@ -62,8 +62,16 @@ iconography they know from desktop OpenSCAD.
 **Project**: https://openscad.org/
 **Source Code**: https://github.com/openscad/openscad (`resources/icons/chokusen/` and `resources/icons/chokusen-dark/`)
 **Pinned Commit**: `fa8ff8916a9090d9bc64e9d3ad2725ba1aa74dce`
-**Vendored Location**: `public/vendor/openscad-icons/` (26 SVGs per theme)
+**Retrieved**: 2026-08-06 (original 26); 2026-08-07 (indent, unindent, export-dxf)
+**Vendored Location**: `public/vendor/openscad-icons/` (29 SVGs per theme)
 **Redistribution**: under this repository's GPL-3.0-or-later umbrella (GPL-2.0-or-later permits this)
+
+The pinned commit is content-identical to the tag this project transcribes
+its UI structure from, `openscad-2026.01.01-TEST2` (`f2bfab1e`): the git tree
+hashes of both icon directories match exactly at the two commits
+(`chokusen/svg` = `83494843fe36b6fdbdaeefceea9224fae66531a5`,
+`chokusen-dark/svg` = `d6b0c5043a8f589953155a6a6822c5e557246120`), so the
+icons and the transcribed structure describe the same release.
 
 The OpenSCAD logo, application icon, and name are **not** included — see the
 "Trademarks / No Affiliation" section below. Only functional toolbar glyphs
