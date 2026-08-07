@@ -272,9 +272,17 @@ test.describe('Classic density: Simplified / Standard inside Classic', () => {
     // ...and keeps everything customizing needs
     await expect(page.locator('.preview-panel')).toBeVisible();
     await expect(page.locator('#paramPanel')).toBeVisible();
-    await expect(page.locator('#classicPresetRow #presetControls')).toHaveCount(
+    // C2 moves the individual desktop controls rather than the whole presets
+    // panel, so the preset row holds the chooser and the +/- pair directly
+    await expect(page.locator('#classicPresetRow #presetSelector')).toHaveCount(
       1
     );
+    await expect(page.locator('#classicPresetRow #addPresetBtn')).toBeVisible();
+    await expect(
+      page.locator('#classicPresetRow #deletePresetBtn')
+    ).toBeVisible();
+    // The Forge additions section is what Simplified drops (D-20/D-21)
+    await expect(page.locator('#classicForgeExtras')).toBeHidden();
     await expect(page.locator('#classicRenderBtn')).toBeVisible();
     await expect(page.locator('#classicTbExportStlBtn')).toBeVisible();
     for (const id of [
@@ -424,13 +432,16 @@ test.describe('Classic on mobile (375px, touch)', () => {
     await page.evaluate(() =>
       document.getElementById('paramPanel').scrollIntoView({ block: 'start' })
     );
+    // "Fully on screen" is the actual requirement. The previous proxy for it
+    // — top edge above the viewport midpoint — only held while the panel was
+    // tall enough to force extra scroll range; C2 shortened it by moving the
+    // preset controls into the dock header, so assert the requirement itself.
     await expect
       .poll(async () =>
-        page
-          .locator('#paramPanel')
-          .evaluate(
-            (el) => el.getBoundingClientRect().y < window.innerHeight / 2
-          )
+        page.locator('#paramPanel').evaluate((el) => {
+          const r = el.getBoundingClientRect();
+          return r.top >= 0 && r.bottom <= window.innerHeight + 1;
+        })
       )
       .toBe(true);
     await expect(page.locator('#classicCustomizerBar')).toBeVisible();
@@ -878,13 +889,55 @@ test.describe('Classic mode layout (C4)', () => {
     await expect(consoleSlot.locator('#consolePanel')).toHaveCount(1);
     await expect(page.locator('#consolePanel')).toHaveAttribute('open', '');
 
-    // Presets: moved INTO the Customizer dock's preset row (C7); the old
-    // standalone presets slot no longer exists
+    // Presets: the individual desktop controls move INTO the Customizer
+    // dock's preset row (C2); the old standalone presets slot never existed
+    // and the whole #presetControls panel is no longer moved as a unit
     await expect(page.locator('#classicPresetsSlot')).toHaveCount(0);
     await expect(page.locator('#classicPresetRow #presetControls')).toHaveCount(
+      0
+    );
+    await expect(page.locator('#classicPresetRow #presetSelector')).toHaveCount(
       1
     );
+    await expect(page.locator('#classicPresetRow #addPresetBtn')).toHaveCount(
+      1
+    );
+    await expect(
+      page.locator('#classicPresetRow #deletePresetBtn')
+    ).toHaveCount(1);
     await expect(page.locator('#classicCustomizerBar')).toBeVisible();
+
+    // Upstream row 1 is Automatic Preview + the detail combobox, nothing else
+    await expect(
+      page.locator('#classicCustomizerControls #paramDetailLevelWrap')
+    ).toHaveCount(1);
+    await expect(
+      page.locator('#classicCustomizerControls #resetAllBtn')
+    ).toHaveCount(0);
+
+    // Everything upstream lacks sits in the collapsed Forge additions section
+    const forgeExtras = page.locator('#classicForgeExtras');
+    await expect(forgeExtras).toBeVisible();
+    await expect(forgeExtras).not.toHaveAttribute('open', '');
+    for (const id of [
+      '#resetAllBtn',
+      '#customizerGroupToggles',
+      '#savePresetBtn',
+      '#copyPresetBtn',
+      '#copyPresetNameBtn',
+      '#managePresetsBtn',
+      '#presetSortToolbar',
+    ]) {
+      await expect(
+        page.locator(`#classicForgeExtrasRow ${id}`),
+        `${id} belongs in Forge additions`
+      ).toHaveCount(1);
+    }
+
+    // The emptied husks stay in the DOM for exit() but never paint (D-22:
+    // this is also what drops the legacy preset search in Classic)
+    await expect(page.locator('#customizerHeaderRow')).toBeHidden();
+    await expect(page.locator('#presetSearchLegacy')).toBeHidden();
 
     // Editor pane (C5): visible by default alongside the customizer
     const editorSlot = page.locator('#classicEditorSlot');
@@ -1019,8 +1072,13 @@ test.describe('Classic mode layout (C4)', () => {
       'design default values'
     );
 
-    // Copy design defaults into a new preset; it becomes the selection
+    // Copy design defaults into a new preset; it becomes the selection.
+    // Copy Preset is a Forge addition, so C2 puts it in the collapsed
+    // "Forge additions" section — open that first, as a user would.
     await presetSelect.selectOption('__design_defaults__');
+    const forgeExtras = page.locator('#classicForgeExtras');
+    await forgeExtras.locator('summary').click();
+    await expect(forgeExtras).toHaveAttribute('open', '');
     await page.locator('#copyPresetBtn').click();
     await expect(
       presetSelect.locator('option', {
@@ -1425,12 +1483,33 @@ test.describe('Classic canvas re-measure (B5)', () => {
       page.evaluate(() => {
         const canvas = document.querySelector('.preview-panel canvas');
         return canvas
-          ? { w: canvas.width, h: canvas.height, css: canvas.clientWidth }
+          ? {
+              w: canvas.width,
+              h: canvas.height,
+              cssW: canvas.clientWidth,
+              cssH: canvas.clientHeight,
+              dpr: window.devicePixelRatio || 1,
+            }
           : null;
       });
 
+    // The backing store matching the CSS box IS the property under test: a
+    // canvas that has not re-measured shows up as a mismatch here. Entering
+    // Classic re-measures through the container's ResizeObserver, which is
+    // debounced — so wait for that to land before taking the baseline, or the
+    // baseline is the Forge layout's width and every later comparison is
+    // against a number the canvas never legitimately has.
+    const inSync = async () => {
+      const s = await canvasSize();
+      if (!s) return false;
+      return (
+        Math.abs(s.w - s.cssW * s.dpr) <= 2 &&
+        Math.abs(s.h - s.cssH * s.dpr) <= 2
+      );
+    };
+    await expect.poll(inSync, { timeout: 15_000 }).toBe(true);
+
     const before = await canvasSize();
-    expect(before).not.toBeNull();
     expect(before.w).toBeGreaterThan(0);
 
     // Shrinking the editor gives the 3D view the space
@@ -1438,15 +1517,12 @@ test.describe('Classic canvas re-measure (B5)', () => {
     await editorResizer.focus();
     for (let i = 0; i < 5; i++) await page.keyboard.press('ArrowLeft');
 
-    // The backing store has to follow the CSS box, not just the box change
     await expect
       .poll(async () => (await canvasSize()).w)
       .toBeGreaterThan(before.w);
+    await expect.poll(inSync, { timeout: 15_000 }).toBe(true);
 
     const after = await canvasSize();
-    const ratio = after.w / after.css;
-    expect(ratio).toBeGreaterThan(0.5);
-    expect(ratio).toBeLessThan(4);
 
     // And the same for the horizontal separator
     const stripResizer = page.locator('#classicResizerStrip');
@@ -1454,5 +1530,6 @@ test.describe('Classic canvas re-measure (B5)', () => {
     for (let i = 0; i < 4; i++) await page.keyboard.press('ArrowUp');
 
     await expect.poll(async () => (await canvasSize()).h).toBeLessThan(after.h);
+    await expect.poll(inSync, { timeout: 15_000 }).toBe(true);
   });
 });

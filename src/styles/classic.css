@@ -875,27 +875,75 @@ body[data-ui-mode='classic'] .classic-auto-preview-label {
   cursor: pointer;
 }
 
-/* The relocated Show Details / Reset row reads as the desktop header line */
+/* Upstream row 1 is exactly Automatic Preview + the detail combobox (U4),
+   so the combobox sits at the end of the line */
 body[data-ui-mode='classic']
   .classic-customizer-controls
-  .customizer-header-row {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--space-xs);
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
+  .param-detail-level-wrap {
+  margin-left: auto;
 }
 
-/* Desktop keeps Automatic Preview, Show Details and Reset on one line */
 body[data-ui-mode='classic']
   .classic-customizer-controls
   .customizer-header-select {
   flex: 0 1 auto;
   max-width: 150px;
   min-height: var(--size-touch-target);
+}
+
+/* The husks the moves leave behind. #customizerHeaderRow is emptied by C2,
+   and hiding #presetControls is also what drops the legacy preset search in
+   Classic (D-22) — the searchable combobox is the only preset search here. */
+body[data-ui-mode='classic'] #customizerHeaderRow,
+body[data-ui-mode='classic'] .param-panel-body > #presetControls {
+  display: none;
+}
+
+/* ── "Forge additions": everything upstream's Customizer does not have ──── */
+.classic-forge-extras {
+  display: none;
+}
+
+body[data-ui-mode='classic'] .classic-forge-extras {
+  display: block;
+  border-top: 1px solid var(--color-border);
+  background: transparent;
+}
+
+body[data-ui-mode='classic'] .classic-forge-extras-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-height: var(--size-touch-target);
+  padding: 0 var(--space-sm);
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+}
+
+body[data-ui-mode='classic'] .classic-forge-extras-summary:hover {
+  background: var(--color-hover-bg);
+}
+
+body[data-ui-mode='classic'] .classic-forge-extras-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  padding: var(--space-2xs) var(--space-sm) var(--space-xs);
+}
+
+/* The Expand/Collapse pair keeps its grouping inside the section */
+body[data-ui-mode='classic']
+  .classic-forge-extras-row
+  .customizer-group-toggles {
+  display: flex;
+  gap: var(--space-2xs);
+}
+
+body[data-ui-mode='classic'] .classic-forge-extras-row .preset-sort-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2xs);
 }
 
 /* Flat parameter rows: the desktop Customizer is a list, not stacked
@@ -924,19 +972,23 @@ body[data-ui-mode='classic'] #parametersContainer .param-group summary:hover {
   background: var(--color-hover-bg);
 }
 
+/* Upstream row 2: preset combobox, then [+] and [−] (U4). The combobox takes
+   the width and the two buttons sit at the end, as on the desktop. */
 body[data-ui-mode='classic'] .classic-preset-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
   padding: var(--space-2xs) var(--space-sm) var(--space-xs);
 }
 
-/* The relocated presets panel reads as one desktop row: no summary, no
-   sort/search toolbars — just the combobox + buttons */
-body[data-ui-mode='classic'] .classic-preset-row > details > summary {
-  display: none;
+body[data-ui-mode='classic'] .classic-preset-row > .preset-combobox-container,
+body[data-ui-mode='classic'] .classic-preset-row > .preset-selector {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
-body[data-ui-mode='classic'] .classic-preset-row #presetSortToolbar,
-body[data-ui-mode='classic'] .classic-preset-row #presetSearchLegacy {
-  display: none;
+body[data-ui-mode='classic'] .classic-preset-row > .btn {
+  flex: 0 0 auto;
 }
 
 /* ============================================================================
@@ -1074,10 +1126,11 @@ body[data-ui-mode='classic'][data-classic-density='simplified']
   #classicTbSaveBtn,
 body[data-ui-mode='classic'][data-classic-density='simplified']
   .classic-tb-group[aria-label='Edit'],
-/* Preset row extras the desktop Customizer does not have */
+/* Everything the desktop Customizer does not have now lives in one section,
+   so Simplified drops it whole rather than naming its members (D-20/D-21).
+   This subsumes the previous #copyPresetNameBtn and #managePresetsBtn
+   entries; both are inside the section now. */
 body[data-ui-mode='classic'][data-classic-density='simplified']
-  #copyPresetNameBtn,
-body[data-ui-mode='classic'][data-classic-density='simplified']
-  #managePresetsBtn {
+  #classicForgeExtras {
   display: none !important;
 }

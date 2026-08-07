@@ -154,15 +154,39 @@ const OPTIONAL_PANE_LABELS = {
 };
 
 /**
- * Panels that move into the Customizer dock rather than a created slot, so
- * its header block matches the desktop Customizer: the Show Details / Reset
- * row on the first line, the preset combobox and its +/−/save buttons on the
- * second. Order matters — each is appended to its target in turn.
+ * Controls that move into the Customizer dock rather than a created slot, so
+ * its header matches the desktop Customizer exactly (U4):
+ *
+ *   Row 1  Automatic Preview checkbox + the detail combobox
+ *   Row 2  preset combobox + [+] + [−]
+ *   ────   "Forge additions", collapsed: everything upstream does not have
+ *
+ * Moving individual controls rather than their two container rows is what
+ * lets the desktop rows hold only what desktop has (D-20). The emptied
+ * #customizerHeaderRow and the #presetControls husk stay behind and are
+ * hidden by classic.css; the husk-hide is also what drops the legacy preset
+ * search in Classic (D-22), since the searchable combobox covers it.
+ *
+ * Order matters — each is appended to its target in turn — and exit()
+ * restores in reverse, so every control returns to its recorded position.
  * @type {Array<{panelId: string, targetId: string}>}
  */
 const CUSTOMIZER_DOCK_MOVES = [
-  { panelId: 'customizerHeaderRow', targetId: 'classicCustomizerControls' },
-  { panelId: 'presetControls', targetId: 'classicPresetRow' },
+  // Row 1: the detail combobox joins the Automatic Preview checkbox
+  { panelId: 'paramDetailLevelWrap', targetId: 'classicCustomizerControls' },
+  // Row 2: preset combobox then the +/− pair, in upstream order
+  { panelId: 'presetComboboxContainer', targetId: 'classicPresetRow' },
+  { panelId: 'presetSelector', targetId: 'classicPresetRow' },
+  { panelId: 'addPresetBtn', targetId: 'classicPresetRow' },
+  { panelId: 'deletePresetBtn', targetId: 'classicPresetRow' },
+  // Forge additions, in the order they read best when expanded
+  { panelId: 'resetAllBtn', targetId: 'classicForgeExtrasRow' },
+  { panelId: 'customizerGroupToggles', targetId: 'classicForgeExtrasRow' },
+  { panelId: 'savePresetBtn', targetId: 'classicForgeExtrasRow' },
+  { panelId: 'copyPresetBtn', targetId: 'classicForgeExtrasRow' },
+  { panelId: 'copyPresetNameBtn', targetId: 'classicForgeExtrasRow' },
+  { panelId: 'managePresetsBtn', targetId: 'classicForgeExtrasRow' },
+  { panelId: 'presetSortToolbar', targetId: 'classicForgeExtrasRow' },
 ];
 
 export class ClassicLayoutController {
@@ -341,7 +365,16 @@ export class ClassicLayoutController {
     for (const record of [...this._moved].reverse()) {
       const { el, parent, nextSibling, wasOpen } = record;
       if (parent && parent.isConnected) {
-        parent.insertBefore(el, nextSibling);
+        // Reverse order means a recorded sibling is normally back in place by
+        // now, and the markup's indentation whitespace makes most anchors
+        // text nodes that never move at all. Falling back to appendChild if
+        // the anchor is missing keeps a NotFoundError from stranding the user
+        // in a half-restored layout — insertBefore throws on a foreign anchor.
+        if (nextSibling && nextSibling.parentNode === parent) {
+          parent.insertBefore(el, nextSibling);
+        } else {
+          parent.appendChild(el);
+        }
       }
       if (el.tagName === 'DETAILS' && wasOpen !== null) {
         el.open = wasOpen;
