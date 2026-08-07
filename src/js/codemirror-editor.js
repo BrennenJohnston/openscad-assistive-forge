@@ -417,7 +417,6 @@ export class CodeMirrorEditor {
 
     const onSave = this.onSave;
     const onRun = this.onRun;
-    const announceRef = this.announce;
 
     const startState = EditorState.create({
       doc: '',
@@ -437,11 +436,14 @@ export class CodeMirrorEditor {
         autocompletion({ override: [openscadCompletions] }),
 
         keymap.of([
+          // Neither shortcut announces here: the keymap cannot know the
+          // outcome. Saving announces "Project saved" once it succeeds and
+          // toasts on failure; the preview state indicator is an aria-live
+          // region that reports rendering and readiness on its own.
           {
             key: 'Mod-s',
             run() {
               onSave();
-              announceRef('Saved');
               return true;
             },
           },
@@ -449,7 +451,6 @@ export class CodeMirrorEditor {
             key: 'Mod-Enter',
             run() {
               onRun();
-              announceRef('Generating preview');
               return true;
             },
           },
