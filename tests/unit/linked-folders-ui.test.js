@@ -101,7 +101,7 @@ describe('buildLinkedFolderModel (H2)', () => {
     expect(entries[0].isLegacy).toBe(true);
   });
 
-  it('marks exactly one entry connected, matched by folder not by reference', async () => {
+  it('marks exactly one entry active, matched by folder not by reference', async () => {
     const entries = await buildLinkedFolderModel({
       listHandles: async () => [
         { key: 'fh-a', handle: fakeHandle('switch-mount', 'disk-1') },
@@ -115,9 +115,21 @@ describe('buildLinkedFolderModel (H2)', () => {
       getActiveHandle: () => fakeHandle('braille-tags', 'disk-2'),
     });
 
-    expect(entries.filter((e) => e.isConnected).map((e) => e.key)).toEqual([
+    expect(entries.filter((e) => e.activeState).map((e) => e.key)).toEqual([
       'fh-b',
     ]);
+  });
+
+  it('carries the sync state onto the active entry', async () => {
+    const entries = await buildLinkedFolderModel({
+      listHandles: async () => [
+        { key: 'fh-a', handle: fakeHandle('switch-mount', 'disk-1') },
+      ],
+      listProjects: async () => [folderLink('p1', 'switch-mount', 'fh-a')],
+      getActiveHandle: () => fakeHandle('switch-mount', 'disk-1'),
+      getActiveState: () => 'pending-restore',
+    });
+    expect(entries[0].activeState).toBe('pending-restore');
   });
 
   it('treats a handle whose isSameEntry rejects as no match', async () => {
@@ -135,7 +147,7 @@ describe('buildLinkedFolderModel (H2)', () => {
 
     // The root could not be proven a duplicate, so it is listed.
     expect(entries.map((e) => e.key)).toEqual(['fh-a', 'root']);
-    expect(entries.some((e) => e.isConnected)).toBe(false);
+    expect(entries.some((e) => e.activeState)).toBe(false);
   });
 
   it('still lists folders when the project store cannot be read', async () => {
@@ -188,7 +200,7 @@ describe('renderLinkedFolders (H2)', () => {
       projectId: 'p1',
       projectName: 'switch-mount',
       isLegacy: false,
-      isConnected: false,
+      activeState: null,
       ...overrides,
     };
   }
@@ -218,13 +230,25 @@ describe('renderLinkedFolders (H2)', () => {
 
   it('marks the connected folder with text, not colour alone', () => {
     renderLinkedFolders(listEl, [
-      entry({ isConnected: true }),
+      entry({ activeState: 'connected' }),
       entry({ key: 'fh-b', name: 'braille-tags' }),
     ]);
     const badges = listEl.querySelectorAll('.linked-folder-badge');
     expect(badges).toHaveLength(1);
     expect(badges[0].textContent).toBe('Connected');
     expect(badges[0].closest('li').dataset.folderKey).toBe('fh-a');
+  });
+
+  it('never claims a connection while permission is still to be granted', () => {
+    renderLinkedFolders(listEl, [entry({ activeState: 'pending-restore' })]);
+    expect(listEl.querySelector('.linked-folder-badge').textContent).toBe(
+      'Needs permission'
+    );
+
+    renderLinkedFolders(listEl, [entry({ activeState: 'denied' })]);
+    expect(listEl.querySelector('.linked-folder-badge').textContent).toBe(
+      'Needs permission'
+    );
   });
 
   it('shows the legacy hint only on a folder with no project card', () => {

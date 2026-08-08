@@ -246,6 +246,7 @@ import {
   updateProject,
   touchProject,
   getProject,
+  listSavedProjects,
   getSavedProjectsSummary as _getSavedProjectsSummary,
   clearAllSavedProjects as _clearAllSavedProjects,
   getStorageDiagnostics,
@@ -257,6 +258,7 @@ import {
   loadFolderHandle,
   saveFolderHandle,
 } from './js/folder-handle-store.js';
+import { createLinkedFoldersUi } from './js/linked-folders-ui.js';
 import Split from 'split.js';
 
 /**
@@ -1913,9 +1915,37 @@ async function initApp() {
 
     if (connectBtn) connectBtn.hidden = false;
 
+    // ── Sub-plan H: every linked folder listed, one connected ───────────
+    // Created here so the section only ever exists on a browser that can
+    // actually hold folder handles.
+    const linkedFoldersUi = createLinkedFoldersUi({
+      listEl: document.getElementById('linkedFoldersList'),
+      sectionEl: document.getElementById('linkedFolders'),
+      listProjects: listSavedProjects,
+      getActiveHandle: () => folderSyncCtrl.getHandle(),
+      getActiveState: () => folderSyncCtrl.getState(),
+      onEmptyFocus: () => connectBtn?.focus(),
+    });
+
+    /** Re-read the store and repaint the list. Safe to call at any time. */
+    function refreshLinkedFolders() {
+      return linkedFoldersUi.refresh();
+    }
+
+    // Deleting a folder-link card also clears that folder's handle, so the
+    // list must follow the project list.
+    document.addEventListener('saved-projects-rendered', () => {
+      void refreshLinkedFolders();
+    });
+
     /**
      * Reflect controller state into the status pill + buttons. Called
      * via `subscribe()` so this stays the single source of truth.
+     *
+     * The pill describes the ONE connected folder (D-33); the linked-folders
+     * list below it shows every folder this browser knows. Connect Folder
+     * therefore stays visible in every state — it is how a second folder
+     * gets linked.
      */
     function _syncFolderUi(state, handle) {
       if (!statusEl || !statusText) return;
@@ -1927,7 +1957,6 @@ async function initApp() {
           statusText.textContent = `Connected to "${name}"`;
           if (restoreBtn) restoreBtn.hidden = true;
           if (disconnectBtn) disconnectBtn.hidden = false;
-          if (connectBtn) connectBtn.hidden = true;
           break;
         case 'pending-restore':
           statusEl.hidden = false;
@@ -1935,7 +1964,6 @@ async function initApp() {
           statusText.textContent = `"${name}" — click Reconnect to re-grant permission for this session`;
           if (restoreBtn) restoreBtn.hidden = false;
           if (disconnectBtn) disconnectBtn.hidden = false;
-          if (connectBtn) connectBtn.hidden = true;
           break;
         case 'denied':
           statusEl.hidden = false;
@@ -1943,7 +1971,6 @@ async function initApp() {
           statusText.textContent = `"${name}" — permission was denied. Click Reconnect to try again, or Disconnect to forget.`;
           if (restoreBtn) restoreBtn.hidden = false;
           if (disconnectBtn) disconnectBtn.hidden = false;
-          if (connectBtn) connectBtn.hidden = true;
           break;
         case 'idle':
         default:
@@ -1952,9 +1979,10 @@ async function initApp() {
           statusText.textContent = '';
           if (restoreBtn) restoreBtn.hidden = true;
           if (disconnectBtn) disconnectBtn.hidden = true;
-          if (connectBtn) connectBtn.hidden = false;
           break;
       }
+      // Which row wears the Connected badge follows the pill.
+      void refreshLinkedFolders();
     }
 
     folderSyncCtrl.subscribe(_syncFolderUi);

@@ -31,8 +31,22 @@ import { listFolderHandles, ROOT_KEY } from './folder-handle-store.js';
  * @property {string|null} projectName
  * @property {boolean} isLegacy True when no folder-link record points here —
  *   the pre-multi-folder root slot, or a handle whose record is gone.
- * @property {boolean} isConnected True for the single active folder.
+ * @property {SyncState|null} activeState Non-null on the ONE active folder,
+ *   carrying the sync controller's state so the row cannot claim a
+ *   connection while the pill is asking for permission to be re-granted.
  */
+
+/** @typedef {'connected'|'pending-restore'|'denied'} SyncState */
+
+/**
+ * Badge text per state. A folder whose permission has lapsed is still the
+ * active one — the row says which, without overstating it.
+ */
+const BADGE_TEXT = {
+  connected: 'Connected',
+  'pending-restore': 'Needs permission',
+  denied: 'Needs permission',
+};
 
 /**
  * `isSameEntry` on a revoked handle rejects; the store treats that as
@@ -74,12 +88,14 @@ async function findEntryForHandle(entries, handle) {
  * @param {() => Promise<{key: string, handle: any}[]>} [deps.listHandles]
  * @param {() => Promise<Object[]>} deps.listProjects Saved-project records.
  * @param {() => (FileSystemDirectoryHandle|null)} [deps.getActiveHandle]
+ * @param {() => SyncState} [deps.getActiveState]
  * @returns {Promise<LinkedFolderEntry[]>}
  */
 export async function buildLinkedFolderModel(deps = {}) {
   const listHandles = deps.listHandles ?? listFolderHandles;
   const listProjects = deps.listProjects;
   const getActiveHandle = deps.getActiveHandle ?? (() => null);
+  const getActiveState = deps.getActiveState ?? (() => 'connected');
 
   const stored = await listHandles();
   if (stored.length === 0) return [];
@@ -115,7 +131,7 @@ export async function buildLinkedFolderModel(deps = {}) {
       projectId: project?.id ?? null,
       projectName: project?.name ?? null,
       isLegacy: !project,
-      isConnected: false,
+      activeState: null,
     });
   }
 
@@ -136,7 +152,7 @@ export async function buildLinkedFolderModel(deps = {}) {
   const active = getActiveHandle();
   if (active) {
     const match = await findEntryForHandle(entries, active);
-    if (match) match.isConnected = true;
+    if (match) match.activeState = getActiveState() ?? null;
   }
 
   return entries;
@@ -184,17 +200,18 @@ export function renderLinkedFolders(listEl, entries, handlers = {}) {
     const item = document.createElement('li');
     item.className = 'linked-folder';
     item.dataset.folderKey = entry.key;
-    if (entry.isConnected) item.dataset.connected = 'true';
+    if (entry.activeState) item.dataset.activeState = entry.activeState;
 
     const name = document.createElement('span');
     name.className = 'linked-folder-name';
     name.textContent = entry.name;
     item.appendChild(name);
 
-    if (entry.isConnected) {
+    const badgeText = BADGE_TEXT[entry.activeState];
+    if (badgeText) {
       const badge = document.createElement('span');
       badge.className = 'linked-folder-badge';
-      badge.textContent = 'Connected';
+      badge.textContent = badgeText;
       item.appendChild(badge);
     }
 
@@ -233,6 +250,7 @@ export function renderLinkedFolders(listEl, entries, handlers = {}) {
  * @param {HTMLElement} [deps.sectionEl] Hidden when nothing is linked.
  * @param {() => Promise<Object[]>} deps.listProjects
  * @param {() => (FileSystemDirectoryHandle|null)} [deps.getActiveHandle]
+ * @param {() => SyncState} [deps.getActiveState]
  * @param {() => Promise<{key: string, handle: any}[]>} [deps.listHandles]
  * @param {(entry: LinkedFolderEntry) => Promise<any>} [deps.onOpen]
  * @param {(entry: LinkedFolderEntry) => Promise<boolean>} [deps.onRemove]
@@ -250,6 +268,7 @@ export function createLinkedFoldersUi(deps = {}) {
       listHandles: deps.listHandles,
       listProjects: deps.listProjects,
       getActiveHandle: deps.getActiveHandle,
+      getActiveState: deps.getActiveState,
     });
     renderLinkedFolders(listEl, entries, {
       onOpen: (entry) => deps.onOpen?.(entry),

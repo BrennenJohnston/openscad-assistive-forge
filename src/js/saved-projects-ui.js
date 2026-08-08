@@ -102,6 +102,16 @@ export function initSavedProjectsUI({
   /**
    * Render saved projects list on welcome screen (v2 with folder tree)
    */
+  /**
+   * Every path that changes the stored project set ends in a re-render, so
+   * this is where other welcome-screen surfaces learn about it — the
+   * linked-folders list (sub-plan H) has to drop a row when a folder-link
+   * card is deleted, which also clears that folder's stored handle.
+   */
+  function announceProjectsRendered() {
+    document.dispatchEvent(new CustomEvent('saved-projects-rendered'));
+  }
+
   async function renderSavedProjectsList() {
     const savedProjectsList = document.getElementById('savedProjectsList');
     const savedProjectsEmpty = document.getElementById('savedProjectsEmpty');
@@ -197,6 +207,7 @@ export function initSavedProjectsUI({
       savedProjectsList.innerHTML = '';
       if (folderTree) folderTree.innerHTML = '';
       savedProjectsEmpty.classList.remove('hidden');
+      announceProjectsRendered();
       return;
     }
 
@@ -229,6 +240,7 @@ export function initSavedProjectsUI({
 
     savedProjectsList.innerHTML = cardsHtml;
     wireUpProjectCardEvents(savedProjectsList);
+    announceProjectsRendered();
   }
 
   /**

@@ -904,6 +904,22 @@
                   </button>
                 </div>
               </div>
+              <!-- Linked folders (sub-plan H). Every folder this browser holds
+                   a handle for; exactly one is Connected at a time (D-33).
+                   Stays hidden until linked-folders-ui.js finds at least one,
+                   so browsers without showDirectoryPicker never see it. -->
+              <div class="linked-folders" id="linkedFolders" hidden>
+                <h4 class="linked-folders-title" id="linkedFoldersTitle">
+                  Linked folders
+                </h4>
+                <ul
+                  class="linked-folders-list"
+                  id="linkedFoldersList"
+                  aria-labelledby="linkedFoldersTitle"
+                >
+                  <!-- Dynamically populated by linked-folders-ui.js -->
+                </ul>
+              </div>
               <p class="saved-projects-description">
                 Your projects organized in folders (stored in this browser)
               </p>
