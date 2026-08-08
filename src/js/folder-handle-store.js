@@ -24,7 +24,7 @@
 const DB_NAME = 'openscad-forge-folder-sync';
 const DB_VERSION = 1;
 const STORE_NAME = 'handles';
-const ROOT_KEY = 'root';
+export const ROOT_KEY = 'root';
 
 /**
  * @returns {boolean} True when both IDB and FSA are present in the
@@ -77,6 +77,41 @@ function tx(db, mode, fn) {
 }
 
 /**
+ * Like {@link tx}, but for a step that needs more than one request inside
+ * the SAME transaction. Enumeration reads keys and values as two requests;
+ * running them in separate transactions would let a concurrent write land
+ * between them and pair key *i* with the handle *i* of a different read.
+ *
+ * @template T
+ * @param {IDBDatabase} db
+ * @param {'readonly'|'readwrite'} mode
+ * @param {(store: IDBObjectStore) => IDBRequest<T>[]} fn
+ * @returns {Promise<T[]>} Results in the same order as the requests.
+ */
+function txAll(db, mode, fn) {
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(STORE_NAME, mode);
+    const store = transaction.objectStore(STORE_NAME);
+    const requests = fn(store);
+    const results = new Array(requests.length);
+    let pending = requests.length;
+    if (pending === 0) {
+      resolve(results);
+      return;
+    }
+    requests.forEach((req, index) => {
+      req.onsuccess = () => {
+        results[index] = req.result;
+        pending -= 1;
+        if (pending === 0) resolve(results);
+      };
+      req.onerror = () =>
+        reject(req.error || new Error('IndexedDB request failed'));
+    });
+  });
+}
+
+/**
  * Read the persisted root directory handle, or `null` if none has
  * been stored. Callers must perform their own
  * queryPermission/requestPermission flow before using the handle.
@@ -99,6 +134,54 @@ export async function loadFolderHandle(deps = {}) {
   } catch (error) {
     console.warn('[FolderHandleStore] loadFolderHandle failed:', error);
     return null;
+  }
+}
+
+/**
+ * @typedef {Object} StoredFolderHandle
+ * @property {string} key Storage key — {@link ROOT_KEY} or an `fh-*` folder-link ref.
+ * @property {FileSystemDirectoryHandle} handle The stored handle.
+ */
+
+/**
+ * Enumerate every stored directory handle, root slot included. Like
+ * {@link loadFolderHandle} this does NOT touch permissions — `handle.name`
+ * is readable without a re-grant, which is what lets the welcome screen
+ * list folders the user has not re-authorised yet.
+ *
+ * @param {Object} [deps]
+ * @param {IDBFactory} [deps.idbFactory]
+ * @returns {Promise<StoredFolderHandle[]>} Empty when nothing is stored or
+ *   the store cannot be read (the failure is logged, never silent).
+ */
+export async function listFolderHandles(deps = {}) {
+  try {
+    const db = await openDb(deps.idbFactory);
+    try {
+      const [keys, handles] = await txAll(db, 'readonly', (store) => [
+        store.getAllKeys(),
+        store.getAll(),
+      ]);
+      const entries = [];
+      for (let i = 0; i < (keys?.length ?? 0); i += 1) {
+        const key = keys[i];
+        const handle = handles?.[i];
+        if (typeof key !== 'string' || !handle || typeof handle !== 'object') {
+          console.warn(
+            '[FolderHandleStore] Skipping unusable stored entry:',
+            key
+          );
+          continue;
+        }
+        entries.push({ key, handle });
+      }
+      return entries;
+    } finally {
+      db.close();
+    }
+  } catch (error) {
+    console.warn('[FolderHandleStore] listFolderHandles failed:', error);
+    return [];
   }
 }
 
