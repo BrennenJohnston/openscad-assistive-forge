@@ -62,8 +62,8 @@ iconography they know from desktop OpenSCAD.
 **Project**: https://openscad.org/
 **Source Code**: https://github.com/openscad/openscad (`resources/icons/chokusen/` and `resources/icons/chokusen-dark/`)
 **Pinned Commit**: `fa8ff8916a9090d9bc64e9d3ad2725ba1aa74dce`
-**Retrieved**: 2026-08-06 (original 26); 2026-08-07 (indent, unindent, export-dxf, zoom-in, zoom-out, measure-distance, measure-angle)
-**Vendored Location**: `public/vendor/openscad-icons/` (33 SVGs per theme)
+**Retrieved**: 2026-08-06 (original 26); 2026-08-07 (indent, unindent, export-dxf, zoom-in, zoom-out, measure-distance, measure-angle); 2026-08-07 (vcr-control-start, vcr-control-step-back, vcr-control-play, vcr-control-pause, vcr-control-step-forward, vcr-control-end — the Animate panel's playback buttons)
+**Vendored Location**: `public/vendor/openscad-icons/` (39 SVGs per theme)
 **Redistribution**: under this repository's GPL-3.0-or-later umbrella (GPL-2.0-or-later permits this)
 
 The pinned commit is content-identical to the tag this project transcribes

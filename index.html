@@ -1923,6 +1923,147 @@
                   </div>
                 </fieldset>
               </div>
+              <!-- Classic Animate panel (F5), transcribed from upstream
+                   Animate.ui. Moved into #classicAnimateSlot on entering
+                   Classic. Playback is always started by the user, and it
+                   announces itself once on start and once on stop — never per
+                   frame. -->
+              <div id="animatePanel" class="classic-panel-body classic-animate">
+                <fieldset class="classic-animate-group">
+                  <legend>Parameters</legend>
+                  <div class="classic-animate-field">
+                    <label for="animateTime">Time</label>
+                    <input
+                      type="number"
+                      id="animateTime"
+                      value="0"
+                      min="0"
+                      max="1"
+                      step="0.01"
+                    />
+                  </div>
+                  <div class="classic-animate-field">
+                    <label for="animateFps">FPS</label>
+                    <input
+                      type="number"
+                      id="animateFps"
+                      value="5"
+                      min="0.1"
+                      step="0.1"
+                      aria-describedby="animateFpsNote"
+                    />
+                  </div>
+                  <p id="animateFpsNote" class="classic-animate-note">
+                    FPS is a top speed, not a promise: each frame is a full
+                    render, so a complex model plays more slowly than the
+                    number asks for.
+                  </p>
+                  <div class="classic-animate-field">
+                    <label for="animateSteps">Steps</label>
+                    <input
+                      type="number"
+                      id="animateSteps"
+                      value="30"
+                      min="1"
+                      step="1"
+                    />
+                  </div>
+                  <!-- Upstream writes one image file per frame to a folder.
+                       A browser cannot write to a folder unprompted, and
+                       asking for a download per frame would be worse than
+                       useless, so this is shown disabled with its reason. -->
+                  <div class="classic-animate-field">
+                    <label for="animateDumpPictures">Dump Pictures</label>
+                    <input
+                      type="checkbox"
+                      id="animateDumpPictures"
+                      disabled
+                      aria-describedby="animateDumpReason"
+                    />
+                    <span id="animateDumpReason" class="classic-animate-reason"
+                      >Saving every frame as an image is not available: a web
+                      page cannot write a folder of files. Use Export image to
+                      save the current frame.</span
+                    >
+                  </div>
+                </fieldset>
+
+                <fieldset class="classic-animate-group">
+                  <legend>Playback</legend>
+                  <div
+                    class="classic-animate-playback"
+                    role="group"
+                    aria-label="Animation playback"
+                  >
+                    <button
+                      type="button"
+                      class="btn classic-tb-btn"
+                      id="animateStartBtn"
+                      title="Go to first frame"
+                    >
+                      <span
+                        class="classic-icon"
+                        data-icon="vcr-control-start"
+                        aria-hidden="true"
+                      ></span
+                      ><span class="sr-only">Go to first frame</span>
+                    </button>
+                    <button
+                      type="button"
+                      class="btn classic-tb-btn"
+                      id="animateStepBackBtn"
+                      title="Step back one frame"
+                    >
+                      <span
+                        class="classic-icon"
+                        data-icon="vcr-control-step-back"
+                        aria-hidden="true"
+                      ></span
+                      ><span class="sr-only">Step back one frame</span>
+                    </button>
+                    <button
+                      type="button"
+                      class="btn classic-tb-btn"
+                      id="animatePlayBtn"
+                      aria-pressed="false"
+                      title="Play animation"
+                    >
+                      <span
+                        class="classic-icon"
+                        data-icon="vcr-control-play"
+                        aria-hidden="true"
+                      ></span
+                      ><span class="sr-only">Play animation</span>
+                    </button>
+                    <button
+                      type="button"
+                      class="btn classic-tb-btn"
+                      id="animateStepForwardBtn"
+                      title="Step forward one frame"
+                    >
+                      <span
+                        class="classic-icon"
+                        data-icon="vcr-control-step-forward"
+                        aria-hidden="true"
+                      ></span
+                      ><span class="sr-only">Step forward one frame</span>
+                    </button>
+                    <button
+                      type="button"
+                      class="btn classic-tb-btn"
+                      id="animateEndBtn"
+                      title="Go to last frame"
+                    >
+                      <span
+                        class="classic-icon"
+                        data-icon="vcr-control-end"
+                        aria-hidden="true"
+                      ></span
+                      ><span class="sr-only">Go to last frame</span>
+                    </button>
+                  </div>
+                </fieldset>
+              </div>
               <!-- File Actions panel removed: all features now in File toolbar menu -->
               <!-- Image Measurement Tool -->
               <details

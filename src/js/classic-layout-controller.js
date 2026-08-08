@@ -110,6 +110,7 @@ const SLOT_DEFS = [
     id: 'classicAnimateSlot',
     className: 'classic-slot classic-animate-slot',
     label: 'Animate',
+    panelId: 'animatePanel',
     parentId: BOTTOM_STRIP_ID,
     titlebar: { text: 'Animate' },
   },

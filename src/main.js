@@ -199,6 +199,7 @@ import {
 import { tabIdFor } from './js/classic-dock-model.js';
 import { initFontListPanel } from './js/font-list-panel.js';
 import { initViewportControlPanel } from './js/viewport-control-panel.js';
+import { initAnimatePanel, getAnimatePanel } from './js/animate-panel.js';
 import { initClassicStatusBar } from './js/classic-status-bar.js';
 import {
   initClassicEditorToolbar,
@@ -5576,11 +5577,21 @@ async function initApp() {
           previewQualityMode === 'auto' ? resolveAdaptiveCacheKey : null,
         resolvePreviewParameters:
           previewQualityMode === 'auto' ? resolveAdaptiveParameters : null,
+        // Render / Generate / export. Playback stops and stays stopped (F5):
+        // two render requests would queue behind each other on the one
+        // blocking worker and make both slow.
+        onFullRenderStart: () => getAnimatePanel()?.pauseForExternalRender(),
         onStateChange: (newState, prevState, extra) => {
           console.log(
             `[AutoPreview] State: ${prevState} -> ${newState}`,
             extra
           );
+          // The other half of the same rule: a preview render started by
+          // something other than the animation. Animation frames never reach
+          // here — renderAnimationFrame sets no preview state.
+          if (newState === PREVIEW_STATE.RENDERING) {
+            getAnimatePanel()?.pauseForExternalRender();
+          }
           if (newState === PREVIEW_STATE.CURRENT) {
             if (typeof extra?.renderDurationMs === 'number') {
               autoPreviewHints.lastPreviewDurationMs = extra.renderDurationMs;
@@ -8389,6 +8400,13 @@ if (rounded) {
     // once WASM is ready, so the panel binds to its camera later, the same way
     // the display-options and overlay-grid controllers do.
     initViewportControlPanel({ getPreviewManager: () => previewManager });
+
+    // Classic Animate panel (F5). Playback drives real renders through the
+    // auto-preview controller's -D $t path.
+    initAnimatePanel({
+      getAutoPreviewController: () => autoPreviewController,
+      getParameters: () => stateManager.getState().parameters || {},
+    });
 
     // Classic Customizer bar (C7): titlebar ✕ + the Automatic Preview mirror.
     // All state flows through the real controls (#autoPreviewToggle), never
