@@ -150,3 +150,29 @@
 .classic-icon[data-icon='zoom-out'] {
   background-image: url('/vendor/openscad-icons/chokusen/chokusen-zoom-out.svg');
 }
+
+/* Animate panel playback buttons (F5). Vendored 2026-08-07 from the same
+   pinned commit as the rest — see the vendor README. */
+.classic-icon[data-icon='vcr-control-start'] {
+  background-image: url('/vendor/openscad-icons/chokusen/chokusen-vcr-control-start.svg');
+}
+
+.classic-icon[data-icon='vcr-control-step-back'] {
+  background-image: url('/vendor/openscad-icons/chokusen/chokusen-vcr-control-step-back.svg');
+}
+
+.classic-icon[data-icon='vcr-control-play'] {
+  background-image: url('/vendor/openscad-icons/chokusen/chokusen-vcr-control-play.svg');
+}
+
+.classic-icon[data-icon='vcr-control-pause'] {
+  background-image: url('/vendor/openscad-icons/chokusen/chokusen-vcr-control-pause.svg');
+}
+
+.classic-icon[data-icon='vcr-control-step-forward'] {
+  background-image: url('/vendor/openscad-icons/chokusen/chokusen-vcr-control-step-forward.svg');
+}
+
+.classic-icon[data-icon='vcr-control-end'] {
+  background-image: url('/vendor/openscad-icons/chokusen/chokusen-vcr-control-end.svg');
+}

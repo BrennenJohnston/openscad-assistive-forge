@@ -16,6 +16,17 @@ project's Classic desktop-layout mode.
   vendored. Only functional toolbar glyphs are included; this project is not
   affiliated with or endorsed by the OpenSCAD project.
 
+## Vendored files
+
+39 SVGs per theme. The `chokusen-vcr-control-*` six (start, step-back, play,
+pause, step-forward, end) were added 2026-08-07 for the Animate panel's
+playback buttons, from the same pinned commit as the rest.
+
+The manifest also holds `chokusen-animate-disabled/-pause/-play.svg`, which
+belong to the Animate dock's menu action upstream. They are deliberately NOT
+vendored: this project puts no icons on menu items, so nothing would
+reference them.
+
 ## Updating
 
 1. Change the pinned commit above.

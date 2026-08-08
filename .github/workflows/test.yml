@@ -226,7 +226,12 @@ jobs:
           # ceiling: the run ended in "Timed out waiting 600s" with 23 tests
           # never started, not on any assertion. Same escape hatch the WASM
           # smoke and WebKit jobs already use.
-          PW_GLOBAL_TIMEOUT: '900000'
+          #
+          # Raised again to 25min when R2b + R3a + R3c reached CI together
+          # (their PRs targeted branches, so none of their ~53 added cases had
+          # ever run here): 311 passed in 15.0m and two were then killed
+          # mid-flight and reported as failures. Same signature, same fix.
+          PW_GLOBAL_TIMEOUT: '1500000'
       
       - name: Upload Playwright report (Edge)
         uses: actions/upload-artifact@v4

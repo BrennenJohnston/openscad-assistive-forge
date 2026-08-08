@@ -116,6 +116,17 @@ body[data-ui-mode='classic'] {
   --classic-col-customizer-min: 300px;
   --classic-col-middle-min: 320px;
   --classic-row-bottom-min: 120px;
+  /* The narrowest a bottom-strip pane may be squeezed before the strip
+     scrolls instead (F7). Sized to fit the new panels' label column plus a
+     usable control beside it, and kept as low as that allows so the strip
+     scrolls as rarely as possible. Below this the panels' controls become
+     unusable rather than merely cramped.
+
+     The ladder this produces on a 1280px window: the default two panes fit
+     with room to spare, three fit exactly, and only a fourth makes the strip
+     scroll — at which point _revealPane scrolls the newly shown one into
+     view so the menu item never looks like it did nothing. */
+  --classic-strip-pane-min: 190px;
   --classic-row-bottom: minmax(var(--classic-row-bottom-min), 0.45fr);
   /* Floor for the 3D view, so dragging the strip up cannot reduce the
      viewport to a sliver. Owner-approved 2026-08-06. */
@@ -477,7 +488,7 @@ body[data-ui-mode='classic'] .classic-slot > details {
     grid-area: display;
   }
 
-  body[data-ui-mode='classic'] .classic-editor-slot {
+  body[data-ui-mode='classic'] .classic-dock-field--left {
     grid-area: editor;
   }
 
@@ -500,22 +511,25 @@ body[data-ui-mode='classic'] .classic-slot > details {
   }
 
   body[data-ui-mode='classic'] .param-panel {
-    grid-area: customizer;
     max-height: none;
     min-height: 0;
     overflow-y: auto;
   }
 
+  body[data-ui-mode='classic'] .classic-dock-field--right-top {
+    grid-area: customizer;
+  }
+
   /* Viewport-Control shares the right column, taking the bottom row only
      while it is occupied; until then the Customizer keeps the whole column
      exactly as it does today. */
-  body[data-ui-mode='classic'] .classic-viewport-control-slot {
+  body[data-ui-mode='classic'] .classic-dock-field--right-bottom {
     grid-column: customizer-start / customizer-end;
     grid-row: 3;
   }
 
   body[data-ui-mode='classic'][data-classic-field-right-bottom='occupied']
-    .param-panel {
+    .classic-dock-field--right-top {
     grid-row: 1 / 3;
   }
 
@@ -526,10 +540,180 @@ body[data-ui-mode='classic'] .classic-slot > details {
   }
 }
 
-/* Empty fields hide their occupants at every breakpoint, so a collapsed track
+/* A dock field holds whichever panels the model has placed there (B6). Two
+   panels in one field stack down the cell; the bottom strip overrides the
+   direction to a row below, which is what keeps its panes side by side. */
+body[data-ui-mode='classic'] .classic-dock-field {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  gap: 1px;
+}
+
+body[data-ui-mode='classic'] .classic-dock-field > * {
+  flex: 1 1 0;
+  min-height: 0;
+  min-width: 0;
+}
+
+/* ── Merged fields: dock tab groups (B7) ─────────────────────────────────────
+   Two panels sharing one cell become a real tab group with ONE shared bar:
+   the tablist, then the active panel's own titlebar so its fold/close buttons
+   stay live. The tab already carries the name, so the title text inside the
+   bar is hidden rather than read out twice.
+
+   Classic-owned: nothing here touches .console-view-tabs, the Forge console's
+   own tablist, which Classic hides (D-9). */
+body[data-ui-mode='classic'] .classic-dock-tabgroup {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid var(--color-border);
+  background-color: var(--color-bg-primary);
+}
+
+body[data-ui-mode='classic'] .classic-dock-tabgroup > .classic-slot,
+body[data-ui-mode='classic'] .classic-dock-tabgroup > .param-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  border: 0;
+}
+
+/* An unselected tabpanel gives up its space. .classic-slot's display:flex
+   would otherwise beat the [hidden] default. */
+body[data-ui-mode='classic'] .classic-dock-tabgroup > [hidden] {
+  display: none;
+}
+
+body[data-ui-mode='classic'] .classic-dock-tabbar {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-xs);
+  min-width: 0;
+  background-color: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-border);
+}
+
+body[data-ui-mode='classic'] .classic-dock-tablist {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+/* The shared bar's titlebar is the active panel's own, moved here. It keeps
+   its buttons and gives up its name to the selected tab. */
+body[data-ui-mode='classic'] .classic-dock-tabbar > .classic-pane-titlebar {
+  flex: 1 1 auto;
+  min-width: 0;
+  border-bottom: 0;
+  justify-content: flex-end;
+}
+
+body[data-ui-mode='classic']
+  .classic-dock-tabbar
+  > .classic-pane-titlebar
+  > .classic-pane-title {
+  display: none;
+}
+
+body[data-ui-mode='classic'] .classic-dock-tab {
+  /* 44px on touch, auto-compact 36px on fine pointers (token media query) */
+  min-height: var(--size-touch-target);
+  padding: 0 var(--space-sm);
+  border: 0;
+  border-right: 1px solid var(--color-border);
+  background-color: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  font-family: inherit;
+  font-size: var(--font-size-xs);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+body[data-ui-mode='classic'] .classic-dock-tab[aria-selected='true'] {
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  /* Selection is carried by more than colour: the selected tab is the one
+     joined to the panel below it. */
+  box-shadow: inset 0 -2px 0 0 var(--color-accent);
+  font-weight: var(--font-weight-medium);
+}
+
+body[data-ui-mode='classic'] .classic-dock-tab:hover {
+  background-color: var(--color-hover-bg);
+}
+
+/* Whether the dock is at desktop width, as a value JS can read (B9). The
+   breakpoint keeps ONE definition — here, in the media query below — rather
+   than a second copy in a matchMedia string that could drift from it. */
+body[data-ui-mode='classic'] {
+  --classic-dock-desktop: 0;
+}
+
+@media (min-width: 1024px) {
+  body[data-ui-mode='classic'] {
+    --classic-dock-desktop: 1;
+  }
+}
+
+/* ── "Move panel" title-bar menus (B8) ───────────────────────────────────────
+   The popup is a child of <body> with position: fixed, because every dock
+   title bar sits inside a slot with overflow-y: auto — an absolutely
+   positioned menu would be clipped by its own pane. It closes on scroll and
+   resize rather than chasing the button around. */
+.classic-panel-menu {
+  position: fixed;
+  z-index: var(--z-index-dropdown);
+  min-width: 12rem;
+  margin: 0;
+  padding: var(--space-2xs) 0;
+  list-style: none;
+  background-color: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-md);
+  /* max-height is set when the menu opens, from the room it actually has */
+  overflow-y: auto;
+}
+
+.classic-panel-menu .classic-panel-menu-sep {
+  border-top: 1px solid var(--color-border-light);
+  margin-top: var(--space-2xs);
+  padding-top: var(--space-2xs);
+}
+
+.classic-panel-menu-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  /* 44px on touch, auto-compact 36px on fine pointers (token media query) */
+  min-height: var(--size-touch-target);
+  padding: 0 var(--space-md);
+  border: 0;
+  background: transparent;
+  color: var(--color-text-primary);
+  font-family: inherit;
+  font-size: var(--font-size-sm);
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.classic-panel-menu-item:hover {
+  background-color: var(--color-hover-bg);
+}
+
+/* Empty fields hide their container at every breakpoint, so a collapsed track
    never has a zero-width element painting inside it. */
+body[data-ui-mode='classic'][data-classic-field-left='empty']
+  .classic-dock-field--left,
+body[data-ui-mode='classic'][data-classic-field-right-top='empty']
+  .classic-dock-field--right-top,
 body[data-ui-mode='classic'][data-classic-field-right-bottom='empty']
-  .classic-viewport-control-slot,
+  .classic-dock-field--right-bottom,
 body[data-ui-mode='classic'][data-classic-field-bottom='empty']
   .classic-bottom-strip {
   display: none;
@@ -723,11 +907,21 @@ body[data-ui-mode='classic'] .classic-bottom-strip {
   min-width: 0;
   gap: 1px;
   background-color: var(--color-border);
+  /* Four open panes will not fit their floors on a narrow desktop; scrolling
+     the strip keeps every pane usable instead of making all four unusable. */
+  overflow-x: auto;
 }
 
-body[data-ui-mode='classic'] .classic-bottom-strip > .classic-slot {
+body[data-ui-mode='classic'] .classic-bottom-strip > .classic-slot,
+body[data-ui-mode='classic'] .classic-bottom-strip > .classic-dock-tabgroup {
   flex: 1 1 50%;
-  min-width: 0;
+  /* A floor, not zero (F7). With only Console and Error-Log open, min-width:0
+     was harmless. Turning on Animate and Font List puts FOUR panes in the
+     strip, and at zero they squeezed to ~150px each — the Font List's table
+     became unreachable and its filter text was clipped mid-word. Past the
+     floor the strip scrolls sideways instead, the same answer R2a gave the
+     toolbars rather than letting them wrap. */
+  min-width: var(--classic-strip-pane-min);
   min-height: 0;
 }
 
@@ -804,7 +998,8 @@ body[data-ui-mode='classic'] .classic-error-log-slot .error-log-output {
     top: auto;
   }
 
-  body[data-ui-mode='classic'] .classic-slot {
+  body[data-ui-mode='classic'] .classic-slot,
+  body[data-ui-mode='classic'] .classic-dock-tabgroup {
     flex: 0 0 auto;
     max-height: 40vh;
   }
@@ -823,15 +1018,20 @@ body[data-ui-mode='classic'] .classic-error-log-slot .error-log-output {
     order: 2;
     flex: 0 0 auto;
   }
-  body[data-ui-mode='classic'] .param-panel {
+  /* The stack orders the FIELDS, not the panels inside them: a panel the user
+     has relocated travels with its field rather than jumping to a fixed place
+     in the stack. */
+  body[data-ui-mode='classic'] .classic-dock-field--right-top {
     order: 3;
+    flex: 0 0 auto;
   }
   body[data-ui-mode='classic'] .classic-bottom-strip {
     order: 4;
     flex: 0 0 auto;
   }
-  body[data-ui-mode='classic'] .classic-editor-slot {
+  body[data-ui-mode='classic'] .classic-dock-field--left {
     order: 5;
+    flex: 0 0 auto;
   }
 
   /* Side by side does not survive a phone width — the strip's panes join the
@@ -839,14 +1039,20 @@ body[data-ui-mode='classic'] .classic-error-log-slot .error-log-output {
   body[data-ui-mode='classic'] .classic-bottom-strip {
     flex-direction: column;
   }
-  body[data-ui-mode='classic'] .classic-bottom-strip > .classic-slot {
+  body[data-ui-mode='classic'] .classic-bottom-strip > .classic-slot,
+  body[data-ui-mode='classic'] .classic-bottom-strip > .classic-dock-tabgroup {
     flex: 0 0 auto;
     max-height: 40vh;
   }
 
-  /* Resizers and Viewport-Control are desktop-only (D-6, D-7) */
+  /* Resizers and Viewport-Control are desktop-only (D-6, D-7); the field that
+     holds Viewport-Control goes with it, so the stack has no empty cell.
+     Relocation goes too (B9): the stack ignores the field map, so a move
+     button here would be a control that does nothing. */
   body[data-ui-mode='classic'] .classic-resizer,
-  body[data-ui-mode='classic'] .classic-viewport-control-slot {
+  body[data-ui-mode='classic'] .classic-viewport-control-slot,
+  body[data-ui-mode='classic'] .classic-dock-field--right-bottom,
+  body[data-ui-mode='classic'] .classic-panel-menu-btn {
     display: none;
   }
 }
@@ -974,6 +1180,255 @@ body[data-ui-mode='classic'] .classic-console-slot > .classic-fold summary {
    on exit (D-9). */
 body[data-ui-mode='classic'] .console-view-tabs {
   display: none;
+}
+
+/* The Classic-only panel bodies (F3/F4/F5) are declared as static markup in
+   index.html so the dock can move them like any other pane, which means they
+   are in the document in every mode. They are Classic-only this round (D-32),
+   so they are hidden by default and shown once the dock adopts them. Full
+   styling is F7's; this pair is only what keeps a Forge user from seeing a
+   Classic panel. Same shape as .classic-customizer-bar below. */
+.classic-panel-body {
+  display: none;
+}
+
+body[data-ui-mode='classic'] .classic-panel-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  gap: var(--space-xs);
+}
+
+/* ============================================================================
+   LAYER 2b2 — The three sub-plan F panels (F7)
+   Font List, Viewport-Control and Animate. Structural rules live above with
+   .classic-panel-body; this block is their appearance and their controls.
+   ============================================================================ */
+
+/* Each panel scrolls inside whatever height its dock field has, rather than
+   pushing the field taller. That is what makes the D-6 40vh cap on a stacked
+   narrow window a real cap and not a suggestion. */
+body[data-ui-mode='classic'] .classic-panel-body {
+  overflow: auto;
+  padding: var(--space-xs);
+  font-size: var(--font-size-sm);
+}
+
+/* Upstream groups its controls in titled boxes; <fieldset>/<legend> is the
+   native equivalent, so the grouping reaches assistive tech for free. */
+body[data-ui-mode='classic'] .classic-font-list-group,
+body[data-ui-mode='classic'] .classic-vp-group,
+body[data-ui-mode='classic'] .classic-animate-group {
+  /* Never shrink. The panel body is a flex column, and in a short dock pane
+     every child shrinks by default — which silently collapsed the Font List's
+     table to nothing while the fieldsets below kept their height. The groups
+     keep their natural size and the panel scrolls instead. */
+  flex: 0 0 auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  padding: var(--space-xs);
+  margin: 0 0 var(--space-xs);
+  min-inline-size: 0;
+}
+
+body[data-ui-mode='classic'] .classic-font-list-group > legend,
+body[data-ui-mode='classic'] .classic-vp-group > legend,
+body[data-ui-mode='classic'] .classic-animate-group > legend {
+  padding: 0 var(--space-2xs);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+/* One label-and-control row. The label column is fixed so the controls line
+   up down the panel and a value is easy to find by eye. */
+body[data-ui-mode='classic'] .classic-font-list-field,
+body[data-ui-mode='classic'] .classic-vp-field,
+body[data-ui-mode='classic'] .classic-animate-field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-2xs);
+  /* In a pane at its narrowest the control drops below its label rather than
+     being squeezed to a few pixels. */
+  flex-wrap: wrap;
+  /* sr-only spans inside these rows are position:absolute; without a
+     positioned ancestor they resolve against <html> and push the page
+     sideways — the 31px phantom-scroll bug R2a paid for twice. */
+  position: relative;
+}
+
+body[data-ui-mode='classic'] .classic-font-list-field > label,
+body[data-ui-mode='classic'] .classic-vp-field > label,
+body[data-ui-mode='classic'] .classic-animate-field > label {
+  flex: 0 0 auto;
+  min-width: 6.5em;
+  color: var(--color-text-secondary);
+}
+
+body[data-ui-mode='classic'] .classic-font-list-field input[type='text'],
+body[data-ui-mode='classic'] .classic-font-list-field select,
+body[data-ui-mode='classic'] .classic-vp-field input,
+body[data-ui-mode='classic'] .classic-animate-field input[type='number'] {
+  min-height: var(--size-touch-target);
+  min-width: 0;
+  /* A small basis, not auto. A number input's intrinsic width is around 200px,
+     which added to the label column overflowed even the right column and made
+     every row wrap onto three lines. With a small basis the control fits
+     beside its label and grows into whatever space is left. */
+  flex: 1 1 6em;
+  padding: 0 var(--space-2xs);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+}
+
+/* components.css gives a, button, summary, [role=button] and [tabindex] a
+   global focus ring, but NOT input or select — this codebase styles those per
+   component. These panels are mostly inputs and selects, so they carry their
+   own, using the same token and geometry as the global rule so the ring looks
+   identical wherever the user lands.
+   No transitions or animation are introduced anywhere in this block, so there
+   is nothing for prefers-reduced-motion to switch off. */
+body[data-ui-mode='classic'] .classic-panel-body input:focus-visible,
+body[data-ui-mode='classic'] .classic-panel-body select:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+/* A checkbox is not a text field and must not be stretched to one. */
+body[data-ui-mode='classic'] .classic-vp-field input[type='checkbox'],
+body[data-ui-mode='classic'] .classic-animate-field input[type='checkbox'] {
+  flex: 0 0 auto;
+  min-height: 0;
+  width: auto;
+}
+
+body[data-ui-mode='classic'] .classic-panel-body input[readonly],
+body[data-ui-mode='classic'] .classic-panel-body input:disabled,
+body[data-ui-mode='classic'] .classic-panel-body select:disabled {
+  background-color: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  cursor: not-allowed;
+}
+
+body[data-ui-mode='classic'] .classic-vp-unit {
+  flex: 0 0 auto;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+/* Reasons for the controls that cannot work yet. Visible, not sr-only: a
+   disabled control the user can see needs its explanation where they are
+   looking, and a screen reader reaches it through aria-describedby either
+   way. */
+body[data-ui-mode='classic'] .classic-font-list-reason,
+body[data-ui-mode='classic'] .classic-vp-reason,
+body[data-ui-mode='classic'] .classic-animate-reason,
+body[data-ui-mode='classic'] .classic-animate-note {
+  flex: 1 1 100%;
+  margin: var(--space-2xs) 0 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: 1.4;
+}
+
+/* Font List ---------------------------------------------------------------- */
+
+body[data-ui-mode='classic'] .classic-font-list-tablewrap {
+  /* The table is the part that takes the leftover height, with a floor so it
+     always shows something; a wide or long table scrolls inside its own box
+     so the panel never scrolls sideways as a whole. */
+  flex: 1 1 auto;
+  min-height: 6em;
+  overflow: auto;
+  margin-bottom: var(--space-xs);
+}
+
+body[data-ui-mode='classic'] .classic-font-list-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+}
+
+body[data-ui-mode='classic'] .classic-font-list-table th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  border-bottom: 1px solid var(--color-border);
+  padding: var(--space-2xs);
+}
+
+body[data-ui-mode='classic'] .classic-font-list-table td {
+  padding: var(--space-2xs);
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: middle;
+}
+
+/* The whole cell is the radio's label, so the target is the row's height
+   rather than the 13px of the control itself. */
+body[data-ui-mode='classic'] .classic-font-list-table td label {
+  display: flex;
+  align-items: center;
+  min-height: var(--size-touch-target);
+  cursor: pointer;
+}
+
+body[data-ui-mode='classic'] .classic-font-list-table input[type='radio'] {
+  min-width: var(--size-touch-target-sm);
+  min-height: var(--size-touch-target);
+  cursor: pointer;
+}
+
+body[data-ui-mode='classic'] .classic-font-sample {
+  /* The sample is set in the row's own font; it must not inherit the panel's
+     size or family, and a long sample must not widen the table. */
+  max-width: 16em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body[data-ui-mode='classic'] .classic-font-list-empty,
+body[data-ui-mode='classic'] .classic-font-list-hint {
+  margin: var(--space-xs) 0 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+body[data-ui-mode='classic'] .classic-font-list-selection {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-2xs) var(--space-xs);
+  margin: 0 0 var(--space-xs);
+}
+
+body[data-ui-mode='classic'] .classic-font-list-selection dt {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+body[data-ui-mode='classic'] .classic-font-list-selection dd {
+  margin: 0;
+  /* Font paths are long and have no spaces to break at. */
+  overflow-wrap: anywhere;
+}
+
+body[data-ui-mode='classic'] #fontListCopyBtn {
+  min-height: var(--size-touch-target);
+}
+
+/* Animate ------------------------------------------------------------------ */
+
+body[data-ui-mode='classic'] .classic-animate-playback {
+  display: flex;
+  gap: var(--space-2xs);
+  align-items: center;
+  flex-wrap: wrap;
+  /* Same sr-only trap as the field rows above. */
+  position: relative;
 }
 
 /* ============================================================================

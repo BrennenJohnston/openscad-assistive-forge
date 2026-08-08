@@ -14,8 +14,10 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   isFolderHandleStorageSupported,
   loadFolderHandle,
+  listFolderHandles,
   saveFolderHandle,
   clearFolderHandle,
+  ROOT_KEY,
   __test,
 } from '../../src/js/folder-handle-store.js';
 
@@ -65,10 +67,17 @@ function makeMemoryIdb() {
           state.records.delete(key);
         });
       },
+      getAllKeys() {
+        return makeRequest(() => [...state.records.keys()]);
+      },
+      getAll() {
+        return makeRequest(() => [...state.records.values()]);
+      },
     };
   }
 
   function makeTx(state) {
+    state.txCount += 1;
     return {
       objectStore: () => makeStore(state),
     };
@@ -101,7 +110,12 @@ function makeMemoryIdb() {
         let state = dbs.get(name);
         const isNew = !state;
         if (!state) {
-          state = { stores: new Set(), records: new Map(), version: 0 };
+          state = {
+            stores: new Set(),
+            records: new Map(),
+            version: 0,
+            txCount: 0,
+          };
           dbs.set(name, state);
         }
         const db = makeDb(state);
@@ -241,6 +255,83 @@ describe('folder-handle-store (F35 Phase A)', () => {
     });
   });
 
+  describe('listFolderHandles (H1 — multi-folder enumeration)', () => {
+    it('returns an empty list when nothing is stored', async () => {
+      expect(await listFolderHandles({ idbFactory: memIdb })).toEqual([]);
+    });
+
+    it('lists the root slot and every folder-link key with its handle', async () => {
+      const root = { name: 'keyguard', kind: 'directory' };
+      const linkedA = { name: 'switch-mount', kind: 'directory' };
+      const linkedB = { name: 'braille-tags', kind: 'directory' };
+      await saveFolderHandle(root, { idbFactory: memIdb });
+      await saveFolderHandle(linkedA, { idbFactory: memIdb, key: 'fh-a' });
+      await saveFolderHandle(linkedB, { idbFactory: memIdb, key: 'fh-b' });
+
+      const listed = await listFolderHandles({ idbFactory: memIdb });
+
+      expect(listed).toHaveLength(3);
+      // Each key must carry ITS OWN handle — the pairing is the point.
+      const byKey = Object.fromEntries(listed.map((e) => [e.key, e.handle]));
+      expect(byKey[ROOT_KEY]).toEqual(root);
+      expect(byKey['fh-a']).toEqual(linkedA);
+      expect(byKey['fh-b']).toEqual(linkedB);
+    });
+
+    it('reads keys and values inside ONE transaction', async () => {
+      await saveFolderHandle(
+        { name: 'one', kind: 'directory' },
+        { idbFactory: memIdb }
+      );
+      const state = memIdb._state.get(__test.DB_NAME);
+      state.txCount = 0;
+
+      await listFolderHandles({ idbFactory: memIdb });
+
+      expect(state.txCount).toBe(1);
+    });
+
+    it('skips an unusable stored value and warns rather than listing it', async () => {
+      await saveFolderHandle(
+        { name: 'real', kind: 'directory' },
+        { idbFactory: memIdb, key: 'fh-real' }
+      );
+      // A value the store never writes today, but a corrupt/legacy record
+      // must not reach the UI as a nameless folder.
+      memIdb._state
+        .get(__test.DB_NAME)
+        .records.set('fh-corrupt', 'not-a-handle');
+
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const listed = await listFolderHandles({ idbFactory: memIdb });
+      expect(listed.map((e) => e.key)).toEqual(['fh-real']);
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('unusable stored entry'),
+        'fh-corrupt'
+      );
+      warnSpy.mockRestore();
+    });
+
+    it('returns an empty list and warns when the store cannot be opened', async () => {
+      const brokenIdb = {
+        open() {
+          const req = {
+            onsuccess: null,
+            onerror: null,
+            onupgradeneeded: null,
+            error: new Error('quota'),
+          };
+          queueMicrotask(() => req.onerror?.());
+          return req;
+        },
+      };
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      expect(await listFolderHandles({ idbFactory: brokenIdb })).toEqual([]);
+      expect(warnSpy).toHaveBeenCalled();
+      warnSpy.mockRestore();
+    });
+  });
+
   describe('input validation', () => {
     it('rejects null/undefined handle on save', async () => {
       await expect(
@@ -302,6 +393,10 @@ describe('folder-handle-store (F35 Phase A)', () => {
       expect(__test.STORE_NAME).toBe('handles');
       expect(__test.ROOT_KEY).toBe('root');
       expect(__test.DB_VERSION).toBe(1);
+    });
+
+    it('exports ROOT_KEY for callers that must tell the root slot apart', () => {
+      expect(ROOT_KEY).toBe(__test.ROOT_KEY);
     });
   });
 });

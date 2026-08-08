@@ -196,6 +196,10 @@ import {
   getClassicLayoutController,
   collapseCustomizerGroups,
 } from './js/classic-layout-controller.js';
+import { tabIdFor } from './js/classic-dock-model.js';
+import { initFontListPanel } from './js/font-list-panel.js';
+import { initViewportControlPanel } from './js/viewport-control-panel.js';
+import { initAnimatePanel, getAnimatePanel } from './js/animate-panel.js';
 import { initClassicStatusBar } from './js/classic-status-bar.js';
 import {
   initClassicEditorToolbar,
@@ -242,6 +246,8 @@ import {
   updateProject,
   touchProject,
   getProject,
+  listSavedProjects,
+  deleteProject,
   getSavedProjectsSummary as _getSavedProjectsSummary,
   clearAllSavedProjects as _clearAllSavedProjects,
   getStorageDiagnostics,
@@ -252,7 +258,9 @@ import {
 import {
   loadFolderHandle,
   saveFolderHandle,
+  clearFolderHandle,
 } from './js/folder-handle-store.js';
+import { createLinkedFoldersUi } from './js/linked-folders-ui.js';
 import Split from 'split.js';
 
 /**
@@ -411,6 +419,177 @@ function hasFullQualitySTLFor(parameters) {
     autoPreviewController?.getCurrentFullSTL(parameters) &&
     !autoPreviewController?.needsFullRender(parameters)
   );
+}
+
+/* ── Error Log: reaching it by keyboard and by menu (F1) ──────────────────────
+ *
+ * The Error-Log lives in two different places depending on the host, so every
+ * entry point below resolves WHERE it is from the DOM rather than from a mode
+ * flag that could disagree with it:
+ *
+ *   Forge    inside the console's Structured tabpanel, behind a tab
+ *   Classic  its own pane in the bottom strip (B2), always on screen
+ *
+ * The two hosts therefore mean different things by "show the Error Log". In
+ * Forge it is genuinely hidden and has to be revealed; in Classic it is
+ * already there and what the user wants is to GET to it. Classic must never
+ * click the Structured tab — that tablist is hidden there (D-9), so it would
+ * be an invisible control changing an invisible selection.
+ */
+
+/** The console <details> was closed and we opened it, so toggling off can undo that. */
+let errorLogOpenedConsole = false;
+
+/** Where focus was before Classic sent it into the Error-Log pane. */
+let errorLogReturnFocus = null;
+
+/**
+ * Which host currently holds the Error-Log, resolved from the element itself.
+ * @returns {'classic'|'forge'|null} null when the markup is not present at all
+ */
+function errorLogHost() {
+  const host = document
+    .getElementById('error-log-output')
+    ?.closest('#classicErrorLogSlot, #console-view-structured');
+  if (!host) return null;
+  return host.id === 'classicErrorLogSlot' ? 'classic' : 'forge';
+}
+
+/**
+ * Whether the Error-Log is on screen right now — what the Window menu item's
+ * tick reports, and what decides which way the shortcut toggles.
+ * @returns {boolean}
+ */
+function isErrorLogShowing() {
+  const host = errorLogHost();
+  if (host === 'forge') {
+    return (
+      Boolean(document.getElementById('consolePanel')?.open) &&
+      document
+        .getElementById('console-tab-structured')
+        ?.getAttribute('aria-selected') === 'true'
+    );
+  }
+  if (host === 'classic') {
+    // Simplified drops the whole bottom strip, and folding takes it with it.
+    if (getUIModeController().getClassicDensity() === 'simplified')
+      return false;
+    if (getClassicLayoutController()?.isConsoleCollapsed()) return false;
+    // Merged into a tab group (B7) and not the selected tab: the model sets
+    // `hidden` on the panels that are not showing.
+    return !document.getElementById('classicErrorLogSlot')?.hidden;
+  }
+  return false;
+}
+
+/**
+ * Forge: open the console if it is closed, select the Structured tab through
+ * the console panel's own wiring (console-panel.js), and put focus on the tab
+ * so the move announces itself.
+ * @returns {boolean}
+ */
+function showErrorLogForge() {
+  const panel = document.getElementById('consolePanel');
+  const tab = document.getElementById('console-tab-structured');
+  if (!panel || !tab) return false;
+
+  if (!panel.open) {
+    panel.open = true;
+    errorLogOpenedConsole = true;
+  }
+  tab.click();
+  tab.focus();
+  return true;
+}
+
+/**
+ * Forge: back to the Log view, and back to a closed console if that is how we
+ * found it — toggling off should leave the panel as it was, not half-open.
+ */
+function hideErrorLogForge() {
+  const logTab = document.getElementById('console-tab-log');
+  logTab?.click();
+  if (errorLogOpenedConsole) {
+    const panel = document.getElementById('consolePanel');
+    if (panel) panel.open = false;
+    errorLogOpenedConsole = false;
+  } else {
+    logTab?.focus();
+  }
+}
+
+/**
+ * Classic: the pane is already in the bottom strip, so this is about reaching
+ * it — unfold the strip if it is folded (D-8), select its tab if it has been
+ * merged into a group (B7), then focus the title bar's menu button, which is
+ * the focusable control the title bar carries (the same contract B8 uses after
+ * a move).
+ * @returns {boolean}
+ */
+function showErrorLogClassic() {
+  const slot = document.getElementById('classicErrorLogSlot');
+  if (!slot) return false;
+
+  if (getUIModeController().getClassicDensity() === 'simplified') {
+    // Nothing else speaks here, so this is the one announcement F1 adds.
+    announceImmediate('Error-Log is not available in the Simplified view');
+    return false;
+  }
+
+  const layout = getClassicLayoutController();
+  if (layout?.isConsoleCollapsed()) layout.setConsoleCollapsed(false);
+
+  const priorFocus = document.activeElement;
+
+  // A merged group's tab lives in the shared bar, outside the panel; a solo
+  // panel keeps its own title bar. tabIdFor comes from the dock model so the
+  // id scheme has one definition (plan §4 rule 5).
+  const tab = document.getElementById(tabIdFor('errorLog'));
+  if (tab) {
+    tab.click();
+    tab.focus();
+  } else {
+    const target =
+      slot.querySelector('.classic-panel-menu-btn') ||
+      slot.querySelector('button');
+    if (!target) return false;
+    target.focus();
+  }
+
+  errorLogReturnFocus = priorFocus;
+  return true;
+}
+
+/** Classic: hand focus back to wherever the user was before. */
+function returnFocusFromErrorLog() {
+  const prior = errorLogReturnFocus;
+  errorLogReturnFocus = null;
+  if (prior?.isConnected && typeof prior.focus === 'function') prior.focus();
+}
+
+/**
+ * Ctrl+Alt+2 / Window > Error-Log. Forge opens and closes the Structured view;
+ * Classic, where the pane cannot be closed, sends focus into it and back out
+ * again — the honest per-host reading of "toggle" for a panel that is always
+ * present in one host and hidden behind a tab in the other.
+ */
+function toggleErrorLog() {
+  const host = errorLogHost();
+
+  if (host === 'forge') {
+    if (isErrorLogShowing()) hideErrorLogForge();
+    else showErrorLogForge();
+    return;
+  }
+
+  if (host === 'classic') {
+    const slot = document.getElementById('classicErrorLogSlot');
+    const active = document.activeElement;
+    const alreadyInside =
+      Boolean(slot?.contains(active)) || active?.id === tabIdFor('errorLog');
+    if (alreadyInside) returnFocusFromErrorLog();
+    else showErrorLogClassic();
+  }
 }
 
 // Track which saved project is currently loaded (for auto-saving companion files)
@@ -1738,9 +1917,127 @@ async function initApp() {
 
     if (connectBtn) connectBtn.hidden = false;
 
+    // ── Sub-plan H: every linked folder listed, one connected ───────────
+    // Created here so the section only ever exists on a browser that can
+    // actually hold folder handles.
+    const linkedFoldersUi = createLinkedFoldersUi({
+      listEl: document.getElementById('linkedFoldersList'),
+      sectionEl: document.getElementById('linkedFolders'),
+      listProjects: listSavedProjects,
+      getActiveHandle: () => folderSyncCtrl.getHandle(),
+      getActiveState: () => folderSyncCtrl.getState(),
+      onOpen: (entry) => _openLinkedFolder(entry),
+      onRemove: (entry) => _removeLinkedFolder(entry),
+      onEmptyFocus: () => connectBtn?.focus(),
+    });
+
+    /**
+     * Open a listed folder. A folder with a project card goes through the
+     * normal card-load path, which already re-grants permission, re-reads
+     * the folder from disk and adopts the handle as the active one.
+     *
+     * A folder with no card (the pre-multi-folder root slot, or one whose
+     * card was deleted) has nothing to load, so it re-grants permission on
+     * ITS OWN handle and goes through the connect-load path, which creates
+     * the card. `restoreFromStored()` cannot serve here: it only ever reads
+     * the root slot, so it would re-grant the wrong folder.
+     */
+    async function _openLinkedFolder(entry) {
+      if (!entry?.handle) return;
+
+      if (entry.projectId) {
+        await savedProjectsUI.loadSavedProject(entry.projectId);
+        return;
+      }
+
+      let granted = false;
+      try {
+        const queried =
+          typeof entry.handle.queryPermission === 'function'
+            ? await entry.handle.queryPermission({ mode: 'readwrite' })
+            : 'prompt';
+        granted =
+          queried === 'granted' ||
+          (typeof entry.handle.requestPermission === 'function' &&
+            (await entry.handle.requestPermission({ mode: 'readwrite' })) ===
+              'granted');
+      } catch (err) {
+        console.warn('[LinkedFolders] Permission request failed:', err);
+        granted = false;
+      }
+      if (!granted) {
+        updateStatus(
+          'Folder connection denied — permission required',
+          'warning'
+        );
+        return;
+      }
+
+      await folderSyncCtrl.adoptHandle(entry.handle);
+      await _loadFromConnectedFolder(entry.handle);
+    }
+
+    /**
+     * Remove a folder's link. Never touches the disk: it drops the stored
+     * handle and the pointer record, which is all this browser holds.
+     *
+     * @returns {Promise<boolean>} True when the row should disappear.
+     */
+    async function _removeLinkedFolder(entry) {
+      if (!entry) return false;
+
+      const confirmed = await showConfirmDialog(
+        `Remove the link to "${entry.name}"?\n\nYour files on disk are not touched. This removes the folder's link and its project card from this browser only.`,
+        'Remove folder link',
+        'Remove link',
+        'Cancel'
+      );
+      if (!confirmed) return false;
+
+      // Deleting the record clears its fh-* handle; a folder with no record
+      // owns nothing but the handle itself.
+      if (entry.projectId) {
+        const result = await deleteProject(entry.projectId);
+        if (!result.success) {
+          showErrorToast({ title: 'Remove Failed', message: result.error });
+          return false;
+        }
+      } else {
+        await clearFolderHandle({ key: entry.key });
+      }
+
+      // The root slot mirrors whichever folder is active, so removing the
+      // active one has to disconnect too — otherwise the next reload
+      // hydrates a folder that is no longer listed.
+      if (entry.activeState) {
+        await folderSyncCtrl.disconnect();
+      }
+
+      announceImmediate(`Removed folder link: ${entry.name}`);
+      updateStatus(`Removed folder link: ${entry.name}`);
+      await savedProjectsUI.renderSavedProjectsList();
+      return true;
+    }
+
+    /** Re-read the store and repaint the list. Safe to call at any time. */
+    function refreshLinkedFolders() {
+      return linkedFoldersUi.refresh();
+    }
+
+    // Deleting a folder-link card also clears that folder's handle, so the
+    // list must follow the project list.
+    document.addEventListener('saved-projects-rendered', () => {
+      void refreshLinkedFolders();
+    });
+
     /**
      * Reflect controller state into the status pill + buttons. Called
      * via `subscribe()` so this stays the single source of truth.
+     *
+     * The pill describes the ONE connected folder (D-33); the linked-folders
+     * list below it shows every folder this browser knows. Connect Folder
+     * therefore stays visible in every state — it is how a second folder
+     * gets linked.
      */
     function _syncFolderUi(state, handle) {
       if (!statusEl || !statusText) return;
@@ -1752,7 +2049,6 @@ async function initApp() {
           statusText.textContent = `Connected to "${name}"`;
           if (restoreBtn) restoreBtn.hidden = true;
           if (disconnectBtn) disconnectBtn.hidden = false;
-          if (connectBtn) connectBtn.hidden = true;
           break;
         case 'pending-restore':
           statusEl.hidden = false;
@@ -1760,7 +2056,6 @@ async function initApp() {
           statusText.textContent = `"${name}" — click Reconnect to re-grant permission for this session`;
           if (restoreBtn) restoreBtn.hidden = false;
           if (disconnectBtn) disconnectBtn.hidden = false;
-          if (connectBtn) connectBtn.hidden = true;
           break;
         case 'denied':
           statusEl.hidden = false;
@@ -1768,7 +2063,6 @@ async function initApp() {
           statusText.textContent = `"${name}" — permission was denied. Click Reconnect to try again, or Disconnect to forget.`;
           if (restoreBtn) restoreBtn.hidden = false;
           if (disconnectBtn) disconnectBtn.hidden = false;
-          if (connectBtn) connectBtn.hidden = true;
           break;
         case 'idle':
         default:
@@ -1777,9 +2071,10 @@ async function initApp() {
           statusText.textContent = '';
           if (restoreBtn) restoreBtn.hidden = true;
           if (disconnectBtn) disconnectBtn.hidden = true;
-          if (connectBtn) connectBtn.hidden = false;
           break;
       }
+      // Which row wears the Connected badge follows the pill.
+      void refreshLinkedFolders();
     }
 
     folderSyncCtrl.subscribe(_syncFolderUi);
@@ -3288,6 +3583,14 @@ async function initApp() {
                 }
               },
             },
+            {
+              // The way back from any arrangement the title-bar menus can
+              // produce (B9). Label owner-approved 2026-08-07.
+              label: 'Reset Panel Layout',
+              handler: () => {
+                getClassicLayoutController()?.resetPanelLayout();
+              },
+            },
           ]
         : []),
       { type: 'separator' },
@@ -3342,6 +3645,16 @@ async function initApp() {
         return panelToggle('codeEditor', 'Editor', 'toggleCodeEditor');
       })(),
       panelToggle('consoleOutput', 'Console', 'toggleConsole'),
+      // Error-Log gets a custom handler rather than a panelToggle: it is a
+      // console tab in Forge and an always-present strip pane in Classic, so
+      // PANEL_REGISTRY's show/hide semantics fit neither host (F1).
+      {
+        type: 'toggle',
+        label: 'Error-Log',
+        shortcutAction: 'toggleErrorLog',
+        checked: isErrorLogShowing(),
+        handler: () => toggleErrorLog(),
+      },
       (() => {
         const inClassic = document.body.dataset.uiMode === 'classic';
         const classicLayout = getClassicLayoutController();
@@ -3366,25 +3679,50 @@ async function initApp() {
           },
         };
       })(),
-      {
-        type: 'action',
-        label: 'Viewport-Control',
-        ...(document.body.dataset.uiMode === 'classic'
-          ? {
-              disabled: true,
-              tooltip:
-                'The camera panel is not part of the Classic layout \u2014 drag to orbit, or use the View menu and toolbar view buttons',
+      // The three panels sub-plan F builds are Classic-only this round (D-32),
+      // so each is a real dock toggle in Classic and keeps its previous Forge
+      // behaviour outside it. Viewport-Control used to be disabled in Classic
+      // with an apologetic tooltip; it is a real panel now (F4/F6).
+      (() => {
+        const classicLayout = getClassicLayoutController();
+        if (document.body.dataset.uiMode === 'classic' && classicLayout) {
+          return {
+            type: 'toggle',
+            label: 'Viewport-Control',
+            checked: classicLayout.isViewportControlVisible(),
+            handler: () => classicLayout.toggleViewportControl(),
+          };
+        }
+        return {
+          type: 'action',
+          label: 'Viewport-Control',
+          handler: () => {
+            const panel = document.getElementById('cameraPanel');
+            if (panel) {
+              panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              const focusable = panel.querySelector('button, input, select');
+              if (focusable) focusable.focus();
             }
-          : {}),
-        handler: () => {
-          const panel = document.getElementById('cameraPanel');
-          if (panel) {
-            panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            const focusable = panel.querySelector('button, input, select');
-            if (focusable) focusable.focus();
-          }
-        },
-      },
+          },
+        };
+      })(),
+      ...(document.body.dataset.uiMode === 'classic' &&
+      getClassicLayoutController()
+        ? [
+            {
+              type: 'toggle',
+              label: 'Animate',
+              checked: getClassicLayoutController().isAnimateVisible(),
+              handler: () => getClassicLayoutController().toggleAnimate(),
+            },
+            {
+              type: 'toggle',
+              label: 'Font List',
+              checked: getClassicLayoutController().isFontListVisible(),
+              handler: () => getClassicLayoutController().toggleFontList(),
+            },
+          ]
+        : []),
       { type: 'separator' },
       // -- Web-only panel toggles --
       // fileActions, editTools, designTools, displayOptions removed — now in toolbar menus
@@ -5384,11 +5722,21 @@ async function initApp() {
           previewQualityMode === 'auto' ? resolveAdaptiveCacheKey : null,
         resolvePreviewParameters:
           previewQualityMode === 'auto' ? resolveAdaptiveParameters : null,
+        // Render / Generate / export. Playback stops and stays stopped (F5):
+        // two render requests would queue behind each other on the one
+        // blocking worker and make both slow.
+        onFullRenderStart: () => getAnimatePanel()?.pauseForExternalRender(),
         onStateChange: (newState, prevState, extra) => {
           console.log(
             `[AutoPreview] State: ${prevState} -> ${newState}`,
             extra
           );
+          // The other half of the same rule: a preview render started by
+          // something other than the animation. Animation frames never reach
+          // here — renderAnimationFrame sets no preview state.
+          if (newState === PREVIEW_STATE.RENDERING) {
+            getAnimatePanel()?.pauseForExternalRender();
+          }
           if (newState === PREVIEW_STATE.CURRENT) {
             if (typeof extra?.renderDurationMs === 'number') {
               autoPreviewHints.lastPreviewDurationMs = extra.renderDurationMs;
@@ -8179,6 +8527,30 @@ if (rounded) {
         hasFullQualitySTLFor(stateManager.getState().parameters),
       triggerPreview: () => editorPreviewTrigger?.(),
       exportStl: () => exportFormatFromMenu('stl'),
+    });
+
+    // Classic Font List panel (F3). Registering the sample faces costs no new
+    // bandwidth: the worker fetches these same four files from the same URLs
+    // to mount them for text(), so the browser serves these from cache.
+    {
+      const fontListPanel = initFontListPanel({
+        assetBaseUrl: new URL(import.meta.env.BASE_URL, window.location.origin)
+          .toString()
+          .replace(/\/$/, ''),
+      });
+      fontListPanel.loadSampleFaces();
+    }
+
+    // Classic Viewport-Control panel (F4). The PreviewManager is built lazily
+    // once WASM is ready, so the panel binds to its camera later, the same way
+    // the display-options and overlay-grid controllers do.
+    initViewportControlPanel({ getPreviewManager: () => previewManager });
+
+    // Classic Animate panel (F5). Playback drives real renders through the
+    // auto-preview controller's -D $t path.
+    initAnimatePanel({
+      getAutoPreviewController: () => autoPreviewController,
+      getParameters: () => stateManager.getState().parameters || {},
     });
 
     // Classic Customizer bar (C7): titlebar ✕ + the Automatic Preview mirror.
@@ -13531,9 +13903,11 @@ if (rounded) {
   keyboardConfig.on('toggleConsole', () =>
     getUIModeController().togglePanelVisibility('consoleOutput')
   );
-  keyboardConfig.on('toggleErrorLog', () =>
-    getUIModeController().togglePanelVisibility('errorLog')
-  );
+  // 'errorLog' is not in PANEL_REGISTRY, so togglePanelVisibility used to
+  // early-return here and Ctrl+Alt+2 did nothing at all (F1). The Error-Log is
+  // a console tab in Forge and a strip pane in Classic; registry semantics fit
+  // neither, so it gets its own per-host handler.
+  keyboardConfig.on('toggleErrorLog', () => toggleErrorLog());
   keyboardConfig.on('toggleCodeEditor', () =>
     getUIModeController().togglePanelVisibility('codeEditor')
   );

@@ -2089,3 +2089,421 @@ test.describe('Classic toolbars stay one row', () => {
     expect(inView, 'focused button scrolled into view').toBe(true);
   });
 });
+
+test.describe('Classic dock relocation (B6-B8)', () => {
+  /** Enter Classic in Standard density at a desktop width. */
+  async function enterClassicDesktop(page, width = 1400) {
+    await page.setViewportSize({ width, height: 900 });
+    await loadSampleProject(page, { query: '?flag_classic_mode=true' });
+    await switchToStandardMode(page);
+    await pickInterfaceMode(page, 'Classic (Desktop Layout)');
+    await expect(page.locator('#classicBottomStrip')).toBeVisible();
+  }
+
+  test('classic-move-menu: every dock title bar carries its own move menu', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await enterClassicDesktop(page);
+
+    // Named per panel, so four of them in the strip do not all read alike
+    for (const name of ['Move Editor', 'Move Customizer', 'Move Console']) {
+      await expect(page.getByRole('button', { name, exact: true })).toHaveCount(
+        1
+      );
+    }
+
+    const consoleMenuBtn = page.getByRole('button', {
+      name: 'Move Console',
+      exact: true,
+    });
+    await expect(consoleMenuBtn).toHaveAttribute('aria-haspopup', 'menu');
+    await expect(consoleMenuBtn).toHaveAttribute('aria-expanded', 'false');
+
+    await consoleMenuBtn.click();
+    await expect(consoleMenuBtn).toHaveAttribute('aria-expanded', 'true');
+
+    const items = await page
+      .locator('.classic-panel-menu [role="menuitem"]')
+      .evaluateAll((els) => els.map((el) => el.textContent));
+    // The field Console already occupies is omitted, not shown dead (rule 8)
+    expect(items).toEqual([
+      'Move to left column',
+      'Move to upper right',
+      'Move to lower right',
+      'Merge with Editor',
+      'Merge with Customizer',
+      'Merge with Error-Log',
+    ]);
+  });
+
+  test('classic-move-keyboard: a panel relocates without a pointer, and says so', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await enterClassicDesktop(page);
+
+    // Reach the menu button by keyboard alone
+    const menuBtn = page.getByRole('button', {
+      name: 'Move Error-Log',
+      exact: true,
+    });
+    await menuBtn.focus();
+    await page.keyboard.press('ArrowDown');
+    await expect(menuBtn).toHaveAttribute('aria-expanded', 'true');
+    // ArrowDown from the button lands on the first item
+    const item = (name) =>
+      page.locator('.classic-panel-menu [role="menuitem"]', { hasText: name });
+    await expect(
+      page.locator('.classic-panel-menu [role="menuitem"]').first()
+    ).toBeFocused();
+
+    await page.keyboard.press('ArrowDown');
+    await expect(item('Move to upper right')).toBeFocused();
+    await page.keyboard.press('Enter');
+
+    // It really moved
+    await expect(page.locator('#classicErrorLogSlot')).toBeVisible();
+    expect(
+      await page
+        .locator('#classicErrorLogSlot')
+        .evaluate((el) => el.closest('.classic-dock-field')?.id)
+    ).toBe('classicFieldRightTop');
+
+    // Focus contract: the moved panel's title bar (its menu button)
+    await expect(
+      page.getByRole('button', { name: 'Move Error-Log', exact: true })
+    ).toBeFocused();
+
+    // ...and it was announced
+    await expect(page.locator('#srAnnouncer')).toContainText(
+      'Error-Log moved to the upper right'
+    );
+  });
+
+  test('classic-move-escape: Escape closes the menu and hands focus back', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await enterClassicDesktop(page);
+
+    const menuBtn = page.getByRole('button', {
+      name: 'Move Console',
+      exact: true,
+    });
+    await menuBtn.click();
+    await expect(page.locator('.classic-panel-menu')).toBeVisible();
+
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.classic-panel-menu')).toHaveCount(0);
+    await expect(menuBtn).toBeFocused();
+    await expect(menuBtn).toHaveAttribute('aria-expanded', 'false');
+
+    // Nothing moved
+    expect(
+      await page
+        .locator('#classicConsoleSlot')
+        .evaluate((el) => el.parentElement?.id)
+    ).toBe('classicBottomStrip');
+  });
+
+  test('classic-merge-split: merging draws a tablist, splitting takes it away', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await enterClassicDesktop(page);
+
+    await page
+      .getByRole('button', { name: 'Move Error-Log', exact: true })
+      .click();
+    await page
+      .locator('.classic-panel-menu [role="menuitem"]', {
+        hasText: 'Merge with Console',
+      })
+      .click();
+
+    const tablist = page.getByRole('tablist', { name: 'Bottom panels' });
+    await expect(tablist).toBeVisible();
+    const errorTab = page.getByRole('tab', { name: 'Error-Log' });
+    const consoleTab = page.getByRole('tab', { name: 'Console' });
+
+    // After a merge focus lands on the newly selected tab (B7)
+    await expect(errorTab).toBeFocused();
+    await expect(errorTab).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('#srAnnouncer')).toContainText(
+      'Error-Log merged with Console, tab 2 of 2'
+    );
+
+    // Arrows select, and the group is a single tab stop
+    await page.keyboard.press('ArrowLeft');
+    await expect(consoleTab).toBeFocused();
+    await expect(consoleTab).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('#classicErrorLogSlot')).toBeHidden();
+    expect(await errorTab.evaluate((el) => el.tabIndex)).toBe(-1);
+
+    // The merged field keeps ONE title bar, and its menu covers both occupants
+    const sharedMenu = page.getByRole('button', {
+      name: 'Move panels',
+      exact: true,
+    });
+    await expect(sharedMenu).toHaveCount(1);
+    await sharedMenu.click();
+    const items = await page
+      .locator('.classic-panel-menu [role="menuitem"]')
+      .evaluateAll((els) => els.map((el) => el.textContent));
+    expect(items).toContain('Move Error-Log to left column');
+    expect(items).toContain('Move Console to left column');
+
+    // Move the BACKGROUND tab out without ever selecting it
+    await page
+      .locator('.classic-panel-menu [role="menuitem"]', {
+        hasText: 'Move Error-Log to lower right',
+      })
+      .click();
+
+    await expect(page.getByRole('tablist')).toHaveCount(0);
+    await expect(page.locator('#classicConsoleSlot')).toBeVisible();
+    await expect(page.locator('#classicErrorLogSlot')).toBeVisible();
+    // The Console's fold button came back out of the shared bar with it
+    await expect(
+      page.locator('#classicConsoleSlot #classicConsoleFoldBtn')
+    ).toBeVisible();
+  });
+
+  test('classic-move-scope: no relocation menus outside Classic or below 1024px', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await enterClassicDesktop(page);
+    await expect(
+      page.getByRole('button', { name: 'Move Console', exact: true })
+    ).toHaveCount(1);
+
+    // Leaving Classic takes every button with it — including the one on the
+    // Customizer's title bar, which is static markup that survives the exit
+    await page.locator('#classicModeToggle').click();
+    await expect(page.locator('body')).not.toHaveAttribute(
+      'data-ui-mode',
+      'classic'
+    );
+    await expect(page.locator('.classic-panel-menu-btn')).toHaveCount(0);
+    await expect(page.locator('#paramPanel')).toBeVisible();
+  });
+
+  test('classic-dock-persist: a relocated panel is still there after a reload', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await enterClassicDesktop(page);
+
+    await page
+      .getByRole('button', { name: 'Move Error-Log', exact: true })
+      .click();
+    await page
+      .locator('.classic-panel-menu [role="menuitem"]', {
+        hasText: 'Move to upper right',
+      })
+      .click();
+
+    await page.reload();
+    await page.waitForSelector('body[data-wasm-ready="true"]', {
+      state: 'attached',
+      timeout: WASM_READY_TIMEOUT,
+    });
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-ui-mode',
+      'classic'
+    );
+
+    expect(
+      await page
+        .locator('#classicErrorLogSlot')
+        .evaluate((el) => el.closest('.classic-dock-field')?.id)
+    ).toBe('classicFieldRightTop');
+  });
+
+  test('classic-dock-reset: View > Reset Panel Layout restores the default', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await enterClassicDesktop(page);
+
+    await page
+      .getByRole('button', { name: 'Move Editor', exact: true })
+      .click();
+    await page
+      .locator('.classic-panel-menu [role="menuitem"]', {
+        hasText: 'Move to lower right',
+      })
+      .click();
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-classic-field-left',
+      'empty'
+    );
+
+    await page.locator('#viewMenuBtn').click();
+    await page.getByRole('menuitem', { name: 'Reset Panel Layout' }).click();
+
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-classic-field-left',
+      'occupied'
+    );
+    expect(
+      await page
+        .locator('#classicEditorSlot')
+        .evaluate((el) => el.closest('.classic-dock-field')?.id)
+    ).toBe('classicFieldLeft');
+    await expect(page.locator('#srAnnouncer')).toContainText(
+      'Panel layout reset'
+    );
+
+    // ...and the reset is what survives the next reload, not the old layout
+    await page.reload();
+    await page.waitForSelector('body[data-wasm-ready="true"]', {
+      state: 'attached',
+      timeout: WASM_READY_TIMEOUT,
+    });
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-classic-field-left',
+      'occupied'
+    );
+  });
+
+  test('classic-dock-corrupt: a bad stored layout falls back, loudly, to the default', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+
+    const warnings = [];
+    page.on('console', (msg) => {
+      if (msg.type() === 'warning' && msg.text().includes('[ClassicDock]')) {
+        warnings.push(msg.text());
+      }
+    });
+    await page.addInitScript(() => {
+      localStorage.setItem(
+        'openscad-forge-classic-dock',
+        '{"left":[["editor"]],"bottom":"everything"}'
+      );
+    });
+
+    await enterClassicDesktop(page);
+
+    // Default arrangement, whole — never half-restored
+    expect(
+      await page
+        .locator('#classicEditorSlot')
+        .evaluate((el) => el.closest('.classic-dock-field')?.id)
+    ).toBe('classicFieldLeft');
+    await expect(page.locator('#classicConsoleSlot')).toBeVisible();
+    expect(
+      await page
+        .locator('#classicConsoleSlot')
+        .evaluate((el) => el.parentElement?.id)
+    ).toBe('classicBottomStrip');
+
+    // Logged, not swallowed (core rule 13) — and cleared so it self-heals
+    expect(warnings.join(' ')).toContain('Ignoring the saved panel layout');
+    expect(
+      await page.evaluate(() =>
+        localStorage.getItem('openscad-forge-classic-dock')
+      )
+    ).toBeNull();
+  });
+
+  test('classic-dock-breakpoint: the arrangement waits below 1024px and comes back unchanged', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await enterClassicDesktop(page, 1200);
+
+    await page
+      .getByRole('button', { name: 'Move Error-Log', exact: true })
+      .click();
+    await page
+      .locator('.classic-panel-menu [role="menuitem"]', {
+        hasText: 'Move to upper right',
+      })
+      .click();
+    const stored = await page.evaluate(() =>
+      localStorage.getItem('openscad-forge-classic-dock')
+    );
+
+    // Below the breakpoint: the stack shows the default, and neither the
+    // splitters nor the move menus are there to be operated
+    await page.setViewportSize({ width: 900, height: 900 });
+    await expect
+      .poll(async () =>
+        page
+          .locator('#classicErrorLogSlot')
+          .evaluate((el) => el.closest('.classic-dock-field')?.id)
+      )
+      .toBe('classicBottomStrip');
+    await expect(page.locator('.classic-panel-menu-btn').first()).toBeHidden();
+    await expect(page.locator('#classicResizerEditor')).toBeHidden();
+
+    // ...and back up, unchanged
+    await page.setViewportSize({ width: 1200, height: 900 });
+    await expect
+      .poll(async () =>
+        page
+          .locator('#classicErrorLogSlot')
+          .evaluate((el) => el.closest('.classic-dock-field')?.id)
+      )
+      .toBe('classicFieldRightTop');
+    expect(
+      await page.evaluate(() =>
+        localStorage.getItem('openscad-forge-classic-dock')
+      )
+    ).toBe(stored);
+  });
+  test('classic-dock-shot7: the editor docks above the Customizer, keyboard only', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await enterClassicDesktop(page);
+
+    // Desktop screenshot 7, reached without a pointer
+    await page
+      .getByRole('button', { name: 'Move Editor', exact: true })
+      .focus();
+    await page.keyboard.press('Enter');
+    // The editor's own field is omitted, so the first item IS the right column
+    await expect(
+      page.locator('.classic-panel-menu [role="menuitem"]').first()
+    ).toHaveText('Move to upper right');
+    await page.keyboard.press('Enter');
+
+    // A column takes the moved panel FIRST — above the Customizer, as upstream
+    expect(
+      await page
+        .locator('#classicFieldRightTop')
+        .evaluate((el) => [...el.children].map((c) => c.id))
+    ).toEqual(['classicEditorSlot', 'paramPanel']);
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-classic-field-left',
+      'empty'
+    );
+
+    // The bottom strip appends instead, so its panes keep reading left to right
+    await page
+      .getByRole('button', { name: 'Move Customizer', exact: true })
+      .click();
+    await page
+      .locator('.classic-panel-menu [role="menuitem"]', {
+        hasText: 'Move to bottom',
+      })
+      .click();
+    expect(
+      await page
+        .locator('#classicBottomStrip')
+        .evaluate((el) => [...el.children].map((c) => c.id))
+    ).toEqual([
+      'classicConsoleSlot',
+      'classicErrorLogSlot',
+      'classicAnimateSlot',
+      'classicFontListSlot',
+      'paramPanel',
+    ]);
+  });
+});
