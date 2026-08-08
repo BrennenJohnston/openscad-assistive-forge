@@ -382,6 +382,13 @@ test.describe('Edit menu parity (G2)', () => {
     await clickMenuItem(page, 'edit', 'Cut')
 
     await expect(editor).not.toContainText('Simple Box - Test Fixture')
+
+    // The point of the focus restore: the user is left in the editor,
+    // carrying on, not stranded on a menu button that is no longer shown.
+    const focusInEditor = await page.evaluate(() =>
+      Boolean(document.activeElement?.closest('#expertModePanel'))
+    )
+    expect(focusInEditor).toBe(true)
   })
 
   test('bookmarks toggle, mark the gutter, and navigate with announcements', async ({
