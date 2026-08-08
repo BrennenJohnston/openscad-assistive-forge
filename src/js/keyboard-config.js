@@ -308,6 +308,11 @@ export const DEFAULT_SHORTCUTS = {
     alt: true,
     description: 'Toggle Customizer panel',
   },
+  jumpToPanel: {
+    key: 'j',
+    ctrl: true,
+    description: 'Jump to a panel',
+  },
   nextPanel: {
     key: ']',
     ctrl: true,
@@ -437,6 +442,7 @@ export const SHORTCUT_CATEGORIES = {
       'toggleErrorLog',
       'toggleCodeEditor',
       'toggleCustomizer',
+      'jumpToPanel',
       'nextPanel',
       'prevPanel',
     ],

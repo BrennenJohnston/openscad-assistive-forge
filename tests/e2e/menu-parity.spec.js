@@ -762,6 +762,92 @@ test.describe('View menu parity (G4)', () => {
   })
 })
 
+// Upstream builds this menu from the docks, so its order is the dock order
+// (U2). Next/Previous Window are omitted — one window (D-24). Outside Classic
+// there are no Animate/Font List docks, so Standard shows the Forge set.
+const WINDOW_MENU_ORDER_STANDARD = [
+  'Editor',
+  'Console',
+  'Customizer',
+  'Error-Log',
+  'Viewport-Control',
+  '---',
+  'Jump To…',
+  '---',
+  'Libraries',
+  'Companion Files',
+  'Image Measurement',
+  'Reference Image',
+]
+
+test.describe('Window menu parity (G5)', () => {
+  test('order follows U2 and Jump To moves focus into the panel it names', async ({
+    page,
+  }) => {
+    await loadFixture(page)
+
+    await page.locator('#windowMenuBtn').click()
+    const items = await readMenu(page, 'window')
+    expect(items.map((i) => i.label)).toEqual(WINDOW_MENU_ORDER_STANDARD)
+
+    // One window, so these stay omitted rather than shipping dead.
+    expect(items.some((i) => /Next Window|Previous Window/.test(i.label))).toBe(
+      false
+    )
+
+    // Jump To lists the panels that are open right now, and choosing one puts
+    // focus INSIDE that panel — not merely somewhere in the page.
+    await menuItem(page, 'window', 'Jump To…').click()
+    const targets = await readSubmenu(page, 'window', 'Jump To…')
+    expect(targets.length).toBeGreaterThan(0)
+    expect(targets.map((t) => t.label)).toContain('Console')
+
+    // Scope to the submenu: the Window menu also has a top-level "Console"
+    // toggle, and clicking that would hide the panel instead of visiting it.
+    await page
+      .locator('#windowMenuItems > li.menu-item--submenu ul button')
+      .filter({ has: page.getByText('Console', { exact: true }) })
+      .first()
+      .click()
+
+    await expect(page.locator('#srAnnouncer')).toHaveText('Jumped to Console')
+    const landedInside = await page.evaluate(
+      () =>
+        document
+          .getElementById('consolePanel')
+          ?.contains(document.activeElement) ?? false
+    )
+    expect(landedInside).toBe(true)
+  })
+
+  test('Ctrl+Alt+4 toggles the Customizer instead of a selector that matches nothing', async ({
+    page,
+  }) => {
+    await loadFixture(page)
+
+    const paramPanel = page.locator('#paramPanel')
+    const collapsedBefore = await paramPanel.evaluate((el) =>
+      el.classList.contains('collapsed')
+    )
+
+    const isCollapsed = () =>
+      paramPanel.evaluate((el) => el.classList.contains('collapsed'))
+
+    await page.keyboard.press('Control+Alt+4')
+    await expect.poll(isCollapsed).toBe(!collapsedBefore)
+    // Exactly one state change per press, and it says which way it went.
+    await expect(page.locator('#srAnnouncer')).toHaveText(
+      collapsedBefore ? 'Customizer shown' : 'Customizer hidden'
+    )
+
+    await page.keyboard.press('Control+Alt+4')
+    await expect(page.locator('#srAnnouncer')).toHaveText(
+      collapsedBefore ? 'Customizer hidden' : 'Customizer shown'
+    )
+    await expect.poll(isCollapsed).toBe(collapsedBefore)
+  })
+})
+
 test.describe('Design menu and Export submenu parity (G3)', () => {
   test('Design order follows U2 and unavailable items say why', async ({
     page,

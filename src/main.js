@@ -196,7 +196,7 @@ import {
   getClassicLayoutController,
   collapseCustomizerGroups,
 } from './js/classic-layout-controller.js';
-import { tabIdFor } from './js/classic-dock-model.js';
+import { tabIdFor, DOCK_PANELS } from './js/classic-dock-model.js';
 import { initFontListPanel } from './js/font-list-panel.js';
 import { initViewportControlPanel } from './js/viewport-control-panel.js';
 import { initAnimatePanel, getAnimatePanel } from './js/animate-panel.js';
@@ -647,6 +647,134 @@ function toggleClassicToolbar(bar) {
     // Preference persistence is best-effort.
   }
   _announce(`${def.name} ${hidden ? 'hidden' : 'shown'}`);
+}
+
+/** Window ▸ Jump To…, the web reading of upstream's jump-to-dock popup (G5). */
+const JUMP_TO_LABEL = 'Jump To…';
+const JUMP_TO_EMPTY_REASON =
+  'No panels are open, so there is nowhere to jump to. Turn one on from this menu first.';
+const JUMP_TO_UNAVAILABLE_REASON =
+  'Jump To is not available in the Simplified view';
+
+/**
+ * Can a Classic dock panel be reached right now? A merged panel that is not
+ * the selected tab counts — its tab reaches it — but one the Window menu has
+ * hidden, or a whole strip that Simplified drops, does not.
+ * @param {{id: string, elementId: string}} panel
+ */
+function dockPanelReachable(panel) {
+  const el = document.getElementById(panel.elementId);
+  if (!el) return false;
+  if (document.getElementById(tabIdFor(panel.id))) return true;
+  return el.getBoundingClientRect().height > 0;
+}
+
+/**
+ * Put focus on a Classic dock panel: its tab when it is merged into a group
+ * (B7), otherwise its title bar's menu button — the same landing point B8
+ * uses after a move and F1 uses for the Error-Log, so a jump feels like
+ * every other way of arriving at a panel.
+ * @param {string} panelId
+ * @returns {boolean}
+ */
+function focusDockPanel(panelId) {
+  const tab = document.getElementById(tabIdFor(panelId));
+  if (tab) {
+    tab.click();
+    tab.focus();
+    return true;
+  }
+  const panel = DOCK_PANELS.find((p) => p.id === panelId);
+  const el = panel && document.getElementById(panel.elementId);
+  const target =
+    el?.querySelector('.classic-panel-menu-btn') || el?.querySelector('button');
+  if (!target) return false;
+  target.focus();
+  return true;
+}
+
+/**
+ * Where Jump To can send you, per host: Classic's dock panels, or the
+ * disclosure panels Ctrl+Alt+] and Ctrl+Alt+[ already cycle through.
+ * @returns {{label: string, focus: () => boolean}[]}
+ */
+function jumpTargets() {
+  const layout = getClassicLayoutController();
+  if (document.body.dataset.uiMode === 'classic' && layout) {
+    return DOCK_PANELS.filter(dockPanelReachable).map((panel) => ({
+      label: panel.label,
+      focus: () => focusDockPanel(panel.id),
+    }));
+  }
+  return getUIModeController()
+    .listFocusablePanels()
+    .map((panel) => ({
+      label: panel.label,
+      focus: () => {
+        if (!panel.el.open) panel.el.open = true;
+        const summary = panel.el.querySelector('summary');
+        if (!summary) return false;
+        summary.focus();
+        summary.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        return true;
+      },
+    }));
+}
+
+/**
+ * Ctrl+J. Upstream opens the jump-to-dock popup itself, so this opens the
+ * Window menu and expands Jump To… rather than leaving the user to find it.
+ */
+function openJumpToPicker() {
+  const btn = document.getElementById('windowMenuBtn');
+  if (!btn || btn.offsetParent === null) {
+    // Simplified hides the menu bar entirely; nothing else would speak here.
+    announceImmediate(JUMP_TO_UNAVAILABLE_REASON);
+    return;
+  }
+  getToolbarMenuController().openMenu('window');
+  const trigger = [
+    ...document.querySelectorAll('#windowMenuItems .menu-submenu-trigger'),
+  ].find(
+    (el) => el.querySelector('.menu-item-label')?.textContent === JUMP_TO_LABEL
+  );
+  trigger?.click();
+}
+
+/**
+ * Window ▸ Customizer, Ctrl+Alt+4 and Ctrl+B are one command. The two
+ * shortcuts used to toggle a `.sidebar` element that exists nowhere in this
+ * app, so both were silently dead (G5).
+ */
+function toggleCustomizerPanel() {
+  const layout = getClassicLayoutController();
+  if (document.body.dataset.uiMode === 'classic' && layout) {
+    layout.toggleCustomizer(); // announces for itself
+    return;
+  }
+  const btn = document.getElementById('collapseParamPanelBtn');
+  if (!btn) return;
+  btn.click();
+  _announce(
+    btn.getAttribute('aria-expanded') === 'true'
+      ? 'Customizer shown'
+      : 'Customizer hidden'
+  );
+}
+
+/** Window ▸ Editor and Ctrl+Alt+3, likewise one command per host. */
+function toggleEditorPanel() {
+  const layout = getClassicLayoutController();
+  if (document.body.dataset.uiMode === 'classic' && layout) {
+    layout.toggleEditor(); // announces for itself
+    return;
+  }
+  const uiCtrl = getUIModeController();
+  const wasHidden = new Set(
+    uiCtrl.getPreferencesForExport().hiddenPanelsInBasic
+  ).has('codeEditor');
+  uiCtrl.togglePanelVisibility('codeEditor');
+  _announce(wasHidden ? 'Editor shown' : 'Editor hidden');
 }
 
 /** Restore the View ▸ Hide … preferences on startup. */
@@ -4035,22 +4163,38 @@ async function initApp() {
       };
     }
 
+    const classicLayout = getClassicLayoutController();
+    const inClassic =
+      document.body.dataset.uiMode === 'classic' && Boolean(classicLayout);
+
+    // Upstream builds this menu from the docks themselves, so its order is the
+    // dock order: Editor, Console, Customizer, Error-Log, Animate, Font List,
+    // Viewport-Control (U2). Next/Previous Window are omitted — one window
+    // (D-24).
     return [
-      // -- Desktop-parity panel toggles --
-      (() => {
-        const classicLayout = getClassicLayoutController();
-        if (document.body.dataset.uiMode === 'classic' && classicLayout) {
-          return {
-            type: 'toggle',
-            label: 'Editor',
-            shortcutAction: 'toggleCodeEditor',
-            checked: classicLayout.isEditorVisible(),
-            handler: () => classicLayout.toggleEditor(),
-          };
-        }
-        return panelToggle('codeEditor', 'Editor', 'toggleCodeEditor');
-      })(),
+      {
+        type: 'toggle',
+        label: 'Editor',
+        shortcutAction: 'toggleCodeEditor',
+        checked: inClassic
+          ? classicLayout.isEditorVisible()
+          : !new Set(uiCtrl.getPreferencesForExport().hiddenPanelsInBasic).has(
+              'codeEditor'
+            ),
+        handler: () => toggleEditorPanel(),
+      },
       panelToggle('consoleOutput', 'Console', 'toggleConsole'),
+      {
+        type: 'toggle',
+        label: 'Customizer',
+        shortcutAction: 'toggleCustomizer',
+        checked: inClassic
+          ? classicLayout.isCustomizerVisible()
+          : !document
+              .getElementById('paramPanel')
+              ?.classList.contains('collapsed'),
+        handler: () => toggleCustomizerPanel(),
+      },
       // Error-Log gets a custom handler rather than a panelToggle: it is a
       // console tab in Forge and an always-present strip pane in Classic, so
       // PANEL_REGISTRY's show/hide semantics fit neither host (F1).
@@ -4061,74 +4205,74 @@ async function initApp() {
         checked: isErrorLogShowing(),
         handler: () => toggleErrorLog(),
       },
-      (() => {
-        const inClassic = document.body.dataset.uiMode === 'classic';
-        const classicLayout = getClassicLayoutController();
-        const checked = inClassic
-          ? Boolean(classicLayout?.isCustomizerVisible())
-          : !document
-              .getElementById('paramPanel')
-              ?.classList.contains('collapsed');
-        return {
-          type: 'toggle',
-          label: 'Customizer',
-          checked,
-          handler: () => {
-            if (
-              document.body.dataset.uiMode === 'classic' &&
-              getClassicLayoutController()
-            ) {
-              getClassicLayoutController().toggleCustomizer();
-            } else {
-              document.getElementById('collapseParamPanelBtn')?.click();
-            }
-          },
-        };
-      })(),
       // The three panels sub-plan F builds are Classic-only this round (D-32),
       // so each is a real dock toggle in Classic and keeps its previous Forge
       // behaviour outside it. Viewport-Control used to be disabled in Classic
       // with an apologetic tooltip; it is a real panel now (F4/F6).
-      (() => {
-        const classicLayout = getClassicLayoutController();
-        if (document.body.dataset.uiMode === 'classic' && classicLayout) {
-          return {
-            type: 'toggle',
-            label: 'Viewport-Control',
-            checked: classicLayout.isViewportControlVisible(),
-            handler: () => classicLayout.toggleViewportControl(),
-          };
-        }
-        return {
-          type: 'action',
-          label: 'Viewport-Control',
-          handler: () => {
-            const panel = document.getElementById('cameraPanel');
-            if (panel) {
-              panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              const focusable = panel.querySelector('button, input, select');
-              if (focusable) focusable.focus();
-            }
-          },
-        };
-      })(),
-      ...(document.body.dataset.uiMode === 'classic' &&
-      getClassicLayoutController()
+      ...(inClassic
         ? [
             {
               type: 'toggle',
               label: 'Animate',
-              checked: getClassicLayoutController().isAnimateVisible(),
-              handler: () => getClassicLayoutController().toggleAnimate(),
+              checked: classicLayout.isAnimateVisible(),
+              handler: () => classicLayout.toggleAnimate(),
             },
             {
               type: 'toggle',
               label: 'Font List',
-              checked: getClassicLayoutController().isFontListVisible(),
-              handler: () => getClassicLayoutController().toggleFontList(),
+              checked: classicLayout.isFontListVisible(),
+              handler: () => classicLayout.toggleFontList(),
+            },
+            {
+              type: 'toggle',
+              label: 'Viewport-Control',
+              checked: classicLayout.isViewportControlVisible(),
+              handler: () => classicLayout.toggleViewportControl(),
             },
           ]
-        : []),
+        : [
+            {
+              type: 'action',
+              label: 'Viewport-Control',
+              handler: () => {
+                const panel = document.getElementById('cameraPanel');
+                if (panel) {
+                  panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  const focusable = panel.querySelector(
+                    'button, input, select'
+                  );
+                  if (focusable) focusable.focus();
+                }
+              },
+            },
+          ]),
+      { type: 'separator' },
+      // Upstream's Ctrl+J opens a jump-to-dock popup. The web reading is a
+      // picker of the panels that are on screen right now; choosing one moves
+      // focus into it.
+      (() => {
+        const targets = jumpTargets();
+        if (targets.length === 0) {
+          return {
+            type: 'action',
+            label: JUMP_TO_LABEL,
+            disabled: true,
+            tooltip: JUMP_TO_EMPTY_REASON,
+          };
+        }
+        return {
+          type: 'submenu',
+          label: JUMP_TO_LABEL,
+          shortcutAction: 'jumpToPanel',
+          items: targets.map((target) => ({
+            type: 'action',
+            label: target.label,
+            handler: () => {
+              if (target.focus()) _announce(`Jumped to ${target.label}`);
+            },
+          })),
+        };
+      })(),
       { type: 'separator' },
       // -- Web-only panel toggles --
       // fileActions, editTools, designTools, displayOptions removed — now in toolbar menus
@@ -14103,12 +14247,10 @@ if (rounded) {
     focusModeBtn?.click();
   });
 
-  keyboardConfig.on('toggleParameters', () => {
-    const sidebar = document.querySelector('.sidebar');
-    if (sidebar) {
-      sidebar.classList.toggle('collapsed');
-    }
-  });
+  // Ctrl+B and Ctrl+Alt+4 are both described as "Toggle Customizer panel" in
+  // the shortcuts modal, and both toggled the same non-existent `.sidebar`.
+  // They now do what they say; the duplicate binding is reported, not removed.
+  keyboardConfig.on('toggleParameters', () => toggleCustomizerPanel());
 
   keyboardConfig.on('resetView', () => {
     if (previewManager) {
@@ -14342,13 +14484,13 @@ if (rounded) {
   // a console tab in Forge and a strip pane in Classic; registry semantics fit
   // neither, so it gets its own per-host handler.
   keyboardConfig.on('toggleErrorLog', () => toggleErrorLog());
-  keyboardConfig.on('toggleCodeEditor', () =>
-    getUIModeController().togglePanelVisibility('codeEditor')
-  );
-  keyboardConfig.on('toggleCustomizer', () => {
-    const sidebar = document.querySelector('.sidebar');
-    if (sidebar) sidebar.classList.toggle('collapsed');
-  });
+  // These two now run the same command as their Window-menu items. Ctrl+Alt+4
+  // used to toggle a `.sidebar` element that exists nowhere in this app, so it
+  // was silently dead — and in Classic the Editor lives in the dock, which the
+  // panel registry cannot reach (G5).
+  keyboardConfig.on('toggleCodeEditor', () => toggleEditorPanel());
+  keyboardConfig.on('toggleCustomizer', () => toggleCustomizerPanel());
+  keyboardConfig.on('jumpToPanel', () => openJumpToPicker());
   keyboardConfig.on('nextPanel', () => getUIModeController().cyclePanel(1));
   keyboardConfig.on('prevPanel', () => getUIModeController().cyclePanel(-1));
 
