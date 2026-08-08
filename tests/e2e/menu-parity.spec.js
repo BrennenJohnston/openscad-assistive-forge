@@ -840,18 +840,40 @@ test.describe('Window menu parity (G5)', () => {
     const isCollapsed = () =>
       paramPanel.evaluate((el) => el.classList.contains('collapsed'))
 
-    await page.keyboard.press('Control+Alt+4')
-    await expect.poll(isCollapsed).toBe(!collapsedBefore)
-    // Exactly one state change per press, and it says which way it went.
-    await expect(page.locator('#srAnnouncer')).toHaveText(
-      collapsedBefore ? 'Customizer shown' : 'Customizer hidden'
-    )
+    // Collect what the live region says rather than sampling its current text:
+    // the announcer clears itself on a timer, so asserting the text directly
+    // races that clear and the case failed on its first attempt in CI.
+    await page.evaluate(() => {
+      window.__said = []
+      const region = document.getElementById('srAnnouncer')
+      new MutationObserver(() => {
+        const text = region.textContent.trim()
+        if (text && window.__said.at(-1) !== text) window.__said.push(text)
+      }).observe(region, {
+        childList: true,
+        subtree: true,
+        characterData: true,
+      })
+    })
 
     await page.keyboard.press('Control+Alt+4')
-    await expect(page.locator('#srAnnouncer')).toHaveText(
-      collapsedBefore ? 'Customizer hidden' : 'Customizer shown'
-    )
+    await expect.poll(isCollapsed).toBe(!collapsedBefore)
+
+    await page.keyboard.press('Control+Alt+4')
     await expect.poll(isCollapsed).toBe(collapsedBefore)
+
+    // One announcement per press, each naming the direction it went.
+    await expect
+      .poll(async () =>
+        (await page.evaluate(() => window.__said)).filter((line) =>
+          /customizer/i.test(line)
+        )
+      )
+      .toEqual(
+        collapsedBefore
+          ? ['Customizer shown', 'Customizer hidden']
+          : ['Customizer hidden', 'Customizer shown']
+      )
   })
 })
 

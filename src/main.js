@@ -787,7 +787,10 @@ function toggleCustomizerPanel() {
   const btn = document.getElementById('collapseParamPanelBtn');
   if (!btn) return;
   btn.click();
-  _announce(
+  // announceImmediate, not the debounced announce: every sibling panel toggle
+  // announces immediately, and the debounce CANCELS a pending message, so two
+  // quick presses of this one alone would have spoken once.
+  announceImmediate(
     btn.getAttribute('aria-expanded') === 'true'
       ? 'Customizer shown'
       : 'Customizer hidden'
