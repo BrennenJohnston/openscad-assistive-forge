@@ -1162,6 +1162,23 @@ body[data-ui-mode='classic'] .console-view-tabs {
   display: none;
 }
 
+/* The Classic-only panel bodies (F3/F4/F5) are declared as static markup in
+   index.html so the dock can move them like any other pane, which means they
+   are in the document in every mode. They are Classic-only this round (D-32),
+   so they are hidden by default and shown once the dock adopts them. Full
+   styling is F7's; this pair is only what keeps a Forge user from seeing a
+   Classic panel. Same shape as .classic-customizer-bar below. */
+.classic-panel-body {
+  display: none;
+}
+
+body[data-ui-mode='classic'] .classic-panel-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  gap: var(--space-xs);
+}
+
 /* ============================================================================
    LAYER 2c — Customizer dock (desktop Customizer header block)
    ============================================================================ */

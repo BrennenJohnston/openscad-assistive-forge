@@ -197,6 +197,7 @@ import {
   collapseCustomizerGroups,
 } from './js/classic-layout-controller.js';
 import { tabIdFor } from './js/classic-dock-model.js';
+import { initFontListPanel } from './js/font-list-panel.js';
 import { initClassicStatusBar } from './js/classic-status-bar.js';
 import {
   initClassicEditorToolbar,
@@ -8370,6 +8371,18 @@ if (rounded) {
       triggerPreview: () => editorPreviewTrigger?.(),
       exportStl: () => exportFormatFromMenu('stl'),
     });
+
+    // Classic Font List panel (F3). Registering the sample faces costs no new
+    // bandwidth: the worker fetches these same four files from the same URLs
+    // to mount them for text(), so the browser serves these from cache.
+    {
+      const fontListPanel = initFontListPanel({
+        assetBaseUrl: new URL(import.meta.env.BASE_URL, window.location.origin)
+          .toString()
+          .replace(/\/$/, ''),
+      });
+      fontListPanel.loadSampleFaces();
+    }
 
     // Classic Customizer bar (C7): titlebar ✕ + the Automatic Preview mirror.
     // All state flows through the real controls (#autoPreviewToggle), never

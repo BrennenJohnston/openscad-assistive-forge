@@ -1726,6 +1726,111 @@
                   </div>
                 </div>
               </details>
+              <!-- Classic Font List panel (F3), transcribed from upstream
+                   FontList.ui. Declared here as static markup and moved into
+                   #classicFontListSlot on entering Classic, the same way the
+                   console and editor panes travel; hidden everywhere else.
+                   The slot is the labelled region, so this is a plain div. -->
+              <div id="fontListPanel" class="classic-panel-body classic-font-list">
+                <div class="classic-font-list-tablewrap">
+                  <table class="classic-font-list-table">
+                    <caption class="sr-only">
+                      Fonts available to the text() function
+                    </caption>
+                    <thead>
+                      <tr>
+                        <th scope="col"><span class="sr-only">Select</span></th>
+                        <th scope="col">Font name</th>
+                        <th scope="col">Style</th>
+                        <th scope="col">Sample</th>
+                      </tr>
+                    </thead>
+                    <tbody id="fontListRows"></tbody>
+                  </table>
+                  <p id="fontListEmpty" class="classic-font-list-empty" hidden>
+                    No fonts match this filter.
+                  </p>
+                </div>
+
+                <fieldset class="classic-font-list-group">
+                  <legend>Filter</legend>
+                  <div class="classic-font-list-field">
+                    <label for="fontListFilterText">Font name</label>
+                    <input type="text" id="fontListFilterText" autocomplete="off" />
+                    <label for="fontListFilterMode" class="sr-only"
+                      >Font name match type</label
+                    >
+                    <select id="fontListFilterMode">
+                      <option value="fixed" selected>Fixed</option>
+                      <option value="wildcard">Wildcard</option>
+                      <option value="regexp">RegExp</option>
+                    </select>
+                  </div>
+                  <p
+                    id="fontListFilterHint"
+                    class="classic-font-list-hint"
+                    role="status"
+                    hidden
+                  ></p>
+
+                  <!-- Upstream filters by glyph coverage here. That needs the
+                       TTF's character map parsed, which this build does not
+                       do, so the control is shown disabled with its reason in
+                       words rather than dropped or left dead. -->
+                  <div class="classic-font-list-field">
+                    <label for="fontListChars">Chars</label>
+                    <select
+                      id="fontListChars"
+                      disabled
+                      aria-describedby="fontListCharsReason"
+                    >
+                      <option value="all" selected>All</option>
+                      <option value="any">Any</option>
+                    </select>
+                    <span id="fontListCharsReason" class="classic-font-list-reason"
+                      >Filtering by characters is not available yet: it needs
+                      each font file's character list, which this browser
+                      version does not read.</span
+                    >
+                  </div>
+
+                  <div class="classic-font-list-field">
+                    <label for="fontListSample">Sample text</label>
+                    <input
+                      type="text"
+                      id="fontListSample"
+                      value="AaBbCc 123"
+                      autocomplete="off"
+                    />
+                    <label for="fontListSampleSize">Size</label>
+                    <input
+                      type="number"
+                      id="fontListSampleSize"
+                      value="16"
+                      min="6"
+                      max="72"
+                      step="1"
+                    />
+                  </div>
+                </fieldset>
+
+                <fieldset class="classic-font-list-group">
+                  <legend>Selection</legend>
+                  <dl class="classic-font-list-selection">
+                    <dt>Font name</dt>
+                    <dd id="fontListSelName">&mdash;</dd>
+                    <dt>Font path</dt>
+                    <dd id="fontListSelPath">&mdash;</dd>
+                    <dt>Style</dt>
+                    <dd id="fontListSelStyle">&mdash;</dd>
+                  </dl>
+                  <!-- Upstream drags a row into the editor; a drag has no
+                       keyboard equivalent, so this gives the same result. -->
+                  <button type="button" id="fontListCopyBtn" class="btn btn-sm" disabled>
+                    Copy font name
+                  </button>
+                </fieldset>
+              </div>
               <!-- File Actions panel removed: all features now in File toolbar menu -->
               <!-- Image Measurement Tool -->
               <details

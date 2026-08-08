@@ -117,6 +117,7 @@ const SLOT_DEFS = [
     id: 'classicFontListSlot',
     className: 'classic-slot classic-font-list-slot',
     label: 'Font List',
+    panelId: 'fontListPanel',
     parentId: BOTTOM_STRIP_ID,
     titlebar: { text: 'Font List' },
   },
