@@ -988,9 +988,10 @@ test.describe('Classic mode layout (C4)', () => {
       .evaluate((el) => getComputedStyle(el).backgroundImage);
     expect(iconImage, 'vendored icon resolves').toContain('openscad-icons');
 
-    // Snap views and Render moved to the 3D view toolbar, still seven of them
+    // Snap views and Render moved to the 3D view toolbar. Six snap views —
+    // G4 took Reset View out of them and gave it its own command.
     const cameraBar = page.locator('#classicCameraBar');
-    await expect(cameraBar.locator('[data-classic-view]')).toHaveCount(7);
+    await expect(cameraBar.locator('[data-classic-view]')).toHaveCount(6);
     await expect(cameraBar.locator('#classicRenderBtn')).toBeVisible();
 
     // Axes toggle reflects pressed state
@@ -1959,9 +1960,12 @@ test.describe('Classic 3D view toolbar (E3-E7)', () => {
     await pickInterfaceMode(page, 'Classic (Desktop Layout)');
 
     // The snap-view buttons moved out of #classicToolbar; if the wiring were
-    // still scoped to it they would all be silently dead
+    // still scoped to it they would all be silently dead. Six, not seven:
+    // G4 gave Reset View its own command instead of a snap to diagonal, so it
+    // means the same thing as the View menu item of that name.
     const viewButtons = page.locator('#classicCameraBar [data-classic-view]');
-    await expect(viewButtons).toHaveCount(7);
+    await expect(viewButtons).toHaveCount(6);
+    await expect(page.locator('#classicResetViewBtn')).toBeVisible();
 
     // Honest axes split (D-16): each button drives exactly its own flag
     const axes = page.locator('#classicAxesToggle');
@@ -2513,5 +2517,152 @@ test.describe('Classic dock relocation (B6-B8)', () => {
       'classicFontListSlot',
       'paramPanel',
     ]);
+  });
+});
+
+test.describe('View menu per-toolbar hide toggles (G4)', () => {
+  /** Enter Classic in Standard density at a desktop width. */
+  async function enterClassicDesktop(page) {
+    await page.setViewportSize({ width: 1400, height: 900 });
+    await loadSampleProject(page, { query: '?flag_classic_mode=true' });
+    await switchToStandardMode(page);
+    await pickInterfaceMode(page, 'Classic (Desktop Layout)');
+    await expect(page.locator('#classicBottomStrip')).toBeVisible();
+  }
+
+  // Upstream splits "Hide Toolbar" into one item per toolbar (U2). The icon
+  // toolbar is this app's own third bar and keeps an item so nothing on
+  // screen becomes unhideable.
+  const BARS = [
+    { label: 'Hide Editor toolbar', selector: '#classicEditorToolbar' },
+    { label: 'Hide 3D View toolbar', selector: '#classicCameraBar' },
+    { label: 'Hide Classic Toolbar', selector: '#classicToolbar' },
+  ];
+
+  test('classic-hide-toolbars: each item hides its own bar and only that bar', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await enterClassicDesktop(page);
+
+    for (const bar of BARS) {
+      await expect(page.locator(bar.selector)).toBeVisible();
+    }
+
+    for (const bar of BARS) {
+      await page.locator('#viewMenuBtn').click();
+      await page
+        .locator('#viewMenuItems button')
+        .filter({ has: page.getByText(bar.label, { exact: true }) })
+        .first()
+        .click();
+
+      await expect(page.locator(bar.selector)).toBeHidden();
+      // The other two must be untouched: one toggle used to hide one bar and
+      // upstream's pair had no implementation at all.
+      for (const other of BARS.filter((b) => b !== bar)) {
+        await expect(page.locator(other.selector)).toBeVisible();
+      }
+
+      // Toggling back restores it, and the menu reports the state it is in.
+      await page.locator('#viewMenuBtn').click();
+      const item = page
+        .locator('#viewMenuItems button')
+        .filter({ has: page.getByText(bar.label, { exact: true }) })
+        .first();
+      await expect(item).toHaveAttribute('aria-checked', 'true');
+      await item.click();
+      await expect(page.locator(bar.selector)).toBeVisible();
+    }
+  });
+
+  test('classic-window-ticks: every tick matches what is on screen', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await enterClassicDesktop(page);
+
+    // The Console is adopted into the dock and shown whatever the
+    // Simplified-view preference says, so reading that preference reported it
+    // as off while it sat in the bottom strip (G5, caught by a screenshot).
+    await expect(page.locator('#consolePanel')).toBeVisible();
+
+    await page.locator('#windowMenuBtn').click();
+    const ticks = await page.evaluate(() => {
+      const out = {};
+      for (const li of document.getElementById('windowMenuItems').children) {
+        const btn = li.querySelector(':scope > button');
+        if (!btn) continue;
+        out[btn.querySelector('.menu-item-label')?.textContent] =
+          btn.getAttribute('aria-checked');
+      }
+      return out;
+    });
+    expect(ticks['Console']).toBe('true');
+    expect(ticks['Editor']).toBe('true');
+    expect(ticks['Customizer']).toBe('true');
+    // These three panes start closed, so their ticks must say so.
+    expect(ticks['Animate']).toBe('false');
+    expect(ticks['Font List']).toBe('false');
+    expect(ticks['Viewport-Control']).toBe('false');
+  });
+
+  test('classic-window-announce-once: a panel toggle speaks once, not twice', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await enterClassicDesktop(page);
+
+    // Count everything the live region says, not just the last line: the menu
+    // used to announce on top of the announcement the panel controller
+    // already makes.
+    await page.evaluate(() => {
+      window.__said = [];
+      const region = document.getElementById('srAnnouncer');
+      new MutationObserver(() => {
+        const text = region.textContent.trim();
+        if (text) window.__said.push(text);
+      }).observe(region, { childList: true, subtree: true, characterData: true });
+    });
+
+    await page.locator('#windowMenuBtn').click();
+    await page
+      .locator('#windowMenuItems button')
+      .filter({ has: page.getByText('Console', { exact: true }) })
+      .first()
+      .click();
+    await page.waitForTimeout(800);
+
+    const said = await page.evaluate(() => window.__said);
+    const aboutConsole = said.filter((line) => /console/i.test(line));
+    expect(aboutConsole).toHaveLength(1);
+  });
+
+  test('classic-hide-toolbars-persist: the choice survives a reload', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await enterClassicDesktop(page);
+
+    await page.locator('#viewMenuBtn').click();
+    await page
+      .locator('#viewMenuItems button')
+      .filter({ has: page.getByText('Hide 3D View toolbar', { exact: true }) })
+      .first()
+      .click();
+    await expect(page.locator('#classicCameraBar')).toBeHidden();
+
+    await page.reload();
+    await page.waitForSelector('body[data-wasm-ready="true"]', {
+      state: 'attached',
+      timeout: WASM_READY_TIMEOUT,
+    });
+
+    // A reload with no saved project lands on Welcome, so assert the restored
+    // preference on <body> rather than the (hidden) bar itself.
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-classic-camera-bar-hidden',
+      'true'
+    );
   });
 });

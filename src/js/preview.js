@@ -385,7 +385,7 @@ export class PreviewManager {
 
     // Position camera for OpenSCAD-style diagonal view (looking at origin from front-right-above)
     // This mimics OpenSCAD's default "Diagonal" view orientation
-    this.camera.position.set(150, -150, 100);
+    this.camera.position.set(...PreviewManager.DEFAULT_CAMERA_POSITION);
 
     // Create renderer — WebGL may be unavailable in headless browsers.
     // When that happens, geometry parsing (loadOFF / loadSTL) still works;
@@ -2216,6 +2216,137 @@ export class PreviewManager {
       cameraDistance
     );
   }
+
+  /**
+   * Set the orthographic frustum from a visible height, keeping the container's
+   * aspect ratio and clearing any accumulated zoom.
+   *
+   * @param {number} frustumHeight - World-space height the frustum should show
+   * @private
+   */
+  _applyOrthoFrustum(frustumHeight) {
+    if (!this.orthoCamera) return;
+
+    const width = this.container?.clientWidth || 0;
+    const height = this.container?.clientHeight || 0;
+    const aspect = height > 0 ? width / height : this.camera?.aspect || 1;
+
+    this.orthoCamera.left = (frustumHeight * aspect) / -2;
+    this.orthoCamera.right = (frustumHeight * aspect) / 2;
+    this.orthoCamera.top = frustumHeight / 2;
+    this.orthoCamera.bottom = frustumHeight / -2;
+    this.orthoCamera.zoom = 1;
+    this.orthoCamera.updateProjectionMatrix();
+  }
+
+  /**
+   * Restore the startup camera pose, whatever is or is not loaded.
+   *
+   * This is View ▸ Reset View. It ignores the model on purpose: upstream's
+   * Reset View returns the camera to its default angle, distance and target,
+   * which is what separates it from View All (fit the model, keep the angle)
+   * and Center (keep the angle and distance, re-centre on the model). Called
+   * from the View menu, the `resetView` shortcut and the camera bar, all of
+   * which used to reach a method that did not exist.
+   */
+  resetCamera() {
+    if (!this.camera) return;
+
+    const camera = this.getActiveCamera();
+    const [x, y, z] = PreviewManager.DEFAULT_CAMERA_POSITION;
+
+    camera.up.set(0, 0, 1);
+    camera.position.set(x, y, z);
+    camera.lookAt(0, 0, 0);
+
+    if (this.controls) this.controls.target.set(0, 0, 0);
+
+    if (this.projectionMode === 'orthographic' && this.orthoCamera) {
+      // The frustum-from-distance relationship toggleProjection() keeps, so a
+      // reset shows the same area in orthographic as it does in perspective.
+      const distance = Math.sqrt(x * x + y * y + z * z);
+      const fovRad = this.camera.fov * (Math.PI / 180);
+      this._applyOrthoFrustum(2 * distance * Math.tan(fovRad / 2));
+    }
+
+    if (this.controls) this.controls.update();
+
+    console.log('[Preview] Camera reset to default pose');
+  }
+
+  /**
+   * Re-centre the view on the model without changing the angle or distance.
+   *
+   * This is View ▸ Center: the desktop clears the pan offset, so the object
+   * returns to the middle of the viewport and nothing else moves.
+   *
+   * @returns {boolean} true when the view moved
+   */
+  centerCamera() {
+    if (!this.camera || !this.mesh) return false;
+
+    const center = new Box3().setFromObject(this.mesh).getCenter(new Vector3());
+    const camera = this.getActiveCamera();
+    const target = this.controls ? this.controls.target : new Vector3();
+
+    camera.position.add(center.clone().sub(target));
+    if (this.controls) this.controls.target.copy(center);
+    camera.lookAt(center);
+
+    if (this.controls) this.controls.update();
+
+    return true;
+  }
+
+  /**
+   * Fit the whole model in view WITHOUT changing the viewing angle.
+   *
+   * This is View ▸ View All. `fitCameraToModel()` also snaps back to the
+   * default diagonal, which is what a freshly loaded model wants but would
+   * make View All and Reset View the same command.
+   *
+   * @returns {boolean} true when the view moved
+   */
+  viewAllCamera() {
+    if (!this.camera || !this.mesh) return false;
+
+    const box = new Box3().setFromObject(this.mesh);
+    const center = box.getCenter(new Vector3());
+    const size = box.getSize(new Vector3());
+    const maxDim = Math.max(size.x, size.y, size.z);
+
+    const camera = this.getActiveCamera();
+    const target = this.controls ? this.controls.target : new Vector3();
+
+    // Keep the direction the user is already looking from; fall back to the
+    // default diagonal when the camera sits exactly on its own target.
+    const direction = camera.position.clone().sub(target);
+    if (direction.lengthSq() < 1e-6) {
+      direction.set(...PreviewManager.CAMERA_VIEWS.diagonal.direction);
+    }
+    direction.normalize();
+
+    const fovRad = this.camera.fov * (Math.PI / 180);
+    const distance = Math.abs(maxDim / 2 / Math.tan(fovRad / 2)) * 1.8; // Padding
+
+    camera.position.copy(center).addScaledVector(direction, distance);
+    camera.lookAt(center);
+    if (this.controls) this.controls.target.copy(center);
+
+    if (this.projectionMode === 'orthographic' && this.orthoCamera) {
+      this._applyOrthoFrustum(maxDim * 1.8);
+    }
+
+    if (this.controls) this.controls.update();
+
+    return true;
+  }
+
+  /**
+   * The pose the camera starts in — OpenSCAD's diagonal view of the origin.
+   * Defined once so `init()` and `resetCamera()` cannot drift apart.
+   */
+  static DEFAULT_CAMERA_POSITION = [150, -150, 100];
 
   /**
    * Standard camera views for OpenSCAD-style viewing (Z-up coordinate system)

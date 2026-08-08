@@ -671,15 +671,40 @@ export class UIModeController {
    * Cycle focus to the next visible disclosure panel.
    * @param {number} direction - 1 for next, -1 for previous
    */
-  cyclePanel(direction = 1) {
-    const detailsPanels = PANEL_REGISTRY.map((p) => {
+  /**
+   * The disclosure panels a user can move focus to right now, in registry
+   * order. Window ▸ Jump To… and panel cycling share this list, so the two
+   * cannot disagree about what counts as a panel.
+   * @returns {{id: string, label: string, el: HTMLElement}[]}
+   */
+  /**
+   * Is a registered panel on screen right now? This asks the DOM rather than
+   * the Simplified-view preference, because Classic's dock adopts some of
+   * these panels and shows them whatever that preference says.
+   * @param {string} panelId
+   * @returns {boolean}
+   */
+  isPanelShowing(panelId) {
+    const panel = PANEL_REGISTRY.find((p) => p.id === panelId);
+    if (!panel) return false;
+    const el = document.querySelector(panel.selector.split(',')[0].trim());
+    if (!el || el.classList.contains(HIDDEN_CLASS)) return false;
+    return el.tagName === 'DETAILS' ? el.open : true;
+  }
+
+  listFocusablePanels() {
+    return PANEL_REGISTRY.map((p) => {
       const el = document.querySelector(p.selector.split(',')[0].trim());
       return el &&
         el.tagName === 'DETAILS' &&
         !el.classList.contains(HIDDEN_CLASS)
-        ? { el, label: p.label }
+        ? { id: p.id, el, label: p.label }
         : null;
     }).filter(Boolean);
+  }
+
+  cyclePanel(direction = 1) {
+    const detailsPanels = this.listFocusablePanels();
 
     if (detailsPanels.length === 0) return;
 

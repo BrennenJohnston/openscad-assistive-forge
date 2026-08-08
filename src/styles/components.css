@@ -12646,6 +12646,29 @@ body.tutorial-body-locked {
    Keyboard Shortcuts Editor
    =================================================== */
 
+/* About dialog (G6). Small like upstream's, and it inherits every modal
+   behaviour from .modal / .modal-content. */
+.about-modal-content {
+  max-width: 34rem;
+}
+
+.about-modal-body p {
+  margin-bottom: var(--space-sm);
+}
+
+.about-version {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.about-links {
+  margin: 0 0 var(--space-sm) var(--space-md);
+}
+
+.about-links li + li {
+  margin-top: var(--space-2xs);
+}
+
 .shortcuts-modal-content {
   max-width: 700px;
 }

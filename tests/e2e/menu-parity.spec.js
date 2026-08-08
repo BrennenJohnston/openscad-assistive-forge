@@ -49,6 +49,9 @@ const EDIT_MENU_ORDER = [
   'Comment',
   'Uncomment',
   'Convert Tabs to Spaces',
+  // Upstream reaches this by Alt+Ins only, with no menu entry; it ships here
+  // disabled-with-reason so it can at least say why it does nothing (D-43).
+  'Insert Template',
   'Toggle Bookmark',
   'Jump to next bookmark',
   'Jump to previous bookmark',
@@ -329,6 +332,10 @@ test.describe('Edit menu parity (G2)', () => {
     expect(items.map((i) => i.label)).toEqual(EDIT_MENU_ORDER)
 
     // D-24: no editor tabs in a one-document app.
+    const insertTemplate = items.find((i) => i.label === 'Insert Template')
+    expect(insertTemplate.disabled).toBe(true)
+    expect(insertTemplate.title).toContain('not built yet')
+
     expect(items.some((i) => /Show (Next|Previous) Tab/.test(i.label))).toBe(
       false
     )
@@ -614,6 +621,458 @@ const EXPORT_SUBMENU_ORDER = [
   '---',
   'Export as Image…',
 ]
+
+// Appendix U2's View menu. Preview (F9) and Thrown Together (F12) are omitted
+// (D-24 — this renderer has no display-mode concept). The projection radios
+// render as one role="group" li, which readMenu reports as '(group)'. The
+// per-toolbar Hide items are Classic-only markup and are asserted there.
+const VIEW_MENU_ORDER = [
+  'Show Edges',
+  'Show Axes',
+  'Show Scale Markers',
+  'Show Crosshairs',
+  '---',
+  'Top',
+  'Bottom',
+  'Left',
+  'Right',
+  'Front',
+  'Back',
+  'Diagonal',
+  'Center',
+  'View All',
+  'Reset View',
+  '---',
+  'Zoom In',
+  'Zoom Out',
+  '---',
+  '(group)',
+  '---',
+  'Preview Quality',
+  '---',
+  '(group)',
+]
+
+/** Produce a full render, which is what enables Center and View All. */
+async function renderModel(page) {
+  const btn = page.locator('#primaryActionBtn')
+  await expect(btn).toContainText('Generate', { timeout: 60_000 })
+  await btn.click()
+  await expect(btn).toContainText('Download', { timeout: 180_000 })
+}
+
+/** Camera position + orbit target; null target means this browser has no WebGL. */
+async function cameraPose(page) {
+  return page.evaluate(() => window.__forgeDebug?.cameraPose() ?? null)
+}
+
+test.describe('View menu parity (G4)', () => {
+  test('order follows U2 and every registered shortcut is displayed', async ({
+    page,
+  }) => {
+    await loadFixture(page)
+
+    await page.locator('#viewMenuBtn').click()
+    const items = await readMenu(page, 'view')
+    expect(items.map((i) => i.label)).toEqual(VIEW_MENU_ORDER)
+
+    // The renderer has no Preview/Thrown Together display modes (D-24), and
+    // the old Forge-only label for the mm ticks is gone.
+    expect(items.some((i) => /Thrown Together/i.test(i.label))).toBe(false)
+    expect(items.some((i) => /Axis Markings/i.test(i.label))).toBe(false)
+
+    // Zoom and Crosshairs had registered actions that no menu ever showed.
+    const shown = await page.evaluate(() => {
+      const out = {}
+      for (const li of document.getElementById('viewMenuItems').children) {
+        const label = li.querySelector(':scope > button .menu-item-label')
+        if (!label) continue
+        out[label.textContent] =
+          li.querySelector(':scope > button .menu-item-shortcut')
+            ?.textContent ?? null
+      }
+      return out
+    })
+    expect(shown['Zoom In']).toBe('Ctrl+]')
+    expect(shown['Zoom Out']).toBe('Ctrl+[')
+    expect(shown['Show Crosshairs']).toBe('Ctrl+3')
+    expect(shown['Center']).toBe('Ctrl+Shift+0')
+
+    // Reset View restores the default pose, so it never needs a render.
+    expect(items.find((i) => i.label === 'Reset View').disabled).toBe(false)
+  })
+
+  test('Center, View All and Reset View each move the camera differently', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000)
+    await loadFixture(page)
+    await renderModel(page)
+
+    // Skip on the missing capability, never on the browser name: CI Firefox
+    // has no WebGL and builds no canvas at all, so there is no camera to move.
+    // Anything else missing is a failure, not a reason to pass quietly.
+    test.skip(
+      (await page.locator('.preview-panel canvas').count()) === 0,
+      'this browser built no 3D canvas'
+    )
+
+    const start = await cameraPose(page)
+    expect(start, 'the cameraPose debug reader must exist').not.toBeNull()
+    expect(start.target, 'a canvas exists, so controls must too').not.toBeNull()
+
+    const distance = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2])
+    const radius = (pose) => distance(pose.position, pose.target)
+
+    // The render leaves the camera fitted and looking at the model's centre.
+    const modelCentre = start.target
+    const fittedRadiusAtStart = radius(start)
+
+    // Push the view off the model and closer in, so each command below has
+    // something of its own to undo.
+    await page.locator('.preview-panel canvas').first().focus()
+    for (let i = 0; i < 3; i++) await page.keyboard.press('Shift+ArrowLeft')
+    const panned = await cameraPose(page)
+    expect(distance(panned.target, modelCentre)).toBeGreaterThan(1)
+
+    // Ctrl+] is new in G4. Three presses must move the camera three steps
+    // closer — not six, which is what a second live path would produce.
+    const ZOOM_STEP = 15
+    for (let i = 0; i < 3; i++) await page.keyboard.press('Control+]')
+    const zoomed = await cameraPose(page)
+    expect(radius(panned) - radius(zoomed)).toBeGreaterThan(3 * ZOOM_STEP - 5)
+    expect(radius(panned) - radius(zoomed)).toBeLessThan(3 * ZOOM_STEP + 5)
+
+    async function runViewItem(label) {
+      await page.locator('#viewMenuBtn').click()
+      await menuItem(page, 'view', label).click()
+      await page.waitForTimeout(150)
+      return cameraPose(page)
+    }
+
+    // Center used to throw: resetCamera() was called at three sites and never
+    // existed. It brings the view back onto the model and changes nothing else.
+    const centered = await runViewItem('Center')
+    expect(distance(centered.target, modelCentre)).toBeLessThan(0.5)
+    expect(radius(centered)).toBeCloseTo(radius(zoomed), 3)
+
+    // View All undoes the zoom by refitting; Reset View ignores the model and
+    // returns to the startup pose. These were the same command before G4.
+    const fitted = await runViewItem('View All')
+    expect(radius(fitted)).toBeCloseTo(fittedRadiusAtStart, 3)
+    expect(radius(fitted) - radius(centered)).toBeGreaterThan(3 * ZOOM_STEP - 5)
+
+    const reset = await runViewItem('Reset View')
+    expect(reset.target).toEqual([0, 0, 0])
+    expect(reset.position.map(Math.round)).toEqual([150, -150, 100])
+    expect(distance(reset.position, fitted.position)).toBeGreaterThan(1)
+  })
+})
+
+// Upstream builds this menu from the docks, so its order is the dock order
+// (U2). Next/Previous Window are omitted — one window (D-24). Outside Classic
+// there are no Animate/Font List docks, so Standard shows the Forge set.
+const WINDOW_MENU_ORDER_STANDARD = [
+  'Editor',
+  'Console',
+  'Customizer',
+  'Error-Log',
+  'Viewport-Control',
+  '---',
+  'Jump To…',
+  '---',
+  'Libraries',
+  'Companion Files',
+  'Image Measurement',
+  'Reference Image',
+]
+
+test.describe('Window menu parity (G5)', () => {
+  test('order follows U2 and Jump To moves focus into the panel it names', async ({
+    page,
+  }) => {
+    await loadFixture(page)
+
+    await page.locator('#windowMenuBtn').click()
+    const items = await readMenu(page, 'window')
+    expect(items.map((i) => i.label)).toEqual(WINDOW_MENU_ORDER_STANDARD)
+
+    // One window, so these stay omitted rather than shipping dead.
+    expect(items.some((i) => /Next Window|Previous Window/.test(i.label))).toBe(
+      false
+    )
+
+    // Jump To lists the panels that are open right now, and choosing one puts
+    // focus INSIDE that panel — not merely somewhere in the page.
+    await menuItem(page, 'window', 'Jump To…').click()
+    const targets = await readSubmenu(page, 'window', 'Jump To…')
+    expect(targets.length).toBeGreaterThan(0)
+    expect(targets.map((t) => t.label)).toContain('Console')
+
+    // Scope to the submenu: the Window menu also has a top-level "Console"
+    // toggle, and clicking that would hide the panel instead of visiting it.
+    await page
+      .locator('#windowMenuItems > li.menu-item--submenu ul button')
+      .filter({ has: page.getByText('Console', { exact: true }) })
+      .first()
+      .click()
+
+    await expect(page.locator('#srAnnouncer')).toHaveText('Jumped to Console')
+    const landedInside = await page.evaluate(
+      () =>
+        document
+          .getElementById('consolePanel')
+          ?.contains(document.activeElement) ?? false
+    )
+    expect(landedInside).toBe(true)
+  })
+
+  test('Ctrl+Alt+4 toggles the Customizer instead of a selector that matches nothing', async ({
+    page,
+  }) => {
+    await loadFixture(page)
+
+    const paramPanel = page.locator('#paramPanel')
+    const collapsedBefore = await paramPanel.evaluate((el) =>
+      el.classList.contains('collapsed')
+    )
+
+    const isCollapsed = () =>
+      paramPanel.evaluate((el) => el.classList.contains('collapsed'))
+
+    // Collect what the live region says rather than sampling its current text:
+    // the announcer clears itself on a timer, so asserting the text directly
+    // races that clear and the case failed on its first attempt in CI.
+    await page.evaluate(() => {
+      window.__said = []
+      const region = document.getElementById('srAnnouncer')
+      new MutationObserver(() => {
+        const text = region.textContent.trim()
+        if (text && window.__said.at(-1) !== text) window.__said.push(text)
+      }).observe(region, {
+        childList: true,
+        subtree: true,
+        characterData: true,
+      })
+    })
+
+    await page.keyboard.press('Control+Alt+4')
+    await expect.poll(isCollapsed).toBe(!collapsedBefore)
+
+    await page.keyboard.press('Control+Alt+4')
+    await expect.poll(isCollapsed).toBe(collapsedBefore)
+
+    // One announcement per press, each naming the direction it went.
+    await expect
+      .poll(async () =>
+        (await page.evaluate(() => window.__said)).filter((line) =>
+          /customizer/i.test(line)
+        )
+      )
+      .toEqual(
+        collapsedBefore
+          ? ['Customizer shown', 'Customizer hidden']
+          : ['Customizer hidden', 'Customizer shown']
+      )
+  })
+})
+
+// Appendix U2's Help menu, then the Forge extras this app keeps.
+const HELP_MENU_ORDER = [
+  'About',
+  'OpenSCAD Homepage',
+  'Documentation',
+  'Offline Documentation',
+  'Cheat Sheet',
+  'Offline Cheat Sheet',
+  'Library info',
+  '---',
+  'Features Guide',
+  'Keyboard Shortcuts…',
+  'Report Issue',
+]
+
+test.describe('Help menu parity (G6)', () => {
+  test('order follows U2, no two items share a target, and About is honest', async ({
+    page,
+  }) => {
+    await loadFixture(page)
+
+    await page.locator('#helpMenuBtn').click()
+    const items = await readMenu(page, 'help')
+    expect(items.map((i) => i.label)).toEqual(HELP_MENU_ORDER)
+
+    // Nothing offline is bundled this round (D-39), so both say why and
+    // point at the online item beside them.
+    for (const label of ['Offline Documentation', 'Offline Cheat Sheet']) {
+      const item = items.find((i) => i.label === label)
+      expect(item.disabled, `${label} should be disabled`).toBe(true)
+      expect(item.title, `${label} should carry a reason`).toBeTruthy()
+      expect(item.title).toContain('not bundled yet')
+    }
+
+    // About opened the Features Guide's ACCESSIBILITY tab — a claim about
+    // itself that was not true. It is now a real About dialog.
+    await menuItem(page, 'help', 'About').click()
+    const about = page.locator('#aboutModal')
+    await expect(about).toBeVisible()
+    await expect(page.locator('#featuresGuideModal')).toBeHidden()
+    await expect(page.locator('#aboutVersion')).toHaveText(
+      /OpenSCAD Assistive Forge, version \d+\.\d+\.\d+/
+    )
+    await expect(about).toContainText('General Public License')
+    await expect(
+      about.getByRole('link', { name: /Third-party notices/ })
+    ).toHaveAttribute('href', /THIRD_PARTY_NOTICES\.md$/)
+    await page.locator('#aboutModalDone').click()
+    await expect(about).toBeHidden()
+
+    // Library info and Features Guide both opened the same tab of the same
+    // modal — the duplicate this plan exists to remove.
+    await page.locator('#helpMenuBtn').click()
+    await menuItem(page, 'help', 'Library info').click()
+    await expect(page.locator('#tab-libraries')).toHaveAttribute(
+      'aria-selected',
+      'true'
+    )
+    await page.locator('#featuresGuideClose').click()
+
+    await page.locator('#helpMenuBtn').click()
+    await menuItem(page, 'help', 'Features Guide').click()
+    await expect(page.locator('#tab-workflow')).toHaveAttribute(
+      'aria-selected',
+      'true'
+    )
+    await expect(page.locator('#tab-libraries')).toHaveAttribute(
+      'aria-selected',
+      'false'
+    )
+  })
+})
+
+test.describe('Mnemonics and one path per shortcut (G7)', () => {
+  test('menus underline the access keys U2 marks, and only those', async ({
+    page,
+  }) => {
+    await loadFixture(page)
+
+    /** label -> the underlined character, for one menu. */
+    async function underlined(menuId) {
+      await page.locator(`#${menuId}MenuBtn`).click()
+      const out = await page.evaluate((id) => {
+        const result = {}
+        for (const btn of document.querySelectorAll(
+          `#${id}MenuItems .menu-item-label`
+        )) {
+          result[btn.textContent] =
+            btn.querySelector('.menu-mnemonic')?.textContent ?? null
+        }
+        return result
+      }, menuId)
+      await page.keyboard.press('Escape')
+      return out
+    }
+
+    const file = await underlined('file')
+    expect(file['New File']).toBe('N')
+    expect(file['Recent Files']).toBe('t') // Recen&t Files
+    expect(file['Export']).toBe('x') // E&xport
+    expect(file['Save As…']).toBe('A')
+    // Forge extras upstream does not have get no invented access key.
+    expect(file['Open Local Folder…']).toBeNull()
+    expect(file['Save a Copy']).toBeNull()
+
+    const edit = await underlined('edit')
+    expect(edit['Cut']).toBe('t') // Cu&t
+    expect(edit['Uncomment']).toBe('m') // Unco&mment
+    expect(edit['Copy viewport translation']).toBe('a') // transl&ation
+    expect(edit['Find Next']).toBe('x') // Find Ne&xt
+
+    const view = await underlined('view')
+    expect(view['Back']).toBe('k') // Bac&k
+    expect(view['Center']).toBe('n') // Ce&nter
+    // U2 marks no access key on the display toggles.
+    expect(view['Show Edges']).toBeNull()
+    expect(view['View All']).toBeNull()
+
+    // Underlining must not change what the item is called.
+    const labels = (await readMenu(page, 'view')).map((i) => i.label)
+    expect(labels).toEqual(VIEW_MENU_ORDER)
+  })
+
+  test('a disabled item states its reason once, not twice', async ({
+    page,
+  }) => {
+    await loadFixture(page)
+
+    await page.locator('#helpMenuBtn').click()
+    const item = menuItem(page, 'help', 'Offline Cheat Sheet')
+
+    // The reason used to live INSIDE the button, so it was part of the
+    // accessible NAME and the description both (D-14).
+    const name = await item.evaluate((el) => el.textContent)
+    expect(name).toBe('Offline Cheat Sheet')
+
+    const describedBy = await item.getAttribute('aria-describedby')
+    expect(describedBy).toBeTruthy()
+    const description = await page.evaluate(
+      (id) => document.getElementById(id)?.textContent ?? '',
+      describedBy.split(' ')[0]
+    )
+    expect(description).toContain('not bundled yet')
+  })
+
+  test('Ctrl+Z has exactly one path and stays out of the code editor', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000)
+    await loadFixture(page)
+
+    // It is now a registry action, so it appears in the shortcuts modal and
+    // can be rebound. It used to be invisible there.
+    await page.keyboard.press('Control+Shift+K')
+    await expect(page.locator('#shortcutsModal')).toBeVisible()
+    await expect(page.locator('#shortcutsModalBody')).toContainText(
+      'Undo the last parameter change'
+    )
+    await page.locator('#shortcutsModalDone').click()
+
+    // One press, one undo. A second live path would take the parameter back
+    // two steps at once.
+    // The parameter groups are closed disclosures, so open the one this
+    // parameter lives in before touching it.
+    const slider = page.locator('#param-width')
+    const group = page.locator('details.param-group', { has: slider })
+    if (!(await group.evaluate((el) => el.open))) {
+      await group.locator('summary').first().click()
+    }
+
+    const original = Number(await slider.inputValue())
+    await slider.fill(String(original + 1))
+    await page.waitForTimeout(700) // two separate history entries, not one
+    await slider.fill(String(original + 2))
+    await expect(slider).toHaveValue(String(original + 2))
+
+    // A focused INPUT is where the registry deliberately stands aside, so
+    // step out of it before pressing the shortcut.
+    await slider.evaluate((el) => el.blur())
+    await page.keyboard.press('Control+z')
+    await expect(slider).toHaveValue(String(original + 1))
+
+    // In the editor, Ctrl+Z is the EDITOR's undo and must not also rewind a
+    // parameter. The legacy listener had no text-entry guard, so it did both.
+    await openEditor(page)
+    const editor = page.locator('#expertModePanel .cm-content')
+    await editor.click()
+    await page.keyboard.type('// marker', { delay: 25 })
+    await expect(editor).toContainText('// marker')
+
+    await page.keyboard.press('Control+z')
+    await expect(editor).not.toContainText('// marker')
+    // The parameter must not have moved a second time.
+    await expect(slider).toHaveValue(String(original + 1))
+  })
+})
 
 test.describe('Design menu and Export submenu parity (G3)', () => {
   test('Design order follows U2 and unavailable items say why', async ({

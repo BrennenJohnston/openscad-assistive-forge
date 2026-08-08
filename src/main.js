@@ -196,7 +196,7 @@ import {
   getClassicLayoutController,
   collapseCustomizerGroups,
 } from './js/classic-layout-controller.js';
-import { tabIdFor } from './js/classic-dock-model.js';
+import { tabIdFor, DOCK_PANELS } from './js/classic-dock-model.js';
 import { initFontListPanel } from './js/font-list-panel.js';
 import { initViewportControlPanel } from './js/viewport-control-panel.js';
 import { initAnimatePanel, getAnimatePanel } from './js/animate-panel.js';
@@ -590,6 +590,235 @@ function toggleErrorLog() {
       Boolean(slot?.contains(active)) || active?.id === tabIdFor('errorLog');
     if (alreadyInside) returnFocusFromErrorLog();
     else showErrorLogClassic();
+  }
+}
+
+/**
+ * The toolbars Classic can hide, each with the body attribute `classic.css`
+ * keys off and the preference key it persists under.
+ *
+ * Upstream's View menu hides the editor toolbar and the 3D view toolbar
+ * separately (U2), so "Hide Toolbar" splits in two. The icon toolbar is this
+ * app's own third bar; it keeps its item and its stored preference so nothing
+ * on screen becomes unhideable, renamed so a screen reader can tell the three
+ * apart. One table, so the menu and the startup restore cannot drift.
+ */
+const CLASSIC_HIDEABLE_TOOLBARS = {
+  editor: {
+    label: 'Hide Editor toolbar',
+    name: 'Editor toolbar',
+    datasetKey: 'classicEditorToolbarHidden',
+    storageKey: 'openscad-forge-classic-editor-toolbar-hidden',
+  },
+  view: {
+    // E7 already shipped the CSS rule for this attribute; nothing set it until
+    // the menu item existed, so the 3D view toolbar could not be hidden.
+    label: 'Hide 3D View toolbar',
+    name: '3D view toolbar',
+    datasetKey: 'classicCameraBarHidden',
+    storageKey: 'openscad-forge-classic-camera-bar-hidden',
+  },
+  icon: {
+    label: 'Hide Classic Toolbar',
+    name: 'Classic toolbar',
+    datasetKey: 'classicToolbarHidden',
+    storageKey: 'openscad-forge-classic-toolbar-hidden',
+  },
+};
+
+/** @param {keyof CLASSIC_HIDEABLE_TOOLBARS} bar */
+function isClassicToolbarHidden(bar) {
+  return (
+    document.body.dataset[CLASSIC_HIDEABLE_TOOLBARS[bar].datasetKey] === 'true'
+  );
+}
+
+/**
+ * Hide or show one Classic toolbar and remember the choice.
+ * @param {keyof CLASSIC_HIDEABLE_TOOLBARS} bar
+ */
+function toggleClassicToolbar(bar) {
+  const def = CLASSIC_HIDEABLE_TOOLBARS[bar];
+  const hidden = !isClassicToolbarHidden(bar);
+  document.body.dataset[def.datasetKey] = String(hidden);
+  try {
+    localStorage.setItem(def.storageKey, String(hidden));
+  } catch {
+    // Preference persistence is best-effort.
+  }
+  _announce(`${def.name} ${hidden ? 'hidden' : 'shown'}`);
+}
+
+// Edit ▸ Insert Template (G7, D-43). Nothing in Appendix U or this repository
+// transcribes what upstream's template actually inserts, and this round fetches
+// nothing from upstream, so building it would mean inventing it.
+const INSERT_TEMPLATE_REASON =
+  "Insert Template is not built yet: nothing in this project records what the desktop's template inserts, and guessing would put code you did not write into your file.";
+
+// Help ▸ Offline … (G6). Both are disabled with a reason rather than hidden:
+// D-39 defers all offline-documentation bundling out of this plan, so nothing
+// third-party is fetched, pinned or vendored here.
+const OFFLINE_DOCUMENTATION_REASON =
+  'Offline documentation is not bundled yet. Use Documentation, which opens the OpenSCAD manual in a new window while you are online.';
+const OFFLINE_CHEAT_SHEET_REASON =
+  'The offline cheat sheet is not bundled yet. Use Cheat Sheet, which opens it in a new window while you are online.';
+
+/**
+ * Help ▸ About. Stamps the build's version into the dialog before opening it,
+ * so the number can never drift from what was actually shipped.
+ */
+function openAboutModal() {
+  const modal = document.getElementById('aboutModal');
+  if (!modal) return;
+
+  const versionLine = document.getElementById('aboutVersion');
+  if (versionLine) {
+    versionLine.textContent = `OpenSCAD Assistive Forge, version ${__APP_VERSION__}`;
+  }
+
+  openModal(modal, {
+    focusTarget: document.getElementById('aboutModalDone'),
+  });
+}
+
+/** Window ▸ Jump To…, the web reading of upstream's jump-to-dock popup (G5). */
+const JUMP_TO_LABEL = 'Jump To…';
+const JUMP_TO_EMPTY_REASON =
+  'No panels are open, so there is nowhere to jump to. Turn one on from this menu first.';
+const JUMP_TO_UNAVAILABLE_REASON =
+  'Jump To is not available in the Simplified view';
+
+/**
+ * Can a Classic dock panel be reached right now? A merged panel that is not
+ * the selected tab counts — its tab reaches it — but one the Window menu has
+ * hidden, or a whole strip that Simplified drops, does not.
+ * @param {{id: string, elementId: string}} panel
+ */
+function dockPanelReachable(panel) {
+  const el = document.getElementById(panel.elementId);
+  if (!el) return false;
+  if (document.getElementById(tabIdFor(panel.id))) return true;
+  return el.getBoundingClientRect().height > 0;
+}
+
+/**
+ * Put focus on a Classic dock panel: its tab when it is merged into a group
+ * (B7), otherwise its title bar's menu button — the same landing point B8
+ * uses after a move and F1 uses for the Error-Log, so a jump feels like
+ * every other way of arriving at a panel.
+ * @param {string} panelId
+ * @returns {boolean}
+ */
+function focusDockPanel(panelId) {
+  const tab = document.getElementById(tabIdFor(panelId));
+  if (tab) {
+    tab.click();
+    tab.focus();
+    return true;
+  }
+  const panel = DOCK_PANELS.find((p) => p.id === panelId);
+  const el = panel && document.getElementById(panel.elementId);
+  const target =
+    el?.querySelector('.classic-panel-menu-btn') || el?.querySelector('button');
+  if (!target) return false;
+  target.focus();
+  return true;
+}
+
+/**
+ * Where Jump To can send you, per host: Classic's dock panels, or the
+ * disclosure panels Ctrl+Alt+] and Ctrl+Alt+[ already cycle through.
+ * @returns {{label: string, focus: () => boolean}[]}
+ */
+function jumpTargets() {
+  const layout = getClassicLayoutController();
+  if (document.body.dataset.uiMode === 'classic' && layout) {
+    return DOCK_PANELS.filter(dockPanelReachable).map((panel) => ({
+      label: panel.label,
+      focus: () => focusDockPanel(panel.id),
+    }));
+  }
+  return getUIModeController()
+    .listFocusablePanels()
+    .map((panel) => ({
+      label: panel.label,
+      focus: () => {
+        if (!panel.el.open) panel.el.open = true;
+        const summary = panel.el.querySelector('summary');
+        if (!summary) return false;
+        summary.focus();
+        summary.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        return true;
+      },
+    }));
+}
+
+/**
+ * Ctrl+J. Upstream opens the jump-to-dock popup itself, so this opens the
+ * Window menu and expands Jump To… rather than leaving the user to find it.
+ */
+function openJumpToPicker() {
+  const btn = document.getElementById('windowMenuBtn');
+  if (!btn || btn.offsetParent === null) {
+    // Simplified hides the menu bar entirely; nothing else would speak here.
+    announceImmediate(JUMP_TO_UNAVAILABLE_REASON);
+    return;
+  }
+  getToolbarMenuController().openMenu('window');
+  const trigger = [
+    ...document.querySelectorAll('#windowMenuItems .menu-submenu-trigger'),
+  ].find(
+    (el) => el.querySelector('.menu-item-label')?.textContent === JUMP_TO_LABEL
+  );
+  trigger?.click();
+}
+
+/**
+ * Window ▸ Customizer, Ctrl+Alt+4 and Ctrl+B are one command. The two
+ * shortcuts used to toggle a `.sidebar` element that exists nowhere in this
+ * app, so both were silently dead (G5).
+ */
+function toggleCustomizerPanel() {
+  const layout = getClassicLayoutController();
+  if (document.body.dataset.uiMode === 'classic' && layout) {
+    layout.toggleCustomizer(); // announces for itself
+    return;
+  }
+  const btn = document.getElementById('collapseParamPanelBtn');
+  if (!btn) return;
+  btn.click();
+  // announceImmediate, not the debounced announce: every sibling panel toggle
+  // announces immediately, and the debounce CANCELS a pending message, so two
+  // quick presses of this one alone would have spoken once.
+  announceImmediate(
+    btn.getAttribute('aria-expanded') === 'true'
+      ? 'Customizer shown'
+      : 'Customizer hidden'
+  );
+}
+
+/** Window ▸ Editor and Ctrl+Alt+3, likewise one command per host. */
+function toggleEditorPanel() {
+  const layout = getClassicLayoutController();
+  if (document.body.dataset.uiMode === 'classic' && layout) {
+    layout.toggleEditor(); // announces for itself
+    return;
+  }
+  // togglePanelVisibility announces this one itself, under the panel's
+  // registry name ("Code Editor"). Announcing again here said it twice.
+  getUIModeController().togglePanelVisibility('codeEditor');
+}
+
+/** Restore the View ▸ Hide … preferences on startup. */
+function restoreClassicToolbarPrefs() {
+  for (const def of Object.values(CLASSIC_HIDEABLE_TOOLBARS)) {
+    try {
+      if (localStorage.getItem(def.storageKey) === 'true') {
+        document.body.dataset[def.datasetKey] = 'true';
+      }
+    } catch {
+      // Preference read is best-effort.
+    }
   }
 }
 
@@ -2446,6 +2675,10 @@ async function initApp() {
 
   const setFirstVisitBlocking = (blocked) => {
     firstVisitBlocking = blocked;
+    // The legacy keydown listener checked this flag itself. Now that its
+    // shortcuts live in the registry, the guard belongs there — and it covers
+    // every registered shortcut, not only the six that were folded in (G7).
+    keyboardConfig.setEnabled(!blocked);
     if (appRoot) {
       if (blocked) {
         appRoot.setAttribute('aria-hidden', 'true');
@@ -3434,6 +3667,15 @@ async function initApp() {
       editorAction('Comment', 'comment'),
       editorAction('Uncomment', 'uncomment'),
       editorAction('Convert Tabs to Spaces', 'convertTabsToSpaces'),
+      {
+        // Upstream has no menu entry for this — it is Alt+Ins only — but a
+        // keyboard-only action that does nothing tells the user nothing.
+        // Disabled here so it can at least say why (D-43).
+        type: 'action',
+        label: 'Insert Template',
+        disabled: true,
+        tooltip: INSERT_TEMPLATE_REASON,
+      },
       editorAction('Toggle Bookmark', 'toggleBookmark'),
       editorAction('Jump to next bookmark', 'nextBookmark'),
       editorAction('Jump to previous bookmark', 'previousBookmark'),
@@ -3724,14 +3966,17 @@ async function initApp() {
         handler: () => displayOptionsController.toggle('axes'),
       },
       {
+        // Upstream label (U2). This app's mm tick overlay IS the scale-marker
+        // overlay; E3 already named the toolbar button the same way.
         type: 'toggle',
-        label: 'Show Axis Markings (mm)',
+        label: 'Show Scale Markers',
         checked: displayOptionsController.get('axisMarks'),
         handler: () => displayOptionsController.toggle('axisMarks'),
       },
       {
         type: 'toggle',
         label: 'Show Crosshairs',
+        shortcutAction: 'toggleCrosshairs',
         checked: displayOptionsController.get('crosshairs'),
         handler: () => displayOptionsController.toggle('crosshairs'),
       },
@@ -3779,6 +4024,9 @@ async function initApp() {
         shortcutAction: 'viewDiagonal',
         handler: cameraViewHandler('diagonal'),
       },
+      // Center, View All and Reset View are three different commands upstream
+      // and were two-thirds duplicates here: Center called a method that did
+      // not exist, and View All and Reset View both fitted the model (G4).
       {
         type: 'action',
         label: 'Center',
@@ -3787,8 +4035,8 @@ async function initApp() {
         tooltip: hasRender ? undefined : 'Render a model first',
         handler: () => {
           if (previewManager) {
-            previewManager.resetCamera();
-            announceCameraAction('View centered');
+            previewManager.centerCamera();
+            announceCameraAction('View centered on the model');
           }
         },
       },
@@ -3800,20 +4048,20 @@ async function initApp() {
         tooltip: hasRender ? undefined : 'Render a model first',
         handler: () => {
           if (previewManager) {
-            previewManager.fitCameraToModel();
+            previewManager.viewAllCamera();
             announceCameraAction('View fitted to model');
           }
         },
       },
       {
+        // No render needed: this one restores the default pose rather than
+        // framing anything, so it is the way back from a lost camera.
         type: 'action',
         label: 'Reset View',
         shortcutAction: 'resetView',
-        enabled: hasRender,
-        tooltip: hasRender ? undefined : 'Render a model first',
         handler: () => {
           if (previewManager) {
-            previewManager.fitCameraToModel();
+            previewManager.resetCamera();
             announceCameraAction('reset');
           }
         },
@@ -3823,6 +4071,7 @@ async function initApp() {
       {
         type: 'action',
         label: 'Zoom In',
+        shortcutAction: 'zoomIn',
         handler: () => {
           if (previewManager) {
             previewManager.zoomCamera(CAMERA_ZOOM_STEP);
@@ -3833,6 +4082,7 @@ async function initApp() {
       {
         type: 'action',
         label: 'Zoom Out',
+        shortcutAction: 'zoomOut',
         handler: () => {
           if (previewManager) {
             previewManager.zoomCamera(-CAMERA_ZOOM_STEP);
@@ -3866,6 +4116,18 @@ async function initApp() {
           }
         },
       },
+      // -- Per-toolbar hide toggles (U2's tail; Classic-only markup) --
+      ...(document.body.dataset.uiMode === 'classic'
+        ? [
+            { type: 'separator' },
+            ...Object.entries(CLASSIC_HIDEABLE_TOOLBARS).map(([bar, def]) => ({
+              type: 'toggle',
+              label: def.label,
+              checked: isClassicToolbarHidden(bar),
+              handler: () => toggleClassicToolbar(bar),
+            })),
+          ]
+        : []),
       { type: 'separator' },
       // -- Preview Quality (proxies #previewQualitySelect, C4) --
       (() => {
@@ -3901,24 +4163,6 @@ async function initApp() {
               },
             },
             {
-              type: 'toggle',
-              label: 'Hide Toolbar',
-              checked: document.body.dataset.classicToolbarHidden === 'true',
-              handler: () => {
-                const hidden =
-                  document.body.dataset.classicToolbarHidden === 'true';
-                document.body.dataset.classicToolbarHidden = String(!hidden);
-                try {
-                  localStorage.setItem(
-                    'openscad-forge-classic-toolbar-hidden',
-                    String(!hidden)
-                  );
-                } catch {
-                  // Preference persistence is best-effort.
-                }
-              },
-            },
-            {
               // The way back from any arrangement the title-bar menus can
               // produce (B9). Label owner-approved 2026-08-07.
               label: 'Reset Panel Layout',
@@ -3941,45 +4185,57 @@ async function initApp() {
   // ── Toolbar: Window menu ─────────────────────────────────────────────────
   getToolbarMenuController().registerMenuBuilder('window', () => {
     const uiCtrl = getUIModeController();
-    const hidden = new Set(
-      uiCtrl.getPreferencesForExport().hiddenPanelsInBasic
-    );
-
     /**
+     * The tick reads the DOM, not the Simplified-view preference: Classic's
+     * dock adopts the Console and shows it whatever that preference says, so
+     * the menu claimed the Console was off while it sat on screen. And
+     * togglePanelVisibility announces the change itself, so announcing here
+     * too said it twice.
+     *
      * @param {string} panelId
      * @param {string} label
      * @param {string|undefined} shortcutAction
      */
     function panelToggle(panelId, label, shortcutAction) {
-      const isVisible = !hidden.has(panelId);
       return {
         type: 'toggle',
         label,
-        checked: isVisible,
+        checked: uiCtrl.isPanelShowing(panelId),
         ...(shortcutAction ? { shortcutAction } : {}),
-        handler: () => {
-          uiCtrl.togglePanelVisibility(panelId);
-          _announce(isVisible ? `${label} hidden` : `${label} shown`);
-        },
+        handler: () => uiCtrl.togglePanelVisibility(panelId),
       };
     }
 
+    const classicLayout = getClassicLayoutController();
+    const inClassic =
+      document.body.dataset.uiMode === 'classic' && Boolean(classicLayout);
+
+    // Upstream builds this menu from the docks themselves, so its order is the
+    // dock order: Editor, Console, Customizer, Error-Log, Animate, Font List,
+    // Viewport-Control (U2). Next/Previous Window are omitted — one window
+    // (D-24).
     return [
-      // -- Desktop-parity panel toggles --
-      (() => {
-        const classicLayout = getClassicLayoutController();
-        if (document.body.dataset.uiMode === 'classic' && classicLayout) {
-          return {
-            type: 'toggle',
-            label: 'Editor',
-            shortcutAction: 'toggleCodeEditor',
-            checked: classicLayout.isEditorVisible(),
-            handler: () => classicLayout.toggleEditor(),
-          };
-        }
-        return panelToggle('codeEditor', 'Editor', 'toggleCodeEditor');
-      })(),
+      {
+        type: 'toggle',
+        label: 'Editor',
+        shortcutAction: 'toggleCodeEditor',
+        checked: inClassic
+          ? classicLayout.isEditorVisible()
+          : uiCtrl.isPanelShowing('codeEditor'),
+        handler: () => toggleEditorPanel(),
+      },
       panelToggle('consoleOutput', 'Console', 'toggleConsole'),
+      {
+        type: 'toggle',
+        label: 'Customizer',
+        shortcutAction: 'toggleCustomizer',
+        checked: inClassic
+          ? classicLayout.isCustomizerVisible()
+          : !document
+              .getElementById('paramPanel')
+              ?.classList.contains('collapsed'),
+        handler: () => toggleCustomizerPanel(),
+      },
       // Error-Log gets a custom handler rather than a panelToggle: it is a
       // console tab in Forge and an always-present strip pane in Classic, so
       // PANEL_REGISTRY's show/hide semantics fit neither host (F1).
@@ -3990,74 +4246,74 @@ async function initApp() {
         checked: isErrorLogShowing(),
         handler: () => toggleErrorLog(),
       },
-      (() => {
-        const inClassic = document.body.dataset.uiMode === 'classic';
-        const classicLayout = getClassicLayoutController();
-        const checked = inClassic
-          ? Boolean(classicLayout?.isCustomizerVisible())
-          : !document
-              .getElementById('paramPanel')
-              ?.classList.contains('collapsed');
-        return {
-          type: 'toggle',
-          label: 'Customizer',
-          checked,
-          handler: () => {
-            if (
-              document.body.dataset.uiMode === 'classic' &&
-              getClassicLayoutController()
-            ) {
-              getClassicLayoutController().toggleCustomizer();
-            } else {
-              document.getElementById('collapseParamPanelBtn')?.click();
-            }
-          },
-        };
-      })(),
       // The three panels sub-plan F builds are Classic-only this round (D-32),
       // so each is a real dock toggle in Classic and keeps its previous Forge
       // behaviour outside it. Viewport-Control used to be disabled in Classic
       // with an apologetic tooltip; it is a real panel now (F4/F6).
-      (() => {
-        const classicLayout = getClassicLayoutController();
-        if (document.body.dataset.uiMode === 'classic' && classicLayout) {
-          return {
-            type: 'toggle',
-            label: 'Viewport-Control',
-            checked: classicLayout.isViewportControlVisible(),
-            handler: () => classicLayout.toggleViewportControl(),
-          };
-        }
-        return {
-          type: 'action',
-          label: 'Viewport-Control',
-          handler: () => {
-            const panel = document.getElementById('cameraPanel');
-            if (panel) {
-              panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              const focusable = panel.querySelector('button, input, select');
-              if (focusable) focusable.focus();
-            }
-          },
-        };
-      })(),
-      ...(document.body.dataset.uiMode === 'classic' &&
-      getClassicLayoutController()
+      ...(inClassic
         ? [
             {
               type: 'toggle',
               label: 'Animate',
-              checked: getClassicLayoutController().isAnimateVisible(),
-              handler: () => getClassicLayoutController().toggleAnimate(),
+              checked: classicLayout.isAnimateVisible(),
+              handler: () => classicLayout.toggleAnimate(),
             },
             {
               type: 'toggle',
               label: 'Font List',
-              checked: getClassicLayoutController().isFontListVisible(),
-              handler: () => getClassicLayoutController().toggleFontList(),
+              checked: classicLayout.isFontListVisible(),
+              handler: () => classicLayout.toggleFontList(),
+            },
+            {
+              type: 'toggle',
+              label: 'Viewport-Control',
+              checked: classicLayout.isViewportControlVisible(),
+              handler: () => classicLayout.toggleViewportControl(),
             },
           ]
-        : []),
+        : [
+            {
+              type: 'action',
+              label: 'Viewport-Control',
+              handler: () => {
+                const panel = document.getElementById('cameraPanel');
+                if (panel) {
+                  panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  const focusable = panel.querySelector(
+                    'button, input, select'
+                  );
+                  if (focusable) focusable.focus();
+                }
+              },
+            },
+          ]),
+      { type: 'separator' },
+      // Upstream's Ctrl+J opens a jump-to-dock popup. The web reading is a
+      // picker of the panels that are on screen right now; choosing one moves
+      // focus into it.
+      (() => {
+        const targets = jumpTargets();
+        if (targets.length === 0) {
+          return {
+            type: 'action',
+            label: JUMP_TO_LABEL,
+            disabled: true,
+            tooltip: JUMP_TO_EMPTY_REASON,
+          };
+        }
+        return {
+          type: 'submenu',
+          label: JUMP_TO_LABEL,
+          shortcutAction: 'jumpToPanel',
+          items: targets.map((target) => ({
+            type: 'action',
+            label: target.label,
+            handler: () => {
+              if (target.focus()) _announce(`Jumped to ${target.label}`);
+            },
+          })),
+        };
+      })(),
       { type: 'separator' },
       // -- Web-only panel toggles --
       // fileActions, editTools, designTools, displayOptions removed — now in toolbar menus
@@ -4082,7 +4338,7 @@ async function initApp() {
       {
         type: 'action',
         label: 'About',
-        handler: () => _openFeaturesTab('tab-accessibility'),
+        handler: () => openAboutModal(),
       },
       {
         type: 'action',
@@ -4102,6 +4358,15 @@ async function initApp() {
             'noopener,noreferrer'
           ),
       },
+      // Both offline items keep U2's position and say why they cannot work
+      // rather than being hidden. Bundling either one is deferred out of this
+      // plan entirely (D-39) — nothing third-party is fetched or vendored here.
+      {
+        type: 'action',
+        label: 'Offline Documentation',
+        disabled: true,
+        tooltip: OFFLINE_DOCUMENTATION_REASON,
+      },
       {
         type: 'action',
         label: 'Cheat Sheet',
@@ -4115,14 +4380,24 @@ async function initApp() {
       },
       {
         type: 'action',
-        label: 'Library Info',
+        label: 'Offline Cheat Sheet',
+        disabled: true,
+        tooltip: OFFLINE_CHEAT_SHEET_REASON,
+      },
+      {
+        // U2's sentence case. It opens the guide's Libraries page; the live
+        // list of what is mounted is File > Show Library Folder.
+        type: 'action',
+        label: 'Library info',
         handler: () => _openFeaturesTab('tab-libraries'),
       },
       { type: 'separator' },
       {
+        // Was the same target as Library info — the duplicate R11 exists to
+        // remove. It opens the guide at its Workflow page instead.
         type: 'action',
         label: 'Features Guide',
-        handler: () => _openFeaturesTab('tab-libraries'),
+        handler: () => _openFeaturesTab('tab-workflow'),
       },
       {
         type: 'action',
@@ -8924,17 +9199,7 @@ if (rounded) {
     // menus drive — no new state anywhere.
     const classicToolbar = document.getElementById('classicToolbar');
     if (classicToolbar) {
-      // Restore the View > Hide Toolbar preference
-      try {
-        if (
-          localStorage.getItem('openscad-forge-classic-toolbar-hidden') ===
-          'true'
-        ) {
-          document.body.dataset.classicToolbarHidden = 'true';
-        }
-      } catch {
-        // Preference read is best-effort.
-      }
+      restoreClassicToolbarPrefs();
       // E3 moved the snap-view buttons to the 3D view toolbar. Scoping this
       // to #classicToolbar would silently leave every one of them dead, so it
       // queries the document — both bars are Classic-only markup.
@@ -8946,12 +9211,23 @@ if (rounded) {
         });
       });
 
+      // The bar's View All and Reset View carry the same labels as the View
+      // menu's items, so they run the same commands (G4). Reset View used to
+      // be a third behaviour again — a snap to the diagonal view.
       document
         .getElementById('classicViewHomeBtn')
         ?.addEventListener('click', () => {
           if (!previewManager) return;
-          previewManager.fitCameraToModel();
+          previewManager.viewAllCamera();
           announceCameraAction('View fitted to model');
+        });
+
+      document
+        .getElementById('classicResetViewBtn')
+        ?.addEventListener('click', () => {
+          if (!previewManager) return;
+          previewManager.resetCamera();
+          announceCameraAction('reset');
         });
 
       // File / Edit / Render groups proxy the same handlers as the menus
@@ -8988,6 +9264,14 @@ if (rounded) {
         perspBtn?.setAttribute('aria-pressed', String(mode === 'perspective'));
         orthoBtn?.setAttribute('aria-pressed', String(mode === 'orthographic'));
       };
+      // These used to update only inside their own click handlers, so changing
+      // projection from the View menu or the P shortcut left the pair claiming
+      // the wrong state (D-10). R3a's event reaches every mirror.
+      syncProjectionButtons();
+      document.addEventListener(
+        'preview-projection-change',
+        syncProjectionButtons
+      );
       perspBtn?.addEventListener('click', () => {
         if (
           previewManager &&
@@ -13986,6 +14270,54 @@ if (rounded) {
     }
   });
 
+  // Folded out of the legacy keydown listener (G7). Each of these was a second
+  // document-level path this registry knew nothing about: invisible in the
+  // shortcuts modal, impossible to rebind, and — for Ctrl+Z — firing the
+  // parameter undo even while the user was typing in the code editor, because
+  // that listener had no text-entry guard. The registry skips every non-global
+  // shortcut inside an input or a contenteditable, so the editor keeps its own
+  // undo and nothing fires twice.
+  keyboardConfig.on('undo', () => {
+    const state = stateManager.getState();
+    if (state.uploadedFile && stateManager.canUndo()) {
+      performUndo();
+    }
+  });
+
+  const redoParameterChange = () => {
+    const state = stateManager.getState();
+    if (state.uploadedFile && stateManager.canRedo()) {
+      performRedo();
+    }
+  };
+  keyboardConfig.on('redo', redoParameterChange);
+  keyboardConfig.on('redoAlt', redoParameterChange);
+
+  keyboardConfig.on('renderAlt', () => {
+    const state = stateManager.getState();
+    if (state.uploadedFile && !primaryActionBtn.disabled) {
+      primaryActionBtn.click();
+    }
+  });
+
+  keyboardConfig.on('generateShortcut', () => {
+    const state = stateManager.getState();
+    if (
+      state.uploadedFile &&
+      primaryActionBtn.dataset.action === 'generate' &&
+      !primaryActionBtn.disabled
+    ) {
+      primaryActionBtn.click();
+    }
+  });
+
+  keyboardConfig.on('downloadShortcut', () => {
+    const state = stateManager.getState();
+    if (state.stl && primaryActionBtn.dataset.action === 'download') {
+      primaryActionBtn.click();
+    }
+  });
+
   keyboardConfig.on('preview', () => {
     const state = stateManager.getState();
     if (state.uploadedFile && autoPreviewController) {
@@ -14023,16 +14355,15 @@ if (rounded) {
     focusModeBtn?.click();
   });
 
-  keyboardConfig.on('toggleParameters', () => {
-    const sidebar = document.querySelector('.sidebar');
-    if (sidebar) {
-      sidebar.classList.toggle('collapsed');
-    }
-  });
+  // Ctrl+B and Ctrl+Alt+4 are both described as "Toggle Customizer panel" in
+  // the shortcuts modal, and both toggled the same non-existent `.sidebar`.
+  // They now do what they say; the duplicate binding is reported, not removed.
+  keyboardConfig.on('toggleParameters', () => toggleCustomizerPanel());
 
   keyboardConfig.on('resetView', () => {
     if (previewManager) {
       previewManager.resetCamera();
+      announceImmediate('View reset to default');
     }
   });
 
@@ -14067,8 +14398,8 @@ if (rounded) {
 
   keyboardConfig.on('viewCenter', () => {
     if (previewManager) {
-      previewManager.resetCamera();
-      announceImmediate('View centered');
+      previewManager.centerCamera();
+      announceImmediate('View centered on the model');
     }
   });
 
@@ -14226,8 +14557,22 @@ if (rounded) {
   // Display action shortcuts
   keyboardConfig.on('viewAll', () => {
     if (previewManager?.mesh) {
-      previewManager.fitCameraToModel();
+      previewManager.viewAllCamera();
       announceImmediate('View fitted to model');
+    }
+  });
+  // Ctrl+] / Ctrl+[ (U2). The menu, the camera bar and these share one step
+  // (D-19), so every surface moves the camera by the same amount.
+  keyboardConfig.on('zoomIn', () => {
+    if (previewManager) {
+      previewManager.zoomCamera(CAMERA_ZOOM_STEP);
+      announceCameraAction('zoom-in');
+    }
+  });
+  keyboardConfig.on('zoomOut', () => {
+    if (previewManager) {
+      previewManager.zoomCamera(-CAMERA_ZOOM_STEP);
+      announceCameraAction('zoom-out');
     }
   });
   keyboardConfig.on('toggleAxes', () =>
@@ -14247,13 +14592,13 @@ if (rounded) {
   // a console tab in Forge and a strip pane in Classic; registry semantics fit
   // neither, so it gets its own per-host handler.
   keyboardConfig.on('toggleErrorLog', () => toggleErrorLog());
-  keyboardConfig.on('toggleCodeEditor', () =>
-    getUIModeController().togglePanelVisibility('codeEditor')
-  );
-  keyboardConfig.on('toggleCustomizer', () => {
-    const sidebar = document.querySelector('.sidebar');
-    if (sidebar) sidebar.classList.toggle('collapsed');
-  });
+  // These two now run the same command as their Window-menu items. Ctrl+Alt+4
+  // used to toggle a `.sidebar` element that exists nowhere in this app, so it
+  // was silently dead — and in Classic the Editor lives in the dock, which the
+  // panel registry cannot reach (G5).
+  keyboardConfig.on('toggleCodeEditor', () => toggleEditorPanel());
+  keyboardConfig.on('toggleCustomizer', () => toggleCustomizerPanel());
+  keyboardConfig.on('jumpToPanel', () => openJumpToPicker());
   keyboardConfig.on('nextPanel', () => getUIModeController().cyclePanel(1));
   keyboardConfig.on('prevPanel', () => getUIModeController().cyclePanel(-1));
 
@@ -14331,85 +14676,6 @@ if (rounded) {
       updateStatus('Gamepad disconnected');
     });
   }
-
-  // The bare r/d/g shortcuts below must never steal a keystroke from
-  // somewhere the user is entering text. CodeMirror's editing surface is a
-  // contenteditable div, not a textarea, so a tagName-only check let 'r'
-  // reset every parameter while the user was typing "render".
-  const isTextEntryTarget = (target) =>
-    target.tagName === 'INPUT' ||
-    target.tagName === 'TEXTAREA' ||
-    target.tagName === 'SELECT' ||
-    target.isContentEditable;
-
-  // Global keyboard shortcuts (legacy - kept for backward compatibility)
-  document.addEventListener('keydown', (e) => {
-    const state = stateManager.getState();
-    if (firstVisitBlocking) {
-      return;
-    }
-
-    // Ctrl/Cmd + Z: Undo
-    if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
-      if (state.uploadedFile && stateManager.canUndo()) {
-        e.preventDefault();
-        performUndo();
-      }
-    }
-
-    // Ctrl/Cmd + Shift + Z: Redo (also Ctrl/Cmd + Y)
-    if (
-      (e.ctrlKey || e.metaKey) &&
-      ((e.key === 'z' && e.shiftKey) || e.key === 'y')
-    ) {
-      if (state.uploadedFile && stateManager.canRedo()) {
-        e.preventDefault();
-        performRedo();
-      }
-    }
-
-    // Ctrl/Cmd + Enter: Trigger primary action (generate or download)
-    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-      if (state.uploadedFile && !primaryActionBtn.disabled) {
-        e.preventDefault();
-        primaryActionBtn.click();
-      }
-    }
-
-    // R key: Reset parameters (when not in input field)
-    if (e.key === 'r' && !e.ctrlKey && !e.metaKey) {
-      if (!isTextEntryTarget(e.target)) {
-        if (state.uploadedFile) {
-          e.preventDefault();
-          resetBtn.click();
-        }
-      }
-    }
-
-    // D key: Download (when button is in download mode)
-    if (e.key === 'd' && !e.ctrlKey && !e.metaKey) {
-      if (!isTextEntryTarget(e.target)) {
-        if (state.stl && primaryActionBtn.dataset.action === 'download') {
-          e.preventDefault();
-          primaryActionBtn.click();
-        }
-      }
-    }
-
-    // G key: Generate (when button is in generate mode)
-    if (e.key === 'g' && !e.ctrlKey && !e.metaKey) {
-      if (!isTextEntryTarget(e.target)) {
-        if (
-          state.uploadedFile &&
-          primaryActionBtn.dataset.action === 'generate' &&
-          !primaryActionBtn.disabled
-        ) {
-          e.preventDefault();
-          primaryActionBtn.click();
-        }
-      }
-    }
-  });
 
   updateStatus('Ready - Upload a file to begin');
 }
@@ -14598,6 +14864,22 @@ if (typeof window !== 'undefined') {
      */
     previewColorScheme() {
       return previewManager?.currentTheme ?? null;
+    },
+
+    /**
+     * Where the camera is and what it orbits. Read-only, and the only way a
+     * parity test can prove that Center, View All and Reset View each moved
+     * the view differently rather than merely that the item was clickable.
+     * `target` is null when the browser has no WebGL, so there are no controls.
+     * @returns {{position: number[], target: number[]|null}|null}
+     */
+    cameraPose() {
+      const camera = previewManager?.getActiveCamera?.();
+      if (!camera) return null;
+      return {
+        position: camera.position.toArray(),
+        target: previewManager.controls?.target?.toArray() ?? null,
+      };
     },
 
     async compareGeometry() {
