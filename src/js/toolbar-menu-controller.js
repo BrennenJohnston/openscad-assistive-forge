@@ -71,6 +71,14 @@ export class ToolbarMenuController {
 
     /** @type {Function|null} Bound reference for document click-outside handler */
     this._onDocumentClick = null;
+
+    /**
+     * The last element focused outside the menu system. Opening a menu takes
+     * focus, which collapses the editor's selection — so Cut/Copy/Paste and
+     * the context-aware Undo need to know where the user actually was.
+     * @type {HTMLElement|null}
+     */
+    this._lastExternalFocus = null;
   }
 
   /**
@@ -120,6 +128,38 @@ export class ToolbarMenuController {
 
     // Menubar keyboard handler (arrow navigation between top-level items)
     bar.addEventListener('keydown', (e) => this._handleMenubarKeydown(e));
+
+    document.addEventListener('focusin', (e) => {
+      if (!this._isInsideMenus(e.target)) this._lastExternalFocus = e.target;
+    });
+  }
+
+  /** @private */
+  _isInsideMenus(el) {
+    if (!el || typeof el.closest !== 'function') return false;
+    if (el.closest('#toolbarMenuBar')) return true;
+    for (const modal of this._modals.values()) {
+      if (modal.contains(el)) return true;
+    }
+    return false;
+  }
+
+  /**
+   * The element that held focus before the menu bar took it. Null once that
+   * element leaves the document.
+   * @returns {HTMLElement|null}
+   */
+  getLastExternalFocus() {
+    const el = this._lastExternalFocus;
+    return el && el.isConnected ? el : null;
+  }
+
+  /**
+   * Put focus back where the user was. CodeMirror restores its own selection
+   * on focus, which is what makes Cut and Copy work from a menu at all.
+   */
+  restoreExternalFocus() {
+    this.getLastExternalFocus()?.focus?.();
   }
 
   // ============================================================================
@@ -734,6 +774,7 @@ export class ToolbarMenuController {
     if (!isDisabled && typeof item.handler === 'function') {
       btn.addEventListener('click', () => {
         this.closeAllMenus();
+        if (item.restoreFocus) this.restoreExternalFocus();
         item.handler();
       });
     }

@@ -781,10 +781,18 @@ test.describe('Classic acceptance (C13)', () => {
     await expect(qualitySubmenu).toBeVisible();
     await page.keyboard.press('Escape');
 
-    // File > Close returns to the welcome screen (accept the unsaved-changes
-    // confirmation the #clearFileBtn handler shows)
+    // File > Close Project returns to the welcome screen (accept the
+    // unsaved-changes confirmation the #clearFileBtn handler shows). The
+    // item was named "Close" until G1 dropped upstream's Quit slot and gave
+    // the single remaining close action the clearer name.
     await page.locator('#fileMenuBtn').click();
-    await page.getByRole('menuitem', { name: 'Close', exact: true }).click();
+    // Target the visible label: a menu item's accessible name also carries
+    // its sr-only tooltip, so an exact name match cannot be used here.
+    await page
+      .locator('#fileMenuItems button')
+      .filter({ has: page.getByText('Close Project', { exact: true }) })
+      .first()
+      .click();
     await page
       .locator('button:has-text("Confirm")')
       .first()

@@ -218,6 +218,7 @@ import { initSavedProjectsUI } from './js/saved-projects-ui.js';
 import {
   getFileActionsController,
   exportFormatFromMenu,
+  setExportDependencies,
 } from './js/file-actions-controller.js';
 import { getEditActionsController } from './js/edit-actions-controller.js';
 import { copyPresetName } from './js/copy-preset-name.js';
@@ -2781,6 +2782,114 @@ async function initApp() {
     }
   }
 
+  /**
+   * Whether the render already in hand is this exact format, for these exact
+   * parameters — the one question that decides whether an export downloads
+   * immediately or has to render first. STL additionally consults the app's
+   * shared render-state function rather than repeating its recipe.
+   *
+   * @param {string} format
+   * @param {Object} parameters
+   * @param {Object} [options]
+   * @param {boolean} [options.stlBinary=true]
+   * @returns {boolean}
+   */
+  function hasCurrentRenderFor(format, parameters, { stlBinary = true } = {}) {
+    const output = stateManager.getState().generatedOutput;
+    const matches = Boolean(
+      output?.data &&
+      (output.format || 'stl').toLowerCase() === format &&
+      output.paramsHash === hashParams(parameters)
+    );
+    if (!matches) return false;
+    if (format !== 'stl') return true;
+    // ascii and binary are different bytes, so asking for the other encoding
+    // is a different render even when the geometry is unchanged.
+    if ((output.stlBinary ?? true) !== stlBinary) return false;
+    return hasFullQualitySTLFor(parameters);
+  }
+
+  /**
+   * Render the model in the requested format so an export can proceed.
+   * @returns {Promise<'ready'|'downloaded'|false>}
+   */
+  async function _renderForExport(format, { stlBinary = true } = {}) {
+    // SVG and DXF keep the one-click path: it asks consent for the 2D
+    // parameter changes and handles the projection fallback, neither of
+    // which a plain render in that format would do.
+    if (format === 'svg' || format === 'dxf') {
+      await _export2DOneClick(format);
+      return 'downloaded';
+    }
+
+    const state = stateManager.getState();
+    if (!renderController) {
+      showErrorToast({
+        title: 'Engine Not Ready',
+        message:
+          'The OpenSCAD engine has not initialized yet. Please wait or refresh the page.',
+      });
+      return false;
+    }
+
+    const formatName = OUTPUT_FORMATS[format]?.name || format.toUpperCase();
+    getToolbarMenuController().closeAll();
+    updateStatus(`Generating ${formatName}\u2026`);
+    announceImmediate(`Generating ${formatName}. This may take a moment.`);
+    autoPreviewController?.cancelPending();
+
+    try {
+      const startTime = Date.now();
+      const result = await renderController.renderFull(
+        state.uploadedFile.content,
+        state.parameters,
+        {
+          outputFormat: format,
+          stlBinary,
+          paramTypes: state.paramTypes || {},
+          files: state.projectFiles,
+          mainFile: state.mainFilePath,
+          libraries: getEnabledLibrariesForRender(),
+          onProgress: () => updateStatus(`Generating ${formatName}\u2026`),
+        }
+      );
+      const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+      const data = result.data || result.stl;
+      const resolvedFormat = (result.format || format).toLowerCase();
+
+      stateManager.setState({
+        generatedOutput: {
+          data,
+          format: resolvedFormat,
+          stats: result.stats,
+          paramsHash: hashParams(state.parameters),
+          stlBinary: resolvedFormat === 'stl' ? stlBinary : undefined,
+        },
+        stl: data,
+        outputFormat: resolvedFormat,
+        stlStats: result.stats,
+        lastRenderTime: duration,
+      });
+      updateStatus(`${formatName} ready (${duration}s)`);
+      return 'ready';
+    } catch (error) {
+      console.error(`[Export] ${formatName} render failed:`, error);
+      updateStatus(`${formatName} export failed: ${error.message || error}`);
+      showErrorToast({
+        title: `${formatName} Export Failed`,
+        message: error.message || String(error),
+      });
+      announceImmediate(`${formatName} export failed.`);
+      return false;
+    }
+  }
+
+  setExportDependencies({
+    hasCurrentRender: (format, options) =>
+      hasCurrentRenderFor(format, stateManager.getState().parameters, options),
+    renderForExport: _renderForExport,
+  });
+
   // Initialize file actions controller (New, Reload, Save, Save As, Export Image, Recent)
   const fileActionsController = getFileActionsController({
     onNew: () => {
@@ -2826,79 +2935,188 @@ async function initApp() {
       document.body.removeChild(link);
     },
     onExport2D: (format) => _export2DOneClick(format),
+    onOpenRecent: (entry) => _openRecentEntry(entry),
   });
   fileActionsController.init();
 
+  const THREEMF_UNAVAILABLE_REASON =
+    '3MF export is not available in this browser build. Export as STL or OBJ instead \u2014 most slicers accept both.';
+  const RECENT_UNAVAILABLE_REASON =
+    'Not saved in this browser — open the file again to reload it';
+  const OPEN_IN_NEW_WINDOW_REASON =
+    'A new browser tab cannot be handed a file from this one. Use New Window, then open the file there.';
+
+  // A recent entry is only a file name, so re-opening works when this browser
+  // still holds the content: a saved project, or a bundled example. A one-off
+  // upload leaves nothing behind, and that entry renders disabled with a
+  // reason rather than failing on click (D-28). Menu builders are synchronous,
+  // so the lookup is cached and rebuilt whenever the project list changes.
+  const recentResolution = new Map();
+
+  async function refreshRecentResolution() {
+    const projects = await listSavedProjects();
+    const resolved = new Map();
+    for (const project of projects) {
+      if (project.originalName && !resolved.has(project.originalName)) {
+        resolved.set(project.originalName, { kind: 'project', id: project.id });
+      }
+    }
+    for (const project of projects) {
+      if (project.name && !resolved.has(project.name)) {
+        resolved.set(project.name, { kind: 'project', id: project.id });
+      }
+    }
+    for (const [key, def] of Object.entries(EXAMPLE_DEFINITIONS)) {
+      if (def.name && !resolved.has(def.name)) {
+        resolved.set(def.name, { kind: 'example', key });
+      }
+    }
+    recentResolution.clear();
+    for (const [name, target] of resolved) recentResolution.set(name, target);
+  }
+
+  function _openRecentEntry(entry) {
+    const target = recentResolution.get(entry?.name);
+    if (!target) return;
+    if (target.kind === 'project') {
+      void savedProjectsUI.loadSavedProject(target.id);
+    } else {
+      void fileHandler.loadExampleByKey(target.key);
+    }
+  }
+
+  document.addEventListener('saved-projects-rendered', () => {
+    void refreshRecentResolution();
+  });
+  void refreshRecentResolution();
+
+  /**
+   * Save a Copy: the open document stays attached to the project it came
+   * from, so a later Save still overwrites the original rather than the copy.
+   */
+  async function _saveProjectCopy() {
+    flushEditorWriteBack();
+    const state = stateManager.getState();
+    if (!state.uploadedFile?.content) return;
+    const previousProjectId = currentSavedProjectId;
+    await savedProjectsUI.showSaveProjectPrompt(state, { preSave: true });
+    currentSavedProjectId = previousProjectId;
+  }
+
+  /**
+   * File > Close Project. The Back button asks its own question, so a dirty
+   * editor is warned here and then closed directly — two dialogs in a row
+   * would be worse than one.
+   */
+  async function _closeProjectFromMenu() {
+    if (getEditorStateManager().getIsDirty()) {
+      const confirmed = await showConfirmDialog(
+        'You have unsaved edits in the code editor. Closing this project will discard them.',
+        'Unsaved code edits',
+        'Discard edits and close',
+        'Keep editing',
+        { destructive: true }
+      );
+      if (!confirmed) return;
+      await closeProjectToWelcome();
+      return;
+    }
+    document.getElementById('clearFileBtn')?.click();
+  }
+
+  /**
+   * File > Show Library Folder…: a browser has no library folder on disk, so
+   * this reveals the library bundles this build actually mounts.
+   */
+  function _showLibraryBundles() {
+    const controls = document.getElementById('libraryControls');
+    if (!controls) return;
+    controls.classList.remove('hidden');
+    const details = controls.querySelector('.library-details');
+    if (details) details.open = true;
+    controls.scrollIntoView({ block: 'nearest' });
+    controls.querySelector('.library-summary')?.focus();
+  }
+
   // ── Toolbar: File menu ──────────────────────────────────────────────────
+  // Order, labels and separators transcribed from upstream MainWindow.ui at
+  // tag openscad-2026.01.01-TEST2 (Appendix U2). Omitted and documented:
+  // Save All and the Python submenu (D-24 — one document, no Python in the
+  // WASM build). Quit has no browser meaning, so its slot is dropped and the
+  // single Close carries the clearer name "Close Project" (D-27, owner
+  // 2026-08-08). "Open Local Folder…" is a Forge extra, kept beside Open File.
   getToolbarMenuController().registerMenuBuilder('file', () => {
     const state = stateManager.getState();
     const hasFile = Boolean(state.uploadedFile);
     const hasRender = Boolean(state.stl);
-    // Full render = Generate button has been pressed and output matches current params
-    const stateOutputFormat = (state.outputFormat || '').toLowerCase();
-    const selectedFormat = (
-      document.getElementById('outputFormat')?.value || 'stl'
-    ).toLowerCase();
-    const hasNonSTLRender =
-      hasRender &&
-      stateOutputFormat === selectedFormat &&
-      stateOutputFormat !== 'stl';
-    const hasFullRender =
-      hasNonSTLRender || hasFullQualitySTLFor(state.parameters);
 
-    // Recent Files submenu items (filenames only; actual re-open via onOpenRecent callback)
-    const recentItems =
-      fileActionsController.recentFiles.length > 0
-        ? fileActionsController.recentFiles.map((entry) => ({
-            type: 'action',
-            label: entry.name,
-            handler: () => fileActionsController.onOpenRecent(entry),
-          }))
-        : [{ type: 'action', label: 'No recent files', disabled: true }];
-
-    // Export submenu: one-click 2D exports + re-download of current render + Export as Image
-    const exportItems = [
-      // One-click 2D exports (auto-adjust params, render, download)
-      {
-        type: 'action',
-        label: 'Export as SVG\u2026',
-        enabled: hasFile,
-        tooltip: hasFile
-          ? 'One-click: auto-adjusts parameters, generates 2D geometry, and downloads SVG'
-          : 'Open a file first',
-        handler: () => fileActionsController.onExport2D('svg'),
-      },
-      {
-        type: 'action',
-        label: 'Export as DXF\u2026',
-        enabled: hasFile,
-        tooltip: hasFile
-          ? 'One-click: auto-adjusts parameters, generates 2D geometry, and downloads DXF'
-          : 'Open a file first',
-        handler: () => fileActionsController.onExport2D('dxf'),
-      },
-      { type: 'separator' },
-      // Re-download current render in its original format
-      ...(!hasFullRender
-        ? [
-            {
+    // Recent Files submenu: entries this browser can still re-open, then
+    // Clear Recent. Unreachable entries stay listed but disabled (D-28).
+    const hasRecent = fileActionsController.recentFiles.length > 0;
+    const recentItems = [
+      ...(hasRecent
+        ? fileActionsController.recentFiles.map((entry) => {
+            const resolvable = recentResolution.has(entry.name);
+            return {
               type: 'action',
-              label: '\u24D8  Press Generate to enable file exports',
-              disabled: true,
-              tooltip:
-                'Use the Generate button to fully render the model, then file export options will become available.',
-            },
-            { type: 'separator' },
-          ]
-        : []),
-      ...Object.entries(OUTPUT_FORMATS).map(([key, fmt]) => ({
+              label: entry.name,
+              disabled: !resolvable,
+              tooltip: resolvable ? undefined : RECENT_UNAVAILABLE_REASON,
+              handler: resolvable
+                ? () => fileActionsController.onOpenRecent(entry)
+                : undefined,
+            };
+          })
+        : [{ type: 'action', label: 'No recent files', disabled: true }]),
+      { type: 'separator' },
+      {
         type: 'action',
-        label: fmt.name,
-        enabled: hasFullRender,
-        tooltip: hasFullRender
-          ? fmt.description
-          : 'Press Generate first to enable this export',
-        handler: () => exportFormatFromMenu(key),
+        label: 'Clear Recent',
+        disabled: !hasRecent,
+        tooltip: hasRecent ? undefined : 'The recent files list is empty',
+        handler: hasRecent
+          ? () => {
+              fileActionsController.clearRecent();
+              announceImmediate('Recent files list cleared');
+            }
+          : undefined,
+      },
+    ];
+
+    // Export submenu, in upstream order (U2). POV is omitted and documented
+    // (D-24 -- the WASM build has no POV writer). Every entry renders on
+    // demand when the render in hand is not already that format, so no export
+    // is a dead end any more.
+    const exportFormats = [
+      ['stl', 'Export as STL (ascii)\u2026', { stlBinary: false }],
+      ['stl', 'Export as STL (binary)\u2026', { stlBinary: true }],
+      ['obj', 'Export as OBJ\u2026', {}],
+      ['off', 'Export as OFF\u2026', {}],
+      ['wrl', 'Export as WRL\u2026', {}],
+      ['amf', 'Export as AMF\u2026', {}],
+      // Measured 2026-08-08: this build's renderer traps on 3MF with
+      // "function signature mismatch", so the item says so instead of
+      // failing every time it is pressed.
+      ['3mf', 'Export as 3MF\u2026', {}, THREEMF_UNAVAILABLE_REASON],
+      ['dxf', 'Export as DXF\u2026', {}],
+      ['svg', 'Export as SVG\u2026', {}],
+      ['csg', 'Export as CSG\u2026', {}],
+      ['pdf', 'Export as PDF\u2026', {}],
+    ];
+
+    const exportItems = [
+      ...exportFormats.map(([format, label, options, unavailableReason]) => ({
+        type: 'action',
+        label,
+        enabled: hasFile && !unavailableReason,
+        tooltip: unavailableReason
+          ? unavailableReason
+          : hasFile
+            ? OUTPUT_FORMATS[format]?.description
+            : 'Open a file first',
+        handler: unavailableReason
+          ? undefined
+          : () => void exportFormatFromMenu(format, options),
       })),
       { type: 'separator' },
       {
@@ -2935,7 +3153,6 @@ async function initApp() {
         handler: () => connectToLocalFolder?.(),
       },
       { type: 'submenu', label: 'Recent Files', items: recentItems },
-      { type: 'separator' },
       {
         type: 'submenu',
         label: 'Examples',
@@ -2988,8 +3205,29 @@ async function initApp() {
       { type: 'separator' },
       {
         type: 'action',
-        label: 'Close',
-        handler: () => document.getElementById('clearFileBtn')?.click(),
+        label: 'New Window',
+        tooltip: 'Opens a second copy of the app in a new browser tab',
+        handler: () =>
+          window.open(
+            window.location.origin + window.location.pathname,
+            '_blank',
+            'noopener,noreferrer'
+          ),
+      },
+      {
+        type: 'action',
+        label: 'Open in New Window',
+        disabled: true,
+        tooltip: OPEN_IN_NEW_WINDOW_REASON,
+      },
+      {
+        type: 'action',
+        label: 'Close Project',
+        enabled: hasFile,
+        tooltip: hasFile
+          ? 'Close the project and return to the start screen'
+          : 'Open a file first',
+        handler: () => void _closeProjectFromMenu(),
       },
       { type: 'separator' },
       {
@@ -3010,24 +3248,21 @@ async function initApp() {
       },
       {
         type: 'action',
-        label: 'Save All',
+        label: 'Save a Copy',
         enabled: hasFile,
         tooltip: hasFile
-          ? 'Save all changes to current project'
+          ? 'Save another copy, leaving this file attached to the project it came from'
           : 'Open a file first',
-        handler: () => fileActionsController.onSaveAll(),
+        handler: () => void _saveProjectCopy(),
       },
       { type: 'separator' },
       { type: 'submenu', label: 'Export', items: exportItems },
       { type: 'separator' },
       {
         type: 'action',
-        label: 'Close',
-        enabled: hasFile,
-        tooltip: hasFile
-          ? 'Close the project and return to the start screen'
-          : 'Open a file first',
-        handler: () => document.getElementById('clearFileBtn')?.click(),
+        label: 'Show Library Folder\u2026',
+        tooltip: 'Shows the library bundles this app can mount',
+        handler: () => _showLibraryBundles(),
       },
     ];
   });
@@ -3056,30 +3291,75 @@ async function initApp() {
   });
   editActionsController.init();
 
-  // ── Toolbar: Edit menu ──────────────────────────────────────────────────
+  // -- Toolbar: Edit menu --------------------------------------------------
+  // Order and labels transcribed from upstream MainWindow.ui (Appendix U2).
+  // Omitted and documented: Show Next/Previous Tab (D-24 -- one document, no
+  // editor tabs). Preferences is relabelled honestly (D-29). Jump to previous
+  // error is a Forge extra, kept beside its upstream sibling.
   getToolbarMenuController().registerMenuBuilder('edit', () => {
     const state = stateManager.getState();
     const hasFile = Boolean(state.uploadedFile);
-    const canUndo = stateManager.canUndo();
-    const canRedo = stateManager.canRedo();
 
     const modeManager = getModeManager();
     const editor = modeManager?.getEditorInstance?.();
     const expertMode = modeManager?.isExpertMode?.();
-    const canEdit = expertMode && editor;
+    // "Is there an editor the user can actually type in?" ModeManager's expert
+    // flag stays false in Classic even though the dock's Editor pane is
+    // mounted, visible and holding the project — so asking it alone disabled
+    // every editor action in the one theme this release is about.
+    const editorBox = document
+      .getElementById('expertModePanel')
+      ?.getBoundingClientRect();
+    const editorOnScreen = Boolean(
+      editorBox && editorBox.width > 0 && editorBox.height > 0
+    );
+    const canEdit = Boolean(editor) && (expertMode || editorOnScreen);
     const editorTip = 'Available when the Code Editor is open';
 
-    function editorAction(label, actionId) {
-      const available = canEdit && editor.supportsAction?.(actionId) === true;
+    // Undo and Redo follow the focus the menu bar just took: from the code
+    // editor they undo text, from anywhere else a parameter change. The
+    // parameter history keeps its own toolbar buttons, which say so by name.
+    const focusInEditor = Boolean(
+      getToolbarMenuController()
+        .getLastExternalFocus()
+        ?.closest?.('#expertModePanel')
+    );
+    const undoTargetsEditor = Boolean(canEdit && focusInEditor);
+    const canUndo = undoTargetsEditor
+      ? Boolean(editor.canUndo?.())
+      : stateManager.canUndo();
+    const canRedo = undoTargetsEditor
+      ? Boolean(editor.canRedo?.())
+      : stateManager.canRedo();
+
+    function historyTooltip(verb, available) {
+      const what = undoTargetsEditor
+        ? 'change in the code editor'
+        : 'parameter change';
+      return available
+        ? `${verb}es the last ${what}`
+        : `Nothing to ${verb.toLowerCase()}: no ${what} yet`;
+    }
+
+    /**
+     * @param {string} label
+     * @param {string} actionId
+     * @param {true|string} [gate] True when allowed, or the reason it is not.
+     */
+    function editorAction(label, actionId, gate = true) {
+      const supported = canEdit && editor.supportsAction?.(actionId) === true;
+      const available = supported && gate === true;
       return {
         type: 'action',
         label,
         disabled: !available,
         tooltip: available
           ? undefined
-          : canEdit
-            ? 'Not available in the basic text editor'
-            : editorTip,
+          : !canEdit
+            ? editorTip
+            : !supported
+              ? 'Not available in the basic text editor'
+              : gate,
         handler: available ? () => editor.performAction(actionId) : undefined,
       };
     }
@@ -3089,15 +3369,19 @@ async function initApp() {
         type: 'action',
         label: 'Undo',
         enabled: canUndo,
-        tooltip: canUndo ? undefined : 'Nothing to undo',
-        handler: () => performUndo(),
+        tooltip: historyTooltip('Undo', canUndo),
+        restoreFocus: true,
+        handler: () =>
+          undoTargetsEditor ? editor.performAction('undo') : performUndo(),
       },
       {
         type: 'action',
         label: 'Redo',
         enabled: canRedo,
-        tooltip: canRedo ? undefined : 'Nothing to redo',
-        handler: () => performRedo(),
+        tooltip: historyTooltip('Redo', canRedo),
+        restoreFocus: true,
+        handler: () =>
+          undoTargetsEditor ? editor.performAction('redo') : performRedo(),
       },
       { type: 'separator' },
       {
@@ -3105,6 +3389,9 @@ async function initApp() {
         label: 'Cut',
         disabled: !canEdit,
         tooltip: canEdit ? undefined : editorTip,
+        // Opening the menu bar takes focus, which collapses the editor's
+        // selection. restoreFocus puts it back before the command runs.
+        restoreFocus: true,
         handler: canEdit ? () => document.execCommand('cut') : undefined,
       },
       {
@@ -3112,6 +3399,7 @@ async function initApp() {
         label: 'Copy',
         disabled: !canEdit,
         tooltip: canEdit ? undefined : editorTip,
+        restoreFocus: true,
         handler: canEdit ? () => document.execCommand('copy') : undefined,
       },
       {
@@ -3119,6 +3407,7 @@ async function initApp() {
         label: 'Paste',
         disabled: !canEdit,
         tooltip: canEdit ? undefined : editorTip,
+        restoreFocus: true,
         // execCommand('paste') is blocked by every modern browser; read
         // the async Clipboard API instead, with an honest fallback.
         handler: canEdit
@@ -3142,10 +3431,14 @@ async function initApp() {
       editorAction('Unindent', 'unindent'),
       editorAction('Comment', 'comment'),
       editorAction('Uncomment', 'uncomment'),
+      editorAction('Convert Tabs to Spaces', 'convertTabsToSpaces'),
+      editorAction('Toggle Bookmark', 'toggleBookmark'),
+      editorAction('Jump to next bookmark', 'nextBookmark'),
+      editorAction('Jump to previous bookmark', 'previousBookmark'),
       { type: 'separator' },
       {
         type: 'action',
-        label: 'Copy Viewport Image',
+        label: 'Copy viewport image',
         shortcutAction: 'copyViewportImage',
         enabled: hasFile,
         tooltip: hasFile ? undefined : 'Open a file first',
@@ -3153,43 +3446,55 @@ async function initApp() {
       },
       {
         type: 'action',
-        label: 'Copy Viewport Translation',
+        label: 'Copy viewport translation',
         enabled: hasFile,
         tooltip: hasFile ? undefined : 'Open a file first',
         handler: () => editActionsController.copyTranslation(),
       },
       {
         type: 'action',
-        label: 'Copy Viewport Rotation',
+        label: 'Copy viewport rotation',
         enabled: hasFile,
         tooltip: hasFile ? undefined : 'Open a file first',
         handler: () => editActionsController.copyRotation(),
       },
       {
         type: 'action',
-        label: 'Copy Viewport Distance',
+        label: 'Copy viewport distance',
         enabled: hasFile,
         tooltip: hasFile ? undefined : 'Open a file first',
         handler: () => editActionsController.copyDistance(),
       },
       {
         type: 'action',
-        label: 'Copy Viewport FOV',
+        label: 'Copy viewport field of view',
         enabled: hasFile,
         tooltip: hasFile ? undefined : 'Open a file first',
         handler: () => editActionsController.copyFov(),
       },
       { type: 'separator' },
-      editorAction('Find\u2026', 'find'),
-      editorAction('Find and Replace\u2026', 'findReplace'),
+      editorAction('Find…', 'find'),
+      editorAction('Find and Replace…', 'findReplace'),
       editorAction('Find Next', 'findNext'),
       editorAction('Find Previous', 'findPrevious'),
+      editorAction(
+        'Use Selection for Find',
+        'useSelectionForFind',
+        canEdit && editor.hasSelection?.()
+          ? true
+          : 'Select some text in the code editor first'
+      ),
       { type: 'separator' },
       {
         type: 'action',
-        label: 'Jump to Next Error',
+        label: 'Jump to next error',
         shortcutAction: 'jumpNextError',
         handler: () => editActionsController.jumpToNextError(),
+      },
+      {
+        type: 'action',
+        label: 'Jump to previous error',
+        handler: () => editActionsController.jumpToPrevError(),
       },
       { type: 'separator' },
       {
@@ -3206,7 +3511,7 @@ async function initApp() {
       },
       {
         type: 'action',
-        label: 'Preferences\u2026',
+        label: 'Preferences (Keyboard Shortcuts)…',
         handler: () => {
           const modal = document.getElementById('shortcutsModal');
           const modalBody = document.getElementById('shortcutsModalBody');
@@ -3236,10 +3541,30 @@ async function initApp() {
   });
   designPanelController.init();
 
-  // ── Toolbar: Design menu ─────────────────────────────────────────────────
+  const PRINT_UNAVAILABLE_REASON =
+    'Sending a model straight to a printer is not built yet. Export the model and open it in your slicer.';
+  const MEASURE_UNAVAILABLE_REASON =
+    'Measuring on the model is not built yet. Show measurements reports the overall size.';
+  const AST_UNAVAILABLE_REASON =
+    'The syntax tree is not available in this browser build. Display Parameters shows what the file declares.';
+  const CSG_UNAVAILABLE_REASON =
+    'The CSG tree is not available in this browser build. Export as CSG saves the flattened CSG source instead.';
+
+  // -- Toolbar: Design menu -------------------------------------------------
+  // Order and labels transcribed from upstream MainWindow.ui (Appendix U2).
+  // Four items ship visibly disabled with a reason rather than absent, so the
+  // menu still tells the truth about what desktop OpenSCAD offers: 3D Print
+  // (D-26), Measure Distance / Angle (D-15) and the two CSG dumps (D-38).
+  // Cancel Render is a Forge extra, kept next to the render it cancels.
   getToolbarMenuController().registerMenuBuilder('design', () => {
     const state = stateManager.getState();
     const hasFile = Boolean(state.uploadedFile);
+
+    /** An upstream action this build genuinely cannot perform yet. */
+    function unavailable(label, reason) {
+      return { type: 'action', label, disabled: true, tooltip: reason };
+    }
+
     return [
       {
         type: 'toggle',
@@ -3306,6 +3631,9 @@ async function initApp() {
           if (renderController?.isBusy?.()) renderController.cancel();
         },
       },
+      unavailable('3D Print', PRINT_UNAVAILABLE_REASON),
+      unavailable('Measure Distance', MEASURE_UNAVAILABLE_REASON),
+      unavailable('Measure Angle', MEASURE_UNAVAILABLE_REASON),
       { type: 'separator' },
       {
         type: 'action',
@@ -3315,12 +3643,17 @@ async function initApp() {
         tooltip: hasFile ? undefined : 'Open a file first',
         handler: () => designPanelController.checkValidity(),
       },
+      unavailable('Display AST…', AST_UNAVAILABLE_REASON),
+      unavailable('Display CSG Tree…', CSG_UNAVAILABLE_REASON),
+      unavailable('Display CSG Products…', CSG_UNAVAILABLE_REASON),
       {
         type: 'action',
-        label: 'Display Parameters\u2026',
+        label: 'Display Parameters…',
         shortcutAction: 'showAST',
         enabled: hasFile,
-        tooltip: hasFile ? undefined : 'Open a file first',
+        tooltip: hasFile
+          ? 'Shows the customizer parameters this file declares'
+          : 'Open a file first',
         handler: () => designPanelController.showAST(),
       },
       { type: 'separator' },
@@ -6478,6 +6811,117 @@ async function initApp() {
     );
   }
 
+  // Close the project and return to the welcome screen. Split out of the Back
+  // button's listener so File > Close Project can ask its own dirty-aware
+  // question and still reach this one path without a second dialog.
+  async function closeProjectToWelcome() {
+    // Reset file input
+    fileInput.value = '';
+
+    // Leave STL view-only mode if it was active
+    setStlViewActive(false);
+    document
+      .getElementById('parametersContainer')
+      ?.querySelector('.stl-view-notice')
+      ?.remove();
+
+    // Clear state (including preset selection so it doesn't survive reload)
+    stateManager.setState({
+      uploadedFile: null,
+      projectFiles: null,
+      mainFilePath: null,
+      schema: null,
+      parameters: {},
+      defaults: {},
+      stl: null,
+      outputFormat: 'stl',
+      stlStats: null,
+      detectedLibraries: [],
+      currentPresetId: null,
+      currentPresetName: null,
+    });
+
+    // Sync the dropdown element and fire change so the format info panel,
+    // 2D guidance, and button labels all reset to their STL defaults.
+    if (outputFormatSelect) {
+      outputFormatSelect.value = 'stl';
+      outputFormatSelect.dispatchEvent(new Event('change'));
+    }
+
+    // Clear history
+    stateManager.clearHistory();
+
+    // Hide main interface, show welcome screen
+    mainInterface.classList.add('hidden');
+    welcomeScreen.classList.remove('hidden');
+    updateStorageDisplay();
+
+    // Refresh saved projects list when returning to welcome screen
+    await savedProjectsUI.renderSavedProjectsList();
+
+    // Reset workflow step state, then re-apply slot visibility.
+    // applyToolbarModeVisibility sees mainInterface.hidden=true and hides both
+    // the toolbar and the workflow progress (welcome-screen branch).
+    applyToolbarModeVisibility(getUIModeController().getMode());
+
+    // Exit focus mode if active
+    const focusModeBtn = document.getElementById('focusModeBtn');
+    if (
+      focusModeBtn &&
+      mainInterface &&
+      mainInterface.classList.contains('focus-mode')
+    ) {
+      mainInterface.classList.remove('focus-mode');
+      focusModeBtn.setAttribute('aria-pressed', 'false');
+    }
+
+    // Close Features Guide modal if open
+    const featuresGuideModal = document.getElementById('featuresGuideModal');
+    if (
+      featuresGuideModal &&
+      !featuresGuideModal.classList.contains('hidden')
+    ) {
+      closeFeaturesGuide();
+    }
+
+    // Clear preview and remove any loaded overlay from the previous project
+    if (previewManager) {
+      previewManager.clear();
+      previewManager.setReferenceOverlaySource({
+        kind: null,
+        name: null,
+        dataUrlOrText: null,
+      });
+      previewManager.setOverlayEnabled(false);
+    }
+
+    // Reset overlay UI controls so the previous project's state doesn't linger
+    if (overlayToggle) overlayToggle.checked = false;
+    if (overlaySourceSelect) overlaySourceSelect.value = '';
+    overlayGridCtrl.updateOverlaySourceDropdown();
+    overlayGridCtrl.updateOverlayStatus();
+
+    // Reset echo drawer so stale warnings don't persist into the
+    // next project load (prevents layout shift from expanded drawer).
+    updatePreviewDrawer([]);
+    if (typeof window.clearConsoleState === 'function') {
+      window.clearConsoleState();
+    }
+
+    // Reset status
+    updateStatus('Ready');
+    statsArea.textContent = '';
+    clearPreviewStats();
+
+    // Remove compact header
+    const appHeader = document.querySelector('.app-header');
+    if (appHeader) {
+      appHeader.classList.remove('compact');
+    }
+
+    console.log('[App] File cleared, returned to welcome screen');
+  }
+
   // Back button - returns to welcome screen
   if (clearFileBtn) {
     clearFileBtn.addEventListener('click', async () => {
@@ -6488,114 +6932,7 @@ async function initApp() {
         'Confirm',
         'Cancel'
       );
-      if (confirmed) {
-        // Reset file input
-        fileInput.value = '';
-
-        // Leave STL view-only mode if it was active
-        setStlViewActive(false);
-        document
-          .getElementById('parametersContainer')
-          ?.querySelector('.stl-view-notice')
-          ?.remove();
-
-        // Clear state (including preset selection so it doesn't survive reload)
-        stateManager.setState({
-          uploadedFile: null,
-          projectFiles: null,
-          mainFilePath: null,
-          schema: null,
-          parameters: {},
-          defaults: {},
-          stl: null,
-          outputFormat: 'stl',
-          stlStats: null,
-          detectedLibraries: [],
-          currentPresetId: null,
-          currentPresetName: null,
-        });
-
-        // Sync the dropdown element and fire change so the format info panel,
-        // 2D guidance, and button labels all reset to their STL defaults.
-        if (outputFormatSelect) {
-          outputFormatSelect.value = 'stl';
-          outputFormatSelect.dispatchEvent(new Event('change'));
-        }
-
-        // Clear history
-        stateManager.clearHistory();
-
-        // Hide main interface, show welcome screen
-        mainInterface.classList.add('hidden');
-        welcomeScreen.classList.remove('hidden');
-        updateStorageDisplay();
-
-        // Refresh saved projects list when returning to welcome screen
-        await savedProjectsUI.renderSavedProjectsList();
-
-        // Reset workflow step state, then re-apply slot visibility.
-        // applyToolbarModeVisibility sees mainInterface.hidden=true and hides both
-        // the toolbar and the workflow progress (welcome-screen branch).
-        applyToolbarModeVisibility(getUIModeController().getMode());
-
-        // Exit focus mode if active
-        const focusModeBtn = document.getElementById('focusModeBtn');
-        if (
-          focusModeBtn &&
-          mainInterface &&
-          mainInterface.classList.contains('focus-mode')
-        ) {
-          mainInterface.classList.remove('focus-mode');
-          focusModeBtn.setAttribute('aria-pressed', 'false');
-        }
-
-        // Close Features Guide modal if open
-        const featuresGuideModal =
-          document.getElementById('featuresGuideModal');
-        if (
-          featuresGuideModal &&
-          !featuresGuideModal.classList.contains('hidden')
-        ) {
-          closeFeaturesGuide();
-        }
-
-        // Clear preview and remove any loaded overlay from the previous project
-        if (previewManager) {
-          previewManager.clear();
-          previewManager.setReferenceOverlaySource({
-            kind: null,
-            name: null,
-            dataUrlOrText: null,
-          });
-          previewManager.setOverlayEnabled(false);
-        }
-
-        // Reset overlay UI controls so the previous project's state doesn't linger
-        if (overlayToggle) overlayToggle.checked = false;
-        if (overlaySourceSelect) overlaySourceSelect.value = '';
-        overlayGridCtrl.updateOverlaySourceDropdown();
-        overlayGridCtrl.updateOverlayStatus();
-
-        // Reset echo drawer so stale warnings don't persist into the
-        // next project load (prevents layout shift from expanded drawer).
-        updatePreviewDrawer([]);
-        if (typeof window.clearConsoleState === 'function') {
-          window.clearConsoleState();
-        }
-
-        // Reset status
-        updateStatus('Ready');
-        statsArea.textContent = '';
-        clearPreviewStats();
-
-        // Remove compact header
-        const appHeader = document.querySelector('.app-header');
-        if (appHeader) {
-          appHeader.classList.remove('compact');
-        }
-
-        console.log('[App] File cleared, returned to welcome screen');
-      }
+      if (confirmed) await closeProjectToWelcome();
     });
   }
 

@@ -21,17 +21,26 @@ import {
   highlightActiveLine,
   drawSelection,
   Decoration,
+  gutter,
+  GutterMarker,
 } from '@codemirror/view';
 import {
   EditorState,
   Compartment,
   StateEffect,
   StateField,
+  RangeSet,
 } from '@codemirror/state';
 import {
   StreamLanguage,
   syntaxHighlighting,
   HighlightStyle,
+  codeFolding,
+  foldGutter,
+  foldKeymap,
+  foldAll,
+  unfoldAll,
+  foldService,
 } from '@codemirror/language';
 import { tags } from '@lezer/highlight';
 import {
@@ -54,6 +63,8 @@ import {
   openSearchPanel,
   findNext,
   findPrevious,
+  setSearchQuery,
+  SearchQuery,
 } from '@codemirror/search';
 
 // ─── OpenSCAD token lists (ported from textarea-editor.js / monaco-editor.js) ──
@@ -339,6 +350,239 @@ const errorLineTheme = EditorView.baseTheme({
   },
 });
 
+// ─── Bookmarks ───────────────────────────────────────────────────────────────
+// CodeMirror has no bookmark feature, so this is a small line-marker extension:
+// a gutter dot per bookmarked line, plus toggle/next/previous commands. The
+// marker is decorative — the state reaches a screen reader through the
+// announcements in performAction(), not through the gutter.
+
+class BookmarkMarker extends GutterMarker {
+  toDOM() {
+    const dot = document.createElement('span');
+    dot.className = 'cm-bookmark-dot';
+    dot.setAttribute('aria-hidden', 'true');
+    dot.textContent = '●';
+    return dot;
+  }
+}
+
+const bookmarkMarker = new BookmarkMarker();
+
+/** @type {StateEffectType<{line: number, on: boolean}>} */
+const toggleBookmarkEffect = StateEffect.define();
+
+const bookmarkField = StateField.define({
+  create() {
+    return RangeSet.empty;
+  },
+  update(marks, tr) {
+    marks = marks.map(tr.changes);
+    for (const effect of tr.effects) {
+      if (!effect.is(toggleBookmarkEffect)) continue;
+      const { doc } = tr.state;
+      const lineNumber = effect.value.line;
+      if (lineNumber < 1 || lineNumber > doc.lines) continue;
+      if (effect.value.on) {
+        marks = marks.update({
+          add: [bookmarkMarker.range(doc.line(lineNumber).from)],
+          sort: true,
+        });
+      } else {
+        marks = marks.update({
+          filter: (from) => lineNumberAt(doc, from) !== lineNumber,
+        });
+      }
+    }
+    return marks;
+  },
+});
+
+function lineNumberAt(doc, pos) {
+  return doc.lineAt(Math.max(0, Math.min(pos, doc.length))).number;
+}
+
+/**
+ * Bookmarked line numbers, ascending. Edits can drag two marks onto the same
+ * line, so the set is de-duplicated on read rather than on every change.
+ * @param {EditorState} state
+ * @returns {number[]}
+ */
+function bookmarkLines(state) {
+  const lines = new Set();
+  const iter = state.field(bookmarkField).iter();
+  while (iter.value) {
+    lines.add(lineNumberAt(state.doc, iter.from));
+    iter.next();
+  }
+  return [...lines].sort((a, b) => a - b);
+}
+
+function cursorLine(state) {
+  return state.doc.lineAt(state.selection.main.head).number;
+}
+
+const toggleBookmark = (view) => {
+  const line = cursorLine(view.state);
+  const on = !bookmarkLines(view.state).includes(line);
+  view.dispatch({ effects: toggleBookmarkEffect.of({ line, on }) });
+  return true;
+};
+
+function gotoBookmark(view, direction) {
+  const lines = bookmarkLines(view.state);
+  if (lines.length === 0) return false;
+  const current = cursorLine(view.state);
+  const target =
+    direction > 0
+      ? (lines.find((line) => line > current) ?? lines[0])
+      : (lines.filter((line) => line < current).pop() ??
+        lines[lines.length - 1]);
+  const line = view.state.doc.line(target);
+  view.dispatch({ selection: { anchor: line.from }, scrollIntoView: true });
+  return true;
+}
+
+const nextBookmark = (view) => gotoBookmark(view, 1);
+const previousBookmark = (view) => gotoBookmark(view, -1);
+
+const bookmarkGutter = gutter({
+  class: 'cm-bookmark-gutter',
+  markers: (view) => view.state.field(bookmarkField),
+  initialSpacer: () => bookmarkMarker,
+});
+
+const bookmarkTheme = EditorView.baseTheme({
+  '.cm-bookmark-gutter': { width: '1em' },
+  '.cm-bookmark-dot': { color: '#0b6bcb', fontSize: '0.7em', lineHeight: 1.6 },
+  '&dark .cm-bookmark-dot': { color: '#78bafc' },
+});
+
+// ─── Code folding ────────────────────────────────────────────────────────────
+// OpenSCAD is tokenized here by a StreamLanguage, which carries no structure —
+// so foldGutter would draw nothing and Fold All would silently do nothing.
+// This supplies the missing fold information: a foldable block is the text
+// between a brace opened on a line and its match, with braces inside strings
+// and comments ignored. Ranges are computed once per document version, since
+// the fold service is asked about every visible line on every repaint.
+
+const foldRangeCache = new WeakMap();
+
+function computeFoldRanges(doc) {
+  const text = doc.toString();
+  const open = [];
+  const pairs = [];
+  let inLineComment = false;
+  let inBlockComment = false;
+  let inString = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    const next = text[i + 1];
+
+    if (inLineComment) {
+      if (char === '\n') inLineComment = false;
+      continue;
+    }
+    if (inBlockComment) {
+      if (char === '*' && next === '/') {
+        inBlockComment = false;
+        i++;
+      }
+      continue;
+    }
+    if (inString) {
+      if (char === '\\') i++;
+      else if (char === '"') inString = false;
+      continue;
+    }
+    if (char === '/' && next === '/') {
+      inLineComment = true;
+      i++;
+    } else if (char === '/' && next === '*') {
+      inBlockComment = true;
+      i++;
+    } else if (char === '"') {
+      inString = true;
+    } else if (char === '{') {
+      open.push(i);
+    } else if (char === '}' && open.length > 0) {
+      pairs.push([open.pop(), i]);
+    }
+  }
+
+  const byLine = new Map();
+  for (const [from, to] of pairs) {
+    const startLine = doc.lineAt(from).number;
+    // A block that opens and closes on one line has nothing to hide.
+    if (doc.lineAt(to).number === startLine) continue;
+    const existing = byLine.get(startLine);
+    if (!existing || to > existing.to) {
+      byLine.set(startLine, { from: from + 1, to });
+    }
+  }
+  return byLine;
+}
+
+function foldRangesFor(doc) {
+  let ranges = foldRangeCache.get(doc);
+  if (!ranges) {
+    ranges = computeFoldRanges(doc);
+    foldRangeCache.set(doc, ranges);
+  }
+  return ranges;
+}
+
+const scadFoldService = foldService.of((state, lineStart) => {
+  const line = state.doc.lineAt(lineStart);
+  return foldRangesFor(state.doc).get(line.number) ?? null;
+});
+
+// ─── Whitespace and search helpers ───────────────────────────────────────────
+
+/**
+ * Expand every tab to the next tab stop, so the visible layout is unchanged.
+ * A flat "one tab becomes N spaces" swap would shift indented code.
+ */
+const convertTabsToSpaces = (view) => {
+  const { state } = view;
+  if (!state.doc.toString().includes('\t')) return false;
+  const tabSize = state.tabSize || 4;
+  const changes = [];
+  for (let n = 1; n <= state.doc.lines; n++) {
+    const line = state.doc.line(n);
+    if (!line.text.includes('\t')) continue;
+    let column = 0;
+    let expanded = '';
+    for (const char of line.text) {
+      if (char === '\t') {
+        const width = tabSize - (column % tabSize);
+        expanded += ' '.repeat(width);
+        column += width;
+      } else {
+        expanded += char;
+        column += 1;
+      }
+    }
+    changes.push({ from: line.from, to: line.to, insert: expanded });
+  }
+  if (changes.length === 0) return false;
+  view.dispatch({ changes });
+  return true;
+};
+
+/** Seed the search query from the selection, then jump to the next match. */
+const useSelectionForFind = (view) => {
+  const range = view.state.selection.main;
+  if (range.empty) return false;
+  view.dispatch({
+    effects: setSearchQuery.of(
+      new SearchQuery({ search: view.state.sliceDoc(range.from, range.to) })
+    ),
+  });
+  findNext(view);
+  return true;
+};
+
 // ─── CodeMirrorEditor class ─────────────────────────────────────────────────
 
 // Named editor commands exposed to the Edit menu / keyboard shortcuts.
@@ -355,10 +599,18 @@ const EDITOR_COMMANDS = {
   comment: lineComment,
   uncomment: lineUncomment,
   find: openSearchPanel,
-  // CodeMirror's search panel includes the replace controls.
+  // CodeMirror's search panel includes the replace controls — verified in the
+  // browser at R3b-1, so Find and Replace needs no separate panel.
   findReplace: openSearchPanel,
   findNext,
   findPrevious,
+  useSelectionForFind,
+  convertTabsToSpaces,
+  toggleBookmark,
+  nextBookmark,
+  previousBookmark,
+  foldAll,
+  unfoldAll,
 };
 
 export class CodeMirrorEditor {
@@ -431,6 +683,12 @@ export class CodeMirrorEditor {
       doc: '',
       extensions: [
         lineNumbers(),
+        bookmarkField,
+        bookmarkGutter,
+        bookmarkTheme,
+        codeFolding(),
+        scadFoldService,
+        foldGutter(),
         this._historyCompartment.of(history()),
         drawSelection(),
         highlightActiveLine(),
@@ -463,9 +721,25 @@ export class CodeMirrorEditor {
               return true;
             },
           },
+          // Upstream's bookmark keys (MainWindow.ui). They live in the
+          // editor's own keymap rather than the app shortcut registry
+          // because they only mean anything while the editor has focus.
+          {
+            key: 'Mod-F2',
+            run: (view) => this._runAndAnnounce('toggleBookmark', view),
+          },
+          {
+            key: 'F2',
+            run: (view) => this._runAndAnnounce('nextBookmark', view),
+          },
+          {
+            key: 'Shift-F2',
+            run: (view) => this._runAndAnnounce('previousBookmark', view),
+          },
           ...defaultKeymap,
           ...historyKeymap,
           ...searchKeymap,
+          ...foldKeymap,
         ]),
 
         EditorView.updateListener.of((update) => {
@@ -683,7 +957,49 @@ export class CodeMirrorEditor {
     const command = EDITOR_COMMANDS[actionId];
     if (!command || !this._view) return false;
     this._view.focus();
-    return command(this._view);
+    return this._runAndAnnounce(actionId, this._view);
+  }
+
+  /**
+   * Run a command and speak its outcome where the outcome is otherwise
+   * invisible to a screen reader — a gutter dot appearing, or a jump that
+   * looks like any other cursor move.
+   * @private
+   */
+  _runAndAnnounce(actionId, view) {
+    const ran = EDITOR_COMMANDS[actionId](view);
+
+    if (actionId === 'toggleBookmark') {
+      const line = cursorLine(view.state);
+      const on = bookmarkLines(view.state).includes(line);
+      this.announce(
+        on ? `Bookmark added, line ${line}` : `Bookmark removed, line ${line}`
+      );
+    } else if (actionId === 'nextBookmark' || actionId === 'previousBookmark') {
+      if (ran) {
+        const lines = bookmarkLines(view.state);
+        const line = cursorLine(view.state);
+        this.announce(
+          `Line ${line}, bookmark ${lines.indexOf(line) + 1} of ${lines.length}`
+        );
+      } else {
+        this.announce('No bookmarks in this file');
+      }
+    } else if (actionId === 'convertTabsToSpaces' && !ran) {
+      this.announce('No tabs to convert');
+    }
+
+    return ran;
+  }
+
+  /**
+   * Whether the selection covers any text — the Edit menu uses this to keep
+   * Use Selection for Find honest rather than silently doing nothing.
+   * @returns {boolean}
+   */
+  hasSelection() {
+    if (!this._view) return false;
+    return !this._view.state.selection.main.empty;
   }
 
   /**

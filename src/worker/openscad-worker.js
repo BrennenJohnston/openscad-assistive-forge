@@ -1065,7 +1065,14 @@ async function renderWithCallMain(
     performanceFlags.push('--enable=lazy-union');
   }
   const exportFlags = [];
-  if (format === 'stl' && supportsBinarySTL) {
+  // Upstream's File > Export offers STL as ascii or binary. Binary is the
+  // default here because it is ~18x faster; asking for ascii simply leaves
+  // the flag off, which is OpenSCAD's own default for a .stl target.
+  if (
+    format === 'stl' &&
+    supportsBinarySTL &&
+    renderOptions?.stlBinary !== false
+  ) {
     exportFlags.push('--export-format=binstl');
   }
   try {

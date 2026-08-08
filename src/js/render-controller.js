@@ -993,6 +993,9 @@ export class RenderController {
               localStorage.getItem(STORAGE_KEY_LAZY_UNION) === 'true',
             useManifold,
             useSourceOverrides,
+            // File > Export > STL (ascii) is the only caller that asks for
+            // anything but binary; everything else keeps the fast default.
+            ...(options.stlBinary === false ? { stlBinary: false } : {}),
           };
 
           // Clear any stale cancel watchdog before posting the new render.
