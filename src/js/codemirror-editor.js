@@ -58,6 +58,7 @@ import {
 } from '@codemirror/commands';
 import { autocompletion } from '@codemirror/autocomplete';
 import {
+  search,
   highlightSelectionMatches,
   searchKeymap,
   openSearchPanel,
@@ -570,7 +571,13 @@ const convertTabsToSpaces = (view) => {
   return true;
 };
 
-/** Seed the search query from the selection, then jump to the next match. */
+/**
+ * Seed the search query from the selection and move to the next match, which
+ * is what upstream's Use Selection for Find does. This only works because the
+ * search() extension is installed below: without it CodeMirror adds its
+ * search state field lazily when the panel first opens, so setSearchQuery
+ * would be silently dropped and findNext would just open an empty panel.
+ */
 const useSelectionForFind = (view) => {
   const range = view.state.selection.main;
   if (range.empty) return false;
@@ -579,8 +586,7 @@ const useSelectionForFind = (view) => {
       new SearchQuery({ search: view.state.sliceDoc(range.from, range.to) })
     ),
   });
-  findNext(view);
-  return true;
+  return findNext(view);
 };
 
 // ─── CodeMirrorEditor class ─────────────────────────────────────────────────
@@ -693,6 +699,10 @@ export class CodeMirrorEditor {
         drawSelection(),
         highlightActiveLine(),
         highlightSelectionMatches(),
+        // Installed explicitly so the search state exists from the start.
+        // CodeMirror otherwise adds it only when the panel first opens, and
+        // Use Selection for Find sets its query before that ever happens.
+        search(),
 
         openscadStreamLanguage,
         this._highlightCompartment.of(
