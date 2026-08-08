@@ -237,13 +237,15 @@ export function initCameraPanelController(options = {}) {
       }
     });
 
-    // Desktop reset view button
+    // Desktop reset view button. Restores the default pose rather than fitting
+    // the model, so the announcement it already made is now true and the
+    // control means the same thing as View ▸ Reset View everywhere (G4).
     document
       .getElementById('cameraResetView')
       ?.addEventListener('click', () => {
         const pm = getPM();
-        if (pm?.fitCameraToModel && pm?.mesh) {
-          pm.fitCameraToModel();
+        if (pm?.resetCamera) {
+          pm.resetCamera();
           announceAction('View reset to default');
         } else {
           announceAction('Load a model first');
@@ -459,13 +461,13 @@ export function initCameraPanelController(options = {}) {
         }
       });
 
-    // Mobile reset view button
+    // Mobile reset view button — same command as its desktop twin
     document
       .getElementById('mobileCameraResetView')
       ?.addEventListener('click', () => {
         const pm = getPM();
-        if (pm?.fitCameraToModel && pm?.mesh) {
-          pm.fitCameraToModel();
+        if (pm?.resetCamera) {
+          pm.resetCamera();
           announceAction('View reset to default');
         } else {
           announceAction('Load a model first');

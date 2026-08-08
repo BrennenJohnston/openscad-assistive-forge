@@ -895,6 +895,14 @@ body[data-ui-mode='classic'][data-classic-camera-bar-hidden='true']
   display: none;
 }
 
+/* Hide Editor toolbar (View menu), the other half of upstream's per-toolbar
+   pair. Two attributes on body outrank the single-attribute rule that shows
+   the bar, so this holds wherever that rule is restated. */
+body[data-ui-mode='classic'][data-classic-editor-toolbar-hidden='true']
+  .classic-editor-toolbar {
+  display: none;
+}
+
 /* No expanded hit zones on these buttons: they already meet the touch-target
    token through .classic-tb-btn, and the bar is now a scroll container, which
    would clip any overflow expansion anyway. */

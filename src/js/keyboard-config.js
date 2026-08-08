@@ -273,6 +273,16 @@ export const DEFAULT_SHORTCUTS = {
     ctrl: true,
     description: 'Toggle crosshairs overlay',
   },
+  zoomIn: {
+    key: ']',
+    ctrl: true,
+    description: 'Zoom in',
+  },
+  zoomOut: {
+    key: '[',
+    ctrl: true,
+    description: 'Zoom out',
+  },
   // Panel controls
   toggleConsole: {
     key: '1',
@@ -337,6 +347,12 @@ export const LEGACY_FORGE_SHORTCUTS = {
   toggleEdges: { key: 'g', ctrl: true, alt: true },
   nextPanel: { key: ']', ctrl: true },
   prevPanel: { key: '[', ctrl: true },
+  // This preset already spends Ctrl+] / Ctrl+[ on panel navigation, so zoom
+  // takes the chords the panels vacate. Without this the two pairs would
+  // collide and _handleKeydown, which stops at its first match, would leave
+  // Next/Previous Panel silently dead for anyone on the legacy preset.
+  zoomIn: { key: ']', ctrl: true, alt: true },
+  zoomOut: { key: '[', ctrl: true, alt: true },
 };
 
 /**
@@ -405,7 +421,14 @@ export const SHORTCUT_CATEGORIES = {
   },
   display: {
     label: 'Display',
-    actions: ['viewAll', 'toggleEdges', 'toggleAxes', 'toggleCrosshairs'],
+    actions: [
+      'viewAll',
+      'zoomIn',
+      'zoomOut',
+      'toggleEdges',
+      'toggleAxes',
+      'toggleCrosshairs',
+    ],
   },
   panels: {
     label: 'Panels',

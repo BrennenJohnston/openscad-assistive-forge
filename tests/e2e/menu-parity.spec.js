@@ -615,6 +615,153 @@ const EXPORT_SUBMENU_ORDER = [
   'Export as Image…',
 ]
 
+// Appendix U2's View menu. Preview (F9) and Thrown Together (F12) are omitted
+// (D-24 — this renderer has no display-mode concept). The projection radios
+// render as one role="group" li, which readMenu reports as '(group)'. The
+// per-toolbar Hide items are Classic-only markup and are asserted there.
+const VIEW_MENU_ORDER = [
+  'Show Edges',
+  'Show Axes',
+  'Show Scale Markers',
+  'Show Crosshairs',
+  '---',
+  'Top',
+  'Bottom',
+  'Left',
+  'Right',
+  'Front',
+  'Back',
+  'Diagonal',
+  'Center',
+  'View All',
+  'Reset View',
+  '---',
+  'Zoom In',
+  'Zoom Out',
+  '---',
+  '(group)',
+  '---',
+  'Preview Quality',
+  '---',
+  '(group)',
+]
+
+/** Produce a full render, which is what enables Center and View All. */
+async function renderModel(page) {
+  const btn = page.locator('#primaryActionBtn')
+  await expect(btn).toContainText('Generate', { timeout: 60_000 })
+  await btn.click()
+  await expect(btn).toContainText('Download', { timeout: 180_000 })
+}
+
+/** Camera position + orbit target; null target means this browser has no WebGL. */
+async function cameraPose(page) {
+  return page.evaluate(() => window.__forgeDebug?.cameraPose() ?? null)
+}
+
+test.describe('View menu parity (G4)', () => {
+  test('order follows U2 and every registered shortcut is displayed', async ({
+    page,
+  }) => {
+    await loadFixture(page)
+
+    await page.locator('#viewMenuBtn').click()
+    const items = await readMenu(page, 'view')
+    expect(items.map((i) => i.label)).toEqual(VIEW_MENU_ORDER)
+
+    // The renderer has no Preview/Thrown Together display modes (D-24), and
+    // the old Forge-only label for the mm ticks is gone.
+    expect(items.some((i) => /Thrown Together/i.test(i.label))).toBe(false)
+    expect(items.some((i) => /Axis Markings/i.test(i.label))).toBe(false)
+
+    // Zoom and Crosshairs had registered actions that no menu ever showed.
+    const shown = await page.evaluate(() => {
+      const out = {}
+      for (const li of document.getElementById('viewMenuItems').children) {
+        const label = li.querySelector(':scope > button .menu-item-label')
+        if (!label) continue
+        out[label.textContent] =
+          li.querySelector(':scope > button .menu-item-shortcut')
+            ?.textContent ?? null
+      }
+      return out
+    })
+    expect(shown['Zoom In']).toBe('Ctrl+]')
+    expect(shown['Zoom Out']).toBe('Ctrl+[')
+    expect(shown['Show Crosshairs']).toBe('Ctrl+3')
+    expect(shown['Center']).toBe('Ctrl+Shift+0')
+
+    // Reset View restores the default pose, so it never needs a render.
+    expect(items.find((i) => i.label === 'Reset View').disabled).toBe(false)
+  })
+
+  test('Center, View All and Reset View each move the camera differently', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000)
+    await loadFixture(page)
+    await renderModel(page)
+
+    // Skip on the missing capability, never on the browser name: CI Firefox
+    // has no WebGL and builds no canvas at all, so there is no camera to move.
+    // Anything else missing is a failure, not a reason to pass quietly.
+    test.skip(
+      (await page.locator('.preview-panel canvas').count()) === 0,
+      'this browser built no 3D canvas'
+    )
+
+    const start = await cameraPose(page)
+    expect(start, 'the cameraPose debug reader must exist').not.toBeNull()
+    expect(start.target, 'a canvas exists, so controls must too').not.toBeNull()
+
+    const distance = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2])
+    const radius = (pose) => distance(pose.position, pose.target)
+
+    // The render leaves the camera fitted and looking at the model's centre.
+    const modelCentre = start.target
+    const fittedRadiusAtStart = radius(start)
+
+    // Push the view off the model and closer in, so each command below has
+    // something of its own to undo.
+    await page.locator('.preview-panel canvas').first().focus()
+    for (let i = 0; i < 3; i++) await page.keyboard.press('Shift+ArrowLeft')
+    const panned = await cameraPose(page)
+    expect(distance(panned.target, modelCentre)).toBeGreaterThan(1)
+
+    // Ctrl+] is new in G4. Three presses must move the camera three steps
+    // closer — not six, which is what a second live path would produce.
+    const ZOOM_STEP = 15
+    for (let i = 0; i < 3; i++) await page.keyboard.press('Control+]')
+    const zoomed = await cameraPose(page)
+    expect(radius(panned) - radius(zoomed)).toBeGreaterThan(3 * ZOOM_STEP - 5)
+    expect(radius(panned) - radius(zoomed)).toBeLessThan(3 * ZOOM_STEP + 5)
+
+    async function runViewItem(label) {
+      await page.locator('#viewMenuBtn').click()
+      await menuItem(page, 'view', label).click()
+      await page.waitForTimeout(150)
+      return cameraPose(page)
+    }
+
+    // Center used to throw: resetCamera() was called at three sites and never
+    // existed. It brings the view back onto the model and changes nothing else.
+    const centered = await runViewItem('Center')
+    expect(distance(centered.target, modelCentre)).toBeLessThan(0.5)
+    expect(radius(centered)).toBeCloseTo(radius(zoomed), 3)
+
+    // View All undoes the zoom by refitting; Reset View ignores the model and
+    // returns to the startup pose. These were the same command before G4.
+    const fitted = await runViewItem('View All')
+    expect(radius(fitted)).toBeCloseTo(fittedRadiusAtStart, 3)
+    expect(radius(fitted) - radius(centered)).toBeGreaterThan(3 * ZOOM_STEP - 5)
+
+    const reset = await runViewItem('Reset View')
+    expect(reset.target).toEqual([0, 0, 0])
+    expect(reset.position.map(Math.round)).toEqual([150, -150, 100])
+    expect(distance(reset.position, fitted.position)).toBeGreaterThan(1)
+  })
+})
+
 test.describe('Design menu and Export submenu parity (G3)', () => {
   test('Design order follows U2 and unavailable items say why', async ({
     page,

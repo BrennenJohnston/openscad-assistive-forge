@@ -2515,3 +2515,88 @@ test.describe('Classic dock relocation (B6-B8)', () => {
     ]);
   });
 });
+
+test.describe('View menu per-toolbar hide toggles (G4)', () => {
+  /** Enter Classic in Standard density at a desktop width. */
+  async function enterClassicDesktop(page) {
+    await page.setViewportSize({ width: 1400, height: 900 });
+    await loadSampleProject(page, { query: '?flag_classic_mode=true' });
+    await switchToStandardMode(page);
+    await pickInterfaceMode(page, 'Classic (Desktop Layout)');
+    await expect(page.locator('#classicBottomStrip')).toBeVisible();
+  }
+
+  // Upstream splits "Hide Toolbar" into one item per toolbar (U2). The icon
+  // toolbar is this app's own third bar and keeps an item so nothing on
+  // screen becomes unhideable.
+  const BARS = [
+    { label: 'Hide Editor toolbar', selector: '#classicEditorToolbar' },
+    { label: 'Hide 3D View toolbar', selector: '#classicCameraBar' },
+    { label: 'Hide Classic Toolbar', selector: '#classicToolbar' },
+  ];
+
+  test('classic-hide-toolbars: each item hides its own bar and only that bar', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await enterClassicDesktop(page);
+
+    for (const bar of BARS) {
+      await expect(page.locator(bar.selector)).toBeVisible();
+    }
+
+    for (const bar of BARS) {
+      await page.locator('#viewMenuBtn').click();
+      await page
+        .locator('#viewMenuItems button')
+        .filter({ has: page.getByText(bar.label, { exact: true }) })
+        .first()
+        .click();
+
+      await expect(page.locator(bar.selector)).toBeHidden();
+      // The other two must be untouched: one toggle used to hide one bar and
+      // upstream's pair had no implementation at all.
+      for (const other of BARS.filter((b) => b !== bar)) {
+        await expect(page.locator(other.selector)).toBeVisible();
+      }
+
+      // Toggling back restores it, and the menu reports the state it is in.
+      await page.locator('#viewMenuBtn').click();
+      const item = page
+        .locator('#viewMenuItems button')
+        .filter({ has: page.getByText(bar.label, { exact: true }) })
+        .first();
+      await expect(item).toHaveAttribute('aria-checked', 'true');
+      await item.click();
+      await expect(page.locator(bar.selector)).toBeVisible();
+    }
+  });
+
+  test('classic-hide-toolbars-persist: the choice survives a reload', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await enterClassicDesktop(page);
+
+    await page.locator('#viewMenuBtn').click();
+    await page
+      .locator('#viewMenuItems button')
+      .filter({ has: page.getByText('Hide 3D View toolbar', { exact: true }) })
+      .first()
+      .click();
+    await expect(page.locator('#classicCameraBar')).toBeHidden();
+
+    await page.reload();
+    await page.waitForSelector('body[data-wasm-ready="true"]', {
+      state: 'attached',
+      timeout: WASM_READY_TIMEOUT,
+    });
+
+    // A reload with no saved project lands on Welcome, so assert the restored
+    // preference on <body> rather than the (hidden) bar itself.
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-classic-camera-bar-hidden',
+      'true'
+    );
+  });
+});

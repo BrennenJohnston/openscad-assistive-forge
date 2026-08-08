@@ -1,5 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { MeshPhongMaterial, DoubleSide, BufferGeometry, Float32BufferAttribute } from 'three'
+import {
+  MeshPhongMaterial,
+  DoubleSide,
+  BufferGeometry,
+  Float32BufferAttribute,
+  PerspectiveCamera,
+  BoxGeometry,
+  Mesh,
+  Vector3,
+} from 'three'
 import { PreviewManager, isThreeJsLoaded, DESKTOP_SHININESS, CORNFIELD_BACK_COLOR } from '../../src/js/preview.js'
 
 describe('PreviewManager', () => {
@@ -699,10 +708,107 @@ describe('PreviewManager', () => {
       const manager = new PreviewManager(container)
       manager.mesh = null
       manager.camera = { position: { set: vi.fn() } }
-      
+
       // Should not throw
       expect(() => manager.fitCameraToModel()).not.toThrow()
       expect(manager.camera.position.set).not.toHaveBeenCalled()
+    })
+  })
+
+  // Center, View All and Reset View are three different commands upstream. They
+  // were two-thirds duplicates here: Center called a method that did not exist
+  // and the other two both fitted the model (G4). These assert what each one
+  // DOES to the camera, not merely that it ran.
+  describe('Camera commands: Center vs View All vs Reset View', () => {
+    // A cube 10mm on a side, sitting 100mm along +X so "centered" is visible.
+    const MODEL_CENTER = new Vector3(100, 0, 0)
+
+    function makeManager() {
+      const manager = new PreviewManager(container)
+      manager.camera = new PerspectiveCamera(45, 4 / 3, 0.1, 10000)
+      manager.camera.position.set(...PreviewManager.DEFAULT_CAMERA_POSITION)
+      manager.projectionMode = 'perspective'
+      manager.controls = { target: new Vector3(0, 0, 0), update: vi.fn() }
+      manager.mesh = new Mesh(new BoxGeometry(10, 10, 10), new MeshPhongMaterial())
+      manager.mesh.position.copy(MODEL_CENTER)
+      manager.mesh.updateMatrixWorld(true)
+      return manager
+    }
+
+    it('resetCamera restores the default pose and needs no model', () => {
+      const manager = new PreviewManager(container)
+      manager.camera = new PerspectiveCamera(45, 4 / 3, 0.1, 10000)
+      manager.camera.position.set(1, 2, 3)
+      manager.controls = { target: new Vector3(9, 9, 9), update: vi.fn() }
+      manager.mesh = null
+
+      manager.resetCamera()
+
+      const [x, y, z] = PreviewManager.DEFAULT_CAMERA_POSITION
+      expect(manager.camera.position.toArray()).toEqual([x, y, z])
+      expect(manager.controls.target.toArray()).toEqual([0, 0, 0])
+      expect(manager.camera.up.toArray()).toEqual([0, 0, 1])
+    })
+
+    it('centerCamera moves the target onto the model, keeping angle and distance', () => {
+      const manager = makeManager()
+      const before = manager.camera.position.clone()
+      const distanceBefore = before.distanceTo(manager.controls.target)
+      const directionBefore = before.clone().sub(manager.controls.target).normalize()
+
+      expect(manager.centerCamera()).toBe(true)
+
+      expect(manager.controls.target.distanceTo(MODEL_CENTER)).toBeLessThan(1e-6)
+      // Same distance and same viewing direction: only the target moved.
+      const after = manager.camera.position
+      expect(after.distanceTo(manager.controls.target)).toBeCloseTo(distanceBefore, 6)
+      const directionAfter = after.clone().sub(manager.controls.target).normalize()
+      expect(directionAfter.angleTo(directionBefore)).toBeLessThan(1e-6)
+      // The camera itself moved, by exactly the target's delta.
+      expect(after.distanceTo(before)).toBeCloseTo(MODEL_CENTER.length(), 6)
+    })
+
+    it('viewAllCamera fits the model WITHOUT changing the viewing angle', () => {
+      const manager = makeManager()
+      // Look from a non-default angle so "kept the angle" means something.
+      manager.camera.position.set(0, 0, 400)
+      manager.controls.target.set(0, 0, 0)
+      const directionBefore = manager.camera.position
+        .clone()
+        .sub(manager.controls.target)
+        .normalize()
+
+      expect(manager.viewAllCamera()).toBe(true)
+
+      expect(manager.controls.target.distanceTo(MODEL_CENTER)).toBeLessThan(1e-6)
+      const directionAfter = manager.camera.position
+        .clone()
+        .sub(manager.controls.target)
+        .normalize()
+      expect(directionAfter.angleTo(directionBefore)).toBeLessThan(1e-6)
+      // A 10mm cube at 45deg fits from ~21mm away, nowhere near 400.
+      expect(manager.camera.position.distanceTo(MODEL_CENTER)).toBeLessThan(60)
+    })
+
+    it('viewAllCamera and resetCamera leave the camera in different places', () => {
+      const fitted = makeManager()
+      fitted.viewAllCamera()
+
+      const reset = makeManager()
+      reset.resetCamera()
+
+      expect(fitted.camera.position.distanceTo(reset.camera.position)).toBeGreaterThan(1)
+      expect(fitted.controls.target.distanceTo(reset.controls.target)).toBeGreaterThan(1)
+    })
+
+    it('centerCamera and viewAllCamera report false with no model', () => {
+      const manager = new PreviewManager(container)
+      manager.camera = new PerspectiveCamera(45, 4 / 3, 0.1, 10000)
+      manager.controls = { target: new Vector3(), update: vi.fn() }
+      manager.mesh = null
+
+      expect(manager.centerCamera()).toBe(false)
+      expect(manager.viewAllCamera()).toBe(false)
     })
   })
 

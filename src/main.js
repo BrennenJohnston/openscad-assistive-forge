@@ -593,6 +593,75 @@ function toggleErrorLog() {
   }
 }
 
+/**
+ * The toolbars Classic can hide, each with the body attribute `classic.css`
+ * keys off and the preference key it persists under.
+ *
+ * Upstream's View menu hides the editor toolbar and the 3D view toolbar
+ * separately (U2), so "Hide Toolbar" splits in two. The icon toolbar is this
+ * app's own third bar; it keeps its item and its stored preference so nothing
+ * on screen becomes unhideable, renamed so a screen reader can tell the three
+ * apart. One table, so the menu and the startup restore cannot drift.
+ */
+const CLASSIC_HIDEABLE_TOOLBARS = {
+  editor: {
+    label: 'Hide Editor toolbar',
+    name: 'Editor toolbar',
+    datasetKey: 'classicEditorToolbarHidden',
+    storageKey: 'openscad-forge-classic-editor-toolbar-hidden',
+  },
+  view: {
+    // E7 already shipped the CSS rule for this attribute; nothing set it until
+    // the menu item existed, so the 3D view toolbar could not be hidden.
+    label: 'Hide 3D View toolbar',
+    name: '3D view toolbar',
+    datasetKey: 'classicCameraBarHidden',
+    storageKey: 'openscad-forge-classic-camera-bar-hidden',
+  },
+  icon: {
+    label: 'Hide Classic Toolbar',
+    name: 'Classic toolbar',
+    datasetKey: 'classicToolbarHidden',
+    storageKey: 'openscad-forge-classic-toolbar-hidden',
+  },
+};
+
+/** @param {keyof CLASSIC_HIDEABLE_TOOLBARS} bar */
+function isClassicToolbarHidden(bar) {
+  return (
+    document.body.dataset[CLASSIC_HIDEABLE_TOOLBARS[bar].datasetKey] === 'true'
+  );
+}
+
+/**
+ * Hide or show one Classic toolbar and remember the choice.
+ * @param {keyof CLASSIC_HIDEABLE_TOOLBARS} bar
+ */
+function toggleClassicToolbar(bar) {
+  const def = CLASSIC_HIDEABLE_TOOLBARS[bar];
+  const hidden = !isClassicToolbarHidden(bar);
+  document.body.dataset[def.datasetKey] = String(hidden);
+  try {
+    localStorage.setItem(def.storageKey, String(hidden));
+  } catch {
+    // Preference persistence is best-effort.
+  }
+  _announce(`${def.name} ${hidden ? 'hidden' : 'shown'}`);
+}
+
+/** Restore the View ▸ Hide … preferences on startup. */
+function restoreClassicToolbarPrefs() {
+  for (const def of Object.values(CLASSIC_HIDEABLE_TOOLBARS)) {
+    try {
+      if (localStorage.getItem(def.storageKey) === 'true') {
+        document.body.dataset[def.datasetKey] = 'true';
+      }
+    } catch {
+      // Preference read is best-effort.
+    }
+  }
+}
+
 // Track which saved project is currently loaded (for auto-saving companion files)
 let currentSavedProjectId = null;
 
@@ -3724,14 +3793,17 @@ async function initApp() {
         handler: () => displayOptionsController.toggle('axes'),
       },
       {
+        // Upstream label (U2). This app's mm tick overlay IS the scale-marker
+        // overlay; E3 already named the toolbar button the same way.
         type: 'toggle',
-        label: 'Show Axis Markings (mm)',
+        label: 'Show Scale Markers',
         checked: displayOptionsController.get('axisMarks'),
         handler: () => displayOptionsController.toggle('axisMarks'),
       },
       {
         type: 'toggle',
         label: 'Show Crosshairs',
+        shortcutAction: 'toggleCrosshairs',
         checked: displayOptionsController.get('crosshairs'),
         handler: () => displayOptionsController.toggle('crosshairs'),
       },
@@ -3779,6 +3851,9 @@ async function initApp() {
         shortcutAction: 'viewDiagonal',
         handler: cameraViewHandler('diagonal'),
       },
+      // Center, View All and Reset View are three different commands upstream
+      // and were two-thirds duplicates here: Center called a method that did
+      // not exist, and View All and Reset View both fitted the model (G4).
       {
         type: 'action',
         label: 'Center',
@@ -3787,8 +3862,8 @@ async function initApp() {
         tooltip: hasRender ? undefined : 'Render a model first',
         handler: () => {
           if (previewManager) {
-            previewManager.resetCamera();
-            announceCameraAction('View centered');
+            previewManager.centerCamera();
+            announceCameraAction('View centered on the model');
           }
         },
       },
@@ -3800,20 +3875,20 @@ async function initApp() {
         tooltip: hasRender ? undefined : 'Render a model first',
         handler: () => {
           if (previewManager) {
-            previewManager.fitCameraToModel();
+            previewManager.viewAllCamera();
             announceCameraAction('View fitted to model');
           }
         },
       },
       {
+        // No render needed: this one restores the default pose rather than
+        // framing anything, so it is the way back from a lost camera.
         type: 'action',
         label: 'Reset View',
         shortcutAction: 'resetView',
-        enabled: hasRender,
-        tooltip: hasRender ? undefined : 'Render a model first',
         handler: () => {
           if (previewManager) {
-            previewManager.fitCameraToModel();
+            previewManager.resetCamera();
             announceCameraAction('reset');
           }
         },
@@ -3823,6 +3898,7 @@ async function initApp() {
       {
         type: 'action',
         label: 'Zoom In',
+        shortcutAction: 'zoomIn',
         handler: () => {
           if (previewManager) {
             previewManager.zoomCamera(CAMERA_ZOOM_STEP);
@@ -3833,6 +3909,7 @@ async function initApp() {
       {
         type: 'action',
         label: 'Zoom Out',
+        shortcutAction: 'zoomOut',
         handler: () => {
           if (previewManager) {
             previewManager.zoomCamera(-CAMERA_ZOOM_STEP);
@@ -3866,6 +3943,18 @@ async function initApp() {
           }
         },
       },
+      // -- Per-toolbar hide toggles (U2's tail; Classic-only markup) --
+      ...(document.body.dataset.uiMode === 'classic'
+        ? [
+            { type: 'separator' },
+            ...Object.entries(CLASSIC_HIDEABLE_TOOLBARS).map(([bar, def]) => ({
+              type: 'toggle',
+              label: def.label,
+              checked: isClassicToolbarHidden(bar),
+              handler: () => toggleClassicToolbar(bar),
+            })),
+          ]
+        : []),
       { type: 'separator' },
       // -- Preview Quality (proxies #previewQualitySelect, C4) --
       (() => {
@@ -3898,24 +3987,6 @@ async function initApp() {
                 getUIModeController().getClassicDensity() === 'simplified',
               handler: () => {
                 getUIModeController().toggleClassicDensity();
-              },
-            },
-            {
-              type: 'toggle',
-              label: 'Hide Toolbar',
-              checked: document.body.dataset.classicToolbarHidden === 'true',
-              handler: () => {
-                const hidden =
-                  document.body.dataset.classicToolbarHidden === 'true';
-                document.body.dataset.classicToolbarHidden = String(!hidden);
-                try {
-                  localStorage.setItem(
-                    'openscad-forge-classic-toolbar-hidden',
-                    String(!hidden)
-                  );
-                } catch {
-                  // Preference persistence is best-effort.
-                }
               },
             },
             {
@@ -8924,17 +8995,7 @@ if (rounded) {
     // menus drive — no new state anywhere.
     const classicToolbar = document.getElementById('classicToolbar');
     if (classicToolbar) {
-      // Restore the View > Hide Toolbar preference
-      try {
-        if (
-          localStorage.getItem('openscad-forge-classic-toolbar-hidden') ===
-          'true'
-        ) {
-          document.body.dataset.classicToolbarHidden = 'true';
-        }
-      } catch {
-        // Preference read is best-effort.
-      }
+      restoreClassicToolbarPrefs();
       // E3 moved the snap-view buttons to the 3D view toolbar. Scoping this
       // to #classicToolbar would silently leave every one of them dead, so it
       // queries the document — both bars are Classic-only markup.
@@ -8946,12 +9007,23 @@ if (rounded) {
         });
       });
 
+      // The bar's View All and Reset View carry the same labels as the View
+      // menu's items, so they run the same commands (G4). Reset View used to
+      // be a third behaviour again — a snap to the diagonal view.
       document
         .getElementById('classicViewHomeBtn')
         ?.addEventListener('click', () => {
           if (!previewManager) return;
-          previewManager.fitCameraToModel();
+          previewManager.viewAllCamera();
           announceCameraAction('View fitted to model');
+        });
+
+      document
+        .getElementById('classicResetViewBtn')
+        ?.addEventListener('click', () => {
+          if (!previewManager) return;
+          previewManager.resetCamera();
+          announceCameraAction('reset');
         });
 
       // File / Edit / Render groups proxy the same handlers as the menus
@@ -8988,6 +9060,14 @@ if (rounded) {
         perspBtn?.setAttribute('aria-pressed', String(mode === 'perspective'));
         orthoBtn?.setAttribute('aria-pressed', String(mode === 'orthographic'));
       };
+      // These used to update only inside their own click handlers, so changing
+      // projection from the View menu or the P shortcut left the pair claiming
+      // the wrong state (D-10). R3a's event reaches every mirror.
+      syncProjectionButtons();
+      document.addEventListener(
+        'preview-projection-change',
+        syncProjectionButtons
+      );
       perspBtn?.addEventListener('click', () => {
         if (
           previewManager &&
@@ -14033,6 +14113,7 @@ if (rounded) {
   keyboardConfig.on('resetView', () => {
     if (previewManager) {
       previewManager.resetCamera();
+      announceImmediate('View reset to default');
     }
   });
 
@@ -14067,8 +14148,8 @@ if (rounded) {
 
   keyboardConfig.on('viewCenter', () => {
     if (previewManager) {
-      previewManager.resetCamera();
-      announceImmediate('View centered');
+      previewManager.centerCamera();
+      announceImmediate('View centered on the model');
     }
   });
 
@@ -14226,8 +14307,22 @@ if (rounded) {
   // Display action shortcuts
   keyboardConfig.on('viewAll', () => {
     if (previewManager?.mesh) {
-      previewManager.fitCameraToModel();
+      previewManager.viewAllCamera();
       announceImmediate('View fitted to model');
+    }
+  });
+  // Ctrl+] / Ctrl+[ (U2). The menu, the camera bar and these share one step
+  // (D-19), so every surface moves the camera by the same amount.
+  keyboardConfig.on('zoomIn', () => {
+    if (previewManager) {
+      previewManager.zoomCamera(CAMERA_ZOOM_STEP);
+      announceCameraAction('zoom-in');
+    }
+  });
+  keyboardConfig.on('zoomOut', () => {
+    if (previewManager) {
+      previewManager.zoomCamera(-CAMERA_ZOOM_STEP);
+      announceCameraAction('zoom-out');
     }
   });
   keyboardConfig.on('toggleAxes', () =>
@@ -14598,6 +14693,22 @@ if (typeof window !== 'undefined') {
      */
     previewColorScheme() {
       return previewManager?.currentTheme ?? null;
+    },
+
+    /**
+     * Where the camera is and what it orbits. Read-only, and the only way a
+     * parity test can prove that Center, View All and Reset View each moved
+     * the view differently rather than merely that the item was clickable.
+     * `target` is null when the browser has no WebGL, so there are no controls.
+     * @returns {{position: number[], target: number[]|null}|null}
+     */
+    cameraPose() {
+      const camera = previewManager?.getActiveCamera?.();
+      if (!camera) return null;
+      return {
+        position: camera.position.toArray(),
+        target: previewManager.controls?.target?.toArray() ?? null,
+      };
     },
 
     async compareGeometry() {
