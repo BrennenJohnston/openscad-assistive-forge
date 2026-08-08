@@ -6788,6 +6788,77 @@
         </div>
       </div>
     </div>
+    <!-- About Modal (G6). Help > About used to open the Features Guide on its
+         accessibility tab, which claimed to be something it was not. Version
+         text is filled in at open time from the build's __APP_VERSION__. -->
+    <div
+      class="modal hidden"
+      id="aboutModal"
+      role="dialog"
+      aria-labelledby="aboutModalTitle"
+      aria-modal="true"
+    >
+      <div class="modal-overlay" id="aboutModalOverlay"></div>
+      <div class="modal-content about-modal-content">
+        <div class="modal-header">
+          <h2 id="aboutModalTitle">About OpenSCAD Assistive Forge</h2>
+          <button type="button"
+            class="modal-close"
+            id="aboutModalClose"
+            aria-label="Close about"
+          >
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              aria-hidden="true"
+            >
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body about-modal-body">
+          <p class="about-version" id="aboutVersion">OpenSCAD Assistive Forge</p>
+          <p>
+            A browser-based OpenSCAD environment built for blind and low-vision
+            makers.
+          </p>
+          <p>
+            Free software under the GNU General Public License, version 3 or
+            later.
+          </p>
+          <ul class="about-links">
+            <li>
+              <a
+                href="https://github.com/BrennenJohnston/openscad-assistive-forge/blob/main/LICENSE"
+                target="_blank"
+                rel="noopener noreferrer"
+                >Licence (opens in a new window)</a
+              >
+            </li>
+            <li>
+              <a
+                href="https://github.com/BrennenJohnston/openscad-assistive-forge/blob/main/THIRD_PARTY_NOTICES.md"
+                target="_blank"
+                rel="noopener noreferrer"
+                >Third-party notices (opens in a new window)</a
+              >
+            </li>
+          </ul>
+          <p>
+            Not affiliated with the OpenSCAD project. Runs the OpenSCAD engine
+            compiled to WebAssembly.
+          </p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" id="aboutModalDone" class="btn btn-primary">Close</button>
+        </div>
+      </div>
+    </div>
     <!-- Keyboard Shortcuts Modal -->
     <div
       class="modal hidden"

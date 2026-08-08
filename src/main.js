@@ -649,6 +649,32 @@ function toggleClassicToolbar(bar) {
   _announce(`${def.name} ${hidden ? 'hidden' : 'shown'}`);
 }
 
+// Help ▸ Offline … (G6). Both are disabled with a reason rather than hidden:
+// D-39 defers all offline-documentation bundling out of this plan, so nothing
+// third-party is fetched, pinned or vendored here.
+const OFFLINE_DOCUMENTATION_REASON =
+  'Offline documentation is not bundled yet. Use Documentation, which opens the OpenSCAD manual in a new window while you are online.';
+const OFFLINE_CHEAT_SHEET_REASON =
+  'The offline cheat sheet is not bundled yet. Use Cheat Sheet, which opens it in a new window while you are online.';
+
+/**
+ * Help ▸ About. Stamps the build's version into the dialog before opening it,
+ * so the number can never drift from what was actually shipped.
+ */
+function openAboutModal() {
+  const modal = document.getElementById('aboutModal');
+  if (!modal) return;
+
+  const versionLine = document.getElementById('aboutVersion');
+  if (versionLine) {
+    versionLine.textContent = `OpenSCAD Assistive Forge, version ${__APP_VERSION__}`;
+  }
+
+  openModal(modal, {
+    focusTarget: document.getElementById('aboutModalDone'),
+  });
+}
+
 /** Window ▸ Jump To…, the web reading of upstream's jump-to-dock popup (G5). */
 const JUMP_TO_LABEL = 'Jump To…';
 const JUMP_TO_EMPTY_REASON =
@@ -4297,7 +4323,7 @@ async function initApp() {
       {
         type: 'action',
         label: 'About',
-        handler: () => _openFeaturesTab('tab-accessibility'),
+        handler: () => openAboutModal(),
       },
       {
         type: 'action',
@@ -4317,6 +4343,15 @@ async function initApp() {
             'noopener,noreferrer'
           ),
       },
+      // Both offline items keep U2's position and say why they cannot work
+      // rather than being hidden. Bundling either one is deferred out of this
+      // plan entirely (D-39) — nothing third-party is fetched or vendored here.
+      {
+        type: 'action',
+        label: 'Offline Documentation',
+        disabled: true,
+        tooltip: OFFLINE_DOCUMENTATION_REASON,
+      },
       {
         type: 'action',
         label: 'Cheat Sheet',
@@ -4330,14 +4365,24 @@ async function initApp() {
       },
       {
         type: 'action',
-        label: 'Library Info',
+        label: 'Offline Cheat Sheet',
+        disabled: true,
+        tooltip: OFFLINE_CHEAT_SHEET_REASON,
+      },
+      {
+        // U2's sentence case. It opens the guide's Libraries page; the live
+        // list of what is mounted is File > Show Library Folder.
+        type: 'action',
+        label: 'Library info',
         handler: () => _openFeaturesTab('tab-libraries'),
       },
       { type: 'separator' },
       {
+        // Was the same target as Library info — the duplicate R11 exists to
+        // remove. It opens the guide at its Workflow page instead.
         type: 'action',
         label: 'Features Guide',
-        handler: () => _openFeaturesTab('tab-libraries'),
+        handler: () => _openFeaturesTab('tab-workflow'),
       },
       {
         type: 'action',

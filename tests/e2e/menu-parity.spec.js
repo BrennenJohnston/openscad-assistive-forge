@@ -848,6 +848,79 @@ test.describe('Window menu parity (G5)', () => {
   })
 })
 
+// Appendix U2's Help menu, then the Forge extras this app keeps.
+const HELP_MENU_ORDER = [
+  'About',
+  'OpenSCAD Homepage',
+  'Documentation',
+  'Offline Documentation',
+  'Cheat Sheet',
+  'Offline Cheat Sheet',
+  'Library info',
+  '---',
+  'Features Guide',
+  'Keyboard Shortcuts…',
+  'Report Issue',
+]
+
+test.describe('Help menu parity (G6)', () => {
+  test('order follows U2, no two items share a target, and About is honest', async ({
+    page,
+  }) => {
+    await loadFixture(page)
+
+    await page.locator('#helpMenuBtn').click()
+    const items = await readMenu(page, 'help')
+    expect(items.map((i) => i.label)).toEqual(HELP_MENU_ORDER)
+
+    // Nothing offline is bundled this round (D-39), so both say why and
+    // point at the online item beside them.
+    for (const label of ['Offline Documentation', 'Offline Cheat Sheet']) {
+      const item = items.find((i) => i.label === label)
+      expect(item.disabled, `${label} should be disabled`).toBe(true)
+      expect(item.title, `${label} should carry a reason`).toBeTruthy()
+      expect(item.title).toContain('not bundled yet')
+    }
+
+    // About opened the Features Guide's ACCESSIBILITY tab — a claim about
+    // itself that was not true. It is now a real About dialog.
+    await menuItem(page, 'help', 'About').click()
+    const about = page.locator('#aboutModal')
+    await expect(about).toBeVisible()
+    await expect(page.locator('#featuresGuideModal')).toBeHidden()
+    await expect(page.locator('#aboutVersion')).toHaveText(
+      /OpenSCAD Assistive Forge, version \d+\.\d+\.\d+/
+    )
+    await expect(about).toContainText('General Public License')
+    await expect(
+      about.getByRole('link', { name: /Third-party notices/ })
+    ).toHaveAttribute('href', /THIRD_PARTY_NOTICES\.md$/)
+    await page.locator('#aboutModalDone').click()
+    await expect(about).toBeHidden()
+
+    // Library info and Features Guide both opened the same tab of the same
+    // modal — the duplicate this plan exists to remove.
+    await page.locator('#helpMenuBtn').click()
+    await menuItem(page, 'help', 'Library info').click()
+    await expect(page.locator('#tab-libraries')).toHaveAttribute(
+      'aria-selected',
+      'true'
+    )
+    await page.locator('#featuresGuideClose').click()
+
+    await page.locator('#helpMenuBtn').click()
+    await menuItem(page, 'help', 'Features Guide').click()
+    await expect(page.locator('#tab-workflow')).toHaveAttribute(
+      'aria-selected',
+      'true'
+    )
+    await expect(page.locator('#tab-libraries')).toHaveAttribute(
+      'aria-selected',
+      'false'
+    )
+  })
+})
+
 test.describe('Design menu and Export submenu parity (G3)', () => {
   test('Design order follows U2 and unavailable items say why', async ({
     page,
