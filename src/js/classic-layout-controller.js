@@ -42,6 +42,7 @@ import {
   ClassicDockModel,
   DOCK_FIELDS,
   DOCK_PANEL_IDS,
+  DOCK_PANELS,
   panelLabel,
 } from './classic-dock-model.js';
 import {
@@ -579,10 +580,27 @@ export class ClassicLayoutController {
     this._panes[key] = !this._panes[key];
     this._applyPaneAttributes();
     this._savePaneState();
+    if (this._panes[key]) this._revealPane(pane);
     announceImmediate(
       `${panelLabel(pane)} ${this._panes[key] ? 'shown' : 'hidden'}`
     );
     return this._panes[key];
+  }
+
+  /**
+   * Bring a just-shown pane into view. Four open panes do not fit the bottom
+   * strip's width at their minimum size, so the strip scrolls (F7) — without
+   * this, turning on the fourth panel would scroll it in beyond the right edge
+   * and the menu item would look like it had done nothing.
+   * @param {string} pane
+   * @private
+   */
+  _revealPane(pane) {
+    const panel = DOCK_PANELS.find((p) => p.id === pane);
+    const el = panel && document.getElementById(panel.elementId);
+    // 'nearest' scrolls only the container that actually overflows, so the
+    // page itself never jumps.
+    el?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
   }
 
   /** Show/hide the Animate pane (Window > Animate). */
