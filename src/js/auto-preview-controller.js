@@ -113,6 +113,10 @@ export class AutoPreviewController {
     this.onPreviewReady = options.onPreviewReady || (() => {});
     this.onProgress = options.onProgress || (() => {});
     this.onError = options.onError || (() => {});
+    // A full render is starting. Unlike renderPreview() this path sets no
+    // preview state, so onStateChange never fires for it and anything that
+    // has to stand back — the Animate panel, F5 — has nothing else to hear.
+    this.onFullRenderStart = options.onFullRenderStart || (() => {});
   }
 
   hashParams(params) {
@@ -800,6 +804,68 @@ export class AutoPreviewController {
   }
 
   /**
+   * Render one animation frame at a given $t (F5).
+   *
+   * Deliberately NOT renderPreview(): that path is built for a user changing a
+   * parameter, so it consults the cache, drops itself as stale when the
+   * parameter hash has moved on, and schedules pending work in its finally
+   * block. An animation asks for a specific frame, now, and every frame has a
+   * different $t, so caching would never hit and the staleness checks would
+   * discard frames the panel had explicitly asked for.
+   *
+   * $t reaches OpenSCAD as a -D flag through the ordinary parameter path
+   * (scad-param-formatter.js), which is why the plan could call this feasible
+   * before any of it was written.
+   *
+   * The camera is preserved on every frame: re-fitting it between frames would
+   * make the model appear to swim, and it would fight a low-vision user who
+   * has zoomed in to watch one detail (the reasoning behind D-11).
+   *
+   * @param {number} tValue - $t for this frame, 0..1
+   * @param {Object} [parameters] - the model's current parameters
+   * @returns {Promise<boolean>} whether the frame rendered and loaded
+   */
+  async renderAnimationFrame(tValue, parameters = {}) {
+    // One frame at a time. The WASM render is blocking in the worker, so a
+    // second concurrent request would queue behind the first and arrive late,
+    // out of order, over a newer frame.
+    if (this._animationFrameInFlight) return false;
+    if (!this.renderController || !this.currentScadContent) return false;
+
+    this._animationFrameInFlight = true;
+    try {
+      const { quality } = this.resolvePreviewQualityInfo(parameters);
+      const frameParameters = { ...parameters, $t: tValue };
+
+      const result = await this.renderController.renderPreview(
+        this.currentScadContent,
+        frameParameters,
+        {
+          ...(quality ? { quality } : {}),
+          outputFormat: 'stl',
+          files: this.projectFiles,
+          mainFile: this.mainFilePath,
+          libraries: this.enabledLibraries,
+          paramTypes: this.paramTypes,
+        }
+      );
+
+      if (result?.diagnostics) {
+        console.log(
+          '[Animate Diag] Worker defineArgs:',
+          result.diagnostics.defineArgs
+        );
+      }
+      if (!result?.stl) return false;
+
+      await this.previewManager?.loadSTL(result.stl, { preserveCamera: true });
+      return true;
+    } finally {
+      this._animationFrameInFlight = false;
+    }
+  }
+
+  /**
    * Render preview with reduced quality
    * @param {Object} parameters - Parameter values
    * @param {string} paramHash - Parameter hash
@@ -1192,6 +1258,7 @@ export class AutoPreviewController {
    * @returns {Promise<Object>} Render result with STL and stats
    */
   async renderFull(parameters, options = {}) {
+    this.onFullRenderStart();
     const paramHash = this.hashParams(parameters);
     const quality = options.quality || null;
     const qualityKey = quality?.name ? `full-${quality.name}` : 'full';

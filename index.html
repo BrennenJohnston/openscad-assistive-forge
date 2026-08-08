@@ -1621,6 +1621,19 @@
                     aria-hidden="true"
                     >0</span
                   >
+                  <!-- Error/warning count for the Structured view (F1).
+                       Decorative, like #console-badge above it: ErrorLogPanel
+                       already announces errors and warnings through the
+                       announcer, so repeating the count to assistive tech
+                       would say the same thing twice. Classic hides this
+                       summary entirely and shows the Error-Log as its own
+                       bottom-strip pane instead. -->
+                  <span
+                    id="error-log-badge"
+                    class="error-log-badge hidden"
+                    aria-hidden="true"
+                    >0</span
+                  >
                 </summary>
                 <div class="console-content">
                   <div class="console-view-tabs" role="tablist" aria-label="Console view">
@@ -1713,6 +1726,344 @@
                   </div>
                 </div>
               </details>
+              <!-- Classic Font List panel (F3), transcribed from upstream
+                   FontList.ui. Declared here as static markup and moved into
+                   #classicFontListSlot on entering Classic, the same way the
+                   console and editor panes travel; hidden everywhere else.
+                   The slot is the labelled region, so this is a plain div. -->
+              <div id="fontListPanel" class="classic-panel-body classic-font-list">
+                <div class="classic-font-list-tablewrap">
+                  <table class="classic-font-list-table">
+                    <caption class="sr-only">
+                      Fonts available to the text() function
+                    </caption>
+                    <thead>
+                      <tr>
+                        <th scope="col"><span class="sr-only">Select</span></th>
+                        <th scope="col">Font name</th>
+                        <th scope="col">Style</th>
+                        <th scope="col">Sample</th>
+                      </tr>
+                    </thead>
+                    <tbody id="fontListRows"></tbody>
+                  </table>
+                  <p id="fontListEmpty" class="classic-font-list-empty" hidden>
+                    No fonts match this filter.
+                  </p>
+                </div>
+
+                <fieldset class="classic-font-list-group">
+                  <legend>Filter</legend>
+                  <div class="classic-font-list-field">
+                    <label for="fontListFilterText">Font name</label>
+                    <input type="text" id="fontListFilterText" autocomplete="off" />
+                    <label for="fontListFilterMode" class="sr-only"
+                      >Font name match type</label
+                    >
+                    <select id="fontListFilterMode">
+                      <option value="fixed" selected>Fixed</option>
+                      <option value="wildcard">Wildcard</option>
+                      <option value="regexp">RegExp</option>
+                    </select>
+                  </div>
+                  <p
+                    id="fontListFilterHint"
+                    class="classic-font-list-hint"
+                    role="status"
+                    hidden
+                  ></p>
+
+                  <!-- Upstream filters by glyph coverage here. That needs the
+                       TTF's character map parsed, which this build does not
+                       do, so the control is shown disabled with its reason in
+                       words rather than dropped or left dead. -->
+                  <div class="classic-font-list-field">
+                    <label for="fontListChars">Chars</label>
+                    <select
+                      id="fontListChars"
+                      disabled
+                      aria-describedby="fontListCharsReason"
+                    >
+                      <option value="all" selected>All</option>
+                      <option value="any">Any</option>
+                    </select>
+                    <span id="fontListCharsReason" class="classic-font-list-reason"
+                      >Filtering by characters is not available yet: it needs
+                      each font file's character list, which this browser
+                      version does not read.</span
+                    >
+                  </div>
+
+                  <div class="classic-font-list-field">
+                    <label for="fontListSample">Sample text</label>
+                    <input
+                      type="text"
+                      id="fontListSample"
+                      value="AaBbCc 123"
+                      autocomplete="off"
+                    />
+                    <label for="fontListSampleSize">Size</label>
+                    <input
+                      type="number"
+                      id="fontListSampleSize"
+                      value="16"
+                      min="6"
+                      max="72"
+                      step="1"
+                    />
+                  </div>
+                </fieldset>
+
+                <fieldset class="classic-font-list-group">
+                  <legend>Selection</legend>
+                  <dl class="classic-font-list-selection">
+                    <dt>Font name</dt>
+                    <dd id="fontListSelName">&mdash;</dd>
+                    <dt>Font path</dt>
+                    <dd id="fontListSelPath">&mdash;</dd>
+                    <dt>Style</dt>
+                    <dd id="fontListSelStyle">&mdash;</dd>
+                  </dl>
+                  <!-- Upstream drags a row into the editor; a drag has no
+                       keyboard equivalent, so this gives the same result. -->
+                  <button type="button" id="fontListCopyBtn" class="btn btn-sm" disabled>
+                    Copy font name
+                  </button>
+                </fieldset>
+              </div>
+              <!-- Classic Viewport-Control panel (F4), transcribed from
+                   upstream ViewportControl.ui. Moved into
+                   #classicViewportControlSlot on entering Classic.
+                   Deliberately carries NO aria-live: the camera emits ~60
+                   change events a second while orbiting, and a live region on
+                   that feed would talk over everything else on the page. -->
+              <div
+                id="viewportControlPanel"
+                class="classic-panel-body classic-viewport-control"
+              >
+                <fieldset class="classic-vp-group">
+                  <legend>Aspect Ratio</legend>
+                  <!-- Upstream sets the render size here; our canvas is sized
+                       by its container, so these report it instead. -->
+                  <div class="classic-vp-field">
+                    <label for="vpWidth">Width</label>
+                    <input type="number" id="vpWidth" readonly />
+                    <span class="classic-vp-unit">px</span>
+                  </div>
+                  <div class="classic-vp-field">
+                    <label for="vpHeight">Height</label>
+                    <input type="number" id="vpHeight" readonly />
+                    <span class="classic-vp-unit">px</span>
+                  </div>
+                  <div class="classic-vp-field">
+                    <label for="vpLock">Lock</label>
+                    <input
+                      type="checkbox"
+                      id="vpLock"
+                      disabled
+                      aria-describedby="vpLockReason"
+                    />
+                    <span id="vpLockReason" class="classic-vp-reason"
+                      >Locking the aspect ratio is not available: the 3D view
+                      is sized by the window, so there is no fixed width and
+                      height to lock together.</span
+                    >
+                  </div>
+                </fieldset>
+
+                <fieldset class="classic-vp-group">
+                  <legend>Details</legend>
+                  <div class="classic-vp-field">
+                    <label for="vpTx">Translation X</label>
+                    <input type="number" id="vpTx" step="1" />
+                  </div>
+                  <div class="classic-vp-field">
+                    <label for="vpTy">Translation Y</label>
+                    <input type="number" id="vpTy" step="1" />
+                  </div>
+                  <div class="classic-vp-field">
+                    <label for="vpTz">Translation Z</label>
+                    <input type="number" id="vpTz" step="1" />
+                  </div>
+                  <div class="classic-vp-field">
+                    <label for="vpRx">Rotation X</label>
+                    <input type="number" id="vpRx" step="1" />
+                    <span class="classic-vp-unit">&deg;</span>
+                  </div>
+                  <div class="classic-vp-field">
+                    <label for="vpRy">Rotation Y</label>
+                    <input type="number" id="vpRy" step="1" />
+                    <span class="classic-vp-unit">&deg;</span>
+                  </div>
+                  <div class="classic-vp-field">
+                    <label for="vpRz">Rotation Z</label>
+                    <input type="number" id="vpRz" step="1" />
+                    <span class="classic-vp-unit">&deg;</span>
+                  </div>
+                  <div class="classic-vp-field">
+                    <label for="vpDistance">Distance</label>
+                    <input type="number" id="vpDistance" step="1" min="0" />
+                  </div>
+                  <div class="classic-vp-field">
+                    <label for="vpFov">FOV</label>
+                    <input
+                      type="number"
+                      id="vpFov"
+                      step="1"
+                      min="1"
+                      max="179"
+                      aria-describedby="vpFovNote"
+                    />
+                    <span class="classic-vp-unit">&deg;</span>
+                    <span id="vpFovNote" class="sr-only"
+                      >Field of view applies to the perspective projection
+                      only, and is unavailable while the view is
+                      orthographic.</span
+                    >
+                  </div>
+                </fieldset>
+              </div>
+              <!-- Classic Animate panel (F5), transcribed from upstream
+                   Animate.ui. Moved into #classicAnimateSlot on entering
+                   Classic. Playback is always started by the user, and it
+                   announces itself once on start and once on stop — never per
+                   frame. -->
+              <div id="animatePanel" class="classic-panel-body classic-animate">
+                <fieldset class="classic-animate-group">
+                  <legend>Parameters</legend>
+                  <div class="classic-animate-field">
+                    <label for="animateTime">Time</label>
+                    <input
+                      type="number"
+                      id="animateTime"
+                      value="0"
+                      min="0"
+                      max="1"
+                      step="0.01"
+                    />
+                  </div>
+                  <div class="classic-animate-field">
+                    <label for="animateFps">FPS</label>
+                    <input
+                      type="number"
+                      id="animateFps"
+                      value="5"
+                      min="0.1"
+                      step="0.1"
+                      aria-describedby="animateFpsNote"
+                    />
+                  </div>
+                  <p id="animateFpsNote" class="classic-animate-note">
+                    FPS is a top speed, not a promise: each frame is a full
+                    render, so a complex model plays more slowly than the
+                    number asks for.
+                  </p>
+                  <div class="classic-animate-field">
+                    <label for="animateSteps">Steps</label>
+                    <input
+                      type="number"
+                      id="animateSteps"
+                      value="30"
+                      min="1"
+                      step="1"
+                    />
+                  </div>
+                  <!-- Upstream writes one image file per frame to a folder.
+                       A browser cannot write to a folder unprompted, and
+                       asking for a download per frame would be worse than
+                       useless, so this is shown disabled with its reason. -->
+                  <div class="classic-animate-field">
+                    <label for="animateDumpPictures">Dump Pictures</label>
+                    <input
+                      type="checkbox"
+                      id="animateDumpPictures"
+                      disabled
+                      aria-describedby="animateDumpReason"
+                    />
+                    <span id="animateDumpReason" class="classic-animate-reason"
+                      >Saving every frame as an image is not available: a web
+                      page cannot write a folder of files. Use Export image to
+                      save the current frame.</span
+                    >
+                  </div>
+                </fieldset>
+
+                <fieldset class="classic-animate-group">
+                  <legend>Playback</legend>
+                  <div
+                    class="classic-animate-playback"
+                    role="group"
+                    aria-label="Animation playback"
+                  >
+                    <button
+                      type="button"
+                      class="btn classic-tb-btn"
+                      id="animateStartBtn"
+                      title="Go to first frame"
+                    >
+                      <span
+                        class="classic-icon"
+                        data-icon="vcr-control-start"
+                        aria-hidden="true"
+                      ></span
+                      ><span class="sr-only">Go to first frame</span>
+                    </button>
+                    <button
+                      type="button"
+                      class="btn classic-tb-btn"
+                      id="animateStepBackBtn"
+                      title="Step back one frame"
+                    >
+                      <span
+                        class="classic-icon"
+                        data-icon="vcr-control-step-back"
+                        aria-hidden="true"
+                      ></span
+                      ><span class="sr-only">Step back one frame</span>
+                    </button>
+                    <button
+                      type="button"
+                      class="btn classic-tb-btn"
+                      id="animatePlayBtn"
+                      aria-pressed="false"
+                      title="Play animation"
+                    >
+                      <span
+                        class="classic-icon"
+                        data-icon="vcr-control-play"
+                        aria-hidden="true"
+                      ></span
+                      ><span class="sr-only">Play animation</span>
+                    </button>
+                    <button
+                      type="button"
+                      class="btn classic-tb-btn"
+                      id="animateStepForwardBtn"
+                      title="Step forward one frame"
+                    >
+                      <span
+                        class="classic-icon"
+                        data-icon="vcr-control-step-forward"
+                        aria-hidden="true"
+                      ></span
+                      ><span class="sr-only">Step forward one frame</span>
+                    </button>
+                    <button
+                      type="button"
+                      class="btn classic-tb-btn"
+                      id="animateEndBtn"
+                      title="Go to last frame"
+                    >
+                      <span
+                        class="classic-icon"
+                        data-icon="vcr-control-end"
+                        aria-hidden="true"
+                      ></span
+                      ><span class="sr-only">Go to last frame</span>
+                    </button>
+                  </div>
+                </fieldset>
+              </div>
               <!-- File Actions panel removed: all features now in File toolbar menu -->
               <!-- Image Measurement Tool -->
               <details
