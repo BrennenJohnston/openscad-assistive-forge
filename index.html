@@ -1621,6 +1621,19 @@
                     aria-hidden="true"
                     >0</span
                   >
+                  <!-- Error/warning count for the Structured view (F1).
+                       Decorative, like #console-badge above it: ErrorLogPanel
+                       already announces errors and warnings through the
+                       announcer, so repeating the count to assistive tech
+                       would say the same thing twice. Classic hides this
+                       summary entirely and shows the Error-Log as its own
+                       bottom-strip pane instead. -->
+                  <span
+                    id="error-log-badge"
+                    class="error-log-badge hidden"
+                    aria-hidden="true"
+                    >0</span
+                  >
                 </summary>
                 <div class="console-content">
                   <div class="console-view-tabs" role="tablist" aria-label="Console view">

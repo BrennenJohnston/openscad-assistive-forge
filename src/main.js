@@ -196,6 +196,7 @@ import {
   getClassicLayoutController,
   collapseCustomizerGroups,
 } from './js/classic-layout-controller.js';
+import { tabIdFor } from './js/classic-dock-model.js';
 import { initClassicStatusBar } from './js/classic-status-bar.js';
 import {
   initClassicEditorToolbar,
@@ -411,6 +412,177 @@ function hasFullQualitySTLFor(parameters) {
     autoPreviewController?.getCurrentFullSTL(parameters) &&
     !autoPreviewController?.needsFullRender(parameters)
   );
+}
+
+/* ── Error Log: reaching it by keyboard and by menu (F1) ──────────────────────
+ *
+ * The Error-Log lives in two different places depending on the host, so every
+ * entry point below resolves WHERE it is from the DOM rather than from a mode
+ * flag that could disagree with it:
+ *
+ *   Forge    inside the console's Structured tabpanel, behind a tab
+ *   Classic  its own pane in the bottom strip (B2), always on screen
+ *
+ * The two hosts therefore mean different things by "show the Error Log". In
+ * Forge it is genuinely hidden and has to be revealed; in Classic it is
+ * already there and what the user wants is to GET to it. Classic must never
+ * click the Structured tab — that tablist is hidden there (D-9), so it would
+ * be an invisible control changing an invisible selection.
+ */
+
+/** The console <details> was closed and we opened it, so toggling off can undo that. */
+let errorLogOpenedConsole = false;
+
+/** Where focus was before Classic sent it into the Error-Log pane. */
+let errorLogReturnFocus = null;
+
+/**
+ * Which host currently holds the Error-Log, resolved from the element itself.
+ * @returns {'classic'|'forge'|null} null when the markup is not present at all
+ */
+function errorLogHost() {
+  const host = document
+    .getElementById('error-log-output')
+    ?.closest('#classicErrorLogSlot, #console-view-structured');
+  if (!host) return null;
+  return host.id === 'classicErrorLogSlot' ? 'classic' : 'forge';
+}
+
+/**
+ * Whether the Error-Log is on screen right now — what the Window menu item's
+ * tick reports, and what decides which way the shortcut toggles.
+ * @returns {boolean}
+ */
+function isErrorLogShowing() {
+  const host = errorLogHost();
+  if (host === 'forge') {
+    return (
+      Boolean(document.getElementById('consolePanel')?.open) &&
+      document
+        .getElementById('console-tab-structured')
+        ?.getAttribute('aria-selected') === 'true'
+    );
+  }
+  if (host === 'classic') {
+    // Simplified drops the whole bottom strip, and folding takes it with it.
+    if (getUIModeController().getClassicDensity() === 'simplified')
+      return false;
+    if (getClassicLayoutController()?.isConsoleCollapsed()) return false;
+    // Merged into a tab group (B7) and not the selected tab: the model sets
+    // `hidden` on the panels that are not showing.
+    return !document.getElementById('classicErrorLogSlot')?.hidden;
+  }
+  return false;
+}
+
+/**
+ * Forge: open the console if it is closed, select the Structured tab through
+ * the console panel's own wiring (console-panel.js), and put focus on the tab
+ * so the move announces itself.
+ * @returns {boolean}
+ */
+function showErrorLogForge() {
+  const panel = document.getElementById('consolePanel');
+  const tab = document.getElementById('console-tab-structured');
+  if (!panel || !tab) return false;
+
+  if (!panel.open) {
+    panel.open = true;
+    errorLogOpenedConsole = true;
+  }
+  tab.click();
+  tab.focus();
+  return true;
+}
+
+/**
+ * Forge: back to the Log view, and back to a closed console if that is how we
+ * found it — toggling off should leave the panel as it was, not half-open.
+ */
+function hideErrorLogForge() {
+  const logTab = document.getElementById('console-tab-log');
+  logTab?.click();
+  if (errorLogOpenedConsole) {
+    const panel = document.getElementById('consolePanel');
+    if (panel) panel.open = false;
+    errorLogOpenedConsole = false;
+  } else {
+    logTab?.focus();
+  }
+}
+
+/**
+ * Classic: the pane is already in the bottom strip, so this is about reaching
+ * it — unfold the strip if it is folded (D-8), select its tab if it has been
+ * merged into a group (B7), then focus the title bar's menu button, which is
+ * the focusable control the title bar carries (the same contract B8 uses after
+ * a move).
+ * @returns {boolean}
+ */
+function showErrorLogClassic() {
+  const slot = document.getElementById('classicErrorLogSlot');
+  if (!slot) return false;
+
+  if (getUIModeController().getClassicDensity() === 'simplified') {
+    // Nothing else speaks here, so this is the one announcement F1 adds.
+    announceImmediate('Error-Log is not available in the Simplified view');
+    return false;
+  }
+
+  const layout = getClassicLayoutController();
+  if (layout?.isConsoleCollapsed()) layout.setConsoleCollapsed(false);
+
+  const priorFocus = document.activeElement;
+
+  // A merged group's tab lives in the shared bar, outside the panel; a solo
+  // panel keeps its own title bar. tabIdFor comes from the dock model so the
+  // id scheme has one definition (plan §4 rule 5).
+  const tab = document.getElementById(tabIdFor('errorLog'));
+  if (tab) {
+    tab.click();
+    tab.focus();
+  } else {
+    const target =
+      slot.querySelector('.classic-panel-menu-btn') ||
+      slot.querySelector('button');
+    if (!target) return false;
+    target.focus();
+  }
+
+  errorLogReturnFocus = priorFocus;
+  return true;
+}
+
+/** Classic: hand focus back to wherever the user was before. */
+function returnFocusFromErrorLog() {
+  const prior = errorLogReturnFocus;
+  errorLogReturnFocus = null;
+  if (prior?.isConnected && typeof prior.focus === 'function') prior.focus();
+}
+
+/**
+ * Ctrl+Alt+2 / Window > Error-Log. Forge opens and closes the Structured view;
+ * Classic, where the pane cannot be closed, sends focus into it and back out
+ * again — the honest per-host reading of "toggle" for a panel that is always
+ * present in one host and hidden behind a tab in the other.
+ */
+function toggleErrorLog() {
+  const host = errorLogHost();
+
+  if (host === 'forge') {
+    if (isErrorLogShowing()) hideErrorLogForge();
+    else showErrorLogForge();
+    return;
+  }
+
+  if (host === 'classic') {
+    const slot = document.getElementById('classicErrorLogSlot');
+    const active = document.activeElement;
+    const alreadyInside =
+      Boolean(slot?.contains(active)) || active?.id === tabIdFor('errorLog');
+    if (alreadyInside) returnFocusFromErrorLog();
+    else showErrorLogClassic();
+  }
 }
 
 // Track which saved project is currently loaded (for auto-saving companion files)
@@ -3350,6 +3522,16 @@ async function initApp() {
         return panelToggle('codeEditor', 'Editor', 'toggleCodeEditor');
       })(),
       panelToggle('consoleOutput', 'Console', 'toggleConsole'),
+      // Error-Log gets a custom handler rather than a panelToggle: it is a
+      // console tab in Forge and an always-present strip pane in Classic, so
+      // PANEL_REGISTRY's show/hide semantics fit neither host (F1).
+      {
+        type: 'toggle',
+        label: 'Error-Log',
+        shortcutAction: 'toggleErrorLog',
+        checked: isErrorLogShowing(),
+        handler: () => toggleErrorLog(),
+      },
       (() => {
         const inClassic = document.body.dataset.uiMode === 'classic';
         const classicLayout = getClassicLayoutController();
@@ -13539,9 +13721,11 @@ if (rounded) {
   keyboardConfig.on('toggleConsole', () =>
     getUIModeController().togglePanelVisibility('consoleOutput')
   );
-  keyboardConfig.on('toggleErrorLog', () =>
-    getUIModeController().togglePanelVisibility('errorLog')
-  );
+  // 'errorLog' is not in PANEL_REGISTRY, so togglePanelVisibility used to
+  // early-return here and Ctrl+Alt+2 did nothing at all (F1). The Error-Log is
+  // a console tab in Forge and a strip pane in Classic; registry semantics fit
+  // neither, so it gets its own per-host handler.
+  keyboardConfig.on('toggleErrorLog', () => toggleErrorLog());
   keyboardConfig.on('toggleCodeEditor', () =>
     getUIModeController().togglePanelVisibility('codeEditor')
   );
