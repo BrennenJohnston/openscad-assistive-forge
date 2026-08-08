@@ -41,8 +41,14 @@ import {
 import {
   ClassicDockModel,
   DOCK_FIELDS,
+  DOCK_PANEL_IDS,
   panelLabel,
 } from './classic-dock-model.js';
+import {
+  initClassicPanelMenus,
+  getClassicPanelMenus,
+  destroyClassicPanelMenus,
+} from './classic-panel-menu.js';
 
 const PANES_STORAGE_KEY = 'openscad-forge-classic-panes';
 
@@ -237,6 +243,9 @@ export class ClassicLayoutController {
     this._dock = new ClassicDockModel({
       isPanelVisible: (panelId) => this._isPanelVisible(panelId),
       isFieldAvailable: (field) => this._isFieldAvailable(field),
+      // Switching tabs moves a different panel's titlebar into the shared bar,
+      // and its menu button has to be re-labelled for the panels it now serves.
+      onGroupChange: () => getClassicPanelMenus()?.refresh(),
     });
   }
 
@@ -262,6 +271,9 @@ export class ClassicLayoutController {
       // occupancy attributes have to be re-stamped, not just the editor's
       // activation state.
       this._applyPaneAttributes();
+      // Simplified leaves only one field standing, so the legal move targets
+      // change with the density and the menus have to be rebuilt.
+      getClassicPanelMenus()?.refresh();
       document.dispatchEvent(
         new CustomEvent(
           this._isEditorAvailable()
@@ -380,6 +392,18 @@ export class ClassicLayoutController {
       getClassicResizerController()?.parkBottomSize();
     }
 
+    // The title-bar menus are the only way to relocate a panel this round
+    // (D-3), so they go on last, once every title bar exists.
+    initClassicPanelMenus({
+      getAllPanels: () => [...DOCK_PANEL_IDS],
+      getFieldOf: (panelId) => this._dock.getFieldOf(panelId),
+      getGroupOf: (panelId) => this._dock.getGroupOf(panelId),
+      canMove: (panelId, field) => this._dock.canMove(panelId, field),
+      getMergeCandidates: (panelId) => this._mergeCandidates(panelId),
+      movePanel: (panelId, field, index, options) =>
+        this.movePanel(panelId, field, index, options),
+    });
+
     this.active = true;
     this.onEnter();
   }
@@ -397,7 +421,10 @@ export class ClassicLayoutController {
 
     // Also before the moves: a merged panel carries role="tabpanel", a hidden
     // flag and a titlebar living in the shared bar. Undoing that first is what
-    // lets a panel leave Classic exactly as it arrived (B7).
+    // lets a panel leave Classic exactly as it arrived (B7). The menu buttons
+    // go with it — the Customizer's title bar is static markup that survives
+    // the exit, so a button left on it would follow the user into Forge.
+    destroyClassicPanelMenus();
     this._dock.dissolveTabGroups();
 
     for (const record of [...this._moved].reverse()) {
@@ -663,11 +690,46 @@ export class ClassicLayoutController {
     this._applyPaneAttributes();
     document.dispatchEvent(new CustomEvent('classic-layout-resize'));
 
-    // B7: a merge selects the panel that just arrived, so that is where the
-    // user is. The solo case lands on the title bar and belongs to B8, which
-    // puts the focusable control there.
-    if (result.merged) this._dock.focusTargetFor(panelId)?.focus?.();
+    // Rebuilding the tab groups discards and recreates the shared bars, so the
+    // menus have to be re-hung before focus is sent to one of their buttons.
+    getClassicPanelMenus()?.refresh();
+
+    // Focus contract (B8): the moved panel's title bar, or its tab when the
+    // target field merged (B7).
+    this._focusAfterMove(panelId);
     return result;
+  }
+
+  /**
+   * Put focus where the panel landed. A title bar is not focusable itself, so
+   * its menu button — the control the user just came from — takes the focus,
+   * which also leaves them able to move the panel straight on again.
+   * @param {string} panelId
+   * @private
+   */
+  _focusAfterMove(panelId) {
+    const target = this._dock.focusTargetFor(panelId);
+    if (!target) return;
+    const focusable =
+      target.getAttribute?.('role') === 'tab'
+        ? target
+        : target.querySelector?.('.classic-panel-menu-btn') || target;
+    focusable.focus?.();
+  }
+
+  /**
+   * The panels this one could merge with: everything else on screen that is
+   * not already sharing its cell. Hidden panels are left out — merging into
+   * something invisible is not a move a user can make sense of.
+   * @param {string} panelId
+   * @returns {string[]}
+   * @private
+   */
+  _mergeCandidates(panelId) {
+    const group = this._dock.getGroupOf(panelId);
+    return DOCK_PANEL_IDS.filter(
+      (id) => id !== panelId && !group.includes(id) && this._isPanelVisible(id)
+    );
   }
 
   /**

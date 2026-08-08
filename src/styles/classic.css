@@ -636,6 +636,52 @@ body[data-ui-mode='classic'] .classic-dock-tab:hover {
   background-color: var(--color-hover-bg);
 }
 
+/* ── "Move panel" title-bar menus (B8) ───────────────────────────────────────
+   The popup is a child of <body> with position: fixed, because every dock
+   title bar sits inside a slot with overflow-y: auto — an absolutely
+   positioned menu would be clipped by its own pane. It closes on scroll and
+   resize rather than chasing the button around. */
+.classic-panel-menu {
+  position: fixed;
+  z-index: var(--z-index-dropdown);
+  min-width: 12rem;
+  margin: 0;
+  padding: var(--space-2xs) 0;
+  list-style: none;
+  background-color: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-md);
+  /* max-height is set when the menu opens, from the room it actually has */
+  overflow-y: auto;
+}
+
+.classic-panel-menu .classic-panel-menu-sep {
+  border-top: 1px solid var(--color-border-light);
+  margin-top: var(--space-2xs);
+  padding-top: var(--space-2xs);
+}
+
+.classic-panel-menu-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  /* 44px on touch, auto-compact 36px on fine pointers (token media query) */
+  min-height: var(--size-touch-target);
+  padding: 0 var(--space-md);
+  border: 0;
+  background: transparent;
+  color: var(--color-text-primary);
+  font-family: inherit;
+  font-size: var(--font-size-sm);
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.classic-panel-menu-item:hover {
+  background-color: var(--color-hover-bg);
+}
+
 /* Empty fields hide their container at every breakpoint, so a collapsed track
    never has a zero-width element painting inside it. */
 body[data-ui-mode='classic'][data-classic-field-left='empty']

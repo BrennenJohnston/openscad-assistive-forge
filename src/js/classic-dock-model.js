@@ -41,18 +41,21 @@ export const DOCK_FIELDS = Object.freeze([
     datasetSuffix: 'Left',
     elementId: 'classicFieldLeft',
     label: 'Left column',
+    positionLabel: 'left column',
   },
   {
     name: 'right-top',
     datasetSuffix: 'RightTop',
     elementId: 'classicFieldRightTop',
     label: 'Upper right',
+    positionLabel: 'upper right',
   },
   {
     name: 'right-bottom',
     datasetSuffix: 'RightBottom',
     elementId: 'classicFieldRightBottom',
     label: 'Lower right',
+    positionLabel: 'lower right',
   },
   // The bottom strip predates the field model (B2) and keeps its id, so the
   // CSS and the R2a regression tests that name it still apply.
@@ -61,6 +64,7 @@ export const DOCK_FIELDS = Object.freeze([
     datasetSuffix: 'Bottom',
     elementId: 'classicBottomStrip',
     label: 'Bottom',
+    positionLabel: 'bottom',
   },
 ]);
 
@@ -76,6 +80,18 @@ export const DOCK_FIELD_NAMES = Object.freeze(DOCK_FIELDS.map((f) => f.name));
  */
 export function fieldLabel(field) {
   return DOCK_FIELDS.find((f) => f.name === field)?.label || field;
+}
+
+/**
+ * The same name mid-sentence, for the move menu ("Move to left column") and
+ * the announcement that follows it ("Console moved to the left column").
+ * Owner-approved 2026-08-07. Held as its own string rather than lower-cased
+ * from the label, so the two forms cannot drift.
+ * @param {string} field
+ * @returns {string}
+ */
+export function fieldPositionLabel(field) {
+  return DOCK_FIELDS.find((f) => f.name === field)?.positionLabel || field;
 }
 
 /**
@@ -214,6 +230,9 @@ export class ClassicDockModel {
   constructor(options = {}) {
     this._isPanelVisible = options.isPanelVisible || (() => true);
     this._isFieldAvailable = options.isFieldAvailable || (() => true);
+    // Selecting a tab swaps which panel's titlebar sits in the shared bar, so
+    // whatever hangs controls off those title bars has to be told (B8).
+    this._onGroupChange = options.onGroupChange || (() => {});
     const resolve = options.getElement;
     // The injected resolver answers for the panels and fields a test sets up;
     // the tab chrome this module creates is only ever in the document.
@@ -736,6 +755,7 @@ export class ClassicDockModel {
     }
 
     this._adoptTitlebar(bar, this._getElement(elementIdFor(panelId)));
+    this._onGroupChange();
   }
 
   /**
