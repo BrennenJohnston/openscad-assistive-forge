@@ -39,6 +39,7 @@ import {
   getAdaptiveQualityConfig,
 } from './quality-tiers.js';
 import { PreviewManager } from './preview.js';
+import { getViewportControlPanel } from './viewport-control-panel.js';
 import { PREVIEW_STATE } from './auto-preview-controller.js';
 import { LIBRARY_DEFINITIONS } from './library-manager.js';
 import { presetManager } from './preset-manager.js';
@@ -1906,6 +1907,8 @@ export function initFileHandler({
 
       getOverlayGridCtrl().connectPreviewManager(previewManager);
       getDisplayOptionsCtrl().connectPreviewManager(previewManager);
+      // Classic's Viewport-Control panel reads and writes this camera (F4).
+      getViewportControlPanel()?.connectPreviewManager(previewManager);
 
       const autoBedToggle = document.getElementById('autoBedToggle');
       if (autoBedToggle) {

@@ -1831,6 +1831,98 @@
                   </button>
                 </fieldset>
               </div>
+              <!-- Classic Viewport-Control panel (F4), transcribed from
+                   upstream ViewportControl.ui. Moved into
+                   #classicViewportControlSlot on entering Classic.
+                   Deliberately carries NO aria-live: the camera emits ~60
+                   change events a second while orbiting, and a live region on
+                   that feed would talk over everything else on the page. -->
+              <div
+                id="viewportControlPanel"
+                class="classic-panel-body classic-viewport-control"
+              >
+                <fieldset class="classic-vp-group">
+                  <legend>Aspect Ratio</legend>
+                  <!-- Upstream sets the render size here; our canvas is sized
+                       by its container, so these report it instead. -->
+                  <div class="classic-vp-field">
+                    <label for="vpWidth">Width</label>
+                    <input type="number" id="vpWidth" readonly />
+                    <span class="classic-vp-unit">px</span>
+                  </div>
+                  <div class="classic-vp-field">
+                    <label for="vpHeight">Height</label>
+                    <input type="number" id="vpHeight" readonly />
+                    <span class="classic-vp-unit">px</span>
+                  </div>
+                  <div class="classic-vp-field">
+                    <label for="vpLock">Lock</label>
+                    <input
+                      type="checkbox"
+                      id="vpLock"
+                      disabled
+                      aria-describedby="vpLockReason"
+                    />
+                    <span id="vpLockReason" class="classic-vp-reason"
+                      >Locking the aspect ratio is not available: the 3D view
+                      is sized by the window, so there is no fixed width and
+                      height to lock together.</span
+                    >
+                  </div>
+                </fieldset>
+
+                <fieldset class="classic-vp-group">
+                  <legend>Details</legend>
+                  <div class="classic-vp-field">
+                    <label for="vpTx">Translation X</label>
+                    <input type="number" id="vpTx" step="1" />
+                  </div>
+                  <div class="classic-vp-field">
+                    <label for="vpTy">Translation Y</label>
+                    <input type="number" id="vpTy" step="1" />
+                  </div>
+                  <div class="classic-vp-field">
+                    <label for="vpTz">Translation Z</label>
+                    <input type="number" id="vpTz" step="1" />
+                  </div>
+                  <div class="classic-vp-field">
+                    <label for="vpRx">Rotation X</label>
+                    <input type="number" id="vpRx" step="1" />
+                    <span class="classic-vp-unit">&deg;</span>
+                  </div>
+                  <div class="classic-vp-field">
+                    <label for="vpRy">Rotation Y</label>
+                    <input type="number" id="vpRy" step="1" />
+                    <span class="classic-vp-unit">&deg;</span>
+                  </div>
+                  <div class="classic-vp-field">
+                    <label for="vpRz">Rotation Z</label>
+                    <input type="number" id="vpRz" step="1" />
+                    <span class="classic-vp-unit">&deg;</span>
+                  </div>
+                  <div class="classic-vp-field">
+                    <label for="vpDistance">Distance</label>
+                    <input type="number" id="vpDistance" step="1" min="0" />
+                  </div>
+                  <div class="classic-vp-field">
+                    <label for="vpFov">FOV</label>
+                    <input
+                      type="number"
+                      id="vpFov"
+                      step="1"
+                      min="1"
+                      max="179"
+                      aria-describedby="vpFovNote"
+                    />
+                    <span class="classic-vp-unit">&deg;</span>
+                    <span id="vpFovNote" class="sr-only"
+                      >Field of view applies to the perspective projection
+                      only, and is unavailable while the view is
+                      orthographic.</span
+                    >
+                  </div>
+                </fieldset>
+              </div>
               <!-- File Actions panel removed: all features now in File toolbar menu -->
               <!-- Image Measurement Tool -->
               <details

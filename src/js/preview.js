@@ -2382,6 +2382,16 @@ export class PreviewManager {
       this.projectionMode === 'perspective' ? 'Perspective' : 'Orthographic';
     this.announceCameraAction(`${modeName} projection`);
 
+    // Switching projection need not move the camera, so OrbitControls emits no
+    // 'change' — anything mirroring the projection has nothing to listen to.
+    // Announced here so every caller (camera bar, View menu, the P shortcut)
+    // reaches every mirror, the same shape as display-option-change (E4).
+    document.dispatchEvent(
+      new CustomEvent('preview-projection-change', {
+        detail: { mode: this.projectionMode },
+      })
+    );
+
     console.log(`[Preview] Switched to ${this.projectionMode} projection`);
     return this.projectionMode;
   }

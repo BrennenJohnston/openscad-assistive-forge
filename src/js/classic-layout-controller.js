@@ -133,6 +133,7 @@ const SLOT_DEFS = [
     id: 'classicViewportControlSlot',
     className: 'classic-slot classic-viewport-control-slot',
     label: 'Viewport-Control',
+    panelId: 'viewportControlPanel',
     parentId: 'classicFieldRightBottom',
     titlebar: { text: 'Viewport-Control' },
   },

@@ -198,6 +198,7 @@ import {
 } from './js/classic-layout-controller.js';
 import { tabIdFor } from './js/classic-dock-model.js';
 import { initFontListPanel } from './js/font-list-panel.js';
+import { initViewportControlPanel } from './js/viewport-control-panel.js';
 import { initClassicStatusBar } from './js/classic-status-bar.js';
 import {
   initClassicEditorToolbar,
@@ -8383,6 +8384,11 @@ if (rounded) {
       });
       fontListPanel.loadSampleFaces();
     }
+
+    // Classic Viewport-Control panel (F4). The PreviewManager is built lazily
+    // once WASM is ready, so the panel binds to its camera later, the same way
+    // the display-options and overlay-grid controllers do.
+    initViewportControlPanel({ getPreviewManager: () => previewManager });
 
     // Classic Customizer bar (C7): titlebar ✕ + the Automatic Preview mirror.
     // All state flows through the real controls (#autoPreviewToggle), never
