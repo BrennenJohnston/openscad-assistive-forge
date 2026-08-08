@@ -801,12 +801,9 @@ function toggleEditorPanel() {
     layout.toggleEditor(); // announces for itself
     return;
   }
-  const uiCtrl = getUIModeController();
-  const wasHidden = new Set(
-    uiCtrl.getPreferencesForExport().hiddenPanelsInBasic
-  ).has('codeEditor');
-  uiCtrl.togglePanelVisibility('codeEditor');
-  _announce(wasHidden ? 'Editor shown' : 'Editor hidden');
+  // togglePanelVisibility announces this one itself, under the panel's
+  // registry name ("Code Editor"). Announcing again here said it twice.
+  getUIModeController().togglePanelVisibility('codeEditor');
 }
 
 /** Restore the View ▸ Hide … preferences on startup. */
@@ -4185,26 +4182,24 @@ async function initApp() {
   // ── Toolbar: Window menu ─────────────────────────────────────────────────
   getToolbarMenuController().registerMenuBuilder('window', () => {
     const uiCtrl = getUIModeController();
-    const hidden = new Set(
-      uiCtrl.getPreferencesForExport().hiddenPanelsInBasic
-    );
-
     /**
+     * The tick reads the DOM, not the Simplified-view preference: Classic's
+     * dock adopts the Console and shows it whatever that preference says, so
+     * the menu claimed the Console was off while it sat on screen. And
+     * togglePanelVisibility announces the change itself, so announcing here
+     * too said it twice.
+     *
      * @param {string} panelId
      * @param {string} label
      * @param {string|undefined} shortcutAction
      */
     function panelToggle(panelId, label, shortcutAction) {
-      const isVisible = !hidden.has(panelId);
       return {
         type: 'toggle',
         label,
-        checked: isVisible,
+        checked: uiCtrl.isPanelShowing(panelId),
         ...(shortcutAction ? { shortcutAction } : {}),
-        handler: () => {
-          uiCtrl.togglePanelVisibility(panelId);
-          _announce(isVisible ? `${label} hidden` : `${label} shown`);
-        },
+        handler: () => uiCtrl.togglePanelVisibility(panelId),
       };
     }
 
@@ -4223,9 +4218,7 @@ async function initApp() {
         shortcutAction: 'toggleCodeEditor',
         checked: inClassic
           ? classicLayout.isEditorVisible()
-          : !new Set(uiCtrl.getPreferencesForExport().hiddenPanelsInBasic).has(
-              'codeEditor'
-            ),
+          : uiCtrl.isPanelShowing('codeEditor'),
         handler: () => toggleEditorPanel(),
       },
       panelToggle('consoleOutput', 'Console', 'toggleConsole'),

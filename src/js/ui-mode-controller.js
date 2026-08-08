@@ -677,6 +677,21 @@ export class UIModeController {
    * cannot disagree about what counts as a panel.
    * @returns {{id: string, label: string, el: HTMLElement}[]}
    */
+  /**
+   * Is a registered panel on screen right now? This asks the DOM rather than
+   * the Simplified-view preference, because Classic's dock adopts some of
+   * these panels and shows them whatever that preference says.
+   * @param {string} panelId
+   * @returns {boolean}
+   */
+  isPanelShowing(panelId) {
+    const panel = PANEL_REGISTRY.find((p) => p.id === panelId);
+    if (!panel) return false;
+    const el = document.querySelector(panel.selector.split(',')[0].trim());
+    if (!el || el.classList.contains(HIDDEN_CLASS)) return false;
+    return el.tagName === 'DETAILS' ? el.open : true;
+  }
+
   listFocusablePanels() {
     return PANEL_REGISTRY.map((p) => {
       const el = document.querySelector(p.selector.split(',')[0].trim());

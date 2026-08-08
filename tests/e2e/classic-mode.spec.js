@@ -2576,6 +2576,68 @@ test.describe('View menu per-toolbar hide toggles (G4)', () => {
     }
   });
 
+  test('classic-window-ticks: every tick matches what is on screen', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await enterClassicDesktop(page);
+
+    // The Console is adopted into the dock and shown whatever the
+    // Simplified-view preference says, so reading that preference reported it
+    // as off while it sat in the bottom strip (G5, caught by a screenshot).
+    await expect(page.locator('#consolePanel')).toBeVisible();
+
+    await page.locator('#windowMenuBtn').click();
+    const ticks = await page.evaluate(() => {
+      const out = {};
+      for (const li of document.getElementById('windowMenuItems').children) {
+        const btn = li.querySelector(':scope > button');
+        if (!btn) continue;
+        out[btn.querySelector('.menu-item-label')?.textContent] =
+          btn.getAttribute('aria-checked');
+      }
+      return out;
+    });
+    expect(ticks['Console']).toBe('true');
+    expect(ticks['Editor']).toBe('true');
+    expect(ticks['Customizer']).toBe('true');
+    // These three panes start closed, so their ticks must say so.
+    expect(ticks['Animate']).toBe('false');
+    expect(ticks['Font List']).toBe('false');
+    expect(ticks['Viewport-Control']).toBe('false');
+  });
+
+  test('classic-window-announce-once: a panel toggle speaks once, not twice', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await enterClassicDesktop(page);
+
+    // Count everything the live region says, not just the last line: the menu
+    // used to announce on top of the announcement the panel controller
+    // already makes.
+    await page.evaluate(() => {
+      window.__said = [];
+      const region = document.getElementById('srAnnouncer');
+      new MutationObserver(() => {
+        const text = region.textContent.trim();
+        if (text) window.__said.push(text);
+      }).observe(region, { childList: true, subtree: true, characterData: true });
+    });
+
+    await page.locator('#windowMenuBtn').click();
+    await page
+      .locator('#windowMenuItems button')
+      .filter({ has: page.getByText('Console', { exact: true }) })
+      .first()
+      .click();
+    await page.waitForTimeout(800);
+
+    const said = await page.evaluate(() => window.__said);
+    const aboutConsole = said.filter((line) => /console/i.test(line));
+    expect(aboutConsole).toHaveLength(1);
+  });
+
   test('classic-hide-toolbars-persist: the choice survives a reload', async ({
     page,
   }) => {
