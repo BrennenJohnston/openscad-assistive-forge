@@ -424,6 +424,57 @@ test.describe('Edit menu parity (G2)', () => {
     )
   })
 
+  test('Use Selection for Find puts the selection in the Find field', async ({
+    page,
+  }) => {
+    await loadFixture(page)
+    await openEditor(page)
+
+    const editor = page.locator('#expertModePanel .cm-content')
+    await editor.click()
+    await page.keyboard.press('Control+Home')
+    for (let i = 0; i < 4; i++) await page.keyboard.press('ArrowDown')
+    await page.keyboard.press('Home')
+    for (let i = 0; i < 5; i++) await page.keyboard.press('Shift+ArrowRight')
+    expect(await page.evaluate(() => window.getSelection()?.toString())).toBe(
+      'width'
+    )
+
+    const selectedLine = () =>
+      page.evaluate(() => {
+        const sel = window.getSelection()
+        if (!sel || sel.rangeCount === 0) return -1
+        let node = sel.anchorNode
+        while (
+          node &&
+          !(node.classList && node.classList.contains('cm-line'))
+        ) {
+          node = node.parentNode
+        }
+        const lines = [
+          ...document.querySelectorAll('#expertModePanel .cm-line'),
+        ]
+        return node ? lines.indexOf(node) + 1 : -1
+      })
+    const before = await selectedLine()
+
+    await page.locator('#editMenuBtn').click()
+    const item = menuItem(page, 'edit', 'Use Selection for Find')
+    expect(await item.getAttribute('aria-disabled')).toBeNull()
+    await item.click()
+
+    // The selection becomes the search term and the view moves to the next
+    // occurrence of it. This only works with the search() extension
+    // installed: without it CodeMirror creates its search state lazily when
+    // the panel first opens, so the query was silently dropped.
+    await expect
+      .poll(selectedLine)
+      .not.toBe(before)
+    expect(await page.evaluate(() => window.getSelection()?.toString())).toBe(
+      'width'
+    )
+  })
+
   test('Convert Tabs to Spaces expands tabs to the next tab stop', async ({
     page,
   }) => {
